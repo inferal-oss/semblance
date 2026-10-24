@@ -40,21 +40,24 @@ c:BarChart a owl:Class ;
     rdfs:subClassOf c:Chart ;
     rdfs:comment "Horizontal stacked bars: one bar per category, one segment per series, totals at the end."@en ;
     sem:slug "bar-chart" .
-c:BarChartRendering a sem:Rendering ; sem:targets c:BarChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset .
+c:BarChartRendering a sem:Rendering ; sem:targets c:BarChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
+    sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query." .
 c:BarChartRendering-fn a sem:Rule ; sem:implements c:BarChartRendering ; sem:function "barchart" .
 
 c:Heatmap a owl:Class ;
     rdfs:subClassOf c:Chart ;
     rdfs:comment "A table of values: series down, categories across, cells colored on a log ramp; flagged cells are outlined."@en ;
     sem:slug "heatmap" .
-c:HeatmapRendering a sem:Rendering ; sem:targets c:Heatmap ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset .
+c:HeatmapRendering a sem:Rendering ; sem:targets c:Heatmap ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
+    sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query; and its color ramp is logarithmic (SPARQL 1.1 has no LOG)." .
 c:HeatmapRendering-fn a sem:Rule ; sem:implements c:HeatmapRendering ; sem:function "heatmap" .
 
 c:LineChart a owl:Class ;
     rdfs:subClassOf c:Chart ;
     rdfs:comment "Lines of value against a numeric category (log–log when c:logScale), one per series."@en ;
     sem:slug "line-chart" .
-c:LineChartRendering a sem:Rendering ; sem:targets c:LineChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset .
+c:LineChartRendering a sem:Rendering ; sem:targets c:LineChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
+    sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query; and its axes are logarithmic (SPARQL 1.1 has no LOG)." .
 c:LineChartRendering-fn a sem:Rule ; sem:implements c:LineChartRendering ; sem:function "linechart" .
 
 c:FindingList a owl:Class ;
@@ -63,7 +66,8 @@ c:FindingList a owl:Class ;
 the findings they write, grouped by judgement, each with its verdict (label and sem:symbol)."""@en ;
     sem:slug "finding-list" .
 c:judgementClass a owl:ObjectProperty .
-c:FindingListRendering a sem:Rendering ; sem:targets c:FindingList ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset .
+c:FindingListRendering a sem:Rendering ; sem:targets c:FindingList ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
+    sem:functionOnly "It runs the CONSTRUCT of every judgement of a class (sem:construct in the data), which SPARQL 1.1 cannot do from inside a query." .
 c:FindingListRendering-fn a sem:Rule ; sem:implements c:FindingListRendering ; sem:function "findings" .
 
 # --- encodings (theme tokens) ------------------------------------------------------------------

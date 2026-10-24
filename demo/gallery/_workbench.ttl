@@ -4,13 +4,203 @@
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
-# The Playground's SPARQL workbench: its instance, sample queries and remembered state.
+# The Playground's SPARQL workbench (the Query tab): its instance, sample queries and remembered state.
+# The editor starts with the first sample, already run, so the tab opens on results.
 
-ui:workbench a c:Stack ; c:children ( ui:workbench-placeholder ) .
-ui:workbench-placeholder a c:Heading ; c:label "SPARQL" .
+ui:workbench a c:QueryWorkbench ;
+    c:label "SPARQL workbench" , "Робоче місце SPARQL"@uk , "SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
+    c:editor ui:queryEditor ;
+    c:actions ( ui:queryRun ) ;
+    c:runs ui:currentQuery ;
+    c:results ui:queryResults ;
+    c:samples ( ui:sampleRenderings ui:sampleReactions ui:sampleLayers ui:sampleChangeLog
+                ui:sampleViolations ui:sampleUndocumented ui:sampleTabsGraph ui:sampleTodos ) .
+
+ui:queryEditor a c:QueryEditor ;
+    c:label "SPARQL query" , "Запит SPARQL"@uk , "SPARQL-Abfrage"@de , "استعلام SPARQL"@ar ;
+    c:value """# Every component class, how many renderings target it, and how many rules implement them.
+SELECT ?component (COUNT(DISTINCT ?rendering) AS ?renderings) (COUNT(DISTINCT ?rule) AS ?rules)
+WHERE {
+  ?component rdfs:subClassOf+ sem:Component .
+  OPTIONAL { ?rendering sem:targets ?component . ?rule sem:implements ?rendering }
+}
+GROUP BY ?component
+ORDER BY DESC(?rules) ?component""" .
+
+# Typed c:Button as well: the button's SPARQL renderings match the asserted class.
+ui:queryRun a c:Button , c:RunQueryButton ; c:of ui:workbench ;
+    c:label "Run" , "Виконати"@uk , "Ausführen"@de , "تشغيل"@ar ;
+    sty:intent sty:Primary ; key:shortcut "mod+enter" .
+
+ui:currentQuery a sem:Query ;
+    rdfs:label "The query last run" , "Останній виконаний запит"@uk , "Die zuletzt ausgeführte Abfrage"@de , "آخر استعلام منفّذ"@ar ;
+    c:runCount 1 ;
+    sem:select """# Every component class, how many renderings target it, and how many rules implement them.
+SELECT ?component (COUNT(DISTINCT ?rendering) AS ?renderings) (COUNT(DISTINCT ?rule) AS ?rules)
+WHERE {
+  ?component rdfs:subClassOf+ sem:Component .
+  OPTIONAL { ?rendering sem:targets ?component . ?rule sem:implements ?rendering }
+}
+GROUP BY ?component
+ORDER BY DESC(?rules) ?component""" .
+
+# --- results: three views of the query last run -------------------------------------------------------
+
+ui:queryResults a c:Tabs ;
+    c:label "Results" , "Результати"@uk , "Ergebnisse"@de , "النتائج"@ar ;
+    c:tabs ( ui:queryTableTab ui:queryGraphTab ui:queryTurtleTab ) ;
+    c:selected ui:queryTableTab .
+ui:queryTableTab a c:Tab ; c:label "Table" , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ; c:content ui:queryTable .
+ui:queryGraphTab a c:Tab ; c:label "Graph" , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ; c:content ui:queryGraph .
+ui:queryTurtleTab a c:Tab ; c:label "Turtle" ; c:content ui:queryTurtle .
+ui:queryTable a c:ResultTable ; c:of ui:currentQuery .
+ui:queryGraph a c:ResultGraph ; c:of ui:currentQuery .
+ui:queryTurtle a c:ResultTurtle ; c:of ui:currentQuery .
+
+# --- sample queries: the ontology, asked about itself -----------------------------------------------------
+
+ui:sampleRenderings a sem:Query ;
+    rdfs:label "Components and their renderings" , "Компоненти та їхні відображення"@uk , "Komponenten und ihre Darstellungen"@de , "المكونات وطرق عرضها"@ar ;
+    rdfs:comment "Every component class, with how many renderings target it and how many rules (SPARQL or function) implement them."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# Every component class, how many renderings target it, and how many rules implement them.
+SELECT ?component (COUNT(DISTINCT ?rendering) AS ?renderings) (COUNT(DISTINCT ?rule) AS ?rules)
+WHERE {
+  ?component rdfs:subClassOf+ sem:Component .
+  OPTIONAL { ?rendering sem:targets ?component . ?rule sem:implements ?rendering }
+}
+GROUP BY ?component
+ORDER BY DESC(?rules) ?component""" .
+
+ui:sampleReactions a sem:Query ;
+    rdfs:label "Reactions and the events they handle" , "Реакції та події, які вони обробляють"@uk , "Reaktionen und ihre Ereignisse"@de , "ردود الفعل والأحداث التي تعالجها"@ar ;
+    rdfs:comment "Every beh:Reaction: the event class it handles, the component (or class) it listens on, and its function fallback."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# What interaction means: each reaction, the event it handles and where.
+SELECT ?reaction ?event ?on ?function
+WHERE {
+  ?reaction a beh:Reaction ; beh:when ?event .
+  OPTIONAL { ?reaction beh:sourceClass ?class }
+  OPTIONAL { ?reaction beh:source ?source }
+  BIND(COALESCE(?class, ?source) AS ?on)
+  OPTIONAL { ?reaction sem:function ?function }
+}
+ORDER BY ?event ?on ?reaction""" .
+
+ui:sampleLayers a sem:Query ;
+    rdfs:label "Layers and the rules they contribute" , "Шари та їхні правила"@uk , "Schichten und ihre Regeln"@de , "الطبقات والقواعد التي تضيفها"@ar ;
+    rdfs:comment "Each sem:Layer, how many rules it adds and the strata they run in."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# Cross-cutting concerns are layers: rules in strata around the components.
+SELECT ?layer (SAMPLE(?name) AS ?label) (COUNT(DISTINCT ?rule) AS ?rules) (MIN(?stratum) AS ?lowest) (MAX(?stratum) AS ?highest)
+WHERE {
+  ?layer a sem:Layer .
+  OPTIONAL { ?layer rdfs:label ?name FILTER(LANG(?name) = "en" || LANG(?name) = "") }
+  OPTIONAL { ?rendering sem:layer ?layer ; sem:stratum ?stratum . ?rule sem:implements ?rendering }
+}
+GROUP BY ?layer
+ORDER BY ?lowest ?layer""" .
+
+ui:sampleChangeLog a sem:Query ;
+    rdfs:label "The change log, newest first" , "Журнал змін, найновіші спершу"@uk , "Das Änderungsprotokoll, neueste zuerst"@de , "سجل التغييرات، الأحدث أولاً"@ar ;
+    rdfs:comment "The latest members of the beh:ChangeLog event stream, read from its head (beh:latest, then beh:previous)."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# The stream names its newest member; each member names the one before it.
+SELECT ?sequence ?event ?target ?added ?removed
+WHERE {
+  beh:ChangeLog beh:latest/beh:previous* ?member .
+  ?member beh:sequence ?sequence ; a ?event ; beh:target ?target ;
+          beh:added ?added ; beh:removed ?removed .
+}
+ORDER BY DESC(?sequence)
+LIMIT 20""" .
+
+ui:sampleViolations a sem:Query ;
+    rdfs:label "Components that violate their shapes" , "Компоненти, що порушують свої форми"@uk , "Komponenten, die ihre Formen verletzen"@de , "مكونات تخالف أشكالها"@ar ;
+    rdfs:comment "SHACL results the shapes layer recorded in the derived graph (for components shown so far)."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# The shapes layer validates each component before it renders (turn on its chip).
+SELECT ?component ?property ?message
+WHERE {
+  ?result a sh:ValidationResult ; sh:focusNode ?component ;
+          sh:resultPath ?property ; sh:resultMessage ?message .
+}
+ORDER BY ?component ?property""" .
+
+ui:sampleUndocumented a sem:Query ;
+    rdfs:label "Properties without a comment" , "Властивості без коментаря"@uk , "Eigenschaften ohne Kommentar"@de , "خصائص بلا تعليق"@ar ;
+    rdfs:comment "Semblance's own properties that no rdfs:comment explains yet."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# What the ontology does not explain yet.
+SELECT ?property ?kind
+WHERE {
+  VALUES ?kind { owl:ObjectProperty owl:DatatypeProperty rdf:Property }
+  ?property a ?kind .
+  FILTER(STRSTARTS(STR(?property), "https://semblance.dev/ns/"))
+  FILTER NOT EXISTS { ?property rdfs:comment ?comment }
+}
+ORDER BY ?property""" .
+
+ui:sampleTabsGraph a sem:Query ;
+    rdfs:label "How c:Tabs is made" , "Як зроблено c:Tabs"@uk , "Wie c:Tabs gemacht ist"@de , "كيف صُنع c:Tabs"@ar ;
+    rdfs:comment "A component as a graph: its superclass, renderings and their rules, reactions and keyboard pattern."@en ;
+    c:resultTab ui:queryGraphTab ;
+    sem:construct """# One component and everything that makes it work.
+CONSTRUCT {
+  c:Tabs rdfs:subClassOf ?super ; key:navigation ?navigation .
+  ?rendering sem:targets c:Tabs ; sem:layer ?layer .
+  ?rule sem:implements ?rendering .
+  ?reaction beh:sourceClass c:Tabs ; beh:when ?event .
+}
+WHERE {
+  { c:Tabs rdfs:subClassOf ?super }
+  UNION { c:Tabs key:navigation ?navigation }
+  UNION { ?rendering sem:targets c:Tabs . ?rule sem:implements ?rendering . OPTIONAL { ?rendering sem:layer ?layer } }
+  UNION { ?reaction beh:sourceClass c:Tabs ; beh:when ?event }
+}""" .
+
+ui:sampleTodos a sem:Query ;
+    rdfs:label "The todo items" , "Завдання"@uk , "Die Aufgaben"@de , "عناصر المهام"@ar ;
+    rdfs:comment "The Screen card's data: the items of the todo list, in the order it sorts them."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# The app's own data, beside the ontology that renders it.
+SELECT ?item ?label ?priority ?done
+WHERE {
+  ex:todos c:item ?item .
+  ?item rdfs:label ?label ; ex:priority ?priority ; ex:done ?done .
+}
+ORDER BY ?priority""" .
+
+# --- remembered state ---------------------------------------------------------------------------------------
+# The editor's text and caret, the query last run (both forms, so a restored CONSTRUCT replaces a
+# SELECT: an empty text is "none"), the results tab, and whether the Query tab is a
+# window, with its geometry. For this tab only.
+
+ui:rememberWorkbench a per:Policy ; per:scope per:Session ;
+    rdfs:label "The SPARQL workbench" , "Робоче місце SPARQL"@uk , "Die SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
+    per:construct """
+CONSTRUCT {
+  ui:queryEditor c:value ?text ; c:caret ?caret .
+  ui:currentQuery sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
+  ui:queryResults c:selected ?view .
+  ui:queryTab c:detached ?detached .
+  ?window c:x ?x ; c:y ?y ; c:width ?w ; c:height ?h ; c:windowState ?state .
+}
+WHERE {
+  { ui:queryEditor c:value ?text }
+  UNION { ui:queryEditor c:caret ?caret }
+  UNION { OPTIONAL { ui:currentQuery sem:select ?s } BIND(COALESCE(?s, "") AS ?select) }
+  UNION { OPTIONAL { ui:currentQuery sem:construct ?c } BIND(COALESCE(?c, "") AS ?construct) }
+  UNION { ui:currentQuery c:runCount ?runs }
+  UNION { ui:queryResults c:selected ?view }
+  UNION { ui:queryTab c:detached ?detached }
+  UNION { ?window prov:wasDerivedFrom ui:queryTab . { ?window c:x ?x } UNION { ?window c:y ?y } UNION { ?window c:width ?w } UNION { ?window c:height ?h } UNION { ?window c:windowState ?state } }
+}""" .

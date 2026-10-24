@@ -5,6 +5,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL } from '../ns.ts'
 import { labelOf, named, rdfList, str, text } from '../components/util.ts'
 import { mint } from '../rdf.ts'
+import { md5Key } from '../components/data.ts'
 
 const SH = NS.sh
 const XSD = NS.xsd
@@ -54,6 +55,9 @@ interface Violation {
   path: string
   shape: Term
   message: string
+  /** The constraint (its sh: local name) and the default message, which key the result. */
+  kind: string
+  fallback: string
   value?: Term
 }
 
@@ -64,15 +68,16 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
   const values = ctx.objects(focus, path.value)
   const out: Violation[] = []
   const short = path.value.replace(/^.*[#/]/, '')
-  const fail = (fallback: string, value?: Term) => out.push({ path: path.value, shape: ps, value, message: text(ctx, ps, SH + 'message') ?? `${short}: ${fallback}` })
+  const fail = (kind: string, fallback: string, value?: Term) =>
+    out.push({ path: path.value, shape: ps, value, kind, fallback, message: text(ctx, ps, SH + 'message') ?? `${short}: ${fallback}` })
   const n = (p: string) => {
     const v = str(ctx.object(ps, SH + p))
     return v === undefined ? undefined : Number(v)
   }
   const min = n('minCount')
-  if (min !== undefined && values.length < min) fail(min === 1 ? 'required' : `at least ${min} values`)
+  if (min !== undefined && values.length < min) fail('minCount', min === 1 ? 'required' : `at least ${min} values`)
   const max = n('maxCount')
-  if (max !== undefined && values.length > max) fail(max === 1 ? 'one value only' : `at most ${max} values`)
+  if (max !== undefined && values.length > max) fail('maxCount', max === 1 ? 'one value only' : `at most ${max} values`)
   const datatype = str(ctx.object(ps, SH + 'datatype'))
   const cls = str(ctx.object(ps, SH + 'class'))
   const kind = str(ctx.object(ps, SH + 'nodeKind'))
@@ -82,28 +87,28 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
     if (datatype) {
       const dt = datatypeOf(v)
       const ok = dt === datatype || (datatype === XSD + 'string' && dt === XSD + 'string') || (NUMERIC.has(datatype) && dt !== undefined && NUMERIC.has(dt) && (datatype !== XSD + 'integer' || Number.isInteger(Number(v.value))))
-      if (!ok) fail(`expected ${datatype.replace(XSD, 'xsd:')}`, v)
+      if (!ok) fail('datatype', `expected ${datatype.replace(XSD, 'xsd:')}`, v)
     }
-    if (cls && !instanceOf(ctx, v, cls)) fail(`expected a ${cls.replace(/^.*[#/]/, '')}`, v)
-    if (kind === SH + 'IRI' && v.termType !== 'NamedNode') fail('expected an IRI', v)
-    if (kind === SH + 'Literal' && v.termType !== 'Literal') fail('expected a literal', v)
-    if (allowed && !rdfList(ctx, allowed).some((a) => a.equals(v))) fail('not an allowed value', v)
+    if (cls && !instanceOf(ctx, v, cls)) fail('class', `expected a ${cls.replace(/^.*[#/]/, '')}`, v)
+    if (kind === SH + 'IRI' && v.termType !== 'NamedNode') fail('nodeKind', 'expected an IRI', v)
+    if (kind === SH + 'Literal' && v.termType !== 'Literal') fail('nodeKind', 'expected a literal', v)
+    if (allowed && !rdfList(ctx, allowed).some((a) => a.equals(v))) fail('in', 'not an allowed value', v)
     if (v.termType === 'Literal') {
       const x = Number(v.value)
       const lo = n('minInclusive')
       const hi = n('maxInclusive')
-      if (lo !== undefined && !(x >= lo)) fail(`at least ${lo}`, v)
-      if (hi !== undefined && !(x <= hi)) fail(`at most ${hi}`, v)
+      if (lo !== undefined && !(x >= lo)) fail('minInclusive', `at least ${lo}`, v)
+      if (hi !== undefined && !(x <= hi)) fail('maxInclusive', `at most ${hi}`, v)
       const minLength = n('minLength')
       const maxLength = n('maxLength')
-      if (minLength !== undefined && v.value.length < minLength) fail(`at least ${minLength} characters`, v)
-      if (maxLength !== undefined && v.value.length > maxLength) fail(`at most ${maxLength} characters`, v)
+      if (minLength !== undefined && v.value.length < minLength) fail('minLength', `at least ${minLength} characters`, v)
+      if (maxLength !== undefined && v.value.length > maxLength) fail('maxLength', `at most ${maxLength} characters`, v)
       if (pattern !== undefined) {
         let re: RegExp | undefined
         try {
           re = new RegExp(pattern, str(ctx.object(ps, SH + 'flags')) ?? '')
         } catch {}
-        if (re && !re.test(v.value)) fail('does not match the expected format', v)
+        if (re && !re.test(v.value)) fail('pattern', 'does not match the expected format', v)
       }
     }
   }
@@ -111,7 +116,7 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
   const other = ctx.object(ps, SH + 'lessThanOrEquals')
   if (named(other)) {
     const bounds = ctx.objects(focus, other.value)
-    for (const v of values) for (const b of bounds) if (!(Number(v.value) <= Number(b.value))) fail(`more than ${other.value.replace(/^.*[#/]/, '')} (${b.value})`, v)
+    for (const v of values) for (const b of bounds) if (!(Number(v.value) <= Number(b.value))) fail('lessThanOrEquals', `more than ${other.value.replace(/^.*[#/]/, '')} (${b.value})`, v)
   }
   return out
 }
@@ -126,8 +131,9 @@ const validate: FnRule = (ctx, focus) => {
   )
   if (!violations.length) return []
   const o = ctx.out(focus)
-  violations.forEach((v, i) => {
-    const r = o.node('shape-' + i)
+  for (const v of violations) {
+    // Keyed by what it says (as the SPARQL rule keys it): the same violation keeps its IRI.
+    const r = o.node('shape-' + md5Key(`${v.path} ${v.shape.value} ${v.kind} ${v.fallback} ${v.value?.value ?? ''}`))
     o.t(r, RDF_TYPE, ctx.nn(SH + 'ValidationResult'))
       .t(r, SH + 'focusNode', focus)
       .t(r, SH + 'resultPath', ctx.nn(v.path))
@@ -136,7 +142,7 @@ const validate: FnRule = (ctx, focus) => {
       .t(r, SH + 'resultSeverity', ctx.nn(SH + 'Violation'))
       .t(focus, VAL.violation, r)
     if (v.value) o.t(r, SH + 'value', v.value)
-  })
+  }
   return o.quads
 }
 
@@ -146,7 +152,7 @@ const mark: FnRule = (ctx, focus) => {
   if (!results.length) return []
   const o = ctx.out(focus)
   const root = ctx.nn(mint(focus.value, 'root'))
-  const messages = results.map((r) => str(ctx.object(r, SH + 'resultMessage'))).filter(Boolean)
+  const messages = results.map((r) => str(ctx.object(r, SH + 'resultMessage'))).filter((m): m is string => !!m).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   o.attr(root, 'data-sem-shape-invalid', String(messages.length))
   o.t(root, SEM.tooltip, `Shape violation: ${messages.join(' · ')}`)
   return o.quads

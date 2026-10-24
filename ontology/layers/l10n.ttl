@@ -41,5 +41,6 @@ l10n:Labels a sem:Rendering ;
     sem:targets sem:Component ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches c:label .
+    sem:watches c:label ;
+    sem:functionOnly "It is how the viewer's language reaches SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
 l10n:Labels-fn a sem:Rule ; sem:implements l10n:Labels ; sem:function "l10n:label" .

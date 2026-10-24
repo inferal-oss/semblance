@@ -28,5 +28,6 @@ ann:Toasts a sem:Rendering ;
     sem:targets c:ToastRegion ;
     sem:layer ann:Layer ;
     sem:stratum -5 ;
-    sem:inputOnly true .
+    sem:inputOnly true ;
+    sem:functionOnly "A toast says the reaction's ann:announces in the viewer's language, a projection setting SPARQL rules cannot see (reactions are not components, so l10n:label does not carry it)." .
 ann:Toasts-fn a sem:Rule ; sem:implements ann:Toasts ; sem:function "announce:toasts" .

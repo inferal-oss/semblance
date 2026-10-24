@@ -32,6 +32,35 @@ sem:Tooltips-fn a sem:Rule ;
     sem:implements sem:Tooltips ;
     sem:function "tooltips" .
 
+# Nodes minted under the focus (<focus>/~local, local without "/~"). In bulk evaluation
+# ($this unbound) the focus test is skipped: the engine groups the output by owning focus.
+sem:Tooltips-sparql a sem:Rule ;
+    sem:implements sem:Tooltips ;
+    sem:construct """
+CONSTRUCT {
+  ?html rdfhtml:attribute ?tip, ?aria .
+  ?tip a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tooltip" ; rdfhtml:attributeValue ?text .
+  ?aria a rdfhtml:Attribute ; rdfhtml:attributeName "aria-description" ; rdfhtml:attributeValue ?text .
+  ?mark rdfhtml:hasChild ?title .
+  ?title a svg:Title ; rdfhtml:hasChild ?titleText .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  ?node sem:tooltip ?value .
+  FILTER(isIRI(?node) && CONTAINS(STR(?node), "/~"))
+  FILTER(COALESCE(STRSTARTS(STR(?node), CONCAT(STR($this), "/~")) && !CONTAINS(STRAFTER(STR(?node), CONCAT(STR($this), "/~")), "/~"), true))
+  BIND(STR(?value) AS ?text)
+  BIND(IRI(CONCAT(STR(?node), "-tip")) AS ?tipNode)
+  BIND(EXISTS { ?node a ?svgType FILTER(STRSTARTS(STR(?svgType), "https://semblance.dev/ns/svg#")) } AS ?svg)
+  BIND(IF(?svg, ?none, ?node) AS ?html)
+  BIND(IF(?svg, ?none, ?tipNode) AS ?tip)
+  BIND(IF(?svg, ?none, IRI(CONCAT(STR(?node), "-tip-aria"))) AS ?aria)
+  # Only leaf marks get a title (ignoring the title this layer itself adds).
+  BIND(IF(?svg && NOT EXISTS { ?node rdfhtml:hasChild ?child FILTER(?child != ?tipNode) }, ?node, ?none) AS ?mark)
+  BIND(IF(BOUND(?mark), ?tipNode, ?none) AS ?title)
+  BIND(IF(BOUND(?mark), IRI(CONCAT(STR(?node), "-tip-text")), ?none) AS ?titleText)
+}""" .
+
 tok:tooltip-bg a sty:Token ; sty:scale sty:Color ; sem:slug "tooltip-bg" ; sty:value "light-dark(#1c1b2e, #f2f2f7)" .
 tok:tooltip-fg a sty:Token ; sty:scale sty:Color ; sem:slug "tooltip-fg" ; sty:value "light-dark(#f2f2f7, #16161d)" .
 

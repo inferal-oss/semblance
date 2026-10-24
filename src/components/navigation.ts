@@ -3,7 +3,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { C, MOD, NS, XSD_INTEGER } from '../ns.ts'
-import { el, hashKey, marked } from './data.ts'
+import { el, hashKey, marked, md5Key } from './data.ts'
 import { isTrue, labelOf, named, nodes, num, text } from './util.ts'
 
 const C_ITEMS = NS.c + 'items'
@@ -19,15 +19,25 @@ const NONE = { add: [], remove: [] }
 
 // --- Breadcrumbs ----------------------------------------------------------------------------------
 
-/** The path from the root down to `end`, following `parent` up (first parent by IRI; cycles stop). */
-function trail(ctx: Parameters<FnRule>[0], end: NamedNode, parent: Term): NamedNode[] {
+/**
+ * The path from the root down to `end`, following `parent` up. With `upTo`, the walk
+ * stops there and, where a node has several parents, takes one that leads to it (a
+ * class aligned with outside vocabularies has more than one superclass); otherwise
+ * the first parent by IRI. Cycles stop.
+ */
+function trail(ctx: Parameters<FnRule>[0], end: NamedNode, parent: Term, upTo?: Term): NamedNode[] {
+  const parents = (n: Term) => ctx.objects(n, parent).filter(named)
+  const reaches = (n: NamedNode, seen = new Set<string>()): boolean => {
+    if (!upTo || n.equals(upTo)) return true
+    if (seen.has(n.value) || seen.size > 64) return false
+    seen.add(n.value)
+    return parents(n).some((p) => reaches(p, seen))
+  }
   const out: NamedNode[] = [end]
   const seen = new Set([end.value])
-  for (let n: NamedNode | undefined = end; n && out.length < 32; ) {
-    const up: NamedNode | undefined = ctx
-      .objects(n, parent)
-      .filter(named)
-      .filter((p) => !seen.has(p.value))
+  for (let n: NamedNode | undefined = end; n && out.length < 32 && !(upTo && n.equals(upTo)); ) {
+    const up: NamedNode | undefined = parents(n)
+      .filter((p) => !seen.has(p.value) && reaches(p))
       .sort((a, b) => (a.value < b.value ? -1 : 1))[0]
     if (up) {
       out.unshift(up)
@@ -48,7 +58,7 @@ const breadcrumbs: FnRule = (ctx, focus) => {
   if (!crumbs.length) {
     const parent = ctx.object(focus, C_PARENT_PROPERTY)
     const end = ctx.object(focus, C.of) ?? (navigates ? ctx.object(target, property) : undefined)
-    if (named(end) && named(parent)) crumbs = trail(ctx, end, parent)
+    if (named(end) && named(parent)) crumbs = trail(ctx, end, parent, ctx.object(focus, NS.c + 'upTo'))
   }
   if (!crumbs.length) return []
   const name = text(ctx, focus, C.label) ?? 'Breadcrumb'
@@ -161,7 +171,7 @@ const stepper: FnRule = (ctx, focus) => {
     return o.quads
   }
   const lis = steps.map((s, i) => {
-    const id = 's' + hashKey(s.value)
+    const id = 's' + md5Key(s.value)
     const state = stateOf(i)
     const label = labelOf(ctx, s)
     const help = text(ctx, s, C.help)
@@ -170,9 +180,9 @@ const stepper: FnRule = (ctx, focus) => {
       el(o, `${id}-label`, 'Span', { class: 'sem-label' }, [o.text(`${id}-label-text`, label)]),
       ...(help ? [el(o, `${id}-help`, 'Span', { class: 'sem-help' }, [o.text(`${id}-help-text`, help)])] : []),
     ])
-    // Screen readers hear the state the marker shows.
-    const status = el(o, `${id}-status`, 'Span', { class: 'sem-visually-hidden' }, [o.text(`${id}-status-text`, state === 'complete' ? ' (completed)' : state === 'current' ? ' (current)' : '')])
-    const parts = [marker, body, ...(state === 'current' ? [] : [status])]
+    // Screen readers hear the state the marker shows (the current step says so with aria-current).
+    const status = () => el(o, `${id}-status`, 'Span', { class: 'sem-visually-hidden' }, [o.text(`${id}-status-text`, state === 'complete' ? ' (completed)' : '')])
+    const parts = [marker, body, ...(state === 'current' ? [] : [status()])]
     let content: NamedNode
     if (navigable) {
       content = el(o, `${id}-go`, 'Button', { type: 'button', class: 'sem-step' }, parts)

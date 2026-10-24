@@ -25,7 +25,7 @@ ui:nv-crumb-navigation c:label "Navigation" .
 ui:nv-crumb-breadcrumbs c:label "Breadcrumbs" .
 ui:nv-crumbs-explicit a c:Breadcrumbs ;
     c:items ( ui:nv-crumb-home ui:nv-crumb-components ui:nv-crumb-navigation ui:nv-crumb-breadcrumbs ) .
-ui:nv-crumbs-derived a c:Breadcrumbs ; c:label "Class path" ; c:of c:ThemeSwitcher ; c:parentProperty rdfs:subClassOf .
+ui:nv-crumbs-derived a c:Breadcrumbs ; c:label "Class path" ; c:of c:ThemeSwitcher ; c:parentProperty rdfs:subClassOf ; c:upTo sem:Component .
 ui:nv-crumbs-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:nv-crumbs-explicit ui:nv-crumbs-derived ) .
 ui:nv-breadcrumbs a c:Flippable ; c:front ui:nv-breadcrumbs-spec .

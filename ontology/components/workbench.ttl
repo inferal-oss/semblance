@@ -4,9 +4,448 @@
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # The SPARQL workbench: an editor, sample queries, and results as a table, a graph and Turtle.
+#
+# Everything is graph state. The editor's text is its c:value and its caret c:caret, written by
+# the input reaction on every keystroke; that re-renders the editor (its highlighted lines and
+# suggestions) and nothing else. Running copies the text into the query node the results show
+# (c:runs, a sem:Query with sem:select or sem:construct) and counts the run (c:runCount), so
+# the results change only when a query is run. The results are ordinary views of that node,
+# usually the panels of a c:Tabs. Autocompletion comes from the graph too: SPARQL's words are
+# individuals of c:SparqlWord, and the terms are every class and property the store declares,
+# named with the prefixes it knows.
+
+# --- the workbench ----------------------------------------------------------------------------------
+
+c:QueryWorkbench a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:label "SPARQL workbench"@en , "Робоче місце SPARQL"@uk , "SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
+    rdfs:comment """A place to write and run SPARQL over the live graph: sample queries (c:samples, sem:Query
+nodes with rdfs:label and rdfs:comment), an editor (c:editor, a c:QueryEditor), header components
+(c:actions, e.g. a c:RunQueryButton), the query last run (c:runs) and its results (c:results, e.g. a
+c:Tabs of c:QueryResultView panels). Picking a sample loads it into the editor, runs it and shows
+its c:resultTab. The sample whose text was run last is shown pressed."""@en ;
+    sem:slug "query-workbench" .
+c:editor a owl:ObjectProperty ; rdfs:domain c:QueryWorkbench ; rdfs:range c:QueryEditor ;
+    rdfs:comment "The editor whose text a run executes."@en .
+c:results a owl:ObjectProperty ; rdfs:domain c:QueryWorkbench ; rdfs:range sem:Component ;
+    rdfs:comment "The component showing the results of the query last run (a c:Tabs of result views)."@en .
+c:runs a owl:ObjectProperty ; rdfs:domain c:QueryWorkbench ; rdfs:range sem:Query ;
+    rdfs:comment "The query node a run writes: its sem:select or sem:construct is what was executed."@en .
+c:samples a owl:ObjectProperty ; rdfs:domain c:QueryWorkbench ; rdfs:range rdf:List ;
+    rdfs:comment "Sample queries (sem:Query), in order."@en .
+c:resultTab a owl:ObjectProperty ; rdfs:domain sem:Query ; rdfs:range c:Tab ;
+    rdfs:comment "On a sample: the results tab that shows it best (selected when it is loaded)."@en .
+c:runCount a owl:DatatypeProperty ; rdfs:domain sem:Query ; rdfs:range xsd:integer ;
+    rdfs:comment "How many times the query was run: running the same text again re-evaluates its views."@en .
+c:loads a owl:ObjectProperty ; rdfs:range sem:Query ;
+    rdfs:comment "On a rendered element: the sample query that activating it loads and runs."@en .
+
+c:QueryWorkbenchRendering a sem:Rendering ; sem:targets c:QueryWorkbench ; sem:stratum 0 ;
+    sem:functionOnly "It names each sample's query form, found by tokenizing its text past the prologue (comments, PREFIX and BASE), which SPARQL's REGEX can only approximate; and it lays out a list of any length." .
+c:QueryWorkbenchRendering-fn a sem:Rule ; sem:implements c:QueryWorkbenchRendering ; sem:function "workbench:workbench" .
+
+# Arrow keys move between the samples (focus only; Enter or Space loads one).
+c:SampleNavigation a key:Navigation ; key:items ".sem-sample-list > button" ; key:orientation key:Horizontal ; key:wrap true .
+c:QueryWorkbench key:navigation c:SampleNavigation .
+
+c:LoadSample a beh:Reaction ;
+    rdfs:label "Load a sample query"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:QueryWorkbench ;
+    beh:deletes """
+CONSTRUCT {
+  ?editor c:value ?value ; c:caret ?caret ; c:suggesting ?suggesting ; c:activeSuggestion ?active .
+  ?query sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
+  ?results c:selected ?tab .
+}
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:loads ?sample .
+  $this c:editor ?editor ; c:runs ?query .
+  { ?editor c:value ?value } UNION { ?editor c:caret ?caret } UNION { ?editor c:suggesting ?suggesting }
+  UNION { ?editor c:activeSuggestion ?active } UNION { ?query sem:select ?select } UNION { ?query sem:construct ?construct }
+  UNION { ?query c:runCount ?runs }
+  UNION { ?sample c:resultTab ?want . $this c:results ?results . ?results c:selected ?tab }
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?editor c:value ?text ; c:caret ?caret .
+  ?query ?form ?text ; c:runCount ?next .
+  ?results c:selected ?want .
+}
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:loads ?sample .
+  $this c:editor ?editor ; c:runs ?query .
+  VALUES ?form { sem:select sem:construct }
+  ?sample ?form ?text .
+  BIND(STRLEN(?text) AS ?caret)
+  OPTIONAL { ?query c:runCount ?runs }
+  BIND(COALESCE(?runs, 0) + 1 AS ?next)
+  OPTIONAL { ?sample c:resultTab ?want . $this c:results ?results }
+}""" ;
+    sem:function "workbench:load" .
+
+# --- running ------------------------------------------------------------------------------------------
+
+c:RunQueryButton a owl:Class ;
+    rdfs:subClassOf c:Button ;
+    rdfs:comment """A button that runs the editor's text of a c:QueryWorkbench (c:of): the text goes to the
+workbench's query node (c:runs) as sem:construct when it is a CONSTRUCT or DESCRIBE, else as
+sem:select, and the run is counted (c:runCount). Give it a key:shortcut (mod+enter) to run from the
+editor. Type instances c:Button too: SPARQL renderings match asserted classes only."""@en ;
+    sem:slug "run-query-button" .
+
+# The query form is found past the prologue: whitespace, comments, PREFIX and BASE declarations.
+# The same pattern is used by the function variant (src/components/workbench.ts, CONSTRUCT_FORM).
+c:RunQuery a beh:Reaction ;
+    rdfs:label "Run the query"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:RunQueryButton ;
+    beh:deletes """
+CONSTRUCT {
+  ?query sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
+  ?editor c:suggesting ?suggesting ; c:activeSuggestion ?active .
+}
+WHERE {
+  $this c:of ?workbench . ?workbench c:runs ?query ; c:editor ?editor .
+  { ?query sem:select ?select } UNION { ?query sem:construct ?construct } UNION { ?query c:runCount ?runs }
+  UNION { ?editor c:suggesting ?suggesting } UNION { ?editor c:activeSuggestion ?active }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?query ?form ?text ; c:runCount ?next }
+WHERE {
+  $this c:of ?workbench . ?workbench c:runs ?query ; c:editor ?editor .
+  OPTIONAL { ?editor c:value ?value }
+  BIND(COALESCE(?value, "") AS ?text)
+  BIND(IF(REGEX(?text, "^(?:[ \\t\\r\\n]+|#[^\\n]*|PREFIX[ \\t\\r\\n]+[A-Za-z0-9_.-]*:[ \\t\\r\\n]*<[^>]*>|BASE[ \\t\\r\\n]*<[^>]*>)*(?:CONSTRUCT|DESCRIBE)", "i"), sem:construct, sem:select) AS ?form)
+  OPTIONAL { ?query c:runCount ?runs }
+  BIND(COALESCE(?runs, 0) + 1 AS ?next)
+}""" ;
+    sem:function "workbench:run" .
+
+# --- the editor -----------------------------------------------------------------------------------------
+
+c:QueryEditor a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:label "SPARQL editor"@en , "Редактор SPARQL"@uk , "SPARQL-Editor"@de , "محرر SPARQL"@ar ;
+    rdfs:comment """A SPARQL editor: the text (c:value) highlighted by token kind under a transparent text
+area, with line numbers, and suggestions for the word before the caret (c:caret) while c:suggesting:
+SPARQL's words (c:SparqlWord), the prefixes the store knows, every class and property it declares
+(as prefixed names, classes first, the namespaces the query already uses first) and the query's
+variables. Up and Down move through them (c:activeSuggestion), Tab or Enter accepts, Escape closes,
+and clicking one accepts it. c:label is the editor's accessible name."""@en ;
+    sem:slug "query-editor" .
+c:caret a owl:DatatypeProperty ; rdfs:domain c:QueryEditor ; rdfs:range xsd:integer ;
+    rdfs:comment "Where the caret is in c:value (UTF-16 code units, as the text area counts)."@en .
+c:suggesting a owl:DatatypeProperty ; rdfs:domain c:QueryEditor ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether suggestions are shown: set by typing, cleared by accepting, Escape, a click or a run."@en .
+c:activeSuggestion a owl:DatatypeProperty ; rdfs:domain c:QueryEditor ; rdfs:range xsd:integer ;
+    rdfs:comment "The position of the highlighted suggestion (default 0)."@en .
+c:suggestionsOf a owl:ObjectProperty ; rdfs:range c:QueryEditor ;
+    rdfs:comment "On a rendered list of suggestions: the editor it completes."@en .
+c:replaceFrom a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "On a rendered list of suggestions: where the word an accepted suggestion replaces starts."@en .
+c:replaceTo a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "On a rendered list of suggestions: where the replaced text ends (the caret: text after it stays)."@en .
+c:suggestionCount a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "On a rendered list of suggestions: how many it shows."@en .
+c:suggestionIndex a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "On a rendered suggestion: its position in the list."@en .
+c:completion a owl:DatatypeProperty ;
+    rdfs:comment "On a rendered suggestion: the text that accepting it puts in place of the word."@en .
+
+c:QueryEditorRendering a sem:Rendering ; sem:targets c:QueryEditor ; sem:stratum 0 ;
+    sem:functionOnly "It tokenizes the text for highlighting and finds the word before the caret to complete, which needs a tokenizer; SPARQL cannot split text into tokens." .
+c:QueryEditorRendering-fn a sem:Rule ; sem:implements c:QueryEditorRendering ; sem:function "workbench:editor" .
+
+# Key presses the editor reacts to. Other keys are not events (the text area handles them), and a
+# key a reaction used does nothing else (no focus move on Tab, no new line on Enter).
+c:EditorKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
+    beh:key "tab" , "enter" , "escape" , "arrowdown" , "arrowup" ;
+    rdfs:comment "A key press in an editor that may move through, accept or close its suggestions (beh:key)."@en .
+
+# Recorded by the event bus (src/behaviour/events.ts); they belong with the behaviour layer.
+beh:caret a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer ;
+    rdfs:comment "A text control's caret (selectionStart) after the interaction."@en .
+beh:key a owl:DatatypeProperty ;
+    rdfs:comment """On an event: the key combination pressed, normalized like key:shortcut ("tab", "mod+enter").
+On an event class recorded from key presses: a combination it is for (none: every key)."""@en .
+
+c:QueryEditorInput a beh:Reaction ;
+    rdfs:label "Edit the query"@en ;
+    beh:when beh:Input ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:caret ?caret ; c:activeSuggestion ?active }
+WHERE { { $this c:value ?old } UNION { $this c:caret ?caret } UNION { $this c:activeSuggestion ?active } }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?value ; c:caret ?caret ; c:suggesting true }
+WHERE { $event beh:value ?value . OPTIONAL { $event beh:caret ?at } BIND(COALESCE(?at, STRLEN(?value)) AS ?caret) }""" ;
+    sem:function "workbench:input" .
+
+# A click in the text (not on a suggestion) moves the caret somewhere suggestions don't belong.
+c:QueryEditorClick a beh:Reaction ;
+    rdfs:label "Close the suggestions"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:suggesting true ; c:activeSuggestion ?active }
+WHERE { $this c:suggesting true . OPTIONAL { $this c:activeSuggestion ?active } }""" ;
+    sem:function "workbench:click" .
+
+c:SuggestionDismiss a beh:Reaction ;
+    rdfs:label "Close the suggestions"@en ;
+    beh:when c:EditorKey ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:suggesting true ; c:activeSuggestion ?active }
+WHERE { $event beh:key "escape" . $this c:suggesting true . ?list c:suggestionsOf $this . OPTIONAL { $this c:activeSuggestion ?active } }""" ;
+    sem:function "workbench:dismiss" .
+
+c:SuggestionNext a beh:Reaction ;
+    rdfs:label "Next suggestion"@en ;
+    beh:when c:EditorKey ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:activeSuggestion ?active }
+WHERE { $event beh:key "arrowdown" . $this c:suggesting true ; c:activeSuggestion ?active . ?list c:suggestionsOf $this }""" ;
+    beh:inserts """CONSTRUCT { $this c:activeSuggestion ?next }
+WHERE {
+  $event beh:key "arrowdown" . $this c:suggesting true . ?list c:suggestionsOf $this ; c:suggestionCount ?count .
+  OPTIONAL { $this c:activeSuggestion ?at } BIND(COALESCE(?at, 0) AS ?active)
+  BIND(IF(?active + 1 >= ?count, 0, ?active + 1) AS ?next)
+}""" ;
+    sem:function "workbench:next" .
+
+c:SuggestionPrevious a beh:Reaction ;
+    rdfs:label "Previous suggestion"@en ;
+    beh:when c:EditorKey ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:activeSuggestion ?active }
+WHERE { $event beh:key "arrowup" . $this c:suggesting true ; c:activeSuggestion ?active . ?list c:suggestionsOf $this }""" ;
+    beh:inserts """CONSTRUCT { $this c:activeSuggestion ?next }
+WHERE {
+  $event beh:key "arrowup" . $this c:suggesting true . ?list c:suggestionsOf $this ; c:suggestionCount ?count .
+  OPTIONAL { $this c:activeSuggestion ?at } BIND(COALESCE(?at, 0) AS ?active)
+  BIND(IF(?active <= 0, ?count - 1, ?active - 1) AS ?next)
+}""" ;
+    sem:function "workbench:previous" .
+
+# Accepting replaces the word (c:replaceFrom .. c:replaceTo of the rendered list) with the
+# suggestion's c:completion and puts the caret after it; a completed prefix ("rdfs:") keeps
+# suggesting, for the term that follows it.
+c:SuggestionAccept a beh:Reaction ;
+    rdfs:label "Accept the suggestion"@en ;
+    beh:when c:EditorKey ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:caret ?caret ; c:suggesting true ; c:activeSuggestion ?active }
+WHERE {
+  $event beh:key ?key FILTER(?key IN ("tab", "enter"))
+  $this c:suggesting true ; c:value ?old . ?list c:suggestionsOf $this .
+  OPTIONAL { $this c:caret ?caret } OPTIONAL { $this c:activeSuggestion ?active }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?new ; c:caret ?after ; c:suggesting ?again }
+WHERE {
+  $event beh:key ?key FILTER(?key IN ("tab", "enter"))
+  $this c:suggesting true ; c:value ?old .
+  OPTIONAL { $this c:activeSuggestion ?at } BIND(COALESCE(?at, 0) AS ?active)
+  ?list c:suggestionsOf $this ; c:replaceFrom ?from ; c:replaceTo ?to ; rdfhtml:hasChild ?option .
+  ?option c:suggestionIndex ?active ; c:completion ?word .
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), ?word, SUBSTR(?old, ?to + 1)) AS ?new)
+  BIND(?from + STRLEN(?word) AS ?after)
+  BIND(IF(STRENDS(?word, ":"), true, ?unbound) AS ?again)
+}""" ;
+    sem:function "workbench:accept" .
+
+c:SuggestionPick a beh:Reaction ;
+    rdfs:label "Accept the suggestion"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:QueryEditor ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:caret ?caret ; c:suggesting ?suggesting ; c:activeSuggestion ?active }
+WHERE {
+  $event beh:node ?hit . ?option rdfhtml:hasChild* ?hit . ?option c:completion ?word .
+  { $this c:value ?old } UNION { $this c:caret ?caret } UNION { $this c:suggesting ?suggesting } UNION { $this c:activeSuggestion ?active }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?new ; c:caret ?after ; c:suggesting ?again }
+WHERE {
+  $event beh:node ?hit . ?option rdfhtml:hasChild* ?hit . ?option c:completion ?word .
+  ?list rdfhtml:hasChild ?option ; c:suggestionsOf $this ; c:replaceFrom ?from ; c:replaceTo ?to .
+  OPTIONAL { $this c:value ?value } BIND(COALESCE(?value, "") AS ?old)
+  BIND(CONCAT(SUBSTR(?old, 1, ?from), ?word, SUBSTR(?old, ?to + 1)) AS ?new)
+  BIND(?from + STRLEN(?word) AS ?after)
+  BIND(IF(STRENDS(?word, ":"), true, ?unbound) AS ?again)
+}""" ;
+    sem:function "workbench:pick" .
+
+# --- SPARQL's own words ------------------------------------------------------------------------------------
+# Highlighted as keywords (in any case) and offered as completions. A c:SparqlWord's rdfs:label is
+# how it is written; its rdfs:comment is shown beside the suggestion.
+
+c:SparqlWord a owl:Class ; rdfs:comment "A word of the SPARQL 1.1 language."@en .
+c:SparqlKeyword a owl:Class ; rdfs:subClassOf c:SparqlWord ; rdfs:comment "A SPARQL keyword: a query form, clause or modifier."@en .
+c:SparqlFunction a owl:Class ; rdfs:subClassOf c:SparqlWord ; rdfs:comment "A SPARQL built-in function or aggregate."@en .
+
+c:kw-select a c:SparqlKeyword ; rdfs:label "SELECT" ; rdfs:comment "Query form: a table of variable bindings."@en .
+c:kw-construct a c:SparqlKeyword ; rdfs:label "CONSTRUCT" ; rdfs:comment "Query form: a graph built from a template."@en .
+c:kw-describe a c:SparqlKeyword ; rdfs:label "DESCRIBE" ; rdfs:comment "Query form: a graph about the resources found."@en .
+c:kw-ask a c:SparqlKeyword ; rdfs:label "ASK" ; rdfs:comment "Query form: whether the pattern has a match."@en .
+c:kw-where a c:SparqlKeyword ; rdfs:label "WHERE" ; rdfs:comment "The graph pattern to match."@en .
+c:kw-prefix a c:SparqlKeyword ; rdfs:label "PREFIX" ; rdfs:comment "Declares a prefix for IRIs."@en .
+c:kw-base a c:SparqlKeyword ; rdfs:label "BASE" ; rdfs:comment "Declares the base IRI for relative IRIs."@en .
+c:kw-distinct a c:SparqlKeyword ; rdfs:label "DISTINCT" ; rdfs:comment "Drops duplicate solutions."@en .
+c:kw-reduced a c:SparqlKeyword ; rdfs:label "REDUCED" ; rdfs:comment "Permits dropping duplicate solutions."@en .
+c:kw-from a c:SparqlKeyword ; rdfs:label "FROM" ; rdfs:comment "Names a graph for the default graph."@en .
+c:kw-named a c:SparqlKeyword ; rdfs:label "NAMED" ; rdfs:comment "With FROM: a named graph to query."@en .
+c:kw-graph a c:SparqlKeyword ; rdfs:label "GRAPH" ; rdfs:comment "Matches a pattern in a named graph."@en .
+c:kw-optional a c:SparqlKeyword ; rdfs:label "OPTIONAL" ; rdfs:comment "A pattern that may or may not match."@en .
+c:kw-filter a c:SparqlKeyword ; rdfs:label "FILTER" ; rdfs:comment "Keeps the solutions for which an expression is true."@en .
+c:kw-bind a c:SparqlKeyword ; rdfs:label "BIND" ; rdfs:comment "Assigns an expression's value to a variable."@en .
+c:kw-as a c:SparqlKeyword ; rdfs:label "AS" ; rdfs:comment "Names a computed value."@en .
+c:kw-union a c:SparqlKeyword ; rdfs:label "UNION" ; rdfs:comment "Solutions of either pattern."@en .
+c:kw-minus a c:SparqlKeyword ; rdfs:label "MINUS" ; rdfs:comment "Removes solutions compatible with a pattern."@en .
+c:kw-values a c:SparqlKeyword ; rdfs:label "VALUES" ; rdfs:comment "Inline data: a table of bindings."@en .
+c:kw-service a c:SparqlKeyword ; rdfs:label "SERVICE" ; rdfs:comment "Matches a pattern at a remote endpoint."@en .
+c:kw-group-by a c:SparqlKeyword ; rdfs:label "GROUP BY" ; rdfs:comment "Groups solutions for aggregates."@en .
+c:kw-having a c:SparqlKeyword ; rdfs:label "HAVING" ; rdfs:comment "Filters groups."@en .
+c:kw-order-by a c:SparqlKeyword ; rdfs:label "ORDER BY" ; rdfs:comment "Sorts the solutions."@en .
+c:kw-asc a c:SparqlKeyword ; rdfs:label "ASC" ; rdfs:comment "Ascending order."@en .
+c:kw-desc a c:SparqlKeyword ; rdfs:label "DESC" ; rdfs:comment "Descending order."@en .
+c:kw-limit a c:SparqlKeyword ; rdfs:label "LIMIT" ; rdfs:comment "At most this many solutions."@en .
+c:kw-offset a c:SparqlKeyword ; rdfs:label "OFFSET" ; rdfs:comment "Skips this many solutions."@en .
+c:kw-exists a c:SparqlKeyword ; rdfs:label "EXISTS" ; rdfs:comment "Whether a pattern matches (in a FILTER)."@en .
+c:kw-not a c:SparqlKeyword ; rdfs:label "NOT" ; rdfs:comment "With EXISTS or IN: the negation."@en .
+c:kw-in a c:SparqlKeyword ; rdfs:label "IN" ; rdfs:comment "Whether a value is one of a list."@en .
+c:kw-undef a c:SparqlKeyword ; rdfs:label "UNDEF" ; rdfs:comment "In VALUES: no binding."@en .
+c:kw-lateral a c:SparqlKeyword ; rdfs:label "LATERAL" ; rdfs:comment "Evaluates a pattern once per solution (SPARQL 1.2 draft; Oxigraph)."@en .
+c:kw-true a c:SparqlKeyword ; rdfs:label "true" ; rdfs:comment "The boolean true."@en .
+c:kw-false a c:SparqlKeyword ; rdfs:label "false" ; rdfs:comment "The boolean false."@en .
+
+c:fn-count a c:SparqlFunction ; rdfs:label "COUNT" ; rdfs:comment "Aggregate: the number of values."@en .
+c:fn-sum a c:SparqlFunction ; rdfs:label "SUM" ; rdfs:comment "Aggregate: the sum of the values."@en .
+c:fn-min a c:SparqlFunction ; rdfs:label "MIN" ; rdfs:comment "Aggregate: the least value."@en .
+c:fn-max a c:SparqlFunction ; rdfs:label "MAX" ; rdfs:comment "Aggregate: the greatest value."@en .
+c:fn-avg a c:SparqlFunction ; rdfs:label "AVG" ; rdfs:comment "Aggregate: the mean."@en .
+c:fn-sample a c:SparqlFunction ; rdfs:label "SAMPLE" ; rdfs:comment "Aggregate: any one value."@en .
+c:fn-group-concat a c:SparqlFunction ; rdfs:label "GROUP_CONCAT" ; rdfs:comment "Aggregate: the values joined (SEPARATOR)."@en .
+c:fn-str a c:SparqlFunction ; rdfs:label "STR" ; rdfs:comment "The lexical form of a literal or an IRI."@en .
+c:fn-lang a c:SparqlFunction ; rdfs:label "LANG" ; rdfs:comment "A literal's language tag."@en .
+c:fn-langmatches a c:SparqlFunction ; rdfs:label "LANGMATCHES" ; rdfs:comment "Whether a language tag matches a range."@en .
+c:fn-datatype a c:SparqlFunction ; rdfs:label "DATATYPE" ; rdfs:comment "A literal's datatype IRI."@en .
+c:fn-iri a c:SparqlFunction ; rdfs:label "IRI" ; rdfs:comment "An IRI from a string."@en .
+c:fn-bnode a c:SparqlFunction ; rdfs:label "BNODE" ; rdfs:comment "A fresh blank node."@en .
+c:fn-strlen a c:SparqlFunction ; rdfs:label "STRLEN" ; rdfs:comment "The length of a string."@en .
+c:fn-substr a c:SparqlFunction ; rdfs:label "SUBSTR" ; rdfs:comment "Part of a string (1-based)."@en .
+c:fn-ucase a c:SparqlFunction ; rdfs:label "UCASE" ; rdfs:comment "Upper case."@en .
+c:fn-lcase a c:SparqlFunction ; rdfs:label "LCASE" ; rdfs:comment "Lower case."@en .
+c:fn-strstarts a c:SparqlFunction ; rdfs:label "STRSTARTS" ; rdfs:comment "Whether a string starts with another."@en .
+c:fn-strends a c:SparqlFunction ; rdfs:label "STRENDS" ; rdfs:comment "Whether a string ends with another."@en .
+c:fn-contains a c:SparqlFunction ; rdfs:label "CONTAINS" ; rdfs:comment "Whether a string contains another."@en .
+c:fn-strbefore a c:SparqlFunction ; rdfs:label "STRBEFORE" ; rdfs:comment "The part of a string before another."@en .
+c:fn-strafter a c:SparqlFunction ; rdfs:label "STRAFTER" ; rdfs:comment "The part of a string after another."@en .
+c:fn-concat a c:SparqlFunction ; rdfs:label "CONCAT" ; rdfs:comment "Strings joined."@en .
+c:fn-replace a c:SparqlFunction ; rdfs:label "REPLACE" ; rdfs:comment "A string with a pattern's matches replaced."@en .
+c:fn-regex a c:SparqlFunction ; rdfs:label "REGEX" ; rdfs:comment "Whether a string matches a pattern."@en .
+c:fn-encode-for-uri a c:SparqlFunction ; rdfs:label "ENCODE_FOR_URI" ; rdfs:comment "A string percent-encoded."@en .
+c:fn-abs a c:SparqlFunction ; rdfs:label "ABS" ; rdfs:comment "The absolute value."@en .
+c:fn-round a c:SparqlFunction ; rdfs:label "ROUND" ; rdfs:comment "The nearest integer."@en .
+c:fn-ceil a c:SparqlFunction ; rdfs:label "CEIL" ; rdfs:comment "Rounded up."@en .
+c:fn-floor a c:SparqlFunction ; rdfs:label "FLOOR" ; rdfs:comment "Rounded down."@en .
+c:fn-now a c:SparqlFunction ; rdfs:label "NOW" ; rdfs:comment "The time the query runs."@en .
+c:fn-year a c:SparqlFunction ; rdfs:label "YEAR" ; rdfs:comment "The year of a date-time."@en .
+c:fn-if a c:SparqlFunction ; rdfs:label "IF" ; rdfs:comment "One of two values, by a condition."@en .
+c:fn-coalesce a c:SparqlFunction ; rdfs:label "COALESCE" ; rdfs:comment "The first argument that has a value."@en .
+c:fn-bound a c:SparqlFunction ; rdfs:label "BOUND" ; rdfs:comment "Whether a variable has a value."@en .
+c:fn-isiri a c:SparqlFunction ; rdfs:label "isIRI" ; rdfs:comment "Whether a term is an IRI."@en .
+c:fn-isblank a c:SparqlFunction ; rdfs:label "isBlank" ; rdfs:comment "Whether a term is a blank node."@en .
+c:fn-isliteral a c:SparqlFunction ; rdfs:label "isLiteral" ; rdfs:comment "Whether a term is a literal."@en .
+c:fn-isnumeric a c:SparqlFunction ; rdfs:label "isNumeric" ; rdfs:comment "Whether a term is a number."@en .
+c:fn-sameterm a c:SparqlFunction ; rdfs:label "sameTerm" ; rdfs:comment "Whether two terms are the same term."@en .
+c:fn-uuid a c:SparqlFunction ; rdfs:label "UUID" ; rdfs:comment "A fresh urn:uuid IRI."@en .
+
+# --- results ------------------------------------------------------------------------------------------------
+
+c:QueryResultView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A view of the results of a query (c:of a sem:Query with sem:select or sem:construct). It
+runs the query when shown and again when its text or c:runCount changes, not when the graph does.
+At most c:limit results are shown. A query that fails shows its error (a c:Alert) instead."""@en .
+
+c:ResultTable a owl:Class ;
+    rdfs:subClassOf c:QueryResultView ;
+    rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ;
+    rdfs:comment "The results as a table: one column per variable the query selects, or subject, predicate and object for a graph."@en ;
+    sem:slug "result-table" .
+c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ;
+    sem:functionOnly "It runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." .
+c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
+
+c:ResultGraph a owl:Class ;
+    rdfs:subClassOf c:QueryResultView ;
+    rdfs:label "Graph"@en , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ;
+    rdfs:comment """The results as a node-link diagram: the triples of a CONSTRUCT, or of SELECT rows (?s ?p ?o,
+or each row's first value linked to the others by variable name). The best-connected nodes are
+shown (at most c:limit, default 40), laid out in layers when the graph is acyclic and narrow
+enough, else around its hub; nodes are prefixed names, edges are labelled by predicate."""@en ;
+    sem:slug "result-graph" .
+c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ;
+    sem:functionOnly "It runs the query held in the data and computes a layout (trigonometry, layering by longest path), which SPARQL cannot do." .
+c:ResultGraphRendering-fn a sem:Rule ; sem:implements c:ResultGraphRendering ; sem:function "workbench:graph" .
+
+c:ResultTurtle a owl:Class ;
+    rdfs:subClassOf c:QueryResultView ;
+    rdfs:label "Turtle"@en , "Turtle"@uk , "Turtle"@de , "Turtle"@ar ;
+    rdfs:comment """The results as syntax-colored Turtle: the graph of a CONSTRUCT, or the bindings of a SELECT
+as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
+    sem:slug "result-turtle" .
+c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of ;
+    sem:functionOnly "It runs the query held in the data and pretty-prints the result as Turtle tokens, which needs a tokenizer." .
+c:ResultTurtleRendering-fn a sem:Rule ; sem:implements c:ResultTurtleRendering ; sem:function "workbench:turtle" .
+
+# --- phrases --------------------------------------------------------------------------------------------------
+
+c:SamplesPhrase a c:Phrase ; rdfs:label "Sample queries"@en , "Приклади запитів"@uk , "Beispielabfragen"@de , "استعلامات نموذجية"@ar .
+c:SuggestionsPhrase a c:Phrase ; rdfs:label "Suggestions"@en , "Підказки"@uk , "Vorschläge"@de , "اقتراحات"@ar .
+c:EditorKeysPhrase a c:Phrase ;
+    rdfs:label "Tab or Enter accepts a suggestion · Esc closes"@en , "Tab або Enter приймає підказку · Esc закриває"@uk ,
+               "Tab oder Enter übernimmt einen Vorschlag · Esc schließt"@de , "Tab أو Enter لقبول الاقتراح · Esc للإغلاق"@ar .
+c:NotRunPhrase a c:Phrase ;
+    rdfs:label "Run a query, or pick a sample, to see its results here."@en , "Виконайте запит або виберіть приклад, щоб побачити результати тут."@uk ,
+               "Führen Sie eine Abfrage aus oder wählen Sie ein Beispiel, um hier die Ergebnisse zu sehen."@de , "نفّذ استعلامًا أو اختر نموذجًا لعرض نتائجه هنا."@ar .
+c:NoSparqlPhrase a c:Phrase ;
+    rdfs:label "Queries need SPARQL; choose a store that has it (Oxigraph or Hybrid)."@en , "Запитам потрібен SPARQL; виберіть сховище з ним (Oxigraph або Hybrid)."@uk ,
+               "Abfragen brauchen SPARQL; wählen Sie einen Speicher, der es kann (Oxigraph oder Hybrid)."@de , "تحتاج الاستعلامات إلى SPARQL؛ اختر مخزنًا يدعمه (Oxigraph أو Hybrid)."@ar .
+c:QueryFailedPhrase a c:Phrase ; rdfs:label "The query failed"@en , "Запит не вдався"@uk , "Die Abfrage ist fehlgeschlagen"@de , "فشل الاستعلام"@ar .
+c:NoResultsPhrase a c:Phrase ; rdfs:label "No results."@en , "Немає результатів."@uk , "Keine Ergebnisse."@de , "لا توجد نتائج."@ar .
+c:RowsPhrase a c:Phrase ; rdfs:label "Rows: {n}"@en , "Рядків: {n}"@uk , "Zeilen: {n}"@de , "الصفوف: {n}"@ar .
+c:TriplesPhrase a c:Phrase ; rdfs:label "Triples: {n}"@en , "Трійок: {n}"@uk , "Tripel: {n}"@de , "الثلاثيات: {n}"@ar .
+c:GraphSizePhrase a c:Phrase ; rdfs:label "Nodes: {n} · edges: {m}"@en , "Вузлів: {n} · ребер: {m}"@uk , "Knoten: {n} · Kanten: {m}"@de , "العقد: {n} · الحواف: {m}"@ar .
+c:MorePhrase a c:Phrase ; rdfs:label "+{n} more"@en , "+{n} ще"@uk , "+{n} weitere"@de , "+{n} أخرى"@ar .
+c:AnswerPhrase a c:Phrase ; rdfs:label "Answer: {v}"@en , "Відповідь: {v}"@uk , "Antwort: {v}"@de , "الإجابة: {v}"@ar .
+c:NoGraphPhrase a c:Phrase ;
+    rdfs:label "Nothing to draw: the results link no nodes."@en , "Нічого малювати: результати не повʼязують вузлів."@uk ,
+               "Nichts zu zeichnen: die Ergebnisse verbinden keine Knoten."@de , "لا شيء للرسم: النتائج لا تربط أي عقد."@ar .
+c:ResultSetPhrase a c:Phrase ;
+    rdfs:label "The bindings, as a SPARQL result set"@en , "Привʼязки як набір результатів SPARQL"@uk ,
+               "Die Bindungen als SPARQL-Ergebnismenge"@de , "الارتباطات كمجموعة نتائج SPARQL"@ar .
+c:RanSamplePhrase a c:Phrase ; rdfs:label "Results of: {name}"@en , "Результати: {name}"@uk , "Ergebnisse von: {name}"@de , "نتائج: {name}"@ar .
+c:RanQueryPhrase a c:Phrase ; rdfs:label "Results of your query"@en , "Результати вашого запиту"@uk , "Ergebnisse Ihrer Abfrage"@de , "نتائج استعلامك"@ar .
+
+# --- shapes ---------------------------------------------------------------------------------------------------
+
+c:QueryWorkbenchShape a sh:NodeShape ; sh:targetClass c:QueryWorkbench ;
+    sh:property [ sh:path c:editor ; sh:minCount 1 ; sh:maxCount 1 ; sh:class c:QueryEditor ; sh:message "A workbench needs exactly one editor (c:editor, a c:QueryEditor)." ] ,
+                [ sh:path c:runs ; sh:minCount 1 ; sh:maxCount 1 ; sh:class sem:Query ; sh:message "A workbench needs one query node to run into (c:runs, a sem:Query)." ] ,
+                [ sh:path c:results ; sh:maxCount 1 ] .
+c:QueryEditorShape a sh:NodeShape ; sh:targetClass c:QueryEditor ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An editor needs an accessible name (c:label)." ] ,
+                [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
+                [ sh:path c:caret ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
+                [ sh:path c:activeSuggestion ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
+                [ sh:path c:suggesting ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+c:QueryResultViewShape a sh:NodeShape ; sh:targetClass c:QueryResultView ;
+    sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:class sem:Query ; sh:message "A result view shows one query (c:of, a sem:Query)." ] ,
+                [ sh:path c:limit ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .
+c:RunQueryButtonShape a sh:NodeShape ; sh:targetClass c:RunQueryButton ;
+    sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:class c:QueryWorkbench ; sh:message "A run button runs one workbench (c:of)." ] .

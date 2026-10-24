@@ -3,6 +3,7 @@ import type { FnRule } from '../engine/context.ts'
 import { ST } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import { isTrue } from '../components/util.ts'
+import { debugFunctions } from './debug.ts'
 
 const busy: FnRule = (ctx, focus) => {
   if (!isTrue(ctx.object(focus, ST.busy))) return []
@@ -11,4 +12,5 @@ const busy: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const statusFunctions: Record<string, FnRule> = { 'status:busy': busy }
+// The debug layer's function rides along until src/components/functions.ts imports debug.ts itself.
+export const statusFunctions: Record<string, FnRule> = { 'status:busy': busy, ...debugFunctions }

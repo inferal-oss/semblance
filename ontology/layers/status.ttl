@@ -23,3 +23,15 @@ st:Busy a sem:Rendering ;
     sem:stratum 10 ;
     sem:watches st:busy .
 st:Busy-fn a sem:Rule ; sem:implements st:Busy ; sem:function "status:busy" .
+st:Busy-sparql a sem:Rule ;
+    sem:implements st:Busy ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?busy .
+  ?busy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-busy" ; rdfhtml:attributeValue "true" .
+}
+WHERE {
+  $this st:busy ?value FILTER(isLiteral(?value) && STR(?value) = "true")
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-busy")) AS ?busy)
+}""" .

@@ -40,8 +40,8 @@ describe('arrow-key navigation (keyboard layer)', () => {
     const h = setup()
     const tab = (name: string) => [...h.document.querySelectorAll('[role=tab]')].find((t) => t.textContent === name)!
     expect(h.press(tab('Inspector'), 'ArrowRight')).toBe(true)
-    expect(tab('Text projection').getAttribute('aria-selected')).toBe('true')
-    h.press(tab('Text projection'), 'End')
+    expect(tab('Query').getAttribute('aria-selected')).toBe('true')
+    h.press(tab('Query'), 'End')
     expect(tab('Change log').getAttribute('aria-selected')).toBe('true')
     h.press(tab('Change log'), 'ArrowRight') // wraps
     expect(tab('Inspector').getAttribute('aria-selected')).toBe('true')

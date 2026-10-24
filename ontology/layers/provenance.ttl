@@ -45,3 +45,7 @@ WHERE {
   BIND(IRI(CONCAT(STR(?root), "-debug-rule")) AS ?ruleAttr)
   BIND(IRI(CONCAT(STR(?root), "-debug-focus")) AS ?focusAttr)
 }""" .
+
+sem:DebugAttributes-fn a sem:Rule ;
+    sem:implements sem:DebugAttributes ;
+    sem:function "debug:attributes" .

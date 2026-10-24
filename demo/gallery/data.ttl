@@ -67,7 +67,7 @@ ui:browsing a owl:ObjectProperty ; rdfs:label "browsing"@en .
 ui:dt-browse ui:browsing c:NavList .
 
 ui:dt-tree-crumbs a c:Breadcrumbs ; c:label "Class path" ;
-    c:controls ui:dt-browse ; c:property ui:browsing ; c:parentProperty rdfs:subClassOf .
+    c:controls ui:dt-browse ; c:property ui:browsing ; c:parentProperty rdfs:subClassOf ; c:upTo sem:Component .
 ui:dt-tree-classes a c:Tree ; c:label "Component classes" ;
     c:of sem:Component ; c:parentProperty rdfs:subClassOf ; c:detailProperty sem:slug ;
     c:expandedNode sem:Component , c:Segmented ;

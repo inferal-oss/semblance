@@ -34,6 +34,43 @@ export function hashKey(s: string): string {
   return (h >>> 0).toString(36)
 }
 
+const MD5_SHIFTS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21]
+const MD5_K = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) >>> 0)
+
+/** MD5 of the UTF-8 bytes of `s`, as lower-case hex: SPARQL's MD5(). */
+export function md5(s: string): string {
+  const bytes = new TextEncoder().encode(s)
+  const n = ((bytes.length + 8) >>> 6) + 1
+  const words = new Uint32Array(n * 16)
+  for (let i = 0; i < bytes.length; i++) words[i >> 2]! |= bytes[i]! << ((i % 4) * 8)
+  words[bytes.length >> 2]! |= 0x80 << ((bytes.length % 4) * 8)
+  words[n * 16 - 2] = (bytes.length * 8) >>> 0
+  words[n * 16 - 1] = Math.floor(bytes.length / 0x20000000)
+  let [a0, b0, c0, d0] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]
+  for (let chunk = 0; chunk < words.length; chunk += 16) {
+    let [a, b, c, d] = [a0, b0, c0, d0]
+    for (let i = 0; i < 64; i++) {
+      const round = i >> 4
+      const f = round === 0 ? (b & c) | (~b & d) : round === 1 ? (d & b) | (~d & c) : round === 2 ? b ^ c ^ d : c ^ (b | ~d)
+      const g = round === 0 ? i : round === 1 ? (5 * i + 1) % 16 : round === 2 ? (3 * i + 5) % 16 : (7 * i) % 16
+      const shift = MD5_SHIFTS[round * 4 + (i % 4)]!
+      const sum = (a + f + MD5_K[i]! + words[chunk + g]!) | 0
+      ;[a, d, c] = [d, c, b]
+      b = (b + ((sum << shift) | (sum >>> (32 - shift)))) | 0
+    }
+    a0 = (a0 + a) | 0
+    b0 = (b0 + b) | 0
+    c0 = (c0 + c) | 0
+    d0 = (d0 + d) | 0
+  }
+  let hex = ''
+  for (const w of [a0, b0, c0, d0]) for (let i = 0; i < 4; i++) hex += ((w >>> (i * 8)) & 0xff).toString(16).padStart(2, '0')
+  return hex
+}
+
+/** A short, stable key that SPARQL rules compute too: SUBSTR(MD5(STR(?x)), 1, 8). */
+export const md5Key = (s: string): string => md5(s).slice(0, 8)
+
 /** The viewer's first language that Intl knows, else en-US. */
 const locale = (ctx: RuleContext) => ctx.memo('data:locale:' + ctx.languages.join(','), () => {
   try {
@@ -340,9 +377,9 @@ export function initials(label: string): string {
   return chars.toLocaleUpperCase()
 }
 
-/** A hue (0-359) derived from a label: the same label always gets the same color. */
+/** A hue (0-359) derived from a label: the same label always gets the same color (as SPARQL computes it, from MD5). */
 export function hueOf(label: string): number {
-  return parseInt(hashKey(label), 36) % 360
+  return parseInt(md5(label).slice(0, 4), 16) % 360
 }
 
 const avatar: FnRule = (ctx, focus) => {
@@ -365,6 +402,7 @@ const avatar: FnRule = (ctx, focus) => {
 }
 
 const avatarGroup: FnRule = (ctx, focus) => {
+  if (!ctx.object(focus, C.children)) return []
   const o = ctx.out(focus)
   const members = nodes(ctx, ctx.object(focus, C.children))
   const max = Math.max(1, num(ctx, focus, C.max, members.length))
@@ -392,17 +430,20 @@ const avatarGroup: FnRule = (ctx, focus) => {
 
 // --- Timeline -------------------------------------------------------------------------------------
 
+/** At most this many events, whatever c:limit says (the SPARQL rule ranks this many newest members). */
+const TIMELINE_MAX = 50
+
 /** The newest members of a head-linked stream; one c:TimelineItem per member, keyed by it. */
 const timeline: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const stream = ctx.object(focus, C.of)
   if (!named(stream)) return []
-  const limit = Math.max(1, num(ctx, focus, C.limit, 8))
+  const limit = Math.min(TIMELINE_MAX, Math.max(1, num(ctx, focus, C.limit, 8)))
   const members: NamedNode[] = []
   for (let m = ctx.object(stream, BEH.latest); named(m) && members.length < limit && ctx.object(m, RDF_TYPE); m = ctx.object(m, BEH.previous)) members.push(m)
   if (!members.length) return message(o, ctx.modality === MOD.Text ? 'Div' : 'P', text(ctx, focus, C.emptyText) ?? 'No events yet.')
   const items = members.map((m) => {
-    const item = o.node('e-' + hashKey(m.value))
+    const item = o.node('e-' + md5Key(m.value))
     o.t(item, RDF_TYPE, ctx.nn(C_TIMELINE_ITEM))
     o.t(item, C.of, m)
     return item

@@ -1,6 +1,6 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
-import type { Delta } from '../rdf.ts'
+import { type Delta, MINT_SEPARATOR, owningFocus } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
@@ -38,6 +38,10 @@ export interface EventDetail {
   checked?: boolean
   /** Numeric details (beh:x, beh:y, beh:width, beh:height). */
   numbers?: Record<string, number>
+  /** A text control's caret (selectionStart) after the interaction (beh:caret). */
+  caret?: number
+  /** The key combination of a key press, normalized as key:shortcut is ("tab", "mod+enter"; beh:key). */
+  key?: string
 }
 
 export interface Handled {
@@ -132,6 +136,22 @@ export class EventBus {
       .sort((a, b) => a.iri.localeCompare(b.iri))
   }
 
+  /** Where the pointer was last seen (view state, for commands that act "here"). */
+  private pointer?: { x: number; y: number }
+
+  /** The pointer's place for a command event: the RDF/HTML node under it and its distance to the viewport's edges. */
+  private pointerDetail(renderer: DomRenderer): EventDetail {
+    const p = this.pointer
+    const view = renderer.host.ownerDocument.defaultView
+    if (!p || !view) return {}
+    let node: string | undefined
+    for (let el: Node | null = renderer.host.ownerDocument.elementFromPoint?.(p.x, p.y) ?? null; el && el !== renderer.host; el = el.parentNode) {
+      node = renderer.keyOf(el)
+      if (node) break
+    }
+    return { node, numbers: { x: p.x, y: p.y, toEnd: view.innerWidth - p.x, toBottom: view.innerHeight - p.y } }
+  }
+
   /** The key:Command bound to a (normalized) key combination, if any. */
   commandFor(combo: string): string | undefined {
     const store = this.runtime.store
@@ -173,6 +193,8 @@ export class EventBus {
     if (detail.node !== undefined) quads.push(f.quad(event, nn(BEH.node), nn(detail.node)))
     if (detail.value !== undefined) quads.push(f.quad(event, nn(BEH.value), f.literal(detail.value)))
     if (detail.checked !== undefined) quads.push(f.quad(event, nn(BEH.checked), f.literal(String(detail.checked), nn(XSD_BOOLEAN))))
+    if (detail.caret !== undefined) quads.push(f.quad(event, nn(NS.beh + 'caret'), f.literal(String(detail.caret), nn(XSD_INTEGER))))
+    if (detail.key !== undefined) quads.push(f.quad(event, nn(NS.beh + 'key'), f.literal(detail.key)))
     for (const [name, v] of Object.entries(detail.numbers ?? {})) quads.push(f.quad(event, nn(NS.beh + name), f.literal(String(Math.round(v)), nn(XSD_INTEGER))))
     // The event is readable by reactions before it is a member of the stream.
     for (const q of quads) this.runtime.store.add(f.quad(q.subject, q.predicate, q.object, this.graph))
@@ -312,9 +334,16 @@ export class EventBus {
    */
   attach(renderer: DomRenderer, onHandled: (h: Handled) => void = () => {}): () => void {
     const domTypes = new Set(this.runtime.store.match(null, this.f.namedNode(BEH.domEvent), null).map((q) => q.object.value))
+    const doc = renderer.host.ownerDocument
+    const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
+    // Key presses a reaction handled are not also the keyboard layer's (nor the browser's).
+    const consumed = new WeakSet<Event>()
     const listener = (e: Event) => {
       if (renderer.inSlot(e.target as Node)) return
-      const types = this.eventClasses(e.type)
+      // Key events carry their combination; an event class may name the keys it is for (beh:key).
+      const combo = e.type.startsWith('key') && (e as KeyboardEvent).key ? comboOf(e as KeyboardEvent, apple) : undefined
+      const types = combo === undefined ? this.eventClasses(e.type) : this.eventClasses(e.type).filter((t) => this.forKey(t, combo))
+      if (!types.length) return
       let node: string | undefined
       for (let el = e.target as Node | null; el && el !== renderer.host; el = el.parentNode) {
         const key = renderer.keyOf(el)
@@ -328,13 +357,17 @@ export class EventBus {
           const detail: EventDetail = { node }
           if (e.type !== 'click' && e.type !== 'mouseover' && 'value' in control && typeof control.value === 'string') detail.value = control.value
           if (control.type === 'checkbox') detail.checked = control.checked
+          if (detail.value !== undefined && typeof control.selectionStart === 'number') detail.caret = control.selectionStart
+          if (combo !== undefined) detail.key = combo
           const custom = (e as CustomEvent).detail
           if (custom && typeof custom === 'object') detail.numbers = custom as Record<string, number>
           const handled = this.emit(type, focus, detail, reactions)
           // Reactions that changed nothing let the event reach the enclosing components
           // (a generic reaction on c:Button must not swallow its container's click).
           if (!handled.recorded && !handled.delta.add.length && !handled.delta.remove.length) continue
+          if (combo !== undefined) e.preventDefault(), consumed.add(e)
           onHandled(handled)
+          this.placeCaret(renderer, focus)
           return
         }
       }
@@ -343,20 +376,19 @@ export class EventBus {
     const gestures = (e: Event) => this.gesture(e as PointerEvent, renderer)
     renderer.host.addEventListener('pointerdown', gestures)
     // Keyboard layer: a key combination activates the element that declares it.
-    const doc = renderer.host.ownerDocument
-    const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
     const keys = (e: Event) => {
       const k = e as KeyboardEvent
-      if (!k.key || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
+      if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
       if (renderer.host.contains(k.target as Node) && navigate(k)) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
-      // Commands (key:Command) are graph nodes, not elements: the press becomes their event.
+      // Commands (key:Command) are graph nodes, not elements: the press becomes their event,
+      // carrying where the pointer is (the node under it, its distance to the edges).
       const command = this.commandFor(combo)
-      if (command) {
+      if (command && !(typing && this.value(this.f.namedNode(command), KEY.whileTyping)?.value === 'false')) {
         k.preventDefault()
-        const handled = this.emit(KEY.Press, command)
+        const handled = this.emit(KEY.Press, command, this.pointerDetail(renderer))
         if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
         return
       }
@@ -375,6 +407,11 @@ export class EventBus {
       ;(control ?? el).click()
     }
     doc.addEventListener('keydown', keys)
+    const track = (e: Event) => {
+      const p = e as PointerEvent
+      this.pointer = { x: p.clientX, y: p.clientY }
+    }
+    doc.addEventListener('pointermove', track, { passive: true })
     // Entering a navigable component by Tab puts the rest of its parts out of the tab order.
     const entered = (e: Event) => {
       const part = e.target as HTMLElement
@@ -386,8 +423,31 @@ export class EventBus {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('pointerdown', gestures)
       doc.removeEventListener('keydown', keys)
+      doc.removeEventListener('pointermove', track)
       renderer.host.removeEventListener('focusin', entered)
     }
+  }
+
+  /** Whether an event class is recorded for a key combination: any key, unless it names some (beh:key). */
+  private forKey(type: string, key: string): boolean {
+    const keys = this.runtime.store.match(this.f.namedNode(type), this.f.namedNode(NS.beh + 'key'), null, this.f.defaultGraph())
+    return !keys.length || keys.some((q) => q.object.value === key)
+  }
+
+  /**
+   * A text control rendered with data-sem-caret keeps its caret where the graph says
+   * after an event its component handled (rewriting the value would put it at the end).
+   */
+  private placeCaret(renderer: DomRenderer, focus: string) {
+    const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
+    // Only the component's own control (not one of a component nested in it).
+    const field = [...(root?.querySelectorAll?.('[data-sem-caret]') ?? [])].find((el) => owningFocus(renderer.keyOf(el) ?? '') === focus) as
+      | HTMLTextAreaElement
+      | undefined
+    const at = Number(field?.getAttribute('data-sem-caret'))
+    if (!field || !Number.isFinite(at) || typeof field.setSelectionRange !== 'function') return
+    if (field.ownerDocument.activeElement !== field) field.focus?.()
+    if (field.selectionStart !== at || field.selectionEnd !== at) field.setSelectionRange(at, at)
   }
 
   /**

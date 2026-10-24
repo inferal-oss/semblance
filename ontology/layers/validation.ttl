@@ -37,7 +37,10 @@ val:Check a sem:Rendering ;
     sem:layer val:Layer ;
     sem:stratum -10 ;
     sem:inputOnly true ;
-    sem:watches val:validates, val:requires, c:value, c:checked .
+    sem:watches val:validates, val:requires, c:value, c:checked ;
+    sem:functionOnly """The error is the shape's sh:message in the viewer's language, a projection setting SPARQL rules
+cannot see. And a button reads its fields' val:invalid through an rdf:List (val:requires): SPARQL rules
+are re-run only for changes one sem:follows hop away, so the button would not hear a field become valid.""" .
 val:Check-fn a sem:Rule ;
     sem:implements val:Check ;
     sem:function "validation:check" .

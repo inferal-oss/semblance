@@ -29,6 +29,84 @@ val:Shapes a sem:Rendering ;
     sem:stratum -9 ;
     sem:inputOnly true .
 val:Shapes-fn a sem:Rule ; sem:implements val:Shapes ; sem:function "shapes:validate" .
+# Each constraint of each property shape of the focus's classes (shapes.ts checkProperty):
+# counts, then one test per value, then pairs with another property. A result is keyed by
+# what it says (path, shape, constraint, default message, value), so the same violation keeps
+# its IRI and a changed one gets a new one. Regular expressions are values, so they are
+# compiled only where a row needs them.
+val:Shapes-sparql a sem:Rule ;
+    sem:implements val:Shapes ;
+    sem:construct """
+CONSTRUCT {
+  ?result a sh:ValidationResult ; sh:focusNode $this ; sh:resultPath ?path ; sh:resultMessage ?message ;
+          sh:sourceShape ?source ; sh:resultSeverity sh:Violation ; sh:value ?value .
+  $this val:violation ?result .
+}
+WHERE {
+  ?shape sh:targetClass ?class .
+  ?type rdfs:subClassOf* ?class .
+  $this a ?type .
+  ?shape sh:property ?ps .
+  ?ps sh:path ?path ; ?constraint ?param .
+  FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
+                                         sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals))
+  BIND($this AS ?focus)
+  VALUES ?localName { "^.*[#/]" }
+  LATERAL {
+    {
+      # Required, and one value only: no counting.
+      BIND(xsd:double(STR(?param)) AS ?bound)
+      FILTER(?bound = 1 && IF(?constraint = sh:minCount, NOT EXISTS { ?focus ?path ?any },
+                              ?constraint = sh:maxCount && EXISTS { ?focus ?path ?one, ?other FILTER(?one != ?other) }))
+      BIND(IF(?constraint = sh:minCount, "required", "one value only") AS ?fallback)
+    } UNION {
+      {
+        BIND(xsd:double(STR(?param)) AS ?bound)
+        FILTER(?constraint IN (sh:minCount, sh:maxCount) && ?bound != 1)
+      }
+      LATERAL { OPTIONAL { SELECT ?focus ?path (COUNT(?x) AS ?n) WHERE { ?focus ?path ?x } GROUP BY ?focus ?path } }
+      FILTER(IF(?constraint = sh:minCount, COALESCE(?n, 0) < ?bound, COALESCE(?n, 0) > ?bound))
+      BIND(IF(?constraint = sh:minCount, CONCAT("at least ", STR(?param), " values"), CONCAT("at most ", STR(?param), " values")) AS ?fallback)
+    } UNION {
+      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals))
+      ?focus ?path ?value .
+      OPTIONAL { FILTER(?constraint = sh:pattern) ?ps sh:flags ?flags }
+      FILTER(IF(?constraint = sh:datatype,
+                !(COALESCE(DATATYPE(?value), sh:none) = ?param
+                  || (?param IN (xsd:integer, xsd:decimal, xsd:double, xsd:float) && DATATYPE(?value) IN (xsd:integer, xsd:decimal, xsd:double, xsd:float)
+                      && (?param != xsd:integer || COALESCE(xsd:double(STR(?value)) = FLOOR(xsd:double(STR(?value))), false)))),
+             IF(?constraint = sh:class, NOT EXISTS { ?value a/rdfs:subClassOf* ?param },
+             IF(?constraint = sh:nodeKind, (?param = sh:IRI && !isIRI(?value)) || (?param = sh:Literal && !isLiteral(?value)),
+             IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?value },
+             isLiteral(?value) && IF(?constraint = sh:minInclusive, !COALESCE(xsd:double(STR(?value)) >= xsd:double(STR(?param)), false),
+                                  IF(?constraint = sh:maxInclusive, !COALESCE(xsd:double(STR(?value)) <= xsd:double(STR(?param)), false),
+                                  IF(?constraint = sh:minLength, STRLEN(STR(?value)) < xsd:double(STR(?param)),
+                                  IF(?constraint = sh:maxLength, STRLEN(STR(?value)) > xsd:double(STR(?param)),
+                                     !REGEX(STR(?value), STR(?param), COALESCE(STR(?flags), "")))))))))))
+      BIND(IF(?constraint = sh:datatype, CONCAT("expected ", IF(CONTAINS(STR(?param), STR(xsd:)),
+                CONCAT(STRBEFORE(STR(?param), STR(xsd:)), "xsd:", STRAFTER(STR(?param), STR(xsd:))), STR(?param))),
+           IF(?constraint = sh:class, CONCAT("expected a ", REPLACE(STR(?param), ?localName, "")),
+           IF(?constraint = sh:nodeKind, IF(?param = sh:IRI, "expected an IRI", "expected a literal"),
+           IF(?constraint = sh:in, "not an allowed value",
+           IF(?constraint = sh:minInclusive, CONCAT("at least ", STR(?param)),
+           IF(?constraint = sh:maxInclusive, CONCAT("at most ", STR(?param)),
+           IF(?constraint = sh:minLength, CONCAT("at least ", STR(?param), " characters"),
+           IF(?constraint = sh:maxLength, CONCAT("at most ", STR(?param), " characters"),
+              "does not match the expected format")))))))) AS ?fallback)
+    } UNION {
+      FILTER(?constraint = sh:lessThanOrEquals && isIRI(?param))
+      ?focus ?path ?value ; ?param ?limit .
+      FILTER(!COALESCE(xsd:double(STR(?value)) <= xsd:double(STR(?limit)), false))
+      BIND(CONCAT("more than ", REPLACE(STR(?param), ?localName, ""), " (", STR(?limit), ")") AS ?fallback)
+    }
+  }
+  LATERAL { OPTIONAL { SELECT ?ps ?custom WHERE { ?ps sh:message ?custom }
+                       ORDER BY (lang(?custom) != "") (!langMatches(lang(?custom), "en")) LIMIT 1 } }
+  BIND(STR(COALESCE(?custom, CONCAT(REPLACE(STR(?path), ?localName, ""), ": ", ?fallback))) AS ?message)
+  BIND(IF(isIRI(?ps), ?ps, ?shape) AS ?source)
+  BIND(IRI(CONCAT(STR($this), "/~shape-", SUBSTR(MD5(CONCAT(STR(?path), " ", STR(?source), " ", STRAFTER(STR(?constraint), "#"), " ",
+       ?fallback, " ", COALESCE(STR(?value), ""))), 1, 8))) AS ?result)
+}""" .
 
 # After the components (and before tooltips, stratum 30): outline and explain.
 val:ShapeMarks a sem:Rendering ;
@@ -38,10 +116,37 @@ val:ShapeMarks a sem:Rendering ;
     sem:stratum 12 ;
     sem:watches val:violation .
 val:ShapeMarks-fn a sem:Rule ; sem:implements val:ShapeMarks ; sem:function "shapes:mark" .
+# The messages in code point order (GROUP_CONCAT over an ordered sub-select).
+val:ShapeMarks-sparql a sem:Rule ;
+    sem:implements val:ShapeMarks ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?count ; sem:tooltip ?tip .
+  ?count a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shape-invalid" ; rdfhtml:attributeValue ?n .
+}
+WHERE {
+  # One row per marked component: its first result.
+  $this val:violation ?first .
+  FILTER NOT EXISTS { $this val:violation ?earlier FILTER(STR(?earlier) < STR(?first)) }
+  BIND($this AS ?self)
+  LATERAL { OPTIONAL { SELECT ?self (COUNT(?message) AS ?c) (GROUP_CONCAT(?message; separator=" · ") AS ?all) WHERE {
+    { SELECT ?self ?message WHERE { ?self val:violation ?result . ?result sh:resultMessage ?raw BIND(STR(?raw) AS ?message) FILTER(?message != "") }
+      ORDER BY ?message }
+  } GROUP BY ?self } }
+  BIND(STR(COALESCE(?c, 0)) AS ?n)
+  BIND(CONCAT("Shape violation: ", COALESCE(?all, "")) AS ?tip)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-shape-invalid")) AS ?count)
+}""" .
 
 c:ShapeReport a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Every SHACL result the shapes layer recorded, by component."@en ;
     sem:slug "shape-report" .
-c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 .
+c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 ;
+    sem:functionOnly """It lists results from anywhere in the graph. SPARQL can (it ranks them by pairs), but a SPARQL
+rule is re-run only for changes on its focus, one sem:follows hop away, or under it (sem:readsMinted); the
+function hears a result go through the reads it traced. A report that SPARQL keeps current needs the
+engine to re-run a rule on changes to a predicate anywhere.""" .
 c:ShapeReportRendering-fn a sem:Rule ; sem:implements c:ShapeReportRendering ; sem:function "shape-report" .
+
