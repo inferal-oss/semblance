@@ -174,7 +174,32 @@ ui:toolsToggle a c:Toggle ; c:controls ui:tools ; c:property c:open ;
 # The engine: which store, which rule implementations, which layers.
 ui:engineTab a c:Tab ; c:label "Engine" , "Рушій"@uk , "Engine"@de , "المحرك"@ar ; c:content ui:toolbar .
 ui:toolbar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
-    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ) .
+    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ui:locationAddress ui:locationTable ) .
+# Where we are, as the navigation effect reports it (urn:semblance:navigation): the address, and
+# each dimension of ui:location with its value, how the address spells it and where it is carried.
+ui:locationAddress a c:Metrics ; c:of ui:location ; c:fields ( nav:address ) .
+ui:locationTable a c:Table ; c:label "Where we are" ; c:query ui:locationRows ; c:dataset ui:location ;
+    c:tableColumns ( ui:loc-col-dimension ui:loc-col-value ui:loc-col-spelled ui:loc-col-carriers ui:loc-col-history ) ;
+    c:emptyText "No location is declared." .
+ui:loc-col-dimension a c:Column ; c:variable "dimension" ; c:label "Dimension" .
+ui:loc-col-value a c:Column ; c:variable "value" ; c:label "Value" .
+ui:loc-col-spelled a c:Column ; c:variable "spelled" ; c:label "In the address" ; c:format "code" .
+ui:loc-col-carriers a c:Column ; c:variable "carriers" ; c:label "Carried by" .
+ui:loc-col-history a c:Column ; c:variable "history" ; c:label "History" .
+ui:locationRows a sem:View ; rdfs:label "where we are"@en ;
+    sem:select """
+SELECT ?dimension ?value ?spelled ?carriers ?history WHERE {
+  { SELECT ?d (COUNT(?mid) AS ?i) WHERE { ui:location nav:dimensions/rdf:rest* ?mid . ?mid rdf:rest*/rdf:first ?d } GROUP BY ?d }
+  ?d nav:property ?dimension .
+  OPTIONAL { ?d nav:value ?value }
+  OPTIONAL { ?d nav:spelled ?spelled0 }
+  BIND(COALESCE(?spelled0, "—") AS ?spelled)
+  OPTIONAL { ?d nav:history ?history0 }
+  BIND(COALESCE(?history0, nav:MakesHistory) AS ?history)
+  OPTIONAL { SELECT ?d (GROUP_CONCAT(?carrier; separator = ", ") AS ?carriers)
+             WHERE { ?d nav:carriedBy ?c . ?c rdfs:label ?carrier FILTER(langMatches(lang(?carrier), "en")) } GROUP BY ?d }
+}
+ORDER BY ?i""" .
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;

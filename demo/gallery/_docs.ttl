@@ -18,14 +18,15 @@ ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 4 ; ui:key "layer
 ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 5 ; ui:key "behaviour" .
 ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 6 ; ui:key "styling" .
 ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 7 ; ui:key "persistence" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 8 ; ui:key "tools" .
-ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 9 ; ui:key "performance" .
+ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 8 ; ui:key "navigation" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 9 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 10 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsNav ui:docPages ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-components ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-components ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-components c:when ui:DocComponents ; c:content ui:doc-components .
 ui:dcs-rules c:when ui:DocRules ; c:content ui:doc-rules .
@@ -33,6 +34,7 @@ ui:dcs-layers c:when ui:DocLayers ; c:content ui:doc-layers .
 ui:dcs-behaviour c:when ui:DocBehaviour ; c:content ui:doc-behaviour .
 ui:dcs-styling c:when ui:DocStyling ; c:content ui:doc-styling .
 ui:dcs-persistence c:when ui:DocPersistence ; c:content ui:doc-persistence .
+ui:dcs-navigation c:when ui:DocNavigation ; c:content ui:doc-navigation .
 ui:dcs-tools c:when ui:DocTools ; c:content ui:doc-tools .
 ui:dcs-performance c:when ui:DocPerformance ; c:content ui:doc-performance .
 
@@ -139,6 +141,27 @@ ui:doc-pe-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:rem
     per:subject ui:shell ;
     per:properties ( mot:preference sty:contrast sty:density sty:theme ) .""" .
 ui:doc-pe-2 a c:Text ; c:label "Every write, restore and forget is a member of per:StateLog. On this site the tools, the display settings and the page you were on are remembered for the tab; the change log only if you switch it on." .
+
+# --- Navigation ---
+ui:doc-navigation a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-na-h ui:doc-na-1 ui:doc-na-code ui:doc-na-2 ui:doc-na-3 ui:doc-na-4 ui:doc-na-5 ) .
+ui:doc-na-h a c:Heading ; c:level 1 ; c:label "Navigation" .
+ui:doc-na-1 a c:Text ; c:label "Where we are is graph data. A nav:Location groups the dimensions of one app; each nav:Dimension is a property of a node (the page, the docs section), says where it is carried - the address's fragment or query, this tab's or this device's storage - whether changing it makes history (a step Back returns to) or not, and when it applies at all. This site's:" .
+ui:doc-na-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:location a nav:Location ; nav:root ui:shell ;
+    nav:dimensions ( ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atTarget ) .
+ui:atPage a nav:Dimension ; nav:subject ui:app ; nav:property ui:page ; nav:keyProperty ui:key ;
+    nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
+ui:atDocSection a nav:Dimension ; nav:subject ui:app ; nav:property ui:docSection ; nav:keyProperty ui:key ;
+    nav:parent ui:atPage ; nav:when ui:Docs ;
+    nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ;
+    nav:carriedBy nav:Fragment ; nav:history nav:NoHistory .""" .
+ui:doc-na-2 a c:Text ; c:label "So this page is #docs/navigation. A section applies only on its page: elsewhere it is left out of the address and not read from it. On load, the carrier with the best nav:rank that has a value wins (the address, then storage), else the graph's own value. Storage carriers are written by the persistence effect, so nothing is remembered twice. Back, Forward and typed addresses are nav:Navigate events in the change log; the URL carriers realize history as a new entry or a replaced one, storage keeps only the current value." .
+ui:doc-na-3 a c:Text ; c:label "A link can point at a resource instead of an address (c:to). The framework finds the location that shows it by walking up the component tree - children, contents, cases - to the switches that show it, and spells their dimension values, with the resource as the target: a link to the code input specimen is #components/inputs/inp-codes-spec. Following it writes those values, and opens what would still hide the target, as classes declare (nav:reveal: a tab is selected, an accordion item expanded, a card turned over, a window opened); the target is brought into view once it is rendered, without motion if you asked for less." .
+ui:doc-na-4 a c:Text ; c:children ( "Try it: " ui:doc-na-to-codes " (another page), or " ui:doc-na-to-workbench " (in the tools, on its tab)." ) .
+ui:doc-na-to-codes a c:Link ; c:label "the code input" ; c:to ui:inp-codes-spec .
+ui:doc-na-to-workbench a c:Link ; c:label "the SPARQL workbench" ; c:to ui:workbench .
+ui:doc-na-5 a c:Text ; c:label "The Engine tab of the tools shows where we are: the address, and each dimension with its value, how the address spells it, and where it is carried." .
 
 # --- Tools ---
 ui:doc-tools a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

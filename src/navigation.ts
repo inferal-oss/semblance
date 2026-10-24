@@ -575,17 +575,35 @@ export class Navigation {
     this.report(loc)
   }
 
-  /** The address the URL carriers spell, in the navigation graph (for inspection). */
+  /**
+   * For inspection, in the navigation graph: the address the URL carriers spell, and per
+   * dimension its value, whether it applies and how the address spells it. The location's
+   * nav:revision counts the reports, so a view of them can follow the location alone.
+   */
   private report(loc: Location) {
     const runtime = this.runtime
     if (!runtime) return
     const f = this.store.factory
-    const s = f.namedNode(loc.iri)
     const g = f.namedNode(NAV_GRAPH)
-    const value = this.address() || '#'
-    const now = this.store.match(s, f.namedNode(NAV + 'address'), null, g)
-    if (now.length === 1 && now[0]!.object.value === value) return
-    runtime.write(NAV_GRAPH, { remove: now, add: [f.quad(s, f.namedNode(NAV + 'address'), f.literal(value))] })
+    const nn = (x: string) => f.namedNode(x)
+    const s = nn(loc.iri)
+    const values = currentValues(this.r, loc)
+    const add: Quad[] = [f.quad(s, nn(NAV + 'address'), f.literal(this.address() || '#'))]
+    for (const d of loc.dimensions) {
+      const v = values.get(d.iri)
+      const applies = !!v && inScope(this.r, loc, d, values)
+      add.push(f.quad(nn(d.iri), nn(NAV + 'applies'), f.literal(String(applies), nn(XSD_BOOLEAN))))
+      if (v) add.push(f.quad(nn(d.iri), nn(NAV + 'value'), v as Quad['object']))
+      if (applies) add.push(f.quad(nn(d.iri), nn(NAV + 'spelled'), f.literal(spell(this.r, d, v!))))
+    }
+    const reported = (q: Quad) => q.predicate.value !== NAV + 'revision'
+    const old = [s, ...loc.dimensions.map((d) => nn(d.iri))].flatMap((x) => this.store.match(x, null, null, g)).filter(reported)
+    const key = (q: Quad) => q.subject.value + ' ' + q.predicate.value + ' ' + q.object.termType + q.object.value
+    const before = new Set(old.map(key))
+    if (old.length === add.length && add.every((q) => before.has(key(q)))) return
+    const revision = this.store.match(s, nn(NAV + 'revision'), null, g)
+    const n = Number(revision[0]?.object.value ?? 0) + 1
+    runtime.write(NAV_GRAPH, { remove: [...old, ...revision], add: [...add, f.quad(s, nn(NAV + 'revision'), f.literal(String(n), nn(XSD_INTEGER)))] })
   }
 
   /**

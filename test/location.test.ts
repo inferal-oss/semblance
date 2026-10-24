@@ -138,6 +138,29 @@ describe('navigation: where we are, in the address', () => {
     expect(s.store.match(navigations[0]!.subject, f.namedNode(NS.beh + 'handledBy'), f.namedNode(NAV + 'Follow')).length).toBe(1)
   })
 
+  it('shows where we are in the tools: the address, and each dimension with its value, spelling and carriers', async () => {
+    const s = await site('/#docs/rules')
+    const f = s.store.factory
+    s.runtime.apply({
+      remove: [...s.store.match(f.namedNode(UI + 'tools'), f.namedNode(NS.c + 'open'), null), ...s.store.match(f.namedNode(UI + 'views'), f.namedNode(NS.c + 'selected'), null)],
+      add: [f.quad(f.namedNode(UI + 'tools'), f.namedNode(NS.c + 'open'), f.literal('true', f.namedNode(NS.xsd + 'boolean'))), f.quad(f.namedNode(UI + 'views'), f.namedNode(NS.c + 'selected'), f.namedNode(UI + 'engineTab'))],
+    })
+    s.shell.flush()
+    const table = () => s.shell.nodeOf(UI + 'locationTable/~root') as Element
+    const rows = () => [...table().querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('th, td')].map((td) => td.textContent!.trim()))
+    expect(rows()[0]).toEqual(['Page', 'Docs', 'docs', 'The address (#)', 'Makes history'])
+    expect(rows()[1]!.slice(0, 3)).toEqual(['Docs', 'Rules and the engine', 'rules'])
+    expect(rows()[1]![3]!.split(', ').sort()).toEqual(['The address (#)', 'This tab'])
+    expect(rows()[2]!.slice(1, 3)).toEqual(['Todo, two projections', '—']) // the example applies only on the examples
+    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('#docs/rules')
+    s.set(UI + 'page', UI + 'Examples')
+    await tick()
+    s.shell.flush()
+    expect(rows()[0]!.slice(1, 3)).toEqual(['Examples', 'examples'])
+    expect(rows()[1]![2]).toBe('—')
+    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('#examples/todo')
+  })
+
   it('opens deep links where they point', async () => {
     const perf = await site('/#docs/performance')
     expect([...perf.document.querySelectorAll('[data-sem-c=bar-chart]')].some(perf.visible)).toBe(true)
@@ -146,6 +169,11 @@ describe('navigation: where we are, in the address', () => {
     expect([...signin.document.querySelectorAll('[data-sem-c=code-input]')].some(signin.visible)).toBe(true)
     const group = await site('/#components/inputs')
     expect(group.value(UI + 'galleryGroup')).toBe(UI + 'GroupInputs')
+    // The docs say so, with links to resources in them.
+    const docs = await site('/#docs/navigation')
+    const links = [...docs.document.querySelectorAll('a')].filter(docs.visible).map((a) => a.textContent + ' ' + a.getAttribute('href'))
+    expect(links).toContain('the code input #components/inputs/inp-codes-spec')
+    expect(links).toContain('the SPARQL workbench #workbench')
   })
 
   it('ignores what it does not know, safely', async () => {

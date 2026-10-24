@@ -120,7 +120,14 @@ nav:Follow a beh:Reaction ; beh:when nav:Navigate ; beh:sourceClass nav:Location
 
 # What the effect reports (in the navigation graph, urn:semblance:navigation).
 nav:address a owl:DatatypeProperty ; rdfs:domain nav:Location ;
+    rdfs:label "Address"@en , "Адреса"@uk , "Adresse"@de , "العنوان"@ar ;
     rdfs:comment "The location as the URL carriers last spelled it (its query and fragment)."@en .
+nav:revision a owl:DatatypeProperty ; rdfs:domain nav:Location ; rdfs:range xsd:integer ;
+    rdfs:comment "How many times the effect reported the location; views of the reports follow it."@en .
+nav:applies a owl:DatatypeProperty ; rdfs:domain nav:Dimension ; rdfs:range xsd:boolean ;
+    rdfs:comment "Reported: whether the dimension is in scope now."@en .
+nav:spelled a owl:DatatypeProperty ; rdfs:domain nav:Dimension ;
+    rdfs:comment "Reported: how the address spells the dimension's value now (while it applies)."@en .
 
 # --- where a resource is shown: links to things, not addresses -------------------------------------
 
@@ -144,7 +151,8 @@ nav:Reveal a owl:Class ;
     rdfs:comment "Set nav:sets on the container to nav:value (default: the part on the way to the target)."@en .
 nav:via a owl:ObjectProperty ; rdfs:domain nav:Reveal ; rdfs:range nav:ContainmentProperty .
 nav:sets a owl:ObjectProperty ; rdfs:domain nav:Reveal ; rdfs:range rdf:Property .
-nav:value a owl:ObjectProperty ; rdfs:domain nav:Reveal .
+nav:value a rdf:Property ;
+    rdfs:comment "On a nav:Reveal: the value to set. Reported on a dimension: its value now."@en .
 c:Tabs nav:reveal [ a nav:Reveal ; nav:via c:tabs ; nav:sets c:selected ] .
 c:AccordionItem nav:reveal [ a nav:Reveal ; nav:via c:content ; nav:sets c:expanded ; nav:value true ] .
 c:Flippable nav:reveal [ a nav:Reveal ; nav:via c:back ; nav:sets c:flipped ; nav:value true ] .
