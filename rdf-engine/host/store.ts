@@ -274,7 +274,7 @@ export function engineStore(module: WebAssembly.Module, kind: string): EngineSto
     quad: (s, p, o, g) => quad(s, p, o, g ?? defaultGraph),
   }
 
-  return {
+  const store: EngineStore = {
     kind,
     factory,
     sparql,
@@ -342,6 +342,7 @@ export function engineStore(module: WebAssembly.Module, kind: string): EngineSto
       return false
     },
   }
+  return store
 }
 
 const RDF_LANG = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString'

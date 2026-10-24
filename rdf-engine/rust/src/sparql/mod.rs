@@ -29,6 +29,8 @@ pub struct Triple {
     pub s: Tv,
     pub p: Tv,
     pub o: Tv,
+    /// A property path in place of `p`.
+    pub path: Option<Box<Path>>,
 }
 
 #[derive(Clone)]
@@ -49,7 +51,6 @@ pub enum Pattern {
     /// One solution binding nothing.
     Unit,
     Bgp(Vec<Triple>),
-    Path(Tv, Path, Tv),
     Join(Box<Pattern>, Box<Pattern>),
     LeftJoin(Box<Pattern>, Box<Pattern>, Option<Expr>),
     Filter(Expr, Box<Pattern>),
@@ -380,12 +381,12 @@ pub fn query_terms(q: &Query, f: &mut dyn FnMut(u32)) {
     fn pattern(p: &Pattern, f: &mut dyn FnMut(u32)) {
         match p {
             Pattern::Unit | Pattern::Service(_) => {}
-            Pattern::Bgp(ts) => ts.iter().for_each(|t| [&t.s, &t.p, &t.o].iter().for_each(|x| tv(x, f))),
-            Pattern::Path(s, p, o) => {
-                tv(s, f);
-                path(p, f);
-                tv(o, f);
-            }
+            Pattern::Bgp(ts) => ts.iter().for_each(|t| {
+                [&t.s, &t.p, &t.o].iter().for_each(|x| tv(x, f));
+                if let Some(p) = &t.path {
+                    path(p, f);
+                }
+            }),
             Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) => {
                 pattern(a, f);
                 pattern(b, f);

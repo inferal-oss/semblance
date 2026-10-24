@@ -169,7 +169,6 @@ impl<'a> Ctx<'a> {
         match p {
             Pattern::Unit => alloc::vec![sub.to_vec()],
             Pattern::Bgp(ts) => self.bgp(ts, sub, active),
-            Pattern::Path(s, path, o) => self.path(s, path, o, sub, active),
             Pattern::Join(a, b) => {
                 let left = self.eval(a, sub, active);
                 if pure(b) {
@@ -336,13 +335,20 @@ impl<'a> Ctx<'a> {
                     Tv::Var(v) if bound[*v as usize] => w,
                     _ => 0,
                 };
-                b(&t.s, 4) + b(&t.o, 3) + b(&t.p, 1)
+                // A path is costlier than a triple with the same ends bound.
+                match t.path {
+                    Some(_) => (b(&t.s, 4) + b(&t.o, 3)).saturating_sub(1),
+                    None => b(&t.s, 4) + b(&t.o, 3) + b(&t.p, 1),
+                }
             };
             let (i, _) = left.iter().enumerate().max_by_key(|(i, t)| (score(t, &bound), usize::MAX - i)).unwrap();
             let t = left.remove(i);
             let mut next = Vec::new();
             for r in &rows {
-                self.triple(t, r, active, &mut next);
+                match &t.path {
+                    Some(p) => next.extend(self.path(&t.s, p, &t.o, r, active)),
+                    None => self.triple(t, r, active, &mut next),
+                }
             }
             rows = next;
             if rows.is_empty() {
@@ -760,8 +766,6 @@ impl<'a> Ctx<'a> {
 fn pure(p: &Pattern) -> bool {
     match p {
         Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) => true,
-        // (A zero-length match at a variable endpoint is checked in `path`.)
-        Pattern::Path(..) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) => pure(a) && pure(b),
         Pattern::Graph(_, a) => pure(a),
         Pattern::Extend(a, _, e) | Pattern::Filter(e, a) => pure(a) && reads_only(e, &certain(a)),
@@ -779,10 +783,6 @@ fn certain(p: &Pattern) -> Vec<Var> {
                     tv_vars(x, &mut out);
                 }
             }
-        }
-        Pattern::Path(s, _, o) => {
-            tv_vars(s, &mut out);
-            tv_vars(o, &mut out);
         }
         Pattern::Join(a, b) => {
             out = certain(a);

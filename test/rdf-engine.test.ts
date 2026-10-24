@@ -47,7 +47,7 @@ describe.skipIf(!built.length).each(built)('%s engine store', (kind) => {
     it(`renders every page of the shell like ${reference} (${prefer} rules)`, () => {
       const shells = [mountShell(5, kind, prefer), mountShell(5, reference, prefer)]
       const html = () => shells.map((h) => h.document.getElementById('app')!.innerHTML)
-      for (const p of ['Playground', 'Performance', 'Components'] as const) {
+      for (const p of ['Home', 'Docs', 'Components', 'Examples', 'Playground'] as const) {
         for (const h of shells) h.showPage(p)
         const [a, b] = html()
         expectSame(a!, b!, p)

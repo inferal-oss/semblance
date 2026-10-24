@@ -418,7 +418,7 @@ impl P<'_, '_> {
                 self.expect(b"{", "expected {")?;
                 self.triples_block_until(b"}", &mut template)?;
                 self.expect(b"}", "expected }")?;
-                let triples: Vec<Triple> = template.iter().map(|t| Triple { s: t[0].clone(), p: t[1].clone(), o: t[2].clone() }).collect();
+                let triples: Vec<Triple> = template.iter().map(|t| Triple { s: t[0].clone(), p: t[1].clone(), o: t[2].clone() , path: None }).collect();
                 q.select = empty_select();
                 q.select.pattern = Pattern::Bgp(triples);
                 self.modifiers(&mut q.select)?;
@@ -850,19 +850,17 @@ impl P<'_, '_> {
             } else {
                 let mut elts = Vec::new();
                 self.triples_block(&mut elts)?;
-                let mut triples = Vec::new();
-                let mut paths = Vec::new();
-                for e in elts {
-                    match e {
-                        Elt::T(t) => triples.push(t),
-                        Elt::P(s, p, o) => paths.push(Pattern::Path(s, p, o)),
-                    }
-                }
+                // Paths are planned with the triples: the BGP evaluates the
+                // most-bound element first, whichever kind it is.
+                let triples: Vec<Triple> = elts
+                    .into_iter()
+                    .map(|e| match e {
+                        Elt::T(t) => t,
+                        Elt::P(s, p, o) => Triple { s, p: Tv::Term(NONE), o, path: Some(Box::new(p)) },
+                    })
+                    .collect();
                 if !triples.is_empty() {
                     g = join(g, Pattern::Bgp(triples));
-                }
-                for p in paths {
-                    g = join(g, p);
                 }
                 if !self.eat(b".") && self.at_triple_start() {
                     return self.c.err("expected .");
@@ -1118,7 +1116,7 @@ impl P<'_, '_> {
             let o = self.graph_node(out)?;
             match &verb {
                 Ok(p) => {
-                    out.push(Elt::T(Triple { s: s.clone(), p: p.clone(), o: o.clone() }));
+                    out.push(Elt::T(Triple { s: s.clone(), p: p.clone(), o: o.clone() , path: None }));
                     self.annotation(s, p, &o, out)?;
                 }
                 Err(path) => out.push(Elt::P(s.clone(), path.clone(), o)),
@@ -1157,7 +1155,7 @@ impl P<'_, '_> {
 
     fn reifies(&mut self, r: &Tv, s: &Tv, p: &Tv, o: &Tv, out: &mut Vec<Elt>) {
         let reifies = self.rdf(b"reifies");
-        out.push(Elt::T(Triple { s: r.clone(), p: Tv::Term(reifies), o: Tv::Triple(Box::new([s.clone(), p.clone(), o.clone()])) }));
+        out.push(Elt::T(Triple { s: r.clone(), p: Tv::Term(reifies), o: Tv::Triple(Box::new([s.clone(), p.clone(), o.clone()])) , path: None }));
     }
 
     fn reifier(&mut self) -> Res<Tv> {
@@ -1225,8 +1223,8 @@ impl P<'_, '_> {
         let mut next = Tv::Term(nil);
         for item in items.into_iter().rev() {
             let cell = Tv::Var(self.fresh_var());
-            out.push(Elt::T(Triple { s: cell.clone(), p: Tv::Term(first), o: item }));
-            out.push(Elt::T(Triple { s: cell.clone(), p: Tv::Term(rest), o: next }));
+            out.push(Elt::T(Triple { s: cell.clone(), p: Tv::Term(first), o: item , path: None }));
+            out.push(Elt::T(Triple { s: cell.clone(), p: Tv::Term(rest), o: next , path: None }));
             next = cell;
         }
         Ok(next)
@@ -1926,10 +1924,6 @@ pub fn pattern_vars(p: &Pattern, out: &mut Vec<Var>) {
                 tv_vars(&t.o, out);
             }
         }
-        Pattern::Path(s, _, o) => {
-            tv_vars(s, out);
-            tv_vars(o, out);
-        }
         Pattern::Join(a, b) | Pattern::LeftJoin(a, b, _) | Pattern::Union(a, b) | Pattern::Lateral(a, b) => {
             pattern_vars(a, out);
             pattern_vars(b, out);
@@ -2213,7 +2207,7 @@ impl P<'_, '_> {
         let mut default = Vec::new();
         let mut p = Pattern::Unit;
         for q in quads {
-            let t = Triple { s: back(&q[0]), p: back(&q[1]), o: back(&q[2]) };
+            let t = Triple { s: back(&q[0]), p: back(&q[1]), o: back(&q[2]) , path: None };
             match &q[3] {
                 Tt::Term(NONE) => default.push(t),
                 g => p = join(p, Pattern::Graph(back(g), Box::new(Pattern::Bgp(alloc::vec![t])))),
