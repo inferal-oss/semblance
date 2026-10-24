@@ -70,6 +70,20 @@ impl Store {
         self.spog.len()
     }
 
+    /// Every graph that holds a quad.
+    pub fn graphs(&self) -> Vec<u32> {
+        let mut out = Vec::new();
+        let mut from = 0u32;
+        while let Some(k) = self.gspo.range([from, 0, 0, 0]..).next() {
+            out.push(k[0]);
+            if k[0] == u32::MAX {
+                break;
+            }
+            from = k[0] + 1;
+        }
+        out
+    }
+
     /// Append every quad matching the pattern (0 = any) to `out`, 4 ids each.
     pub fn scan(&self, pat: Quad, out: &mut Vec<u32>) {
         let [s, p, o, g] = pat;

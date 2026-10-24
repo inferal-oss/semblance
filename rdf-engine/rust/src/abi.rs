@@ -2,13 +2,21 @@
 
 use crate::dict::{self, Dict, Key, lowercase};
 use crate::lex;
+use crate::sparql;
 use crate::ntriples;
 use crate::turtle;
 use crate::store::{Quad, Store};
 use alloc::vec::Vec;
 use core::cell::UnsafeCell;
 
+struct Prepared {
+    query: sparql::Query,
+    /// Bound variables: one term each, or several (run once per combination).
+    binds: Vec<(sparql::Var, Vec<u32>)>,
+}
+
 struct State {
+    queries: Vec<Option<Prepared>>,
     dict: Dict,
     store: Store,
     input: Vec<u8>,
@@ -27,6 +35,7 @@ static STATE: Global = Global(UnsafeCell::new(None));
 fn st() -> &'static mut State {
     unsafe {
         (*STATE.0.get()).get_or_insert_with(|| State {
+            queries: Vec::new(),
             dict: Dict::new(),
             store: Store::default(),
             input: Vec::new(),
@@ -313,45 +322,136 @@ pub extern "C" fn collect() -> i32 {
     0
 }
 
-// --- queries (phase 3) -------------------------------------------------------
+// --- queries -----------------------------------------------------------------
 
-#[unsafe(no_mangle)]
-pub extern "C" fn prepare(_text_len: u32, _base_len: u32) -> i32 {
-    not_implemented()
+fn prepared(h: u32) -> Option<&'static mut Prepared> {
+    st().queries.get_mut((h as usize).wrapping_sub(1))?.as_mut()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn query_form(_h: u32) -> u32 {
+pub extern "C" fn prepare(text_len: u32, base_len: u32) -> i32 {
+    let s = st();
+    let [text, base] = args(&s.input, [text_len, base_len]);
+    match sparql::parse::parse_query(text, base, &mut s.dict) {
+        Ok(query) => {
+            let p = Prepared { query, binds: Vec::new() };
+            match s.queries.iter().position(Option::is_none) {
+                Some(i) => {
+                    s.queries[i] = Some(p);
+                    i as i32 + 1
+                }
+                None => {
+                    s.queries.push(Some(p));
+                    s.queries.len() as i32
+                }
+            }
+        }
+        Err(e) => fail_at(e),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_form(h: u32) -> u32 {
+    prepared(h).map_or(0, |p| p.query.form as u32)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_var_count(h: u32) -> u32 {
+    prepared(h).filter(|p| p.query.form == sparql::Form::Select).map_or(0, |p| p.query.select.project.len() as u32)
+}
+
+fn var_name(h: u32, i: u32) -> &'static [u8] {
+    prepared(h).and_then(|p| p.query.select.project.get(i as usize).map(|&v| &p.query.vars[v as usize][..])).unwrap_or(b"")
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_var_ptr(h: u32, i: u32) -> *const u8 {
+    var_name(h, i).as_ptr()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn query_var_len(h: u32, i: u32) -> u32 {
+    var_name(h, i).len() as u32
+}
+
+fn set_binding(h: u32, name: &[u8], values: Vec<u32>) -> i32 {
+    let Some(p) = prepared(h) else { return fail(b"no such query") };
+    let Some(v) = p.query.var(name) else { return 0 };
+    p.binds.retain(|(x, _)| *x != v);
+    if !values.is_empty() {
+        p.binds.push((v, values));
+    }
     0
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn query_var_count(_h: u32) -> u32 {
-    0
+pub extern "C" fn bind(h: u32, name_len: u32, id: u32) -> i32 {
+    let name = st().input[..name_len as usize].to_vec();
+    set_binding(h, &name, if id == 0 { Vec::new() } else { alloc::vec![id] })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn query_var_ptr(_h: u32, _i: u32) -> *const u8 {
-    core::ptr::null()
+pub extern "C" fn bind_values(h: u32, count: u32, name_len: u32) -> i32 {
+    let s = st();
+    let n = count as usize;
+    let ids: Vec<u32> = (0..n).map(|i| u32::from_le_bytes([s.input[i * 4], s.input[i * 4 + 1], s.input[i * 4 + 2], s.input[i * 4 + 3]])).collect();
+    let name = s.input[n * 4..n * 4 + name_len as usize].to_vec();
+    set_binding(h, &name, ids)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn query_var_len(_h: u32, _i: u32) -> u32 {
-    0
+pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
+    let s = st();
+    let graph_ids: Vec<u32> = (0..graphs as usize).map(|i| u32::from_le_bytes([s.input[i * 4], s.input[i * 4 + 1], s.input[i * 4 + 2], s.input[i * 4 + 3]])).collect();
+    let Some(p) = s.queries.get((h as usize).wrapping_sub(1)).and_then(Option::as_ref) else { return fail(b"no such query") };
+    // One run per combination of bound values.
+    let mut combos: Vec<Vec<(sparql::Var, u32)>> = alloc::vec![Vec::new()];
+    for (v, values) in &p.binds {
+        combos = combos.into_iter().flat_map(|c| values.iter().map(move |&x| {
+            let mut c = c.clone();
+            c.push((*v, x));
+            c
+        })).collect();
+    }
+    s.result.clear();
+    let mut count = 0usize;
+    let mut seen = alloc::collections::BTreeSet::new();
+    for c in combos {
+        match sparql::execute(&p.query, &mut s.dict, &s.store, &graph_ids, &c) {
+            sparql::Output::Rows(r) => {
+                count += if p.query.select.project.is_empty() { 0 } else { r.len() / p.query.select.project.len() };
+                s.result.extend(r);
+            }
+            sparql::Output::Triples(t) => {
+                for x in t.chunks_exact(3) {
+                    if seen.insert([x[0], x[1], x[2]]) {
+                        s.result.extend_from_slice(x);
+                        count += 1;
+                    }
+                }
+            }
+            sparql::Output::Bool(b) => {
+                if b {
+                    return 1;
+                }
+            }
+        }
+    }
+    if p.query.form == sparql::Form::Ask {
+        return 0;
+    }
+    // A SELECT projecting nothing still has solutions.
+    if p.query.form == sparql::Form::Select && p.query.select.project.is_empty() {
+        return 0;
+    }
+    count as i32
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn bind(_h: u32, _name_len: u32, _id: u32) -> i32 {
-    not_implemented()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn run(_h: u32, _graphs: u32) -> i32 {
-    not_implemented()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn release(_h: u32) -> i32 {
+pub extern "C" fn release(h: u32) -> i32 {
+    if let Some(slot) = st().queries.get_mut((h as usize).wrapping_sub(1)) {
+        *slot = None;
+    }
     0
 }
 

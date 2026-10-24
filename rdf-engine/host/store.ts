@@ -3,7 +3,7 @@
 // and the factory hands out those same objects.
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { Factory, GraphStore } from '../../src/store/types.ts'
-import { DEFAULT_GRAPH, Engine, Format, Kind } from './engine.ts'
+import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
 
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
@@ -195,6 +195,42 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
     return t as Term
   }
 
+  // Parsed queries by text. Semblance substitutes each focus into the text, so
+  // this is bounded; prepared queries with bound variables avoid the parse.
+  const prepared = new Map<string, Query>()
+  const prepare = (text: string) => {
+    let q = prepared.get(text)
+    if (q) {
+      prepared.delete(text)
+    } else {
+      q = e.prepare(text)
+      if (prepared.size >= 512) {
+        const [oldest, old] = prepared.entries().next().value!
+        prepared.delete(oldest)
+        old.release()
+      }
+    }
+    prepared.set(text, q)
+    return q
+  }
+  const graphIds = (graphs: Term[]) => {
+    const out: number[] = []
+    for (const g of graphs) {
+      const id = idOf(g, false)
+      if (id) out.push(id)
+    }
+    // Every requested graph unknown to the engine: an empty default graph.
+    return graphs.length && !out.length ? [0xffffffff] : out
+  }
+  let sparql: boolean
+  try {
+    e.prepare('ASK {}').release()
+    sparql = true
+  } catch (err) {
+    if (!(err instanceof EngineError)) throw err
+    sparql = false
+  }
+
   const ids = (q: Quad, intern: boolean) => [idOf(q.subject, intern), idOf(q.predicate, intern), idOf(q.object, intern), idOf(q.graph, intern)]
 
   const factory: Factory = {
@@ -207,7 +243,7 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
   return {
     kind,
     factory,
-    sparql: false,
+    sparql,
     add(q) {
       const [s, p, o, g] = ids(q, true)
       e.add(s!, p!, o!, g!)
@@ -229,11 +265,26 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
       for (let i = 0, k = 0; i < r.length; i += 4, k++) out[k] = quad(termOf(r[i]!), termOf(r[i + 1]!), termOf(r[i + 2]!), termOf(r[i + 3]!))
       return out
     },
-    select() {
-      throw new Error(`The ${kind} store has no SPARQL engine yet`)
+    select(query, graphs) {
+      if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet`)
+      const r = prepare(query).run(graphIds(graphs as Term[]))
+      if (r.form !== Form.Select) throw new Error('not a SELECT query')
+      const out: Map<string, Term>[] = []
+      const width = r.vars.length
+      for (let i = 0; i < r.rows.length; i += width) {
+        const m = new Map<string, Term>()
+        for (let k = 0; k < width; k++) if (r.rows[i + k]) m.set(r.vars[k]!, termOf(r.rows[i + k]!))
+        out.push(m)
+      }
+      return out
     },
-    construct() {
-      throw new Error(`The ${kind} store has no SPARQL engine yet; use function rules (prefer: "function")`)
+    construct(query, graphs) {
+      if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet; use function rules (prefer: "function")`)
+      const r = prepare(query).run(graphIds(graphs as Term[]))
+      if (r.form !== Form.Construct && r.form !== Form.Describe) throw new Error('not a CONSTRUCT query')
+      const out: Quad[] = new Array(r.triples.length / 3)
+      for (let i = 0, k = 0; i < r.triples.length; i += 3, k++) out[k] = quad(termOf(r.triples[i]!), termOf(r.triples[i + 1]!), termOf(r.triples[i + 2]!), defaultGraph)
+      return out
     },
     loadTurtle(text) {
       e.load(Format.Turtle, text)

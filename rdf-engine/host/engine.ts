@@ -72,6 +72,7 @@ interface Exports {
   query_var_ptr(h: number, i: number): number
   query_var_len(h: number, i: number): number
   bind(h: number, nameLen: number, id: number): number
+  bind_values(h: number, count: number, nameLen: number): number
   run(h: number, graphs: number): number
   release(h: number): number
   parse_update(textLen: number, baseLen: number): number
@@ -230,6 +231,13 @@ export class Engine {
     this.check(this.x.bind(h, this.put(name)[0]!, id))
   }
   /** @internal */
+  bindValues(h: number, name: string, ids: ArrayLike<number>): void {
+    const at = this.x.input(ids.length * 4 + name.length * 3)
+    new Uint32Array(this.x.memory.buffer, at, ids.length).set(ids)
+    const n = encoder.encodeInto(name, new Uint8Array(this.x.memory.buffer, at + ids.length * 4)).written
+    this.check(this.x.bind_values(h, ids.length, n))
+  }
+  /** @internal */
   runQuery(h: number, graphs: ArrayLike<number>): number {
     this.putIds(graphs)
     return this.check(this.x.run(h, graphs.length))
@@ -267,6 +275,12 @@ export class Query {
 
   bind(name: string, id: number): this {
     this.engine.bindVar(this.handle, name, id)
+    return this
+  }
+
+  /** Bind a variable to several terms: the results of running once with each. */
+  bindValues(name: string, ids: ArrayLike<number>): this {
+    this.engine.bindValues(this.handle, name, ids)
     return this
   }
 

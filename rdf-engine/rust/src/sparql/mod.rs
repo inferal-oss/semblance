@@ -1,0 +1,289 @@
+//! SPARQL 1.2: the algebra (this file), the parser, and the evaluator.
+//! Constants are interned at parse time; variables are numbered per query,
+//! and a solution is a row of term ids indexed by variable (0 = unbound).
+
+pub mod eval;
+pub mod expr;
+pub mod md5;
+pub mod num;
+pub mod parse;
+pub mod regex;
+
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+
+pub type Var = u32;
+
+/// A position in a pattern: a term, a variable, or a triple term with variables in it.
+#[derive(Clone)]
+pub enum Tv {
+    Term(u32),
+    Var(Var),
+    Triple(Box<[Tv; 3]>),
+}
+
+#[derive(Clone)]
+pub struct Triple {
+    pub s: Tv,
+    pub p: Tv,
+    pub o: Tv,
+}
+
+#[derive(Clone)]
+pub enum Path {
+    Iri(u32),
+    Inverse(Box<Path>),
+    Seq(Box<Path>, Box<Path>),
+    Alt(Box<Path>, Box<Path>),
+    ZeroOrMore(Box<Path>),
+    OneOrMore(Box<Path>),
+    ZeroOrOne(Box<Path>),
+    /// `!(...)`: forward and inverse IRIs excluded.
+    Negated(Vec<u32>, Vec<u32>),
+}
+
+#[derive(Clone)]
+pub enum Pattern {
+    /// One solution binding nothing.
+    Unit,
+    Bgp(Vec<Triple>),
+    Path(Tv, Path, Tv),
+    Join(Box<Pattern>, Box<Pattern>),
+    LeftJoin(Box<Pattern>, Box<Pattern>, Option<Expr>),
+    Filter(Expr, Box<Pattern>),
+    Union(Box<Pattern>, Box<Pattern>),
+    Minus(Box<Pattern>, Box<Pattern>),
+    Graph(Tv, Box<Pattern>),
+    Extend(Box<Pattern>, Var, Expr),
+    Values(Vec<Var>, Vec<Vec<u32>>),
+    Lateral(Box<Pattern>, Box<Pattern>),
+    Sub(Box<Select>),
+    Service(bool),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Func {
+    Str, Lang, LangMatches, Datatype, Iri, Bnode, Rand, Abs, Ceil, Floor, Round, Concat, SubStr,
+    StrLen, Replace, UCase, LCase, EncodeForUri, Contains, StrStarts, StrEnds, StrBefore, StrAfter,
+    Year, Month, Day, Hours, Minutes, Seconds, Timezone, Tz, Now, Uuid, StrUuid, Md5, Sha1, Sha256,
+    Sha384, Sha512, StrLang, StrDt, SameTerm, IsIri, IsBlank, IsLiteral, IsNumeric, Regex, Triple,
+    Subject, Predicate, Object, IsTriple, LangDir, HasLang, HasLangDir, StrLangDir,
+}
+
+#[derive(Clone)]
+pub enum Expr {
+    Var(Var),
+    Const(u32),
+    Or(Box<Expr>, Box<Expr>),
+    And(Box<Expr>, Box<Expr>),
+    Not(Box<Expr>),
+    Cmp(Cmp, Box<Expr>, Box<Expr>),
+    In(Box<Expr>, Vec<Expr>, bool),
+    Arith(Op, Box<Expr>, Box<Expr>),
+    Neg(Box<Expr>),
+    Plus(Box<Expr>),
+    Call(Func, Vec<Expr>),
+    Bound(Var),
+    If(Box<Expr>, Box<Expr>, Box<Expr>),
+    Coalesce(Vec<Expr>),
+    Exists(Box<Pattern>, bool),
+    /// `xsd:...(x)`: the target datatype's IRI id.
+    Cast(u32, Box<Expr>),
+    /// A function the engine does not know: always an error.
+    Unknown,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Cmp {
+    Eq, Ne, Lt, Gt, Le, Ge,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Op {
+    Add, Sub, Mul, Div,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AggKind {
+    Count, Sum, Min, Max, Avg, Sample, GroupConcat,
+}
+
+#[derive(Clone)]
+pub struct Aggregate {
+    pub kind: AggKind,
+    pub distinct: bool,
+    /// `None`: `COUNT(*)`.
+    pub expr: Option<Expr>,
+    pub separator: Vec<u8>,
+}
+
+#[derive(Clone)]
+pub struct Select {
+    pub pattern: Pattern,
+    /// GROUP BY: key expressions, each optionally bound to a variable.
+    pub group: Option<Vec<(Expr, Option<Var>)>>,
+    /// Aggregates, each computed into a hidden variable.
+    pub aggregates: Vec<(Var, Aggregate)>,
+    pub having: Vec<Expr>,
+    /// SELECT expressions, in order: `(expr AS ?v)`.
+    pub extend: Vec<(Var, Expr)>,
+    pub order: Vec<(Expr, bool)>,
+    /// The projected variables, in order (for `*`, every visible variable).
+    pub project: Vec<Var>,
+    pub distinct: bool,
+    pub reduced: bool,
+    pub offset: usize,
+    pub limit: Option<usize>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Form {
+    Select = 1,
+    Construct = 2,
+    Ask = 3,
+    Describe = 4,
+}
+
+/// A position in a CONSTRUCT template: blank nodes are per-solution.
+#[derive(Clone)]
+pub enum Tt {
+    Term(u32),
+    Var(Var),
+    Bnode(u32),
+    Triple(Box<[Tt; 3]>),
+}
+
+pub struct Query {
+    pub form: Form,
+    /// Variable names by index; hidden variables (blank nodes, aggregates) start with `_`.
+    pub vars: Vec<Vec<u8>>,
+    pub select: Select,
+    pub template: Vec<[Tt; 3]>,
+    pub template_bnodes: u32,
+    pub describe: Vec<Tv>,
+    pub from: Vec<u32>,
+    pub from_named: Vec<u32>,
+    pub base: Vec<u8>,
+}
+
+impl Query {
+    pub fn var(&self, name: &[u8]) -> Option<Var> {
+        self.vars.iter().position(|v| v == name).map(|i| i as Var)
+    }
+}
+
+pub enum Output {
+    /// SELECT: rows of the projected variables.
+    Rows(Vec<u32>),
+    /// CONSTRUCT, DESCRIBE: triples.
+    Triples(Vec<u32>),
+    Bool(bool),
+}
+
+/// Run a query over `graphs` (their union is the default graph; empty: the
+/// store's default graph), with variables bound to terms.
+pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::Store, graphs: &[u32], binds: &[(Var, u32)]) -> Output {
+    use crate::dict::{BNODE, DEFAULT_GRAPH_ID, IRI, Key, TRIPLE};
+    use eval::{Active, Ctx};
+    let (default, named) = if !q.from.is_empty() || !q.from_named.is_empty() {
+        (q.from.clone(), Some(q.from_named.clone()))
+    } else if graphs.is_empty() {
+        (alloc::vec![DEFAULT_GRAPH_ID], None)
+    } else {
+        (graphs.to_vec(), None)
+    };
+    let nvars = q.vars.len();
+    let mut sub = alloc::vec![0u32; nvars];
+    for &(v, id) in binds {
+        sub[v as usize] = id;
+    }
+    let mut ctx = Ctx::new(dict, store, default, named, &q.base, nvars);
+    let rows = ctx.select(&q.select, &sub, Active::Default);
+    match q.form {
+        Form::Select => {
+            let mut out = Vec::with_capacity(rows.len() * q.select.project.len());
+            for r in &rows {
+                out.extend(q.select.project.iter().map(|&v| r[v as usize]));
+            }
+            Output::Rows(out)
+        }
+        Form::Ask => Output::Bool(!rows.is_empty()),
+        Form::Construct => {
+            let mut seen = alloc::collections::BTreeSet::new();
+            let mut out = Vec::new();
+            for r in &rows {
+                let bnodes: Vec<u32> = (0..q.template_bnodes).map(|_| ctx.dict.fresh_bnode()).collect();
+                for t in &q.template {
+                    let ids = [inst(&t[0], r, &bnodes, ctx.dict), inst(&t[1], r, &bnodes, ctx.dict), inst(&t[2], r, &bnodes, ctx.dict)];
+                    let [Some(s), Some(p), Some(o)] = ids else { continue };
+                    let kind = |id: u32| ctx.dict.term(id).map_or(0, |t| t.kind);
+                    if !matches!(kind(s), IRI | BNODE) || kind(p) != IRI {
+                        continue;
+                    }
+                    if seen.insert([s, p, o]) {
+                        out.extend_from_slice(&[s, p, o]);
+                    }
+                }
+            }
+            return Output::Triples(out);
+
+            fn inst(t: &Tt, r: &[u32], bnodes: &[u32], dict: &mut crate::dict::Dict) -> Option<u32> {
+                match t {
+                    Tt::Term(i) => Some(*i),
+                    Tt::Var(v) => Some(r[*v as usize]).filter(|&x| x != 0),
+                    Tt::Bnode(k) => Some(bnodes[*k as usize]),
+                    Tt::Triple(b) => {
+                        let (s, p, o) = (inst(&b[0], r, bnodes, dict)?, inst(&b[1], r, bnodes, dict)?, inst(&b[2], r, bnodes, dict)?);
+                        let ks = dict.term(s)?.kind;
+                        if !matches!(ks, IRI | BNODE) || dict.term(p)?.kind != IRI {
+                            return None;
+                        }
+                        Some(dict.intern(Key::triple(s, p, o)))
+                    }
+                }
+            }
+        }
+        Form::Describe => {
+            let mut targets = alloc::collections::BTreeSet::new();
+            for d in &q.describe {
+                match d {
+                    Tv::Term(i) => {
+                        targets.insert(*i);
+                    }
+                    Tv::Var(v) => targets.extend(rows.iter().map(|r| r[*v as usize]).filter(|&x| x != 0)),
+                    Tv::Triple(_) => {}
+                }
+            }
+            if q.describe.is_empty() {
+                for r in &rows {
+                    targets.extend(q.select.project.iter().map(|&v| r[v as usize]).filter(|&x| x != 0));
+                }
+            }
+            // Concise bounded description: outgoing triples, following blank nodes.
+            let mut seen = alloc::collections::BTreeSet::new();
+            let mut out = Vec::new();
+            let mut todo: Vec<u32> = targets.into_iter().collect();
+            let mut done = alloc::collections::BTreeSet::new();
+            let mut scan = Vec::new();
+            while let Some(n) = todo.pop() {
+                if !done.insert(n) {
+                    continue;
+                }
+                for &g in &ctx.default.clone() {
+                    scan.clear();
+                    store.scan([n, 0, 0, g], &mut scan);
+                    for q in scan.chunks_exact(4) {
+                        if seen.insert([q[0], q[1], q[2]]) {
+                            out.extend_from_slice(&q[..3]);
+                            let k = ctx.dict.term(q[2]).map_or(0, |t| t.kind);
+                            if k == BNODE || k == TRIPLE {
+                                todo.push(q[2]);
+                            }
+                        }
+                    }
+                }
+            }
+            Output::Triples(out)
+        }
+    }
+}

@@ -8,9 +8,11 @@ mod abi;
 mod dict;
 mod hash;
 mod heap;
+mod host;
 mod iri;
 mod lex;
 mod ntriples;
+mod sparql;
 mod store;
 mod turtle;
 

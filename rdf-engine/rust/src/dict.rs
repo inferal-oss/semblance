@@ -6,6 +6,7 @@ use crate::hash;
 use alloc::vec::Vec;
 
 pub const NONE: u32 = 0;
+pub const DEFAULT_GRAPH_ID: u32 = 1;
 pub const XSD_STRING: u32 = 2;
 pub const RDF_LANG_STRING: u32 = 3;
 pub const RDF_DIR_LANG_STRING: u32 = 4;
