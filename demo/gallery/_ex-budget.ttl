@@ -147,35 +147,60 @@ ui:ex-budget-rate a c:Stat ; c:label "Savings rate" ; c:unit "%" ; c:help "What 
 ui:ex-budget-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
     c:children ( ui:ex-budget-sheet ui:ex-budget-derived ) .
 
-# The sheet: one number field per entry, labelled by its description, its category as help.
+# The sheet: a row per entry - its amount field, labelled by its description, and its category.
+# Each list declares its column tracks once (bud:SheetColumns) and each row is a pos:Subgrid of
+# them, so the fields and the tags line up from row to row.
+bud:SheetColumns a pos:Layout ; sem:slug "budget-sheet-columns" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) max-content" ] ,
+                 [ sty:property "column-gap" ; sty:raw "var(--sem-space-4)" ] ,
+                 [ sty:property "row-gap" ; sty:raw "var(--sem-space-3)" ] ,
+                 [ sty:property "align-items" ; sty:raw "end" ] .
 ui:ex-budget-sheet a c:Card ; c:label "October" ; c:badge "editable" ;
     c:note "Amounts in euros. Each field validates against bud:AmountShape." ;
     c:content ui:ex-budget-lines .
 ui:ex-budget-lines a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-budget-in-heading ui:ex-budget-in ui:ex-budget-out-heading ui:ex-budget-out ) .
-ui:ex-budget-in-heading a c:Heading ; c:label "Income" ; c:level 3 ; sty:textStyle sty:Subtitle .
-ui:ex-budget-out-heading a c:Heading ; c:label "Expenses" ; c:level 3 ; sty:textStyle sty:Subtitle .
-ui:ex-budget-in a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-budget-f-salary ui:ex-budget-f-freelance ) .
-ui:ex-budget-out a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-budget-f-rent ui:ex-budget-f-groceries ui:ex-budget-f-eatingOut ui:ex-budget-f-transit ui:ex-budget-f-power ui:ex-budget-f-books ) .
+ui:ex-budget-in-heading a c:Text ; c:label "Income" ; sty:textStyle sty:Overline .
+ui:ex-budget-out-heading a c:Text ; c:label "Expenses" ; sty:textStyle sty:Overline .
+ui:ex-budget-in a c:Stack ; pos:layout bud:SheetColumns ;
+    c:children ( ui:ex-budget-r-salary ui:ex-budget-r-freelance ) .
+ui:ex-budget-out a c:Stack ; pos:layout bud:SheetColumns ;
+    c:children ( ui:ex-budget-r-rent ui:ex-budget-r-groceries ui:ex-budget-r-eatingOut ui:ex-budget-r-transit ui:ex-budget-r-power ui:ex-budget-r-books ) .
 
-ui:ex-budget-f-salary a c:TextField ; bud:edits bud:salary ; c:label "Salary" ; c:help "Salary" ;
+ui:ex-budget-f-salary a c:TextField ; bud:edits bud:salary ; c:label "Salary" ;
     c:inputType "number" ; c:value "4200" ; val:validates bud:AmountShape .
-ui:ex-budget-f-freelance a c:TextField ; bud:edits bud:freelance ; c:label "Illustration commission" ; c:help "Side work" ;
+ui:ex-budget-f-freelance a c:TextField ; bud:edits bud:freelance ; c:label "Illustration commission" ;
     c:inputType "number" ; c:value "650" ; val:validates bud:AmountShape .
-ui:ex-budget-f-rent a c:TextField ; bud:edits bud:rent ; c:label "Rent" ; c:help "Housing" ;
+ui:ex-budget-f-rent a c:TextField ; bud:edits bud:rent ; c:label "Rent" ;
     c:inputType "number" ; c:value "1450" ; val:validates bud:AmountShape .
-ui:ex-budget-f-groceries a c:TextField ; bud:edits bud:groceries ; c:label "Groceries" ; c:help "Food" ;
+ui:ex-budget-f-groceries a c:TextField ; bud:edits bud:groceries ; c:label "Groceries" ;
     c:inputType "number" ; c:value "520" ; val:validates bud:AmountShape .
-ui:ex-budget-f-eatingOut a c:TextField ; bud:edits bud:eatingOut ; c:label "Eating out" ; c:help "Food" ;
+ui:ex-budget-f-eatingOut a c:TextField ; bud:edits bud:eatingOut ; c:label "Eating out" ;
     c:inputType "number" ; c:value "180" ; val:validates bud:AmountShape .
-ui:ex-budget-f-transit a c:TextField ; bud:edits bud:transit ; c:label "Transit pass" ; c:help "Transport" ;
+ui:ex-budget-f-transit a c:TextField ; bud:edits bud:transit ; c:label "Transit pass" ;
     c:inputType "number" ; c:value "86" ; val:validates bud:AmountShape .
-ui:ex-budget-f-power a c:TextField ; bud:edits bud:power ; c:label "Power and internet" ; c:help "Utilities" ;
+ui:ex-budget-f-power a c:TextField ; bud:edits bud:power ; c:label "Power and internet" ;
     c:inputType "number" ; c:value "140" ; val:validates bud:AmountShape .
-ui:ex-budget-f-books a c:TextField ; bud:edits bud:books ; c:label "Books and concerts" ; c:help "Leisure" ;
+ui:ex-budget-f-books a c:TextField ; bud:edits bud:books ; c:label "Books and concerts" ;
     c:inputType "number" ; c:value "120" ; val:validates bud:AmountShape .
+
+ui:ex-budget-r-salary a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-salary ui:ex-budget-t-salary ) .
+ui:ex-budget-t-salary a c:Tag ; c:label "Salary" ; sty:tone sty:Success .
+ui:ex-budget-r-freelance a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-freelance ui:ex-budget-t-freelance ) .
+ui:ex-budget-t-freelance a c:Tag ; c:label "Side work" ; sty:tone sty:Success .
+ui:ex-budget-r-rent a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-rent ui:ex-budget-t-rent ) .
+ui:ex-budget-t-rent a c:Tag ; c:label "Housing" ; sty:tone sty:Neutral .
+ui:ex-budget-r-groceries a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-groceries ui:ex-budget-t-groceries ) .
+ui:ex-budget-t-groceries a c:Tag ; c:label "Food" ; sty:tone sty:Neutral .
+ui:ex-budget-r-eatingOut a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-eatingOut ui:ex-budget-t-eatingOut ) .
+ui:ex-budget-t-eatingOut a c:Tag ; c:label "Food" ; sty:tone sty:Neutral .
+ui:ex-budget-r-transit a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-transit ui:ex-budget-t-transit ) .
+ui:ex-budget-t-transit a c:Tag ; c:label "Transport" ; sty:tone sty:Neutral .
+ui:ex-budget-r-power a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-power ui:ex-budget-t-power ) .
+ui:ex-budget-t-power a c:Tag ; c:label "Utilities" ; sty:tone sty:Neutral .
+ui:ex-budget-r-books a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:ex-budget-f-books ui:ex-budget-t-books ) .
+ui:ex-budget-t-books a c:Tag ; c:label "Leisure" ; sty:tone sty:Neutral .
 
 # What is derived: the totals per category (a table) and where the money goes (a chart).
 ui:ex-budget-derived a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
@@ -205,7 +230,9 @@ ui:ex-budget-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
 ui:ex-budget-how-data a c:Text ; c:children (
     "The data is the example's own vocabulary: " ui:ex-budget-how-c1 " has entries; each " ui:ex-budget-how-c2
     " has a " ui:ex-budget-how-c3 " (whose " ui:ex-budget-how-c4 " is income or an expense) and an amount. Each amount is an ordinary "
-    ui:ex-budget-how-c5 " that says which entry it edits (" ui:ex-budget-how-c6 ") and validates against " ui:ex-budget-how-c7 ", a SHACL property shape." ) .
+    ui:ex-budget-how-c5 " that says which entry it edits (" ui:ex-budget-how-c6 ") and validates against " ui:ex-budget-how-c7 ", a SHACL property shape. Each row is a " ui:ex-budget-how-c18 " of the sheet's own column tracks (" ui:ex-budget-how-c19 "), so fields and tags line up." ) .
+ui:ex-budget-how-c18 a c:Code ; c:label "pos:Subgrid" .
+ui:ex-budget-how-c19 a c:Code ; c:label "bud:SheetColumns" .
 ui:ex-budget-how-c1 a c:Code ; c:label "bud:sheet" .
 ui:ex-budget-how-c2 a c:Code ; c:label "bud:Entry" .
 ui:ex-budget-how-c3 a c:Code ; c:label "bud:category" .
