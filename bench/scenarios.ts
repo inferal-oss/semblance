@@ -7,7 +7,7 @@ import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 import type { GraphStore } from '../src/store/types.ts'
 
-export type StoreKind = 'oxigraph' | 'n3' | 'hybrid' | 'rust' | 'wat'
+export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
 
 export interface BenchEnv {
   name: string
@@ -27,21 +27,18 @@ export interface Config {
 }
 
 export const CONFIGS: Config[] = [
+  { id: 'wat · sparql · bulk', store: 'wat', prefer: 'sparql', bulkThreshold: 16 },
+  { id: 'wat · sparql · per-focus', store: 'wat', prefer: 'sparql', bulkThreshold: Infinity },
+  { id: 'wat · function', store: 'wat', prefer: 'function', bulkThreshold: 16 },
+  { id: 'rust · sparql · bulk', store: 'rust', prefer: 'sparql', bulkThreshold: 16 },
+  { id: 'rust · sparql · per-focus', store: 'rust', prefer: 'sparql', bulkThreshold: Infinity },
+  { id: 'rust · function', store: 'rust', prefer: 'function', bulkThreshold: 16 },
   { id: 'oxigraph · sparql · bulk', store: 'oxigraph', prefer: 'sparql', bulkThreshold: 16 },
   { id: 'oxigraph · sparql · per-focus', store: 'oxigraph', prefer: 'sparql', bulkThreshold: Infinity },
   { id: 'oxigraph · function', store: 'oxigraph', prefer: 'function', bulkThreshold: 16 },
   { id: 'hybrid · sparql · bulk', store: 'hybrid', prefer: 'sparql', bulkThreshold: 16 },
   { id: 'hybrid · function', store: 'hybrid', prefer: 'function', bulkThreshold: 16 },
   { id: 'n3 · function', store: 'n3', prefer: 'function', bulkThreshold: 16 },
-]
-
-/** Node also runs the rdf-engine builds (WAT with function rules until it has SPARQL). */
-export const NODE_CONFIGS: Config[] = [
-  ...CONFIGS,
-  { id: 'rust · sparql · bulk', store: 'rust', prefer: 'sparql', bulkThreshold: 16 },
-  { id: 'rust · sparql · per-focus', store: 'rust', prefer: 'sparql', bulkThreshold: Infinity },
-  { id: 'rust · function', store: 'rust', prefer: 'function', bulkThreshold: 16 },
-  { id: 'wat · function', store: 'wat', prefer: 'function', bulkThreshold: 16 },
 ]
 
 export interface Row {

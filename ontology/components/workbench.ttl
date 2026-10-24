@@ -591,8 +591,8 @@ c:NotRunPhrase a c:Phrase ;
     rdfs:label "Run a query, or pick a sample, to see its results here."@en , "Виконайте запит або виберіть приклад, щоб побачити результати тут."@uk ,
                "Führen Sie eine Abfrage aus oder wählen Sie ein Beispiel, um hier die Ergebnisse zu sehen."@de , "نفّذ استعلامًا أو اختر نموذجًا لعرض نتائجه هنا."@ar .
 c:NoSparqlPhrase a c:Phrase ;
-    rdfs:label "Queries need SPARQL; choose a store that has it (Oxigraph or Hybrid)."@en , "Запитам потрібен SPARQL; виберіть сховище з ним (Oxigraph або Hybrid)."@uk ,
-               "Abfragen brauchen SPARQL; wählen Sie einen Speicher, der es kann (Oxigraph oder Hybrid)."@de , "تحتاج الاستعلامات إلى SPARQL؛ اختر مخزنًا يدعمه (Oxigraph أو Hybrid)."@ar .
+    rdfs:label "Queries need SPARQL; choose a store that has it (Semblance WASM, Semblance Rust, Oxigraph or Hybrid)."@en , "Запитам потрібен SPARQL; виберіть сховище з ним (Semblance WASM, Semblance Rust, Oxigraph або Hybrid)."@uk ,
+               "Abfragen brauchen SPARQL; wählen Sie einen Speicher, der es kann (Semblance WASM, Semblance Rust, Oxigraph oder Hybrid)."@de , "تحتاج الاستعلامات إلى SPARQL؛ اختر مخزنًا يدعمه (Semblance WASM أو Semblance Rust أو Oxigraph أو Hybrid)."@ar .
 c:QueryFailedPhrase a c:Phrase ; rdfs:label "The query failed"@en , "Запит не вдався"@uk , "Die Abfrage ist fehlgeschlagen"@de , "فشل الاستعلام"@ar .
 c:NoResultsPhrase a c:Phrase ; rdfs:label "No results."@en , "Немає результатів."@uk , "Keine Ergebnisse."@de , "لا توجد نتائج."@ar .
 c:RowsPhrase a c:Phrase ; rdfs:label "Rows: {n}"@en , "Рядків: {n}"@uk , "Zeilen: {n}"@de , "الصفوف: {n}"@ar .

@@ -22,11 +22,12 @@ import { perfRunner } from './perf-runner.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const params = new URLSearchParams(location.search)
-const kind = (params.get('store') ?? 'hybrid') as StoreKind
+// Semblance's own WASM engine by default: the fastest store (rdf-engine/results).
+const kind = (params.get('store') ?? 'wat') as StoreKind
 // SPARQL by default: the rules are queries, inspectable and portable. Function twins render the same
 // HTML, faster in the browser (Rules menu, ?prefer=function); a store without SPARQL (N3) needs them.
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
-const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
+const STORES: Record<StoreKind, string> = { wat: 'SemblanceWasm', rust: 'SemblanceRust', hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 
 await initWeb()

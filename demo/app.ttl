@@ -35,7 +35,7 @@
 ui:app sty:colorScheme sty:System ;
     sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer ;
     l10n:language l10n:English ;
-    ui:store ui:Hybrid ;
+    ui:store ui:SemblanceWasm ;
     ui:rules ui:PreferSparql ;
     ui:page ui:Home ;
     ui:docSection ui:DocOverview ;
@@ -44,9 +44,11 @@ ui:app sty:colorScheme sty:System ;
     ui:galleryGroup ui:GroupFoundations .
 
 ui:store rdfs:label "Store" ; rdfs:range ui:StoreKind .
-ui:Hybrid a ui:StoreKind ; rdfs:label "Hybrid · Oxigraph + N3 mirror" ; sem:order 1 ; ui:key "hybrid" .
-ui:Oxigraph a ui:StoreKind ; rdfs:label "Oxigraph" ; sem:order 2 ; ui:key "oxigraph" .
-ui:N3 a ui:StoreKind ; rdfs:label "N3.js · functions only" ; sem:order 3 ; ui:key "n3" .
+ui:SemblanceWasm a ui:StoreKind ; rdfs:label "Semblance WASM" ; sem:order 1 ; ui:key "wat" .
+ui:SemblanceRust a ui:StoreKind ; rdfs:label "Semblance Rust" ; sem:order 2 ; ui:key "rust" .
+ui:Hybrid a ui:StoreKind ; rdfs:label "Hybrid · Oxigraph + N3 mirror" ; sem:order 3 ; ui:key "hybrid" .
+ui:Oxigraph a ui:StoreKind ; rdfs:label "Oxigraph" ; sem:order 4 ; ui:key "oxigraph" .
+ui:N3 a ui:StoreKind ; rdfs:label "N3.js · functions only" ; sem:order 5 ; ui:key "n3" .
 ui:rules rdfs:label "Rules" ; rdfs:range ui:RuleKind .
 ui:PreferSparql a ui:RuleKind ; rdfs:label "Prefer SPARQL" ; sem:order 1 ; ui:key "sparql" .
 ui:PreferFunction a ui:RuleKind ; rdfs:label "Prefer functions" ; sem:order 2 ; ui:key "function" .

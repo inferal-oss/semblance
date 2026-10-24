@@ -17,7 +17,11 @@
     "conformance": "tsx rdf-engine/conformance/run.ts",
     "engine:build": "tsx rdf-engine/build.ts",
     "engine:check": "tsx rdf-engine/host/abi-check.ts",
-    "engine:compare": "tsx rdf-engine/compare.ts"
+    "engine:compare": "tsx rdf-engine/compare.ts",
+    "predev": "npm run engine:build",
+    "prebuild": "npm run engine:build",
+    "pretest": "npm run engine:build",
+    "prebuild:single": "npm run engine:build"
   },
   "dependencies": {
     "n3": "^2.13.12",

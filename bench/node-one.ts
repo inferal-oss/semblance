@@ -5,13 +5,13 @@
 import '../src/behaviour/events.ts'
 import { loadStore } from '../src/node/load.ts'
 import { runMicro } from './micro.ts'
-import { NODE_CONFIGS, runBench } from './scenarios.ts'
+import { CONFIGS, runBench } from './scenarios.ts'
 
 const [mode, a, b] = process.argv.slice(2)
 if (mode === 'micro') {
   console.log('RESULT:' + JSON.stringify(await runMicro()))
 } else {
-  const config = NODE_CONFIGS.find((c) => c.id === a)
+  const config = CONFIGS.find((c) => c.id === a)
   if (!config) throw new Error(`Unknown config "${a}"`)
   const rows = await runBench({ name: 'node', loadStore, log: (l) => console.error(l) }, [Number(b)], [config])
   console.log('RESULT:' + JSON.stringify(rows))

@@ -252,7 +252,7 @@ const queryview: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text)]))
     return o.quads
   }
-  if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Oxigraph or Hybrid).')
+  if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Semblance WASM, Semblance Rust, Oxigraph or Hybrid).')
   if (variable && !named(value)) return message(text(ctx, focus, C.emptyText) ?? 'Nothing selected.')
   const sections: TurtleSection[] = []
   for (const q of queries) {
