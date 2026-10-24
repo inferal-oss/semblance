@@ -25,4 +25,9 @@ export interface GraphStore {
   /** Evaluate a CONSTRUCT query whose default graph is the union of `graphs`. */
   construct(query: string, graphs: Quad_Graph[]): Quad[]
   loadTurtle(text: string): void
+  /**
+   * Housekeeping in small slices (e.g. in idle time), for at most `budgetMs`.
+   * Returns whether more remains. Optional; stores without upkeep omit it.
+   */
+  maintain?(budgetMs: number): boolean
 }

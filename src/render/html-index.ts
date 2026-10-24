@@ -65,11 +65,33 @@ export class HtmlIndex {
   visibility = 0
   /** One dirty set per consumer (each renderer patches independently). */
   private consumers = new Set<Dirty>()
+  /** Sizes of the index, for leak checks. */
+  footprint(): Record<string, number> {
+    return { nodes: this.nodes.size, attrs: this.attrs.size, immediate: this.immediate.size, strict: this.strict.size, roots: this.rootByFocus.size, chainParents: this.chainParent.size }
+  }
   constructor(private readonly onError: (e: Error) => void = (e) => console.error(e)) {}
 
   apply(delta: Delta): void {
     for (const q of delta.remove) this.quad(q, -1)
     for (const q of delta.add) this.quad(q, 1)
+    // Forget nodes and attribute occurrences nothing describes any more, so the
+    // index stays the size of what is derived, however much came and went.
+    if (delta.remove.length) {
+      for (const q of delta.remove) {
+        this.collect(q.subject.value)
+        if (q.object.termType === 'NamedNode') this.collect(q.object.value)
+      }
+    }
+  }
+
+  private collect(key: string) {
+    const n = this.nodes.get(key)
+    if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined) {
+      this.nodes.delete(key)
+      this.chainParent.delete(key)
+    }
+    const a = this.attrs.get(key)
+    if (a && !a.owners.size && a.name === undefined && a.value === undefined) this.attrs.delete(key)
   }
 
   /** Register a consumer of changes; call the result to take what changed since the last call. */

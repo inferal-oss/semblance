@@ -9,6 +9,8 @@ import type { GraphStore } from '../store/types.ts'
  *   @layer sem.hooks      values of hookable properties that carry declarations
  *                         (e.g. pos:Row) and token-valued hooks (e.g. pos:gap)
  *   @layer sem.components sty:StyleRule without intent
+ *   @layer sem.variants   sty:StyleRule with sty:when (a value of a hooked axis such as
+ *                         tone, emphasis or size): wins over the component's base rule
  *   @layer sem.intents    sty:StyleRule with intent (wins over the base rule)
  */
 const hyphens = (decl: string) => decl.slice(0, decl.indexOf(':')).split('-').length
@@ -99,30 +101,45 @@ export function compileStyles(store: GraphStore): string {
 
   const typeAttr = hookAttr(RDF_TYPE)
   const intentAttr = hookAttr(STY.intent)
+  // sty:when <value>: the attribute of the hooked property whose range the value belongs to.
+  const whenAttr = (v: Term) => {
+    for (const t of objects(v, RDF_TYPE)) {
+      for (const p of subjects(RDFS_RANGE, t.value)) {
+        const attr = object(p, STY.hookAttribute)?.value
+        if (attr) return sel(attr, slug(v))
+      }
+    }
+    return undefined
+  }
   const componentRules: (string | undefined)[] = []
+  const variantRules: (string | undefined)[] = []
   const intentRules: (string | undefined)[] = []
   for (const r of subjects(RDF_TYPE, STY.StyleRule)) {
     const cls = object(r, STY.appliesTo)
     const intent = object(r, STY.intent)
     const state = object(r, STY.state)?.value
     const part = object(r, STY.part)?.value
-    // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer may add).
+    const when = objects(r, STY.when).map(whenAttr).filter(Boolean).sort().join('')
+    // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
+    // may add), or every element carrying its sty:when value.
     if (!cls) {
-      if (part) componentRules.push(block(part, declarations(r)))
+      if (when) variantRules.push(block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r)))
+      else if (part) componentRules.push(block(part, declarations(r)))
       continue
     }
     // A rule for a class also styles its subclasses (data-sem-c names only the direct class).
     const selector = withSubclasses(cls)
-      .map((c) => sel(typeAttr, slug(c)) + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (part ? ' ' + part : ''))
+      .map((c) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (part ? ' ' + part : ''))
       .join(', ')
-    ;(intent ? intentRules : componentRules).push(block(selector, declarations(r)))
+    ;(intent ? intentRules : when ? variantRules : componentRules).push(block(selector, declarations(r)))
   }
 
   return [
-    '@layer sem.tokens, sem.hooks, sem.components, sem.intents;',
+    '@layer sem.tokens, sem.hooks, sem.components, sem.variants, sem.intents;',
     layer('tokens', tokenRules),
     layer('hooks', hookRules, true),
     layer('components', componentRules),
+    layer('variants', variantRules),
     layer('intents', intentRules),
   ]
     .filter(Boolean)

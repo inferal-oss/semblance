@@ -71,12 +71,16 @@ export class Runtime {
 
   /** Spend up to `budgetMs` evaluating hidden work (see Engine.warm). Returns whether work remains. */
   warm(budgetMs: number): boolean {
+    const until = performance.now() + budgetMs
     let more = false
     const share = budgetMs / Math.max(1, this.projections.length)
     for (const p of this.projections) {
       more = p.engine.warm(share) || more
       settle(p)
     }
+    // What time is left goes to the store's own upkeep (e.g. compaction).
+    const left = until - performance.now()
+    if (left > 1) more = (this.store.maintain?.(left) ?? false) || more
     return more
   }
 

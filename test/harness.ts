@@ -11,9 +11,9 @@ const UI = 'https://semblance.dev/demo#'
 const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
-export function mountShell(todos = 5) {
+export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
-  const store = loadStore('oxigraph', todoApp(todos), appGraph)
+  const store = loadStore(kind, todoApp(todos), appGraph)
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer]
   const screen = runtime.project({ modality: MOD.Screen, layers, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {

@@ -11,6 +11,10 @@ export class DomRenderer {
   private els = new Map<string, Node>()
   private keys = new WeakMap<Node, string>()
   private applied = new Map<string, Map<string, string>>()
+  /** Sizes of the renderer's maps, for leak checks. */
+  footprint(): Record<string, number> {
+    return { elements: this.els.size, applied: this.applied.size }
+  }
   private readonly takeDirty: () => ReturnType<ReturnType<HtmlIndex['consumer']>>
   /** DOM operations performed, for benchmarks. */
   ops = 0

@@ -2,19 +2,39 @@ import type { Quad, Quad_Graph, Term } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
 import type { Factory, GraphStore } from './types.ts'
 
+const COMPACT_MIN = 5_000
+
 /**
  * Oxigraph adapter. The module is injected because Node (`oxigraph/node.js`)
  * and browsers (`oxigraph/web.js`, needs `init()`) load it differently.
  */
 export function oxigraphStore(ox: typeof Ox): GraphStore {
-  const store = new ox.Store()
+  let store = new ox.Store()
   const factory = ox as unknown as Factory
+  // Oxigraph's in-memory store keeps deleted quads as dead versions that every
+  // later lookup of the same pattern walks, so a sliding window (a bounded log,
+  // replaced metrics) gets slower forever. Rebuild from the live quads once the
+  // deletions since the last rebuild reach half of them: amortized O(1) per write.
+  // (The hybrid store rebuilds in idle slices instead; see hybrid.ts.)
+  let deletes = 0
+  let threshold = COMPACT_MIN
+  const compact = () => {
+    const live = store.match(null, null, null, null)
+    const fresh = new ox.Store(live)
+    ;(store as unknown as { free?: () => void }).free?.()
+    store = fresh
+    deletes = 0
+    threshold = Math.max(COMPACT_MIN, live.length / 2)
+  }
   return {
     kind: 'oxigraph',
     factory,
     sparql: true,
     add: (q) => store.add(q as Ox.Quad),
-    delete: (q) => store.delete(q as Ox.Quad),
+    delete: (q) => {
+      store.delete(q as Ox.Quad)
+      if (++deletes > threshold) compact()
+    },
     has: (q) => store.has(q as Ox.Quad),
     match: (s, p, o, g) => store.match(s as Ox.Term, p as Ox.Term, o as Ox.Term, g as Ox.Term) as unknown as Quad[],
     select(query: string, graphs: Quad_Graph[]) {

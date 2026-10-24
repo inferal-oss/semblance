@@ -140,6 +140,21 @@ export class Engine {
     return this.refs.size
   }
 
+  /** Sizes of the engine's bookkeeping, for leak checks: all must stay bounded by what is derived. */
+  footprint(): Record<string, number> {
+    let outputs = 0
+    for (const byFocus of this.outputs.values()) outputs += byFocus.size
+    let readers = 0
+    for (const byRule of this.readers.values()) for (const foci of byRule.values()) readers += foci.size
+    let readsOf = 0
+    for (const byFocus of this.readsOf.values()) readsOf += byFocus.size
+    let deferred = 0
+    for (const foci of this.deferred.values()) deferred += foci.size
+    let members = 0
+    for (const byOwner of this.memberKeys.values()) for (const keys of byOwner.values()) members += keys.size
+    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, types: this.types.size, links: this.links.size }
+  }
+
   onChange(listener: Listener): () => void {
     this.listeners.push(listener)
     return () => (this.listeners = this.listeners.filter((l) => l !== listener))
@@ -357,7 +372,11 @@ export class Engine {
       let subjects = byPred.get(p)
       if (!subjects) byPred.set(p, (subjects = new Set()))
       if (sign > 0) subjects.add(s)
-      else subjects.delete(s)
+      else {
+        subjects.delete(s)
+        if (!subjects.size) byPred.delete(p)
+        if (!byPred.size) this.links.delete(o)
+      }
     }
   }
 
@@ -487,12 +506,27 @@ export class Engine {
     return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
   }
 
+  /** Drop a (rule, focus) pair's traced reads. */
+  private forgetReads(rule: Rule, focus: string) {
+    const byFocus = this.readsOf.get(rule)
+    for (const subject of byFocus?.get(focus) ?? []) {
+      const byRule = this.readers.get(subject)
+      const foci = byRule?.get(rule)
+      if (!foci) continue
+      foci.delete(focus)
+      if (!foci.size) byRule!.delete(rule)
+      if (!byRule!.size) this.readers.delete(subject)
+    }
+    byFocus?.delete(focus)
+  }
+
   /** Replace a (rule, focus) pair's traced reads. */
   private recordReads(rule: Rule, focus: string, trace: Map<string, Set<string>>) {
+    this.forgetReads(rule, focus)
     let byFocus = this.readsOf.get(rule)
     if (!byFocus) this.readsOf.set(rule, (byFocus = new Map()))
-    for (const subject of byFocus.get(focus) ?? []) this.readers.get(subject)?.get(rule)?.delete(focus)
     trace.delete(focusOf(focus)) // the focus's own triples are covered by its self-watch
+    if (!trace.size) return
     byFocus.set(focus, [...trace.keys()])
     for (const [subject, preds] of trace) {
       let byRule = this.readers.get(subject)
@@ -548,7 +582,12 @@ export class Engine {
       this.committing = undefined
     }
     if (next.size) byFocus.set(focus, next)
-    else byFocus.delete(focus)
+    else {
+      byFocus.delete(focus)
+      // A pair with nothing to show no longer needs to hear about what it read,
+      // unless it is still an instance (its next input may produce output).
+      if (!this.isInstance(focus, rule) || !this.linked(rule, focus)) this.forgetReads(rule, focus)
+    }
     if (rule.forEach && memberOf(focus) !== undefined) {
       let byOwner = this.memberKeys.get(rule)
       if (!byOwner) this.memberKeys.set(rule, (byOwner = new Map()))
