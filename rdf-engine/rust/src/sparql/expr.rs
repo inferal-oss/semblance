@@ -740,10 +740,9 @@ impl Ctx<'_> {
                 let (p, _) = self.string(&v[1])?;
                 let (r, _) = self.string(&v[2])?;
                 let flags = if v.len() > 3 { self.string(&v[3])?.0 } else { Vec::new() };
+                // XPath makes a pattern that matches the empty string an error;
+                // Oxigraph (and Semblance's text projection) replace anyway.
                 let re = self.regex(&p, &flags)?;
-                if re.matches_empty() {
-                    return Err(());
-                }
                 let text = regex::chars(&s);
                 let repl = regex::chars(&r);
                 let literal = flags.contains(&b'q');

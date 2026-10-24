@@ -538,9 +538,4 @@ impl Regex {
         }
         None
     }
-
-    pub fn matches_empty(&self) -> bool {
-        let mut slots = Vec::new();
-        self.run(&[], 0, &mut slots)
-    }
 }

@@ -9,12 +9,11 @@ import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } fr
 
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
-/** A term's engine id, once known. */
-const ID = Symbol('engine id')
-type Tagged = { [ID]?: number }
+/** Engine ids are tagged on term objects under a key of each store's own. */
+type Tagged = { [key: symbol]: number | undefined }
 
 abstract class Base {
-  [ID]?: number
+  [key: symbol]: number | undefined
   abstract readonly termType: string
   abstract readonly value: string
   equals(other: Term | null | undefined): boolean {
@@ -82,6 +81,8 @@ export type EngineStore = GraphStore & { termCount(): number }
 
 export function engineStore(module: WebAssembly.Module, kind: string): EngineStore {
   const e = new Engine(module)
+  // This store's tag: term objects of another store (another engine) carry ids that mean nothing here.
+  const ID = Symbol('engine id')
   const defaultGraph = new Default()
   defaultGraph[ID] = DEFAULT_GRAPH
   /** Term objects by id, filled as ids come back from the engine. */
