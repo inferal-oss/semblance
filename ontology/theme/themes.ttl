@@ -213,7 +213,9 @@ sty:Semblance a sty:Theme ; sem:slug "semblance" ; sem:order 1 ; sem:symbol "◇
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "40px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 sty:Paper a sty:Theme ; sem:slug "paper" ; sem:order 2 ; sem:symbol "¶" ;
     rdfs:label "Paper"@en , "Папір"@uk , "Papier"@de , "ورق"@ar ;
@@ -336,7 +338,9 @@ sty:Paper a sty:Theme ; sem:slug "paper" ; sem:order 2 ; sem:symbol "¶" ;
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "40px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 sty:Terminal a sty:Theme ; sem:slug "terminal" ; sem:order 3 ; sem:symbol "▮" ;
     rdfs:label "Terminal"@en , "Термінал"@uk , "Terminal"@de , "طرفية"@ar ;
@@ -459,7 +463,9 @@ sty:Terminal a sty:Theme ; sem:slug "terminal" ; sem:order 3 ; sem:symbol "▮" 
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "40px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 sty:Blueprint a sty:Theme ; sem:slug "blueprint" ; sem:order 4 ; sem:symbol "⌗" ;
     rdfs:label "Blueprint"@en , "Креслення"@uk , "Blaupause"@de , "مخطط"@ar ;
@@ -582,7 +588,9 @@ sty:Blueprint a sty:Theme ; sem:slug "blueprint" ; sem:order 4 ; sem:symbol "⌗
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "40px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 sty:Sunset a sty:Theme ; sem:slug "sunset" ; sem:order 5 ; sem:symbol "◓" ;
     rdfs:label "Sunset"@en , "Захід сонця"@uk , "Abendrot"@de , "غروب"@ar ;
@@ -705,7 +713,9 @@ sty:Sunset a sty:Theme ; sem:slug "sunset" ; sem:order 5 ; sem:symbol "◓" ;
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "40px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 # --- rules that read the theme-level tokens --------------------------------------------
 # Generic, not per theme: inside any themed subtree, these parts read the tokens the

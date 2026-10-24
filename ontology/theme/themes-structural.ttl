@@ -175,7 +175,9 @@ sty:Cupertino a sty:Theme ; sem:slug "cupertino" ; sem:order 6 ; sem:symbol "⌘
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "72px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "84px" ] .
 
 sty:Tracker a sty:Theme ; sem:slug "tracker" ; sem:order 7 ; sem:symbol "▀" ;
     rdfs:label "Tracker"@en , "Трекер"@uk , "Tracker"@de , "المتتبع"@ar ;
@@ -298,7 +300,9 @@ sty:Tracker a sty:Theme ; sem:slug "tracker" ; sem:order 7 ; sem:symbol "▀" ;
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "36px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 sty:Classic a sty:Theme ; sem:slug "classic" ; sem:order 8 ; sem:symbol "⊞" ;
     rdfs:label "Classic"@en , "Класика"@uk , "Klassisch"@de , "كلاسيكي"@ar ;
@@ -421,7 +425,9 @@ sty:Classic a sty:Theme ; sem:slug "classic" ; sem:order 8 ; sem:symbol "⊞" ;
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "34px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 sty:Fluent a sty:Theme ; sem:slug "fluent" ; sem:order 10 ; sem:symbol "◫" ;
     rdfs:label "Fluent"@en , "Флюент"@uk , "Fluent"@de , "فلوينت"@ar ;
@@ -544,7 +550,9 @@ sty:Fluent a sty:Theme ; sem:slug "fluent" ; sem:order 10 ; sem:symbol "◫" ;
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "49px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "58px" ] .
 
 sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     rdfs:label "Doodle"@en , "Каракулі"@uk , "Gekritzel"@de , "خربشة"@ar ;
@@ -667,7 +675,9 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
         [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
         [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
-        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-taskbar-size" ; sty:raw "40px" ] ,
+        [ sty:property "--sem-taskbar-span" ; sty:raw "min(168px, 40vw)" ] .
 
 # --- structure ---------------------------------------------------------------------------
 
@@ -980,9 +990,6 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
 # Docked, the dock stays a shelf: centred along its edge, a little off it, as long as its entries;
 # the page keeps clear the band it floats in (--sem-taskbar-size, --sem-taskbar-span).
-[] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "72px" ] ,
-                 [ sty:property "--sem-taskbar-span" ; sty:raw "84px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=top], [data-sem-edge=bottom], [data-sem-edge=start], [data-sem-edge=end]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "18px" ] ,
@@ -1771,8 +1778,6 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "transparent" ] ,
                  [ sty:property "background" ; sty:raw "linear-gradient(135deg, #fff9c4, #f3c300)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px #8a6d00, inset 1px 1px 0 1px #fffbe0" ] .
-[] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "36px" ] .
 # The Deskbar stands upright: its grip is a row of dots on top.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge]) > .sem-grip:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
@@ -2375,8 +2380,6 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "inset-block-end" ; sty:raw "0" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "z-index" ; sty:raw "56" ] .
-[] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "34px" ] .
 # Where the theme puts it (along the bottom) it owns that edge, as if docked there.
 [] a sty:StyleRule ; sty:when sty:Classic ;
     sty:state ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge], [hidden]))" ;
@@ -3444,9 +3447,6 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=taskbar] .sem-task[aria-current=\"true\"]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::after" ;
     sty:declares [ sty:property "width" ; sty:raw "16px" ] ,
                  [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
-[] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "49px" ] ,
-                 [ sty:property "--sem-taskbar-span" ; sty:raw "58px" ] .
 # Where the theme puts it (along the bottom) it owns that edge, as if docked there.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
     sty:state ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge], [hidden]))" ;
