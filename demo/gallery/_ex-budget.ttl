@@ -153,8 +153,8 @@ ui:ex-budget-sheet a c:Card ; c:label "October" ; c:badge "editable" ;
     c:content ui:ex-budget-lines .
 ui:ex-budget-lines a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-budget-in-heading ui:ex-budget-in ui:ex-budget-out-heading ui:ex-budget-out ) .
-ui:ex-budget-in-heading a c:Heading ; c:label "Income" ; c:level 3 .
-ui:ex-budget-out-heading a c:Heading ; c:label "Expenses" ; c:level 3 .
+ui:ex-budget-in-heading a c:Heading ; c:label "Income" ; c:level 3 ; sty:textStyle sty:Subtitle .
+ui:ex-budget-out-heading a c:Heading ; c:label "Expenses" ; c:level 3 ; sty:textStyle sty:Subtitle .
 ui:ex-budget-in a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
     c:children ( ui:ex-budget-f-salary ui:ex-budget-f-freelance ) .
 ui:ex-budget-out a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
@@ -232,6 +232,6 @@ ui:ex-budget-how-c14 a c:Code ; c:label "bud:EditAmount" .
 ui:ex-budget-how-c15 a c:Code ; c:label "dcterms:modified" .
 ui:ex-budget-how-cost a c:Text ; c:children (
     "Why it is cheap: every view names " ui:ex-budget-how-c16 " as its " ui:ex-budget-how-c17
-    ", so a keystroke re-runs those seven SELECTs over eight entries and nothing else; and only while this example is shown - on any other page they are parked. Flip the table or the chart (the ↻ corner) to see the query it runs." ) .
+    ", so a keystroke re-runs those seven SELECTs over eight entries and nothing else; and only while this example is shown - on any other page they are parked. Turn the table or the chart over (its Source button) to see the query it runs." ) .
 ui:ex-budget-how-c16 a c:Code ; c:label "bud:sheet" .
 ui:ex-budget-how-c17 a c:Code ; c:label "c:dataset" .

@@ -41,12 +41,12 @@ describe('the activity example', () => {
   it('charts events by type and lists the most-used components, live', () => {
     const h = activity()
     h.open()
-    expect(h.bars()).toEqual({ Click: '2.00' })
+    expect(h.bars()).toEqual({ Click: '2' })
     expect(h.components()).toEqual(['nav-list', 'segmented'])
     h.click(h.header('Component'))
     h.click(h.header('Component'))
     h.click(h.header('Component'))
-    expect(h.bars()).toEqual({ Click: '5.00' })
+    expect(h.bars()).toEqual({ Click: '5' })
     // Sorted by component now (the header clicks sort the table).
     expect(h.components()).toEqual(['nav-list', 'segmented', 'table'])
     expect(h.recent()).toBe(5)

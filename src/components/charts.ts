@@ -8,7 +8,7 @@ import { text } from './util.ts'
 const str = (t: Term | undefined) => t?.value
 type Row = Map<string, Term>
 
-const fmt = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : '<0.01')
+const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : '<0.01')
 const num = (t: Term | undefined) => (t ? Number(t.value) : undefined)
 const key = (s: string) => encodeURIComponent(s).replace(/%/g, '')
 
@@ -46,6 +46,8 @@ function rows(ctx: RuleContext, focus: NamedNode): Row[] | string {
 function legendOf(ctx: RuleContext, focus: NamedNode, data: Row[], variable: string | undefined) {
   const declared = rdfList(ctx, ctx.object(focus, C.legend)).map((s) => ({ key: str(ctx.object(s, C.key)) ?? s.value, label: labelOf(ctx, s) }))
   if (declared.length) return declared
+  // Without a series variable every value is one series, named by the chart.
+  if (!variable) return [{ key: '', label: labelOf(ctx, focus) }]
   const seen = [...new Set(data.map((r) => (variable ? str(r.get(variable)) : undefined)).filter((x): x is string => x !== undefined))]
   return seen.map((k) => ({ key: k, label: k }))
 }
@@ -100,8 +102,9 @@ const barchart: FnRule = (ctx, focus) => {
       ])
       return o.el(id, 'Div', { class: 'sem-bar' }, [o.el(`${id}-label`, 'Span', { class: 'sem-category' }, [o.text(`${id}-label-text`, category)]), track, value])
     })
-    const caption = o.el(`f${fi}-caption`, 'Figcaption', {}, [o.text(`f${fi}-caption-text`, e.facetLabel.replace('{value}', Number.isFinite(Number(facet)) ? Number(facet).toLocaleString('en-US') : facet))])
-    return o.el(`f${fi}`, 'Figure', {}, [caption, ...bars])
+    // Small multiples are captioned; an unfaceted chart is one figure without one.
+    const caption = e.facet ? [o.el(`f${fi}-caption`, 'Figcaption', {}, [o.text(`f${fi}-caption-text`, e.facetLabel.replace('{value}', Number.isFinite(Number(facet)) ? Number(facet).toLocaleString('en-US') : facet))])] : []
+    return o.el(`f${fi}`, 'Figure', {}, [...caption, ...bars])
   })
   const parts = [o.el('panels', 'Div', { class: 'sem-panels' }, panels)]
   if (e.series && series.length > 1) parts.push(legend(o, series))
