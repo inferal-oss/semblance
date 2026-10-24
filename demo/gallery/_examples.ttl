@@ -28,12 +28,13 @@ ui:ExViews a ui:Example ; rdfs:label "Maintained views" ; sem:order 11 ; ui:key 
 ui:ExShapes a ui:Example ; rdfs:label "A form from a shape" ; sem:order 12 ; ui:key "shape-form" .
 ui:ExSheet a ui:Example ; rdfs:label "Spreadsheet" ; sem:order 13 ; ui:key "sheet" .
 ui:ExCalendar a ui:Example ; rdfs:label "Room bookings" ; sem:order 14 ; ui:key "calendar" .
+ui:ExDashboard a ui:Example ; rdfs:label "Sales dashboard" ; sem:order 15 ; ui:key "dashboard" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:examplesNav ui:examplePages ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" ; c:compactAs c:Picker .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
-    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-views ui:exc-shapes ui:exc-sheet ui:exc-calendar ) .
+    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-views ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ) .
 ui:exc-todo c:when ui:ExTodo ; c:content ui:exp-todo .
 ui:exc-signin c:when ui:ExSignin ; c:content ui:exp-signin .
 ui:exc-network c:when ui:ExNetwork ; c:content ui:exp-network .
@@ -48,6 +49,7 @@ ui:exc-views c:when ui:ExViews ; c:content ui:exp-views .
 ui:exc-shapes c:when ui:ExShapes ; c:content ui:exp-shapes .
 ui:exc-sheet c:when ui:ExSheet ; c:content ui:exp-sheet .
 ui:exc-calendar c:when ui:ExCalendar ; c:content ui:exp-calendar .
+ui:exc-dashboard c:when ui:ExDashboard ; c:content ui:exp-dashboard .
 
 # --- Each example: the app, how it works, and its source ---------------------------------------------
 # An example is its own graph, in its own file (demo/gallery/_ex-<key>.ttl; the network inspector in
@@ -97,3 +99,6 @@ ui:exs-sheet a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo
 ui:exp-calendar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-calendar ui:ex-calendar-how ) .
 ui:ex-calendar-how c:sourceView ui:exs-calendar .
 ui:exs-calendar a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-calendar.ttl> .
+ui:exp-dashboard a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-dashboard ui:ex-dashboard-how ) .
+ui:ex-dashboard-how c:sourceView ui:exs-dashboard .
+ui:exs-dashboard a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-dashboard.ttl> .

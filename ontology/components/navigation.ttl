@@ -26,8 +26,8 @@ c:NavList a owl:Class ;
 # c:Segmented can have one; a nav list is where it is usual.
 c:countProperty a owl:ObjectProperty ; rdfs:domain c:Segmented ; rdfs:range rdf:Property ;
     rdfs:comment "A numeric property of each option, shown as a count after its label when above zero."@en .
-c:countLabel a owl:DatatypeProperty ; rdfs:domain c:Segmented ;
-    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\")."@en .
+c:countLabel a owl:DatatypeProperty ;
+    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\"): on a c:Segmented with c:countProperty, or c:Chips with c:countQuery."@en .
 c:SegmentedCounts a sem:Rendering ;
     sem:targets c:Segmented ;
     sem:requires c:countProperty ;

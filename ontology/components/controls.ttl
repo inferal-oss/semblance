@@ -671,6 +671,23 @@ c:ChipsRendering-fn a sem:Rule ;
     sem:implements c:ChipsRendering ;
     sem:function "chips" .
 
+# Counts on chips (a facet's values: how many there are of each, given the other filters):
+# c:countQuery names a SELECT whose solutions are an option (?option) and its count (?count).
+# Each chip whose option is among them shows the count after its label, spelled out with
+# c:countLabel for assistive technology ("42 orders"); a zero is shown too, and marked
+# (.sem-zero), since choosing that value would show nothing. Like a table's or a chart's view,
+# the query re-runs when c:dataset changes (the data, and the filters it reads).
+c:countQuery a owl:ObjectProperty ; rdfs:range sem:View ; rdfs:subPropertyOf c:dataQuery ;
+    rdfs:comment "A SELECT of ?option and ?count: the count each chip shows after its label. Re-run when c:dataset changes."@en .
+c:ChipsCounts a sem:Rendering ;
+    sem:targets c:Chips ;
+    sem:requires c:countQuery ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:follows c:dataset ;
+    sem:functionOnly "It runs the SELECT named in the data (c:countQuery, a sem:View), which SPARQL 1.1 cannot do from inside a query." .
+c:ChipsCounts-fn a sem:Rule ; sem:implements c:ChipsCounts ; sem:function "chips:counts" .
+
 c:ChipsRendering-sparql-screen a sem:Rule ;
     sem:implements c:ChipsRendering ;
     sem:modality mod:Screen ;

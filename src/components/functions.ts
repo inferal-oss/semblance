@@ -574,6 +574,42 @@ const chips: FnRule = (ctx, focus) => {
   return o.quads
 }
 chips.watches = watchControlled
+
+/**
+ * Counts on chips (c:countQuery): the SELECT's ?count for each chip's ?option, after its label
+ * (the number shown, the words spoken); a zero is marked. Decorates the chips the chips rule mints.
+ */
+const chipCounts: FnRule = (ctx, focus) => {
+  const view = ctx.object(focus, NS.c + 'countQuery')
+  const query = view && ctx.object(view, NS.sem + 'select')?.value
+  if (!query || !ctx.sparql) return []
+  let rows: Map<string, Term>[]
+  try {
+    rows = ctx.select(query)
+  } catch {
+    return []
+  }
+  const spoken = text(ctx, focus, NS.c + 'countLabel')
+  // Written in the viewer's locale (grouping, digits).
+  ctx.readsLanguage()
+  const format = new Intl.NumberFormat(ctx.languages[0] ?? 'en')
+  const o = ctx.out(focus)
+  for (const row of rows) {
+    const opt = row.get('option')
+    const count = row.get('count')
+    if (!opt || !count) continue
+    const n = Number(count.value)
+    const key = 'chip-' + encodeForUri(opt.value)
+    const shown = Number.isFinite(n) ? format.format(n) : count.value
+    const el = o.el(`${key}-count`, 'Span', { class: n === 0 ? 'sem-count sem-zero' : 'sem-count' }, [
+      o.el(`${key}-count-figure`, 'Span', { 'aria-hidden': 'true' }, [o.text(`${key}-count-text`, shown)]),
+      o.el(`${key}-count-spoken`, 'Span', { class: 'sem-visually-hidden' }, [o.text(`${key}-count-spoken-text`, `, ${shown}${spoken ? ' ' + spoken : ''}`)]),
+    ])
+    o.t(o.node(key), H.hasChild, el)
+    o.t(o.node(`${key}-text`), NS.ord + 'immediatelyPrecedes', el)
+  }
+  return o.quads
+}
 segmented.watches = watchControlled
 
 // --- localization for SPARQL rules ----------------------------------------------------------
@@ -774,6 +810,7 @@ export const functions: Record<string, FnRule> = {
   'source-back': sourceBack,
   choice,
   chips,
+  'chips:counts': chipCounts,
   'style:hooks': styleHooks,
   'a11y:textfield': a11yTextField,
   'a11y:list': a11yList,

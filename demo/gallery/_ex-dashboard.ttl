@@ -1,0 +1,354 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dx: <https://semblance.dev/demo/dashboard#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Sales dashboard: facets that filter, charts and a table that follow, counts that know the other
+# filters - and work that stays the same size however many orders there are.
+#
+# The orders are members of a stream (an LDES), each with a region, a product, a channel and an
+# amount. One maintained view (iv:View, docs/IVM.md) keeps a cube of them: a cell per region,
+# product and channel with its orders and revenue, each new order +1 to one cell. Everything on
+# the page reads the cube, never the orders: the facets' counts, the charts, the table and the
+# totals are SELECTs over at most 4 x 4 x 3 cells. The filters are triples on dx:filters, written
+# by the chips; every query applies them, and each facet's counts apply all but its own.
+# =================================================================================================
+
+ui:ex-dashboard-prefixes sh:declare [ sh:prefix "dx" ; sh:namespace "https://semblance.dev/demo/dashboard#"^^xsd:anyURI ] .
+
+# --- the dimensions -------------------------------------------------------------------------------
+# Each is a property whose rdfs:range holds its values, in sem:order: the chips' options.
+
+dx:region rdfs:label "Region" ; rdfs:range dx:Region .
+dx:north a dx:Region ; rdfs:label "North" ; sem:order 1 .
+dx:south a dx:Region ; rdfs:label "South" ; sem:order 2 .
+dx:east a dx:Region ; rdfs:label "East" ; sem:order 3 .
+dx:west a dx:Region ; rdfs:label "West" ; sem:order 4 .
+
+dx:product rdfs:label "Product" ; rdfs:range dx:Product .
+dx:coffee a dx:Product ; rdfs:label "Coffee" ; sem:order 1 .
+dx:tea a dx:Product ; rdfs:label "Tea" ; sem:order 2 .
+dx:cocoa a dx:Product ; rdfs:label "Cocoa" ; sem:order 3 .
+dx:juice a dx:Product ; rdfs:label "Juice" ; sem:order 4 .
+
+dx:channel rdfs:label "Channel" ; rdfs:range dx:Channel .
+dx:web a dx:Channel ; rdfs:label "Web" ; sem:order 1 .
+dx:store a dx:Channel ; rdfs:label "Store" ; sem:order 2 .
+dx:partner a dx:Channel ; rdfs:label "Partner" ; sem:order 3 .
+
+# The filters: values of the three dimensions on one node. None chosen means all.
+dx:filters a dx:Filters .
+
+# --- the orders: a stream --------------------------------------------------------------------------
+# Twenty-four to begin with; the buttons stream more in.
+
+dx:orders a ldes:EventStream ;
+    tree:member dx:o1 , dx:o2 , dx:o3 , dx:o4 , dx:o5 , dx:o6 , dx:o7 , dx:o8 , dx:o9 , dx:o10 , dx:o11 , dx:o12 ,
+                dx:o13 , dx:o14 , dx:o15 , dx:o16 , dx:o17 , dx:o18 , dx:o19 , dx:o20 , dx:o21 , dx:o22 , dx:o23 , dx:o24 .
+dx:o1 dx:region dx:north ; dx:product dx:coffee ; dx:channel dx:web ; dx:amount 24 .
+dx:o2 dx:region dx:north ; dx:product dx:tea ; dx:channel dx:store ; dx:amount 12 .
+dx:o3 dx:region dx:north ; dx:product dx:coffee ; dx:channel dx:partner ; dx:amount 40 .
+dx:o4 dx:region dx:north ; dx:product dx:cocoa ; dx:channel dx:web ; dx:amount 18 .
+dx:o5 dx:region dx:north ; dx:product dx:juice ; dx:channel dx:store ; dx:amount 9 .
+dx:o6 dx:region dx:north ; dx:product dx:coffee ; dx:channel dx:web ; dx:amount 31 .
+dx:o7 dx:region dx:south ; dx:product dx:tea ; dx:channel dx:web ; dx:amount 15 .
+dx:o8 dx:region dx:south ; dx:product dx:juice ; dx:channel dx:store ; dx:amount 11 .
+dx:o9 dx:region dx:south ; dx:product dx:coffee ; dx:channel dx:store ; dx:amount 27 .
+dx:o10 dx:region dx:south ; dx:product dx:juice ; dx:channel dx:partner ; dx:amount 35 .
+dx:o11 dx:region dx:south ; dx:product dx:tea ; dx:channel dx:web ; dx:amount 14 .
+dx:o12 dx:region dx:east ; dx:product dx:cocoa ; dx:channel dx:web ; dx:amount 22 .
+dx:o13 dx:region dx:east ; dx:product dx:coffee ; dx:channel dx:store ; dx:amount 19 .
+dx:o14 dx:region dx:east ; dx:product dx:cocoa ; dx:channel dx:partner ; dx:amount 48 .
+dx:o15 dx:region dx:east ; dx:product dx:tea ; dx:channel dx:store ; dx:amount 10 .
+dx:o16 dx:region dx:east ; dx:product dx:coffee ; dx:channel dx:web ; dx:amount 26 .
+dx:o17 dx:region dx:west ; dx:product dx:coffee ; dx:channel dx:web ; dx:amount 33 .
+dx:o18 dx:region dx:west ; dx:product dx:juice ; dx:channel dx:web ; dx:amount 8 .
+dx:o19 dx:region dx:west ; dx:product dx:tea ; dx:channel dx:partner ; dx:amount 29 .
+dx:o20 dx:region dx:west ; dx:product dx:coffee ; dx:channel dx:store ; dx:amount 21 .
+dx:o21 dx:region dx:west ; dx:product dx:cocoa ; dx:channel dx:store ; dx:amount 16 .
+dx:o22 dx:region dx:west ; dx:product dx:juice ; dx:channel dx:web ; dx:amount 7 .
+dx:o23 dx:region dx:north ; dx:product dx:tea ; dx:channel dx:web ; dx:amount 13 .
+dx:o24 dx:region dx:east ; dx:product dx:juice ; dx:channel dx:web ; dx:amount 12 .
+
+# --- the cube: one maintained view ----------------------------------------------------------------
+# A cell per region, product and channel that has orders: how many, and their revenue. The view
+# never runs again over the orders: a new one is +1 to its cell (its count and sum), nothing else.
+# iv:measured writes the work of each step, and a check against a from-scratch run, in idle time.
+
+dx:Cube a iv:View ; rdfs:label "the cube" ; iv:measured true ; iv:whileShown ui:ex-dashboard ;
+    sem:construct """
+CONSTRUCT { ?cell a dx:Cell ; dx:region ?region ; dx:product ?product ; dx:channel ?channel ; dx:orders ?n ; dx:revenue ?sum }
+WHERE {
+  { SELECT ?region ?product ?channel (COUNT(?o) AS ?n) (SUM(?amount) AS ?sum)
+    WHERE { dx:orders tree:member ?o . ?o dx:region ?region ; dx:product ?product ; dx:channel ?channel ; dx:amount ?amount }
+    GROUP BY ?region ?product ?channel }
+  BIND(IRI(CONCAT(STR(dx:cube), "/~", REPLACE(STR(?region), "^.*#", ""), "-", REPLACE(STR(?product), "^.*#", ""), "-", REPLACE(STR(?channel), "^.*#", ""))) AS ?cell)
+}""" .
+
+# The whole stream, also maintained: what the components follow (c:dataset) to know the data changed.
+dx:Totals a iv:View ; rdfs:label "the totals" ; iv:whileShown ui:ex-dashboard ;
+    sem:construct """
+CONSTRUCT { dx:totals dx:orders ?n ; dx:revenue ?sum }
+WHERE { { SELECT (COUNT(?o) AS ?n) (SUM(?amount) AS ?sum) WHERE { dx:orders tree:member ?o . ?o dx:amount ?amount } } }""" .
+
+# --- the queries: all over the cube ----------------------------------------------------------------
+# A cell passes a dimension's filter when nothing is chosen in it, or its value is.
+
+dx:qByRegion a sem:View ; sem:select """
+SELECT ?region ?channel (SUM(?revenue) AS ?value) WHERE {
+  ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:revenue ?revenue .
+  FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+  FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+  FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+  ?r rdfs:label ?region ; sem:order ?ro . ?c rdfs:label ?channel .
+}
+GROUP BY ?ro ?region ?channel ORDER BY ?ro""" .
+
+dx:qByProduct a sem:View ; sem:select """
+SELECT ?product (SUM(?n) AS ?value) WHERE {
+  ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:orders ?n .
+  FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+  FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+  FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+  ?p rdfs:label ?product ; sem:order ?po .
+}
+GROUP BY ?po ?product ORDER BY ?po""" .
+
+dx:qBreakdown a sem:View ; sem:select """
+SELECT ?region ?product (SUM(?n) AS ?orders) (SUM(?revenue) AS ?sales) (SUM(?revenue) / SUM(?n) AS ?average) WHERE {
+  ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:orders ?n ; dx:revenue ?revenue .
+  FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+  FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+  FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+  ?r rdfs:label ?region . ?p rdfs:label ?product .
+}
+GROUP BY ?region ?product ORDER BY DESC(?sales) ?region ?product""" .
+
+dx:qShownOrders a sem:View ; sem:select """
+SELECT (COALESCE(SUM(?n), 0) AS ?value) WHERE {
+  ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:orders ?n .
+  FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+  FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+  FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+}""" .
+dx:qShownSales a sem:View ; sem:select """
+SELECT (COALESCE(SUM(?revenue), 0) AS ?value) WHERE {
+  ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:revenue ?revenue .
+  FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+  FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+  FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+}""" .
+dx:qAllOrders a sem:View ; sem:select """SELECT ?value WHERE { dx:totals dx:orders ?value }""" .
+dx:qCells a sem:View ; sem:select """SELECT (COUNT(?cell) AS ?value) WHERE { ?cell a dx:Cell }""" .
+
+# Each facet's counts: every filter but its own, so a value's count is what choosing it would add.
+dx:qRegionCounts a sem:View ; sem:select """
+SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
+  ?option a dx:Region .
+  OPTIONAL {
+    ?cell a dx:Cell ; dx:region ?option ; dx:product ?p ; dx:channel ?c ; dx:orders ?n .
+    FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+    FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+  }
+} GROUP BY ?option""" .
+dx:qProductCounts a sem:View ; sem:select """
+SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
+  ?option a dx:Product .
+  OPTIONAL {
+    ?cell a dx:Cell ; dx:region ?r ; dx:product ?option ; dx:channel ?c ; dx:orders ?n .
+    FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+    FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
+  }
+} GROUP BY ?option""" .
+dx:qChannelCounts a sem:View ; sem:select """
+SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
+  ?option a dx:Channel .
+  OPTIONAL {
+    ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?option ; dx:orders ?n .
+    FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
+    FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
+  }
+} GROUP BY ?option""" .
+
+# The cube's own account of its last step, against what a from-scratch run reads.
+dx:qWork a sem:View ; sem:select """
+SELECT ?value ?max ?label WHERE {
+  OPTIONAL { dx:Cube iv:lastRows ?last ; iv:inputRows ?reads }
+  BIND(COALESCE(?last, 0) AS ?value)
+  BIND(IF(COALESCE(?reads, 0) > COALESCE(?last, 0), ?reads, COALESCE(?last, 0) + 1) AS ?max)
+  BIND(IF(BOUND(?last), CONCAT("The cube's last step: ", STR(?last), " rows of work; a from-scratch run reads ", STR(?reads), "."), "Measuring…") AS ?label)
+}""" .
+
+# --- the dashboard -----------------------------------------------------------------------------------
+
+ui:ex-dashboard a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-dashboard-intro ui:ex-dashboard-facets ui:ex-dashboard-figures ui:ex-dashboard-charts ui:ex-dashboard-table-card ui:ex-dashboard-grow-card ) .
+ui:ex-dashboard-intro a c:Text ;
+    c:label "Orders by region, product and channel. Choose values in the facets: the figures, both charts and the table follow, and each facet's counts say how many orders choosing a value would add, given the other facets. Then add a thousand orders and watch the work per step stay the same." .
+
+# The facets: chips toggling values of the three dimensions on dx:filters, each with its counts.
+ui:ex-dashboard-facets a c:Card ; c:label "Filters" ; c:badge "c:Chips" ; c:content ui:ex-dashboard-facet-list .
+ui:ex-dashboard-facet-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:align pos:Start ;
+    c:children ( ui:ex-dashboard-region ui:ex-dashboard-product ui:ex-dashboard-channel ui:ex-dashboard-clear ) .
+ui:ex-dashboard-region a c:Chips ; c:controls dx:filters ; c:property dx:region ;
+    c:countQuery dx:qRegionCounts ; c:countLabel "orders" ; c:dataset dx:totals , dx:filters .
+ui:ex-dashboard-product a c:Chips ; c:controls dx:filters ; c:property dx:product ;
+    c:countQuery dx:qProductCounts ; c:countLabel "orders" ; c:dataset dx:totals , dx:filters .
+ui:ex-dashboard-channel a c:Chips ; c:controls dx:filters ; c:property dx:channel ;
+    c:countQuery dx:qChannelCounts ; c:countLabel "orders" ; c:dataset dx:totals , dx:filters .
+ui:ex-dashboard-clear a c:Button ; c:label "Clear filters" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+
+ui:ex-dashboard-figures a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-dashboard-shown ui:ex-dashboard-sales ui:ex-dashboard-all ui:ex-dashboard-cells ) .
+ui:ex-dashboard-shown a c:Stat ; c:label "Orders shown" ; c:valueQuery dx:qShownOrders ; c:dataset dx:totals , dx:filters .
+ui:ex-dashboard-sales a c:Stat ; c:label "Sales shown" ; c:unit "€" ; c:valueQuery dx:qShownSales ; c:dataset dx:totals , dx:filters .
+ui:ex-dashboard-all a c:Stat ; c:label "Orders in all" ; c:help "The stream's members, counted by a maintained view." ; c:valueQuery dx:qAllOrders ; c:dataset dx:totals .
+ui:ex-dashboard-cells a c:Stat ; c:label "Cube cells" ; c:help "What every query on this page reads: at most 4 × 4 × 3." ; c:valueQuery dx:qCells ; c:dataset dx:totals .
+
+ui:ex-dashboard-charts a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-dashboard-region-card ui:ex-dashboard-product-card ) .
+ui:ex-dashboard-region-card a c:Card ; c:label "Sales by region, €" ; c:badge "by channel" ; c:content ui:ex-dashboard-by-region .
+ui:ex-dashboard-by-region a c:BarChart ; rdfs:label "Sales by region and channel" ;
+    c:view dx:qByRegion ; c:dataset dx:totals , dx:filters ;
+    c:categoryVariable "region" ; c:seriesVariable "channel" ; c:valueVariable "value" ;
+    c:legend ( dx:webSeries dx:storeSeries dx:partnerSeries ) .
+dx:webSeries a c:series ; rdfs:label "Web" ; c:key "Web" .
+dx:storeSeries a c:series ; rdfs:label "Store" ; c:key "Store" .
+dx:partnerSeries a c:series ; rdfs:label "Partner" ; c:key "Partner" .
+ui:ex-dashboard-product-card a c:Card ; c:label "Orders by product" ; c:content ui:ex-dashboard-by-product .
+ui:ex-dashboard-by-product a c:BarChart ; rdfs:label "Orders by product" ;
+    c:view dx:qByProduct ; c:dataset dx:totals , dx:filters ;
+    c:categoryVariable "product" ; c:valueVariable "value" .
+
+ui:ex-dashboard-table-card a c:Card ; c:label "Region and product" ; c:badge "c:Table" ;
+    c:note "The cube's cells for what the filters let through, summed over channels." ;
+    c:content ui:ex-dashboard-table .
+ui:ex-dashboard-col-region a c:Column ; c:variable "region" ; c:label "Region" .
+ui:ex-dashboard-col-product a c:Column ; c:variable "product" ; c:label "Product" .
+ui:ex-dashboard-col-orders a c:Column ; c:variable "orders" ; c:label "Orders" ; c:align "end" ; c:format "number" .
+ui:ex-dashboard-col-sales a c:Column ; c:variable "sales" ; c:label "Sales, €" ; c:align "end" ; c:format "number" .
+ui:ex-dashboard-col-average a c:Column ; c:variable "average" ; c:label "Average, €" ; c:align "end" ; c:format "decimal" .
+ui:ex-dashboard-table a c:Table ; c:label "Region and product" ; c:query dx:qBreakdown ; c:dataset dx:totals , dx:filters ;
+    c:tableColumns ( ui:ex-dashboard-col-region ui:ex-dashboard-col-product ui:ex-dashboard-col-orders ui:ex-dashboard-col-sales ui:ex-dashboard-col-average ) ;
+    c:emptyText "No orders match these filters." .
+
+# Growing the data, and the work it takes.
+ui:ex-dashboard-grow-card a c:Card ; c:label "More orders" ; c:badge "iv:measured" ;
+    c:note "Orders arrive in batches, each one tick of the cube: its work is the batch, however many orders came before." ;
+    c:content ui:ex-dashboard-grow .
+ui:ex-dashboard-grow a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-dashboard-buttons ui:ex-dashboard-work ) .
+ui:ex-dashboard-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-dashboard-add100 ui:ex-dashboard-add1000 ) .
+ui:ex-dashboard-add100 a c:Button ; c:label "Add 100 orders" .
+ui:ex-dashboard-add1000 a c:Button ; c:label "Add 1,000 orders" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ex-dashboard-work a c:Progress ; c:active true ; c:valueQuery dx:qWork ; c:dataset dx:Cube .
+
+# --- the reactions ---------------------------------------------------------------------------------
+# The chips write the filters themselves (c:Chips toggles a value of c:property on c:controls).
+# Clearing them deletes them all.
+
+dx:Clear a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-dashboard-clear ;
+    beh:deletes """CONSTRUCT { dx:filters ?p ?v } WHERE { VALUES ?p { dx:region dx:product dx:channel } dx:filters ?p ?v }""" .
+
+# A feed of batches: the buttons set how many are left and how big they are, and make the feed due
+# now (beh:dueAt). The host turns a due time into a beh:Due event; dx:Batch adds a batch of orders
+# to the stream - their dimensions and amounts drawn from a hash of the event - and makes the next
+# batch due 40 ms later.
+dx:feed dx:left 0 ; dx:size 10 .
+
+dx:Add100 a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-dashboard-add100 ;
+    beh:deletes """CONSTRUCT { dx:feed dx:left ?n ; dx:size ?s ; beh:dueAt ?due } WHERE { { dx:feed dx:left ?n } UNION { dx:feed dx:size ?s } UNION { dx:feed beh:dueAt ?due } }""" ;
+    beh:inserts """CONSTRUCT { dx:feed dx:left 10 ; dx:size 10 ; beh:dueAt ?at } WHERE { $event beh:at ?at }""" .
+dx:Add1000 a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-dashboard-add1000 ;
+    beh:deletes """CONSTRUCT { dx:feed dx:left ?n ; dx:size ?s ; beh:dueAt ?due } WHERE { { dx:feed dx:left ?n } UNION { dx:feed dx:size ?s } UNION { dx:feed beh:dueAt ?due } }""" ;
+    beh:inserts """CONSTRUCT { dx:feed dx:left 20 ; dx:size 50 ; beh:dueAt ?at } WHERE { $event beh:at ?at }""" .
+
+dx:Batch a beh:Reaction ; beh:when beh:Due ; beh:source dx:feed ;
+    beh:deletes """
+CONSTRUCT { dx:feed dx:left ?n ; beh:dueAt ?due }
+WHERE { dx:feed dx:left ?n FILTER(?n > 0) OPTIONAL { dx:feed beh:dueAt ?due } }""" ;
+    beh:inserts """
+CONSTRUCT {
+  dx:feed dx:left ?next ; beh:dueAt ?then .
+  dx:orders tree:member ?o . ?o dx:region ?region ; dx:product ?product ; dx:channel ?channel ; dx:amount ?amount .
+}
+WHERE {
+  dx:feed dx:left ?n ; dx:size ?size FILTER(?n > 0)
+  $event beh:at ?at .
+  BIND(?n - 1 AS ?next)
+  BIND(IF(?next > 0, xsd:dateTime(?at) + xsd:dayTimeDuration("PT0.04S"), ?none) AS ?then)
+  VALUES ?k { 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 }
+  FILTER(?k <= ?size)
+  BIND(MD5(CONCAT(STR($event), "/", STR(?k))) AS ?h)
+  BIND(IRI(CONCAT(STR(dx:), "o-", SUBSTR(?h, 1, 16))) AS ?o)
+  BIND(SUBSTR(?h, 17, 1) AS ?d1) BIND(SUBSTR(?h, 18, 1) AS ?d2) BIND(SUBSTR(?h, 19, 1) AS ?d3)
+  BIND(IF(CONTAINS("01234", ?d1), dx:north, IF(CONTAINS("5678", ?d1), dx:south, IF(CONTAINS("9ab", ?d1), dx:east, dx:west))) AS ?region)
+  BIND(IF(CONTAINS("012345", ?d2), dx:coffee, IF(CONTAINS("6789", ?d2), dx:tea, IF(CONTAINS("abc", ?d2), dx:cocoa, dx:juice))) AS ?product)
+  BIND(IF(CONTAINS("0123456", ?d3), dx:web, IF(CONTAINS("789ab", ?d3), dx:store, dx:partner)) AS ?channel)
+  BIND(IF(?product = dx:coffee, 8, IF(?product = dx:tea, 6, IF(?product = dx:cocoa, 10, 5))) AS ?base)
+  BIND(?base + 2 * STRLEN(STRBEFORE("0123456789abcdef", SUBSTR(?h, 20, 1))) + STRLEN(STRBEFORE("0123456789abcdef", SUBSTR(?h, 21, 1))) AS ?amount)
+}""" ;
+    ann:announces "Orders added" .
+
+# --- how it works -----------------------------------------------------------------------------------
+
+ui:ex-dashboard-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-dashboard-w1 ui:ex-dashboard-w2 ui:ex-dashboard-w3 ui:ex-dashboard-w4 ui:ex-dashboard-w5 ui:ex-dashboard-w6 ui:ex-dashboard-w7 ) .
+
+ui:ex-dashboard-w1 a c:WalkthroughStep ; rdfs:label "The orders are a stream" ;
+    c:children ( ui:ex-dashboard-m-orders " is an " ui:ex-dashboard-m-EventStream ": each order, such as " ui:ex-dashboard-m-o1 ", is a member with a region, a product, a channel and an amount. The dimensions are properties whose range holds their values - " ui:ex-dashboard-m-region " ranges over the four regions, in sem:order - so the facets need no list of options." ) .
+ui:ex-dashboard-w2 a c:WalkthroughStep ; rdfs:label "One maintained view: the cube" ;
+    c:children ( ui:ex-dashboard-m-cube " is an " ui:ex-dashboard-m-View ": plain SPARQL grouping the members by region, product and channel, with COUNT and SUM. The runtime keeps its result instead of re-running it: a new order is +1 to one cell's count and its amount to the cell's sum. At most 4 × 4 × 3 cells, however many orders - and " ui:ex-dashboard-m-totals ", a second view, counts them all." ) .
+ui:ex-dashboard-w3 a c:WalkthroughStep ; rdfs:label "Facets write the filters" ;
+    c:children ( ui:ex-dashboard-m-regionChips " is a " ui:ex-dashboard-m-Chips " over dx:region of " ui:ex-dashboard-m-filters ": pressing North adds the triple dx:filters dx:region dx:north, pressing it again removes it. The filters are graph state like any other - " ui:ex-dashboard-m-clear " deletes them - and every query below reads them: a cell passes a dimension when nothing is chosen in it, or its value is." ) .
+ui:ex-dashboard-w4 a c:WalkthroughStep ; rdfs:label "Counts that know the other filters" ;
+    c:children ( "Each chip shows how many orders choosing it would add, from its facet's " ui:ex-dashboard-m-countQuery ": " ui:ex-dashboard-m-regionCounts " sums the cube's cells per region, applying the product and channel filters but not the region one. Choose Tea and the region counts become each region's tea orders; a zero is dimmed." ) .
+ui:ex-dashboard-w5 a c:WalkthroughStep ; rdfs:label "Charts and the table read the cube" ;
+    c:children ( ui:ex-dashboard-m-byRegion " is a " ui:ex-dashboard-m-BarChart " of " ui:ex-dashboard-m-qByRegion ", sales per region stacked by channel; the product chart and " ui:ex-dashboard-m-table " (" ui:ex-dashboard-m-qBreakdown ") are SELECTs over the same cells. Each names its " ui:ex-dashboard-m-dataset ": the totals and the filters, so a new order or a chosen value re-runs it - over the cube, never the orders." ) .
+ui:ex-dashboard-w6 a c:WalkthroughStep ; rdfs:label "More orders, a batch at a time" ;
+    c:children ( ui:ex-dashboard-m-add1000 " runs " ui:ex-dashboard-m-add1000r ", which makes " ui:ex-dashboard-m-feed " due now (" ui:ex-dashboard-m-dueAt "). The host turns that into a " ui:ex-dashboard-m-Due " event, and " ui:ex-dashboard-m-batch " adds fifty orders to the stream - their dimensions and amounts drawn from a hash of the event - and makes the next batch due shortly after. Each batch is one tick of the cube." ) .
+ui:ex-dashboard-w7 a c:WalkthroughStep ; rdfs:label "Work that does not grow" ;
+    c:children ( "The cube is " ui:ex-dashboard-m-measured ": in idle time the runtime writes the rows of work its last step took and what a from-scratch run would read. " ui:ex-dashboard-m-work " shows them (" ui:ex-dashboard-m-qWork "): a batch of fifty is a hundred-odd rows of work - each order read once, each cell it touched updated - whether the stream holds a hundred orders or ten thousand, while a re-run reads every one. A filter changes nothing in the cube at all: it costs the few queries over its cells." ) .
+
+ui:ex-dashboard-m-orders a c:Mention ; c:label "dx:orders" ; c:mentions dx:orders .
+ui:ex-dashboard-m-EventStream a c:Mention ; c:label "ldes:EventStream" ; c:mentions ldes:EventStream ; c:to ldes:EventStream .
+ui:ex-dashboard-m-o1 a c:Mention ; c:label "dx:o1" ; c:mentions dx:o1 .
+ui:ex-dashboard-m-region a c:Mention ; c:label "dx:region" ; c:mentions dx:region .
+ui:ex-dashboard-m-cube a c:Mention ; c:label "dx:Cube" ; c:mentions dx:Cube .
+ui:ex-dashboard-m-View a c:Mention ; c:label "iv:View" ; c:mentions iv:View ; c:to iv:View .
+ui:ex-dashboard-m-totals a c:Mention ; c:label "dx:Totals" ; c:mentions dx:Totals .
+ui:ex-dashboard-m-regionChips a c:Mention ; c:label "The region facet" ; c:mentions ui:ex-dashboard-region .
+ui:ex-dashboard-m-Chips a c:Mention ; c:label "c:Chips" ; c:mentions c:Chips ; c:to c:Chips .
+ui:ex-dashboard-m-filters a c:Mention ; c:label "dx:filters" ; c:mentions dx:filters .
+ui:ex-dashboard-m-clear a c:Mention ; c:label "dx:Clear" ; c:mentions dx:Clear .
+ui:ex-dashboard-m-countQuery a c:Mention ; c:label "c:countQuery" ; c:mentions c:countQuery ; c:to c:countQuery .
+ui:ex-dashboard-m-regionCounts a c:Mention ; c:label "dx:qRegionCounts" ; c:mentions dx:qRegionCounts .
+ui:ex-dashboard-m-byRegion a c:Mention ; c:label "The region chart" ; c:mentions ui:ex-dashboard-by-region .
+ui:ex-dashboard-m-BarChart a c:Mention ; c:label "c:BarChart" ; c:mentions c:BarChart ; c:to c:BarChart .
+ui:ex-dashboard-m-qByRegion a c:Mention ; c:label "dx:qByRegion" ; c:mentions dx:qByRegion .
+ui:ex-dashboard-m-table a c:Mention ; c:label "the table" ; c:mentions ui:ex-dashboard-table .
+ui:ex-dashboard-m-qBreakdown a c:Mention ; c:label "dx:qBreakdown" ; c:mentions dx:qBreakdown .
+ui:ex-dashboard-m-dataset a c:Mention ; c:label "c:dataset" ; c:mentions c:dataset ; c:to c:dataset .
+ui:ex-dashboard-m-add1000 a c:Mention ; c:label "Add 1,000 orders" ; c:mentions ui:ex-dashboard-add1000 .
+ui:ex-dashboard-m-add1000r a c:Mention ; c:label "dx:Add1000" ; c:mentions dx:Add1000 .
+ui:ex-dashboard-m-feed a c:Mention ; c:label "dx:feed" ; c:mentions dx:feed .
+ui:ex-dashboard-m-dueAt a c:Mention ; c:label "beh:dueAt" ; c:mentions beh:dueAt ; c:to beh:dueAt .
+ui:ex-dashboard-m-Due a c:Mention ; c:label "beh:Due" ; c:mentions beh:Due ; c:to beh:Due .
+ui:ex-dashboard-m-batch a c:Mention ; c:label "dx:Batch" ; c:mentions dx:Batch .
+ui:ex-dashboard-m-measured a c:Mention ; c:label "iv:measured" ; c:mentions iv:measured ; c:to iv:measured .
+ui:ex-dashboard-m-work a c:Mention ; c:label "The bar" ; c:mentions ui:ex-dashboard-work .
+ui:ex-dashboard-m-qWork a c:Mention ; c:label "dx:qWork" ; c:mentions dx:qWork .

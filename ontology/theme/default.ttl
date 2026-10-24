@@ -161,6 +161,15 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Danger ;
     sty:declares [ sty:property "color" ; sty:token tok:danger ] .
 
+# Text for assistive technology only (a count spelled out, a state in words), wherever a rule puts it.
+[] a sty:StyleRule ; sty:part ".sem-visually-hidden" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+
 # --- form controls: they fit the space they are given ----------------------------------------
 # A text control's own minimum width comes from its default size (about 20 characters), and a
 # grid or flex item does not shrink below its content's minimum by default. Some engines let a
@@ -682,6 +691,16 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
 [] a sty:StyleRule ; sty:appliesTo c:Chips ; sty:part "button:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
+
+# A count after a chip's label (c:countQuery): quieter than the label; a zero quieter still.
+[] a sty:StyleRule ; sty:appliesTo c:Chips ; sty:part "button > .sem-count" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "6px" ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
+                 [ sty:property "opacity" ; sty:raw "0.75" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Chips ; sty:part "button > .sem-count.sem-zero" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.45" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Chips ; sty:part "button[aria-pressed=true]" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
