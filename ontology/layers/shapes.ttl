@@ -14,9 +14,16 @@
 #   <result> a sh:ValidationResult ; sh:focusNode <component> ; sh:resultPath <p> ;
 #            sh:resultMessage "…" ; sh:sourceShape <shape> ; sh:resultSeverity sh:Violation .
 # A component with violations is outlined, with the messages as its tooltip,
-# and c:ShapeReport lists every result. Supported constraints: sh:minCount,
-# sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
-# sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals.
+# and c:ShapeReport lists every result. Supported constraints, in property shapes
+# (sh:property) whose sh:path is a property: sh:minCount, sh:maxCount, sh:datatype,
+# sh:class, sh:nodeKind, sh:in, sh:minInclusive, sh:maxInclusive, sh:minLength,
+# sh:maxLength, sh:pattern, sh:lessThanOrEquals. On the node shape: sh:or, a list of
+# property shapes the focus must conform to one of. Each alternative is read as needing
+# a value along its path, a property or the inverse of one (sh:path [ sh:inversePath p ]):
+# sh:minCount 1, or a value of a class (sh:qualifiedValueShape [ sh:class C ] ;
+# sh:qualifiedMinCount 1); its other constraints are not read.
+# An sh:or result is about the focus node itself: no sh:resultPath, sh:value the
+# focus, sh:sourceShape and the sh:message (if any) those of the node shape.
 
 val:ShapesLayer a sem:Layer ; rdfs:label "shapes"@en , "форми"@uk , "Formen"@de , "الأشكال"@ar ;
     rdfs:comment "Validates component instances against the SHACL shapes of their classes."@en .
@@ -30,7 +37,8 @@ val:Shapes a sem:Rendering ;
     sem:inputOnly true .
 val:Shapes-fn a sem:Rule ; sem:implements val:Shapes ; sem:function "shapes:validate" .
 # Each constraint of each property shape of the focus's classes (shapes.ts checkProperty):
-# counts, then one test per value, then pairs with another property. A result is keyed by
+# counts, then one test per value, then pairs with another property; then each sh:or of
+# those shapes that no alternative holds for (shapes.ts checkOr). A result is keyed by
 # what it says (path, shape, constraint, default message, value), so the same violation keeps
 # its IRI and a changed one gets a new one. Regular expressions are values, so they are
 # compiled only where a row needs them.
@@ -46,10 +54,17 @@ WHERE {
   ?shape sh:targetClass ?class .
   ?type rdfs:subClassOf* ?class .
   $this a ?type .
-  ?shape sh:property ?ps .
-  ?ps sh:path ?path ; ?constraint ?param .
-  FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
-                                         sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals))
+  {
+    ?shape sh:property ?ps .
+    ?ps sh:path ?path ; ?constraint ?param .
+    FILTER(isIRI(?path) && ?constraint IN (sh:minCount, sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
+                                           sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals))
+  } UNION {
+    # The node shape's own constraint: about the focus, with no path.
+    ?shape sh:or ?param .
+    BIND(sh:or AS ?constraint)
+    BIND(?shape AS ?ps)
+  }
   BIND($this AS ?focus)
   VALUES ?localName { "^.*[#/]" }
   LATERAL {
@@ -68,7 +83,7 @@ WHERE {
       FILTER(IF(?constraint = sh:minCount, COALESCE(?n, 0) < ?bound, COALESCE(?n, 0) > ?bound))
       BIND(IF(?constraint = sh:minCount, CONCAT("at least ", STR(?param), " values"), CONCAT("at most ", STR(?param), " values")) AS ?fallback)
     } UNION {
-      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals))
+      FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals, sh:or))
       ?focus ?path ?value .
       OPTIONAL { FILTER(?constraint = sh:pattern) ?ps sh:flags ?flags }
       FILTER(IF(?constraint = sh:datatype,
@@ -98,13 +113,30 @@ WHERE {
       ?focus ?path ?value ; ?param ?limit .
       FILTER(!COALESCE(xsd:double(STR(?value)) <= xsd:double(STR(?limit)), false))
       BIND(CONCAT("more than ", REPLACE(STR(?param), ?localName, ""), " (", STR(?limit), ")") AS ?fallback)
+    } UNION {
+      # sh:or: no alternative holds. An alternative is a property shape read as needing a value
+      # along its path (a property, or [ sh:inversePath p ]), of the sh:class of its
+      # sh:qualifiedValueShape if it has one: sh:minCount 1, or sh:qualifiedMinCount 1. The ones
+      # that hold are counted in a LATERAL sub-select (a NOT EXISTS may be planned without the
+      # outer bindings, from rdf:rest* over every node).
+      FILTER(?constraint = sh:or)
+      LATERAL { OPTIONAL { SELECT ?param ?focus (COUNT(?member) AS ?holding) WHERE {
+        ?param rdf:rest*/rdf:first ?member .
+        { ?member sh:path ?memberPath FILTER(isIRI(?memberPath)) ?focus ?memberPath ?held }
+        UNION { ?member sh:path/sh:inversePath ?inverse FILTER(isIRI(?inverse)) ?held ?inverse ?focus }
+        OPTIONAL { ?member sh:qualifiedValueShape/sh:class ?qualifiedClass }
+        FILTER(!BOUND(?qualifiedClass) || EXISTS { ?held a/rdfs:subClassOf* ?qualifiedClass })
+      } GROUP BY ?param ?focus } }
+      FILTER(COALESCE(?holding, 0) = 0)
+      BIND(?focus AS ?value)
+      BIND("no alternative holds" AS ?fallback)
     }
   }
   LATERAL { OPTIONAL { SELECT ?ps ?custom WHERE { ?ps sh:message ?custom }
                        ORDER BY (lang(?custom) != "") (!langMatches(lang(?custom), "en")) LIMIT 1 } }
-  BIND(STR(COALESCE(?custom, CONCAT(REPLACE(STR(?path), ?localName, ""), ": ", ?fallback))) AS ?message)
+  BIND(STR(COALESCE(?custom, CONCAT(REPLACE(STR(COALESCE(?path, ?shape)), ?localName, ""), ": ", ?fallback))) AS ?message)
   BIND(IF(isIRI(?ps), ?ps, ?shape) AS ?source)
-  BIND(IRI(CONCAT(STR($this), "/~shape-", SUBSTR(MD5(CONCAT(STR(?path), " ", STR(?source), " ", STRAFTER(STR(?constraint), "#"), " ",
+  BIND(IRI(CONCAT(STR($this), "/~shape-", SUBSTR(MD5(CONCAT(COALESCE(STR(?path), ""), " ", STR(?source), " ", STRAFTER(STR(?constraint), "#"), " ",
        ?fallback, " ", COALESCE(STR(?value), ""))), 1, 8))) AS ?result)
 }""" .
 

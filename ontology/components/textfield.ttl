@@ -7,7 +7,8 @@
 
 c:TextField a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "A labelled single-line text input with optional help and error text."@en ;
+    rdfs:comment """A labelled single-line text input with optional help and error text. Without a c:label it
+renders the input alone, to be labelled by a c:Field."""@en ;
     sem:slug "text-field" .
 
 # --- screen ---------------------------------------------------------------------
@@ -35,7 +36,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextField .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?labelData)
   OPTIONAL { $this c:value ?value }
@@ -43,8 +44,8 @@ WHERE {
   OPTIONAL { $this c:inputType ?declaredType }
   BIND(COALESCE(?declaredType, "text") AS ?inputType)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
-  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
   BIND(STR(?input) AS ?inputId)
   OPTIONAL {
@@ -84,11 +85,11 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextField .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:value ?value }
-  BIND(CONCAT(STR(?label), ": [", COALESCE(STR(?value), ""), "_]") AS ?lineData)
+  BIND(CONCAT(COALESCE(CONCAT(STR(?label), ": "), ""), "[", COALESCE(STR(?value), ""), "_]") AS ?lineData)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)

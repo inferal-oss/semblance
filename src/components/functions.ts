@@ -96,14 +96,14 @@ const buttonText: FnRule = (ctx, focus) => {
 }
 
 const textFieldScreen: FnRule = (ctx, focus) => {
+  // Without a label, the input alone (a c:Field labels it).
   const label = text(ctx, focus, C.label)
-  if (label === undefined) return []
   const help = text(ctx, focus, C.help)
   const error = text(ctx, focus, C.error)
   const o = ctx.out(focus)
   const inputId = mint(focus.value, 'input')
   const parts = [
-    o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)]),
+    ...(label === undefined ? [] : [o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])]),
     o.el('input', 'Input', {
       type: str(ctx.object(focus, NS.c + 'inputType')) ?? 'text',
       id: inputId,
@@ -119,11 +119,10 @@ const textFieldScreen: FnRule = (ctx, focus) => {
 
 const textFieldText: FnRule = (ctx, focus) => {
   const label = text(ctx, focus, C.label)
-  if (label === undefined) return []
   const help = text(ctx, focus, C.help)
   const error = text(ctx, focus, C.error)
   const o = ctx.out(focus)
-  const parts = [o.el('line', 'Div', {}, [o.text('line-text', `${label}: [${str(ctx.object(focus, C.value)) ?? ''}_]`)])]
+  const parts = [o.el('line', 'Div', {}, [o.text('line-text', `${label === undefined ? '' : label + ': '}[${str(ctx.object(focus, C.value)) ?? ''}_]`)])]
   if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', `  ${help}`)]))
   if (error !== undefined) parts.push(o.el('error', 'Div', {}, [o.text('error-text', `  ! ${error}`)]))
   o.renders(o.el('root', 'Div', {}, parts))

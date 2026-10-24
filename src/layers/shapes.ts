@@ -52,6 +52,7 @@ const NUMERIC = new Set([XSD + 'integer', XSD + 'decimal', XSD + 'double', XSD +
 const datatypeOf = (t: Term) => (t.termType === 'Literal' ? (t.language ? NS.rdf + 'langString' : t.datatype.value) : undefined)
 
 interface Violation {
+  /** The property shape's path; empty for a node shape's own constraint. */
   path: string
   shape: Term
   message: string
@@ -121,14 +122,38 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
   return out
 }
 
+/**
+ * Whether an alternative of an sh:or holds for `focus`: a property shape read as needing a value
+ * along its path (a property, or [ sh:inversePath p ]), of the sh:class of its
+ * sh:qualifiedValueShape if it has one (sh:minCount 1, or sh:qualifiedMinCount 1).
+ */
+function holds(ctx: RuleContext, focus: NamedNode, member: Term): boolean {
+  const path = ctx.untraced(() => ctx.object(member, SH + 'path'))
+  if (!path) return false
+  const inverse = named(path) ? undefined : ctx.untraced(() => ctx.object(path, SH + 'inversePath'))
+  const values = named(path) ? ctx.objects(focus, path.value) : named(inverse) ? ctx.match(null, inverse.value, focus).map((q) => q.subject) : []
+  const classes = ctx.untraced(() => ctx.objects(member, SH + 'qualifiedValueShape').flatMap((q) => ctx.objects(q, SH + 'class')))
+  return classes.length ? values.some((v) => classes.some((c) => instanceOf(ctx, v, c.value))) : values.length > 0
+}
+
+/** The violations of the node shape's sh:or lists: the ones none of whose alternatives holds. */
+function checkOr(ctx: RuleContext, focus: NamedNode, shape: NamedNode): Violation[] {
+  const lists = ctx.untraced(() => ctx.objects(shape, SH + 'or'))
+  const fallback = 'no alternative holds'
+  return lists
+    .filter((list) => !ctx.untraced(() => rdfList(ctx, list)).some((m) => holds(ctx, focus, m)))
+    .map(() => ({ path: '', shape, value: focus, kind: 'or', fallback, message: text(ctx, shape, SH + 'message') ?? `${shape.value.replace(/^.*[#/]/, '')}: ${fallback}` }))
+}
+
 const validate: FnRule = (ctx, focus) => {
   const shapes = ctx.objects(focus, RDF_TYPE).flatMap((t) => shapesFor(ctx, t.value))
   if (!shapes.length) return []
   // sh:sourceShape names the node shape (property shapes are usually blank nodes,
   // which derived graphs never contain).
-  const violations = [...new Set(shapes.map((s) => s.value))].flatMap((s) =>
-    ctx.untraced(() => ctx.objects(ctx.nn(s), SH + 'property')).flatMap((ps) => checkProperty(ctx, focus, ps).map((v) => ({ ...v, shape: ps.termType === 'NamedNode' ? ps : ctx.nn(s) }))),
-  )
+  const violations = [...new Set(shapes.map((s) => s.value))].flatMap((s) => [
+    ...ctx.untraced(() => ctx.objects(ctx.nn(s), SH + 'property')).flatMap((ps) => checkProperty(ctx, focus, ps).map((v) => ({ ...v, shape: ps.termType === 'NamedNode' ? ps : ctx.nn(s) }))),
+    ...checkOr(ctx, focus, ctx.nn(s)),
+  ])
   if (!violations.length) return []
   const o = ctx.out(focus)
   for (const v of violations) {
@@ -136,11 +161,12 @@ const validate: FnRule = (ctx, focus) => {
     const r = o.node('shape-' + md5Key(`${v.path} ${v.shape.value} ${v.kind} ${v.fallback} ${v.value?.value ?? ''}`))
     o.t(r, RDF_TYPE, ctx.nn(SH + 'ValidationResult'))
       .t(r, SH + 'focusNode', focus)
-      .t(r, SH + 'resultPath', ctx.nn(v.path))
       .t(r, SH + 'resultMessage', v.message)
       .t(r, SH + 'sourceShape', v.shape)
       .t(r, SH + 'resultSeverity', ctx.nn(SH + 'Violation'))
       .t(focus, VAL.violation, r)
+    // A node shape's own constraint (sh:or) is about the focus itself: no path.
+    if (v.path) o.t(r, SH + 'resultPath', ctx.nn(v.path))
     if (v.value) o.t(r, SH + 'value', v.value)
   }
   return o.quads
