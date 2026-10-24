@@ -98,8 +98,8 @@ describe('arrow-key navigation (keyboard layer)', () => {
     const nav = [...h.document.querySelectorAll('[data-sem-c=segmented]')].find((s) => s.textContent!.includes('Docs'))!
     const button = (t: string) => [...nav.querySelectorAll('button')].find((b) => b.textContent === t)!
     h.press(button('Components'), 'ArrowRight')
-    expect(h.value(UI + 'page')).toBe(UI + 'Examples')
-    h.press(button('Examples'), 'ArrowLeft')
+    expect(h.value(UI + 'page')).toBe(UI + 'Reference')
+    h.press(button('Reference'), 'ArrowLeft')
     expect(h.value(UI + 'page')).toBe(UI + 'Components')
   })
 })

@@ -53,7 +53,8 @@ ui:page rdfs:label "Page" ; rdfs:range ui:Page .
 ui:Home a ui:Page ; rdfs:label "Home" ; sem:order 1 ; ui:key "home" .
 ui:Docs a ui:Page ; rdfs:label "Docs" ; sem:order 2 ; ui:key "docs" .
 ui:Components a ui:Page ; rdfs:label "Components" ; sem:order 3 ; ui:key "components" .
-ui:Examples a ui:Page ; rdfs:label "Examples" ; sem:order 4 ; ui:key "examples" .
+ui:Reference a ui:Page ; rdfs:label "Reference" ; sem:order 4 ; ui:key "reference" .
+ui:Examples a ui:Page ; rdfs:label "Examples" ; sem:order 5 ; ui:key "examples" .
 ui:inspectorMode rdfs:label "Inspector" ; rdfs:range ui:InspectorMode .
 ui:Live a ui:InspectorMode ; rdfs:label "Live" ; sem:symbol "●" ; sem:order 1 .
 ui:Paused a ui:InspectorMode ; rdfs:label "Paused" ; sem:symbol "❙❙" ; sem:order 2 .
@@ -110,14 +111,16 @@ ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
 # (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl). Each page is evaluated when
 # its navigation item is pointed at or focused, so it is ready by the time it is clicked.
 ui:pages a c:Switch ; c:controls ui:app ; c:property ui:page ;
-    c:cases ( ui:homeCase ui:docsCase ui:componentsCase ui:examplesCase ) .
+    c:cases ( ui:homeCase ui:docsCase ui:componentsCase ui:referenceCase ui:examplesCase ) .
 ui:homeCase c:when ui:Home ; c:content ui:home .
 ui:docsCase c:when ui:Docs ; c:content ui:docs .
 ui:componentsCase c:when ui:Components ; c:content ui:gallery .
+ui:referenceCase c:when ui:Reference ; c:content ui:reference .
 ui:examplesCase c:when ui:Examples ; c:content ui:examples .
 ui:home sem:warm sem:OnIntent .
 ui:docs sem:warm sem:OnIntent .
 ui:gallery sem:warm sem:OnIntent .
+ui:reference sem:warm sem:OnIntent .
 ui:examples sem:warm sem:OnIntent .
 
 # --- tools --------------------------------------------------------------------------------------

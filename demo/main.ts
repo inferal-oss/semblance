@@ -23,7 +23,7 @@ const kind = (params.get('store') ?? 'hybrid') as StoreKind
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'function')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
-const PAGES = { home: 'Home', docs: 'Docs', components: 'Components', examples: 'Examples' } as const
+const PAGES = { home: 'Home', docs: 'Docs', components: 'Components', reference: 'Reference', examples: 'Examples' } as const
 
 await initWeb()
 // The Components page: one graph per component group (demo/gallery/*.ttl).

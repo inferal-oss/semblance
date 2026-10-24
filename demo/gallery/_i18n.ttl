@@ -17,6 +17,7 @@
 ui:Home rdfs:label "Головна"@uk , "Start"@de , "الرئيسية"@ar .
 ui:Docs rdfs:label "Документація"@uk , "Doku"@de , "التوثيق"@ar .
 ui:Examples rdfs:label "Приклади"@uk , "Beispiele"@de , "أمثلة"@ar .
+ui:Reference rdfs:label "Довідник"@uk , "Referenz"@de , "المرجع"@ar .
 ui:DocPerformance rdfs:label "Продуктивність"@uk , "Leistung"@de , "الأداء"@ar .
 ui:Components rdfs:label "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
 ui:GroupFoundations rdfs:label "Основи"@uk , "Grundlagen"@de , "الأسس"@ar .
