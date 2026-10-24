@@ -65,3 +65,5 @@ val:Layer rdfs:label "валідація"@uk , "Validierung"@de , "التحقق"
 key:Layer rdfs:label "клавіатура"@uk , "Tastatur"@de , "لوحة المفاتيح"@ar .
 st:Layer rdfs:label "статус"@uk , "Status"@de , "الحالة"@ar .
 ann:Layer rdfs:label "оголошення"@uk , "Ankündigungen"@de , "الإعلانات"@ar .
+ui:GroupWindows rdfs:label "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
+ui:GroupThemes rdfs:label "Теми"@uk , "Designs"@de , "السمات"@ar .
