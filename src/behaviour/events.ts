@@ -476,7 +476,11 @@ export class EventBus {
       if (!el && combo === 'escape') {
         // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
         const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined
-        if (dismiss) k.preventDefault(), dismiss.click()
+        if (!dismiss) return
+        k.preventDefault()
+        // A disclosure's toggle (aria-expanded) takes the focus back from what it closes.
+        if (dismiss.hasAttribute('aria-expanded')) dismiss.focus?.()
+        dismiss.click()
         return
       }
       if (!el || el.closest('[hidden], [inert]')) return
@@ -487,6 +491,19 @@ export class EventBus {
       ;(control ?? el).click()
     })
     doc.addEventListener('keydown', keys)
+    // A press outside an open disclosure that asks for it (data-sem-dismiss-outside on its toggle)
+    // closes it: the toggle is clicked, so its own reactions do it, as Escape does above.
+    const outside = (e: Event) => {
+      const target = e.target as Node
+      for (const toggle of renderer.host.querySelectorAll<HTMLElement>('[data-sem-dismiss-outside]')) {
+        if (toggle.closest('[hidden]')) continue
+        const region = toggle.getAttribute('aria-controls')
+        const panel = region ? doc.getElementById(region) : null
+        if (toggle.contains(target) || panel?.contains(target)) continue
+        toggle.click()
+      }
+    }
+    doc.addEventListener('pointerdown', outside, true)
     const track = (e: Event) => {
       const p = e as PointerEvent
       this.pointer = { x: p.clientX, y: p.clientY }
@@ -510,6 +527,7 @@ export class EventBus {
       renderer.host.removeEventListener('mousedown', keepFocus)
       drags.dispose()
       doc.removeEventListener('keydown', keys)
+      doc.removeEventListener('pointerdown', outside, true)
       doc.removeEventListener('pointermove', track)
       renderer.host.removeEventListener('focusin', entered)
     }

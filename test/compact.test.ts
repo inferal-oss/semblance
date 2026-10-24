@@ -128,6 +128,32 @@ describe('the app bar on a compact screen', () => {
     expect($('.sem-more').getAttribute('data-open')).toBe('false')
   })
 
+  it('closes them on Escape, giving the focus back to the More button, and on a press outside', () => {
+    const { $, fire, document, window, store } = site()
+    const f = store.factory
+    const expanded = () => store.match(f.namedNode(UI + 'appBar'), f.namedNode(NS.c + 'expanded'), null)[0]?.object.value
+    expect($('.sem-more-toggle').hasAttribute('data-sem-escape')).toBe(false)
+    fire($('.sem-more-toggle'), 'click')
+    // Open, the toggle declares what closes it; the event bus clicks it, so its reaction does.
+    expect($('.sem-more-toggle').hasAttribute('data-sem-escape')).toBe(true)
+    expect($('.sem-more-toggle').hasAttribute('data-sem-dismiss-outside')).toBe(true)
+    let focused: Element | undefined
+    const toggle = $('.sem-more-toggle') as HTMLElement
+    toggle.focus = () => void (focused = toggle)
+    const esc = new window.Event('keydown', { bubbles: true })
+    Object.defineProperty(esc, 'key', { value: 'Escape' })
+    document.dispatchEvent(esc)
+    expect(expanded()).toBe('false')
+    expect(focused).toBe(toggle)
+    // A press inside the panel leaves it open; one anywhere else closes it.
+    fire($('.sem-more-toggle'), 'click')
+    fire($('.sem-more-body [data-sem-c=theme-switcher] button'), 'pointerdown')
+    expect(expanded()).toBe('true')
+    fire($('main, [data-sem-c=switch]'), 'pointerdown')
+    expect(expanded()).toBe('false')
+    expect($('.sem-more-toggle').hasAttribute('data-sem-dismiss-outside')).toBe(false)
+  })
+
   it('renders the same through its SPARQL and function rules, folded and open', () => {
     const a = site('sparql')
     const b = site('function')

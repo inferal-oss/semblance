@@ -104,7 +104,15 @@ const appbar: FnRule = (ctx, focus) => {
     const toggle = o.el(
       'more-toggle',
       'Button',
-      { type: 'button', class: 'sem-more-toggle', 'aria-expanded': String(open), 'aria-controls': body.value, 'aria-label': text(ctx, focus, C_MORE_LABEL) ?? 'More' },
+      {
+        type: 'button',
+        class: 'sem-more-toggle',
+        'aria-expanded': String(open),
+        'aria-controls': body.value,
+        'aria-label': text(ctx, focus, C_MORE_LABEL) ?? 'More',
+        // Open, Escape or a press outside closes it: the toggle says so (the event bus clicks it).
+        ...(open ? { 'data-sem-escape': '', 'data-sem-dismiss-outside': '' } : {}),
+      },
       [icon],
     )
     o.t(toggle, C_FOLDS, focus)
