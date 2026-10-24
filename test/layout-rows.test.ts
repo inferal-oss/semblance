@@ -43,4 +43,12 @@ describe('rows that line up', () => {
     }
     expect(css).toMatch(/--sem-measure-page:\s*1120px/)
   })
+
+  it('content-sized components keep their size in a shared column, and guides outline the cells', () => {
+    for (const c of ['badge', 'tag', 'count-badge', 'kbd']) {
+      expect(css, c).toMatch(new RegExp(`\\[data-sem-c="?${c}"?\\][^{]*\\{[^}]*justify-self:\\s*start`))
+    }
+    expect(css).toMatch(/\[data-sem-guides="cells"\] \[data-sem-layout=subgrid\] > \*[^{]*\{[^}]*outline:\s*1px dashed/)
+    expect(css).toMatch(/\[data-sem-guides="cells"\] \[data-sem-direction=row\] > \*[^{]*\{[^}]*outline:\s*1px dashed/)
+  })
 })

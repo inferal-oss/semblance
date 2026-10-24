@@ -180,10 +180,19 @@ ui:lyf-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:child
 ui:lyg-list a c:Stack ; pos:layout ui:LedgerColumns ; c:children ( ui:lyg-r0 ui:lyg-r1 ui:lyg-switch ) .
 ui:lyg-switch a c:Switch ; c:controls ui:lyRowsState ; c:property ui:lyRowShown ; c:cases ( ui:lyg-case ) .
 ui:lyg-case c:when ui:LyShown ; c:content ui:lyg-r2 .
-ui:lyf-card a c:Card ; c:label "Each row on its own" ; c:badge "pos:Row" ; c:content ui:lyf-list .
-ui:lyg-card a c:Card ; c:label "Rows that share columns" ; c:badge "pos:Subgrid" ; c:content ui:lyg-list .
-ui:ly-rows-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:lyf-card ui:lyg-card ) .
+ui:lyf-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:lyf-list ui:lyf-note ) .
+ui:lyf-note a c:Text ; sty:textStyle sty:Caption ; sty:tone sty:Warning ;
+    c:label "Each row sizes its own cells: the badge and the price start wherever that row's text ends, so they drift from row to row." .
+ui:lyg-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:lyg-list ui:lyg-note ) .
+ui:lyg-note a c:Text ; sty:textStyle sty:Caption ; sty:tone sty:Success ;
+    c:label "The list declares three columns once - name, status, price - and every row places its cells in them: one line for the badges, one edge for the prices." .
+ui:lyf-card a c:Card ; c:label "Each row on its own" ; c:badge "pos:Row" ; c:content ui:lyf-body .
+ui:lyg-card a c:Card ; c:label "Rows that share columns" ; c:badge "pos:Subgrid" ; c:content ui:lyg-body .
+ui:ly-rows-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; pos:guides pos:CellGuides ; c:children ( ui:lyf-card ui:lyg-card ) .
+# Guides are graph state too: outline every cell of both lists, or not.
+ui:ly-rows-guides a c:Segmented ; c:controls ui:ly-rows-body ; c:property pos:guides ; c:label "Guides" .
+ui:ly-rows-stage a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ly-rows-guides ui:ly-rows-body ) .
 ui:ly-rows a c:Flippable ; c:front ui:ly-rows-spec .
 ui:ly-rows-spec a c:Specimen ; c:label "Rows that line up" ;
-    c:help "Rows of a list are often built as stacks, but a stack lays out only its own children: each row places its cells from its own content, so nothing lines up. Declare the column tracks once on the list (a pos:Layout with grid-template-columns) and make each row pos:Subgrid: the rows share the columns. A c:Switch between them takes no part in layout, so the last row lines up too." ;
-    c:children ( ui:ly-rows-body ) .
+    c:help "The same three rows, twice; the dashed boxes are the cells. A stack lays out only its own children, so on the left each row places its cells from its own content. On the right the list declares its column tracks once (a pos:Layout with grid-template-columns) and each row is pos:Subgrid, sharing them - also the last row, inside a c:Switch, which takes no part in layout. A badge stays as wide as its label in its column." ;
+    c:children ( ui:ly-rows-stage ) .

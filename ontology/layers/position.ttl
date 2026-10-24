@@ -141,3 +141,15 @@ pos:TextAlignment a owl:Class .
 pos:TextStart a pos:TextAlignment ; sem:slug "start" ; sty:declares [ sty:property "text-align" ; sty:raw "start" ] .
 pos:TextCenter a pos:TextAlignment ; sem:slug "center" ; sty:declares [ sty:property "text-align" ; sty:raw "center" ] .
 pos:TextEnd a pos:TextAlignment ; sem:slug "end" ; sty:declares [ sty:property "text-align" ; sty:raw "end" ] .
+
+pos:guides a owl:ObjectProperty ;
+    rdfs:range pos:Guides ;
+    rdfs:label "Guides"@en , "Напрямні"@uk , "Hilfslinien"@de , "أدلة"@ar ;
+    rdfs:comment "Layout guides drawn over a subtree, to show how it is laid out (pos:CellGuides outlines every cell of a row)."@en ;
+    sty:hookAttribute "data-sem-guides" .
+pos:Guides a owl:Class .
+pos:NoGuides a pos:Guides ; sem:slug "none" ; sem:order 1 ;
+    rdfs:label "Off"@en , "Вимк."@uk , "Aus"@de , "إيقاف"@ar .
+pos:CellGuides a pos:Guides ; sem:slug "cells" ; sem:order 2 ;
+    rdfs:label "Show cells"@en , "Показати клітинки"@uk , "Zellen zeigen"@de , "إظهار الخلايا"@ar ;
+    rdfs:comment "Every cell of a row is outlined."@en .

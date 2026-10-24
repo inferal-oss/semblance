@@ -8,6 +8,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 
 # Default theme for the layout components.
 
@@ -264,3 +265,25 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
                  [ sty:property "min-width" ; sty:raw "min(100%, 55%)" ] .
 [] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child:not(:only-child)" ;
     sty:declares [ sty:property "max-width" ; sty:raw "min(100%, 240px)" ] .
+
+# Components whose size is their content - a badge, a tag, a count, a key cap - stay that size in a
+# grid cell. A grid stretches its items to the track by default, so in rows that share columns
+# (pos:Subgrid) a short badge would grow to the width of the longest one in its column; they sit at
+# the start of the track instead (logical, so right to left too). Flex containers ignore this.
+[] a sty:StyleRule ; sty:appliesTo c:Badge ;
+    sty:declares [ sty:property "justify-self" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tag ;
+    sty:declares [ sty:property "justify-self" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CountBadge ;
+    sty:declares [ sty:property "justify-self" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Kbd ;
+    sty:declares [ sty:property "justify-self" ; sty:raw "start" ] .
+
+# Guides (pos:guides pos:CellGuides): every cell of a row is outlined, so whether cells line up
+# across rows can be seen, not only read about.
+[] a sty:StyleRule ; sty:when pos:CellGuides ; sty:part "[data-sem-layout=subgrid] > *" ;
+    sty:declares [ sty:property "outline" ; sty:raw "1px dashed var(--sem-accent)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:when pos:CellGuides ; sty:part "[data-sem-direction=row] > *" ;
+    sty:declares [ sty:property "outline" ; sty:raw "1px dashed var(--sem-accent)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "2px" ] .
