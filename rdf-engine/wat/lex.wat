@@ -28,7 +28,15 @@
 (@define T_TT_CLOSE 15) ;; )>>
 (@define T_ANN_OPEN 16) ;; {|
 (@define T_ANN_CLOSE 17) ;; |}
-;; Other punctuation is its own character: . ; , [ ] ( ) { } ~
+;; SPARQL only ($sparql set):
+(@define T_VAR 18)      ;; ?name or $name; $str: name
+(@define T_LE 19)       ;; <=
+(@define T_GE 20)       ;; >=
+(@define T_NE 21)       ;; !=
+(@define T_AND 22)      ;; &&
+(@define T_OR 23)       ;; ||
+;; Other punctuation is its own character: . ; , [ ] ( ) { } ~ and, in SPARQL,
+;; ? ! = < > * / + - ^ |
 
 (global $p (mut i32) (i32.const 0))
 (global $end (mut i32) (i32.const 0))
@@ -41,6 +49,7 @@
 (global $pfx (mut i32) (i32.const 0))
 (global $pfx_len (mut i32) (i32.const 0))
 (global $dir (mut i32) (i32.const 0))
+(global $sparql (mut i32) (i32.const 0))   ;; lex SPARQL rather than Turtle
 
 ;; A syntax error: "line N: msg". Returns 0.
 (func $syntax (param $msg i32) (param $n i32) (result i32)
@@ -599,6 +608,70 @@
   (global.set $tok (local.get $t))
   (call $advance (local.get $n)))
 
+;; Whether an IRIREF starts at $p (on '<'): its characters run to a '>'.
+;; In SPARQL, '<' is otherwise less-than.
+(func $iri_ahead (result i32)
+  (local $q i32) (local $c i32)
+  (local.set $q (global.get $p))
+  (loop $chars
+    (if (i32.ge_u (local.tee $q (i32.add (local.get $q) (i32.const 1))) (global.get $end)) (then (return (i32.const 0))))
+    (local.set $c (i32.load8_u (local.get $q)))
+    (if (i32.eq (local.get $c) (i32.const '>')) (then (return (i32.const 1))))
+    (br_if $chars (i32.or (i32.eq (local.get $c) (i32.const '\\')) (i32.eqz (call $iri_bad (local.get $c))))))
+  (i32.const 0))
+
+;; A variable (on '?' or '$'): 1 when a VARNAME follows, else 0 (no error).
+(func $scan_var (result i32)
+  (local $c i32) (local $q i32)
+  (local.set $q (i32.add (global.get $p) (i32.const 1)))
+  (if (i32.ge_u (local.get $q) (global.get $end)) (then (return (i32.const 0))))
+  (local.set $c (call $decode (local.get $q)))
+  (if (i32.eqz (i32.or (call $pn_u (local.get $c)) (call $is_digit (local.get $c)))) (then (return (i32.const 0))))
+  (global.set $str (local.get $q))
+  (loop $chars
+    (local.set $q (i32.add (local.get $q) (global.get $cplen)))
+    (if (i32.lt_u (local.get $q) (global.get $end)) (then
+      (local.set $c (call $decode (local.get $q)))
+      (br_if $chars (i32.and (call $pn_chars (local.get $c)) (i32.ne (local.get $c) (i32.const '-')))))))
+  (global.set $p (local.get $q))
+  (global.set $str_len (i32.sub (local.get $q) (global.get $str)))
+  (i32.const 1))
+
+;; A one-character token; returns 1.
+(func $single (param $c i32) (result i32)
+  (call $punct (local.get $c) (i32.const 1))
+  (i32.const 1))
+
+;; SPARQL's own tokens; 1 when one was read.
+(func $lex_sparql (param $c i32) (param $c1 i32) (result i32)
+  (if (i32.or (i32.eq (local.get $c) (i32.const '?')) (i32.eq (local.get $c) (i32.const '$'))) (then
+    (if (call $scan_var) (then (global.set $tok (i32.const T_VAR)) (return (i32.const 1))))
+    (if (i32.eq (local.get $c) (i32.const '?')) (then (return (call $single (local.get $c)))))
+    (return (i32.const 0))))
+  (if (i32.and (i32.eq (local.get $c) (i32.const '<')) (i32.ne (local.get $c1) (i32.const '<'))) (then
+    (if (call $iri_ahead) (then (return (i32.const 0))))
+    (if (i32.eq (local.get $c1) (i32.const '=')) (then (call $punct (i32.const T_LE) (i32.const 2)) (return (i32.const 1))))
+    (return (call $single (local.get $c)))))
+  (if (i32.and (i32.eq (local.get $c) (i32.const '>')) (i32.ne (local.get $c1) (i32.const '>'))) (then
+    (if (i32.eq (local.get $c1) (i32.const '=')) (then (call $punct (i32.const T_GE) (i32.const 2)) (return (i32.const 1))))
+    (return (call $single (local.get $c)))))
+  (if (i32.eq (local.get $c) (i32.const '!')) (then
+    (if (i32.eq (local.get $c1) (i32.const '=')) (then (call $punct (i32.const T_NE) (i32.const 2)) (return (i32.const 1))))
+    (return (call $single (local.get $c)))))
+  (if (i32.and (i32.eq (local.get $c) (i32.const '&')) (i32.eq (local.get $c1) (i32.const '&')))
+    (then (call $punct (i32.const T_AND) (i32.const 2)) (return (i32.const 1))))
+  (if (i32.and (i32.eq (local.get $c) (i32.const '|')) (i32.eq (local.get $c1) (i32.const '|')))
+    (then (call $punct (i32.const T_OR) (i32.const 2)) (return (i32.const 1))))
+  (if (i32.and (i32.eq (local.get $c) (i32.const '|')) (i32.ne (local.get $c1) (i32.const '}'))) (then (return (call $single (local.get $c)))))
+  (if (i32.and (i32.eq (local.get $c) (i32.const '^')) (i32.ne (local.get $c1) (i32.const '^'))) (then (return (call $single (local.get $c)))))
+  (if (call $one_of (local.get $c) (@str "=*/")) (then (return (call $single (local.get $c)))))
+  ;; + and - not starting a number
+  (if (i32.or (i32.eq (local.get $c) (i32.const '+')) (i32.eq (local.get $c) (i32.const '-'))) (then
+    (if (i32.eqz (i32.or (call $is_digit (local.get $c1))
+                         (i32.and (i32.eq (local.get $c1) (i32.const '.')) (call $is_digit (call $peek_at (i32.const 2))))))
+      (then (return (call $single (local.get $c)))))))
+  (i32.const 0))
+
 ;; Read the next token into $tok.
 (func $lex
   (local $c i32) (local $c1 i32)
@@ -606,6 +679,8 @@
   (local.set $c (call $peek))
   (local.set $c1 (call $peek_at (i32.const 1)))
   (if (i32.lt_s (local.get $c) (i32.const 0)) (then (global.set $tok (i32.const T_EOF)) (return)))
+  (if (global.get $sparql) (then
+    (if (call $lex_sparql (local.get $c) (local.get $c1)) (then (return)))))
   (if (i32.eq (local.get $c) (i32.const '<')) (then
     (if (i32.ne (local.get $c1) (i32.const '<')) (then
       (global.set $tok (select (i32.const T_IRI) (i32.const T_ERR) (call $scan_iri)))

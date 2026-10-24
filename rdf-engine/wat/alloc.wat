@@ -9,6 +9,9 @@
 ;; a block wastes at most a third. A freed block goes on its class's list and
 ;; is reused by the next allocation of that class: O(1) both ways.
 
+(import "env" "now" (func $now_ms (result f64)))
+(import "env" "random" (func $random (result f64)))
+
 (memory (export "memory") 2)
 
 (global $top (mut i32) (i32.const 0))

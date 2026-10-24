@@ -3,19 +3,19 @@
   "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
   "summary": {
     "sparql12": {
-      "pass": 0,
-      "fail": 0,
-      "skip": 271
+      "pass": 247,
+      "fail": 1,
+      "skip": 23
     },
     "sparql11": {
-      "pass": 0,
-      "fail": 0,
-      "skip": 510
+      "pass": 352,
+      "fail": 9,
+      "skip": 149
     },
     "sparql10": {
-      "pass": 0,
-      "fail": 0,
-      "skip": 481
+      "pass": 479,
+      "fail": 2,
+      "skip": 0
     },
     "rdf12": {
       "pass": 1055,
@@ -23,5 +23,18 @@
       "skip": 82
     }
   },
-  "failing": {}
+  "failing": {
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-2": "wrong result",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-3": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-avg-02": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-err-02": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-sum-02": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-decimal": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-double": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-float": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-string": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#coalesce01": "wrong result",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected": "wrong result",
+    "sparql/sparql12/eval-triple-terms/manifest#construct-5": "wrong result"
+  }
 }

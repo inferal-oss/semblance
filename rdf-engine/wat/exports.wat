@@ -6,6 +6,8 @@
   (global.set $errbuf (call $alloc (i32.const 160)))
   (call $init_load)
   (call $init_knowns)
+  (call $init_functions)
+  (global.set $nbuf (call $alloc (i32.const 400)))
   (call $init_terms)
   (call $init_store))
 
@@ -134,18 +136,8 @@
   (if (i32.gt_u (i32.sub (local.get $fmt) (i32.const 1)) (i32.const 3)) (then (return (call $fail (@str "unknown format")))))
   (call $load (local.get $fmt) (local.get $len) (local.get $base_len) (local.get $graph)))
 
-(func (export "collect") (result i32) (i32.const 0))
 
 ;; --- queries (later phases) -------------------------------------------------------
 
-(func (export "prepare") (param i32 i32) (result i32) (call $ni))
-(func (export "query_form") (param i32) (result i32) (call $ni))
-(func (export "query_var_count") (param i32) (result i32) (call $ni))
-(func (export "query_var_ptr") (param i32 i32) (result i32) (call $ni))
-(func (export "query_var_len") (param i32 i32) (result i32) (call $ni))
-(func (export "bind") (param i32 i32 i32) (result i32) (call $ni))
-(func (export "bind_values") (param i32 i32 i32) (result i32) (call $ni))
-(func (export "run") (param i32 i32) (result i32) (call $ni))
-(func (export "release") (param i32) (result i32) (call $ni))
 (func (export "parse_update") (param i32 i32) (result i32) (call $ni))
 (func (export "update") (param i32 i32) (result i32) (call $ni))

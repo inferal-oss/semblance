@@ -43,7 +43,7 @@
   (if (i32.eqz (local.tee $id (i32.load offset=8 (local.get $at)))) (then
     (local.set $id (call $iri_const (i32.load (local.get $at)) (i32.load offset=4 (local.get $at))))
     (i32.store offset=8 (local.get $at) (local.get $id))))
-  (local.get $id))
+  (call $recorded (local.get $id)))
 
 (func $known_name (param $k i32) (param $p i32) (param $n i32)
   (local $at i32)
@@ -197,8 +197,10 @@
     (local.set $dt (i32.const K_DOUBLE))
     (br_if $lit (i32.eq (local.get $t) (i32.const T_DOUBLE)))
     (local.set $dt (i32.const K_BOOLEAN))
-    (br_if $lit (i32.or (call $word (@str "true") (i32.const 0)) (call $word (@str "false") (i32.const 0))))
+    ;; (SPARQL keywords, true and false among them, ignore case)
+    (br_if $lit (i32.or (call $word (@str "true") (global.get $sparql)) (call $word (@str "false") (global.get $sparql))))
     (return (call $expected (@str "unexpected token"))))
+  (if (i32.eq (local.get $dt) (i32.const K_BOOLEAN)) (then (call $lower (local.get $v) (local.get $n))))
   (call $lex)
   (call $intern (i32.const 3) (local.get $v) (local.get $n) (call $known (local.get $dt)) (i32.const 0) (i32.const 0) (i32.const 1)))
 

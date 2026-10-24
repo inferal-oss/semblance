@@ -7,7 +7,7 @@
 ;;   +12 b: value len  (triple: predicate)
 ;;   +16 c: datatype   (triple: object)
 ;;   +20 language length; the tag is stored lowercased right after the value
-;;   +24 (reserved for reference counts, phase 5)
+;;   +24 datatype class cache (expr.wat)  +28 next freed id
 ;; Value and tag share one block of value_len + lang_len bytes.
 ;;
 ;; The interning table is open addressing with linear probing over term ids
@@ -18,6 +18,7 @@
 (global $terms_cap (mut i32) (i32.const 0))   ;; in records
 (global $next_id (mut i32) (i32.const 1))
 (global $live (mut i32) (i32.const 0))
+(global $free_ids (mut i32) (i32.const 0))    ;; freed ids, linked through record +28
 (global $htab (mut i32) (i32.const 0))
 (global $hcap (mut i32) (i32.const 0))        ;; slots, a power of two
 (global $hcount (mut i32) (i32.const 0))
@@ -72,6 +73,12 @@
 ;; A new id with a zeroed record and zeroed index lists (see store.wat).
 (func $new_id (result i32)
   (local $id i32) (local $cap i32)
+  ;; a freed id first (collect)
+  (if (local.tee $id (global.get $free_ids)) (then
+    (global.set $free_ids (i32.load offset=28 (call $rec (local.get $id))))
+    (memory.fill (call $rec (local.get $id)) (i32.const 0) (i32.const 32))
+    (global.set $live (i32.add (global.get $live) (i32.const 1)))
+    (return (local.get $id))))
   (local.set $id (global.get $next_id))
   (if (i32.eq (local.get $id) (global.get $terms_cap)) (then
     (local.set $cap (i32.shl (local.get $id) (i32.const 1)))
@@ -118,7 +125,18 @@
 ;; Intern (or with create = 0, look up) an IRI, blank node or literal.
 ;; kd is kind | direction << 8; for literals dt is the datatype id and the
 ;; tag (already lowercase) is n2 bytes at p2. Returns the id, or 0.
+;; While a query is prepared, every term it interns or looks up is recorded
+;; (collect keeps them).
+(global $rec_vec (mut i32) (i32.const 0))
+(func $recorded (param $id i32) (result i32)
+  (if (i32.and (i32.ne (global.get $rec_vec) (i32.const 0)) (i32.ne (local.get $id) (i32.const 0)))
+    (then (call $v_push1 (global.get $rec_vec) (local.get $id))))
+  (local.get $id))
+
 (func $intern (param $kd i32) (param $p i32) (param $n i32) (param $dt i32) (param $p2 i32) (param $n2 i32) (param $create i32) (result i32)
+  (call $recorded (call $intern_raw (local.get $kd) (local.get $p) (local.get $n) (local.get $dt) (local.get $p2) (local.get $n2) (local.get $create))))
+
+(func $intern_raw (param $kd i32) (param $p i32) (param $n i32) (param $dt i32) (param $p2 i32) (param $n2 i32) (param $create i32) (result i32)
   (local $h i32) (local $i i32) (local $id i32) (local $r i32) (local $mask i32)
   (local.set $h (call $hash_bytes (local.get $kd) (local.get $p) (local.get $n)))
   (if (i32.eq (i32.and (local.get $kd) (i32.const 0xff)) (i32.const 3)) (then
@@ -160,6 +178,9 @@
 
 ;; Intern (or look up) the triple term (s, p, o).
 (func $intern_triple (param $s i32) (param $p i32) (param $o i32) (param $create i32) (result i32)
+  (call $recorded (call $intern_triple_raw (local.get $s) (local.get $p) (local.get $o) (local.get $create))))
+
+(func $intern_triple_raw (param $s i32) (param $p i32) (param $o i32) (param $create i32) (result i32)
   (local $h i32) (local $i i32) (local $id i32) (local $r i32) (local $mask i32)
   (local.set $h (call $fmix (call $mix (call $mix (call $mix (i32.const 4) (local.get $s)) (local.get $p)) (local.get $o))))
   (local.set $mask (i32.sub (global.get $hcap) (i32.const 1)))
