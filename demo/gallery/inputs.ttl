@@ -10,12 +10,14 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
 
 # Gallery page: Inputs.
 
 ui:gallery-inputs a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-codes ui:inp-checkboxes ui:inp-radios ui:inp-switches
-                 ui:inp-sliders ui:inp-fields ui:inp-selection ) .
+                 ui:inp-sliders ui:inp-fields ui:inp-selection ui:inp-typeahead ui:inp-tags ) .
 ui:gallery-inputs-intro a c:Heading ; c:label "Inputs" .
 
 # --- The node the shared controls edit ------------------------------------------------------------
@@ -171,3 +173,71 @@ ui:inp-selection a c:Flippable ; c:front ui:inp-selection-spec .
 ui:inp-selection-spec a c:Specimen ; c:label "Select and chips" ;
     c:help "c:Choice is a native select for a single-valued property; c:Chips toggle the values of a multi-valued one (ui:inp-topic). Both draw their options from the property's rdfs:range." ;
     c:children ( ui:inp-sel-col ) .
+
+# --- Typeahead: Combobox -----------------------------------------------------------------------------
+# Options from a class (ui:InpCountry, the range of ui:inp-country): type "cura" or "reu" and the
+# accented names match. The team combobox allows custom values: a new name becomes a ui:InpTeam
+# with that rdfs:label, if it conforms to ui:TeamNameShape.
+
+ui:inputsDemo ui:inp-country ui:country-pt ; ui:inp-team ui:team-design .
+
+ui:inp-country a rdf:Property ; rdfs:label "Country" ; rdfs:range ui:InpCountry .
+ui:InpCountry a owl:Class .
+ui:country-ax a ui:InpCountry ; rdfs:label "Åland Islands" .
+ui:country-at a ui:InpCountry ; rdfs:label "Austria" .
+ui:country-ci a ui:InpCountry ; rdfs:label "Côte d’Ivoire" .
+ui:country-cw a ui:InpCountry ; rdfs:label "Curaçao" .
+ui:country-cz a ui:InpCountry ; rdfs:label "Czechia" .
+ui:country-is a ui:InpCountry ; rdfs:label "Iceland" .
+ui:country-pt a ui:InpCountry ; rdfs:label "Portugal" .
+ui:country-re a ui:InpCountry ; rdfs:label "Réunion" .
+ui:country-st a ui:InpCountry ; rdfs:label "São Tomé and Príncipe" .
+ui:country-tr a ui:InpCountry ; rdfs:label "Türkiye" .
+ui:country-ua a ui:InpCountry ; rdfs:label "Ukraine" .
+ui:country-uy a ui:InpCountry ; rdfs:label "Uruguay" .
+
+ui:inp-team a owl:ObjectProperty ; rdfs:label "Team" ; rdfs:range ui:InpTeam .
+ui:InpTeam a owl:Class .
+ui:team-design a ui:InpTeam ; rdfs:label "Design" .
+ui:team-platform a ui:InpTeam ; rdfs:label "Platform" .
+ui:team-research a ui:InpTeam ; rdfs:label "Research" .
+ui:TeamNameShape a sh:PropertyShape ; sh:path ui:inp-team ; sh:minLength 2 ; sh:maxLength 24 ; sh:pattern "^[A-Za-zÀ-ÿ ]+$" ;
+    sh:message "A team name is 2 to 24 letters." .
+
+ui:inp-combo-country a c:Combobox ; c:controls ui:inputsDemo ; c:property ui:inp-country ;
+    c:placeholder "Search countries" ; c:help "Only listed countries: matching ignores case and accents." .
+ui:inp-combo-team a c:Combobox ; c:controls ui:inputsDemo ; c:property ui:inp-team ; c:allowsCustom true ;
+    c:placeholder "Pick or name a team" ; val:validates ui:TeamNameShape ;
+    c:help "Type a new name and press Enter: it becomes a ui:InpTeam." .
+ui:inp-combo-plan a c:Combobox ; c:controls ui:inputsDemo ; c:property ui:inp-plan ; sty:size sty:Small .
+ui:inp-combo-off a c:Combobox ; c:label "Region (locked)" ; c:controls ui:inputsDemo ; c:property ui:inp-country ; c:disabled true .
+ui:inp-combo-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:inp-combo-country ui:inp-combo-team ui:inp-combo-plan ui:inp-combo-off ) .
+ui:inp-typeahead a c:Flippable ; c:front ui:inp-typeahead-spec .
+ui:inp-typeahead-spec a c:Specimen ; c:label "Combobox" ;
+    c:help "A c:Combobox is a field you type into to find one value of a property (c:controls, c:property), like a c:Choice that searches: role=combobox over a role=listbox, the active option by aria-activedescendant. Its options are the instances of the property's range (or c:optionClass, or a c:options list); ↓ ↑ move, Enter picks, Escape gives your text back. With c:allowsCustom true, a name that matches nothing can be created, checked by a SHACL shape (val:validates). The small one edits the same plan as the radio group." ;
+    c:children ( ui:inp-combo-col ) .
+
+# --- Typeahead: TagInput -----------------------------------------------------------------------------
+# Topics (ui:inp-topic, the c:Chips above edit it too) come from a class and cannot be invented.
+# Labels are literals: the options are every label already in use, on any node; a new one is made
+# by Enter or a comma, at most four, each up to 16 lower-case letters, digits or dashes.
+
+ui:inputsDemo ui:inp-labels "design" , "a11y" .
+ui:inputsOther ui:inp-labels "performance" , "rdf" , "überblick" .
+ui:inp-labels a owl:DatatypeProperty ; rdfs:label "Labels" .
+ui:LabelsShape a sh:PropertyShape ; sh:path ui:inp-labels ; sh:maxCount 4 ; sh:maxLength 16 ; sh:pattern "^[a-z0-9äöüß-]+$" ;
+    sh:message "Up to four labels, each a lower-case word (a-z, 0-9, dashes)." .
+
+ui:inp-tags-topics a c:TagInput ; c:controls ui:inputsDemo ; c:property ui:inp-topic ;
+    c:placeholder "Add a topic" ; c:help "Options only: the topics of ui:InpTopic." .
+ui:inp-tags-labels a c:TagInput ; c:controls ui:inputsDemo ; c:property ui:inp-labels ;
+    c:optionsInUse true ; c:allowsCustom true ; val:validates ui:LabelsShape ;
+    c:placeholder "Add a label" ; c:help "Labels in use anywhere are suggested; Enter or a comma adds a new one. Backspace in the empty field removes the last." .
+ui:inp-tags-off a c:TagInput ; c:label "Topics (locked)" ; c:controls ui:inputsDemo ; c:property ui:inp-topic ; c:disabled true .
+ui:inp-tags-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:inp-tags-topics ui:inp-tags-labels ui:inp-tags-off ) .
+ui:inp-tags a c:Flippable ; c:front ui:inp-tags-spec .
+ui:inp-tags-spec a c:Specimen ; c:label "Tag input" ;
+    c:help "A c:TagInput edits a multi-valued property: its values are c:Tag pills (✕ removes one), and the field finds more to add with the same typeahead. A value is never added twice. With c:allowsCustom, Enter or a comma adds what you typed; c:optionsInUse offers every value the property already has. The shape's sh:maxCount caps the count, and its message is shown at the cap." ;
+    c:children ( ui:inp-tags-col ) .

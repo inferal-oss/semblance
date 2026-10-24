@@ -9,6 +9,7 @@ import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
+import { typeaheadFunctions } from './typeahead.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
@@ -709,6 +710,7 @@ export const functions: Record<string, FnRule> = {
   ...formulaFunctions,
   ...moneyFunctions,
   ...boardFunctions,
+  ...typeaheadFunctions,
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,

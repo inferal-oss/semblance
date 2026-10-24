@@ -65,7 +65,7 @@ Thin vocabularies. Every component
 | **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches |
 | **Type** | Heading · Text · Link · Kbd · Code · Blockquote · Walkthrough (WalkthroughStep, Mention) |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem (+ Pressable, Setter mixins) |
-| **Inputs** | TextField · TextArea · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips |
+| **Inputs** | TextField · TextArea · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState |
 | **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · MessageList · Timeline · Tree · Board · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
@@ -87,6 +87,15 @@ mentions to their nodes (`src/web/walkthrough.ts`: the graph says what, the host
 Activating a mention shows its statement in the walkthrough's `c:sourceView` (`c:highlightsSubject`;
 the host records each statement's lines as a `c:SourceSpan`), or, with `c:to`, goes to the term's
 page. Every example on the Examples page explains itself with one.
+
+A **typeahead** (`ontology/components/typeahead.ttl`) is a text field that finds values among
+options from the graph: a `c:Combobox` sets a single-valued property, a `c:TagInput` edits a
+multi-valued one as removable `c:Tag` pills. Options are a `c:options` list, the instances of
+`c:optionClass` (the property's range by default) and, with `c:optionsInUse`, the values already
+in use. Matching ignores case and diacritics and highlights the match; the arrow keys, Enter and
+Escape follow the WAI-ARIA combobox pattern. With `c:allowsCustom`, new text becomes a literal or a
+new labelled resource (`c:customAs`, `c:mintBase`), if the `val:validates` shape allows it; its
+`sh:maxCount` caps a tag input.
 
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)

@@ -54,15 +54,54 @@ function valueOf(ctx: RuleContext, field: Term): string | undefined {
   return checked ? (isTrue(checked) ? 'true' : '') : undefined
 }
 
+/**
+ * A field over another node's property (c:controls, c:property): the node's values against the
+ * shapes' sh:minCount (quietly) and sh:maxCount (full at it, an error past it); the typed text,
+ * when the field creates values (c:allowsCustom), against their value constraints.
+ */
+function controlled(ctx: RuleContext, focus: Term, shapes: Term[], target: Term, property: Term) {
+  const count = target.termType === 'NamedNode' ? ctx.objects(target, property).length : 0
+  const typed = str(ctx.object(focus, C.value))?.trim()
+  const creates = isTrue(ctx.object(focus, NS.c + 'allowsCustom'))
+  let invalid = false
+  let error: string | undefined
+  let full: string | undefined
+  let entry: string | undefined
+  for (const shape of shapes) {
+    const bound = (p: string) => {
+      const v = str(ctx.object(shape, SH + p))
+      return v === undefined ? undefined : Number(v)
+    }
+    const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
+    const min = bound('minCount')
+    const max = bound('maxCount')
+    if (min !== undefined && count < min) invalid = true
+    if (max !== undefined && count > max) (invalid = true), (error ??= message(`At most ${max}.`))
+    if (max !== undefined && count >= max) full ??= message(`At most ${max}.`)
+    const problem = creates && typed ? violation(ctx, shape, typed) : undefined
+    entry ??= problem
+  }
+  return { invalid, error, full, entry }
+}
+
 const check: FnRule = (ctx, focus) => {
-  const shape = ctx.object(focus, VAL.validates)
+  const shapes = ctx.objects(focus, VAL.validates)
   const requires = ctx.object(focus, VAL.requires)
-  if (!shape && !requires) return []
+  if (!shapes.length && !requires) return []
   const o = ctx.out(focus)
   const bool = ctx.nn(XSD_BOOLEAN)
-  if (shape) {
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  if (shapes.length && target && property) {
+    const { invalid, error, full, entry } = controlled(ctx, focus, shapes, target, property)
+    if (invalid) o.t(focus, VAL.invalid, ctx.f.literal('true', bool))
+    if (error !== undefined) o.t(focus, C.error, error)
+    if (full !== undefined) o.t(focus, NS.val + 'full', full)
+    if (entry !== undefined) o.t(focus, NS.val + 'invalidEntry', entry)
+  } else if (shapes.length) {
     const value = valueOf(ctx, focus)
-    const problem = violation(ctx, shape, value)
+    let problem: string | undefined
+    for (const shape of shapes) if ((problem = violation(ctx, shape, value)) !== undefined) break
     if (problem !== undefined) {
       o.t(focus, VAL.invalid, ctx.f.literal('true', bool))
       // Pristine fields are invalid (so forms stay gated) but say nothing yet.
@@ -74,6 +113,12 @@ const check: FnRule = (ctx, focus) => {
     if (blocked) o.t(focus, C.disabled, ctx.f.literal('true', bool))
   }
   return o.quads
+}
+// What re-runs it: its own inputs, and for a field over another node (followed through c:controls)
+// that node's property, which only the data names.
+check.watches = (ctx, focus) => {
+  const property = ctx.object(focus, C.property)
+  return new Set([VAL.validates, VAL.requires, C.value, C.checked, C.controls, C.property, NS.c + 'allowsCustom', ...(property ? [property.value] : [])])
 }
 
 export const validationFunctions: Record<string, FnRule> = { 'validation:check': check }

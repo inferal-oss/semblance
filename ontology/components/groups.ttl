@@ -65,6 +65,8 @@ c:RadioGroup sem:group c:InputsGroup . c:ToggleSwitch sem:group c:InputsGroup . 
 c:Field sem:group c:InputsGroup . c:Choice sem:group c:InputsGroup . c:Segmented sem:group c:InputsGroup .
 c:Chips sem:group c:InputsGroup . c:CodeInput sem:group c:InputsGroup . c:ThemeSwitcher sem:group c:InputsGroup .
 c:SearchField sem:group c:InputsGroup .
+c:Typeahead sem:group c:InputsGroup . c:Combobox sem:group c:InputsGroup . c:TagInput sem:group c:InputsGroup .
+c:TypeaheadOption sem:group c:InputsGroup . c:CustomValueKind sem:group c:InputsGroup .
 c:Charset sem:group c:InputsGroup . c:Case sem:group c:InputsGroup . c:CellStyle sem:group c:InputsGroup .
 c:SearchKey sem:group c:InputsGroup .
 

@@ -18,6 +18,14 @@
 # its conclusions like any other input. Supported: sh:minCount (required),
 # sh:minLength, sh:maxLength, sh:pattern (+ sh:flags), sh:minInclusive,
 # sh:maxInclusive, sh:datatype (xsd:integer / xsd:decimal), sh:in.
+#
+# A field that edits a property of another node (c:controls, c:property: a
+# combobox, a tag input) is checked by the values that node has: sh:minCount
+# (quietly), sh:maxCount (with the message, past it; and val:full at it, so the
+# field adds no more). The text typed into one that creates values
+# (c:allowsCustom) is a candidate value: it is checked against the value
+# constraints, and val:invalidEntry (the message) keeps it from being committed. A field may
+# validate against several shapes; the first violated one speaks.
 
 <https://semblance.dev/ns/validation> a owl:Ontology ;
     rdfs:label "Semblance validation layer"@en .
@@ -30,6 +38,10 @@ val:requires a owl:ObjectProperty ; rdfs:range rdf:List ;
     rdfs:comment "On a button: the fields that must all be valid for it to be enabled."@en .
 val:invalid a owl:DatatypeProperty ;
     rdfs:comment "Derived: the field's value violates its shape (or a required field is empty)."@en .
+val:invalidEntry a owl:DatatypeProperty ;
+    rdfs:comment "Derived: the text typed into a field that creates values breaks its shape's value constraints, so it cannot be committed. The value is the shape's sh:message."@en .
+val:full a owl:DatatypeProperty ;
+    rdfs:comment "Derived: the property a field edits holds as many values as its shape's sh:maxCount allows. The value is the shape's sh:message."@en .
 
 val:Check a sem:Rendering ;
     sem:requires val:validates , val:requires ;
@@ -38,9 +50,10 @@ val:Check a sem:Rendering ;
     sem:layer val:Layer ;
     sem:stratum -10 ;
     sem:inputOnly true ;
-    sem:watches val:validates, val:requires, c:value, c:checked ;
+    sem:follows c:controls ;
     sem:functionOnly """The error is the shape's sh:message in the viewer's language, a projection setting SPARQL rules
-cannot see. And a button reads its fields' val:invalid through an rdf:List (val:requires): SPARQL rules
+cannot see. A field over another node's property hears that property change, which is only known
+from the data (the function's watches). And a button reads its fields' val:invalid through an rdf:List (val:requires): SPARQL rules
 are re-run only for changes one sem:follows hop away, so the button would not hear a field become valid.""" .
 val:Check-fn a sem:Rule ;
     sem:implements val:Check ;

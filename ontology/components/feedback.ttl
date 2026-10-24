@@ -210,7 +210,8 @@ c:Tag a owl:Class ;
     rdfs:comment """A label chip (c:label, optional c:icon). Toned: sty:tone and sty:emphasis (default
 soft), sized by sty:size. A c:selectable tag is a toggle button (aria-pressed) over c:checked; a
 c:removable tag has a ✕ that marks it c:removed, after which it renders nothing (the fact stays in
-the graph, so it can be restored by removing it)."""@en ;
+the graph, so it can be restored by removing it). A tag a c:TagInput shows (c:pillOf) is not marked:
+its ✕ removes the value, by the tag input's own reaction."""@en ;
     sem:slug "tag" .
 c:removable a owl:DatatypeProperty ; rdfs:domain c:Tag ; rdfs:range xsd:boolean .
 c:selectable a owl:DatatypeProperty ; rdfs:domain c:Tag ; rdfs:range xsd:boolean .
@@ -315,7 +316,7 @@ WHERE {
 c:TagRemove a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Tag ;
-    beh:inserts """CONSTRUCT { $this c:removed true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:removes $this }""" ;
+    beh:inserts """CONSTRUCT { $this c:removed true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:removes $this FILTER NOT EXISTS { $this c:pillOf ?owner } }""" ;
     sem:function "tag:remove" .
 c:TagToggle a beh:Reaction ;
     beh:when beh:Click ;

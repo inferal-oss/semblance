@@ -266,7 +266,8 @@ const toastRegion: FnRule = (ctx, focus) => {
 export const functions: Record<string, FnRule> = { badge, alert, tag, spinner, skeleton, 'empty-state': emptyState, toast, 'toast-region': toastRegion }
 
 export const reactions: Record<string, ReactionFn> = {
-  'tag:remove': (ctx) => (hitMarks(ctx, FB.removes) ? setFlag(ctx, ctx.target, FB.removed, true) : none()),
+  // A pill of a tag input (c:pillOf) is removed by the tag input's own reaction (c:TagInputRemove).
+  'tag:remove': (ctx) => (hitMarks(ctx, FB.removes) && !ctx.match(ctx.target, NS.c + 'pillOf', null).length ? setFlag(ctx, ctx.target, FB.removed, true) : none()),
   'tag:toggle': (ctx) => {
     if (!hitMarks(ctx, FB.toggles)) return none()
     return setFlag(ctx, ctx.target, FB.checked, !ctx.match(ctx.target, FB.checked, null).some((q) => q.object.value === 'true'))

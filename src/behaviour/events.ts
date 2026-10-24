@@ -423,6 +423,10 @@ export class EventBus {
     renderer.host.addEventListener('keydown', dragKeys)
     doc.addEventListener('keydown', dragKeys)
     renderer.host.addEventListener('dragstart', native)
+    // Pressing inside an element marked data-sem-keep-focus (a typeahead's list) leaves the focus
+    // where it is, so the field keeps it while one of its options is clicked.
+    const keepFocus = (e: Event) => (e.target as Element).closest?.('[data-sem-keep-focus]') && e.preventDefault()
+    renderer.host.addEventListener('mousedown', keepFocus)
     for (const t of domTypes) renderer.host.addEventListener(t, listener)
     // A field marked data-sem-controlled shows what the graph says once its input is handled,
     // also when nothing changed (a code input drops characters its charset does not allow).
@@ -487,6 +491,7 @@ export class EventBus {
       renderer.host.removeEventListener('keydown', dragKeys)
       doc.removeEventListener('keydown', dragKeys)
       renderer.host.removeEventListener('dragstart', native)
+      renderer.host.removeEventListener('mousedown', keepFocus)
       drags.dispose()
       doc.removeEventListener('keydown', keys)
       doc.removeEventListener('pointermove', track)
