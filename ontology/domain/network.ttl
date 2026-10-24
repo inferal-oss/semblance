@@ -1,4 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
 @prefix net: <https://semblance.dev/ns/network#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix http: <http://www.w3.org/2011/http#> .
@@ -60,6 +63,21 @@ net:SocketKind a net:Kind ; rdfs:label "Socket lifetime"@en ; sem:order 2 ; sem:
 net:FrameKind a net:Kind ; rdfs:label "Sent / received"@en ; sem:order 3 ; sem:slug "frame" .
 net:EventKind a net:Kind ; rdfs:label "Event"@en ; sem:order 4 ; sem:slug "event" .
 
+# How entries look, for legends, badges and time bars: a kind is a category, drawn in a series
+# color (c:swatch); a status or a level is state, shown in a tone (sty:tone).
+net:HttpKind c:swatch tok:series-1 .
+net:SocketKind c:swatch tok:series-2 .
+net:FrameKind c:swatch tok:series-3 .
+net:EventKind c:swatch tok:series-5 .
+net:Pending sty:tone sty:Warning .
+net:Complete sty:tone sty:Success .
+net:Failed sty:tone sty:Danger .
+net:Open sty:tone sty:Info .
+net:Closed sty:tone sty:Neutral .
+net:Sent sty:tone sty:Accent .
+net:Received sty:tone sty:Info .
+net:Recorded sty:tone sty:Neutral .
+
 # --- HTTP (aligned with the W3C HTTP vocabulary) ---------------------------------------------------
 
 net:Exchange a owl:Class ; rdfs:subClassOf net:Entry , http:Request ;
@@ -91,6 +109,9 @@ net:Level a owl:Class .
 net:Info a net:Level ; rdfs:label "Info"@en ; sem:order 1 ; sem:slug "info" .
 net:Success a net:Level ; rdfs:label "Success"@en ; sem:order 2 ; sem:slug "success" .
 net:Warning a net:Level ; rdfs:label "Warning"@en ; sem:order 3 ; sem:slug "warning" .
+net:Info sty:tone sty:Info .
+net:Success sty:tone sty:Success .
+net:Warning sty:tone sty:Warning .
 net:Span a owl:Class ; rdfs:subClassOf net:Event ;
     rdfs:comment "An application event that takes time: started, and later finished (net:endedAt)."@en .
 

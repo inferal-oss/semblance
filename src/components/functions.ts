@@ -20,6 +20,10 @@ import { functions as dataFunctions } from './data.ts'
 import { functions as navigationFunctions } from './navigation.ts'
 import { functions as overlaysFunctions } from './overlays.ts'
 import { functions as disclosureFunctions } from './disclosure.ts'
+import { functions as gridFunctions } from './grid.ts'
+import { functions as panesFunctions } from './panes.ts'
+import { functions as payloadFunctions } from './payload.ts'
+import { functions as toolbarFunctions } from './toolbar.ts'
 import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
 import { mint } from '../rdf.ts'
@@ -719,6 +723,10 @@ export const functions: Record<string, FnRule> = {
   ...navigationFunctions,
   ...overlaysFunctions,
   ...disclosureFunctions,
+  ...gridFunctions,
+  ...panesFunctions,
+  ...payloadFunctions,
+  ...toolbarFunctions,
   stack,
   'heading:screen': headingScreen,
   'heading:text': headingText,

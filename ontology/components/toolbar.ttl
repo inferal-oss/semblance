@@ -1,0 +1,358 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# Toolbar pieces (the inspection group): what sits around a data view. A toolbar of controls
+# (an inspector's filter bar), a search field bound to any node's property, a legend of
+# categories and their colors, a live indicator (recording / paused) that toggles a boolean,
+# and a badge counting a collection's members. Their state is graph state: the field edits
+# the property it is bound to, the indicator flips the boolean it shows, and the legend and
+# the count read the data they describe.
+
+# Phrases these components say of their own accord (c:Phrase, feedback.ttl).
+c:LivePhrase a c:Phrase ; rdfs:label "Recording"@en , "Запис"@uk , "Aufnahme"@de , "تسجيل"@ar .
+c:PausedPhrase a c:Phrase ; rdfs:label "Paused"@en , "Призупинено"@uk , "Angehalten"@de , "متوقف مؤقتًا"@ar .
+c:SearchPhrase a c:Phrase ; rdfs:label "Search"@en , "Пошук"@uk , "Suchen"@de , "بحث"@ar .
+c:ClearSearchCommand a c:Phrase ; rdfs:label "Clear search"@en , "Очистити пошук"@uk , "Suche leeren"@de , "مسح البحث"@ar .
+
+# --- Toolbar: a row of controls ------------------------------------------------------------------
+# A c:Stack (its children in list order) that says what it is: role=toolbar, named by c:label.
+# It lays its children out in a row that wraps; a c:Spacer pushes what follows to the end.
+
+c:Toolbar a owl:Class ;
+    rdfs:subClassOf c:Stack ;
+    rdfs:comment """A row of controls (c:children: fields, choices, switches, buttons, a spacer) that wraps on
+narrow widths: role=toolbar, named by c:label. An inspector's filter bar is one."""@en ;
+    sem:slug "toolbar" .
+# The children are the c:Stack rendering's; this adds the toolbar's role and name to its root.
+c:ToolbarRole a sem:Rendering ; sem:targets c:Toolbar ; sem:modality mod:Screen ; sem:stratum 0 .
+c:ToolbarRole-fn a sem:Rule ; sem:implements c:ToolbarRole ; sem:function "toolbar:role" .
+c:ToolbarRole-sparql a sem:Rule ;
+    sem:implements c:ToolbarRole ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?role, ?name .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Toolbar .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any)) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?name)
+}""" .
+
+# --- SearchField: free text bound to a property ----------------------------------------------------
+# Like c:Choice and c:ToggleSwitch, it edits c:property of the node it c:controls: typing writes
+# the text (a plain literal), emptying the field removes it. The ✕ button (shown while there is
+# text) and Escape in the field remove it too. A grid's text filter is such a node.
+
+c:SearchField a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A search input (type=search) for the text value of c:property on the node it c:controls.
+c:label is its accessible name (default "Search"), c:placeholder its hint. Typing writes the text,
+emptying it removes the value; a clear button and Escape remove it as well."""@en ;
+    sem:slug "search-field" ;
+    c:labelPart "input" .
+c:clears a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element: the search field whose text activating it removes."@en .
+c:SearchKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "escape" ;
+    rdfs:comment "Escape pressed in a search field (it clears the field; with nothing to clear, Escape goes on to close what is open)."@en .
+
+c:SearchFieldRendering a sem:Rendering ; sem:targets c:SearchField ; sem:stratum 0 ; sem:follows c:controls .
+c:SearchFieldRendering-fn a sem:Rule ; sem:implements c:SearchFieldRendering ; sem:function "toolbar:search-field" .
+c:SearchFieldRendering-sparql a sem:Rule ;
+    sem:implements c:SearchFieldRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?icon, ?input, ?clear .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText ; ord:immediatelyPrecedes ?input .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data "⌕" .
+  ?input a rdfhtml:Input ; rdfhtml:type "search" ; rdfhtml:id ?inputId ; rdfhtml:autocomplete "off" ;
+         rdfhtml:value ?value ; rdfhtml:placeholder ?placeholder ; rdfhtml:attribute ?inputName ; ord:immediatelyPrecedes ?clear .
+  ?inputName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?clear a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-clear" ; c:clears $this ;
+         rdfhtml:attribute ?clearName ; rdfhtml:hasChild ?clearIcon .
+  ?clearName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?clearLabel .
+  ?clearIcon a rdfhtml:Span ; rdfhtml:attribute ?clearIconHidden ; rdfhtml:hasChild ?clearIconText .
+  ?clearIconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?clearIconText a rdfhtml:Text ; rdfhtml:data "✕" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SearchField ; c:controls ?target ; c:property ?property .
+  OPTIONAL { ?target ?property ?raw FILTER(isLiteral(?raw) && STR(?raw) != "") }
+  BIND(STR(?raw) AS ?value)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  OPTIONAL { c:SearchPhrase rdfs:label ?search_u FILTER(lang(?search_u) = "") }
+  OPTIONAL { c:SearchPhrase rdfs:label ?search_en FILTER(langMatches(lang(?search_en), "en")) }
+  BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?search_u, ?search_en)) AS ?label)
+  OPTIONAL { $this c:placeholder ?hint_u FILTER(isLiteral(?hint_u) && lang(?hint_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?hint_u)) $this c:placeholder ?hint_en FILTER(langMatches(lang(?hint_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?hint_u) && !BOUND(?hint_en)) $this c:placeholder ?hint_any FILTER(isLiteral(?hint_any)) }
+  BIND(STR(COALESCE(?hint_u, ?hint_en, ?hint_any)) AS ?placeholder)
+  OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_u FILTER(lang(?clear_u) = "") }
+  OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_en FILTER(langMatches(lang(?clear_en), "en")) }
+  BIND(STR(COALESCE(?clear_u, ?clear_en)) AS ?clearLabel)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~icon")) AS ?icon)
+  BIND(IRI(CONCAT(STR($this), "/~icon-aria-hidden")) AS ?iconHidden)
+  BIND(IRI(CONCAT(STR($this), "/~icon-text")) AS ?iconText)
+  BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
+  BIND(STR(?input) AS ?inputId)
+  BIND(IRI(CONCAT(STR($this), "/~input-aria-label")) AS ?inputName)
+  BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear")), ?none) AS ?clear)
+  BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-aria-label")), ?none) AS ?clearName)
+  BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-icon")), ?none) AS ?clearIcon)
+  BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-icon-aria-hidden")), ?none) AS ?clearIconHidden)
+  BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-icon-text")), ?none) AS ?clearIconText)
+}""" .
+
+c:SearchFieldInput a beh:Reaction ;
+    beh:when beh:Input ;
+    beh:sourceClass c:SearchField ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?text } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER(STR(?v) != "") BIND(STR(?v) AS ?text) }""" ;
+    sem:function "toolbar:search-input" .
+c:SearchFieldClear a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:SearchField ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:clears $this . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    sem:function "toolbar:search-clear" .
+c:SearchFieldEscape a beh:Reaction ;
+    beh:when c:SearchKey ;
+    beh:sourceClass c:SearchField ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:key "escape" . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    sem:function "toolbar:search-escape" .
+
+# --- Legend: categories and their colors ------------------------------------------------------------
+# The categories are c:items (in list order) or the instances of the class c:of (by sem:order).
+# Each is drawn in its c:swatch token (a series color), else in its sty:tone (a state), else
+# neutral; its label is its c:label or rdfs:label in the viewer's language (via the texts rule
+# below for SPARQL). Items carry sem:orderKey, so the index orders them.
+
+c:Legend a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Swatches and labels for a set of categories: c:items (an rdf:List of individuals) or the
+instances of the class c:of, by sem:order. A category's color is its c:swatch token, else its sty:tone;
+c:label names the legend (a list)."""@en ;
+    sem:slug "legend" .
+c:LegendRendering a sem:Rendering ; sem:targets c:Legend ; sem:stratum 0 .
+c:LegendRendering-fn a sem:Rule ; sem:implements c:LegendRendering ; sem:function "toolbar:legend" .
+c:LegendRendering-sparql a sem:Rule ;
+    sem:implements c:LegendRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Ul ; sem:renders $this ; rdfhtml:attribute ?role, ?name ; rdfhtml:hasChild ?li .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "list" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?li a rdfhtml:Li ; sem:orderKey ?key ; rdfhtml:hasChild ?swatch, ?labelEl .
+  ?swatch a rdfhtml:Span ; rdfhtml:class "sem-swatch" ; rdfhtml:style ?style ; rdfhtml:attribute ?swatchHidden, ?tone ;
+          ord:immediatelyPrecedes ?labelEl .
+  ?swatchHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?tone a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tone" ; rdfhtml:attributeValue ?toneSlug .
+  ?labelEl a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?itemLabel .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Legend .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {
+    BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+    OPTIONAL { $this l10n:label ?localLabel }
+    OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
+    OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
+    OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+    BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any)) AS ?label)
+    BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?name)
+  } UNION {
+    {
+      $this c:items ?list .
+      LATERAL { SELECT ?list ?item (COUNT(?before) AS ?pos) WHERE {
+        ?list rdf:rest* ?cell . ?cell rdf:first ?item FILTER(isIRI(?item))
+        ?list rdf:rest* ?before . ?before rdf:rest* ?cell
+      } GROUP BY ?list ?item }
+      BIND(STR(?pos) AS ?key)
+    } UNION {
+      FILTER NOT EXISTS { $this c:items ?explicit }
+      $this c:of ?class . ?item a ?class FILTER(isIRI(?item))
+      OPTIONAL { ?item sem:order ?order }
+      BIND(STR(COALESCE(?order, 0)) AS ?key)
+    }
+    BIND(CONCAT(STR($this), "/~i-", ENCODE_FOR_URI(STR(?item))) AS ?id)
+    BIND(IRI(?id) AS ?li)
+    BIND(IRI(CONCAT(?id, "-swatch")) AS ?swatch)
+    BIND(IRI(CONCAT(?id, "-swatch-aria-hidden")) AS ?swatchHidden)
+    BIND(IRI(CONCAT(?id, "-label")) AS ?labelEl)
+    BIND(IRI(CONCAT(?id, "-label-text")) AS ?labelText)
+    OPTIONAL { ?item c:swatch ?token . ?token sem:slug ?tokenSlug }
+    BIND(CONCAT("--swatch: var(--sem-", ?tokenSlug, ")") AS ?style)
+    OPTIONAL { FILTER(!BOUND(?tokenSlug)) ?item sty:tone ?toneValue . ?toneValue sem:slug ?toneSlug }
+    BIND(IF(BOUND(?toneSlug), IRI(CONCAT(?id, "-swatch-data-sem-tone")), ?none) AS ?tone)
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?item)))) AS ?itemLabelNode)
+    OPTIONAL { ?itemLabelNode l10n:label ?itemLocal }
+    OPTIONAL { ?item c:label ?itemC_u FILTER(isLiteral(?itemC_u) && lang(?itemC_u) = "") }
+    OPTIONAL { FILTER(!BOUND(?itemC_u)) ?item c:label ?itemC_en FILTER(langMatches(lang(?itemC_en), "en")) }
+    OPTIONAL { FILTER(!BOUND(?itemC_u) && !BOUND(?itemC_en)) ?item c:label ?itemC_any FILTER(isLiteral(?itemC_any)) }
+    OPTIONAL { ?item rdfs:label ?itemR_u FILTER(isLiteral(?itemR_u) && lang(?itemR_u) = "") }
+    OPTIONAL { FILTER(!BOUND(?itemR_u)) ?item rdfs:label ?itemR_en FILTER(langMatches(lang(?itemR_en), "en")) }
+    OPTIONAL { FILTER(!BOUND(?itemR_u) && !BOUND(?itemR_en)) ?item rdfs:label ?itemR_any FILTER(isLiteral(?itemR_any)) }
+    BIND(STR(COALESCE(?itemLocal, ?itemC_u, ?itemC_en, ?itemC_any, ?itemR_u, ?itemR_en, ?itemR_any, REPLACE(STR(?item), "^.*[#/]", ""))) AS ?itemLabel)
+  }
+}""" .
+
+# The viewer's language reaches the SPARQL rule as labels under the legend (<focus>/~l10n-<item>).
+c:LegendTexts a sem:Rendering ;
+    sem:targets c:Legend ;
+    sem:stratum -20 ;
+    sem:inputOnly true ;
+    sem:functionOnly "It is how the viewer's language reaches the SPARQL rule: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+c:LegendTexts-fn a sem:Rule ; sem:implements c:LegendTexts ; sem:function "toolbar:legend-texts" .
+
+# --- LiveIndicator: is it live? -------------------------------------------------------------------
+# Shows the boolean c:property of the node it c:controls (absent counts as true: live), e.g.
+# net:Capture net:recording, as a dot that pulses while live and a word ("Recording" or
+# "Paused"). It is a toggle button (aria-pressed): activating it flips that boolean. Without
+# c:controls, the state is its own c:checked.
+
+c:LiveIndicator a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Whether something is live: the boolean c:property of c:controls (absent: live), as a pulsing dot
+and c:label ("Recording" by default) or, when off, c:pausedLabel ("Paused"). Pressing it flips the boolean."""@en ;
+    sem:slug "live-indicator" .
+c:pausedLabel a owl:DatatypeProperty ; rdfs:domain c:LiveIndicator ;
+    rdfs:comment "What a live indicator says while not live (default \"Paused\")."@en .
+
+c:LiveIndicatorRendering a sem:Rendering ; sem:targets c:LiveIndicator ; sem:stratum 0 ; sem:follows c:controls .
+c:LiveIndicatorRendering-fn a sem:Rule ; sem:implements c:LiveIndicatorRendering ; sem:function "toolbar:live-indicator" .
+c:LiveIndicatorRendering-sparql a sem:Rule ;
+    sem:implements c:LiveIndicatorRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Button ; sem:renders $this ; rdfhtml:type "button" ; c:toggles $this ;
+        rdfhtml:attribute ?pressed, ?live, ?name ; rdfhtml:hasChild ?dot, ?state .
+  ?pressed a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?liveText .
+  ?live a rdfhtml:Attribute ; rdfhtml:attributeName "data-live" ; rdfhtml:attributeValue ?liveText .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?dot a rdfhtml:Span ; rdfhtml:class "sem-dot" ; rdfhtml:attribute ?dotHidden ; ord:immediatelyPrecedes ?state .
+  ?dotHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?state a rdfhtml:Span ; rdfhtml:class "sem-state" ; rdfhtml:attribute ?stateHidden ; rdfhtml:hasChild ?stateText .
+  ?stateHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?stateText a rdfhtml:Text ; rdfhtml:data ?stateLabel .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:LiveIndicator .
+  OPTIONAL { $this c:controls ?controls ; c:property ?controlsProperty }
+  BIND(COALESCE(?controls, $this) AS ?n) BIND(COALESCE(?controlsProperty, c:checked) AS ?p)
+  BIND(!EXISTS { ?n ?p ?off FILTER(STR(?off) = "false") } AS ?isLive)
+  BIND(IF(?isLive, "true", "false") AS ?liveText)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  OPTIONAL { c:LivePhrase rdfs:label ?live_u FILTER(lang(?live_u) = "") }
+  OPTIONAL { c:LivePhrase rdfs:label ?live_en FILTER(langMatches(lang(?live_en), "en")) }
+  BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?live_u, ?live_en)) AS ?label)
+  OPTIONAL { $this c:pausedLabel ?paused_u FILTER(isLiteral(?paused_u) && lang(?paused_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?paused_u)) $this c:pausedLabel ?paused_en FILTER(langMatches(lang(?paused_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?paused_u) && !BOUND(?paused_en)) $this c:pausedLabel ?paused_any FILTER(isLiteral(?paused_any)) }
+  OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_u FILTER(lang(?pausedPhrase_u) = "") }
+  OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_en FILTER(langMatches(lang(?pausedPhrase_en), "en")) }
+  BIND(STR(COALESCE(?paused_u, ?paused_en, ?paused_any, ?pausedPhrase_u, ?pausedPhrase_en)) AS ?pausedLabel)
+  BIND(IF(?isLive, ?label, ?pausedLabel) AS ?stateLabel)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-pressed")) AS ?pressed)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-live")) AS ?live)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~dot")) AS ?dot)
+  BIND(IRI(CONCAT(STR($this), "/~dot-aria-hidden")) AS ?dotHidden)
+  BIND(IRI(CONCAT(STR($this), "/~state")) AS ?state)
+  BIND(IRI(CONCAT(STR($this), "/~state-aria-hidden")) AS ?stateHidden)
+  BIND(IRI(CONCAT(STR($this), "/~state-text")) AS ?stateText)
+}""" .
+
+c:LiveIndicatorToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:LiveIndicator ;
+    beh:deletes """CONSTRUCT { ?n ?p ?old } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  OPTIONAL { $this c:controls ?c ; c:property ?cp }
+  BIND(COALESCE(?c, $this) AS ?n) BIND(COALESCE(?cp, c:checked) AS ?p)
+  ?n ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?n ?p ?new } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  OPTIONAL { $this c:controls ?c ; c:property ?cp }
+  BIND(COALESCE(?c, $this) AS ?n) BIND(COALESCE(?cp, c:checked) AS ?p)
+  BIND(EXISTS { ?n ?p ?off FILTER(STR(?off) = "false") } AS ?new) }""" ;
+    sem:function "toolbar:live-toggle" .
+
+# --- CountBadge: how many members ------------------------------------------------------------------
+# The number of members of c:collection (through c:memberProperty, tree:member by default),
+# optionally only those of c:memberClass (or a subclass), in a pill toned like a c:Badge
+# (sty:tone, sty:emphasis). Counting is linear in the members, so a bounded collection (an LDES
+# with a retention policy) keeps it cheap.
+
+c:CountBadge a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """The number of members of c:collection (via c:memberProperty, default tree:member; only those of
+c:memberClass if given) in a small pill, named "N <c:label>". Toned like a badge (sty:tone, sty:emphasis)."""@en ;
+    sem:slug "count-badge" .
+c:memberClass a owl:ObjectProperty ; rdfs:range owl:Class ;
+    rdfs:comment "Count only the members of this class (or of a subclass)."@en .
+c:CountBadgeRendering a sem:Rendering ; sem:targets c:CountBadge ; sem:stratum 0 ; sem:follows c:collection .
+c:CountBadgeRendering-fn a sem:Rule ; sem:implements c:CountBadgeRendering ; sem:function "toolbar:count-badge" .
+c:CountBadgeRendering-sparql a sem:Rule ;
+    sem:implements c:CountBadgeRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:attribute ?role, ?name ; rdfhtml:hasChild ?count .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "img" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?aria .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:attribute ?countHidden ; rdfhtml:hasChild ?countText .
+  ?countHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?countText a rdfhtml:Text ; rdfhtml:data ?number .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CountBadge ; c:collection ?collection .
+  OPTIONAL { $this c:memberProperty ?declared }
+  BIND(COALESCE(?declared, tree:member) AS ?via)
+  OPTIONAL { $this c:memberClass ?class }
+  LATERAL { OPTIONAL { SELECT ?collection ?via ?class (COUNT(DISTINCT ?m) AS ?counted) WHERE {
+    ?collection ?via ?m .
+    FILTER(!BOUND(?class) || EXISTS { ?m a/rdfs:subClassOf* ?class })
+  } GROUP BY ?collection ?via ?class } }
+  BIND(STR(COALESCE(?counted, 0)) AS ?number)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any)) AS ?label)
+  BIND(IF(BOUND(?label), CONCAT(?number, " ", ?label), ?number) AS ?aria)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~count")) AS ?count)
+  BIND(IRI(CONCAT(STR($this), "/~count-aria-hidden")) AS ?countHidden)
+  BIND(IRI(CONCAT(STR($this), "/~count-text")) AS ?countText)
+}""" .

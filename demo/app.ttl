@@ -420,6 +420,7 @@ ui:GroupDisclosure a ui:GalleryGroup ; rdfs:label "Disclosure" ; sem:order 10 ; 
 ui:GroupLayers a ui:GalleryGroup ; rdfs:label "Layers" ; sem:order 11 ; ui:key "layers" .
 ui:GroupWindows a ui:GalleryGroup ; rdfs:label "Windows" ; sem:order 12 ; ui:key "windows" .
 ui:GroupThemes a ui:GalleryGroup ; rdfs:label "Themes" ; sem:order 13 ; ui:key "themes" .
+ui:GroupInspection a ui:GalleryGroup ; rdfs:label "Inspection" ; sem:order 14 ; ui:key "inspection" .
 
 ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:galleryAside ui:galleryPages ) .
@@ -437,7 +438,7 @@ ui:densityChoice a c:Choice ; c:controls ui:shell ; c:property sty:density .
 ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" .
 ui:galleryPages a c:Switch ; c:controls ui:app ; c:property ui:galleryGroup ;
     c:cases ( ui:gc-foundations ui:gc-layout ui:gc-type ui:gc-actions ui:gc-inputs ui:gc-feedback
-              ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ui:gc-windows ui:gc-themes ) .
+              ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ui:gc-windows ui:gc-themes ui:gc-inspection ) .
 ui:gc-foundations c:when ui:GroupFoundations ; c:content ui:gallery-foundations .
 ui:gc-layout c:when ui:GroupLayout ; c:content ui:gallery-layout .
 ui:gc-type c:when ui:GroupType ; c:content ui:gallery-type .
@@ -451,6 +452,7 @@ ui:gc-disclosure c:when ui:GroupDisclosure ; c:content ui:gallery-disclosure .
 ui:gc-layers c:when ui:GroupLayers ; c:content ui:gallery-layers .
 ui:gc-windows c:when ui:GroupWindows ; c:content ui:gallery-windows .
 ui:gc-themes c:when ui:GroupThemes ; c:content ui:gallery-themes .
+ui:gc-inspection c:when ui:GroupInspection ; c:content ui:gallery-inspection .
 
 # --- remembered state (per:Policy; see PERSISTENCE.md) ------------------------------------------
 # Restored before the first render, written back after the changes they cover.

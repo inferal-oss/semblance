@@ -42,15 +42,24 @@ beh:Move a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-move" ;
     rdfs:comment "A move gesture ended (beh:x, beh:y). While dragging, only the view moves; this commits the result."@en .
 beh:Resize a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-resize" ;
     rdfs:comment "A resize gesture ended (beh:width, beh:height)."@en .
+beh:Size a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-size" ;
+    rdfs:comment """A one-axis size handle (a separator, a column's edge, a panel's free edge) was dragged, or
+moved with the arrow keys: the new size of what it sizes along its axis (beh:size) and the room
+there was for it (beh:extent, its container along the same axis), in CSS px."""@en .
 
 beh:recorded a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "On an event class: false means its events are not appended to the change log."@en .
 beh:gesture a owl:DatatypeProperty ;
-    rdfs:comment "Rendered as data-sem-gesture=\"move\"|\"resize\" on a handle: dragging it moves or resizes the nearest component root, then emits beh:Move / beh:Resize."@en .
+    rdfs:comment """Rendered as data-sem-gesture="move"|"resize"|"size" on a handle: dragging it moves or resizes
+the nearest component root, then emits beh:Move / beh:Resize. A "size" handle sizes one element
+along one axis (data-sem-sizes, data-sem-axis, data-sem-sign, data-sem-min / -max / -step; arrow
+keys too) and emits beh:Size."""@en .
 beh:x a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:y a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:width a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:height a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:size a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:extent a owl:DatatypeProperty ; rdfs:range xsd:integer .
 
 beh:target a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:comment "The component instance the event is addressed to."@en .
 beh:node a owl:ObjectProperty ; rdfs:domain beh:Event ;
@@ -113,6 +122,8 @@ beh:EventShape a sh:NodeShape ;
                 [ sh:path beh:y ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:width ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:height ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:size ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:extent ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:handledBy ; sh:class beh:Reaction ] ,
                 [ sh:path beh:previous ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
                 [ sh:path beh:added ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,

@@ -417,7 +417,7 @@ export class EventBus {
     const keys = (e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
-      if (renderer.host.contains(k.target as Node) && navigate(k)) return k.preventDefault()
+      if (renderer.host.contains(k.target as Node) && (sizeByKey(k, renderer) || navigate(k))) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
@@ -497,6 +497,7 @@ export class EventBus {
   private gesture(e: PointerEvent, renderer: DomRenderer) {
     const handle = (e.target as Element).closest?.('[data-sem-gesture]') as HTMLElement | null
     if (!handle || e.button !== 0 || (e.target as Element).closest('button, input, select, textarea')) return
+    if (handle.dataset.semGesture === 'size') return this.sizeGesture(e, handle, renderer)
     let box: HTMLElement | null = handle
     while (box && !(renderer.keyOf(box) && renderer.index.focusOf(renderer.keyOf(box)!))) box = box.parentElement
     if (!box) return
@@ -552,4 +553,99 @@ export class EventBus {
     handle.addEventListener('pointerup', up)
     handle.addEventListener('pointercancel', up)
   }
+
+  /**
+   * One-axis sizing (data-sem-gesture="size": a separator, a column's edge, a panel's free
+   * edge). The handle says what it sizes (data-sem-sizes: "previous" or "next" for a sibling,
+   * else a selector for its closest ancestor, else the nearest component root), along which
+   * axis (data-sem-axis "x" or "y"), in which direction (data-sem-sign -1 when dragging toward
+   * the start grows it) and within which bounds (data-sem-min, data-sem-max, in px). While
+   * dragging only the view changes; on release one sem-size DOM event carries the new size
+   * and the room there was (the sized element's parent along the axis) into a beh:Size event.
+   */
+  private sizeGesture(e: PointerEvent, handle: HTMLElement, renderer: DomRenderer) {
+    const target = sizedBy(handle, renderer)
+    if (!target) return
+    const { axis, sign, min, max } = sizing(handle)
+    const start = { at: axis === 'x' ? e.clientX : e.clientY, size: measure(target, axis) }
+    const original = target.getAttribute('style')
+    e.preventDefault()
+    handle.setPointerCapture?.(e.pointerId)
+    let size = start.size
+    const move = (m: PointerEvent) => {
+      size = Math.min(max, Math.max(min, start.size + sign * ((axis === 'x' ? m.clientX : m.clientY) - start.at)))
+      setSize(target, axis, size)
+    }
+    const up = () => {
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', up)
+      handle.removeEventListener('pointercancel', up)
+      if (original === null) target.removeAttribute('style')
+      else target.setAttribute('style', original)
+      if (size !== start.size) handle.dispatchEvent(sizeEvent(handle, size, extentOf(target, axis)))
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', up)
+    handle.addEventListener('pointercancel', up)
+  }
+}
+
+// --- one-axis sizing (separators) ------------------------------------------------------------------
+
+/** The element a size handle sizes (see EventBus.sizeGesture). */
+function sizedBy(handle: HTMLElement, renderer: DomRenderer): HTMLElement | null {
+  const sizes = handle.dataset.semSizes
+  if (sizes === 'previous') return handle.previousElementSibling as HTMLElement | null
+  if (sizes === 'next') return handle.nextElementSibling as HTMLElement | null
+  if (sizes) return handle.closest(sizes) as HTMLElement | null
+  let box: HTMLElement | null = handle
+  while (box && !(renderer.keyOf(box) && renderer.index.focusOf(renderer.keyOf(box)!))) box = box.parentElement
+  return box
+}
+
+function sizing(handle: HTMLElement) {
+  const n = (v: string | undefined, fallback: number) => (v !== undefined && Number.isFinite(Number(v)) ? Number(v) : fallback)
+  return {
+    axis: handle.dataset.semAxis === 'y' ? ('y' as const) : ('x' as const),
+    sign: n(handle.dataset.semSign, 1) < 0 ? -1 : 1,
+    min: n(handle.dataset.semMin, 0),
+    max: n(handle.dataset.semMax, Infinity),
+    step: n(handle.dataset.semStep, 16),
+  }
+}
+
+const measure = (el: HTMLElement, axis: 'x' | 'y') => {
+  const r = el.getBoundingClientRect?.()
+  return (axis === 'x' ? (r?.width ?? el.offsetWidth) : (r?.height ?? el.offsetHeight)) || 0
+}
+const extentOf = (el: HTMLElement, axis: 'x' | 'y') => (el.parentElement ? measure(el.parentElement, axis) : 0)
+
+/** The sem-size DOM event, made by the handle's own window (a test DOM refuses foreign events). */
+const sizeEvent = (handle: HTMLElement, size: number, extent: number) =>
+  new (handle.ownerDocument.defaultView?.CustomEvent ?? CustomEvent)('sem-size', { bubbles: true, detail: { size, extent } })
+
+/** The transient view of a size being dragged: pinned along its axis (flex items too). */
+function setSize(el: HTMLElement, axis: 'x' | 'y', size: number) {
+  Object.assign(el.style, axis === 'x' ? { width: `${size}px`, flex: `0 0 ${size}px` } : { height: `${size}px`, flex: `0 0 ${size}px` })
+}
+
+/**
+ * Arrow keys on a focused size handle (role=separator): a step along its axis (data-sem-step,
+ * 16px by default), Home and End to its bounds. Commits like a drag, with one sem-size event.
+ * Returns whether the key was used.
+ */
+export function sizeByKey(k: KeyboardEvent, renderer: DomRenderer): boolean {
+  const handle = (k.target as Element | null)?.closest?.('[data-sem-gesture="size"]') as HTMLElement | null
+  if (!handle || !renderer.host.contains(handle) || k.altKey || k.ctrlKey || k.metaKey) return false
+  const { axis, sign, min, max, step } = sizing(handle)
+  const forward = axis === 'x' ? 'ArrowRight' : 'ArrowDown'
+  const back = axis === 'x' ? 'ArrowLeft' : 'ArrowUp'
+  if (![forward, back, 'Home', 'End'].includes(k.key)) return false
+  const target = sizedBy(handle, renderer)
+  if (!target) return false
+  const current = measure(target, axis)
+  const size =
+    k.key === 'Home' ? min : k.key === 'End' ? (Number.isFinite(max) ? max : current) : Math.min(max, Math.max(min, current + sign * (k.key === forward ? step : -step)))
+  if (size !== current) handle.dispatchEvent(sizeEvent(handle, size, extentOf(target, axis)))
+  return true
 }

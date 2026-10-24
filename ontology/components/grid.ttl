@@ -1,0 +1,27 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# components: grid (stub).
+
+# --- shared by the inspection components (grid, panes, payload, toolbar) -----------------------
+# A collection is a node and the property that links it to its members (tree:member by default:
+# an LDES stream's members). The grid shows them as rows; a count badge counts them.
+
+c:collection a owl:ObjectProperty ;
+    rdfs:comment "The node whose members a component shows or counts (an ldes:EventStream, a list's owner...)."@en .
+c:memberProperty a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment "What links c:collection to its members (default tree:member)."@en .
+c:via a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment "A hop taken before reading a value: from a row (or a viewed subject) through this property first (e.g. http:resp, to read from the response)."@en .
+c:swatch a owl:ObjectProperty ; rdfs:range sty:Token ;
+    rdfs:comment "On a category (an individual such as a kind): the color it is drawn in, a token (a series color: categories are not states)."@en .

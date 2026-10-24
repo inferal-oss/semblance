@@ -1,0 +1,16 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# Gallery page: Inspection. The parts in-app inspectors, log viewers, event browsers and
+# trace viewers are built from: a data grid with a time scale, filters, split and docked
+# panes, payload views (text, hex, JSON) and the small toolbar pieces around them. Each
+# section is its own graph (demo/gallery/_in-*.ttl).
+
+ui:gallery-inspection a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:gallery-inspection-intro ui:gallery-inspection-lede ui:in-grid ui:in-toolbar ui:in-panes ui:in-payload ) .
+ui:gallery-inspection-intro a c:Heading ; c:label "Inspection" .
+ui:gallery-inspection-lede a c:Text ;
+    c:label "The parts of an in-app inspector, each on its own and general: a data grid whose rows, sort, selection, column widths and paging are graph state; a time scale for spans; filters as data the grid honours; split and docked panes; payloads as text, hex or a JSON tree. The Network page composes them over captured traffic." .

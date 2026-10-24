@@ -15,6 +15,10 @@ import { docsReactions } from '../layers/docs.ts'
 import { persistenceReactions } from '../persistence.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
 import { reactions as windowReactions } from '../components/containers.ts'
+import { reactions as gridReactions } from '../components/grid.ts'
+import { reactions as panesReactions } from '../components/panes.ts'
+import { reactions as payloadReactions } from '../components/payload.ts'
+import { reactions as toolbarReactions } from '../components/toolbar.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
@@ -132,4 +136,8 @@ export const reactions: Record<string, ReactionFn> = {
   ...persistenceReactions,
   ...disclosureReactions,
   ...windowReactions,
+  ...gridReactions,
+  ...panesReactions,
+  ...payloadReactions,
+  ...toolbarReactions,
 }
