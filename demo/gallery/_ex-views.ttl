@@ -253,27 +253,50 @@ ui:ex-views-work-buckets a c:Progress ; c:active true ; c:of vx:Buckets ; c:valu
 
 ui:ex-views-how a c:Walkthrough ; c:label "How it works" ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
-    c:steps ( ui:ex-views-w1 ui:ex-views-w2 ui:ex-views-w3 ui:ex-views-w4 ) .
+    c:steps ( ui:ex-views-w1 ui:ex-views-w2 ui:ex-views-w3 ui:ex-views-w4 ui:ex-views-w5 ui:ex-views-w6 ui:ex-views-w7 ) .
 
-ui:ex-views-w1 a c:WalkthroughStep ; rdfs:label "Queries that are kept, not re-run" ;
-    c:children ( "Each figure comes from an " ui:ex-views-m-View " in this file: plain SPARQL over " ui:ex-views-m-log ", with annotations. Run from scratch, the query gives the same answer - the green checks show the runtime checking that - but the runtime never runs it that way: " ui:ex-views-m-recent ", " ui:ex-views-m-byType " and " ui:ex-views-m-whole " are kept." ) .
-ui:ex-views-w2 a c:WalkthroughStep ; rdfs:label "Members are the changes" ;
-    c:children ( "An appended member is evaluated once - its part of the query, cached - and enters the groups with weight +1: COUNT and SUM add, MAX keeps values in order, COUNT(DISTINCT) keeps them with weights. When the retention policy retires a member, the same rows leave with weight -1. " ui:ex-views-m-steps " records each step: what came in and which groups changed." ) .
-ui:ex-views-w3 a c:WalkthroughStep ; rdfs:label "A window that moves on its own" ;
-    c:children ( ui:ex-views-m-window " keeps only the last 30 seconds of the stream's timestamps. One timer, set for the next member to age out, moves it: " ui:ex-views-m-buckets " drains at the top while you do nothing. The streamed events are " ui:ex-views-m-due " events: the scheduler fires one when " ui:ex-views-m-dueAt " comes, and " ui:ex-views-m-pulse " sets the next." ) .
-ui:ex-views-w4 a c:WalkthroughStep ; rdfs:label "What it costs" ;
-    c:children ( "The bars are the runtime's own account (" ui:ex-views-m-measured "): per step a view does a handful of rows of work, whatever the log holds, while a from-scratch run reads every member. " ui:ex-views-m-whileShown " keeps these views off the critical path elsewhere: on other pages they do nothing, and catch up when this one is shown." ) .
+ui:ex-views-w1 a c:WalkthroughStep ; rdfs:label "One event comes in as +1" ;
+    c:children ( "Press " ui:ex-views-m-one ": " ui:ex-views-m-oneevent " changes one triple, and the click becomes a member of " ui:ex-views-m-log ". " ui:ex-views-m-whole " is an " ui:ex-views-m-View " - plain SPARQL, a COUNT, SUM, MAX and COUNT(DISTINCT) over the log's members - but the runtime never runs it again. It reads the new member once and adds it to what it holds with weight +1: the view's state is a weighted set of rows (a Z-set), and a change is just more rows with weights. \"In the log\" (" ui:ex-views-m-events ") reads the result with a point query." ) .
+ui:ex-views-w2 a c:WalkthroughStep ; rdfs:label "A group changes, and the step is recorded" ;
+    c:children ( ui:ex-views-m-bytype " groups the members by their type. The click lands in its group, whose count goes up by one (say from 3 to 4), and nothing else is touched. The view has an " ui:ex-views-m-deltaLog ": each tick it writes what came in and which groups changed, from what to what, as a member of " ui:ex-views-m-steps " - the stream " ui:ex-views-m-stepsTable " shows, newest first." ) .
+ui:ex-views-w3 a c:WalkthroughStep ; rdfs:label "Checked against a from-scratch run" ;
+    c:children ( "Each view is " ui:ex-views-m-measured ": in idle time the runtime also runs the same query the ordinary way, over every member, and compares. The alerts - " ui:ex-views-m-checkwhole " for the whole log - read the comparison through " ui:ex-views-m-qcheck ": green with a ✓ while the kept answer is exactly the re-run's, red if it ever differs." ) .
+ui:ex-views-w4 a c:WalkthroughStep ; rdfs:label "Work, against what a re-run reads" ;
+    c:children ( "The bars are the runtime's own account of the last step: " ui:ex-views-m-workwhole " shows the rows of work it took out of the rows a re-run reads (" ui:ex-views-m-qwork "). A step is a handful of rows whatever the log holds; a re-run reads every member, so the bar stays short as the log grows." ) .
+ui:ex-views-w5 a c:WalkthroughStep ; rdfs:label "The window ages out on the clock" ;
+    c:children ( ui:ex-views-m-window " is an " ui:ex-views-m-SlidingWindow " of 30 seconds; " ui:ex-views-m-recent " and " ui:ex-views-m-buckets " count only through it (" ui:ex-views-m-windowp "). One timer, set for the next member to age out, moves it: each member that leaves is a step of −1, with no event at all. Do nothing and watch " ui:ex-views-m-band " drain, five seconds at a time." ) .
+ui:ex-views-w6 a c:WalkthroughStep ; rdfs:label "A hundred events, one at a time" ;
+    c:children ( ui:ex-views-m-streambutton " runs " ui:ex-views-m-start ", which makes " ui:ex-views-m-stream " due now (" ui:ex-views-m-dueAt "). The host's scheduler turns a due time into a " ui:ex-views-m-Due " event addressed to it, and " ui:ex-views-m-pulse " counts down and makes the next one due 50 ms later. Each pulse is an ordinary member: a hundred steps of +1, and the table, the bars and the checks follow every one." ) .
+ui:ex-views-w7 a c:WalkthroughStep ; rdfs:label "Keep 50: retirement is −1" ;
+    c:children ( ui:ex-views-m-keep50 " lowers " ui:ex-views-m-retention " to 50 members. On the next event the log retires everything past the newest 50, and the views see each retired member leave with weight −1 - one step of many −1s. MAX keeps its values in order, so a retired maximum gives way to the next. All this happens only while the dashboard is shown (" ui:ex-views-m-whileShown "): elsewhere these views do nothing, and catch up when it is shown again." ) .
 
-ui:ex-views-m-View a c:Mention ; c:label "iv:View" ; c:mentions iv:View ; c:to iv:View .
+ui:ex-views-m-one a c:Mention ; c:label "the One event button" ; c:mentions ui:ex-views-one .
+ui:ex-views-m-oneevent a c:Mention ; c:label "vx:OneEvent" ; c:mentions vx:OneEvent .
 ui:ex-views-m-log a c:Mention ; c:label "beh:ChangeLog" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
-ui:ex-views-m-recent a c:Mention ; c:label "vx:Recent" ; c:mentions vx:Recent .
-ui:ex-views-m-byType a c:Mention ; c:label "vx:RecentByType" ; c:mentions vx:RecentByType .
 ui:ex-views-m-whole a c:Mention ; c:label "vx:Whole" ; c:mentions vx:Whole .
+ui:ex-views-m-View a c:Mention ; c:label "iv:View" ; c:mentions iv:View ; c:to iv:View .
+ui:ex-views-m-events a c:Mention ; c:label "ui:ex-views-events" ; c:mentions ui:ex-views-events .
+ui:ex-views-m-bytype a c:Mention ; c:label "vx:RecentByType" ; c:mentions vx:RecentByType .
+ui:ex-views-m-deltaLog a c:Mention ; c:label "iv:deltaLog" ; c:mentions iv:deltaLog ; c:to iv:deltaLog .
 ui:ex-views-m-steps a c:Mention ; c:label "vx:steps" ; c:mentions vx:steps .
-ui:ex-views-m-window a c:Mention ; c:label "vx:window" ; c:mentions vx:window .
-ui:ex-views-m-buckets a c:Mention ; c:label "vx:Buckets" ; c:mentions vx:Buckets .
-ui:ex-views-m-due a c:Mention ; c:label "beh:Due" ; c:mentions beh:Due ; c:to beh:Due .
-ui:ex-views-m-dueAt a c:Mention ; c:label "beh:dueAt" ; c:mentions beh:dueAt ; c:to beh:dueAt .
-ui:ex-views-m-pulse a c:Mention ; c:label "vx:Pulse" ; c:mentions vx:Pulse .
+ui:ex-views-m-stepsTable a c:Mention ; c:label "the steps table" ; c:mentions ui:ex-views-steps .
 ui:ex-views-m-measured a c:Mention ; c:label "iv:measured" ; c:mentions iv:measured ; c:to iv:measured .
+ui:ex-views-m-checkwhole a c:Mention ; c:label "ui:ex-views-check-whole" ; c:mentions ui:ex-views-check-whole .
+ui:ex-views-m-qcheck a c:Mention ; c:label "vx:qCheck" ; c:mentions vx:qCheck .
+ui:ex-views-m-workwhole a c:Mention ; c:label "ui:ex-views-work-whole" ; c:mentions ui:ex-views-work-whole .
+ui:ex-views-m-qwork a c:Mention ; c:label "vx:qWork" ; c:mentions vx:qWork .
+ui:ex-views-m-window a c:Mention ; c:label "vx:window" ; c:mentions vx:window .
+ui:ex-views-m-SlidingWindow a c:Mention ; c:label "iv:SlidingWindow" ; c:mentions iv:SlidingWindow ; c:to iv:SlidingWindow .
+ui:ex-views-m-windowp a c:Mention ; c:label "iv:window" ; c:mentions iv:window ; c:to iv:window .
+ui:ex-views-m-recent a c:Mention ; c:label "vx:Recent" ; c:mentions vx:Recent .
+ui:ex-views-m-buckets a c:Mention ; c:label "vx:Buckets" ; c:mentions vx:Buckets .
+ui:ex-views-m-band a c:Mention ; c:label "the band" ; c:mentions ui:ex-views-band .
+ui:ex-views-m-streambutton a c:Mention ; c:label "The Stream button" ; c:mentions ui:ex-views-stream .
+ui:ex-views-m-start a c:Mention ; c:label "vx:StartStream" ; c:mentions vx:StartStream .
+ui:ex-views-m-stream a c:Mention ; c:label "vx:stream" ; c:mentions vx:stream .
+ui:ex-views-m-dueAt a c:Mention ; c:label "beh:dueAt" ; c:mentions beh:dueAt ; c:to beh:dueAt .
+ui:ex-views-m-Due a c:Mention ; c:label "beh:Due" ; c:mentions beh:Due ; c:to beh:Due .
+ui:ex-views-m-pulse a c:Mention ; c:label "vx:Pulse" ; c:mentions vx:Pulse .
+ui:ex-views-m-keep50 a c:Mention ; c:label "The Keep 50 button" ; c:mentions ui:ex-views-keep50 .
+ui:ex-views-m-retention a c:Mention ; c:label "the log's retention" ; c:mentions beh:ChangeLogRetention ; c:to beh:ChangeLogRetention .
 ui:ex-views-m-whileShown a c:Mention ; c:label "iv:whileShown" ; c:mentions iv:whileShown ; c:to iv:whileShown .
