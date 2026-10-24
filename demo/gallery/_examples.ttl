@@ -45,8 +45,9 @@ ui:exc-views c:when ui:ExViews ; c:content ui:exp-views .
 
 # --- Each example: the app, how it works, and its source ---------------------------------------------
 # An example is its own graph, in its own file (demo/gallery/_ex-<key>.ttl; the network inspector in
-# _network.ttl; the todo app is built by src/examples/todo.ts). Below it, an explanation it defines
-# (<root>-how), then the file itself, verbatim: the host records each example file as a c:SourceText.
+# _network.ttl; the todo app is built by src/examples/todo.ts). Below it, the walkthrough it defines
+# (<root>-how, a c:Walkthrough), and beside that walkthrough's diagram the file itself, verbatim (its
+# c:sourceView): the host records each example file as a c:SourceText, with the lines of each statement.
 
 ui:exp-todo a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-todo ui:ex-todo-how ) .
 ui:ex-todo-how c:sourceView ui:exs-todo .
