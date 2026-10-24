@@ -6,6 +6,7 @@ import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persist
 import { Navigation, rendererReveal } from '../src/navigation.ts'
 import { attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
+import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
@@ -225,10 +226,9 @@ runtime.apply = (delta) => {
   return apply(delta)
 }
 
-const short = (iri: string) => {
-  for (const [p, ns] of Object.entries({ ...NS, ui: UI, ex: EX })) if (iri.startsWith(ns)) return `${p}:${iri.slice(ns.length)}`
-  return iri
-}
+// Event and reaction names in the status bar, compacted with every prefix the graph knows.
+const prefixes = { ...NS, ...declaredPrefixes(store), ui: UI, ex: EX }
+const short = (iri: string) => compactIri(iri, prefixes)
 const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
 // Pointing at a navigation item or a tab evaluates what it would show (sem:OnIntent).
 attachIntent(runtime, shell, { flush: () => flush() })
