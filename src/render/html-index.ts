@@ -118,6 +118,29 @@ export class HtmlIndex {
    * Whether a component instance is shown: its placement can be followed up
    * to one of `roots` without passing an element marked hidden.
    */
+  /**
+   * Walk up from a focus through what places it (its parent elements, the component
+   * that rendered them, ordering chains) and return the first answer `ask` gives.
+   */
+  nearest<T>(focus: string, ask: (key: string) => T | undefined): T | undefined {
+    const seen = new Set<string>()
+    const todo = [focus]
+    while (todo.length) {
+      const key = todo.shift()!
+      if (seen.has(key)) continue
+      seen.add(key)
+      const answer = ask(key)
+      if (answer !== undefined) return answer
+      const placedAs = this.focusByRoot.get(key)
+      if (placedAs !== undefined) todo.push(placedAs)
+      const n = this.nodes.get(key)
+      if (n) todo.push(...n.parents)
+      const chained = this.chainParent.get(key)
+      if (chained !== undefined) todo.push(chained)
+    }
+    return undefined
+  }
+
   isShown(focus: string, roots: ReadonlySet<string>): boolean {
     const seen = new Set<string>()
     const up = (key: string): boolean => {

@@ -126,6 +126,17 @@ describe('the demo shell is a component graph', () => {
     expect(before.domOps).toBeLessThanOrEqual(2)
   })
 
+  it('warms only what declares sem:warm sem:Eager in idle time', () => {
+    const { document, runtime, screen } = mountShell()
+    const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+    while (runtime.warm(50)) {}
+    // The Performance page (eager) is ready before it is shown...
+    expect(runs('BarChartRendering-fn')).toBeGreaterThan(0)
+    // ...the gallery (lazy, the default) is not evaluated until a group is shown.
+    expect(runs('SwatchesRendering-fn')).toBe(0)
+    expect(document.querySelector('[data-sem-c=swatches]')).toBeNull()
+  })
+
   it('switches pages and theme through the same kind of control', () => {
     const { document, fire, value } = mountShell()
     const button = (text: string) => [...document.querySelectorAll('[data-sem-c=segmented] button, [data-sem-c=theme-switcher] button')].find((b) => b.textContent!.includes(text))!

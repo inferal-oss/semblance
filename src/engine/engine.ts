@@ -108,6 +108,8 @@ export class Engine {
    * demanded (e.g. not shown) are parked instead of evaluated, until resume().
    */
   demand?: (focus: string) => boolean
+  /** Whether parked work for a focus may be evaluated in idle time (see sem:warm). */
+  warmable?: (focus: string) => boolean
   private deferred = new Map<Rule, Set<string>>()
   /** While warming, parked work is evaluated regardless of demand. */
   private warming = false
@@ -202,6 +204,8 @@ export class Engine {
         let picked = 0
         for (const [rule, foci] of this.deferred) {
           for (const focus of foci) {
+            // Lazy parts stay parked until they are shown.
+            if (this.warmable && !this.warmable(focusOf(focus))) continue
             foci.delete(focus)
             this.markDirty(rule, focus)
             if (++picked >= slice) break
@@ -214,7 +218,13 @@ export class Engine {
     } finally {
       this.warming = false
     }
-    return this.hasDeferred
+    return this.hasWarmable
+  }
+
+  /** Whether parked work remains that idle time may evaluate. */
+  private get hasWarmable(): boolean {
+    for (const foci of this.deferred.values()) for (const focus of foci) if (!this.warmable || this.warmable(focusOf(focus))) return true
+    return false
   }
 
   /** Evaluate parked pairs whose focus is now demanded. Returns whether anything ran. */

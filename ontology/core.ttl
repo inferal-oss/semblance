@@ -76,6 +76,23 @@ member. Its output places the member's part itself (e.g. hasChild + sem:orderKey
 sem:renders a owl:ObjectProperty ;
     rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
 
+# --- Warmth: what may be evaluated before it is shown -------------------------------
+# Projections evaluate only what is shown (demand). In idle time the host may
+# evaluate hidden parts ahead of time so that showing them is instant - but only
+# under a component that says so: sem:warm sem:Eager. The nearest ancestor (in
+# the rendered tree) that declares a warmth decides; with none, parts are lazy:
+# evaluated when they are first shown. Pages one navigates between often are
+# eager; large, rarely visited ones (a gallery) stay lazy.
+
+sem:warm a owl:ObjectProperty ;
+    rdfs:range sem:Warmth ;
+    rdfs:comment "Whether this component's hidden parts are evaluated in idle time (inherited by what it renders)."@en .
+sem:Warmth a owl:Class .
+sem:Eager a sem:Warmth ; rdfs:label "eager"@en ;
+    rdfs:comment "Hidden parts are evaluated in idle time, so showing them is instant."@en .
+sem:Lazy a sem:Warmth ; rdfs:label "lazy"@en ;
+    rdfs:comment "Hidden parts are evaluated when first shown (the default)."@en .
+
 sem:functionOnly a owl:DatatypeProperty ;
     rdfs:comment """On a rendering: it has no SPARQL implementation, on purpose, and this says why
 (e.g. it tokenizes source text into colored spans, runs a query named in the data, or needs a

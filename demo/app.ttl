@@ -105,6 +105,10 @@ ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
 ui:pages a c:Switch ; c:controls ui:app ; c:property ui:page ;
     c:cases ( ui:playgroundCase ui:performanceCase ui:componentsCase ) .
 ui:playgroundCase c:when ui:Playground ; c:content ui:playground .
+# The two working pages are warmed in idle time, so switching between them is
+# instant; the gallery renders a group only when it is selected (lazy, the default).
+ui:playground sem:warm sem:Eager .
+ui:performance sem:warm sem:Eager .
 ui:componentsCase c:when ui:Components ; c:content ui:gallery .
 ui:performanceCase c:when ui:Performance ; c:content ui:performance .
 

@@ -3,7 +3,7 @@ import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH } from './ns.ts'
+import { EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 
@@ -48,6 +48,11 @@ export class Runtime {
     if (opts.roots) {
       const roots = new Set(opts.roots)
       engine.demand = (focus) => index.isShown(focus, roots)
+      // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).
+      const f = this.store.factory
+      const warm = f.namedNode(SEM.warm)
+      engine.warmable = (focus) =>
+        index.nearest(focus, (key) => (key.includes(' ') ? undefined : this.store.match(f.namedNode(key), warm, null)[0]?.object.value)) === SEM.Eager
     }
     engine.start()
     const p: Projection = { engine, index }
