@@ -1,5 +1,5 @@
 import { CONFIGS, runBench } from '../bench/scenarios.ts'
-import { initWeb, loadStore } from '../src/web/load.ts'
+import { initWeb, loadStoreWith } from '../src/web/load.ts'
 import { CELL_PREFIX } from './cell-protocol.ts'
 
 // One benchmark cell: parameters arrive in window.name, rows go back to the parent.
@@ -13,7 +13,7 @@ try {
   const stage = document.body.appendChild(document.createElement('div'))
   stage.style.cssText = 'position:absolute;left:-10000px;top:0;width:600px'
   await initWeb(config.store)
-  const rows = await runBench({ name: 'browser', loadStore, host: () => stage.appendChild(document.createElement('div')), log: () => {} }, [size], [config])
+  const rows = await runBench({ name: 'browser', loadStore: loadStoreWith, host: () => stage.appendChild(document.createElement('div')), log: () => {} }, [size], [config])
   post({ rows })
 } catch (e) {
   post({ error: String((e as Error).stack ?? e) })

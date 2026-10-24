@@ -31,6 +31,7 @@ perf:Sparql rdfs:label "SPARQL rules"@en .
 perf:Function rdfs:label "function rules"@en .
 perf:Bulk rdfs:label "bulk evaluation"@en .
 perf:PerFocus rdfs:label "per-focus evaluation"@en .
+perf:Compiled rdfs:label "queries compiled to WebAssembly"@en .
 
 perf:Scenario a owl:Class .
 perf:Initial a owl:Class ; rdfs:subClassOf perf:Scenario .
@@ -190,6 +191,24 @@ WHERE {
   BIND(IRI(CONCAT(STR(perf:), "finding-dom-", STR(?n))) AS ?f)
   BIND(CONCAT("Across all configurations at ", STR(?n), " items, DOM patching is ", STR(ROUND(100 * ?dom / (?engine + ?dom))),
               "% of update time; the graph engine is the rest. Keyed patching keeps DOM work proportional to what changed.") AS ?text)
+}""" .
+
+perf:CompiledEffect a perf:Judgement ;
+    rdfs:label "Compiled vs interpreted SPARQL"@en ;
+    sem:order 8 ;
+    sem:construct """
+CONSTRUCT { ?f a perf:Finding ; perf:judgement perf:CompiledEffect ; sem:verdict ?verdict ; sem:sortKey ?label ; sem:text ?text }
+WHERE {
+  ?cc perf:evaluation perf:Compiled ; perf:store ?store ; perf:evaluation ?mode ; rdfs:label ?label .
+  FILTER(?mode != perf:Compiled)
+  ?ic perf:store ?store ; perf:rules perf:Sparql ; perf:evaluation ?mode ; rdfs:label ?plain .
+  FILTER NOT EXISTS { ?ic perf:evaluation perf:Compiled }
+  ?a perf:configuration ?cc ; perf:scenario perf:InitialRender ; perf:items ?n ; perf:engineMs ?tc .
+  ?b perf:configuration ?ic ; perf:scenario perf:InitialRender ; perf:items ?n ; perf:engineMs ?ti .
+  BIND(IF(?ti > ?tc * 1.15, perf:Good, IF(?tc > ?ti * 1.15, perf:Concern, perf:Insight)) AS ?verdict)
+  BIND(IRI(CONCAT(STR(perf:), "finding-compiled-", ENCODE_FOR_URI(STR(?cc)), "-", STR(?n))) AS ?f)
+  BIND(CONCAT(?label, ": at ", STR(?n), " items the initial render takes ", STR(ROUND(?tc)), " ms against ", STR(ROUND(?ti)),
+              " ms interpreted (", ?plain, ", ", STR(ROUND(?ti / ?tc * 100) / 100), "×), compiling included.") AS ?text)
 }""" .
 
 # --- views: every chart and table on the performance page is a SELECT ---------------------------

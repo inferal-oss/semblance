@@ -47,11 +47,20 @@ export async function initWeb(kind: StoreKind): Promise<void> {
   }
 }
 
-export function createStore(kind: StoreKind): GraphStore {
+/** Store options (benchmark configurations choose them; the defaults are the site's). */
+export interface StoreOptions {
+  /** Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md). */
+  compiled?: boolean
+}
+
+/** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
+export const COMPILE_ON_RUN = 2
+
+export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphStore {
   if (kind === 'rust' || kind === 'wat') {
     const module = engines[kind]
     if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind)
+    return engineStore(module, kind, { compile: options.compiled ? COMPILE_ON_RUN : 0 })
   }
   if (kind === 'n3') return n3Store()
   if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)
@@ -66,7 +75,12 @@ export function ontologySources(): string[] {
 }
 
 export function loadStore(kind: StoreKind, ...data: string[]): GraphStore {
-  const store = createStore(kind)
+  return loadStoreWith(kind, {}, ...data)
+}
+
+/** loadStore, with store options. */
+export function loadStoreWith(kind: StoreKind, options: StoreOptions, ...data: string[]): GraphStore {
+  const store = createStore(kind, options)
   for (const ttl of [...ontologySources(), ...data]) store.loadTurtle(ttl)
   return store
 }

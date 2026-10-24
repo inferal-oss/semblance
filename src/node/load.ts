@@ -15,7 +15,16 @@ const ontologyDir = fileURLToPath(new URL('../../ontology/', import.meta.url))
 
 const engines = new Map<string, WebAssembly.Module>()
 
-function engine(kind: 'rust' | 'wat'): GraphStore {
+/** Store options (benchmark configurations choose them; the defaults are the site's). */
+export interface StoreOptions {
+  /** Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md). */
+  compiled?: boolean
+}
+
+/** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
+export const COMPILE_ON_RUN = 2
+
+function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
   let module = engines.get(kind)
   if (!module) {
     const path = fileURLToPath(new URL(`../../rdf-engine/build/${kind}.wasm`, import.meta.url))
@@ -23,7 +32,8 @@ function engine(kind: 'rust' | 'wat'): GraphStore {
     engines.set(kind, (module = new WebAssembly.Module(readFileSync(path))))
   }
   // SEMBLANCE_ENGINE_COMPILE=n: compile each prepared query on its n-th run (rdf-engine/results/compiled.md).
-  return engineStore(module, kind, { compile: Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0 })
+  const env = Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0
+  return engineStore(module, kind, { compile: options.compiled ? COMPILE_ON_RUN : env })
 }
 
 let created: ((store: GraphStore) => void) | undefined
@@ -37,8 +47,8 @@ export function watchStores(listener: ((store: GraphStore) => void) | undefined)
   created = listener
 }
 
-export function createStore(kind: StoreKind): GraphStore {
-  const store = kind === 'rust' || kind === 'wat' ? engine(kind) : kind === 'oxigraph' ? oxigraphStore(ox) : kind === 'hybrid' ? hybridStore(ox) : n3Store()
+export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphStore {
+  const store = kind === 'rust' || kind === 'wat' ? engine(kind, options) : kind === 'oxigraph' ? oxigraphStore(ox) : kind === 'hybrid' ? hybridStore(ox) : n3Store()
   created?.(store)
   return store
 }
@@ -49,7 +59,12 @@ export function ontologySources(): string[] {
 
 /** A store with the framework ontologies and the given app data loaded. */
 export function loadStore(kind: StoreKind, ...data: string[]): GraphStore {
-  const store = createStore(kind)
+  return loadStoreWith(kind, {}, ...data)
+}
+
+/** loadStore, with store options. */
+export function loadStoreWith(kind: StoreKind, options: StoreOptions, ...data: string[]): GraphStore {
+  const store = createStore(kind, options)
   for (const ttl of [...ontologySources(), ...data]) store.loadTurtle(ttl)
   return store
 }

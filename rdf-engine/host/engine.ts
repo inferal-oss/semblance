@@ -327,7 +327,7 @@ export class Engine {
     return instance.exports as unknown as CompiledExports
   }
   /** @internal The bytes of query h's compiled module (or why not), without instantiating it. */
-  compiledBytes(h: number): Uint8Array | string {
+  compiledBytes(h: number): Uint8Array<ArrayBuffer> | string {
     if (!this.x.compile) return 'engine cannot compile'
     const n = this.x.compile(h)
     if (n < 0) return this.str(this.x.error_ptr(), this.x.error_len())

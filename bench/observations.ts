@@ -25,7 +25,9 @@ const str = (s: string) => JSON.stringify(s)
 function describeConfig(c: Config, order: number): string {
   const store = { oxigraph: 'Oxigraph', hybrid: 'Hybrid', n3: 'N3', rust: 'RustEngine', wat: 'WatEngine' }[c.store]
   const rules = c.prefer === 'sparql' ? 'Sparql' : 'Function'
-  const evaluation = c.prefer === 'sparql' ? (Number.isFinite(c.bulkThreshold) ? ' ; perf:evaluation perf:Bulk' : ' ; perf:evaluation perf:PerFocus') : ''
+  const evaluation =
+    (c.prefer === 'sparql' ? (Number.isFinite(c.bulkThreshold) ? ' ; perf:evaluation perf:Bulk' : ' ; perf:evaluation perf:PerFocus') : '') +
+    (c.compiled ? ' ; perf:evaluation perf:Compiled' : '')
   return `<${configIri(c.id)}> a perf:Configuration ; rdfs:label ${str(c.id)} ; sem:order ${order} ; perf:store perf:${store} ; perf:rules perf:${rules}${evaluation} .`
 }
 

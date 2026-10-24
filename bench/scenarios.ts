@@ -11,7 +11,7 @@ export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
 
 export interface BenchEnv {
   name: string
-  loadStore(kind: StoreKind, ...data: string[]): GraphStore
+  loadStore(kind: StoreKind, options: StoreOptions, ...data: string[]): GraphStore
   /** A fresh, attached host element, when a DOM is available. */
   host?: () => Element
   log(line: string): void
@@ -19,19 +19,31 @@ export interface BenchEnv {
   pause?: () => Promise<void>
 }
 
+/** How a configuration's store is made. */
+export interface StoreOptions {
+  /** Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md). */
+  compiled?: boolean
+}
+
 export interface Config {
   id: string
   store: StoreKind
   prefer: 'sparql' | 'function'
   bulkThreshold: number
+  /** Compiled queries, whatever the site's default (rust and wat stores only). */
+  compiled?: boolean
 }
 
 export const CONFIGS: Config[] = [
   { id: 'wat · sparql · bulk', store: 'wat', prefer: 'sparql', bulkThreshold: 16 },
   { id: 'wat · sparql · per-focus', store: 'wat', prefer: 'sparql', bulkThreshold: Infinity },
+  { id: 'wat · sparql · compiled', store: 'wat', prefer: 'sparql', bulkThreshold: 16, compiled: true },
+  { id: 'wat · sparql · per-focus · compiled', store: 'wat', prefer: 'sparql', bulkThreshold: Infinity, compiled: true },
   { id: 'wat · function', store: 'wat', prefer: 'function', bulkThreshold: 16 },
   { id: 'rust · sparql · bulk', store: 'rust', prefer: 'sparql', bulkThreshold: 16 },
   { id: 'rust · sparql · per-focus', store: 'rust', prefer: 'sparql', bulkThreshold: Infinity },
+  { id: 'rust · sparql · compiled', store: 'rust', prefer: 'sparql', bulkThreshold: 16, compiled: true },
+  { id: 'rust · sparql · per-focus · compiled', store: 'rust', prefer: 'sparql', bulkThreshold: Infinity, compiled: true },
   { id: 'rust · function', store: 'rust', prefer: 'function', bulkThreshold: 16 },
   { id: 'oxigraph · sparql · bulk', store: 'oxigraph', prefer: 'sparql', bulkThreshold: 16 },
   { id: 'oxigraph · sparql · per-focus', store: 'oxigraph', prefer: 'sparql', bulkThreshold: Infinity },
@@ -70,7 +82,7 @@ export async function runBench(env: BenchEnv, sizes: number[], configs = CONFIGS
   for (const size of sizes) {
     const data = todoApp(size)
     for (const config of configs) {
-      const store = env.loadStore(config.store, data)
+      const store = env.loadStore(config.store, { compiled: config.compiled }, data)
       const runtime = new Runtime(store)
       let t = now()
       const screen = runtime.project({
