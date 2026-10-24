@@ -1,0 +1,126 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix shop: <https://semblance.dev/demo/shop#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Localized product page: one graph, four languages.
+#
+# Every text is an RDF literal: the untagged one is the English source, "…"@uk, "…"@de and
+# "…"@ar are its translations. The viewer's language is l10n:language on ui:app - the same
+# setting as the site's Display settings, so switching here switches the whole site - and the
+# localization layer picks each label in it. Numbers and the price are formatted for that
+# language, and Arabic lays the page out right to left.
+# =================================================================================================
+
+ui:ex-localized-prefixes sh:declare [ sh:prefix "shop" ; sh:namespace "https://semblance.dev/demo/shop#"^^xsd:anyURI ] .
+
+# --- the product, as data ---------------------------------------------------------------------------
+# Its specifications are properties with translated labels and units; the description list
+# below shows their values, and writes the numbers the viewer's way (1.8 L, 1,8 L, ١٫٨ L).
+
+shop:halden a shop:Product ;
+    shop:pressure 15 ; shop:tank 1.8 ; shop:weight 7.4 ; shop:warranty 2 .
+shop:pressure rdfs:label "Pump pressure" , "Тиск помпи"@uk , "Pumpendruck"@de , "ضغط المضخة"@ar ; c:unit "bar" , "бар"@uk , "bar"@de , "بار"@ar .
+shop:tank rdfs:label "Water tank" , "Резервуар для води"@uk , "Wassertank"@de , "خزان الماء"@ar ; c:unit "L" , "л"@uk , "l"@de , "لتر"@ar .
+shop:weight rdfs:label "Weight" , "Вага"@uk , "Gewicht"@de , "الوزن"@ar ; c:unit "kg" , "кг"@uk , "kg"@de , "كغ"@ar .
+shop:warranty rdfs:label "Warranty" , "Гарантія"@uk , "Garantie"@de , "الضمان"@ar ; c:unit "years" , "роки"@uk , "Jahre"@de , "سنوات"@ar .
+
+# --- the page ---------------------------------------------------------------------------------------
+
+ui:ex-localized a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-localized-intro ui:ex-localized-language ui:ex-localized-card ) .
+ui:ex-localized-intro a c:Text ;
+    c:label "A product page whose every word is a language-tagged literal. Switch the language: labels, numbers and the price follow the viewer's locale, and Arabic turns the page right to left." ,
+            "Сторінка товару, де кожне слово — літерал із мовним тегом. Перемкніть мову: написи, числа й ціна підлаштовуються під мову читача, а арабська розгортає сторінку справа наліво."@uk ,
+            "Eine Produktseite, deren Wörter alle sprachmarkierte Literale sind. Wechseln Sie die Sprache: Beschriftungen, Zahlen und der Preis folgen der Sprache des Lesers, und Arabisch dreht die Seite von rechts nach links."@de ,
+            "صفحة منتج كل كلمة فيها نصّ موسوم باللغة. بدّل اللغة: تتبع التسميات والأرقام والسعر لغة القارئ، وتقلب العربية الصفحة من اليمين إلى اليسار."@ar .
+
+# The language switch: a segmented control over l10n:language on the app. Its options are the
+# l10n:Language individuals (ontology/layers/l10n.ttl), each labelled in the viewer's language.
+ui:ex-localized-language a c:Segmented ; c:controls ui:app ; c:property l10n:language .
+
+# The product card: name, description, price, stock, the cart, specifications, a review.
+ui:ex-localized-card a c:Card ;
+    c:label "Halden espresso machine" , "Еспресо-машина Halden"@uk , "Espressomaschine Halden"@de , "آلة إسبريسو هالدن"@ar ;
+    c:badge "New" , "Новинка"@uk , "Neu"@de , "جديد"@ar ;
+    c:content ui:ex-localized-body .
+ui:ex-localized-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-localized-description ui:ex-localized-offer ui:ex-localized-buy ui:ex-localized-specs-title ui:ex-localized-specs ui:ex-localized-review ) .
+ui:ex-localized-description a c:Text ;
+    c:label "A compact dual-thermoblock machine: steam and brew at once, a pressure gauge you can read, and a tank you can fill from the front." ,
+            "Компактна машина з двома термоблоками: пара й заварювання водночас, манометр, який легко прочитати, і резервуар, який наповнюється спереду."@uk ,
+            "Eine kompakte Maschine mit zwei Thermoblöcken: Dampf und Brühen gleichzeitig, ein gut ablesbares Manometer und ein Tank, der sich von vorn füllen lässt."@de ,
+            "آلة مدمجة بمسخّنين: بخار وتحضير في آن واحد، ومقياس ضغط سهل القراءة، وخزان يُملأ من الأمام."@ar .
+
+# The price: c:Money formats the amount for the viewer's locale (the currency is data).
+ui:ex-localized-offer a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
+    c:children ( ui:ex-localized-price ui:ex-localized-stock ) .
+ui:ex-localized-price a c:Money ; c:value 1249.00 ; c:currency "EUR" ; sty:textStyle sty:Title .
+ui:ex-localized-stock a c:Badge ; sty:tone sty:Success ;
+    c:label "In stock" , "В наявності"@uk , "Auf Lager"@de , "متوفر"@ar .
+
+ui:ex-localized-buy a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; pos:align pos:Center ;
+    c:children ( ui:ex-localized-add ui:ex-localized-cart ) .
+ui:ex-localized-add a c:Button ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
+    c:label "Add to cart" , "Додати в кошик"@uk , "In den Warenkorb"@de , "أضف إلى السلة"@ar .
+ui:ex-localized-cart a c:Stat ; c:value 0 ;
+    c:label "In your cart" , "У кошику"@uk , "Im Warenkorb"@de , "في سلتك"@ar .
+
+ui:ex-localized-specs-title a c:Heading ; c:level 3 ;
+    c:label "Specifications" , "Характеристики"@uk , "Technische Daten"@de , "المواصفات"@ar .
+ui:ex-localized-specs a c:DescriptionList ; c:of shop:halden ;
+    c:fields ( shop:pressure shop:tank shop:weight shop:warranty ) .
+
+ui:ex-localized-review a c:Blockquote ; c:attribution "Olena K., Lviv" ;
+    c:label "Quiet, quick to heat, and the milk froths in seconds. The best thing on my counter." ,
+            "Тиха, швидко нагрівається, а молоко збивається за секунди. Найкраще, що є на моїй кухні."@uk ,
+            "Leise, schnell aufgeheizt, und die Milch schäumt in Sekunden. Das Beste auf meiner Arbeitsplatte."@de ,
+            "هادئة وسريعة التسخين، والحليب يُرغى في ثوانٍ. أفضل ما في مطبخي."@ar .
+
+# --- the reaction: adding to the cart ------------------------------------------------------------------
+# One more in the cart, announced in the viewer's language (the toast layer reads the tagged literals).
+
+shop:AddToCart a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-localized-add ;
+    beh:deletes """CONSTRUCT { ui:ex-localized-cart c:value ?n } WHERE { ui:ex-localized-cart c:value ?n }""" ;
+    beh:inserts """CONSTRUCT { ui:ex-localized-cart c:value ?next } WHERE { OPTIONAL { ui:ex-localized-cart c:value ?n } BIND(COALESCE(?n, 0) + 1 AS ?next) }""" ;
+    ann:announces "Added to your cart" , "Додано в кошик"@uk , "Zum Warenkorb hinzugefügt"@de , "أُضيفت إلى سلتك"@ar ; ann:tone sty:Success .
+
+# --- how it works ---------------------------------------------------------------------------------
+
+ui:ex-localized-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-localized-how-title ui:ex-localized-how-labels ui:ex-localized-how-price ui:ex-localized-how-rtl ui:ex-localized-how-cost ) .
+ui:ex-localized-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
+ui:ex-localized-how-labels a c:Text ; c:children (
+    "Each label has an untagged English source and tagged translations (" ui:ex-localized-how-c1 "). The viewer's language is "
+    ui:ex-localized-how-c2 " on " ui:ex-localized-how-c3 ", set by the " ui:ex-localized-how-c4
+    " above (the same property the site's Display settings set). Function rules pick a label in that language as they render; for SPARQL rules, which cannot see it, the localization layer first writes "
+    ui:ex-localized-how-c5 " - the label in the viewer's language - and they prefer it." ) .
+ui:ex-localized-how-c1 a c:Code ; c:label "\"Auf Lager\"@de" .
+ui:ex-localized-how-c2 a c:Code ; c:label "l10n:language" .
+ui:ex-localized-how-c3 a c:Code ; c:label "ui:app" .
+ui:ex-localized-how-c4 a c:Code ; c:label "c:Segmented" .
+ui:ex-localized-how-c5 a c:Code ; c:label "l10n:label" .
+ui:ex-localized-how-price a c:Text ; c:children (
+    "The price is a " ui:ex-localized-how-c6 ": an amount and an ISO currency code, as data. How it is written - €1,249.00, 1.249,00 €, 1 249,00 € - belongs to the viewer, so a function rule ("
+    ui:ex-localized-how-c7 ") formats it with Intl.NumberFormat in the viewer's language before anything renders, and both renderings show that text. The specifications are properties of "
+    ui:ex-localized-how-c8 " with translated labels and units; the description list writes their numbers the same way." ) .
+ui:ex-localized-how-c6 a c:Code ; c:label "c:Money" .
+ui:ex-localized-how-c7 a c:Code ; c:label "c:MoneyTexts" .
+ui:ex-localized-how-c8 a c:Code ; c:label "shop:halden" .
+ui:ex-localized-how-rtl a c:Text ; c:children (
+    "Arabic is declared right to left (" ui:ex-localized-how-c9 "). The host follows the graph: it sets dir and lang on the page, and the layout - stacks, the card, this text - mirrors through CSS logical properties. Adding to the cart is "
+    ui:ex-localized-how-c10 ", whose announcement is translated too." ) .
+ui:ex-localized-how-c9 a c:Code ; c:label "l10n:direction l10n:RTL" .
+ui:ex-localized-how-c10 a c:Code ; c:label "shop:AddToCart" .
+ui:ex-localized-how-cost a c:Text ; c:children (
+    "Why it is cheap: switching the language re-runs only the rules that chose a text by language (they record that they did), not the page." ) .

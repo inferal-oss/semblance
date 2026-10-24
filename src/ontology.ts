@@ -47,6 +47,7 @@ export const ONTOLOGY_FILES = [
   'components/payload.ttl',
   'components/toolbar.ttl',
   'components/formula.ttl',
+  'components/money.ttl',
   'perf/perf.ttl',
   'domain/network.ttl',
   'shapes/components.ttl',
@@ -54,6 +55,7 @@ export const ONTOLOGY_FILES = [
   'shapes/panes.ttl',
   'shapes/payload.ttl',
   'shapes/toolbar.ttl',
+  'shapes/money.ttl',
   'alignments.ttl',
   'theme/foundations.ttl',
   'theme/default.ttl',
@@ -77,4 +79,5 @@ export const ONTOLOGY_FILES = [
   'theme/payload.ttl',
   'theme/toolbar.ttl',
   'theme/formula.ttl',
+  'theme/money.ttl',
 ] as const
