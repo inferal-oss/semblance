@@ -53,7 +53,16 @@ export class Runtime {
     engine.onChange((d) => index.apply(d))
     if (opts.roots) {
       const roots = new Set(opts.roots)
-      engine.demand = (focus) => index.isShown(focus, roots)
+      // Whether a focus is shown is asked for every parked pair on every check; the answer holds
+      // until something that decides visibility changes (index.visibility), so it is kept until then.
+      let epoch = -1
+      let shown = new Map<string, boolean>()
+      engine.demand = (focus) => {
+        if (epoch !== index.visibility) (epoch = index.visibility), (shown = new Map())
+        let v = shown.get(focus)
+        if (v === undefined) shown.set(focus, (v = index.isShown(focus, roots)))
+        return v
+      }
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).
       const f = this.store.factory
       const warm = f.namedNode(SEM.warm)
