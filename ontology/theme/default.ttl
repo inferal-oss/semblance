@@ -863,6 +863,11 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-body" ;
     sty:declares [ sty:property "overflow" ; sty:raw "auto" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] .
+# A frame's body is inset by default (a space token, so density re-values it). Content that
+# states its own inset (pos:inset, data-sem-inset) is the more specific constraint: the frame
+# then adds none, rather than doubling it.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-body:not(:has(> [data-sem-inset]))" ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-4 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-grip" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "right" ; sty:raw "0" ] ,

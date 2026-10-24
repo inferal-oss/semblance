@@ -85,7 +85,7 @@
     sty:declares [ sty:property "width" ; sty:raw "22px" ] ,
                  [ sty:property "height" ; sty:raw "22px" ] ,
                  [ sty:property "font-size" ; sty:raw "11px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Palette ; sty:part ".sem-window-body" ;
+[] a sty:StyleRule ; sty:appliesTo c:Palette ; sty:part ".sem-window-body:not(:has(> [data-sem-inset]))" ;
     sty:declares [ sty:property "padding" ; sty:token tok:space-3 ] .
 
 # --- the desktop's stacking layer ---------------------------------------------------------------------------------
@@ -153,3 +153,13 @@
                  [ sty:property "max-width" ; sty:raw "calc(100vw - 32px)" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
                  [ sty:property "animation" ; sty:raw "sem-rise-in var(--sem-duration) var(--sem-ease)" ] .
+
+# A frame docked to the bottom edge owns that edge: the taskbar sits just above it (anchor
+# positioning; where that is unsupported the declaration is dropped and it keeps its place).
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:BottomEdge ; sty:state ":not([data-sem-window-state=\"maximized\"], [data-sem-window-state=\"minimized\"])" ;
+    sty:declares [ sty:property "anchor-name" ; sty:raw "--sem-bottom-dock" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ;
+    sty:state ":has(> .sem-frames > [data-sem-edge=\"bottom\"]:not([hidden], [data-sem-window-state=\"minimized\"], [data-sem-window-state=\"maximized\"]))" ;
+    sty:part "> [data-sem-c=\"taskbar\"]" ;
+    sty:declares [ sty:property "position-anchor" ; sty:raw "--sem-bottom-dock" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "calc(anchor(top) + 12px)" ] .
