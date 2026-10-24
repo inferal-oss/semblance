@@ -52,14 +52,23 @@ ui:dcs-performance c:when ui:DocPerformance ; c:content ui:doc-performance .
 
 # --- Overview ---
 ui:doc-overview a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-ov-h ui:doc-ov-1 ui:doc-ov-2 ui:doc-ov-code ui:doc-ov-3 ui:doc-ov-pipeline ui:doc-ov-4 ) .
+    c:children ( ui:doc-ov-h ui:doc-ov-1 ui:doc-ov-2 ui:ov-live ui:doc-ov-2b ui:doc-ov-3 ui:doc-ov-pipeline ui:doc-ov-4 ) .
 ui:doc-ov-h a c:Heading ; c:level 1 ; c:label "Overview" .
 ui:doc-ov-1 a c:Text ; c:label "Semblance describes a user interface as an RDF graph. The framework is a set of ontologies - components, layers, styles, behaviour - and an engine that projects a graph through rules into RDF/HTML, which a renderer patches into the DOM (or serializes as HTML or text)." .
-ui:doc-ov-2 a c:Text ; c:label "Your application is data: instances of component classes, wired to your own vocabulary. A button is a resource with a label; a list is a resource that names the property it shows; a page is a switch over a property of your app." .
-ui:doc-ov-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:page a c:Stack ; c:children ( ex:title ex:todos ex:add ) .
+ui:doc-ov-2 a c:Text ; c:label "Your application is data: instances of component classes, wired to your own vocabulary. A button is a resource with a label; a list is a resource that names the items it shows and the properties it reads from them; a page is a switch over a property of your app." .
+ui:doc-ov-2b a c:Text ; c:label "That is a whole app: edit it and it renders again as you type; tick a todo and its reaction runs. The same graph is projected twice, on screen and as text. Every example in these docs runs like this, in a sandbox of its own." .
+ui:ov-live a c:LiveExample ; c:label "A page of todos" ; c:exampleRoot <https://example.org/todos#page> ; c:textPreview true ; c:sources ( ui:ov-live-app ) .
+ui:ov-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/todos#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:title ex:todos ex:add ) .
 ex:title a c:Heading ; c:label "Todos" .
-ex:todos a c:List ; c:of ex:inbox ; c:item ex:item ; c:orderBy ex:created .
-ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .""" .
+ex:todos a c:List ; c:label "Todos" ; c:sortBy ex:created ;
+    c:itemLabel rdfs:label ; c:itemChecked ex:done ;
+    c:item ex:write , ex:render .
+ex:write rdfs:label "Write the ontology" ; ex:created 1 ; ex:done true .
+ex:render rdfs:label "Render it" ; ex:created 2 ; ex:done false .
+ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .''' .
 ui:doc-ov-3 a c:Text ; c:label "Rules turn that graph into a projection. Each rule is itself a resource - a SPARQL CONSTRUCT, or a function registered under a name - so the whole pipeline can be queried. The pipeline:" .
 ui:doc-ov-pipeline a c:Code ; c:block true ; c:label """component graph  ──►  rules (SPARQL | functions), stratified  ──►  RDF/HTML projection
                                                                          ├─► DOM (keyed patching)
@@ -427,30 +436,61 @@ WHERE {
 
 # --- Building components ---
 ui:doc-components a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-cp-h ui:doc-cp-1 ui:doc-cp-2 ui:doc-cp-code ui:doc-cp-3 ui:doc-cp-rules ui:doc-cp-4 ui:doc-cp-shape ui:doc-cp-5 ui:doc-cp-fn ui:doc-cp-6 ) .
+    c:children ( ui:doc-cp-h ui:doc-cp-1 ui:doc-cp-2 ui:cp-live ui:doc-cp-2b ui:doc-cp-3 ui:doc-cp-rules ui:doc-cp-4 ui:doc-cp-5 ui:doc-cp-fn ui:doc-cp-6 ) .
 ui:doc-cp-h a c:Heading ; c:level 1 ; c:label "Building components" .
 ui:doc-cp-1 a c:Text ; c:label "A component is an OWL class under sem:Component, a rendering slot that targets it (sem:Rendering), and rules that implement the slot. A SHACL shape says what an instance must say; style rules say how it looks in every theme. All of it is Turtle in the same graph as the app that uses it." .
 ui:doc-cp-2 a c:Text ; c:label "Write the rule in SPARQL. A SPARQL CONSTRUCT is the implementation: it is data, so it can be inspected (turn a component over, or open the Inspector), queried and run on any store. It builds RDF/HTML for $this, minting every node from it (never blank nodes), so nodes keep their identity and DOM elements are reused:" .
-ui:doc-cp-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:Tally a owl:Class ; rdfs:subClassOf sem:Component ;
-    sem:slug "ex-tally" .            # data-sem-c="ex-tally": slugs are global, prefix yours
-ex:TallyRendering a sem:Rendering ; sem:targets ex:Tally ; sem:stratum 0 .
-ex:TallyRendering-sparql a sem:Rule ; sem:implements ex:TallyRendering ;
-    sem:construct \"\"\"
+ui:doc-cp-2b a c:Text ; c:label "The vocabulary file declares its prefix for queries once (sh:declare), so the rule can say ex:Avatar. Its style rules use tokens, so the avatar follows the theme, the colour scheme and the density like everything else. Change the rule - another element, other initials - and the people re-render with it." .
+ui:cp-live a c:LiveExample ; c:label "A component of your own" ; c:exampleRoot <https://example.org/people#page> ;
+    c:sources ( ui:cp-live-def ui:cp-live-app ) ; c:selectedSource ui:cp-live-def .
+ui:cp-live-def a c:CodeEditor ; c:language "turtle" ; c:label "avatar.ttl" ; c:original '''@prefix ex: <https://example.org/people#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/people#"^^xsd:anyURI ] .
+
+# A person's initials in a circle, and their name beside it.
+ex:Avatar a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "ex-avatar" .
+ex:AvatarRendering a sem:Rendering ; sem:targets ex:Avatar ; sem:stratum 0 .
+ex:AvatarRendering-sparql a sem:Rule ; sem:implements ex:AvatarRendering ;
+    sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?name, ?figure .
-  ?name a rdfhtml:Span ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?figure .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?mark, ?name .
+  ?mark a rdfhtml:Span ; rdfhtml:class "ex-avatar-mark" ; rdfhtml:hasChild ?markText ;
+        ord:immediatelyPrecedes ?name .
+  ?markText a rdfhtml:Text ; rdfhtml:data ?initials .
+  ?name a rdfhtml:Span ; rdfhtml:hasChild ?nameText .
   ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
-  ?figure a rdfhtml:Strong ; rdfhtml:hasChild ?figureText .
-  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
 }
 WHERE {
-  $this a ex:Tally ; c:label ?label .
-  OPTIONAL { $this c:value ?value } OPTIONAL { $this ex:unit ?unit }
-  BIND(CONCAT(STR(COALESCE(?value, 0)), IF(BOUND(?unit), CONCAT(" ", ?unit), "")) AS ?shown)
+  $this a ex:Avatar ; c:label ?label .
+  BIND(UCASE(CONCAT(SUBSTR(?label, 1, 1), SUBSTR(STRAFTER(?label, " "), 1, 1))) AS ?initials)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~mark")) AS ?mark)
+  BIND(IRI(CONCAT(STR($this), "/~mark-text")) AS ?markText)
   BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
-  ...
-}\"\"\" .""" .
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+}""" .
+
+ex:AvatarShape a sh:NodeShape ; sh:targetClass ex:Avatar ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An avatar needs a name (c:label)." ] .
+
+[] a sty:StyleRule ; sty:appliesTo ex:Avatar ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Avatar ; sty:part ".ex-avatar-mark" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "inline-size" ; sty:raw "2.25em" ] ,
+                 [ sty:property "block-size" ; sty:raw "2.25em" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .''' .
+ui:cp-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/people#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:ada ex:alan ) .
+ex:ada a ex:Avatar ; c:label "Ada Lovelace" .
+ex:alan a ex:Avatar ; c:label "Alan Turing" .''' .
 ui:doc-cp-3 a c:Text ; c:label "What makes a rule run again is declared too:" .
 ui:doc-cp-rules a c:DescriptionList ; c:of ui:doc-cp-rule-items ; c:fields ( ui:rr-self ui:rr-follows ui:rr-watches ui:rr-requires ui:rr-foreach ui:rr-modality ) .
 ui:doc-cp-rule-items ui:rr-self "A change to the component's own triples marks it dirty; the engine diffs the output and patches only what changed." ;
@@ -461,9 +501,7 @@ ui:doc-cp-rule-items ui:rr-self "A change to the component's own triples marks i
     ui:rr-modality "sem:modality mod:Text - a rule for one modality; write one per modality the component renders in." .
 ui:rr-self rdfs:label "Its triples" . ui:rr-follows rdfs:label "Follows" . ui:rr-watches rdfs:label "Watches" .
 ui:rr-requires rdfs:label "Requires" . ui:rr-foreach rdfs:label "For each" . ui:rr-modality rdfs:label "Modality" .
-ui:doc-cp-4 a c:Text ; c:label "What an instance must say is a SHACL shape on the class. The shapes layer validates every component as it renders, outlines the ones that do not conform and lists them." .
-ui:doc-cp-shape a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:TallyShape a sh:NodeShape ; sh:targetClass ex:Tally ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A tally needs a label (c:label)." ] .""" .
+ui:doc-cp-4 a c:Text ; c:label "What an instance must say is a SHACL shape on the class (ex:AvatarShape above). The shapes layer validates every component as it renders, outlines the ones that do not conform and lists them; here the problems list under the rendering says which and why. Take the label off ex:alan to see it." .
 ui:doc-cp-5 a c:Text ; c:label "A rule can also be a function registered under a name (sem:function). Functions are an escape hatch for the rare step SPARQL cannot express - and first look for a building block that puts the missing input in the graph - and an oracle: a function twin renders the identical HTML, faster, and the tests compare the two after every step. A component without a SPARQL rule is incomplete." .
 ui:doc-cp-fn a c:Code ; c:block true ; c:label """// A function twin: same nodes, same IRIs, same HTML (the parity tests check it).
 const tally: FnRule = (ctx, focus) => {
@@ -500,8 +538,32 @@ ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav r
 
 # --- Rules and the engine ---
 ui:doc-rules a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-ru-h ui:doc-ru-1 ui:doc-ru-2 ui:doc-ru-3 ui:doc-ru-4 ui:doc-ru-5 ) .
+    c:children ( ui:doc-ru-h ui:doc-ru-0 ui:doc-ru-walk ui:doc-ru-1 ui:doc-ru-2 ui:doc-ru-3 ui:doc-ru-4 ui:doc-ru-5 ) .
 ui:doc-ru-h a c:Heading ; c:level 1 ; c:label "Rules and the engine" .
+ui:doc-ru-0 a c:Text ; c:label "One component, a text field, from its triples to the page and back, through the framework's own graph: the diagram beside the steps is drawn from the terms they mention and the links among them." .
+ui:doc-ru-walk a c:Walkthrough ; c:label "A field, from data to the page and back" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in colour points at its node. Activate one to open its page in the Reference." ;
+    c:steps ( ui:doc-ru-w1 ui:doc-ru-w2 ui:doc-ru-w3 ui:doc-ru-w4 ui:doc-ru-w5 ) .
+ui:doc-ru-w1 a c:WalkthroughStep ; rdfs:label "Data" ;
+    c:children ( "A text field is an instance of " ui:doc-ru-m-TextField ", a class under " ui:doc-ru-m-Component ". Its label, value and help are its own triples, so changing one of them marks the field dirty and nothing else." ) .
+ui:doc-ru-w2 a c:WalkthroughStep ; rdfs:label "A rendering and its rules" ;
+    c:children ( ui:doc-ru-m-OnScreen " is a " ui:doc-ru-m-Rendering " that targets the class on screen. " ui:doc-ru-m-sparql " implements it with a CONSTRUCT that builds RDF/HTML for each field, minting every node from it; " ui:doc-ru-m-fn " is its function twin, which renders the same HTML (the tests compare the two after every step). A projection picks one, SPARQL by default." ) .
+ui:doc-ru-w3 a c:WalkthroughStep ; rdfs:label "Layers around it" ;
+    c:children ( ui:doc-ru-m-Check " runs before the components (stratum -10): it checks the field's value against the shape the field points at and derives c:error, which the field's own rule renders. Later strata decorate what the rules made - ARIA relationships, style hooks - without the field knowing." ) .
+ui:doc-ru-w4 a c:WalkthroughStep ; rdfs:label "Typing is an event" ;
+    c:children ( "A keystroke becomes a " ui:doc-ru-m-Input " event addressed to the field. " ui:doc-ru-m-TextFieldInput " deletes its old c:value and inserts the typed one: one change, after which only the field's pairs of rule and focus are dirty, and only their DOM is patched." ) .
+ui:doc-ru-w5 a c:WalkthroughStep ; rdfs:label "Recorded" ;
+    c:children ( "The event, with the size of its change, is a member of " ui:doc-ru-m-ChangeLog ", an LDES stream bounded by its retention policy - which the Change log and Activity tools read." ) .
+ui:doc-ru-m-TextField a c:Mention ; c:label "c:TextField" ; c:mentions c:TextField ; c:to c:TextField .
+ui:doc-ru-m-Component a c:Mention ; c:label "sem:Component" ; c:mentions sem:Component ; c:to sem:Component .
+ui:doc-ru-m-OnScreen a c:Mention ; c:label "c:TextFieldOnScreen" ; c:mentions c:TextFieldOnScreen ; c:to c:TextFieldOnScreen .
+ui:doc-ru-m-Rendering a c:Mention ; c:label "sem:Rendering" ; c:mentions sem:Rendering ; c:to sem:Rendering .
+ui:doc-ru-m-sparql a c:Mention ; c:label "c:TextFieldOnScreen-sparql" ; c:mentions c:TextFieldOnScreen-sparql ; c:to c:TextFieldOnScreen-sparql .
+ui:doc-ru-m-fn a c:Mention ; c:label "c:TextFieldOnScreen-fn" ; c:mentions c:TextFieldOnScreen-fn ; c:to c:TextFieldOnScreen-fn .
+ui:doc-ru-m-Check a c:Mention ; c:label "val:Check" ; c:mentions val:Check ; c:to val:Check .
+ui:doc-ru-m-Input a c:Mention ; c:label "beh:Input" ; c:mentions beh:Input ; c:to beh:Input .
+ui:doc-ru-m-TextFieldInput a c:Mention ; c:label "c:TextFieldInput" ; c:mentions c:TextFieldInput ; c:to c:TextFieldInput .
+ui:doc-ru-m-ChangeLog a c:Mention ; c:label "beh:ChangeLog" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
 ui:doc-ru-1 a c:Text ; c:label "Identity. Rules mint IRIs as <focus>/~<local>, never blank nodes, so a node keeps its identity across re-evaluation, its DOM element is reused, and its IRI doubles as an id that labels and descriptions point at." .
 ui:doc-ru-2 a c:Text ; c:label "Incrementality. Each (rule, focus) pair owns its output. A change marks pairs dirty through the focus's own triples, sem:follows links and the triples a function read; outputs are diffed and reference-counted. Member-wise rules (sem:forEach) evaluate once per member, so adding a list item touches only that item." .
 ui:doc-ru-3 a c:Text ; c:label "Demand. Only what is shown under a projection's roots is evaluated; hidden pages and tabs are parked. sem:warm says what to prepare ahead: sem:Eager in idle time, sem:OnIntent when a choice that would show it is pointed at." .
@@ -510,7 +572,7 @@ ui:doc-ru-5 a c:Text ; c:label "Implementations. SPARQL rules are the implementa
 
 # --- Layers ---
 ui:doc-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-la-h ui:doc-la-1 ui:doc-la-list ui:doc-la-2 ) .
+    c:children ( ui:doc-la-h ui:doc-la-1 ui:doc-la-list ui:doc-la-3 ui:la-live ui:doc-la-2 ) .
 ui:doc-la-h a c:Heading ; c:level 1 ; c:label "Layers" .
 ui:doc-la-1 a c:Text ; c:label "A layer is a set of rules enabled per projection (sem:enables). Layers decorate what components render without the components knowing:" .
 ui:doc-la-list a c:DescriptionList ; c:of ui:doc-la-items ; c:fields ( ui:la-a11y ui:la-style ui:la-l10n ui:la-val ui:la-key ui:la-prv ui:la-per ui:la-docs ) .
@@ -526,29 +588,73 @@ ui:la-a11y rdfs:label "Accessibility" . ui:la-style rdfs:label "Style" . ui:la-l
 ui:la-val rdfs:label "Validation" . ui:la-key rdfs:label "Keyboard" . ui:la-prv rdfs:label "Privacy" .
 ui:la-per rdfs:label "Persistence" . ui:la-docs rdfs:label "Docs" .
 ui:doc-la-2 a c:Text ; c:label "Turn any of them off in the Engine tool and the same components render without them." .
+ui:doc-la-3 a c:Text ; c:label "None of the components below knows about any layer. The validation layer reads the shape the field points at and gives it an error; the accessibility layer ties the error and the help to the input; the status layer marks the busy button and the theme shimmers it; the tooltip layer shows c:tip on hover and focus." .
+ui:la-live a c:LiveExample ; c:label "Layers at work" ; c:exampleRoot <https://example.org/layers#page> ; c:sources ( ui:la-live-app ) .
+ui:la-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/layers#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:age ex:sync ) .
+ex:age a c:TextField ; c:label "Age" ; c:help "As on your passport." ;
+    c:inputType "number" ; c:value "7" ; val:validates ex:AgeShape .
+ex:AgeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ;
+    sh:datatype xsd:integer ; sh:minInclusive 13 ; sh:maxInclusive 120 ;
+    sh:message "A whole number from 13 to 120." .
+ex:sync a c:Button ; c:label "Syncing" ; st:busy true ;
+    c:tip "st:busy: the status layer marks it aria-busy, and the theme shimmers it." .''' .
 
 # --- Behaviour and events ---
 ui:doc-behaviour a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-be-h ui:doc-be-1 ui:doc-be-code ui:doc-be-2 ) .
+    c:children ( ui:doc-be-h ui:doc-be-1 ui:be-live ui:doc-be-1b ui:doc-be-2 ) .
 ui:doc-be-h a c:Heading ; c:level 1 ; c:label "Behaviour and events" .
 ui:doc-be-1 a c:Text ; c:label "An interaction becomes an RDF event addressed to the innermost component with a matching reaction. A reaction is a pair of CONSTRUCTs - what to delete, what to insert - over $event and $this. Every matching reaction sees the state before the event, and their union is applied as one change." .
-ui:doc-be-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:CodeInputInput a beh:Reaction ;
-    beh:when beh:Input ;
-    beh:sourceClass c:CodeInput ;
-    beh:deletes \"\"\"CONSTRUCT { $this c:value ?old } WHERE { $this c:value ?old }\"\"\" ;
-    beh:inserts \"\"\"CONSTRUCT { $this c:value ?code } WHERE {
-      $event beh:value ?typed .
-      BIND(SUBSTR(REPLACE(?typed, "[^0-9]", ""), 1, 6) AS ?code) }\"\"\" .""" .
+ui:doc-be-1b a c:Text ; c:label "One reaction serves both buttons: it is for every c:Button (beh:sourceClass), $this is the one clicked, and its ex:step says by how much. The stream statistics below are the example's own change log, counted by a SPARQL rule." .
+ui:be-live a c:LiveExample ; c:label "Events and reactions" ; c:exampleRoot <https://example.org/counter#page> ; c:sources ( ui:be-live-app ) .
+ui:be-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/counter#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/counter#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:count ex:buttons ex:log ) .
+ex:count a c:Heading ; c:level 2 ; c:label "0" ; ex:n 0 .
+ex:buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ex:less ex:more ) .
+ex:less a c:Button ; c:label "-1" ; ex:step -1 .
+ex:more a c:Button ; c:label "+1" ; ex:step 1 ; sty:intent sty:Primary .
+ex:log a c:StreamStats ; c:label "Events" ; c:of beh:ChangeLog .
+
+ex:Step a beh:Reaction ;
+    beh:when beh:Click ; beh:sourceClass c:Button ;
+    beh:deletes """CONSTRUCT { ex:count ex:n ?n ; c:label ?shown }
+WHERE { $this ex:step ?step . ex:count ex:n ?n ; c:label ?shown }""" ;
+    beh:inserts """CONSTRUCT { ex:count ex:n ?next ; c:label ?label }
+WHERE { $this ex:step ?step . ex:count ex:n ?n BIND(?n + ?step AS ?next) BIND(STR(?next) AS ?label) }""" .''' .
 ui:doc-be-2 a c:Text ; c:label "Each event, with the size of the change it caused, becomes an immutable member of the beh:ChangeLog, an LDES stream bounded by its retention policy and linked from its newest member back, so the latest members are read in as many steps. The Change log and Activity tools are views of it." .
 
 # --- Styling and themes ---
 ui:doc-styling a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-st-h ui:doc-st-1 ui:doc-st-code ui:doc-st-2 ) .
+    c:children ( ui:doc-st-h ui:doc-st-1 ui:st-live ui:doc-st-1b ui:doc-st-2 ui:doc-st-3 ) .
 ui:doc-st-h a c:Heading ; c:level 1 ; c:label "Styling and themes" .
 ui:doc-st-1 a c:Text ; c:label "Styles compile from the ontology into cascade layers: tokens become custom properties, hookable properties (tone, emphasis, size, text style, layout) become data-sem-* attributes, and sty:StyleRules declare what each value looks like - once, for every component that has the axis." .
-ui:doc-st-code a c:Code ; c:block true ; c:language "turtle" ; c:label """[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Underlined ;
-    sty:part ".sem-code-cell" ;
-    sty:declares [ sty:property "border-width" ; sty:raw "0 0 2px" ] .""" .
+ui:doc-st-1b a c:Text ; c:label "Tone and emphasis are axes every component that has them shares: the same values, the same look. The style rule at the end is the example's own: a rule for c:Badge in your app styles every badge, but in a sandbox only that sandbox's." .
+ui:st-live a c:LiveExample ; c:label "Variants and a style rule" ; c:exampleRoot <https://example.org/styles#page> ; c:sources ( ui:st-live-app ) .
+ui:st-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/styles#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:badges ex:buttons ) .
+ex:badges a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ex:info ex:done ex:failed ) .
+ex:info a c:Badge ; c:label "Queued" ; sty:tone sty:Info .
+ex:done a c:Badge ; c:label "Passed" ; sty:tone sty:Success .
+ex:failed a c:Badge ; c:label "Failed" ; sty:tone sty:Danger ; sty:emphasis sty:Solid .
+ex:buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ex:solid ex:soft ex:ghost ) .
+ex:solid a c:Button ; c:label "Solid" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ex:soft a c:Button ; c:label "Soft" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ex:ghost a c:Button ; c:label "Ghost" ; sty:tone sty:Accent ; sty:emphasis sty:Ghost .
+
+[] a sty:StyleRule ; sty:appliesTo c:Badge ;
+    sty:declares [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.06em" ] .''' .
+ui:doc-st-3 a c:Text ; c:children ( "Themes for part of a page, with a picker, are a " ui:doc-st-recipe "." ) .
+ui:doc-st-recipe a c:Link , c:Setter ; c:label "recipe" ; c:href "#docs/recipes" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
 ui:doc-st-2 a c:Text ; c:label "A theme (sty:theme on any subtree) re-values every token; structural themes add rules narrowed to themselves that rebuild title bars, controls and docks. Contrast, motion and density compose with every theme." .
 
 # --- Persistence ---
@@ -559,7 +665,7 @@ ui:doc-pe-1 a c:Text ; c:label "What to remember is graph data too: a per:Policy
 ui:doc-pe-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:rememberDisplay a per:Policy ; per:scope per:Session ;
     per:subject ui:shell ;
     per:properties ( mot:preference sty:contrast sty:density sty:theme ) .""" .
-ui:doc-pe-2 a c:Text ; c:label "Every write, restore and forget is a member of per:StateLog. On this site the tools, the display settings and the page you were on are remembered for the tab; the change log only if you switch it on." .
+ui:doc-pe-2 a c:Text ; c:label "That policy is this site\u2019s own, running now: change the theme and reload the tab. The edits of the live examples in these docs are remembered the same way (ui:rememberLiveExamples, a CONSTRUCT over every example\u2019s sources). Every write, restore and forget is a member of per:StateLog. On this site the tools, the display settings and the page you were on are remembered for the tab; the change log only if you switch it on." .
 
 # --- Navigation ---
 ui:doc-navigation a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
@@ -585,7 +691,7 @@ ui:doc-na-5 a c:Text ; c:label "The Engine tab of the tools shows where we are: 
 # --- Maintained views ---
 ui:doc-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-iv-h ui:doc-iv-1 ui:doc-iv-2
-                 ui:doc-iv-decl-h ui:doc-iv-decl-1 ui:doc-iv-decl-code ui:doc-iv-decl-2
+                 ui:doc-iv-decl-h ui:doc-iv-decl-1 ui:doc-iv-decl-code ui:doc-iv-decl-live-1 ui:iv-live ui:doc-iv-decl-2
                  ui:doc-iv-group-h ui:doc-iv-group-1 ui:doc-iv-group-code
                  ui:doc-iv-time-h ui:doc-iv-time-1 ui:doc-iv-time-code ui:doc-iv-time-2
                  ui:doc-iv-show-h ui:doc-iv-show-1
@@ -608,6 +714,30 @@ WHERE { { SELECT (COUNT(?m) AS ?n) WHERE { beh:ChangeLog tree:member ?m } } }\"\
 # Any component shows it: here a stat reads the view's output with a query of its own.
 vx:qEvents a sem:View ; sem:select \"\"\"SELECT ?value WHERE { vx:log vx:events ?value }\"\"\" .
 ui:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery vx:qEvents .""" .
+ui:doc-iv-decl-live-1 a c:Text ; c:label "Here is one running, in a sandbox with a change log of its own: each like is an event, a member of the log, and the view adds it to what it holds - it never counts the log again. A component that reads a view's output says which node it reads (c:dataset), so it is re-run when that changes." .
+ui:iv-live a c:LiveExample ; c:label "A maintained view" ; c:exampleRoot <https://example.org/views#page> ; c:sources ( ui:iv-live-app ) .
+ui:iv-live-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/views#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/views#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:like ex:stats ) .
+ex:like a c:Button ; c:label "Like" ; sty:intent sty:Primary .
+ex:post ex:likes 0 .
+ex:Like a beh:Reaction ; beh:when beh:Click ; beh:source ex:like ;
+    beh:deletes """CONSTRUCT { ex:post ex:likes ?n } WHERE { ex:post ex:likes ?n }""" ;
+    beh:inserts """CONSTRUCT { ex:post ex:likes ?next } WHERE { ex:post ex:likes ?n BIND(?n + 1 AS ?next) }""" .
+
+# Kept member by member, as events arrive.
+ex:Totals a iv:View ;
+    sem:construct """CONSTRUCT { ex:log ex:events ?n ; ex:changed ?changed }
+WHERE { { SELECT (COUNT(?m) AS ?n) (SUM(?a + ?r) AS ?changed)
+          WHERE { beh:ChangeLog tree:member ?m . ?m beh:added ?a ; beh:removed ?r } } }""" .
+
+ex:stats a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ex:events ex:changed ) .
+ex:qEvents a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:events ?value }""" .
+ex:qChanged a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:changed ?value }""" .
+ex:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery ex:qEvents ; c:dataset ex:log .
+ex:changed a c:Stat ; c:label "Triples changed" ; c:valueQuery ex:qChanged ; c:dataset ex:log .''' .
 ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX and DISTINCT are maintained. A query of another shape still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
 
 ui:doc-iv-group-h a c:Heading ; c:level 2 ; c:label "Groups" .
