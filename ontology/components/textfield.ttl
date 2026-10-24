@@ -34,7 +34,10 @@ CONSTRUCT {
   ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
 }
 WHERE {
-  $this a c:TextField ; c:label ?labelData .
+  $this a c:TextField .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?labelData)
   OPTIONAL { $this c:value ?value }
   OPTIONAL { $this c:placeholder ?placeholder }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -78,7 +81,10 @@ CONSTRUCT {
   ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
 }
 WHERE {
-  $this a c:TextField ; c:label ?label .
+  $this a c:TextField .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:value ?value }
   BIND(CONCAT(STR(?label), ": [", COALESCE(STR(?value), ""), "_]") AS ?lineData)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)

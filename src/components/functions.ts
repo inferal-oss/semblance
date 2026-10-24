@@ -5,6 +5,10 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { validationFunctions } from '../layers/validation.ts'
+import { keyboardFunctions } from '../layers/keyboard.ts'
+import { statusFunctions } from '../layers/status.ts'
+import { l10nFunctions } from '../layers/l10n.ts'
 import { functions as layoutFunctions } from './layout.ts'
 import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
@@ -18,6 +22,7 @@ import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
+import { labelOf, RDFS_LABEL, text } from './util.ts'
 
 const str = (t: Term | undefined) => t?.value
 const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
@@ -41,7 +46,7 @@ const stack: FnRule = (ctx, focus) => {
 }
 
 const headingScreen: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
   const level = Math.min(6, Math.max(1, Number(str(ctx.object(focus, C.level)) ?? 2)))
   const o = ctx.out(focus)
@@ -50,7 +55,7 @@ const headingScreen: FnRule = (ctx, focus) => {
 }
 
 const headingText: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
   const o = ctx.out(focus)
   o.renders(o.el('root', 'Div', {}, [o.text('label', '# ' + label.toUpperCase())]))
@@ -58,7 +63,7 @@ const headingText: FnRule = (ctx, focus) => {
 }
 
 const buttonScreen: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
   const o = ctx.out(focus)
   const disabled = isTrue(ctx.object(focus, C.disabled)) ? '' : undefined
@@ -67,7 +72,7 @@ const buttonScreen: FnRule = (ctx, focus) => {
 }
 
 const buttonText: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
   const o = ctx.out(focus)
   o.renders(o.el('root', 'Span', {}, [o.text('label', `[ ${label} ]`)]))
@@ -75,10 +80,10 @@ const buttonText: FnRule = (ctx, focus) => {
 }
 
 const textFieldScreen: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
-  const help = str(ctx.object(focus, C.help))
-  const error = str(ctx.object(focus, C.error))
+  const help = text(ctx, focus, C.help)
+  const error = text(ctx, focus, C.error)
   const o = ctx.out(focus)
   const inputId = mint(focus.value, 'input')
   const parts = [
@@ -87,7 +92,7 @@ const textFieldScreen: FnRule = (ctx, focus) => {
       type: 'text',
       id: inputId,
       value: str(ctx.object(focus, C.value)),
-      placeholder: str(ctx.object(focus, C.placeholder)),
+      placeholder: text(ctx, focus, C.placeholder),
     }),
   ]
   if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', help)]))
@@ -97,10 +102,10 @@ const textFieldScreen: FnRule = (ctx, focus) => {
 }
 
 const textFieldText: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
-  const help = str(ctx.object(focus, C.help))
-  const error = str(ctx.object(focus, C.error))
+  const help = text(ctx, focus, C.help)
+  const error = text(ctx, focus, C.error)
   const o = ctx.out(focus)
   const parts = [o.el('line', 'Div', {}, [o.text('line-text', `${label}: [${str(ctx.object(focus, C.value)) ?? ''}_]`)])]
   if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', `  ${help}`)]))
@@ -179,8 +184,7 @@ const listItemText: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-const label = (ctx: RuleContext, t: Term) =>
-  str(ctx.object(t, C.label)) ?? str(ctx.object(t, 'http://www.w3.org/2000/01/rdf-schema#label')) ?? t.value.replace(/^.*[#/]/, '')
+const label = labelOf
 
 const tabs: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -256,7 +260,7 @@ const segmented: FnRule = (ctx, focus) => {
   if (!target || !property) return []
   const o = ctx.out(focus)
   const current = ctx.object(target, property)?.value
-  const caption = str(ctx.object(focus, C.label)) ?? label(ctx, property)
+  const caption = text(ctx, focus, C.label) ?? label(ctx, property)
   if (ctx.modality === MOD.Text) {
     const line = options(ctx, focus, property).map((opt) => `(${opt.value === current ? '•' : ' '}) ${label(ctx, opt)}`).join('  ')
     o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${line}`)]))
@@ -486,7 +490,7 @@ const choice: FnRule = (ctx, focus) => {
   if (!target || !property) return []
   const o = ctx.out(focus)
   const current = ctx.object(target, property)?.value
-  const caption = str(ctx.object(focus, C.label)) ?? label(ctx, property)
+  const caption = text(ctx, focus, C.label) ?? label(ctx, property)
   const opts = options(ctx, focus, property)
   if (ctx.modality === MOD.Text) {
     const chosen = opts.find((t) => t.value === current)
@@ -509,7 +513,7 @@ const chips: FnRule = (ctx, focus) => {
   if (!target || !property) return []
   const o = ctx.out(focus)
   const on = new Set(ctx.objects(target, property).map((t) => t.value))
-  const caption = str(ctx.object(focus, C.label)) ?? label(ctx, property)
+  const caption = text(ctx, focus, C.label) ?? label(ctx, property)
   const opts = options(ctx, focus, property)
   if (ctx.modality === MOD.Text) {
     o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${opts.map((t) => `${on.has(t.value) ? '[x]' : '[ ]'} ${label(ctx, t)}`).join('  ')}`)]))
@@ -567,7 +571,7 @@ const a11yTextField: FnRule = (ctx, focus) => {
 }
 
 const a11yList: FnRule = (ctx, focus) => {
-  const label = str(ctx.object(focus, C.label))
+  const label = text(ctx, focus, C.label)
   if (label === undefined) return []
   const o = ctx.out(focus)
   o.attr(o.node('root'), 'aria-label', label, 'root-aria-label')
@@ -578,6 +582,10 @@ export const functions: Record<string, FnRule> = {
   ...containerFunctions,
   ...viewFunctions,
   ...chartFunctions,
+  ...validationFunctions,
+  ...keyboardFunctions,
+  ...statusFunctions,
+  ...l10nFunctions,
   ...layoutFunctions,
   ...typeFunctions,
   ...actionsFunctions,

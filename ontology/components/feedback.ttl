@@ -32,3 +32,121 @@ polite (role=status). Toned: sty:tone and sty:emphasis (default soft)."""@en ;
     sem:slug "alert" .
 c:AlertRendering a sem:Rendering ; sem:targets c:Alert ; sem:stratum 0 .
 c:AlertRendering-fn a sem:Rule ; sem:implements c:AlertRendering ; sem:function "alert" .
+
+# --- phrases: what components say of their own, localized like any label ---------------------------
+
+c:Phrase a owl:Class ;
+    rdfs:comment """A user-visible string a component shows of its own accord (not taken from its
+instance), such as the accessible name of a close button. Components read its rdfs:label in the
+viewer's language, so the localization layer covers them too."""@en .
+c:CloseCommand a c:Phrase ; rdfs:label "Close"@en , "Закрити"@uk , "Schließen"@de , "إغلاق"@ar .
+c:RemoveCommand a c:Phrase ; rdfs:label "Remove"@en , "Видалити"@uk , "Entfernen"@de , "إزالة"@ar .
+c:DismissCommand a c:Phrase ; rdfs:label "Dismiss"@en , "Закрити сповіщення"@uk , "Ausblenden"@de , "تجاهل"@ar .
+c:LoadingStatus a c:Phrase ; rdfs:label "Loading"@en , "Завантаження"@uk , "Wird geladen"@de , "جارٍ التحميل"@ar .
+c:NotificationsRegion a c:Phrase ; rdfs:label "Notifications"@en , "Сповіщення"@uk , "Benachrichtigungen"@de , "الإشعارات"@ar .
+
+# --- shared state and markers ----------------------------------------------------------------------
+
+c:open a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """Whether a component that is shown on demand (a dialog, drawer, popover or toast) is
+shown now. Dialogs, drawers and popovers default to closed, toasts to open."""@en .
+c:closes a owl:ObjectProperty ;
+    rdfs:comment """On a rendered element (a ✕, a scrim): the component that activating it closes. On a
+c:Button: the overlay the button closes (sets c:open false), like c:opens."""@en .
+c:toggles a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element: the component whose own on/off state (c:open, c:checked) activating it flips."@en .
+c:removes a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element: the component that activating it removes (marks c:removed)."@en .
+
+# --- Tag -------------------------------------------------------------------------------------------
+
+c:Tag a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A label chip (c:label, optional c:icon). Toned: sty:tone and sty:emphasis (default
+soft), sized by sty:size. A c:selectable tag is a toggle button (aria-pressed) over c:checked; a
+c:removable tag has a ✕ that marks it c:removed, after which it renders nothing (the fact stays in
+the graph, so it can be restored by removing it)."""@en ;
+    sem:slug "tag" .
+c:removable a owl:DatatypeProperty ; rdfs:domain c:Tag ; rdfs:range xsd:boolean .
+c:selectable a owl:DatatypeProperty ; rdfs:domain c:Tag ; rdfs:range xsd:boolean .
+c:removed a owl:DatatypeProperty ; rdfs:domain c:Tag ; rdfs:range xsd:boolean ;
+    rdfs:comment "The tag was removed by the user; it renders nothing."@en .
+# c:checked (xsd:boolean) is the shared on/off value of toggles, checkboxes and selectable tags.
+c:TagRendering a sem:Rendering ; sem:targets c:Tag ; sem:stratum 0 .
+c:TagRendering-fn a sem:Rule ; sem:implements c:TagRendering ; sem:function "tag" .
+
+c:TagRemove a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Tag ;
+    beh:inserts """CONSTRUCT { $this c:removed true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:removes $this }""" ;
+    sem:function "tag:remove" .
+c:TagToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Tag ;
+    beh:deletes """CONSTRUCT { $this c:checked ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . $this c:checked ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:checked ?new } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . OPTIONAL { $this c:checked ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "tag:toggle" .
+
+# --- Spinner ---------------------------------------------------------------------------------------
+
+c:Spinner a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """An indeterminate activity indicator: a ring turning on the motion tokens (the motion
+layer calms it). role=status, named by c:label (default: the c:LoadingStatus phrase). Sized by
+sty:size, colored by sty:tone (default accent)."""@en ;
+    sem:slug "spinner" .
+c:SpinnerRendering a sem:Rendering ; sem:targets c:Spinner ; sem:stratum 0 .
+c:SpinnerRendering-fn a sem:Rule ; sem:implements c:SpinnerRendering ; sem:function "spinner" .
+
+# --- Skeleton --------------------------------------------------------------------------------------
+
+c:Skeleton a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A shimmering placeholder for content still loading (aria-hidden: the busy state is
+announced by what it stands in for). c:shape "text" (c:lines lines, the last one shorter; the
+default), "circle" or "block"; c:width / c:height in px size circles and blocks."""@en ;
+    sem:slug "skeleton" .
+c:lines a owl:DatatypeProperty ; rdfs:domain c:Skeleton ; rdfs:range xsd:integer .
+c:shape a owl:DatatypeProperty ; rdfs:domain c:Skeleton ; rdfs:range xsd:string .
+c:SkeletonRendering a sem:Rendering ; sem:targets c:Skeleton ; sem:stratum 0 .
+c:SkeletonRendering-fn a sem:Rule ; sem:implements c:SkeletonRendering ; sem:function "skeleton" .
+
+# --- EmptyState ------------------------------------------------------------------------------------
+
+c:EmptyState a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "What a view shows when it has nothing to show: a glyph (c:icon), a title (c:label), a hint (c:help) and actions (c:children)."@en ;
+    sem:slug "empty-state" .
+c:EmptyStateRendering a sem:Rendering ; sem:targets c:EmptyState ; sem:stratum 0 .
+c:EmptyStateRendering-fn a sem:Rule ; sem:implements c:EmptyStateRendering ; sem:function "empty-state" .
+
+# --- Toasts ----------------------------------------------------------------------------------------
+
+c:Toast a owl:Class ;
+    rdfs:subClassOf c:Overlay ;
+    rdfs:comment """A transient message: title (c:label), body (c:help), the tone's glyph (or c:icon),
+optional actions (c:children) and a dismiss ✕. Shown unless c:open is false. Danger toasts are
+assertive (role=alert); the others are announced by the polite region they appear in. A toast makes
+no assumption about where it comes from: a person, a reaction or the announcements layer."""@en ;
+    sem:slug "toast" .
+c:ToastRendering a sem:Rendering ; sem:targets c:Toast ; sem:stratum 0 .
+c:ToastRendering-fn a sem:Rule ; sem:implements c:ToastRendering ; sem:function "toast" .
+
+c:ToastRegion a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Where toasts appear: a fixed stack in the end corner, an aria-live=polite region
+(named by c:label, default the c:NotificationsRegion phrase). It shows the toasts of c:toasts (an
+rdf:List, in order) and those it c:hosts (by IRI), newest last. Put it on the shell's c:Desktop so
+it is outside every page."""@en ;
+    sem:slug "toast-region" .
+c:toasts a owl:ObjectProperty ; rdfs:domain c:ToastRegion ; rdfs:range rdf:List .
+c:ToastRegionRendering a sem:Rendering ; sem:targets c:ToastRegion ; sem:stratum 0 .
+c:ToastRegionRendering-fn a sem:Rule ; sem:implements c:ToastRegionRendering ; sem:function "toast-region" .
+
+# Dismissing a toast closes it (c:OverlayClose, overlays.ttl); a hosted toast also leaves its
+# region, so a region fed by a stream of announcements does not grow.
+c:ToastUnhost a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Toast ;
+    beh:deletes """CONSTRUCT { ?region c:hosts $this } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . ?region c:hosts $this }""" ;
+    sem:function "toast:unhost" .

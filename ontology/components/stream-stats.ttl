@@ -58,7 +58,10 @@ CONSTRUCT {
   ?rowA ord:precedes ?rowB .
 }
 WHERE {
-  $this a c:StreamStats ; c:label ?label ; c:of ?stream .
+  $this a c:StreamStats ; c:of ?stream .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
   BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
@@ -154,7 +157,10 @@ CONSTRUCT {
   ?text a rdfhtml:Text ; rdfhtml:data ?line .
 }
 WHERE {
-  $this a c:StreamStats ; c:label ?label ; c:of ?stream .
+  $this a c:StreamStats ; c:of ?stream .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL {
     SELECT ?stream (COUNT(?m) AS ?n) (SUM(?a) AS ?added) (SUM(?r) AS ?removed)
     WHERE { ?stream tree:member ?m . ?m beh:added ?a ; beh:removed ?r }

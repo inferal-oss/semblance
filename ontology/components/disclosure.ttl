@@ -10,3 +10,50 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Disclosure components (DESIGN.md §3): Accordion.
+
+# --- Accordion -------------------------------------------------------------------------------------
+# Each item is a component of its own, so expanding one re-renders only that item
+# (and, in an exclusive accordion, the one it closes). Its header button carries
+# `c:toggles <item>`, which the reaction finds from the clicked node.
+
+c:Accordion a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Stacked sections (c:items, a list of c:AccordionItem) whose bodies open and close
+under their headers. With c:exclusive true, opening one closes the others."""@en ;
+    sem:slug "accordion" .
+c:items a owl:ObjectProperty ; rdfs:range rdf:List ; rdfs:comment "The items of a collection component, in order."@en .
+c:exclusive a owl:DatatypeProperty ; rdfs:domain c:Accordion ; rdfs:range xsd:boolean ;
+    rdfs:comment "At most one item is open at a time."@en .
+c:AccordionRendering a sem:Rendering ; sem:targets c:Accordion ; sem:stratum 0 .
+c:AccordionRendering-fn a sem:Rule ; sem:implements c:AccordionRendering ; sem:function "accordion" .
+
+c:AccordionItem a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A section of a c:Accordion: a header button (c:label, optional c:help beneath it) that
+shows or hides its panel (c:content, any component). c:expanded says whether it is open. The
+header is a button in a heading (aria-expanded, aria-controls); the panel is a region labelled
+by it, inert while closed, and its height and opacity animate with the motion tokens."""@en ;
+    sem:slug "accordion-item" .
+c:expanded a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Whether a disclosure is open."@en .
+c:toggles a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element: the disclosure (an item) that activating it opens or closes."@en .
+c:AccordionItemRendering a sem:Rendering ; sem:targets c:AccordionItem ; sem:stratum 0 .
+c:AccordionItemRendering-fn a sem:Rule ; sem:implements c:AccordionItemRendering ; sem:function "accordion-item" .
+
+# Clicking an item's header flips its c:expanded. In an exclusive accordion (the one
+# whose c:items list holds the item), opening it also closes every other open item.
+c:AccordionToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:AccordionItem ;
+    beh:deletes """CONSTRUCT { $this c:expanded ?old . ?other c:expanded true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this .
+  { $this c:expanded ?old }
+  UNION
+  { FILTER NOT EXISTS { $this c:expanded true }
+    ?cell rdf:first $this . ?list rdf:rest* ?cell . ?accordion c:items ?list ; c:exclusive true .
+    ?accordion c:items/rdf:rest*/rdf:first ?other . ?other c:expanded true . FILTER(?other != $this) }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:expanded ?new }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . OPTIONAL { $this c:expanded ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "accordion:toggle" .

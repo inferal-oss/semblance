@@ -14,5 +14,72 @@
 # Gallery page: Overlays.
 
 ui:gallery-overlays a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-overlays-intro ) .
+    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ) .
 ui:gallery-overlays-intro a c:Heading ; c:label "Overlays" .
+
+# Dialogs and drawers are fixed to the viewport, so they live on the shell's desktop
+# (outside the gallery's flippable cards, whose 3D transforms would contain them).
+# The buttons on this page open them by saying so: `c:opens`.
+ui:desktop c:hosts ui:ov-dialog , ui:ov-confirm , ui:ov-drawer-end , ui:ov-drawer-start .
+
+# --- dialogs ---
+ui:ov-dialog a c:Dialog ; c:label "Rename graph" ;
+    c:help "The new name is written to the graph when you save." ;
+    c:content ui:ov-dialog-field ;
+    c:actions ( ui:ov-dialog-cancel ui:ov-dialog-save ) .
+ui:ov-dialog-field a c:TextField ; c:label "Name" ; c:value "Todo graph" ; c:placeholder "A short name" .
+ui:ov-dialog-cancel a c:Button ; c:label "Cancel" ; sty:emphasis sty:Outline ; c:closes ui:ov-dialog .
+ui:ov-dialog-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:closes ui:ov-dialog .
+
+ui:ov-confirm a c:Dialog ; c:label "Delete 5 todos?" ;
+    c:help "Their triples are removed from the input graph. The change log keeps the event, not the data." ;
+    c:actions ( ui:ov-confirm-cancel ui:ov-confirm-delete ) .
+ui:ov-confirm-cancel a c:Button ; c:label "Keep them" ; sty:emphasis sty:Outline ; c:closes ui:ov-confirm .
+ui:ov-confirm-delete a c:Button ; c:label "Delete" ; sty:tone sty:Danger ; sty:emphasis sty:Solid ; c:closes ui:ov-confirm .
+
+ui:ov-open-dialog a c:Button ; c:label "Open dialog" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-dialog .
+ui:ov-open-confirm a c:Button ; c:label "Delete todos…" ; sty:tone sty:Danger ; sty:emphasis sty:Soft ; c:opens ui:ov-confirm .
+ui:ov-dialogs a c:Flippable ; c:front ui:ov-dialogs-spec .
+ui:ov-dialogs-spec a c:Specimen ; c:label "Dialog" ;
+    c:help "A modal panel over a scrim (role=dialog, aria-modal, labelled by its title). Its state is one fact, c:open: buttons that c:opens or c:closes it set it, and so do its ✕ and a click on the scrim. Closed, its content is not evaluated." ;
+    c:children ( ui:ov-open-dialog ui:ov-open-confirm ) .
+
+# --- drawers ---
+ui:ov-drawer-end a c:Drawer ; c:side "end" ; c:label "Filters" ;
+    c:help "Show the todos that carry these tags." ;
+    c:content ui:ov-filter-tags ;
+    c:actions ( ui:ov-drawer-reset ui:ov-drawer-apply ) .
+ui:ov-filter-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:ov-filter-open ui:ov-filter-done ui:ov-filter-blocked ui:ov-filter-starred ) .
+ui:ov-filter-open a c:Tag ; c:label "Open" ; c:selectable true ; c:checked true ; sty:tone sty:Accent .
+ui:ov-filter-done a c:Tag ; c:label "Done" ; c:selectable true ; sty:tone sty:Accent .
+ui:ov-filter-blocked a c:Tag ; c:label "Blocked" ; c:selectable true ; sty:tone sty:Warning .
+ui:ov-filter-starred a c:Tag ; c:label "Starred" ; c:icon "★" ; c:selectable true ; sty:tone sty:Info .
+ui:ov-drawer-reset a c:Button ; c:label "Close" ; sty:emphasis sty:Outline ; c:closes ui:ov-drawer-end .
+ui:ov-drawer-apply a c:Button ; c:label "Apply" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:closes ui:ov-drawer-end .
+
+ui:ov-drawer-start a c:Drawer ; c:side "start" ; c:label "Outline" ;
+    c:help "A drawer from the start edge, with nothing but a description and a close button." .
+
+ui:ov-open-drawer-end a c:Button ; c:label "Open end drawer" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-drawer-end .
+ui:ov-open-drawer-start a c:Button ; c:label "Open start drawer" ; sty:emphasis sty:Outline ; c:opens ui:ov-drawer-start .
+ui:ov-drawers a c:Flippable ; c:front ui:ov-drawers-spec .
+ui:ov-drawers-spec a c:Specimen ; c:label "Drawer" ;
+    c:help "A dialog attached to an edge (c:side start or end) that slides in on the motion tokens. Same contract as the dialog: c:open, c:opens / c:closes, ✕ and scrim." ;
+    c:children ( ui:ov-open-drawer-end ui:ov-open-drawer-start ) .
+
+# --- popovers ---
+ui:ov-pop-info a c:Popover ; c:trigger "What is this?" ;
+    c:help "A c:Popover: a panel anchored below its trigger. The trigger toggles c:open and reports it with aria-expanded." .
+ui:ov-pop-status a c:Popover ; c:trigger "Status" ;
+    c:help "Three layers decorate this panel's content." ;
+    c:content ui:ov-pop-badges .
+ui:ov-pop-badges a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:ov-pop-b1 ui:ov-pop-b2 ui:ov-pop-b3 ) .
+ui:ov-pop-b1 a c:Badge ; c:label "a11y" ; sty:tone sty:Success .
+ui:ov-pop-b2 a c:Badge ; c:label "style" ; sty:tone sty:Accent .
+ui:ov-pop-b3 a c:Badge ; c:label "source" ; sty:tone sty:Info .
+ui:ov-pop-small a c:Popover ; c:trigger "Small" ; sty:size sty:Small ; c:help "The trigger is sized by sty:size, like every control." .
+ui:ov-popovers a c:Flippable ; c:front ui:ov-popovers-spec .
+ui:ov-popovers-spec a c:Specimen ; c:label "Popover" ;
+    c:help "Non-modal and anchored, so it can live inside the page (and inside this card). It shows c:help and c:content while c:open." ;
+    c:children ( ui:ov-pop-info ui:ov-pop-status ui:ov-pop-small ) .

@@ -1,8 +1,13 @@
 // Function rules and reactions for the layout components (ontology/components/layout.ttl).
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
-import { C, MOD, SEM, STY } from '../ns.ts'
+import { C, MOD, NS, SEM, STY } from '../ns.ts'
 import { labelOf, nodes, str, text } from './util.ts'
+
+const POS_DIRECTION = NS.pos + 'direction'
+const POS_COLUMN = NS.pos + 'Column'
+const C_COLUMNS = NS.c + 'columns'
+const C_MIN_WIDTH = NS.c + 'minWidth'
 
 /** A titled example: a heading, a description and a stage holding the components shown. */
 const specimen: FnRule = (ctx, focus) => {
@@ -52,6 +57,75 @@ const swatches: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { specimen, swatches }
+/** A padded container; elevation, tone, inset and gap are style hooks on its root. */
+const surface: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const children = nodes(ctx, ctx.object(focus, C.children))
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, [o.text('top', '┌'), ...children, o.text('bottom', '└')]))
+    return o.quads
+  }
+  o.renders(o.el('root', 'Div', {}, children))
+  return o.quads
+}
+
+/** A separator: an <hr>, or with a label a separator role whose label sits in the line. */
+const divider: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const label = text(ctx, focus, C.label)
+  const vertical = ctx.object(focus, POS_DIRECTION)?.value === POS_COLUMN
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', vertical ? 'Span' : 'Div', {}, [o.text('line', vertical ? ' │ ' : label ? `──── ${label} ────` : '────────')]))
+    return o.quads
+  }
+  if (label === undefined) {
+    const root = o.el('root', 'Hr')
+    if (vertical) o.attr(root, 'aria-orientation', 'vertical')
+    o.renders(root)
+    return o.quads
+  }
+  const root = o.el('root', 'Div', {}, [o.el('label', 'Span', { class: 'sem-label' }, [o.text('label-text', label)])])
+  o.attr(root, 'role', 'separator')
+  o.attr(root, 'aria-label', label)
+  if (vertical) o.attr(root, 'aria-orientation', 'vertical')
+  o.renders(root)
+  return o.quads
+}
+
+const CSS_LENGTH = /^\d+(\.\d+)?(px|rem|em|ch|vw|%)$/
+
+/**
+ * Tiles of equal width. The grid's parameters reach the theme as custom
+ * properties (--grid-min, --grid-columns) on its root; the theme lays it out.
+ */
+const grid: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const children = nodes(ctx, ctx.object(focus, C.children))
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, children))
+    return o.quads
+  }
+  const columns = Math.round(Number(str(ctx.object(focus, C_COLUMNS))))
+  const min = str(ctx.object(focus, C_MIN_WIDTH))?.trim()
+  const vars = [
+    ...(min && CSS_LENGTH.test(min) ? [`--grid-min: ${min}`] : []),
+    ...(columns >= 1 && columns <= 24 ? [`--grid-columns: ${columns}`] : []),
+  ]
+  const root = o.el('root', 'Div', { style: vars.length ? vars.join('; ') : undefined }, children)
+  if (columns >= 1 && columns <= 24) o.attr(root, 'data-columns', String(columns))
+  o.renders(root)
+  return o.quads
+}
+
+/** Space that grows to push its neighbours apart. */
+const spacer: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const root = o.el('root', ctx.modality === MOD.Text ? 'Span' : 'Div')
+  if (ctx.modality !== MOD.Text) o.attr(root, 'aria-hidden', 'true')
+  o.renders(root)
+  return o.quads
+}
+
+export const functions: Record<string, FnRule> = { specimen, swatches, surface, divider, grid, spacer }
 
 export const reactions: Record<string, ReactionFn> = {}

@@ -29,7 +29,10 @@ CONSTRUCT {
   ?text a rdfhtml:Text ; rdfhtml:data ?label .
 }
 WHERE {
-  $this a c:Heading ; c:label ?label .
+  $this a c:Heading .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:level ?l }
   BIND(IRI(CONCAT(STR(rdfhtml:), "H", STR(COALESCE(?l, 2)))) AS ?element)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -55,7 +58,10 @@ CONSTRUCT {
   ?text a rdfhtml:Text ; rdfhtml:data ?line .
 }
 WHERE {
-  $this a c:Heading ; c:label ?label .
+  $this a c:Heading .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(CONCAT("# ", UCASE(STR(?label))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)

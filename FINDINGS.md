@@ -77,3 +77,40 @@ app and its history grow. It fails on any scan of a growing set.
 The Activity view's cost is proportional to the log bound (`ldes:amount`,
 200 by default), not to session length. A larger bound buys more history at a
 higher per-event cost for that view only while it is shown.
+
+## Keeping cost constant: what the checks found
+
+`test/cost.test.ts` counts the work of ten interactions: rule runs, derived
+triples written, triples matched, SPARQL result rows and DOM operations. It
+requires those counts to stay the same after the list grows by 300 items and
+the history by 250 events. When first added, it caught two problems:
+
+- **Adding a todo** re-ran the whole list rule. Reads grew from 344 to 1,253
+  triples, because the rule read every item and its sort key, and recorded
+  provenance for every item. The fix is **member-wise rules**
+  (`sem:forEach c:item`): one evaluation per (list, item), each placing its item
+  by `sem:orderKey`, which the HTML index sorts. Adding or re-sorting an item now
+  touches only that item.
+- **Turning a card over to its source** rebuilt the back side on every flip:
+  about 10,000 derived triples and 3,000 DOM operations. Its walk over the
+  front's subtree was also traced, so after one flip, every change inside the
+  card re-ran it. The back is now a `c:SourceBack` component. It is built once
+  when first revealed, walks untraced, and visits each component class once.
+
+`test/soak.test.ts` runs 3,600 mixed events and requires every structure, and
+the time per event, to stay flat. It found leaks and one store problem:
+
+- The HTML index never forgot nodes, and the engine kept read-tracking entries
+  for parts that no longer existed. Both now clean up after themselves.
+- **Oxigraph 0.5.13 never purges deleted quads.** Its in-memory store keeps
+  them as dead versions that later lookups of the same pattern walk. A sliding
+  window of 200 LDES members costs 15 µs per match when fresh, and 1.5 ms after
+  20,000 retirements. Per-event time in the pure-Oxigraph configuration grew
+  tenfold over 900 events. The hybrid store (the default) now rebuilds its
+  Oxigraph side from the N3 mirror in idle slices (`GraphStore.maintain`, driven
+  by `Runtime.warm`), with writes going to both copies until it swaps. The pure
+  Oxigraph store compacts synchronously once deletions reach half its size.
+  With an idle slice between interactions, the hybrid store stays at
+  11–12 ms per event, including the 8 ms idle budget, across 5,000 events. The
+  pure-Oxigraph configuration still degrades, which is a reason to keep it as a
+  comparison only.

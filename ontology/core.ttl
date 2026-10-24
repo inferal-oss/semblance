@@ -76,6 +76,11 @@ member. Its output places the member's part itself (e.g. hasChild + sem:orderKey
 sem:renders a owl:ObjectProperty ;
     rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
 
+sem:inputOnly a owl:DatatypeProperty ;
+    rdfs:comment """On a rendering: it applies only to instances typed in the input graphs, not to
+instances other rules mint. Pre-render rules (strata below the components, e.g. localization
+and validation) need it: a minted instance appears after their stratum has run."""@en .
+
 sem:orderKey a owl:DatatypeProperty ;
     rdfs:comment """On an RDF/HTML node: orders it among siblings that carry no ord: precedence (numerically
 when both keys are numbers, else as strings; the node IRI breaks ties). Member-wise rules

@@ -80,6 +80,12 @@ sty:size a owl:ObjectProperty ;
     sty:hookAttribute "data-sem-size" .
 sty:ControlSize a owl:Class .
 
+sty:Keyframes a owl:Class ;
+    rdfs:comment "A named animation (sty:name) of steps (sty:step [ sty:at \"50%\" ; sty:declares ... ]), compiled to @keyframes."@en .
+sty:name a owl:DatatypeProperty .
+sty:step a owl:ObjectProperty ; rdfs:domain sty:Keyframes .
+sty:at a owl:DatatypeProperty ; rdfs:comment "A keyframe selector: from, to, or a percentage."@en .
+
 sty:when a owl:ObjectProperty ; rdfs:domain sty:StyleRule ;
     rdfs:comment """Narrows a style rule to elements whose hooked axis has this value (e.g. sty:Solid).
 Without sty:appliesTo the rule applies to every component with that value."""@en .
@@ -104,6 +110,23 @@ sty:Dark a sty:ColorScheme ; rdfs:label "Night"@en ; sem:symbol "☾" ; sem:orde
     sty:declares [ sty:property "color-scheme" ; sty:raw "dark" ] .
 sty:System a sty:ColorScheme ; rdfs:label "Match"@en ; sem:symbol "◐" ; sem:order 3 ; sem:slug "system" ;
     sty:declares [ sty:property "color-scheme" ; sty:raw "light dark" ] .
+
+sty:contrast a owl:ObjectProperty ;
+    rdfs:range sty:Contrast ;
+    rdfs:label "Contrast"@en ;
+    rdfs:comment "Standard, or high contrast: role tokens re-valued for stronger text and visible borders in the subtree."@en ;
+    sty:hookAttribute "data-sem-contrast" .
+sty:Contrast a owl:Class .
+sty:StandardContrast a sty:Contrast ; rdfs:label "Standard"@en ; sem:symbol "◑" ; sem:order 1 ; sem:slug "standard" .
+sty:HighContrast a sty:Contrast ; rdfs:label "High"@en ; sem:symbol "●" ; sem:order 2 ; sem:slug "high" ;
+    sty:declares [ sty:property "--sem-text" ; sty:raw "light-dark(#000000, #ffffff)" ] ,
+                 [ sty:property "--sem-muted" ; sty:raw "light-dark(#26262f, #e4e4ee)" ] ,
+                 [ sty:property "--sem-faint" ; sty:raw "light-dark(#4a4a58, #b8b8c8)" ] ,
+                 [ sty:property "--sem-border" ; sty:raw "light-dark(#6b6b7c, #8a8a9e)" ] ,
+                 [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#26262f, #e4e4ee)" ] ,
+                 [ sty:property "--sem-accent" ; sty:raw "light-dark(#3a2bc4, #b4abff)" ] ,
+                 [ sty:property "--sem-accent-strong" ; sty:raw "light-dark(#2a1d9e, #d4ceff)" ] ,
+                 [ sty:property "--sem-ring" ; sty:raw "0 0 0 3px light-dark(#000000, #ffffff)" ] .
 
 sty:backdrop a owl:ObjectProperty ;
     rdfs:range sty:Backdrop ;

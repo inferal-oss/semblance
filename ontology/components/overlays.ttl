@@ -8,5 +8,102 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix a11y: <https://semblance.dev/ns/a11y#> .
 
 # Overlays components (DESIGN.md §3): Dialog, Drawer and Popover.
+#
+# An overlay's state is one fact, c:open. It changes only through reactions: the
+# overlay's own ✕ and scrim (rendered elements marked c:closes), a popover's
+# trigger (c:toggles), and any c:Button that c:opens or c:closes it. The
+# vocabulary for c:open / c:closes / c:toggles is declared with the feedback
+# components (feedback.ttl), which share it.
+#
+# Overlays are fixed to the viewport. An ancestor with a transform, perspective
+# or filter becomes their containing block (a c:Flippable card has one), so put
+# dialogs, drawers and toast regions on the shell's c:Desktop (`ui:desktop c:hosts
+# ui:myDialog`): it is outside every page, and they open over all of it.
+
+c:Overlay a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A component shown on demand, over the page (c:open). Closing it is one reaction for every kind."@en .
+
+c:opens a owl:ObjectProperty ; rdfs:domain c:Button ; rdfs:range c:Overlay ;
+    rdfs:comment "The overlay this button opens (sets its c:open true). The button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
+
+# --- Dialog ----------------------------------------------------------------------------------------
+
+c:Dialog a owl:Class ;
+    rdfs:subClassOf c:Overlay ;
+    rdfs:comment """A modal panel over a scrim: title (c:label), description (c:help), content
+(c:content) and actions (c:actions, typically buttons that c:closes it). role=dialog, aria-modal,
+labelled by its title and described by its description. The ✕ and a click on the scrim close it.
+Closed (the default) it renders an empty hidden root: its content is not evaluated."""@en ;
+    sem:slug "dialog" .
+c:DialogRendering a sem:Rendering ; sem:targets c:Dialog ; sem:stratum 0 .
+c:DialogRendering-fn a sem:Rule ; sem:implements c:DialogRendering ; sem:function "dialog" .
+
+# --- Drawer ----------------------------------------------------------------------------------------
+
+c:Drawer a owl:Class ;
+    rdfs:subClassOf c:Overlay ;
+    rdfs:comment "A dialog that slides in from an edge of the viewport: c:side \"start\" or \"end\" (the default). Same contract as c:Dialog."@en ;
+    sem:slug "drawer" .
+c:side a owl:DatatypeProperty ; rdfs:domain c:Drawer ; rdfs:range xsd:string ;
+    rdfs:comment "\"start\" or \"end\": the inline edge a drawer is attached to."@en .
+c:DrawerRendering a sem:Rendering ; sem:targets c:Drawer ; sem:stratum 0 .
+c:DrawerRendering-fn a sem:Rule ; sem:implements c:DrawerRendering ; sem:function "drawer" .
+
+# --- Popover ---------------------------------------------------------------------------------------
+
+c:Popover a owl:Class ;
+    rdfs:subClassOf c:Overlay ;
+    rdfs:comment """A non-modal panel anchored below its trigger button (labelled by c:trigger, else
+c:label). The trigger toggles c:open and reports it (aria-expanded, aria-controls); the panel
+(role=dialog, labelled by the trigger) shows c:help and c:content while open."""@en ;
+    sem:slug "popover" .
+c:trigger a owl:DatatypeProperty ; rdfs:domain c:Popover ; rdfs:comment "The trigger button's label."@en .
+c:PopoverRendering a sem:Rendering ; sem:targets c:Popover ; sem:stratum 0 .
+c:PopoverRendering-fn a sem:Rule ; sem:implements c:PopoverRendering ; sem:function "popover" .
+
+# --- behaviour -------------------------------------------------------------------------------------
+
+c:OverlayClose a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Overlay ;
+    beh:deletes """CONSTRUCT { $this c:open ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this . $this c:open ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:open false } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:closes $this }""" ;
+    sem:function "overlay:close" .
+
+c:PopoverToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Popover ;
+    beh:deletes """CONSTRUCT { $this c:open ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . $this c:open ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:open ?new } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . OPTIONAL { $this c:open ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "popover:toggle" .
+
+# Any button opens or closes overlays by saying so (`ui:btn c:opens ui:dialog`). The
+# reactions are on c:Button, so a button inside an overlay's actions closes it by
+# c:closes rather than by its click bubbling up to the overlay.
+c:Opens a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Button ;
+    beh:deletes """CONSTRUCT { ?overlay c:open ?old } WHERE { $this c:opens ?overlay . ?overlay c:open ?old }""" ;
+    beh:inserts """CONSTRUCT { ?overlay c:open true } WHERE { $this c:opens ?overlay }""" ;
+    sem:function "overlay:open" .
+
+c:Closes a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Button ;
+    beh:deletes """CONSTRUCT { ?overlay c:open ?old } WHERE { $this c:closes ?overlay . ?overlay c:open ?old }""" ;
+    beh:inserts """CONSTRUCT { ?overlay c:open false } WHERE { $this c:closes ?overlay }""" ;
+    sem:function "overlay:close-from" .
+
+# --- a11y: a button that opens an overlay says so --------------------------------------------------
+
+c:OpenerAria a sem:Rendering ;
+    rdfs:comment "aria-controls, aria-expanded and aria-haspopup on a c:Button that c:opens an overlay."@en ;
+    sem:targets c:Button ;
+    sem:modality mod:Screen ;
+    sem:layer a11y:Layer ;
+    sem:stratum 10 .
+c:OpenerAria-fn a sem:Rule ; sem:implements c:OpenerAria ; sem:function "overlays:opener-aria" .

@@ -125,3 +125,20 @@ tok:duration-slow a sty:Token ; sty:scale sty:Motion ; sem:slug "duration-slow" 
 tok:ease a sty:Token ; sty:scale sty:Motion ; sem:slug "ease" ; sty:value "cubic-bezier(0.2, 0, 0, 1)" .
 tok:ease-out a sty:Token ; sty:scale sty:Motion ; sem:slug "ease-out" ; sty:value "cubic-bezier(0, 0, 0.2, 1)" .
 tok:spring a sty:Token ; sty:scale sty:Motion ; sem:slug "spring" ; sty:value "cubic-bezier(0.34, 1.4, 0.64, 1)" .
+
+# --- animations (use with the motion tokens, so the motion layer can calm them) ---
+[] a sty:Keyframes ; sty:name "sem-spin" ;
+    sty:step [ sty:at "to" ; sty:declares [ sty:property "transform" ; sty:raw "rotate(360deg)" ] ] .
+[] a sty:Keyframes ; sty:name "sem-shimmer" ;
+    sty:step [ sty:at "from" ; sty:declares [ sty:property "background-position" ; sty:raw "120% 0" ] ] ,
+             [ sty:at "to" ; sty:declares [ sty:property "background-position" ; sty:raw "-120% 0" ] ] .
+[] a sty:Keyframes ; sty:name "sem-fade-in" ;
+    sty:step [ sty:at "from" ; sty:declares [ sty:property "opacity" ; sty:raw "0" ] ] .
+[] a sty:Keyframes ; sty:name "sem-rise-in" ;
+    sty:step [ sty:at "from" ; sty:declares [ sty:property "opacity" ; sty:raw "0" ] , [ sty:property "transform" ; sty:raw "translateY(8px)" ] ] .
+[] a sty:Keyframes ; sty:name "sem-scale-in" ;
+    sty:step [ sty:at "from" ; sty:declares [ sty:property "opacity" ; sty:raw "0" ] , [ sty:property "transform" ; sty:raw "scale(0.96)" ] ] .
+[] a sty:Keyframes ; sty:name "sem-slide-in-end" ;
+    sty:step [ sty:at "from" ; sty:declares [ sty:property "transform" ; sty:raw "translateX(100%)" ] ] .
+[] a sty:Keyframes ; sty:name "sem-slide-in-start" ;
+    sty:step [ sty:at "from" ; sty:declares [ sty:property "transform" ; sty:raw "translateX(-100%)" ] ] .

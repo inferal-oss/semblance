@@ -23,6 +23,11 @@ export interface Rule {
    * so adding, removing or changing one member re-runs only that member's evaluation.
    */
   forEach?: string
+  /**
+   * Applies only to instances typed in the input graphs, not to ones other rules
+   * mint (pre-render rules in strata below the components: localization, validation).
+   */
+  inputOnly: boolean
 }
 
 export interface Selection {
@@ -32,6 +37,8 @@ export interface Selection {
   prefer: 'sparql' | 'function'
   /** Whether the store can evaluate SPARQL; slots with only SPARQL implementations are skipped otherwise. */
   sparql?: boolean
+  /** The viewer's languages, most preferred first (the localization layer). */
+  languages?: string[]
 }
 
 /** Read every sem:Rule from the ontology graph(s) loaded in the store. */
@@ -70,6 +77,7 @@ export function loadRules(store: GraphStore): Rule[] {
       watches: watches.length ? new Set(watches) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach: get(SEM.forEach)?.value,
+      inputOnly: get(SEM.inputOnly)?.value === 'true',
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || a.iri.localeCompare(b.iri))

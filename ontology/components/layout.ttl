@@ -32,3 +32,48 @@ c:Swatches a owl:Class ;
 c:prefix a owl:DatatypeProperty ; rdfs:domain c:Swatches .
 c:SwatchesRendering a sem:Rendering ; sem:targets c:Swatches ; sem:stratum 0 .
 c:SwatchesRendering-fn a sem:Rule ; sem:implements c:SwatchesRendering ; sem:function "swatches" .
+
+# --- Surface: a padded container that stands off the page -----------------------------------------
+
+c:Surface a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A padded container for c:children. How far it stands off the page is sty:elevation
+(sty:Flat, the default, sty:Raised or sty:Overlay); sty:tone tints its background soft and its
+border in the tone. Padding is pos:inset (default space-5); children stack with pos:gap."""@en ;
+    sem:slug "surface" .
+c:SurfaceRendering a sem:Rendering ; sem:targets c:Surface ; sem:stratum 0 .
+c:SurfaceRendering-fn a sem:Rule ; sem:implements c:SurfaceRendering ; sem:function "surface" .
+
+# --- Divider: a rule between content ----------------------------------------------------------------
+
+c:Divider a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A separator. Horizontal by default; pos:direction pos:Column stands it upright (between
+items of a row). An optional c:label sits centred in the line."""@en ;
+    sem:slug "divider" .
+c:DividerRendering a sem:Rendering ; sem:targets c:Divider ; sem:stratum 0 .
+c:DividerRendering-fn a sem:Rule ; sem:implements c:DividerRendering ; sem:function "divider" .
+
+# --- Grid: tiles in a responsive grid ------------------------------------------------------------------
+
+c:Grid a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """c:children as tiles of equal width. c:minWidth (a CSS length, default 240px) is the
+narrowest a tile may get: as many columns as fit. c:columns caps the columns at that count; they
+still wrap when tiles would be narrower than c:minWidth (default 160px then). Spacing: pos:gap."""@en ;
+    sem:slug "grid" .
+c:columns a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "The most columns a grid shows."@en .
+c:minWidth a owl:DatatypeProperty ;
+    rdfs:comment "The narrowest a grid tile may get, as a CSS length (\"240px\", \"16rem\")."@en .
+c:GridRendering a sem:Rendering ; sem:targets c:Grid ; sem:stratum 0 .
+c:GridRendering-fn a sem:Rule ; sem:implements c:GridRendering ; sem:function "grid" .
+
+# --- Spacer: pushes its neighbours apart ------------------------------------------------------------
+
+c:Spacer a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Empty space that grows, pushing what follows it in a row or column to the far end."@en ;
+    sem:slug "spacer" .
+c:SpacerRendering a sem:Rendering ; sem:targets c:Spacer ; sem:stratum 0 .
+c:SpacerRendering-fn a sem:Rule ; sem:implements c:SpacerRendering ; sem:function "spacer" .

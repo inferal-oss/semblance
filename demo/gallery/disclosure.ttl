@@ -14,5 +14,55 @@
 # Gallery page: Disclosure.
 
 ui:gallery-disclosure a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-disclosure-intro ) .
+    c:children ( ui:gallery-disclosure-intro ui:dc-layers ui:dc-faq ui:dc-flip ) .
 ui:gallery-disclosure-intro a c:Heading ; c:label "Disclosure" .
+
+# --- an exclusive accordion: Semblance's layers ---
+ui:dc-layer-modality a c:AccordionItem ; c:label "Modality" ; c:help "Screen and Text projections of one graph" ; c:content ui:dc-layer-modality-text ; c:expanded true .
+ui:dc-layer-modality-text a c:Text ; c:label "Modality is substitution: each rendering rule may target sem:modality mod:Screen or mod:Text, and a projection picks the rules of its modality. The same component instances become a DOM or a compact text sketch." .
+ui:dc-layer-style a c:AccordionItem ; c:label "Style" ; c:help "Tokens, hooks and theme rules compiled to CSS" ; c:content ui:dc-layer-style-text .
+ui:dc-layer-style-text a c:Text ; c:label "Styling is semantic. Tokens become custom properties; hookable axes (tone, emphasis, size, text style, elevation) become data-sem-* attributes; sty:StyleRule declarations compile into cascade layers. A component never hard-codes a color." .
+ui:dc-layer-position a c:AccordionItem ; c:label "Position" ; c:help "Layout as pure vocabulary" ; c:content ui:dc-layer-position-text .
+ui:dc-layer-position-text a c:Text ; c:label "pos:direction, pos:gap, pos:inset, pos:align and pos:layout have no rules of their own: they are hookable, so the style layer exposes them and the theme turns them into flexbox and grid." .
+ui:dc-layer-a11y a c:AccordionItem ; c:label "Accessibility" ; c:help "ARIA relationships by IRI" ; c:content ui:dc-layer-a11y-text .
+ui:dc-layer-a11y-text a c:Text ; c:label "The a11y layer decorates rendered output with labels, descriptions and roles. Node IRIs double as DOM ids, so aria-describedby and aria-controls point at nodes, as this accordion does." .
+ui:dc-layer-behaviour a c:AccordionItem ; c:label "Behaviour" ; c:help "Events, reactions and the change log" ; c:content ui:dc-layer-behaviour-text .
+ui:dc-layer-behaviour-text a c:Text ; c:label "An interaction becomes an RDF event addressed to the innermost component with a matching beh:Reaction. Reactions are SPARQL CONSTRUCT pairs over $event and $this; their union is applied as one delta and recorded in an LDES." .
+ui:dc-layer-provenance a c:AccordionItem ; c:label "Provenance" ; c:help "Every node knows the rule that made it" ; c:content ui:dc-layer-provenance-text .
+ui:dc-layer-provenance-text a c:Text ; c:label "Each derived node has prov:wasGeneratedBy or prov:wasInfluencedBy an activity whose plan is a rule. Turn any card over to follow that trail." .
+ui:dc-layer-source a c:AccordionItem ; c:label "Source" ; c:help "How this view is made" ; c:content ui:dc-layer-source-text .
+ui:dc-layer-source-text a c:Text ; c:label "c:Flippable shows, on its back, the queries a view reads and the rules that rendered it, found through its PROV-O trail and syntax-colored." .
+ui:dc-layers-accordion a c:Accordion ; c:exclusive true ;
+    c:items ( ui:dc-layer-modality ui:dc-layer-style ui:dc-layer-position ui:dc-layer-a11y ui:dc-layer-behaviour ui:dc-layer-provenance ui:dc-layer-source ) .
+ui:dc-layers a c:Flippable ; c:front ui:dc-layers-spec .
+ui:dc-layers-spec a c:Specimen ; c:label "Accordion" ;
+    c:help "Sections that open under their headers. Each item is its own component, so opening one re-renders only it (and, with c:exclusive true, the one it closes). The header is a button in a heading with aria-expanded and aria-controls; the panel is a labelled region, inert while closed." ;
+    c:children ( ui:dc-layers-accordion ) .
+
+# --- a non-exclusive accordion: several open at once ---
+ui:dc-faq-1 a c:AccordionItem ; c:label "Where does the state live?" ; c:content ui:dc-faq-1-text ; c:expanded true .
+ui:dc-faq-1-text a c:Text ; c:children ( "In the graph: " ui:dc-faq-1-code " on the item. A click changes it only through a reaction." ) .
+ui:dc-faq-1-code a c:Code ; c:label "c:expanded true" ; c:language "turtle" .
+ui:dc-faq-2 a c:AccordionItem ; c:label "Can several be open?" ; c:content ui:dc-faq-2-text ; c:expanded true .
+ui:dc-faq-2-text a c:Text ; c:label "Yes, unless the accordion is c:exclusive. This one is not." .
+ui:dc-faq-3 a c:AccordionItem ; c:label "Is it keyboard accessible?" ; c:content ui:dc-faq-3-text .
+ui:dc-faq-3-kbd-tab a c:Kbd ; c:label "Tab" .
+ui:dc-faq-3-kbd-enter a c:Kbd ; c:label "Enter" .
+ui:dc-faq-3-kbd-space a c:Kbd ; c:label "Space" .
+ui:dc-faq-3-text a c:Text ; c:children ( "Headers are buttons: " ui:dc-faq-3-kbd-tab " to reach one, " ui:dc-faq-3-kbd-enter " or " ui:dc-faq-3-kbd-space " to toggle it." ) .
+ui:dc-faq-accordion a c:Accordion ; c:items ( ui:dc-faq-1 ui:dc-faq-2 ui:dc-faq-3 ) .
+ui:dc-faq a c:Flippable ; c:front ui:dc-faq-spec .
+ui:dc-faq-spec a c:Specimen ; c:label "Accordion, several open" ;
+    c:help "Without c:exclusive each item opens and closes on its own." ;
+    c:children ( ui:dc-faq-accordion ) .
+
+# --- Flippable: the other disclosure ---
+ui:dc-flip-card a c:Flippable ; c:front ui:dc-flip-surface .
+ui:dc-flip-surface a c:Surface ; sty:elevation sty:Raised ; pos:direction pos:Column ; c:children ( ui:dc-flip-over ui:dc-flip-title ui:dc-flip-text ) .
+ui:dc-flip-over a c:Text ; sty:textStyle sty:Overline ; c:label "c:Flippable" .
+ui:dc-flip-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Turn me over" .
+ui:dc-flip-text a c:Text ; sty:textStyle sty:Caption ; c:label "Any component can be the front of a card; its back lists the rules that rendered it. Its state is c:flipped, toggled by a reaction." .
+ui:dc-flip a c:Flippable ; c:front ui:dc-flip-spec .
+ui:dc-flip-spec a c:Specimen ; c:label "Flippable" ;
+    c:help "A two-sided card around any component (c:front): the back shows how it is made, from its PROV-O trail. Every specimen on these pages is one." ;
+    c:children ( ui:dc-flip-card ) .

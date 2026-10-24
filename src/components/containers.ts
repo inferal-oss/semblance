@@ -2,6 +2,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, MOD } from '../ns.ts'
+import { text } from './util.ts'
 
 const str = (t: Term | undefined) => t?.value
 const int = (ctx: RuleContext, s: Term, p: string, fallback: number) => {
@@ -14,7 +15,7 @@ const STAGGER = 28
 
 export const window: FnRule = (ctx, focus) => {
   const body = ctx.object(focus, C.body)
-  const title = str(ctx.object(focus, C.title)) ?? 'Window'
+  const title = text(ctx, focus, C.title) ?? 'Window'
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
     o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `┌ ${title} ┐`)]), ...(body?.termType === 'NamedNode' ? [body] : [])]))
@@ -49,7 +50,7 @@ export const window: FnRule = (ctx, focus) => {
 export const progress: FnRule = (ctx, focus) => {
   const value = Number(str(ctx.object(focus, C.value)) ?? 0)
   const max = Number(str(ctx.object(focus, C.max)) ?? 1) || 1
-  const label = str(ctx.object(focus, C.label)) ?? ''
+  const label = text(ctx, focus, C.label) ?? ''
   const active = str(ctx.object(focus, C.active)) === 'true'
   const share = Math.max(0, Math.min(1, value / max))
   const o = ctx.out(focus)

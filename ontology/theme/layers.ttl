@@ -1,0 +1,68 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+
+# Theme for what the layers add: shortcut hints, busy state, shortcut lists.
+
+# --- keyboard: a hint after any element that declares a shortcut (Apple or other glyphs) ---
+[] a sty:StyleRule ; sty:part "[data-sem-shortcut]:not(input, textarea, select)::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other)" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
+                 [ sty:property "padding" ; sty:raw "2px 5px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "5px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid color-mix(in oklab, currentColor 28%, transparent)" ] ,
+                 [ sty:property "font" ; sty:raw "600 10px/1 var(--sem-font-mono)" ] ,
+                 [ sty:property "opacity" ; sty:raw "0.75" ] ,
+                 [ sty:property "vertical-align" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-shortcut]:not(input, textarea, select)::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple)" ] .
+
+# --- shortcut list ---
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(100%, 360px)" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "> div" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "justify-content" ; sty:raw "space-between" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-4 ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "> div:nth-child(odd)" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-sunken ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "dd" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part "kbd" ;
+    sty:declares [ sty:property "padding" ; sty:raw "3px 7px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "6px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-bottom-width" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "font" ; sty:raw "600 11px/1 var(--sem-font-mono)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part ".sem-apple" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=shortcut-list] .sem-apple" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline" ] .
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=shortcut-list] .sem-other" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+# --- status: busy components ---
+[] a sty:StyleRule ; sty:part "[aria-busy=true]" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "cursor" ; sty:raw "progress" ] .
+[] a sty:StyleRule ; sty:part "[aria-busy=true] > *" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.45" ] ,
+                 [ sty:property "transition" ; sty:raw "opacity var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:part "[aria-busy=true]::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] ,
+                 [ sty:property "border-radius" ; sty:raw "inherit" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--sem-accent) 14%, transparent) 50%, transparent 70%) 0 0 / 220% 100%" ] ,
+                 [ sty:property "animation" ; sty:raw "sem-shimmer calc(var(--sem-duration-slow) * 4) linear infinite" ] .

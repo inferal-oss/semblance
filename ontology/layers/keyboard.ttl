@@ -1,0 +1,37 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Keyboard layer. Any component may carry a shortcut (key:shortcut
+# "mod+shift+k"; "mod" is ⌘ on Apple platforms and Ctrl elsewhere). The layer
+# exposes it as aria-keyshortcuts and a visible hint on the component's root;
+# the event bus turns the key press into activating that root (a click on it,
+# or on its first control; focus for text inputs), so the component's own
+# click reactions run and the change log records an ordinary event.
+# c:ShortcutList shows every shortcut in the graph.
+
+<https://semblance.dev/ns/keyboard> a owl:Ontology ;
+    rdfs:label "Semblance keyboard layer"@en .
+
+key:Layer a sem:Layer ; rdfs:label "keyboard"@en .
+
+key:shortcut a owl:DatatypeProperty ;
+    rdfs:comment "A key combination that activates the component: modifiers (mod, ctrl, alt, shift, meta) and a key, joined by +."@en .
+
+key:Shortcuts a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:modality mod:Screen ;
+    sem:layer key:Layer ;
+    sem:stratum 10 ;
+    sem:watches key:shortcut .
+key:Shortcuts-fn a sem:Rule ; sem:implements key:Shortcuts ; sem:function "keyboard:shortcut" .
+
+c:ShortcutList a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Every key:shortcut in the graph, with what it activates."@en ;
+    sem:slug "shortcut-list" .
+c:ShortcutListRendering a sem:Rendering ; sem:targets c:ShortcutList ; sem:stratum 0 .
+c:ShortcutListRendering-fn a sem:Rule ; sem:implements c:ShortcutListRendering ; sem:function "shortcut-list" .

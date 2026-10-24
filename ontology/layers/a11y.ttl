@@ -72,7 +72,10 @@ CONSTRUCT {
   ?a a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
 }
 WHERE {
-  $this a c:List ; c:label ?label .
+  $this a c:List .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?a)
 }""" .

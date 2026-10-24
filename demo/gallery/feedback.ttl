@@ -10,7 +10,7 @@
 # Gallery page: Feedback.
 
 ui:gallery-feedback a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-feedback-intro ui:fb-badges ui:fb-alerts ) .
+    c:children ( ui:gallery-feedback-intro ui:fb-badges ui:fb-alerts ui:fb-tags ui:fb-spinners ui:fb-skeletons ui:fb-empty ui:fb-toasts ) .
 ui:gallery-feedback-intro a c:Heading ; c:label "Feedback" .
 
 ui:fb-badge-neutral a c:Badge ; c:label "Neutral" ; c:icon "•" ; sty:tone sty:Neutral .
@@ -34,3 +34,102 @@ ui:fb-alerts-spec a c:Specimen ; c:label "Alert" ;
     c:children ( ui:fb-alerts-col ) .
 ui:fb-alerts-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:fb-alert-info ui:fb-alert-success ui:fb-alert-warning ui:fb-alert-danger ) .
 
+
+# --- tags ---
+ui:fb-tag-neutral a c:Tag ; c:label "rdf:List" ; sty:tone sty:Neutral .
+ui:fb-tag-accent a c:Tag ; c:label "component" ; c:icon "✦" ; sty:tone sty:Accent .
+ui:fb-tag-info a c:Tag ; c:label "SPARQL" ; sty:tone sty:Info .
+ui:fb-tag-success a c:Tag ; c:label "derived" ; c:icon "✓" ; sty:tone sty:Success .
+ui:fb-tag-warning a c:Tag ; c:label "parked" ; sty:tone sty:Warning .
+ui:fb-tag-danger a c:Tag ; c:label "invalid" ; sty:tone sty:Danger .
+ui:fb-tags-tones a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:fb-tag-neutral ui:fb-tag-accent ui:fb-tag-info ui:fb-tag-success ui:fb-tag-warning ui:fb-tag-danger ) .
+ui:fb-tag-sm a c:Tag ; c:label "Small" ; sty:size sty:Small ; sty:tone sty:Accent .
+ui:fb-tag-md a c:Tag ; c:label "Medium" ; sty:size sty:Medium ; sty:tone sty:Accent .
+ui:fb-tag-lg a c:Tag ; c:label "Large" ; sty:size sty:Large ; sty:tone sty:Accent .
+ui:fb-tag-outline a c:Tag ; c:label "Outline" ; sty:tone sty:Info ; sty:emphasis sty:Outline .
+ui:fb-tag-solid a c:Tag ; c:label "Solid" ; sty:tone sty:Info ; sty:emphasis sty:Solid .
+ui:fb-tags-sizes a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:fb-tag-sm ui:fb-tag-md ui:fb-tag-lg ui:fb-tag-outline ui:fb-tag-solid ) .
+ui:fb-tag-rm-1 a c:Tag ; c:label "screen" ; c:removable true ; sty:tone sty:Accent .
+ui:fb-tag-rm-2 a c:Tag ; c:label "text" ; c:removable true ; sty:tone sty:Accent .
+ui:fb-tag-rm-3 a c:Tag ; c:label "a11y" ; c:removable true ; sty:tone sty:Success .
+ui:fb-tag-rm-4 a c:Tag ; c:label "debug" ; c:removable true ; sty:tone sty:Neutral .
+ui:fb-tags-removable a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:fb-tag-rm-1 ui:fb-tag-rm-2 ui:fb-tag-rm-3 ui:fb-tag-rm-4 ) .
+ui:fb-tag-sel-1 a c:Tag ; c:label "Open" ; c:selectable true ; c:checked true ; sty:tone sty:Accent .
+ui:fb-tag-sel-2 a c:Tag ; c:label "Done" ; c:selectable true ; sty:tone sty:Accent .
+ui:fb-tag-sel-3 a c:Tag ; c:label "Blocked" ; c:icon "!" ; c:selectable true ; sty:tone sty:Warning .
+ui:fb-tag-sel-4 a c:Tag ; c:label "Starred" ; c:icon "★" ; c:selectable true ; c:removable true ; c:checked true ; sty:tone sty:Info .
+ui:fb-tags-selectable a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:fb-tag-sel-1 ui:fb-tag-sel-2 ui:fb-tag-sel-3 ui:fb-tag-sel-4 ) .
+ui:fb-tags a c:Flippable ; c:front ui:fb-tags-spec .
+ui:fb-tags-spec a c:Specimen ; c:label "Tag" ;
+    c:help "A label chip: toned and sized like every control. c:removable adds a ✕ that marks the tag c:removed; c:selectable makes it a toggle button (aria-pressed) over c:checked. Click them: each is one RDF event." ;
+    c:children ( ui:fb-tags-col ) .
+ui:fb-tags-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:fb-tags-tones ui:fb-tags-sizes ui:fb-tags-removable ui:fb-tags-selectable ) .
+
+# --- spinners ---
+ui:fb-spin-sm a c:Spinner ; c:label "Loading the graph" ; sty:size sty:Small .
+ui:fb-spin-md a c:Spinner ; c:label "Loading the graph" ; sty:size sty:Medium .
+ui:fb-spin-lg a c:Spinner ; c:label "Loading the graph" ; sty:size sty:Large .
+ui:fb-spin-neutral a c:Spinner ; c:label "Rendering" ; sty:tone sty:Neutral .
+ui:fb-spin-success a c:Spinner ; c:label "Saving" ; sty:tone sty:Success .
+ui:fb-spin-warning a c:Spinner ; c:label "Retrying" ; sty:tone sty:Warning .
+ui:fb-spin-danger a c:Spinner ; c:label "Rolling back" ; sty:tone sty:Danger .
+ui:fb-spinners a c:Flippable ; c:front ui:fb-spinners-spec .
+ui:fb-spinners-spec a c:Specimen ; c:label "Spinner" ;
+    c:help "An indeterminate indicator (role=status, named by c:label). Pure CSS on the motion tokens: Motion → None stops it. Sized by sty:size, colored by sty:tone." ;
+    c:children ( ui:fb-spin-sm ui:fb-spin-md ui:fb-spin-lg ui:fb-spin-neutral ui:fb-spin-success ui:fb-spin-warning ui:fb-spin-danger ) .
+
+# --- skeletons ---
+ui:fb-skel-avatar a c:Skeleton ; c:shape "circle" ; c:width 44 ; c:height 44 .
+ui:fb-skel-lines a c:Skeleton ; c:lines 3 .
+ui:fb-skel-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:fb-skel-avatar ui:fb-skel-lines ) .
+ui:fb-skel-block a c:Skeleton ; c:shape "block" ; c:height 88 .
+ui:fb-skel-para a c:Skeleton ; c:lines 5 .
+ui:fb-skel-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:fb-skel-row ui:fb-skel-block ui:fb-skel-para ) .
+ui:fb-skeletons a c:Flippable ; c:front ui:fb-skeletons-spec .
+ui:fb-skeletons-spec a c:Specimen ; c:label "Skeleton" ;
+    c:help "A shimmering stand-in while content loads: c:lines of text (the last one shorter), a circle or a block (c:shape, sized by c:width / c:height). Hidden from assistive technology." ;
+    c:children ( ui:fb-skel-col ) .
+
+# --- empty state ---
+ui:fb-empty-add a c:Button ; c:label "Add a todo" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:fb-empty-import a c:Button ; c:label "Import Turtle" ; sty:emphasis sty:Outline .
+ui:fb-empty-state a c:EmptyState ; c:icon "∅" ; c:label "No triples match" ;
+    c:help "Nothing in the graph matches this view yet. Add something, or load a Turtle file to start from." ;
+    c:children ( ui:fb-empty-add ui:fb-empty-import ) .
+ui:fb-empty a c:Flippable ; c:front ui:fb-empty-spec .
+ui:fb-empty-spec a c:Specimen ; c:label "Empty state" ;
+    c:help "What a view shows when it has nothing to show: a glyph, a title (c:label), a hint (c:help) and actions (c:children)." ;
+    c:children ( ui:fb-empty-state ) .
+
+# --- toasts ---
+# Inline toasts show the look; dismissing one sets its c:open false. The live region sits
+# on the shell's desktop (outside every page, fixed to the viewport); its toasts start
+# closed and the buttons open them (c:opens).
+ui:fb-toast-info a c:Toast ; c:label "Rules reloaded" ; c:help "12 renderings picked up the new theme." ; sty:tone sty:Info .
+ui:fb-toast-success a c:Toast ; c:label "Saved" ; c:help "Recorded as a member of the change log." ; sty:tone sty:Success .
+ui:fb-toast-danger a c:Toast ; c:label "Rule failed" ; c:help "The previous output is kept." ; sty:tone sty:Danger .
+ui:fb-toasts-inline a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:fb-toast-info ui:fb-toast-success ui:fb-toast-danger ) .
+ui:fb-toasts-reset a c:Button ; c:label "Show inline toasts again" ; sty:emphasis sty:Ghost ;
+    c:opens ui:fb-toast-info , ui:fb-toast-success , ui:fb-toast-danger .
+
+ui:desktop c:hosts ui:fb-toast-region .
+ui:fb-toast-region a c:ToastRegion ; c:toasts ( ui:fb-live-saved ui:fb-live-warning ui:fb-live-failed ) .
+ui:fb-live-saved a c:Toast ; c:open false ; c:label "Todo saved" ; c:help "One event, three triples changed." ; sty:tone sty:Success .
+ui:fb-live-warning a c:Toast ; c:open false ; c:label "Large graph" ; c:help "The next render may take a moment." ; sty:tone sty:Warning .
+ui:fb-live-failed a c:Toast ; c:open false ; c:label "Could not connect" ; c:help "The store did not answer; retrying in 5 s." ; sty:tone sty:Danger .
+ui:fb-show-saved a c:Button ; c:label "Success toast" ; sty:tone sty:Success ; sty:emphasis sty:Soft ; c:opens ui:fb-live-saved .
+ui:fb-show-warning a c:Button ; c:label "Warning toast" ; sty:tone sty:Warning ; sty:emphasis sty:Soft ; c:opens ui:fb-live-warning .
+ui:fb-show-failed a c:Button ; c:label "Danger toast" ; sty:tone sty:Danger ; sty:emphasis sty:Soft ; c:opens ui:fb-live-failed .
+ui:fb-toasts-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:fb-show-saved ui:fb-show-warning ui:fb-show-failed ui:fb-toasts-reset ) .
+ui:fb-toasts a c:Flippable ; c:front ui:fb-toasts-spec .
+ui:fb-toasts-spec a c:Specimen ; c:label "Toast" ;
+    c:help "A transient message with a dismiss ✕, shown in a c:ToastRegion: an aria-live=polite stack in the corner of the viewport. The buttons open toasts in the region; danger toasts are assertive (role=alert)." ;
+    c:children ( ui:fb-toasts-col ) .
+ui:fb-toasts-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:fb-toasts-buttons ui:fb-toasts-inline ) .

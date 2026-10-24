@@ -18,6 +18,8 @@ export interface EngineOptions {
   name?: string
   /** Further named graphs rules read as input (e.g. the change-log LDES). */
   inputGraphs?: string[]
+  /** The viewer's languages, most preferred first (see util.text and the localization layer). */
+  languages?: string[]
 }
 
 export interface EngineStats {
@@ -93,6 +95,8 @@ export class Engine {
   /** Member-wise rules: rule -> focus -> member keys with output (to retract them). */
   private memberKeys = new Map<Rule, Map<string, Set<string>>>()
   private current = -Infinity
+  /** Whether the triple being propagated types a minted (derived) instance. */
+  private derivedTrigger = false
   /** The (rule, focus) whose output is being committed: its own writes never re-dirty it. */
   private committing?: { rule: Rule; focus: string }
   /** Evaluations per (rule, focus) in the current run, to catch rules that never settle. */
@@ -121,9 +125,13 @@ export class Engine {
     this.bulkThreshold = opts.bulkThreshold ?? 16
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
-    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql }
-    this.ctx = createContext(store, this.graphs, opts.modality)
+    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
+    this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
+  }
+
+  get languages(): readonly string[] {
+    return this.selection.languages ?? []
   }
 
   get activeRules(): readonly Rule[] {
@@ -234,12 +242,12 @@ export class Engine {
    */
   reconfigure(sel: Partial<Selection>): void {
     this.selection = { ...this.selection, ...sel }
-    if (sel.modality) this.ctx = createContext(this.store, this.graphs, sel.modality)
+    if (sel.modality || sel.languages) this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
     const after = selectRules(this.allRules, this.selection, warn)
-    // Swapping modality or implementations can change every output: re-evaluate all.
-    // Otherwise (layers) only added rules run; rules reading what changed are
-    // re-run by ordinary propagation (traced reads, sem:readsMinted).
-    const full = sel.modality !== undefined || sel.prefer !== undefined
+    // Swapping modality, implementations or language can change every output:
+    // re-evaluate all. Otherwise (layers) only added rules run; rules reading what
+    // changed are re-run by ordinary propagation (traced reads, sem:readsMinted).
+    const full = sel.modality !== undefined || sel.prefer !== undefined || sel.languages !== undefined
     const before = new Set(this.rules)
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
@@ -318,6 +326,8 @@ export class Engine {
   }
 
   private markDirty(rule: Rule, focus: string) {
+    // Input-only rules never hear about instances other rules mint.
+    if (rule.inputOnly && (this.derivedTrigger || !this.typedInInput(focusOf(focus)))) return
     if (rule.stratum < this.current) {
       throw new Error(`Stratification violation: stratum ${this.current} invalidated <${rule.iri}> (stratum ${rule.stratum}) for <${focus}>`)
     }
@@ -326,6 +336,14 @@ export class Engine {
     let foci = byRule.get(rule)
     if (!foci) byRule.set(rule, (foci = new Set()))
     foci.add(focus)
+  }
+
+  /** Whether a node is typed in one of the input graphs (not only by a rule's output). */
+  private typedInInput(focus: string): boolean {
+    const f = this.store.factory
+    const s = f.namedNode(focus)
+    const p = f.namedNode(RDF_TYPE)
+    return this.graphs.slice(0, -1).some((g) => this.store.match(s, p, null, g).length > 0)
   }
 
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
@@ -381,6 +399,18 @@ export class Engine {
   }
 
   private propagate(q: Quad, sign: 1 | -1) {
+    const outer = this.derivedTrigger
+    // Only the discovery of minted instances (a derived rdf:type) is hidden from
+    // input-only rules; what they read still re-runs them as usual.
+    this.derivedTrigger = q.predicate.value === RDF_TYPE && q.graph.equals(this.graph)
+    try {
+      this.propagateQuad(q, sign)
+    } finally {
+      this.derivedTrigger = outer
+    }
+  }
+
+  private propagateQuad(q: Quad, sign: 1 | -1) {
     const s = q.subject.value
     const p = q.predicate.value
     // Removing a type: dirty its rules while the instance is still indexed, so

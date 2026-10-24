@@ -1,7 +1,7 @@
 import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
-import { A11Y, MOD, NS, SEM, STY } from '../src/ns.ts'
+import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
@@ -46,6 +46,9 @@ const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
 const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] })
 const text = runtime.project({ modality: MOD.Text, prefer, provenance: true, name: 'text', roots: [EX + 'page'] })
 
+// The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere.
+if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
+
 const sheet = new CSSStyleSheet()
 sheet.replaceSync(compileStyles(store))
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
@@ -70,8 +73,20 @@ function syncSettings() {
 
   const layers = enabledLayers()
   const active = new Set(screen.engine.activeRules.map((r) => r.layer).filter(Boolean))
-  const wanted = [A11Y.Layer, STY.Layer, SEM.DebugLayer, SEM.SourceLayer, SEM.TooltipLayer].filter((l) => layers.has(l))
+  const known = new Set(store.match(null, nn(NS.rdf + 'type'), nn(SEM.Layer)).map((q) => q.subject.value))
+  const wanted = [...layers].filter((l) => known.has(l))
   if (wanted.length !== active.size || wanted.some((l) => !active.has(l))) screen.engine.reconfigure({ layers })
+
+  // Localization: the viewer's language is a projection setting; RTL languages flip the page.
+  const language = appValues(L10N.language)[0]
+  const code = language && store.match(nn(language.value), nn(L10N.code), null)[0]?.object.value
+  if (code && screen.engine.languages[0] !== code) {
+    screen.engine.reconfigure({ languages: [code] })
+    text.engine.reconfigure({ languages: [code] })
+  }
+  const rtl = !!language && store.match(nn(language.value), nn(L10N.direction), nn(L10N.RTL)).length > 0
+  document.documentElement.lang = code ?? 'en'
+  document.documentElement.dir = rtl ? 'rtl' : 'ltr'
 
   const key = (p: string) => {
     const v = appValues(p)[0]

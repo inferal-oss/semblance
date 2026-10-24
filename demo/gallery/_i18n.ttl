@@ -1,0 +1,65 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix mot: <https://semblance.dev/ns/motion#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix st: <https://semblance.dev/ns/status#> .
+@prefix a11y: <https://semblance.dev/ns/a11y#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Translations of the demo's chrome (localization layer): language-tagged
+# literals next to the untagged source text. The gallery's own content is in
+# English unless translated here.
+
+ui:Playground rdfs:label "Пісочниця"@uk , "Spielwiese"@de , "ساحة التجربة"@ar .
+ui:Performance rdfs:label "Продуктивність"@uk , "Leistung"@de , "الأداء"@ar .
+ui:Components rdfs:label "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
+ui:GroupFoundations rdfs:label "Основи"@uk , "Grundlagen"@de , "الأسس"@ar .
+ui:GroupLayout rdfs:label "Розкладка"@uk , "Layout"@de , "التخطيط"@ar .
+ui:GroupType rdfs:label "Типографіка"@uk , "Typografie"@de , "الطباعة"@ar .
+ui:GroupActions rdfs:label "Дії"@uk , "Aktionen"@de , "الإجراءات"@ar .
+ui:GroupInputs rdfs:label "Поля введення"@uk , "Eingaben"@de , "المدخلات"@ar .
+ui:GroupFeedback rdfs:label "Зворотний звʼязок"@uk , "Rückmeldung"@de , "الإشعارات"@ar .
+ui:GroupData rdfs:label "Дані"@uk , "Daten"@de , "البيانات"@ar .
+ui:GroupNavigation rdfs:label "Навігація"@uk , "Navigation"@de , "التنقل"@ar .
+ui:GroupOverlays rdfs:label "Накладки"@uk , "Overlays"@de , "الطبقات العائمة"@ar .
+ui:GroupDisclosure rdfs:label "Розкриття"@uk , "Aufklappen"@de , "الإفصاح"@ar .
+ui:GroupLayers rdfs:label "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
+sty:Light rdfs:label "День"@uk , "Tag"@de , "نهار"@ar .
+sty:Dark rdfs:label "Ніч"@uk , "Nacht"@de , "ليل"@ar .
+sty:System rdfs:label "Як у системі"@uk , "System"@de , "حسب النظام"@ar .
+sty:colorScheme rdfs:label "Тема"@uk , "Design"@de , "السمة"@ar .
+sty:contrast rdfs:label "Контраст"@uk , "Kontrast"@de , "التباين"@ar .
+sty:StandardContrast rdfs:label "Звичайний"@uk , "Standard"@de , "عادي"@ar .
+sty:HighContrast rdfs:label "Високий"@uk , "Hoch"@de , "عالٍ"@ar .
+mot:preference rdfs:label "Рух"@uk , "Bewegung"@de , "الحركة"@ar .
+mot:Full rdfs:label "Повний"@uk , "Voll"@de , "كاملة"@ar .
+mot:Reduced rdfs:label "Зменшений"@uk , "Reduziert"@de , "مخففة"@ar .
+mot:None rdfs:label "Без руху"@uk , "Keine"@de , "بلا"@ar .
+sty:density rdfs:label "Density" , "Щільність"@uk , "Dichte"@de , "الكثافة"@ar .
+sty:Comfortable rdfs:label "Comfortable" , "Простора"@uk , "Bequem"@de , "مريحة"@ar .
+sty:Compact rdfs:label "Compact" , "Компактна"@uk , "Kompakt"@de , "مضغوطة"@ar .
+ui:appBar c:subtitle "один граф компонентів · багато проєкцій"@uk , "ein Komponentengraph · viele Projektionen"@de , "رسم بياني واحد للمكونات · إسقاطات متعددة"@ar .
+ui:store rdfs:label "Сховище"@uk , "Speicher"@de , "المخزن"@ar .
+ui:rules rdfs:label "Правила"@uk , "Regeln"@de , "القواعد"@ar .
+ui:inspectorTab c:label "Інспектор"@uk , "Inspektor"@de , "المفتش"@ar .
+ui:textTab c:label "Текстова проєкція"@uk , "Textprojektion"@de , "الإسقاط النصي"@ar .
+ui:activityTab c:label "Активність"@uk , "Aktivität"@de , "النشاط"@ar .
+ui:logTab c:label "Журнал змін"@uk , "Änderungsprotokoll"@de , "سجل التغييرات"@ar .
+ui:screenCard c:label "Екран"@uk , "Bildschirm"@de , "الشاشة"@ar .
+ui:viewsCard c:label "Подання"@uk , "Ansichten"@de , "العروض"@ar .
+ui:Live rdfs:label "Наживо"@uk , "Live"@de , "مباشر"@ar .
+ui:Paused rdfs:label "Пауза"@uk , "Pausiert"@de , "متوقف"@ar .
+ui:Off rdfs:label "Вимк."@uk , "Aus"@de , "إيقاف"@ar .
+ui:galleryNav c:label "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
+ui:galleryGroup rdfs:label "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
+sty:Layer rdfs:label "стиль"@uk , "Stil"@de , "النمط"@ar .
+a11y:Layer rdfs:label "доступність"@uk , "Barrierefreiheit"@de , "إمكانية الوصول"@ar .
+sem:SourceLayer rdfs:label "джерело"@uk , "Quelle"@de , "المصدر"@ar .
+sem:TooltipLayer rdfs:label "підказки"@uk , "Hinweise"@de , "التلميحات"@ar .
+sem:DebugLayer rdfs:label "налагодження"@uk , "Debug"@de , "التصحيح"@ar .
+val:Layer rdfs:label "валідація"@uk , "Validierung"@de , "التحقق"@ar .
+key:Layer rdfs:label "клавіатура"@uk , "Tastatur"@de , "لوحة المفاتيح"@ar .
+st:Layer rdfs:label "статус"@uk , "Status"@de , "الحالة"@ar .

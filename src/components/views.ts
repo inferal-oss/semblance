@@ -4,6 +4,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
 import { owningFocus } from '../rdf.ts'
 import { type TurtleSection, turtleTokens } from '../turtle.ts'
+import { text } from './util.ts'
 
 const RDFS_LABEL = NS.rdfs + 'label'
 const SH = 'http://www.w3.org/ns/shacl#'
@@ -20,15 +21,15 @@ export function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
 }
 
 export const labelOf = (ctx: RuleContext, t: Term) =>
-  str(ctx.object(t, C.label)) ?? str(ctx.object(t, RDFS_LABEL)) ?? t.value.replace(/^.*[#/]/, '')
+  text(ctx, t, C.label) ?? str(ctx.object(t, RDFS_LABEL)) ?? t.value.replace(/^.*[#/]/, '')
 
 // --- Card ----------------------------------------------------------------------------------
 
 const card: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const label = str(ctx.object(focus, C.label))
-  const badge = str(ctx.object(focus, C.badge))
-  const note = str(ctx.object(focus, C.note))
+  const label = text(ctx, focus, C.label)
+  const badge = text(ctx, focus, C.badge)
+  const note = text(ctx, focus, C.note)
   const content = ctx.object(focus, C.content)
   const actions = rdfList(ctx, ctx.object(focus, C.actions)).filter(named)
   if (ctx.modality === MOD.Text) {
@@ -51,8 +52,8 @@ const card: FnRule = (ctx, focus) => {
 const appbar: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const logo = ctx.object(focus, C.logo)
-  const label = str(ctx.object(focus, C.label)) ?? ''
-  const subtitle = str(ctx.object(focus, C.subtitle))
+  const label = text(ctx, focus, C.label) ?? ''
+  const subtitle = text(ctx, focus, C.subtitle)
   const actions = rdfList(ctx, ctx.object(focus, C.actions)).filter(named)
   if (ctx.modality === MOD.Text) {
     o.renders(o.el('root', 'Div', {}, [o.text('line', `${label}${subtitle ? ' — ' + subtitle : ''}`)]))
@@ -109,7 +110,7 @@ const metrics: FnRule = (ctx, focus) => {
   const chips = fields.flatMap((p, i) => {
     const v = ctx.object(of, p)
     if (!v) return []
-    const unit = str(ctx.object(p, C.unit))
+    const unit = text(ctx, p, C.unit)
     const value =
       v.termType === 'NamedNode'
         ? compact(ctx, v.value)
@@ -137,10 +138,10 @@ const toggle: FnRule = (ctx, focus) => {
   if (!target || !property) return []
   const o = ctx.out(focus)
   const on = ctx.object(target, property)?.value === 'true'
-  const label = str(ctx.object(focus, C.label)) ?? labelOf(ctx, property)
+  const label = text(ctx, focus, C.label) ?? labelOf(ctx, property)
   const b = o.el('root', 'Button', { type: 'button' }, [o.text('label', label)])
   o.attr(b, 'aria-pressed', String(on))
-  const note = str(ctx.object(focus, C.note))
+  const note = text(ctx, focus, C.note)
   if (note) o.tip(b, note)
   o.renders(b)
   return o.quads
@@ -218,7 +219,7 @@ const queryview: FnRule = (ctx, focus) => {
     return o.quads
   }
   if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Oxigraph or Hybrid).')
-  if (variable && !named(value)) return message(str(ctx.object(focus, C.emptyText)) ?? 'Nothing selected.')
+  if (variable && !named(value)) return message(text(ctx, focus, C.emptyText) ?? 'Nothing selected.')
   const sections: TurtleSection[] = []
   for (const q of queries) {
     let text = str(ctx.object(q, SEM.construct)) ?? ''
@@ -238,7 +239,7 @@ const queryview: FnRule = (ctx, focus) => {
     }
     if (quads.length) sections.push({ title: str(ctx.object(q, RDFS_LABEL)), quads })
   }
-  if (!sections.length) return message(str(ctx.object(focus, C.emptyText)) ?? 'No results.')
+  if (!sections.length) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
   const nodes = turtleNodes(o, turtleTokens(sections, prefixes(ctx), str(ctx.object(focus, C.baseIri))))
   o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, nodes))
   return o.quads
@@ -314,7 +315,7 @@ const streammembers: FnRule = (ctx, focus) => {
     return view
   })
   if (!views.length) {
-    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', str(ctx.object(focus, C.emptyText)) ?? 'No members yet.')]))
+    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text(ctx, focus, C.emptyText) ?? 'No members yet.')]))
     return o.quads
   }
   o.renders(o.el('root', 'Div', {}, views))

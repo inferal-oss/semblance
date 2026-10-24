@@ -3,6 +3,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { labelOf, rdfList } from './views.ts'
+import { text } from './util.ts'
 
 const str = (t: Term | undefined) => t?.value
 type Row = Map<string, Term>
@@ -164,7 +165,7 @@ const linechart: FnRule = (ctx, focus) => {
     .map((r) => ({ s: e.series ? str(r.get(e.series)) ?? '' : '', x: num(r.get(e.category)), y: num(r.get(e.value)) }))
     .filter((p): p is { s: string; x: number; y: number } => p.x !== undefined && p.y !== undefined && p.y > 0)
   const xs = [...new Set(points.map((p) => p.x))].sort((a, b) => a - b)
-  if (xs.length < 2) return message(ctx, focus, str(ctx.object(focus, C.emptyText)) ?? 'Needs at least two sizes.')
+  if (xs.length < 2) return message(ctx, focus, text(ctx, focus, C.emptyText) ?? 'Needs at least two sizes.')
   const series = legendOf(ctx, focus, data, e.series)
   const o = ctx.out(focus)
   const W = 560
@@ -247,7 +248,7 @@ const findings: FnRule = (ctx, focus) => {
     })
     sections.push(o.el(`j${ji}`, 'Section', {}, [o.el(`j${ji}-h`, 'H3', {}, [o.text(`j${ji}-h-t`, labelOf(ctx, j))]), o.el(`j${ji}-ul`, 'Ul', {}, lis)]))
   })
-  if (!sections.length) return message(ctx, focus, str(ctx.object(focus, C.emptyText)) ?? 'No findings yet.')
+  if (!sections.length) return message(ctx, focus, text(ctx, focus, C.emptyText) ?? 'No findings yet.')
   o.renders(o.el('root', 'Div', {}, sections))
   return o.quads
 }

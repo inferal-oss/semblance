@@ -12,7 +12,7 @@ a Linked Data Event Stream, and declarative reactions turn events into state.
 ```bash
 npm install
 npm run dev            # demo: Playground + Performance (http://localhost:5173)
-npm test               # 49 tests
+npm test               # unit, integration, cost and soak tests
 npm run bench          # Node benchmarks, one process per cell -> bench/results/ (md, json, ttl)
 npm run build:single   # one self-contained, shareable file: dist-single/semblance.html (~6 MB)
 ```
@@ -24,8 +24,10 @@ input graph (default graph)            ontology/  (components, layers, theme, ru
   ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .
         │
         │  Engine (src/engine): per-modality rule selection, stratified, incremental
+        │    stratum -20 localization      → labels in the viewer's language
+        │    stratum -10 validation layer  → c:error / val:invalid from SHACL shapes
         │    stratum 0   component rules   → RDF/HTML skeleton (+ nested instances)
-        │    stratum 10  a11y layer        → ARIA relationships
+        │    stratum 10  a11y, keyboard, status layers → ARIA relationships, shortcuts, aria-busy
         │    stratum 20  style hooks       → data-sem-* attributes (CSS compiled from the theme graph)
         │    stratum 90  debug layer       → data-sem-rule / data-sem-focus
         │    stratum 95  source layer      → flip control + "how this view is made" back side
@@ -58,8 +60,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   not evaluated. Showing them resumes their parked work. In idle time the host
   warms hidden views a slice at a time (`Runtime.warm`), so navigation finds them
   ready and an interaction never pays for them.
+- **Member-wise rules** (`sem:forEach <property>`) evaluate once per
+  (focus, member), so adding or re-sorting one list item touches only it.
 - **Ordering** uses RDF/HTML flat ordering (`hasChild` plus `ord:precedes` /
   `ord:immediatelyPrecedes`), which CONSTRUCT can emit. Ambiguity is an error.
+  Siblings placed member-wise carry `sem:orderKey` and are sorted instead.
 
 ### Layers
 - **Modality** is substitution: Screen and Text projections of one graph.
@@ -73,6 +78,22 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `prov:wasInfluencedBy` → activity → `prov:hadPlan` → the rule.
 - **Source**: `c:Flippable` turns any component over to show the rules that
   made it (found through its PROV-O trail, syntax-colored).
+- **Tooltip**: ontological tooltips from `rdfs:comment` / `c:tip`.
+- **Validation**: fields point at SHACL property shapes (`val:validates`); the
+  layer derives `c:error`, which fields already render, and disables buttons
+  whose `val:requires` fields are invalid.
+- **Keyboard**: `key:shortcut "mod+k"` on any component gives
+  `aria-keyshortcuts`, a hint, and activation by key press (through the
+  component's own click reactions). `c:ShortcutList` lists them all.
+- **Status**: `st:busy` marks any component `aria-busy`; the theme shimmers it.
+- **Localization**: labels are language-tagged literals; the viewer's language
+  (`l10n:language`) is a projection setting; RTL languages flip the page.
+- **Motion and contrast**: hookable properties of the shell
+  (`mot:preference`, `sty:contrast`) whose values re-value the motion and role
+  tokens for the subtree.
+
+See [DESIGN.md](DESIGN.md) for the design system: foundations, the shared
+variant axes (`sty:tone` × `sty:emphasis` × `sty:size`), and the component set.
 
 ### Behaviour: events, reactions, LDES
 - A relevant interaction becomes an RDF event addressed to the innermost
@@ -124,11 +145,15 @@ or its history is:
 - correlated sub-patterns in SPARQL use `EXISTS` / `LATERAL`, not `OPTIONAL` /
   `UNION`, which Oxigraph plans as scans.
 
-`test/shell.test.ts` guards this: it toggles a todo, grows the list by 300
-items and the history by 100 events, and requires the same rule runs, derived
-triples written, triples read and DOM operations for the next toggle. In the
-browser a toggle is ~0.5 ms with the Inspector shown, ~4–5 ms with the Activity
-or Change log views open, and stays there after 750 events.
+Two tests guard this. `test/cost.test.ts` measures ten interactions (toggle,
+type, hover, density, theme, tabs, page, source flip, window move, add) in
+work counters: rule runs, derived triples written, triples matched, SPARQL
+result rows and DOM operations. They must not grow when the list grows by 300
+items and the history by 250 events. `test/soak.test.ts` runs 3,600 events on
+the app's store and requires the graph, the engine's bookkeeping, the HTML
+index, the DOM renderer and the time per event to stay flat. See
+[FINDINGS.md](FINDINGS.md) for what they caught, including Oxigraph's
+unpurged deletions and how the hybrid store works around them.
 
 ## Layout
 

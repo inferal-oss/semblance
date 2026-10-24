@@ -12,6 +12,11 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix mot: <https://semblance.dev/ns/motion#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix st: <https://semblance.dev/ns/status#> .
 
 # =================================================================================================
 # The demo's entire interface as a component graph. The host page is a mount
@@ -22,7 +27,8 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, key:Layer, st:Layer ;
+    l10n:language l10n:English ;
     ui:store ui:Hybrid ;
     ui:rules ui:PreferSparql ;
     ui:page ui:Playground ;
@@ -64,7 +70,9 @@ ui:domNodes rdfs:label "DOM nodes" .
 
 # --- the shell ----------------------------------------------------------------------------------
 
-ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:desktop ) .
+ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:desktop ) ;
+    # Display settings of the whole interface: hooked axes whose values re-value tokens.
+    mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable .
 
 # Detached views live here, outside the pages, so they survive page changes.
 ui:desktop a c:Desktop .
@@ -95,7 +103,7 @@ ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
-    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer ) .
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer key:Layer st:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
 
 ui:workspace a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
@@ -315,7 +323,16 @@ ui:GroupDisclosure a ui:GalleryGroup ; rdfs:label "Disclosure" ; sem:order 10 ; 
 ui:GroupLayers a ui:GalleryGroup ; rdfs:label "Layers" ; sem:order 11 ; ui:key "layers" .
 
 ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
-    c:children ( ui:galleryNav ui:galleryPages ) .
+    c:children ( ui:galleryAside ui:galleryPages ) .
+ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:galleryNav ui:display ) .
+# Display settings: each a control over one property of the shell (or the app).
+ui:display a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:languageChoice ui:contrastChoice ui:motionChoice ui:densityChoice ) .
+ui:languageChoice a c:Choice ; c:controls ui:app ; c:property l10n:language .
+ui:contrastChoice a c:Choice ; c:controls ui:shell ; c:property sty:contrast .
+ui:motionChoice a c:Choice ; c:controls ui:shell ; c:property mot:preference .
+ui:densityChoice a c:Choice ; c:controls ui:shell ; c:property sty:density .
 ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" .
 ui:galleryPages a c:Switch ; c:controls ui:app ; c:property ui:galleryGroup ;
     c:cases ( ui:gc-foundations ui:gc-layout ui:gc-type ui:gc-actions ui:gc-inputs ui:gc-feedback

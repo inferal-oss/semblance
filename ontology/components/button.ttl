@@ -25,7 +25,10 @@ CONSTRUCT {
   ?text a rdfhtml:Text ; rdfhtml:data ?label .
 }
 WHERE {
-  $this a c:Button ; c:label ?label .
+  $this a c:Button .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:disabled true . BIND("" AS ?disabled) }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
@@ -50,7 +53,10 @@ CONSTRUCT {
   ?text a rdfhtml:Text ; rdfhtml:data ?line .
 }
 WHERE {
-  $this a c:Button ; c:label ?label .
+  $this a c:Button .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(CONCAT("[ ", STR(?label), " ]") AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)

@@ -80,8 +80,9 @@ describe('behaviour layer', () => {
       const fire = (el: Element, type: string) => el.dispatchEvent(new window.Event(type, { bubbles: true }))
 
       // Adding with an empty field sets an error, which the a11y layer announces.
+      // AddTodo matched too but changed nothing, so only RequireText handled it.
       fire(host.querySelector('button')!, 'click')
-      expect(handled.at(-1)).toEqual(['AddTodo', 'RequireText'])
+      expect(handled.at(-1)).toEqual(['RequireText'])
       const input = host.querySelector('input[type=text]') as HTMLInputElement
       expect(input.getAttribute('aria-invalid')).toBe('true')
       expect(host.querySelector('[role=alert]')!.textContent).toBe('Please describe the todo first.')
@@ -94,6 +95,7 @@ describe('behaviour layer', () => {
       expect(input.hasAttribute('aria-invalid')).toBe(false)
 
       fire(host.querySelector('button')!, 'click')
+      expect(handled.at(-1)).toEqual(['AddTodo'])
       expect(labels(host)).toContain('Ship the spike')
       expect(value()).toBeUndefined()
 

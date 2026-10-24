@@ -11,6 +11,11 @@ export class DomRenderer {
   private els = new Map<string, Node>()
   private keys = new WeakMap<Node, string>()
   private applied = new Map<string, Map<string, string>>()
+  /** The DOM node rendered for an RDF/HTML node, if it is mounted. */
+  nodeOf(key: string): Node | undefined {
+    return this.els.get(key)
+  }
+
   /** Sizes of the renderer's maps, for leak checks. */
   footprint(): Record<string, number> {
     return { elements: this.els.size, applied: this.applied.size }

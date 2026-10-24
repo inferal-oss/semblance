@@ -20,6 +20,12 @@ export const NS = {
   svg: 'https://semblance.dev/ns/svg#',
   tree: 'https://w3id.org/tree#',
   sh: 'http://www.w3.org/ns/shacl#',
+  mot: 'https://semblance.dev/ns/motion#',
+  val: 'https://semblance.dev/ns/validation#',
+  key: 'https://semblance.dev/ns/keyboard#',
+  l10n: 'https://semblance.dev/ns/l10n#',
+  ann: 'https://semblance.dev/ns/announce#',
+  st: 'https://semblance.dev/ns/status#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -90,7 +96,9 @@ export const SEM = {
   tooltip: sem + 'tooltip',
   readsMinted: sem + 'readsMinted',
   forEach: sem + 'forEach',
+  inputOnly: sem + 'inputOnly',
   TooltipLayer: sem + 'TooltipLayer',
+  Layer: sem + 'Layer',
   select: sem + 'select',
   text: sem + 'text',
   verdict: sem + 'verdict',
@@ -199,6 +207,7 @@ export const C = {
   prefix: c + 'prefix',
   error: c + 'error',
   disabled: c + 'disabled',
+  checked: c + 'checked',
   item: c + 'item',
   sortBy: c + 'sortBy',
   itemLabel: c + 'itemLabel',
@@ -218,6 +227,10 @@ export const STY = {
   hookAttribute: sty + 'hookAttribute',
   overrides: sty + 'overrides',
   when: sty + 'when',
+  Keyframes: sty + 'Keyframes',
+  name: sty + 'name',
+  step: sty + 'step',
+  at: sty + 'at',
   tone: sty + 'tone',
   emphasis: sty + 'emphasis',
   size: sty + 'size',
@@ -286,3 +299,15 @@ export const BEH = {
 
 export const A11Y = { Layer: NS.a11y + 'Layer' } as const
 export const POS = { Layer: NS.pos + 'Layer' } as const
+
+export const MOT = { preference: NS.mot + 'preference' } as const
+export const VAL = {
+  Layer: NS.val + 'Layer',
+  validates: NS.val + 'validates',
+  requires: NS.val + 'requires',
+  invalid: NS.val + 'invalid',
+} as const
+export const KEY = { Layer: NS.key + 'Layer', shortcut: NS.key + 'shortcut' } as const
+export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
+export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
+export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const

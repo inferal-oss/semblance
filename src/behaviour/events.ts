@@ -4,6 +4,7 @@ import type { Delta } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
+import { comboOf } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
@@ -153,7 +154,6 @@ export class EventBus {
       f.quad(event, nn(BEH.target), nn(target)),
       f.quad(event, nn(BEH.sequence), f.literal(String(seq), nn(XSD_INTEGER))),
       f.quad(event, nn(BEH.at), f.literal(new Date().toISOString(), nn(XSD_DATETIME))),
-      ...reactions.map((r) => f.quad(event, nn(BEH.handledBy), nn(r.iri))),
     ]
     if (detail.node !== undefined) quads.push(f.quad(event, nn(BEH.node), nn(detail.node)))
     if (detail.value !== undefined) quads.push(f.quad(event, nn(BEH.value), f.literal(detail.value)))
@@ -162,13 +162,19 @@ export class EventBus {
     // The event is readable by reactions before it is a member of the stream.
     for (const q of quads) this.runtime.store.add(f.quad(q.subject, q.predicate, q.object, this.graph))
 
-    // Every reaction sees the state before the event.
+    // Every reaction sees the state before the event. Only those that change
+    // something handled it (generic reactions often match and do nothing).
     const delta: Delta = { add: [], remove: [] }
+    const acted: Reaction[] = []
     for (const r of reactions) {
       const d = this.react(r, event, nn(target))
+      if (!d.add.length && !d.remove.length) continue
+      acted.push(r)
       delta.remove.push(...d.remove)
       delta.add.push(...d.add)
     }
+    reactions = acted
+    for (const r of acted) quads.push(f.quad(event, nn(BEH.handledBy), nn(r.iri)))
     const forget = () => {
       for (const q of quads) this.runtime.store.delete(f.quad(q.subject, q.predicate, q.object, this.graph))
     }
@@ -318,9 +324,28 @@ export class EventBus {
     for (const t of domTypes) renderer.host.addEventListener(t, listener)
     const gestures = (e: Event) => this.gesture(e as PointerEvent, renderer)
     renderer.host.addEventListener('pointerdown', gestures)
+    // Keyboard layer: a key combination activates the element that declares it.
+    const doc = renderer.host.ownerDocument
+    const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
+    const keys = (e: Event) => {
+      const k = e as KeyboardEvent
+      if (!k.key || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
+      const combo = comboOf(k, apple)
+      const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
+      if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
+      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo) as HTMLElement | undefined
+      if (!el || el.closest('[hidden], [inert]')) return
+      k.preventDefault()
+      const field = el.matches('input, textarea, select') ? el : (el.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select') as HTMLElement | null)
+      if (field) return field.focus()
+      const control = el.matches('button, a, [role=button], input') ? el : (el.querySelector('button, a, [role=button], input') as HTMLElement | null)
+      ;(control ?? el).click()
+    }
+    doc.addEventListener('keydown', keys)
     return () => {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('pointerdown', gestures)
+      doc.removeEventListener('keydown', keys)
     }
   }
 

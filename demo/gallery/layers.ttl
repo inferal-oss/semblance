@@ -3,11 +3,104 @@
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix st: <https://semblance.dev/ns/status#> .
+@prefix mot: <https://semblance.dev/ns/motion#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
-# Gallery page: Layers.
+# Gallery page: Layers - cross-cutting concerns that apply to every component
+# without the components knowing. Each can be switched off in the Playground's
+# layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ) .
-ui:gallery-layers-intro a c:Heading ; c:label "Layers" .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ) .
+ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
+
+# --- validation: SHACL shapes on fields -------------------------------------------------------------
+
+ui:l-validation a c:Flippable ; c:front ui:l-validation-spec .
+ui:l-validation-spec a c:Specimen ; c:label "Validation" , "Валідація"@uk , "Validierung"@de , "التحقق"@ar ;
+    c:help "Each field points at a SHACL property shape (val:validates). The validation layer checks the field's value against sh:minLength, sh:pattern, sh:minInclusive… and derives c:error, which the field already renders and the a11y layer announces. The button requires all three (val:requires) and stays disabled until they conform. Turn the validation layer off in the Playground and the same fields render without a word." ;
+    c:children ( ui:signup ) .
+ui:signup a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:signupEmail ui:signupPassword ui:signupAge ui:signupSubmit ) .
+ui:signupEmail a c:TextField ; c:label "Email" , "Ел. пошта"@uk , "E-Mail"@de , "البريد الإلكتروني"@ar ;
+    c:placeholder "you@example.org" ; val:validates ui:EmailShape .
+ui:signupPassword a c:TextField ; c:label "Password" , "Пароль"@uk , "Passwort"@de , "كلمة المرور"@ar ;
+    c:help "At least 8 characters, one digit." ; val:validates ui:PasswordShape .
+ui:signupAge a c:TextField ; c:label "Age" , "Вік"@uk , "Alter"@de , "العمر"@ar ; val:validates ui:AgeShape .
+ui:signupSubmit a c:Button ; c:label "Create account" , "Створити обліковий запис"@uk , "Konto erstellen"@de , "إنشاء حساب"@ar ;
+    sty:tone sty:Accent ; sty:emphasis sty:Solid ; val:requires ( ui:signupEmail ui:signupPassword ui:signupAge ) .
+
+ui:EmailShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ;
+    sh:pattern "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" ;
+    sh:message "Enter an email address like you@example.org." , "Введіть адресу на кшталт you@example.org."@uk ,
+               "Geben Sie eine Adresse wie you@example.org ein."@de , "أدخل عنوانًا مثل you@example.org."@ar .
+ui:PasswordShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:minLength 8 ; sh:pattern "[0-9]" ;
+    sh:message "Use at least 8 characters, including a digit." , "Щонайменше 8 символів, серед них цифра."@uk ,
+               "Mindestens 8 Zeichen, darunter eine Ziffer."@de , "استخدم 8 أحرف على الأقل، منها رقم."@ar .
+ui:AgeShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 13 ; sh:maxInclusive 120 ;
+    sh:message "A whole number from 13 to 120." , "Ціле число від 13 до 120."@uk ,
+               "Eine ganze Zahl von 13 bis 120."@de , "عدد صحيح من 13 إلى 120."@ar .
+
+# --- keyboard: shortcuts as data ----------------------------------------------------------------------
+
+ui:l-keyboard a c:Flippable ; c:front ui:l-keyboard-spec .
+ui:l-keyboard-spec a c:Specimen ; c:label "Keyboard" , "Клавіатура"@uk , "Tastatur"@de , "لوحة المفاتيح"@ar ;
+    c:help "key:shortcut on any component: the keyboard layer adds aria-keyshortcuts and the hint, and the key press activates the component, so its ordinary click reactions run and the change log records the event. The list on the right is a SPARQL view of every shortcut in the graph." ;
+    c:children ( ui:counterRow ui:shortcuts ) .
+ui:counterRow a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:increment ui:resetCounter ui:counter ) .
+ui:increment a c:Button ; c:label "Increment" , "Збільшити"@uk , "Erhöhen"@de , "زيادة"@ar ;
+    sty:tone sty:Accent ; sty:emphasis sty:Soft ; key:shortcut "mod+i" .
+ui:resetCounter a c:Button ; c:label "Reset" , "Скинути"@uk , "Zurücksetzen"@de , "إعادة ضبط"@ar ;
+    sty:emphasis sty:Ghost ; key:shortcut "mod+shift+i" .
+ui:counter a c:Badge ; c:label "0" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:shortcuts a c:ShortcutList .
+ui:galleryNav key:shortcut "mod+shift+g" .
+
+ui:Increment a beh:Reaction ; beh:when beh:Click ; beh:source ui:increment ;
+    beh:deletes """CONSTRUCT { ui:counter c:label ?old } WHERE { ui:counter c:label ?old }""" ;
+    beh:inserts """CONSTRUCT { ui:counter c:label ?new } WHERE { ui:counter c:label ?old BIND(STR(xsd:integer(?old) + 1) AS ?new) }""" .
+ui:ResetCounter a beh:Reaction ; beh:when beh:Click ; beh:source ui:resetCounter ;
+    beh:deletes """CONSTRUCT { ui:counter c:label ?old } WHERE { ui:counter c:label ?old }""" ;
+    beh:inserts """CONSTRUCT { ui:counter c:label "0" } WHERE { }""" .
+
+# --- status: busy ----------------------------------------------------------------------------------------
+
+ui:l-status a c:Flippable ; c:front ui:l-status-spec .
+ui:l-status-spec a c:Specimen ; c:label "Status" , "Статус"@uk , "Status"@de , "الحالة"@ar ;
+    c:help "st:busy on any component: the status layer marks it aria-busy and the theme dims it under a shimmer. Whatever does the work writes st:busy; the component is unchanged." ;
+    c:children ( ui:busyToggle ui:busyTarget ) .
+ui:busyToggle a c:Button ; c:label "Toggle busy" , "Перемкнути зайнятість"@uk , "Beschäftigt umschalten"@de , "تبديل الانشغال"@ar ;
+    sty:emphasis sty:Outline ; key:shortcut "mod+shift+b" .
+ui:busyTarget a c:Alert ; sty:tone sty:Info ;
+    c:label "Quarterly report" , "Квартальний звіт"@uk , "Quartalsbericht"@de , "التقرير الفصلي"@ar ;
+    c:help "Figures are recomputed from 2,431 observations." .
+ui:ToggleBusy a beh:Reaction ; beh:when beh:Click ; beh:source ui:busyToggle ;
+    beh:deletes """CONSTRUCT { ui:busyTarget st:busy ?b } WHERE { ui:busyTarget st:busy ?b }""" ;
+    beh:inserts """CONSTRUCT { ui:busyTarget st:busy true } WHERE { FILTER NOT EXISTS { ui:busyTarget st:busy true } }""" .
+
+# --- localization -----------------------------------------------------------------------------------------
+
+ui:l-l10n a c:Flippable ; c:front ui:l-l10n-spec .
+ui:l-l10n-spec a c:Specimen ; c:label "Localization" , "Локалізація"@uk , "Lokalisierung"@de , "الترجمة"@ar ;
+    c:help "Labels are language-tagged literals; the viewer's language is a projection setting. Function rules read labels through one helper and SPARQL rules through a derived l10n:label, so every component follows. Arabic lays the page out right to left." ;
+    c:children ( ui:languageSwitch ) .
+ui:languageSwitch a c:Segmented ; c:controls ui:app ; c:property l10n:language .
+
+# --- display: motion, contrast, density -----------------------------------------------------------------------
+
+ui:l-display a c:Flippable ; c:front ui:l-display-spec .
+ui:l-display-spec a c:Specimen ; c:label "Motion, contrast and density" , "Рух, контраст і щільність"@uk , "Bewegung, Kontrast und Dichte"@de , "الحركة والتباين والكثافة"@ar ;
+    c:help "Three hookable properties of the shell whose values re-value tokens for the whole interface: mot:preference (durations and easing), sty:contrast (role colors) and sty:density (spacing). No component reads them." ;
+    c:children ( ui:motionSwitch ui:contrastSwitch ui:densitySwitch ) .
+ui:motionSwitch a c:Segmented ; c:controls ui:shell ; c:property mot:preference .
+ui:contrastSwitch a c:Segmented ; c:controls ui:shell ; c:property sty:contrast .
+ui:densitySwitch a c:Segmented ; c:controls ui:shell ; c:property sty:density .

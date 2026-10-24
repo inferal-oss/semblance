@@ -14,5 +14,113 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-spacer ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
+
+# --- surfaces and elevation ---
+ui:ly-flat a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:ly-flat-over ui:ly-flat-title ui:ly-flat-text ) .
+ui:ly-flat-over a c:Text ; sty:textStyle sty:Overline ; c:label "sty:Flat" .
+ui:ly-flat-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Flat" .
+ui:ly-flat-text a c:Text ; sty:textStyle sty:Caption ; c:label "On the page: a hairline border, no shadow. The default." .
+ui:ly-raised a c:Surface ; sty:elevation sty:Raised ; c:children ( ui:ly-raised-over ui:ly-raised-title ui:ly-raised-text ) .
+ui:ly-raised-over a c:Text ; sty:textStyle sty:Overline ; c:label "sty:Raised" .
+ui:ly-raised-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Raised" .
+ui:ly-raised-text a c:Text ; sty:textStyle sty:Caption ; c:label "Lifted off the page: cards and panels." .
+ui:ly-overlay a c:Surface ; sty:elevation sty:Overlay ; c:children ( ui:ly-overlay-over ui:ly-overlay-title ui:ly-overlay-text ) .
+ui:ly-overlay-over a c:Text ; sty:textStyle sty:Overline ; c:label "sty:Overlay" .
+ui:ly-overlay-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Overlay" .
+ui:ly-overlay-text a c:Text ; sty:textStyle sty:Caption ; c:label "Floats above everything: menus, popovers, dialogs." .
+ui:ly-surfaces-grid a c:Grid ; c:minWidth "200px" ; pos:gap tok:space-5 ; c:children ( ui:ly-flat ui:ly-raised ui:ly-overlay ) .
+ui:ly-surfaces a c:Flippable ; c:front ui:ly-surfaces-spec .
+ui:ly-surfaces-spec a c:Specimen ; c:label "Surface" ;
+    c:help "A padded container for c:children. sty:elevation says how far it stands off the page (flat, raised, overlay); pos:inset and pos:gap override its padding and spacing." ;
+    c:children ( ui:ly-surfaces-grid ) .
+
+# --- tinted surfaces ---
+ui:ly-tint-accent a c:Surface ; sty:tone sty:Accent ; pos:inset tok:space-4 ; c:children ( ui:ly-tint-accent-t ui:ly-tint-accent-c ) .
+ui:ly-tint-accent-t a c:Text ; sty:textStyle sty:Body ; sty:tone sty:Accent ; c:label "Accent" .
+ui:ly-tint-accent-c a c:Text ; sty:textStyle sty:Caption ; c:label "Featured content." .
+ui:ly-tint-info a c:Surface ; sty:tone sty:Info ; pos:inset tok:space-4 ; c:children ( ui:ly-tint-info-t ui:ly-tint-info-c ) .
+ui:ly-tint-info-t a c:Text ; sty:textStyle sty:Body ; sty:tone sty:Info ; c:label "Info" .
+ui:ly-tint-info-c a c:Text ; sty:textStyle sty:Caption ; c:label "Background reading." .
+ui:ly-tint-success a c:Surface ; sty:tone sty:Success ; pos:inset tok:space-4 ; c:children ( ui:ly-tint-success-t ui:ly-tint-success-c ) .
+ui:ly-tint-success-t a c:Text ; sty:textStyle sty:Body ; sty:tone sty:Success ; c:label "Success" .
+ui:ly-tint-success-c a c:Text ; sty:textStyle sty:Caption ; c:label "Everything checks out." .
+ui:ly-tint-warning a c:Surface ; sty:tone sty:Warning ; pos:inset tok:space-4 ; c:children ( ui:ly-tint-warning-t ui:ly-tint-warning-c ) .
+ui:ly-tint-warning-t a c:Text ; sty:textStyle sty:Body ; sty:tone sty:Warning ; c:label "Warning" .
+ui:ly-tint-warning-c a c:Text ; sty:textStyle sty:Caption ; c:label "Look before you leap." .
+ui:ly-tint-danger a c:Surface ; sty:tone sty:Danger ; pos:inset tok:space-4 ; c:children ( ui:ly-tint-danger-t ui:ly-tint-danger-c ) .
+ui:ly-tint-danger-t a c:Text ; sty:textStyle sty:Body ; sty:tone sty:Danger ; c:label "Danger" .
+ui:ly-tint-danger-c a c:Text ; sty:textStyle sty:Caption ; c:label "Cannot be undone." .
+ui:ly-tinted-grid a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-3 ;
+    c:children ( ui:ly-tint-accent ui:ly-tint-info ui:ly-tint-success ui:ly-tint-warning ui:ly-tint-danger ) .
+ui:ly-tinted a c:Flippable ; c:front ui:ly-tinted-spec .
+ui:ly-tinted-spec a c:Specimen ; c:label "Tinted surface" ;
+    c:help "sty:tone on a surface tints its background with the tone's soft fill and its border with the tone's border color." ;
+    c:children ( ui:ly-tinted-grid ) .
+
+# --- dividers ---
+ui:ly-div-plain a c:Divider .
+ui:ly-div-label a c:Divider ; c:label "or continue with" .
+ui:ly-div-a a c:Text ; c:inline true ; sty:textStyle sty:Body ; c:label "Screen" .
+ui:ly-div-v1 a c:Divider ; pos:direction pos:Column .
+ui:ly-div-b a c:Text ; c:inline true ; sty:textStyle sty:Body ; c:label "Text" .
+ui:ly-div-v2 a c:Divider ; pos:direction pos:Column .
+ui:ly-div-c a c:Text ; c:inline true ; sty:textStyle sty:Body ; c:label "Source" .
+ui:ly-div-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ;
+    c:children ( ui:ly-div-a ui:ly-div-v1 ui:ly-div-b ui:ly-div-v2 ui:ly-div-c ) .
+ui:ly-div-above a c:Text ; sty:textStyle sty:Caption ; c:label "Above the rule" .
+ui:ly-div-below a c:Text ; sty:textStyle sty:Caption ; c:label "Below the rule" .
+ui:ly-div-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ly-div-above ui:ly-div-plain ui:ly-div-below ui:ly-div-label ui:ly-div-row ) .
+ui:ly-dividers a c:Flippable ; c:front ui:ly-dividers-spec .
+ui:ly-dividers-spec a c:Specimen ; c:label "Divider" ;
+    c:help "An <hr>, or with a c:label a separator whose label sits in the line. pos:direction pos:Column stands it upright between the items of a row." ;
+    c:children ( ui:ly-div-col ) .
+
+# --- grids ---
+ui:ly-tile-1 a c:Surface ; pos:inset tok:space-4 ; c:children ( ui:ly-tile-1-t ) .
+ui:ly-tile-1-t a c:Text ; sty:textStyle sty:Mono ; c:label "1 · Modality" .
+ui:ly-tile-2 a c:Surface ; pos:inset tok:space-4 ; c:children ( ui:ly-tile-2-t ) .
+ui:ly-tile-2-t a c:Text ; sty:textStyle sty:Mono ; c:label "2 · Style" .
+ui:ly-tile-3 a c:Surface ; pos:inset tok:space-4 ; c:children ( ui:ly-tile-3-t ) .
+ui:ly-tile-3-t a c:Text ; sty:textStyle sty:Mono ; c:label "3 · Position" .
+ui:ly-tile-4 a c:Surface ; pos:inset tok:space-4 ; c:children ( ui:ly-tile-4-t ) .
+ui:ly-tile-4-t a c:Text ; sty:textStyle sty:Mono ; c:label "4 · A11y" .
+ui:ly-tile-5 a c:Surface ; pos:inset tok:space-4 ; c:children ( ui:ly-tile-5-t ) .
+ui:ly-tile-5-t a c:Text ; sty:textStyle sty:Mono ; c:label "5 · Behaviour" .
+ui:ly-tile-6 a c:Surface ; pos:inset tok:space-4 ; c:children ( ui:ly-tile-6-t ) .
+ui:ly-tile-6-t a c:Text ; sty:textStyle sty:Mono ; c:label "6 · Provenance" .
+ui:ly-grid-auto-cap a c:Text ; sty:textStyle sty:Overline ; c:label "c:minWidth \"140px\" — as many columns as fit" .
+ui:ly-grid-auto a c:Grid ; c:minWidth "140px" ; pos:gap tok:space-3 ;
+    c:children ( ui:ly-tile-1 ui:ly-tile-2 ui:ly-tile-3 ui:ly-tile-4 ui:ly-tile-5 ui:ly-tile-6 ) .
+ui:ly-grid-three-cap a c:Text ; sty:textStyle sty:Overline ; c:label "c:columns 3 — at most three, wrapping when narrow" .
+ui:ly-tile-a a c:Surface ; sty:elevation sty:Raised ; c:children ( ui:ly-tile-a-t ui:ly-tile-a-c ) .
+ui:ly-tile-a-t a c:Text ; sty:textStyle sty:Subtitle ; c:label "Components" .
+ui:ly-tile-a-c a c:Text ; sty:textStyle sty:Caption ; c:label "Thin vocabularies with rendering rules." .
+ui:ly-tile-b a c:Surface ; sty:elevation sty:Raised ; c:children ( ui:ly-tile-b-t ui:ly-tile-b-c ) .
+ui:ly-tile-b-t a c:Text ; sty:textStyle sty:Subtitle ; c:label "Layers" .
+ui:ly-tile-b-c a c:Text ; sty:textStyle sty:Caption ; c:label "Cross-cutting concerns in later strata." .
+ui:ly-tile-c a c:Surface ; sty:elevation sty:Raised ; c:children ( ui:ly-tile-c-t ui:ly-tile-c-c ) .
+ui:ly-tile-c-t a c:Text ; sty:textStyle sty:Subtitle ; c:label "Theme" .
+ui:ly-tile-c-c a c:Text ; sty:textStyle sty:Caption ; c:label "Tokens and style rules compiled to CSS." .
+ui:ly-grid-three a c:Grid ; c:columns 3 ; c:children ( ui:ly-tile-a ui:ly-tile-b ui:ly-tile-c ) .
+ui:ly-grids-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ly-grid-auto-cap ui:ly-grid-auto ui:ly-grid-three-cap ui:ly-grid-three ) .
+ui:ly-grids a c:Flippable ; c:front ui:ly-grids-spec .
+ui:ly-grids-spec a c:Specimen ; c:label "Grid" ;
+    c:help "c:children as equal tiles. c:minWidth is the narrowest a tile may get; c:columns caps the column count. Both reach the theme as custom properties on the grid's root; pos:gap spaces the tiles." ;
+    c:children ( ui:ly-grids-col ) .
+
+# --- spacer ---
+ui:ly-sp-title a c:Text ; c:inline true ; sty:textStyle sty:Subtitle ; c:label "Projection" .
+ui:ly-sp-spacer a c:Spacer .
+ui:ly-sp-kbd a c:Kbd ; c:keys ( "⌘" "P" ) .
+ui:ly-sp-button a c:Button ; c:label "Open" ; sty:size sty:Small .
+ui:ly-sp-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:ly-sp-title ui:ly-sp-spacer ui:ly-sp-kbd ui:ly-sp-button ) .
+ui:ly-sp-bar a c:Surface ; pos:direction pos:Column ; pos:inset tok:space-3 ; c:children ( ui:ly-sp-row ) .
+ui:ly-spacer a c:Flippable ; c:front ui:ly-spacer-spec .
+ui:ly-spacer-spec a c:Specimen ; c:label "Spacer" ;
+    c:help "Space that grows: in a row it pushes what follows it to the far end." ;
+    c:children ( ui:ly-sp-bar ) .

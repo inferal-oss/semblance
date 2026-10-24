@@ -77,3 +77,114 @@
 [] a sty:StyleRule ; sty:appliesTo c:Swatches ; sty:part ".sem-swatch code" ;
     sty:declares [ sty:property "font" ; sty:raw "500 10px/1 var(--sem-font-mono)" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+
+# --- elevations (sty:Flat and sty:Raised are in theme/default.ttl) ---
+sty:Overlay a sty:Elevation ; rdfs:label "Overlay"@en ; sem:slug "overlay" ; sem:order 3 ;
+    rdfs:comment "Floats above the page: menus, popovers, dialogs."@en .
+sty:Flat rdfs:label "Flat"@en ; sem:order 1 .
+sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
+
+# --- surface ---
+# Direction, gap and inset are the position layer's; the surface only fills them in
+# when they are not given, so pos:direction / pos:gap / pos:inset always win.
+[] a sty:StyleRule ; sty:appliesTo c:Surface ;
+    sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "transition" ; sty:raw "box-shadow var(--sem-duration) var(--sem-ease), background var(--sem-duration) var(--sem-ease), border-color var(--sem-duration) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-direction]):not([data-sem-layout])" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-gap])" ;
+    sty:declares [ sty:property "gap" ; sty:token tok:space-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-inset])" ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-5 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state "[data-sem-tone]" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--tone-soft)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--tone-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:when sty:Flat ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:when sty:Raised ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:shadow-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:when sty:Overlay ;
+    sty:declares [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-xl ] .
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:when sty:Overlay ; sty:state ":not([data-sem-tone])" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-overlay ] .
+
+# --- divider ---
+[] a sty:StyleRule ; sty:appliesTo c:Divider ;
+    sty:declares [ sty:property "flex" ; sty:raw "0 0 auto" ] ,
+                 [ sty:property "align-self" ; sty:raw "stretch" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+# The bare rule: a 1px line across (or, standing up, along) its container.
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":is(hr)" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:border ] .
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":is(hr)[aria-orientation=vertical]" ;
+    sty:declares [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] ,
+                 [ sty:property "min-height" ; sty:raw "1.5em" ] .
+# A labelled rule: the label between two lines.
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":not(hr)" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "row" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.08em" ] ,
+                 [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":not(hr)::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "flex" ; sty:raw "1 1 0" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:border ] .
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":not(hr)::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "flex" ; sty:raw "1 1 0" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:border ] .
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":not(hr)[aria-orientation=vertical]" ;
+    sty:declares [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "min-height" ; sty:raw "4em" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":not(hr)[aria-orientation=vertical]::before" ;
+    sty:declares [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Divider ; sty:state ":not(hr)[aria-orientation=vertical]::after" ;
+    sty:declares [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] .
+
+# --- grid ---
+# --grid-min and --grid-columns come from c:minWidth and c:columns (custom properties
+# set on the root by the grid rule). With a column count, tiles never get narrower
+# than 1/N of the row (less the widest gap), so at most N fit; they still wrap at --grid-min.
+[] a sty:StyleRule ; sty:appliesTo c:Grid ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, var(--grid-min, 240px)), 1fr))" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Grid ; sty:state "[data-columns]" ;
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, max(var(--grid-min, 160px), calc((100% - (var(--grid-columns) - 1) * var(--sem-space-8)) / var(--grid-columns)))), 1fr))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Grid ; sty:state ":not([data-sem-gap])" ;
+    sty:declares [ sty:property "gap" ; sty:token tok:space-4 ] .
+
+# --- spacer ---
+[] a sty:StyleRule ; sty:appliesTo c:Spacer ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
+                 [ sty:property "align-self" ; sty:raw "stretch" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] .

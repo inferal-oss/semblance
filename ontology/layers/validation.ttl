@@ -1,0 +1,43 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Validation layer. A field says which SHACL property shape its value must
+# conform to (val:validates); the layer checks the field's c:value (or
+# c:checked) against the shape's constraints and derives c:error with the
+# shape's sh:message, which every field already renders (and the a11y layer
+# turns into aria-invalid + an announced message). Errors appear once the
+# field has a value; a required field without one is invalid but quiet.
+#
+# A button with val:requires (fields) is disabled while any of them is
+# invalid. The layer runs before the components (stratum -10), so they render
+# its conclusions like any other input. Supported: sh:minCount (required),
+# sh:minLength, sh:maxLength, sh:pattern (+ sh:flags), sh:minInclusive,
+# sh:maxInclusive, sh:datatype (xsd:integer / xsd:decimal), sh:in.
+
+<https://semblance.dev/ns/validation> a owl:Ontology ;
+    rdfs:label "Semblance validation layer"@en .
+
+val:Layer a sem:Layer ; rdfs:label "validation"@en .
+
+val:validates a owl:ObjectProperty ; rdfs:range sh:PropertyShape ;
+    rdfs:comment "The shape a field's value must conform to."@en .
+val:requires a owl:ObjectProperty ; rdfs:range rdf:List ;
+    rdfs:comment "On a button: the fields that must all be valid for it to be enabled."@en .
+val:invalid a owl:DatatypeProperty ;
+    rdfs:comment "Derived: the field's value violates its shape (or a required field is empty)."@en .
+
+val:Check a sem:Rendering ;
+    rdfs:comment "Checks fields against their shapes and gates buttons on them."@en ;
+    sem:targets sem:Component ;
+    sem:layer val:Layer ;
+    sem:stratum -10 ;
+    sem:inputOnly true ;
+    sem:watches val:validates, val:requires, c:value, c:checked .
+val:Check-fn a sem:Rule ;
+    sem:implements val:Check ;
+    sem:function "validation:check" .

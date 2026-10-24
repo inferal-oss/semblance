@@ -10,3 +10,93 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Type components (DESIGN.md §3): Text, Link, Kbd and Code: running text in the type scale.
+
+# --- The type-scale axis ------------------------------------------------------------------------
+# A hookable axis like sty:tone: the value's slug becomes data-sem-text-style on the
+# component root, and the declarations of each value (theme/type.ttl) compile into the
+# hooks layer, so any component carrying sty:textStyle is set in that style.
+
+sty:textStyle a owl:ObjectProperty ;
+    rdfs:range sty:TextStyle ;
+    rdfs:label "Text style"@en ;
+    rdfs:comment "Where a run of text sits in the type scale: display, title, subtitle, body, caption, overline or mono."@en ;
+    sty:hookAttribute "data-sem-text-style" .
+sty:TextStyle a owl:Class ; rdfs:comment "A step of the type scale: font size, weight, line height and letter spacing from the type tokens."@en .
+sty:Display a sty:TextStyle ; rdfs:label "Display"@en ; sem:slug "display" ; sem:order 1 ;
+    rdfs:comment "The largest step: a page's one big statement."@en .
+sty:Title a sty:TextStyle ; rdfs:label "Title"@en ; sem:slug "title" ; sem:order 2 ;
+    rdfs:comment "Titles of pages and sections."@en .
+sty:Subtitle a sty:TextStyle ; rdfs:label "Subtitle"@en ; sem:slug "subtitle" ; sem:order 3 ;
+    rdfs:comment "A quieter line under a title."@en .
+sty:Body a sty:TextStyle ; rdfs:label "Body"@en ; sem:slug "body" ; sem:order 4 ;
+    rdfs:comment "Running text (the default)."@en .
+sty:Caption a sty:TextStyle ; rdfs:label "Caption"@en ; sem:slug "caption" ; sem:order 5 ;
+    rdfs:comment "Small supporting text: hints, footnotes, metadata."@en .
+sty:Overline a sty:TextStyle ; rdfs:label "Overline"@en ; sem:slug "overline" ; sem:order 6 ;
+    rdfs:comment "A small upper-case label above a title."@en .
+sty:Mono a sty:TextStyle ; rdfs:label "Mono"@en ; sem:slug "mono" ; sem:order 7 ;
+    rdfs:comment "Monospaced text: identifiers, IRIs, numbers that line up."@en .
+
+# --- Text --------------------------------------------------------------------------------------
+
+c:Text a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Running text: c:label is the text, or c:children an inline sequence of strings and
+components (links, kbd, code). Set in the type scale by sty:textStyle (default body) and
+colored by sty:tone (its --tone-text). A paragraph, or a span when c:inline is true."""@en ;
+    sem:slug "text" .
+c:inline a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Render inline (a span) rather than as a block (a paragraph)."@en .
+c:TextRendering a sem:Rendering ; sem:targets c:Text ; sem:stratum 0 .
+c:TextRendering-fn a sem:Rule ; sem:implements c:TextRendering ; sem:function "text" .
+
+# --- Link --------------------------------------------------------------------------------------
+
+c:Link a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A hyperlink: c:label (else the address) to c:href. Absolute http(s) addresses, or
+c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
+technology (c:externalHint). Accent by default; sty:tone recolors it."""@en ;
+    sem:slug "link" ;
+    c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de .
+c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
+c:external a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether a link leaves the application (default: absolute http(s) addresses do)."@en .
+c:externalHint a owl:AnnotationProperty ;
+    rdfs:comment "On a component class: what is said, after the label, about an external link (language-tagged)."@en .
+c:LinkRendering a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 .
+c:LinkRendering-fn a sem:Rule ; sem:implements c:LinkRendering ; sem:function "link" .
+
+# --- Kbd ---------------------------------------------------------------------------------------
+
+c:Kbd a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Keyboard input: one key cap (c:label, e.g. "⌘K") or a combination (c:keys, a list
+such as ( "⌘" "K" )) as nested <kbd> elements. Modifier glyphs are spelled out in its title."""@en ;
+    sem:slug "kbd" .
+c:keys a owl:ObjectProperty ; rdfs:range rdf:List ; rdfs:comment "The keys of a combination, in order."@en .
+c:KbdRendering a sem:Rendering ; sem:targets c:Kbd ; sem:stratum 0 .
+c:KbdRendering-fn a sem:Rule ; sem:implements c:KbdRendering ; sem:function "kbd" .
+
+# --- Code --------------------------------------------------------------------------------------
+
+c:Code a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Code: inline (<code>) or, with c:block true, a block (<pre><code>). With c:language
+"sparql" or "turtle" its tokens are colored with the same palette as the rule sources on the
+back of every card. c:label is the code."""@en ;
+    sem:slug "code" .
+c:block a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Render as a block rather than inline."@en .
+c:language a owl:DatatypeProperty ; rdfs:comment "The language of a code sample (\"sparql\", \"turtle\"), for coloring."@en .
+c:CodeRendering a sem:Rendering ; sem:targets c:Code ; sem:stratum 0 .
+c:CodeRendering-fn a sem:Rule ; sem:implements c:CodeRendering ; sem:function "code" .
+
+# --- Blockquote --------------------------------------------------------------------------------
+
+c:Blockquote a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A quotation (c:label) set off from the text, with an optional c:attribution."@en ;
+    sem:slug "blockquote" .
+c:attribution a owl:DatatypeProperty ; rdfs:comment "Who or what a quotation is from."@en .
+c:BlockquoteRendering a sem:Rendering ; sem:targets c:Blockquote ; sem:stratum 0 .
+c:BlockquoteRendering-fn a sem:Rule ; sem:implements c:BlockquoteRendering ; sem:function "blockquote" .

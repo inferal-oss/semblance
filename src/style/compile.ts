@@ -149,7 +149,21 @@ export function compileStyles(store: GraphStore): string {
     ;(intent ? intentRules : when ? variantRules : componentRules).push([classDepth(cls), block(selector, declarations(r))])
   }
 
+  // Animations: sty:Keyframes with sty:name and sty:step [ sty:at "50%" ; sty:declares ... ].
+  const keyframes = subjects(RDF_TYPE, STY.Keyframes)
+    .map((k) => {
+      const name = object(k, STY.name)?.value
+      if (!name) return undefined
+      const steps = objects(k, STY.step)
+        .map((st) => ({ at: object(st, STY.at)?.value ?? '0%', decls: declarations(st) }))
+        .sort((a, b) => (a.at === 'from' ? -1 : b.at === 'from' ? 1 : a.at === 'to' ? 1 : b.at === 'to' ? -1 : parseFloat(a.at) - parseFloat(b.at)))
+      return `@keyframes ${name} {\n${steps.map((st) => `  ${st.at} { ${st.decls.join(' ')} }`).join('\n')}\n}`
+    })
+    .filter((k): k is string => k !== undefined)
+    .sort()
+
   return [
+    ...keyframes,
     '@layer sem.tokens, sem.hooks, sem.components, sem.variants, sem.intents;',
     layer('tokens', tokenRules),
     layer('hooks', hookRules, true),
