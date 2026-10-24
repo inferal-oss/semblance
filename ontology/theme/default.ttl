@@ -900,7 +900,6 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part ".sem-detach" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
-                 [ sty:property "margin-left" ; sty:raw "-4px" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] ,
@@ -1191,11 +1190,21 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:Toggle ; sty:state ":focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
 
+# The open-in-a-window control sits inside its tab's frame: the tab's label reserves room at its
+# end, and the control (the tab's next sibling, so arrow keys still move tab to tab) is pulled
+# back over that room and stacked above the tab. Every theme's frame - bevels, folder tabs,
+# pills - then encloses both.
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tab]:has(+ .sem-detach) > .sem-tab-label" ;
+    sty:declares [ sty:property "margin-inline-end" ; sty:raw "22px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part ".sem-detach" ;
     sty:declares [ sty:property "width" ; sty:raw "24px" ] ,
                  [ sty:property "height" ; sty:raw "24px" ] ,
                  [ sty:property "align-self" ; sty:raw "center" ] ,
-                 [ sty:property "margin" ; sty:raw "0 4px 0 -10px" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "-30px" ] ,
+                 [ sty:property "margin-inline-end" ; sty:raw "6px" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,

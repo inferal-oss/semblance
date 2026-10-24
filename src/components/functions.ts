@@ -249,7 +249,10 @@ const tabs: FnRule = (ctx, focus) => {
     const on = tab.value === selected
     const tabId = mint(focus.value, 'tab-' + key)
     const panelId = mint(focus.value, 'panel-' + key)
-    const button = o.el('tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [o.text('tab-' + key + '-label', name)])
+    // The label is its own element, so a tab that can open in a window keeps room inside its own
+    // frame for that control (the theme reserves it), whatever the theme draws around the tab.
+    const tabLabel = o.el('tab-' + key + '-name', 'Span', { class: 'sem-tab-label' }, [o.text('tab-' + key + '-label', name)])
+    const button = o.el('tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [tabLabel])
     o.attr(button, 'role', 'tab').attr(button, 'aria-selected', String(on)).attr(button, 'aria-controls', panelId)
     o.t(button, C.selects, tab)
     buttons.push(button)

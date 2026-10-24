@@ -25,4 +25,11 @@ describe('rows that line up', () => {
     expect(field).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/)
     expect(field).toMatch(/min-width:\s*0/)
   })
+
+  it("a frame's body inset is the theme's general rule: no theme replaces it", () => {
+    // Theme rules sit in a later layer, so a padding there would override the general inset (and
+    // the "content's own inset wins" constraint) for every window in that theme.
+    const themed = [...css.matchAll(/([^{}]*\.sem-window-body[^{}]*)\{([^}]*)\}/g)].filter(([, sel]) => sel!.includes('data-sem-theme'))
+    expect(themed.filter(([, , body]) => /(^|;|\s)padding\s*:/.test(body!)).map(([, sel]) => sel!.trim().slice(0, 80))).toEqual([])
+  })
 })

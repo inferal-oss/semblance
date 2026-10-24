@@ -1615,8 +1615,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-body:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-face)" ] ,
-                 [ sty:property "box-shadow" ; sty:raw "var(--bv-raised), var(--sem-shadow-3)" ] ,
-                 [ sty:property "padding" ; sty:raw "2px" ] .
+                 [ sty:property "box-shadow" ; sty:raw "var(--bv-raised), var(--sem-shadow-3)" ] .
 
 # The taskbar: a raised strip of task buttons; the frame in front is the pushed-in one.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
