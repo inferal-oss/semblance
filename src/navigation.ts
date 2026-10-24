@@ -255,13 +255,19 @@ export function readAddress(r: Reader, loc: Location, address: string): Values {
 
 // --- where a resource is shown ---------------------------------------------------------------------
 
+/** The way down from the location's root to `resource`: each container, the part it holds, and through what. */
+interface Step {
+  parent: Term
+  child: Term
+  via: string
+}
+
 /**
- * The dimension values that show `resource` under the location: walking up the component tree
- * (nav:ContainmentProperty, lists through their members) to the location's root, and at each
- * c:Switch case taking the value of the dimension the switch follows. Undefined when the
+ * Walk up the component tree from `resource` (nav:ContainmentProperty; lists through their
+ * members) to the location's root, breadth first so the shortest way wins. Undefined when the
  * resource is not under the root.
  */
-export function shows(r: Reader, loc: Location, resource: Term): Values | undefined {
+function pathTo(r: Reader, loc: Location, resource: Term): Step[] | undefined {
   const f = r.f
   const containment = (p: Term) => r.match(p, RDF_TYPE, f.namedNode(NAV + 'ContainmentProperty')).length > 0
   const parents = (x: Term): { parent: Term; via: string }[] => {
@@ -275,15 +281,15 @@ export function shows(r: Reader, loc: Location, resource: Term): Values | undefi
     for (const h of holders) for (const q of r.match(null, null, h)) if (q.subject.termType === 'NamedNode' && containment(q.predicate)) out.push({ parent: q.subject, via: q.predicate.value })
     return out
   }
-  // Breadth first, so the shortest way up wins; each node remembers how it was reached.
-  const from = new Map<string, { node: Term; up?: string }>([[resource.value, { node: resource }]])
+  // Each node remembers how it was reached.
+  const from = new Map<string, { node: Term; up?: string; via?: string }>([[resource.value, { node: resource }]])
   const queue: Term[] = [resource]
   let reached: string | undefined = loc.root ? undefined : resource.value
   while (queue.length && !reached && from.size < 20_000) {
     const x = queue.shift()!
-    for (const { parent } of parents(x)) {
+    for (const { parent, via } of parents(x)) {
       if (from.has(parent.value)) continue
-      from.set(parent.value, { node: parent, up: x.value })
+      from.set(parent.value, { node: parent, up: x.value, via })
       if (parent.value === loc.root) {
         reached = parent.value
         break
@@ -292,18 +298,67 @@ export function shows(r: Reader, loc: Location, resource: Term): Values | undefi
     }
   }
   if (!reached) return undefined
+  const steps: Step[] = []
+  for (let at = from.get(reached)!; at.up; at = from.get(at.up)!) steps.push({ parent: at.node, child: from.get(at.up)!.node, via: at.via! })
+  return steps
+}
+
+/**
+ * The dimension values that show `resource` under the location: at each c:Switch case on the
+ * way down, the value of the dimension the switch follows. Undefined when it is not under the root.
+ */
+export function shows(r: Reader, loc: Location, resource: Term): Values | undefined {
+  const steps = pathTo(r, loc, resource)
+  if (!steps) return undefined
   const values: Values = new Map()
-  // Down the path from the root: a switch, then the case it shows.
-  for (let at = from.get(reached)!; at.up; at = from.get(at.up)!) {
-    const child = from.get(at.up)!.node
+  for (const { parent, child } of steps) {
     const when = one(r, child, C + 'when')
-    if (!when || r.match(at.node, C + 'cases', null).length === 0) continue
-    const controls = one(r, at.node, C + 'controls')
-    const property = one(r, at.node, C + 'property')?.value
+    if (!when || r.match(parent, C + 'cases', null).length === 0) continue
+    const controls = one(r, parent, C + 'controls')
+    const property = one(r, parent, C + 'property')?.value
     const d = loc.dimensions.find((d) => !d.target && same(d.subject, controls) && d.property === property)
     if (d) values.set(d.iri, when)
   }
   return values
+}
+
+const isA = (r: Reader, node: Term, cls: string) => {
+  const seen = new Set<string>()
+  const todo = r.match(node, RDF_TYPE, null).map((q) => q.object.value)
+  while (todo.length) {
+    const c = todo.pop()!
+    if (c === cls) return true
+    if (seen.has(c) || seen.size > 256) continue
+    seen.add(c)
+    for (const q of r.match(r.f.namedNode(c), NS.rdfs + 'subClassOf', null)) todo.push(q.object.value)
+  }
+  return false
+}
+
+/**
+ * The rest of what shows `resource`, beyond the location's dimensions: on the way down, each
+ * container that hides what it holds until told (nav:reveal on its class: a tab selected, an item
+ * expanded, a window opened) is told. Written when a link to it is followed.
+ */
+export function opening(r: Reader, loc: Location, resource: Term): Delta {
+  const f = r.f
+  const delta: Delta = { add: [], remove: [] }
+  const reveals = r.match(null, NAV + 'reveal', null).flatMap((q) => {
+    const via = one(r, q.object, NAV + 'via')?.value
+    const sets = one(r, q.object, NAV + 'sets')?.value
+    return via && sets ? [{ cls: q.subject.value, via, sets, value: one(r, q.object, NAV + 'value') }] : []
+  })
+  for (const { parent, child, via } of pathTo(r, loc, resource) ?? []) {
+    for (const rv of reveals) {
+      if (rv.via !== via || !isA(r, parent, rv.cls)) continue
+      const value = rv.value ?? child
+      const now = r.match(parent, rv.sets, null)
+      if (now.length === 1 && same(now[0]!.object, value)) continue
+      delta.remove.push(...now)
+      delta.add.push(f.quad(parent as Quad['subject'], f.namedNode(rv.sets), value as Quad['object']))
+    }
+  }
+  return delta
 }
 
 /** The fragment of the location that shows `resource`, with it as the target. */
@@ -330,6 +385,13 @@ export function followDelta(r: Reader, loc: Location, address: string): Delta {
     if (next ? now.length === 1 && same(now[0]!.object, next) : !d.target) continue
     delta.remove.push(...now)
     if (next) delta.add.push(f.quad(d.subject, f.namedNode(d.property), next as Quad['object']))
+  }
+  // A target in a tab not selected, an item not expanded, a window not open: they are opened too.
+  const target = loc.dimensions.find((d) => d.target && read.has(d.iri))
+  if (target) {
+    const open = opening(r, loc, read.get(target.iri)!)
+    delta.remove.push(...open.remove)
+    delta.add.push(...open.add)
   }
   return delta
 }
@@ -429,7 +491,12 @@ export class Navigation {
       n++
     }
     const target = loc.dimensions.find((d) => d.target)
-    if (target && read.has(target.iri)) this.revealing = read.get(target.iri)!.value
+    if (target && read.has(target.iri)) {
+      this.revealing = read.get(target.iri)!.value
+      const open = opening(this.r, loc, read.get(target.iri)!)
+      for (const q of open.remove) this.store.delete(q)
+      for (const q of open.add) this.store.add(f.quad(q.subject, q.predicate, q.object, f.defaultGraph()))
+    }
     return n
   }
 

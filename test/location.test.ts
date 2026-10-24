@@ -1,7 +1,7 @@
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
-import { addressOf, Navigation, readLocations, shows } from '../src/navigation.ts'
+import { addressOf, Navigation, opening, readLocations, shows } from '../src/navigation.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { type Backend, memoryBackend, Persistence } from '../src/persistence.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -342,6 +342,47 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
     s.tab.back()
     expect(s.value(NAV + 'target')).toBe(UI + 'inp-codes-spec')
     expect(revealed.length).toBe(2)
+  })
+
+  it('opens what hides the target: the tools window and the tab it is in, as part of the same step', async () => {
+    const s = await site('/#docs/rules')
+    const f = s.store.factory
+    const o = (subject: string, p: string) => s.store.match(f.namedNode(subject), f.namedNode(p), null)[0]?.object.value
+    expect(o(UI + 'tools', NS.c + 'open')).toBe('false')
+    expect(o(UI + 'views', NS.c + 'selected')).toBe(UI + 'inspectorTab')
+    s.tab.visit('#workbench')
+    expect(o(UI + 'tools', NS.c + 'open')).toBe('true')
+    expect(o(UI + 'views', NS.c + 'selected')).toBe(UI + 'queryTab')
+    expect(s.value(UI + 'page')).toBe(UI + 'Docs') // the tools are on every page: where we are stays
+    expect(s.tab.address).toBe('#docs/rules/workbench')
+    expect(s.shell.nodeOf(UI + 'workbench/~root')).toBeDefined()
+    // One navigation event did it all.
+    const navigations = s.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(NAV + 'Navigate'))
+    expect(navigations.length).toBe(1)
+    // On load, too.
+    const fresh = await site('/#workbench')
+    expect(fresh.store.match(f.namedNode(UI + 'views'), f.namedNode(NS.c + 'selected'), null)[0]!.object.value).toBe(UI + 'queryTab')
+  })
+
+  it('expands an accordion item, selects a tab and turns a card over, declared per class (nav:reveal)', () => {
+    const store = loadStore('oxigraph', `
+@prefix ui: <${UI}> . @prefix c: <${NS.c}> . @prefix nav: <${NAV}> .
+ui:here a nav:Location ; nav:root ui:root ; nav:dimensions ( ui:atTarget ) .
+ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ; nav:carriedBy nav:Fragment .
+ui:root a c:Stack ; c:children ( ui:acc ) .
+ui:acc a c:Accordion ; c:items ( ui:one ui:two ) .
+ui:one a c:AccordionItem ; c:content ui:tabs . ui:two a c:AccordionItem ; c:expanded true .
+ui:tabs a c:Tabs ; c:tabs ( ui:t1 ui:t2 ) ; c:selected ui:t1 .
+ui:t2 a c:Tab ; c:content ui:card .
+ui:card a c:Flippable ; c:front ui:face ; c:back ui:deep .
+ui:deep a c:Text .`)
+    const f = store.factory
+    const r = { f, match: (a: never, p: string | null, o: never) => store.match(a, p ? f.namedNode(p) : null, o) }
+    const loc = readLocations(r)[0]!
+    const d = opening(r, loc, f.namedNode(UI + 'deep'))
+    const said = Object.fromEntries(d.add.map((q) => [q.subject.value.slice(UI.length) + ' ' + q.predicate.value.slice(NS.c.length), q.object.value.replace(UI, '')]))
+    expect(said).toEqual({ 'one expanded': 'true', 'tabs selected': 't2', 'card flipped': 'true' })
+    expect(d.remove.map((q) => q.object.value)).toEqual([UI + 't1'])
   })
 
   it('goes straight to a target from its anchor alone, on load, without motion when the shell asks for less', async () => {

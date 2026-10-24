@@ -136,6 +136,20 @@ c:tabs a nav:ContainmentProperty . c:actions a nav:ContainmentProperty . c:items
 c:primary a nav:ContainmentProperty . c:secondary a nav:ContainmentProperty . c:toolbar a nav:ContainmentProperty .
 c:footer a nav:ContainmentProperty . c:hosts a nav:ContainmentProperty .
 
+# Containers that hide what they hold until told: following a link to something inside one
+# tells it (as part of the same step), whatever dimensions the location has.
+nav:reveal a owl:ObjectProperty ; rdfs:range nav:Reveal ;
+    rdfs:comment "On a component class: how an instance is made to show what it holds through nav:via."@en .
+nav:Reveal a owl:Class ;
+    rdfs:comment "Set nav:sets on the container to nav:value (default: the part on the way to the target)."@en .
+nav:via a owl:ObjectProperty ; rdfs:domain nav:Reveal ; rdfs:range nav:ContainmentProperty .
+nav:sets a owl:ObjectProperty ; rdfs:domain nav:Reveal ; rdfs:range rdf:Property .
+nav:value a owl:ObjectProperty ; rdfs:domain nav:Reveal .
+c:Tabs nav:reveal [ a nav:Reveal ; nav:via c:tabs ; nav:sets c:selected ] .
+c:AccordionItem nav:reveal [ a nav:Reveal ; nav:via c:content ; nav:sets c:expanded ; nav:value true ] .
+c:Flippable nav:reveal [ a nav:Reveal ; nav:via c:back ; nav:sets c:flipped ; nav:value true ] .
+c:Window nav:reveal [ a nav:Reveal ; nav:via c:body ; nav:sets c:open ; nav:value true ] .
+
 nav:href a owl:DatatypeProperty ;
     rdfs:comment "Derived, on a c:Link with c:to: the URL fragment of the location that shows its target."@en .
 # In the components' stratum, so links that other components mint (a reference's facets) get it too.
