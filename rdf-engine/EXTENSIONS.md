@@ -25,14 +25,15 @@ Two limitations listed under `sem:functionOnly` need no engine support:
 
 ## Capabilities
 
-Extensions come in groups. A store says which it has; a SPARQL rule says which
-it needs; the rule engine picks a rule only when the store has all of them.
+Extensions come in groups, instances of `sx:Group`. A store says which it has; a
+SPARQL rule says which it needs; the rule engine picks a rule only when the store
+has all of them.
 
 | group | IRI | contents |
 |---|---|---|
 | Math | `sx:Math` | `sx:log` … `sx:pi` |
 | Text | `sx:Text` | `sx:codepoint` … `sx:fnv1a` |
-| Locale | `sx:Locale` | `sx:formatNumber`, `sx:formatDateTime`, `sx:collated` |
+| Locale | `sx:Locale` | `sx:formatNumber`, `sx:formatDateTime`, `sx:collated`, `sx:sortKey` |
 | Matches | `sx:Matches` | `sx:matches`, `sx:chars` |
 | JSON | `sx:Json` | `sx:json` |
 
@@ -40,10 +41,16 @@ it needs; the rule engine picks a rule only when the store has all of them.
   order (Math = 1, Text = 2, Locale = 4, Matches = 8, JSON = 16). Absent means 0.
 - **Store.** `GraphStore.extensions?: ReadonlySet<string>`, the group IRIs.
   Absent means none (N3, Oxigraph, hybrid).
-- **Rule.** `sem:requires sx:Math` (repeatable) on a `sem:Rule` with a
-  `sem:construct`. A rendering whose SPARQL rule requires an extension still
-  needs a function rule, for stores without it; `sem:functionOnly` is then
-  dropped, and `test/implementations.ts` checks that both exist.
+- **Rule.** `sem:needsExtension sx:Math` (repeatable; domain `sem:Rule`, range
+  `sx:Group`) on a rule with a `sem:construct`. (`sem:requires` is taken: it
+  names a property the focus must have.) Rule selection goes by preference,
+  then skips a rule whose groups the store lacks, so the next rule runs. A
+  rendering whose SPARQL rule needs an extension still needs a function rule,
+  for stores without it; `sem:functionOnly` is then dropped, and
+  `test/implementations.ts` checks that both exist. A `beh:Reaction` may carry
+  `sem:needsExtension` too, falling back to its `sem:function`.
+- Queries using extensions are standard SPARQL syntax, so every parser (and
+  `rdf-engine/host/parse-check.ts`) accepts them.
 - An engine never rejects an `sx:` IRI it does not implement at prepare time:
   an unknown function is an expression error (standard behaviour) and an
   unknown magic relation is an ordinary predicate. The capability check is
@@ -93,12 +100,16 @@ constructor's options (`"style=currency;currency=EUR;maximumFractionDigits=0"`).
 | `sx:formatNumber(n, lang [, options])` | `Intl.NumberFormat` |
 | `sx:formatDateTime(dt, lang [, options])` | `Intl.DateTimeFormat`; `timeZone=…` in the options, else the host's zone |
 | `sx:collated(s, lang)` | as an `ORDER BY` key, `s` is compared with `Intl.Collator(lang)`; anywhere else it is `s` |
+| `sx:sortKey(s, lang)` | `xsd:string` that sorts by code point close to how `Intl.Collator(lang)` sorts `s`: case folded and accents stripped (NFD, combining marks removed, then lower-cased for `lang`). `Intl` has no collation-key API, so this is the weaker key; for `sem:orderKey`, where ORDER BY does not apply |
+
+The time zone `sx:formatDateTime` uses when the options name none is a store
+option (`timeZone`, default the host's own), so tests can fix it (`"UTC"`).
 
 The engines reach `Intl` through one more `env` import (ABI.md):
 `intl(op, in_ptr, in_len, out_ptr, out_cap) -> i32`, with UTF-8 arguments
 separated by NUL; it returns the result's length, or minus the length needed
 when `out_cap` is too small. `op` 0 is number formatting, 1 date-time
-formatting, 2 comparison (returns -1, 0 or 1).
+formatting, 2 comparison (returns -1, 0 or 1), 3 the sort key.
 
 ## Magic relations
 
