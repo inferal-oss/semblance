@@ -15,15 +15,18 @@
 
 ui:example rdfs:label "Examples" ; rdfs:range ui:Example .
 ui:ExTodo a ui:Example ; rdfs:label "Todo, two projections" ; sem:order 1 ; ui:key "todo" .
-ui:ExSignin a ui:Example ; rdfs:label "Sign in with a code" ; sem:order 2 ; ui:key "signin" .
+ui:ExNetwork a ui:Example ; rdfs:label "Network inspector" ; sem:order 2 ; ui:key "network" .
+ui:ExSignin a ui:Example ; rdfs:label "Sign in with a code" ; sem:order 3 ; ui:key "signin" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:examplesNav ui:examplePages ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
-    c:cases ( ui:exc-todo ui:exc-signin ) .
+    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ) .
 ui:exc-todo c:when ui:ExTodo ; c:content ui:ex-todo .
 ui:exc-signin c:when ui:ExSignin ; c:content ui:ex-signin .
+# The network inspector (demo/gallery/_network.ttl): the page's own traffic, captured into net:Capture.
+ui:exc-network c:when ui:ExNetwork ; c:content ui:networkExample .
 
 # --- Todo, on screen and as text ---------------------------------------------------------------
 # The same component graph, projected twice: to the screen (RDF/HTML patched into the DOM)
