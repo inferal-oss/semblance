@@ -2,6 +2,7 @@
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
@@ -35,3 +36,49 @@ c:ShortcutList a owl:Class ;
     sem:slug "shortcut-list" .
 c:ShortcutListRendering a sem:Rendering ; sem:targets c:ShortcutList ; sem:stratum 0 .
 c:ShortcutListRendering-fn a sem:Rule ; sem:implements c:ShortcutListRendering ; sem:function "shortcut-list" .
+
+# --- Arrow-key navigation (roving focus) -----------------------------------------------------------
+# A component class may declare how arrow keys move focus among its parts
+# (key:navigation a key:Navigation pattern). The layer copies the pattern onto
+# the component's root as data-sem-nav-* attributes; the event bus moves focus
+# among the matching parts (Up/Down or Left/Right, Home, End), keeps exactly
+# one of them in the tab order (roving tabindex), and, for patterns that
+# activate on focus, clicks the newly focused part, so selection goes through
+# the component's own reactions. Trees also expand (Right), collapse (Left)
+# and move between parent and child. Focus is view state: no graph change.
+
+key:navigation a owl:ObjectProperty ; rdfs:domain owl:Class ; rdfs:range key:Navigation ;
+    rdfs:comment "How arrow keys move focus within instances of the class."@en .
+key:Navigation a owl:Class .
+key:items a owl:DatatypeProperty ; rdfs:domain key:Navigation ; rdfs:comment "CSS selector of the focusable parts, within the component's root."@en .
+key:orientation a owl:ObjectProperty ; rdfs:domain key:Navigation ; rdfs:range key:Orientation .
+key:Orientation a owl:Class .
+key:Vertical a key:Orientation ; sem:slug "vertical" .
+key:Horizontal a key:Orientation ; sem:slug "horizontal" .
+key:wrap a owl:DatatypeProperty ; rdfs:domain key:Navigation ; rdfs:comment "Moving past the last part goes to the first."@en .
+key:activatesOnFocus a owl:DatatypeProperty ; rdfs:domain key:Navigation ; rdfs:comment "Focusing a part activates it (tabs, radio-like groups)."@en .
+key:node a owl:DatatypeProperty ; rdfs:domain key:Navigation ; rdfs:comment "Trees: selector of a node (carrying aria-expanded) that contains its part."@en .
+key:toggle a owl:DatatypeProperty ; rdfs:domain key:Navigation ; rdfs:comment "Trees: selector, within a node, of the control that expands or collapses it."@en .
+
+key:MenuNavigation a key:Navigation ; key:items "[role=menuitem]:not([disabled])" ; key:orientation key:Vertical ; key:wrap true .
+key:TabNavigation a key:Navigation ; key:items "[role=tablist] > [role=tab]" ; key:orientation key:Horizontal ; key:wrap true ; key:activatesOnFocus true .
+key:AccordionNavigation a key:Navigation ; key:items "h3 > button[aria-expanded]" ; key:orientation key:Vertical .
+key:TreeNavigation a key:Navigation ; key:items "[role=treeitem] > .sem-row > .sem-label" ; key:orientation key:Vertical ;
+    key:node "[role=treeitem]" ; key:toggle ":scope > .sem-row > .sem-twisty" .
+key:SegmentedNavigation a key:Navigation ; key:items "button[aria-pressed]" ; key:orientation key:Horizontal ; key:wrap true ; key:activatesOnFocus true .
+key:ListNavigation a key:Navigation ; key:items "button[aria-pressed]" ; key:orientation key:Vertical ; key:wrap true ; key:activatesOnFocus true .
+
+c:Menu key:navigation key:MenuNavigation .
+c:Tabs key:navigation key:TabNavigation .
+c:Accordion key:navigation key:AccordionNavigation .
+c:Tree key:navigation key:TreeNavigation .
+c:Segmented key:navigation key:SegmentedNavigation .
+c:NavList key:navigation key:ListNavigation .
+
+key:Navigation-rendering a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:modality mod:Screen ;
+    sem:layer key:Layer ;
+    sem:stratum 10 ;
+    sem:watches rdf:type .
+key:Navigation-fn a sem:Rule ; sem:implements key:Navigation-rendering ; sem:function "keyboard:navigation" .

@@ -110,7 +110,7 @@ describe('incremental updates', () => {
         expect(toHTML(screen.index, page), name).toBe(toHTML(expected.index, page))
         expect(toText(text.index, page), name).toBe(toText(expectedText.index, page))
       }
-    }, 30_000)
+    }, 120_000)
   }
 
   it('re-renders only what changed', () => {

@@ -1,7 +1,7 @@
 // The keyboard layer (ontology/layers/keyboard.ttl): shortcuts as data.
 import type { FnRule } from '../engine/context.ts'
-import { KEY, MOD } from '../ns.ts'
-import { labelOf, str } from '../components/util.ts'
+import { KEY, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
+import { isTrue, labelOf, str } from '../components/util.ts'
 import { mint } from '../rdf.ts'
 
 const MODIFIERS = ['mod', 'ctrl', 'alt', 'shift', 'meta']
@@ -78,4 +78,127 @@ const shortcutList: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const keyboardFunctions: Record<string, FnRule> = { 'keyboard:shortcut': shortcut, 'shortcut-list': shortcutList }
+/** The navigation pattern of the most specific class of `focus` that declares one. */
+function patternOf(ctx: Parameters<FnRule>[0], focus: Parameters<FnRule>[1]) {
+  const ofClass = (cls: string) =>
+    ctx.memo('key:navigation ' + cls, () => {
+      const todo = [cls]
+      const seen = new Set<string>()
+      while (todo.length) {
+        const c = todo.shift()!
+        if (seen.has(c)) continue
+        seen.add(c)
+        const nav = ctx.untraced(() => ctx.object(ctx.nn(c), NS.key + 'navigation'))
+        if (nav) return nav
+        todo.push(...ctx.untraced(() => ctx.objects(ctx.nn(c), RDFS_SUBCLASS)).map((t) => t.value))
+      }
+      return undefined
+    })
+  for (const t of ctx.objects(focus, RDF_TYPE)) {
+    const nav = ofClass(t.value)
+    if (nav) return nav
+  }
+  return undefined
+}
+
+/** Copies the class's navigation pattern onto the component's root, for the event bus. */
+const navigation: FnRule = (ctx, focus) => {
+  const nav = patternOf(ctx, focus)
+  if (!nav) return []
+  const items = str(ctx.object(nav, NS.key + 'items'))
+  if (!items) return []
+  const o = ctx.out(focus)
+  const root = ctx.nn(mint(focus.value, 'root'))
+  const orientation = ctx.object(nav, NS.key + 'orientation')
+  o.attr(root, 'data-sem-nav-items', items)
+  o.attr(root, 'data-sem-nav-orientation', (orientation && str(ctx.object(orientation, SEM.slug))) ?? 'vertical')
+  if (isTrue(ctx.object(nav, NS.key + 'wrap'))) o.attr(root, 'data-sem-nav-wrap', '')
+  if (isTrue(ctx.object(nav, NS.key + 'activatesOnFocus'))) o.attr(root, 'data-sem-nav-activate', '')
+  const node = str(ctx.object(nav, NS.key + 'node'))
+  const toggle = str(ctx.object(nav, NS.key + 'toggle'))
+  if (node) o.attr(root, 'data-sem-nav-node', node)
+  if (toggle) o.attr(root, 'data-sem-nav-toggle', toggle)
+  return o.quads
+}
+
+// --- the host side: moving focus (view state) --------------------------------------------------
+
+const NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+/** The parts of a navigation root, in document order, that belong to it (not to a nested root). */
+function partsOf(root: Element): HTMLElement[] {
+  const selector = root.getAttribute('data-sem-nav-items')!
+  return [...root.querySelectorAll(selector)].filter(
+    (el) => el.closest('[data-sem-nav-items]') === root && !el.closest('[hidden], [inert]'),
+  ) as HTMLElement[]
+}
+
+/** Keep exactly one part of the root in the tab order: the one that has (or last had) focus. */
+export function rove(root: Element, current: HTMLElement) {
+  for (const part of partsOf(root)) part.setAttribute('tabindex', part === current ? '0' : '-1')
+}
+
+function focusPart(root: Element, part: HTMLElement | undefined) {
+  if (!part) return
+  rove(root, part)
+  part.focus?.()
+  if (root.hasAttribute('data-sem-nav-activate') && part.getAttribute('aria-pressed') !== 'true' && part.getAttribute('aria-selected') !== 'true') part.click()
+}
+
+/**
+ * Arrow-key navigation within the component that declares a pattern. Returns
+ * whether the key was used (the caller then prevents its default).
+ */
+export function navigate(e: KeyboardEvent): boolean {
+  if (!NAV_KEYS.has(e.key) || e.altKey || e.ctrlKey || e.metaKey) return false
+  const target = e.target as HTMLElement | null
+  const root = target?.closest?.('[data-sem-nav-items]')
+  if (!root || target!.closest('input, textarea, select')) return false
+  // A menu button: Down / Up open the menu at its first / last item (the click runs its reaction).
+  if (target!.getAttribute('aria-haspopup') === 'menu' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    if (target!.getAttribute('aria-expanded') !== 'true') target!.click()
+    const items = partsOf(root)
+    focusPart(root, e.key === 'ArrowDown' ? items[0] : items.at(-1))
+    return true
+  }
+  const parts = partsOf(root)
+  const at = parts.indexOf(target as HTMLElement)
+  if (at < 0) return false
+  const rtl = target!.ownerDocument.defaultView?.getComputedStyle?.(root).direction === 'rtl'
+  const vertical = root.getAttribute('data-sem-nav-orientation') !== 'horizontal'
+  const wrap = root.hasAttribute('data-sem-nav-wrap')
+  const step = (d: number) => {
+    const n = at + d
+    return wrap ? parts[(n + parts.length) % parts.length] : parts[Math.max(0, Math.min(parts.length - 1, n))]
+  }
+  const nodeSel = root.getAttribute('data-sem-nav-node')
+  const [next, prev] = vertical ? ['ArrowDown', 'ArrowUp'] : rtl ? ['ArrowLeft', 'ArrowRight'] : ['ArrowRight', 'ArrowLeft']
+  if (e.key === next) return focusPart(root, step(1)), true
+  if (e.key === prev) return focusPart(root, step(-1)), true
+  if (e.key === 'Home') return focusPart(root, parts[0]), true
+  if (e.key === 'End') return focusPart(root, parts.at(-1)), true
+  // Trees: in (expand, then first child) and out (collapse, then parent).
+  if (nodeSel && vertical) {
+    const [inward, outward] = rtl ? ['ArrowLeft', 'ArrowRight'] : ['ArrowRight', 'ArrowLeft']
+    const node = target!.closest(nodeSel)
+    if (!node) return false
+    const toggle = node.querySelector(root.getAttribute('data-sem-nav-toggle') ?? ':scope > button') as HTMLElement | null
+    const expanded = node.getAttribute('aria-expanded')
+    if (e.key === inward) {
+      if (expanded === 'false') toggle?.click()
+      else if (expanded === 'true') focusPart(root, parts.find((p) => p.closest(nodeSel)?.parentElement?.closest(nodeSel) === node))
+      return true
+    }
+    if (e.key === outward) {
+      if (expanded === 'true') toggle?.click()
+      else {
+        const parent = node.parentElement?.closest(nodeSel)
+        if (parent && root.contains(parent)) focusPart(root, parts.find((p) => p.closest(nodeSel) === parent))
+      }
+      return true
+    }
+  }
+  return false
+}
+
+export const keyboardFunctions: Record<string, FnRule> = { 'keyboard:shortcut': shortcut, 'shortcut-list': shortcutList, 'keyboard:navigation': navigation }

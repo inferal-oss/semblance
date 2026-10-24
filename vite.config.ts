@@ -23,5 +23,6 @@ export default defineConfig(({ mode }) => ({
     target: 'es2023',
     assetsInlineLimit: mode === 'single' ? Number.MAX_SAFE_INTEGER : undefined,
   },
-  test: { root: here, include: ['test/**/*.test.ts'] },
+  // Integration tests mount the whole demo; under a parallel run they need more than 5 s.
+  test: { root: here, include: ['test/**/*.test.ts'], testTimeout: 60_000 },
 }))

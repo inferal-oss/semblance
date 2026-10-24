@@ -56,16 +56,25 @@ document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
 const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
 // The Text projection mounts into its slot once the slot is shown (it is evaluated on demand).
 let textDom: DomRenderer | undefined
-// Modal overlays take focus when they open and give it back when they close.
-let modal: Element | null = null
-let opener: HTMLElement | null = null
+// Modal overlays and menus take focus when they open and give it back when they close.
+const popups = {
+  modal: { selector: '[aria-modal=true]', first: 'input, textarea, select, button:not(.sem-close), [tabindex]', open: null as Element | null, opener: null as HTMLElement | null },
+  menu: { selector: '[role=menu]', first: '[role=menuitem]:not([disabled])', open: null as Element | null, opener: null as HTMLElement | null },
+}
 function focusModal() {
-  const open = [...document.querySelectorAll('[aria-modal=true]')].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
-  if (open === modal) return
-  if (open && !modal) opener = document.activeElement as HTMLElement | null
-  modal = open
-  if (open) (open.querySelector('input, textarea, select, button:not(.sem-close), [tabindex]') as HTMLElement | null ?? (open as HTMLElement)).focus?.()
-  else opener?.focus?.(), (opener = null)
+  for (const p of Object.values(popups)) {
+    const open = [...document.querySelectorAll(p.selector)].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
+    if (open === p.open) continue
+    if (open && !p.open) p.opener = document.activeElement as HTMLElement | null
+    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body)
+    p.open = open
+    if (open) {
+      if (!open.contains(document.activeElement)) ((open.querySelector(p.first) as HTMLElement | null) ?? (open as HTMLElement)).focus?.()
+    } else {
+      if (wasFocusedInside || document.activeElement === document.body) p.opener?.focus?.()
+      p.opener = null
+    }
+  }
 }
 
 const flush = () => {

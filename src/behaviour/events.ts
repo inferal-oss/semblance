@@ -4,7 +4,7 @@ import type { Delta } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
-import { comboOf } from '../layers/keyboard.ts'
+import { comboOf, navigate, rove } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
@@ -333,6 +333,7 @@ export class EventBus {
     const keys = (e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
+      if (renderer.host.contains(k.target as Node) && navigate(k)) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
@@ -351,10 +352,18 @@ export class EventBus {
       ;(control ?? el).click()
     }
     doc.addEventListener('keydown', keys)
+    // Entering a navigable component by Tab puts the rest of its parts out of the tab order.
+    const entered = (e: Event) => {
+      const part = e.target as HTMLElement
+      const root = part.closest?.('[data-sem-nav-items]')
+      if (root && part.matches(root.getAttribute('data-sem-nav-items')!)) rove(root, part)
+    }
+    renderer.host.addEventListener('focusin', entered)
     return () => {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('pointerdown', gestures)
       doc.removeEventListener('keydown', keys)
+      renderer.host.removeEventListener('focusin', entered)
     }
   }
 
