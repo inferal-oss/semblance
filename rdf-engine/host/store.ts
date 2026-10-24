@@ -231,6 +231,13 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
     sparql = false
   }
 
+  const triplesOf = (r: ReturnType<Query['run']>): Quad[] => {
+    if (r.form !== Form.Construct && r.form !== Form.Describe) throw new Error('not a CONSTRUCT query')
+    const out: Quad[] = new Array(r.triples.length / 3)
+    for (let i = 0, k = 0; i < r.triples.length; i += 3, k++) out[k] = quad(termOf(r.triples[i]!), termOf(r.triples[i + 1]!), termOf(r.triples[i + 2]!), defaultGraph)
+    return out
+  }
+
   const ids = (q: Quad, intern: boolean) => [idOf(q.subject, intern), idOf(q.predicate, intern), idOf(q.object, intern), idOf(q.graph, intern)]
 
   const factory: Factory = {
@@ -278,13 +285,24 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
       }
       return out
     },
+    constructFor(query, variable, values, graphs) {
+      const q = prepare(query)
+      const ids: number[] = []
+      for (const v of values) {
+        const id = idOf(v, false)
+        if (id) ids.push(id)
+      }
+      if (!ids.length) return []
+      q.bindValues(variable, ids)
+      try {
+        return triplesOf(q.run(graphIds(graphs as Term[])))
+      } finally {
+        q.bindValues(variable, [])
+      }
+    },
     construct(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet; use function rules (prefer: "function")`)
-      const r = prepare(query).run(graphIds(graphs as Term[]))
-      if (r.form !== Form.Construct && r.form !== Form.Describe) throw new Error('not a CONSTRUCT query')
-      const out: Quad[] = new Array(r.triples.length / 3)
-      for (let i = 0, k = 0; i < r.triples.length; i += 3, k++) out[k] = quad(termOf(r.triples[i]!), termOf(r.triples[i + 1]!), termOf(r.triples[i + 2]!), defaultGraph)
-      return out
+      return triplesOf(prepare(query).run(graphIds(graphs as Term[])))
     },
     loadTurtle(text) {
       e.load(Format.Turtle, text)

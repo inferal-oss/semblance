@@ -35,9 +35,11 @@ export const CONFIGS: Config[] = [
   { id: 'n3 · function', store: 'n3', prefer: 'function', bulkThreshold: 16 },
 ]
 
-/** Node also runs the rdf-engine builds (function rules until they have SPARQL). */
+/** Node also runs the rdf-engine builds (WAT with function rules until it has SPARQL). */
 export const NODE_CONFIGS: Config[] = [
   ...CONFIGS,
+  { id: 'rust · sparql · bulk', store: 'rust', prefer: 'sparql', bulkThreshold: 16 },
+  { id: 'rust · sparql · per-focus', store: 'rust', prefer: 'sparql', bulkThreshold: Infinity },
   { id: 'rust · function', store: 'rust', prefer: 'function', bulkThreshold: 16 },
   { id: 'wat · function', store: 'wat', prefer: 'function', bulkThreshold: 16 },
 ]

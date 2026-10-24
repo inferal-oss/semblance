@@ -568,6 +568,7 @@ export class Engine {
       }
     }
     this.stats.queries++
+    if (this.store.constructFor) return this.constructFor(rule, [focus])
     return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
   }
 
@@ -612,6 +613,15 @@ export class Engine {
   private bulk(rule: Rule, foci: string[]): Map<string, Quad[]> {
     this.stats.bulkQueries++
     const groups = new Map<string, Quad[]>()
+    if (this.store.constructFor) {
+      for (const q of this.constructFor(rule, foci)) {
+        const focus = owningFocus(q.subject.value)
+        let g = groups.get(focus)
+        if (!g) groups.set(focus, (g = []))
+        g.push(q)
+      }
+      return groups
+    }
     // Restrict ?this to the dirty foci, at the start of the WHERE clause.
     const query = rule.queryParts!.join('?this')
     const template = query.search(/CONSTRUCT\s*\{/i)
@@ -625,6 +635,15 @@ export class Engine {
       g.push(q)
     }
     return groups
+  }
+
+  private constructFor(rule: Rule, foci: string[]): Quad[] {
+    const f = this.store.factory
+    try {
+      return this.store.constructFor!(rule.queryParts!.join('?this'), 'this', foci.map((x) => f.namedNode(x)), this.graphs)
+    } catch (e) {
+      throw new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
+    }
   }
 
   private construct(rule: Rule, query: string): Quad[] {

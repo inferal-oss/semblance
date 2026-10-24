@@ -24,6 +24,12 @@ export interface GraphStore {
   select(query: string, graphs: Quad_Graph[]): Map<string, Term>[]
   /** Evaluate a CONSTRUCT query whose default graph is the union of `graphs`. */
   construct(query: string, graphs: Quad_Graph[]): Quad[]
+  /**
+   * Evaluate a CONSTRUCT query once for each of `values` bound to `variable`
+   * (as if written in its place) and return all the triples. Optional: stores
+   * with prepared queries skip re-parsing per focus and splicing VALUES.
+   */
+  constructFor?(query: string, variable: string, values: Term[], graphs: Quad_Graph[]): Quad[]
   loadTurtle(text: string): void
   /**
    * Housekeeping in small slices (e.g. in idle time), for at most `budgetMs`.
