@@ -110,6 +110,9 @@ ui:playgroundCase c:when ui:Playground ; c:content ui:playground .
 # instant; the gallery renders a group only when it is selected (lazy, the default).
 ui:playground sem:warm sem:Eager .
 ui:performance sem:warm sem:Eager .
+# The gallery is large: a group is evaluated when its navigation item is pointed
+# at or focused, so it is ready by the time it is clicked.
+ui:gallery sem:warm sem:OnIntent .
 ui:componentsCase c:when ui:Components ; c:content ui:gallery .
 ui:performanceCase c:when ui:Performance ; c:content ui:performance .
 

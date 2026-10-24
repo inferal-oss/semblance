@@ -195,8 +195,9 @@ export class Engine {
    * `budgetMs` (e.g. in idle time): hidden views become ready before they are
    * shown, and interactions never pay for them. Returns whether work remains.
    */
-  warm(budgetMs: number, slice = 4): boolean {
+  warm(budgetMs: number, slice = 4, only?: (focus: string) => boolean): boolean {
     if (!this.demand) return false
+    const allowed = only ?? this.warmable
     const until = performance.now() + budgetMs
     this.warming = true
     try {
@@ -204,8 +205,8 @@ export class Engine {
         let picked = 0
         for (const [rule, foci] of this.deferred) {
           for (const focus of foci) {
-            // Lazy parts stay parked until they are shown.
-            if (this.warmable && !this.warmable(focusOf(focus))) continue
+            // Lazy parts stay parked until they are shown (or intended: `only`).
+            if (allowed && !allowed(focusOf(focus))) continue
             foci.delete(focus)
             this.markDirty(rule, focus)
             if (++picked >= slice) break
@@ -218,12 +219,12 @@ export class Engine {
     } finally {
       this.warming = false
     }
-    return this.hasWarmable
+    return this.hasWarmable(allowed)
   }
 
   /** Whether parked work remains that idle time may evaluate. */
-  private get hasWarmable(): boolean {
-    for (const foci of this.deferred.values()) for (const focus of foci) if (!this.warmable || this.warmable(focusOf(focus))) return true
+  private hasWarmable(allowed = this.warmable): boolean {
+    for (const foci of this.deferred.values()) for (const focus of foci) if (!allowed || allowed(focusOf(focus))) return true
     return false
   }
 

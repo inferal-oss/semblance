@@ -23,6 +23,7 @@ export interface Projection {
 export class Runtime {
   readonly projections: Projection[] = []
   private readonly inputListeners: ((graph: string | undefined, delta: Delta) => void)[] = []
+  private readonly warmth = new WeakMap<Engine, (focus: string) => string | undefined>()
 
   constructor(readonly store: GraphStore) {}
 
@@ -53,8 +54,9 @@ export class Runtime {
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).
       const f = this.store.factory
       const warm = f.namedNode(SEM.warm)
-      engine.warmable = (focus) =>
-        index.nearest(focus, (key) => (key.includes(' ') ? undefined : this.store.match(f.namedNode(key), warm, null)[0]?.object.value)) === SEM.Eager
+      const warmth = (focus: string) => index.nearest(focus, (key) => (key.includes(' ') ? undefined : this.store.match(f.namedNode(key), warm, null)[0]?.object.value))
+      engine.warmable = (focus) => warmth(focus) === SEM.Eager
+      this.warmth.set(engine, warmth)
     }
     engine.start()
     const p: Projection = { engine, index }
@@ -103,6 +105,27 @@ export class Runtime {
     // What time is left goes to the store's own upkeep (e.g. compaction).
     const left = until - performance.now()
     if (left > 1) more = (this.store.maintain?.(left) ?? false) || more
+    return more
+  }
+
+  /**
+   * Evaluate, for up to `budgetMs`, the parked work under the given components - what
+   * the person shows intent to see (see sem:OnIntent) - where their warmth allows it
+   * (on intent or eager). Returns whether work remains.
+   */
+  preload(contents: ReadonlySet<string>, budgetMs: number): boolean {
+    let more = false
+    for (const p of this.projections) {
+      const warmth = this.warmth.get(p.engine)
+      if (!warmth) continue
+      const under = (focus: string) => p.index.nearest(focus, (key) => (contents.has(key) ? true : undefined)) === true
+      const allowed = (focus: string) => {
+        const w = warmth(focus)
+        return (w === SEM.OnIntent || w === SEM.Eager) && under(focus)
+      }
+      more = p.engine.warm(budgetMs / this.projections.length, 4, allowed) || more
+      settle(p)
+    }
     return more
   }
 

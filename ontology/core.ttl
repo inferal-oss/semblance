@@ -92,6 +92,30 @@ sem:Eager a sem:Warmth ; rdfs:label "eager"@en ;
     rdfs:comment "Hidden parts are evaluated in idle time, so showing them is instant."@en .
 sem:Lazy a sem:Warmth ; rdfs:label "lazy"@en ;
     rdfs:comment "Hidden parts are evaluated when first shown (the default)."@en .
+sem:OnIntent a sem:Warmth ; rdfs:label "on intent"@en ;
+    rdfs:comment """Hidden parts are evaluated as soon as the person shows intent to see them: pointing at,
+or focusing, a control that would show them (a navigation item, a tab). By the time they
+click, it is rendered."""@en .
+
+# What a control would show, when it is pointed at: intent previews. Each is a
+# SELECT with $control (the component the pointed element belongs to) and
+# $option (what the element c:selects) that returns ?content - the hidden
+# component that choosing it would show. The host runs them on hover / focus
+# and evaluates that content ahead of the click (where its warmth allows).
+sem:IntentPreview a owl:Class ;
+    rdfs:comment "A query from a pointed-at choice ($control, $option) to the ?content it would show."@en .
+
+sem:SwitchPreview a sem:IntentPreview ;
+    rdfs:label "a switch's case"@en ;
+    rdfs:comment "A control over a property that a c:Switch also follows: the case it would show."@en ;
+    sem:select """SELECT DISTINCT ?content WHERE {
+  $control c:controls ?target ; c:property ?property .
+  ?switch a c:Switch ; c:controls ?target ; c:property ?property ; c:cases/rdf:rest*/rdf:first ?case .
+  ?case c:when $option ; c:content ?content .
+}""" .
+sem:TabPreview a sem:IntentPreview ;
+    rdfs:label "a tab's content"@en ;
+    sem:select """SELECT DISTINCT ?content WHERE { $option a c:Tab ; c:content ?content }""" .
 
 sem:bulk a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment """On a SPARQL rule: false keeps it from being evaluated once for many foci. The engine

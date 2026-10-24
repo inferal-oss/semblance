@@ -112,6 +112,8 @@ export const SEM = {
   warm: sem + 'warm',
   Eager: sem + 'Eager',
   Lazy: sem + 'Lazy',
+  OnIntent: sem + 'OnIntent',
+  IntentPreview: sem + 'IntentPreview',
   select: sem + 'select',
   text: sem + 'text',
   verdict: sem + 'verdict',

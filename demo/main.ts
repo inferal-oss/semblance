@@ -2,6 +2,7 @@ import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
+import { attachIntent } from '../src/intent.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -190,6 +191,8 @@ const short = (iri: string) => {
   return iri
 }
 const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
+// Pointing at a navigation item or a tab evaluates what it would show (sem:OnIntent).
+attachIntent(runtime, shell, { flush: () => flush() })
 persistence.attach(runtime)
 bus.attach(shell, (h: Handled) => {
   syncSettings()

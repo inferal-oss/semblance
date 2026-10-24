@@ -177,3 +177,26 @@ describe('the demo shell is a component graph', () => {
     expect(chart.querySelector('circle.sem-dot title')!.textContent).toBe('hybrid · function · 100: 11.0 ms')
   })
 })
+
+describe('intent preloading (sem:OnIntent)', () => {
+  it('evaluates a gallery group when its navigation item is pointed at, before the click', async () => {
+    const { attachIntent } = await import('../src/intent.ts')
+    const { document, fire, runtime, screen, shell, showPage } = mountShell()
+    attachIntent(runtime, shell, { idle: (run) => run(1_000), flush: () => shell.flush() })
+    showPage('Components')
+    const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+    const nav = (name: string) => [...document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name)!
+    expect(runs('TableRendering-fn') + runs('TableRendering-sparql')).toBe(0)
+    fire(nav('Data'), 'pointerover')
+    // Evaluated and built (hidden) ahead of the click; nothing else was.
+    expect(runs('TableRendering-fn') + runs('TableRendering-sparql')).toBeGreaterThan(0)
+    expect(document.querySelector('[data-sem-c=table]')!.closest('[hidden]')).not.toBeNull()
+    expect(runs('TreeRendering-fn') + runs('TreeRendering-sparql')).toBeGreaterThan(0)
+    expect(runs('AccordionRendering-fn') + runs('AccordionRendering-sparql')).toBe(0)
+    const before = screen.engine.stats.ruleRuns
+    fire(nav('Data'), 'click')
+    expect(document.querySelector('[data-sem-c=table]')!.closest('[hidden]')).toBeNull()
+    // The click only switches the case: the page is already there.
+    expect(screen.engine.stats.ruleRuns - before).toBeLessThan(40)
+  })
+})
