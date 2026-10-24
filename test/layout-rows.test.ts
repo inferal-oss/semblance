@@ -16,4 +16,13 @@ describe('rows that line up', () => {
     expect(css).toMatch(/\[data-sem-c="?switch"?\][^{,]*\{[^}]*display:\s*contents/)
     expect(css).toMatch(/\[data-sem-c="?switch"?\] > :not\(\[hidden\]\)[^{]*\{[^}]*display:\s*contents/)
   })
+
+  it('form controls fit the column they are given, whatever the engine thinks their minimum is', () => {
+    const controls = css.match(/:where\(input:not\(\[type=checkbox\][^{]*\{([^}]*)\}/)![1]!
+    expect(controls).toMatch(/min-width:\s*0/)
+    expect(controls).toMatch(/max-width:\s*100%/)
+    const field = css.match(/\[data-sem-c="?text-field"?\]\s*\{([^}]*)\}/)![1]!
+    expect(field).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/)
+    expect(field).toMatch(/min-width:\s*0/)
+  })
 })

@@ -158,10 +158,25 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Danger ;
     sty:declares [ sty:property "color" ; sty:token tok:danger ] .
 
+# --- form controls: they fit the space they are given ----------------------------------------
+# A text control's own minimum width comes from its default size (about 20 characters), and a
+# grid or flex item does not shrink below its content's minimum by default. Some engines let a
+# percentage-wide input shrink anyway and some do not, so a field could overflow its column into
+# the next. Controls state that they may shrink to their container, everywhere.
+[] a sty:StyleRule ; sty:part ":where(input:not([type=checkbox], [type=radio], [type=range], [type=color]), select, textarea)" ;
+    sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+# Figures in number fields line up.
+[] a sty:StyleRule ; sty:part ":where(input[type=number])" ;
+    sty:declares [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+
 # --- text field ---------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "label" ;
