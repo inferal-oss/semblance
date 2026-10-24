@@ -1,6 +1,7 @@
 // The kanban example (demo/gallery/_ex-kanban.ttl) on a c:Board, driven through events on the site.
 import { describe, expect, it } from 'vitest'
 import { mountSite } from './harness.ts'
+import { fakeLayout } from './drag-layout.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const KB = 'https://semblance.dev/demo/kanban#'
@@ -38,6 +39,28 @@ function kanban(prefer: 'sparql' | 'function' = 'sparql') {
     h.shell.flush()
   }
   return { ...h, click, root, lanes, card, control, press, column, toasts, field, type, button }
+}
+
+/**
+ * The board with a fake layout (the test DOM has none): the lanes 300px apart, their cards 60px
+ * rows from y = 100, and pointer and key events to drag cards over them.
+ */
+function dragging(prefer: 'sparql' | 'function' = 'sparql') {
+  const h = kanban(prefer)
+  const zones = () => [...h.root().querySelectorAll('[data-sem-drop-zone]')] as HTMLElement[]
+  const { rectOf, pointer } = fakeLayout(h, { width: 300, row: 60 })
+  /** Drag a card to the top half of the i-th card of lane z (or past the last). */
+  const drag = (title: string, z: number, i: number) => {
+    const el = h.card(title) as HTMLElement
+    const r = rectOf(el)
+    pointer(el, 'pointerdown', r.left + 20, r.top + 20)
+    pointer(h.document, 'pointermove', r.left + 30, r.top + 30)
+    pointer(h.document, 'pointermove', z * 300 + 140, 100 + i * 60 + 10)
+    pointer(h.document, 'pointerup', z * 300 + 140, 100 + i * 60 + 10)
+    h.shell.flush()
+  }
+  const rank = (id: string) => h.store.match(h.store.factory.namedNode(KB + id), h.store.factory.namedNode(KB + 'rank'), null).map((q) => q.object.value)
+  return { ...h, zones, pointer, drag, rank }
 }
 
 describe('the kanban example', () => {
@@ -124,5 +147,76 @@ describe('the kanban example', () => {
     }
     expect(b.root().innerHTML).toBe(a.root().innerHTML)
     expect(b.column('c2')).toEqual(a.column('c2'))
+  })
+
+  it('drags a card into another column, between two cards, and reorders within a column', () => {
+    const { drag, column, rank, lanes, zones } = dragging()
+    expect(zones().map((z) => z.getAttribute('data-sem-drop-zone')!.replace(KB, ''))).toEqual(['todo', 'doing', 'done'])
+    drag('Write the persistence guide', 2, 0)
+    expect(column('c3')).toEqual(['done'])
+    expect(rank('c3')).toEqual(['5'])
+    expect(lanes().Done.cards).toEqual(['Write the persistence guide', 'Toast overlaps the dock'])
+    expect(lanes()['To do'].count).toBe('2')
+    // Within To do: Crash (rank 2) to the top, before Offline mode (1).
+    drag('Crash when pasting an empty query', 0, 0)
+    expect(lanes()['To do'].cards).toEqual(['Crash when pasting an empty query', 'Offline mode for the editor'])
+    expect(rank('c2')).toEqual(['0'])
+    // Between two cards of Doing (ranks 4 and 5): half way.
+    drag('Toast overlaps the dock', 1, 1)
+    expect(lanes().Doing.cards).toEqual(['Keyboard shortcuts for the board', 'Toast overlaps the dock', 'Bump Oxigraph'])
+    expect(rank('c6')).toEqual(['4.5'])
+    expect(lanes().Doing.count).toBe('3 / 3')
+  })
+
+  it('refuses a drop into a full Doing with the shape\'s message, and the buttons still move cards', () => {
+    const { drag, click, control, column, lanes, toasts, card, bus } = dragging()
+    click(control('Offline mode for the editor', 'Move to Doing'))
+    expect(lanes().Doing.count).toBe('3 / 3')
+    drag('Crash when pasting an empty query', 1, 0)
+    expect(column('c2')).toEqual(['todo'])
+    expect(toasts()).toContain('Doing holds at most three cards.')
+    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-refused')).toBe(true)
+    expect(bus.recent(1)[0]!.some((q) => q.predicate.value.endsWith('handledBy') && q.object.value === KB + 'DropCard')).toBe(false)
+    // Reordering within the full column is still fine (it adds no card).
+    drag('Bump Oxigraph', 1, 0)
+    expect(lanes().Doing.cards[0]).toBe('Bump Oxigraph')
+    click(control('Bump Oxigraph', 'Move to Done'))
+    drag('Crash when pasting an empty query', 1, 0)
+    expect(column('c2')).toEqual(['doing'])
+    expect(card('Crash when pasting an empty query').hasAttribute('data-sem-refused')).toBe(false)
+  })
+
+  it('carries a card by keyboard: Space, the arrows, Enter - and the arrows are the board\'s again after', () => {
+    const { press, column, lanes, document } = dragging()
+    press('Write the persistence guide', ' ')
+    expect(document.querySelector('[data-sem-drag-live]')!.textContent).toBe('Write the persistence guide: To do, after Crash when pasting an empty query.')
+    // Into Doing at the same place (its end), then up one.
+    press('Write the persistence guide', 'ArrowRight')
+    expect(document.querySelector('[data-sem-drag-live]')!.textContent).toBe('Write the persistence guide: Doing, after Bump Oxigraph.')
+    press('Write the persistence guide', 'ArrowUp')
+    expect(document.querySelector('[data-sem-drag-live]')!.textContent).toBe('Write the persistence guide: Doing, before Bump Oxigraph.')
+    // Still in To do while carried: the board's own arrow-key move did not run.
+    expect(column('c3')).toEqual(['todo'])
+    press('Write the persistence guide', 'Enter')
+    expect(column('c3')).toEqual(['doing'])
+    expect(lanes().Doing.cards).toEqual(['Keyboard shortcuts for the board', 'Write the persistence guide', 'Bump Oxigraph'])
+    press('Write the persistence guide', 'ArrowRight')
+    expect(column('c3')).toEqual(['done'])
+  })
+
+  it('renders the same with SPARQL and with function rules while dragging', () => {
+    const [a, b] = (['sparql', 'function'] as const).map((prefer) => dragging(prefer))
+    for (const h of [a!, b!]) {
+      const el = h.card('Write the persistence guide')
+      h.pointer(el, 'pointerdown', 20, 220)
+      h.pointer(h.document, 'pointermove', 30, 230)
+      h.pointer(h.document, 'pointermove', 440, 170)
+      h.shell.flush()
+    }
+    expect(b!.root().innerHTML).toBe(a!.root().innerHTML)
+    expect(a!.root().innerHTML).toContain('data-sem-drop-before')
+    for (const h of [a!, b!]) h.pointer(h.document, 'pointerup', 440, 170), h.shell.flush()
+    expect(b!.root().innerHTML).toBe(a!.root().innerHTML)
+    expect(b!.rank('c3')).toEqual(a!.rank('c3'))
   })
 })

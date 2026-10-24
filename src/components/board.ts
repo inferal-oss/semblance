@@ -3,7 +3,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import type { Delta } from '../rdf.ts'
-import { BEH, C, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY } from '../ns.ts'
+import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY } from '../ns.ts'
 import { named, RDFS_LABEL, str, text } from './util.ts'
 
 const c = (local: string) => NS.c + local
@@ -88,6 +88,8 @@ const board: FnRule = (ctx, focus) => {
     const head = o.el(key + '-head', 'Header', {}, [heading, count])
     o.attr(cards, 'aria-labelledby', heading.value)
     o.t(cards, RDF_TYPE, ctx.nn(H.ns + 'Ul'))
+    // As a drop target, each lane's cards are a zone receiving into the lane.
+    o.t(focus, DND.zone, cards).t(cards, DND.receptacle, lane)
     const section = o.el(key, 'Section', { class: full ? 'sem-lane sem-full' : 'sem-lane' }, [head, cards])
     o.t(section, SEM.orderKey, order)
     return section
@@ -100,6 +102,9 @@ const board: FnRule = (ctx, focus) => {
   const label = str(ctx.object(focus, L10N.label)) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value
   const root = o.el('root', 'Div', { role: 'group', 'aria-label': label })
   for (const lane of lanes) o.t(root, H.hasChild, lane)
+  o.t(focus, DND.memberOf, property)
+  const order = ctx.object(focus, P.cardOrder)
+  if (order) o.t(focus, DND.orderBy, order)
   o.renders(root)
   return o.quads
 }
@@ -119,6 +124,13 @@ const boardCard: FnRule = (ctx, focus, item) => {
   const o = ctx.out(focus)
   const card = o.node('card-' + encodeForUri(item.value))
   o.t(card, RDF_TYPE, ctx.nn(P.BoardCard)).t(card, C.of, item).t(card, P.onBoard, focus)
+  // A sortable board's cards can be picked up, carrying their items (the drag and drop layer).
+  if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
+    o.t(card, RDF_TYPE, ctx.nn(DND.Draggable)).t(card, DND.carries, item)
+    const titleProperty = ctx.object(focus, P.cardTitle)
+    const title = named(titleProperty) ? ctx.object(item, titleProperty.value) : undefined
+    if (title) o.t(card, DND.name, title.value)
+  }
   if (at > 0) o.t(card, P.previousLane, lanes[at - 1]!)
   if (at < lanes.length - 1) o.t(card, P.nextLane, lanes[at + 1]!)
   const orderBy = ctx.object(focus, P.cardOrder)
@@ -128,7 +140,7 @@ const boardCard: FnRule = (ctx, focus, item) => {
   o.t(o.node(laneKey(lane!) + '-cards'), H.hasChild, card)
   return o.quads
 }
-boardCard.watches = () => new Set([NS.c + 'property', P.cardOrder])
+boardCard.watches = () => new Set([RDF_TYPE, NS.c + 'property', P.cardOrder, P.cardTitle])
 
 // --- a card ---------------------------------------------------------------------------------------
 

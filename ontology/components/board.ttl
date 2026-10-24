@@ -4,6 +4,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -24,6 +25,12 @@
 # adding or moving a card re-places that card alone. A card shows its title, a tag and a person
 # (as c:Tag and c:Avatar instances it mints), and icon buttons that move it to the previous or
 # next lane and, on a c:removable board, remove it. Arrow keys on a focused card move it too.
+#
+# For the drag and drop layer the board says what it is as a drop target: each lane's list of
+# cards is a zone receiving into the lane (dnd:zone, dnd:receptacle), a card is placed by
+# c:property (dnd:memberOf) and ordered by c:cardOrder (dnd:orderBy). A board that is also a
+# dnd:Sortable mints its cards as draggables carrying their items, so they can be dragged
+# between lanes and within one; the lane limits are the same shapes, read by the layer.
 
 c:Board a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -84,6 +91,8 @@ CONSTRUCT {
   ?count a c:Badge ; c:label ?countLabel ; sty:tone ?tone ; sty:size sty:Small .
   ?cards a rdfhtml:Ul ; rdfhtml:attribute ?labelledBy .
   ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?headingId .
+  $this dnd:memberOf ?p ; dnd:orderBy ?cardOrder ; dnd:zone ?cards .
+  ?cards dnd:receptacle ?laneNode .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Board ; c:property ?p .
@@ -91,6 +100,7 @@ WHERE {
   {
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+    OPTIONAL { $this c:cardOrder ?cardOrder }
     BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label)
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
     BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?name)

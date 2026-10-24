@@ -7,6 +7,7 @@
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -20,6 +21,8 @@
 # its lanes are the kb:Column individuals (the range of kb:column, by sem:order), each card goes
 # where its kb:column points. Moving a card is a reaction that rewrites that one triple; the
 # limit on Doing is a shape the move reaction reads; counts are aggregates in the board's rule.
+# The board is also dnd:Sortable: cards can be dragged between lanes and within one, the drag and
+# drop layer refusing a full Doing by the same shape, and this file's drop reaction moving them.
 # =================================================================================================
 
 ui:ex-kanban-prefixes sh:declare [ sh:prefix "kb" ; sh:namespace "https://semblance.dev/demo/kanban#"^^xsd:anyURI ] .
@@ -34,7 +37,8 @@ kb:done a kb:Column ; rdfs:label "Done" ; sem:order 3 .
 
 # The work-in-progress limit: at most three cards point at Doing (the inverse of kb:column).
 # A standard SHACL node shape on the column. The board's move reaction refuses a move that
-# would break it, and the Doing header counts against it ("3 / 3").
+# would break it, the drag and drop layer a drop that would, and the Doing header counts against
+# it ("3 / 3").
 kb:DoingLimit a sh:NodeShape ; sh:targetNode kb:doing ;
     sh:property [ sh:path [ sh:inversePath kb:column ] ; sh:maxCount 3 ;
                   sh:message "Doing holds at most three cards." ] .
@@ -64,10 +68,11 @@ kb:c6 a kb:Card ; kb:title "Toast overlaps the dock" ; kb:column kb:done ; kb:as
 ui:ex-kanban a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-kanban-intro ui:ex-kanban-add-row ui:ex-kanban-board ui:ex-kanban-keys ) .
 ui:ex-kanban-intro a c:Text ;
-    c:label "A board of the example's own cards, laid out by a c:Board from where each card's kb:column points. Move cards with ← and →, or focus one and use the arrow keys; Doing has a work-in-progress limit of three, a SHACL shape the move respects." .
+    c:label "A board of the example's own cards, laid out by a c:Board from where each card's kb:column points. Drag a card to another column or to another place in its own, move it with ← and →, or focus one and use the arrow keys; Doing has a work-in-progress limit of three, a SHACL shape every move respects." .
 
 # The board: lanes from kb:column's range, cards from c:card, its look from the card's properties.
-ui:ex-kanban-board a c:Board ; c:label "Sprint 14" ;
+# As a dnd:Sortable its cards are draggables carrying the kb:Card, and each lane a drop zone.
+ui:ex-kanban-board a c:Board , dnd:Sortable ; c:label "Sprint 14" ;
     c:property kb:column ; c:cardTitle kb:title ; c:cardTag kb:tag ; c:cardPerson kb:assignee ; c:cardOrder kb:rank ;
     c:removable true ;
     c:card kb:c1 , kb:c2 , kb:c3 , kb:c4 , kb:c5 , kb:c6 .
@@ -82,10 +87,11 @@ ui:ex-kanban-add a c:Button ; c:label "Add to To do" ; sty:tone sty:Accent ; sty
     val:requires ( ui:ex-kanban-new ) ; key:shortcut "mod+enter" .
 
 ui:ex-kanban-keys a c:Text ; sty:textStyle sty:Caption ;
-    c:children ( "Tab to a card, then " ui:ex-kanban-key-left " / " ui:ex-kanban-key-right " moves it. " ui:ex-kanban-key-add " adds the card you typed." ) .
+    c:children ( "Tab to a card, then " ui:ex-kanban-key-left " / " ui:ex-kanban-key-right " moves it; " ui:ex-kanban-key-space " picks it up to carry with the arrows, and puts it down again. " ui:ex-kanban-key-add " adds the card you typed." ) .
 ui:ex-kanban-key-left a c:Kbd ; c:label "←" .
 ui:ex-kanban-key-right a c:Kbd ; c:label "→" .
 ui:ex-kanban-key-add a c:Kbd ; c:label "⌘↵" .
+ui:ex-kanban-key-space a c:Kbd ; c:label "Space" .
 
 # --- the reaction: adding a card ---------------------------------------------------------------------
 # A new card, minted from the event's IRI, goes to the end of To do: its rank is one more than
@@ -109,10 +115,27 @@ WHERE {
 }""" ;
     ann:announces "Card added to To do" ; ann:tone sty:Success .
 
+# --- the reaction: dropping a card -------------------------------------------------------------------
+# A drop the layer accepted (into a lane with room, or within the card's own) puts the card in the
+# lane it was dropped into, at the rank the drop computed: half way between its new neighbours',
+# so no other card is renumbered. A drop into a full Doing never gets here: it is a dnd:Refusal,
+# announced with kb:DoingLimit's message.
+
+kb:DropCard a beh:Reaction ; beh:when dnd:Drop ; beh:source ui:ex-kanban-board ;
+    beh:deletes """
+CONSTRUCT { ?card kb:column ?old ; kb:rank ?oldRank . ?minted c:refusedBy ?refusal }
+WHERE {
+  $event dnd:carrying ?card ; dnd:into ?lane ; dnd:source ?minted .
+  { ?card kb:column ?old } UNION { $event dnd:rank ?rank . ?card kb:rank ?oldRank } UNION { ?minted c:refusedBy ?refusal }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?card kb:column ?lane ; kb:rank ?rank }
+WHERE { $event dnd:carrying ?card ; dnd:into ?lane . OPTIONAL { $event dnd:rank ?rank } }""" .
+
 # --- how it works ---------------------------------------------------------------------------------
 
 ui:ex-kanban-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-kanban-how-title ui:ex-kanban-how-board ui:ex-kanban-how-move ui:ex-kanban-how-limit ui:ex-kanban-how-add ui:ex-kanban-how-cost ) .
+    c:children ( ui:ex-kanban-how-title ui:ex-kanban-how-board ui:ex-kanban-how-move ui:ex-kanban-how-limit ui:ex-kanban-how-drag ui:ex-kanban-how-drop ui:ex-kanban-how-add ui:ex-kanban-how-cost ) .
 ui:ex-kanban-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
 ui:ex-kanban-how-board a c:Text ; c:children (
     "The board is a " ui:ex-kanban-how-c1 ", a framework component. It is told which property places a card (" ui:ex-kanban-how-c2
@@ -134,6 +157,19 @@ ui:ex-kanban-how-limit a c:Text ; c:children (
     ui:ex-kanban-how-c10 " matches exactly that case, marks the card (it shakes) and announces why. The lane counts in the headers are a COUNT per lane in the board's own rule, toned warning at the limit." ) .
 ui:ex-kanban-how-c9 a c:Code ; c:label "kb:DoingLimit" .
 ui:ex-kanban-how-c10 a c:Code ; c:label "c:BoardRefuse" .
+ui:ex-kanban-how-drag a c:Text ; c:children (
+    "Dragging is the drag and drop layer's. The board is also a " ui:ex-kanban-how-d1 ", so it mints its cards as draggables carrying their kb:Card and says what it is as a drop target: each lane's list is a zone receiving into that lane, a card goes in by kb:column and is ordered by kb:rank. Picking a card up (pointer, or Space on a focused card) writes the drag into the graph as "
+    ui:ex-kanban-how-d2 ", and every lane derives whether it would take it: the layer checks that one more card still conforms to the lane's shapes, so a full Doing refuses, dimmed, with kb:DoingLimit's message over it. Moving over a lane, or between two cards, is an unrecorded " ui:ex-kanban-how-d3 " event: it only moves the drag's place, marks the insertion point and computes the rank the card would take." ) .
+ui:ex-kanban-how-d1 a c:Code ; c:label "dnd:Sortable" .
+ui:ex-kanban-how-d2 a c:Code ; c:label "dnd:Current" .
+ui:ex-kanban-how-d3 a c:Code ; c:label "dnd:Over" .
+ui:ex-kanban-how-drop a c:Text ; c:children (
+    "Letting go where a lane takes it is a " ui:ex-kanban-how-d4 " addressed to the board, carrying the drag (the card, the lane, its neighbours, the rank). What it means is this file's reaction, " ui:ex-kanban-how-d5
+    ": it rewrites the card's kb:column and kb:rank - the rank half way between the neighbours', so no other card is renumbered, and reordering within a lane is the same drop. Letting go over a full Doing is a "
+    ui:ex-kanban-how-d6 " instead, which the reaction never sees: the card shakes and the shape's message is announced. Escape puts it back." ) .
+ui:ex-kanban-how-d4 a c:Code ; c:label "dnd:Drop" .
+ui:ex-kanban-how-d5 a c:Code ; c:label "kb:DropCard" .
+ui:ex-kanban-how-d6 a c:Code ; c:label "dnd:Refusal" .
 ui:ex-kanban-how-add a c:Text ; c:children (
     "Adding is this file's reaction, " ui:ex-kanban-how-c11 ": it mints a card from the event's IRI, ranks it last in To do and clears the field. The button is disabled until the field conforms to "
     ui:ex-kanban-how-c12 " (the validation layer's " ui:ex-kanban-how-c13 "). Removing is the board's " ui:ex-kanban-how-c14 "." ) .
@@ -142,4 +178,4 @@ ui:ex-kanban-how-c12 a c:Code ; c:label "kb:TitleShape" .
 ui:ex-kanban-how-c13 a c:Code ; c:label "val:requires" .
 ui:ex-kanban-how-c14 a c:Code ; c:label "c:BoardRemove" .
 ui:ex-kanban-how-cost a c:Text ; c:children (
-    "Why it is cheap: cards are placed member-wise (sem:forEach c:card), so a move re-places that one card and re-renders it; the only other work is the board's lane headers, whose counts follow the cards." ) .
+    "Why it is cheap: cards are placed member-wise (sem:forEach c:card), so a move re-places that one card and re-renders it; the only other work is the board's lane headers, whose counts follow the cards. A drag over the board re-runs only the board's marks and the carried card's status, however many cards there are." ) .
