@@ -329,7 +329,17 @@ export const BEH = {
 } as const
 
 export const A11Y = { Layer: NS.a11y + 'Layer' } as const
-export const POS = { Layer: NS.pos + 'Layer' } as const
+export const POS = {
+  Layer: NS.pos + 'Layer',
+  layout: NS.pos + 'layout',
+  AlignedColumns: NS.pos + 'AlignedColumns',
+  rows: NS.pos + 'rows',
+  RowSubgrid: NS.pos + 'RowSubgrid',
+  rowParts: NS.pos + 'rowParts',
+  rowSpan: NS.pos + 'rowSpan',
+  RowSpan: NS.pos + 'RowSpan',
+  count: NS.pos + 'count',
+} as const
 
 export const MOT = { preference: NS.mot + 'preference' } as const
 export const VAL = {

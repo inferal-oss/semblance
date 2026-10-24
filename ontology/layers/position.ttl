@@ -4,10 +4,12 @@
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# Positioning layer. It has no rules of its own: its properties are declared
-# hookable, so the style layer's hook rule exposes them and the CSS compiler
-# turns them into layout. A layer can be pure vocabulary riding on another.
+# Positioning layer. Its properties are declared hookable, so the style layer's
+# hook rule exposes them and the CSS compiler turns them into layout. A layer can
+# be (almost) pure vocabulary riding on another: its only rules derive what the
+# hooks expose for columns whose parts line up (pos:AlignedColumns, below).
 
 <https://semblance.dev/ns/position> a owl:Ontology ;
     rdfs:label "Semblance positioning layer"@en .
@@ -78,6 +80,128 @@ pos:Subgrid a pos:Layout ; sem:slug "subgrid" ;
                  [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] .
 
+# Columns whose parts line up: the block-axis counterpart of pos:Subgrid. Side by side, columns
+# that are each a stack of parts (a heading over a list; a card's header over its body) place
+# their parts from their own content, so a heading that wraps pushes its list below its
+# neighbours'. A container that says pos:layout pos:AlignedColumns makes its children share row
+# tracks instead: each child that has parts takes its rows from the container (pos:rows
+# pos:RowSubgrid, derived: no markup on the columns) and spans as many of them as it has parts
+# (pos:rowSpan, derived from its c:children, or from its class's pos:rowParts - a c:Card is a
+# header and a body). Part N of every column is then in row N, as tall as the tallest part N of
+# the columns on that line: the longest heading sets the heading row for all of them.
+#
+# It degrades without a breakpoint. The tracks are auto-placed, so columns that wrap start a new
+# line of rows of their own; at phone width (sty:CompactWidth) each column is alone on its line,
+# a stack again. Rows and columns are logical, so right to left needs nothing more. A column's own
+# gap (pos:gap) still spaces its parts; without one, the container's spaces them. A component
+# whose own style lays out its parts (c:Card's grid-template-rows) defers to the subgrid where a
+# span is given ([data-sem-row-span]).
+#
+# Anything can take rows by saying pos:rows pos:RowSubgrid itself; the span is derived as for the
+# columns of pos:AlignedColumns. A rendering that mints components in a grid of its own says both
+# on them, the span from their class's pos:rowParts (c:TermMembers does, for its cards). The layout comes with the span: without a
+# known number of parts nothing changes, so a column is never crammed into one row.
+pos:AlignedColumns a pos:Layout ; sem:slug "aligned-columns" ;
+    rdfs:label "Aligned columns"@en , "Вирівняні стовпці"@uk , "Ausgerichtete Spalten"@de , "أعمدة متحاذية"@ar ;
+    rdfs:comment "Columns side by side whose parts line up: every child with parts takes its rows from this grid (pos:RowSubgrid), so part N of each column is in row N."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] .
+
+pos:rows a owl:ObjectProperty ;
+    rdfs:range pos:Rows ;
+    rdfs:comment """Where a component's rows come from. pos:RowSubgrid: from the grid it is in, spanning
+pos:rowSpan of them. Derived for the children of a pos:AlignedColumns container; a component (or a
+rendering, for what it mints) may also say it."""@en ;
+    sty:hookAttribute "data-sem-rows" .
+pos:Rows a owl:Class .
+pos:RowSubgrid a pos:Rows ; sem:slug "subgrid" ;
+    rdfs:label "Rows from the container"@en , "Рядки контейнера"@uk , "Zeilen des Containers"@de , "صفوف الحاوية"@ar ;
+    rdfs:comment "Takes its row tracks from the grid it is in: its parts go in the container's rows, one each (the span, pos:rowSpan, lays it out)."@en .
+
+pos:rowParts a owl:DatatypeProperty ;
+    rdfs:domain owl:Class ; rdfs:range xsd:integer ;
+    rdfs:comment """On a component class: how many parts its rendering lays out one below the other (a c:Card:
+its header and its body), for a component of it that takes rows (pos:RowSubgrid). Without it, a
+component's parts are its c:children."""@en .
+
+pos:rowSpan a owl:ObjectProperty ;
+    rdfs:range pos:RowSpan ;
+    rdfs:comment """Derived: how many of its container's rows a component that takes rows (pos:RowSubgrid)
+spans - its parts, by its class's pos:rowParts or its c:children. A value lays the component out:
+a grid on the container's row tracks (grid-template-rows: subgrid), spanning that many."""@en ;
+    sty:hookAttribute "data-sem-row-span" ;
+    sty:overrides pos:direction , pos:layout , pos:rows .
+pos:RowSpan a owl:Class ;
+    rdfs:comment "A number of rows a component takes from its container (pos:count), laid out as a subgrid on them."@en .
+pos:count a owl:DatatypeProperty ; rdfs:domain pos:RowSpan ; rdfs:range xsd:integer .
+pos:RowSpan1 a pos:RowSpan ; pos:count 1 ; sem:slug "1" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 1" ] .
+pos:RowSpan2 a pos:RowSpan ; pos:count 2 ; sem:slug "2" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 2" ] .
+pos:RowSpan3 a pos:RowSpan ; pos:count 3 ; sem:slug "3" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 3" ] .
+pos:RowSpan4 a pos:RowSpan ; pos:count 4 ; sem:slug "4" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 4" ] .
+pos:RowSpan5 a pos:RowSpan ; pos:count 5 ; sem:slug "5" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 5" ] .
+pos:RowSpan6 a pos:RowSpan ; pos:count 6 ; sem:slug "6" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 6" ] .
+pos:RowSpan7 a pos:RowSpan ; pos:count 7 ; sem:slug "7" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 7" ] .
+pos:RowSpan8 a pos:RowSpan ; pos:count 8 ; sem:slug "8" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] , [ sty:property "grid-row" ; sty:raw "span 8" ] .
+
+# The derivations run before the components (as localization and validation do): they say things
+# about the columns, and a component re-renders when what is said about it changes, so this must be
+# settled before stratum 0. They judge the input; a rendering that mints components which take rows
+# says their span itself, from the class's pos:rowParts (c:TermMembers does). They serve the style
+# hooks, so they run with the style layer. The first says which
+# children of an aligned container take rows; the second counts the parts of anything that does.
+pos:AlignedColumnRows a sem:Rendering ;
+    rdfs:comment "Children of a pos:AlignedColumns container take their rows from it (pos:rows pos:RowSubgrid)."@en ;
+    sem:targets sem:Component ;
+    sem:layer sty:Layer ;
+    sem:requires pos:layout ;
+    sem:inputOnly true ;
+    sem:stratum -16 .
+pos:AlignedColumnRows-fn a sem:Rule ; sem:implements pos:AlignedColumnRows ; sem:function "position:aligned-columns" .
+pos:AlignedColumnRows-sparql a sem:Rule ;
+    sem:implements pos:AlignedColumnRows ;
+    sem:construct """
+CONSTRUCT { ?column pos:rows pos:RowSubgrid }
+WHERE {
+  $this pos:layout pos:AlignedColumns ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column))
+}""" .
+
+pos:RowSpans a sem:Rendering ;
+    rdfs:comment "What takes rows (pos:RowSubgrid) spans as many as it has parts: its class's pos:rowParts, or its c:children."@en ;
+    sem:targets sem:Component ;
+    sem:layer sty:Layer ;
+    sem:requires pos:rows ;
+    sem:inputOnly true ;
+    sem:stratum -15 .
+pos:RowSpans-fn a sem:Rule ; sem:implements pos:RowSpans ; sem:function "position:row-span" .
+pos:RowSpans-sparql a sem:Rule ;
+    sem:implements pos:RowSpans ;
+    sem:construct """
+CONSTRUCT { $this pos:rowSpan ?span }
+WHERE {
+  $this pos:rows pos:RowSubgrid .
+  LATERAL { OPTIONAL { SELECT ?this (MAX(?declared) AS ?parts) WHERE { $this a/rdfs:subClassOf* ?class . ?class pos:rowParts ?declared } GROUP BY ?this } }
+  LATERAL { OPTIONAL { SELECT ?this (COUNT(?part) AS ?children) WHERE { $this c:children/rdf:rest*/rdf:first ?part FILTER(isIRI(?part)) } GROUP BY ?this } }
+  BIND(COALESCE(?parts, ?children, 0) AS ?n)
+  ?span a pos:RowSpan ; pos:count ?count FILTER(?count = ?n)
+}""" .
+
 pos:inset a owl:ObjectProperty ;
     rdfs:comment "Padding inside a container, as a space token."@en ;
     sty:hookAttribute "data-sem-inset" ;
@@ -145,11 +269,11 @@ pos:TextEnd a pos:TextAlignment ; sem:slug "end" ; sty:declares [ sty:property "
 pos:guides a owl:ObjectProperty ;
     rdfs:range pos:Guides ;
     rdfs:label "Guides"@en , "Напрямні"@uk , "Hilfslinien"@de , "أدلة"@ar ;
-    rdfs:comment "Layout guides drawn over a subtree, to show how it is laid out (pos:CellGuides outlines every cell of a row)."@en ;
+    rdfs:comment "Layout guides drawn over a subtree, to show how it is laid out (pos:CellGuides outlines every cell of a row and every part of a column)."@en ;
     sty:hookAttribute "data-sem-guides" .
 pos:Guides a owl:Class .
 pos:NoGuides a pos:Guides ; sem:slug "none" ; sem:order 1 ;
     rdfs:label "Off"@en , "Вимк."@uk , "Aus"@de , "إيقاف"@ar .
 pos:CellGuides a pos:Guides ; sem:slug "cells" ; sem:order 2 ;
     rdfs:label "Show cells"@en , "Показати клітинки"@uk , "Zellen zeigen"@de , "إظهار الخلايا"@ar ;
-    rdfs:comment "Every cell of a row is outlined."@en .
+    rdfs:comment "Every cell of a row, and every part of a column, is outlined."@en .

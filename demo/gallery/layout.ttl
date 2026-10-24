@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-spacer ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -111,6 +111,57 @@ ui:ly-grids a c:Flippable ; c:front ui:ly-grids-spec .
 ui:ly-grids-spec a c:Specimen ; c:label "Grid" ;
     c:help "c:children as equal tiles. c:minWidth is the narrowest a tile may get; c:columns caps the column count. Both reach the theme as custom properties on the grid's root; pos:gap spaces the tiles." ;
     c:children ( ui:ly-grids-col ) .
+
+# --- columns whose parts line up -------------------------------------------------------------------
+# The block-axis counterpart of the rows above: three plans side by side, each a column of parts
+# (a name, what it is for, a price), twice. On the left each column stacks its own parts, so the
+# name that wraps pushes its text and price below its neighbours'. On the right the grid says
+# pos:layout pos:AlignedColumns: each column takes its rows from it (pos:rows pos:RowSubgrid,
+# derived) and spans three of them (pos:rowSpan, derived from its three children), so the names
+# share a row as tall as the longest, the texts start on one line and the prices on another.
+
+ui:lycf-starter a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:lycf-starter-name ui:lycf-starter-about ui:lycf-starter-price ) .
+ui:lycf-starter-name a c:Text ; sty:textStyle sty:Subtitle ; c:label "Starter" , "Стартовий"@uk , "Starter"@de , "المبتدئ"@ar .
+ui:lycf-starter-about a c:Text ; sty:textStyle sty:Caption ; c:label "For one person trying it out." .
+ui:lycf-starter-price a c:Badge ; c:label "$0" ; sty:tone sty:Accent .
+ui:lycf-team a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:lycf-team-name ui:lycf-team-about ui:lycf-team-price ) .
+ui:lycf-team-name a c:Text ; sty:textStyle sty:Subtitle ; c:label "Team, billed yearly, with priority support" , "Команда, щорічна оплата, пріоритетна підтримка"@uk , "Team, jährlich abgerechnet, mit bevorzugtem Support"@de , "الفريق، بفوترة سنوية ودعم ذي أولوية"@ar .
+ui:lycf-team-about a c:Text ; sty:textStyle sty:Caption ; c:label "For a team that ships every week: shared projects, reviews and an audit log." .
+ui:lycf-team-price a c:Badge ; c:label "$12" ; sty:tone sty:Accent .
+ui:lycf-studio a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:lycf-studio-name ui:lycf-studio-about ui:lycf-studio-price ) .
+ui:lycf-studio-name a c:Text ; sty:textStyle sty:Subtitle ; c:label "Studio" , "Студія"@uk , "Studio"@de , "الاستوديو"@ar .
+ui:lycf-studio-about a c:Text ; sty:textStyle sty:Caption ; c:label "For agencies with many clients." .
+ui:lycf-studio-price a c:Badge ; c:label "$40" ; sty:tone sty:Accent .
+ui:lycg-starter a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:lycg-starter-name ui:lycg-starter-about ui:lycg-starter-price ) .
+ui:lycg-starter-name a c:Text ; sty:textStyle sty:Subtitle ; c:label "Starter" , "Стартовий"@uk , "Starter"@de , "المبتدئ"@ar .
+ui:lycg-starter-about a c:Text ; sty:textStyle sty:Caption ; c:label "For one person trying it out." .
+ui:lycg-starter-price a c:Badge ; c:label "$0" ; sty:tone sty:Accent .
+ui:lycg-team a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:lycg-team-name ui:lycg-team-about ui:lycg-team-price ) .
+ui:lycg-team-name a c:Text ; sty:textStyle sty:Subtitle ; c:label "Team, billed yearly, with priority support" , "Команда, щорічна оплата, пріоритетна підтримка"@uk , "Team, jährlich abgerechnet, mit bevorzugtem Support"@de , "الفريق، بفوترة سنوية ودعم ذي أولوية"@ar .
+ui:lycg-team-about a c:Text ; sty:textStyle sty:Caption ; c:label "For a team that ships every week: shared projects, reviews and an audit log." .
+ui:lycg-team-price a c:Badge ; c:label "$12" ; sty:tone sty:Accent .
+ui:lycg-studio a c:Stack ; pos:direction pos:Column ; pos:align pos:Start ; pos:gap tok:space-2 ; c:children ( ui:lycg-studio-name ui:lycg-studio-about ui:lycg-studio-price ) .
+ui:lycg-studio-name a c:Text ; sty:textStyle sty:Subtitle ; c:label "Studio" , "Студія"@uk , "Studio"@de , "الاستوديو"@ar .
+ui:lycg-studio-about a c:Text ; sty:textStyle sty:Caption ; c:label "For agencies with many clients." .
+ui:lycg-studio-price a c:Badge ; c:label "$40" ; sty:tone sty:Accent .
+ui:lycf-grid a c:Grid ; c:minWidth "140px" ; c:columns 3 ; pos:gap tok:space-4 ; c:children ( ui:lycf-starter ui:lycf-team ui:lycf-studio ) .
+ui:lycg-grid a c:Grid ; c:minWidth "140px" ; c:columns 3 ; pos:gap tok:space-4 ; pos:layout pos:AlignedColumns ; c:children ( ui:lycg-starter ui:lycg-team ui:lycg-studio ) .
+ui:lycf-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:lycf-grid ui:lycf-note ) .
+ui:lycf-note a c:Text ; sty:textStyle sty:Caption ; sty:tone sty:Warning ;
+    c:label "Each column stacks its own parts: the name that wraps pushes its text and its price down, so nothing lines up across the plans." .
+ui:lycg-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:lycg-grid ui:lycg-note ) .
+ui:lycg-note a c:Text ; sty:textStyle sty:Caption ; sty:tone sty:Success ;
+    c:label "The grid's columns share its rows, one per part: the longest name sets the name row for all three, and the texts and prices each start on one line." .
+ui:lycf-card a c:Card ; c:label "Each column on its own" ; c:badge "c:Grid" ; c:content ui:lycf-body .
+ui:lycg-card a c:Card ; c:label "Columns whose parts line up" ; c:badge "pos:AlignedColumns" ; c:content ui:lycg-body .
+ui:ly-columns-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:guides pos:CellGuides ; c:children ( ui:lycf-card ui:lycg-card ) .
+ui:ly-columns-guides a c:Segmented ; c:controls ui:ly-columns-body ; c:property pos:guides ; c:label "Guides" .
+ui:ly-columns-stage a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ly-columns-guides ui:ly-columns-body ) .
+ui:ly-columns a c:Flippable ; c:front ui:ly-columns-spec .
+ui:ly-columns-spec a c:Specimen ;
+    c:label "Columns whose parts line up" , "Стовпці, чиї частини вирівняні"@uk , "Spalten, deren Teile fluchten"@de , "أعمدة تتحاذى أجزاؤها"@ar ;
+    c:help "The same three plans, twice; the dashed boxes are the parts. On the left each column stacks its own parts, so a name that wraps pushes the rest of its column down. On the right the grid is pos:AlignedColumns: every column takes its rows from it and spans as many as it has parts (derived from its children; a c:Card is a header and a body), so part N of each column is in row N. Where the columns wrap, as on a phone, each line has rows of its own, and a column alone on its line is a stack again." ;
+    c:children ( ui:ly-columns-stage ) .
 
 # --- spacer ---
 ui:ly-sp-title a c:Text ; c:inline true ; sty:textStyle sty:Subtitle ; c:label "Projection" .

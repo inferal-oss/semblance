@@ -84,7 +84,7 @@ ui:l-dragdrop a c:Flippable ; c:front ui:l-dragdrop-spec .
 ui:l-dragdrop-spec a c:Specimen ; c:label "Drag and drop" , "Перетягування"@uk , "Ziehen und Ablegen"@de , "السحب والإفلات"@ar ;
     c:help "Three lists that are dnd:Sortable: their items can be picked up (drag one, or focus it and press Space; arrows move it, Space drops, Escape puts it back) and the lists take them in. Where a task may go is SHACL: Bugs accepts only what conforms to a shape (a bug), and Today has a capacity, sh:maxCount on its items. While a task is carried, every list says whether it would take it - refusing ones are dimmed and tell you why - and a line shows where it would land. Dropping is this page's own reaction: the task joins the list with a rank half way between its new neighbours'; nothing else is renumbered." ;
     c:children ( ui:dndShelves ) .
-ui:dndShelves a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-4 ; c:children ( ui:dndBacklogBox ui:dndTodayBox ui:dndBugsBox ) .
+ui:dndShelves a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-4 ; pos:layout pos:AlignedColumns ; c:children ( ui:dndBacklogBox ui:dndTodayBox ui:dndBugsBox ) .
 ui:dndBacklogBox a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dndBacklogTitle ui:dndBacklog ) .
 ui:dndTodayBox a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dndTodayTitle ui:dndToday ) .
 ui:dndBugsBox a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dndBugsTitle ui:dndBugs ) .

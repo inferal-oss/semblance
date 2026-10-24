@@ -288,10 +288,19 @@
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))" ] ,
                  [ sty:property "gap" ; sty:token tok:space-3 ] .
-[] a sty:StyleRule ; sty:appliesTo c:TermCard ;
+# A card's parts are one below the other: in the rows it shares with the cards beside it (the
+# members view mints it with pos:rows pos:RowSubgrid; c:TermCard has pos:rowParts 5), each part in
+# its own row, so a card without tags still has its counts on the counts line; else a column.
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:state ":not([data-sem-row-span])" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
-                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
-                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "> header" ; sty:declares [ sty:property "grid-row" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "> .sem-summary" ; sty:declares [ sty:property "grid-row" ; sty:raw "2" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "> .sem-tags" ; sty:declares [ sty:property "grid-row" ; sty:raw "3" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "> .sem-counts" ; sty:declares [ sty:property "grid-row" ; sty:raw "4" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "> .sem-shown" ; sty:declares [ sty:property "grid-row" ; sty:raw "5" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ;
+    sty:declares [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:token tok:space-3 ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,

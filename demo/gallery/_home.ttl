@@ -36,7 +36,7 @@ ui:goComponents a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ;
     sty:emphasis sty:Ghost ; sty:size sty:Large .
 
 # --- what it is, in six claims ---
-ui:pillars a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-5 ;
+ui:pillars a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-5 ; pos:layout pos:AlignedColumns ;
     c:children ( ui:pillarData ui:pillarRules ui:pillarLayers ui:pillarEvents ui:pillarCost ui:pillarThemes ) .
 ui:pillarData a c:Card ; c:label "Components are data" ; c:badge "OWL · SHACL" ; c:content ui:pillarDataText .
 ui:pillarDataText a c:Text ; c:label "A component is a class in an ontology, with SHACL shapes for what an instance must say. Your app is instances of them: a graph you can query, validate, diff and store." .

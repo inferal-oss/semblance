@@ -151,6 +151,24 @@ inside the component; `sty:when` narrows to a variant value or a theme. Use toke
 Structural themes (Classic, Tracker, Doodle…) add their own rules under `sty:when <theme>`; check
 a new component in them.
 
+Layout is the position layer's vocabulary (`pos:direction`, `pos:layout`, `pos:gap`…), exposed as
+hooks in the lowest cascade layer: a component's own rule that sets the same property wins, so a
+component defers to a hook it should not override with a `sty:state` such as
+`:not([data-sem-direction])` (as `c:Surface` does). Two layouts make parts line up across siblings:
+
+- **Rows that share columns.** A container declares its column tracks (a `pos:Layout` with
+  `grid-template-columns`) and each row says `pos:layout pos:Subgrid`.
+- **Columns whose parts line up.** A container says `pos:layout pos:AlignedColumns` (or is any grid
+  of columns, such as a `c:Grid`, that says it): each child with parts takes its rows from it
+  (`pos:rows pos:RowSubgrid`) and spans one row per part (`pos:rowSpan`). Both are derived, before the
+  components render: the parts are a child's `c:children`, or what its class declares
+  (`c:Card pos:rowParts 2`: a header and a body). So the tallest heading sets the heading row for all
+  the columns on a line, and their bodies start together; where columns wrap (a phone) each line has
+  rows of its own. A component whose style lays out its own parts must defer to the span
+  (`:not([data-sem-row-span])`, as `c:Card` does), and should place optional parts in fixed rows
+  (`c:TermCard`), so that a missing part does not shift the next one up a row. A rendering that mints
+  components into a grid of its own says both properties on them (`c:TermMembers`).
+
 ## Localization
 
 Labels are language-tagged literals (`c:label "Save"@en , "Зберегти"@uk`); the localization layer

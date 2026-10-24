@@ -694,7 +694,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:Card ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
-                 [ sty:property "grid-template-rows" ; sty:raw "auto 1fr" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
@@ -702,6 +702,11 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "box-shadow" ; sty:token tok:shadow-raised ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
+# Its own rows (the header, then the body taking the rest) - unless it takes them from aligned
+# columns it stands in (pos:rowSpan, ontology/layers/position.ttl), whose header row and body row it
+# shares with its neighbours.
+[] a sty:StyleRule ; sty:appliesTo c:Card ; sty:state ":not([data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-template-rows" ; sty:raw "auto 1fr" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,

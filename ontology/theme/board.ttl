@@ -20,8 +20,15 @@
                  [ sty:property "align-items" ; sty:raw "start" ] ,
                  [ sty:property "gap" ; sty:token tok:space-4 ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
+# Lanes are columns whose parts line up (as pos:AlignedColumns lays out a container's columns,
+# ontology/layers/position.ttl): each lane takes two of the board's rows - its header, its cards -
+# so a header that wraps sets the header row for every lane on its line, and their lists start
+# together. Wrapped lanes start rows of their own; on a phone each lane is a stack again.
 [] a sty:StyleRule ; sty:appliesTo c:Board ; sty:part "> .sem-lane" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-row" ; sty:raw "span 2" ] ,
+                 [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
                  [ sty:property "gap" ; sty:token tok:space-3 ] ,
                  [ sty:property "padding" ; sty:token tok:space-3 ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] ,
@@ -44,8 +51,10 @@
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.04em" ] .
+# The list fills its lane's row (lanes on a line share it), and its cards stay at its top.
 [] a sty:StyleRule ; sty:appliesTo c:Board ; sty:part "> .sem-lane > ul" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "align-content" ; sty:raw "start" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,

@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
@@ -28,7 +29,10 @@ c:hideLabel a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On a
 c:Card a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "A titled surface (c:label, c:badge, c:note, header c:actions) around one component (c:content)."@en ;
-    sem:slug "card" .
+    sem:slug "card" ;
+    # Two parts, its header over its body: cards side by side in pos:AlignedColumns share a header
+    # row and a body row, so their bodies start on one line however their titles wrap.
+    pos:rowParts 2 .
 c:CardRendering a sem:Rendering ; sem:targets c:Card ; sem:stratum 0 .
 c:CardRendering-fn a sem:Rule ; sem:implements c:CardRendering ; sem:function "card" .
 

@@ -210,7 +210,7 @@ ui:ex-views-check-recent a c:Alert ; c:of vx:Recent ; c:valueQuery vx:qCheck ; c
 ui:ex-views-check-types a c:Alert ; c:of vx:RecentByType ; c:valueQuery vx:qCheck ; c:dataset vx:RecentByType .
 ui:ex-views-check-buckets a c:Alert ; c:of vx:Buckets ; c:valueQuery vx:qCheck ; c:dataset vx:Buckets .
 
-ui:ex-views-panels a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
+ui:ex-views-panels a c:Grid ; c:minWidth "420px" ; pos:layout pos:AlignedColumns ; pos:gap tok:space-5 ;
     c:children ( ui:ex-views-band-card ui:ex-views-types-card ) .
 ui:ex-views-band-card a c:Card ; c:label "The window, 5 seconds at a time" ; c:badge "iv:window" ;
     c:note "Members enter at the bottom and age out at the top: the band moves on the clock alone." ;

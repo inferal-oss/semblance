@@ -4,9 +4,10 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, NS, ORD, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
+import { BEH, C, H, NS, ORD, POS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { isTrue, named, nodes, str, text } from './util.ts'
 import { md5Key } from './data.ts'
+import { spanOf } from '../layers/position.ts'
 
 const c = NS.c
 const R = {
@@ -622,6 +623,9 @@ const members: FnRule = (ctx, focus) => {
   }
   const target = ctx.object(focus, C.controls)
   const property = ctx.object(focus, C.property)
+  // A card's span of the rows it shares with its neighbours: its class's parts.
+  const parts = ctx.object(ctx.nn(R.TermCard), POS.rowParts)
+  const span = spanOf(ctx, parts ? Number(parts.value) : undefined)
   const byRole = new Map<string, NamedNode[]>()
   for (const t of found.values()) {
     const role = roleOf(ctx, t)
@@ -634,7 +638,8 @@ const members: FnRule = (ctx, focus) => {
     const grid = o.el(`r-${slug}-cards`, 'Div', { class: 'sem-cards' })
     for (const t of terms) {
       const card = o.node('card-' + key(t.value))
-      o.t(card, RDF_TYPE, ctx.nn(R.TermCard)).t(card, C.of, t).t(card, R.role, r)
+      o.t(card, RDF_TYPE, ctx.nn(R.TermCard)).t(card, C.of, t).t(card, R.role, r).t(card, POS.rows, ctx.nn(POS.RowSubgrid))
+      if (span) o.t(card, POS.rowSpan, span)
       if (named(target) && named(property)) o.t(card, C.controls, target).t(card, C.property, property)
       o.t(card, SEM.orderKey, localOf(t.value))
       o.t(grid, H.hasChild, card)

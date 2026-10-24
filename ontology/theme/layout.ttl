@@ -99,7 +99,8 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 
 # --- surface ---
 # Direction, gap and inset are the position layer's; the surface only fills them in
-# when they are not given, so pos:direction / pos:gap / pos:inset always win.
+# when they are not given, so pos:direction / pos:gap / pos:inset (and the rows a surface takes
+# from aligned columns, pos:rowSpan) always win.
 [] a sty:StyleRule ; sty:appliesTo c:Surface ;
     sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
@@ -108,7 +109,7 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "transition" ; sty:raw "box-shadow var(--sem-duration) var(--sem-ease), background var(--sem-duration) var(--sem-ease), border-color var(--sem-duration) var(--sem-ease)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-direction]):not([data-sem-layout])" ;
+[] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-direction]):not([data-sem-layout]):not([data-sem-row-span])" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-direction" ; sty:raw "column" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Surface ; sty:state ":not([data-sem-gap])" ;
@@ -309,9 +310,14 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:appliesTo c:Kbd ;
     sty:declares [ sty:property "justify-self" ; sty:raw "start" ] .
 
-# Guides (pos:guides pos:CellGuides): every cell of a row is outlined, so whether cells line up
-# across rows can be seen, not only read about.
+# Guides (pos:guides pos:CellGuides): every cell of a row, and every part of a column, is outlined,
+# so whether cells line up across rows (and parts across columns) can be seen, not only read about.
 [] a sty:StyleRule ; sty:when pos:CellGuides ; sty:part "[data-sem-layout=subgrid] > *" ;
+    sty:declares [ sty:property "outline" ; sty:raw "1px dashed var(--sem-accent)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "2px" ] .
+# The parts of columns: of those that take rows from aligned columns (pos:RowSubgrid), and of
+# column stacks in a grid, which place their parts on their own.
+[] a sty:StyleRule ; sty:when pos:CellGuides ; sty:part ":is([data-sem-rows=subgrid], [data-sem-c=grid] > [data-sem-direction=column]) > *" ;
     sty:declares [ sty:property "outline" ; sty:raw "1px dashed var(--sem-accent)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "2px" ] .
 [] a sty:StyleRule ; sty:when pos:CellGuides ; sty:part "[data-sem-direction=row] > *" ;

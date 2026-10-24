@@ -13,6 +13,7 @@ import { typeaheadFunctions } from './typeahead.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
+import { positionFunctions } from '../layers/position.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
@@ -714,6 +715,7 @@ export const functions: Record<string, FnRule> = {
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,
+  ...positionFunctions,
   ...l10nFunctions,
   ...announceFunctions,
   ...shapeFunctions,

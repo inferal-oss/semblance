@@ -352,7 +352,7 @@ ui:th-structure-spec a c:Specimen ;
     c:label "Structure, not just colour" , "Будова, а не лише колір"@uk , "Aufbau, nicht nur Farbe"@de , "البنية، لا اللون فقط"@ar ;
     c:help "The same controls under the default and the five structural themes. Cupertino, Tracker, Classic, Doodle and Fluent restate the tokens as every theme does, then add sty:StyleRules narrowed by sty:when to themselves: bevels instead of borders, a recessed track under segmented keys, folder tabs, list boxes, inked strokes on wobbly corners, hairlines with an accent pill. Nothing here names a theme; each tile only carries sty:theme." ;
     c:children ( ui:th-structure-grid ) .
-ui:th-structure-grid a c:Grid ; c:minWidth "300px" ; pos:gap tok:space-4 ;
+ui:th-structure-grid a c:Grid ; c:minWidth "300px" ; pos:gap tok:space-4 ; pos:layout pos:AlignedColumns ;
     c:children ( ui:ths-semblance ui:ths-cupertino ui:ths-tracker ui:ths-classic ui:ths-doodle ui:ths-fluent ) .
 
 ui:ths-semblance a c:Surface ; sty:theme sty:Semblance ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;

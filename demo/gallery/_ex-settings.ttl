@@ -82,7 +82,7 @@ ui:set-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty
 # The badge says nothing by itself: set:Changes (below) labels and tones it.
 ui:set-status a c:Badge, set:ChangeIndicator ; set:draft ui:set-draft ; set:saved ui:set-saved .
 
-ui:set-sections a c:Grid ; c:minWidth "320px" ; c:columns 2 ; pos:gap tok:space-4 ;
+ui:set-sections a c:Grid ; c:minWidth "320px" ; c:columns 2 ; pos:gap tok:space-4 ; pos:layout pos:AlignedColumns ;
     c:children ( ui:set-profile ui:set-notifications ui:set-appearance ui:set-privacy ) .
 
 # --- profile: text fields that write to the draft as you type -------------------------------------
