@@ -13,5 +13,5 @@
     "allowImportingTsExtensions": true,
     "noUncheckedIndexedAccess": false
   },
-  "include": ["src", "test", "bench", "demo", "scripts", "rdf-engine"]
+  "include": ["src", "test", "bench", "demo", "scripts", "rdf-engine", "examples"]
 }

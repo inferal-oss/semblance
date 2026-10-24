@@ -50,7 +50,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     const h = workbench()
     const d = h.document
     expect(d.querySelector('[data-sem-c=query-workbench]')!.getAttribute('aria-label')).toBe('SPARQL workbench')
-    expect(d.querySelectorAll('.sem-sample').length).toBe(8)
+    expect(d.querySelectorAll('.sem-sample').length).toBe(9)
     expect(d.querySelector('.sem-sample[aria-pressed=true] .sem-sample-label')!.textContent).toBe('Components and their renderings')
     expect(area(h).getAttribute('aria-label')).toBe('SPARQL query')
     expect(area(h).value).toBe(editorValue(h))
@@ -149,6 +149,16 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(options(h)).toHaveLength(0)
   })
 
+  it('lists the renderings whose SPARQL or function side is missing, and which', () => {
+    const h = workbench()
+    sample(h, 'Renderings missing a SPARQL or function side')
+    showResults(h, 'Table')
+    const table = panel(h).querySelector('[data-sem-c=result-table]')!
+    expect([...table.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['?rendering', '?targets', '?missing', '?why'])
+    const missing = [...table.querySelectorAll('tbody tr')].map((tr) => tr.querySelectorAll('td')[2]!.textContent!)
+    for (const m of missing) expect(m).toMatch(/^(SPARQL|function|SPARQL for (Screen|Text))$/)
+  })
+
   it('runs with the button and with mod+Enter, as SELECT or CONSTRUCT', () => {
     const h = workbench()
     type(h, 'SELECT ?item WHERE { ex:todos c:item ?item }')
@@ -182,8 +192,8 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
       showResults(h, 'Table')
       const table = panel(h).querySelector('[data-sem-c=result-table]')!
       expect(table.querySelector('[role=alert]'), label).toBeNull()
-      // Shapes are clean in the demo; everything else has rows.
-      if (label !== 'Components that violate their shapes') expect(table.querySelectorAll('tbody tr').length, label).toBeGreaterThan(0)
+      // Shapes are clean in the demo, and every rendering is meant to have both sides; everything else has rows.
+      if (label !== 'Components that violate their shapes' && label !== 'Renderings missing a SPARQL or function side') expect(table.querySelectorAll('tbody tr').length, label).toBeGreaterThan(0)
       showResults(h, 'Turtle')
       const turtle = panel(h).querySelector('[data-sem-c=result-turtle]')!
       expect(turtle.querySelector('[role=alert]'), label).toBeNull()

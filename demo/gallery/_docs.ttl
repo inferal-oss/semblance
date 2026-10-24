@@ -12,23 +12,27 @@
 
 ui:docSection rdfs:label "Docs" ; rdfs:range ui:DocSection .
 ui:DocOverview a ui:DocSection ; rdfs:label "Overview" ; sem:order 1 ; ui:key "overview" .
-ui:DocComponents a ui:DocSection ; rdfs:label "Components" ; sem:order 2 ; ui:key "components" .
-ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" ; sem:order 3 ; ui:key "rules" .
-ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 4 ; ui:key "layers" .
-ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 5 ; ui:key "behaviour" .
-ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 6 ; ui:key "styling" .
-ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 7 ; ui:key "persistence" .
-ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 8 ; ui:key "navigation" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 9 ; ui:key "tools" .
-ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 10 ; ui:key "performance" .
+ui:DocStart a ui:DocSection ; rdfs:label "Getting started" ; sem:order 2 ; ui:key "start" .
+ui:DocComponents a ui:DocSection ; rdfs:label "Building components" ; sem:order 3 ; ui:key "components" .
+ui:DocIntegrate a ui:DocSection ; rdfs:label "Integrating" ; sem:order 4 ; ui:key "integrate" .
+ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" ; sem:order 5 ; ui:key "rules" .
+ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 6 ; ui:key "layers" .
+ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 7 ; ui:key "behaviour" .
+ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 8 ; ui:key "styling" .
+ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 9 ; ui:key "persistence" .
+ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 10 ; ui:key "navigation" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 11 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 12 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsNav ui:docPages ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-components ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-components ui:dcs-integrate ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
+ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
 ui:dcs-components c:when ui:DocComponents ; c:content ui:doc-components .
+ui:dcs-integrate c:when ui:DocIntegrate ; c:content ui:doc-integrate .
 ui:dcs-rules c:when ui:DocRules ; c:content ui:doc-rules .
 ui:dcs-layers c:when ui:DocLayers ; c:content ui:doc-layers .
 ui:dcs-behaviour c:when ui:DocBehaviour ; c:content ui:doc-behaviour .
@@ -59,25 +63,112 @@ ui:doc-ov-kbd a c:Kbd ; c:keys ( "⌘" "." ) .
 ui:doc-ov-examples a c:Link , c:Setter ; c:label "examples" ; c:href "#examples" ; c:controls ui:app ; c:property ui:page ; c:value ui:Examples .
 ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "#components" ; c:controls ui:app ; c:property ui:page ; c:value ui:Components .
 
-# --- Components ---
+# --- Getting started ---
+ui:doc-start a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-gs-h ui:doc-gs-1 ui:doc-gs-install ui:doc-gs-2 ui:doc-gs-vite ui:doc-gs-3 ui:doc-gs-app ui:doc-gs-4 ui:doc-gs-mount ui:doc-gs-5 ui:doc-gs-react ui:doc-gs-6 ) .
+ui:doc-gs-h a c:Heading ; c:level 1 ; c:label "Getting started" .
+ui:doc-gs-1 a c:Text ; c:label "Semblance is the npm package @inferal-oss/semblance (not published yet: until it is, use a checkout of the repository, or npm pack it). It ships TypeScript, its ontologies and its WebAssembly engines, built by your bundler - today Vite." .
+ui:doc-gs-install a c:Code ; c:block true ; c:label """npm install @inferal-oss/semblance
+npm install --save-dev vite""" .
+ui:doc-gs-2 a c:Text ; c:label "The package finds its ontology files and engine builds with import.meta.glob, so Vite must not pre-bundle it; its Turtle parser, N3, is CommonJS and must be pre-bundled:" .
+ui:doc-gs-vite a c:Code ; c:block true ; c:label """// vite.config.ts
+export default defineConfig({
+  optimizeDeps: {
+    exclude: ['@inferal-oss/semblance', 'oxigraph'],
+    include: ['@inferal-oss/semblance > n3'],
+  },
+})""" .
+ui:doc-gs-3 a c:Text ; c:label "The interface is data. A page in Turtle:" .
+ui:doc-gs-app a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ex:title ex:cups ex:drink ) .
+ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
+ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .""" .
+ui:doc-gs-4 a c:Text ; c:label "Mount it. mount loads a store with Semblance's ontologies and your graphs, compiles the theme, projects the root, patches it into the element and routes its events to reactions:" .
+ui:doc-gs-mount a c:Code ; c:block true ; c:label """import { mount } from '@inferal-oss/semblance/web'
+import app from './app.ttl?raw'
+import tally from './tally.ttl?raw'
+
+await mount(document.getElementById('app')!, { root: 'https://example.org/hello#page', graphs: [tally, app] })""" .
+ui:doc-gs-5 a c:Text ; c:label "ex:Tally is a component of our own (Building components shows it). A click on the button adds a cup: a reaction deletes the old value and inserts the new one." .
+ui:doc-gs-react a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:Drink a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:drink ;
+    beh:deletes \"\"\"CONSTRUCT { ex:cups c:value ?n } WHERE { ex:cups c:value ?n }\"\"\" ;
+    beh:inserts \"\"\"CONSTRUCT { ex:cups c:value ?next } WHERE { ex:cups c:value ?n BIND(?n + 1 AS ?next) }\"\"\" .""" .
+ui:doc-gs-6 a c:Text ; c:label "The complete example is examples/hello in the repository, and docs/GETTING-STARTED.md walks through it, including rendering on the server." .
+
+# --- Building components ---
 ui:doc-components a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-cp-h ui:doc-cp-1 ui:doc-cp-code ui:doc-cp-2 ui:doc-cp-shape ui:doc-cp-3 ) .
-ui:doc-cp-h a c:Heading ; c:level 1 ; c:label "Components" .
-ui:doc-cp-1 a c:Text ; c:label "A component is an OWL class under sem:Component. Its rendering is a sem:Rendering slot targeting the class, and one or more sem:Rule implementations of it. Capabilities are mixin classes: a c:Window is c:Draggable, c:Resizable, c:Minimizable, c:Dockable; an instance adds one by saying it is of that class too." .
-ui:doc-cp-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:CodeInput a owl:Class ;
-    rdfs:subClassOf sem:Component ;
-    sem:slug "code-input" .
-c:CodeInputRendering a sem:Rendering ; sem:targets c:CodeInput ; sem:stratum 0 .
-c:CodeInputRendering-fn a sem:Rule ; sem:implements c:CodeInputRendering ;
-    sem:function "inputs:code-input" .
-c:CodeInputRendering-sparql a sem:Rule ; sem:implements c:CodeInputRendering ;
-    sem:construct \"\"\"CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ... }\"\"\" .""" .
-ui:doc-cp-2 a c:Text ; c:label "What an instance must say is a SHACL shape on the class. The shapes layer validates every component as it renders, outlines the ones that do not conform and lists them." .
-ui:doc-cp-shape a c:Code ; c:block true ; c:language "turtle" ; c:label """c:CodeInputShape a sh:NodeShape ; sh:targetClass c:CodeInput ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ] ,
-                [ sh:path c:length ; sh:minInclusive 1 ; sh:maxInclusive 32 ] ,
-                [ sh:path c:charset ; sh:class c:Charset ] .""" .
-ui:doc-cp-3 a c:Text ; c:label "Components come in groups - layout, type, actions, inputs, feedback, data, navigation, overlays, disclosure, windows - each one file of vocabulary, one of styles, one of functions and one gallery page." .
+    c:children ( ui:doc-cp-h ui:doc-cp-1 ui:doc-cp-2 ui:doc-cp-code ui:doc-cp-3 ui:doc-cp-rules ui:doc-cp-4 ui:doc-cp-shape ui:doc-cp-5 ui:doc-cp-fn ui:doc-cp-6 ) .
+ui:doc-cp-h a c:Heading ; c:level 1 ; c:label "Building components" .
+ui:doc-cp-1 a c:Text ; c:label "A component is an OWL class under sem:Component, a rendering slot that targets it (sem:Rendering), and rules that implement the slot. A SHACL shape says what an instance must say; style rules say how it looks in every theme. All of it is Turtle in the same graph as the app that uses it." .
+ui:doc-cp-2 a c:Text ; c:label "Write the rule in SPARQL. A SPARQL CONSTRUCT is the implementation: it is data, so it can be inspected (turn a component over, or open the Inspector), queried and run on any store. It builds RDF/HTML for $this, minting every node from it (never blank nodes), so nodes keep their identity and DOM elements are reused:" .
+ui:doc-cp-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:Tally a owl:Class ; rdfs:subClassOf sem:Component ;
+    sem:slug "ex-tally" .            # data-sem-c="ex-tally": slugs are global, prefix yours
+ex:TallyRendering a sem:Rendering ; sem:targets ex:Tally ; sem:stratum 0 .
+ex:TallyRendering-sparql a sem:Rule ; sem:implements ex:TallyRendering ;
+    sem:construct \"\"\"
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?name, ?figure .
+  ?name a rdfhtml:Span ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?figure .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?figure a rdfhtml:Strong ; rdfhtml:hasChild ?figureText .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+}
+WHERE {
+  $this a ex:Tally ; c:label ?label .
+  OPTIONAL { $this c:value ?value } OPTIONAL { $this ex:unit ?unit }
+  BIND(CONCAT(STR(COALESCE(?value, 0)), IF(BOUND(?unit), CONCAT(" ", ?unit), "")) AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  ...
+}\"\"\" .""" .
+ui:doc-cp-3 a c:Text ; c:label "What makes a rule run again is declared too:" .
+ui:doc-cp-rules a c:DescriptionList ; c:of ui:doc-cp-rule-items ; c:fields ( ui:rr-self ui:rr-follows ui:rr-watches ui:rr-requires ui:rr-foreach ui:rr-modality ) .
+ui:doc-cp-rule-items ui:rr-self "A change to the component's own triples marks it dirty; the engine diffs the output and patches only what changed." ;
+    ui:rr-follows "sem:follows c:of - so do changes to the node it points at." ;
+    ui:rr-watches "sem:watches c:value - only these predicates make it dirty." ;
+    ui:rr-requires "sem:requires c:icon - skipped for instances without the property." ;
+    ui:rr-foreach "sem:forEach c:item - member-wise: once per member, so one item changes alone." ;
+    ui:rr-modality "sem:modality mod:Text - a rule for one modality; write one per modality the component renders in." .
+ui:rr-self rdfs:label "Its triples" . ui:rr-follows rdfs:label "Follows" . ui:rr-watches rdfs:label "Watches" .
+ui:rr-requires rdfs:label "Requires" . ui:rr-foreach rdfs:label "For each" . ui:rr-modality rdfs:label "Modality" .
+ui:doc-cp-4 a c:Text ; c:label "What an instance must say is a SHACL shape on the class. The shapes layer validates every component as it renders, outlines the ones that do not conform and lists them." .
+ui:doc-cp-shape a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:TallyShape a sh:NodeShape ; sh:targetClass ex:Tally ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A tally needs a label (c:label)." ] .""" .
+ui:doc-cp-5 a c:Text ; c:label "A rule can also be a function registered under a name (sem:function). Functions are an escape hatch for the rare step SPARQL cannot express - and first look for a building block that puts the missing input in the graph - and an oracle: a function twin renders the identical HTML, faster, and the tests compare the two after every step. A component without a SPARQL rule is incomplete." .
+ui:doc-cp-fn a c:Code ; c:block true ; c:label """// A function twin: same nodes, same IRIs, same HTML (the parity tests check it).
+const tally: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const label = text(ctx, focus, C.label)
+  if (label === undefined) return []
+  const shown = String(Number(ctx.object(focus, C.value)?.value ?? 0)) + ...
+  o.renders(o.el('root', 'Div', {}, [o.el('name', 'Span', {}, [o.text('name-text', label)]), o.el('figure', 'Strong', {}, [o.text('figure-text', shown)])]))
+  return o.quads
+}""" .
+ui:doc-cp-6 a c:Text ; c:label "Components come in groups - layout, type, actions, inputs, feedback, data, navigation, overlays, disclosure, windows - each one file of vocabulary, one of styles, one of function twins and one gallery page. docs/COMPONENTS.md in the repository has the details." .
+
+# --- Integrating ---
+ui:doc-integrate a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-in-h ui:doc-in-1 ui:doc-in-code ui:doc-in-list ) .
+ui:doc-in-h a c:Heading ; c:level 1 ; c:label "Integrating" .
+ui:doc-in-1 a c:Text ; c:label "mount is the short way. The pieces it wires, for when you need them yourself:" .
+ui:doc-in-code a c:Code ; c:block true ; c:label """await initWeb('wat')
+const store = loadStore('wat', components, app)    // Semblance's ontology + yours
+const runtime = new Runtime(store)                   // one graph, many projections
+const screen = runtime.project({ modality: MOD.Screen, layers, roots: [root] })
+const renderer = new DomRenderer(screen.index, element, root)
+renderer.flush()
+new EventBus(runtime, screen).attach(renderer, () => renderer.flush())""" .
+ui:doc-in-list a c:DescriptionList ; c:of ui:doc-in-items ; c:fields ( ui:in-data ui:in-proj ui:in-embed ui:in-ssr ui:in-per ui:in-nav ) .
+ui:doc-in-items ui:in-data "Change the graph with runtime.apply({ add, remove }) or runtime.transaction(…), then flush; read it with store.match or SPARQL. Keep your data in your own vocabulary and point components at it." ;
+    ui:in-proj "runtime.project again for another root or the Text modality; every change reaches all projections once." ;
+    ui:in-embed "Mount several roots into an existing page, or mount anything into a component's host-owned slot (c:slot)." ;
+    ui:in-ssr "In Node, loadStore from @inferal-oss/semblance/node, project, and toHTML or toText." ;
+    ui:in-per "per:Policy nodes say what to remember; attach Persistence before the first projection." ;
+    ui:in-nav "nav:Location says which state lives in the address; attach Navigation, and links can point at resources (c:to)." .
+ui:in-data rdfs:label "Your data" . ui:in-proj rdfs:label "Projections" . ui:in-embed rdfs:label "Embedding" .
+ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav rdfs:label "The address" .
 
 # --- Rules and the engine ---
 ui:doc-rules a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
@@ -87,7 +178,7 @@ ui:doc-ru-1 a c:Text ; c:label "Identity. Rules mint IRIs as <focus>/~<local>, n
 ui:doc-ru-2 a c:Text ; c:label "Incrementality. Each (rule, focus) pair owns its output. A change marks pairs dirty through the focus's own triples, sem:follows links and the triples a function read; outputs are diffed and reference-counted. Member-wise rules (sem:forEach) evaluate once per member, so adding a list item touches only that item." .
 ui:doc-ru-3 a c:Text ; c:label "Demand. Only what is shown under a projection's roots is evaluated; hidden pages and tabs are parked. sem:warm says what to prepare ahead: sem:Eager in idle time, sem:OnIntent when a choice that would show it is pointed at." .
 ui:doc-ru-4 a c:Text ; c:label "Bulk. A SPARQL rule pending for several foci runs once with VALUES when every triple it constructs is attributable to $this. sem:requires skips foci without a property; strata order layers after the components they decorate." .
-ui:doc-ru-5 a c:Text ; c:label "Implementations. SPARQL and function rules render the same HTML, and the tests check that they do. Functions are faster in the browser; SPARQL is inspectable and portable. The Engine tool switches between them live." .
+ui:doc-ru-5 a c:Text ; c:label "Implementations. SPARQL rules are the implementation; function twins render the same HTML, faster, and the tests check that they do after every step. The Engine tool switches between them live, and the Query tool lists renderings missing either side." .
 
 # --- Layers ---
 ui:doc-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

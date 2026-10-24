@@ -1,0 +1,54 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://example.org/hello#> .
+
+# A component of our own: a figure with its label and unit. One class, one rendering slot, one
+# SPARQL rule for it, a shape for what an instance must say, and how it looks.
+
+ex:Tally a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A figure (c:value) with its label (c:label) and an optional unit (ex:unit)."@en ;
+    sem:slug "ex-tally" .
+ex:unit a owl:DatatypeProperty ; rdfs:domain ex:Tally .
+
+ex:TallyRendering a sem:Rendering ; sem:targets ex:Tally ; sem:stratum 0 .
+ex:TallyRendering-sparql a sem:Rule ;
+    sem:implements ex:TallyRendering ;
+    sem:construct """
+PREFIX ex: <https://example.org/hello#>
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?name, ?figure .
+  ?name a rdfhtml:Span ; rdfhtml:class "ex-tally-label" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?figure .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?figure a rdfhtml:Strong ; rdfhtml:hasChild ?figureText .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+}
+WHERE {
+  $this a ex:Tally ; c:label ?label .
+  OPTIONAL { $this c:value ?value }
+  OPTIONAL { $this ex:unit ?unit }
+  BIND(CONCAT(STR(COALESCE(?value, 0)), IF(BOUND(?unit), CONCAT(" ", ?unit), "")) AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+  BIND(IRI(CONCAT(STR($this), "/~figure")) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~figure-text")) AS ?figureText)
+}""" .
+
+ex:TallyShape a sh:NodeShape ; sh:targetClass ex:Tally ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A tally needs a label (c:label): say what the figure is." ] ,
+                [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:integer ] .
+
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ; sty:part "> strong" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:text-2xl ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ; sty:part ".ex-tally-label" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .

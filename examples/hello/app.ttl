@@ -1,0 +1,22 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ex: <https://example.org/hello#> .
+
+# The app: built-in components and ours, in one graph.
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
+    c:children ( ex:title ex:cups ex:drink ) .
+ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
+ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .
+
+# What a click on the button means: one more cup. Delete the old value, insert the new one.
+ex:Drink a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:drink ;
+    beh:deletes """PREFIX ex: <https://example.org/hello#>
+CONSTRUCT { ex:cups c:value ?n } WHERE { ex:cups c:value ?n }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/hello#>
+CONSTRUCT { ex:cups c:value ?next } WHERE { ex:cups c:value ?n BIND(?n + 1 AS ?next) }""" .

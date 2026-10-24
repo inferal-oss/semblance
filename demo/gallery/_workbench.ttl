@@ -22,7 +22,7 @@ ui:workbench a c:QueryWorkbench ;
     c:runs ui:currentQuery ;
     c:results ui:queryResults ;
     c:samples ( ui:sampleRenderings ui:sampleReactions ui:sampleLayers ui:sampleChangeLog
-                ui:sampleViolations ui:sampleUndocumented ui:sampleTabsGraph ui:sampleTodos ) .
+                ui:sampleViolations ui:sampleUndocumented ui:sampleRuleSides ui:sampleTabsGraph ui:sampleTodos ) .
 
 ui:queryEditor a c:QueryEditor ;
     c:label "SPARQL query" , "Запит SPARQL"@uk , "SPARQL-Abfrage"@de , "استعلام SPARQL"@ar ;
@@ -148,6 +148,34 @@ WHERE {
   FILTER NOT EXISTS { ?property rdfs:comment ?comment }
 }
 ORDER BY ?property""" .
+
+ui:sampleRuleSides a sem:Query ;
+    rdfs:label "Renderings missing a SPARQL or function side" , "Рендеринги без SPARQL чи функції"@uk , "Darstellungen ohne SPARQL- oder Funktionsseite"@de , "عروض ينقصها جانب SPARQL أو دالة"@ar ;
+    rdfs:comment "Renderings whose implementations are not on both sides, which side is missing, and why when the rendering says (sem:functionOnly)."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# Renderings whose implementations are not on both sides. A function rule covers every modality
+# it handles; a SPARQL rule covers its sem:modality, or all of them when it names none.
+SELECT ?rendering ?targets ?missing ?why
+WHERE {
+  ?rendering a sem:Rendering .
+  OPTIONAL { ?rendering sem:targets ?targets }
+  OPTIONAL { ?rendering sem:functionOnly ?why }
+  BIND(EXISTS { ?fn sem:implements ?rendering ; sem:function ?name } AS ?hasFunction)
+  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct ?text } AS ?hasSparql)
+  # A modality the function covers but no SPARQL rule does (only where SPARQL rules name modalities).
+  OPTIONAL {
+    FILTER NOT EXISTS { ?rendering sem:modality ?own }
+    VALUES ?modality { mod:Screen mod:Text }
+    ?some sem:implements ?rendering ; sem:construct ?someText ; sem:modality ?named .
+    FILTER NOT EXISTS {
+      ?q2 sem:implements ?rendering ; sem:construct ?text2 .
+      FILTER(NOT EXISTS { ?q2 sem:modality ?m2 } || EXISTS { ?q2 sem:modality ?modality })
+    }
+  }
+  FILTER(!?hasFunction || !?hasSparql || (BOUND(?modality) && ?hasFunction))
+  BIND(IF(!?hasSparql, "SPARQL", IF(!?hasFunction, "function", CONCAT("SPARQL for ", STRAFTER(STR(?modality), "#")))) AS ?missing)
+}
+ORDER BY ?missing ?rendering""" .
 
 ui:sampleTabsGraph a sem:Query ;
     rdfs:label "How c:Tabs is made" , "Як зроблено c:Tabs"@uk , "Wie c:Tabs gemacht ist"@de , "كيف صُنع c:Tabs"@ar ;

@@ -1,16 +1,57 @@
 {
-  "name": "semblance",
-  "version": "0.0.0",
+  "name": "@inferal-oss/semblance",
+  "version": "0.1.0",
   "private": true,
   "license": "MIT OR Apache-2.0",
   "type": "module",
-  "description": "Spike: an ontologically-defined web UI framework",
+  "description": "An ontologically defined web UI framework: components, layers, styles and behaviour are RDF; SPARQL rules project the graph into the DOM",
+  "keywords": [
+    "rdf",
+    "sparql",
+    "ui",
+    "framework",
+    "ontology",
+    "owl",
+    "shacl",
+    "incremental"
+  ],
+  "homepage": "https://semblance.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inferal-oss/semblance.git"
+  },
+  "bugs": {
+    "url": "https://github.com/inferal-oss/semblance/issues"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./web": "./src/web/index.ts",
+    "./node": "./src/node/index.ts",
+    "./ontology/*": "./ontology/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "ontology",
+    "rdf-engine/host",
+    "rdf-engine/build/*.wasm",
+    "docs",
+    "README.md",
+    "DESIGN.md",
+    "PERSISTENCE.md",
+    "LICENSE",
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "gen:vocab": "tsx scripts/gen-rdfhtml-vocab.ts",
     "gen:mark": "tsx scripts/gen-mark.ts",
     "dev": "vite",
     "build": "vite build",
-    "test": "lockf /tmp/semblance-vitest.lock vitest run --maxWorkers=4",
+    "test": "scripts/test-queue.sh vitest run --maxWorkers=4",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/node.ts",
     "build:single": "vite build --mode single && node scripts/name-single.mjs",
@@ -21,7 +62,8 @@
     "predev": "npm run engine:build",
     "prebuild": "npm run engine:build",
     "pretest": "npm run engine:build",
-    "prebuild:single": "npm run engine:build"
+    "prebuild:single": "npm run engine:build",
+    "prepack": "npm run engine:build"
   },
   "dependencies": {
     "n3": "^2.13.12",
