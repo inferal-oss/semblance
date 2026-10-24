@@ -94,6 +94,8 @@ function classQuads(ctx: RuleContext, cls: NamedNode): { title: string; quads: Q
     const rules = renderings.flatMap((r) => ctx.match(null, S + 'implements', r).map((q) => q.subject))
     sections.push({ title: 'how it renders', quads: [...renderings, ...rules].flatMap(about) })
   }
+  const layerRenderings = ctx.match(null, S + 'layer', cls).map((q) => q.subject)
+  if (layerRenderings.length) sections.push({ title: 'what the layer renders', quads: layerRenderings.flatMap(about) })
   const reactions = ctx.match(null, BEH.sourceClass, cls).map((q) => q.subject)
   if (reactions.length) sections.push({ title: 'how it reacts', quads: reactions.flatMap(about) })
   const shapes = ctx.match(null, NS.sh + 'targetClass', cls).map((q) => q.subject)
@@ -101,10 +103,14 @@ function classQuads(ctx: RuleContext, cls: NamedNode): { title: string; quads: Q
   return sections
 }
 
-const PREFIXES: Record<string, string> = { c: NS.c, sem: NS.sem, sty: NS.sty, beh: NS.beh, mod: NS.mod, pos: NS.pos, rdfs: NS.rdfs, owl: NS.owl, sh: NS.sh, xsd: NS.xsd, key: NS.key, val: NS.val, tok: NS.tok }
+/** Every framework namespace, so any term the reference shows reads as a prefixed name. */
+const PREFIXES: Record<string, string> = { ...NS }
 
 const classDoc: FnRule = (ctx, focus) => {
-  const cls = ctx.object(focus, C.of)
+  // c:of, or what c:bindProperty of c:bindFrom holds (a selection, as the reference has).
+  const from = ctx.object(focus, C.bindFrom)
+  const bound = ctx.object(focus, C.bindProperty)
+  const cls = ctx.object(focus, C.of) ?? (named(from) && named(bound) ? ctx.object(from, bound) : undefined)
   if (!named(cls)) return []
   const o = ctx.out(focus)
   const tokens = ctx.untraced(() => turtleTokens(classQuads(ctx, cls), PREFIXES, undefined, false))

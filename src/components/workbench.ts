@@ -235,6 +235,7 @@ export function selectVariables(query: string): string[] | undefined {
 type Row = Map<string, Term>
 type Outcome =
   | { kind: 'none' }
+  | { kind: 'unbound' }
   | { kind: 'nosparql' }
   | { kind: 'error'; message: string }
   | { kind: 'select'; vars: string[]; rows: Row[] }
@@ -259,6 +260,16 @@ function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
   ctx.object(q, W.runCount)
   const run = executed(ctx, q)
   if (!run) return { kind: 'none' }
+  // A bound view (c:bindVariable, as a c:QueryView): $variable is the value of c:bindProperty on
+  // c:bindFrom (e.g. a selection), read so that a new value runs the query again.
+  const variable = str(ctx.object(focus, C.bindVariable))
+  if (variable) {
+    const from = ctx.object(focus, C.bindFrom)
+    const p = ctx.object(focus, C.bindProperty)
+    const value = named(from) && named(p) ? ctx.object(from, p) : undefined
+    if (!named(value)) return { kind: 'unbound' }
+    run.text = run.text.replaceAll('$' + variable, `<${value.value}>`)
+  }
   if (!ctx.sparql) return { kind: 'nosparql' }
   try {
     const result = (run.graph ? ctx.construct(run.text) : ctx.select(run.text)) as unknown
@@ -286,6 +297,7 @@ function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
 function notice(ctx: RuleContext, o: Out, result: Outcome): NamedNode[] | undefined {
   if (result.kind === 'none') return [o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.notRun, 'Run a query, or pick a sample, to see its results here.'))])]
   if (result.kind === 'nosparql') return [o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noSparql, 'Queries need SPARQL.'))])]
+  if (result.kind === 'unbound') return [o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', text(ctx, o.focus, NS.c + 'emptyText') ?? say(ctx, P.notRun, 'Run a query, or pick a sample, to see its results here.'))])]
   if (result.kind === 'error') {
     const alert = o.node('error')
     o.t(alert, RDF_TYPE, ctx.nn(W.Alert))

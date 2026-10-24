@@ -29,7 +29,7 @@ sem:SpecimenOntology-fn a sem:Rule ; sem:implements sem:SpecimenOntology ; sem:f
 
 c:ClassDoc a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "The ontology of one class (c:of): the class, its properties, renderings, reactions and shape, as highlighted Turtle."@en ;
+    rdfs:comment "The ontology of one class (c:of, or the value of c:bindProperty on c:bindFrom): the class, its properties, renderings, reactions and shape, as highlighted Turtle."@en ;
     sem:slug "class-doc" .
 c:ClassDocRendering a sem:Rendering ;
     sem:targets c:ClassDoc ;
