@@ -407,12 +407,14 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 
 # --- segmented controls (and the theme switcher) -----------------------------------------
 
-# A segmented control never widens the page: narrower than its options, it scrolls them.
+# A segmented control never widens the page: on a phone, narrower than its options, it scrolls
+# them. Elsewhere it does not clip: a scroll container cuts off what themes draw at its edges (an
+# inked border, a raised option).
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "scrollbar-width" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] ,
-                 [ sty:property "overflow-x" ; sty:raw "auto" ] ,
-                 [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:raw "3px" ] ,
                  [ sty:property "border-radius" ; sty:raw "999px" ] ,
