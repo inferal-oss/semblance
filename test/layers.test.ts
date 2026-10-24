@@ -155,6 +155,17 @@ describe('keyboard layer: commands', () => {
     expect(mode()).toBe(UI + 'Paused')
     press(h.document)
     expect(mode()).toBe(UI + 'Live')
+    // Shift+Z turns collection off (and clears what was inspected), and on again.
+    const shiftZ = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+    Object.assign(shiftZ, { key: 'Z', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true })
+    h.document.dispatchEvent(shiftZ)
+    expect(mode()).toBe(UI + 'Off')
+    const again = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+    Object.assign(again, { key: 'Z', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true })
+    h.document.dispatchEvent(again)
+    expect(mode()).toBe(UI + 'Live')
+    press(h.document)
+    press(h.document)
     // Each press is an event in the change log, handled by exactly one of the two reactions.
     const handled = h.bus.recent(2).map((quads) => quads.filter((q) => q.predicate.value.endsWith('#handledBy')).map((q) => q.object.value))
     expect(handled).toEqual([[UI + 'ResumeInspector'], [UI + 'PauseInspector']])

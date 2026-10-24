@@ -147,7 +147,9 @@ ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
 ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspector ui:highlight ) .
 ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ) .
 ui:pauseHint a c:Text ; c:inline true ; sty:textStyle sty:Caption ;
-    c:children ( ui:pauseKey " pauses / resumes" ) .
+    c:children ( ui:pauseKey " pauses · " ui:offKey ui:offKeyZ " turns off" ) .
+ui:offKey a c:Kbd ; c:label "⇧" .
+ui:offKeyZ a c:Kbd ; c:label "Z" .
 ui:pauseKey a c:Kbd ; c:label "Z" .
 
 # Z, anywhere: freeze the inspector on what it shows, and Z again to resume. A
@@ -161,6 +163,19 @@ ui:PauseInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:pauseInspe
     beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Paused } WHERE { ui:app ui:inspectorMode ui:Live }""" ;
     ann:announces "Inspector paused · Z to resume" , "Інспектор призупинено · Z, щоб продовжити"@uk ,
                   "Inspektor angehalten · Z zum Fortsetzen"@de , "تم إيقاف المفتش مؤقتًا · اضغط Z للاستئناف"@ar ; ann:tone sty:Info .
+# Shift+Z: stop collecting altogether (Off), and Shift+Z again to go back to Live.
+ui:disableInspector a key:Command ; key:shortcut "shift+z" ;
+    rdfs:label "Turn the inspector off or on" , "Вимкнути або ввімкнути інспектор"@uk ,
+               "Inspektor aus- oder einschalten"@de , "إيقاف المفتش أو تشغيله"@ar .
+ui:DisableInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:disableInspector ;
+    beh:deletes """CONSTRUCT { ui:app ui:inspectorMode ?m . ui:app ui:inspecting ?node } WHERE { ui:app ui:inspectorMode ?m FILTER(?m != ui:Off) OPTIONAL { ui:app ui:inspecting ?node } }""" ;
+    beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Off } WHERE { ui:app ui:inspectorMode ?m FILTER(?m != ui:Off) }""" ;
+    ann:announces "Inspector off · Shift+Z to turn it on" , "Інспектор вимкнено · Shift+Z, щоб увімкнути"@uk ,
+                  "Inspektor aus · Umschalt+Z zum Einschalten"@de , "تم إيقاف المفتش · Shift+Z للتشغيل"@ar .
+ui:EnableInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:disableInspector ;
+    beh:deletes """CONSTRUCT { ui:app ui:inspectorMode ui:Off } WHERE { ui:app ui:inspectorMode ui:Off }""" ;
+    beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Live } WHERE { ui:app ui:inspectorMode ui:Off }""" ;
+    ann:announces "Inspector on" , "Інспектор увімкнено"@uk , "Inspektor an"@de , "تم تشغيل المفتش"@ar .
 ui:ResumeInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:pauseInspector ;
     beh:deletes """CONSTRUCT { ui:app ui:inspectorMode ui:Paused } WHERE { ui:app ui:inspectorMode ui:Paused }""" ;
     beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Live } WHERE { ui:app ui:inspectorMode ui:Paused }""" ;
