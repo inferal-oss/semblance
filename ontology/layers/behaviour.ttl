@@ -45,7 +45,13 @@ beh:Focus a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "focusin" ; beh
 beh:Blur a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "focusout" ; beh:recorded false ;
     rdfs:comment "A rendered element lost focus. Not recorded."@en .
 beh:Move a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-move" ;
-    rdfs:comment "A move gesture ended (beh:x, beh:y). While dragging, only the view moves; this commits the result."@en .
+    rdfs:comment """A move gesture ended (beh:x, beh:y). While dragging, only the view moves; this commits the result.
+Let go over a place that takes back what was moved (a tab list a window was torn from), it says
+onto what (beh:onto) and no position."""@en .
+beh:TearOff a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-tear-off" ;
+    rdfs:comment """A part was dragged out of the component it belongs to and let go there (a detachable tab, out
+of its tab list): beh:x and beh:y say where what it becomes goes (its top-left, in CSS px from the
+viewport's). Dragged back before letting go, or let go before it was out, there is no event."""@en .
 beh:Resize a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-resize" ;
     rdfs:comment "A resize gesture ended (beh:width, beh:height)."@en .
 beh:Size a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-size" ;
@@ -81,6 +87,8 @@ beh:width a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:height a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:size a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:extent a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:onto a owl:ObjectProperty ; rdfs:domain beh:Event ;
+    rdfs:comment "Where a gesture was let go: the rendered element under the pointer that takes back what was moved (a tab list, for a window torn from it)."@en .
 
 beh:target a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:comment "The component instance the event is addressed to."@en .
 beh:node a owl:ObjectProperty ; rdfs:domain beh:Event ;
@@ -141,6 +149,7 @@ beh:EventShape a sh:NodeShape ;
                 [ sh:path beh:checked ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path beh:x ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:y ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:onto ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
                 [ sh:path beh:width ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:height ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:size ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,

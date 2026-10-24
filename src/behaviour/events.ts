@@ -7,6 +7,7 @@ import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, navigate, normalizeShortcut, rove } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
+import { returnPlaces, tearGesture } from './tear.ts'
 import { type Clock, systemClock } from './clock.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
@@ -414,7 +415,15 @@ export class EventBus {
           if (detail.value !== undefined && typeof control.selectionStart === 'number') detail.caret = control.selectionStart
           if (combo !== undefined) detail.key = combo
           const custom = (e as CustomEvent).detail
-          if (custom && typeof custom === 'object') detail.numbers = custom as Record<string, number>
+          if (custom && typeof custom === 'object') {
+            // Numbers are beh:* integers (a measure the host could not take is left out); a string names a
+            // rendered node (beh:onto: where a move was let go).
+            detail.numbers = {}
+            for (const [name, v] of Object.entries(custom as Record<string, unknown>)) {
+              if (typeof v === 'number' && Number.isFinite(v)) detail.numbers[name] = v
+              else if (typeof v === 'string') (detail.about ??= []).push([NS.beh + name, this.f.namedNode(v)])
+            }
+          }
           const handled = this.emit(type, focus, detail, reactions)
           // Reactions that changed nothing let the event reach the enclosing components
           // (a generic reaction on c:Button must not swallow its container's click).
@@ -569,6 +578,8 @@ export class EventBus {
    */
   private gesture(e: PointerEvent, renderer: DomRenderer, drags: DragHost) {
     const handle = (e.target as Element).closest?.('[data-sem-gesture]') as HTMLElement | null
+    // A detachable tab is a button that also tears off (src/behaviour/tear.ts).
+    if (handle?.dataset.semGesture === 'tear') return tearGesture(e, handle)
     if (!handle || e.button !== 0 || (e.target as Element).closest('button, input, select, textarea')) return
     if (handle.dataset.semGesture === 'size') return this.sizeGesture(e, handle, renderer)
     if (handle.dataset.semGesture === 'drag') return drags.pointer(e, handle)
@@ -583,6 +594,9 @@ export class EventBus {
     // What the graph says (the renderer's last write); the drag only changes the view until release.
     const original = target.getAttribute('style')
     const edge = target.getAttribute('data-sem-edge')
+    // A window torn from a tab can be let go over that tab list again: then the move is onto it.
+    const frame = kind === 'move' ? renderer.index.focusOf(renderer.keyOf(box)!) : undefined
+    const home = frame ? returnPlaces(this.runtime.store, this.projection.engine.graph, renderer, box, frame) : undefined
     e.preventDefault()
     handle.setPointerCapture?.(e.pointerId)
     // The last moments of the gesture, for its velocity at release.
@@ -603,17 +617,22 @@ export class EventBus {
         const left = natural ? m.clientX - Math.min(start.x - start.left, width / 2) : start.left + dx
         const top = natural ? m.clientY - Math.min(start.y - start.top, height / 2) : start.top + dy
         Object.assign(target.style, { left: `${left}px`, top: `${Math.max(0, top)}px`, right: 'auto', bottom: 'auto', translate: 'none', ...size })
+        home?.mark(home.at(m.clientX, m.clientY)?.el)
       } else Object.assign(target.style, { width: `${Math.max(280, start.width + dx)}px`, height: `${Math.max(180, start.height + dy)}px` })
     }
     const up = (u: PointerEvent) => {
       handle.removeEventListener('pointermove', move)
       handle.removeEventListener('pointerup', up)
       handle.removeEventListener('pointercancel', up)
-      let detail: Record<string, number> | undefined
-      if (kind === 'move' && moved && u.type === 'pointerup') {
+      let detail: Record<string, number | string> | undefined
+      const onto = kind === 'move' && moved && u.type === 'pointerup' ? home?.at(u.clientX, u.clientY) : undefined
+      home?.mark(undefined)
+      // Let go over the tab list it came from: a move onto it, with no position (the window keeps its own).
+      if (onto) detail = { onto: onto.key }
+      else if (kind === 'move' && moved && u.type === 'pointerup') {
         // Where the pointer was released, as distances to the viewport's logical edges (for snapping).
         const view = target.ownerDocument.documentElement
-        const rtl = target.ownerDocument.defaultView?.getComputedStyle(target).direction === 'rtl'
+        const rtl = target.ownerDocument.defaultView?.getComputedStyle?.(target).direction === 'rtl'
         const fromLeft = u.clientX
         const fromRight = view.clientWidth - u.clientX
         // Its velocity over the last 100 ms (none if it came to rest before it was let go).
@@ -641,7 +660,9 @@ export class EventBus {
       if (edge === null) target.removeAttribute('data-sem-edge')
       else target.setAttribute('data-sem-edge', edge)
       // A press that never moved (or a gesture the browser took over) changes nothing.
-      if (detail) handle.dispatchEvent(new CustomEvent(kind === 'move' ? 'sem-move' : 'sem-resize', { bubbles: true, detail }))
+      // Made by the handle's own window (a test DOM refuses foreign events).
+      const Custom = handle.ownerDocument.defaultView?.CustomEvent ?? CustomEvent
+      if (detail) handle.dispatchEvent(new Custom(kind === 'move' ? 'sem-move' : 'sem-resize', { bubbles: true, detail }))
     }
     handle.addEventListener('pointermove', move)
     handle.addEventListener('pointerup', up)

@@ -216,7 +216,11 @@ effects of graph state.
 
 A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 (`prov:wasDerivedFrom`), and hosted on a `c:Desktop` that is not part of any
-page, so it survives navigation. Dock and close follow the provenance back.
+page, so it survives navigation. Dock and close follow the provenance back. A tab also tears
+off: dragged out of its list past `c:tearDistance` (a touch after a long press), a ghost of the
+window follows the pointer, and letting go is one `beh:TearOff` event that detaches it and places
+the window there; dragged back over the list it stays a tab. A window let go over the tab list it
+came from (`c:gathers`) is a `beh:Move` onto it, which docks it. Shift+Enter on a tab detaches it.
 Dialogs, drawers and toast regions are hosted there too.
 
 **Live examples** (`c:LiveExample`, `ontology/components/live.ttl`) put the Turtle of a small app

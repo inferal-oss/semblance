@@ -366,16 +366,25 @@ function hitObject(ctx: ReactionContext, marker: string): Term | undefined {
 
 /** Bring a frame to the front of the desktops hosting it, unless it already is. */
 function raise(ctx: ReactionContext, w: Term): Delta {
-  const out = none()
-  for (const { subject: d } of ctx.match(null, C.hosts, w)) {
-    const current = ctx.match(d, WIN.topmost, null)
-    if (current.some((q) => q.object.equals(w))) continue
-    let top = 0
-    for (const h of ctx.match(d, C.hosts, null)) for (const z of ctx.match(h.object, WIN.z, null)) top = Math.max(top, Number(z.object.value) || 0)
-    out.remove.push(...current, ...ctx.match(w, WIN.z, null))
-    out.add.push(quad(ctx, d, WIN.topmost, w), quad(ctx, w, WIN.z, integer(ctx, top + 1)))
-  }
-  return out
+  return merge(...ctx.match(null, C.hosts, w).map(({ subject: d }) => raiseOn(ctx, d, w)))
+}
+
+/** Bring a frame to the front of one desktop (it may not be placed there yet), unless it already is. */
+function raiseOn(ctx: ReactionContext, d: Term, w: Term): Delta {
+  const current = ctx.match(d, WIN.topmost, null)
+  if (current.some((q) => q.object.equals(w))) return none()
+  let top = 0
+  for (const h of ctx.match(d, C.hosts, null)) for (const z of ctx.match(h.object, WIN.z, null)) top = Math.max(top, Number(z.object.value) || 0)
+  return { remove: [...current, ...ctx.match(w, WIN.z, null)], add: [quad(ctx, d, WIN.topmost, w), quad(ctx, w, WIN.z, integer(ctx, top + 1))] }
+}
+
+const detach = (ctx: ReactionContext, tab: Term): Delta => ({ remove: [], add: [quad(ctx, tab, WIN.detached, ctx.runtime.store.factory.literal('true', nn(ctx, XSD_BOOLEAN)))] })
+
+/** A window minted from a tab goes back into it: the tab is no longer detached, and is selected. */
+function backToTab(ctx: ReactionContext): Delta {
+  const tab = ctx.object(ctx.target, PROV_DERIVED_FROM)
+  if (!tab || !ctx.match(tab, RDF_TYPE, nn(ctx, WIN.Tab)).length) return none()
+  return merge({ remove: ctx.match(tab, WIN.detached, null), add: [] }, ...tabsOf(ctx, tab).map((tabs) => put(ctx, tabs, WIN.selected, tab)))
 }
 
 /**
@@ -422,13 +431,32 @@ function tabsOf(ctx: ReactionContext, tab: Term): Term[] {
 export const reactions: Record<string, ReactionFn> = {
   'tabs:detach': (ctx) => {
     const tab = hitObject(ctx, WIN.detaches)
-    return tab ? { remove: [], add: [quad(ctx, tab, WIN.detached, ctx.runtime.store.factory.literal('true', nn(ctx, XSD_BOOLEAN)))] } : none()
+    return tab ? detach(ctx, tab) : none()
   },
-  'window:dock': (ctx) => {
-    if (!hitMarks(ctx, C.docks)) return none()
-    const tab = ctx.object(ctx.target, PROV_DERIVED_FROM)
-    if (!tab || !ctx.match(tab, RDF_TYPE, nn(ctx, WIN.Tab)).length) return none()
-    return merge({ remove: ctx.match(tab, WIN.detached, null), add: [] }, ...tabsOf(ctx, tab).map((tabs) => put(ctx, tabs, WIN.selected, tab)))
+  'tabs:detach-key': (ctx) => {
+    const tab = hitObject(ctx, C.tearsOff)
+    return tab ? detach(ctx, tab) : none()
+  },
+  // Detached into its window, placed where the gesture let go, floating, normal and in front.
+  'tabs:tear-off': (ctx) => {
+    const tab = hitObject(ctx, C.tearsOff)
+    const w = hitObject(ctx, C.tearsInto)
+    if (!tab || !w) return none()
+    const x = ctx.object(ctx.event, NS.beh + 'x')
+    const y = ctx.object(ctx.event, NS.beh + 'y')
+    const off = ctx.match(w, WIN.windowState, null).filter((q) => q.object.value !== WIN.Normal)
+    return merge(
+      detach(ctx, tab),
+      x && y ? merge(put(ctx, w, C.x, x), put(ctx, w, C.y, y)) : none(),
+      { remove: ctx.match(w, WIN.attachedTo, null), add: [] },
+      off.length ? { remove: off, add: [quad(ctx, w, WIN.windowState, nn(ctx, WIN.Normal))] } : none(),
+      ...ctx.match(ctx.target, C.windowsOn, null).map((q) => raiseOn(ctx, q.object, w)),
+    )
+  },
+  'window:dock': (ctx) => (hitMarks(ctx, C.docks) ? backToTab(ctx) : none()),
+  'window:return': (ctx) => {
+    const onto = ctx.object(ctx.event, BEH.onto)
+    return onto && ctx.match(onto, C.gathers, ctx.target).length ? backToTab(ctx) : none()
   },
   'frame:move': (ctx) => {
     const x = ctx.object(ctx.event, NS.beh + 'x')

@@ -270,3 +270,69 @@
     sty:declares [ sty:property "--sem-dock-start" ; sty:raw "var(--sem-taskbar-span, min(168px, 40vw))" ] .
 [] a sty:StyleRule ; sty:part ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=end]:not([hidden]))" ;
     sty:declares [ sty:property "--sem-dock-end" ; sty:raw "var(--sem-taskbar-span, min(168px, 40vw))" ] .
+
+# --- tearing a tab off into a window, and dragging it back ------------------------------------------
+# A tab that tears off is pressed and dragged, not selected as text or held for a callout.
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[data-sem-gesture=tear]" ;
+    sty:declares [ sty:property "user-select" ; sty:raw "none" ] ,
+                 [ sty:property "-webkit-user-select" ; sty:raw "none" ] ,
+                 [ sty:property "-webkit-touch-callout" ; sty:raw "none" ] .
+# A touch held long enough to tear: the tab gives a little; torn, it fades where it was.
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[data-sem-tear-armed]" ;
+    sty:declares [ sty:property "scale" ; sty:raw "0.96" ] ,
+                 [ sty:property "transition" ; sty:raw "scale var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[data-sem-tearing]" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] .
+# The ghost: the window it would become (the host draws it with the frame's hooks, so every theme
+# draws its own window), smaller, see-through and outlined, under the pointer in the top layer.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-ghost]" ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "inset" ; sty:raw "auto" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "z-index" ; sty:raw "1000" ] ,
+                 [ sty:property "width" ; sty:raw "min(340px, calc(100vw - 32px))" ] ,
+                 [ sty:property "height" ; sty:raw "180px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "opacity" ; sty:raw "0.9" ] ,
+                 [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent-9)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "3px" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "transition" ; sty:raw "opacity var(--sem-duration-fast) var(--sem-ease), outline-color var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-ghost]" ; sty:part ".sem-tear-cue" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "padding" ; sty:raw "12px 16px" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
+                 [ sty:property "font" ; sty:raw "600 var(--sem-text-sm)/1.35 var(--sem-font)" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] .
+# Back over the tab list: letting go keeps the tab, so the ghost fades and the list lights up.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-ghost][data-sem-tear=back]" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.5" ] ,
+                 [ sty:property "outline-color" ; sty:raw "var(--sem-border-strong)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-ghost][data-sem-tear=back]" ; sty:part ".sem-tear-cue" ;
+    sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tablist][data-sem-gathering]" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent-9)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "-3px" ] ,
+                 [ sty:property "background-color" ; sty:raw "color-mix(in oklab, var(--sem-accent-9) 10%, transparent)" ] .
+# A window torn from a tab, dragged over that tab list: letting go returns it, and it says so (under
+# its title bar, which is where the pointer is, so it is on screen however tall the window).
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-returning]" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.75" ] ,
+                 [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent-9)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "3px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state "[data-sem-returning]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-return-cue)" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "12px" ] ,
+                 [ sty:property "top" ; sty:raw "52px" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] ,
+                 [ sty:property "padding" ; sty:raw "8px 12px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:token tok:accent-9 ] ,
+                 [ sty:property "color" ; sty:raw "white" ] ,
+                 [ sty:property "font" ; sty:raw "600 var(--sem-text-xs)/1.35 var(--sem-font)" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .

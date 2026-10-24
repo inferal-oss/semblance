@@ -23,7 +23,7 @@ import { functions as layoutFunctions } from './layout.ts'
 import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
 import { functions as inputsFunctions } from './inputs.ts'
-import { functions as feedbackFunctions } from './feedback.ts'
+import { functions as feedbackFunctions, phrase } from './feedback.ts'
 import { functions as dataFunctions } from './data.ts'
 import { functions as navigationFunctions } from './navigation.ts'
 import { functions as overlaysFunctions } from './overlays.ts'
@@ -264,6 +264,9 @@ const tabs: FnRule = (ctx, focus) => {
     o.t(button, C.selects, tab)
     buttons.push(button)
     if (detachable) {
+      // Dragged out of the list it tears off into its window (src/behaviour/tear.ts); Shift+Enter detaches it.
+      o.attr(button, 'data-sem-gesture', 'tear').attr(button, 'aria-keyshortcuts', 'Shift+Enter')
+      o.t(button, C.tearsOff, tab).t(button, C.tearsInto, o.node('window-' + key))
       const detach = o.el('detach-' + key, 'Button', { type: 'button', class: 'sem-detach' }, [o.text('detach-' + key + '-label', '⧉')])
       o.attr(detach, 'aria-label', `Open ${name} in a window`)
       o.tip(detach, `Open ${name} in a window`)
@@ -276,6 +279,15 @@ const tabs: FnRule = (ctx, focus) => {
   })
   const list = o.el('tablist', 'Div', {}, buttons)
   if (!text) o.attr(list, 'role', 'tablist')
+  if (!text && detachable) {
+    // How far out a tab tears off, and what the ghost that follows it says, in the viewer's language.
+    o.attr(list, 'data-sem-tear-distance', str(ctx.object(ctx.nn(C.Tabs), C.tearDistance)) ?? '24')
+      .attr(list, 'data-sem-tear-cue', phrase(ctx, C.TearOffCue, 'Release to open in a window'))
+      .attr(list, 'data-sem-tear-back-cue', phrase(ctx, C.TearBackCue, 'Release to keep it a tab'))
+    // The windows torn from these tabs come back when let go over the list.
+    for (const w of windows) o.t(list, C.gathers, w)
+    if (windows.length) o.attr(list, 'data-sem-return-cue', phrase(ctx, C.ReturnCue, 'Release to return it to its tab'))
+  }
   // Windows go where the tabs say (a c:Desktop outlives page changes), else inside the tabs.
   const desktop = ctx.object(focus, C.windowsOn)
   if (desktop?.termType === 'NamedNode') for (const w of windows) o.t(desktop, C.hosts, w)

@@ -39,6 +39,16 @@
 # overlays (c:open, c:opens / c:closes): `c:open false` keeps one closed, and its
 # content is not evaluated until it opens.
 #
+# A detachable tab also tears off: dragged out of its tab list, past c:tearDistance, a ghost of
+# the window it would become follows the pointer and says what letting go does; let go there, one
+# beh:TearOff event says where the window goes and c:TabsTearOff detaches the tab into a window
+# placed there (floating, normal, in front). Brought back over the list before letting go, it
+# stays a tab; let go before it was ever that far out, it was a click. A touch tears after a still,
+# long press; on the keyboard, Shift+Enter on the focused tab does what its ⧉ control does. The
+# way back is the same gesture reversed: the tab list names the windows torn from it (c:gathers),
+# and a window dragged by its title bar and let go over that list is a beh:Move onto it
+# (beh:onto, no position), which c:WindowReturn docks by provenance, like ⇲.
+#
 # Geometry (c:x, c:y, c:width, c:height) is input state on the window's IRI, committed
 # by one RDF event per gesture; the IRI is deterministic, so a re-detached tab reopens
 # where it was.
@@ -167,6 +177,12 @@ c:MoveHint a c:Phrase ; rdfs:label "Drag, or use the arrow keys; at an edge it d
 c:UndockCommand a c:Phrase ; rdfs:label "Float"@en , "Відкріпити"@uk , "Lösen"@de , "فك التثبيت"@ar .
 c:ReturnToTabCommand a c:Phrase ; rdfs:label "Return to its tab"@en , "Повернути у вкладку"@uk , "Zurück in den Tab"@de , "إرجاع إلى علامة التبويب"@ar .
 c:WindowsRegion a c:Phrase ; rdfs:label "Windows"@en , "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
+c:TearOffCue a c:Phrase ; rdfs:label "Release to open in a window"@en , "Відпустіть, щоб відкрити у вікні"@uk ,
+    "Loslassen, um es in einem Fenster zu öffnen"@de , "أفلِت لفتحها في نافذة"@ar .
+c:TearBackCue a c:Phrase ; rdfs:label "Release to keep it a tab"@en , "Відпустіть, щоб лишити вкладкою"@uk ,
+    "Loslassen, um es als Tab zu behalten"@de , "أفلِت لإبقائها علامة تبويب"@ar .
+c:ReturnCue a c:Phrase ; rdfs:label "Release to return it to its tab"@en , "Відпустіть, щоб повернути у вкладку"@uk ,
+    "Loslassen, um es in seinen Tab zurückzulegen"@de , "أفلِت لإرجاعها إلى علامة التبويب"@ar .
 
 # --- frames -----------------------------------------------------------------------------------
 
@@ -198,6 +214,19 @@ c:detachable a owl:DatatypeProperty ; rdfs:domain c:Tabs ; rdfs:range xsd:boolea
 c:detached a owl:DatatypeProperty ; rdfs:domain c:Tab ; rdfs:range xsd:boolean ;
     rdfs:comment "The tab's content is shown in a window instead of a panel."@en .
 c:detaches a owl:ObjectProperty ; rdfs:comment "On a rendered element: the tab that activating it detaches."@en .
+c:tearDistance a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:integer ;
+    rdfs:comment "How far (CSS px) outside its tab list a detachable tab must be dragged for letting go to tear it off into a window."@en .
+c:Tabs c:tearDistance 24 .
+c:tearsOff a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element (a detachable tab): the tab that dragging it out of its list, or Shift+Enter on it, detaches."@en .
+c:tearsInto a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element (a detachable tab): the window its tab becomes when torn off (the IRI c:Tabs mints for it, which keeps its geometry)."@en .
+c:gathers a owl:ObjectProperty ;
+    rdfs:comment "On a rendered tab list: a window detached from one of its tabs; a move of that window let go over the list returns it there."@en .
+
+# Shift+Enter on a focused detachable tab: detach it, as its ⧉ control does.
+c:TabsDetachKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "shift+enter" ;
+    rdfs:comment "Shift+Enter pressed in a component (on a detachable tab: open it in a window)."@en .
 
 c:WindowRendering a sem:Rendering ;
     sem:targets c:Window ;
@@ -215,6 +244,43 @@ c:TabsDetach a beh:Reaction ;
     beh:sourceClass c:Tabs ;
     beh:inserts """CONSTRUCT { ?tab c:detached true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:detaches ?tab }""" ;
     sem:function "tabs:detach" .
+
+c:TabsDetachByKey a beh:Reaction ;
+    beh:when c:TabsDetachKey ;
+    beh:sourceClass c:Tabs ;
+    beh:inserts """CONSTRUCT { ?tab c:detached true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:tearsOff ?tab }""" ;
+    sem:function "tabs:detach-key" .
+
+# Torn off: the tab is detached into its window, which is placed where the gesture let go (the
+# window's own c:x / c:y, so it is remembered like a move), floating, not minimized or maximized,
+# and in front of the desktop the tabs put their windows on (one more than the highest c:z there).
+# Each part names the window by the tab's marker (?n c:tearsInto ?w) itself, so what it filters on
+# is bound where it filters.
+c:TabsTearOff a beh:Reaction ;
+    beh:when beh:TearOff ;
+    beh:sourceClass c:Tabs ;
+    beh:deletes """CONSTRUCT { ?w c:x ?ox ; c:y ?oy ; c:attachedTo ?edge ; c:windowState ?state ; c:z ?oz . ?d c:topmost ?front }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:tearsOff ?tab ; c:tearsInto ?w .
+  { $event beh:x ?nx ; beh:y ?ny . ?w c:x ?ox }
+  UNION { $event beh:x ?nx ; beh:y ?ny . ?w c:y ?oy }
+  UNION { ?w c:attachedTo ?edge }
+  UNION { ?w c:windowState ?state FILTER(?state != c:Normal) }
+  UNION { $this c:windowsOn ?d . ?n c:tearsInto ?w . ?d c:topmost ?front FILTER(?front != ?w) }
+  UNION { $this c:windowsOn ?d . ?n c:tearsInto ?w . ?w c:z ?oz FILTER NOT EXISTS { ?d c:topmost ?w } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?tab c:detached true . ?w c:x ?x ; c:y ?y ; c:windowState ?normal ; c:z ?z . ?d c:topmost ?w }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:tearsOff ?tab ; c:tearsInto ?w .
+  {} UNION { $event beh:x ?x ; beh:y ?y }
+  UNION { ?w c:windowState ?state FILTER(?state != c:Normal) BIND(c:Normal AS ?normal) }
+  UNION {
+    $this c:windowsOn ?d . ?n c:tearsInto ?w . FILTER NOT EXISTS { ?d c:topmost ?w }
+    LATERAL { SELECT (MAX(?oz) AS ?top) WHERE { ?d c:hosts ?o . ?o c:z ?oz } }
+    BIND(COALESCE(?top, 0) + 1 AS ?z)
+  }
+}""" ;
+    sem:function "tabs:tear-off" .
 
 # Dock or close: the window was derived from a tab; send the content back and select it.
 c:WindowDock a beh:Reaction ;
@@ -234,6 +300,26 @@ WHERE {
   ?tabs c:tabs/rdf:rest*/rdf:first ?tab .
 }""" ;
     sem:function "window:dock" .
+
+# Dragged back: a move let go over the tab list it was torn from (beh:onto a list that c:gathers
+# it) docks it the same way. The move says no position, so the window keeps the one it had.
+c:WindowReturn a beh:Reaction ;
+    beh:when beh:Move ;
+    beh:sourceClass c:Window ;
+    beh:deletes """CONSTRUCT { ?tab c:detached ?d . ?tabs c:selected ?old }
+WHERE {
+  $event beh:onto ?list . ?list c:gathers $this .
+  $this prov:wasDerivedFrom ?tab . ?tab a c:Tab ; c:detached ?d .
+  ?tabs c:tabs/rdf:rest*/rdf:first ?tab .
+  OPTIONAL { ?tabs c:selected ?old }
+}""" ;
+    beh:inserts """CONSTRUCT { ?tabs c:selected ?tab }
+WHERE {
+  $event beh:onto ?list . ?list c:gathers $this .
+  $this prov:wasDerivedFrom ?tab . ?tab a c:Tab .
+  ?tabs c:tabs/rdf:rest*/rdf:first ?tab .
+}""" ;
+    sem:function "window:return" .
 
 # --- behaviour: capabilities ----------------------------------------------------------------------
 
