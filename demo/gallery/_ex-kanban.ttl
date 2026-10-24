@@ -8,6 +8,7 @@
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -51,10 +52,16 @@ kb:Feature a kb:Tag ; rdfs:label "feature" ; sty:tone sty:Accent .
 kb:Docs a kb:Tag ; rdfs:label "docs" ; sty:tone sty:Info .
 kb:Chore a kb:Tag ; rdfs:label "chore" ; sty:tone sty:Neutral .
 
-kb:ada rdfs:label "Ada Lovelace" .
-kb:grace rdfs:label "Grace Hopper" .
-kb:alan rdfs:label "Alan Kay" .
-kb:barbara rdfs:label "Barbara Liskov" .
+kb:ada a kb:Person ; rdfs:label "Ada Lovelace" .
+kb:grace a kb:Person ; rdfs:label "Grace Hopper" .
+kb:alan a kb:Person ; rdfs:label "Alan Kay" .
+kb:barbara a kb:Person ; rdfs:label "Barbara Liskov" .
+
+# Who a card is for and what kind of work it is: the comboboxes of the add row offer the
+# individuals of these ranges. A tag can also be made up there, as a new kb:Tag.
+kb:Person a owl:Class .
+kb:assignee rdfs:label "Assignee" ; rdfs:range kb:Person .
+kb:tag rdfs:label "Tag" ; rdfs:range kb:Tag .
 
 kb:c1 a kb:Card ; kb:title "Offline mode for the editor" ; kb:column kb:todo ; kb:assignee kb:ada ; kb:tag kb:Feature ; kb:rank 1 .
 kb:c2 a kb:Card ; kb:title "Crash when pasting an empty query" ; kb:column kb:todo ; kb:assignee kb:grace ; kb:tag kb:Bug ; kb:rank 2 .
@@ -81,8 +88,18 @@ ui:ex-kanban-board a c:Board , dnd:Sortable ; c:label "Sprint 14" ;
 kb:TitleShape a sh:PropertyShape ; sh:path kb:title ; sh:minCount 1 ; sh:maxLength 80 ;
     sh:message "A title of up to 80 characters." .
 ui:ex-kanban-add-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
-    c:children ( ui:ex-kanban-new ui:ex-kanban-add ) .
+    c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ) .
 ui:ex-kanban-new a c:TextField ; c:label "New card" ; c:placeholder "What needs doing?" ; val:validates kb:TitleShape .
+
+# Who and what kind: comboboxes over a draft the new card copies. The assignee is one of the
+# kb:Person individuals; a tag may be new (c:allowsCustom): Enter on "Create …" mints a kb:Tag
+# under c:mintBase, if the text is a tag kb:NewTagShape allows.
+ui:ex-kanban-draft kb:assignee kb:ada ; kb:tag kb:Feature .
+kb:NewTagShape a sh:PropertyShape ; sh:path kb:tag ; sh:maxLength 16 ; sh:pattern "^[a-z][a-z0-9-]*$" ;
+    sh:message "A tag is one lower-case word, up to 16 letters." .
+ui:ex-kanban-who a c:Combobox ; c:controls ui:ex-kanban-draft ; c:property kb:assignee ; c:placeholder "Who?" .
+ui:ex-kanban-tag a c:Combobox ; c:controls ui:ex-kanban-draft ; c:property kb:tag ; c:placeholder "Tag" ;
+    c:allowsCustom true ; c:mintBase "https://semblance.dev/demo/kanban#tag-" ; val:validates kb:NewTagShape .
 ui:ex-kanban-add a c:Button ; c:label "Add to To do" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
     val:requires ( ui:ex-kanban-new ) ; key:shortcut "mod+enter" .
 
@@ -95,7 +112,7 @@ ui:ex-kanban-key-space a c:Kbd ; c:label "Space" .
 
 # --- the reaction: adding a card ---------------------------------------------------------------------
 # A new card, minted from the event's IRI, goes to the end of To do: its rank is one more than
-# the highest. The field is cleared. (Moving, refusing a full column and removing are the
+# the highest; it is for the draft's assignee and has its tag. The field is cleared. (Moving, refusing a full column and removing are the
 # board's own reactions, c:BoardMove, c:BoardRefuse and c:BoardRemove in ontology/components/board.ttl.)
 
 kb:AddCard a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-kanban-add ;
@@ -104,7 +121,7 @@ CONSTRUCT { ui:ex-kanban-new c:value ?v }
 WHERE { ui:ex-kanban-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 80) }""" ;
     beh:inserts """
 CONSTRUCT {
-  ?card a kb:Card ; kb:title ?title ; kb:column kb:todo ; kb:rank ?rank .
+  ?card a kb:Card ; kb:title ?title ; kb:column kb:todo ; kb:rank ?rank ; kb:assignee ?who ; kb:tag ?tag .
   ui:ex-kanban-board c:card ?card .
 }
 WHERE {
@@ -112,6 +129,8 @@ WHERE {
   BIND(STR(?v) AS ?title)
   BIND(IRI(CONCAT(STR(kb:), "card-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?card)
   { SELECT (COALESCE(MAX(?r) + 1, 1) AS ?rank) WHERE { ?any kb:rank ?r } }
+  OPTIONAL { ui:ex-kanban-draft kb:assignee ?who }
+  OPTIONAL { ui:ex-kanban-draft kb:tag ?tag }
 }""" ;
     ann:announces "Card added to To do" ; ann:tone sty:Success .
 

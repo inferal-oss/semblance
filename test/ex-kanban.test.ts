@@ -136,6 +136,38 @@ describe('the kanban example', () => {
     expect(store.match(null, store.factory.namedNode(KB + 'title'), store.factory.literal('Ship the board'))).toHaveLength(0)
   })
 
+  it('gives a new card the assignee and tag picked in the add row, a new tag included', () => {
+    const h = kanban()
+    const combo = (n: number) => h.root().querySelectorAll('[data-sem-c=combobox] .sem-ta-field > input')[n] as HTMLInputElement
+    const typeIn = (n: number, text: string) => {
+      combo(n).value = text
+      h.fire(combo(n), 'input')
+      h.shell.flush()
+    }
+    const press = (n: number, key: string) => {
+      const e = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+      Object.assign(e, { key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+      combo(n).dispatchEvent(e)
+      h.shell.flush()
+    }
+    expect(combo(0).value).toBe('Ada Lovelace')
+    expect(combo(1).value).toBe('feature')
+    typeIn(0, 'hopper')
+    press(0, 'Enter')
+    expect(combo(0).value).toBe('Grace Hopper')
+    // A tag that is not there yet: a new kb:Tag, minted under the combobox's c:mintBase.
+    typeIn(1, 'perf')
+    press(1, 'Enter')
+    const f = h.store.factory
+    expect(h.store.match(f.namedNode(KB + 'tag-perf'), f.namedNode('http://www.w3.org/2000/01/rdf-schema#label'), null).map((q) => q.object.value)).toEqual(['perf'])
+    expect(h.store.match(f.namedNode(KB + 'tag-perf'), f.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), null).map((q) => q.object.value)).toEqual([KB + 'Tag'])
+    h.type('Profile the board')
+    h.click(h.button('Add to To do'))
+    const c = h.card('Profile the board')
+    expect(c.querySelector('[data-sem-c=avatar]')!.getAttribute('aria-label')).toBe('Grace Hopper')
+    expect(c.querySelector('[data-sem-c=tag]')!.textContent).toContain('perf')
+  })
+
   it('renders the same with function rules preferred, before and after moves', () => {
     const a = kanban('sparql')
     const b = kanban('function')
