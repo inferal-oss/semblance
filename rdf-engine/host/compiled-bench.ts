@@ -7,7 +7,8 @@
 //    construct / constructFor / select call is recorded (query, bound foci, graphs).
 //    Each distinct call is replayed on that store, interpreted and compiled:
 //    results compared, and timed (emit, WebAssembly.compile, instantiate, runs).
-// 3. Unbound: every compilable corpus query run unbound on the same store, compared.
+// 3. Unbound: every compilable corpus query that Semblance runs unbound (no $this,
+//    $event) run on the same store, compared. (Rules run unbound can take gigabytes.)
 import { writeFileSync } from 'node:fs'
 import '../../src/behaviour/events.ts'
 import { SPARQL_PREFIXES } from '../../src/ns.ts'
@@ -123,7 +124,7 @@ for (const raw of corpus) {
   if (typeof b === 'string') declined.set(b, (declined.get(b) ?? 0) + 1)
   else {
     compilable++
-    compilableTexts.push(text)
+    if (!/\$(this|event)\b/.test(raw)) compilableTexts.push(text)
   }
   q.release()
 }
@@ -194,7 +195,9 @@ for (const c of distinct.slice(0, maxCalls)) {
 // --- 3. unbound runs of every compilable corpus query --------------------------------
 let unboundSame = 0
 let unboundRun = 0
+const memoryMb = () => (store.engine as unknown as { x: { memory: WebAssembly.Memory } }).x.memory.buffer.byteLength >> 20
 for (const text of compilableTexts) {
+  if (memoryMb() > 512) break
   const q = e.prepare(text)
   try {
     const a = performance.now()

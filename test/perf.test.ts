@@ -48,6 +48,7 @@ describe('performance judgements', () => {
       'BulkEffect',
       'Scaling',
       'DomShare',
+      'CompiledEffect',
     ])
   })
 
@@ -92,5 +93,19 @@ describe('performance judgements', () => {
     const pending = select(store, all[1]!).filter((r) => r.value === undefined)
     // The fixture measured 6 configurations, without rename/add/type; the later ones (the engines) not at all.
     expect(pending.length).toBe(2 * (6 * 3 + (CONFIGS.length - 6) * 5))
+  })
+})
+
+describe('compiled query judgements', () => {
+  it('compares each compiled configuration with the interpreted one of the same store and evaluation', () => {
+    const store = oxigraphStore(ox)
+    store.loadTurtle(perfOntology)
+    const at = (config: string, engineMs: number): Row => ({ env: 'node', config, size: 1000, scenario: 'initial render', engineMs, ruleRuns: 1, derived: 1 })
+    store.loadTurtle(observationsTurtle([at('rust · sparql · bulk', 100), at('rust · sparql · compiled', 80), at('wat · sparql · per-focus', 100), at('wat · sparql · per-focus · compiled', 130)]))
+    const found = judge(store).findings.filter((f) => f.judgement.endsWith('CompiledEffect'))
+    expect(found.map((f) => [f.verdict, f.text])).toEqual([
+      ['good', 'rust · sparql · compiled: at 1000 items the initial render takes 80 ms against 100 ms interpreted (rust · sparql · bulk, 1.25×), compiling included.'],
+      ['concern', 'wat · sparql · per-focus · compiled: at 1000 items the initial render takes 130 ms against 100 ms interpreted (wat · sparql · per-focus, 0.77×), compiling included.'],
+    ])
   })
 })

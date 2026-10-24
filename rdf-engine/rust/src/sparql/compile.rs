@@ -426,15 +426,18 @@ impl<'q> Gen<'q> {
         self.f(f).i32(0).set(i).open(BLOCK).open(LOOP).get(i).global_get(g + 1).op(GE_U).br(BR_IF, 1);
         self.f(f).call(STACK).global_get(g).i32(4).op(MUL).op(ADD).get(i).i32(w).op(MUL).op(ADD).set(r);
         self.f(f).get(i).i32(1).op(ADD).set(i).open(BLOCK);
-        let mut saves = Vec::new();
+        // Every check before any merge: a mismatch leaves the block without restoring.
         for &v in &vars {
-            let state = st.bound[v as usize];
-            let a = self.frame + 4 * v;
-            if state != 0 {
+            if st.bound[v as usize] != 0 {
                 // Both bound: they must agree.
+                let a = self.frame + 4 * v;
                 self.f(f).get(r).load(4 * v).tee(x).op(EQZ).i32(0).load(a).op(EQZ).op(OR).get(x).i32(0).load(a).op(EQ).op(OR).op(EQZ).br(BR_IF, 0);
             }
-            if state == CERTAIN {
+        }
+        let mut saves = Vec::new();
+        for &v in &vars {
+            let a = self.frame + 4 * v;
+            if st.bound[v as usize] == CERTAIN {
                 continue;
             }
             let save = self.f(f).local();

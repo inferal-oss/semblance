@@ -20,6 +20,7 @@ npm run engine:build                          # build/rust.wasm, build/wat.wasm 
 npm run engine:check -- rust                  # term and store checks against ABI.md
 npm run conformance -- --target rust          # or wat, oxigraph; --suite rdf12 --only <iri part> -v --show
 npm run engine:compare                        # size and speed matrix -> results/compare.md
+npx tsx rdf-engine/host/compiled-bench.ts rust  # compiled vs interpreted queries -> results/compiled.md
 ```
 
 ## Benchmarks
