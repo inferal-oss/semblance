@@ -26,6 +26,8 @@ export default defineConfig(({ command, mode }) => ({
     target: 'es2023',
     assetsInlineLimit: mode === 'single' ? Number.MAX_SAFE_INTEGER : undefined,
   },
-  // Integration tests mount the whole demo; under a parallel run they need more than 5 s.
-  test: { root: here, include: ['test/**/*.test.ts'], testTimeout: 60_000 },
+  // Integration tests mount the whole demo; with two runs sharing the machine (scripts/test-queue.sh)
+  // the largest (the chat and network examples, from-scratch engine checks) take over a minute.
+  // Speed is guarded by the cost tests' work counters, not by this limit.
+  test: { root: here, include: ['test/**/*.test.ts'], testTimeout: 180_000 },
 }))
