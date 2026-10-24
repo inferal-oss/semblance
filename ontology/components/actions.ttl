@@ -10,3 +10,100 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Actions components (DESIGN.md §3): Button variants, IconButton, ButtonGroup and Menu.
+# c:Button lives in button.ttl; it carries sty:tone / sty:emphasis / sty:size through the style
+# layer like every toned component here.
+
+c:toggles a owl:ObjectProperty ;
+    rdfs:comment """On a rendered element: the component whose boolean state activating it flips (a menu's
+trigger flips c:open, a switch's button flips c:checked). Reactions find it from the event's
+beh:node or any RDF/HTML ancestor of it (rdfhtml:hasChild*), so clicks elsewhere in the
+component do nothing."""@en .
+c:pressed a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "A toggle button's state (aria-pressed). Absent: the button is not a toggle."@en .
+c:open a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether a disclosing component (a menu) shows its content."@en .
+c:items a owl:ObjectProperty ; rdfs:range rdf:List ;
+    rdfs:comment "The ordered entries of a component (a menu's c:MenuItem instances)."@en .
+
+# --- IconButton ------------------------------------------------------------------------------------
+
+c:IconButton a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A square, icon-only button: the glyph is c:icon and the accessible name (aria-label, and
+its tooltip) is c:label. Toned (sty:tone, sty:emphasis; soft by default) and sized (sty:size).
+With c:pressed it is a toggle button (aria-pressed); what it does is a behaviour-layer binding."""@en ;
+    sem:slug "icon-button" .
+c:IconButtonRendering a sem:Rendering ; sem:targets c:IconButton ; sem:stratum 0 .
+c:IconButtonRendering-fn a sem:Rule ; sem:implements c:IconButtonRendering ; sem:function "actions:icon-button" .
+
+# --- ButtonGroup -----------------------------------------------------------------------------------
+
+c:ButtonGroup a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """An attached row of buttons (c:children): one outline, shared inner borders. A sty:size on
+the group sizes every button in it (the size's custom properties inherit). c:label names the
+group for assistive technology (role=group)."""@en ;
+    sem:slug "button-group" .
+c:ButtonGroupRendering a sem:Rendering ; sem:targets c:ButtonGroup ; sem:stratum 0 .
+c:ButtonGroupRendering-fn a sem:Rule ; sem:implements c:ButtonGroupRendering ; sem:function "actions:button-group" .
+
+# --- Menu ------------------------------------------------------------------------------------------
+
+c:Menu a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A menu button: a trigger (c:label, optional c:icon) that discloses c:items, a list of
+c:MenuItem. c:open holds whether the menu is shown; clicking the trigger flips it, and Escape
+closes it (the open trigger declares the keyboard layer's escape shortcut). Toned and sized
+like a button. Items are only built while the menu is open."""@en ;
+    sem:slug "menu" .
+c:MenuItem a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """An entry of a c:Menu: c:label, optional c:icon, optional sty:tone (e.g. sty:Danger for a
+destructive action), c:disabled. Choosing it closes its menu; anything else it does is its own
+beh:Reaction (per instance or per class), applied in the same delta."""@en ;
+    sem:slug "menu-item" .
+
+c:MenuRendering a sem:Rendering ; sem:targets c:Menu ; sem:stratum 0 .
+c:MenuRendering-fn a sem:Rule ; sem:implements c:MenuRendering ; sem:function "actions:menu" .
+c:MenuItemRendering a sem:Rendering ; sem:targets c:MenuItem ; sem:stratum 0 .
+c:MenuItemRendering-fn a sem:Rule ; sem:implements c:MenuItemRendering ; sem:function "actions:menu-item" .
+
+c:MenuToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Menu ;
+    beh:deletes """CONSTRUCT { $this c:open ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . $this c:open ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { $this c:open ?new } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:toggles $this . FILTER NOT EXISTS { $this c:disabled true } OPTIONAL { $this c:open ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "actions:menu-toggle" .
+
+c:MenuItemChoose a beh:Reaction ;
+    rdfs:comment "Choosing an item closes the menus it belongs to."@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:MenuItem ;
+    beh:deletes """CONSTRUCT { ?menu c:open ?old } WHERE { ?menu c:items/rdf:rest*/rdf:first $this ; c:open ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { ?menu c:open false } WHERE { ?menu c:items/rdf:rest*/rdf:first $this ; c:open true . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    sem:function "actions:menu-item-choose" .
+
+# --- Behaviour mixins ------------------------------------------------------------------------------
+# Classes without a rendering (and without a slug, so they add no style hook): an instance opts
+# into the behaviour by also having the class (`a c:IconButton, c:Pressable`). Being class-level
+# reactions they compose with the component's own (a c:MenuItem that is a c:Setter both closes
+# its menu and sets the value, in one delta).
+
+c:Pressable a owl:Class ;
+    rdfs:comment "Mixin: activating the component flips its c:pressed (a toggle button)."@en .
+c:PressableFlip a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Pressable ;
+    beh:deletes """CONSTRUCT { $this c:pressed ?old } WHERE { $this c:pressed ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { $this c:pressed ?new } WHERE { FILTER NOT EXISTS { $this c:disabled true } OPTIONAL { $this c:pressed ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "actions:press" .
+
+c:Setter a owl:Class ;
+    rdfs:comment """Mixin: activating the component sets c:property of the node it c:controls to its c:value
+(a menu item that records a choice, a button that switches a mode)."""@en .
+c:SetterAssign a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Setter ;
+    beh:deletes """CONSTRUCT { ?n ?p ?old } WHERE { $this c:controls ?n ; c:property ?p ; c:value ?v . ?n ?p ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { ?n ?p ?v } WHERE { $this c:controls ?n ; c:property ?p ; c:value ?v . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    sem:function "actions:assign" .

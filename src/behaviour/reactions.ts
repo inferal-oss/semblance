@@ -95,7 +95,19 @@ const chipsToggle: ReactionFn = (ctx) => {
   return existing.length ? { remove: existing, add: [] } : { remove: [], add: [f.quad(target, p, option)] }
 }
 
+/** c:Toggle: flip the boolean c:property of the node it c:controls. */
+const toggleFlip: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const target = ctx.object(ctx.target, C.controls)
+  const p = ctx.object(ctx.target, C.property)
+  if (!target || !p) return { add: [], remove: [] }
+  const current = ctx.match(target, p.value, null)
+  const on = current.some((q) => q.object.value === 'true')
+  return { remove: current, add: [f.quad(target, p, f.literal(String(!on), f.namedNode(XSD_BOOLEAN)))] }
+}
+
 export const reactions: Record<string, ReactionFn> = {
+  'toggle:flip': toggleFlip,
   'choice:select': choiceSelect,
   'chips:toggle': chipsToggle,
   'flippable:flip': flippableFlip,

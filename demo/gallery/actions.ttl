@@ -14,5 +14,138 @@
 # Gallery page: Actions.
 
 ui:gallery-actions a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-actions-intro ) .
+    c:children ( ui:gallery-actions-intro ui:act-buttons ui:act-button-states ui:act-icon-buttons ui:act-button-groups ui:act-menus ) .
 ui:gallery-actions-intro a c:Heading ; c:label "Actions" .
+# --- Button: tone x emphasis ---
+ui:act-b-solid-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Solid .
+ui:act-b-solid-accent a c:Button ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-b-solid-info a c:Button ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Solid .
+ui:act-b-solid-success a c:Button ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:act-b-solid-warning a c:Button ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Solid .
+ui:act-b-solid-danger a c:Button ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Solid .
+ui:act-b-row-solid a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-solid-neutral ui:act-b-solid-accent ui:act-b-solid-info ui:act-b-solid-success ui:act-b-solid-warning ui:act-b-solid-danger ) .
+ui:act-b-soft-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Soft .
+ui:act-b-soft-accent a c:Button ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:act-b-soft-info a c:Button ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:act-b-soft-success a c:Button ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Soft .
+ui:act-b-soft-warning a c:Button ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Soft .
+ui:act-b-soft-danger a c:Button ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:act-b-row-soft a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-soft-neutral ui:act-b-soft-accent ui:act-b-soft-info ui:act-b-soft-success ui:act-b-soft-warning ui:act-b-soft-danger ) .
+ui:act-b-outline-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Outline .
+ui:act-b-outline-accent a c:Button ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:act-b-outline-info a c:Button ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Outline .
+ui:act-b-outline-success a c:Button ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Outline .
+ui:act-b-outline-warning a c:Button ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:act-b-outline-danger a c:Button ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Outline .
+ui:act-b-row-outline a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-outline-neutral ui:act-b-outline-accent ui:act-b-outline-info ui:act-b-outline-success ui:act-b-outline-warning ui:act-b-outline-danger ) .
+ui:act-b-ghost-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Ghost .
+ui:act-b-ghost-accent a c:Button ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Ghost .
+ui:act-b-ghost-info a c:Button ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Ghost .
+ui:act-b-ghost-success a c:Button ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Ghost .
+ui:act-b-ghost-warning a c:Button ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Ghost .
+ui:act-b-ghost-danger a c:Button ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Ghost .
+ui:act-b-row-ghost a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-ghost-neutral ui:act-b-ghost-accent ui:act-b-ghost-info ui:act-b-ghost-success ui:act-b-ghost-warning ui:act-b-ghost-danger ) .
+ui:act-b-grid a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-b-row-solid ui:act-b-row-soft ui:act-b-row-outline ui:act-b-row-ghost ) .
+ui:act-buttons a c:Flippable ; c:front ui:act-buttons-spec .
+ui:act-buttons-spec a c:Specimen ; c:label "Button" ;
+    c:help "Six tones by four emphases (rows: solid, soft, outline, ghost) - 24 looks from ten theme rules. Tone and emphasis are object properties with style hooks, so the button rule knows nothing about them." ;
+    c:children ( ui:act-b-grid ) .
+
+# --- Button: sizes, intents and states ---
+ui:act-b-sm a c:Button ; c:label "Small" ; sty:size sty:Small ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-b-md a c:Button ; c:label "Medium" ; sty:size sty:Medium ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-b-lg a c:Button ; c:label "Large" ; sty:size sty:Large ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-b-sizes a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-sm ui:act-b-md ui:act-b-lg ) .
+ui:act-b-primary a c:Button ; c:label "Primary" ; sty:intent sty:Primary .
+ui:act-b-secondary a c:Button ; c:label "Secondary" ; sty:intent sty:Secondary .
+ui:act-b-plain a c:Button ; c:label "Default" .
+ui:act-b-intents a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-primary ui:act-b-plain ui:act-b-secondary ) .
+ui:act-b-disabled-solid a c:Button ; c:label "Disabled" ; c:disabled true ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-b-disabled-outline a c:Button ; c:label "Disabled" ; c:disabled true ; sty:emphasis sty:Outline .
+ui:act-b-disabled-plain a c:Button ; c:label "Disabled" ; c:disabled true .
+ui:act-b-disabled a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-disabled-solid ui:act-b-disabled-outline ui:act-b-disabled-plain ) .
+ui:act-b-states-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-b-sizes ui:act-b-intents ui:act-b-disabled ) .
+ui:act-button-states a c:Flippable ; c:front ui:act-button-states-spec .
+ui:act-button-states-spec a c:Specimen ; c:label "Button sizes and states" ;
+    c:help "sty:size sets the control height, padding, font and radius custom properties; sty:intent is the older shorthand (Primary = accent solid); c:disabled true renders a disabled button." ;
+    c:children ( ui:act-b-states-col ) .
+
+# --- IconButton ---
+ui:act-ib-default a c:IconButton ; c:icon "✎" ; c:label "Edit" .
+ui:act-ib-solid a c:IconButton ; c:icon "+" ; c:label "Add" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-ib-soft a c:IconButton ; c:icon "⧉" ; c:label "Duplicate" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:act-ib-outline a c:IconButton ; c:icon "⤓" ; c:label "Download" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:act-ib-ghost a c:IconButton ; c:icon "⋯" ; c:label "More" ; sty:tone sty:Accent ; sty:emphasis sty:Ghost .
+ui:act-ib-emphases a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:act-ib-default ui:act-ib-solid ui:act-ib-soft ui:act-ib-outline ui:act-ib-ghost ) .
+ui:act-ib-neutral a c:IconButton ; c:icon "⚙" ; c:label "Settings" ; sty:tone sty:Neutral ; sty:emphasis sty:Soft .
+ui:act-ib-info a c:IconButton ; c:icon "ℹ" ; c:label "About" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:act-ib-success a c:IconButton ; c:icon "✓" ; c:label "Approve" ; sty:tone sty:Success ; sty:emphasis sty:Soft .
+ui:act-ib-warning a c:IconButton ; c:icon "⚑" ; c:label "Flag" ; sty:tone sty:Warning ; sty:emphasis sty:Soft .
+ui:act-ib-danger a c:IconButton ; c:icon "✕" ; c:label "Delete" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:act-ib-danger-solid a c:IconButton ; c:icon "✕" ; c:label "Delete now" ; sty:tone sty:Danger ; sty:emphasis sty:Solid .
+ui:act-ib-tones a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:act-ib-neutral ui:act-ib-info ui:act-ib-success ui:act-ib-warning ui:act-ib-danger ui:act-ib-danger-solid ) .
+ui:act-ib-sm a c:IconButton ; c:icon "↺" ; c:label "Undo (small)" ; sty:size sty:Small .
+ui:act-ib-md a c:IconButton ; c:icon "↺" ; c:label "Undo (medium)" ; sty:size sty:Medium .
+ui:act-ib-lg a c:IconButton ; c:icon "↺" ; c:label "Undo (large)" ; sty:size sty:Large .
+ui:act-ib-star a c:IconButton, c:Pressable ; c:icon "★" ; c:label "Star" ; c:pressed false ; sty:tone sty:Warning .
+ui:act-ib-pin a c:IconButton, c:Pressable ; c:icon "⚲" ; c:label "Pin" ; c:pressed true .
+ui:act-ib-off a c:IconButton ; c:icon "⌫" ; c:label "Clear (disabled)" ; c:disabled true .
+ui:act-ib-states a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:act-ib-sm ui:act-ib-md ui:act-ib-lg ui:act-ib-star ui:act-ib-pin ui:act-ib-off ) .
+ui:act-ib-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-ib-emphases ui:act-ib-tones ui:act-ib-states ) .
+ui:act-icon-buttons a c:Flippable ; c:front ui:act-icon-buttons-spec .
+ui:act-icon-buttons-spec a c:Specimen ; c:label "Icon button" ;
+    c:help "Square and icon-only: c:icon is the glyph, c:label its accessible name and tooltip. Toned and sized like a button. The star and the pin are also c:Pressable, a behaviour mixin whose reaction flips c:pressed (aria-pressed); the graph holds the state." ;
+    c:children ( ui:act-ib-col ) .
+
+# --- ButtonGroup ---
+ui:act-bg-cut a c:Button ; c:label "Cut" .
+ui:act-bg-copy a c:Button ; c:label "Copy" .
+ui:act-bg-paste a c:Button ; c:label "Paste" .
+ui:act-bg-edit a c:ButtonGroup ; c:label "Clipboard" ; c:children ( ui:act-bg-cut ui:act-bg-copy ui:act-bg-paste ) .
+ui:act-bg-bold a c:IconButton, c:Pressable ; c:icon "B" ; c:label "Bold" ; c:pressed true .
+ui:act-bg-italic a c:IconButton, c:Pressable ; c:icon "I" ; c:label "Italic" ; c:pressed false .
+ui:act-bg-underline a c:IconButton, c:Pressable ; c:icon "U" ; c:label "Underline" ; c:pressed false .
+ui:act-bg-format a c:ButtonGroup ; c:label "Text style" ; c:children ( ui:act-bg-bold ui:act-bg-italic ui:act-bg-underline ) .
+ui:act-bg-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-bg-save-more a c:IconButton ; c:icon "▾" ; c:label "More save options" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:act-bg-split a c:ButtonGroup ; c:label "Save" ; c:children ( ui:act-bg-save ui:act-bg-save-more ) .
+ui:act-bg-prev a c:Button ; c:label "‹ Prev" .
+ui:act-bg-page a c:Button ; c:label "Page 2" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:act-bg-next a c:Button ; c:label "Next ›" .
+ui:act-bg-small a c:ButtonGroup ; c:label "Pages" ; sty:size sty:Small ; c:children ( ui:act-bg-prev ui:act-bg-page ui:act-bg-next ) .
+ui:act-bg-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:act-bg-edit ui:act-bg-format ui:act-bg-split ui:act-bg-small ) .
+ui:act-button-groups a c:Flippable ; c:front ui:act-button-groups-spec .
+ui:act-button-groups-spec a c:Specimen ; c:label "Button group" ;
+    c:help "An attached row of buttons (c:children) with shared inner borders and role=group. Icon buttons and toned buttons mix freely; a sty:size on the group sizes every button in it (the last group is small)." ;
+    c:children ( ui:act-bg-row ) .
+
+# --- Menu ---
+# The items are c:Setter too: choosing one writes its c:value into the badge's c:label
+# (c:controls / c:property), and the menu's own reaction closes it - one delta.
+ui:act-menu-log a c:Badge ; c:label "Nothing chosen yet" ; c:icon "•" ; sty:tone sty:Neutral .
+ui:act-mi-duplicate a c:MenuItem, c:Setter ; c:label "Duplicate" ; c:icon "⧉" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "Duplicated" .
+ui:act-mi-rename a c:MenuItem, c:Setter ; c:label "Rename…" ; c:icon "✎" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "Renamed" .
+ui:act-mi-archive a c:MenuItem, c:Setter ; c:label "Archive" ; c:icon "⤓" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "Archived" .
+ui:act-mi-locked a c:MenuItem ; c:label "Share (disabled)" ; c:icon "⇪" ; c:disabled true .
+ui:act-mi-delete a c:MenuItem, c:Setter ; c:label "Delete" ; c:icon "✕" ; sty:tone sty:Danger ; c:controls ui:act-menu-log ; c:property c:label ; c:value "Deleted" .
+ui:act-menu-actions a c:Menu ; c:label "Actions" ; c:open false ;
+    c:items ( ui:act-mi-duplicate ui:act-mi-rename ui:act-mi-archive ui:act-mi-locked ui:act-mi-delete ) .
+ui:act-mi-doc a c:MenuItem, c:Setter ; c:label "Document" ; c:icon "▤" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "New document" .
+ui:act-mi-folder a c:MenuItem, c:Setter ; c:label "Folder" ; c:icon "▣" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "New folder" .
+ui:act-mi-upload a c:MenuItem ; c:label "Upload" ; c:icon "⇡" .
+ui:act-menu-new a c:Menu ; c:label "New" ; c:icon "+" ; c:open false ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
+    c:items ( ui:act-mi-doc ui:act-mi-folder ui:act-mi-upload ) .
+ui:act-mi-name a c:MenuItem, c:Setter ; c:label "Name" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "Sorted by name" .
+ui:act-mi-date a c:MenuItem, c:Setter ; c:label "Date modified" ; c:controls ui:act-menu-log ; c:property c:label ; c:value "Sorted by date" .
+ui:act-menu-sort a c:Menu ; c:label "Sort" ; c:icon "⇅" ; c:open false ; sty:size sty:Small ; sty:emphasis sty:Outline ;
+    c:items ( ui:act-mi-name ui:act-mi-date ) .
+ui:act-mi-none a c:MenuItem ; c:label "Nothing" .
+ui:act-menu-off a c:Menu ; c:label "Disabled" ; c:disabled true ; c:items ( ui:act-mi-none ) .
+ui:act-menu-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-menu-actions ui:act-menu-new ui:act-menu-sort ui:act-menu-off ui:act-menu-log ) .
+ui:act-menus a c:Flippable ; c:front ui:act-menus-spec .
+ui:act-menus-spec a c:Specimen ; c:label "Menu" ;
+    c:help "A menu button: c:open is graph state that the trigger's reaction flips (Escape closes it too). Items are c:MenuItem instances, built only while the menu is open; choosing one closes the menu, and these are also c:Setter, so they write their c:value into the badge." ;
+    c:children ( ui:act-menu-row ) .

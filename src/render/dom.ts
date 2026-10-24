@@ -108,7 +108,7 @@ export class DomRenderer {
 
   /** Keep live form state in line with the graph (attributes only set defaults). */
   private reflect(el: Element, name: string, value: string | undefined) {
-    if (el.localName !== 'input') return
+    if (el.localName !== 'input' && el.localName !== 'textarea') return
     const input = el as HTMLInputElement
     if (name === 'checked') input.checked = value !== undefined
     else if (name === 'value' && input.value !== (value ?? '')) input.value = value ?? ''

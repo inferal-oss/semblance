@@ -9,4 +9,133 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# Inputs components (DESIGN.md §3): TextArea, Checkbox, RadioGroup, Switch, Slider and the Field wrapper.
+# Inputs components (DESIGN.md §3): TextArea, Checkbox, RadioGroup, ToggleSwitch, Slider and the
+# Field wrapper. TextField (textfield.ttl), Choice, Segmented and Chips (controls.ttl) complete
+# the group. Every input keeps its state in the graph - its own c:value / c:checked, or
+# c:property of the node it c:controls - and changes it only through the reactions below.
+
+c:rows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Visible lines of a multi-line text input."@en .
+c:checked a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Whether a boolean control is on."@en .
+c:min a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Lower bound of a numeric value."@en .
+c:step a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Granularity of a numeric value."@en .
+
+c:labelPart a owl:DatatypeProperty ;
+    rdfs:comment """On a component class: the local name of its rendered element that a label points to
+(`<label for>` the element minted <instance>/~<local>). A c:Field labels its content through it;
+content without one (a group of options) is labelled with aria-labelledby on its root."""@en .
+c:TextField c:labelPart "input" .
+c:Choice c:labelPart "select" .
+
+# --- TextArea --------------------------------------------------------------------------------------
+
+c:TextArea a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A multi-line text input: c:label, c:value, c:placeholder, c:help, c:error, c:rows (default 3),
+c:disabled. Typing sets c:value (and clears a stale c:error). Without a c:label it renders the
+input alone, to be labelled by a c:Field."""@en ;
+    sem:slug "text-area" ;
+    c:labelPart "input" .
+c:TextAreaRendering a sem:Rendering ; sem:targets c:TextArea ; sem:stratum 0 .
+c:TextAreaRendering-fn a sem:Rule ; sem:implements c:TextAreaRendering ; sem:function "inputs:text-area" .
+c:TextAreaInput a beh:Reaction ;
+    beh:when beh:Input ;
+    beh:sourceClass c:TextArea ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?value }""" ;
+    sem:function "inputs:text-area-input" .
+
+# --- Checkbox --------------------------------------------------------------------------------------
+
+c:Checkbox a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A labelled check box: c:label, c:checked, c:help, c:error, c:disabled. Changing it sets
+c:checked from the event's beh:checked. Its checked color is its sty:tone (accent by default)."""@en ;
+    sem:slug "checkbox" ;
+    c:labelPart "input" .
+c:CheckboxRendering a sem:Rendering ; sem:targets c:Checkbox ; sem:stratum 0 .
+c:CheckboxRendering-fn a sem:Rule ; sem:implements c:CheckboxRendering ; sem:function "inputs:checkbox" .
+c:CheckboxChange a beh:Reaction ;
+    beh:when beh:Change ;
+    beh:sourceClass c:Checkbox ;
+    beh:deletes """CONSTRUCT { $this c:checked ?old ; c:error ?error } WHERE { { $this c:checked ?old } UNION { $this c:error ?error } }""" ;
+    beh:inserts """CONSTRUCT { $this c:checked ?checked } WHERE { $event beh:checked ?checked }""" ;
+    sem:function "inputs:checkbox-change" .
+
+# --- RadioGroup ------------------------------------------------------------------------------------
+
+c:RadioGroup a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Sets one property (c:property) of one node (c:controls), like c:Segmented and c:Choice:
+the options are c:options, else the individuals in the property's rdfs:range (ordered by
+sem:order, labelled by rdfs:label, described by rdfs:comment). Native radio inputs, so arrow keys
+move the selection; each option element carries c:selects. c:label is a visible caption;
+pos:direction pos:Row lays the options out in a row."""@en ;
+    sem:slug "radio-group" .
+c:RadioGroupRendering a sem:Rendering ; sem:targets c:RadioGroup ; sem:stratum 0 .
+c:RadioGroupRendering-fn a sem:Rule ; sem:implements c:RadioGroupRendering ; sem:function "inputs:radio-group" .
+c:RadioGroupSelect a beh:Reaction ;
+    beh:when beh:Change ;
+    beh:sourceClass c:RadioGroup ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
+    sem:function "inputs:radio-group-select" .
+
+# --- ToggleSwitch ------------------------------------------------------------------------------------
+# (c:Switch, in views.ttl, is the case switcher the demo shell is built from.)
+
+c:ToggleSwitch a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """An on/off switch (role=switch): c:label, c:help, c:disabled. Its state is its own c:checked,
+or - like c:Toggle, whose design-system version it is - the boolean c:property of the node it
+c:controls. Clicking the switch flips that state. Its on color is its sty:tone (accent by
+default); sty:size scales it."""@en ;
+    sem:slug "toggle-switch" ;
+    c:labelPart "input" .
+c:ToggleSwitchRendering a sem:Rendering ; sem:targets c:ToggleSwitch ; sem:stratum 0 .
+c:ToggleSwitchRendering-fn a sem:Rule ; sem:implements c:ToggleSwitchRendering ; sem:function "inputs:toggle-switch" .
+c:ToggleSwitchFlip a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:ToggleSwitch ;
+    beh:deletes """CONSTRUCT { ?n ?p ?old } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  FILTER NOT EXISTS { $this c:disabled true }
+  OPTIONAL { $this c:controls ?c ; c:property ?cp }
+  BIND(COALESCE(?c, $this) AS ?n) BIND(COALESCE(?cp, c:checked) AS ?p)
+  ?n ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?n ?p ?new } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  FILTER NOT EXISTS { $this c:disabled true }
+  OPTIONAL { $this c:controls ?c ; c:property ?cp }
+  BIND(COALESCE(?c, $this) AS ?n) BIND(COALESCE(?cp, c:checked) AS ?p)
+  OPTIONAL { ?n ?p ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "inputs:toggle-switch-flip" .
+
+# --- Slider ------------------------------------------------------------------------------------------
+
+c:Slider a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A range input: c:label, c:value, c:min (0), c:max (100), c:step (1), c:unit, c:help,
+c:disabled. Dragging writes c:value (an xsd:decimal) per input event; the value is shown next to
+the label and paints the filled part of the track."""@en ;
+    sem:slug "slider" ;
+    c:labelPart "input" .
+c:SliderRendering a sem:Rendering ; sem:targets c:Slider ; sem:stratum 0 .
+c:SliderRendering-fn a sem:Rule ; sem:implements c:SliderRendering ; sem:function "inputs:slider" .
+c:SliderInput a beh:Reaction ;
+    beh:when beh:Input ;
+    beh:sourceClass c:Slider ;
+    beh:deletes """CONSTRUCT { $this c:value ?old } WHERE { $this c:value ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?v . BIND(STRDT(?v, xsd:decimal) AS ?value) }""" ;
+    sem:function "inputs:slider-input" .
+
+# --- Field -------------------------------------------------------------------------------------------
+
+c:Field a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Gives any control (c:content) a label (c:label), help text (c:help) and an error line
+(c:error, announced with role=alert). The label points at the content's c:labelPart element,
+or labels the content's root (aria-labelledby) when its class names none; help and error
+describe it (aria-describedby, aria-invalid) unless the content has its own."""@en ;
+    sem:slug "field" .
+c:FieldRendering a sem:Rendering ; sem:targets c:Field ; sem:stratum 0 .
+c:FieldRendering-fn a sem:Rule ; sem:implements c:FieldRendering ; sem:function "inputs:field" .

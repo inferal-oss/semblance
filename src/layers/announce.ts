@@ -1,0 +1,33 @@
+// The announcements layer (ontology/layers/announce.ttl): toasts from the change log.
+import type { FnRule } from '../engine/context.ts'
+import { ANN, BEH, C, RDF_TYPE, STY } from '../ns.ts'
+import { named, num, str, text } from '../components/util.ts'
+
+/** How far back the layer looks for announcing events, and how many it shows. */
+const WINDOW = 50
+
+const toasts: FnRule = (ctx, focus) => {
+  const stream = ctx.object(focus, ANN.from)
+  if (!named(stream)) return []
+  const limit = num(ctx, focus, C.limit, 3)
+  const o = ctx.out(focus)
+  const found: { seq: number; text: string; tone?: string }[] = []
+  let m = ctx.object(stream, BEH.latest)
+  for (let seen = 0; named(m) && seen < WINDOW && found.length < limit; seen++, m = ctx.object(m, BEH.previous)) {
+    for (const reaction of ctx.objects(m, BEH.handledBy)) {
+      const said = text(ctx, reaction, ANN.announces)
+      if (said === undefined) continue
+      found.push({ seq: Number(str(ctx.object(m, BEH.sequence)) ?? 0), text: said, tone: ctx.object(reaction, ANN.tone)?.value })
+      break
+    }
+  }
+  for (const a of found) {
+    // Keys sort chronologically, and the region orders hosted toasts by IRI.
+    const toast = o.node('ann-' + String(a.seq).padStart(10, '0'))
+    o.t(toast, RDF_TYPE, ctx.nn(C.Toast)).t(toast, C.label, a.text).t(focus, C.hosts, toast)
+    if (a.tone) o.t(toast, STY.tone, ctx.nn(a.tone))
+  }
+  return o.quads
+}
+
+export const announceFunctions: Record<string, FnRule> = { 'announce:toasts': toasts }

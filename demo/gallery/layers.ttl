@@ -10,6 +10,7 @@
 @prefix mot: <https://semblance.dev/ns/motion#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -55,6 +56,7 @@ ui:l-keyboard a c:Flippable ; c:front ui:l-keyboard-spec .
 ui:l-keyboard-spec a c:Specimen ; c:label "Keyboard" , "Клавіатура"@uk , "Tastatur"@de , "لوحة المفاتيح"@ar ;
     c:help "key:shortcut on any component: the keyboard layer adds aria-keyshortcuts and the hint, and the key press activates the component, so its ordinary click reactions run and the change log records the event. The list on the right is a SPARQL view of every shortcut in the graph." ;
     c:children ( ui:counterRow ui:shortcuts ) .
+# The counter's reactions also announce themselves (ann:announces): watch the corner.
 ui:counterRow a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
     c:children ( ui:increment ui:resetCounter ui:counter ) .
 ui:increment a c:Button ; c:label "Increment" , "Збільшити"@uk , "Erhöhen"@de , "زيادة"@ar ;
@@ -66,8 +68,10 @@ ui:shortcuts a c:ShortcutList .
 ui:galleryNav key:shortcut "mod+shift+g" .
 
 ui:Increment a beh:Reaction ; beh:when beh:Click ; beh:source ui:increment ;
+    ann:announces "Counter incremented" , "Лічильник збільшено"@uk , "Zähler erhöht"@de , "تمت زيادة العداد"@ar ; ann:tone sty:Accent ;
     beh:deletes """CONSTRUCT { ui:counter c:label ?old } WHERE { ui:counter c:label ?old }""" ;
     beh:inserts """CONSTRUCT { ui:counter c:label ?new } WHERE { ui:counter c:label ?old BIND(STR(xsd:integer(?old) + 1) AS ?new) }""" .
+ui:ResetCounter ann:announces "Counter reset" , "Лічильник скинуто"@uk , "Zähler zurückgesetzt"@de , "تمت إعادة ضبط العداد"@ar .
 ui:ResetCounter a beh:Reaction ; beh:when beh:Click ; beh:source ui:resetCounter ;
     beh:deletes """CONSTRUCT { ui:counter c:label ?old } WHERE { ui:counter c:label ?old }""" ;
     beh:inserts """CONSTRUCT { ui:counter c:label "0" } WHERE { }""" .

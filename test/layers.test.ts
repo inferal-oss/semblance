@@ -62,6 +62,11 @@ describe('keyboard layer', () => {
     expect(counter()).toBe('2')
     press('I', { ctrlKey: true, shiftKey: true })
     expect(counter()).toBe('0')
+    // Announcing reactions become toasts in the shell's region, newest last.
+    const region = h.byId(`${UI}announcements/~root`)
+    const toasts = [...region.querySelectorAll('[data-sem-c=toast]')].map((t) => t.textContent)
+    expect(toasts.filter((t) => t!.includes('Counter'))).toHaveLength(3)
+    expect(toasts.at(-1)).toContain('Counter reset')
     // The list is a view of every key:shortcut in the graph.
     expect(h.$('[data-sem-c=shortcut-list]').textContent).toContain('Increment')
   })

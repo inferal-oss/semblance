@@ -3,7 +3,7 @@ import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { loadStore } from '../src/node/load.ts'
-import { A11Y, KEY, MOD, SEM, ST, STY, VAL } from '../src/ns.ts'
+import { A11Y, ANN, KEY, MOD, SEM, ST, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 
@@ -17,7 +17,7 @@ export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxig
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const store = loadStore(kind, todoApp(todos), appGraph, ...gallery)
   const runtime = new Runtime(store)
-  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, KEY.Layer, ST.Layer]
+  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, KEY.Layer, ST.Layer, ANN.Layer]
   const screen = runtime.project({ modality: MOD.Screen, layers, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
     throw e
   })

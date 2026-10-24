@@ -102,6 +102,12 @@ describe('the demo shell is a component graph', () => {
         domOps: shell.ops - ops,
       }
     }
+    // Past every window that looks back over the log (announcements read the 50 newest).
+    const field = document.querySelector('[data-sem-c=text-field] input') as HTMLInputElement
+    for (let i = 0; i < 60; i++) {
+      field.value = 'w'.repeat((i % 5) + 1)
+      fire(field, 'input')
+    }
     toggle()
     const before = toggle()
     // Grow everything a toggle should not depend on: the list, and the event history.

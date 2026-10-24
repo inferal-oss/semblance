@@ -5,6 +5,7 @@
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix st: <https://semblance.dev/ns/status#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix a11y: <https://semblance.dev/ns/a11y#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -63,3 +64,4 @@ sem:DebugLayer rdfs:label "налагодження"@uk , "Debug"@de , "التص
 val:Layer rdfs:label "валідація"@uk , "Validierung"@de , "التحقق"@ar .
 key:Layer rdfs:label "клавіатура"@uk , "Tastatur"@de , "لوحة المفاتيح"@ar .
 st:Layer rdfs:label "статус"@uk , "Status"@de , "الحالة"@ar .
+ann:Layer rdfs:label "оголошення"@uk , "Ankündigungen"@de , "الإعلانات"@ar .

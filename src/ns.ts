@@ -204,6 +204,7 @@ export const C = {
   placeholder: c + 'placeholder',
   help: c + 'help',
   icon: c + 'icon',
+  Toast: c + 'Toast',
   prefix: c + 'prefix',
   error: c + 'error',
   disabled: c + 'disabled',

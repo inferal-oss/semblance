@@ -14,5 +14,136 @@
 # Gallery page: Inputs.
 
 ui:gallery-inputs a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-inputs-intro ) .
+    c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-checkboxes ui:inp-radios ui:inp-switches
+                 ui:inp-sliders ui:inp-fields ui:inp-selection ) .
 ui:gallery-inputs-intro a c:Heading ; c:label "Inputs" .
+
+# --- The node the shared controls edit ------------------------------------------------------------
+# Controls that edit "a property of a node" (c:controls / c:property) all point here, so one
+# triple shows up in several controls at once.
+
+ui:inputsDemo ui:inp-plan ui:inp-plan-pro ; ui:inp-notify true ; ui:inp-topic ui:inp-topic-rdf .
+
+ui:inp-plan a rdf:Property ; rdfs:label "Plan" ; rdfs:range ui:InpPlan .
+ui:InpPlan a owl:Class .
+ui:inp-plan-free a ui:InpPlan ; rdfs:label "Free" ; sem:order 1 ; rdfs:comment "One project, community support." .
+ui:inp-plan-pro a ui:InpPlan ; rdfs:label "Pro" ; sem:order 2 ; rdfs:comment "Unlimited projects and history." .
+ui:inp-plan-team a ui:InpPlan ; rdfs:label "Team" ; sem:order 3 ; rdfs:comment "Shared workspaces and roles." .
+
+ui:inp-notify a rdf:Property ; rdfs:label "Email notifications" ; rdfs:range xsd:boolean .
+
+ui:inp-topic a rdf:Property ; rdfs:label "Topics" ; rdfs:range ui:InpTopic .
+ui:InpTopic a owl:Class .
+ui:inp-topic-rdf a ui:InpTopic ; rdfs:label "RDF" ; sem:order 1 .
+ui:inp-topic-sparql a ui:InpTopic ; rdfs:label "SPARQL" ; sem:order 2 .
+ui:inp-topic-shacl a ui:InpTopic ; rdfs:label "SHACL" ; sem:order 3 .
+ui:inp-topic-ui a ui:InpTopic ; rdfs:label "Interfaces" ; sem:order 4 .
+
+# --- Text: TextField and TextArea -------------------------------------------------------------------
+
+ui:inp-tf-name a c:TextField ; c:label "Name" ; c:placeholder "Ada Lovelace" .
+ui:inp-ta-about a c:TextArea ; c:label "Description" ; c:rows 3 ;
+    c:placeholder "What is this project about?" ; c:help "Plain text. Every keystroke sets c:value on this instance." .
+ui:inp-ta-error a c:TextArea ; c:label "Release notes" ; c:rows 2 ; c:value "tbd" ;
+    c:error "Release notes need at least one full sentence." .
+ui:inp-ta-off a c:TextArea ; c:label "Archived note" ; c:rows 2 ; c:disabled true ; c:value "This note is read-only." .
+ui:inp-ta-sm a c:TextArea ; c:label "Small" ; c:rows 1 ; sty:size sty:Small ; c:placeholder "A small, single-row text area" .
+ui:inp-text-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:inp-tf-name ui:inp-ta-about ui:inp-ta-error ui:inp-ta-off ui:inp-ta-sm ) .
+ui:inp-text a c:Flippable ; c:front ui:inp-text-spec .
+ui:inp-text-spec a c:Specimen ; c:label "Text field and text area" ;
+    c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value." ;
+    c:children ( ui:inp-text-col ) .
+
+# --- Checkbox ---------------------------------------------------------------------------------------
+
+ui:inp-cb-updates a c:Checkbox ; c:label "Email me about product updates" ; c:checked true ;
+    c:help "At most one email a month." .
+ui:inp-cb-usage a c:Checkbox ; c:label "Share anonymous usage data" ; c:checked false .
+ui:inp-cb-success a c:Checkbox ; c:label "Run checks before publishing" ; c:checked true ; sty:tone sty:Success .
+ui:inp-cb-terms a c:Checkbox ; c:label "I accept the terms" ; c:checked false ; c:error "You need to accept the terms to continue." .
+ui:inp-cb-off a c:Checkbox ; c:label "Required cookies (always on)" ; c:checked true ; c:disabled true .
+ui:inp-cb-sm a c:Checkbox ; c:label "Small" ; c:checked true ; sty:size sty:Small .
+ui:inp-cb-lg a c:Checkbox ; c:label "Large" ; c:checked false ; sty:size sty:Large .
+ui:inp-cb-sizes a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ; c:children ( ui:inp-cb-sm ui:inp-cb-lg ) .
+ui:inp-cb-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:inp-cb-updates ui:inp-cb-usage ui:inp-cb-success ui:inp-cb-terms ui:inp-cb-off ui:inp-cb-sizes ) .
+ui:inp-checkboxes a c:Flippable ; c:front ui:inp-checkboxes-spec .
+ui:inp-checkboxes-spec a c:Specimen ; c:label "Checkbox" ;
+    c:help "A labelled check box whose state is c:checked on the instance; the change event carries beh:checked and the reaction writes it back. The checked color is the sty:tone (accent by default)." ;
+    c:children ( ui:inp-cb-col ) .
+
+# --- RadioGroup (and the other editors of the same triple) ------------------------------------------
+
+ui:inp-rg-plan a c:RadioGroup ; c:label "Plan" ; c:controls ui:inputsDemo ; c:property ui:inp-plan ;
+    c:help "Options are the individuals of the property's rdfs:range." .
+ui:inp-rg-row a c:RadioGroup ; c:controls ui:inputsDemo ; c:property ui:inp-plan ; pos:direction pos:Row ; sty:size sty:Small .
+ui:inp-rg-seg a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:inp-rg-choice a c:Choice ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:inp-rg-others a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inp-rg-seg ui:inp-rg-choice ) .
+ui:inp-rg-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-rg-plan ui:inp-rg-row ui:inp-rg-others ) .
+ui:inp-radios a c:Flippable ; c:front ui:inp-radios-spec .
+ui:inp-radios-spec a c:Specimen ; c:label "Radio group" ;
+    c:help "Edits c:property of c:controls, like c:Segmented and c:Choice: here all four edit the same triple (ui:inputsDemo ui:inp-plan), so choosing in one updates the others. pos:direction pos:Row lays the options out in a row; rdfs:comment describes each option." ;
+    c:children ( ui:inp-rg-col ) .
+
+# --- ToggleSwitch -----------------------------------------------------------------------------------
+
+ui:inp-sw-wifi a c:ToggleSwitch ; c:label "Wi-Fi" ; c:checked true .
+ui:inp-sw-notify a c:ToggleSwitch ; c:controls ui:inputsDemo ; c:property ui:inp-notify ;
+    c:help "Edits ui:inp-notify of ui:inputsDemo, like the c:Toggle next to it." .
+ui:inp-sw-toggle a c:Toggle ; c:controls ui:inputsDemo ; c:property ui:inp-notify ; c:label "Notifications (c:Toggle)" .
+ui:inp-sw-success a c:ToggleSwitch ; c:label "Auto-deploy" ; c:checked true ; sty:tone sty:Success .
+ui:inp-sw-danger a c:ToggleSwitch ; c:label "Maintenance mode" ; c:checked false ; sty:tone sty:Danger .
+ui:inp-sw-off a c:ToggleSwitch ; c:label "Locked setting" ; c:checked true ; c:disabled true .
+ui:inp-sw-sm a c:ToggleSwitch ; c:label "Small" ; c:checked true ; sty:size sty:Small .
+ui:inp-sw-lg a c:ToggleSwitch ; c:label "Large" ; c:checked true ; sty:size sty:Large .
+ui:inp-sw-shared a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:inp-sw-notify ui:inp-sw-toggle ) .
+ui:inp-sw-tones a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ; c:children ( ui:inp-sw-wifi ui:inp-sw-success ui:inp-sw-danger ui:inp-sw-off ) .
+ui:inp-sw-sizes a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ; c:children ( ui:inp-sw-sm ui:inp-sw-lg ) .
+ui:inp-sw-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-sw-shared ui:inp-sw-tones ui:inp-sw-sizes ) .
+ui:inp-switches a c:Flippable ; c:front ui:inp-switches-spec .
+ui:inp-switches-spec a c:Specimen ; c:label "Switch" ;
+    c:help "c:ToggleSwitch (role=switch, aria-checked): its own c:checked, or a boolean property of another node - the design-system version of c:Toggle, which edits the same triple here. Colored by sty:tone, scaled by sty:size." ;
+    c:children ( ui:inp-sw-col ) .
+
+# --- Slider -----------------------------------------------------------------------------------------
+
+ui:inp-sl-volume a c:Slider ; c:label "Volume" ; c:value 40 ; c:unit "%" .
+ui:inp-sl-opacity a c:Slider ; c:label "Opacity" ; c:min 0 ; c:max 1 ; c:step 0.05 ; c:value 0.8 ;
+    c:help "From 0 to 1 in steps of 0.05." .
+ui:inp-sl-temp a c:Slider ; c:label "Temperature" ; c:min 16 ; c:max 28 ; c:step 0.5 ; c:value 21.5 ; c:unit "°C" ; sty:tone sty:Warning .
+ui:inp-sl-sm a c:Slider ; c:label "Small" ; c:value 70 ; sty:size sty:Small ; sty:tone sty:Success .
+ui:inp-sl-off a c:Slider ; c:label "Disabled" ; c:value 25 ; c:disabled true .
+ui:inp-sl-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:inp-sl-volume ui:inp-sl-opacity ui:inp-sl-temp ui:inp-sl-sm ui:inp-sl-off ) .
+ui:inp-sliders a c:Flippable ; c:front ui:inp-sliders-spec .
+ui:inp-sliders-spec a c:Specimen ; c:label "Slider" ;
+    c:help "A range input over c:min, c:max and c:step. Each input event writes c:value (xsd:decimal); the rule shows it beside the label and paints the filled track from it." ;
+    c:children ( ui:inp-sl-col ) .
+
+# --- Field ------------------------------------------------------------------------------------------
+
+ui:inp-f-bio-input a c:TextArea ; c:rows 2 ; c:placeholder "A line or two about you" .
+ui:inp-f-bio a c:Field ; c:label "Bio" ; c:content ui:inp-f-bio-input ; c:help "Shown on your profile." .
+ui:inp-f-level-input a c:Slider ; c:value 60 ; c:unit "%" .
+ui:inp-f-level a c:Field ; c:label "Brightness" ; c:content ui:inp-f-level-input .
+ui:inp-f-plan-input a c:RadioGroup ; c:controls ui:inputsDemo ; c:property ui:inp-plan ; pos:direction pos:Row ; sty:size sty:Small .
+ui:inp-f-plan a c:Field ; c:label "Billing plan" ; c:content ui:inp-f-plan-input ; c:help "A group of options is labelled with aria-labelledby." .
+ui:inp-f-terms-input a c:Checkbox ; c:label "I have read the data policy" ; c:checked false .
+ui:inp-f-terms a c:Field ; c:label "Consent" ; c:content ui:inp-f-terms-input ; c:error "Consent is required before you continue." .
+ui:inp-f-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-f-bio ui:inp-f-level ui:inp-f-plan ui:inp-f-terms ) .
+ui:inp-fields a c:Flippable ; c:front ui:inp-fields-spec .
+ui:inp-fields-spec a c:Specimen ; c:label "Field" ;
+    c:help "Gives any control (c:content) a label, help and an error line. The label points at the element the control's class names as its c:labelPart (label for); help and error describe it (aria-describedby, aria-invalid)." ;
+    c:children ( ui:inp-f-col ) .
+
+# --- Selection: Choice and Chips --------------------------------------------------------------------
+
+ui:inp-sel-choice a c:Choice ; c:label "Plan" ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:inp-sel-chips a c:Chips ; c:controls ui:inputsDemo ; c:property ui:inp-topic .
+ui:inp-sel-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-sel-choice ui:inp-sel-chips ) .
+ui:inp-selection a c:Flippable ; c:front ui:inp-selection-spec .
+ui:inp-selection-spec a c:Specimen ; c:label "Select and chips" ;
+    c:help "c:Choice is a native select for a single-valued property; c:Chips toggle the values of a multi-valued one (ui:inp-topic). Both draw their options from the property's rdfs:range." ;
+    c:children ( ui:inp-sel-col ) .

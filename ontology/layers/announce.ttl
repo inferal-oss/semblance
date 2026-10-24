@@ -1,0 +1,32 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Announcements layer. A reaction may say what it means to the person who
+# triggered it (ann:announces "Todo added", optionally ann:tone). A
+# c:ToastRegion that reads a change log (ann:from beh:ChangeLog) shows the
+# most recent announcing events as c:Toast instances, newest last: the layer
+# walks the log from its head (beh:latest / beh:previous), so its cost is the
+# window, not the history. Toasts are minted before components render
+# (stratum -5) and hosted by the region (c:hosts); dismissing one closes it.
+
+<https://semblance.dev/ns/announce> a owl:Ontology ;
+    rdfs:label "Semblance announcements layer"@en .
+
+ann:Layer a sem:Layer ; rdfs:label "announcements"@en .
+
+ann:announces a owl:DatatypeProperty ; rdfs:domain beh:Reaction ;
+    rdfs:comment "What the reaction's effect means, told to the person (language-tagged literals translate it)."@en .
+ann:tone a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range sty:Tone .
+ann:from a owl:ObjectProperty ; rdfs:domain c:ToastRegion ; rdfs:comment "The change log whose announcing events the region shows."@en .
+
+ann:Toasts a sem:Rendering ;
+    sem:targets c:ToastRegion ;
+    sem:layer ann:Layer ;
+    sem:stratum -5 ;
+    sem:inputOnly true .
+ann:Toasts-fn a sem:Rule ; sem:implements ann:Toasts ; sem:function "announce:toasts" .

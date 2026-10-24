@@ -17,6 +17,7 @@
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix st: <https://semblance.dev/ns/status#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
 
 # =================================================================================================
 # The demo's entire interface as a component graph. The host page is a mount
@@ -27,7 +28,7 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, key:Layer, st:Layer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, key:Layer, st:Layer, ann:Layer ;
     l10n:language l10n:English ;
     ui:store ui:Hybrid ;
     ui:rules ui:PreferSparql ;
@@ -75,7 +76,13 @@ ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:desktop ) ;
     mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable .
 
 # Detached views live here, outside the pages, so they survive page changes.
-ui:desktop a c:Desktop .
+ui:desktop a c:Desktop ; c:hosts ui:announcements .
+
+# Announcing reactions (ann:announces) show up here as toasts, from the change log.
+ui:announcements a c:ToastRegion ; ann:from beh:ChangeLog ; c:limit 3 .
+ex:AddTodo ann:announces "Todo added" , "Завдання додано"@uk , "Aufgabe hinzugefügt"@de , "تمت إضافة المهمة"@ar ; ann:tone sty:Success .
+ui:RunMatrix ann:announces "Benchmark started" , "Бенчмарк запущено"@uk , "Benchmark gestartet"@de , "بدأ القياس"@ar ; ann:tone sty:Info .
+ui:ClearMatrix ann:announces "Results cleared" , "Результати очищено"@uk , "Ergebnisse gelöscht"@de , "تم مسح النتائج"@ar .
 
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
@@ -103,7 +110,7 @@ ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
-    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer key:Layer st:Layer ) .
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer key:Layer st:Layer ann:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
 
 ui:workspace a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
