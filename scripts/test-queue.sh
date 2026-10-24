@@ -19,8 +19,9 @@ SLOTS="${SEMBLANCE_SLOTS:-2}"
 mkdir -p "$Q"
 TICKET="$(python3 -c 'import time; print(time.time_ns())')-$$"
 touch "$Q/$TICKET"
-trap 'rm -f "$Q/$TICKET"' EXIT
-trap 'rm -f "$Q/$TICKET"; exit 130' INT TERM HUP
+STARTED="${TMPDIR:-/tmp}/semblance-vitest.started-$TICKET"
+trap 'rm -f "$Q/$TICKET" "$STARTED"' EXIT
+trap 'rm -f "$Q/$TICKET" "$STARTED"; exit 130' INT TERM HUP
 
 announced=""
 while :; do
@@ -35,10 +36,12 @@ while :; do
     while [ "$i" -le "$SLOTS" ]; do
       lock="$LOCK"
       [ "$i" -gt 1 ] && lock="$LOCK.$i"
-      # -t 0: take the slot only if it is free; 75 (EX_TEMPFAIL) means it is not.
-      lockf -t 0 "$lock" "$@"
+      # -t 0: take the slot only if it is free. lockf exits 75 (EX_TEMPFAIL) when it is not; the
+      # marker tells that apart from a command that itself exits 75.
+      rm -f "$STARTED"
+      lockf -s -t 0 "$lock" sh -c ': > "$0"; exec "$@"' "$STARTED" "$@"
       status=$?
-      [ "$status" -ne 75 ] && exit "$status"
+      if [ "$status" -ne 75 ] || [ -e "$STARTED" ]; then rm -f "$STARTED"; exit "$status"; fi
       i=$((i + 1))
     done
   elif [ -z "$announced" ]; then
