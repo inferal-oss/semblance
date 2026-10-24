@@ -2559,7 +2559,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-bottom" ; sty:raw "2px solid var(--ink)" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
-                 [ sty:property "padding" ; sty:raw "0 4px" ] ,
+                 [ sty:property "padding" ; sty:raw "5px 4px 0" ] ,
                  [ sty:property "gap" ; sty:raw "4px" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
     sty:part "[data-sem-c=tabs] [role=tab]:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
