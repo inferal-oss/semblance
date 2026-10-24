@@ -113,11 +113,14 @@
 [] a sty:StyleRule ; sty:appliesTo c:DescriptionList ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(7rem, max-content) minmax(0, 1fr)" ] ,
-                 [ sty:property "flex" ; sty:raw "1 1 320px" ] ,
-                 [ sty:property "align-self" ; sty:raw "start" ] ,
                  [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "font-size" ; sty:token tok:text-sm ] .
+# Beside other things in a row it takes a share of at least 320px; in a column, the column's width
+# (a flex basis there would be a height).
+[] a sty:StyleRule ; sty:appliesTo c:DescriptionList ; sty:state ":where([data-sem-direction=row] > *)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 320px" ] ,
+                 [ sty:property "align-self" ; sty:raw "start" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DescriptionList ; sty:part "> .sem-pair" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
