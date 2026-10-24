@@ -1,9 +1,50 @@
 # Views over changes: incremental view maintenance for Semblance
 
-Status: **design**, not implemented. Covers what a maintained view is, how it
-is declared and inspected, how it relates to the rule engine, the operator set
-and each operator's incremental form, time and windows, correctness, cost, and
-a phased plan. Decisions that are yours are collected at the end.
+Status: **phases 0 and 1 landed** (October 2026); phases 2-6 pending. Below the status, the
+document is the design: what a maintained view is, how it is declared and inspected, how it
+relates to the rule engine, the operator set and each operator's incremental form, time and
+windows, correctness, cost, and the phased plan. The decisions taken are at the end; what was
+built, and where it differs from the design, is §20.
+
+## Status
+
+### Landed
+
+| what | where | commits |
+|---|---|---|
+| **Phase 0, groundwork.** Z-sets and term interning; one tick per `apply`, `Runtime.transaction(fn)` for several changes as one consolidated tick; `Runtime.advance()` (a tick time alone causes); a reaction's delta and its change-log append are one transaction; strict mode, comparing every view with Oxigraph from scratch after every tick. | `src/view/zset.ts`, `terms.ts`, `src/runtime.ts`, `src/behaviour/events.ts` | e32a8bf |
+| **Phase 1, aggregates over streams.** A recognizer (behind `ViewCompiler`) for aggregates over LDES members (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `DISTINCT`, as SELECT or CONSTRUCT); member partitions cached until the member retires or changes; incremental `GROUP BY`; a sink writing to `urn:semblance:views`, an input graph of every projection; function views as twins; anything else falls back to recompute with its reason (`iv:fallback`). | `src/view/recognize.ts`, `runtime.ts`, `aggregate.ts`, `functions.ts`, `ontology/layers/view.ttl` | e32a8bf |
+| **What uses it.** The Activity tool (`c:StreamStats`) and count badges (`c:CountBadge`) read maintained views instead of aggregating the change log: a todo toggle with Activity shown costs the same at a log bound of 200 or 2,000 (1.0 ms with function rules, 4-6 ms with SPARQL rules; before, 8.3 / 52.4 ms and 10.9 / 284.6 ms). `test/view-cost.test.ts` requires equal work counters at both bounds. | `ontology/components/stream-stats.ttl`, `toolbar.ttl` | e32a8bf |
+| **Sliding windows** (ahead of phase 4, because the example needs one): `iv:SlidingWindow` with `iv:range` and `iv:timeBy`, one timer for the next expiry, on an injectable clock shared with the event bus. | `src/view/runtime.ts` | e32a8bf |
+| **Demand.** `iv:whileShown` (a component or a class): a hidden view does nothing per tick and is rebuilt when shown. | `src/runtime.ts` (`views.shown`) | e32a8bf |
+| **Observability.** Each view's plan as data (`iv:operator`, `iv:kind`, `iv:algebra`), with PROV-O; figures (`iv:stateRows`, `iv:lastRows`, `iv:lastMs`, …) for `iv:measured` views; a per-tick log of each view (`iv:deltaLog`, members `iv:Delta`: what came in, which groups changed, rows of work); a correctness check against a from-scratch run (`iv:matches`, `iv:resultRows`, `iv:checkedTick`); view rows in the status bar. | `src/view/runtime.ts`, `ontology/layers/view.ttl` | e32a8bf, a050a46 |
+| **The "Maintained views" example**: a dashboard of three measured views (two windowed), with each step, a ✓ check per view, work against a re-run's work, the window draining on the clock, and stream / one-event / keep-50 controls. | `demo/gallery/_ex-views.ttl`, `test/ex-views.test.ts` | d59e856, a050a46 |
+
+Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
+query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
+dependencies, the workbench "Live switch" of phase 4 without a circuit.
+
+### In progress
+
+- **The example's walkthrough** ("How it works" beside a diagram, like the other examples).
+- **SPARQL for every rendering** (outside IVM, but related to phase 3): engine support for
+  member-wise SPARQL rules and other building blocks, so no rendering is function-only.
+
+### Pending
+
+| phase | what | replaces or enables |
+|---|---|---|
+| 2: joins, negation, order | delta queries over the store's indexes (joins outside the member, so labels and filters can live in views); `DISTINCT`, `UNION`, `OPTIONAL`, `EXISTS` / `NOT EXISTS` / `MINUS` with magic sets; `VALUES`; top-k with order keys (tuple keys in `compareKeys`); parameters; the rdf-engine parser in place of the recognizer | the data grid's window (`c:DataGridWindow`), chart and table SELECTs, judgements, `c:ToastRegion` |
+| 3: views and rules together | view graphs as projection inputs (done for the views graph); exact dependencies for SPARQL rules from their algebra, replacing `sem:follows`; `iv:strategy iv:Incremental` for rules; persistence policies as views | a count row changing alone re-runs nothing it does not feed |
+| 4: time | tumbling and count windows; event time and watermarks for `net:Capture`; delta logs for replication, "since" and undo; the workbench's Plan tab | constant cost per event and per expiry everywhere |
+| 5: the rest of SPARQL | `LATERAL`, correlated subqueries, anchored paths, `GROUP_CONCAT`, `SAMPLE`, the remaining expressions; incremental W3C conformance | `c:StreamStats`'s full rule and the grid rule as views |
+| 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
+
+Known gaps in what landed (§20): the recognizer does not prove a member-local part reads only the
+member (the oracle checks it in tests); SPARQL views still evaluate member-local parts and changed
+groups with a few store queries per tick; rules find view output through `sem:follows`; `HAVING`,
+`ORDER BY … LIMIT` and joins outside the member fall back to recompute; `MIN` / `MAX` keep a
+sorted array, not a tree.
 
 ## 1. Summary
 

@@ -21,14 +21,15 @@ ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 
 ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 8 ; ui:key "styling" .
 ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 9 ; ui:key "persistence" .
 ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 10 ; ui:key "navigation" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 11 ; ui:key "tools" .
-ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 12 ; ui:key "performance" .
+ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" ; sem:order 11 ; ui:key "views" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 12 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 13 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsNav ui:docPages ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-components ui:dcs-integrate ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-components ui:dcs-integrate ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-views ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
 ui:dcs-components c:when ui:DocComponents ; c:content ui:doc-components .
@@ -39,6 +40,7 @@ ui:dcs-behaviour c:when ui:DocBehaviour ; c:content ui:doc-behaviour .
 ui:dcs-styling c:when ui:DocStyling ; c:content ui:doc-styling .
 ui:dcs-persistence c:when ui:DocPersistence ; c:content ui:doc-persistence .
 ui:dcs-navigation c:when ui:DocNavigation ; c:content ui:doc-navigation .
+ui:dcs-views c:when ui:DocViews ; c:content ui:doc-views .
 ui:dcs-tools c:when ui:DocTools ; c:content ui:doc-tools .
 ui:dcs-performance c:when ui:DocPerformance ; c:content ui:doc-performance .
 
@@ -253,6 +255,39 @@ ui:doc-na-4 a c:Text ; c:children ( "Try it: " ui:doc-na-to-codes " (another pag
 ui:doc-na-to-codes a c:Link ; c:label "the code input" ; c:to ui:inp-codes-spec .
 ui:doc-na-to-workbench a c:Link ; c:label "the SPARQL workbench" ; c:to ui:workbench .
 ui:doc-na-5 a c:Text ; c:label "The Engine tab of the tools shows where we are: the address, and each dimension with its value, how the address spells it, and where it is carried." .
+
+# --- Maintained views ---
+ui:doc-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-iv-h ui:doc-iv-1 ui:doc-iv-code ui:doc-iv-2 ui:doc-iv-h2 ui:doc-iv-landed ui:doc-iv-h3 ui:doc-iv-pending ui:doc-iv-3 ) .
+ui:doc-iv-h a c:Heading ; c:level 1 ; c:label "Maintained views" .
+ui:doc-iv-1 a c:Text ; c:label "Rules re-run their query when what they read changes. That is cheap for a list item and expensive for a view over a collection, such as counting the change log on every event. A maintained view (iv:View) is a query whose result is kept up to date from the changes themselves, in the style of DBSP: a member that arrives counts once (+1), and once more, negatively (-1), when it retires or leaves a window. The query is ordinary SPARQL, so the same text runs from scratch, and the tests compare the two after every change." .
+ui:doc-iv-code a c:Code ; c:block true ; c:language "turtle" ; c:label """vx:window a iv:SlidingWindow ; iv:range "PT30S"^^xsd:dayTimeDuration .
+vx:Recent a iv:View ; iv:window vx:window ; iv:whileShown ui:ex-views ;
+    sem:construct \"\"\"
+CONSTRUCT { vx:recent vx:events ?n }
+WHERE { { SELECT (COUNT(?m) AS ?n) WHERE { beh:ChangeLog tree:member ?m } } }\"\"\" .""" .
+ui:doc-iv-2 a c:Text ; c:children ( "Its output is written to a views graph every projection reads, so components render it like any data. The " ui:doc-iv-example " example shows the machinery: each step, a check against a from-scratch run, and the work against a re-run's." ) .
+ui:doc-iv-example a c:Link ; c:label "Maintained views" ; c:to ui:exp-views .
+ui:doc-iv-h2 a c:Heading ; c:level 2 ; c:label "What has landed" .
+ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ) .
+ui:doc-iv-landed-items ui:ivl-ticks "Ticks: every change is one; Runtime.transaction makes several one, consolidated. An event's reaction and its change-log entry are one tick." ;
+    ui:ivl-agg "Aggregates over a stream's members - COUNT, SUM, AVG, MIN, MAX, DISTINCT - maintained incrementally, member by member; any other query falls back to recompute, saying why (iv:fallback)." ;
+    ui:ivl-uses "The Activity tool and the count badges read maintained views: a todo toggle costs the same whether the log keeps 200 events or 2,000 (about 1 ms with function rules, 4-6 ms with SPARQL)." ;
+    ui:ivl-window "Sliding windows: members leave as time passes, on one timer, even when nothing else happens." ;
+    ui:ivl-demand "Views kept only while shown (iv:whileShown), and rebuilt when shown again." ;
+    ui:ivl-see "Each view's plan, figures, per-step log (iv:deltaLog) and a from-scratch check (iv:matches) are graph data too." .
+ui:ivl-ticks rdfs:label "Ticks" . ui:ivl-agg rdfs:label "Aggregates" . ui:ivl-uses rdfs:label "In use" .
+ui:ivl-window rdfs:label "Windows" . ui:ivl-demand rdfs:label "Demand" . ui:ivl-see rdfs:label "Inspection" .
+ui:doc-iv-h3 a c:Heading ; c:level 2 ; c:label "What is pending" .
+ui:doc-iv-pending a c:DescriptionList ; c:of ui:doc-iv-pending-items ; c:fields ( ui:ivp-2 ui:ivp-3 ui:ivp-4 ui:ivp-5 ui:ivp-6 ) .
+ui:doc-iv-pending-items ui:ivp-2 "Joins outside the member, DISTINCT, OPTIONAL, EXISTS and MINUS, top-k with order keys: then the data grid's window and the charts become views." ;
+    ui:ivp-3 "Exact dependencies for SPARQL rules from their algebra, in place of sem:follows; rules that are themselves maintained." ;
+    ui:ivp-4 "Tumbling and count windows, event time with watermarks, delta logs for replication, \"since\" and undo." ;
+    ui:ivp-5 "The rest of SPARQL incrementally: LATERAL, correlated subqueries, paths, GROUP_CONCAT." ;
+    ui:ivp-6 "The operators in Rust inside Semblance's engine, if profiling shows the runtime dominating." .
+ui:ivp-2 rdfs:label "Phase 2: joins" . ui:ivp-3 rdfs:label "Phase 3: rules" . ui:ivp-4 rdfs:label "Phase 4: time" .
+ui:ivp-5 rdfs:label "Phase 5: SPARQL" . ui:ivp-6 rdfs:label "Phase 6: engine" .
+ui:doc-iv-3 a c:Text ; c:label "docs/IVM.md in the repository has the design, the decisions, what was built and where it differs, and the measurements." .
 
 # --- Tools ---
 ui:doc-tools a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
