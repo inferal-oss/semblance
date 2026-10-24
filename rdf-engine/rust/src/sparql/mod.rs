@@ -2,6 +2,7 @@
 //! Constants are interned at parse time; variables are numbered per query,
 //! and a solution is a row of term ids indexed by variable (0 = unbound).
 
+pub mod compile;
 pub mod eval;
 pub mod expr;
 pub mod md5;

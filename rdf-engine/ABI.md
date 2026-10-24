@@ -129,6 +129,58 @@ blank nodes) are interned and appear in results like any other term.
 | `result_ptr() -> ptr` | |
 | `error_ptr() -> ptr`, `error_len() -> n` | |
 
+## Optional: compiled queries
+
+An engine may compile a prepared query into a WebAssembly module of its own,
+whose `run` replaces the interpreter's for that query. Results are the same;
+only speed differs. Hosts check for the `compile` export and fall back to
+`run` whenever it is missing, declines, or a compiled run fails. The
+interpreter stays complete: correctness never depends on what compiles.
+(Experimental; measured in [results/compiled.md](results/compiled.md).)
+
+| export | |
+|---|---|
+| `compile(h) -> n` | A module for query `h` as its variables are bound now (which variables, not their values): `n` bytes of a WebAssembly binary at `result_ptr()`. Negative: not compiled; the error starts with `not compilable:` when the query uses what the compiler does not handle. |
+
+The module:
+
+- imports `memory` and functions only from module `engine`, by the names of
+  the engine's own exports (so the host instantiates it with
+  `{ engine: instance.exports }`), and only those listed below;
+- exports `run(graphs) -> n`: the same contract as `run(h, graphs)` (graph ids
+  in the input buffer, results at `result_ptr()`, a negative value an error);
+- stays valid until `release(h)`. Binding values may change between runs;
+  binding a different set of variables makes `run` fail (`cq_begin` returns an
+  error), and the host compiles again for the new set or runs interpreted.
+
+A compiled run keeps its variables in a row frame (one id per variable of the
+query, 0 = unbound) in the engine's memory, at an address the engine chose when
+compiling. Lists it asks the engine for go on a stack of words in engine memory:
+the caller passes `at`, the word where the list starts (everything below it
+stays put), and reads it at `cq_stack() + 4 * at`. The engine functions a
+compiled module may import:
+
+| import | |
+|---|---|
+| `cq_begin(h, shape, graphs) -> n` | Start a run of query `h` compiled for the bound-variable set `shape` (an engine-chosen number baked into the module): read the graphs as `run` does, clear the results; `n` is the number of binding combinations (`bind_values`), or negative if `h` is now bound differently. |
+| `cq_combo(i)` | Set the frame for combination `i` (`0 <= i < n`): bound variables to their values, the rest to 0. |
+| `cq_scan(s, p, o, at) -> n` | Triples matching `(s, p, o)` (0 = any) in the run's default graph (the union of its graphs, each triple once): `n` triples of 3 ids from `at`. |
+| `cq_path(k, s, o, at) -> n` | Pairs for the module's property path pattern `k`, its ends `s` and `o` given (0 = free): `n` entries of 3 ids `(start, 0, end)` from `at`. |
+| `cq_eval(k, at) -> n` | The engine's own evaluation of the module's pattern `k` against the frame (which of the frame's bindings it sees is the engine's business, as its interpreter would do it there): `n` rows of one id per variable of the query from `at`, which the module joins with the frame. |
+| `cq_stack() -> ptr` | Where the stack is; valid until the next `cq_scan`, `cq_path` or `cq_eval`. |
+| `cq_test(k) -> 0 \| 1 \| 2` | The module's expression `k` over the frame, as a condition: false, true, or an error. |
+| `cq_value(k) -> id` | The module's expression `k` over the frame: its value as a term (interned), 0 on an error. |
+| `cq_solution()` | The frame is a solution: SELECT appends its projected row (with DISTINCT, unless already seen in this combination); ASK counts it. |
+| `cq_triple(s, p, o)` | A CONSTRUCT template triple: appended unless a position is 0 or invalid (a literal subject, a non-IRI predicate) or it was produced before in this run. |
+| `cq_end() -> n` | End the run: the value `run` returns. |
+| `fresh_bnode`, `term_kind`, `term_datatype`, `term_lang_len` | As above. |
+
+What `k` and `shape` mean is the engine's business: it records them when it
+compiles. The two engines compile the same queries (BGPs, OPTIONAL, UNION,
+VALUES, LATERAL, FILTER, BIND, property paths through `cq_path`, the rest of a
+group's patterns through `cq_eval`); they decline DESCRIBE, aggregates,
+ORDER BY / LIMIT / OFFSET of the query itself, and triple terms in templates.
+
 ## Changing the ABI
 
 Both engines and the host move together: an ABI change is a commit that edits

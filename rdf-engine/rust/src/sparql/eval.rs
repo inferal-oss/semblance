@@ -429,7 +429,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    fn test(&mut self, f: &Expr, row: &[u32]) -> bool {
+    pub(crate) fn test(&mut self, f: &Expr, row: &[u32]) -> bool {
         self.expr(f, row).and_then(|v| self.ebv(&v)) == Ok(true)
     }
 
@@ -524,7 +524,7 @@ impl<'a> Ctx<'a> {
 
     // --- property paths ------------------------------------------------------------
 
-    fn path(&mut self, s: &Tv, path: &Path, o: &Tv, sub: &[u32], active: Active) -> Vec<Row> {
+    pub(crate) fn path(&mut self, s: &Tv, path: &Path, o: &Tv, sub: &[u32], active: Active) -> Vec<Row> {
         let (sb, ob) = (resolve(s, sub), resolve(o, sub));
         let pairs = self.pairs(path, sb, ob, active);
         let mut out = Vec::new();
@@ -893,7 +893,7 @@ impl<'a> Ctx<'a> {
 /// and for BIND / FILTER over such a pattern when the expression only reads
 /// variables the pattern always binds: a substituted value then equals the
 /// pattern's own, so the expression cannot tell.
-fn pure(p: &Pattern) -> bool {
+pub(crate) fn pure(p: &Pattern) -> bool {
     match p {
         Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) => pure(a) && pure(b),
@@ -1139,7 +1139,7 @@ fn mark(x: &Tv, bound: &mut [bool]) {
 }
 
 /// A position's value under a row, if it is fixed.
-fn resolve(x: &Tv, row: &[u32]) -> Option<u32> {
+pub(crate) fn resolve(x: &Tv, row: &[u32]) -> Option<u32> {
     match x {
         Tv::Term(i) => Some(*i),
         Tv::Var(v) => match row[*v as usize] {

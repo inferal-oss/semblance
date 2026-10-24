@@ -17,6 +17,7 @@ mod ntriples;
 mod sparql;
 mod store;
 mod turtle;
+mod wasm;
 
 #[global_allocator]
 static HEAP: heap::Heap = heap::Heap::new();

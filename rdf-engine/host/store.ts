@@ -83,10 +83,25 @@ export type EngineStore = GraphStore & {
   setDeadline(at: number | undefined): void
   /** A step budget for each query, as setDeadline (undefined: unlimited). */
   setFuel(steps: number | undefined): void
+  /** The engine itself and term ids, for measurements that bypass the adapter. */
+  engine: Engine
+  idOf(t: Term): number
 }
 
-export function engineStore(module: WebAssembly.Module, kind: string): EngineStore {
+export interface EngineStoreOptions {
+  /**
+   * Compiled queries (ABI.md, "Optional: compiled queries"): compile a prepared
+   * query, for the variables it has bound, on its n-th run with them. 0: never.
+   */
+  compile?: number
+}
+
+/** Called with every engine store made (benchmarks use it to watch queries). */
+export const engineStoreHooks: { created?: (store: EngineStore) => void } = {}
+
+export function engineStore(module: WebAssembly.Module, kind: string, options: EngineStoreOptions = {}): EngineStore {
   const e = new Engine(module)
+  e.autoCompile = options.compile ?? 0
   // This store's tag: term objects of another store (another engine) carry ids that mean nothing here.
   const ID = Symbol('engine id')
   const defaultGraph = new Default()
@@ -354,12 +369,15 @@ export function engineStore(module: WebAssembly.Module, kind: string): EngineSto
     },
     setDeadline: (at) => e.setDeadline(at),
     setFuel: (steps) => e.setFuel(steps),
+    engine: e,
+    idOf: (t) => idOf(t, false),
     maintain() {
       // Collect once the dictionary has grown by half since the last collection.
       if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
       return false
     },
   }
+  engineStoreHooks.created?.(store)
   return store
 }
 

@@ -10,9 +10,11 @@ use alloc::vec::Vec;
 use core::cell::UnsafeCell;
 
 struct Prepared {
-    query: sparql::Query,
+    query: alloc::boxed::Box<sparql::Query>,
     /// Bound variables: one term each, or several (run once per combination).
     binds: Vec<(sparql::Var, Vec<u32>)>,
+    /// What compiled modules of this query refer to (see `compile`).
+    cq: Option<alloc::boxed::Box<Cq>>,
 }
 
 struct State {
@@ -343,7 +345,7 @@ pub extern "C" fn prepare(text_len: u32, base_len: u32) -> i32 {
     let [text, base] = args(&s.input, [text_len, base_len]);
     match sparql::parse::parse_query(text, base, &mut s.dict) {
         Ok(query) => {
-            let p = Prepared { query, binds: Vec::new() };
+            let p = Prepared { query: alloc::boxed::Box::new(query), binds: Vec::new(), cq: None };
             match s.queries.iter().position(Option::is_none) {
                 Some(i) => {
                     s.queries[i] = Some(p);
@@ -435,14 +437,7 @@ fn run_query(h: u32, graphs: u32) -> i32 {
     let graph_ids: Vec<u32> = (0..graphs as usize).map(|i| u32::from_le_bytes([s.input[i * 4], s.input[i * 4 + 1], s.input[i * 4 + 2], s.input[i * 4 + 3]])).collect();
     let Some(p) = s.queries.get((h as usize).wrapping_sub(1)).and_then(Option::as_ref) else { return fail(b"no such query") };
     // One run per combination of bound values.
-    let mut combos: Vec<Vec<(sparql::Var, u32)>> = alloc::vec![Vec::new()];
-    for (v, values) in &p.binds {
-        combos = combos.into_iter().flat_map(|c| values.iter().map(move |&x| {
-            let mut c = c.clone();
-            c.push((*v, x));
-            c
-        })).collect();
-    }
+    let combos = combos(&p.binds);
     s.result.clear();
     let mut count = 0usize;
     let mut seen = crate::idmap::IdMap::new();
@@ -506,4 +501,253 @@ pub extern "C" fn update(text_len: u32, base_len: u32) -> i32 {
         Ok(()) => 0,
         Err(msg) => fail(msg.as_bytes()),
     }
+}
+
+/// Every combination of bound values.
+fn combos(binds: &[(sparql::Var, Vec<u32>)]) -> Vec<Vec<(sparql::Var, u32)>> {
+    let mut combos: Vec<Vec<(sparql::Var, u32)>> = alloc::vec![Vec::new()];
+    for (v, values) in binds {
+        combos = combos.into_iter().flat_map(|c| values.iter().map(move |&x| {
+            let mut c = c.clone();
+            c.push((*v, x));
+            c
+        })).collect();
+    }
+    combos
+}
+
+// --- compiled queries (ABI.md, "Optional: compiled queries") ------------------------
+
+/// What a query's compiled modules refer to: the tables they index into, and
+/// the row frame. The frame is allocated once and never resized: modules have
+/// its address baked in. The query is boxed, so the tables' pointers into it stay put.
+struct Cq {
+    tables: sparql::compile::Tables,
+    frame: Vec<u32>,
+    /// The bound variables (sorted) each compiled module was made for.
+    shapes: Vec<Vec<sparql::Var>>,
+}
+
+fn shape(p: &Prepared) -> Vec<sparql::Var> {
+    let mut v: Vec<sparql::Var> = p.binds.iter().map(|(v, _)| *v).collect();
+    v.sort_unstable();
+    v
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn compile(h: u32) -> i32 {
+    let Some(p) = prepared(h) else { return fail(b"no such query") };
+    let bound = shape(p);
+    let nvars = p.query.vars.len();
+    let cq = p.cq.get_or_insert_with(|| alloc::boxed::Box::new(Cq { tables: Default::default(), frame: alloc::vec![0; nvars.max(1)], shapes: Vec::new() }));
+    let id = match cq.shapes.iter().position(|s| *s == bound) {
+        Some(i) => i,
+        None => {
+            cq.shapes.push(bound.clone());
+            cq.shapes.len() - 1
+        }
+    };
+    let t = &cq.tables;
+    let base = [t.exprs.len() as u32, t.paths.len() as u32, t.patterns.len() as u32];
+    match sparql::compile::compile(&p.query, &st().dict, &bound, h, id as u32, cq.frame.as_ptr() as u32, base) {
+        Ok((bytes, t)) => {
+            cq.tables.exprs.extend(t.exprs);
+            cq.tables.paths.extend(t.paths);
+            cq.tables.patterns.extend(t.patterns);
+            let r = &mut st().result;
+            r.clear();
+            r.resize(bytes.len().div_ceil(4), 0);
+            unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), r.as_mut_ptr() as *mut u8, bytes.len()) };
+            bytes.len() as i32
+        }
+        Err(msg) => fail(msg.as_bytes()),
+    }
+}
+
+/// A compiled run, between `cq_begin` and `cq_end`.
+struct Run {
+    ctx: sparql::eval::Ctx<'static>,
+    p: &'static Prepared,
+    combos: Vec<Vec<(sparql::Var, u32)>>,
+    count: usize,
+    seen: crate::idmap::IdMap,
+    distinct: crate::idmap::IdMap,
+    stack: Vec<u32>,
+    scan: Vec<u32>,
+}
+
+struct RunCell(UnsafeCell<Option<Run>>);
+unsafe impl Sync for RunCell {}
+static RUN: RunCell = RunCell(UnsafeCell::new(None));
+
+fn run_state() -> &'static mut Run {
+    unsafe { (*RUN.0.get()).as_mut().unwrap_or_else(|| core::arch::wasm32::unreachable()) }
+}
+
+fn cq(r: &Run) -> &'static Cq {
+    unsafe { &*(&**r.p.cq.as_ref().unwrap() as *const Cq) }
+}
+
+/// The frame: one id per variable of the query.
+fn frame(r: &Run) -> &'static mut [u32] {
+    let cq = cq(r);
+    unsafe { core::slice::from_raw_parts_mut(cq.frame.as_ptr() as *mut u32, r.p.query.vars.len()) }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_begin(h: u32, shape_id: u32, graphs: u32) -> i32 {
+    let s = st();
+    let graph_ids: Vec<u32> = (0..graphs as usize).map(|i| u32::from_le_bytes([s.input[i * 4], s.input[i * 4 + 1], s.input[i * 4 + 2], s.input[i * 4 + 3]])).collect();
+    let Some(p) = s.queries.get((h as usize).wrapping_sub(1)).and_then(Option::as_ref) else { return fail(b"no such query") };
+    let Some(cq) = &p.cq else { return fail(b"query not compiled") };
+    if cq.shapes.get(shape_id as usize) != Some(&shape(p)) {
+        return fail(b"bound variables changed since compile");
+    }
+    let q = &p.query;
+    let (default, named) = if !q.from.is_empty() || !q.from_named.is_empty() {
+        (q.from.clone(), Some(q.from_named.clone()))
+    } else if graph_ids.is_empty() {
+        (alloc::vec![dict::DEFAULT_GRAPH_ID], None)
+    } else {
+        (graph_ids, None)
+    };
+    let combos = combos(&p.binds);
+    let n = combos.len() as i32;
+    let ctx = sparql::eval::Ctx::new(&mut s.dict, &s.store, default, named, &q.base, q.vars.len());
+    s.result.clear();
+    unsafe {
+        *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new() });
+    }
+    n
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_combo(i: u32) {
+    let r = run_state();
+    let f = frame(r);
+    f.fill(0);
+    for &(v, x) in &r.combos[i as usize] {
+        f[v as usize] = x;
+    }
+    if r.p.query.select.distinct || r.p.query.select.reduced {
+        r.distinct = crate::idmap::IdMap::new();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_scan(sub: u32, p: u32, o: u32, at: u32) -> u32 {
+    let r = run_state();
+    r.stack.truncate(at as usize);
+    let dedupe = r.ctx.default.len() > 1;
+    let mut seen = crate::idmap::IdMap::new();
+    let mut n = 0;
+    for &g in &r.ctx.default {
+        r.scan.clear();
+        r.ctx.store.scan([sub, p, o, g], &mut r.scan);
+        for q in r.scan.chunks_exact(4) {
+            if dedupe && !seen.add(&q[..3]) {
+                continue;
+            }
+            r.stack.extend_from_slice(&q[..3]);
+            n += 1;
+        }
+    }
+    if r.stack.len() > (16 << 20) {
+        core::arch::wasm32::unreachable()
+    }
+    n
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_stack() -> *const u32 {
+    run_state().stack.as_ptr()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_path(k: u32, _s: u32, _o: u32, at: u32) -> u32 {
+    let r = run_state();
+    r.stack.truncate(at as usize);
+    let t = unsafe { &*cq(r).tables.paths[k as usize] };
+    let rows = r.ctx.path(&t.s, t.path.as_ref().unwrap(), &t.o, frame(r), sparql::eval::Active::Default);
+    for row in &rows {
+        let x = sparql::eval::resolve(&t.s, row).unwrap_or(0);
+        let y = sparql::eval::resolve(&t.o, row).unwrap_or(0);
+        r.stack.extend_from_slice(&[x, 0, y]);
+    }
+    rows.len() as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_eval(k: u32, at: u32) -> u32 {
+    let r = run_state();
+    r.stack.truncate(at as usize);
+    let p = unsafe { &*cq(r).tables.patterns[k as usize] };
+    let rows = r.ctx.eval(p, frame(r), sparql::eval::Active::Default);
+    for row in &rows {
+        r.stack.extend_from_slice(row);
+    }
+    if r.stack.len() > (16 << 20) {
+        core::arch::wasm32::unreachable()
+    }
+    rows.len() as u32
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_test(k: u32) -> u32 {
+    let r = run_state();
+    let e = unsafe { &*cq(r).tables.exprs[k as usize] };
+    match r.ctx.expr(e, frame(r)).and_then(|v| r.ctx.ebv(&v)) {
+        Ok(b) => b as u32,
+        Err(()) => 2,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_value(k: u32) -> u32 {
+    let r = run_state();
+    let e = unsafe { &*cq(r).tables.exprs[k as usize] };
+    match r.ctx.expr(e, frame(r)) {
+        Ok(v) => r.ctx.to_id(&v),
+        Err(()) => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_solution() {
+    let r = run_state();
+    let sel = &r.p.query.select;
+    if r.p.query.form == sparql::Form::Select {
+        let f = frame(r);
+        let row: Vec<u32> = sel.project.iter().map(|&v| f[v as usize]).collect();
+        if (sel.distinct || sel.reduced) && !r.distinct.add(&row) {
+            return;
+        }
+        st().result.extend_from_slice(&row);
+    }
+    r.count += 1;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_triple(sub: u32, p: u32, o: u32) {
+    let r = run_state();
+    if sub == 0 || p == 0 || o == 0 {
+        return;
+    }
+    let kind = |id: u32| r.ctx.dict.term(id).map_or(0, |t| t.kind);
+    if !matches!(kind(sub), dict::IRI | dict::BNODE) || kind(p) != dict::IRI {
+        return;
+    }
+    if r.seen.add(&[sub, p, o]) {
+        st().result.extend_from_slice(&[sub, p, o]);
+        r.count += 1;
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_end() -> i32 {
+    let Some(r) = (unsafe { (*RUN.0.get()).take() }) else { return fail(b"no compiled run") };
+    if r.p.query.form == sparql::Form::Ask {
+        return (r.count > 0) as i32;
+    }
+    r.count as i32
 }

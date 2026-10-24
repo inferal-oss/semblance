@@ -79,6 +79,26 @@ interface Exports {
   release(h: number): number
   parse_update(textLen: number, baseLen: number): number
   update(textLen: number, baseLen: number): number
+  /** Optional (compiled queries): module bytes for query h, at result_ptr(). */
+  compile?(h: number): number
+}
+
+/** A compiled query module's instance (see ABI.md, "Optional: compiled queries"). */
+interface CompiledExports {
+  run(graphs: number): number
+}
+
+/** Counters for compiled queries, per engine instance. */
+export interface CompileStats {
+  compiled: number
+  /** Queries the compiler declined, by reason. */
+  declined: Map<string, number>
+  /** Milliseconds spent in the engine's `compile` (emitting bytes) and in `WebAssembly.Module`. */
+  emitMs: number
+  wasmMs: number
+  bytes: number
+  compiledRuns: number
+  interpretedRuns: number
 }
 
 const encoder = new TextEncoder()
@@ -108,6 +128,9 @@ export class EngineError extends Error {
 
 export class Engine {
   private x: Exports
+  /** Compile a prepared query (for its current bound variables) on its n-th run; 0: never. */
+  autoCompile = 0
+  readonly stats: CompileStats = { compiled: 0, declined: new Map(), emitMs: 0, wasmMs: 0, bytes: 0, compiledRuns: 0, interpretedRuns: 0 }
 
   /** `now` replaces the clock (`env.now`), for tests of the query budget. */
   constructor(module: WebAssembly.Module, now?: () => number) {
@@ -276,6 +299,49 @@ export class Engine {
     this.putIds(graphs)
     return this.check(this.x.run(h, graphs.length))
   }
+  /** Whether this engine build can compile queries. */
+  get canCompile(): boolean {
+    return typeof this.x.compile === 'function'
+  }
+  /**
+   * @internal The compiled module for query h, as it is bound now; a string
+   * says why the engine declined.
+   */
+  compileQuery(h: number): CompiledExports | string {
+    if (!this.x.compile) return 'engine cannot compile'
+    let t = performance.now()
+    const n = this.x.compile(h)
+    if (n < 0) {
+      const why = this.str(this.x.error_ptr(), this.x.error_len())
+      this.stats.declined.set(why, (this.stats.declined.get(why) ?? 0) + 1)
+      return why
+    }
+    const bytes = new Uint8Array(this.x.memory.buffer, this.x.result_ptr(), n).slice()
+    const t1 = performance.now()
+    this.stats.emitMs += t1 - t
+    const instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), { engine: this.x as unknown as WebAssembly.ModuleImports })
+    t = performance.now()
+    this.stats.wasmMs += t - t1
+    this.stats.compiled++
+    this.stats.bytes += n
+    return instance.exports as unknown as CompiledExports
+  }
+  /** @internal The bytes of query h's compiled module (or why not), without instantiating it. */
+  compiledBytes(h: number): Uint8Array | string {
+    if (!this.x.compile) return 'engine cannot compile'
+    const n = this.x.compile(h)
+    if (n < 0) return this.str(this.x.error_ptr(), this.x.error_len())
+    return new Uint8Array(this.x.memory.buffer, this.x.result_ptr(), n).slice()
+  }
+  /** @internal */
+  instantiateCompiled(module: WebAssembly.Module): CompiledExports {
+    return new WebAssembly.Instance(module, { engine: this.x as unknown as WebAssembly.ModuleImports }).exports as unknown as CompiledExports
+  }
+  /** @internal Run a compiled query; negative: its error (the caller falls back). */
+  runCompiled(c: CompiledExports, graphs: ArrayLike<number>): number {
+    this.putIds(graphs)
+    return c.run(graphs.length)
+  }
   /** @internal */
   resultIds(n: number): Uint32Array {
     return this.results(n)
@@ -300,26 +366,72 @@ export type Solutions =
   | { form: Form.Ask; value: boolean }
 
 export class Query {
+  /** Names of the variables bound now. */
+  private readonly bound = new Set<string>()
+  /** Compiled modules by bound variables; a string: why the engine declined. */
+  private readonly compiled = new Map<string, CompiledExports | string>()
+  private readonly runs = new Map<string, number>()
+
   constructor(
     private readonly engine: Engine,
-    private readonly handle: number,
+    readonly handle: number,
     readonly form: Form,
     readonly vars: string[],
   ) {}
 
   bind(name: string, id: number): this {
     this.engine.bindVar(this.handle, name, id)
+    if (id) this.bound.add(name)
+    else this.bound.delete(name)
     return this
   }
 
   /** Bind a variable to several terms: the results of running once with each. */
   bindValues(name: string, ids: ArrayLike<number>): this {
     this.engine.bindValues(this.handle, name, ids)
+    if (ids.length) this.bound.add(name)
+    else this.bound.delete(name)
     return this
   }
 
+  private get shape(): string {
+    return [...this.bound].sort().join(' ')
+  }
+
+  /**
+   * Compile this query for the variables bound now (their values may change);
+   * later runs with the same variables bound use the compiled module. Returns
+   * null, or why the engine declined (runs then stay interpreted).
+   */
+  compile(): string | null {
+    const key = this.shape
+    let c = this.compiled.get(key)
+    if (c === undefined) this.compiled.set(key, (c = this.engine.compileQuery(this.handle)))
+    return typeof c === 'string' ? c : null
+  }
+
+  /** Whether runs with the variables bound now use a compiled module. */
+  get isCompiled(): boolean {
+    return typeof this.compiled.get(this.shape) === 'object'
+  }
+
   run(graphs: ArrayLike<number> = []): Solutions {
-    const n = this.engine.runQuery(this.handle, graphs)
+    const key = this.shape
+    let c = this.compiled.get(key)
+    if (c === undefined && this.engine.autoCompile) {
+      const n = (this.runs.get(key) ?? 0) + 1
+      this.runs.set(key, n)
+      if (n >= this.engine.autoCompile) this.compiled.set(key, (c = this.engine.compileQuery(this.handle)))
+    }
+    let n = -1
+    if (typeof c === 'object') {
+      n = this.engine.runCompiled(c, graphs)
+      if (n >= 0) this.engine.stats.compiledRuns++
+    }
+    if (n < 0) {
+      n = this.engine.runQuery(this.handle, graphs)
+      this.engine.stats.interpretedRuns++
+    }
     if (this.form === Form.Ask) return { form: Form.Ask, value: n === 1 }
     if (this.form === Form.Select) return { form: Form.Select, vars: this.vars, count: n, rows: this.engine.resultIds(n * this.vars.length) }
     return { form: this.form, triples: this.engine.resultIds(n * 3) }

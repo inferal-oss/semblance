@@ -22,7 +22,8 @@ function engine(kind: 'rust' | 'wat'): GraphStore {
     if (!existsSync(path)) throw new Error(`No ${kind} engine build at ${path}; run \`npm run engine:build\``)
     engines.set(kind, (module = new WebAssembly.Module(readFileSync(path))))
   }
-  return engineStore(module, kind)
+  // SEMBLANCE_ENGINE_COMPILE=n: compile each prepared query on its n-th run (rdf-engine/results/compiled.md).
+  return engineStore(module, kind, { compile: Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0 })
 }
 
 let created: ((store: GraphStore) => void) | undefined

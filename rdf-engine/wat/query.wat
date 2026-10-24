@@ -823,8 +823,31 @@
   (local.get $ids))
 
 (func $run (param $q i32) (param $graphs i32) (result i32)
-  (local $i i32) (local $n i32) (local $id i32) (local $ans i32) (local $cnt i32) (local $vals i32) (local $slot i32) (local $e i32)
-  (local $dg_size i32) (local $res i32)
+  (local $i i32) (local $ans i32) (local $cnt i32)
+  (call $run_begin (local.get $q) (local.get $graphs))
+  (if (local.tee $cnt (i32.load offset=80 (local.get $q)))
+    (then
+      ;; bind_values: once per term
+      (loop $values
+        (if (i32.and (i32.lt_u (local.get $i) (local.get $cnt)) (i32.eqz (global.get $bu_stop))) (then
+          (call $run_value (local.get $q) (local.get $i))
+          (local.set $ans (i32.or (local.get $ans) (call $run_once (local.get $q))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $values)))))
+    (else (local.set $ans (call $run_once (local.get $q)))))
+  (call $run_end (local.get $q) (local.get $ans)))
+
+;; The bind_values term i as the parameter; each value is its own run:
+;; subquery caches hold the previous parameters.
+(func $run_value (param $q i32) (param $i i32)
+  (call $set_params (local.get $q) (i32.load offset=84 (local.get $q)) (i32.load offset=116 (local.get $q))
+    (i32.load (i32.add (i32.load offset=76 (local.get $q)) (i32.shl (local.get $i) (i32.const 2)))))
+  (global.set $epoch (i32.add (global.get $epoch) (i32.const 1)))
+  (call $cache_clear))
+
+;; A run's set-up: globals, scratch rows, the dataset, the result sets.
+(func $run_begin (param $q i32) (param $graphs i32)
+  (local $i i32) (local $n i32) (local $id i32) (local $dg_size i32)
   (global.set $q (local.get $q))
   (global.set $NV (i32.load offset=52 (local.get $q)))
   (global.set $W (i32.shl (select (global.get $NV) (i32.const 3) (i32.gt_u (global.get $NV) (i32.const 3))) (i32.const 2)))
@@ -868,23 +891,13 @@
     (global.set $ngn (global.get $gl_n))))
   (global.set $out (call $v_new))
   (global.set $out_rows (i32.const 0))
-  (global.set $tset (call $set_make (i32.const 3)))
-  (if (local.tee $cnt (i32.load offset=80 (local.get $q)))
-    (then
-      ;; bind_values: once per term
-      (local.set $vals (i32.load offset=76 (local.get $q)))
-      (local.set $i (i32.const 0))
-      (loop $values
-        (if (i32.and (i32.lt_u (local.get $i) (local.get $cnt)) (i32.eqz (global.get $bu_stop))) (then
-          (call $set_params (local.get $q) (i32.load offset=84 (local.get $q)) (i32.load offset=116 (local.get $q)) (i32.load (i32.add (local.get $vals) (i32.shl (local.get $i) (i32.const 2)))))
-          ;; each value is its own run: subquery caches hold the previous params
-          (global.set $epoch (i32.add (global.get $epoch) (i32.const 1)))
-          (call $cache_clear)
-          (local.set $ans (i32.or (local.get $ans) (call $run_once (local.get $q))))
-          (local.set $i (i32.add (local.get $i) (i32.const 1)))
-          (br $values))))
-      (call $set_params (local.get $q) (i32.load offset=84 (local.get $q)) (i32.load offset=116 (local.get $q)) (i32.const 0)))
-    (else (local.set $ans (call $run_once (local.get $q)))))
+  (global.set $tset (call $set_make (i32.const 3))))
+
+;; A run's end: the results (ans: the ASK answer), and the set-up freed.
+(func $run_end (param $q i32) (param $ans i32) (result i32)
+  (local $n i32) (local $res i32)
+  (if (i32.load offset=80 (local.get $q))
+    (then (call $set_params (local.get $q) (i32.load offset=84 (local.get $q)) (i32.load offset=116 (local.get $q)) (i32.const 0))))
   (call $cache_clear)
   ;; results
   (local.set $n (i32.load offset=4 (global.get $out)))
@@ -999,6 +1012,7 @@
 
 (func (export "release") (param $q i32) (result i32)
   (call $drop_values (local.get $q))
+  (call $cx_release (local.get $q))
   (if (i32.load offset=248 (local.get $q))
     (then (i32.store offset=240 (i32.load offset=248 (local.get $q)) (i32.load offset=240 (local.get $q))))
     (else (global.set $queries (i32.load offset=240 (local.get $q)))))

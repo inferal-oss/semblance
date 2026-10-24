@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 
 const FILES = [
   'alloc.wat', 'terms.wat', 'store.wat', 'lex.wat', 'iri.wat', 'ntriples.wat', 'turtle.wat', 'load.wat',
-  'sparql.wat', 'eval.wat', 'query.wat', 'update.wat', 'expr.wat', 'num.wat', 'temporal.wat', 'budget.wat', 'regex.wat', 'digest.wat', 'collect.wat', 'exports.wat',
+  'sparql.wat', 'eval.wat', 'query.wat', 'update.wat', 'expr.wat', 'num.wat', 'temporal.wat', 'budget.wat', 'regex.wat', 'digest.wat', 'collect.wat', 'compile.wat', 'exports.wat',
 ]
 // Static data starts after the allocator's free-list heads (see alloc.wat).
 const DATA = 272
