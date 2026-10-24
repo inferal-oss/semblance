@@ -5,6 +5,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { formulaFunctions } from './formula.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
@@ -708,6 +709,7 @@ export const functions: Record<string, FnRule> = {
   ...containerFunctions,
   ...viewFunctions,
   ...chartFunctions,
+  ...formulaFunctions,
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,

@@ -1,0 +1,237 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix bud: <https://semblance.dev/demo/budget#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Budget sheet: formulas are queries.
+#
+# A month's income and expenses as data (bud:Entry, each with a category and an amount). The
+# amounts are edited in ordinary text fields; every figure derived from them - the totals, the
+# balance, the savings rate, the category table and the chart - is a SPARQL SELECT (a sem:View)
+# that a component shows. Nothing is computed in code that belongs to this example.
+# =================================================================================================
+
+# Queries and IRIs use the bud: prefix (sh:declare, read by the engine and the inspector).
+ui:ex-budget-prefixes sh:declare [ sh:prefix "bud" ; sh:namespace "https://semblance.dev/demo/budget#"^^xsd:anyURI ] .
+
+# --- the data: categories and entries ------------------------------------------------------------
+# A category is income or an expense (bud:kind). An entry is one line of the sheet.
+
+bud:Income a bud:Kind ; rdfs:label "Income" ; sem:order 1 .
+bud:Expense a bud:Kind ; rdfs:label "Expense" ; sem:order 2 .
+
+bud:Salary a bud:Category ; rdfs:label "Salary" ; bud:kind bud:Income ; sem:order 1 .
+bud:SideWork a bud:Category ; rdfs:label "Side work" ; bud:kind bud:Income ; sem:order 2 .
+bud:Housing a bud:Category ; rdfs:label "Housing" ; bud:kind bud:Expense ; sem:order 3 .
+bud:Food a bud:Category ; rdfs:label "Food" ; bud:kind bud:Expense ; sem:order 4 .
+bud:Transport a bud:Category ; rdfs:label "Transport" ; bud:kind bud:Expense ; sem:order 5 .
+bud:Utilities a bud:Category ; rdfs:label "Utilities" ; bud:kind bud:Expense ; sem:order 6 .
+bud:Leisure a bud:Category ; rdfs:label "Leisure" ; bud:kind bud:Expense ; sem:order 7 .
+
+# The sheet holds the entries. When an amount changes, the edit also stamps the sheet
+# (dcterms:modified): that is what the views below follow (c:dataset bud:sheet).
+bud:sheet a bud:Sheet ; rdfs:label "October" ;
+    bud:entry bud:salary , bud:freelance , bud:rent , bud:groceries , bud:eatingOut , bud:transit , bud:power , bud:books .
+
+bud:salary a bud:Entry ; bud:category bud:Salary ; dcterms:description "Salary" ; bud:amount 4200.00 .
+bud:freelance a bud:Entry ; bud:category bud:SideWork ; dcterms:description "Illustration commission" ; bud:amount 650.00 .
+bud:rent a bud:Entry ; bud:category bud:Housing ; dcterms:description "Rent" ; bud:amount 1450.00 .
+bud:groceries a bud:Entry ; bud:category bud:Food ; dcterms:description "Groceries" ; bud:amount 520.00 .
+bud:eatingOut a bud:Entry ; bud:category bud:Food ; dcterms:description "Eating out" ; bud:amount 180.00 .
+bud:transit a bud:Entry ; bud:category bud:Transport ; dcterms:description "Transit pass" ; bud:amount 86.00 .
+bud:power a bud:Entry ; bud:category bud:Utilities ; dcterms:description "Power and internet" ; bud:amount 140.00 .
+bud:books a bud:Entry ; bud:category bud:Leisure ; dcterms:description "Books and concerts" ; bud:amount 120.00 .
+
+# What an amount must be: the validation layer checks each field against this shape and shows
+# its message (and aria-invalid) while the text is not a non-negative number.
+bud:AmountShape a sh:PropertyShape ; sh:path bud:amount ; sh:datatype xsd:decimal ; sh:minInclusive 0 ;
+    sh:message "An amount of zero or more, like 86 or 120.50." .
+
+# --- the formulas: SPARQL SELECTs -----------------------------------------------------------------
+# Each is a sem:View. A Stat takes its figure from one (c:valueQuery: the first row's ?value,
+# and ?tone if bound); the table and the chart take their rows from one (c:query, c:view).
+
+bud:TotalOf a sem:View ; rdfs:label "total of a kind" ;
+    # $this is the Stat asking; it names the kind it sums (bud:sums).
+    sem:select """
+SELECT (SUM(?amount) AS ?value) WHERE {
+  $this bud:sums ?kind .
+  OPTIONAL { bud:sheet bud:entry ?e . ?e bud:category/bud:kind ?kind ; bud:amount ?a }
+  BIND(COALESCE(?a, 0) AS ?amount)
+}""" .
+
+bud:Balance a sem:View ; rdfs:label "balance" ;
+    sem:select """
+SELECT ?value ?tone WHERE {
+  { SELECT (SUM(IF(?kind = bud:Income, ?a, -?a)) AS ?sum) WHERE { bud:sheet bud:entry ?e . ?e bud:category/bud:kind ?kind ; bud:amount ?a } }
+  BIND(COALESCE(?sum, 0) AS ?value)
+  BIND(IF(?value < 0, sty:Danger, sty:Success) AS ?tone)
+}""" .
+
+bud:SavingsRate a sem:View ; rdfs:label "savings rate" ;
+    sem:select """
+SELECT ?value ?tone WHERE {
+  { SELECT (SUM(IF(?kind = bud:Income, ?a, 0)) AS ?in) (SUM(IF(?kind = bud:Expense, ?a, 0)) AS ?out)
+    WHERE { bud:sheet bud:entry ?e . ?e bud:category/bud:kind ?kind ; bud:amount ?a } }
+  BIND(IF(?in > 0, ROUND(1000 * (?in - ?out) / ?in) / 10, 0) AS ?value)
+  BIND(IF(?value < 0, sty:Danger, IF(?value < 10, sty:Warning, sty:Success)) AS ?tone)
+}""" .
+
+bud:ByCategory a sem:View ; rdfs:label "totals by category" ;
+    sem:select """
+SELECT ?category ?kind (SUM(?a) AS ?total) (COUNT(?e) AS ?entries) (SAMPLE(?o) AS ?order) WHERE {
+  bud:sheet bud:entry ?e . ?e bud:category ?category ; bud:amount ?a .
+  ?category bud:kind ?kind ; sem:order ?o .
+}
+GROUP BY ?category ?kind
+ORDER BY ?order""" .
+
+bud:Spending a sem:View ; rdfs:label "spending by category" ;
+    sem:select """
+SELECT ?label (SUM(?a) AS ?value) (SAMPLE(?o) AS ?order) WHERE {
+  bud:sheet bud:entry ?e . ?e bud:category ?category ; bud:amount ?a .
+  ?category bud:kind bud:Expense ; rdfs:label ?label ; sem:order ?o .
+}
+GROUP BY ?label
+ORDER BY ?order""" .
+
+# --- the reaction: an edited amount becomes data -------------------------------------------------
+# Each amount field says which entry it edits (bud:edits). Typing in it is a beh:Input event;
+# the field's own reaction keeps the text (c:value), and this one, when the text is a number,
+# writes it to the entry and stamps the sheet. Every view following bud:sheet then re-runs - only
+# while it is shown.
+
+bud:EditAmount a beh:Reaction ; beh:when beh:Input ; beh:sourceClass c:TextField ;
+    beh:deletes """
+CONSTRUCT { ?entry bud:amount ?old . bud:sheet dcterms:modified ?stamp }
+WHERE {
+  $this bud:edits ?entry . $event beh:value ?text FILTER(REGEX(?text, "^ *[0-9]+([.][0-9]+)? *$"))
+  { ?entry bud:amount ?old } UNION { bud:sheet dcterms:modified ?stamp }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?entry bud:amount ?amount . bud:sheet dcterms:modified ?at }
+WHERE {
+  $this bud:edits ?entry . $event beh:value ?text ; beh:at ?at FILTER(REGEX(?text, "^ *[0-9]+([.][0-9]+)? *$"))
+  BIND(xsd:decimal(REPLACE(?text, " ", "")) AS ?amount)
+}""" .
+
+# --- the interface ---------------------------------------------------------------------------------
+
+ui:ex-budget a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-budget-intro ui:ex-budget-figures ui:ex-budget-body ) .
+ui:ex-budget-intro a c:Text ;
+    c:label "A month's budget where every figure is a SPARQL query over the entries: change an amount and the totals, the balance, the table and the chart follow. Push the expenses past the income and the balance turns red." .
+
+# Key figures: Stats whose c:value comes from a formula (c:valueQuery), re-run when the sheet changes.
+ui:ex-budget-figures a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-budget-income ui:ex-budget-expenses ui:ex-budget-balance ui:ex-budget-rate ) .
+ui:ex-budget-income a c:Stat ; c:label "Income" ; c:unit "€" ; bud:sums bud:Income ;
+    c:valueQuery bud:TotalOf ; c:dataset bud:sheet .
+ui:ex-budget-expenses a c:Stat ; c:label "Expenses" ; c:unit "€" ; bud:sums bud:Expense ;
+    c:valueQuery bud:TotalOf ; c:dataset bud:sheet .
+ui:ex-budget-balance a c:Stat ; c:label "Balance" ; c:unit "€" ; c:help "Income minus expenses." ;
+    c:valueQuery bud:Balance ; c:dataset bud:sheet .
+ui:ex-budget-rate a c:Stat ; c:label "Savings rate" ; c:unit "%" ; c:help "What is left, as a share of income." ;
+    c:valueQuery bud:SavingsRate ; c:dataset bud:sheet .
+
+ui:ex-budget-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-budget-sheet ui:ex-budget-derived ) .
+
+# The sheet: one number field per entry, labelled by its description, its category as help.
+ui:ex-budget-sheet a c:Card ; c:label "October" ; c:badge "editable" ;
+    c:note "Amounts in euros. Each field validates against bud:AmountShape." ;
+    c:content ui:ex-budget-lines .
+ui:ex-budget-lines a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-budget-in-heading ui:ex-budget-in ui:ex-budget-out-heading ui:ex-budget-out ) .
+ui:ex-budget-in-heading a c:Heading ; c:label "Income" ; c:level 3 .
+ui:ex-budget-out-heading a c:Heading ; c:label "Expenses" ; c:level 3 .
+ui:ex-budget-in a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-budget-f-salary ui:ex-budget-f-freelance ) .
+ui:ex-budget-out a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-budget-f-rent ui:ex-budget-f-groceries ui:ex-budget-f-eatingOut ui:ex-budget-f-transit ui:ex-budget-f-power ui:ex-budget-f-books ) .
+
+ui:ex-budget-f-salary a c:TextField ; bud:edits bud:salary ; c:label "Salary" ; c:help "Salary" ;
+    c:inputType "number" ; c:value "4200" ; val:validates bud:AmountShape .
+ui:ex-budget-f-freelance a c:TextField ; bud:edits bud:freelance ; c:label "Illustration commission" ; c:help "Side work" ;
+    c:inputType "number" ; c:value "650" ; val:validates bud:AmountShape .
+ui:ex-budget-f-rent a c:TextField ; bud:edits bud:rent ; c:label "Rent" ; c:help "Housing" ;
+    c:inputType "number" ; c:value "1450" ; val:validates bud:AmountShape .
+ui:ex-budget-f-groceries a c:TextField ; bud:edits bud:groceries ; c:label "Groceries" ; c:help "Food" ;
+    c:inputType "number" ; c:value "520" ; val:validates bud:AmountShape .
+ui:ex-budget-f-eatingOut a c:TextField ; bud:edits bud:eatingOut ; c:label "Eating out" ; c:help "Food" ;
+    c:inputType "number" ; c:value "180" ; val:validates bud:AmountShape .
+ui:ex-budget-f-transit a c:TextField ; bud:edits bud:transit ; c:label "Transit pass" ; c:help "Transport" ;
+    c:inputType "number" ; c:value "86" ; val:validates bud:AmountShape .
+ui:ex-budget-f-power a c:TextField ; bud:edits bud:power ; c:label "Power and internet" ; c:help "Utilities" ;
+    c:inputType "number" ; c:value "140" ; val:validates bud:AmountShape .
+ui:ex-budget-f-books a c:TextField ; bud:edits bud:books ; c:label "Books and concerts" ; c:help "Leisure" ;
+    c:inputType "number" ; c:value "120" ; val:validates bud:AmountShape .
+
+# What is derived: the totals per category (a table) and where the money goes (a chart).
+ui:ex-budget-derived a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-budget-table-card ui:ex-budget-chart-card ) .
+ui:ex-budget-table-card a c:Flippable ; c:front ui:ex-budget-table-panel .
+ui:ex-budget-table-panel a c:Card ; c:label "By category" ; c:badge "GROUP BY" ;
+    c:note "SUM per category, one SELECT. Click a header to sort." ; c:content ui:ex-budget-table .
+ui:ex-budget-col-category a c:Column ; c:variable "category" ; c:label "Category" .
+ui:ex-budget-col-kind a c:Column ; c:variable "kind" ; c:label "Kind" .
+ui:ex-budget-col-entries a c:Column ; c:variable "entries" ; c:label "Entries" ; c:align "end" ; c:format "number" .
+ui:ex-budget-col-total a c:Column ; c:variable "total" ; c:label "Total (€)" ; c:align "end" ; c:format "decimal" .
+ui:ex-budget-table a c:Table ; c:label "Totals by category" ; c:query bud:ByCategory ; c:dataset bud:sheet ;
+    c:tableColumns ( ui:ex-budget-col-category ui:ex-budget-col-kind ui:ex-budget-col-entries ui:ex-budget-col-total ) ;
+    c:emptyText "No entries." .
+ui:ex-budget-chart-card a c:Flippable ; c:front ui:ex-budget-chart-panel .
+ui:ex-budget-chart-panel a c:Card ; c:label "Where it goes" ; c:badge "chart" ;
+    c:note "Expenses by category, from a SELECT; redrawn when an amount changes." ; c:content ui:ex-budget-chart .
+ui:ex-budget-chart a c:BarChart ; rdfs:label "Spending by category" ;
+    c:view bud:Spending ; c:dataset bud:sheet ;
+    c:categoryVariable "label" ; c:valueVariable "value" ; c:unit "€" .
+
+# --- how it works ---------------------------------------------------------------------------------
+
+ui:ex-budget-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-budget-how-title ui:ex-budget-how-data ui:ex-budget-how-formulas ui:ex-budget-how-edit ui:ex-budget-how-cost ) .
+ui:ex-budget-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
+ui:ex-budget-how-data a c:Text ; c:children (
+    "The data is the example's own vocabulary: " ui:ex-budget-how-c1 " has entries; each " ui:ex-budget-how-c2
+    " has a " ui:ex-budget-how-c3 " (whose " ui:ex-budget-how-c4 " is income or an expense) and an amount. Each amount is an ordinary "
+    ui:ex-budget-how-c5 " that says which entry it edits (" ui:ex-budget-how-c6 ") and validates against " ui:ex-budget-how-c7 ", a SHACL property shape." ) .
+ui:ex-budget-how-c1 a c:Code ; c:label "bud:sheet" .
+ui:ex-budget-how-c2 a c:Code ; c:label "bud:Entry" .
+ui:ex-budget-how-c3 a c:Code ; c:label "bud:category" .
+ui:ex-budget-how-c4 a c:Code ; c:label "bud:kind" .
+ui:ex-budget-how-c5 a c:Code ; c:label "c:TextField" .
+ui:ex-budget-how-c6 a c:Code ; c:label "bud:edits" .
+ui:ex-budget-how-c7 a c:Code ; c:label "bud:AmountShape" .
+ui:ex-budget-how-formulas a c:Text ; c:children (
+    "Every figure is a SELECT (a " ui:ex-budget-how-c8 "). The Stats take theirs through " ui:ex-budget-how-c9
+    ", a framework rule that runs the query before the components render and writes the first row's ?value as the Stat's value - and ?tone as its tone, which is how "
+    ui:ex-budget-how-c10 " turns the balance red when it is negative. The table (" ui:ex-budget-how-c11 ") and the bar chart (" ui:ex-budget-how-c12
+    ") take their rows from GROUP BY queries the same way the Performance page's charts do." ) .
+ui:ex-budget-how-c8 a c:Code ; c:label "sem:View" .
+ui:ex-budget-how-c9 a c:Code ; c:label "c:valueQuery" .
+ui:ex-budget-how-c10 a c:Code ; c:label "bud:Balance" .
+ui:ex-budget-how-c11 a c:Code ; c:label "bud:ByCategory" .
+ui:ex-budget-how-c12 a c:Code ; c:label "bud:Spending" .
+ui:ex-budget-how-edit a c:Text ; c:children (
+    "Typing is a " ui:ex-budget-how-c13 " event. The field's own reaction keeps its text; " ui:ex-budget-how-c14
+    " - a CONSTRUCT pair in this file - writes the number to the entry and stamps the sheet with " ui:ex-budget-how-c15
+    ". Text that is not a number changes nothing but the field, which then shows the shape's message." ) .
+ui:ex-budget-how-c13 a c:Code ; c:label "beh:Input" .
+ui:ex-budget-how-c14 a c:Code ; c:label "bud:EditAmount" .
+ui:ex-budget-how-c15 a c:Code ; c:label "dcterms:modified" .
+ui:ex-budget-how-cost a c:Text ; c:children (
+    "Why it is cheap: every view names " ui:ex-budget-how-c16 " as its " ui:ex-budget-how-c17
+    ", so a keystroke re-runs those seven SELECTs over eight entries and nothing else; and only while this example is shown - on any other page they are parked. Flip the table or the chart (the ↻ corner) to see the query it runs." ) .
+ui:ex-budget-how-c16 a c:Code ; c:label "bud:sheet" .
+ui:ex-budget-how-c17 a c:Code ; c:label "c:dataset" .

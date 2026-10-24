@@ -46,6 +46,7 @@ export const ONTOLOGY_FILES = [
   'components/panes.ttl',
   'components/payload.ttl',
   'components/toolbar.ttl',
+  'components/formula.ttl',
   'perf/perf.ttl',
   'domain/network.ttl',
   'shapes/components.ttl',
@@ -75,4 +76,5 @@ export const ONTOLOGY_FILES = [
   'theme/panes.ttl',
   'theme/payload.ttl',
   'theme/toolbar.ttl',
+  'theme/formula.ttl',
 ] as const
