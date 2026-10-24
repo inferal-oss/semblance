@@ -13,8 +13,11 @@
 # Default theme for the layout components.
 
 # --- specimen ---
+# One column that never grows past the card: what is wider than the stage (a table, a long
+# segmented control, a hex dump) shrinks to it and scrolls inside itself, not the page.
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
                  [ sty:property "gap" ; sty:token tok:space-4 ] ,
                  [ sty:property "padding" ; sty:token tok:space-5 ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
@@ -27,6 +30,12 @@
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:token tok:space-1 ] ,
                  [ sty:property "padding-right" ; sty:raw "88px" ] .
+# On a phone only the title keeps clear of the flip control in the corner; the text below it
+# takes the card's width.
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> header" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding-right" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> header h3" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding-right" ; sty:raw "88px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> header h3" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "font-size" ; sty:token tok:text-lg ] ,
@@ -47,6 +56,9 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
                  [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, var(--sem-border) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage > *" ;
+    sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage > [data-sem-direction=column]" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 100%" ] .
 
@@ -253,6 +265,23 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-bar-body[hidden]" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
+# On a compact screen the bar is one line: what it holds scrolls sideways instead of wrapping
+# into rows that would take a quarter of the screen.
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "padding" ; sty:raw "2px 12px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-bar-body" ;
+    sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
+                 [ sty:property "overflow-x" ; sty:raw "auto" ] ,
+                 [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "padding-block" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-bar-body > *" ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-fold" ;
+    sty:declares [ sty:property "min-height" ; sty:raw "36px" ] .
+
 # --- pos:Aside: the navigation and the main column's shares --------------------------------------
 # The first child is the navigation; everything else is the main column - also content a c:Switch
 # shows, since a switch takes no part in layout (its root and shown case are display: contents).
@@ -287,3 +316,8 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:when pos:CellGuides ; sty:part "[data-sem-direction=row] > *" ;
     sty:declares [ sty:property "outline" ; sty:raw "1px dashed var(--sem-accent)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "2px" ] .
+
+# On a compact screen the navigation is always on top, and as wide as the page.
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child:not(:only-child)" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .

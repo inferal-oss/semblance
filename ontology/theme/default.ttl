@@ -584,6 +584,21 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
                  [ sty:property "background" ; sty:token tok:surface-sunken ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 
+# Narrower than its options, the select gives way (its text is cut, not the page).
+[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "select" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "36px" ] .
+# On a phone the caption goes above the select, as a form's labels do there.
+[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "padding" ; sty:raw "6px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "> span" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding-inline" ; sty:raw "6px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "select:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
@@ -1012,11 +1027,11 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-panels" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
-                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(320px, 1fr))" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" ] ,
                  [ sty:property "gap" ; sty:raw "4px 28px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-bar" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
-                 [ sty:property "grid-template-columns" ; sty:raw "minmax(110px, 34%) minmax(0, 1fr) 66px" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(min(110px, 30%), 34%) minmax(0, 1fr) 66px" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "10px" ] ,
                  [ sty:property "height" ; sty:raw "26px" ] .

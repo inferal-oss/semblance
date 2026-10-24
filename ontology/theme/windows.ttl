@@ -66,6 +66,10 @@
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "border-width" ; sty:raw "1px 0 0" ] .
 
+# On a compact screen a frame docked to the bottom is a sheet of at most half the screen.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:BottomEdge ; sty:state ":not([data-sem-window-state=\"maximized\"])" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "max-height" ; sty:raw "50dvh" ] .
+
 # --- palette: a slim title strip, as tall as its content ------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:Palette ;
@@ -153,6 +157,12 @@
                  [ sty:property "max-width" ; sty:raw "calc(100vw - 32px)" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
                  [ sty:property "animation" ; sty:raw "sem-rise-in var(--sem-duration) var(--sem-ease)" ] .
+
+# On a compact screen the taskbar keeps to the end corner, off the middle of what is being read.
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"]" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "left" ; sty:raw "auto" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "12px" ] ,
+                 [ sty:property "translate" ; sty:raw "none" ] .
 
 # A frame docked to the bottom edge owns that edge: the taskbar sits just above it (anchor
 # positioning; where that is unsupported the declaration is dropped and it keeps its place).

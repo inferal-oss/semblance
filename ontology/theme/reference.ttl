@@ -20,6 +20,9 @@
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "font-size" ; sty:token tok:text-sm ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
+# Stacked above the term on a phone, the tree keeps to under half the screen and scrolls.
+[] a sty:StyleRule ; sty:appliesTo c:TermTree ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "max-height" ; sty:raw "45dvh" ] .
 [] a sty:StyleRule ; sty:appliesTo c:TermTree ; sty:part "[role=group]" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,

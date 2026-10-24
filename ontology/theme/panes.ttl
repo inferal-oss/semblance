@@ -25,6 +25,18 @@
 [] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:when pos:Column ;
     sty:declares [ sty:property "flex-direction" ; sty:raw "column" ] ,
                  [ sty:property "min-height" ; sty:raw "20rem" ] .
+# On a compact screen a side-by-side split stacks: the primary pane above (about half the screen,
+# scrolling), the secondary below. The divider, which sizes a side-by-side split, goes.
+[] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex-direction" ; sty:raw "column" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-primary" ;
+    sty:declares [ sty:property "flex" ; sty:raw "0 0 auto" ] ,
+                 [ sty:property "height" ; sty:raw "min(24rem, 50dvh)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-secondary" ;
+    sty:declares [ sty:property "flex" ; sty:raw "0 0 auto" ] ,
+                 [ sty:property "border-top" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-divider" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:part "> .sem-pane" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] ,

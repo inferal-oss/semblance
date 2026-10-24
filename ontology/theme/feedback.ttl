@@ -241,6 +241,7 @@
                  [ sty:property "gap" ; sty:token tok:space-3 ] ,
                  [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "width" ; sty:raw "min(380px, calc(100vw - 32px))" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "padding" ; sty:raw "12px 10px 12px 14px" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,

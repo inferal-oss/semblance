@@ -1,5 +1,5 @@
 import type { Term } from '@rdfjs/types'
-import { RDFS_RANGE, RDFS_SUBCLASS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY } from '../ns.ts'
+import { NS, RDFS_RANGE, RDFS_SUBCLASS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY } from '../ns.ts'
 import type { GraphStore } from '../store/types.ts'
 
 /**
@@ -12,8 +12,14 @@ import type { GraphStore } from '../store/types.ts'
  *   @layer sem.variants   sty:StyleRule with sty:when (a value of a hooked axis such as
  *                         tone, emphasis or size): wins over the component's base rule
  *   @layer sem.intents    sty:StyleRule with intent (wins over the base rule)
+ *
+ * A rule with sty:atWidth (a sty:WidthClass such as sty:CompactWidth) is compiled into its
+ * layer inside the width class's media condition, after that layer's other rules, so at
+ * equal specificity it wins where the condition holds.
  */
 const hyphens = (decl: string) => decl.slice(0, decl.indexOf(':')).split('-').length
+const STY_AT_WIDTH = NS.sty + 'atWidth'
+const STY_MEDIA = NS.sty + 'media'
 
 export function compileStyles(store: GraphStore): string {
   const f = store.factory
@@ -121,25 +127,36 @@ export function compileStyles(store: GraphStore): string {
     depthOf.set(cls.value, d)
     return d
   }
-  const ranked = (rules: [number, string | undefined][]) =>
-    rules
-      .filter((r): r is [number, string] => r[1] !== undefined)
+  // [class depth, block, media condition (sty:atWidth) or ''].
+  type Ranked = [number, string | undefined, string]
+  const ranked = (rules: Ranked[]) => {
+    const sorted = rules
+      .filter((r): r is [number, string, string] => r[1] !== undefined)
       .sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0))
-      .map((r) => r[1])
-  const componentRules: [number, string | undefined][] = []
-  const variantRules: [number, string | undefined][] = []
-  const intentRules: [number, string | undefined][] = []
+    const plain = sorted.filter((r) => !r[2]).map((r) => r[1])
+    // Width-conditioned rules last, one @media block per condition (in a stable order).
+    const conditions = [...new Set(sorted.map((r) => r[2]).filter(Boolean))].sort()
+    const sized = conditions.map(
+      (media) => `  @media ${media} {\n${sorted.filter((r) => r[2] === media).map((r) => '  ' + r[1]).join('\n')}\n  }`,
+    )
+    return [...plain, ...sized]
+  }
+  const componentRules: Ranked[] = []
+  const variantRules: Ranked[] = []
+  const intentRules: Ranked[] = []
   for (const r of subjects(RDF_TYPE, STY.StyleRule)) {
     const cls = object(r, STY.appliesTo)
     const intent = object(r, STY.intent)
     const state = object(r, STY.state)?.value
     const part = object(r, STY.part)?.value
     const when = objects(r, STY.when).map(whenAttr).filter(Boolean).sort().join('')
+    const width = object(r, STY_AT_WIDTH)
+    const media = (width && object(width, STY_MEDIA)?.value) ?? ''
     // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
     // may add), or every element carrying its sty:when value.
     if (!cls) {
-      if (when) variantRules.push([0, block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r))])
-      else if (part) componentRules.push([0, block(part, declarations(r))])
+      if (when) variantRules.push([0, block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r)), media])
+      else if (part) componentRules.push([0, block(part, declarations(r)), media])
       continue
     }
     // A rule for a class also styles its subclasses (data-sem-c names only the direct class).
@@ -148,7 +165,7 @@ export function compileStyles(store: GraphStore): string {
     const selector = withSubclasses(cls)
       .flatMap((c) => parts.map((p) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (p ? ' ' + p : '')))
       .join(', ')
-    ;(intent ? intentRules : when ? variantRules : componentRules).push([classDepth(cls), block(selector, declarations(r))])
+    ;(intent ? intentRules : when ? variantRules : componentRules).push([classDepth(cls), block(selector, declarations(r)), media])
   }
 
   // Animations: sty:Keyframes with sty:name and sty:step [ sty:at "50%" ; sty:declares ... ].

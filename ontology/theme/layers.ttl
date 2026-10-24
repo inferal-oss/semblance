@@ -89,6 +89,10 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
                  [ sty:property "background" ; sty:raw "var(--sem-danger-3)" ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
+# On a phone the three columns (the component, the property, the message) stack.
+[] a sty:StyleRule ; sty:appliesTo c:ShapeReport ; sty:part "> li" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShapeReport ; sty:part "> li > code" ;
     sty:declares [ sty:property "font" ; sty:raw "500 12px/1.4 var(--sem-font-mono)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] .
