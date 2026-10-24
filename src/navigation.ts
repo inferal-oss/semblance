@@ -370,8 +370,12 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
   for (const loc of locations) {
     const needs = shows(r, loc, resource)
     if (!needs) continue
+    // A resource that is a whole case of a switch (a page) is shown by the values alone: there is
+    // nothing within it to bring into view, so the address names no target (#home, not #home/home).
+    const last = pathTo(r, loc, resource)?.at(-1)
+    const whole = !!last && !!one(r, last.parent, C + 'when')
     const target = loc.dimensions.find((d) => d.target && d.carriers.includes(NAV + 'Fragment'))
-    if (target) needs.set(target.iri, resource)
+    if (target && !whole) needs.set(target.iri, resource)
     return spellAddress(r, loc, needs).fragment || '#'
   }
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),

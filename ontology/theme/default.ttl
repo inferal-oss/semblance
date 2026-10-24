@@ -762,6 +762,17 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "gap" ; sty:raw "10px" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
 
+# Home: the logo and the name as one link, looking like the brand, not like a link.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-home" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "10px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-home:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand strong" ;
     sty:declares [ sty:property "font-size" ; sty:raw "16px" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] ,

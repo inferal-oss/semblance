@@ -12,6 +12,8 @@ import { labelOf as textLabelOf, text } from './util.ts'
 const C_GRAPH_MARK = NS.c + 'GraphMark'
 const C_ACTIVE = NS.c + 'active'
 const C_BYLINE = NS.c + 'byline'
+const NAV_HREF = NS.nav + 'href'
+const C_HREF = NS.c + 'href'
 const C_MORE_ACTIONS = NS.c + 'moreActions'
 const C_MORE_LABEL = NS.c + 'moreLabel'
 const C_EXPANDED = NS.c + 'expanded'
@@ -82,9 +84,12 @@ const appbar: FnRule = (ctx, focus) => {
     return o.quads
   }
   const byline = ctx.object(focus, C_BYLINE)
+  // Home: the logo and the name are one link (c:to, resolved as nav:href; else c:href). The byline
+  // may hold a link of its own, so it stays outside.
+  const href = (ctx.object(focus, NAV_HREF) ?? ctx.object(focus, C_HREF))?.value
+  const mark = [...(named(logo) ? [logo] : []), o.el('name', 'Strong', {}, [o.text('name-text', label)])]
   const brand = o.el('brand', 'Div', { class: 'sem-brand' }, [
-    ...(named(logo) ? [logo] : []),
-    o.el('name', 'Strong', {}, [o.text('name-text', label)]),
+    ...(href !== undefined ? [o.el('home', 'A', { class: 'sem-home', href }, mark)] : mark),
     ...(subtitle ? [o.el('subtitle', 'Span', {}, [o.text('subtitle-text', subtitle)])] : []),
     ...(named(byline) ? [o.el('byline', 'Span', { class: 'sem-byline' }, [byline])] : []),
   ])

@@ -168,3 +168,7 @@ nav:href a owl:DatatypeProperty ;
 c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to ;
     sem:functionOnly "It walks the component tree up to any depth through containment properties named in the data, and spells the location as URL text exactly as the navigation effect parses it (key order, escaping, prefixed names); SPARQL 1.1 paths cannot have variable predicates." .
 c:LinkDestination-fn a sem:Rule ; sem:implements c:LinkDestination ; sem:function "navigation:link-destination" .
+# An app bar's c:to (its home) is resolved the same way, for the link its logo and name make.
+c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to ;
+    sem:functionOnly "As c:LinkDestination: it walks the component tree up to any depth through containment properties named in the data." .
+c:AppBarDestination-fn a sem:Rule ; sem:implements c:AppBarDestination ; sem:function "navigation:link-destination" .

@@ -112,8 +112,9 @@ WHERE {
 c:AppBar a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """The application's top bar: a logo, a name (c:label), a c:subtitle, a c:byline, c:actions and
-c:moreActions. Where there is room the more actions follow the others; on a compact screen
-(sty:CompactWidth) they fold behind a More button, shown while the bar is c:expanded."""@en ;
+c:moreActions. With c:to (a resource: the app's home, found as a c:Link finds its target) or c:href, the
+logo and the name are a link there. Where there is room the more actions follow the others; on a
+compact screen (sty:CompactWidth) they fold behind a More button, shown while the bar is c:expanded."""@en ;
     sem:slug "app-bar" .
 c:moreActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;
     rdfs:comment "Secondary actions (settings, tools): after c:actions where there is room, behind a More button on a compact screen."@en .
@@ -132,10 +133,11 @@ c:AppBarRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Header ; sem:renders $this ; rdfhtml:hasChild ?brand, ?actions .
-  ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logo, ?name, ?subtitle, ?bylineBox ; ord:immediatelyPrecedes ?actions .
+  ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logoOut, ?nameOut, ?home, ?subtitle, ?bylineBox ; ord:immediatelyPrecedes ?actions .
+  ?home a rdfhtml:A ; rdfhtml:class "sem-home" ; rdfhtml:href ?href ; rdfhtml:hasChild ?logoIn, ?nameIn ; ord:immediatelyPrecedes ?subtitle .
   ?bylineBox a rdfhtml:Span ; rdfhtml:class "sem-byline" ; rdfhtml:hasChild ?byline .
   ?beforeByline ord:immediatelyPrecedes ?bylineBox .
-  ?name a rdfhtml:Strong ; rdfhtml:hasChild ?nameText ; ord:immediatelyFollows ?logo ; ord:immediatelyPrecedes ?subtitle .
+  ?name a rdfhtml:Strong ; rdfhtml:hasChild ?nameText ; ord:immediatelyFollows ?logo ; ord:immediatelyPrecedes ?afterName .
   ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
   ?subtitle a rdfhtml:Span ; rdfhtml:hasChild ?subtitleText .
   ?subtitleText a rdfhtml:Text ; rdfhtml:data ?subtitleData .
@@ -180,7 +182,18 @@ WHERE {
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle")), ?none) AS ?subtitle)
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle-text")), ?none) AS ?subtitleText)
   BIND(IRI(CONCAT(STR($this), "/~actions")) AS ?actions)
-  BIND(IF(BOUND(?bylineBox), COALESCE(?subtitle, ?name), ?none) AS ?beforeByline)
+  # Home: the logo and the name are one link (c:to, resolved as nav:href; else c:href). The byline may
+  # hold a link of its own, so it stays outside.
+  OPTIONAL { $this nav:href ?href0 }
+  OPTIONAL { FILTER(!BOUND(?href0)) $this c:href ?href1 }
+  BIND(STR(COALESCE(?href0, ?href1)) AS ?href)
+  BIND(IF(BOUND(?href), IRI(CONCAT(STR($this), "/~home")), ?none) AS ?home)
+  BIND(IF(BOUND(?home), ?logo, ?none) AS ?logoIn)
+  BIND(IF(BOUND(?home), ?none, ?logo) AS ?logoOut)
+  BIND(IF(BOUND(?home), ?name, ?none) AS ?nameIn)
+  BIND(IF(BOUND(?home), ?none, ?name) AS ?nameOut)
+  BIND(IF(BOUND(?home), ?none, ?subtitle) AS ?afterName)
+  BIND(IF(BOUND(?bylineBox), COALESCE(?subtitle, ?home, ?name), ?none) AS ?beforeByline)
   # The more actions, in a group after the last action: a toggle and the body it opens.
   OPTIONAL { $this c:moreActions/rdf:first ?firstMore FILTER(isIRI(?firstMore)) }
   OPTIONAL { FILTER(BOUND(?firstMore)) $this c:actions/rdf:rest* ?lastCell . ?lastCell rdf:first ?lastAction0 ; rdf:rest rdf:nil FILTER(isIRI(?lastAction0)) }

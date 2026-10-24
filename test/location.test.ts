@@ -7,7 +7,7 @@ import { type Backend, memoryBackend, Persistence } from '../src/persistence.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 import type { GraphStore } from '../src/store/types.ts'
-import { mountNavigating } from './harness.ts'
+import { mountNavigating, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const NAV = NS.nav
@@ -311,6 +311,18 @@ describe('navigation: links to resources', () => {
     expect(Object.fromEntries([...needs].map(([d, v]) => [d.slice(UI.length), v.value.slice(UI.length)]))).toEqual({ atPage: 'Components', atGalleryGroup: 'GroupInputs' })
     expect(addressOf(r, s.store.factory.namedNode(UI + 'inp-codes-spec'))).toBe('#components/inputs/inp-codes-spec')
     expect(addressOf(r, s.store.factory.namedNode(UI + 'DocRules'))).toBe(undefined) // not a component anywhere
+    // A whole page (a switch case's content) is shown by the page alone: nothing to bring into view.
+    expect(addressOf(r, s.store.factory.namedNode(UI + 'home'))).toBe('#home')
+  })
+
+  it.each(['sparql', 'function'] as const)("the app bar's logo and name link home (%s)", (prefer) => {
+    const s = mountSite('wat', prefer)
+    const home = s.document.querySelector('[data-sem-c=app-bar] .sem-home')!
+    expect(home.tagName).toBe('A')
+    expect(home.getAttribute('href')).toBe('#home')
+    expect(home.querySelector('[data-sem-c=graph-mark]')).not.toBeNull()
+    expect(home.textContent).toContain('Semblance')
+    expect(home.querySelector('.sem-byline')).toBeNull() // the sponsor's own link stays outside
   })
 
   it.each(['sparql', 'function'] as const)('renders a link to a resource with the address that shows it (%s)', (prefer) => {

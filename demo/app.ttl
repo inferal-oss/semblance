@@ -138,6 +138,7 @@ ui:ClearMatrix ann:announces "Results cleared" , "Результати очищ�
 # button on a phone (c:moreActions), so the bar is one row there.
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
+    c:to ui:home ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
     c:actions ( ui:nav ) ;
