@@ -104,8 +104,14 @@ export class Persistence {
     return this.backends[scope] ?? this.backends[PER + 'Session']!
   }
 
-  /** The policies declared in the graph. */
+  private cachedPolicies?: Policy[]
+
+  /** The policies declared in the graph (cached until a change touches per: terms). */
   policies(): Policy[] {
+    return (this.cachedPolicies ??= this.readPolicies())
+  }
+
+  private readPolicies(): Policy[] {
     const s = this.store
     const f = s.factory
     const nn = (x: string) => f.namedNode(x)
@@ -208,6 +214,7 @@ export class Persistence {
 
   private changed(graph: string | undefined, delta: Delta) {
     if (graph === PERSIST_GRAPH) return
+    if (graph === undefined && [...delta.add, ...delta.remove].some((q) => q.predicate.value.startsWith(PER) || q.object.value === PER + 'Policy')) this.cachedPolicies = undefined
     const policies = this.policies()
     for (const q of [...delta.add, ...delta.remove]) {
       const p = q.predicate.value

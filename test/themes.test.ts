@@ -183,8 +183,8 @@ describe('switching themes', () => {
     const { document, root } = open()
     const themed = [...document.querySelectorAll('[data-sem-theme]')]
     const count = (slug: string) => themed.filter((e) => e.getAttribute('data-sem-theme') === slug).length
-    // one composition, two schemes and the ramps per theme; two contrast tiles per non-default theme
-    expect(count('semblance')).toBe(4)
+    // the shell, plus one composition, two schemes and the ramps per theme; two contrast tiles per non-default theme
+    expect(count('semblance')).toBe(5)
     for (const slug of ['paper', 'terminal', 'blueprint', 'sunset']) expect(count(slug), slug).toBe(6)
     const paper = root('th-paper')!
     expect(paper.getAttribute('data-sem-theme')).toBe('paper')

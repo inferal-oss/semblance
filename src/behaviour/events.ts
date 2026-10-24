@@ -89,7 +89,24 @@ export class EventBus {
     const f = runtime.store.factory
     this.graph = f.namedNode(EVENTS_GRAPH)
     this.graphs = [f.defaultGraph(), this.graph, projection.engine.graph]
+    // Reactions and the class hierarchy are read once and kept until the input changes
+    // them (a reaction's triples, a type, a subclass link).
+    runtime.onInput((graph, delta) => {
+      if (graph !== undefined) return
+      for (const q of [...delta.add, ...delta.remove]) {
+        const p = q.predicate.value
+        if (p.startsWith(NS.beh) || p === SEM.function || p === RDFS_SUBCLASS) this.cachedReactions = undefined
+        if (p === RDF_TYPE || p === RDFS_SUBCLASS) this.classCache.clear()
+      }
+    })
+    // Types the projection derives (minted components) change a node's classes too.
+    projection.engine.onChange((delta) => {
+      for (const q of [...delta.add, ...delta.remove]) if (q.predicate.value === RDF_TYPE) this.classCache.delete(q.subject.value)
+    })
   }
+
+  private cachedReactions?: Map<string, Reaction[]>
+  private classCache = new Map<string, Set<string>>()
 
   private get f() {
     return this.runtime.store.factory
@@ -100,6 +117,19 @@ export class EventBus {
 
   private value(s: Term, p: string): Term | undefined {
     return this.match(s, p, null)[0]?.object
+  }
+
+  /** Reactions by the event class they handle (cached; see the constructor). */
+  private reactionsByEvent(): Map<string, Reaction[]> {
+    if (this.cachedReactions) return this.cachedReactions
+    const byEvent = new Map<string, Reaction[]>()
+    for (const r of this.reactions()) {
+      let list = byEvent.get(r.when)
+      if (!list) byEvent.set(r.when, (list = []))
+      list.push(r)
+    }
+    for (const list of byEvent.values()) list.sort((a, b) => a.iri.localeCompare(b.iri))
+    return (this.cachedReactions = byEvent)
   }
 
   private reactions(): Reaction[] {
@@ -117,6 +147,8 @@ export class EventBus {
 
   /** Classes of a node, with superclasses. */
   private classes(node: string): Set<string> {
+    const cached = this.classCache.get(node)
+    if (cached) return cached
     const out = new Set<string>()
     const todo = this.match(this.f.namedNode(node), RDF_TYPE, null).map((q) => q.object.value)
     while (todo.length) {
@@ -125,15 +157,16 @@ export class EventBus {
       out.add(c)
       for (const q of this.runtime.store.match(this.f.namedNode(c), this.f.namedNode(RDFS_SUBCLASS), null)) todo.push(q.object.value)
     }
+    this.classCache.set(node, out)
     return out
   }
 
   /** Reactions for an event class on a component instance. */
   reactionsFor(type: string, target: string): Reaction[] {
+    const candidates = this.reactionsByEvent().get(type)
+    if (!candidates) return []
     const types = this.classes(target)
-    return this.reactions()
-      .filter((r) => r.when === type && (r.source === target || (r.sourceClass !== undefined && types.has(r.sourceClass))))
-      .sort((a, b) => a.iri.localeCompare(b.iri))
+    return candidates.filter((r) => r.source === target || (r.sourceClass !== undefined && types.has(r.sourceClass)))
   }
 
   /** Where the pointer was last seen (view state, for commands that act "here"). */

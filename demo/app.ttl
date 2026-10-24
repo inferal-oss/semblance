@@ -35,7 +35,7 @@ ui:app sty:colorScheme sty:System ;
     sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer ;
     l10n:language l10n:English ;
     ui:store ui:Hybrid ;
-    ui:rules ui:PreferSparql ;
+    ui:rules ui:PreferFunction ;
     ui:page ui:Playground ;
     ui:inspectorMode ui:Live ;
     ui:galleryGroup ui:GroupFoundations .

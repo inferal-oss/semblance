@@ -12,7 +12,6 @@
 # Theme for the SPARQL workbench.
 
 # The editor's metrics: the highlighted text and the transparent text area over it must match exactly.
-tok:editor-font a sty:Token ; sem:slug "editor-font" ; sty:value "12.5px/20px var(--sem-font-mono)" .
 tok:editor-line a sty:Token ; sem:slug "editor-line" ; sty:value "20px" .
 tok:editor-pad a sty:Token ; sem:slug "editor-pad" ; sty:value "10px" .
 
@@ -117,7 +116,7 @@ tok:editor-pad a sty:Token ; sem:slug "editor-pad" ; sty:value "10px" .
 [] a sty:StyleRule ; sty:appliesTo c:QueryEditor ; sty:part ".sem-gutter" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:raw "var(--sem-editor-pad) 8px var(--sem-editor-pad) 12px" ] ,
-                 [ sty:property "font" ; sty:token tok:editor-font ] ,
+                 [ sty:property "font" ; sty:raw "12.5px/20px var(--sem-font-mono)" ] ,
                  [ sty:property "text-align" ; sty:raw "end" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "border-inline-end" ; sty:raw "1px solid var(--sem-border)" ] ,
@@ -136,7 +135,7 @@ tok:editor-pad a sty:Token ; sem:slug "editor-pad" ; sty:value "10px" .
                  [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:raw "var(--sem-editor-pad) 14px" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
-                 [ sty:property "font" ; sty:token tok:editor-font ] ,
+                 [ sty:property "font" ; sty:raw "12.5px/20px var(--sem-font-mono)" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0" ] ,
                  [ sty:property "white-space" ; sty:raw "pre" ] ,
                  [ sty:property "tab-size" ; sty:raw "2" ] ,
@@ -184,7 +183,7 @@ tok:editor-pad a sty:Token ; sem:slug "editor-pad" ; sty:value "10px" .
                  [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:raw "4px" ] ,
                  [ sty:property "list-style" ; sty:raw "none" ] ,
-                 [ sty:property "font" ; sty:token tok:editor-font ] ,
+                 [ sty:property "font" ; sty:raw "12.5px/20px var(--sem-font-mono)" ] ,
                  [ sty:property "background" ; sty:token tok:surface-overlay ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,

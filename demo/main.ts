@@ -18,7 +18,8 @@ import { perfRunner } from './perf-runner.ts'
 const UI = 'https://semblance.dev/demo#'
 const params = new URLSearchParams(location.search)
 const kind = (params.get('store') ?? 'hybrid') as StoreKind
-const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
+// Functions by default: measured several times faster in the browser; SPARQL renders identically (Rules menu).
+const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'function')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 const PAGES = { playground: 'Playground', performance: 'Performance', components: 'Components' } as const
