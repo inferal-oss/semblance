@@ -581,7 +581,9 @@ c:ElementMarkupRendering-fn a sem:Rule ; sem:implements c:ElementMarkupRendering
 
 c:Highlight a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "Marks the RDF/HTML node held in c:bindProperty of c:bindFrom (data-sem-highlighted); renders nothing of its own."@en ;
+    rdfs:comment """Marks the RDF/HTML node held in c:bindProperty of c:bindFrom (data-sem-highlighted). Of its own it
+renders only an empty hidden root, so the theme shows the mark only while a highlight is shown: one parked
+with what holds it (a closed or minimized window, a tab not selected) leaves its last mark in place, unseen."""@en ;
     sem:slug "highlight" .
 c:HighlightRendering a sem:Rendering ;
     sem:targets c:Highlight ;
@@ -594,13 +596,18 @@ c:HighlightRendering-sparql a sem:Rule ;
     sem:implements c:HighlightRendering ;
     sem:construct """
 CONSTRUCT {
+  ?root a rdfhtml:Span ; rdfhtml:hidden "" ; sem:renders $this .
   ?node rdfhtml:attribute ?mark .
   ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-highlighted" ; rdfhtml:attributeValue "true" .
 }
 WHERE {
-  $this a/rdfs:subClassOf* c:Highlight ; c:bindFrom ?from ; c:bindProperty ?property .
-  ?from ?property ?node FILTER(isIRI(?node))
-  BIND(IRI(CONCAT(STR($this), "/~mark")) AS ?mark)
+  $this a/rdfs:subClassOf* c:Highlight .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    $this c:bindFrom ?from ; c:bindProperty ?property .
+    ?from ?property ?node FILTER(isIRI(?node))
+    BIND(IRI(CONCAT(STR($this), "/~mark")) AS ?mark)
+  }
 }""" .
 
 # --- Switch ------------------------------------------------------------------------------------------

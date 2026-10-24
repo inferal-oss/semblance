@@ -7,6 +7,7 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
 # Gallery page: Windows.
@@ -14,7 +15,9 @@
 # The demo windows live on the shell's desktop (outside every page), closed until a
 # button c:opens them, so they survive navigation and their content is not evaluated
 # while closed. The desktop also hosts the taskbar: it lists every open frame, on every
-# page, and hides itself while there is none.
+# page, and hides itself while there is none. It is draggable and dockable like a frame: its
+# grip moves it (or the arrow keys, focused), and thrown at an edge it docks there; where it
+# is, is remembered for the tab like the tools window.
 
 ui:gallery-windows a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ) .
@@ -23,7 +26,10 @@ ui:gallery-windows-lede a c:Text ;
     c:label "A window is not one behaviour but several. Each capability is a mixin class with its own reactions (c:Draggable, c:Resizable, c:Raisable, c:Minimizable, c:Maximizable, c:Dockable); c:Window has them all, c:Palette only some, and a frame's title bar shows the controls of the capabilities its instance has. Window state is two hookable axes, so the theme styles each value once and any control that sets a property can drive it." .
 
 ui:desktop c:hosts ui:win-checklist , ui:win-log , ui:win-activity , ui:win-display , ui:taskbar .
-ui:taskbar a c:Taskbar ; c:of ui:desktop .
+ui:taskbar a c:Taskbar , c:Draggable , c:Dockable ; c:of ui:desktop .
+ui:rememberTaskbar a per:Policy ; per:scope per:Session ;
+    rdfs:label "Where the taskbar is" , "Де панель вікон"@uk , "Wo die Fensterleiste ist"@de , "مكان شريط النوافذ"@ar ;
+    per:subject ui:taskbar ; per:properties ( c:x c:y c:attachedTo ) .
 
 # --- the demo frames --------------------------------------------------------------------------------
 
@@ -95,7 +101,7 @@ ui:wn-open-activity-2 a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:empha
 ui:wn-taskbar-inline a c:Taskbar ; c:of ui:desktop ; c:label "Windows on the desktop" .
 ui:wn-taskbar a c:Flippable ; c:front ui:wn-taskbar-spec .
 ui:wn-taskbar-spec a c:Specimen ; c:label "Taskbar" ;
-    c:help "A c:Taskbar lists the open frames of a desktop (c:of), each with its state's symbol. Activating an entry restores a minimized frame, brings another to the front, or minimizes the one already in front: three reactions that all see the state before the click. The desktop hosts one, so minimized windows (including those detached from the Playground's tabs) can always be found; this is a second instance of the same component." ;
+    c:help "A c:Taskbar lists the open frames of a desktop (c:of), each with its state's symbol. Activating an entry restores a minimized frame, brings another to the front, or minimizes the one already in front: three reactions that all see the state before the click. The desktop hosts one, so minimized windows (including those detached from the Playground's tabs) can always be found; that one is also c:Draggable and c:Dockable, so its grip (or the arrow keys) moves it, and thrown at an edge it docks there and the page keeps that edge clear. This is a second instance of the same component, neither, so it stays in the page." ;
     c:children ( ui:wn-taskbar-inline ) .
 
 ui:wn-open-display a c:Button ; c:label "Display palette" ; c:icon "◐" ; sty:emphasis sty:Outline ; c:opens ui:win-display .

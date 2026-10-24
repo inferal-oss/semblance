@@ -740,9 +740,10 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # --- app bar and logo -----------------------------------------------------------------------------
 
+# Sticky below a taskbar docked to the top (--sem-dock-top, windows.ttl), if there is one.
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ;
     sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
-                 [ sty:property "top" ; sty:raw "0" ] ,
+                 [ sty:property "top" ; sty:raw "var(--sem-dock-top, 0px)" ] ,
                  [ sty:property "z-index" ; sty:raw "20" ] ,
                  [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
@@ -1040,7 +1041,9 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:part ":is(.ttl-lang, .ttl-datatype, .ttl-bnode)" ; sty:declares [ sty:property "color" ; sty:token tok:code-comment ] .
 [] a sty:StyleRule ; sty:part ".ttl-punct" ; sty:declares [ sty:property "color" ; sty:token tok:faint ] .
 
-[] a sty:StyleRule ; sty:part "[data-sem-highlighted]" ;
+# The inspector's mark (c:Highlight), only while a highlight is shown: not when what holds it is
+# hidden, closed, or behind a maximized window (each hides it), where its last mark would linger.
+[] a sty:StyleRule ; sty:part ":root:has([data-sem-c=highlight]:not([hidden] *)) [data-sem-highlighted]" ;
     sty:declares [ sty:property "outline" ; sty:raw "1.5px dashed color-mix(in oklab, var(--sem-accent) 70%, transparent)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "4px" ] ,
                  [ sty:property "border-radius" ; sty:raw "4px" ] .

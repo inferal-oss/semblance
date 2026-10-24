@@ -107,7 +107,11 @@ into: `c:Draggable`, `c:Resizable`, `c:Raisable`, `c:Minimizable`,
 `c:Maximizable`, `c:Dockable`. A `c:Window` has them all; a `c:Palette` docks.
 Their state is two hookable axes, `c:windowState` (normal, minimized,
 maximized) and `c:attachedTo` (floating or a viewport edge), plus stacking
-order (`c:z`) as graph state.
+order (`c:z`) as graph state. A move docks to the edge where its release lands,
+carried `c:throwTime` along its velocity, so a frame thrown at an edge docks
+there. The capabilities are not only for frames: the desktop's `c:Taskbar` is
+also `c:Draggable` and `c:Dockable`, so its grip (or the arrow keys) moves it,
+and docked it lies along its edge while the page keeps that edge clear.
 
 ## 4. Layers
 

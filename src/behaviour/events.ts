@@ -440,7 +440,7 @@ export class EventBus {
     const keys = (e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
-      if (renderer.host.contains(k.target as Node) && (sizeByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      if (renderer.host.contains(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
@@ -521,62 +521,88 @@ export class EventBus {
    * root follows the pointer (a transient view change), and on release one
    * sem-move / sem-resize DOM event carries the result into an RDF event. A "drag" handle
    * carries what it shows to drop targets (src/behaviour/drag.ts).
+   *
+   * A move says where the box was let go (x, y), how far the pointer was from each edge of the
+   * viewport, and how fast it was going then (inlineVelocity, blockVelocity, px/s): the graph
+   * decides whether that docks it (c:snapDistance, c:throwTime). A handle marked
+   * data-sem-move-size="content" carries its box at the box's own size, floating; any other is
+   * pinned to the size it had, so a frame attached to an edge comes away whole.
    */
   private gesture(e: PointerEvent, renderer: DomRenderer, drags: DragHost) {
     const handle = (e.target as Element).closest?.('[data-sem-gesture]') as HTMLElement | null
     if (!handle || e.button !== 0 || (e.target as Element).closest('button, input, select, textarea')) return
     if (handle.dataset.semGesture === 'size') return this.sizeGesture(e, handle, renderer)
     if (handle.dataset.semGesture === 'drag') return drags.pointer(e, handle)
-    let box: HTMLElement | null = handle
-    while (box && !(renderer.keyOf(box) && renderer.index.focusOf(renderer.keyOf(box)!))) box = box.parentElement
+    const box = boxOf(handle, renderer)
     if (!box) return
     const kind = handle.dataset.semGesture
-    const start = { x: e.clientX, y: e.clientY, left: box.offsetLeft, top: box.offsetTop, width: box.offsetWidth, height: box.offsetHeight }
+    // Where the box is on screen (a theme may centre it with a translate, which the drag drops).
+    const rect = box.getBoundingClientRect()
+    const start = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, width: box.offsetWidth, height: box.offsetHeight }
     const target = box
+    const natural = kind === 'move' && handle.dataset.semMoveSize === 'content'
     // What the graph says (the renderer's last write); the drag only changes the view until release.
     const original = target.getAttribute('style')
+    const edge = target.getAttribute('data-sem-edge')
     e.preventDefault()
-    handle.setPointerCapture(e.pointerId)
+    handle.setPointerCapture?.(e.pointerId)
+    // The last moments of the gesture, for its velocity at release.
+    const trail: { x: number; y: number; t: number }[] = [{ x: e.clientX, y: e.clientY, t: e.timeStamp }]
+    let moved = false
     const move = (m: PointerEvent) => {
       const dx = m.clientX - start.x
       const dy = m.clientY - start.y
-      // Pinned to its size while dragged, so a frame attached to an edge comes away whole.
-      if (kind === 'move')
-        Object.assign(target.style, {
-          left: `${start.left + dx}px`,
-          top: `${Math.max(0, start.top + dy)}px`,
-          right: 'auto',
-          bottom: 'auto',
-          width: `${start.width}px`,
-          height: `${start.height}px`,
-        })
-      else Object.assign(target.style, { width: `${Math.max(280, start.width + dx)}px`, height: `${Math.max(180, start.height + dy)}px` })
+      trail.push({ x: m.clientX, y: m.clientY, t: m.timeStamp })
+      while (trail.length > 2 && m.timeStamp - trail[0]!.t > 100) trail.shift()
+      if (kind === 'move') {
+        if (!moved && natural) target.setAttribute('data-sem-edge', 'none')
+        moved = true
+        const size = natural ? {} : { width: `${start.width}px`, height: `${start.height}px` }
+        // Grabbed docked, it comes away at its own size under the pointer, as far into it as it was.
+        const width = natural ? target.offsetWidth : start.width
+        const height = natural ? target.offsetHeight : start.height
+        const left = natural ? m.clientX - Math.min(start.x - start.left, width / 2) : start.left + dx
+        const top = natural ? m.clientY - Math.min(start.y - start.top, height / 2) : start.top + dy
+        Object.assign(target.style, { left: `${left}px`, top: `${Math.max(0, top)}px`, right: 'auto', bottom: 'auto', translate: 'none', ...size })
+      } else Object.assign(target.style, { width: `${Math.max(280, start.width + dx)}px`, height: `${Math.max(180, start.height + dy)}px` })
     }
     const up = (u: PointerEvent) => {
       handle.removeEventListener('pointermove', move)
       handle.removeEventListener('pointerup', up)
       handle.removeEventListener('pointercancel', up)
-      let detail: Record<string, number>
-      if (kind === 'move') {
+      let detail: Record<string, number> | undefined
+      if (kind === 'move' && moved && u.type === 'pointerup') {
         // Where the pointer was released, as distances to the viewport's logical edges (for snapping).
         const view = target.ownerDocument.documentElement
         const rtl = target.ownerDocument.defaultView?.getComputedStyle(target).direction === 'rtl'
         const fromLeft = u.clientX
         const fromRight = view.clientWidth - u.clientX
+        // Its velocity over the last 100 ms (none if it came to rest before it was let go).
+        const first = trail[0]!
+        const span = u.timeStamp - first.t
+        const still = u.timeStamp - trail[trail.length - 1]!.t > 60
+        const vx = span > 0 && !still ? ((u.clientX - first.x) / span) * 1000 : 0
+        const vy = span > 0 && !still ? ((u.clientY - first.y) / span) * 1000 : 0
+        const placed = target.getBoundingClientRect()
         detail = {
-          x: target.offsetLeft,
-          y: target.offsetTop,
+          x: natural ? placed.left : target.offsetLeft,
+          y: natural ? placed.top : target.offsetTop,
           toStart: rtl ? fromRight : fromLeft,
           toEnd: rtl ? fromLeft : fromRight,
           toTop: u.clientY,
           toBottom: view.clientHeight - u.clientY,
+          inlineVelocity: rtl ? -vx : vx,
+          blockVelocity: vy,
         }
-      } else detail = { width: target.offsetWidth, height: target.offsetHeight }
+      } else if (kind !== 'move') detail = { width: target.offsetWidth, height: target.offsetHeight }
       // Back to the graph's state: the reactions decide what the gesture did (moved, snapped
       // to an edge, or nothing), and the renderer shows that.
       if (original === null) target.removeAttribute('style')
       else target.setAttribute('style', original)
-      handle.dispatchEvent(new CustomEvent(kind === 'move' ? 'sem-move' : 'sem-resize', { bubbles: true, detail }))
+      if (edge === null) target.removeAttribute('data-sem-edge')
+      else target.setAttribute('data-sem-edge', edge)
+      // A press that never moved (or a gesture the browser took over) changes nothing.
+      if (detail) handle.dispatchEvent(new CustomEvent(kind === 'move' ? 'sem-move' : 'sem-resize', { bubbles: true, detail }))
     }
     handle.addEventListener('pointermove', move)
     handle.addEventListener('pointerup', up)
@@ -617,6 +643,60 @@ export class EventBus {
     handle.addEventListener('pointerup', up)
     handle.addEventListener('pointercancel', up)
   }
+}
+
+/** The component root a gesture handle belongs to (the nearest element that renders a focus). */
+function boxOf(handle: HTMLElement, renderer: DomRenderer): HTMLElement | null {
+  let box: HTMLElement | null = handle
+  while (box && !(renderer.keyOf(box) && renderer.index.focusOf(renderer.keyOf(box)!))) box = box.parentElement
+  return box
+}
+
+// --- moving by key (move handles) -------------------------------------------------------------------
+
+/** The edge each arrow key heads for, by writing direction. */
+const ARROW_EDGES: Record<string, { ltr: string; rtl: string }> = {
+  ArrowUp: { ltr: 'top', rtl: 'top' },
+  ArrowDown: { ltr: 'bottom', rtl: 'bottom' },
+  ArrowLeft: { ltr: 'start', rtl: 'end' },
+  ArrowRight: { ltr: 'end', rtl: 'start' },
+}
+const OPPOSITE: Record<string, string> = { top: 'bottom', bottom: 'top', start: 'end', end: 'start' }
+
+/**
+ * Arrow keys on a focused move handle (data-sem-gesture="move" that takes focus): 16 px a press
+ * (64 with Shift), kept on screen, committed like a drag with one sem-move event that says where
+ * the box is and how far it now is from the edge it moved towards, so the graph docks it there once
+ * it is within reach (c:snapDistance). Docked, the arrow away from its edge takes it off (a move
+ * with no position: it floats where it last floated); the others do nothing. Returns whether the
+ * key was used.
+ */
+export function moveByKey(k: KeyboardEvent, renderer: DomRenderer): boolean {
+  const handle = (k.target as Element | null)?.closest?.('[data-sem-gesture="move"]') as HTMLElement | null
+  const heading = ARROW_EDGES[k.key]
+  if (!handle || !heading || !handle.hasAttribute('tabindex') || !renderer.host.contains(handle) || k.altKey || k.ctrlKey || k.metaKey) return false
+  const box = boxOf(handle, renderer)
+  if (!box) return false
+  const doc = box.ownerDocument
+  const rtl = doc.defaultView?.getComputedStyle?.(box)?.direction === 'rtl'
+  const towards = rtl ? heading.rtl : heading.ltr
+  const edge = box.getAttribute('data-sem-edge')
+  const send = (detail: Record<string, number>) => handle.dispatchEvent(new (doc.defaultView?.CustomEvent ?? CustomEvent)('sem-move', { bubbles: true, detail }))
+  if (edge && edge !== 'none') {
+    if (towards === OPPOSITE[edge]) send({})
+    return true
+  }
+  const view = doc.documentElement
+  const r = box.getBoundingClientRect()
+  const step = k.shiftKey ? 64 : 16
+  const dx = k.key === 'ArrowLeft' ? -step : k.key === 'ArrowRight' ? step : 0
+  const dy = k.key === 'ArrowUp' ? -step : k.key === 'ArrowDown' ? step : 0
+  const left = Math.max(0, Math.min(view.clientWidth - r.width, r.left + dx))
+  const top = Math.max(0, Math.min(view.clientHeight - r.height, r.top + dy))
+  const away = { top, bottom: view.clientHeight - (top + r.height), start: rtl ? view.clientWidth - (left + r.width) : left, end: rtl ? left : view.clientWidth - (left + r.width) }
+  const name = { top: 'toTop', bottom: 'toBottom', start: 'toStart', end: 'toEnd' }[towards]!
+  send({ x: left, y: top, [name]: away[towards as keyof typeof away] })
+  return true
 }
 
 // --- one-axis sizing (separators) ------------------------------------------------------------------

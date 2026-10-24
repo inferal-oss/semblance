@@ -30,6 +30,7 @@ export const WIN = {
   TopEdge: c + 'TopEdge',
   BottomEdge: c + 'BottomEdge',
   snapDistance: c + 'snapDistance',
+  throwTime: c + 'throwTime',
   z: c + 'z',
   topmost: c + 'topmost',
   minimizes: c + 'minimizes',
@@ -47,16 +48,22 @@ export const WIN = {
   Maximize: c + 'MaximizeCommand',
   Restore: c + 'RestoreCommand',
   Undock: c + 'UndockCommand',
+  Move: c + 'MoveHandle',
+  MoveHint: c + 'MoveHint',
   ReturnToTab: c + 'ReturnToTabCommand',
   Windows: c + 'WindowsRegion',
 } as const
 const PROV_DERIVED_FROM = 'http://www.w3.org/ns/prov#wasDerivedFrom'
-/** The edges a frame can be attached to, by slug, with the event detail that measures each. */
+/**
+ * The edges a frame can be attached to, by slug, with the event detail that measures each and
+ * which way along each axis (inline, block) is away from it (a velocity that way carries a
+ * release further from the edge).
+ */
 const EDGES = [
-  { iri: WIN.StartEdge, slug: 'start', distance: NS.beh + 'toStart' },
-  { iri: WIN.EndEdge, slug: 'end', distance: NS.beh + 'toEnd' },
-  { iri: WIN.TopEdge, slug: 'top', distance: NS.beh + 'toTop' },
-  { iri: WIN.BottomEdge, slug: 'bottom', distance: NS.beh + 'toBottom' },
+  { iri: WIN.StartEdge, slug: 'start', distance: NS.beh + 'toStart', away: [1, 0] },
+  { iri: WIN.EndEdge, slug: 'end', distance: NS.beh + 'toEnd', away: [-1, 0] },
+  { iri: WIN.TopEdge, slug: 'top', distance: NS.beh + 'toTop', away: [0, 1] },
+  { iri: WIN.BottomEdge, slug: 'bottom', distance: NS.beh + 'toBottom', away: [0, -1] },
 ] as const
 const SNAP_DEFAULT = 24
 
@@ -139,6 +146,7 @@ export const frame: FnRule = (ctx, focus) => {
     return o.quads
   }
   const tab = originTab(ctx, focus)
+  const hidden = minimized || coveredByMaximized(ctx, focus)
   const control = (local: string, glyph: string, label: string, marker: string) => {
     // data-sem-control names the control for the theme (close, minimize, maximize, restore, dock, undock).
     const b = o.el(local, 'Button', { type: 'button', class: 'sem-window-control', 'data-sem-control': local }, [o.text(local + '-text', glyph)])
@@ -166,10 +174,28 @@ export const frame: FnRule = (ctx, focus) => {
     o.attr(grip, 'data-sem-gesture', 'resize').attr(grip, 'aria-hidden', 'true')
     parts.push(grip)
   }
-  o.renders(o.el('root', 'Section', { style: geometry(ctx, focus, caps, maximized, edge?.slug), hidden: minimized ? '' : undefined }, parts))
+  o.renders(o.el('root', 'Section', { style: geometry(ctx, focus, caps, maximized, edge?.slug), hidden: hidden ? '' : undefined }, parts))
   const root = o.node('root')
   o.attr(root, 'role', 'dialog').attr(root, 'aria-label', title)
   return o.quads
+}
+
+/**
+ * Whether a maximized frame on one of its desktops is in front of this one (a higher c:z, or the
+ * same and placed after it): then it cannot be seen, and is not shown, so what is in it (an
+ * inspector following the pointer) is parked. Only the frames' states are read until one is
+ * maximized, so raising costs no more.
+ */
+function coveredByMaximized(ctx: RuleContext, focus: NamedNode): boolean {
+  for (const { subject: d } of ctx.match(null, C.hosts, focus)) {
+    for (const other of ctx.objects(d, C.hosts)) {
+      if (other.equals(focus) || ctx.object(other, WIN.windowState)?.value !== WIN.Maximized || isFalse(ctx.object(other, FB.open))) continue
+      // In front: a higher c:z, or the same and placed after it (the desktop places frames in IRI order).
+      const [mz, fz] = [int(ctx, other, WIN.z, 0), int(ctx, focus, WIN.z, 0)]
+      if (mz > fz || (mz === fz && other.value > focus.value)) return true
+    }
+  }
+  return false
 }
 
 /** Default geometry, staggered by the window's position among its siblings. */
@@ -243,7 +269,12 @@ export const desktop: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** The open frames of a desktop, each an entry that restores, raises or minimizes it. */
+/**
+ * The open frames of a desktop, each an entry that restores, raises or minimizes it. A draggable
+ * taskbar leads with a grip (the move handle, for the pointer and the arrow keys); placed by it, it
+ * floats where it was put (c:x, c:y, kept on screen) or lies along the edge it is attached to.
+ * Unplaced, the theme places it.
+ */
 export const taskbar: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const desktop = ctx.object(focus, C.of)
@@ -263,9 +294,12 @@ export const taskbar: FnRule = (ctx, focus) => {
     const stateLabel = s.state ? (text(ctx, s.state, RDFS_LABEL) ?? slug) : undefined
     return { w, key: encodeURIComponent(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
   })
+  const edgeNode = ctx.object(focus, WIN.attachedTo)
+  const edge = EDGES.find((e) => e.iri === edgeNode?.value)
   if (ctx.modality === MOD.Text) {
     const line = entries.map((e) => `[${e.symbol} ${e.title}${e.active ? '*' : ''}]`).join(' ')
-    o.renders(o.el('root', 'Div', { hidden: entries.length ? undefined : '' }, [o.text('line', `▤ ${label}: ${line}`)]))
+    const mark = edge ? ` ${symbolOf(ctx, edgeNode) ?? ''}`.trimEnd() : ''
+    o.renders(o.el('root', 'Div', { hidden: entries.length ? undefined : '' }, [o.text('line', `▤ ${label}${mark}: ${line}`)]))
     return o.quads
   }
   const buttons = entries.map((e) => {
@@ -278,8 +312,29 @@ export const taskbar: FnRule = (ctx, focus) => {
     o.t(b, WIN.activates, e.w)
     return b
   })
-  const root = o.el('root', 'Div', { hidden: entries.length ? undefined : '' }, buttons)
+  const caps = classesOf(ctx, focus)
+  const parts = [...buttons]
+  if (caps.has(WIN.Draggable)) {
+    // A focusable handle, not a <button> (a pointer pressed on a button is the button's): it moves
+    // the taskbar at its own size, so one docked along an edge comes away as long as its entries.
+    const grip = o.el('grip', 'Span', { class: 'sem-grip', tabindex: '0', role: 'button' })
+    o.attr(grip, 'data-sem-gesture', 'move')
+      .attr(grip, 'data-sem-move-size', 'content')
+      .attr(grip, 'aria-label', `${phrase(ctx, WIN.Move, 'Move')} ${label}`)
+      .attr(grip, 'aria-keyshortcuts', 'ArrowUp ArrowDown ArrowLeft ArrowRight')
+    o.tip(grip, phrase(ctx, WIN.MoveHint, 'Drag, or use the arrow keys; at an edge it docks'))
+    parts.unshift(grip)
+  }
+  const x = ctx.object(focus, C.x)
+  const y = ctx.object(focus, C.y)
+  // Floating where it was put, but never off screen: its grip stays within reach when the viewport shrinks.
+  const placed = !edge && caps.has(WIN.Draggable) && x && y
+  const style = placed ? `left: clamp(0px, ${int(ctx, focus, C.x, 0)}px, calc(100vw - 56px)); top: clamp(0px, ${int(ctx, focus, C.y, 0)}px, calc(100dvh - 48px));` : undefined
+  const root = o.el('root', 'Div', { hidden: entries.length ? undefined : '', style }, parts)
   o.attr(root, 'role', 'toolbar').attr(root, 'aria-label', label)
+  // Placed and floating: c:NoEdge's slug, as a docked one carries its edge's (the style layer's hook).
+  if (placed) o.attr(root, 'data-sem-edge', 'none')
+  if (edge?.slug === 'start' || edge?.slug === 'end') o.attr(root, 'aria-orientation', 'vertical')
   o.renders(root)
   return o.quads
 }
@@ -323,12 +378,22 @@ function raise(ctx: ReactionContext, w: Term): Delta {
   return out
 }
 
-/** The edge a move's release snaps a dockable frame to (the nearest within c:snapDistance). */
+/**
+ * The edge a move's release snaps a dockable frame to: the nearest within c:snapDistance of where
+ * the release lands, carried c:throwTime ms along the gesture's velocity.
+ */
 function snapEdge(ctx: ReactionContext): string | undefined {
-  const limit = Number(ctx.object(nn(ctx, WIN.Dockable), WIN.snapDistance)?.value ?? SNAP_DEFAULT)
+  const dockable = nn(ctx, WIN.Dockable)
+  const limit = Number(ctx.object(dockable, WIN.snapDistance)?.value ?? SNAP_DEFAULT)
+  const ahead = Number(ctx.object(dockable, WIN.throwTime)?.value ?? 0) / 1000
+  const velocity = (p: string) => Number(ctx.object(ctx.event, NS.beh + p)?.value ?? 0) || 0
+  const vi = velocity('inlineVelocity')
+  const vb = velocity('blockVelocity')
   let best: { iri: string; d: number } | undefined
   for (const e of EDGES) {
-    const d = Number(ctx.object(ctx.event, e.distance)?.value ?? NaN)
+    const at = ctx.object(ctx.event, e.distance)
+    if (!at) continue
+    const d = Number(at.value) + (vi * e.away[0] + vb * e.away[1]) * ahead
     if (d <= limit && (!best || d < best.d)) best = { iri: e.iri, d }
   }
   return best?.iri
@@ -366,9 +431,9 @@ export const reactions: Record<string, ReactionFn> = {
     return merge({ remove: ctx.match(tab, WIN.detached, null), add: [] }, ...tabsOf(ctx, tab).map((tabs) => put(ctx, tabs, WIN.selected, tab)))
   },
   'frame:move': (ctx) => {
-    if (classesIn(ctx, ctx.target).has(WIN.Dockable) && snapEdge(ctx)) return none()
     const x = ctx.object(ctx.event, NS.beh + 'x')
     const y = ctx.object(ctx.event, NS.beh + 'y')
+    if (!x || !y || (classesIn(ctx, ctx.target).has(WIN.Dockable) && snapEdge(ctx))) return none()
     return merge(put(ctx, ctx.target, C.x, x), put(ctx, ctx.target, C.y, y))
   },
   'frame:snap': (ctx) => {

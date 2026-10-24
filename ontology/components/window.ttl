@@ -23,7 +23,7 @@
 #   c:Raisable     pressing anywhere in it brings it to the front of its desktop: c:z, c:topmost
 #   c:Minimizable  c:windowState c:Minimized (hidden; its desktop's c:Taskbar restores it)
 #   c:Maximizable  c:windowState c:Maximized (fills the viewport)
-#   c:Dockable     c:attachedTo an edge of the viewport; dropped near an edge, it snaps there
+#   c:Dockable     c:attachedTo an edge of the viewport; dropped near an edge, or thrown at one, it snaps there
 #
 # State is two orthogonal, hookable axes (sty:hookAttribute), so the theme styles each
 # value once for every frame: c:windowState (data-sem-window-state) and c:attachedTo
@@ -42,6 +42,12 @@
 # Geometry (c:x, c:y, c:width, c:height) is input state on the window's IRI, committed
 # by one RDF event per gesture; the IRI is deterministic, so a re-detached tab reopens
 # where it was.
+#
+# The capabilities are not only for frames. A c:Taskbar that is also c:Draggable and c:Dockable
+# (`ui:taskbar a c:Taskbar , c:Draggable , c:Dockable`) gets a grip: dragged, or moved with the
+# arrow keys, it floats where it is put (c:x, c:y); thrown at an edge it docks there
+# (c:attachedTo), lying along it; dragged away it floats again. Without either it stays where
+# the theme puts it.
 
 # --- capabilities (mixins) ------------------------------------------------------------------
 
@@ -67,16 +73,25 @@ c:Minimizable a owl:Class ;
 c:Maximizable a owl:Class ;
     rdfs:subClassOf c:Restorable ;
     rdfs:label "Maximizable"@en , "Розгортається"@uk , "Maximierbar"@de , "قابل للتكبير"@ar ;
-    rdfs:comment "Mixin: a control marked c:maximizes sets c:windowState c:Maximized: the frame fills the viewport, and c:restores returns it to its place (floating or docked)."@en .
+    rdfs:comment """Mixin: a control marked c:maximizes sets c:windowState c:Maximized: the frame fills the viewport
+(less the edge a docked taskbar keeps), and c:restores returns it to its place (floating or docked).
+The frames on its desktop behind it (a lower c:z, or the same and placed before it) cannot be seen, so they are not shown: hidden, their
+bodies parked, until they come in front of it or it is restored."""@en .
 c:Dockable a owl:Class ;
     rdfs:label "Dockable"@en , "Прикріплюється"@uk , "Andockbar"@de , "قابل للإرساء"@ar ;
     rdfs:comment """Mixin: c:attachedTo an edge of the viewport, the frame fills that edge (a side panel, a
 top or bottom bar). Dropping it with the pointer within c:snapDistance of an edge attaches it there;
-dragging it away, or a control marked c:undocks, floats it again where it was."""@en ;
-    c:snapDistance 24 .
+dragging it away, or a control marked c:undocks, floats it again where it was. A release counts
+where its momentum would carry it (c:throwTime), so a frame thrown at an edge docks there too."""@en ;
+    c:snapDistance 24 ;
+    c:throwTime 160 .
 
 c:snapDistance a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:integer ;
     rdfs:comment "How close to an edge (CSS px) the pointer must be released for a c:Dockable frame to snap to it."@en .
+c:throwTime a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:integer ;
+    rdfs:comment """How far ahead (ms) a move's release is carried along its velocity (beh:inlineVelocity,
+beh:blockVelocity) before it is measured against c:snapDistance: a release 300 px from an edge at
+2,000 px/s towards it lands within reach (0: only where the pointer was let go counts)."""@en .
 
 # --- state axes -------------------------------------------------------------------------------
 
@@ -131,16 +146,24 @@ c:PointerDown a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "pointerdow
 
 # Numeric details of a move gesture's release (events.ts adds them as beh:* integers):
 # how far the pointer was from each edge of the viewport, in CSS px, with start and end
-# following the writing direction. A move without them never snaps.
+# following the writing direction. A move without them never snaps. A pointer gesture also
+# says how fast it was going when let go (px/s along the inline axis, positive towards the end,
+# and along the block axis, positive towards the bottom); a key press says only the distance
+# to the edge it moves towards.
 beh:toStart a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:toEnd a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:toTop a owl:DatatypeProperty ; rdfs:range xsd:integer .
 beh:toBottom a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:inlineVelocity a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:blockVelocity a owl:DatatypeProperty ; rdfs:range xsd:integer .
 
 # Phrases a frame shows of its own accord (c:Phrase, feedback.ttl), in the viewer's language.
 c:MinimizeCommand a c:Phrase ; rdfs:label "Minimize"@en , "Згорнути"@uk , "Minimieren"@de , "تصغير"@ar .
 c:MaximizeCommand a c:Phrase ; rdfs:label "Maximize"@en , "Розгорнути"@uk , "Maximieren"@de , "تكبير"@ar .
 c:RestoreCommand a c:Phrase ; rdfs:label "Restore"@en , "Відновити"@uk , "Wiederherstellen"@de , "استعادة"@ar .
+c:MoveHandle a c:Phrase ; rdfs:label "Move"@en , "Перемістити"@uk , "Verschieben"@de , "نقل"@ar .
+c:MoveHint a c:Phrase ; rdfs:label "Drag, or use the arrow keys; at an edge it docks"@en , "Перетягніть або скористайтеся стрілками; біля краю прикріплюється"@uk ,
+    "Ziehen oder mit den Pfeiltasten bewegen; am Rand dockt es an"@de , "اسحب أو استخدم مفاتيح الأسهم؛ عند الحافة يثبت"@ar .
 c:UndockCommand a c:Phrase ; rdfs:label "Float"@en , "Відкріпити"@uk , "Lösen"@de , "فك التثبيت"@ar .
 c:ReturnToTabCommand a c:Phrase ; rdfs:label "Return to its tab"@en , "Повернути у вкладку"@uk , "Zurück in den Tab"@de , "إرجاع إلى علامة التبويب"@ar .
 c:WindowsRegion a c:Phrase ; rdfs:label "Windows"@en , "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
@@ -215,23 +238,41 @@ WHERE {
 # --- behaviour: capabilities ----------------------------------------------------------------------
 
 # A move that snaps a dockable frame to an edge is the dock's: the floating position stays
-# where it was, so floating again returns there.
+# where it was, so floating again returns there. A move that says no position (a key press that
+# takes a docked component off its edge) floats it where it was, too.
+#
+# Where a release lands, for each edge: its distance from it, carried c:throwTime ms further along
+# the gesture's velocity (?si, ?sb: which way along each axis is away from that edge).
 c:DraggableMove a beh:Reaction ;
     beh:when beh:Move ;
     beh:sourceClass c:Draggable ;
     beh:deletes """CONSTRUCT { $this c:x ?x ; c:y ?y }
 WHERE {
+  $event beh:x ?nx ; beh:y ?ny .
   { $this c:x ?x } UNION { $this c:y ?y }
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:Dockable . c:Dockable c:snapDistance ?limit . $event beh:toStart|beh:toEnd|beh:toTop|beh:toBottom ?d FILTER(?d <= ?limit) }
+  FILTER NOT EXISTS {
+    $this a/rdfs:subClassOf* c:Dockable . c:Dockable c:snapDistance ?limit .
+    { $event beh:toStart ?r BIND(1 AS ?si) BIND(0 AS ?sb) } UNION { $event beh:toEnd ?r BIND(-1 AS ?si) BIND(0 AS ?sb) }
+    UNION { $event beh:toTop ?r BIND(0 AS ?si) BIND(1 AS ?sb) } UNION { $event beh:toBottom ?r BIND(0 AS ?si) BIND(-1 AS ?sb) }
+    OPTIONAL { c:Dockable c:throwTime ?t } OPTIONAL { $event beh:inlineVelocity ?vi } OPTIONAL { $event beh:blockVelocity ?vb }
+    FILTER(?r + (COALESCE(?vi, 0) * ?si + COALESCE(?vb, 0) * ?sb) * COALESCE(?t, 0) / 1000 <= ?limit)
+  }
 }""" ;
     beh:inserts """CONSTRUCT { $this c:x ?x ; c:y ?y }
 WHERE {
   $event beh:x ?x ; beh:y ?y .
-  FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:Dockable . c:Dockable c:snapDistance ?limit . $event beh:toStart|beh:toEnd|beh:toTop|beh:toBottom ?d FILTER(?d <= ?limit) }
+  FILTER NOT EXISTS {
+    $this a/rdfs:subClassOf* c:Dockable . c:Dockable c:snapDistance ?limit .
+    { $event beh:toStart ?r BIND(1 AS ?si) BIND(0 AS ?sb) } UNION { $event beh:toEnd ?r BIND(-1 AS ?si) BIND(0 AS ?sb) }
+    UNION { $event beh:toTop ?r BIND(0 AS ?si) BIND(1 AS ?sb) } UNION { $event beh:toBottom ?r BIND(0 AS ?si) BIND(-1 AS ?sb) }
+    OPTIONAL { c:Dockable c:throwTime ?t } OPTIONAL { $event beh:inlineVelocity ?vi } OPTIONAL { $event beh:blockVelocity ?vb }
+    FILTER(?r + (COALESCE(?vi, 0) * ?si + COALESCE(?vb, 0) * ?sb) * COALESCE(?t, 0) / 1000 <= ?limit)
+  }
 }""" ;
     sem:function "frame:move" .
 
-# Every move re-decides the attachment: the nearest edge within c:snapDistance, else none.
+# Every move re-decides the attachment: the edge the release lands nearest, within c:snapDistance
+# (or past it), else none.
 c:DockableSnap a beh:Reaction ;
     beh:when beh:Move ;
     beh:sourceClass c:Dockable ;
@@ -241,8 +282,12 @@ WHERE {
   c:Dockable c:snapDistance ?limit .
   {
     SELECT ?edge ?d WHERE {
-      { $event beh:toStart ?d BIND(c:StartEdge AS ?edge) BIND(1 AS ?rank) } UNION { $event beh:toEnd ?d BIND(c:EndEdge AS ?edge) BIND(2 AS ?rank) }
-      UNION { $event beh:toTop ?d BIND(c:TopEdge AS ?edge) BIND(3 AS ?rank) } UNION { $event beh:toBottom ?d BIND(c:BottomEdge AS ?edge) BIND(4 AS ?rank) }
+      { $event beh:toStart ?r BIND(c:StartEdge AS ?edge) BIND(1 AS ?rank) BIND(1 AS ?si) BIND(0 AS ?sb) }
+      UNION { $event beh:toEnd ?r BIND(c:EndEdge AS ?edge) BIND(2 AS ?rank) BIND(-1 AS ?si) BIND(0 AS ?sb) }
+      UNION { $event beh:toTop ?r BIND(c:TopEdge AS ?edge) BIND(3 AS ?rank) BIND(0 AS ?si) BIND(1 AS ?sb) }
+      UNION { $event beh:toBottom ?r BIND(c:BottomEdge AS ?edge) BIND(4 AS ?rank) BIND(0 AS ?si) BIND(-1 AS ?sb) }
+      OPTIONAL { c:Dockable c:throwTime ?t } OPTIONAL { $event beh:inlineVelocity ?vi } OPTIONAL { $event beh:blockVelocity ?vb }
+      BIND(?r + (COALESCE(?vi, 0) * ?si + COALESCE(?vb, 0) * ?sb) * COALESCE(?t, 0) / 1000 AS ?d)
     } ORDER BY ?d ?rank LIMIT 1
   }
   FILTER(?d <= ?limit)
@@ -343,7 +388,10 @@ c:Taskbar a owl:Class ;
     rdfs:comment """The open frames of a desktop (c:of), one entry each with its state's symbol and its
 title. Activating an entry restores a minimized frame, brings another to the front, and
 minimizes the frame already in front (if it is c:Minimizable). Hidden while no frame is open.
-Hosted on the desktop itself, it is there on every page."""@en ;
+Hosted on the desktop itself, it is there on every page. An instance that is also c:Draggable has
+a grip (dragged, or moved with the arrow keys: c:x, c:y), and one that is also c:Dockable docks to
+the edge it is thrown at (c:attachedTo): along the top or bottom it lies across, along the start or
+end it stands upright, and the page keeps that edge clear."""@en ;
     sem:slug "taskbar" .
 c:TaskbarRendering a sem:Rendering ; sem:targets c:Taskbar ; sem:stratum 0 .
 c:TaskbarRendering-fn a sem:Rule ; sem:implements c:TaskbarRendering ; sem:function "taskbar" .

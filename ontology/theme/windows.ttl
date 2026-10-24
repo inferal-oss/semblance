@@ -22,7 +22,8 @@
 # --- c:windowState ------------------------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:Maximized ;
-    sty:declares [ sty:property "inset" ; sty:raw "0" ] ,
+    sty:declares [ sty:property "inset-block" ; sty:raw "var(--sem-dock-top, 0px) var(--sem-dock-bottom, 0px)" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "var(--sem-dock-start, 0px) var(--sem-dock-end, 0px)" ] ,
                  [ sty:property "width" ; sty:raw "auto" ] ,
                  [ sty:property "height" ; sty:raw "auto" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
@@ -32,34 +33,35 @@
     sty:declares [ sty:property "cursor" ; sty:raw "default" ] .
 
 # --- c:attachedTo: a docked frame fills its edge (maximized wins) -------------------------------------------
+# A taskbar docked to an edge owns it (--sem-dock-*, set on the page below): frames dock inside it.
 
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:StartEdge ; sty:state ":not([data-sem-window-state=\"maximized\"])" ;
-    sty:declares [ sty:property "inset-block" ; sty:raw "0" ] ,
-                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+    sty:declares [ sty:property "inset-block" ; sty:raw "var(--sem-dock-top, 0px) var(--sem-dock-bottom, 0px)" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "var(--sem-dock-start, 0px)" ] ,
                  [ sty:property "inset-inline-end" ; sty:raw "auto" ] ,
                  [ sty:property "height" ; sty:raw "auto" ] ,
                  [ sty:property "max-width" ; sty:raw "80vw" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "border-width" ; sty:raw "0 1px 0 0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:EndEdge ; sty:state ":not([data-sem-window-state=\"maximized\"])" ;
-    sty:declares [ sty:property "inset-block" ; sty:raw "0" ] ,
-                 [ sty:property "inset-inline-end" ; sty:raw "0" ] ,
+    sty:declares [ sty:property "inset-block" ; sty:raw "var(--sem-dock-top, 0px) var(--sem-dock-bottom, 0px)" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "var(--sem-dock-end, 0px)" ] ,
                  [ sty:property "inset-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "height" ; sty:raw "auto" ] ,
                  [ sty:property "max-width" ; sty:raw "80vw" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "border-width" ; sty:raw "0 0 0 1px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:TopEdge ; sty:state ":not([data-sem-window-state=\"maximized\"])" ;
-    sty:declares [ sty:property "inset-inline" ; sty:raw "0" ] ,
-                 [ sty:property "inset-block-start" ; sty:raw "0" ] ,
+    sty:declares [ sty:property "inset-inline" ; sty:raw "var(--sem-dock-start, 0px) var(--sem-dock-end, 0px)" ] ,
+                 [ sty:property "inset-block-start" ; sty:raw "var(--sem-dock-top, 0px)" ] ,
                  [ sty:property "inset-block-end" ; sty:raw "auto" ] ,
                  [ sty:property "width" ; sty:raw "auto" ] ,
                  [ sty:property "max-height" ; sty:raw "70vh" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "border-width" ; sty:raw "0 0 1px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:BottomEdge ; sty:state ":not([data-sem-window-state=\"maximized\"])" ;
-    sty:declares [ sty:property "inset-inline" ; sty:raw "0" ] ,
-                 [ sty:property "inset-block-end" ; sty:raw "0" ] ,
+    sty:declares [ sty:property "inset-inline" ; sty:raw "var(--sem-dock-start, 0px) var(--sem-dock-end, 0px)" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "var(--sem-dock-bottom, 0px)" ] ,
                  [ sty:property "inset-block-start" ; sty:raw "auto" ] ,
                  [ sty:property "width" ; sty:raw "auto" ] ,
                  [ sty:property "max-height" ; sty:raw "70vh" ] ,
@@ -155,6 +157,7 @@
                  [ sty:property "translate" ; sty:raw "-50% 0" ] ,
                  [ sty:property "z-index" ; sty:raw "55" ] ,
                  [ sty:property "max-width" ; sty:raw "calc(100vw - 32px)" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
                  [ sty:property "animation" ; sty:raw "sem-rise-in var(--sem-duration) var(--sem-ease)" ] .
 
@@ -166,10 +169,104 @@
 
 # A frame docked to the bottom edge owns that edge: the taskbar sits just above it (anchor
 # positioning; where that is unsupported the declaration is dropped and it keeps its place).
+# Only while the taskbar is where the theme put it: placed, it stays where it was put.
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:when c:BottomEdge ; sty:state ":not([data-sem-window-state=\"maximized\"], [data-sem-window-state=\"minimized\"])" ;
     sty:declares [ sty:property "anchor-name" ; sty:raw "--sem-bottom-dock" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Desktop ;
     sty:state ":has(> .sem-frames > [data-sem-edge=\"bottom\"]:not([hidden], [data-sem-window-state=\"minimized\"], [data-sem-window-state=\"maximized\"]))" ;
-    sty:part "> [data-sem-c=\"taskbar\"]" ;
+    sty:part "> [data-sem-c=\"taskbar\"]:not([data-sem-edge])" ;
     sty:declares [ sty:property "position-anchor" ; sty:raw "--sem-bottom-dock" ] ,
                  [ sty:property "inset-block-end" ; sty:raw "calc(anchor(top) + 12px)" ] .
+
+# --- a taskbar that can be moved (c:Draggable) and docked (c:Dockable) ---------------------------------------------
+# Its grip is a column of dots at its start (a row of them at its top when it stands upright).
+
+[] a sty:StyleRule ; sty:appliesTo c:Taskbar ; sty:part "> .sem-grip" ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "align-self" ; sty:raw "stretch" ] ,
+                 [ sty:property "width" ; sty:raw "14px" ] ,
+                 [ sty:property "min-height" ; sty:raw "24px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "6px" ] ,
+                 [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--sem-faint) 1.1px, transparent 1.6px) center / 5px 5px space" ] ,
+                 [ sty:property "background-origin" ; sty:raw "content-box" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 2px" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "cursor" ; sty:raw "grab" ] ,
+                 [ sty:property "touch-action" ; sty:raw "none" ] ,
+                 [ sty:property "user-select" ; sty:raw "none" ] ,
+                 [ sty:property "-webkit-user-select" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Taskbar ; sty:part "> .sem-grip:hover" ;
+    sty:declares [ sty:property "background-color" ; sty:token tok:surface-hover ] .
+[] a sty:StyleRule ; sty:appliesTo c:Taskbar ; sty:part "> .sem-grip:active" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "grabbing" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Taskbar ; sty:part "> .sem-grip:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+
+# Placed: floating where it was put (its inline left and top), no longer centred.
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"][data-sem-edge=\"none\"]" ;
+    sty:declares [ sty:property "inset-block-end" ; sty:raw "auto" ] ,
+                 [ sty:property "right" ; sty:raw "auto" ] ,
+                 [ sty:property "translate" ; sty:raw "none" ] .
+
+# Docked: it lies along its edge, from end to end, flush with it; the page keeps that edge clear.
+# How thick it is across: --sem-taskbar-size lying, --sem-taskbar-span standing (a theme may say).
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"]:is([data-sem-edge=\"top\"], [data-sem-edge=\"bottom\"], [data-sem-edge=\"start\"], [data-sem-edge=\"end\"])" ;
+    sty:declares [ sty:property "translate" ; sty:raw "none" ] ,
+                 [ sty:property "max-width" ; sty:raw "none" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "border-width" ; sty:raw "0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "animation" ; sty:raw "none" ] ,
+                 [ sty:property "scrollbar-width" ; sty:raw "thin" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"]:is([data-sem-edge=\"top\"], [data-sem-edge=\"bottom\"])" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "0" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--sem-taskbar-size, 40px)" ] ,
+                 [ sty:property "overflow-x" ; sty:raw "auto" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "hidden" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"][data-sem-edge=\"top\"]" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "0 auto" ] ,
+                 [ sty:property "border-block-end-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"][data-sem-edge=\"bottom\"]" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "auto 0" ] ,
+                 [ sty:property "border-block-start-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"]:is([data-sem-edge=\"start\"], [data-sem-edge=\"end\"])" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "var(--sem-taskbar-span, min(168px, 40vw))" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] ,
+                 [ sty:property "overflow-x" ; sty:raw "hidden" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"][data-sem-edge=\"start\"]" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "0 auto" ] ,
+                 [ sty:property "border-inline-end-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> [data-sem-c=\"taskbar\"][data-sem-edge=\"end\"]" ;
+    sty:declares [ sty:property "inset-inline" ; sty:raw "auto 0" ] ,
+                 [ sty:property "border-inline-start-width" ; sty:raw "1px" ] .
+# Standing upright, its entries are rows as wide as it, and its grip a row of dots on top.
+[] a sty:StyleRule ; sty:appliesTo c:Taskbar ; sty:state ":is([data-sem-edge=\"start\"], [data-sem-edge=\"end\"])" ; sty:part "> .sem-task" ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "max-width" ; sty:raw "none" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Taskbar ; sty:state ":is([data-sem-edge=\"start\"], [data-sem-edge=\"end\"])" ; sty:part "> .sem-grip" ;
+    sty:declares [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] ,
+                 [ sty:property "height" ; sty:raw "14px" ] ,
+                 [ sty:property "padding" ; sty:raw "2px 4px" ] .
+
+# The page keeps a docked taskbar's edge clear: the element that holds the desktop is padded by
+# it, and says how much (--sem-dock-*) to what sticks to that edge (the app bar, the status bar)
+# and to the frames that dock or maximize there.
+[] a sty:StyleRule ; sty:part ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=top], [data-sem-edge=bottom], [data-sem-edge=start], [data-sem-edge=end]):not([hidden]))" ;
+    sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "padding-block" ; sty:raw "var(--sem-dock-top, 0px) var(--sem-dock-bottom, 0px)" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "var(--sem-dock-start, 0px) var(--sem-dock-end, 0px)" ] .
+[] a sty:StyleRule ; sty:part ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=top]:not([hidden]))" ;
+    sty:declares [ sty:property "--sem-dock-top" ; sty:raw "var(--sem-taskbar-size, 40px)" ] .
+[] a sty:StyleRule ; sty:part ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=bottom]:not([hidden]))" ;
+    sty:declares [ sty:property "--sem-dock-bottom" ; sty:raw "var(--sem-taskbar-size, 40px)" ] .
+[] a sty:StyleRule ; sty:part ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=start]:not([hidden]))" ;
+    sty:declares [ sty:property "--sem-dock-start" ; sty:raw "var(--sem-taskbar-span, min(168px, 40vw))" ] .
+[] a sty:StyleRule ; sty:part ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=end]:not([hidden]))" ;
+    sty:declares [ sty:property "--sem-dock-end" ; sty:raw "var(--sem-taskbar-span, min(168px, 40vw))" ] .

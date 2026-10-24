@@ -978,6 +978,44 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=taskbar] .sem-task[aria-current=\"true\"]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--sem-text) 0 2px, transparent 2.5px) bottom 1px center / 6px 6px no-repeat" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+# Docked, the dock stays a shelf: centred along its edge, a little off it, as long as its entries;
+# the page keeps clear the band it floats in (--sem-taskbar-size, --sem-taskbar-span).
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "72px" ] ,
+                 [ sty:property "--sem-taskbar-span" ; sty:raw "84px" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=top], [data-sem-edge=bottom], [data-sem-edge=start], [data-sem-edge=end]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "18px" ] ,
+                 [ sty:property "border-width" ; sty:raw "1px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-3)" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=top], [data-sem-edge=bottom]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "fit-content" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "calc(100% - 16px)" ] ,
+                 [ sty:property "margin-inline" ; sty:raw "auto" ] ,
+                 [ sty:property "block-size" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=bottom]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "inset-block-end" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=top]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "inset-block-start" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=start], [data-sem-edge=end]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "block-size" ; sty:raw "fit-content" ] ,
+                 [ sty:property "max-block-size" ; sty:raw "calc(100dvh - 16px)" ] ,
+                 [ sty:property "margin-block" ; sty:raw "auto" ] ,
+                 [ sty:property "inline-size" ; sty:raw "auto" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=start]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=end]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "inset-inline-end" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=start], [data-sem-edge=end]) > .sem-task:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "max-width" ; sty:raw "72px" ] .
 
 # Bars: the app bar and the status bar are glass toolbars with hairline edges.
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
@@ -1697,7 +1735,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # The Deskbar: on the desktop, the taskbar is a column of entries at the top right.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "left" ; sty:raw "auto" ] ,
                  [ sty:property "right" ; sty:raw "12px" ] ,
                  [ sty:property "top" ; sty:raw "76px" ] ,
@@ -1733,6 +1771,15 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "transparent" ] ,
                  [ sty:property "background" ; sty:raw "linear-gradient(135deg, #fff9c4, #f3c300)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px #8a6d00, inset 1px 1px 0 1px #fffbe0" ] .
+[] a sty:StyleRule ; sty:when sty:Tracker ;
+    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "36px" ] .
+# The Deskbar stands upright: its grip is a row of dots on top.
+[] a sty:StyleRule ; sty:when sty:Tracker ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge]) > .sem-grip:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] ,
+                 [ sty:property "height" ; sty:raw "14px" ] ,
+                 [ sty:property "padding" ; sty:raw "2px 4px" ] .
 
 # --- Classic ---------------------------------------------------------------------------------
 [] a sty:StyleRule ; sty:when sty:Classic ;
@@ -2320,7 +2367,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # The taskbar on the desktop runs along the bottom of the screen.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "left" ; sty:raw "0" ] ,
                  [ sty:property "right" ; sty:raw "0" ] ,
                  [ sty:property "translate" ; sty:raw "none" ] ,
@@ -2328,6 +2375,14 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "inset-block-end" ; sty:raw "0" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "z-index" ; sty:raw "56" ] .
+[] a sty:StyleRule ; sty:when sty:Classic ;
+    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "34px" ] .
+# Where the theme puts it (along the bottom) it owns that edge, as if docked there.
+[] a sty:StyleRule ; sty:when sty:Classic ;
+    sty:state ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge], [hidden]))" ;
+    sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "--sem-dock-bottom" ; sty:raw "var(--sem-taskbar-size)" ] ,
+                 [ sty:property "padding-block-end" ; sty:raw "var(--sem-dock-bottom)" ] .
 
 # The brand in the app bar wears the caption gradient.
 [] a sty:StyleRule ; sty:when sty:Classic ;
@@ -2756,6 +2811,11 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "border" ; sty:raw "2px solid var(--ink)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-o)" ] .
+# Docked, the tape lies straight along its edge.
+[] a sty:StyleRule ; sty:when sty:Doodle ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=top], [data-sem-edge=bottom], [data-sem-edge=start], [data-sem-edge=end]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:declares [ sty:property "rotate" ; sty:raw "none" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] .
 
 # Badges and tags are circled words; progress is hatched in with a pen.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
@@ -3327,7 +3387,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "gap" ; sty:raw "4px" ] ,
                  [ sty:property "justify-content" ; sty:raw "center" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "left" ; sty:raw "0" ] ,
                  [ sty:property "right" ; sty:raw "0" ] ,
                  [ sty:property "translate" ; sty:raw "none" ] ,
@@ -3384,6 +3444,41 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=taskbar] .sem-task[aria-current=\"true\"]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::after" ;
     sty:declares [ sty:property "width" ; sty:raw "16px" ] ,
                  [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:declares [ sty:property "--sem-taskbar-size" ; sty:raw "49px" ] ,
+                 [ sty:property "--sem-taskbar-span" ; sty:raw "58px" ] .
+# Where the theme puts it (along the bottom) it owns that edge, as if docked there.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:state ":has(> [data-sem-c=desktop] > [data-sem-c=taskbar]:not([data-sem-edge], [hidden]))" ;
+    sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "--sem-dock-bottom" ; sty:raw "var(--sem-taskbar-size)" ] ,
+                 [ sty:property "padding-block-end" ; sty:raw "var(--sem-dock-bottom)" ] .
+# Docked, a band flush with its edge, a stroke on its inner side.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=top], [data-sem-edge=bottom], [data-sem-edge=start], [data-sem-edge=end]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "border-width" ; sty:raw "0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=bottom]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-block-start-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=top]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-block-end-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=start]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-inline-end-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar][data-sem-edge=end]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-inline-start-width" ; sty:raw "1px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=start], [data-sem-edge=end]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-start" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:is([data-sem-edge=start], [data-sem-edge=end]) > .sem-task:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] .
 
 # Bars on Mica, edged with a hairline; cards and specimens are layers with a stroke.
 [] a sty:StyleRule ; sty:when sty:Fluent ;

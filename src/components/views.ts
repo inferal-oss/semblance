@@ -452,14 +452,17 @@ const elementMarkup: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** Marks the selected node; owns only the attribute it adds. */
+/**
+ * Marks the selected node. Of its own it renders an empty hidden root: the theme shows the mark
+ * only while that root is shown, so a highlight parked out of sight leaves no visible mark.
+ */
 const highlight: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Span', { hidden: '' }))
   const from = ctx.object(focus, C.bindFrom)
   const property = ctx.object(focus, C.bindProperty)
   const node = from && property ? ctx.object(from, property) : undefined
-  if (!named(node)) return []
-  const o = ctx.out(focus)
-  o.attr(node, 'data-sem-highlighted', 'true', 'mark')
+  if (named(node)) o.attr(node, 'data-sem-highlighted', 'true', 'mark')
   return o.quads
 }
 
