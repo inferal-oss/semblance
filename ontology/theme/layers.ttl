@@ -94,3 +94,59 @@
                  [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShapeReport ; sty:part "> li > span" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] .
+
+# --- ontology docs under each specimen ---
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "border-top" ; sty:raw "1px dashed var(--sem-border)" ] ,
+                 [ sty:property "padding-top" ; sty:token tok:space-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "padding" ; sty:raw "6px 8px" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font" ; sty:raw "500 12px/1.3 var(--sem-font)" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle:hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] , [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle strong" ;
+    sty:declares [ sty:property "font" ; sty:raw "650 11px/1 var(--sem-font)" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.08em" ] ,
+                 [ sty:property "text-transform" ; sty:raw "uppercase" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle > span:not(.sem-chevron)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs .sem-chevron" ;
+    sty:declares [ sty:property "width" ; sty:raw "7px" ] ,
+                 [ sty:property "height" ; sty:raw "7px" ] ,
+                 [ sty:property "border-right" ; sty:raw "1.5px solid currentColor" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "1.5px solid currentColor" ] ,
+                 [ sty:property "transform" ; sty:raw "rotate(-45deg)" ] ,
+                 [ sty:property "transition" ; sty:raw "transform var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > [aria-expanded=true] .sem-chevron" ;
+    sty:declares [ sty:property "transform" ; sty:raw "rotate(45deg)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ClassDoc ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "max-height" ; sty:raw "420px" ] ,
+                 [ sty:property "overflow" ; sty:raw "auto" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-4 ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "font" ; sty:raw "12px/1.55 var(--sem-font-mono)" ] ,
+                 [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
+                 [ sty:property "animation" ; sty:raw "sem-rise-in var(--sem-duration) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ClassDoc ; sty:part ".ttl-comment" ;
+    sty:declares [ sty:property "color" ; sty:token tok:faint ] , [ sty:property "font-style" ; sty:raw "italic" ] .

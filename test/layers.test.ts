@@ -195,3 +195,26 @@ describe('component shapes layer', () => {
     expect(h.$('[data-sem-c=shape-report]').querySelectorAll('li')).toHaveLength(2)
   })
 })
+
+describe('ontology docs layer', () => {
+  it('shows, under each specimen, the ontology of the components it uses, once opened', () => {
+    const h = showLayers()
+    const f = h.store.factory
+    const app = f.namedNode(UI + 'app')
+    const group = f.namedNode(UI + 'galleryGroup')
+    h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupFeedback'))] })
+    h.shell.flush()
+    const spec = h.byId(`${UI}fb-alerts-spec/~root`)
+    const toggle = spec.querySelector('.sem-docs-toggle')!
+    expect(toggle.textContent).toContain('c:Alert')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(spec.querySelector('[data-sem-c=class-doc]')).toBeNull() // not built until opened
+    h.fire(toggle, 'click')
+    const doc = spec.querySelector('[data-sem-c=class-doc]')!
+    expect(doc.textContent).toContain('c:Alert')
+    expect(doc.textContent).toContain('rdfs:subClassOf')
+    expect(doc.textContent).toContain('sem:targets')
+    // The section sits after the stage, inside the specimen.
+    expect(spec.lastElementChild!.classList.contains('sem-docs')).toBe(true)
+  })
+})

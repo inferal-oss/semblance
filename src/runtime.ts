@@ -4,6 +4,7 @@ import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
 import { EVENTS_GRAPH, PERF_GRAPH } from './ns.ts'
+import { docsFunctions } from './layers/docs.ts'
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -29,7 +30,7 @@ export class Runtime {
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH],
       ...opts,
-      functions: { ...builtinFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError)
     engine.onChange((d) => index.apply(d))

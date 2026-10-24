@@ -99,6 +99,7 @@ export const SEM = {
   inputOnly: sem + 'inputOnly',
   TooltipLayer: sem + 'TooltipLayer',
   Layer: sem + 'Layer',
+  DocsLayer: sem + 'DocsLayer',
   select: sem + 'select',
   text: sem + 'text',
   verdict: sem + 'verdict',
