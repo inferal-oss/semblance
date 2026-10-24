@@ -47,6 +47,21 @@ beh:Size a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-size" ;
 moved with the arrow keys: the new size of what it sizes along its axis (beh:size) and the room
 there was for it (beh:extent, its container along the same axis), in CSS px."""@en .
 
+# --- Time: things due later ---------------------------------------------------------------------
+# Any node may say when something is due about it (beh:dueAt). When the time comes, the host
+# (src/behaviour/schedule.ts, on the host's one clock) records a beh:Due event addressed to that
+# node - an ordinary recorded event, handled by ordinary reactions (beh:when beh:Due) - and the
+# beh:dueAt is spent unless a reaction set a new one. One timer serves the earliest due node. A
+# node with beh:dueWhileShown waits, past its time, until that component is shown: a script
+# playing in a page nobody looks at holds still.
+
+beh:dueAt a owl:DatatypeProperty ; rdfs:range xsd:dateTime ;
+    rdfs:comment "When a beh:Due event is due for this node."@en .
+beh:dueWhileShown a owl:ObjectProperty ; rdfs:range sem:Component ;
+    rdfs:comment "The node's beh:Due waits until this component is shown."@en .
+beh:Due a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "A node's beh:dueAt time came (the event's target is the node; beh:at is when it fired)."@en .
+
 beh:recorded a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "On an event class: false means its events are not appended to the change log."@en .
 beh:gesture a owl:DatatypeProperty ;

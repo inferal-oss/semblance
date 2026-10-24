@@ -1,5 +1,6 @@
 import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
+import { Scheduler } from '../src/behaviour/schedule.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { Navigation, rendererReveal } from '../src/navigation.ts'
@@ -245,6 +246,16 @@ bus.attach(shell, (h: Handled) => {
     flush()
   }
 })
+// Things due later (beh:dueAt: the chat example's script) become beh:Due events, on the bus's
+// clock; one that waits for a component to be shown waits while it is hidden.
+const scheduler = new Scheduler(bus, {
+  shown: (c) => screen.index.isShown(c, new Set([UI + 'shell'])),
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+})
+scheduler.attach()
 
 // Changes of where we are go to the address; Back, Forward and typed or followed addresses
 // come back as nav:Navigate events, and a followed link's target is brought into view.

@@ -15,6 +15,12 @@
 # publication. Like c:List, the container renders only its element and the items
 # are placed member-wise (sem:forEach c:item): posting a message evaluates that
 # message alone, however long the thread is.
+#
+# A message is pending while it is being written: its writing has started
+# (prov:startedAtTime) and it has not been published (no as:published yet). The list
+# shows it where it started, as its author typing - animated dots, read out as "… is
+# typing" by the log - and when it is published the same entry becomes the message,
+# in place.
 
 # --- MessageList: the thread --------------------------------------------------------------------
 
@@ -23,7 +29,8 @@ c:MessageList a owl:Class ;
     rdfs:comment """Messages (c:item: nodes with as:attributedTo, as:content, as:published) in order of
 publication, as a log (role=log, so new messages are announced politely). Each is a minted c:Message
 with the author's avatar, name and time. Messages by c:viewer are marked as one's own; a message with
-prv:sensitive true is hidden in private mode. c:label names the thread."""@en ;
+prv:sensitive true is hidden in private mode. A message being written (prov:startedAtTime, no
+as:published) shows as its author typing, until it is published. c:label names the thread."""@en ;
     sem:slug "message-list" .
 c:viewer a owl:ObjectProperty ; rdfs:domain c:MessageList ;
     rdfs:comment "The person reading: their messages are their own (aligned to the end)."@en .
@@ -55,7 +62,8 @@ c:MessageListRendering-sparql-text a sem:Rule ;
 CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this . }
 WHERE { $this a c:MessageList . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
 
-# One message (sem:forEach c:item): mints its c:Message, ordered by as:published.
+# One message (sem:forEach c:item): mints its c:Message, ordered by as:published (a pending
+# one by when its writing started).
 c:MessageListMembers a sem:Rendering ;
     sem:targets c:MessageList ;
     sem:stratum 0 ;
@@ -74,6 +82,8 @@ c:MessageRendering a sem:Rendering ; sem:targets c:Message ; sem:stratum 0 ; sem
 c:MessageRendering-fn a sem:Rule ; sem:implements c:MessageRendering ; sem:function "messages:message" .
 # The author's name is their c:label or rdfs:label; the time shown is the clock time as
 # written in as:published (characters 12-16 of the xsd:dateTime), the full value in datetime.
+# Pending (prov:startedAtTime, not published): the author's name and, in place of the body,
+# three dots (hidden from assistive technology) and "is typing…" (for it).
 c:MessageRendering-sparql-screen a sem:Rule ;
     sem:implements c:MessageRendering ;
     sem:modality mod:Screen ;
@@ -81,20 +91,30 @@ c:MessageRendering-sparql-screen a sem:Rule ;
 CONSTRUCT {
   ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:hasChild ?avatar, ?main .
   ?avatar a c:Avatar ; c:label ?author ; c:image ?image ; sty:size sty:Small ; ord:immediatelyPrecedes ?main .
-  ?main a rdfhtml:Div ; rdfhtml:class "sem-message-main" ; rdfhtml:hasChild ?meta, ?body .
-  ?meta a rdfhtml:Div ; rdfhtml:class "sem-message-meta" ; rdfhtml:hasChild ?who, ?time ; ord:immediatelyPrecedes ?body .
+  ?main a rdfhtml:Div ; rdfhtml:class "sem-message-main" ; rdfhtml:hasChild ?meta, ?afterMeta .
+  ?meta a rdfhtml:Div ; rdfhtml:class "sem-message-meta" ; rdfhtml:hasChild ?who, ?time ; ord:immediatelyPrecedes ?afterMeta .
   ?who a rdfhtml:Span ; rdfhtml:class "sem-author" ; rdfhtml:hasChild ?whoText ; ord:immediatelyPrecedes ?time .
   ?whoText a rdfhtml:Text ; rdfhtml:data ?author .
   ?time a rdfhtml:Time ; rdfhtml:dateTime ?at ; rdfhtml:hasChild ?timeText .
   ?timeText a rdfhtml:Text ; rdfhtml:data ?clock .
   ?body a rdfhtml:P ; rdfhtml:class "sem-message-body" ; rdfhtml:hasChild ?bodyText .
   ?bodyText a rdfhtml:Text ; rdfhtml:data ?content .
+  ?typing a rdfhtml:P ; rdfhtml:class "sem-typing" ; rdfhtml:hasChild ?dots, ?say .
+  ?dots a rdfhtml:Span ; rdfhtml:class "sem-dots" ; rdfhtml:attribute ?dotsHidden ; rdfhtml:hasChild ?dot ; ord:immediatelyPrecedes ?say .
+  ?dotsHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?dot a rdfhtml:Span .
+  ?dotA ord:immediatelyPrecedes ?dotB .
+  ?say a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?sayText .
+  ?sayText a rdfhtml:Text ; rdfhtml:data "is typing…" .
 }
 WHERE {
   $this a c:Message ; c:of ?message .
-  ?message as:content ?rawContent .
-  BIND(STR(?rawContent) AS ?content)
+  OPTIONAL { ?message as:content ?rawContent }
   OPTIONAL { ?message as:published ?published }
+  OPTIONAL { ?message prov:startedAtTime ?started }
+  BIND(!BOUND(?published) && BOUND(?started) AS ?pending)
+  FILTER(?pending || BOUND(?rawContent))
+  BIND(IF(?pending, ?none, STR(?rawContent)) AS ?content)
   BIND(STR(?published) AS ?at)
   BIND(SUBSTR(STR(?published), 12, 5) AS ?clock)
   OPTIONAL { ?message as:attributedTo ?person
@@ -103,7 +123,8 @@ WHERE {
     OPTIONAL { ?person c:image ?img } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(STR(?img) AS ?image)
-  BIND(IF(EXISTS { $this c:inList ?list . ?list c:viewer ?viewer . ?message as:attributedTo ?viewer }, "sem-mine", ?none) AS ?class)
+  BIND(EXISTS { $this c:inList ?list . ?list c:viewer ?viewer . ?message as:attributedTo ?viewer } AS ?mine)
+  BIND(IF(?mine, IF(?pending, "sem-mine sem-pending", "sem-mine"), IF(?pending, "sem-pending", ?none)) AS ?class)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~avatar")) AS ?avatar)
   BIND(IRI(CONCAT(STR($this), "/~main")) AS ?main)
@@ -112,8 +133,20 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~author-text")) AS ?whoText)
   BIND(IF(BOUND(?published), IRI(CONCAT(STR($this), "/~time")), ?none) AS ?time)
   BIND(IF(BOUND(?published), IRI(CONCAT(STR($this), "/~time-text")), ?none) AS ?timeText)
-  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
-  BIND(IRI(CONCAT(STR($this), "/~body-text")) AS ?bodyText)
+  BIND(IF(?pending, ?none, IRI(CONCAT(STR($this), "/~body"))) AS ?body)
+  BIND(IF(?pending, ?none, IRI(CONCAT(STR($this), "/~body-text"))) AS ?bodyText)
+  BIND(IF(?pending, IRI(CONCAT(STR($this), "/~typing")), ?none) AS ?typing)
+  BIND(COALESCE(?body, ?typing) AS ?afterMeta)
+  # The three dots: d1 d2 d3, in order.
+  LATERAL { OPTIONAL { FILTER(?pending)
+    VALUES (?k ?k2) { ("1" "2") ("2" "3") ("3" UNDEF) }
+    BIND(IRI(CONCAT(STR($this), "/~dot-", ?k)) AS ?dot)
+    BIND(?dot AS ?dotA)
+    BIND(IF(BOUND(?k2), IRI(CONCAT(STR($this), "/~dot-", ?k2)), ?none) AS ?dotB) } }
+  BIND(IF(?pending, IRI(CONCAT(STR($this), "/~dots")), ?none) AS ?dots)
+  BIND(IF(?pending, IRI(CONCAT(STR($this), "/~dots-aria-hidden")), ?none) AS ?dotsHidden)
+  BIND(IF(?pending, IRI(CONCAT(STR($this), "/~typing-say")), ?none) AS ?say)
+  BIND(IF(?pending, IRI(CONCAT(STR($this), "/~typing-say-text")), ?none) AS ?sayText)
 }""" .
 c:MessageRendering-sparql-text a sem:Rule ;
     sem:implements c:MessageRendering ;
@@ -125,13 +158,17 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Message ; c:of ?message .
-  ?message as:content ?content .
+  OPTIONAL { ?message as:content ?content }
   OPTIONAL { ?message as:published ?published }
+  OPTIONAL { ?message prov:startedAtTime ?started }
+  BIND(!BOUND(?published) && BOUND(?started) AS ?pending)
+  FILTER(?pending || BOUND(?content))
   OPTIONAL { ?message as:attributedTo ?person
     OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
     OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
-  BIND(CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ": ", STR(?content)) AS ?line)
+  BIND(IF(?pending, CONCAT("  ", ?author, " is typing…"),
+          CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ": ", STR(?content))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .

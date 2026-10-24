@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
+import type { Clock } from '../src/behaviour/clock.ts'
+import { Scheduler } from '../src/behaviour/schedule.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
@@ -28,8 +30,8 @@ export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxig
 }
 
 /** The site as a visitor first sees it: the landing page, tools closed. */
-export function mountSite(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
-  return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery)), prefer)
+export function mountSite(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock) {
+  return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery)), prefer, clock)
 }
 
 /**
@@ -52,11 +54,11 @@ function workbench(store: GraphStore): GraphStore {
  * The shell with persistence over the given backends, as the host runs it: remembered
  * state is restored before the first projection; `persistence.flush()` writes now.
  */
-export async function mountRemembering(backends: Record<string, Backend>) {
+export async function mountRemembering(backends: Record<string, Backend>, clock?: Clock) {
   const store = workbench(sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery)))
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
-  const shell = mount(store, 'sparql')
+  const shell = mount(store, 'sparql', clock)
   persistence.attach(shell.runtime)
   return { ...shell, persistence }
 }
@@ -77,7 +79,8 @@ export async function mountNavigating(opts: NavigationOptions, backends?: Record
   return { ...shell, persistence, navigation }
 }
 
-function mount(store: GraphStore, prefer: 'sparql' | 'function') {
+/** `clock` is the host's time (beh:at, beh:dueAt): a ManualClock lets a test move it; by default nothing due fires. */
+function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer']
@@ -86,8 +89,11 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function') {
   })
   const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
   shell.flush()
-  const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
+  const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer, clock })
   bus.attach(shell, () => shell.flush())
+  // Things due later (beh:dueAt) become beh:Due events; one waiting to be shown waits.
+  const scheduler = new Scheduler(bus, { shown: (c) => screen.index.isShown(c, new Set([UI + 'shell'])), onHandled: () => shell.flush() })
+  scheduler.attach()
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
@@ -108,6 +114,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function') {
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, fire, value, showPage }
 }
 

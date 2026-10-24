@@ -6,6 +6,7 @@ import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, navigate, normalizeShortcut, rove } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
+import { type Clock, systemClock } from './clock.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
@@ -75,12 +76,15 @@ export class EventBus {
   private readonly graphs: Quad_Graph[]
   /** Retained members, oldest first, so retirement touches only what expires. */
   private retained?: { event: NamedNode; at: number }[]
+  /** What time an event happens at (beh:at): the host's clock, which tests can move by hand. */
+  readonly clock: Clock
 
   constructor(
     readonly runtime: Runtime,
     readonly projection: Projection,
-    private readonly opts: { functions?: Record<string, ReactionFn>; prefer?: 'sparql' | 'function'; stream?: string } = {},
+    private readonly opts: { functions?: Record<string, ReactionFn>; prefer?: 'sparql' | 'function'; stream?: string; clock?: Clock } = {},
   ) {
+    this.clock = opts.clock ?? systemClock()
     const f = runtime.store.factory
     this.graph = f.namedNode(EVENTS_GRAPH)
     this.graphs = [f.defaultGraph(), this.graph, projection.engine.graph]
@@ -216,7 +220,7 @@ export class EventBus {
       f.quad(event, nn(RDF_TYPE), nn(type)),
       f.quad(event, nn(BEH.target), nn(target)),
       f.quad(event, nn(BEH.sequence), f.literal(String(seq), nn(XSD_INTEGER))),
-      f.quad(event, nn(BEH.at), f.literal(new Date().toISOString(), nn(XSD_DATETIME))),
+      f.quad(event, nn(BEH.at), f.literal(new Date(this.clock.now()).toISOString(), nn(XSD_DATETIME))),
     ]
     if (detail.node !== undefined) quads.push(f.quad(event, nn(BEH.node), nn(detail.node)))
     if (detail.value !== undefined) quads.push(f.quad(event, nn(BEH.value), f.literal(detail.value)))
