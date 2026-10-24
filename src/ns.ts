@@ -24,6 +24,7 @@ export const NS = {
   val: 'https://semblance.dev/ns/validation#',
   key: 'https://semblance.dev/ns/keyboard#',
   dnd: 'https://semblance.dev/ns/dragdrop#',
+  dep: 'https://semblance.dev/ns/dependency#',
   l10n: 'https://semblance.dev/ns/l10n#',
   ann: 'https://semblance.dev/ns/announce#',
   st: 'https://semblance.dev/ns/status#',
@@ -353,3 +354,14 @@ export const DND = {
 export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
 export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
 export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const
+/** The dependency layer (ontology/layers/dependency.ttl). */
+export const DEP = {
+  follows: NS.dep + 'follows',
+  property: NS.dep + 'property',
+  takes: NS.dep + 'takes',
+  case: NS.dep + 'case',
+  when: NS.dep + 'when',
+  gives: NS.dep + 'gives',
+  otherwise: NS.dep + 'otherwise',
+  defaults: NS.dep + 'defaults',
+} as const

@@ -107,6 +107,14 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 - **Validation**: fields point at SHACL property shapes (`val:validates`); the
   layer derives `c:error`, which fields already render, and disables buttons
   whose `val:requires` fields are invalid.
+- **Dependency**: views that depend on another view's value. A component follows a
+  value (`dep:follows` a node, `dep:property` of it) and takes the properties of the profile
+  that value selects - carried by the value itself (`dep:takes`: a country's `co:postalField`)
+  or listed by the component (`dep:case`), else `dep:otherwise` - before validation and the
+  components run, so a field's label, placeholder, SHACL shape, options, `c:disabled` or
+  `c:hidden` follow it. Choosing a value also applies its `dep:defaults` (a country's
+  currency and dialling code), which stay editable. The Checkout example's form follows the
+  country; Settings' online switch follows the public profile.
 - **Keyboard**: `key:shortcut "mod+k"` on any component gives
   `aria-keyshortcuts`, a hint, and activation by key press (through the
   component's own click reactions). `key:Command` is a shortcut that belongs to
@@ -271,7 +279,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, keyboard, status, l10n, announce |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -281,7 +289,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
 | `src/components/` | function rules and reactions, one module per group |
-| `src/layers/` | function rules of the validation, keyboard, status, l10n and announcement layers |
+| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n and announcement layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
 | `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |

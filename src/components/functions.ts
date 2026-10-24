@@ -15,6 +15,7 @@ import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
 import { dragdropFunctions } from '../layers/dragdrop.ts'
+import { dependencyFunctions } from '../layers/dependency.ts'
 import { functions as layoutFunctions } from './layout.ts'
 import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
@@ -733,6 +734,7 @@ export const functions: Record<string, FnRule> = {
   ...announceFunctions,
   ...shapeFunctions,
   ...dragdropFunctions,
+  ...dependencyFunctions,
   ...layoutFunctions,
   ...typeFunctions,
   ...actionsFunctions,

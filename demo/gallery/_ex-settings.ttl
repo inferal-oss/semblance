@@ -8,6 +8,7 @@
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix dep: <https://semblance.dev/ns/dependency#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -125,8 +126,14 @@ ui:set-privacy-switches a c:Stack ; pos:direction pos:Column ; pos:gap tok:space
     c:children ( ui:set-public ui:set-online ) .
 ui:set-public a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:publicProfile ;
     c:help "People outside your workspace can see your name and bio." .
+# Being seen online only means something on a public profile, so that switch depends on the
+# other one (the dependency layer, ontology/layers/dependency.ttl): it follows the draft's
+# set:publicProfile, and for false (dep:case) it is disabled and says why. Its help is in both
+# profiles, since it varies; its own setting is kept, for when the profile is public again.
 ui:set-online a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:showOnline ;
-    c:help "A green dot on your avatar while you're active." .
+    dep:follows ui:set-draft ; dep:property set:publicProfile ;
+    dep:case [ dep:when false ; dep:gives [ c:disabled true ; c:help "Only with a public profile: turn that on first." ] ] ;
+    dep:otherwise [ c:help "A green dot on your avatar while you're active." ] .
 
 # --- appearance: a theme choice, previewed on a sample card ---------------------------------------
 # The choice's options are the sty:Theme individuals (set:theme's range). The preview surface
@@ -267,7 +274,7 @@ WHERE {
 
 ui:ex-settings-how a c:Walkthrough ; c:label "How it works" ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
-    c:steps ( ui:ex-settings-w1 ui:ex-settings-w2 ui:ex-settings-w3 ui:ex-settings-w4 ui:ex-settings-w5 ui:ex-settings-w6 ) .
+    c:steps ( ui:ex-settings-w1 ui:ex-settings-w2 ui:ex-settings-w3 ui:ex-settings-w4 ui:ex-settings-w5 ui:ex-settings-w5b ui:ex-settings-w6 ) .
 
 ui:ex-settings-w1 a c:WalkthroughStep ; rdfs:label "Two nodes: saved, and a draft" ;
     c:children ( "The state is " ui:ex-settings-m-saved " and " ui:ex-settings-m-draft ", two nodes with the same properties. Each property is a " ui:ex-settings-m-Setting ", like " ui:ex-settings-m-name " or " ui:ex-settings-m-theme " - which is all that saving, discarding and counting changes need to know about it." ) .
@@ -279,9 +286,15 @@ ui:ex-settings-w4 a c:WalkthroughStep ; rdfs:label "Rules derive the rest" ;
     c:children ( ui:ex-settings-m-changes " counts the settings in which the two nodes differ and writes the label, icon and tone of " ui:ex-settings-m-status ", disabling Save and Discard when there is nothing to do. " ui:ex-settings-m-preview " gives " ui:ex-settings-m-previewcard " the draft's theme. Each is a SPARQL CONSTRUCT here with a function twin in src/examples/settings.ts; both write the same triples." ) .
 ui:ex-settings-w5 a c:WalkthroughStep ; rdfs:label "Checked by shapes" ;
     c:children ( "The fields point at SHACL property shapes - " ui:ex-settings-m-emailshape " for the email - and the validation layer derives their errors. Save requires all three fields, so it stays disabled while one is wrong." ) .
+ui:ex-settings-w5b a c:WalkthroughStep ; rdfs:label "One switch depends on another" ;
+    c:children ( ui:ex-settings-m-online " follows the draft's " ui:ex-settings-m-public ": its " ui:ex-settings-m-case
+    " for false disables it and says why, and otherwise it has its usual help. The dependency layer gives it those properties before it renders; its own setting is kept for when the profile is public again." ) .
 ui:ex-settings-w6 a c:WalkthroughStep ; rdfs:label "Kept, and cheap" ;
     c:children ( ui:ex-settings-m-keep " is a " ui:ex-settings-m-Policy " kept on this device: on load it is put back - into the saved node, the draft and the fields - before anything renders. A keystroke changes two triples, the field's value and the draft's: that field, its validation and the change count run again, and the page gets a single DOM operation." ) .
 
+ui:ex-settings-m-online a c:Mention ; c:label "\"Show when I'm online\"" ; c:mentions ui:set-online .
+ui:ex-settings-m-public a c:Mention ; c:label "set:publicProfile" ; c:mentions set:publicProfile .
+ui:ex-settings-m-case a c:Mention ; c:label "dep:case" ; c:mentions dep:case ; c:to dep:case .
 ui:ex-settings-m-saved a c:Mention ; c:label "ui:set-saved" ; c:mentions ui:set-saved .
 ui:ex-settings-m-draft a c:Mention ; c:label "ui:set-draft" ; c:mentions ui:set-draft .
 ui:ex-settings-m-Setting a c:Mention ; c:label "set:Setting" ; c:mentions set:Setting .

@@ -220,3 +220,7 @@
                  [ sty:property "transition" ; sty:raw "filter var(--sem-duration-slow) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:part "[data-sem-concealed], [data-sem-sensitive]" ;
     sty:declares [ sty:property "transition" ; sty:raw "filter var(--sem-duration-slow) var(--sem-ease)" ] .
+
+# --- dependency: a component with c:hidden is out of view, whatever its own display ---
+[] a sty:StyleRule ; sty:part "[data-sem-c][hidden]" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .

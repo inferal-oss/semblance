@@ -102,6 +102,27 @@ describe('the settings example', () => {
     expect(s.status()).toContain('1 unsaved change')
   })
 
+  it('lets "Show when I\'m online" depend on the public profile, the same with SPARQL and function rules', () => {
+    const [x, y] = (['sparql', 'function'] as const).map((prefer) => open(mountSite('oxigraph', prefer)))
+    for (const s of [x!, y!]) {
+      const help = () => s.root('set-online').querySelector('.sem-help')?.textContent
+      expect(s.sw('set-online').hasAttribute('disabled')).toBe(false)
+      expect(help()).toBe("A green dot on your avatar while you're active.")
+      s.click(s.sw('set-public'))
+      expect(s.value('set-draft', 'publicProfile')).toEqual(['false'])
+      expect(s.sw('set-online').hasAttribute('disabled')).toBe(true)
+      expect(help()).toBe('Only with a public profile: turn that on first.')
+      expect(s.value('set-draft', 'showOnline')).toEqual(['true']) // kept for when it is public again
+    }
+    expect(y!.root('ex-settings').outerHTML).toBe(x!.root('ex-settings').outerHTML)
+    for (const s of [x!, y!]) {
+      s.click(s.sw('set-public'))
+      expect(s.sw('set-online').hasAttribute('disabled')).toBe(false)
+      expect(s.status()).toContain('All changes saved')
+    }
+    expect(y!.root('ex-settings').outerHTML).toBe(x!.root('ex-settings').outerHTML)
+  })
+
   it('remembers what was saved on this device across a reload', async () => {
     const storage: Record<string, Backend> = { [PER + 'Session']: memoryBackend(), [PER + 'Device']: memoryBackend(), [PER + 'Database']: memoryBackend() }
     const a = await mountRemembering(storage)
