@@ -190,8 +190,16 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
                  [ sty:property "min-height" ; sty:raw "0" ] .
 
 # --- status bar ---
+# Its container is at least as tall as the viewport and pushes the bar to its end,
+# so the bar sits at the bottom of the window on short pages too; on long pages it
+# sticks to the bottom while the content scrolls under it.
+[] a sty:StyleRule ; sty:part ":has(> [data-sem-c=status-bar])" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "min-height" ; sty:raw "100dvh" ] .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ;
-    sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
+    sty:declares [ sty:property "margin-top" ; sty:raw "auto" ] ,
+                 [ sty:property "position" ; sty:raw "sticky" ] ,
                  [ sty:property "bottom" ; sty:raw "0" ] ,
                  [ sty:property "z-index" ; sty:raw "40" ] ,
                  [ sty:property "display" ; sty:raw "flex" ] ,
