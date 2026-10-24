@@ -1,5 +1,8 @@
 // Runs one (config, size) pair; spawned by bench/node.ts so that runs do not
 // share a heap (earlier stores and WASM term wrappers skew later runs).
+// reactions.ts and persistence.ts import each other; entering through the event
+// bus (as the app and the tests do) initializes them in a working order.
+import '../src/behaviour/events.ts'
 import { loadStore } from '../src/node/load.ts'
 import { runMicro } from './micro.ts'
 import { NODE_CONFIGS, runBench } from './scenarios.ts'
