@@ -226,3 +226,20 @@ describe('c:inputType', () => {
     expect((h.byId(`${UI}signupEmail/~input`) as HTMLInputElement).getAttribute('type')).toBe('email')
   })
 })
+
+describe('privacy (concealment) layer', () => {
+  it('masks concealed text fields, marks other components, and private mode adds the sensitive ones', () => {
+    const h = showLayers()
+    expect((h.byId(`${UI}apiKey/~input`) as HTMLInputElement).getAttribute('type')).toBe('password')
+    expect(h.byId(`${UI}balance/~root`).hasAttribute('data-sem-concealed')).toBe(true)
+    expect(h.byId(`${UI}income/~root`).hasAttribute('data-sem-sensitive')).toBe(true)
+    const shell = h.byId(`${UI}shell/~root`)
+    expect(shell.getAttribute('data-sem-privacy')).toBe('conceal')
+    const press = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+    Object.assign(press, { key: 'H', ctrlKey: true, metaKey: false, altKey: false, shiftKey: true })
+    h.document.dispatchEvent(press)
+    expect(shell.getAttribute('data-sem-privacy')).toBe('private')
+    const css = compileStyles(h.store)
+    expect(css).toContain('[data-sem-privacy=private] [data-sem-sensitive]')
+  })
+})

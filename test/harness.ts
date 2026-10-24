@@ -5,7 +5,7 @@ import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { loadStore } from '../src/node/load.ts'
-import { A11Y, ANN, KEY, MOD, SEM, ST, STY, VAL } from '../src/ns.ts'
+import { A11Y, ANN, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 
@@ -35,7 +35,7 @@ export async function mountRemembering(backends: Record<string, Backend>) {
 function mount(store: GraphStore, prefer: 'sparql' | 'function') {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const runtime = new Runtime(store)
-  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer]
+  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer']
   const screen = runtime.project({ modality: MOD.Screen, layers, prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
     throw e
   })

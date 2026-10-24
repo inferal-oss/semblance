@@ -6,6 +6,7 @@ import type { GraphStore } from './store/types.ts'
 import { EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
+import { privacyFunctions } from './layers/privacy.ts'
 import { functions as workbenchFunctions } from './components/workbench.ts'
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
@@ -42,7 +43,7 @@ export class Runtime {
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH],
       ...opts,
-      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...workbenchFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...workbenchFunctions, ...privacyFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError)
     engine.onChange((d) => index.apply(d))

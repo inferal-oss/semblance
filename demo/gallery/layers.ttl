@@ -11,6 +11,7 @@
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix prv: <https://semblance.dev/ns/privacy#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -20,7 +21,7 @@
 # layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ui:l-persistence ) .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ui:l-persistence ui:l-privacy ) .
 ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
 
 # --- validation: SHACL shapes on fields -------------------------------------------------------------
@@ -126,3 +127,21 @@ ui:l-persistence-spec a c:Specimen ; c:label "Remembered state" , "Збереж�
     c:help "What is remembered is a per:Policy in the graph: which triples (a node's properties, or a CONSTRUCT), where (this tab, this device, the browser database) and whether. They are restored before the first render and written back after the changes they cover; every write, restore and forget is a member of per:StateLog. Turn one off to forget it; ⌫ forgets without turning it off. Detach the inspector, move it, reload: it is where you left it." ;
     c:children ( ui:policies ) .
 ui:policies a c:PolicyList .
+
+# --- privacy: concealment of anything ---------------------------------------------------------------
+
+ui:l-privacy a c:Flippable ; c:front ui:l-privacy-spec .
+ui:l-privacy-spec a c:Specimen ; c:label "Concealment" , "Приховування"@uk , "Verbergen"@de , "الإخفاء"@ar ;
+    c:help "prv:concealed on any component hides it: a text field becomes a password field (the privacy layer derives c:inputType before it renders), anything else is blurred beyond recognition. prv:sensitive components are hidden only in private mode - press ⌘⇧H (Ctrl+Shift+H), or pick a mode below. The components don't know." ;
+    c:children ( ui:privacyModes ui:privacyRow ui:apiKey ) .
+ui:privacyModes a c:Segmented ; c:controls ui:shell ; c:property prv:privacy .
+ui:privacyRow a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:balance ui:income ui:payees ) .
+ui:balance a c:Stat ; c:label "Balance" , "Баланс"@uk , "Kontostand"@de , "الرصيد"@ar ; c:value "12 480" ; c:unit "€" ; c:delta 3.2 ; c:deltaUnit "%" ; prv:concealed true .
+ui:income a c:Stat ; c:label "Income this month" , "Дохід цього місяця"@uk , "Einnahmen diesen Monat"@de , "دخل هذا الشهر"@ar ; c:value "4 210" ; c:unit "€" ; prv:sensitive true .
+ui:payees a c:AvatarGroup ; c:max 4 ; prv:sensitive true ; c:children ( ui:payee1 ui:payee2 ui:payee3 ui:payee4 ui:payee5 ) .
+ui:payee1 a c:Avatar ; c:label "Ada Lovelace" .
+ui:payee2 a c:Avatar ; c:label "Grace Hopper" .
+ui:payee3 a c:Avatar ; c:label "Tim Berners-Lee" .
+ui:payee4 a c:Avatar ; c:label "Katherine Johnson" .
+ui:payee5 a c:Avatar ; c:label "Alan Kay" .
+ui:apiKey a c:TextField ; c:label "API key" , "Ключ API"@uk , "API-Schlüssel"@de , "مفتاح API"@ar ; c:value "sk-semblance-4f9a2c7e" ; prv:concealed true .

@@ -209,3 +209,12 @@
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
 [] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-forget:disabled" ;
     sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] , [ sty:property "cursor" ; sty:raw "default" ] .
+
+# --- privacy: concealed content is blurred (text fields are masked instead) ---
+[] a sty:StyleRule ; sty:part ":is([data-sem-privacy=conceal], [data-sem-privacy=private]) [data-sem-concealed]:not([data-sem-c=text-field]), [data-sem-privacy=private] [data-sem-sensitive]" ;
+    sty:declares [ sty:property "filter" ; sty:raw "blur(9px) saturate(0.3)" ] ,
+                 [ sty:property "user-select" ; sty:raw "none" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "transition" ; sty:raw "filter var(--sem-duration-slow) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-concealed], [data-sem-sensitive]" ;
+    sty:declares [ sty:property "transition" ; sty:raw "filter var(--sem-duration-slow) var(--sem-ease)" ] .

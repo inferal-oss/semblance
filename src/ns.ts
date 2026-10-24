@@ -27,6 +27,7 @@ export const NS = {
   ann: 'https://semblance.dev/ns/announce#',
   st: 'https://semblance.dev/ns/status#',
   per: 'https://semblance.dev/ns/persistence#',
+  prv: 'https://semblance.dev/ns/privacy#',
   dcterms: 'http://purl.org/dc/terms/',
   skos: 'http://www.w3.org/2004/02/skos/core#',
   schema: 'https://schema.org/',

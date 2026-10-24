@@ -19,6 +19,7 @@
 @prefix st: <https://semblance.dev/ns/status#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix prv: <https://semblance.dev/ns/privacy#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
 
@@ -31,7 +32,7 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer ;
     l10n:language l10n:English ;
     ui:store ui:Hybrid ;
     ui:rules ui:PreferSparql ;
@@ -76,7 +77,7 @@ ui:domNodes rdfs:label "DOM nodes" .
 
 ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
     # Display settings of the whole interface: hooked axes whose values re-value tokens.
-    mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable ; sty:theme sty:Semblance .
+    mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable ; sty:theme sty:Semblance ; prv:privacy prv:Conceal .
 
 # Detached views live here, outside the pages, so they survive page changes.
 ui:desktop a c:Desktop ; c:hosts ui:announcements .
@@ -122,7 +123,7 @@ ui:toolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
-    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer ) .
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
 
 ui:workspace a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
@@ -382,7 +383,8 @@ ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:galleryNav ui:display ) .
 # Display settings: each a control over one property of the shell (or the app).
 ui:display a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
-    c:children ( ui:themeChoice ui:languageChoice ui:contrastChoice ui:motionChoice ui:densityChoice ) .
+    c:children ( ui:themeChoice ui:languageChoice ui:contrastChoice ui:motionChoice ui:densityChoice ui:privacyChoice ) .
+ui:privacyChoice a c:Choice ; c:controls ui:shell ; c:property prv:privacy .
 ui:themeChoice a c:Choice ; c:controls ui:shell ; c:property sty:theme .
 ui:languageChoice a c:Choice ; c:controls ui:app ; c:property l10n:language .
 ui:contrastChoice a c:Choice ; c:controls ui:shell ; c:property sty:contrast .
@@ -430,7 +432,7 @@ WHERE {
 
 ui:rememberDisplay a per:Policy ; per:scope per:Session ;
     rdfs:label "Display settings" , "Налаштування відображення"@uk , "Anzeigeeinstellungen"@de , "إعدادات العرض"@ar ;
-    per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme ) .
+    per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme prv:privacy ) .
 
 ui:rememberSettings a per:Policy ; per:scope per:Session ;
     rdfs:label "Language, theme and gallery page" , "Мова, тема і сторінка галереї"@uk , "Sprache, Design und Galerieseite"@de , "اللغة والسمة وصفحة المعرض"@ar ;
@@ -446,3 +448,16 @@ WHERE { { beh:ChangeLog tree:member ?m . ?m ?p ?o } UNION { beh:ChangeLog tree:m
 ui:rememberLogSwitch a c:ToggleSwitch ; c:controls ui:rememberChangeLog ; c:property per:enabled ;
     c:label "Keep the change log across reloads (this tab)" , "Зберігати журнал змін між перезавантаженнями (ця вкладка)"@uk ,
             "Änderungsprotokoll über Neuladen hinweg behalten (dieser Tab)"@de , "الاحتفاظ بسجل التغييرات عند إعادة التحميل (علامة التبويب هذه)"@ar .
+
+# ⌘⇧H / Ctrl+Shift+H: private mode on and off (for screen sharing).
+ui:togglePrivate a key:Command ; key:shortcut "mod+shift+h" ;
+    rdfs:label "Private mode on or off" , "Приватний режим"@uk , "Privatmodus an oder aus"@de , "تشغيل الوضع الخاص أو إيقافه"@ar .
+ui:GoPrivate a beh:Reaction ; beh:when key:Press ; beh:source ui:togglePrivate ;
+    beh:deletes """CONSTRUCT { ui:shell prv:privacy ?m } WHERE { ui:shell prv:privacy ?m FILTER(?m != prv:Private) }""" ;
+    beh:inserts """CONSTRUCT { ui:shell prv:privacy prv:Private } WHERE { ui:shell prv:privacy ?m FILTER(?m != prv:Private) }""" ;
+    ann:announces "Private mode · sensitive content hidden" , "Приватний режим · чутливе приховано"@uk ,
+                  "Privatmodus · Sensibles verborgen"@de , "الوضع الخاص · المحتوى الحساس مخفي"@ar ; ann:tone sty:Info .
+ui:LeavePrivate a beh:Reaction ; beh:when key:Press ; beh:source ui:togglePrivate ;
+    beh:deletes """CONSTRUCT { ui:shell prv:privacy prv:Private } WHERE { ui:shell prv:privacy prv:Private }""" ;
+    beh:inserts """CONSTRUCT { ui:shell prv:privacy prv:Conceal } WHERE { ui:shell prv:privacy prv:Private }""" ;
+    ann:announces "Private mode off" , "Приватний режим вимкнено"@uk , "Privatmodus aus"@de , "تم إيقاف الوضع الخاص"@ar .
