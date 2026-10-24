@@ -128,7 +128,12 @@
 (global $cx_shape (mut i32) (i32.const 0))   ;; the bound slots (a bitset)
 (global $cx_funcs (mut i32) (i32.const 0))   ;; the module's functions (a vector)
 (global $cx_ng (mut i32) (i32.const 0))      ;; its globals
-(global $cx_keep (mut i32) (i32.const 0))    ;; 1: cq_value(k | 1) keeps the last call's BNODE(s) nodes
+(global $cx_keep (mut i32) (i32.const 0))
+;; Inside a LATERAL compiled in line: the row it substitutes (a copy of the frame
+;; made on entry, which elements left to the interpreter see as $lat), and the
+;; slots certainly bound on entry (a bitset), which nested groups see; else 0.
+(global $cx_lat (mut i32) (i32.const 0))
+(global $cx_latbits (mut i32) (i32.const 0))    ;; 1: cq_value(k | 1) keeps the last call's BNODE(s) nodes
 
 ;; Step lists (16 bytes: +0 kind, +4 a, +8 b, +12 next).
 (@define S_LIST 1)    ;; a: the group elements from a on
@@ -142,7 +147,8 @@
 (@define S_FOUND 9)   ;; a: the global set when it matched
 (@define S_CALL 10)   ;; a: a function to call with the stack top
 (@define S_FINAL 11)  ;; a solution
-(@define S_SEL 12)    ;; S_BIND of a SELECT expression after another: BNODE(s) of the same solution
+(@define S_SEL 12)
+(@define S_LATEND 13) ;; a, b: the LATERAL context (row, visible slots) of the rest    ;; S_BIND of a SELECT expression after another: BNODE(s) of the same solution
 ;; What is known about a variable (a byte per slot in a state, after +0 the
 ;; local holding the stack top): 0 unbound, maybe bound, certainly bound.
 (@define MAYBE 1) (@define CERTAIN 2)
@@ -256,7 +262,8 @@
   (loop $slots
     (if (i32.lt_u (local.get $s) (global.get $cx_nv)) (then
       (if (i32.and (i32.and (call $bit (local.get $b) (local.get $s)) (i32.ne (i32.load8_u (call $st_at (local.get $st) (local.get $s))) (i32.const 0)))
-                   (i32.eqz (i32.or (call $bit (i32.load offset=12 (local.get $g)) (local.get $s)) (call $bit (global.get $cx_shape) (local.get $s)))))
+                   (i32.eqz (i32.or (i32.or (call $bit (i32.load offset=12 (local.get $g)) (local.get $s)) (call $bit (global.get $cx_shape) (local.get $s)))
+                                    (if (result i32) (global.get $cx_latbits) (then (call $bit (global.get $cx_latbits) (local.get $s))) (else (i32.const 0))))))
         (then (return (i32.const 0))))
       (local.set $s (i32.add (local.get $s) (i32.const 1)))
       (br $slots))))
@@ -350,6 +357,17 @@
       (call $step (i32.const S_EL) (local.get $a) (i32.const 0) (call $step (i32.const S_LIST) (i32.load offset=28 (local.get $a)) (i32.const 0) (local.get $rest)))
       (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const S_EL)) (then (return (call $element (local.get $f) (local.get $a) (local.get $rest) (local.get $st)))))
+  (if (i32.eq (local.get $k) (i32.const S_LATEND)) (then
+    (local.set $l (global.get $cx_lat))
+    (local.set $x (global.get $cx_latbits))
+    (global.set $cx_lat (local.get $a))
+    (global.set $cx_latbits (i32.load offset=8 (local.get $s)))
+    (call $cx_emit (local.get $f) (local.get $rest) (local.get $st))
+    (global.set $cx_lat (local.get $l))
+    (global.set $cx_latbits (local.get $x))
+    (return)))
+  (if (i32.eq (local.get $k) (i32.const S_PATH)) (then
+    (if (call $closure_loop (local.get $f) (local.get $a) (local.get $rest) (local.get $st)) (then (return)))))
   (if (i32.le_u (i32.sub (local.get $k) (i32.const S_TRIPLE)) (i32.const 1))
     (then (return (call $scan_loop (local.get $f) (local.get $a) (i32.eq (local.get $k) (i32.const S_PATH)) (local.get $rest) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const S_EVAL)) (then (return (call $eval_loop (local.get $f) (local.get $a) (local.get $rest) (local.get $st)))))
@@ -382,7 +400,11 @@
     (call $value (local.get $f) (local.get $a))
     (global.set $cx_keep (i32.const 0))
     (call $em1 (local.get $f) (@str "Ma}") (call $addr (local.get $x)))
-    (i32.store8 (call $st_at (local.tee $st (call $st_copy (local.get $st))) (local.get $x)) (i32.const MAYBE))
+    ;; certainly bound after it when it copies a constant or a certainly bound variable
+    (local.set $n (i32.eq (i32.load (local.get $a)) (i32.const E_CONST)))
+    (if (i32.eq (i32.load (local.get $a)) (i32.const E_VAR))
+      (then (local.set $n (i32.eq (i32.load8_u (call $st_at (local.get $st) (i32.load offset=4 (local.get $a)))) (i32.const CERTAIN)))))
+    (i32.store8 (call $st_at (local.tee $st (call $st_copy (local.get $st))) (local.get $x)) (select (i32.const CERTAIN) (i32.const MAYBE) (local.get $n)))
     (call $cx_emit (local.get $f) (local.get $rest) (local.get $st))
     (call $em2 (local.get $f) (@str "k0gbMa") (call $addr (local.get $x)) (local.get $l))
     (return)))
@@ -430,10 +452,12 @@
   (if (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (then
     (if (call $inline_ok (i32.load offset=4 (local.get $el)) (local.get $st) (i32.const 1))
       (then (return (call $cx_emit (local.get $f) (call $step (i32.const S_OPT) (i32.load offset=4 (local.get $el)) (i32.const 0) (local.get $rest)) (local.get $st)))))))
+  (if (i32.eq (local.get $k) (i32.const P_LATERAL)) (then (return (call $lateral (local.get $f) (local.get $el) (local.get $rest) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const P_BIND)) (then
     (return (call $cx_emit (local.get $f) (call $step (i32.const S_BIND) (i32.load offset=4 (local.get $el)) (i32.load offset=8 (local.get $el)) (local.get $rest)) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then (return (call $values (local.get $f) (local.get $el) (local.get $rest) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const P_PATH)) (then
+    (if (call $closure_loop (local.get $f) (local.get $el) (local.get $rest) (local.get $st)) (then (return)))
     (if (i32.and (call $plain (i32.load offset=4 (local.get $el))) (call $plain (i32.load offset=12 (local.get $el))))
       (then (return (call $scan_loop (local.get $f) (local.get $el) (i32.const 1) (local.get $rest) (local.get $st)))))))
   (call $eval_loop (local.get $f) (local.get $el) (local.get $rest) (local.get $st)))
@@ -532,7 +556,7 @@
   (local.set $r (call $local (local.get $f)))
   (local.set $top (call $local (local.get $f)))
   (local.set $k (i32.load (local.get $el)))
-  (call $em (local.get $f) (@str "kagbC4vc") (local.get $el) (local.get $at) (local.get $n) (i32.const 0))
+  (call $em (local.get $f) (@str "kagbC4vc") (call $eval_key (local.get $el)) (local.get $at) (local.get $n) (i32.const 0))
   (call $em (local.get $f) (@str "gagbkcljvd") (local.get $at) (local.get $n) (i32.shr_u (call $width) (i32.const 2)) (local.get $top))
   (call $em1 (local.get $f) (@str "k0va") (local.get $i))
   ;; MINUS binds nothing
@@ -877,6 +901,13 @@
   (local $s i32) (local $next i32)
   (call $cx_setup (local.get $q))
   (if (global.get $cx_frame) (then (call $free (global.get $cx_frame) (call $width))))
+  (local.set $s (i32.load offset=236 (local.get $q)))
+  (loop $sites
+    (if (local.get $s) (then
+      (local.set $next (i32.load (local.get $s)))
+      (call $free (local.get $s) (i32.add (i32.const 12) (call $width)))
+      (local.set $s (local.get $next))
+      (br $sites))))
   (local.set $s (i32.load offset=204 (local.get $q)))
   (loop $shapes
     (if (local.get $s) (then
@@ -906,6 +937,8 @@
         (local.set $tp (i32.load offset=28 (local.get $tp)))
         (br $triples))))))
   (call $cx_setup (local.get $q))
+  (global.set $cx_lat (i32.const 0))
+  (global.set $cx_latbits (i32.const 0))
   ;; the frame, once per query; this compile's shape
   (if (i32.eqz (global.get $cx_frame)) (then
     (global.set $cx_frame (call $alloc0 (call $width)))
@@ -1065,8 +1098,15 @@
   (local.get $n))
 
 (func (export "cq_eval") (param $k i32) (param $at i32) (result i32)
-  (local $t i32) (local $n i32) (local $words i32)
-  (local.set $n (i32.load offset=4 (local.tee $t (call $cx_rows (local.get $k) (i32.const 0)))))
+  (local $t i32) (local $n i32) (local $words i32) (local $saved i32)
+  ;; k | 1: an element inside a LATERAL compiled in line (see $eval_key)
+  (local.set $saved (global.get $lat))
+  (if (i32.and (local.get $k) (i32.const 1)) (then
+    (global.set $lat (i32.load offset=8 (i32.and (local.get $k) (i32.const -2))))
+    (local.set $k (i32.load offset=4 (i32.and (local.get $k) (i32.const -2))))))
+  (local.set $t (call $cx_rows (local.get $k) (i32.const 0)))
+  (global.set $lat (local.get $saved))
+  (local.set $n (i32.load offset=4 (local.get $t)))
   (local.set $words (i32.mul (local.get $n) (i32.shr_u (global.get $W) (i32.const 2))))
   (global.set $cs_n (local.get $at))
   (call $cs_room (i32.add (local.get $at) (local.get $words)))
@@ -1128,3 +1168,53 @@
   (global.set $cs (i32.const 0))
   (global.set $cs_cap (i32.const 0))
   (call $run_end (global.get $q) (i32.ne (global.get $cx_count) (i32.const 0))))
+
+;; --- LATERAL in line ---------------------------------------------------------------
+;; The interpreter evaluates LATERAL's group once per row with the row substituted
+;; ($lat): that is the group's elements in line, seeing the whole frame. Elements
+;; inside it left to the interpreter must see that row as $lat: cq_eval gets a
+;; record (tag 1) naming the element and the LATERAL's copy of the frame.
+
+;; A query-lifetime record (released with the query, listed at +236): +0 next,
+;; +4 an element, +8 a LATERAL's row, +12 room for a row.
+(func $cx_site (result i32)
+  (local $r i32)
+  (local.set $r (call $alloc0 (i32.add (i32.const 12) (call $width))))
+  (i32.store (local.get $r) (i32.load offset=236 (global.get $cx_q)))
+  (i32.store offset=236 (global.get $cx_q) (local.get $r))
+  (local.get $r))
+
+;; cq_eval's key for element el: el itself, or inside a LATERAL a record (tag 1).
+(func $eval_key (param $el i32) (result i32)
+  (local $r i32)
+  (if (i32.eqz (global.get $cx_lat)) (then (return (local.get $el))))
+  (i32.store offset=4 (local.tee $r (call $cx_site)) (local.get $el))
+  (i32.store offset=8 (local.get $r) (global.get $cx_lat))
+  (i32.or (local.get $r) (i32.const 1)))
+
+(func $lateral (param $f i32) (param $el i32) (param $rest i32) (param $st i32)
+  (local $row i32) (local $bits i32) (local $s i32) (local $g i32) (local $sl i32) (local $sb i32)
+  (local.set $row (i32.add (call $cx_site) (i32.const 12)))
+  ;; the copy of the frame: memory.copy(row, frame, W)
+  (call $em (local.get $f) (@str "kakbkc") (local.get $row) (global.get $cx_frame) (call $width) (i32.const 0))
+  (call $bput (local.get $f) (i32.const 0xfc)) (call $bput (local.get $f) (i32.const 10))
+  (call $bput (local.get $f) (i32.const 0)) (call $bput (local.get $f) (i32.const 0))
+  ;; the slots certainly bound on entry
+  (local.set $bits (call $cx_bits))
+  (loop $slots
+    (if (i32.lt_u (local.get $s) (global.get $cx_nv)) (then
+      (if (i32.eq (i32.load8_u (call $st_at (local.get $st) (local.get $s))) (i32.const CERTAIN)) (then (call $setbit (local.get $bits) (local.get $s))))
+      (local.set $s (i32.add (local.get $s) (i32.const 1)))
+      (br $slots))))
+  (local.set $g (i32.load offset=4 (local.get $el)))
+  (local.set $sl (global.get $cx_lat))
+  (local.set $sb (global.get $cx_latbits))
+  (global.set $cx_lat (local.get $row))
+  (global.set $cx_latbits (local.get $bits))
+  (call $cx_emit (local.get $f)
+    (call $step (i32.const S_LIST) (i32.load offset=4 (local.get $g)) (i32.const 0)
+      (call $step (i32.const S_FILT) (i32.load offset=8 (local.get $g)) (i32.const 0)
+        (call $step (i32.const S_LATEND) (local.get $sl) (local.get $sb) (local.get $rest))))
+    (local.get $st))
+  (global.set $cx_lat (local.get $sl))
+  (global.set $cx_latbits (local.get $sb)))
