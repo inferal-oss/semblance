@@ -27,8 +27,59 @@ export class Runtime {
   readonly projections: Projection[] = []
   private readonly inputListeners: ((graph: string | undefined, delta: Delta) => void)[] = []
   private readonly warmth = new WeakMap<Engine, (focus: string) => string | undefined>()
+  private readonly refreshListeners: (() => void)[] = []
+  private refreshQueued = false
+  /** When the next refresh may run: a slow one waits longer, so following never takes over. */
+  private refreshAfter = 0
+
+  /**
+   * How a refresh waits for the next frame (see refresh()): requestAnimationFrame where there
+   * is a page, else a microtask. Hosts and tests may replace it.
+   */
+  frame: (run: () => void) => void =
+    typeof requestAnimationFrame === 'function' ? (run) => void requestAnimationFrame(() => run()) : (run) => queueMicrotask(run)
+  /**
+   * Following a query never takes more than about this share of the time: after a refresh
+   * that took t ms, the next waits at least t / share - t ms more.
+   */
+  refreshShare = 0.25
 
   constructor(readonly store: GraphStore) {}
+
+  /** Hear about every refresh (after the projections are updated): the host flushes its renderers. */
+  onRefresh(listener: () => void): () => void {
+    this.refreshListeners.push(listener)
+    return () => this.refreshListeners.splice(this.refreshListeners.indexOf(listener), 1)
+  }
+
+  /**
+   * Re-run the views whose followed queries read what changed since the last refresh (see
+   * Engine.refresh), in every projection. The host calls it at the next frame by itself
+   * (`frame`); call it to refresh now. Returns whether anything was re-run.
+   */
+  refresh(): boolean {
+    const t = performance.now()
+    let any = false
+    for (const p of this.projections) if (p.engine.refresh()) settle(p), (any = true)
+    if (!any) return false
+    const took = performance.now() - t
+    this.refreshAfter = performance.now() + took * (1 / this.refreshShare - 1)
+    for (const l of this.refreshListeners) l()
+    return true
+  }
+
+  /** At most one refresh waits at a time: everything that changes before it runs is in it. */
+  private queueRefresh() {
+    if (this.refreshQueued) return
+    this.refreshQueued = true
+    const go = () => {
+      const wait = this.refreshAfter - performance.now()
+      if (wait > 1) return void setTimeout(() => this.frame(go), wait)
+      this.refreshQueued = false
+      this.refresh()
+    }
+    this.frame(go)
+  }
 
   /**
    * Hear about every effective change to the input graphs (`graph` undefined = the
@@ -51,6 +102,7 @@ export class Runtime {
     })
     const index = new HtmlIndex(onError)
     engine.onChange((d) => index.apply(d))
+    engine.onStale = () => this.queueRefresh()
     if (opts.roots) {
       const roots = new Set(opts.roots)
       // Whether a focus is shown is asked for every parked pair on every check; the answer holds

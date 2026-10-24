@@ -65,6 +65,19 @@ sem:follows a owl:ObjectProperty ;
 sem:watches a owl:ObjectProperty ;
     rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
 
+# A function rule may run a query held in the data and follow it (RuleContext.select / construct
+# with { follow: true }): it then depends on the triples the query reads - its triple patterns,
+# with the IRIs they name (src/sparql-reads.ts) - and a changed triple that matches one re-runs it.
+sem:refresh a owl:ObjectProperty ; rdfs:domain sem:Rendering ; rdfs:range sem:Refresh ;
+    rdfs:comment """When a rule of this rendering is re-run after a triple a query it follows reads has changed:
+sem:AtOnce (the default), in the same run as the change, or sem:NextFrame, at the host's next
+frame, once for every change since: a busy graph (a change-log member per keystroke) costs one
+evaluation per frame, never one per change, and the change itself does not wait for it."""@en .
+sem:Refresh a owl:Class ; rdfs:comment "When a rule that follows a query is re-run after what it read changed."@en .
+sem:AtOnce a sem:Refresh ; rdfs:label "at once"@en ; rdfs:comment "In the same run as the change that it read."@en .
+sem:NextFrame a sem:Refresh ; rdfs:label "next frame"@en ;
+    rdfs:comment "At the host's next frame (requestAnimationFrame; a microtask without a page), coalescing every change since. A slow evaluation spaces the next one out."@en .
+
 sem:forEach a owl:ObjectProperty ;
     rdfs:range rdf:Property ;
     rdfs:comment """Makes a rule member-wise: it is evaluated once per (focus, member) for each

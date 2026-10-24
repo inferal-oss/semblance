@@ -3,6 +3,7 @@ import { H, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
+import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 
 export interface EngineOptions {
@@ -34,6 +35,13 @@ export interface EngineStats {
 }
 
 type Listener = (delta: Delta) => void
+
+/** A (rule, focus) pair that follows queries: the triple patterns they read. */
+interface Follower {
+  rule: Rule
+  focus: string
+  reads: ReadPattern[]
+}
 
 const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
 
@@ -90,6 +98,16 @@ export class Engine {
   private readers = new Map<string, Map<Rule, Map<string, Set<string>>>>()
   /** The inverse, to retract a pair's previous reads: rule -> focus -> subjects. */
   private readsOf = new Map<Rule, Map<string, string[]>>()
+  /** Pairs that follow queries, by rule and focus, and by the predicates they read ('*' = any). */
+  private queryFollowers = new Map<Rule, Map<string, Follower>>()
+  private queryFollowersByPredicate = new Map<string, Set<Follower>>()
+  /** Followers whose reads changed, waiting for the next frame (sem:refresh sem:NextFrame). */
+  private stale = new Set<Follower>()
+  /**
+   * Called when work starts waiting for the next frame (once until refresh()): the host
+   * schedules refresh() then.
+   */
+  onStale?: () => void
   private refs = new Map<string, { q: Quad; n: number }>()
   private dirty = new Map<number, Map<Rule, Set<string>>>()
   /** Member-wise rules: rule -> focus -> member keys with output (to retract them). */
@@ -162,7 +180,9 @@ export class Engine {
     for (const foci of this.deferred.values()) deferred += foci.size
     let members = 0
     for (const byOwner of this.memberKeys.values()) for (const keys of byOwner.values()) members += keys.size
-    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, types: this.types.size, links: this.links.size }
+    let following = 0
+    for (const byFocus of this.queryFollowers.values()) following += byFocus.size
+    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, types: this.types.size, links: this.links.size, following, stale: this.stale.size }
   }
 
   onChange(listener: Listener): () => void {
@@ -245,6 +265,25 @@ export class Engine {
     return any
   }
 
+  /** Whether followed queries' reads changed since the last refresh() (see sem:refresh). */
+  get hasStale(): boolean {
+    return this.stale.size > 0
+  }
+
+  /**
+   * Re-run, once each, the rules whose followed queries read triples that changed since the
+   * last refresh (sem:refresh sem:NextFrame): the host calls this at its next frame, so a burst
+   * of changes costs one evaluation. Returns whether anything was re-run.
+   */
+  refresh(): boolean {
+    if (!this.stale.size) return false
+    const stale = [...this.stale]
+    this.stale.clear()
+    for (const f of stale) this.markDirty(f.rule, f.focus)
+    this.run()
+    return true
+  }
+
   /**
    * Switch modality, layers or implementation preference. Rules that are no
    * longer selected retract their output; every selected rule is re-evaluated
@@ -271,7 +310,7 @@ export class Engine {
     const before = new Set(this.rules)
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
-    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r)
+    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r), this.forgetAllFollowing(r)
     // Keep what the retractions dirtied for rules that stay; drop the rest.
     for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
     this.activate(after)
@@ -470,6 +509,11 @@ export class Engine {
         }
       }
     }
+    // Function rules that follow a query re-run if the triple matches what it reads.
+    if (this.queryFollowersByPredicate.size) {
+      this.touchFollowers(this.queryFollowersByPredicate.get(p), q)
+      this.touchFollowers(this.queryFollowersByPredicate.get('*'), q)
+    }
     // Rules that read what was minted under their focus (e.g. the tooltip layer)
     // re-run when a lower stratum changes it.
     const owner = owningFocus(s)
@@ -480,6 +524,65 @@ export class Engine {
       }
     }
     if (sign > 0) this.index(q, sign)
+  }
+
+  private touchFollowers(followers: Set<Follower> | undefined, q: Quad) {
+    if (!followers) return
+    const s = q.subject.value
+    const p = q.predicate.value
+    for (const f of followers) {
+      if (this.stale.has(f)) continue
+      if (this.committing?.rule === f.rule && this.committing.focus === f.focus) continue
+      // What the rule (or a layer over it) renders under its focus is not what it read.
+      const focus = focusOf(f.focus)
+      if (s === focus || s.startsWith(focus + '/~')) continue
+      if (!f.reads.some((r) => matchesRead(r, s, p, q.object))) continue
+      if (f.rule.refresh === 'now') {
+        if (f.rule.stratum >= this.current) this.markDirty(f.rule, f.focus)
+      } else if (this.demand && !this.warming && !this.demand(focus)) {
+        // Not shown: it waits, parked, until it is (no frame needed).
+        let parked = this.deferred.get(f.rule)
+        if (!parked) this.deferred.set(f.rule, (parked = new Set()))
+        parked.add(f.focus)
+      } else {
+        const first = !this.stale.size
+        this.stale.add(f)
+        if (first) this.onStale?.()
+      }
+    }
+  }
+
+  /** Replace a (rule, focus) pair's followed query reads. */
+  private recordFollowing(rule: Rule, focus: string, reads: ReadPattern[]) {
+    this.forgetFollowing(rule, focus)
+    if (!reads.length) return
+    const f: Follower = { rule, focus, reads }
+    let byFocus = this.queryFollowers.get(rule)
+    if (!byFocus) this.queryFollowers.set(rule, (byFocus = new Map()))
+    byFocus.set(focus, f)
+    for (const p of new Set(reads.map((r) => r.p ?? '*'))) {
+      let set = this.queryFollowersByPredicate.get(p)
+      if (!set) this.queryFollowersByPredicate.set(p, (set = new Set()))
+      set.add(f)
+    }
+  }
+
+  private forgetFollowing(rule: Rule, focus: string) {
+    const byFocus = this.queryFollowers.get(rule)
+    const f = byFocus?.get(focus)
+    if (!f) return
+    byFocus!.delete(focus)
+    if (!byFocus!.size) this.queryFollowers.delete(rule)
+    this.stale.delete(f)
+    for (const p of new Set(f.reads.map((r) => r.p ?? '*'))) {
+      const set = this.queryFollowersByPredicate.get(p)
+      set?.delete(f)
+      if (set && !set.size) this.queryFollowersByPredicate.delete(p)
+    }
+  }
+
+  private forgetAllFollowing(rule: Rule) {
+    for (const focus of [...(this.queryFollowers.get(rule)?.keys() ?? [])]) this.forgetFollowing(rule, focus)
   }
 
   // --- evaluation ------------------------------------------------------------
@@ -557,14 +660,17 @@ export class Engine {
     if (rule.kind === 'function') {
       this.stats.fnCalls++
       const trace = new Map<string, Set<string>>()
+      const reads: ReadPattern[] = []
       this.ctx.trace = trace
+      this.ctx.queryReads = reads
       try {
         const f = this.store.factory
         const member = memberOf(focus)
         return this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
       } finally {
-        this.ctx.trace = undefined
+        this.ctx.trace = this.ctx.queryReads = undefined
         this.recordReads(rule, focus, trace)
+        if (reads.length || this.queryFollowers.has(rule)) this.recordFollowing(rule, focus, reads)
       }
     }
     this.stats.queries++
@@ -683,7 +789,7 @@ export class Engine {
       byFocus.delete(focus)
       // A pair with nothing to show no longer needs to hear about what it read,
       // unless it is still an instance (its next input may produce output).
-      if (!this.isInstance(focus, rule) || !this.linked(rule, focus)) this.forgetReads(rule, focus)
+      if (!this.isInstance(focus, rule) || !this.linked(rule, focus)) this.forgetReads(rule, focus), this.forgetFollowing(rule, focus)
     }
     if (rule.forEach && memberOf(focus) !== undefined) {
       let byOwner = this.memberKeys.get(rule)

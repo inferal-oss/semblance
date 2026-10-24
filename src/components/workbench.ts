@@ -32,6 +32,10 @@ const W = {
   of: c + 'of',
   limit: c + 'limit',
   actions: c + 'actions',
+  followUpdates: c + 'followUpdates',
+  LiveIndicator: c + 'LiveIndicator',
+  controls: c + 'controls',
+  property: c + 'property',
   caretEvent: NS.beh + 'caret',
   key: NS.beh + 'key',
   selectedTerm: c + 'selectedTerm',
@@ -66,6 +70,7 @@ const P = {
   graphSelection: c + 'GraphSelectionPhrase',
   graphSelectionOne: c + 'GraphSelectionOnePhrase',
   clearSelection: c + 'ClearSelectionPhrase',
+  following: c + 'FollowingPhrase',
 } as const
 
 const RS = 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#'
@@ -252,12 +257,26 @@ function executed(ctx: RuleContext, q: Term): { text: string; graph: boolean } |
   return select ? { text: select, graph: false } : undefined
 }
 
-/** Run the query a result view shows. Never throws: a failing query is an outcome like any other. */
+/**
+ * Whether a result view follows updates: it, or a workbench that runs its query (c:runs), says
+ * c:followUpdates true. Read (traced), so switching it re-evaluates the view.
+ */
+function following(ctx: RuleContext, focus: NamedNode, q: Term): boolean {
+  if (isTrue(ctx.object(focus, W.followUpdates))) return true
+  return ctx.untraced(() => ctx.match(null, W.runs, q)).some((m) => isTrue(ctx.object(m.subject, W.followUpdates)))
+}
+
+/**
+ * Run the query a result view shows. Never throws: a failing query is an outcome like any other.
+ * Followed (see following()), the view depends on the triples the query reads, and its
+ * rendering's sem:refresh re-runs it when they change; otherwise its results stay as of the run.
+ */
 function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
   const q = ctx.object(focus, W.of)
   if (!named(q)) return { kind: 'none' }
   // Read so that running the same text again re-evaluates the view.
   ctx.object(q, W.runCount)
+  const follow = following(ctx, focus, q)
   const run = executed(ctx, q)
   if (!run) return { kind: 'none' }
   // A bound view (c:bindVariable, as a c:QueryView): $variable is the value of c:bindProperty on
@@ -272,7 +291,7 @@ function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
   }
   if (!ctx.sparql) return { kind: 'nosparql' }
   try {
-    const result = (run.graph ? ctx.construct(run.text) : ctx.select(run.text)) as unknown
+    const result = (run.graph ? ctx.construct(run.text, { follow }) : ctx.select(run.text, { follow })) as unknown
     if (typeof result === 'boolean') return { kind: 'ask', answer: result }
     if (!Array.isArray(result)) return { kind: 'error', message: 'The query returned no results the workbench can show.' }
     if (result.length && result[0] instanceof Map) {
@@ -588,6 +607,8 @@ const workbench: FnRule = (ctx, focus) => {
     return construct ? (queryForm(construct) ?? 'CONSTRUCT') : (queryForm(str(ctx.object(q, SEM.select)) ?? '') ?? 'SELECT')
   }
   const status = run ? (named(current) ? say(ctx, P.ranSample, 'Results of: {name}', { name: labelOf(ctx, current) }) : say(ctx, P.ranQuery, 'Results of your query')) : undefined
+  // While its results follow updates, a live indicator says so (pressing it stops following).
+  const live = isTrue(ctx.object(focus, W.followUpdates)) ? say(ctx, P.following, 'Live') : undefined
 
   if (ctx.modality === MOD.Text) {
     const list = samples.map((s, i) => `${s === current ? '•' : ' '} ${i + 1}. ${labelOf(ctx, s)} (${form(s)})`).join('\n')
@@ -597,7 +618,7 @@ const workbench: FnRule = (ctx, focus) => {
         o.el('samples', 'Div', {}, [o.text('samples-text', `${say(ctx, P.samples, 'Sample queries')}:\n${list}`)]),
         ...actions,
         ...(named(editorNode) ? [editorNode] : []),
-        ...(status ? [o.el('status', 'Div', {}, [o.text('status-text', `${status} · ${form(query!)}`)])] : []),
+        ...(status ? [o.el('status', 'Div', {}, [o.text('status-text', `${status} · ${form(query!)}${live ? ` · ${live}` : ''}`)])] : []),
         ...(named(results) ? [results] : []),
       ]),
     )
@@ -628,6 +649,7 @@ const workbench: FnRule = (ctx, focus) => {
     ...actions,
     ...(run && query ? [o.el('form', 'Span', { class: 'sem-form' }, [o.text('form-text', form(query))])] : []),
     ...(status ? [o.el('status', 'Span', { class: 'sem-status' }, [o.text('status-text', status)])] : []),
+    ...(live ? [liveIndicator(ctx, o, focus, live)] : []),
   ])
   o.attr(toolbar, 'role', 'toolbar').attr(toolbar, 'aria-label', label)
   const main = o.el('main', 'Div', { class: 'sem-main' }, [toolbar, ...(named(editorNode) ? [editorNode] : []), ...(named(results) ? [results] : [])])
@@ -635,6 +657,16 @@ const workbench: FnRule = (ctx, focus) => {
   o.attr(root, 'aria-label', label)
   o.renders(root)
   return o.quads
+}
+
+/** A c:LiveIndicator, minted under the workbench, over its c:followUpdates. */
+function liveIndicator(ctx: RuleContext, o: Out, focus: NamedNode, label: string): NamedNode {
+  const n = o.node('live')
+  o.t(n, RDF_TYPE, ctx.nn(W.LiveIndicator))
+  o.t(n, W.controls, focus)
+  o.t(n, W.property, ctx.nn(W.followUpdates))
+  o.t(n, C.label, label)
+  return n
 }
 
 // --- results: a table --------------------------------------------------------------------------------

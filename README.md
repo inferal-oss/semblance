@@ -217,7 +217,11 @@ completions come from the graph (keywords, functions and every prefixed term the
 store knows), sample queries, and results as a table, a graph or Turtle. Selecting
 a node of the graph (`c:selectedTerm`, by click or Enter) highlights it and its
 neighbourhood and dims the rest: a rule derives each mark's `c:Salience` from the
-rendered links, so a selection re-runs that rule only, not the query. Like
+rendered links, so a selection re-runs that rule only, not the query. **Follow
+updates** (`c:followUpdates`) keeps the results live: a view that follows its query
+depends on the triple patterns the query reads (`src/sparql-reads.ts`), so only a
+change matching one re-runs it, at most once a frame (`sem:refresh sem:NextFrame`), and
+a live indicator says so. Like
 any tab it can be detached into a window, and its state is remembered.
 
 Every example on the **Examples** page explains itself with a **walkthrough**
@@ -246,6 +250,7 @@ The cost of an interaction depends on what it changes, not on how big the app
 or its history is:
 - demand-driven evaluation (above) keeps hidden views off the critical path;
 - read tracing re-runs a function rule only when a triple it read changes;
+- a followed query re-runs only for a triple matching its patterns, once a frame;
 - immutable LDES members are rendered once, by content-keyed views;
 - the change log is bounded and read from its head;
 - correlated sub-patterns in SPARQL use `EXISTS` / `LATERAL`, not `OPTIONAL` /

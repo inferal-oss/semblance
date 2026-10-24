@@ -2,6 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { mint } from '../rdf.ts'
+import { queryReads, type ReadPattern } from '../sparql-reads.ts'
 import type { Factory, GraphStore } from '../store/types.ts'
 import { ATTRIBUTE_NAMES } from '../vocab/rdfhtml.generated.ts'
 
@@ -14,15 +15,25 @@ export interface RuleContext {
   match(s: Term | string | null, p: Term | string | null, o: Term | string | null): Quad[]
   object(s: Term | string, p: Term | string): Term | undefined
   objects(s: Term | string, p: Term | string): Term[]
-  /** SPARQL over the rule's view of the graphs (throws on stores without SPARQL). */
-  select(query: string): Map<string, Term>[]
-  construct(query: string): Quad[]
+  /**
+   * SPARQL over the rule's view of the graphs (throws on stores without SPARQL). Untraced
+   * unless `follow`: then the rule depends on the triples the query reads (its triple
+   * patterns, see sparql-reads.ts) and is re-run, as its rendering's sem:refresh says, when a
+   * matching triple changes.
+   */
+  select(query: string, opts?: QueryOptions): Map<string, Term>[]
+  construct(query: string, opts?: QueryOptions): Quad[]
   readonly sparql: boolean
   /**
    * When set (by the engine, around one function-rule evaluation), every
    * pattern read is recorded as subject -> predicates ('*' = any predicate).
    */
   trace?: Map<string, Set<string>>
+  /**
+   * Set with `trace`: the triple patterns of the queries the rule followed (`{}` alone: it may
+   * read any triple).
+   */
+  queryReads?: ReadPattern[]
   /**
    * Run `read` without recording its reads: the rule is not re-run when what it
    * read there changes (for snapshots, such as a view's source on its back side).
@@ -43,6 +54,11 @@ export interface RuleContext {
  */
 /** The pseudo-subject a rule "reads" when its output depends on the viewer's languages. */
 export const LANGUAGE = '\u0000language'
+
+export interface QueryOptions {
+  /** Depend on what the query reads (see RuleContext.select). */
+  follow?: boolean
+}
 
 export interface FnRule {
   /** `member` is set for member-wise rules (sem:forEach): one evaluation per member. */
@@ -82,6 +98,10 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     }
     return out
   }
+  const followed = (text: string, opts: QueryOptions | undefined) => {
+    if (opts?.follow && ctx.queryReads) ctx.queryReads.push(...(queryReads(text) ?? [{}]))
+    return text
+  }
   const ctx: RuleContext = {
     f,
     modality,
@@ -94,12 +114,13 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
       ctx.trace?.set(LANGUAGE, new Set(['*']))
     },
     untraced<T>(read: () => T): T {
-      const trace = ctx.trace
-      ctx.trace = undefined
+      const { trace, queryReads } = ctx
+      ctx.trace = ctx.queryReads = undefined
       try {
         return read()
       } finally {
         ctx.trace = trace
+        ctx.queryReads = queryReads
       }
     },
     memo<T>(key: string, compute: () => T): T {
@@ -108,8 +129,8 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     out: (focus) => new Out(ctx, focus, graph),
     sparql: store.sparql,
-    select: (query) => store.select(prefixes() + '\n' + query, graphs),
-    construct: (query) => store.construct(prefixes() + '\n' + query, graphs),
+    select: (query, opts) => store.select(followed(prefixes() + '\n' + query, opts), graphs),
+    construct: (query, opts) => store.construct(followed(prefixes() + '\n' + query, opts), graphs),
   }
   return ctx
 }

@@ -89,6 +89,8 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
   })
   const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
   shell.flush()
+  // Views that follow their queries refresh at the next frame (a microtask here).
+  runtime.onRefresh(() => shell.flush())
   const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer, clock })
   bus.attach(shell, () => shell.flush())
   // Things due later (beh:dueAt) become beh:Due events; one waiting to be shown waits.

@@ -18,7 +18,7 @@
 ui:workbench a c:QueryWorkbench ;
     c:label "SPARQL workbench" , "Робоче місце SPARQL"@uk , "SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
     c:editor ui:queryEditor ;
-    c:actions ( ui:queryRun ) ;
+    c:actions ( ui:queryRun ui:queryFollow ) ;
     c:runs ui:currentQuery ;
     c:results ui:queryResults ;
     c:samples ( ui:sampleRenderings ui:sampleReactions ui:sampleLayers ui:sampleChangeLog
@@ -39,6 +39,10 @@ ORDER BY DESC(?rules) ?component""" .
 ui:queryRun a c:Button , c:RunQueryButton ; c:of ui:workbench ;
     c:label "Run" , "Виконати"@uk , "Ausführen"@de , "تشغيل"@ar ;
     sty:intent sty:Primary ; key:shortcut "mod+enter" .
+
+# Whether the results follow the graph (c:followUpdates): off, they stay as of the last run.
+ui:queryFollow a c:ToggleSwitch ; c:controls ui:workbench ; c:property c:followUpdates ;
+    c:label "Follow updates" , "Стежити за змінами"@uk , "Änderungen folgen"@de , "متابعة التحديثات"@ar .
 
 ui:currentQuery a sem:Query ;
     rdfs:label "The query last run" , "Останній виконаний запит"@uk , "Die zuletzt ausgeführte Abfrage"@de , "آخر استعلام منفّذ"@ar ;
@@ -209,7 +213,7 @@ ORDER BY ?priority""" .
 
 # --- remembered state ---------------------------------------------------------------------------------------
 # The editor's text and caret, the query last run (both forms, so a restored CONSTRUCT replaces a
-# SELECT: an empty text is "none"), the results tab, the node selected in the graph, and whether
+# SELECT: an empty text is "none"), whether its results follow updates, the results tab, the node selected in the graph, and whether
 # the Query tab is a window, with its geometry. For this tab only.
 
 ui:rememberWorkbench a per:Policy ; per:scope per:Session ;
@@ -217,6 +221,7 @@ ui:rememberWorkbench a per:Policy ; per:scope per:Session ;
     per:construct """
 CONSTRUCT {
   ui:queryEditor c:value ?text ; c:caret ?caret .
+  ui:workbench c:followUpdates ?follow .
   ui:currentQuery sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
   ui:queryResults c:selected ?view .
   ui:queryGraph c:selectedTerm ?node .
@@ -226,6 +231,7 @@ CONSTRUCT {
 WHERE {
   { ui:queryEditor c:value ?text }
   UNION { ui:queryEditor c:caret ?caret }
+  UNION { ui:workbench c:followUpdates ?follow }
   UNION { OPTIONAL { ui:currentQuery sem:select ?s } BIND(COALESCE(?s, "") AS ?select) }
   UNION { OPTIONAL { ui:currentQuery sem:construct ?c } BIND(COALESCE(?c, "") AS ?construct) }
   UNION { ui:currentQuery c:runCount ?runs }

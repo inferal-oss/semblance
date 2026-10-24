@@ -112,6 +112,8 @@ const flush = () => {
   textDom?.flush()
 }
 flush()
+// Views that follow their queries (sem:refresh sem:NextFrame) re-run at the next frame.
+runtime.onRefresh(flush)
 
 // --- effects of graph state --------------------------------------------------------------
 

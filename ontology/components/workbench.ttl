@@ -17,7 +17,9 @@
 # the input reaction on every keystroke; that re-renders the editor (its highlighted lines and
 # suggestions) and nothing else. Running copies the text into the query node the results show
 # (c:runs, a sem:Query with sem:select or sem:construct) and counts the run (c:runCount), so
-# the results change only when a query is run. The results are ordinary views of that node,
+# the results change only when a query is run - unless the workbench follows updates
+# (c:followUpdates true): then they follow the triples the query reads, re-run at most once a
+# frame when one of them changes, and a live indicator says so. The results are ordinary views of that node,
 # usually the panels of a c:Tabs. Autocompletion comes from the graph too: SPARQL's words are
 # individuals of c:SparqlWord, and the terms are every class and property the store declares,
 # named with the prefixes it knows.
@@ -31,7 +33,9 @@ c:QueryWorkbench a owl:Class ;
 nodes with rdfs:label and rdfs:comment), an editor (c:editor, a c:QueryEditor), header components
 (c:actions, e.g. a c:RunQueryButton), the query last run (c:runs) and its results (c:results, e.g. a
 c:Tabs of c:QueryResultView panels). Picking a sample loads it into the editor, runs it and shows
-its c:resultTab. The sample whose text was run last is shown pressed."""@en ;
+its c:resultTab. The sample whose text was run last is shown pressed. With c:followUpdates true
+(e.g. a c:ToggleSwitch among its actions), the results follow what the query reads, and a
+c:LiveIndicator in the toolbar shows that they are live."""@en ;
     sem:slug "query-workbench" .
 c:editor a owl:ObjectProperty ; rdfs:domain c:QueryWorkbench ; rdfs:range c:QueryEditor ;
     rdfs:comment "The editor whose text a run executes."@en .
@@ -45,6 +49,12 @@ c:resultTab a owl:ObjectProperty ; rdfs:domain sem:Query ; rdfs:range c:Tab ;
     rdfs:comment "On a sample: the results tab that shows it best (selected when it is loaded)."@en .
 c:runCount a owl:DatatypeProperty ; rdfs:domain sem:Query ; rdfs:range xsd:integer ;
     rdfs:comment "How many times the query was run: running the same text again re-evaluates its views."@en .
+c:followUpdates a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Follow updates"@en , "Стежити за змінами"@uk , "Änderungen folgen"@de , "متابعة التحديثات"@ar ;
+    rdfs:comment """On a c:QueryWorkbench (or one c:QueryResultView): whether the results of the query it runs
+follow the graph. True: each view depends on the triples its query reads (its triple patterns,
+with the IRIs they name) and is re-run, at most once a frame, when one of them changes; changes
+to anything else re-run nothing. False or absent: the results stay as of the last run."""@en .
 c:loads a owl:ObjectProperty ; rdfs:range sem:Query ;
     rdfs:comment "On a rendered element: the sample query that activating it loads and runs."@en .
 
@@ -374,15 +384,17 @@ c:fn-uuid a c:SparqlFunction ; rdfs:label "UUID" ; rdfs:comment "A fresh urn:uui
 c:QueryResultView a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A view of the results of a query (c:of a sem:Query with sem:select or sem:construct). It
-runs the query when shown and again when its text or c:runCount changes, not when the graph does.
-At most c:limit results are shown. A query that fails shows its error (a c:Alert) instead."""@en .
+runs the query when shown and again when its text or c:runCount changes, not when the graph does -
+unless it follows updates (its own c:followUpdates, or that of a workbench that c:runs its query):
+then also when a triple the query reads changes, at the next frame. At most c:limit results are
+shown. A query that fails shows its error (a c:Alert) instead."""@en .
 
 c:ResultTable a owl:Class ;
     rdfs:subClassOf c:QueryResultView ;
     rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ;
     rdfs:comment "The results as a table: one column per variable the query selects, or subject, predicate and object for a graph."@en ;
     sem:slug "result-table" .
-c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ;
+c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:functionOnly "It runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." .
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
 
@@ -397,8 +409,8 @@ node (a click, or Enter or Space on it) highlights it and its connections and di
 c:selectedTerm."""@en ;
     sem:slug "result-graph" .
 # Not the selection: changing it must not run the query or lay the graph out again.
-c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount ;
+c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
+    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates ;
     sem:functionOnly "It runs the query held in the data and computes a layout (trigonometry, layering by longest path), which SPARQL cannot do." .
 c:ResultGraphRendering-fn a sem:Rule ; sem:implements c:ResultGraphRendering ; sem:function "workbench:graph" .
 
@@ -576,7 +588,7 @@ c:ResultTurtle a owl:Class ;
     rdfs:comment """The results as syntax-colored Turtle: the graph of a CONSTRUCT, or the bindings of a SELECT
 as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
     sem:slug "result-turtle" .
-c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of ;
+c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:functionOnly "It runs the query held in the data and pretty-prints the result as Turtle tokens, which needs a tokenizer." .
 c:ResultTurtleRendering-fn a sem:Rule ; sem:implements c:ResultTurtleRendering ; sem:function "workbench:turtle" .
 
@@ -618,6 +630,7 @@ c:GraphSelectionOnePhrase a c:Phrase ;
     rdfs:label "{name} — 1 connection"@en , "{name} — 1 звʼязок"@uk , "{name} — 1 Verbindung"@de , "{name} — اتصال واحد"@ar .
 c:ClearSelectionPhrase a c:Phrase ;
     rdfs:label "Clear the selection"@en , "Скасувати вибір"@uk , "Auswahl aufheben"@de , "مسح التحديد"@ar .
+c:FollowingPhrase a c:Phrase ; rdfs:label "Live"@en , "Наживо"@uk , "Live"@de , "مباشر"@ar .
 c:RanQueryPhrase a c:Phrase ; rdfs:label "Results of your query"@en , "Результати вашого запиту"@uk , "Ergebnisse Ihrer Abfrage"@de , "نتائج استعلامك"@ar .
 
 # --- shapes ---------------------------------------------------------------------------------------------------
@@ -625,7 +638,8 @@ c:RanQueryPhrase a c:Phrase ; rdfs:label "Results of your query"@en , "Резу�
 c:QueryWorkbenchShape a sh:NodeShape ; sh:targetClass c:QueryWorkbench ;
     sh:property [ sh:path c:editor ; sh:minCount 1 ; sh:maxCount 1 ; sh:class c:QueryEditor ; sh:message "A workbench needs exactly one editor (c:editor, a c:QueryEditor)." ] ,
                 [ sh:path c:runs ; sh:minCount 1 ; sh:maxCount 1 ; sh:class sem:Query ; sh:message "A workbench needs one query node to run into (c:runs, a sem:Query)." ] ,
-                [ sh:path c:results ; sh:maxCount 1 ] .
+                [ sh:path c:results ; sh:maxCount 1 ] ,
+                [ sh:path c:followUpdates ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 c:QueryEditorShape a sh:NodeShape ; sh:targetClass c:QueryEditor ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An editor needs an accessible name (c:label)." ] ,
                 [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
