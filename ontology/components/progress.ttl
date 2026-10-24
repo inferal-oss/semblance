@@ -99,8 +99,10 @@ WHERE {
 [] a sty:StyleRule ; sty:appliesTo c:Progress ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
-                 [ sty:property "gap" ; sty:raw "10px" ] ,
-                 [ sty:property "min-width" ; sty:raw "260px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px 10px" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(100%, 260px)" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:state "[hidden]" ;
@@ -108,6 +110,7 @@ WHERE {
 
 [] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:part ".sem-track" ;
     sty:declares [ sty:property "width" ; sty:raw "160px" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "height" ; sty:raw "6px" ] ,
                  [ sty:property "border-radius" ; sty:raw "6px" ] ,
                  [ sty:property "background" ; sty:token tok:border ] ,

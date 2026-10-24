@@ -124,6 +124,7 @@
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "height" ; sty:raw "auto" ] ,
                  [ sty:property "width" ; sty:raw "var(--dock-size, 280px)" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "border-top" ; sty:raw "0" ] ,
                  [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border-strong)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DockPanel ; sty:when c:StartEdge ;
@@ -134,6 +135,7 @@
                  [ sty:property "order" ; sty:raw "-1" ] ,
                  [ sty:property "height" ; sty:raw "auto" ] ,
                  [ sty:property "width" ; sty:raw "var(--dock-size, 280px)" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "border-top" ; sty:raw "0" ] ,
                  [ sty:property "border-inline-end" ; sty:raw "1px solid var(--sem-border-strong)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DockPanel ; sty:state "[data-viewport]" ;
