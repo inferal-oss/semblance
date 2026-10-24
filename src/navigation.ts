@@ -566,7 +566,9 @@ export function rendererReveal(renderer: { nodeOf(key: string): Node | undefined
   return (iri, { smooth }) => {
     const el = renderer.nodeOf(iri + '/~root') as HTMLElement | undefined
     if (!el?.isConnected || el.closest('[hidden]')) return false
-    el.scrollIntoView?.({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+    // Centered when it fits (a sticky app bar would cover its start), else from its start.
+    const fits = el.getBoundingClientRect?.().height < (el.ownerDocument.defaultView?.innerHeight ?? 0) * 0.8
+    el.scrollIntoView?.({ behavior: smooth ? 'smooth' : 'auto', block: fits ? 'center' : 'start' })
     if (el.matches('a[href], button, input, select, textarea, [tabindex]')) el.focus({ preventScroll: true })
     return true
   }

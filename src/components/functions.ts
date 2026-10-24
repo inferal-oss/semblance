@@ -27,6 +27,7 @@ import { functions as gridFunctions } from './grid.ts'
 import { functions as panesFunctions } from './panes.ts'
 import { functions as payloadFunctions } from './payload.ts'
 import { functions as toolbarFunctions } from './toolbar.ts'
+import { functions as messagesFunctions } from './messages.ts'
 import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
 import { mint } from '../rdf.ts'
@@ -733,6 +734,7 @@ export const functions: Record<string, FnRule> = {
   ...panesFunctions,
   ...payloadFunctions,
   ...toolbarFunctions,
+  ...messagesFunctions,
   stack,
   'heading:screen': headingScreen,
   'heading:text': headingText,
