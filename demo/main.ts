@@ -101,7 +101,9 @@ flush()
 function syncSettings() {
   const slug = (t: { value: string } | undefined) => t && store.match(nn(t.value), nn(SEM.slug), null)[0]?.object.value
   const scheme = slug(appValues(STY.colorScheme)[0])
-  if (scheme) document.documentElement.setAttribute('data-sem-color-scheme', scheme)
+  // Only when changed: rewriting an attribute on <html> can restyle the whole page.
+  const html = document.documentElement
+  if (scheme && html.getAttribute('data-sem-color-scheme') !== scheme) html.setAttribute('data-sem-color-scheme', scheme)
 
   const layers = enabledLayers()
   const active = new Set(screen.engine.activeRules.map((r) => r.layer).filter(Boolean))
@@ -117,8 +119,8 @@ function syncSettings() {
     text.engine.reconfigure({ languages: [code] })
   }
   const rtl = !!language && store.match(nn(language.value), nn(L10N.direction), nn(L10N.RTL)).length > 0
-  document.documentElement.lang = code ?? 'en'
-  document.documentElement.dir = rtl ? 'rtl' : 'ltr'
+  if (html.lang !== (code ?? 'en')) html.lang = code ?? 'en'
+  if (html.dir !== (rtl ? 'rtl' : 'ltr')) html.dir = rtl ? 'rtl' : 'ltr'
 
   const key = (p: string) => {
     const v = appValues(p)[0]

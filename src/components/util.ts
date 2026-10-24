@@ -37,6 +37,8 @@ export const nodes = (ctx: RuleContext, head: Term | undefined): NamedNode[] => 
 export function text(ctx: RuleContext, s: Term, p: string): string | undefined {
   const values = ctx.objects(s, p).filter((t) => t.termType === 'Literal')
   if (values.length <= 1) return values[0]?.value
+  // Which value wins depends on the viewer's languages: a language change re-runs this.
+  ctx.readsLanguage()
   const lang = (t: Term) => (t.termType === 'Literal' ? t.language.toLowerCase() : '')
   const tagged = (want: string) => values.find((t) => lang(t) === want) ?? values.find((t) => lang(t).startsWith(want + '-'))
   for (const want of ctx.languages) {

@@ -76,7 +76,7 @@ ui:domNodes rdfs:label "DOM nodes" .
 
 ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
     # Display settings of the whole interface: hooked axes whose values re-value tokens.
-    mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable .
+    mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable ; sty:theme sty:Semblance .
 
 # Detached views live here, outside the pages, so they survive page changes.
 ui:desktop a c:Desktop ; c:hosts ui:announcements .
@@ -382,7 +382,8 @@ ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:galleryNav ui:display ) .
 # Display settings: each a control over one property of the shell (or the app).
 ui:display a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
-    c:children ( ui:languageChoice ui:contrastChoice ui:motionChoice ui:densityChoice ) .
+    c:children ( ui:themeChoice ui:languageChoice ui:contrastChoice ui:motionChoice ui:densityChoice ) .
+ui:themeChoice a c:Choice ; c:controls ui:shell ; c:property sty:theme .
 ui:languageChoice a c:Choice ; c:controls ui:app ; c:property l10n:language .
 ui:contrastChoice a c:Choice ; c:controls ui:shell ; c:property sty:contrast .
 ui:motionChoice a c:Choice ; c:controls ui:shell ; c:property mot:preference .

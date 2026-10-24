@@ -9,8 +9,334 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
-# Gallery page: Themes.
+# Gallery page: Themes. A theme (sty:theme, ontology/theme/themes.ttl) is a value of a
+# hookable axis whose declarations re-value the tokens of a subtree. On the shell it
+# re-themes the interface; on any component, only that subtree.
 
 ui:gallery-themes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-themes-intro ) .
+    c:children ( ui:gallery-themes-intro ui:th-switch ui:th-side ui:th-schemes ui:th-contrast ui:th-ramps ) .
 ui:gallery-themes-intro a c:Heading ; c:label "Themes" .
+
+# --- switching the whole interface ---------------------------------------------------------
+
+ui:th-switch a c:Flippable ; c:front ui:th-switch-spec .
+ui:th-switch-spec a c:Specimen ;
+    c:label "Switch the whole interface" , "Перемкнути весь інтерфейс"@uk , "Die ganze Oberfläche umschalten"@de , "تبديل الواجهة بأكملها"@ar ;
+    c:help "The shell carries sty:theme as it carries sty:contrast and mot:preference. Picking a theme writes one triple, ui:shell sty:theme …; the style layer exposes it as data-sem-theme and the theme's declarations re-value every token below it. The options are the sty:Theme individuals, ordered by sem:order. Theme, scheme and contrast are independent axes: every theme has a day and a night side, and high contrast strengthens any of them." ;
+    c:children ( ui:th-switch-col ) .
+ui:th-switch-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:th-switch-theme-row ui:th-switch-scheme-row ui:th-switch-contrast-row ) .
+ui:th-switch-theme-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:th-switch-theme-l ui:themeSwitch ) .
+ui:th-switch-theme-l a c:Text ; sty:textStyle sty:Overline ; c:label "Theme" , "Тема"@uk , "Design"@de , "السمة"@ar .
+ui:themeSwitch a c:Segmented ; c:controls ui:shell ; c:property sty:theme .
+ui:th-switch-scheme-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:th-switch-scheme-l ui:th-schemeSwitch ) .
+ui:th-switch-scheme-l a c:Text ; sty:textStyle sty:Overline ; c:label "Scheme" , "Схема"@uk , "Schema"@de , "المخطط"@ar .
+ui:th-schemeSwitch a c:Segmented ; c:controls ui:app ; c:property sty:colorScheme .
+ui:th-switch-contrast-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:th-switch-contrast-l ui:th-contrastSwitch ) .
+ui:th-switch-contrast-l a c:Text ; sty:textStyle sty:Overline ; c:label "Contrast" , "Контраст"@uk , "Kontrast"@de , "التباين"@ar .
+ui:th-contrastSwitch a c:Segmented ; c:controls ui:shell ; c:property sty:contrast .
+
+# --- the same composition under each theme -------------------------------------------------
+
+ui:th-side a c:Flippable ; c:front ui:th-side-spec .
+ui:th-side-spec a c:Specimen ;
+    c:label "One composition, five themes" , "Одна композиція, п’ять тем"@uk , "Eine Komposition, fünf Designs"@de , "تكوين واحد، خمس سمات"@ar ;
+    c:help "Five c:Surface instances with the same children, each with a different sty:theme. A theme is a sty:Theme individual whose sty:declares restate the ramps, the role colors, type, radii, shadows and easing, and a few theme-level tokens: the heading's font, case and mark, the progress fill, the backdrop. No component names a theme; components read tokens, custom properties inherit, so the nearest theme wins - even inside another theme." ;
+    c:children ( ui:th-side-grid ) .
+
+ui:th-semblance a c:Surface ; sty:theme sty:Semblance ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:th-semblance-name ui:th-semblance-title ui:th-semblance-body ui:th-semblance-tags ui:th-semblance-field ui:th-semblance-progress ui:th-semblance-checks ui:th-semblance-actions ) .
+ui:th-semblance-name a c:Text ; sty:textStyle sty:Overline ; c:label "Semblance" .
+ui:th-semblance-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:th-semblance-body a c:Text ; sty:textStyle sty:Caption ; c:label "Ramps, type, corners, depth and motion, from one triple on this surface." .
+ui:th-semblance-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-semblance-draft ui:th-semblance-synced ui:th-semblance-notes ui:th-semblance-late ) .
+ui:th-semblance-draft a c:Badge ; c:label "Draft" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:th-semblance-synced a c:Badge ; c:label "Synced" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:th-semblance-notes a c:Badge ; c:label "3 notes" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:th-semblance-late a c:Badge ; c:label "Late" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:th-semblance-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:th-semblance-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:th-semblance-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:th-semblance-autosave ui:th-semblance-spell ) .
+ui:th-semblance-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:th-semblance-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:th-semblance-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-semblance-publish ui:th-semblance-accent ui:th-semblance-preview ) .
+ui:th-semblance-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:th-semblance-accent a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-semblance-preview a c:Button ; c:label "Preview" ; sty:emphasis sty:Outline .
+
+ui:th-paper a c:Surface ; sty:theme sty:Paper ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:th-paper-name ui:th-paper-title ui:th-paper-body ui:th-paper-tags ui:th-paper-field ui:th-paper-progress ui:th-paper-checks ui:th-paper-actions ) .
+ui:th-paper-name a c:Text ; sty:textStyle sty:Overline ; c:label "Paper" .
+ui:th-paper-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:th-paper-body a c:Text ; sty:textStyle sty:Caption ; c:label "Ramps, type, corners, depth and motion, from one triple on this surface." .
+ui:th-paper-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-paper-draft ui:th-paper-synced ui:th-paper-notes ui:th-paper-late ) .
+ui:th-paper-draft a c:Badge ; c:label "Draft" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:th-paper-synced a c:Badge ; c:label "Synced" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:th-paper-notes a c:Badge ; c:label "3 notes" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:th-paper-late a c:Badge ; c:label "Late" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:th-paper-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:th-paper-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:th-paper-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:th-paper-autosave ui:th-paper-spell ) .
+ui:th-paper-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:th-paper-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:th-paper-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-paper-publish ui:th-paper-accent ui:th-paper-preview ) .
+ui:th-paper-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:th-paper-accent a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-paper-preview a c:Button ; c:label "Preview" ; sty:emphasis sty:Outline .
+
+ui:th-terminal a c:Surface ; sty:theme sty:Terminal ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:th-terminal-name ui:th-terminal-title ui:th-terminal-body ui:th-terminal-tags ui:th-terminal-field ui:th-terminal-progress ui:th-terminal-checks ui:th-terminal-actions ) .
+ui:th-terminal-name a c:Text ; sty:textStyle sty:Overline ; c:label "Terminal" .
+ui:th-terminal-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:th-terminal-body a c:Text ; sty:textStyle sty:Caption ; c:label "Ramps, type, corners, depth and motion, from one triple on this surface." .
+ui:th-terminal-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-terminal-draft ui:th-terminal-synced ui:th-terminal-notes ui:th-terminal-late ) .
+ui:th-terminal-draft a c:Badge ; c:label "Draft" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:th-terminal-synced a c:Badge ; c:label "Synced" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:th-terminal-notes a c:Badge ; c:label "3 notes" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:th-terminal-late a c:Badge ; c:label "Late" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:th-terminal-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:th-terminal-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:th-terminal-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:th-terminal-autosave ui:th-terminal-spell ) .
+ui:th-terminal-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:th-terminal-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:th-terminal-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-terminal-publish ui:th-terminal-accent ui:th-terminal-preview ) .
+ui:th-terminal-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:th-terminal-accent a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-terminal-preview a c:Button ; c:label "Preview" ; sty:emphasis sty:Outline .
+
+ui:th-blueprint a c:Surface ; sty:theme sty:Blueprint ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:th-blueprint-name ui:th-blueprint-title ui:th-blueprint-body ui:th-blueprint-tags ui:th-blueprint-field ui:th-blueprint-progress ui:th-blueprint-checks ui:th-blueprint-actions ) .
+ui:th-blueprint-name a c:Text ; sty:textStyle sty:Overline ; c:label "Blueprint" .
+ui:th-blueprint-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:th-blueprint-body a c:Text ; sty:textStyle sty:Caption ; c:label "Ramps, type, corners, depth and motion, from one triple on this surface." .
+ui:th-blueprint-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-blueprint-draft ui:th-blueprint-synced ui:th-blueprint-notes ui:th-blueprint-late ) .
+ui:th-blueprint-draft a c:Badge ; c:label "Draft" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:th-blueprint-synced a c:Badge ; c:label "Synced" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:th-blueprint-notes a c:Badge ; c:label "3 notes" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:th-blueprint-late a c:Badge ; c:label "Late" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:th-blueprint-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:th-blueprint-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:th-blueprint-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:th-blueprint-autosave ui:th-blueprint-spell ) .
+ui:th-blueprint-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:th-blueprint-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:th-blueprint-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-blueprint-publish ui:th-blueprint-accent ui:th-blueprint-preview ) .
+ui:th-blueprint-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:th-blueprint-accent a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-blueprint-preview a c:Button ; c:label "Preview" ; sty:emphasis sty:Outline .
+
+ui:th-sunset a c:Surface ; sty:theme sty:Sunset ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:th-sunset-name ui:th-sunset-title ui:th-sunset-body ui:th-sunset-tags ui:th-sunset-field ui:th-sunset-progress ui:th-sunset-checks ui:th-sunset-actions ) .
+ui:th-sunset-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset" .
+ui:th-sunset-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:th-sunset-body a c:Text ; sty:textStyle sty:Caption ; c:label "Ramps, type, corners, depth and motion, from one triple on this surface." .
+ui:th-sunset-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-draft ui:th-sunset-synced ui:th-sunset-notes ui:th-sunset-late ) .
+ui:th-sunset-draft a c:Badge ; c:label "Draft" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:th-sunset-synced a c:Badge ; c:label "Synced" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:th-sunset-notes a c:Badge ; c:label "3 notes" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:th-sunset-late a c:Badge ; c:label "Late" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:th-sunset-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:th-sunset-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:th-sunset-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:th-sunset-autosave ui:th-sunset-spell ) .
+ui:th-sunset-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:th-sunset-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:th-sunset-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-publish ui:th-sunset-accent ui:th-sunset-preview ) .
+ui:th-sunset-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:th-sunset-accent a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-sunset-preview a c:Button ; c:label "Preview" ; sty:emphasis sty:Outline .
+ui:th-side-grid a c:Grid ; c:minWidth "300px" ; pos:gap tok:space-4 ; c:children ( ui:th-semblance ui:th-paper ui:th-terminal ui:th-blueprint ui:th-sunset ) .
+
+# --- both schemes of every theme ------------------------------------------------------------
+
+ui:th-schemes a c:Flippable ; c:front ui:th-schemes-spec .
+ui:th-schemes-spec a c:Specimen ;
+    c:label "Day and night, at once" , "День і ніч водночас"@uk , "Tag und Nacht zugleich"@de , "النهار والليل معًا"@ar ;
+    c:help "sty:colorScheme on each tile forces Day or Night under its theme. Every theme color is a light-dark() pair, so the color scheme stays an axis of its own: five themes, two schemes, from one set of declarations per theme." ;
+    c:children ( ui:th-schemes-grid ) .
+ui:th-semblance-light a c:Surface ; sty:theme sty:Semblance ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-semblance-light-name ui:th-semblance-light-text ui:th-semblance-light-row ) .
+ui:th-semblance-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Semblance · Day" .
+ui:th-semblance-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-semblance-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-semblance-light-save ui:th-semblance-light-new ui:th-semblance-light-info ) .
+ui:th-semblance-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-semblance-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-semblance-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-semblance-dark a c:Surface ; sty:theme sty:Semblance ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-semblance-dark-name ui:th-semblance-dark-text ui:th-semblance-dark-row ) .
+ui:th-semblance-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Semblance · Night" .
+ui:th-semblance-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-semblance-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-semblance-dark-save ui:th-semblance-dark-new ui:th-semblance-dark-info ) .
+ui:th-semblance-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-semblance-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-semblance-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-paper-light a c:Surface ; sty:theme sty:Paper ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-paper-light-name ui:th-paper-light-text ui:th-paper-light-row ) .
+ui:th-paper-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Paper · Day" .
+ui:th-paper-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-paper-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-paper-light-save ui:th-paper-light-new ui:th-paper-light-info ) .
+ui:th-paper-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-paper-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-paper-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-paper-dark a c:Surface ; sty:theme sty:Paper ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-paper-dark-name ui:th-paper-dark-text ui:th-paper-dark-row ) .
+ui:th-paper-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Paper · Night" .
+ui:th-paper-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-paper-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-paper-dark-save ui:th-paper-dark-new ui:th-paper-dark-info ) .
+ui:th-paper-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-paper-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-paper-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-terminal-light a c:Surface ; sty:theme sty:Terminal ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-terminal-light-name ui:th-terminal-light-text ui:th-terminal-light-row ) .
+ui:th-terminal-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Terminal · Day" .
+ui:th-terminal-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-terminal-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-terminal-light-save ui:th-terminal-light-new ui:th-terminal-light-info ) .
+ui:th-terminal-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-terminal-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-terminal-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-terminal-dark a c:Surface ; sty:theme sty:Terminal ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-terminal-dark-name ui:th-terminal-dark-text ui:th-terminal-dark-row ) .
+ui:th-terminal-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Terminal · Night" .
+ui:th-terminal-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-terminal-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-terminal-dark-save ui:th-terminal-dark-new ui:th-terminal-dark-info ) .
+ui:th-terminal-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-terminal-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-terminal-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-blueprint-light a c:Surface ; sty:theme sty:Blueprint ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-blueprint-light-name ui:th-blueprint-light-text ui:th-blueprint-light-row ) .
+ui:th-blueprint-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Blueprint · Day" .
+ui:th-blueprint-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-blueprint-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-blueprint-light-save ui:th-blueprint-light-new ui:th-blueprint-light-info ) .
+ui:th-blueprint-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-blueprint-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-blueprint-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-blueprint-dark a c:Surface ; sty:theme sty:Blueprint ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-blueprint-dark-name ui:th-blueprint-dark-text ui:th-blueprint-dark-row ) .
+ui:th-blueprint-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Blueprint · Night" .
+ui:th-blueprint-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-blueprint-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-blueprint-dark-save ui:th-blueprint-dark-new ui:th-blueprint-dark-info ) .
+ui:th-blueprint-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-blueprint-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-blueprint-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-sunset-light a c:Surface ; sty:theme sty:Sunset ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-sunset-light-name ui:th-sunset-light-text ui:th-sunset-light-row ) .
+ui:th-sunset-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset · Day" .
+ui:th-sunset-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-sunset-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-light-save ui:th-sunset-light-new ui:th-sunset-light-info ) .
+ui:th-sunset-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-sunset-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-sunset-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-sunset-dark a c:Surface ; sty:theme sty:Sunset ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-sunset-dark-name ui:th-sunset-dark-text ui:th-sunset-dark-row ) .
+ui:th-sunset-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset · Night" .
+ui:th-sunset-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-sunset-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-dark-save ui:th-sunset-dark-new ui:th-sunset-dark-info ) .
+ui:th-sunset-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-sunset-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-sunset-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-schemes-grid a c:Grid ; c:columns 2 ; c:minWidth "220px" ; pos:gap tok:space-3 ; c:children ( ui:th-semblance-light ui:th-semblance-dark ui:th-paper-light ui:th-paper-dark ui:th-terminal-light ui:th-terminal-dark ui:th-blueprint-light ui:th-blueprint-dark ui:th-sunset-light ui:th-sunset-dark ) .
+
+# --- contrast composes with every theme -----------------------------------------------------
+
+ui:th-contrast a c:Flippable ; c:front ui:th-contrast-spec .
+ui:th-contrast-spec a c:Specimen ;
+    c:label "Contrast composes" , "Контраст поєднується з темою"@uk , "Kontrast lässt sich kombinieren"@de , "التباين يتكامل مع السمة"@ar ;
+    c:help "With the interface at standard contrast, the right-hand tiles add sty:contrast sty:HighContrast (set High above and every tile gets it). Under a theme it is restated in terms of that theme's own ramps - text pushed toward black or white, borders at step 10, the accent at steps 11-12 - so high contrast keeps each theme's hue instead of falling back to the default's violet. Where both meet on one element, sty:contrast sty:overrides sty:theme orders them." ;
+    c:children ( ui:th-contrast-grid ) .
+ui:th-paper-standard a c:Surface ; sty:theme sty:Paper ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-paper-standard-name ui:th-paper-standard-text ui:th-paper-standard-muted ui:th-paper-standard-row ) .
+ui:th-paper-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Paper · Standard" .
+ui:th-paper-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-paper-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-paper-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-paper-standard-btn ui:th-paper-standard-tag ) .
+ui:th-paper-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-paper-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-paper-high a c:Surface ; sty:theme sty:Paper ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-paper-high-name ui:th-paper-high-text ui:th-paper-high-muted ui:th-paper-high-row ) .
+ui:th-paper-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Paper · High" .
+ui:th-paper-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-paper-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-paper-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-paper-high-btn ui:th-paper-high-tag ) .
+ui:th-paper-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-paper-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-terminal-standard a c:Surface ; sty:theme sty:Terminal ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-terminal-standard-name ui:th-terminal-standard-text ui:th-terminal-standard-muted ui:th-terminal-standard-row ) .
+ui:th-terminal-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Terminal · Standard" .
+ui:th-terminal-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-terminal-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-terminal-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-terminal-standard-btn ui:th-terminal-standard-tag ) .
+ui:th-terminal-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-terminal-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-terminal-high a c:Surface ; sty:theme sty:Terminal ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-terminal-high-name ui:th-terminal-high-text ui:th-terminal-high-muted ui:th-terminal-high-row ) .
+ui:th-terminal-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Terminal · High" .
+ui:th-terminal-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-terminal-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-terminal-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-terminal-high-btn ui:th-terminal-high-tag ) .
+ui:th-terminal-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-terminal-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-blueprint-standard a c:Surface ; sty:theme sty:Blueprint ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-blueprint-standard-name ui:th-blueprint-standard-text ui:th-blueprint-standard-muted ui:th-blueprint-standard-row ) .
+ui:th-blueprint-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Blueprint · Standard" .
+ui:th-blueprint-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-blueprint-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-blueprint-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-blueprint-standard-btn ui:th-blueprint-standard-tag ) .
+ui:th-blueprint-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-blueprint-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-blueprint-high a c:Surface ; sty:theme sty:Blueprint ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-blueprint-high-name ui:th-blueprint-high-text ui:th-blueprint-high-muted ui:th-blueprint-high-row ) .
+ui:th-blueprint-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Blueprint · High" .
+ui:th-blueprint-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-blueprint-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-blueprint-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-blueprint-high-btn ui:th-blueprint-high-tag ) .
+ui:th-blueprint-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-blueprint-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-sunset-standard a c:Surface ; sty:theme sty:Sunset ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-sunset-standard-name ui:th-sunset-standard-text ui:th-sunset-standard-muted ui:th-sunset-standard-row ) .
+ui:th-sunset-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset · Standard" .
+ui:th-sunset-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-sunset-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-sunset-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-standard-btn ui:th-sunset-standard-tag ) .
+ui:th-sunset-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-sunset-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-sunset-high a c:Surface ; sty:theme sty:Sunset ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-sunset-high-name ui:th-sunset-high-text ui:th-sunset-high-muted ui:th-sunset-high-row ) .
+ui:th-sunset-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset · High" .
+ui:th-sunset-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-sunset-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-sunset-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-high-btn ui:th-sunset-high-tag ) .
+ui:th-sunset-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-sunset-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-contrast-grid a c:Grid ; c:columns 2 ; c:minWidth "220px" ; pos:gap tok:space-3 ; c:children ( ui:th-paper-standard ui:th-paper-high ui:th-terminal-standard ui:th-terminal-high ui:th-blueprint-standard ui:th-blueprint-high ui:th-sunset-standard ui:th-sunset-high ) .
+
+# --- each theme's ramps -----------------------------------------------------------------
+
+ui:th-ramps a c:Flippable ; c:front ui:th-ramps-spec .
+ui:th-ramps-spec a c:Specimen ;
+    c:label "Ramps per theme" , "Шкали кожної теми"@uk , "Farbskalen je Design"@de , "تدرجات كل سمة"@ar ;
+    c:help "The same c:Swatches (the sty:Ramp tokens, read through var(--sem-…)) inside each themed surface show that theme's values. The ramps are generated in OKLCH, twelve steps per hue on one lightness curve per scheme, and checked: text and muted text reach 4.5:1 on every surface, and so does text on every solid." ;
+    c:children ( ui:th-ramps-grid ) .
+ui:th-semblance-ramps a c:Surface ; sty:theme sty:Semblance ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-semblance-ramps-name ui:th-semblance-ramps-gray ui:th-semblance-ramps-accent ) .
+ui:th-semblance-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Semblance" .
+ui:th-semblance-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-semblance-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-paper-ramps a c:Surface ; sty:theme sty:Paper ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-paper-ramps-name ui:th-paper-ramps-gray ui:th-paper-ramps-accent ) .
+ui:th-paper-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Paper" .
+ui:th-paper-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-paper-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-terminal-ramps a c:Surface ; sty:theme sty:Terminal ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-terminal-ramps-name ui:th-terminal-ramps-gray ui:th-terminal-ramps-accent ) .
+ui:th-terminal-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Terminal" .
+ui:th-terminal-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-terminal-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-blueprint-ramps a c:Surface ; sty:theme sty:Blueprint ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-blueprint-ramps-name ui:th-blueprint-ramps-gray ui:th-blueprint-ramps-accent ) .
+ui:th-blueprint-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Blueprint" .
+ui:th-blueprint-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-blueprint-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-sunset-ramps a c:Surface ; sty:theme sty:Sunset ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-sunset-ramps-name ui:th-sunset-ramps-gray ui:th-sunset-ramps-accent ) .
+ui:th-sunset-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset" .
+ui:th-sunset-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-sunset-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-ramps-grid a c:Grid ; c:minWidth "520px" ; pos:gap tok:space-3 ; c:children ( ui:th-semblance-ramps ui:th-paper-ramps ui:th-terminal-ramps ui:th-blueprint-ramps ui:th-sunset-ramps ) .

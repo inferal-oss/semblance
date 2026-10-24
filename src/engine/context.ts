@@ -28,6 +28,8 @@ export interface RuleContext {
    * read there changes (for snapshots, such as a view's source on its back side).
    */
   untraced<T>(read: () => T): T
+  /** Record that what is being computed depends on the viewer's languages (see util.text). */
+  readsLanguage(): void
   /** The viewer's languages, most preferred first (the localization layer sets them). */
   languages: string[]
   /** Per-engine memo, e.g. for ontology lookups that never change during a run. */
@@ -39,6 +41,9 @@ export interface RuleContext {
  * A function rule. `watches` optionally narrows (per focus) which predicates
  * make the focus dirty, for dependencies that are only known from the data.
  */
+/** The pseudo-subject a rule "reads" when its output depends on the viewer's languages. */
+export const LANGUAGE = '\u0000language'
+
 export interface FnRule {
   /** `member` is set for member-wise rules (sem:forEach): one evaluation per member. */
   (ctx: RuleContext, focus: NamedNode, member?: NamedNode): Quad[]
@@ -85,6 +90,9 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
     objects: (s, p) => match(s, p, null).map((q) => q.object),
+    readsLanguage() {
+      ctx.trace?.set(LANGUAGE, new Set(['*']))
+    },
     untraced<T>(read: () => T): T {
       const trace = ctx.trace
       ctx.trace = undefined

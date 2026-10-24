@@ -17,6 +17,7 @@ sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
                 [ sh:path sty:emphasis ; sh:maxCount 1 ; sh:class sty:Emphasis ] ,
                 [ sh:path sty:size ; sh:maxCount 1 ; sh:class sty:ControlSize ] ,
                 [ sh:path sty:textStyle ; sh:maxCount 1 ; sh:class sty:TextStyle ] ,
+                [ sh:path sty:theme ; sh:maxCount 1 ; sh:class sty:Theme ] ,
                 [ sh:path sty:intent ; sh:maxCount 1 ; sh:class sty:Intent ] ,
                 [ sh:path pos:direction ; sh:maxCount 1 ; sh:class pos:Direction ] ,
                 [ sh:path pos:layout ; sh:maxCount 1 ; sh:class pos:Layout ] ,

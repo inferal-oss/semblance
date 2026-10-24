@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph } from '@rdfjs/types'
 import { H, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
-import { createContext, type FnRule, type RuleContext } from './context.ts'
+import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 
 export interface EngineOptions {
@@ -195,7 +195,7 @@ export class Engine {
    * `budgetMs` (e.g. in idle time): hidden views become ready before they are
    * shown, and interactions never pay for them. Returns whether work remains.
    */
-  warm(budgetMs: number, slice = 16): boolean {
+  warm(budgetMs: number, slice = 4): boolean {
     if (!this.demand) return false
     const until = performance.now() + budgetMs
     this.warming = true
@@ -251,13 +251,22 @@ export class Engine {
    * the resulting delta minimal.
    */
   reconfigure(sel: Partial<Selection>): void {
+    // A language change alone re-runs only what picked a text by language (util.text
+    // records it as a read of LANGUAGE); everything else stays as it is.
+    if (sel.languages && sel.modality === undefined && sel.prefer === undefined && sel.layers === undefined) {
+      this.selection = { ...this.selection, languages: sel.languages }
+      this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
+      for (const [rule, foci] of this.readers.get(LANGUAGE) ?? []) for (const focus of foci.keys()) this.markDirty(rule, focus)
+      this.run()
+      return
+    }
     this.selection = { ...this.selection, ...sel }
     if (sel.modality || sel.languages) this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
     const after = selectRules(this.allRules, this.selection, warn)
-    // Swapping modality, implementations or language can change every output:
+    // Swapping modality or implementations can change every output:
     // re-evaluate all. Otherwise (layers) only added rules run; rules reading what
     // changed are re-run by ordinary propagation (traced reads, sem:readsMinted).
-    const full = sel.modality !== undefined || sel.prefer !== undefined || sel.languages !== undefined
+    const full = sel.modality !== undefined || sel.prefer !== undefined
     const before = new Set(this.rules)
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
