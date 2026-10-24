@@ -73,6 +73,8 @@ interface Policy {
   construct?: string
   /** Predicates whose changes make the policy dirty. */
   watches: Set<string>
+  /** A storage-carried nav:Dimension rather than a declared policy (no switch of its own). */
+  dimension?: true
 }
 
 interface Blob {
@@ -115,7 +117,7 @@ export class Persistence {
     const f = s.factory
     const nn = (x: string) => f.namedNode(x)
     const one = (subject: Term, p: string) => s.match(subject, nn(p), null)[0]?.object
-    return s.match(null, nn(RDF_TYPE), nn(PER + 'Policy')).map(({ subject: p }) => {
+    const policies = s.match(null, nn(RDF_TYPE), nn(PER + 'Policy')).map(({ subject: p }) => {
       const construct = one(p, PER + 'construct')?.value
       const listHead = one(p, PER + 'properties')
       const properties: string[] = []
@@ -137,6 +139,15 @@ export class Persistence {
         watches: new Set([...properties, ...(construct ? this.mentioned(construct) : [])]),
       }
     })
+    // A dimension of a location (nav:Dimension) carried by a storage scope is remembered like a
+    // policy over its subject and property: storage has one writer.
+    const dimensions = s.match(null, nn(NS.nav + 'carriedBy'), null).flatMap(({ subject: d, object: scope }): Policy[] => {
+      const subject = one(d, NS.nav + 'subject')
+      const property = one(d, NS.nav + 'property')?.value
+      if (!subject || !property || !s.match(scope, nn(RDF_TYPE), nn(PER + 'Scope')).length) return []
+      return [{ iri: d.value, scope: scope.value, enabled: true, version: '1', subject, properties: [property], watches: new Set([property]), dimension: true }]
+    })
+    return [...policies, ...dimensions]
   }
 
   /** IRIs a query mentions (full or prefixed), for deciding what changes concern it. */
@@ -203,17 +214,25 @@ export class Persistence {
     return total
   }
 
+  /** Whether the last restore put back what a policy (or a storage-carried dimension) stored. */
+  restored(policy: string): boolean {
+    return (this.restoredCounts.get(policy) ?? 0) > 0
+  }
+
   /** Follow input changes from now on; report restores in the state log. */
   attach(runtime: Runtime): () => void {
     this.runtime = runtime
     for (const [policy, n] of this.restoredCounts) this.record(PER + 'Restore', this.policies().find((p) => p.iri === policy)!, n)
     for (const policy of this.policies()) this.report(policy)
+    // Where we are may have come from the address since: storage-carried dimensions are written once.
+    for (const policy of this.policies()) if (policy.dimension) this.dirty.add(policy.iri)
+    if (this.dirty.size) this.schedule()
     return runtime.onInput((graph, delta) => this.changed(graph, delta))
   }
 
   private changed(graph: string | undefined, delta: Delta) {
     if (graph === PERSIST_GRAPH) return
-    if (graph === undefined && [...delta.add, ...delta.remove].some((q) => q.predicate.value.startsWith(PER) || q.object.value === PER + 'Policy')) this.cachedPolicies = undefined
+    if (graph === undefined && [...delta.add, ...delta.remove].some((q) => q.predicate.value.startsWith(PER) || q.predicate.value.startsWith(NS.nav) || q.object.value === PER + 'Policy')) this.cachedPolicies = undefined
     const policies = this.policies()
     for (const q of [...delta.add, ...delta.remove]) {
       const p = q.predicate.value
@@ -245,7 +264,7 @@ export class Persistence {
   private async control(policy: Policy, delta: Delta) {
     const f = this.store.factory
     const flags: Record<string, boolean> = {}
-    for (const p of this.policies()) flags[p.iri] = p.enabled
+    for (const p of this.policies()) if (!p.dimension) flags[p.iri] = p.enabled
     await this.backend(PER + 'Device').set(this.key('enabled'), JSON.stringify(flags))
     const forgetting = delta.add.some((q) => q.subject.value === policy.iri && q.predicate.value === PER + 'request' && q.object.value === 'forget')
     if (!policy.enabled || forgetting) {

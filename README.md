@@ -131,6 +131,18 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   this device, the browser database) and whether; a host effect restores them
   before the first render and writes them back; `per:StateLog` records every
   write and restore. See [PERSISTENCE.md](PERSISTENCE.md).
+- **Navigation**: where we are is graph data. A `nav:Location` groups the
+  dimensions of one app (`nav:Dimension`: a node's property, e.g. the page or the
+  docs section), each saying where it is carried (the address's fragment or
+  query, or a persistence scope), whether a change makes history (a step Back
+  returns to) or not, and when it applies (`nav:parent` / `nav:when`: a docs
+  section only on the docs). A host effect (`src/navigation.ts`) reads the address
+  before the first render (the best `nav:rank` wins: address, then storage, then
+  the graph's default), writes changes back as `#docs/rules`, and records Back,
+  Forward and typed addresses as `nav:Navigate` events. A `c:Link` with `c:to` a
+  resource goes to the location that shows it, found by walking up the component
+  tree to the switches that show it (`#components/inputs/inp-codes-spec`), and the
+  target is brought into view once rendered.
 
 Our vocabularies are aligned with DCMI, SKOS, schema.org, ActivityStreams,
 PROV-O and others in `ontology/alignments.ttl`, with the strength of each link
@@ -237,7 +249,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, keyboard, status, l10n and announcement layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/intent.ts`, `src/network.ts` | host effects: remembering state, intent preloading, network capture |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

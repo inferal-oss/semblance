@@ -144,13 +144,16 @@ WHERE {
 
 c:Link a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """A hyperlink: c:label (else the address) to c:href, after an optional c:logo (a component,
+    rdfs:comment """A hyperlink: c:label (else the address) to c:to (a resource: the link goes to the
+location that shows it, nav:href) or c:href (an address, also the fallback), after an optional c:logo (a component,
 e.g. a c:Emblem). Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
 technology (c:externalHint). Accent by default; sty:tone recolors it."""@en ;
     sem:slug "link" ;
     c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de .
 c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
+c:to a owl:ObjectProperty ;
+    rdfs:comment "The resource a link goes to (e.g. a gallery specimen): its address is the location that shows it (navigation layer)."@en .
 c:external a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a link leaves the application (default: absolute http(s) addresses do)."@en .
 c:externalHint a owl:AnnotationProperty ;
@@ -174,7 +177,8 @@ CONSTRUCT {
   ?hintText a rdfhtml:Text ; rdfhtml:data ?hintData .
 }
 WHERE {
-  $this a/rdfs:subClassOf* c:Link ; c:href ?href0 .
+  $this a/rdfs:subClassOf* c:Link .
+  { $this nav:href ?href0 } UNION { FILTER NOT EXISTS { $this nav:href ?any } $this c:href ?href0 }
   BIND(STR(?href0) AS ?href)
   OPTIONAL { $this c:logo ?logo FILTER(isIRI(?logo)) }
   OPTIONAL { $this l10n:label ?localLabel }
@@ -215,7 +219,8 @@ CONSTRUCT {
   ?text a rdfhtml:Text ; rdfhtml:data ?line .
 }
 WHERE {
-  $this a/rdfs:subClassOf* c:Link ; c:href ?href0 .
+  $this a/rdfs:subClassOf* c:Link .
+  { $this nav:href ?href0 } UNION { FILTER NOT EXISTS { $this nav:href ?any } $this c:href ?href0 }
   BIND(STR(?href0) AS ?href)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }

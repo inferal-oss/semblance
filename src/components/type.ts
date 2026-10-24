@@ -41,7 +41,8 @@ const textRun: FnRule = (ctx, focus) => {
 const isExternal = (href: string, flag: string | undefined) => (flag === undefined ? /^https?:\/\//i.test(href) : flag === 'true')
 
 const link: FnRule = (ctx, focus) => {
-  const href = str(ctx.object(focus, C_HREF))
+  // A link to a resource (c:to) goes where the navigation layer resolved it (nav:href); c:href is the fallback.
+  const href = str(ctx.object(focus, NS.nav + 'href') ?? ctx.object(focus, C_HREF))
   if (href === undefined) return []
   const label = text(ctx, focus, C.label) ?? href
   const external = isExternal(href, str(ctx.object(focus, C_EXTERNAL)))

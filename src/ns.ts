@@ -27,6 +27,7 @@ export const NS = {
   ann: 'https://semblance.dev/ns/announce#',
   st: 'https://semblance.dev/ns/status#',
   per: 'https://semblance.dev/ns/persistence#',
+  nav: 'https://semblance.dev/ns/navigation#',
   prv: 'https://semblance.dev/ns/privacy#',
   net: 'https://semblance.dev/ns/network#',
   http: 'http://www.w3.org/2011/http#',
@@ -287,6 +288,8 @@ export const EVENTS_GRAPH = 'urn:semblance:events'
 export const PERF_GRAPH = 'urn:semblance:perf'
 /** What the persistence effect reports: per:StateLog and each policy's size and last write. */
 export const PERSIST_GRAPH = 'urn:semblance:persistence'
+/** What the navigation effect reports: each location's address as the URL last spelled it. */
+export const NAV_GRAPH = 'urn:semblance:navigation'
 /** Captured network activity (net:Capture), written by the capture effect (src/network.ts). */
 export const NETWORK_GRAPH = 'urn:semblance:network'
 export const SVG_NS = 'http://www.w3.org/2000/svg'

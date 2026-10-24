@@ -22,6 +22,7 @@
 @prefix prv: <https://semblance.dev/ns/privacy#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
+@prefix nav: <https://semblance.dev/ns/navigation#> .
 
 # =================================================================================================
 # The demo's entire interface as a component graph. The host page is a mount
@@ -60,6 +61,30 @@ ui:Live a ui:InspectorMode ; rdfs:label "Live" ; sem:symbol "●" ; sem:order 1 
 ui:Paused a ui:InspectorMode ; rdfs:label "Paused" ; sem:symbol "❙❙" ; sem:order 2 .
 ui:Off a ui:InspectorMode ; rdfs:label "Off" ; sem:symbol "○" ; sem:order 3 .
 ui:inspecting rdfs:label "inspecting" .
+
+# --- where we are (nav:Location; ontology/layers/navigation.ttl) ----------------------------------
+# The page, and on it the docs section, the example, the component group or the reference term,
+# is a location in the address: #docs/rules, #examples/kanban, #components/inputs,
+# #reference/c:Window. Changing one is a step Back returns to; reloads and shared links open
+# where they point. A section applies only on its page (out of it, it is left out of the
+# address), and is also kept for this tab, so a page is found where it was left. A link to a
+# resource (c:to) adds what it points at, brought into view: #components/inputs/inp-codes-spec.
+ui:location a nav:Location ; nav:root ui:shell ;
+    nav:dimensions ( ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atTarget ) .
+ui:atPage a nav:Dimension ; nav:subject ui:app ; nav:property ui:page ; nav:keyProperty ui:key ;
+    nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
+ui:atDocSection a nav:Dimension ; nav:subject ui:app ; nav:property ui:docSection ; nav:keyProperty ui:key ;
+    nav:parent ui:atPage ; nav:when ui:Docs ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+ui:atExample a nav:Dimension ; nav:subject ui:app ; nav:property ui:example ; nav:keyProperty ui:key ;
+    nav:parent ui:atPage ; nav:when ui:Examples ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+ui:atGalleryGroup a nav:Dimension ; nav:subject ui:app ; nav:property ui:galleryGroup ; nav:keyProperty ui:key ;
+    nav:parent ui:atPage ; nav:when ui:Components ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+# The Reference's selected term, as a prefixed name (its other state is ui:rememberReference's).
+ui:atReferenceTerm a nav:Dimension ; nav:subject ui:app ; nav:property ui:referenceSubject ; nav:spelling nav:PrefixedName ;
+    nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
+# What a followed link points at: where to look, not a place of its own.
+ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ;
+    nav:carriedBy nav:Fragment ; nav:history nav:NoHistory .
 
 # Prefixes for showing IRIs compactly (sh:declare style).
 ui:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/todo#"^^xsd:anyURI ] ,
@@ -508,9 +533,10 @@ ui:rememberDisplay a per:Policy ; per:scope per:Session ;
     rdfs:label "Display settings" , "Налаштування відображення"@uk , "Anzeigeeinstellungen"@de , "إعدادات العرض"@ar ;
     per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme prv:privacy ) .
 
+# The sections of the pages are kept for this tab by the location (ui:location), not here.
 ui:rememberSettings a per:Policy ; per:scope per:Session ;
-    rdfs:label "Language, theme and gallery page" , "Мова, тема і сторінка галереї"@uk , "Sprache, Design und Galerieseite"@de , "اللغة والسمة وصفحة المعرض"@ar ;
-    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ui:galleryGroup ui:docSection ui:example ) .
+    rdfs:label "Language and theme" , "Мова і тема"@uk , "Sprache und Design"@de , "اللغة والسمة"@ar ;
+    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ) .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
 ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ;

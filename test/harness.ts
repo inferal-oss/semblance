@@ -3,6 +3,7 @@ import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
 import { exampleFunctions } from '../src/examples/index.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
+import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
 import type { GraphStore } from '../src/store/types.ts'
@@ -59,6 +60,22 @@ export async function mountRemembering(backends: Record<string, Backend>) {
   const shell = mount(store, 'sparql')
   persistence.attach(shell.runtime)
   return { ...shell, persistence }
+}
+
+/**
+ * The site with the navigation effect over an injected location and history (and, given
+ * backends, persistence), as the host runs it: storage, then the URL, before the first projection.
+ */
+export async function mountNavigating(opts: NavigationOptions, backends?: Record<string, Backend>, prefer: 'sparql' | 'function' = 'sparql') {
+  const store = sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery))
+  const persistence = backends && new Persistence(store, backends, { delayMs: 60_000 })
+  await persistence?.restore()
+  const navigation = new Navigation(store, { root: UI + 'shell', ...opts, persistence })
+  await navigation.restore()
+  const shell = mount(store, prefer)
+  persistence?.attach(shell.runtime)
+  navigation.attach(shell.runtime, { bus: shell.bus, onNavigate: () => shell.shell.flush() })
+  return { ...shell, persistence, navigation }
 }
 
 function mount(store: GraphStore, prefer: 'sparql' | 'function') {

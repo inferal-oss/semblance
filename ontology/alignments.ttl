@@ -12,6 +12,7 @@
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix st: <https://semblance.dev/ns/status#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix a11y: <https://semblance.dev/ns/a11y#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -51,6 +52,8 @@
     vann:preferredNamespacePrefix "l10n" ; vann:preferredNamespaceUri "https://semblance.dev/ns/l10n#" .
 <https://semblance.dev/ns/persistence> dcterms:title "Semblance persistence"@en ;
     vann:preferredNamespacePrefix "per" ; vann:preferredNamespaceUri "https://semblance.dev/ns/persistence#" .
+<https://semblance.dev/ns/navigation> dcterms:title "Semblance navigation"@en ;
+    vann:preferredNamespacePrefix "nav" ; vann:preferredNamespaceUri "https://semblance.dev/ns/navigation#" .
 <https://semblance.dev/ns/validation> dcterms:title "Semblance validation"@en ;
     vann:preferredNamespacePrefix "val" ; vann:preferredNamespaceUri "https://semblance.dev/ns/validation#" .
 <https://semblance.dev/ns/keyboard> dcterms:title "Semblance keyboard layer"@en ;
@@ -143,6 +146,21 @@ per:Restore rdfs:subClassOf prov:Activity .
 per:Forget rdfs:subClassOf prov:Activity .
 per:lastWritten rdfs:subPropertyOf dcterms:modified .
 st:busy skos:closeMatch schema:actionStatus .
+
+# --- navigation (schema.org, ActivityStreams; the WHATWG URL and HTML concepts it realizes) --------
+
+nav:Location skos:relatedMatch schema:WebPage .
+nav:Dimension skos:relatedMatch schema:PropertyValue .
+nav:Fragment skos:closeMatch <https://url.spec.whatwg.org/#concept-url-fragment> .
+nav:Query skos:closeMatch <https://url.spec.whatwg.org/#concept-url-query> .
+nav:target skos:closeMatch <https://html.spec.whatwg.org/multipage/browsing-the-web.html#the-indicated-part-of-the-document> .
+nav:anchor skos:relatedMatch schema:identifier .
+nav:MakesHistory skos:relatedMatch <https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-pushstate> .
+nav:NoHistory skos:relatedMatch <https://html.spec.whatwg.org/multipage/nav-history-apis.html#dom-history-replacestate> .
+nav:Navigate rdfs:subClassOf beh:Event ; skos:closeMatch as:Travel .
+nav:href rdfs:subPropertyOf schema:url .
+nav:address skos:relatedMatch schema:url .
+c:to skos:relatedMatch schema:target .
 
 # --- accessibility (schema.org accessibility properties) -------------------------------------------
 

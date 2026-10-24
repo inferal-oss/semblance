@@ -14,6 +14,7 @@ import { reactions as workbenchReactions } from '../components/workbench.ts'
 import { reactions as referenceReactions } from '../components/reference.ts'
 import { docsReactions } from '../layers/docs.ts'
 import { persistenceReactions } from '../persistence.ts'
+import { locationReactions } from '../navigation.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
 import { reactions as windowReactions } from '../components/containers.ts'
 import { reactions as gridReactions } from '../components/grid.ts'
@@ -137,6 +138,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...referenceReactions,
   ...docsReactions,
   ...persistenceReactions,
+  ...locationReactions,
   ...disclosureReactions,
   ...windowReactions,
   ...gridReactions,

@@ -19,6 +19,7 @@ export const ONTOLOGY_FILES = [
   'layers/shapes.ttl',
   'layers/docs.ttl',
   'layers/persistence.ttl',
+  'layers/navigation.ttl',
   'layers/privacy.ttl',
   'components/common.ttl',
   'components/stack.ttl',

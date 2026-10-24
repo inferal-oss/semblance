@@ -3,6 +3,7 @@ import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { exampleFunctions } from '../src/examples/index.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
+import { Navigation, rendererReveal } from '../src/navigation.ts'
 import { attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
@@ -25,7 +26,6 @@ const kind = (params.get('store') ?? 'hybrid') as StoreKind
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'function')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
-const PAGES = { home: 'Home', docs: 'Docs', components: 'Components', reference: 'Reference', examples: 'Examples' } as const
 
 await initWeb()
 // The Components page: one graph per component group (demo/gallery/*.ttl).
@@ -44,6 +44,9 @@ const persistence = new Persistence(store, {
   [NS.per + 'Database']: indexedDbBackend(),
 })
 await persistence.restore().catch((e) => console.warn('[semblance] could not restore remembered state', e))
+// Where we are (ui:location in app.ttl): the address over what storage kept, before the first projection too.
+const navigation = new Navigation(store, { root: UI + 'shell', persistence })
+await navigation.restore()
 const f = store.factory
 const nn = (iri: string) => f.namedNode(iri)
 const app = nn(UI + 'app')
@@ -57,7 +60,6 @@ const setApp = (p: string, value: string) => {
 // Settings that arrive through the URL become graph state before projecting.
 setApp(UI + 'store', UI + STORES[kind])
 setApp(UI + 'rules', UI + RULES[prefer])
-setApp(UI + 'page', UI + (PAGES[location.hash.slice(1) as keyof typeof PAGES] ?? 'Home'))
 
 const runtime = new Runtime(store)
 const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
@@ -163,8 +165,6 @@ function syncSettings() {
   }
   syncFavicon()
 
-  const page = key(UI + 'page') ?? 'home'
-  if (location.hash.slice(1) !== page) history.replaceState(null, '', '#' + page)
   const nextStore = key(UI + 'store') ?? kind
   const nextRules = key(UI + 'rules') ?? prefer
   if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3')) {
@@ -247,13 +247,15 @@ bus.attach(shell, (h: Handled) => {
   }
 })
 
-// Back/forward and typed URLs write the page into the graph.
-addEventListener('hashchange', () => {
-  const page = PAGES[location.hash.slice(1) as keyof typeof PAGES]
-  if (!page) return
-  apply({ remove: store.match(app, nn(UI + 'page'), null, dg), add: [f.quad(app, nn(UI + 'page'), nn(UI + page))] })
-  syncSettings()
-  flush()
+// Changes of where we are go to the address; Back, Forward and typed or followed addresses
+// come back as nav:Navigate events, and a followed link's target is brought into view.
+navigation.attach(runtime, {
+  bus,
+  reveal: rendererReveal(shell),
+  onNavigate: () => {
+    syncSettings()
+    flush()
+  },
 })
 
 const checkPerf = perfRunner(runtime, flush)
@@ -279,4 +281,4 @@ void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom } })
+if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation } })
