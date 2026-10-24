@@ -1,0 +1,27 @@
+{
+  "target": "rust",
+  "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
+  "summary": {
+    "sparql12": {
+      "pass": 0,
+      "fail": 0,
+      "skip": 271
+    },
+    "sparql11": {
+      "pass": 0,
+      "fail": 0,
+      "skip": 510
+    },
+    "sparql10": {
+      "pass": 0,
+      "fail": 0,
+      "skip": 481
+    },
+    "rdf12": {
+      "pass": 218,
+      "fail": 0,
+      "skip": 919
+    }
+  },
+  "failing": {}
+}

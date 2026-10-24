@@ -76,10 +76,14 @@ function compare(actual: QueryResult, want: QueryResult, ordered: boolean): Outc
   return same ? { status: 'pass' } : { status: 'fail', reason: 'wrong result' }
 }
 
+/** An engine that has not reached a feature yet says so; that is a skip, not a pass or a fail. */
+const NOT_IMPLEMENTED = 'not implemented'
+
 function expectError(run: () => unknown): Outcome {
   try {
     run()
-  } catch {
+  } catch (e) {
+    if (short(e) === NOT_IMPLEMENTED) return { status: 'skip', reason: NOT_IMPLEMENTED }
     return { status: 'pass' }
   }
   return { status: 'fail', reason: 'accepted invalid input' }
@@ -142,6 +146,7 @@ export function runTest(target: Target, t: Test): Outcome {
     }
     return { status: 'skip', reason: `test type ${t.type}` }
   } catch (e) {
+    if (short(e) === NOT_IMPLEMENTED) return { status: 'skip', reason: NOT_IMPLEMENTED }
     return { status: 'fail', reason: 'error: ' + short(e) }
   }
 }

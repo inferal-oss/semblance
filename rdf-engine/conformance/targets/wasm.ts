@@ -1,8 +1,10 @@
 // Conformance target for any engine build in rdf-engine/build/<name>.wasm.
 import { existsSync, readFileSync } from 'node:fs'
 import { DEFAULT_GRAPH, Engine, Form, Format, Kind } from '../../host/engine.ts'
+import * as ox from 'oxigraph'
 import type { Dataset, RdfFile, Target } from '../target.ts'
 import { iri, lit, type Row, type T } from '../terms.ts'
+import { MIME } from './oxigraph.ts'
 
 const FORMAT: Partial<Record<RdfFile['format'], Format>> = {
   ntriples: Format.NTriples,
@@ -43,9 +45,14 @@ function rows(e: Engine, ids: Uint32Array, width: number): Row[] {
 }
 
 function load(e: Engine, file: RdfFile, graph: number) {
-  const format = FORMAT[file.format]
-  if (!format) throw new Error(`format ${file.format} is not supported`)
-  e.load(format, file.text, file.base, graph)
+  if (file.format === 'rdfxml') {
+    // RDF/XML is outside the ABI; a few SPARQL tests keep their data in it.
+    const store = new ox.Store()
+    store.load(file.text, { format: MIME.rdfxml, base_iri: file.base })
+    e.load(Format.NTriples, store.dump({ format: MIME.ntriples, from_graph_name: ox.defaultGraph() }), file.base, graph)
+    return
+  }
+  e.load(FORMAT[file.format]!, file.text, file.base, graph)
 }
 
 export function wasmTarget(name: string): Target {

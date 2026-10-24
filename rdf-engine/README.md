@@ -19,7 +19,17 @@ rdf-engine/conformance/fetch.sh               # W3C rdf-tests, pinned (gitignore
 npm run engine:build                          # build/rust.wasm, build/wat.wasm + sizes
 npm run engine:check -- rust                  # term and store checks against ABI.md
 npm run conformance -- --target rust          # or wat, oxigraph; --suite rdf12 --only <iri part> -v --show
+npm run engine:compare                        # size and speed matrix -> results/compare.md
 ```
+
+## Benchmarks
+
+Every benchmark is a matrix of **rust × wat × oxigraph** (N3.js rides along as a
+reference: it is what the hybrid store answers pattern matches with).
+`npm run engine:compare` measures the stores directly on synthetic data. From
+phase 2 on, Semblance's own `npm run bench` gets `rust` and `wat` store kinds
+next to `oxigraph` and `hybrid`, so the same scenarios (initial render, toggle,
+reorder, add, typing) run on all of them.
 
 `npm run conformance` writes `conformance/results/<target>.json`: pass/fail/skip
 counts per suite and every failing test with its reason. These files are
@@ -39,7 +49,8 @@ The engines move in lockstep; each phase ends with both passing the same tests.
 1. **Terms and store.** Interning, `add`/`remove`/`has`/`match`/`apply`,
    N-Triples and N-Quads `load`. Done when the rdf12 N-Triples and N-Quads tests pass.
 2. **Turtle and TriG.** Done when all rdf12 tests pass. A `GraphStore` adapter
-   then runs Semblance's function-rule tests on the engine (`sparql: false`).
+   then runs Semblance's function-rule tests on the engine (`sparql: false`),
+   and `npm run bench` gets `rust` and `wat` columns.
 3. **The SPARQL Semblance uses.** Parser, algebra, prepared queries with `bind`.
    Semblance's SPARQL rules switch from textual `$this` substitution to binding.
    Done when Semblance's test suite and `npm run bench` run on the engine.

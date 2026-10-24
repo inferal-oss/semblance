@@ -11,7 +11,8 @@ mkdirSync(out, { recursive: true })
 
 const ENGINES: Record<string, () => void> = {
   rust() {
-    execFileSync('cargo', ['build', '--release', '--target', 'wasm32-unknown-unknown', '--manifest-path', here + 'rust/Cargo.toml'], { stdio: 'inherit' })
+    // From the crate's directory, so its .cargo/config.toml (target features) applies.
+    execFileSync('cargo', ['build', '--release', '--target', 'wasm32-unknown-unknown'], { cwd: here + 'rust', stdio: 'inherit' })
     copyFileSync(here + 'rust/target/wasm32-unknown-unknown/release/semblance_rdf.wasm', out + 'rust.wasm')
   },
   wat() {

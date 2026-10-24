@@ -85,7 +85,7 @@ check('add, has, remove', (e) => {
 
 check('match agrees with a brute-force scan', (e) => {
   let seed = 7
-  const rand = (n: number) => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff), seed % n)
+  const rand = (n: number) => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff), (seed >>> 8) % n)
   const terms = Array.from({ length: 12 }, (_, i) => e.iri('http://example/t' + i))
   const graphs = [DEFAULT_GRAPH, terms[10]!, terms[11]!]
   const quads = new Map<string, number[]>()

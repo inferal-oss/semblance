@@ -81,7 +81,7 @@ scoped to the instance: interning the same label twice gives the same node.
 | `term_lang_ptr(id)`, `term_lang_len(id)` | Literals; length 0 when none. |
 | `term_direction(id)` | Literals: 0, 1 or 2. |
 | `triple_subject(id)`, `triple_predicate(id)`, `triple_object(id)` | Triple terms. |
-| `term_count()` | Live terms. |
+| `term_count()` | Live terms, counting the default graph and the three built-in datatype IRIs (`xsd:string`, `rdf:langString`, `rdf:dirLangString`): 4 on a fresh instance. |
 
 ## Store
 
@@ -93,7 +93,7 @@ scoped to the instance: interning the same label twice gives the same node.
 | `match(s, p, o, g) -> n` | Quads matching the pattern (`0` = any; `g = 1` = default graph only, `g = 0` = all graphs), as `n × 4` ids. Order unspecified. |
 | `apply(removes, adds) -> 0` | Batch: the input buffer holds `removes` quads, then `adds` quads (4 ids each). Removes first. |
 | `quad_count() -> n` | |
-| `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG. Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of quads parsed. On a syntax error nothing is added. |
+| `load(format, text_len, base_len, graph) -> n` | Parse and add. `format`: 1 N-Triples, 2 N-Quads, 3 Turtle, 4 TriG. Triples go to `graph`; quads keep theirs. Blank node labels are scoped to this document. Returns the number of statements parsed, duplicates included. On a syntax error nothing is added. |
 | `collect() -> n` | Free terms that no quad, prepared query or pending result uses; their ids are listed in the result buffer and may be reused afterwards. Hosts must forget them. |
 
 ## Queries (SPARQL 1.2)
