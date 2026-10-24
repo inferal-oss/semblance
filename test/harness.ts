@@ -3,6 +3,7 @@ import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
 import type { Clock } from '../src/behaviour/clock.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
+import { Clipboard, type ClipboardLike } from '../src/clipboard.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
@@ -25,8 +26,8 @@ const sources = (store: GraphStore) => {
 }
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
-export function mountShell(todos = 5, kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
-  return mount(workbench(sources(loadStore(kind, todoApp(todos), appGraph, ...gallery))), prefer)
+export function mountShell(todos = 5, kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock) {
+  return mount(workbench(sources(loadStore(kind, todoApp(todos), appGraph, ...gallery))), prefer, clock)
 }
 
 /** The site as a visitor first sees it: the landing page, tools closed. */
@@ -96,6 +97,13 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
   // Things due later (beh:dueAt) become beh:Due events; one waiting to be shown waits.
   const scheduler = new Scheduler(bus, { shown: (c) => screen.index.isShown(c, new Set([UI + 'shell'])), onHandled: () => shell.flush() })
   scheduler.attach()
+  // Copies go to a clipboard the test can read (clipboard.text); none fails, as without a page.
+  const clipboard = { text: undefined as string | undefined, available: true, writeText: async (t: string) => void (clipboard.text = t) }
+  const copies = new Clipboard(bus, {
+    clipboard: { writeText: (t) => (clipboard.available ? clipboard.writeText(t) : Promise.reject(new Error('No clipboard'))) } satisfies ClipboardLike,
+    onHandled: () => shell.flush(),
+  })
+  copies.attach()
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
@@ -116,6 +124,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, scheduler, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, fire, value, showPage }
 }
 

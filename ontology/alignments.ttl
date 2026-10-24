@@ -61,6 +61,8 @@
     vann:preferredNamespacePrefix "key" ; vann:preferredNamespaceUri "https://semblance.dev/ns/keyboard#" .
 <https://semblance.dev/ns/dragdrop> dcterms:title "Semblance drag and drop layer"@en ;
     vann:preferredNamespacePrefix "dnd" ; vann:preferredNamespaceUri "https://semblance.dev/ns/dragdrop#" .
+<https://semblance.dev/ns/clipboard> dcterms:title "Semblance clipboard"@en ;
+    vann:preferredNamespacePrefix "clip" ; vann:preferredNamespaceUri "https://semblance.dev/ns/clipboard#" .
 
 # --- labels and descriptions (RDFS, SKOS, DCMI) --------------------------------------------------
 
@@ -262,4 +264,8 @@ skos:relatedMatch sem:alignmentStrength sem:Related .
     [ sh:prefix "per" ; sh:namespace "https://semblance.dev/ns/persistence#"^^xsd:anyURI ],
     [ sh:prefix "prv" ; sh:namespace "https://semblance.dev/ns/privacy#"^^xsd:anyURI ],
     [ sh:prefix "net" ; sh:namespace "https://semblance.dev/ns/network#"^^xsd:anyURI ],
+    [ sh:prefix "dep" ; sh:namespace "https://semblance.dev/ns/dependency#"^^xsd:anyURI ],
+    [ sh:prefix "nav" ; sh:namespace "https://semblance.dev/ns/navigation#"^^xsd:anyURI ],
+    [ sh:prefix "iv" ; sh:namespace "https://semblance.dev/ns/view#"^^xsd:anyURI ],
+    [ sh:prefix "clip" ; sh:namespace "https://semblance.dev/ns/clipboard#"^^xsd:anyURI ],
     [ sh:prefix "perf" ; sh:namespace "https://semblance.dev/ns/perf#"^^xsd:anyURI ] .

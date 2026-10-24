@@ -95,7 +95,18 @@
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] .
-[] a sty:StyleRule ; sty:appliesTo c:QueryResultView ; sty:part "> .sem-summary" ;
+# The summary line, with the view's c:actions (a copier) at its end when it has any.
+[] a sty:StyleRule ; sty:appliesTo c:QueryResultView ; sty:part "> .sem-result-bar" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "justify-content" ; sty:raw "space-between" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:QueryResultView ; sty:part "> .sem-result-bar > .sem-actions" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:QueryResultView ; sty:part "> .sem-summary, > .sem-result-bar > .sem-summary" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "font-size" ; sty:token tok:text-xs ] ,
                  [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,

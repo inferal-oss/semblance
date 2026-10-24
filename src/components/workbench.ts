@@ -43,6 +43,9 @@ const W = {
   selectedTerm: c + 'selectedTerm',
   neighbourhood: c + 'neighbourhood',
   term: c + 'term',
+  row: c + 'row',
+  column: c + 'column',
+  markdown: c + 'markdown',
   edgeFrom: c + 'edgeFrom',
   edgeTo: c + 'edgeTo',
   salience: c + 'salience',
@@ -333,6 +336,13 @@ function notice(ctx: RuleContext, o: Out, result: Outcome): NamedNode[] | undefi
 const limitOf = (ctx: RuleContext, focus: NamedNode, fallback: number) => Math.max(1, Math.round(num(ctx, focus, W.limit, fallback)))
 
 const summary = (o: Out, line: string) => o.el('summary', 'P', { class: 'sem-summary' }, [o.text('summary-text', line)])
+
+/** The summary line, with the view's c:actions (e.g. a copier) beside it when it has any. */
+function summaryBar(ctx: RuleContext, o: Out, line: string): NamedNode {
+  const actions = nodes(ctx, ctx.object(o.focus, W.actions))
+  if (!actions.length) return summary(o, line)
+  return o.el('summary-bar', 'Div', { class: 'sem-result-bar' }, [summary(o, line), o.el('actions', 'Div', { class: 'sem-actions' }, actions)])
+}
 
 // --- terms for completion ------------------------------------------------------------------------
 
@@ -699,17 +709,29 @@ function liveIndicator(ctx: RuleContext, o: Out, focus: NamedNode, label: string
 
 const NUMERIC = /#(integer|decimal|double|float|long|int|short|nonNegativeInteger|positiveInteger)$/
 
-function cell(ctx: RuleContext, o: Out, id: string, t: Term | undefined): NamedNode {
-  if (!t) return o.el(id, 'Td', { class: 'sem-unbound' })
+/**
+ * A cell, which says what it shows (c:column, and c:term: the term, or itself for a blank node,
+ * which rules may not mint), so rules above the table can read the results from it (c:markdown).
+ */
+function cell(ctx: RuleContext, o: Out, id: string, column: number, t: Term | undefined): NamedNode {
+  if (!t) {
+    const td = o.el(id, 'Td', { class: 'sem-unbound' })
+    o.t(td, W.column, int(ctx, column))
+    return td
+  }
   if (t.termType === 'NamedNode' || t.termType === 'BlankNode') {
     const code = o.el(`${id}-code`, 'Code', {}, [o.text(`${id}-text`, display(ctx, t))])
-    return o.el(id, 'Td', {}, [code])
+    const td = o.el(id, 'Td', {}, [code])
+    o.t(td, W.column, int(ctx, column)).t(td, W.term, t.termType === 'NamedNode' ? t : td)
+    return td
   }
   const lit = t as Term & { language?: string; datatype?: NamedNode }
   const numeric = !lit.language && NUMERIC.test(lit.datatype?.value ?? '')
   const parts = [o.text(`${id}-text`, truncate(t.value, 240))]
   if (lit.language) parts.push(o.el(`${id}-lang`, 'Span', { class: 'sem-lang' }, [o.text(`${id}-lang-text`, '@' + lit.language)]))
-  return o.el(id, 'Td', { class: numeric ? 'sem-end' : undefined }, parts)
+  const td = o.el(id, 'Td', { class: numeric ? 'sem-end' : undefined }, parts)
+  o.t(td, W.column, int(ctx, column)).t(td, W.term, t)
+  return td
 }
 
 const table: FnRule = (ctx, focus) => {
@@ -744,24 +766,91 @@ const table: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [summary(o, count), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
-  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)])))])
+  const th = (h: string, i: number) => {
+    const n = o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)])
+    o.t(n, W.column, int(ctx, i))
+    return n
+  }
+  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map(th))])
   const seen = new Map<string, number>()
   const body = o.el(
     'body',
     'Tbody',
     {},
-    shown.map((r) => {
+    shown.map((r, ri) => {
       // Keyed by content: a row that is in the next run too keeps its elements.
       const base = 'r' + fnv(r.map((t) => (t ? t.termType + t.value : '')).join('\u0000'))
       const n = seen.get(base) ?? 0
       seen.set(base, n + 1)
       const id = n ? `${base}-${n}` : base
-      return o.el(id, 'Tr', {}, r.map((t, ci) => cell(ctx, o, `${id}-c${ci}`, t)))
+      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => cell(ctx, o, `${id}-c${ci}`, ci, t)))
+      o.t(tr, W.row, int(ctx, ri))
+      return tr
     }),
   )
-  const parts = [summary(o, count), o.el('scroll', 'Div', { class: 'sem-scroll' }, [o.el('table', 'Table', {}, [head, body])])]
+  const parts = [summaryBar(ctx, o, count), o.el('scroll', 'Div', { class: 'sem-scroll' }, [o.el('table', 'Table', {}, [head, body])])]
   if (total > shown.length) parts.push(o.el('more', 'P', { class: 'sem-more' }, [o.text('more-text', say(ctx, P.more, '+{n} more', { n: total - shown.length }))]))
   o.renders(o.el('root', 'Div', {}, parts))
+  return o.quads
+}
+
+// --- results: the table as Markdown ----------------------------------------------------------------
+// The function variant of c:ResultTableMarkdown-sparql (workbench.ttl): it reads what the table
+// rendered (its header cells and the terms its cells say they show), not the results, and names
+// IRIs with the prefixes the graph declares (sh:declare), as the SPARQL does.
+
+/** Every (prefix, namespace) the graph declares, read once per engine. */
+const declarations = (ctx: RuleContext): [string, string][] =>
+  ctx.memo('workbench:declarations', () =>
+    ctx.untraced(() =>
+      ctx.match(null, SH + 'prefix', null).flatMap((q) => ctx.objects(q.subject, SH + 'namespace').map((ns): [string, string] => [q.object.value, ns.value])),
+    ),
+  )
+
+/** An IRI as prefix:local with the longest declared namespace that leaves a valid local name (then the least prefix). */
+function declaredName(ctx: RuleContext, iri: string): string | undefined {
+  let best: [string, string] | undefined
+  for (const [p, ns] of declarations(ctx)) {
+    if (!iri.startsWith(ns) || !PN_LOCAL.test(iri.slice(ns.length))) continue
+    if (!best || ns.length > best[1].length || (ns.length === best[1].length && p < best[0])) best = [p, ns]
+  }
+  return best && `${best[0]}:${iri.slice(best[1].length)}`
+}
+
+/** Text in a Markdown table cell: a pipe would end the cell, a line break the row. */
+const markdownCell = (s: string) => s.replace(/[|]/g, '&#124;').replace(/\r?\n/g, '<br>')
+
+const position = (ctx: RuleContext, n: Term, p: string) => Number(ctx.object(n, p)?.value ?? NaN)
+const dataOf = (ctx: RuleContext, n: Term) => ctx.objects(n, H.hasChild).flatMap((t) => ctx.objects(t, H.data)).map((d) => d.value)
+
+const tableMarkdown: FnRule = (ctx, focus) => {
+  const head = ctx.nn(mint(focus.value, 'head-row'))
+  if (!ctx.match(head, RDF_TYPE, H.ns + 'Tr').length) return []
+  const byPosition = <T>(items: [number, T][]) => items.filter(([i]) => Number.isFinite(i)).sort((a, b) => a[0] - b[0]).map(([, v]) => v)
+  const names = byPosition(ctx.objects(head, H.hasChild).flatMap((th) => dataOf(ctx, th).map((d): [number, string] => [position(ctx, th, W.column), markdownCell(d)])))
+  if (!names.length) return []
+  const shown = (td: Term): string => {
+    const t = ctx.object(td, W.term)
+    if (!t) return ''
+    // A blank node: the cell stands in for it, and shows its label.
+    if (t.equals(td)) {
+      const code = ctx.objects(td, H.hasChild).find((n) => ctx.match(n, RDF_TYPE, H.ns + 'Code').length)
+      return code ? dataOf(ctx, code).map((d) => '`' + d + '`').join('') : ''
+    }
+    if (t.termType === 'NamedNode') return '`' + (declaredName(ctx, t.value) ?? `<${t.value}>`) + '`'
+    const lang = t.termType === 'Literal' ? t.language : ''
+    return markdownCell(t.value) + (lang ? '@' + lang : '')
+  }
+  const body = ctx.nn(mint(focus.value, 'body'))
+  const rows = byPosition(
+    ctx.objects(body, H.hasChild).map((tr): [number, string] => [
+      position(ctx, tr, W.row),
+      `| ${byPosition(ctx.objects(tr, H.hasChild).map((td): [number, string] => [position(ctx, td, W.column), shown(td)])).join(' | ')} |`,
+    ]),
+  )
+  const lines = [`| ${names.join(' | ')} |`, `| ${names.map(() => '---').join(' | ')} |`, ...rows]
+  const o = ctx.out(focus)
+  o.t(o.node('root'), W.markdown, lines.join('\n'))
   return o.quads
 }
 
@@ -1141,6 +1230,7 @@ export const functions: Record<string, FnRule> = {
   'workbench:workbench': workbench,
   'workbench:editor': editor,
   'workbench:table': table,
+  'workbench:table-markdown': tableMarkdown,
   'workbench:graph': graphview,
   'workbench:graph-selection': graphSelection,
   'workbench:turtle': turtleview,

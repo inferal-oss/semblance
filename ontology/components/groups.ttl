@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 # The component groups (DESIGN.md §3), and which group each component class is in,
@@ -63,6 +64,7 @@ c:Button sem:group c:ActionsGroup . c:IconButton sem:group c:ActionsGroup . c:Bu
 c:Menu sem:group c:ActionsGroup . c:MenuItem sem:group c:ActionsGroup . c:Toggle sem:group c:ActionsGroup .
 c:Toolbar sem:group c:ActionsGroup .
 c:Pressable sem:group c:ActionsGroup . c:Setter sem:group c:ActionsGroup . c:Unsetter sem:group c:ActionsGroup .
+clip:Copier sem:group c:ActionsGroup .
 
 # --- Inputs ---
 c:TextField sem:group c:InputsGroup . c:TextArea sem:group c:InputsGroup . c:Checkbox sem:group c:InputsGroup .

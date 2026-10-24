@@ -18,6 +18,7 @@ import { statusFunctions } from '../layers/status.ts'
 import { positionFunctions } from '../layers/position.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
+import { clipboardFunctions } from '../layers/clipboard.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
 import { dragdropFunctions } from '../layers/dragdrop.ts'
 import { dependencyFunctions } from '../layers/dependency.ts'
@@ -773,6 +774,7 @@ export const functions: Record<string, FnRule> = {
   ...positionFunctions,
   ...l10nFunctions,
   ...announceFunctions,
+  ...clipboardFunctions,
   ...shapeFunctions,
   ...dragdropFunctions,
   ...dependencyFunctions,

@@ -12,11 +12,12 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix net: <https://semblance.dev/ns/network#> .
 @prefix tree: <https://w3id.org/tree#> .
+@prefix clip: <https://semblance.dev/ns/clipboard#> .
 
 # Gallery page: Actions.
 
 ui:gallery-actions a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-actions-intro ui:act-buttons ui:act-button-states ui:act-icon-buttons ui:act-button-groups ui:act-menus ui:act-tb-toolbar ) .
+    c:children ( ui:gallery-actions-intro ui:act-buttons ui:act-button-states ui:act-icon-buttons ui:act-copiers ui:act-button-groups ui:act-menus ui:act-tb-toolbar ) .
 ui:gallery-actions-intro a c:Heading ; c:label "Actions" .
 # --- Button: tone x emphasis ---
 ui:act-b-solid-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Solid .
@@ -101,6 +102,23 @@ ui:act-icon-buttons a c:Flippable ; c:front ui:act-icon-buttons-spec .
 ui:act-icon-buttons-spec a c:Specimen ; c:demonstrates c:IconButton , c:Pressable ; c:label "Icon button" ;
     c:help "Square and icon-only: c:icon is the glyph, c:label its accessible name and tooltip. Toned and sized like a button. The star and the pin are also c:Pressable, a behaviour mixin whose reaction flips c:pressed (aria-pressed); the graph holds the state." ;
     c:children ( ui:act-ib-col ) .
+
+# --- Copier: copying to the clipboard ---
+ui:act-copy-sample a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:copy a c:IconButton , clip:Copier ;
+    clip:copies ui:sample ; clip:property c:label ;
+    c:label "Copy the sample" .""" .
+ui:act-copy-icon a c:IconButton , clip:Copier ; clip:copies ui:act-copy-sample ; clip:property c:label ; clip:format clip:Turtle ;
+    c:label "Copy the sample" , "Копіювати зразок"@uk , "Beispiel kopieren"@de , "نسخ المثال"@ar .
+ui:act-copy-button a c:Button , clip:Copier ; clip:copies ui:act-copy-sample ; clip:property c:label ;
+    c:label "Copy" , "Копіювати"@uk , "Kopieren"@de , "نسخ"@ar ; sty:size sty:Small .
+ui:act-copy-off a c:IconButton , clip:Copier ; clip:copies ui:act-copy-sample ; clip:property c:label ; c:disabled true ;
+    c:label "Copy (disabled)" , "Копіювати (вимкнено)"@uk , "Kopieren (deaktiviert)"@de , "نسخ (معطّل)"@ar .
+ui:act-copy-controls a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:act-copy-icon ui:act-copy-button ui:act-copy-off ) .
+ui:act-copy-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-copy-sample ui:act-copy-controls ) .
+ui:act-copiers a c:Flippable ; c:front ui:act-copiers-spec .
+ui:act-copiers-spec a c:Specimen ; c:label "Copy to the clipboard" ;
+    c:help "Any button that is also a clip:Copier copies a value of a node (clip:copies, clip:property): here the sample's c:label, elsewhere a result table's c:markdown or an editor's text. The click records a clip:Request; the host's clipboard effect writes it and reports back as an event, so the glyph shows ✓ (or ✕) for a moment and a toast says what was copied. A button is keyboard accessible by construction: Enter or Space copies." ;
+    c:children ( ui:act-copy-row ) .
 
 # --- ButtonGroup ---
 ui:act-bg-cut a c:Button ; c:label "Cut" .

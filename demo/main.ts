@@ -1,6 +1,7 @@
 import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
+import { Clipboard } from '../src/clipboard.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { Navigation, rendererReveal } from '../src/navigation.ts'
@@ -292,6 +293,13 @@ const scheduler = new Scheduler(bus, {
   },
 })
 scheduler.attach()
+// Copies (clip:Request) go to the page's clipboard; how it went comes back as an event (a toast).
+new Clipboard(bus, {
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach()
 
 // Changes of where we are go to the address; Back, Forward and typed or followed addresses
 // come back as nav:Navigate events, and a followed link's target is brought into view.

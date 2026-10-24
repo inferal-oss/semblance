@@ -40,6 +40,7 @@ export const NS = {
   foaf: 'http://xmlns.com/foaf/0.1/',
   vann: 'http://purl.org/vocab/vann/',
   iv: 'https://semblance.dev/ns/view#',
+  clip: 'https://semblance.dev/ns/clipboard#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -374,6 +375,14 @@ export const DND = {
 export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
 export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
 export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const
+/** Copying to the clipboard (ontology/layers/clipboard.ttl, src/clipboard.ts). */
+export const CLIP = {
+  Copier: NS.clip + 'Copier', copies: NS.clip + 'copies', property: NS.clip + 'property', format: NS.clip + 'format', icon: NS.clip + 'icon',
+  PlainText: NS.clip + 'PlainText', copiedPhrase: NS.clip + 'copiedPhrase', Request: NS.clip + 'Request', text: NS.clip + 'text',
+  requestedBy: NS.clip + 'requestedBy', says: NS.clip + 'says', request: NS.clip + 'request', reason: NS.clip + 'reason',
+  Copied: NS.clip + 'Copied', CopyFailed: NS.clip + 'CopyFailed', outcome: NS.clip + 'outcome', glyph: NS.clip + 'glyph',
+  Success: NS.clip + 'Success', Failure: NS.clip + 'Failure', until: NS.clip + 'until', shownFor: NS.clip + 'shownFor',
+} as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',

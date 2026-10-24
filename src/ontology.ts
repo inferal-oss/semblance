@@ -24,6 +24,7 @@ export const ONTOLOGY_FILES = [
   'layers/privacy.ttl',
   'layers/dragdrop.ttl',
   'layers/dependency.ttl',
+  'layers/clipboard.ttl',
   'components/common.ttl',
   'components/stack.ttl',
   'components/heading.ttl',

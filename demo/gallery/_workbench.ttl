@@ -6,6 +6,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -18,7 +19,7 @@
 ui:workbench a c:QueryWorkbench ;
     c:label "SPARQL workbench" , "Робоче місце SPARQL"@uk , "SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
     c:editor ui:queryEditor ;
-    c:actions ( ui:queryRun ui:queryFollow ) ;
+    c:actions ( ui:queryRun ui:queryFollow ui:queryCopy ) ;
     c:runs ui:currentQuery ;
     c:results ui:queryResults ;
     c:samples ( ui:sampleRenderings ui:sampleReactions ui:sampleLayers ui:sampleChangeLog
@@ -39,6 +40,11 @@ ORDER BY DESC(?rules) ?component""" .
 ui:queryRun a c:Button , c:RunQueryButton ; c:of ui:workbench ;
     c:label "Run" , "Виконати"@uk , "Ausführen"@de , "تشغيل"@ar ;
     sty:intent sty:Primary ; key:shortcut "mod+enter" .
+
+# Copies the editor's text (a clip:Copier of its c:value): the toast says the query was copied.
+ui:queryCopy a c:IconButton , clip:Copier ; clip:copies ui:queryEditor ; clip:property c:value ; clip:format clip:Sparql ;
+    c:label "Copy the query" , "Копіювати запит"@uk , "Abfrage kopieren"@de , "نسخ الاستعلام"@ar ;
+    sty:emphasis sty:Ghost .
 
 # Whether the results follow the graph (c:followUpdates): off, they stay as of the last run.
 ui:queryFollow a c:ToggleSwitch ; c:controls ui:workbench ; c:property c:followUpdates ;
@@ -65,7 +71,11 @@ ui:queryResults a c:Tabs ;
 ui:queryTableTab a c:Tab ; c:label "Table" , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ; c:content ui:queryTable .
 ui:queryGraphTab a c:Tab ; c:label "Graph" , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ; c:content ui:queryGraph .
 ui:queryTurtleTab a c:Tab ; c:label "Turtle" ; c:content ui:queryTurtle .
-ui:queryTable a c:ResultTable ; c:of ui:currentQuery .
+ui:queryTable a c:ResultTable ; c:of ui:currentQuery ; c:actions ( ui:queryTableCopy ) .
+# Beside the table's summary: copies the rows shown as a Markdown table (the table's c:markdown).
+ui:queryTableCopy a c:IconButton , clip:Copier ; clip:copies ui:queryTable ; clip:property c:markdown ; clip:format clip:Markdown ;
+    c:label "Copy as Markdown" , "Копіювати як Markdown"@uk , "Als Markdown kopieren"@de , "نسخ بصيغة Markdown"@ar ;
+    sty:size sty:Small ; sty:emphasis sty:Ghost .
 ui:queryGraph a c:ResultGraph ; c:of ui:currentQuery .
 ui:queryTurtle a c:ResultTurtle ; c:of ui:currentQuery .
 

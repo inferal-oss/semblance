@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -82,9 +83,16 @@ c:PaginationShape a sh:NodeShape ; sh:targetClass c:Pagination ;
                 [ sh:path c:pages ; sh:minCount 1 ; sh:minInclusive 1 ] .
 c:AvatarShape a sh:NodeShape ; sh:targetClass c:Avatar ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An avatar needs a name (c:label) for its initials and its accessible name." ] .
+c:OwnIconShape a sh:PropertyShape ;
+    rdfs:comment "Has its own glyph."@en ;
+    sh:path c:icon ; sh:minCount 1 .
+c:CopierIconShape a sh:PropertyShape ;
+    rdfs:comment "Copies something (a clip:Copier): its glyph is derived from its outcome and clip:icon."@en ;
+    sh:path clip:copies ; sh:minCount 1 .
 c:IconButtonShape a sh:NodeShape ; sh:targetClass c:IconButton ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An icon-only button needs a c:label: it is its accessible name." ] ,
-                [ sh:path c:icon ; sh:minCount 1 ] .
+    sh:or ( c:OwnIconShape c:CopierIconShape ) ;
+    sh:message "An icon button needs a glyph (c:icon), unless it is a clip:Copier, whose glyph is derived." ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An icon-only button needs a c:label: it is its accessible name." ] .
 c:DialogShape a sh:NodeShape ; sh:targetClass c:Dialog ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A dialog needs a title (c:label): it labels the dialog." ] ,
                 [ sh:path c:open ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
