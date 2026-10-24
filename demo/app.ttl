@@ -108,7 +108,6 @@ ui:ClearMatrix ann:announces "Results cleared" , "Результати очищ�
 
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
-    c:subtitle "one component graph · many projections" ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
     c:actions ( ui:nav ui:toolsToggle ui:theme ) .

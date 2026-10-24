@@ -45,7 +45,6 @@ mot:None rdfs:label "Без руху"@uk , "Keine"@de , "بلا"@ar .
 sty:density rdfs:label "Density" , "Щільність"@uk , "Dichte"@de , "الكثافة"@ar .
 sty:Comfortable rdfs:label "Comfortable" , "Простора"@uk , "Bequem"@de , "مريحة"@ar .
 sty:Compact rdfs:label "Compact" , "Компактна"@uk , "Kompakt"@de , "مضغوطة"@ar .
-ui:appBar c:subtitle "один граф компонентів · багато проєкцій"@uk , "ein Komponentengraph · viele Projektionen"@de , "رسم بياني واحد للمكونات · إسقاطات متعددة"@ar .
 ui:store rdfs:label "Сховище"@uk , "Speicher"@de , "المخزن"@ar .
 ui:rules rdfs:label "Правила"@uk , "Regeln"@de , "القواعد"@ar .
 ui:inspectorTab c:label "Інспектор"@uk , "Inspektor"@de , "المفتش"@ar .
