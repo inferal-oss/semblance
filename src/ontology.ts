@@ -40,6 +40,7 @@ export const ONTOLOGY_FILES = [
   'components/navigation.ttl',
   'components/overlays.ttl',
   'components/disclosure.ttl',
+  'components/workbench.ttl',
   'perf/perf.ttl',
   'shapes/components.ttl',
   'theme/foundations.ttl',
@@ -57,4 +58,5 @@ export const ONTOLOGY_FILES = [
   'theme/navigation.ttl',
   'theme/overlays.ttl',
   'theme/disclosure.ttl',
+  'theme/workbench.ttl',
 ] as const

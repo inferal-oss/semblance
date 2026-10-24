@@ -3,6 +3,7 @@ import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { docsReactions } from '../src/layers/docs.ts'
+import { reactions as workbenchReactions } from '../src/components/workbench.ts'
 import { type Backend, Persistence, persistenceReactions } from '../src/persistence.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { loadStore } from '../src/node/load.ts'
@@ -42,7 +43,7 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function') {
   })
   const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
   shell.flush()
-  const bus = new EventBus(runtime, screen, { functions: { ...todoReactions, ...docsReactions, ...persistenceReactions }, prefer })
+  const bus = new EventBus(runtime, screen, { functions: { ...todoReactions, ...docsReactions, ...persistenceReactions, ...workbenchReactions }, prefer })
   bus.attach(shell, () => shell.flush())
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')

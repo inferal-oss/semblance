@@ -2,6 +2,7 @@ import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { docsReactions } from '../src/layers/docs.ts'
+import { reactions as workbenchReactions } from '../src/components/workbench.ts'
 import { indexedDbBackend, Persistence, persistenceReactions, webStorageBackend } from '../src/persistence.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
@@ -188,7 +189,7 @@ const short = (iri: string) => {
   for (const [p, ns] of Object.entries({ ...NS, ui: UI, ex: EX })) if (iri.startsWith(ns)) return `${p}:${iri.slice(ns.length)}`
   return iri
 }
-const bus = new EventBus(runtime, screen, { functions: { ...todoReactions, ...docsReactions, ...persistenceReactions }, prefer })
+const bus = new EventBus(runtime, screen, { functions: { ...todoReactions, ...docsReactions, ...persistenceReactions, ...workbenchReactions }, prefer })
 persistence.attach(runtime)
 bus.attach(shell, (h: Handled) => {
   syncSettings()

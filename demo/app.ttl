@@ -140,10 +140,11 @@ ui:viewsCard a c:Card ;
     c:note "Every view is a projection of the same graph. ↗ opens one in a window; tab and window state are graph state." ;
     c:content ui:views .
 ui:views a c:Tabs ; c:detachable true ; c:windowsOn ui:desktop ;
-    c:tabs ( ui:inspectorTab ui:textTab ui:activityTab ui:logTab ) ;
+    c:tabs ( ui:inspectorTab ui:queryTab ui:textTab ui:activityTab ui:logTab ) ;
     c:selected ui:inspectorTab .
 
 ui:inspectorTab a c:Tab ; c:label "Inspector" ; c:content ui:inspectorCard .
+ui:queryTab a c:Tab ; c:label "Query" , "Запит"@uk , "Abfrage"@de , "استعلام"@ar ; c:content ui:workbench .
 ui:textTab a c:Tab ; c:label "Text projection" ; c:content ui:textCard .
 ui:activityTab a c:Tab ; c:label "Activity" ; c:content ui:activityCard .
 ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
