@@ -243,3 +243,33 @@ describe('privacy (concealment) layer', () => {
     expect(css).toContain('[data-sem-privacy=private] [data-sem-sensitive]')
   })
 })
+
+describe('⌘Z: inspect here', () => {
+  it('brings the inspector up as a window beside the pointer, paused on the node under it', () => {
+    const h = mountShell()
+    const f = h.store.factory
+    // The test DOM has no layout: the bus's pointer detail is given directly.
+    const label = h.document.querySelector('[data-sem-c=list-item] label')!
+    const node = h.shell.keyOf(label)!
+    ;(h.bus as unknown as { pointerDetail: () => unknown }).pointerDetail = () => ({ node, numbers: { x: 900, y: 120, toEnd: 500, toBottom: 700 } })
+    const press = (opts: object, target: EventTarget = h.document) => {
+      const e = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+      Object.assign(e, { key: 'z', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, ...opts })
+      target.dispatchEvent(e)
+    }
+    // From Off, too.
+    h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'app'), f.namedNode(UI + 'inspectorMode'), null), add: [f.quad(f.namedNode(UI + 'app'), f.namedNode(UI + 'inspectorMode'), f.namedNode(UI + 'Off'))] })
+    h.shell.flush()
+    press({})
+    expect(h.value(UI + 'inspectorMode')).toBe(UI + 'Paused')
+    expect(h.value(UI + 'inspecting')).toBe(node)
+    const win = h.document.querySelector('[data-sem-c=window]')!
+    expect(win.querySelector('.sem-window-bar strong')!.textContent).toBe('Inspector')
+    // Not enough room after the pointer (500 < 520 + 40): it opens before it.
+    expect(win.getAttribute('style')).toContain('left: 356px; top: 144px')
+    // In a text field ⌘Z is undo, not this.
+    h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'app'), f.namedNode(UI + 'inspectorMode'), null), add: [f.quad(f.namedNode(UI + 'app'), f.namedNode(UI + 'inspectorMode'), f.namedNode(UI + 'Live'))] })
+    press({}, h.document.querySelector('[data-sem-c=text-field] input')!)
+    expect(h.value(UI + 'inspectorMode')).toBe(UI + 'Live')
+  })
+})

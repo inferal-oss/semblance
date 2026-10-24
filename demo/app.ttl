@@ -156,7 +156,9 @@ ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
 ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspector ui:highlight ) .
 ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ) .
 ui:pauseHint a c:Text ; c:inline true ; sty:textStyle sty:Caption ;
-    c:children ( ui:pauseKey " pauses · " ui:offKey ui:offKeyZ " turns off" ) .
+    c:children ( ui:hereKey ui:hereKeyZ " here · " ui:pauseKey " pauses · " ui:offKey ui:offKeyZ " turns off" ) .
+ui:hereKey a c:Kbd ; c:label "⌘" .
+ui:hereKeyZ a c:Kbd ; c:label "Z" .
 ui:offKey a c:Kbd ; c:label "⇧" .
 ui:offKeyZ a c:Kbd ; c:label "Z" .
 ui:pauseKey a c:Kbd ; c:label "Z" .
@@ -172,6 +174,45 @@ ui:PauseInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:pauseInspe
     beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Paused } WHERE { ui:app ui:inspectorMode ui:Live }""" ;
     ann:announces "Inspector paused · Z to resume" , "Інспектор призупинено · Z, щоб продовжити"@uk ,
                   "Inspektor angehalten · Z zum Fortsetzen"@de , "تم إيقاف المفتش مؤقتًا · اضغط Z للاستئناف"@ar ; ann:tone sty:Info .
+# ⌘Z / Ctrl+Z, anywhere but in a text field (there it is undo): "what is this?" -
+# the inspector comes up as a window beside the pointer (opened, restored, raised),
+# paused on the node under the pointer, so it can be explored. From Off, too.
+ui:inspectHere a key:Command ; key:shortcut "mod+z" ; key:whileTyping false ;
+    rdfs:label "Inspect what is under the pointer" , "Оглянути те, що під вказівником"@uk ,
+               "Untersuchen, was unter dem Zeiger ist"@de , "فحص ما تحت المؤشر"@ar .
+ui:InspectHere a beh:Reaction ; beh:when key:Press ; beh:source ui:inspectHere ;
+    beh:deletes """
+CONSTRUCT {
+  ui:app ui:inspectorMode ?mode ; ui:inspecting ?old . ui:inspectorTab c:detached ?detached .
+  ?w c:x ?ox ; c:y ?oy ; c:windowState ?state ; c:z ?oz . ui:desktop c:topmost ?front .
+}
+WHERE {
+  BIND(IRI(CONCAT(STR(ui:views), "/~window-", ENCODE_FOR_URI(STR(ui:inspectorTab)))) AS ?w)
+  { ui:app ui:inspectorMode ?mode }
+  UNION { $event beh:node ?under . ui:app ui:inspecting ?old }
+  UNION { ui:inspectorTab c:detached ?detached }
+  UNION { $event beh:x ?px . ?w c:x ?ox } UNION { $event beh:y ?py . ?w c:y ?oy }
+  UNION { ?w c:windowState ?state } UNION { ?w c:z ?oz } UNION { ui:desktop c:topmost ?front }
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ui:app ui:inspectorMode ui:Paused ; ui:inspecting ?under . ui:inspectorTab c:detached true .
+  ?w c:x ?x ; c:y ?y ; c:windowState c:Normal ; c:z ?z . ui:desktop c:topmost ?w .
+}
+WHERE {
+  BIND(IRI(CONCAT(STR(ui:views), "/~window-", ENCODE_FOR_URI(STR(ui:inspectorTab)))) AS ?w)
+  OPTIONAL { $event beh:node ?under }
+  OPTIONAL { $event beh:x ?px ; beh:y ?py ; beh:toEnd ?toEnd ; beh:toBottom ?toBottom }
+  OPTIONAL { ?w c:width ?declaredWidth } OPTIONAL { ?w c:height ?declaredHeight }
+  BIND(COALESCE(?declaredWidth, 520) AS ?width) BIND(COALESCE(?declaredHeight, 440) AS ?height)
+  # Beside the pointer, on whichever side has room.
+  BIND(IF(?toEnd > ?width + 40, ?px + 24, IF(?px - ?width - 24 < 8, 8, ?px - ?width - 24)) AS ?x)
+  BIND(IF(?toBottom > ?height + 40, ?py + 24, IF(?py - ?height - 24 < 8, 8, ?py - ?height - 24)) AS ?y)
+  OPTIONAL { SELECT (MAX(?oz) AS ?top) WHERE { ui:desktop c:hosts ?o . ?o c:z ?oz } }
+  BIND(COALESCE(?top, 0) + 1 AS ?z)
+}""" ;
+    ann:announces "Inspecting here · paused" , "Огляд тут · пауза"@uk , "Hier untersuchen · angehalten"@de , "فحص هنا · متوقف مؤقتًا"@ar ; ann:tone sty:Info .
+
 # Shift+Z: stop collecting altogether (Off), and Shift+Z again to go back to Live.
 ui:disableInspector a key:Command ; key:shortcut "shift+z" ;
     rdfs:label "Turn the inspector off or on" , "Вимкнути або ввімкнути інспектор"@uk ,
