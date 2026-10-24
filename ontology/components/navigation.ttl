@@ -20,6 +20,24 @@ c:NavList a owl:Class ;
     rdfs:comment "Vertical navigation: picks one value of c:property on c:controls, from the property's range."@en ;
     sem:slug "nav-list" .
 
+# A count beside each option (unread messages, open issues): c:countProperty names a numeric
+# property of the options; the rendering adds the value after the option's label when it is
+# above zero, with c:countLabel spelled out for assistive technology ("3 unread"). Any
+# c:Segmented can have one; a nav list is where it is usual.
+c:countProperty a owl:ObjectProperty ; rdfs:domain c:Segmented ; rdfs:range rdf:Property ;
+    rdfs:comment "A numeric property of each option, shown as a count after its label when above zero."@en .
+c:countLabel a owl:DatatypeProperty ; rdfs:domain c:Segmented ;
+    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\")."@en .
+c:SegmentedCounts a sem:Rendering ;
+    sem:targets c:Segmented ;
+    sem:requires c:countProperty ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:functionOnly """The counts are properties of the options, which are not linked from the component (they are the
+individuals of the property's range): SPARQL rules re-run only for changes one sem:follows hop away, so a
+count changing would not reach them. The function's reads are traced, so it hears each option's count.""" .
+c:SegmentedCounts-fn a sem:Rule ; sem:implements c:SegmentedCounts ; sem:function "nav:counts" .
+
 # --- Breadcrumbs: where you are in a hierarchy ----------------------------------------------------
 # The trail is c:items (nodes, labelled), or derived: from an end node up through c:parentProperty
 # (`?node <parentProperty> ?parent`) to a node with no parent. The end node is c:of, or the

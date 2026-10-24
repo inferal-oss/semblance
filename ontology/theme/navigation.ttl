@@ -37,6 +37,30 @@
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .
 
+# Counts after an option's label (c:countProperty): a small solid pill at the end of the row.
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
+                 [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count > [aria-hidden]" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
+                 [ sty:property "min-width" ; sty:raw "1.5em" ] ,
+                 [ sty:property "padding" ; sty:raw "1px 6px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:accent ] ,
+                 [ sty:property "color" ; sty:token tok:on-accent ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "line-height" ; sty:raw "1.4" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-visually-hidden" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+
 # --- breadcrumbs ---
 [] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ;
     sty:declares [ sty:property "font-family" ; sty:token tok:font ] ,

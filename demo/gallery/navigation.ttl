@@ -67,8 +67,13 @@ ui:NvRules a ui:NvSection ; rdfs:label "Rules"@en ; sem:order 2 .
 ui:NvTheme a ui:NvSection ; rdfs:label "Theme"@en ; sem:order 3 .
 ui:NvBehaviour a ui:NvSection ; rdfs:label "Behaviour"@en ; sem:order 4 .
 ui:nv-doc ui:nvSection ui:NvRules .
-ui:nv-navlist-sections a c:NavList ; c:controls ui:nv-doc ; c:property ui:nvSection ; c:label "Sections" .
+ui:nv-navlist-sections a c:NavList ; c:controls ui:nv-doc ; c:property ui:nvSection ; c:label "Sections" ;
+    c:countProperty ui:nvOpen ; c:countLabel "open questions" .
+# How many open questions each section has: shown beside it (c:countProperty), when above zero.
+ui:nvOpen a owl:DatatypeProperty ; rdfs:label "Open questions"@en ; rdfs:range xsd:integer .
+ui:NvTheme ui:nvOpen 2 .
+ui:NvBehaviour ui:nvOpen 12 .
 ui:nv-navlist a c:Flippable ; c:front ui:nv-navlist-spec .
 ui:nv-navlist-spec a c:Specimen ; c:label "Nav list" ;
-    c:help "Vertical navigation over one property's values: the options are the individuals in its rdfs:range, ordered by sem:order. The same contract and reaction as c:Segmented." ;
+    c:help "Vertical navigation over one property's values: the options are the individuals in its rdfs:range, ordered by sem:order. The same contract and reaction as c:Segmented. c:countProperty shows a number of each option beside it (here open questions; in the Chat example, unread messages), spelled out for screen readers by c:countLabel." ;
     c:children ( ui:nv-navlist-sections ) .

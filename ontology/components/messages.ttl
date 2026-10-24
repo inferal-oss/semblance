@@ -1,0 +1,137 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
+
+# Messages: a conversation, a comment thread, a feed. The messages are data items
+# in ActivityStreams terms (as:attributedTo a person with an rdfs:label and
+# optionally a c:image, as:content, as:published); the list shows them in order of
+# publication. Like c:List, the container renders only its element and the items
+# are placed member-wise (sem:forEach c:item): posting a message evaluates that
+# message alone, however long the thread is.
+
+# --- MessageList: the thread --------------------------------------------------------------------
+
+c:MessageList a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Messages (c:item: nodes with as:attributedTo, as:content, as:published) in order of
+publication, as a log (role=log, so new messages are announced politely). Each is a minted c:Message
+with the author's avatar, name and time. Messages by c:viewer are marked as one's own; a message with
+prv:sensitive true is hidden in private mode. c:label names the thread."""@en ;
+    sem:slug "message-list" .
+c:viewer a owl:ObjectProperty ; rdfs:domain c:MessageList ;
+    rdfs:comment "The person reading: their messages are their own (aligned to the end)."@en .
+
+c:MessageListRendering a sem:Rendering ; sem:targets c:MessageList ; sem:stratum 0 ; sem:watches c:label .
+c:MessageListRendering-fn a sem:Rule ; sem:implements c:MessageListRendering ; sem:function "messages:list" .
+c:MessageListRendering-sparql-screen a sem:Rule ;
+    sem:implements c:MessageListRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Ol ; sem:renders $this ; rdfhtml:attribute ?role, ?name .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "log" .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+}
+WHERE {
+  $this a c:MessageList .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel, "Messages")) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
+}""" .
+c:MessageListRendering-sparql-text a sem:Rule ;
+    sem:implements c:MessageListRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this . }
+WHERE { $this a c:MessageList . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
+
+# One message (sem:forEach c:item): mints its c:Message, ordered by as:published.
+c:MessageListMembers a sem:Rendering ;
+    sem:targets c:MessageList ;
+    sem:stratum 0 ;
+    sem:forEach c:item ;
+    sem:functionOnly "Member-wise (sem:forEach): the engine evaluates it once per (list, message) and hands the message to the rule as an argument, which it does for function rules only." .
+c:MessageListMembers-fn a sem:Rule ; sem:implements c:MessageListMembers ; sem:function "messages:member" .
+
+# --- Message: one entry --------------------------------------------------------------------------
+
+c:Message a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal: the per-message instance a c:MessageList mints (c:of the message, c:inList the list)."@en ;
+    sem:slug "message" .
+
+c:MessageRendering a sem:Rendering ; sem:targets c:Message ; sem:stratum 0 ; sem:follows c:of .
+c:MessageRendering-fn a sem:Rule ; sem:implements c:MessageRendering ; sem:function "messages:message" .
+# The author's name is their c:label or rdfs:label; the time shown is the clock time as
+# written in as:published (characters 12-16 of the xsd:dateTime), the full value in datetime.
+c:MessageRendering-sparql-screen a sem:Rule ;
+    sem:implements c:MessageRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:hasChild ?avatar, ?main .
+  ?avatar a c:Avatar ; c:label ?author ; c:image ?image ; sty:size sty:Small ; ord:immediatelyPrecedes ?main .
+  ?main a rdfhtml:Div ; rdfhtml:class "sem-message-main" ; rdfhtml:hasChild ?meta, ?body .
+  ?meta a rdfhtml:Div ; rdfhtml:class "sem-message-meta" ; rdfhtml:hasChild ?who, ?time ; ord:immediatelyPrecedes ?body .
+  ?who a rdfhtml:Span ; rdfhtml:class "sem-author" ; rdfhtml:hasChild ?whoText ; ord:immediatelyPrecedes ?time .
+  ?whoText a rdfhtml:Text ; rdfhtml:data ?author .
+  ?time a rdfhtml:Time ; rdfhtml:dateTime ?at ; rdfhtml:hasChild ?timeText .
+  ?timeText a rdfhtml:Text ; rdfhtml:data ?clock .
+  ?body a rdfhtml:P ; rdfhtml:class "sem-message-body" ; rdfhtml:hasChild ?bodyText .
+  ?bodyText a rdfhtml:Text ; rdfhtml:data ?content .
+}
+WHERE {
+  $this a c:Message ; c:of ?message .
+  ?message as:content ?rawContent .
+  BIND(STR(?rawContent) AS ?content)
+  OPTIONAL { ?message as:published ?published }
+  BIND(STR(?published) AS ?at)
+  BIND(SUBSTR(STR(?published), 12, 5) AS ?clock)
+  OPTIONAL { ?message as:attributedTo ?person
+    OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
+    OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") }
+    OPTIONAL { ?person c:image ?img } }
+  BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
+  BIND(STR(?img) AS ?image)
+  BIND(IF(EXISTS { $this c:inList ?list . ?list c:viewer ?viewer . ?message as:attributedTo ?viewer }, "sem-mine", ?none) AS ?class)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~avatar")) AS ?avatar)
+  BIND(IRI(CONCAT(STR($this), "/~main")) AS ?main)
+  BIND(IRI(CONCAT(STR($this), "/~meta")) AS ?meta)
+  BIND(IRI(CONCAT(STR($this), "/~author")) AS ?who)
+  BIND(IRI(CONCAT(STR($this), "/~author-text")) AS ?whoText)
+  BIND(IF(BOUND(?published), IRI(CONCAT(STR($this), "/~time")), ?none) AS ?time)
+  BIND(IF(BOUND(?published), IRI(CONCAT(STR($this), "/~time-text")), ?none) AS ?timeText)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~body-text")) AS ?bodyText)
+}""" .
+c:MessageRendering-sparql-text a sem:Rule ;
+    sem:implements c:MessageRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Message ; c:of ?message .
+  ?message as:content ?content .
+  OPTIONAL { ?message as:published ?published }
+  OPTIONAL { ?message as:attributedTo ?person
+    OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
+    OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
+  BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
+  BIND(CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ": ", STR(?content)) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
+}""" .

@@ -207,7 +207,44 @@ const stepperGo: ReactionFn = (ctx) => {
   return { remove: ctx.match(ctx.target, C_CURRENT, null), add: [f.quad(ctx.target, f.namedNode(C_CURRENT), step)] }
 }
 
+// --- Counts beside the options of a c:Segmented / c:NavList ---------------------------------------
+
+const H_HAS_CHILD = NS.rdfhtml + 'hasChild'
+/** SPARQL's ENCODE_FOR_URI, so the option keys match the segmented rule's (functions.ts encodeForUri; not imported, which would be a cycle). */
+const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
+
+/**
+ * After each option's label, its c:countProperty value when above zero, with c:countLabel
+ * read after it by assistive technology. Decorates the option buttons the segmented rule
+ * mints (same keys); each option's count is a traced read, so a count changing re-runs this.
+ */
+const counts: FnRule = (ctx, focus) => {
+  const property = ctx.object(focus, C.property)
+  const countProperty = ctx.object(focus, NS.c + 'countProperty')
+  if (!named(property) || !named(countProperty)) return []
+  const explicit = ctx.object(focus, NS.c + 'options')
+  const range = ctx.object(property, 'http://www.w3.org/2000/01/rdf-schema#range')
+  const options = explicit ? nodes(ctx, explicit) : range ? ctx.match(null, NS.rdf + 'type', range).map((q) => q.subject).filter(named) : []
+  const spoken = text(ctx, focus, NS.c + 'countLabel')
+  const o = ctx.out(focus)
+  for (const opt of options) {
+    const n = num(ctx, opt, countProperty.value, 0)
+    if (!(n > 0)) continue
+    const key = 'opt-' + encodeForUri(opt.value)
+    const shown = n > 99 ? '99+' : String(n)
+    const count = el(o, `${key}-count`, 'Span', { class: 'sem-count' }, [
+      el(o, `${key}-count-figure`, 'Span', { 'aria-hidden': 'true' }, [o.text(`${key}-count-text`, shown)]),
+      el(o, `${key}-count-spoken`, 'Span', { class: 'sem-visually-hidden' }, [o.text(`${key}-count-spoken-text`, `, ${n}${spoken ? ' ' + spoken : ''}`)]),
+    ])
+    const button = o.node(key)
+    o.t(button, H_HAS_CHILD, count)
+    o.t(o.node(`${key}-label`), NS.ord + 'immediatelyPrecedes', count)
+  }
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
+  'nav:counts': counts,
   'nav:breadcrumbs': breadcrumbs,
   'nav:pagination': pagination,
   'nav:stepper': stepper,

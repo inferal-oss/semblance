@@ -11,11 +11,12 @@
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
 
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-timeline ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-messages ui:dt-timeline ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -162,6 +163,23 @@ ui:dt-avatars a c:Flippable ; c:front ui:dt-avatars-spec .
 ui:dt-avatars-spec a c:Specimen ; c:label "Avatar" ;
     c:help "Initials on a hue derived from the label (the same name always gets the same color), or an image; sized by sty:size. A group overlaps them and counts the rest past c:max." ;
     c:children ( ui:dt-av-ada ui:dt-av-tim ui:dt-av-grace ui:dt-av-image ui:dt-av-group ) .
+
+# --- MessageList: a thread of ActivityStreams notes -----------------------------------------------
+
+ui:dt-msg-ada rdfs:label "Ada Lovelace" .
+ui:dt-msg-alan rdfs:label "Alan Kay" .
+ui:dt-msg-1 a as:Note ; as:attributedTo ui:dt-msg-alan ; as:published "2024-05-14T10:02:00Z"^^xsd:dateTime ;
+    as:content "Is the thread member-wise, like the todo list?" .
+ui:dt-msg-2 a as:Note ; as:attributedTo ui:dt-msg-ada ; as:published "2024-05-14T10:03:00Z"^^xsd:dateTime ;
+    as:content "Yes: each note is one c:item, evaluated on its own. A new note costs one message, however long the thread." .
+ui:dt-msg-3 a as:Note ; as:attributedTo ui:dt-msg-alan ; as:published "2024-05-14T10:05:00Z"^^xsd:dateTime ;
+    as:content "And this one is sensitive: private mode (⌘⇧H) hides it." ; <https://semblance.dev/ns/privacy#sensitive> true .
+ui:dt-messages-thread a c:MessageList ; c:label "A thread" ; c:viewer ui:dt-msg-ada ;
+    c:item ui:dt-msg-1 , ui:dt-msg-2 , ui:dt-msg-3 .
+ui:dt-messages a c:Flippable ; c:front ui:dt-messages-spec .
+ui:dt-messages-spec a c:Specimen ; c:label "Message list" ;
+    c:help "Messages as data: as:Note nodes with as:attributedTo, as:content and as:published, the thread's c:item. Each becomes a minted c:Message - the author's avatar, name and time - in order of publication; c:viewer's own are at the end. The list is a log (role=log), and a prv:sensitive note is hidden in private mode. The Chat example is built on it." ;
+    c:children ( ui:dt-messages-thread ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

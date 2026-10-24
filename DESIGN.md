@@ -59,7 +59,7 @@ Thin vocabularies. Every component
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem (+ Pressable, Setter mixins) |
 | **Inputs** | TextField · TextArea · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState |
-| **Data** | List · Table · DescriptionList · Stat · Metrics · Avatar · AvatarGroup · Timeline · Tree · charts |
+| **Data** | List · Table · DescriptionList · Stat · Metrics · Avatar · AvatarGroup · MessageList · Timeline · Tree · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Window · Palette · Taskbar · Tooltip (layer) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |

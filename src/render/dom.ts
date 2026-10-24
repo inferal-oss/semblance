@@ -74,6 +74,12 @@ export class DomRenderer {
       if (el && el.nodeType === 3) {
         const data = this.index.nodes.get(k)?.data ?? ''
         if ((el as Text).data !== data) ((el as Text).data = data), this.ops++
+        // A text area's content is only its default value: once typed in, what it shows is its
+        // live value, which follows the graph like an input's (a reaction emptying a composer).
+        for (const p of this.index.nodes.get(k)?.parents ?? []) {
+          const area = this.els.get(p) as HTMLTextAreaElement | undefined
+          if (area?.localName === 'textarea' && area.value !== data) area.value = data
+        }
       }
     }
     for (const k of d.attrs) if (this.els.has(k)) this.syncAttrs(k)

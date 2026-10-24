@@ -157,10 +157,12 @@ describe('c:NavList', () => {
   it('still picks one value of a property, from its range', () => {
     const { root, click, objects } = gallery()
     const list = root('nv-navlist-sections')
-    expect([...list.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Overview', 'Rules', 'Theme', 'Behaviour'])
-    click([...list.querySelectorAll('button')].find((b) => b.textContent === 'Theme')!)
+    // Each option's count (c:countProperty) follows its label when above zero, spelled out once.
+    expect([...list.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Overview', 'Rules', 'Theme2, 2 open questions', 'Behaviour12, 12 open questions'])
+    expect([...list.querySelectorAll('.sem-count [aria-hidden=true]')].map((c) => c.textContent)).toEqual(['2', '12'])
+    click([...list.querySelectorAll('button')].find((b) => b.textContent!.startsWith('Theme'))!)
     expect(objects(UI + 'nv-doc', UI + 'nvSection')).toEqual([UI + 'NvTheme'])
-    expect(root('nv-navlist-sections').querySelector('[aria-pressed=true]')!.textContent).toBe('Theme')
+    expect(root('nv-navlist-sections').querySelector('[aria-pressed=true] > span')!.textContent).toBe('Theme')
   })
 })
 
