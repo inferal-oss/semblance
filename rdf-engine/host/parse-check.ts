@@ -14,7 +14,10 @@ const looksLikeQuery = (s: string) => s.includes('{') && /^\s*(PREFIX|BASE|SELEC
 export function semblanceQueries(): string[] {
   const out: string[] = []
   for (const f of [...walk(root + 'ontology'), ...walk(root + 'demo')].filter((f) => f.endsWith('.ttl'))) {
-    for (const q of new Parser().parse(readFileSync(f, 'utf8'))) if (q.object.termType === 'Literal' && looksLikeQuery(q.object.value)) out.push(q.object.value)
+    // A file's own prefixes come along with its queries (example apps declare theirs).
+    const prefixes: string[] = []
+    const quads = new Parser().parse(readFileSync(f, 'utf8'), null, (p, iri) => void prefixes.push(`PREFIX ${p}: <${iri.value}>`))
+    for (const q of quads) if (q.object.termType === 'Literal' && looksLikeQuery(q.object.value)) out.push(prefixes.join('\n') + '\n' + q.object.value)
   }
   for (const f of walk(root + 'src').filter((f) => f.endsWith('.ts'))) {
     // Template literals without interpolation that are whole queries.
