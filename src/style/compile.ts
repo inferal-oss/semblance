@@ -111,9 +111,24 @@ export function compileStyles(store: GraphStore): string {
     }
     return undefined
   }
-  const componentRules: (string | undefined)[] = []
-  const variantRules: (string | undefined)[] = []
-  const intentRules: (string | undefined)[] = []
+  // How deep a class sits under sem:Component: a subclass's rules come after its
+  // superclass's, so a refinement (c:NavList of c:Segmented) wins at equal specificity.
+  const depthOf = new Map<string, number>()
+  const classDepth = (cls: Term): number => {
+    if (depthOf.has(cls.value)) return depthOf.get(cls.value)!
+    depthOf.set(cls.value, 0)
+    const d = Math.max(-1, ...objects(cls, RDFS_SUBCLASS).map(classDepth)) + 1
+    depthOf.set(cls.value, d)
+    return d
+  }
+  const ranked = (rules: [number, string | undefined][]) =>
+    rules
+      .filter((r): r is [number, string] => r[1] !== undefined)
+      .sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0))
+      .map((r) => r[1])
+  const componentRules: [number, string | undefined][] = []
+  const variantRules: [number, string | undefined][] = []
+  const intentRules: [number, string | undefined][] = []
   for (const r of subjects(RDF_TYPE, STY.StyleRule)) {
     const cls = object(r, STY.appliesTo)
     const intent = object(r, STY.intent)
@@ -123,24 +138,24 @@ export function compileStyles(store: GraphStore): string {
     // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
     // may add), or every element carrying its sty:when value.
     if (!cls) {
-      if (when) variantRules.push(block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r)))
-      else if (part) componentRules.push(block(part, declarations(r)))
+      if (when) variantRules.push([0, block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r))])
+      else if (part) componentRules.push([0, block(part, declarations(r))])
       continue
     }
     // A rule for a class also styles its subclasses (data-sem-c names only the direct class).
     const selector = withSubclasses(cls)
       .map((c) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (part ? ' ' + part : ''))
       .join(', ')
-    ;(intent ? intentRules : when ? variantRules : componentRules).push(block(selector, declarations(r)))
+    ;(intent ? intentRules : when ? variantRules : componentRules).push([classDepth(cls), block(selector, declarations(r))])
   }
 
   return [
     '@layer sem.tokens, sem.hooks, sem.components, sem.variants, sem.intents;',
     layer('tokens', tokenRules),
     layer('hooks', hookRules, true),
-    layer('components', componentRules),
-    layer('variants', variantRules),
-    layer('intents', intentRules),
+    layer('components', ranked(componentRules), true),
+    layer('variants', ranked(variantRules), true),
+    layer('intents', ranked(intentRules), true),
   ]
     .filter(Boolean)
     .join('\n\n')

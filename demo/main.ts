@@ -19,10 +19,12 @@ const kind = (params.get('store') ?? 'hybrid') as StoreKind
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
-const PAGES = { playground: 'Playground', performance: 'Performance' } as const
+const PAGES = { playground: 'Playground', performance: 'Performance', components: 'Components' } as const
 
 await initWeb()
-const store = loadStore(kind, todoApp(5), appGraph)
+// The Components page: one graph per component group (demo/gallery/*.ttl).
+const gallery = Object.values(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+const store = loadStore(kind, todoApp(5), appGraph, ...gallery)
 const f = store.factory
 const nn = (iri: string) => f.namedNode(iri)
 const app = nn(UI + 'app')

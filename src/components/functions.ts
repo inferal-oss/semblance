@@ -5,6 +5,15 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { functions as layoutFunctions } from './layout.ts'
+import { functions as typeFunctions } from './type.ts'
+import { functions as actionsFunctions } from './actions.ts'
+import { functions as inputsFunctions } from './inputs.ts'
+import { functions as feedbackFunctions } from './feedback.ts'
+import { functions as dataFunctions } from './data.ts'
+import { functions as navigationFunctions } from './navigation.ts'
+import { functions as overlaysFunctions } from './overlays.ts'
+import { functions as disclosureFunctions } from './disclosure.ts'
 import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
 import { mint } from '../rdf.ts'
@@ -569,6 +578,15 @@ export const functions: Record<string, FnRule> = {
   ...containerFunctions,
   ...viewFunctions,
   ...chartFunctions,
+  ...layoutFunctions,
+  ...typeFunctions,
+  ...actionsFunctions,
+  ...inputsFunctions,
+  ...feedbackFunctions,
+  ...dataFunctions,
+  ...navigationFunctions,
+  ...overlaysFunctions,
+  ...disclosureFunctions,
   stack,
   'heading:screen': headingScreen,
   'heading:text': headingText,

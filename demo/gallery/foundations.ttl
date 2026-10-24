@@ -1,0 +1,70 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+
+# Gallery page: Foundations - the tokens and variant axes every component shares.
+
+ui:gallery-foundations a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:gallery-foundations-intro ui:f-colors ui:f-tones ui:f-sizes ) .
+ui:gallery-foundations-intro a c:Heading ; c:label "Foundations" .
+
+ui:f-colors a c:Flippable ; c:front ui:f-colors-spec .
+ui:f-colors-spec a c:Specimen ; c:label "Color ramps" ;
+    c:help "Twelve steps per hue, each a light-dark() pair: 1-2 backgrounds, 3-5 fills, 6-8 borders, 9-10 solids, 11-12 text. Status hues define the steps components use. Switch Day / Night to see both sides." ;
+    c:children ( ui:sw-gray ui:sw-accent ui:sw-info ui:sw-success ui:sw-warning ui:sw-danger ) .
+ui:sw-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:sw-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:sw-info a c:Swatches ; c:label "info" ; c:of sty:Ramp ; c:prefix "info-" .
+ui:sw-success a c:Swatches ; c:label "success" ; c:of sty:Ramp ; c:prefix "success-" .
+ui:sw-warning a c:Swatches ; c:label "warning" ; c:of sty:Ramp ; c:prefix "warning-" .
+ui:sw-danger a c:Swatches ; c:label "danger" ; c:of sty:Ramp ; c:prefix "danger-" .
+ui:b-neutral-solid a c:Badge ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Solid .
+ui:b-accent-solid a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:b-info-solid a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Solid .
+ui:b-success-solid a c:Badge ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:b-warning-solid a c:Badge ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Solid .
+ui:b-danger-solid a c:Badge ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Solid .
+ui:f-tones-solid a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:b-neutral-solid ui:b-accent-solid ui:b-info-solid ui:b-success-solid ui:b-warning-solid ui:b-danger-solid ) .
+ui:b-neutral-soft a c:Badge ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Soft .
+ui:b-accent-soft a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Soft .
+ui:b-info-soft a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:b-success-soft a c:Badge ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Soft .
+ui:b-warning-soft a c:Badge ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Soft .
+ui:b-danger-soft a c:Badge ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Soft .
+ui:f-tones-soft a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:b-neutral-soft ui:b-accent-soft ui:b-info-soft ui:b-success-soft ui:b-warning-soft ui:b-danger-soft ) .
+ui:b-neutral-outline a c:Badge ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Outline .
+ui:b-accent-outline a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:b-info-outline a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Outline .
+ui:b-success-outline a c:Badge ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Outline .
+ui:b-warning-outline a c:Badge ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Outline .
+ui:b-danger-outline a c:Badge ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Outline .
+ui:f-tones-outline a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:b-neutral-outline ui:b-accent-outline ui:b-info-outline ui:b-success-outline ui:b-warning-outline ui:b-danger-outline ) .
+ui:b-neutral-ghost a c:Badge ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Ghost .
+ui:b-accent-ghost a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Ghost .
+ui:b-info-ghost a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Ghost .
+ui:b-success-ghost a c:Badge ; c:label "Success" ; sty:tone sty:Success ; sty:emphasis sty:Ghost .
+ui:b-warning-ghost a c:Badge ; c:label "Warning" ; sty:tone sty:Warning ; sty:emphasis sty:Ghost .
+ui:b-danger-ghost a c:Badge ; c:label "Danger" ; sty:tone sty:Danger ; sty:emphasis sty:Ghost .
+ui:f-tones-ghost a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:b-neutral-ghost ui:b-accent-ghost ui:b-info-ghost ui:b-success-ghost ui:b-warning-ghost ui:b-danger-ghost ) .
+
+ui:f-tones a c:Flippable ; c:front ui:f-tones-spec .
+ui:f-tones-spec a c:Specimen ; c:label "Tone × emphasis" ;
+    c:help "sty:tone says what a component means, sty:emphasis how loudly. Six tones and four emphases are 24 looks from ten style rules, shared by every toned component (badges here; buttons, alerts and tags elsewhere)." ;
+    c:children ( ui:f-tones-col ) .
+ui:f-tones-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:f-tones-solid ui:f-tones-soft ui:f-tones-outline ui:f-tones-ghost ) .
+ui:btn-size-small a c:Button ; c:label "Small" ; sty:size sty:Small ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:btn-size-medium a c:Button ; c:label "Medium" ; sty:size sty:Medium ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:btn-size-large a c:Button ; c:label "Large" ; sty:size sty:Large ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:btn-size-small-o a c:Button ; c:label "Small" ; sty:size sty:Small ; sty:emphasis sty:Outline .
+ui:btn-size-medium-o a c:Button ; c:label "Medium" ; sty:size sty:Medium ; sty:emphasis sty:Outline .
+ui:btn-size-large-o a c:Button ; c:label "Large" ; sty:size sty:Large ; sty:emphasis sty:Outline .
+
+ui:f-sizes a c:Flippable ; c:front ui:f-sizes-spec .
+ui:f-sizes-spec a c:Specimen ; c:label "Sizes" ;
+    c:help "sty:size sets the control height, padding, font size and radius (tokens control-sm, control-md, control-lg) for every control alike." ;
+    c:children ( ui:btn-size-small ui:btn-size-medium ui:btn-size-large ui:btn-size-small-o ui:btn-size-medium-o ui:btn-size-large-o ) .

@@ -54,6 +54,36 @@ sty:Primary a sty:Intent ; sem:slug "primary" .
 sty:Secondary a sty:Intent ; sem:slug "secondary" .
 sty:Danger a sty:Intent ; sem:slug "danger" .
 
+# --- Variant axes (DESIGN.md §2) ---------------------------------------------------
+# Orthogonal, shared by every component that has them. A tone says what a thing
+# means and sets the --tone-* custom properties; an emphasis says how loud it is
+# and maps those properties onto background, border and color; a size sets the
+# control height. Theme rules with sty:when style each value once, for all.
+
+sty:tone a owl:ObjectProperty ;
+    rdfs:range sty:Tone ;
+    rdfs:label "Tone"@en ;
+    rdfs:comment "What a component means: neutral, accent, or a status."@en ;
+    sty:hookAttribute "data-sem-tone" .
+sty:Tone a owl:Class .
+
+sty:emphasis a owl:ObjectProperty ;
+    rdfs:range sty:Emphasis ;
+    rdfs:label "Emphasis"@en ;
+    rdfs:comment "How loudly a component presents its tone."@en ;
+    sty:hookAttribute "data-sem-emphasis" .
+sty:Emphasis a owl:Class .
+
+sty:size a owl:ObjectProperty ;
+    rdfs:range sty:ControlSize ;
+    rdfs:label "Size"@en ;
+    sty:hookAttribute "data-sem-size" .
+sty:ControlSize a owl:Class .
+
+sty:when a owl:ObjectProperty ; rdfs:domain sty:StyleRule ;
+    rdfs:comment """Narrows a style rule to elements whose hooked axis has this value (e.g. sty:Solid).
+Without sty:appliesTo the rule applies to every component with that value."""@en .
+
 sty:density a owl:ObjectProperty ;
     rdfs:range sty:Density ;
     rdfs:comment "Spacing density of a subtree; implemented as token overrides scoped to the subtree."@en ;

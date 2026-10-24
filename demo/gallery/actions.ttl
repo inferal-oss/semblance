@@ -1,0 +1,18 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+
+# Gallery page: Actions.
+
+ui:gallery-actions a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:gallery-actions-intro ) .
+ui:gallery-actions-intro a c:Heading ; c:label "Actions" .

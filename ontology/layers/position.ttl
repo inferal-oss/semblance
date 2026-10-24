@@ -50,6 +50,17 @@ pos:Sidebar a pos:Layout ; sem:slug "sidebar" ;
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 380px), 1fr))" ] ,
                  [ sty:property "align-items" ; sty:raw "start" ] .
 
+pos:Aside a pos:Layout ; sem:slug "aside" ;
+    rdfs:comment "A narrow navigation column beside the main column; the navigation goes on top when narrow."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 200px), 220px) minmax(min(100%, 520px), 1fr))" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] .
+pos:Grid a pos:Layout ; sem:slug "grid" ;
+    rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] .
+
 pos:inset a owl:ObjectProperty ;
     rdfs:comment "Padding inside a container, as a space token."@en ;
     sty:hookAttribute "data-sem-inset" ;

@@ -1,0 +1,34 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+
+# Layout components (DESIGN.md §3): Grid, Surface, Divider and the Specimen frame the gallery is built from.
+
+# --- Specimen: a titled example (the unit of the component gallery) -----------------------------
+
+c:Specimen a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A titled example: heading (c:label), description (c:help) and a stage of components (c:children)."@en ;
+    sem:slug "specimen" .
+c:stage a owl:ObjectProperty ; rdfs:domain c:Specimen ; rdfs:range pos:Layout ;
+    rdfs:comment "How the stage lays its children out (a pos:Layout)."@en .
+c:SpecimenRendering a sem:Rendering ; sem:targets c:Specimen ; sem:stratum 0 .
+c:SpecimenRendering-fn a sem:Rule ; sem:implements c:SpecimenRendering ; sem:function "specimen" .
+
+# --- Swatches: the tokens of a scale --------------------------------------------------------------
+
+c:Swatches a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "The tokens of one scale (c:of a sty:Scale) whose slug starts with c:prefix, in step order."@en ;
+    sem:slug "swatches" .
+c:prefix a owl:DatatypeProperty ; rdfs:domain c:Swatches .
+c:SwatchesRendering a sem:Rendering ; sem:targets c:Swatches ; sem:stratum 0 .
+c:SwatchesRendering-fn a sem:Rule ; sem:implements c:SwatchesRendering ; sem:function "swatches" .

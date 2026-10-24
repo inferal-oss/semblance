@@ -26,7 +26,8 @@ ui:app sty:colorScheme sty:System ;
     ui:store ui:Hybrid ;
     ui:rules ui:PreferSparql ;
     ui:page ui:Playground ;
-    ui:inspectorMode ui:Live .
+    ui:inspectorMode ui:Live ;
+    ui:galleryGroup ui:GroupFoundations .
 
 ui:store rdfs:label "Store" ; rdfs:range ui:StoreKind .
 ui:Hybrid a ui:StoreKind ; rdfs:label "Hybrid · Oxigraph + N3 mirror" ; sem:order 1 ; ui:key "hybrid" .
@@ -38,6 +39,7 @@ ui:PreferFunction a ui:RuleKind ; rdfs:label "Prefer functions" ; sem:order 2 ; 
 ui:page rdfs:label "Page" ; rdfs:range ui:Page .
 ui:Playground a ui:Page ; rdfs:label "Playground" ; sem:order 1 ; ui:key "playground" .
 ui:Performance a ui:Page ; rdfs:label "Performance" ; sem:order 2 ; ui:key "performance" .
+ui:Components a ui:Page ; rdfs:label "Components" ; sem:order 3 ; ui:key "components" .
 ui:inspectorMode rdfs:label "Inspector" ; rdfs:range ui:InspectorMode .
 ui:Live a ui:InspectorMode ; rdfs:label "Live" ; sem:symbol "●" ; sem:order 1 .
 ui:Paused a ui:InspectorMode ; rdfs:label "Paused" ; sem:symbol "❙❙" ; sem:order 2 .
@@ -77,8 +79,9 @@ ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
 
 ui:pages a c:Switch ; c:controls ui:app ; c:property ui:page ;
-    c:cases ( ui:playgroundCase ui:performanceCase ) .
+    c:cases ( ui:playgroundCase ui:performanceCase ui:componentsCase ) .
 ui:playgroundCase c:when ui:Playground ; c:content ui:playground .
+ui:componentsCase c:when ui:Components ; c:content ui:gallery .
 ui:performanceCase c:when ui:Performance ; c:content ui:performance .
 
 # --- playground ---------------------------------------------------------------------------------
@@ -292,3 +295,39 @@ ui:findings a c:FindingList ; c:judgementClass perf:Judgement ; c:dataset perf:r
     c:emptyText "Findings appear once there are observations." .
 ui:observations a c:QueryView ; c:of perf:run ; c:queries ( perf:ObservationsQuery ) ;
     c:emptyText "No observations yet. Results of a run are kept for this tab." .
+
+# --- components (the gallery) -----------------------------------------------------------------
+# A navigation list of the component groups and one page per group; each page
+# is its own graph in demo/gallery/<group>.ttl. Every specimen is a c:Specimen
+# inside a c:Flippable, so its back shows the rules that made it.
+
+ui:galleryGroup rdfs:label "Components" ; rdfs:range ui:GalleryGroup .
+ui:GroupFoundations a ui:GalleryGroup ; rdfs:label "Foundations" ; sem:order 1 ; ui:key "foundations" .
+ui:GroupLayout a ui:GalleryGroup ; rdfs:label "Layout" ; sem:order 2 ; ui:key "layout" .
+ui:GroupType a ui:GalleryGroup ; rdfs:label "Type" ; sem:order 3 ; ui:key "type" .
+ui:GroupActions a ui:GalleryGroup ; rdfs:label "Actions" ; sem:order 4 ; ui:key "actions" .
+ui:GroupInputs a ui:GalleryGroup ; rdfs:label "Inputs" ; sem:order 5 ; ui:key "inputs" .
+ui:GroupFeedback a ui:GalleryGroup ; rdfs:label "Feedback" ; sem:order 6 ; ui:key "feedback" .
+ui:GroupData a ui:GalleryGroup ; rdfs:label "Data" ; sem:order 7 ; ui:key "data" .
+ui:GroupNavigation a ui:GalleryGroup ; rdfs:label "Navigation" ; sem:order 8 ; ui:key "navigation" .
+ui:GroupOverlays a ui:GalleryGroup ; rdfs:label "Overlays" ; sem:order 9 ; ui:key "overlays" .
+ui:GroupDisclosure a ui:GalleryGroup ; rdfs:label "Disclosure" ; sem:order 10 ; ui:key "disclosure" .
+ui:GroupLayers a ui:GalleryGroup ; rdfs:label "Layers" ; sem:order 11 ; ui:key "layers" .
+
+ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
+    c:children ( ui:galleryNav ui:galleryPages ) .
+ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" .
+ui:galleryPages a c:Switch ; c:controls ui:app ; c:property ui:galleryGroup ;
+    c:cases ( ui:gc-foundations ui:gc-layout ui:gc-type ui:gc-actions ui:gc-inputs ui:gc-feedback
+              ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ) .
+ui:gc-foundations c:when ui:GroupFoundations ; c:content ui:gallery-foundations .
+ui:gc-layout c:when ui:GroupLayout ; c:content ui:gallery-layout .
+ui:gc-type c:when ui:GroupType ; c:content ui:gallery-type .
+ui:gc-actions c:when ui:GroupActions ; c:content ui:gallery-actions .
+ui:gc-inputs c:when ui:GroupInputs ; c:content ui:gallery-inputs .
+ui:gc-feedback c:when ui:GroupFeedback ; c:content ui:gallery-feedback .
+ui:gc-data c:when ui:GroupData ; c:content ui:gallery-data .
+ui:gc-navigation c:when ui:GroupNavigation ; c:content ui:gallery-navigation .
+ui:gc-overlays c:when ui:GroupOverlays ; c:content ui:gallery-overlays .
+ui:gc-disclosure c:when ui:GroupDisclosure ; c:content ui:gallery-disclosure .
+ui:gc-layers c:when ui:GroupLayers ; c:content ui:gallery-layers .

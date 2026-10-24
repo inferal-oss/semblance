@@ -195,6 +195,8 @@ export const C = {
   value: c + 'value',
   placeholder: c + 'placeholder',
   help: c + 'help',
+  icon: c + 'icon',
+  prefix: c + 'prefix',
   error: c + 'error',
   disabled: c + 'disabled',
   item: c + 'item',

@@ -27,6 +27,8 @@ export interface RuleContext {
    * read there changes (for snapshots, such as a view's source on its back side).
    */
   untraced<T>(read: () => T): T
+  /** The viewer's languages, most preferred first (the localization layer sets them). */
+  languages: string[]
   /** Per-engine memo, e.g. for ontology lookups that never change during a run. */
   memo<T>(key: string, compute: () => T): T
   out(focus: NamedNode): Out
@@ -43,7 +45,7 @@ export interface FnRule {
 }
 
 /** `graphs` is the rule's view: input graphs, then the engine's derived graph (last). */
-export function createContext(store: GraphStore, graphs: Quad_Graph[], modality: string): RuleContext {
+export function createContext(store: GraphStore, graphs: Quad_Graph[], modality: string, languages: string[] = []): RuleContext {
   const graph = graphs[graphs.length - 1] as NamedNode
   const f = store.factory
   const names = new Map<string, NamedNode>()
@@ -77,6 +79,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
   const ctx: RuleContext = {
     f,
     modality,
+    languages,
     nn,
     match,
     object: (s, p) => match(s, p, null)[0]?.object,

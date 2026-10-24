@@ -1,0 +1,38 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Default theme for the navigation components.
+
+# --- nav list ---
+[] a sty:StyleRule ; sty:appliesTo c:NavList ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-2 ] ,
+                 [ sty:property "position" ; sty:raw "sticky" ] ,
+                 [ sty:property "top" ; sty:raw "88px" ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-1 ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavList ; sty:part "button" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-start" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] ,
+                 [ sty:property "text-align" ; sty:raw "left" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavList ; sty:part "button[aria-pressed=true]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .

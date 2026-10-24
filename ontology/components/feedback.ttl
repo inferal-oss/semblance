@@ -1,0 +1,34 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Feedback components (DESIGN.md §3): Alert, Badge, Tag, Spinner, Skeleton, EmptyState and the toast region.
+
+c:icon a owl:DatatypeProperty ; rdfs:comment "A glyph shown with the component (a character or short string; icon fonts are a theme concern)."@en .
+
+# --- Badge -----------------------------------------------------------------------------------------
+
+c:Badge a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A short status label (c:label, optional c:icon). Toned: sty:tone and sty:emphasis (default soft)."@en ;
+    sem:slug "badge" .
+c:BadgeRendering a sem:Rendering ; sem:targets c:Badge ; sem:stratum 0 .
+c:BadgeRendering-fn a sem:Rule ; sem:implements c:BadgeRendering ; sem:function "badge" .
+
+# --- Alert -----------------------------------------------------------------------------------------
+
+c:Alert a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A message that stands out: title (c:label), body (c:help), icon (c:icon, else the
+tone's glyph) and actions (c:children). Danger alerts are announced (role=alert), others are
+polite (role=status). Toned: sty:tone and sty:emphasis (default soft)."""@en ;
+    sem:slug "alert" .
+c:AlertRendering a sem:Rendering ; sem:targets c:Alert ; sem:stratum 0 .
+c:AlertRendering-fn a sem:Rule ; sem:implements c:AlertRendering ; sem:function "alert" .

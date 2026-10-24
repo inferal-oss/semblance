@@ -1,0 +1,36 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+
+# Gallery page: Feedback.
+
+ui:gallery-feedback a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:gallery-feedback-intro ui:fb-badges ui:fb-alerts ) .
+ui:gallery-feedback-intro a c:Heading ; c:label "Feedback" .
+
+ui:fb-badge-neutral a c:Badge ; c:label "Neutral" ; c:icon "•" ; sty:tone sty:Neutral .
+ui:fb-badge-accent a c:Badge ; c:label "Accent" ; c:icon "✦" ; sty:tone sty:Accent .
+ui:fb-badge-info a c:Badge ; c:label "Info" ; c:icon "ℹ" ; sty:tone sty:Info .
+ui:fb-badge-success a c:Badge ; c:label "Success" ; c:icon "✓" ; sty:tone sty:Success .
+ui:fb-badge-warning a c:Badge ; c:label "Warning" ; c:icon "!" ; sty:tone sty:Warning .
+ui:fb-badge-danger a c:Badge ; c:label "Danger" ; c:icon "✕" ; sty:tone sty:Danger .
+ui:fb-badges a c:Flippable ; c:front ui:fb-badges-spec .
+ui:fb-badges-spec a c:Specimen ; c:label "Badge" ;
+    c:help "A short status label with an optional glyph. Soft by default; any sty:emphasis applies." ;
+    c:children ( ui:fb-badge-neutral ui:fb-badge-accent ui:fb-badge-info ui:fb-badge-success ui:fb-badge-warning ui:fb-badge-danger ) .
+
+ui:fb-alert-info a c:Alert ; c:label "Heads up" ; c:help "Rules are data: this alert is a c:Alert instance rendered by a function rule." ; sty:tone sty:Info .
+ui:fb-alert-success a c:Alert ; c:label "Saved" ; c:help "Your change was recorded as a member of the change-log LDES." ; sty:tone sty:Success .
+ui:fb-alert-warning a c:Alert ; c:label "Large graph" ; c:help "Rendering 10,000 items takes about a second on first paint." ; sty:tone sty:Warning .
+ui:fb-alert-danger a c:Alert ; c:label "Rule failed" ; c:help "The SPARQL rule did not parse; the previous output is kept." ; sty:tone sty:Danger .
+ui:fb-alerts a c:Flippable ; c:front ui:fb-alerts-spec .
+ui:fb-alerts-spec a c:Specimen ; c:label "Alert" ;
+    c:help "Title, body, a tone glyph and optional actions. Danger alerts are announced (role=alert), others are polite (role=status)." ;
+    c:children ( ui:fb-alerts-col ) .
+ui:fb-alerts-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:fb-alert-info ui:fb-alert-success ui:fb-alert-warning ui:fb-alert-danger ) .
+

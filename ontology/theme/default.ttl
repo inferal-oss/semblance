@@ -33,7 +33,7 @@ tok:font-size-title a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-title
 tok:font-size-metric a sty:Token ; sty:scale sty:Font ; sem:slug "font-size-metric" ; sty:value "26px" .
 tok:line-height a sty:Token ; sty:scale sty:Font ; sem:slug "line-height" ; sty:value "1.5" .
 
-tok:motion a sty:Token ; sem:slug "motion" ; sty:value "160ms cubic-bezier(0.2, 0, 0, 1)" .
+tok:motion a sty:Token ; sem:slug "motion" ; sty:value "var(--sem-duration) var(--sem-ease)" .
 tok:shadow a sty:Token ; sem:slug "shadow" ;
     sty:value "0 1px 2px light-dark(rgb(17 17 34 / 0.06), rgb(0 0 0 / 0.5))" .
 tok:shadow-raised a sty:Token ; sem:slug "shadow-raised" ;
@@ -110,9 +110,14 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 # --- button -----------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:Button ;
-    sty:declares [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-4 ) ] ,
-                 [ sty:property "min-height" ; sty:raw "38px" ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
+    sty:declares [ sty:property "padding" ; sty:raw "0 var(--control-px, var(--sem-space-4))" ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, 38px)" ] ,
+                 [ sty:property "font-size" ; sty:raw "var(--control-font, inherit)" ] ,
+                 [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,

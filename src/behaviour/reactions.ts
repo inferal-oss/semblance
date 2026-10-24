@@ -2,6 +2,15 @@
 // (used where SPARQL is unavailable or functions are preferred).
 import { BEH, C, H, XSD_BOOLEAN } from '../ns.ts'
 import type { ReactionFn } from './events.ts'
+import { reactions as layoutReactions } from '../components/layout.ts'
+import { reactions as typeReactions } from '../components/type.ts'
+import { reactions as actionsReactions } from '../components/actions.ts'
+import { reactions as inputsReactions } from '../components/inputs.ts'
+import { reactions as feedbackReactions } from '../components/feedback.ts'
+import { reactions as dataReactions } from '../components/data.ts'
+import { reactions as navigationReactions } from '../components/navigation.ts'
+import { reactions as overlaysReactions } from '../components/overlays.ts'
+import { reactions as disclosureReactions } from '../components/disclosure.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
@@ -94,4 +103,13 @@ export const reactions: Record<string, ReactionFn> = {
   'segmented:select': segmentedSelect,
   'textfield:input': textFieldInput,
   'listitem:change': listItemChange,
+  ...layoutReactions,
+  ...typeReactions,
+  ...actionsReactions,
+  ...inputsReactions,
+  ...feedbackReactions,
+  ...dataReactions,
+  ...navigationReactions,
+  ...overlaysReactions,
+  ...disclosureReactions,
 }

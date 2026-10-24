@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
@@ -9,11 +9,13 @@ import { Runtime } from '../src/runtime.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
+const galleryDir = new URL('../demo/gallery/', import.meta.url)
+const gallery = readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => readFileSync(new URL(f, galleryDir), 'utf8'))
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
 export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
-  const store = loadStore(kind, todoApp(todos), appGraph)
+  const store = loadStore(kind, todoApp(todos), appGraph, ...gallery)
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer]
   const screen = runtime.project({ modality: MOD.Screen, layers, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
@@ -26,7 +28,7 @@ export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxig
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
-  const showPage = (page: 'Playground' | 'Performance') => {
+  const showPage = (page: 'Playground' | 'Performance' | 'Components') => {
     const f = store.factory
     runtime.apply({ remove: store.match(app(), f.namedNode(UI + 'page'), null), add: [f.quad(app(), f.namedNode(UI + 'page'), f.namedNode(UI + page))] })
     shell.flush()

@@ -1,0 +1,79 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Default theme for the layout components.
+
+# --- specimen ---
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-4 ] ,
+                 [ sty:property "padding" ; sty:token tok:space-5 ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-1 ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> header" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] ,
+                 [ sty:property "padding-right" ; sty:raw "88px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> header h3" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-lg ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "-0.015em" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> header p" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "line-height" ; sty:token tok:leading-normal ] ,
+                 [ sty:property "max-width" ; sty:raw "68ch" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "padding" ; sty:token tok:space-5 ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "background" ; sty:raw "radial-gradient(circle at 1px 1px, var(--sem-border) 1px, transparent 0) 0 0 / 16px 16px, var(--sem-surface-sunken)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-stage > [data-sem-direction=column]" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 100%" ] .
+
+# --- swatches ---
+[] a sty:StyleRule ; sty:appliesTo c:Swatches ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] .
+[] a sty:StyleRule ; sty:appliesTo c:Swatches ; sty:part "strong" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.08em" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:Swatches ; sty:part ".sem-swatch-row" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(36px, 1fr))" ] ,
+                 [ sty:property "gap" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Swatches ; sty:part ".sem-swatch" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] ,
+                 [ sty:property "justify-items" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Swatches ; sty:part ".sem-swatch > span" ;
+    sty:declares [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "height" ; sty:raw "40px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px rgb(127 127 127 / 0.18)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Swatches ; sty:part ".sem-swatch code" ;
+    sty:declares [ sty:property "font" ; sty:raw "500 10px/1 var(--sem-font-mono)" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .

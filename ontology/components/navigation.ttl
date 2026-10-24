@@ -1,0 +1,21 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Navigation components (DESIGN.md §3): NavList, Breadcrumbs, Pagination and Stepper.
+
+# --- NavList: vertical navigation over one property's values -----------------------------------
+# A c:Segmented laid out as a list: the same graph contract (c:controls,
+# c:property, options from the property's range), the same reaction.
+
+c:NavList a owl:Class ;
+    rdfs:subClassOf c:Segmented ;
+    rdfs:comment "Vertical navigation: picks one value of c:property on c:controls, from the property's range."@en ;
+    sem:slug "nav-list" .
