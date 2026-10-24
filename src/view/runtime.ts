@@ -107,6 +107,8 @@ export class ViewRuntime {
   readonly graph: NamedNode
   readonly terms = new Terms()
   readonly totals: ViewTotals = { ticks: 0, rowsIn: 0, state: 0, ms: 0 }
+  /** Every tick the runtime has run, numbered (delta logs name ticks by it). */
+  tickNo = 0
   /** Compare every view with a from-scratch evaluation after every tick, and refuse fallbacks (tests). */
   strict = false
   clock: ViewClock
@@ -174,6 +176,7 @@ export class ViewRuntime {
   /** One tick: the consolidated change of the input graphs. Returns the view graph's change (applied). */
   tick(delta: Delta): Delta {
     if (!this.started) return { add: [], remove: [] }
+    this.tickNo++
     const t = performance.now()
     const now = this.clock.now()
     const changes = { add: delta.add.filter((q) => this.dataset.has(q.graph.value)), remove: delta.remove.filter((q) => this.dataset.has(q.graph.value)) }
@@ -249,7 +252,7 @@ export class ViewRuntime {
    * runtime writes them; views never read the view graph, so this cannot feed back).
    * A from-scratch evaluation is timed at most every `sampleMs` for comparison.
    */
-  figures(sampleMs = 2000): Delta {
+  figures(sampleMs = 1000): Delta {
     const f = this.store.factory
     const nn = (p: string) => f.namedNode(p)
     const now = this.clock.now()
@@ -278,6 +281,10 @@ export class ViewRuntime {
         set(s, IV + 'scratchMs', dec(performance.now() - t))
         set(s, IV + 'scratchRows', int(n))
         set(s, IV + 'inputRows', int(v.inputRows()))
+        // The maintained result against that run: the check a page can show (✓ / ✕).
+        set(s, IV + 'resultRows', int(v.plan.form === 'select' ? v.rows().length : v.quads().length))
+        set(s, IV + 'matches', f.literal(String(v.compare(now) === undefined), nn(NS.xsd + 'boolean')))
+        set(s, IV + 'checkedTick', int(this.tickNo))
       }
     }
     return { add, remove }
@@ -326,6 +333,7 @@ export class ViewRuntime {
     }
     const view = new MaintainedView(this, iri, plan, windowNode?.termType === 'NamedNode' ? windowNode.value : undefined)
     view.whileShown = one(s, IV + 'whileShown')?.value
+    view.deltaLog = one(s, IV + 'deltaLog')?.value
     this.views.set(iri, view)
     out.plus(view.planQuads())
   }
@@ -369,6 +377,16 @@ export class ViewRuntime {
       construct: (q: string) => this.store.construct(prefixes + '\n' + q, this.graphs as never).map((x) => f.quad(x.subject, x.predicate, x.object, this.graph)),
       timestampPath: (stream: string) => this.store.match(f.namedNode(stream), f.namedNode(NS.ldes + 'timestampPath'), null)[0]?.object.value,
     }
+  }
+
+  /** A stream's retention (tree:view/ldes:retentionPolicy/ldes:amount), if it has one. */
+  retained(stream: string): number | undefined {
+    const f = this.store.factory
+    const one = (s: Term, p: string) => this.store.match(s as NamedNode, f.namedNode(p), null)[0]?.object
+    const view = one(f.namedNode(stream), NS.tree + 'view')
+    const policy = view && one(view, NS.ldes + 'retentionPolicy')
+    const amount = policy && one(policy, NS.ldes + 'amount')
+    return amount ? Number(amount.value) : undefined
   }
 
   /** Members of a stream (or of every stream) now, in the views' dataset. */
@@ -460,6 +478,9 @@ const rowKey = (ids: readonly number[]) => ids.join(',')
 class MaintainedView implements ViewHandle {
   readonly figures: ViewFigures = { ticks: 0, rowsIn: 0, rowsOut: 0, ms: 0, lastRows: 0, lastMs: 0 }
   sampledAt?: number
+  /** iv:deltaLog: the stream this view's ticks are recorded in, and the members it holds there. */
+  deltaLog?: string
+  private deltas: Quad[][] = []
   /** iv:whileShown: maintained only while this component (or an instance of this class) is shown. */
   whileShown?: string
   suspended = false
@@ -602,6 +623,8 @@ class MaintainedView implements ViewHandle {
     }
     const evaluated = current.size ? p.local([...current.values()]) : new Map<string, Map<string, Term>[]>()
     const cutoff = p.window ? now - p.window.rangeMs : -Infinity
+    /** What happened to members this tick, for the delta log. */
+    const happened = { appended: 0, retired: 0, changed: 0, expired: 0 }
     for (const key of touched) {
       const old = this.members.get(key)
       const cur = current.get(key)
@@ -614,6 +637,7 @@ class MaintainedView implements ViewHandle {
         if (old && old.inWindow === next.inWindow && old.t === next.t && sameRows(old.rows, ids)) continue
         for (const r of ids) for (const id of r) terms.retain(id)
       }
+      happened[old && next ? 'changed' : next ? 'appended' : 'retired']++
       if (old?.inWindow) enter(old, -1)
       if (old) release(old), (this.memberRows -= old.rows.length)
       if (next) {
@@ -643,6 +667,7 @@ class MaintainedView implements ViewHandle {
         if (st?.inWindow && st.t === t) {
           enter(st, -1)
           st.inWindow = false
+          happened.expired++
         }
       }
     }
@@ -655,6 +680,7 @@ class MaintainedView implements ViewHandle {
     const out = new ZSet<Quad>()
     const rowDelta = new ZSet<Map<string, Term>>()
     let outRows = 0
+    const changes: { key: string; before?: Term; after?: Term }[] = []
     for (const gk of dirty) {
       const g = this.groups.get(gk)!
       const before = this.emitted.get(gk)
@@ -674,7 +700,9 @@ class MaintainedView implements ViewHandle {
         this.groups.delete(gk)
       }
       const rk = row ? mapKey(row) : undefined
-      if (before && rk === mapKey(before.row)) continue
+      if ((before && rk === mapKey(before.row)) || (!before && !row)) continue
+      const first = p.aggregates[0]?.as
+      changes.push({ key: groupLabel(p.groupBy.map((v) => (row ?? before!.row).get(v))) || first || '', before: first ? before?.row.get(first) : undefined, after: first ? row?.get(first) : undefined })
       if (before) {
         rowDelta.add(mapKey(before.row), before.row, -1)
         for (const q of before.quads) out.add(quadKey(q), q, -1)
@@ -698,9 +726,51 @@ class MaintainedView implements ViewHandle {
       this.figures.lastRows = rows + dirty.size + outRows
       this.figures.lastMs = ms
       this.rt.totals.rowsIn += rows + dirty.size + outRows
+      if (this.deltaLog && (changes.length || rows)) this.logDelta(out, now, happened, changes, this.figures.lastRows)
     }
     this.notify(rowDelta, out)
     return out
+  }
+
+  /**
+   * iv:deltaLog: one member per tick that changed the view - what came in (members appended,
+   * retired, changed, aged out of the window), which groups changed and how, and the work it
+   * took against what a re-run reads - so a page can show each step. Keeps the newest few
+   * (the log's ldes:amount, default 12).
+   */
+  private logDelta(out: ZSet<Quad>, now: number, happened: Record<'appended' | 'retired' | 'changed' | 'expired', number>, changes: { key: string; before?: Term; after?: Term }[], work: number) {
+    const f = this.rt.store.factory
+    const nn = (x: string) => f.namedNode(x)
+    const g = this.rt.graph
+    const log = nn(this.deltaLog!)
+    const tick = nn(mint(this.deltaLog!, `${encodeURIComponent(this.iri.replace(/^.*[#/]/, ''))}-${this.rt.tickNo}`))
+    const int = (n: number) => f.literal(String(n), nn(NS.xsd + 'integer'))
+    const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`
+    const came = [
+      happened.appended && `+${plural(happened.appended, 'member')}`,
+      happened.retired && `−${plural(happened.retired, 'member')} retired`,
+      happened.expired && `−${plural(happened.expired, 'member')} aged out`,
+      happened.changed && `${plural(happened.changed, 'member')} changed`,
+    ].filter(Boolean)
+    const shown = changes.slice(0, 3).map((c) => `${c.key}: ${c.before?.value ?? '–'} → ${c.after?.value ?? '–'}`)
+    if (changes.length > 3) shown.push(`${changes.length - 3} more`)
+    const quads = [
+      f.quad(log, nn(NS.tree + 'member'), tick, g),
+      f.quad(tick, nn(RDF_TYPE), nn(IV + 'Delta'), g),
+      f.quad(tick, nn(IV + 'view'), nn(this.iri), g),
+      f.quad(tick, nn(IV + 'tick'), int(this.rt.tickNo), g),
+      f.quad(tick, nn(IV + 'at'), f.literal(new Date(now).toISOString(), nn(NS.xsd + 'dateTime')), g),
+      f.quad(tick, nn(IV + 'came'), f.literal(came.join(', ') || 'nothing came in'), g),
+      f.quad(tick, nn(IV + 'changed'), f.literal(shown.join('; ') || 'no group changed'), g),
+      f.quad(tick, nn(IV + 'entered'), int(happened.appended), g),
+      f.quad(tick, nn(IV + 'left'), int(happened.retired + happened.expired), g),
+      f.quad(tick, nn(IV + 'work'), int(work), g),
+      f.quad(tick, nn(IV + 'inputRows'), int(this.memberRows), g),
+    ]
+    for (const q of quads) out.add(quadKey(q), q, 1)
+    this.deltas.push(quads)
+    const keep = this.rt.retained(this.deltaLog!) ?? 12
+    while (this.deltas.length > keep) for (const q of this.deltas.shift()!) out.add(quadKey(q), q, -1)
   }
 
   /** Subjects the view types were generated by its activity; others it decorates were influenced. */
@@ -762,6 +832,8 @@ class MaintainedView implements ViewHandle {
   /** Retract everything (the view is redefined or removed). */
   drop(out: ZSet<Quad>) {
     out.plus(this.planQuads(), -1)
+    for (const quads of this.deltas) for (const q of quads) out.add(quadKey(q), q, -1)
+    this.deltas = []
     this.reset(out)
   }
 
@@ -855,6 +927,11 @@ class MaintainedView implements ViewHandle {
     if (!diff.size) return undefined
     return [...diff.entries()].slice(0, 6).map(([k, , w]) => `${w > 0 ? 'extra' : 'missing'} ${k}`).join('; ')
   }
+}
+
+/** A group's key, readably: local names of IRIs, values of literals. */
+function groupLabel(terms: (Term | undefined)[]): string {
+  return terms.map((t) => (!t ? '–' : t.termType === 'NamedNode' ? t.value.replace(/^.*[#/]/, '') : t.value)).join(' · ')
 }
 
 function sameRows(a: number[][], b: number[][]): boolean {

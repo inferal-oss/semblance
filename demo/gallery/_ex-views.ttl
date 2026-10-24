@@ -5,6 +5,8 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -12,25 +14,24 @@
 @prefix ui: <https://semblance.dev/demo#> .
 
 # =================================================================================================
-# Maintained views: a dashboard whose figures are not re-computed, but kept.
+# Maintained views: a dashboard whose figures are not re-computed, but kept - and shows it.
 #
 # Every interaction on this site is a member of the change log (beh:ChangeLog, an LDES that
 # keeps the newest 200). The figures below are maintained views (iv:View, docs/IVM.md): SPARQL
 # that also runs from scratch, but which the runtime keeps up to date from the changes - a
-# member counted once when it arrives and once more, negatively, when it retires or leaves a
-# window. So an event costs the same work however many members there are, and the table at
-# the bottom shows it: each view's state, its work in the last tick, and what re-running the
-# same query from scratch costs.
+# member counted once when it arrives (+1) and once more, negatively (-1), when it retires or
+# leaves a window. The page shows the machinery: each step as it happens, the work it took
+# against what a re-run would read, and a check against a from-scratch run of the same query.
 # =================================================================================================
 
 ui:ex-views-prefixes sh:declare [ sh:prefix "vx" ; sh:namespace "https://semblance.dev/demo/views#"^^xsd:anyURI ] .
 
 # --- the maintained views ---------------------------------------------------------------------------
-# Each is a CONSTRUCT over an aggregate of the stream's members. iv:window narrows two of them
-# to the last 30 seconds: members leave as time passes, on one timer, even while you do
-# nothing. iv:measured asks the runtime to write their figures (iv:stateRows, iv:lastRows,
-# iv:lastMs, iv:scratchMs...) in idle time; iv:whileShown maintains them only while this
-# dashboard is on screen, and rebuilds them when it is shown again.
+# Each is a CONSTRUCT over an aggregate of the stream's members. iv:window narrows some to the
+# last 30 seconds: members leave as time passes, on one timer, even while you do nothing.
+# iv:measured asks the runtime to write their figures and a from-scratch check in idle time;
+# iv:deltaLog records each step in vx:steps; iv:whileShown maintains them only while this
+# dashboard is on screen.
 
 vx:window a iv:SlidingWindow ; iv:range "PT30S"^^xsd:dayTimeDuration .
 
@@ -40,8 +41,8 @@ vx:Recent a iv:View ; rdfs:label "events, last 30 s" ;
 CONSTRUCT { vx:recent vx:events ?n }
 WHERE { { SELECT (COUNT(?m) AS ?n) WHERE { beh:ChangeLog tree:member ?m } } }""" .
 
-vx:RecentByType a iv:View ; rdfs:label "events per type, last 30 s" ;
-    iv:window vx:window ; iv:measured true ; iv:whileShown ui:ex-views ;
+vx:RecentByType a iv:View ; rdfs:label "per type, last 30 s" ;
+    iv:window vx:window ; iv:measured true ; iv:whileShown ui:ex-views ; iv:deltaLog vx:steps ;
     sem:construct """
 CONSTRUCT { vx:recent vx:byType ?row . ?row vx:type ?type ; vx:count ?n }
 WHERE {
@@ -51,8 +52,24 @@ WHERE {
   BIND(IRI(CONCAT(STR(vx:recent), "/~", ENCODE_FOR_URI(?type))) AS ?row)
 }""" .
 
+# The window, five seconds at a time: a bucket per beh:at, so the bars move up as time passes.
+vx:Buckets a iv:View ; rdfs:label "per 5 s, last 30 s" ;
+    iv:window vx:window ; iv:measured true ; iv:whileShown ui:ex-views ;
+    sem:construct """
+CONSTRUCT { vx:recent vx:bucket ?row . ?row vx:second ?second ; vx:count ?n }
+WHERE {
+  { SELECT ?second (COUNT(?m) AS ?n)
+    WHERE {
+      beh:ChangeLog tree:member ?m . ?m beh:at ?at .
+      BIND(xsd:integer(FLOOR(xsd:integer(SUBSTR(STR(?at), 18, 2)) / 5) * 5) AS ?s5)
+      BIND(CONCAT(SUBSTR(STR(?at), 12, 6), IF(?s5 < 10, "0", ""), STR(?s5)) AS ?second)
+    }
+    GROUP BY ?second }
+  BIND(IRI(CONCAT(STR(vx:recent), "/~s", ENCODE_FOR_URI(?second))) AS ?row)
+}""" .
+
 vx:Whole a iv:View ; rdfs:label "the whole log" ;
-    iv:measured true ; iv:whileShown ui:ex-views ;
+    iv:measured true ; iv:whileShown ui:ex-views ; iv:deltaLog vx:steps ;
     sem:construct """
 CONSTRUCT { vx:log vx:events ?n ; vx:changed ?changed ; vx:largest ?largest ; vx:components ?components }
 WHERE {
@@ -60,13 +77,18 @@ WHERE {
     WHERE { beh:ChangeLog tree:member ?m . ?m beh:added ?a ; beh:removed ?r ; beh:target ?t } }
 }""" .
 
-# --- streaming events -------------------------------------------------------------------------------
+# Where the steps are recorded: a stream of its own, keeping the newest twelve.
+vx:steps a ldes:EventStream ; ldes:timestampPath iv:at ; ldes:sequencePath iv:tick ;
+    tree:view [ ldes:retentionPolicy [ a beh:LatestMembersPolicy ; ldes:amount 12 ] ] .
+
+# --- driving it -------------------------------------------------------------------------------------
 # "Stream 100 events" sets vx:stream's counter and makes it due now (beh:dueAt). The host's
 # scheduler turns a due time into a beh:Due event addressed to the node; vx:Pulse takes one
-# off the counter and makes the next one due 50 ms later. Each pulse is an ordinary member
-# of the change log.
+# off the counter and makes the next one due 50 ms later. "Stop" empties the counter. Each
+# pulse, and each click here, is an ordinary member of the change log. "Keep 50" lowers the
+# log's retention: the next event retires every member past the newest 50 - a step of many -1s.
 
-vx:stream vx:left 0 .
+vx:stream vx:left 0 ; vx:clicks 0 .
 
 vx:StartStream a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-views-stream ;
     beh:deletes """
@@ -89,6 +111,23 @@ WHERE {
   BIND(IF(?next > 0, xsd:dateTime(?at) + xsd:dayTimeDuration("PT0.05S"), ?none) AS ?then)
 }""" .
 
+vx:Stop a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-views-stop ;
+    beh:deletes """
+CONSTRUCT { vx:stream vx:left ?n ; beh:dueAt ?due }
+WHERE { vx:stream vx:left ?n FILTER(?n > 0) OPTIONAL { vx:stream beh:dueAt ?due } }""" ;
+    beh:inserts """CONSTRUCT { vx:stream vx:left 0 } WHERE { vx:stream vx:left ?n FILTER(?n > 0) }""" .
+
+vx:OneEvent a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-views-one ;
+    beh:deletes """CONSTRUCT { vx:stream vx:clicks ?n } WHERE { vx:stream vx:clicks ?n }""" ;
+    beh:inserts """CONSTRUCT { vx:stream vx:clicks ?next } WHERE { vx:stream vx:clicks ?n BIND(?n + 1 AS ?next) }""" .
+
+vx:Keep50 a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-views-keep50 ;
+    beh:deletes """CONSTRUCT { beh:ChangeLogRetention ldes:amount ?n } WHERE { beh:ChangeLogRetention ldes:amount ?n FILTER(?n != 50) }""" ;
+    beh:inserts """CONSTRUCT { beh:ChangeLogRetention ldes:amount 50 } WHERE { FILTER NOT EXISTS { beh:ChangeLogRetention ldes:amount 50 } }""" .
+vx:Keep200 a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-views-keep200 ;
+    beh:deletes """CONSTRUCT { beh:ChangeLogRetention ldes:amount ?n } WHERE { beh:ChangeLogRetention ldes:amount ?n FILTER(?n != 200) }""" ;
+    beh:inserts """CONSTRUCT { beh:ChangeLogRetention ldes:amount 200 } WHERE { FILTER NOT EXISTS { beh:ChangeLogRetention ldes:amount 200 } }""" .
+
 # --- reading the views ------------------------------------------------------------------------------
 # The components read the views' output graph with point queries: a few triples, however long
 # the log. Their c:dataset is the node the view writes, so they re-render when it changes.
@@ -101,33 +140,60 @@ vx:qComponents a sem:View ; sem:select """SELECT ?value WHERE { vx:log vx:compon
 vx:qByType a sem:View ; sem:select """
 SELECT ?type ?value WHERE { vx:recent vx:byType ?row . ?row vx:type ?type ; vx:count ?value }
 ORDER BY DESC(?value) ?type""" .
+vx:qBuckets a sem:View ; sem:select """
+SELECT ?second ?value WHERE { vx:recent vx:bucket ?row . ?row vx:second ?second ; vx:count ?value }
+ORDER BY ?second""" .
 
-# The figures the runtime writes for each measured view (in the views graph).
-vx:qCosts a sem:View ; sem:select """
-SELECT ?view ?state ?last ?lastMs ?reads ?scratchMs WHERE {
-  ?v a iv:View ; iv:measured true ; rdfs:label ?view .
-  OPTIONAL { ?v iv:stateRows ?state } OPTIONAL { ?v iv:lastRows ?last } OPTIONAL { ?v iv:lastMs ?lastMs }
-  OPTIONAL { ?v iv:inputRows ?reads } OPTIONAL { ?v iv:scratchMs ?scratchMs }
+# Each step (the delta log), newest first.
+vx:qSteps a sem:View ; sem:select """
+SELECT ?tick ?view ?came ?changed ?work ?reads WHERE {
+  vx:steps tree:member ?d . ?d iv:tick ?tick ; iv:view ?v ; iv:came ?came ; iv:changed ?changed ; iv:work ?work ; iv:inputRows ?reads .
+  ?v rdfs:label ?view
 }
-ORDER BY ?view""" .
+ORDER BY DESC(?tick) ?view
+LIMIT 8""" .
+
+# The check, per view (the component names it, c:of): the runtime's last from-scratch run.
+vx:qCheck a sem:View ; sem:select """
+SELECT ?label ?tone WHERE {
+  $this c:of ?v . ?v rdfs:label ?name .
+  OPTIONAL { ?v iv:matches ?same ; iv:resultRows ?rows ; iv:checkedTick ?tick }
+  BIND(IF(!BOUND(?same), CONCAT(?name, ": checking…"),
+       IF(?same, CONCAT(?name, ": same as a from-scratch run (", STR(?rows), " triples, tick ", STR(?tick), ")"),
+                 CONCAT(?name, ": differs from a from-scratch run"))) AS ?label)
+  BIND(IF(!BOUND(?same), sty:Neutral, IF(?same, sty:Success, sty:Danger)) AS ?tone)
+}""" .
+
+# The work of the last step against a re-run, per view: a bar of rows touched out of rows read.
+vx:qWork a sem:View ; sem:select """
+SELECT ?value ?max ?label WHERE {
+  $this c:of ?v . ?v rdfs:label ?name .
+  OPTIONAL { ?v iv:lastRows ?last ; iv:inputRows ?reads ; iv:lastMs ?ms ; iv:scratchMs ?scratch }
+  BIND(COALESCE(?last, 0) AS ?value)
+  BIND(IF(COALESCE(?reads, 0) >= COALESCE(?last, 0), IF(COALESCE(?reads, 0) > 0, ?reads, 1), ?last) AS ?max)
+  BIND(IF(BOUND(?last), CONCAT(?name, ": ", STR(?last), " rows of work for the last step (", STR(?ms), " ms); a re-run reads ", STR(?reads), " (", STR(?scratch), " ms)"), CONCAT(?name, ": measuring…")) AS ?label)
+}""" .
 
 # --- the dashboard ----------------------------------------------------------------------------------
 
 ui:ex-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:ex-views-intro ui:ex-views-controls ui:ex-views-figures ui:ex-views-panels ) .
+    c:children ( ui:ex-views-intro ui:ex-views-controls ui:ex-views-figures ui:ex-views-checks ui:ex-views-panels ui:ex-views-steps-card ui:ex-views-work-card ) .
 ui:ex-views-intro a c:Text ;
-    c:label "Your interactions, counted as they happen: the figures are maintained views over the change log, kept up to date from each new event instead of re-run over the whole log. Stream a hundred events, then wait: the last-30-seconds figures age out on their own." .
+    c:label "Your interactions, counted as they happen: every figure is a maintained view over the change log, kept up to date from each event (+1) and each retirement (-1) instead of re-run over the whole log. Stream a hundred events, watch each step below, then wait: the last-30-seconds figures age out on their own. The green checks compare each view with a from-scratch run of the same query." .
 
 ui:ex-views-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-views-stream ui:ex-views-note ) .
+    c:children ( ui:ex-views-stream ui:ex-views-stop ui:ex-views-one ui:ex-views-keep50 ui:ex-views-keep200 ) .
 ui:ex-views-stream a c:Button ; c:label "Stream 100 events" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
-ui:ex-views-note a c:Text ; c:label "Twenty a second, each a member of the change log." .
+ui:ex-views-stop a c:Button ; c:label "Stop" .
+ui:ex-views-one a c:Button ; c:label "One event" .
+ui:ex-views-keep50 a c:Button ; c:label "Keep 50" ; sty:emphasis sty:Outline ; c:help "Lower the log's retention: the next step retires the rest." .
+ui:ex-views-keep200 a c:Button ; c:label "Keep 200" ; sty:emphasis sty:Outline .
 
-ui:ex-views-figures a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-4 ;
+ui:ex-views-figures a c:Grid ; c:minWidth "140px" ; pos:gap tok:space-4 ;
     c:children ( ui:ex-views-recent ui:ex-views-events ui:ex-views-changed ui:ex-views-largest ui:ex-views-components ) .
 ui:ex-views-recent a c:Stat ; c:label "Last 30 seconds" ; c:unit "events" ; c:help "A sliding window (iv:SlidingWindow)." ;
     c:valueQuery vx:qRecent ; c:dataset vx:recent .
-ui:ex-views-events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:help "Retention keeps 200 (ldes:amount)." ;
+ui:ex-views-events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:help "The log's retention bounds it (ldes:amount)." ;
     c:valueQuery vx:qEvents ; c:dataset vx:log .
 ui:ex-views-changed a c:Stat ; c:label "Triples changed" ; c:help "SUM(?added + ?removed)." ;
     c:valueQuery vx:qChanged ; c:dataset vx:log .
@@ -136,50 +202,76 @@ ui:ex-views-largest a c:Stat ; c:label "Largest change" ; c:unit "triples" ; c:h
 ui:ex-views-components a c:Stat ; c:label "Components" ; c:help "COUNT(DISTINCT ?target)." ;
     c:valueQuery vx:qComponents ; c:dataset vx:log .
 
+# The checks: one alert per view, green (✓) while it equals a from-scratch run, red (✕) if not.
+ui:ex-views-checks a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-views-check-whole ui:ex-views-check-recent ui:ex-views-check-types ui:ex-views-check-buckets ) .
+ui:ex-views-check-whole a c:Alert ; c:of vx:Whole ; c:valueQuery vx:qCheck ; c:dataset vx:Whole .
+ui:ex-views-check-recent a c:Alert ; c:of vx:Recent ; c:valueQuery vx:qCheck ; c:dataset vx:Recent .
+ui:ex-views-check-types a c:Alert ; c:of vx:RecentByType ; c:valueQuery vx:qCheck ; c:dataset vx:RecentByType .
+ui:ex-views-check-buckets a c:Alert ; c:of vx:Buckets ; c:valueQuery vx:qCheck ; c:dataset vx:Buckets .
+
 ui:ex-views-panels a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
-    c:children ( ui:ex-views-types-card ui:ex-views-costs-card ) .
-ui:ex-views-types-card a c:Flippable ; c:front ui:ex-views-types-panel .
-ui:ex-views-types-panel a c:Card ; c:label "Last 30 seconds, by type" ; c:badge "iv:window" ; c:content ui:ex-views-types .
+    c:children ( ui:ex-views-band-card ui:ex-views-types-card ) .
+ui:ex-views-band-card a c:Card ; c:label "The window, 5 seconds at a time" ; c:badge "iv:window" ;
+    c:note "Members enter at the bottom and age out at the top: the band moves on the clock alone." ;
+    c:content ui:ex-views-band .
+ui:ex-views-band a c:BarChart ; rdfs:label "Events per 5 seconds, last 30 seconds" ;
+    c:view vx:qBuckets ; c:dataset vx:recent ;
+    c:categoryVariable "second" ; c:valueVariable "value" ;
+    c:emptyText "Nothing in the last 30 seconds." .
+ui:ex-views-types-card a c:Card ; c:label "Last 30 seconds, by type" ; c:badge "GROUP BY" ; c:content ui:ex-views-types .
 ui:ex-views-types a c:BarChart ; rdfs:label "Events per type, last 30 seconds" ;
     c:view vx:qByType ; c:dataset vx:recent ;
     c:categoryVariable "type" ; c:valueVariable "value" ;
     c:emptyText "Nothing in the last 30 seconds." .
 
-ui:ex-views-costs-card a c:Card ; c:label "What each view costs" ; c:badge "iv:measured" ;
-    c:note "Rows held, rows of work in the last tick and its time - against the rows and time of running the same query from scratch (sampled every 2 s)." ;
-    c:content ui:ex-views-costs .
+# Each step, as the runtime recorded it (iv:deltaLog): what came in, and what it did.
+ui:ex-views-steps-card a c:Card ; c:label "Each step" ; c:badge "iv:deltaLog" ;
+    c:note "One row per tick that changed a view: members in (+) and out (−), the groups that changed and how, the rows of work against the rows a re-run reads." ;
+    c:content ui:ex-views-steps .
+ui:ex-views-col-tick a c:Column ; c:variable "tick" ; c:label "Tick" ; c:align "end" ; c:format "number" .
 ui:ex-views-col-view a c:Column ; c:variable "view" ; c:label "View" .
-ui:ex-views-col-state a c:Column ; c:variable "state" ; c:label "State rows" ; c:align "end" ; c:format "number" .
-ui:ex-views-col-last a c:Column ; c:variable "last" ; c:label "Last tick, rows" ; c:align "end" ; c:format "number" .
-ui:ex-views-col-ms a c:Column ; c:variable "lastMs" ; c:label "Last tick, ms" ; c:align "end" ; c:format "decimal" .
-ui:ex-views-col-reads a c:Column ; c:variable "reads" ; c:label "From scratch, rows" ; c:align "end" ; c:format "number" .
-ui:ex-views-col-scratch a c:Column ; c:variable "scratchMs" ; c:label "From scratch, ms" ; c:align "end" ; c:format "decimal" .
-ui:ex-views-costs a c:Table ; c:label "What each view costs" ; c:query vx:qCosts ;
-    c:dataset vx:Recent , vx:RecentByType , vx:Whole ;
-    c:tableColumns ( ui:ex-views-col-view ui:ex-views-col-state ui:ex-views-col-last ui:ex-views-col-ms ui:ex-views-col-reads ui:ex-views-col-scratch ) ;
-    c:emptyText "Figures appear after the first idle moment." .
+ui:ex-views-col-came a c:Column ; c:variable "came" ; c:label "Came in" .
+ui:ex-views-col-changed a c:Column ; c:variable "changed" ; c:label "Groups changed" ; c:format "code" .
+ui:ex-views-col-work a c:Column ; c:variable "work" ; c:label "Work, rows" ; c:align "end" ; c:format "number" .
+ui:ex-views-col-reads a c:Column ; c:variable "reads" ; c:label "A re-run reads" ; c:align "end" ; c:format "number" .
+ui:ex-views-steps a c:Table ; c:label "Each step" ; c:query vx:qSteps ; c:dataset vx:steps ;
+    c:tableColumns ( ui:ex-views-col-tick ui:ex-views-col-view ui:ex-views-col-came ui:ex-views-col-changed ui:ex-views-col-work ui:ex-views-col-reads ) ;
+    c:emptyText "Do something on the page: each event is a step." .
 
-# --- how it works ---------------------------------------------------------------------------------
+# The work of the last step against a re-run, one bar per view (figures written in idle time).
+ui:ex-views-work-card a c:Card ; c:label "Work per step, against a re-run" ; c:badge "iv:measured" ;
+    c:note "A bar is the rows the last step touched out of the rows a from-scratch run of the same query reads." ;
+    c:content ui:ex-views-work .
+ui:ex-views-work a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-views-work-whole ui:ex-views-work-types ui:ex-views-work-buckets ) .
+ui:ex-views-work-whole a c:Progress ; c:active true ; c:of vx:Whole ; c:valueQuery vx:qWork ; c:dataset vx:Whole .
+ui:ex-views-work-types a c:Progress ; c:active true ; c:of vx:RecentByType ; c:valueQuery vx:qWork ; c:dataset vx:RecentByType .
+ui:ex-views-work-buckets a c:Progress ; c:active true ; c:of vx:Buckets ; c:valueQuery vx:qWork ; c:dataset vx:Buckets .
+
+# --- how it works -----------------------------------------------------------------------------------
 
 ui:ex-views-how a c:Walkthrough ; c:label "How it works" ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
     c:steps ( ui:ex-views-w1 ui:ex-views-w2 ui:ex-views-w3 ui:ex-views-w4 ) .
 
 ui:ex-views-w1 a c:WalkthroughStep ; rdfs:label "Queries that are kept, not re-run" ;
-    c:children ( "Each figure comes from an " ui:ex-views-m-View " in this file: plain SPARQL over " ui:ex-views-m-log ", with annotations. Run from scratch, the query gives the same answer - the tests check that after every change - but the runtime never runs it that way: " ui:ex-views-m-recent ", " ui:ex-views-m-byType " and " ui:ex-views-m-whole " are kept." ) .
+    c:children ( "Each figure comes from an " ui:ex-views-m-View " in this file: plain SPARQL over " ui:ex-views-m-log ", with annotations. Run from scratch, the query gives the same answer - the green checks show the runtime checking that - but the runtime never runs it that way: " ui:ex-views-m-recent ", " ui:ex-views-m-byType " and " ui:ex-views-m-whole " are kept." ) .
 ui:ex-views-w2 a c:WalkthroughStep ; rdfs:label "Members are the changes" ;
-    c:children ( "An appended member is evaluated once - its part of the query, cached - and enters the groups: COUNT and SUM add, MAX keeps values in order, COUNT(DISTINCT) keeps them with weights. When the retention policy retires a member, the same rows leave with weight -1. Only the groups that changed are written to the views graph, and the components read those triples." ) .
+    c:children ( "An appended member is evaluated once - its part of the query, cached - and enters the groups with weight +1: COUNT and SUM add, MAX keeps values in order, COUNT(DISTINCT) keeps them with weights. When the retention policy retires a member, the same rows leave with weight -1. " ui:ex-views-m-steps " records each step: what came in and which groups changed." ) .
 ui:ex-views-w3 a c:WalkthroughStep ; rdfs:label "A window that moves on its own" ;
-    c:children ( ui:ex-views-m-window " keeps only the last 30 seconds of the stream's timestamps. One timer, set for the next member to age out, moves it: the figures drop while you do nothing. The streamed events are " ui:ex-views-m-due " events: the scheduler fires one when " ui:ex-views-m-dueAt " comes, and " ui:ex-views-m-pulse " sets the next." ) .
+    c:children ( ui:ex-views-m-window " keeps only the last 30 seconds of the stream's timestamps. One timer, set for the next member to age out, moves it: " ui:ex-views-m-buckets " drains at the top while you do nothing. The streamed events are " ui:ex-views-m-due " events: the scheduler fires one when " ui:ex-views-m-dueAt " comes, and " ui:ex-views-m-pulse " sets the next." ) .
 ui:ex-views-w4 a c:WalkthroughStep ; rdfs:label "What it costs" ;
-    c:children ( "The table is the runtime's own account (" ui:ex-views-m-measured "): per event a view does a handful of rows of work, whatever the log holds, while a from-scratch run reads every member. " ui:ex-views-m-whileShown " keeps these views off the critical path elsewhere: on other pages they do nothing, and catch up when this one is shown." ) .
+    c:children ( "The bars are the runtime's own account (" ui:ex-views-m-measured "): per step a view does a handful of rows of work, whatever the log holds, while a from-scratch run reads every member. " ui:ex-views-m-whileShown " keeps these views off the critical path elsewhere: on other pages they do nothing, and catch up when this one is shown." ) .
 
 ui:ex-views-m-View a c:Mention ; c:label "iv:View" ; c:mentions iv:View ; c:to iv:View .
 ui:ex-views-m-log a c:Mention ; c:label "beh:ChangeLog" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
 ui:ex-views-m-recent a c:Mention ; c:label "vx:Recent" ; c:mentions vx:Recent .
 ui:ex-views-m-byType a c:Mention ; c:label "vx:RecentByType" ; c:mentions vx:RecentByType .
 ui:ex-views-m-whole a c:Mention ; c:label "vx:Whole" ; c:mentions vx:Whole .
+ui:ex-views-m-steps a c:Mention ; c:label "vx:steps" ; c:mentions vx:steps .
 ui:ex-views-m-window a c:Mention ; c:label "vx:window" ; c:mentions vx:window .
+ui:ex-views-m-buckets a c:Mention ; c:label "vx:Buckets" ; c:mentions vx:Buckets .
 ui:ex-views-m-due a c:Mention ; c:label "beh:Due" ; c:mentions beh:Due ; c:to beh:Due .
 ui:ex-views-m-dueAt a c:Mention ; c:label "beh:dueAt" ; c:mentions beh:dueAt ; c:to beh:dueAt .
 ui:ex-views-m-pulse a c:Mention ; c:label "vx:Pulse" ; c:mentions vx:Pulse .

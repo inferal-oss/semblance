@@ -8,13 +8,13 @@
 # figure, a Progress's fraction, a Badge's count) may take it from a SPARQL SELECT instead of
 # stating it: c:valueQuery names a sem:View whose first solution is the value. The rule runs
 # before the components (stratum -1) and writes what the solution says - ?value as c:value,
-# ?tone (a sty:Tone, when bound) as sty:tone - so the component renders it like a stated
+# ?tone (a sty:Tone, when bound) as sty:tone, ?max as c:max and ?label as c:label - so the component renders it like a stated
 # value. Like a table's or a chart's view, it re-runs when its c:dataset changes; $this in the
 # query is the component.
 
 c:valueQuery a owl:ObjectProperty ; rdfs:range sem:View ; rdfs:subPropertyOf c:dataQuery ;
     rdfs:comment """A SELECT (a sem:View) whose first solution is the component's value: ?value becomes its
-c:value and ?tone, when bound, its sty:tone. Re-run when c:dataset changes; $this is the component."""@en .
+c:value and ?tone, ?max and ?label, when bound, its sty:tone, c:max and c:label. Re-run when c:dataset changes; $this is the component."""@en .
 
 c:Formula a sem:Rendering ;
     sem:targets sem:Component ;

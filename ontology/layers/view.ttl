@@ -52,7 +52,24 @@ iv:whileShown a owl:ObjectProperty ; rdfs:domain iv:View ;
 shown; otherwise it is suspended (no work per tick) and rebuilt from its inputs when shown again."""@en .
 # Designed, not built yet (docs/IVM.md §7.3-7.4): iv:TumblingWindow (iv:size, iv:keep),
 # iv:CountWindow, iv:clock (iv:WallClock, iv:EventTime) with iv:lateness; iv:parameter,
-# iv:partitionBy, iv:materialize (iv:Graph, iv:Ephemeral), iv:maxState, iv:deltaLog.
+# iv:partitionBy, iv:materialize (iv:Graph, iv:Ephemeral), iv:maxState.
+
+# --- each step, as data (iv:deltaLog) -------------------------------------------------------------
+# A view may record its ticks in a stream: one member per tick that changed it, saying what came
+# in and what that did to its groups, in the views graph. The stream's retention (ldes:amount)
+# says how many it keeps (default 12).
+
+iv:deltaLog a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range ldes:EventStream ;
+    rdfs:comment "A stream the runtime appends one iv:Delta to for each tick that changed this view."@en .
+iv:Delta a owl:Class ; rdfs:comment "One tick of a view: iv:came, iv:changed, iv:entered, iv:left, iv:work against iv:inputRows."@en .
+iv:view a owl:ObjectProperty ; rdfs:domain iv:Delta ; rdfs:range iv:View .
+iv:tick a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:range xsd:integer ; rdfs:comment "The runtime's tick number."@en .
+iv:at a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:range xsd:dateTime .
+iv:came a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:comment "What came in: members appended (+), retired or aged out (−), changed."@en .
+iv:changed a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:comment "Which groups changed, and from what to what (the first aggregate)."@en .
+iv:entered a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:range xsd:integer ; rdfs:comment "Members that entered (weight +1)."@en .
+iv:left a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:range xsd:integer ; rdfs:comment "Members that left (weight −1): retired, or out of the window."@en .
+iv:work a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Rows the tick processed."@en .
 
 # --- the plan, as data (written by the runtime) ---------------------------------------------------------
 
@@ -85,3 +102,7 @@ iv:meanMs a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Mean m
 iv:scratchMs a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Milliseconds a from-scratch run of the same query took (sampled)."@en .
 iv:scratchRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Results of that run."@en .
 iv:inputRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Member rows a from-scratch run reads."@en .
+iv:resultRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Rows (or triples) the maintained result has."@en .
+iv:matches a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether the maintained result equalled that from-scratch run, when last checked (iv:checkedTick)."@en .
+iv:checkedTick a owl:DatatypeProperty ; rdfs:range xsd:integer .

@@ -22,6 +22,11 @@ const formulaValue: FnRule = (ctx, focus) => {
   if (value?.termType === 'Literal') o.t(focus, NS.c + 'value', value)
   const tone = row.get('tone')
   if (tone?.termType === 'NamedNode') o.t(focus, STY.tone, tone)
+  // A bound (a progress bar's total) and a caption may come from the data too.
+  const max = row.get('max')
+  if (max?.termType === 'Literal') o.t(focus, NS.c + 'max', max)
+  const label = row.get('label')
+  if (label?.termType === 'Literal') o.t(focus, NS.c + 'label', label)
   return o.quads
 }
 

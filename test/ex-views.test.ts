@@ -24,10 +24,12 @@ function views(prefer: 'sparql' | 'function' = 'sparql') {
   const root = () => h.shell.nodeOf(UI + 'ex-views/~root') as Element
   const stat = (label: string) => [...root().querySelectorAll('[data-sem-c=stat]')].find((s) => s.querySelector('.sem-label')!.textContent === label)!.querySelector('.sem-value')!.textContent
   const bars = () => Object.fromEntries([...root().querySelectorAll('[data-sem-c=bar-chart] .sem-bar')].map((b) => [b.querySelector('.sem-category')!.textContent, b.querySelector('.sem-total')!.textContent]))
-  const costs = () => [...root().querySelectorAll('[data-sem-c=table] tbody tr')].map((tr) => [...tr.querySelectorAll('td, th')].map((c) => c.textContent))
+  const steps = () => [...root().querySelectorAll('[data-sem-c=table] tbody tr')].map((tr) => [...tr.querySelectorAll('td, th')].map((c) => c.textContent!.trim()))
+  const checks = () => [...root().querySelectorAll('[data-sem-c=alert]')].map((b) => (b.getAttribute('data-sem-tone') ?? '') + ' ' + b.textContent!.trim())
+  const work = () => [...root().querySelectorAll('[data-sem-c=progress]')].map((p) => ({ label: p.textContent!.trim(), now: Number(p.getAttribute('aria-valuenow')), max: Number(p.getAttribute('aria-valuemax')) }))
   const advance = (ms: number) => (clock.advance(ms), h.shell.flush())
   const log = () => h.bus.recent(1000).length
-  return { ...h, clock, click, button, open, root, stat, bars, costs, advance, log }
+  return { ...h, clock, click, button, open, root, stat, bars, steps, checks, work, advance, log }
 }
 
 describe('the maintained views example', () => {
@@ -54,19 +56,34 @@ describe('the maintained views example', () => {
     }, 120_000)
   }
 
-  it('shows what each view costs against a from-scratch run', () => {
+  it('shows each step, a check against a from-scratch run, and the work against a re-run', () => {
     const h = views()
     h.open()
     h.click(h.button('Stream 100 events'))
     h.advance(5000)
     h.runtime.warm(8)
     h.shell.flush()
-    const rows = Object.fromEntries(h.costs().map(([view, ...cells]) => [view, cells.map((c) => Number(c!.replace(/,/g, '')))]))
-    expect(Object.keys(rows).sort()).toEqual(['events per type, last 30 s', 'events, last 30 s', 'the whole log'])
-    const [state, last, , reads] = rows['the whole log']!
-    expect(reads).toBe(103) // a re-run reads every member
-    expect(last).toBeLessThan(10) // the last event was a few rows of work
-    expect(state).toBeGreaterThanOrEqual(103)
+    // Every view is checked against a from-scratch run of its query, and matches.
+    expect(h.checks()).toHaveLength(4)
+    for (const c of h.checks()) expect(c).toMatch(/^success .*same as a from-scratch run/)
+    // The last step: one member in, one group up by one.
+    const [newest] = h.steps()
+    const [, view, came, changed, work, reads] = newest!
+    expect(['the whole log', 'per type, last 30 s']).toContain(view)
+    expect(came).toBe('+1 member')
+    expect(changed).toMatch(/→/)
+    expect(Number(work)).toBeLessThan(10)
+    expect(Number(reads.replace(/,/g, ''))).toBeGreaterThanOrEqual(100)
+    // The bars: a few rows of work out of the hundred a re-run reads.
+    const whole = h.work().find((w) => w.label.startsWith('the whole log'))!
+    expect(whole.now).toBeLessThan(10)
+    expect(whole.max).toBe(103)
+    // Lowering the retention retires most of the log in one step, every member with weight -1.
+    h.click(h.button('Keep 50'))
+    expect(h.stat('In the log')).toBe('50')
+    const retired = h.steps().find((s) => s[1] === 'the whole log')!
+    expect(retired[2]).toMatch(/^\+1 member, −54 members retired$/)
+    h.click(h.button('Keep 200'))
   }, 120_000)
 
   it('does nothing while it is not shown, and catches up when shown again', () => {
