@@ -173,7 +173,12 @@ compiled module may import:
 | `cq_solution()` | The frame is a solution: SELECT appends its projected row (with DISTINCT, unless already seen in this combination); ASK counts it. |
 | `cq_triple(s, p, o)` | A CONSTRUCT template triple: appended unless a position is 0 or invalid (a literal subject, a non-IRI predicate) or it was produced before in this run. |
 | `cq_end() -> n` | End the run: the value `run` returns. |
-| `fresh_bnode`, `term_kind`, `term_datatype`, `term_lang_len` | As above. |
+| `fresh_bnode`, `term_kind`, `term_datatype`, `term_lang_len`, `has` | As above. |
+
+A module may also read the engine's own structures in its memory directly
+(the WAT engine's compiled triple patterns walk its store's lists in line):
+that is between an engine and the code it generates, and stays valid only
+within one run.
 
 What `k` and `shape` mean is the engine's business: it records them when it
 compiles. The two engines compile the same queries (BGPs, OPTIONAL, UNION,

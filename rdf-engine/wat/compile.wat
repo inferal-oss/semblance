@@ -337,7 +337,7 @@
   (if (i32.and (i32.eq (i32.load (local.get $rest)) (i32.const S_CALL)) (i32.eqz (i32.load offset=12 (local.get $rest))))
     (then (return (i32.load offset=4 (local.get $rest)))))
   ;; 15 imports, then run
-  (local.set $k (i32.add (i32.load offset=4 (global.get $cx_funcs)) (i32.const 15)))
+  (local.set $k (i32.add (i32.load offset=4 (global.get $cx_funcs)) (i32.const 16)))
   (call $v_push1 (global.get $cx_funcs) (local.tee $f (call $bb_new)))
   (i32.store (local.tee $st (call $st_copy (local.get $st))) (i32.const 0))
   (call $cx_emit (local.get $f) (local.get $rest) (local.get $st))
@@ -472,7 +472,7 @@
 ;; matches, 3 words each on the stack, binding its variables for rest.
 (func $scan_loop (param $f i32) (param $el i32) (param $path i32) (param $rest i32) (param $st i32)
   (local $at i32) (local $n i32) (local $i i32) (local $r i32) (local $top i32)
-  (local $c i32) (local $ref i32) (local $s i32) (local $recs i32) (local $nr i32) (local $j i32) (local $p i32) (local $next i32)
+  (local $c i32) (local $ref i32) (local $s i32) (local $recs i32) (local $nr i32) (local $j i32) (local $p i32) (local $next i32) (local $lst i32)
   (local.set $at (i32.load (local.get $st)))
   (local.set $n (call $local (local.get $f)))
   (local.set $i (call $local (local.get $f)))
@@ -485,11 +485,15 @@
       (call $push_ref (local.get $f) (i32.load offset=12 (local.get $el)))
       (call $em2 (local.get $f) (@str "gaC3vb") (local.get $at) (local.get $n)))
     (else
-      (call $push_ref (local.get $f) (i32.load offset=4 (local.get $el)))
-      (call $push_ref (local.get $f) (i32.load offset=8 (local.get $el)))
-      (call $push_ref (local.get $f) (i32.load offset=12 (local.get $el)))
-      (call $em2 (local.get $f) (@str "gaC2vb") (local.get $at) (local.get $n))))
-  (call $em (local.get $f) (@str "gagbk3ljvck0vd") (local.get $at) (local.get $n) (local.get $top) (local.get $i))
+      ;; a bound position: the store's lists, read in line (cscan.wat)
+      (if (i32.eqz (local.tee $lst (call $scan_list (local.get $f) (local.get $el) (local.get $st) (local.get $n)))) (then
+        (call $push_ref (local.get $f) (i32.load offset=4 (local.get $el)))
+        (call $push_ref (local.get $f) (i32.load offset=8 (local.get $el)))
+        (call $push_ref (local.get $f) (i32.load offset=12 (local.get $el)))
+        (call $em2 (local.get $f) (@str "gaC2vb") (local.get $at) (local.get $n))))))
+  (if (local.get $lst)
+    (then (call $em (local.get $f) (@str "gavbk0vc") (local.get $at) (local.get $top) (local.get $i) (i32.const 0)))
+    (else (call $em (local.get $f) (@str "gagbk3ljvck0vd") (local.get $at) (local.get $n) (local.get $top) (local.get $i))))
   ;; the variables it binds (records: column, slot, saved value's local, and
   ;; for a repeated variable the first column + 1)
   (local.set $recs (call $anew (i32.const 48)))
@@ -517,8 +521,12 @@
         (local.set $nr (i32.add (local.get $nr) (i32.const 1)))))
       (i32.store8 (call $st_at (local.get $next) (local.get $s)) (i32.const CERTAIN))))
     (br_if $columns (i32.ne (local.tee $c (i32.add (local.get $c) (i32.const 1))) (i32.const 3))))
-  ;; r = the stack + 4 at + 12 i
-  (call $em (local.get $f) (@str "{[gagbOf1C5gck4ljgak<ljvdgak1jva{") (local.get $i) (local.get $n) (local.get $at) (local.get $r))
+  ;; r = the stack + 4 at + 12 i, or the quad of list entry i
+  (if (local.get $lst)
+    (then
+      (call $em2 (local.get $f) (@str "{[gagbOf1") (local.get $i) (local.get $n))
+      (call $scan_row (local.get $f) (local.get $el) (local.get $st) (local.get $lst) (local.get $i) (local.get $r)))
+    (else (call $em (local.get $f) (@str "{[gagbOf1C5gck4ljgak<ljvdgak1jva{") (local.get $i) (local.get $n) (local.get $at) (local.get $r))))
   (call $bind_recs (local.get $f) (local.get $recs) (local.get $nr) (local.get $r) (i32.const 1))
   (call $bind_recs (local.get $f) (local.get $recs) (local.get $nr) (local.get $r) (i32.const 0))
   (call $cx_emit (local.get $f) (local.get $rest) (local.get $next))
@@ -810,20 +818,12 @@
 ;; --- the module -----------------------------------------------------------------------
 
 ;; The module's bytes: header (types, imports), functions, globals, exports, code.
-(@define CX_HEADER 357)
+(@define CX_HEADER 370)
 (func $module (result i32)
   (local $out i32) (local $t i32) (local $i i32) (local $f i32) (local $body i32) (local $n i32)
   (local.set $out (call $bb_new))
   (call $bputs (local.get $out)
-    (@words32 0x6d736100 0x00000001 0x60082c01 0x60007f01 0x7f017f01 0x7f7f0360 0x607f017f 0x7f7f7f04 0x607f017f 0x607f0100
-      0x03600000 0x007f7f7f 0x7f7f0260 0xac027f01 0x65061002 0x6e69676e 0x656d0665 0x79726f6d 0x06000002 0x69676e65
-      0x6308656e 0x65625f71 0x006e6967 0x6e650602 0x656e6967 0x5f716308 0x626d6f63 0x0600006f 0x69676e65 0x6307656e
-      0x63735f71 0x03006e61 0x676e6506 0x07656e69 0x705f7163 0x00687461 0x6e650603 0x656e6967 0x5f716307 0x6c617665
-      0x65060700 0x6e69676e 0x71630865 0x6174735f 0x04006b63 0x676e6506 0x07656e69 0x745f7163 0x00747365 0x6e650601
-      0x656e6967 0x5f716308 0x756c6176 0x06010065 0x69676e65 0x630b656e 0x6f735f71 0x6974756c 0x05006e6f 0x676e6506
-      0x09656e69 0x745f7163 0x6c706972 0x06060065 0x69676e65 0x6306656e 0x6e655f71 0x06040064 0x69676e65 0x660b656e
-      0x68736572 0x6f6e625f 0x04006564 0x676e6506 0x09656e69 0x6d726574 0x6e696b5f 0x06010064 0x69676e65 0x740d656e
-      0x5f6d7265 0x61746164 0x65707974 0x65060100 0x6e69676e 0x65740d65 0x6c5f6d72 0x5f676e61 0x006e656c 0x00000001)
+    (@words32 0x6d736100 0x00000001 0x60082c01 0x60007f01 0x7f017f01 0x7f7f0360 0x607f017f 0x7f7f7f04 0x607f017f 0x607f0100 0x03600000 0x007f7f7f 0x7f7f0260 0xb9027f01 0x65061102 0x6e69676e 0x656d0665 0x79726f6d 0x06000002 0x69676e65 0x6308656e 0x65625f71 0x006e6967 0x6e650602 0x656e6967 0x5f716308 0x626d6f63 0x0600006f 0x69676e65 0x6307656e 0x63735f71 0x03006e61 0x676e6506 0x07656e69 0x705f7163 0x00687461 0x6e650603 0x656e6967 0x5f716307 0x6c617665 0x65060700 0x6e69676e 0x71630865 0x6174735f 0x04006b63 0x676e6506 0x07656e69 0x745f7163 0x00747365 0x6e650601 0x656e6967 0x5f716308 0x756c6176 0x06010065 0x69676e65 0x630b656e 0x6f735f71 0x6974756c 0x05006e6f 0x676e6506 0x09656e69 0x745f7163 0x6c706972 0x06060065 0x69676e65 0x6306656e 0x6e655f71 0x06040064 0x69676e65 0x660b656e 0x68736572 0x6f6e625f 0x04006564 0x676e6506 0x09656e69 0x6d726574 0x6e696b5f 0x06010064 0x69676e65 0x740d656e 0x5f6d7265 0x61746164 0x65707974 0x65060100 0x6e69676e 0x65740d65 0x6c5f6d72 0x5f676e61 0x006e656c 0x6e650601 0x656e6967 0x73616803 0x00000300)
     (i32.const CX_HEADER))
   (local.set $n (i32.load offset=4 (global.get $cx_funcs)))
   ;; functions: run (i32) -> i32, the rest (i32) -> ()
@@ -846,12 +846,12 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $globals))))
     (call $section (local.get $out) (i32.const 6) (local.get $t))))
-  ;; export "run": function 15
+  ;; export "run": function 16
   (call $uleb (local.tee $t (call $bb_new)) (i32.const 1))
   (call $uleb (local.get $t) (i32.const 3))
   (call $bputs (local.get $t) (@str "run"))
   (call $uleb (local.get $t) (i32.const 0))
-  (call $uleb (local.get $t) (i32.const 15))
+  (call $uleb (local.get $t) (i32.const 16))
   (call $section (local.get $out) (i32.const 7) (local.get $t))
   ;; code
   (call $uleb (local.tee $t (call $bb_new)) (local.get $n))
@@ -1030,6 +1030,8 @@
   (call $free (local.get $b) (global.get $cx_bw))
   (if (i32.eqz (local.get $ok)) (then (return (call $fail (@str "bound variables changed since compile")))))
   (call $run_begin (local.get $q) (local.get $graphs))
+  (i32.store offset=8 (global.get $bases) (global.get $dg))
+  (i32.store offset=12 (global.get $bases) (global.get $dgn))
   (global.set $cx_count (i32.const 0))
   (global.set $cs_n (i32.const 0))
   (call $cs_room (i32.const 1024))

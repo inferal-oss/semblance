@@ -15,6 +15,9 @@
 ;; shifting, and the table by moving the last quad into its slot.
 
 (global $post (mut i32) (i32.const 0))
+;; Where compiled queries find the store (see cscan.wat): +0 $post, +4 $quads,
+;; +8 the default graphs, +12 their count (set when a compiled run begins).
+(global $bases i32 (@words32 0 0 0 0))
 (global $quads (mut i32) (i32.const 0))
 (global $qcap (mut i32) (i32.const 0))   ;; in quads
 (global $qn (mut i32) (i32.const 0))     ;; quads in the store
@@ -148,7 +151,8 @@
   (if (i32.eq (local.get $q) (global.get $qcap)) (then
     (global.set $quads (call $realloc (global.get $quads) (i32.shl (local.get $q) (i32.const 5))
       (i32.shl (local.get $q) (i32.const 6)) (i32.shl (local.get $q) (i32.const 5))))
-    (global.set $qcap (i32.shl (local.get $q) (i32.const 1)))))
+    (global.set $qcap (i32.shl (local.get $q) (i32.const 1)))
+    (i32.store offset=4 (global.get $bases) (global.get $quads))))
   (local.set $r (call $quad (local.get $q)))
   (i32.store (local.get $r) (local.get $s))
   (i32.store offset=4 (local.get $r) (local.get $p))
@@ -238,5 +242,6 @@
 (func $init_store
   (global.set $qcap (i32.const 64))
   (global.set $quads (call $alloc (i32.const 2048)))
+  (i32.store offset=4 (global.get $bases) (global.get $quads))
   (global.set $qscap (i32.const 128))
   (global.set $qset (call $alloc0 (i32.const 512))))
