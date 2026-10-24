@@ -4,20 +4,20 @@
 use crate::dict::{Dict, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING};
 use crate::lex::{Cur, Res, has_scheme};
 use crate::store::Quad;
-use alloc::collections::BTreeMap;
+use crate::idmap::{IdMap, bytes_key};
 use alloc::vec::Vec;
 
 struct Parser<'a, 'd> {
     c: Cur<'a>,
     dict: &'d mut Dict,
-    bnodes: BTreeMap<Vec<u8>, u32>,
+    bnodes: IdMap,
     buf: Vec<u8>,
     lang: Vec<u8>,
 }
 
 /// Parse a document into quads; triples go to `graph`.
 pub fn parse(text: &[u8], quads: bool, graph: u32, dict: &mut Dict, out: &mut Vec<Quad>) -> Res<()> {
-    let mut p = Parser { c: Cur::new(text), dict, bnodes: BTreeMap::new(), buf: Vec::new(), lang: Vec::new() };
+    let mut p = Parser { c: Cur::new(text), dict, bnodes: IdMap::new(), buf: Vec::new(), lang: Vec::new() };
     loop {
         p.ws();
         if p.c.eof() {
@@ -102,11 +102,12 @@ impl Parser<'_, '_> {
             return self.c.err("expected blank node");
         }
         self.c.bnode_label(&mut self.buf)?;
-        if let Some(&id) = self.bnodes.get(&self.buf) {
+        let key = bytes_key(&self.buf);
+        if let Some(id) = self.bnodes.get(&key) {
             return Ok(id);
         }
         let id = self.dict.fresh_bnode();
-        self.bnodes.insert(self.buf.clone(), id);
+        self.bnodes.insert(&key, id);
         Ok(id)
     }
 

@@ -76,15 +76,15 @@ impl Ctx<'_> {
         if dt == RDF_LANG_STRING || dt == RDF_DIR_LANG_STRING {
             return Dt::LangString;
         }
-        if let Some(&k) = self.dt_cache.get(&dt) {
-            return k;
+        if let Some(k) = self.dt_cache.get(&[dt]) {
+            return [Dt::Integer, Dt::Decimal, Dt::Float, Dt::Double, Dt::Boolean, Dt::String, Dt::LangString, Dt::DateTime, Dt::Date, Dt::Other][k as usize];
         }
         let v = self.dict.value(dt);
         let k = match v.strip_prefix(XSD) {
             Some(local) => classify(local),
             None => Dt::Other,
         };
-        self.dt_cache.insert(dt, k);
+        self.dt_cache.insert(&[dt], k as u32);
         k
     }
 

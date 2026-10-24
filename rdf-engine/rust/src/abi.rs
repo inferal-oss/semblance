@@ -411,7 +411,7 @@ pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
     }
     s.result.clear();
     let mut count = 0usize;
-    let mut seen = alloc::collections::BTreeSet::new();
+    let mut seen = crate::idmap::IdMap::new();
     for c in combos {
         match sparql::execute(&p.query, &mut s.dict, &s.store, &graph_ids, &c) {
             sparql::Output::Rows(r, n) => {
@@ -420,7 +420,7 @@ pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
             }
             sparql::Output::Triples(t) => {
                 for x in t.chunks_exact(3) {
-                    if seen.insert([x[0], x[1], x[2]]) {
+                    if seen.add(x) {
                         s.result.extend_from_slice(x);
                         count += 1;
                     }

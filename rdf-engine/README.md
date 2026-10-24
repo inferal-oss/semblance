@@ -65,7 +65,7 @@ The engines move in lockstep; each phase ends with both passing the same tests.
 
 - Same ABI, same host, same tests. No code is shared between the engines.
 - Literals keep their lexical form; no canonicalization.
-- Rust: `opt-level = "s"`, LTO, `panic = "abort"`, one codegen unit, stripped.
+- Rust: `opt-level = "z"` (as fast as "s" or 3 here, and smallest), LTO, `panic = "abort"`, one codegen unit, stripped.
   Dependencies only when they earn their size; each one is listed here.
   (None so far.)
 - Sizes are reported by `npm run engine:build` (raw, gzip, brotli) for the

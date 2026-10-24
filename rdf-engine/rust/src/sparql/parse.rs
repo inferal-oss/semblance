@@ -5,7 +5,7 @@ use super::{QuadTemplate, Target, Transfer, Update, UpdateOp};
 use crate::dict::{Dict, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING};
 use crate::iri;
 use crate::lex::{Cur, Res, has_scheme, pn_chars, pn_chars_base, pn_chars_u};
-use alloc::collections::BTreeMap;
+use crate::idmap::{IdMap, bytes_key};
 use alloc::vec;
 
 const RDF: &[u8] = b"http://www.w3.org/1999/02/22-rdf-syntax-ns#";
@@ -21,20 +21,26 @@ const CASTS: &[&[u8]] = &[
 struct P<'a, 'd> {
     c: Cur<'a>,
     dict: &'d mut Dict,
-    prefixes: BTreeMap<Vec<u8>, Vec<u8>>,
+    /// Namespaces by prefix (an index into `namespaces`).
+    prefixes: IdMap,
+    namespaces: Vec<Vec<u8>>,
     base: Vec<u8>,
     vars: Vec<Vec<u8>>,
     /// Blank node labels in patterns: their variable and the basic graph pattern they belong to.
-    bnodes: BTreeMap<Vec<u8>, (Var, u32)>,
+    bnodes: IdMap,
+    /// (variable, basic graph pattern) by `bnodes` value.
+    bnode_vars: Vec<(Var, u32)>,
     /// Blank node labels in a CONSTRUCT template.
-    tbnodes: BTreeMap<Vec<u8>, Var>,
+    tbnodes: IdMap,
+    /// The keys of `tbnodes`, for the request-wide label check.
+    tbnode_labels: Vec<Vec<u32>>,
     /// The current basic graph pattern; anything but FILTER between triples starts another.
     bgp: u32,
     hidden: u32,
     aggs: Vec<(Var, Aggregate)>,
     agg_ok: bool,
     /// Variables standing for template blank nodes (CONSTRUCT), by variable.
-    template_bnodes: BTreeMap<Var, u32>,
+    template_bnodes: IdMap,
     in_template: bool,
     /// The top-level SELECT was `SELECT *`.
     top_star: bool,
@@ -58,16 +64,19 @@ fn new_parser<'a, 'd>(text: &'a [u8], base: &[u8], dict: &'d mut Dict) -> P<'a, 
     P {
         c: Cur::new(text),
         dict,
-        prefixes: BTreeMap::new(),
+        prefixes: IdMap::new(),
+        namespaces: Vec::new(),
         base: base.to_vec(),
         vars: Vec::new(),
-        bnodes: BTreeMap::new(),
-        tbnodes: BTreeMap::new(),
+        bnodes: IdMap::new(),
+        bnode_vars: Vec::new(),
+        tbnodes: IdMap::new(),
+        tbnode_labels: Vec::new(),
         bgp: 0,
         hidden: 0,
         aggs: Vec::new(),
         agg_ok: false,
-        template_bnodes: BTreeMap::new(),
+        template_bnodes: IdMap::new(),
         in_template: false,
         top_star: false,
     }
@@ -188,7 +197,7 @@ impl P<'_, '_> {
         let v = (self.vars.len() - 1) as Var;
         if self.in_template {
             let k = self.template_bnodes.len() as u32;
-            self.template_bnodes.insert(v, k);
+            self.template_bnodes.insert(&[v], k);
         }
         v
     }
@@ -296,10 +305,10 @@ impl P<'_, '_> {
         }
         let prefix = self.c.s[start..self.c.i].to_vec();
         self.c.expect(b':', "expected prefixed name")?;
-        let Some(ns) = self.prefixes.get(&prefix) else {
+        let Some(ns) = self.prefixes.get(&bytes_key(&prefix)) else {
             return self.c.err("undefined prefix");
         };
-        let mut out = ns.clone();
+        let mut out = self.namespaces[ns as usize].clone();
         let (mut keep_len, mut keep_i) = (out.len(), self.c.i);
         let mut first = true;
         loop {
@@ -360,7 +369,8 @@ impl P<'_, '_> {
                 }
                 self.c.expect(b':', "expected prefix name")?;
                 let ns = self.iri_string()?;
-                self.prefixes.insert(prefix, ns);
+                self.namespaces.push(ns);
+                self.prefixes.set(&bytes_key(&prefix), self.namespaces.len() as u32 - 1);
             } else if self.kw(b"VERSION") {
                 self.ws();
                 match self.c.peek() {
@@ -489,8 +499,8 @@ impl P<'_, '_> {
     fn to_template(&self, t: Tv) -> Tt {
         match t {
             Tv::Term(i) => Tt::Term(i),
-            Tv::Var(v) => match self.template_bnodes.get(&v) {
-                Some(&k) => Tt::Bnode(k),
+            Tv::Var(v) => match self.template_bnodes.get(&[v]) {
+                Some(k) => Tt::Bnode(k),
                 None => Tt::Var(v),
             },
             Tv::Triple(b) => {
@@ -1239,22 +1249,26 @@ impl P<'_, '_> {
         self.c.eat_str(b"_:");
         let mut label = Vec::new();
         self.c.bnode_label(&mut label)?;
+        let key = bytes_key(&label);
         if self.in_template {
-            if let Some(&v) = self.tbnodes.get(&label) {
+            if let Some(v) = self.tbnodes.get(&key) {
                 return Ok(Tv::Var(v));
             }
             let v = self.fresh_var();
-            self.tbnodes.insert(label, v);
+            self.tbnodes.insert(&key, v);
+            self.tbnode_labels.push(key);
             return Ok(Tv::Var(v));
         }
-        if let Some(&(v, bgp)) = self.bnodes.get(&label) {
+        if let Some(i) = self.bnodes.get(&key) {
+            let (v, bgp) = self.bnode_vars[i as usize];
             if bgp != self.bgp {
                 return self.c.err("a blank node label is used in two basic graph patterns");
             }
             return Ok(Tv::Var(v));
         }
         let v = self.fresh_var();
-        self.bnodes.insert(label, (v, self.bgp));
+        self.bnode_vars.push((v, self.bgp));
+        self.bnodes.insert(&key, self.bnode_vars.len() as u32 - 1);
         Ok(Tv::Var(v))
     }
 
@@ -1952,7 +1966,7 @@ impl P<'_, '_> {
     fn update(&mut self) -> Res<Update> {
         let mut ops = Vec::new();
         // Blank node labels in DATA may not be shared between the operations of a request.
-        let mut labels: alloc::collections::BTreeSet<Vec<u8>> = alloc::collections::BTreeSet::new();
+        let mut labels = IdMap::new();
         loop {
             self.prologue()?;
             self.ws();
@@ -1962,8 +1976,8 @@ impl P<'_, '_> {
             let op = self.update_op()?;
             let data = matches!(op, UpdateOp::Data { .. });
             ops.push(op);
-            for l in self.tbnodes.keys().filter(|_| data) {
-                if !labels.insert(l.clone()) {
+            for l in self.tbnode_labels.iter().filter(|_| data) {
+                if !labels.add(l) {
                     return self.c.err("a blank node label is used in two operations");
                 }
             }
@@ -1980,9 +1994,11 @@ impl P<'_, '_> {
 
     fn update_op(&mut self) -> Res<UpdateOp> {
         self.vars.clear();
-        self.bnodes.clear();
-        self.tbnodes.clear();
-        self.template_bnodes.clear();
+        self.bnodes = IdMap::new();
+        self.bnode_vars.clear();
+        self.tbnodes = IdMap::new();
+        self.tbnode_labels.clear();
+        self.template_bnodes = IdMap::new();
         self.hidden = 0;
         if self.kw(b"LOAD") {
             let silent = self.kw(b"SILENT");

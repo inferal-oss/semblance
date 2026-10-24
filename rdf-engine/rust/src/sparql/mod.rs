@@ -213,7 +213,7 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
         }
         Form::Ask => Output::Bool(!rows.is_empty()),
         Form::Construct => {
-            let mut seen = alloc::collections::BTreeSet::new();
+            let mut seen = crate::idmap::IdMap::new();
             let mut out = Vec::new();
             for r in &rows {
                 let bnodes: Vec<u32> = (0..q.template_bnodes).map(|_| ctx.dict.fresh_bnode()).collect();
@@ -224,7 +224,7 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
                     if !matches!(kind(s), IRI | BNODE) || kind(p) != IRI {
                         continue;
                     }
-                    if seen.insert([s, p, o]) {
+                    if seen.add(&[s, p, o]) {
                         out.extend_from_slice(&[s, p, o]);
                     }
                 }
@@ -232,36 +232,33 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
             Output::Triples(out)
         }
         Form::Describe => {
-            let mut targets = alloc::collections::BTreeSet::new();
+            let mut todo: Vec<u32> = Vec::new();
             for d in &q.describe {
                 match d {
-                    Tv::Term(i) => {
-                        targets.insert(*i);
-                    }
-                    Tv::Var(v) => targets.extend(rows.iter().map(|r| r[*v as usize]).filter(|&x| x != 0)),
+                    Tv::Term(i) => todo.push(*i),
+                    Tv::Var(v) => todo.extend(rows.iter().map(|r| r[*v as usize]).filter(|&x| x != 0)),
                     Tv::Triple(_) => {}
                 }
             }
             if q.describe.is_empty() {
                 for r in &rows {
-                    targets.extend(q.select.project.iter().map(|&v| r[v as usize]).filter(|&x| x != 0));
+                    todo.extend(q.select.project.iter().map(|&v| r[v as usize]).filter(|&x| x != 0));
                 }
             }
             // Concise bounded description: outgoing triples, following blank nodes.
-            let mut seen = alloc::collections::BTreeSet::new();
+            let mut seen = crate::idmap::IdMap::new();
             let mut out = Vec::new();
-            let mut todo: Vec<u32> = targets.into_iter().collect();
-            let mut done = alloc::collections::BTreeSet::new();
+            let mut done = crate::idmap::IdMap::new();
             let mut scan = Vec::new();
             while let Some(n) = todo.pop() {
-                if !done.insert(n) {
+                if !done.add(&[n]) {
                     continue;
                 }
                 for &g in &ctx.default.clone() {
                     scan.clear();
                     store.scan([n, 0, 0, g], &mut scan);
                     for q in scan.chunks_exact(4) {
-                        if seen.insert([q[0], q[1], q[2]]) {
+                        if seen.add(&q[..3]) {
                             out.extend_from_slice(&q[..3]);
                             let k = ctx.dict.term(q[2]).map_or(0, |t| t.kind);
                             if k == BNODE || k == TRIPLE {

@@ -11,7 +11,7 @@ use super::regex::Regex;
 use super::*;
 use crate::dict::{self, DEFAULT_GRAPH_ID, Dict, Key, NONE};
 use crate::store::Store;
-use alloc::collections::{BTreeMap, BTreeSet};
+use crate::idmap::{IdMap, bytes_key};
 use alloc::rc::Rc;
 use core::cmp::Ordering;
 
@@ -33,9 +33,13 @@ pub struct Ctx<'a> {
     pub base: &'a [u8],
     pub nvars: usize,
     pub now_ms: f64,
-    pub dt_cache: BTreeMap<u32, super::expr::Dt>,
-    regexes: BTreeMap<(Vec<u8>, Vec<u8>), Rc<Regex>>,
-    bnodes: BTreeMap<(Row, Vec<u8>), u32>,
+    /// Datatype kinds by datatype id (`Dt as u32`).
+    pub dt_cache: IdMap,
+    /// Compiled regexes by pattern and flags (an index into `regex_list`).
+    regexes: IdMap,
+    regex_list: Vec<Rc<Regex>>,
+    /// BNODE(str) per solution and string.
+    bnodes: IdMap,
     scan: Vec<u32>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
     active: Active,
@@ -51,9 +55,10 @@ impl<'a> Ctx<'a> {
             base,
             nvars,
             now_ms: crate::host::now(),
-            dt_cache: BTreeMap::new(),
-            regexes: BTreeMap::new(),
-            bnodes: BTreeMap::new(),
+            dt_cache: IdMap::new(),
+            regexes: IdMap::new(),
+            regex_list: Vec::new(),
+            bnodes: IdMap::new(),
             scan: Vec::new(),
             active: Active::Default,
         }
@@ -110,22 +115,25 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn regex(&mut self, pattern: &[u8], flags: &[u8]) -> R<Rc<Regex>> {
-        let key = (pattern.to_vec(), flags.to_vec());
-        if let Some(r) = self.regexes.get(&key) {
-            return Ok(r.clone());
+        let mut key = bytes_key(pattern);
+        key.extend(bytes_key(flags));
+        if let Some(i) = self.regexes.get(&key) {
+            return Ok(self.regex_list[i as usize].clone());
         }
         let r = Rc::new(super::regex::compile(pattern, flags).ok_or(())?);
-        self.regexes.insert(key, r.clone());
+        self.regex_list.push(r.clone());
+        self.regexes.insert(&key, self.regex_list.len() as u32 - 1);
         Ok(r)
     }
 
     pub fn bnode_for(&mut self, row: &[u32], s: &[u8]) -> u32 {
-        let key = (row.to_vec(), s.to_vec());
-        if let Some(&b) = self.bnodes.get(&key) {
+        let mut key = row.to_vec();
+        key.extend(bytes_key(s));
+        if let Some(b) = self.bnodes.get(&key) {
             return b;
         }
         let b = self.dict.fresh_bnode();
-        self.bnodes.insert(key, b);
+        self.bnodes.insert(&key, b);
         b
     }
 
@@ -367,13 +375,13 @@ impl<'a> Ctx<'a> {
         let (Some(s), Some(p), Some(o)) = (pos(&t.s, self), pos(&t.p, self), pos(&t.o, self)) else { return };
         let graphs = self.graphs(active);
         let dedupe = graphs.len() > 1;
-        let mut seen: BTreeSet<[u32; 3]> = BTreeSet::new();
+        let mut seen = IdMap::new();
         let mut scan = core::mem::take(&mut self.scan);
         for g in graphs {
             scan.clear();
             self.store.scan([s, p, o, g], &mut scan);
             for q in scan.chunks_exact(4) {
-                if dedupe && !seen.insert([q[0], q[1], q[2]]) {
+                if dedupe && !seen.add(&q[..3]) {
                     continue;
                 }
                 let mut r = row.to_vec();
@@ -409,13 +417,13 @@ impl<'a> Ctx<'a> {
     fn scan_pairs(&mut self, s: u32, p: u32, o: u32, active: Active, out: &mut Vec<(u32, u32, u32)>) {
         let graphs = self.graphs(active);
         let dedupe = graphs.len() > 1;
-        let mut seen: BTreeSet<[u32; 3]> = BTreeSet::new();
+        let mut seen = IdMap::new();
         let mut scan = core::mem::take(&mut self.scan);
         for g in graphs {
             scan.clear();
             self.store.scan([s, p, o, g], &mut scan);
             for q in scan.chunks_exact(4) {
-                if !dedupe || seen.insert([q[0], q[1], q[2]]) {
+                if !dedupe || seen.add(&q[..3]) {
                     out.push((q[0], q[1], q[2]));
                 }
             }
@@ -440,34 +448,45 @@ impl<'a> Ctx<'a> {
             }
             Path::Seq(a, b) => {
                 let mut out = Vec::new();
+                // Each middle node's continuations, computed once.
+                let (mut index, mut cached) = (IdMap::new(), Vec::<Vec<(u32, u32)>>::new());
                 if s.is_some() || o.is_none() {
-                    let mut cache: BTreeMap<u32, Vec<(u32, u32)>> = BTreeMap::new();
                     for (x, m) in self.pairs(a, s, None, active) {
-                        if !cache.contains_key(&m) {
-                            let r = self.pairs(b, Some(m), o, active);
-                            cache.insert(m, r);
-                        }
-                        out.extend(cache[&m].iter().map(|&(_, y)| (x, y)));
+                        let i = match index.get(&[m]) {
+                            Some(i) => i as usize,
+                            None => {
+                                cached.push(self.pairs(b, Some(m), o, active));
+                                index.insert(&[m], cached.len() as u32 - 1);
+                                cached.len() - 1
+                            }
+                        };
+                        out.extend(cached[i].iter().map(|&(_, y)| (x, y)));
                     }
                 } else {
-                    let mut cache: BTreeMap<u32, Vec<(u32, u32)>> = BTreeMap::new();
                     for (m, y) in self.pairs(b, None, o, active) {
-                        if !cache.contains_key(&m) {
-                            let r = self.pairs(a, None, Some(m), active);
-                            cache.insert(m, r);
-                        }
-                        out.extend(cache[&m].iter().map(|&(x, _)| (x, y)));
+                        let i = match index.get(&[m]) {
+                            Some(i) => i as usize,
+                            None => {
+                                cached.push(self.pairs(a, None, Some(m), active));
+                                index.insert(&[m], cached.len() as u32 - 1);
+                                cached.len() - 1
+                            }
+                        };
+                        out.extend(cached[i].iter().map(|&(x, _)| (x, y)));
                     }
                 }
                 out
             }
             Path::ZeroOrOne(q) => {
-                let mut set: BTreeSet<(u32, u32)> = BTreeSet::new();
-                for n in self.zero_nodes(s, o, active) {
-                    set.insert((n, n));
+                let mut seen = IdMap::new();
+                let mut out = Vec::new();
+                let zero: Vec<(u32, u32)> = self.zero_nodes(s, o, active).into_iter().map(|n| (n, n)).collect();
+                for (a, b) in zero.into_iter().chain(self.pairs(q, s, o, active)) {
+                    if seen.add(&[a, b]) {
+                        out.push((a, b));
+                    }
                 }
-                set.extend(self.pairs(q, s, o, active));
-                set.into_iter().collect()
+                out
             }
             Path::ZeroOrMore(q) | Path::OneOrMore(q) => {
                 let zero = matches!(path, Path::ZeroOrMore(_));
@@ -538,27 +557,31 @@ impl<'a> Ctx<'a> {
     fn nodes(&mut self, active: Active) -> Vec<u32> {
         let mut t = Vec::new();
         self.scan_pairs(NONE, NONE, NONE, active, &mut t);
-        let mut set: BTreeSet<u32> = BTreeSet::new();
+        let mut seen = IdMap::new();
+        let mut out = Vec::new();
         for (a, _, b) in t {
-            set.insert(a);
-            set.insert(b);
+            for n in [a, b] {
+                if seen.add(&[n]) {
+                    out.push(n);
+                }
+            }
         }
-        set.into_iter().collect()
+        out
     }
 
     /// Nodes reachable from `start` by one or more steps of `q` (or zero, with `zero`).
     fn closure(&mut self, q: &Path, start: u32, zero: bool, backwards: bool, active: Active) -> Vec<u32> {
-        let mut seen: BTreeSet<u32> = BTreeSet::new();
+        let mut seen = IdMap::new();
         let mut out = Vec::new();
         if zero {
-            seen.insert(start);
+            seen.add(&[start]);
             out.push(start);
         }
         let mut frontier = alloc::vec![start];
         while let Some(n) = frontier.pop() {
             let next = if backwards { self.pairs(q, None, Some(n), active).into_iter().map(|(a, _)| a).collect::<Vec<_>>() } else { self.pairs(q, Some(n), None, active).into_iter().map(|(_, b)| b).collect() };
             for m in next {
-                if seen.insert(m) {
+                if seen.add(&[m]) {
                     out.push(m);
                     frontier.push(m);
                 }
@@ -588,7 +611,7 @@ impl<'a> Ctx<'a> {
         }
         if !s.order.is_empty() {
             let mut keyed: Vec<(Vec<Option<Val>>, Row)> = rows.into_iter().map(|r| (s.order.iter().map(|(e, _)| self.expr(e, &r).ok()).collect(), r)).collect();
-            keyed.sort_by(|(a, _), (b, _)| {
+            keyed.sort_unstable_by(|(a, _), (b, _)| {
                 for (i, (_, desc)) in s.order.iter().enumerate() {
                     let o = self.sort_cmp(a[i].as_ref(), b[i].as_ref());
                     if o != Ordering::Equal {
@@ -612,8 +635,8 @@ impl<'a> Ctx<'a> {
             }
         }
         if s.distinct || s.reduced {
-            let mut seen: BTreeSet<Row> = BTreeSet::new();
-            rows.retain(|r| seen.insert(r.clone()));
+            let mut seen = IdMap::new();
+            rows.retain(|r| seen.add(r));
         }
         let rows: Vec<Row> = rows.into_iter().skip(s.offset).take(s.limit.unwrap_or(usize::MAX)).collect();
         rows
@@ -625,22 +648,22 @@ impl<'a> Ctx<'a> {
 
     fn group(&mut self, s: &Select, rows: Vec<Row>) -> Vec<Row> {
         let keys = s.group.as_deref().unwrap_or(&[]);
-        let mut order: Vec<Row> = Vec::new();
-        let mut groups: BTreeMap<Row, Vec<Row>> = BTreeMap::new();
+        // Groups in order of first appearance.
+        let mut index = IdMap::new();
+        let mut groups: Vec<(Row, Vec<Row>)> = Vec::new();
         for r in rows {
             let key: Row = keys.iter().map(|(e, _)| self.expr(e, &r).map(|v| self.to_id(&v)).unwrap_or(NONE)).collect();
-            if !groups.contains_key(&key) {
-                order.push(key.clone());
+            let (i, new) = index.insert(&key, groups.len() as u32);
+            if new {
+                groups.push((key, Vec::new()));
             }
-            groups.entry(key).or_default().push(r);
+            groups[i as usize].1.push(r);
         }
         if keys.is_empty() && groups.is_empty() {
-            order.push(Vec::new());
-            groups.insert(Vec::new(), Vec::new());
+            groups.push((Vec::new(), Vec::new()));
         }
         let mut out = Vec::new();
-        for key in order {
-            let members = groups.remove(&key).unwrap();
+        for (key, members) in groups {
             let mut r = alloc::vec![NONE; self.nvars];
             for ((e, v), k) in keys.iter().zip(&key) {
                 match (e, v) {
@@ -660,18 +683,23 @@ impl<'a> Ctx<'a> {
     fn aggregate(&mut self, a: &Aggregate, rows: &[Row]) -> R<Val> {
         use super::num::Num;
         let Some(e) = &a.expr else {
-            let n = if a.distinct { rows.iter().collect::<BTreeSet<_>>().len() } else { rows.len() };
+            let n = if a.distinct {
+                let mut seen = IdMap::new();
+                rows.iter().filter(|r| seen.add(r)).count()
+            } else {
+                rows.len()
+            };
             return Ok(Val::Num(Num::Int(n as i128)));
         };
         let mut vals: Vec<R<Val>> = rows.iter().map(|r| self.expr(e, r)).collect();
         if a.distinct {
-            let mut seen = BTreeSet::new();
+            let mut seen = IdMap::new();
             let mut kept = Vec::new();
             for v in vals {
                 match v {
                     Ok(v) => {
                         let id = self.to_id(&v);
-                        if seen.insert(id) {
+                        if seen.add(&[id]) {
                             kept.push(Ok(Val::Id(id)));
                         }
                     }
@@ -803,13 +831,22 @@ pub fn join_rows(left: Vec<Row>, right: &[Row]) -> Vec<Row> {
     let key = (0..n).find(|&v| left.iter().all(|r| r[v] != NONE) && right.iter().all(|r| r[v] != NONE));
     match key {
         Some(v) => {
-            let mut index: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
-            for (i, r) in right.iter().enumerate() {
-                index.entry(r[v]).or_default().push(i);
+            // Right rows by key value: (first, next) chains through `next`.
+            let mut first = IdMap::new();
+            let mut next = alloc::vec![u32::MAX; right.len()];
+            for (i, r) in right.iter().enumerate().rev() {
+                let (head, new) = first.insert(&[r[v]], i as u32);
+                if !new {
+                    next[i] = head;
+                    first.set(&[r[v]], i as u32);
+                }
             }
             for l in &left {
-                if let Some(is) = index.get(&l[v]) {
-                    for &i in is {
+                if let Some(head) = first.get(&[l[v]]) {
+                    let mut at = head;
+                    while at != u32::MAX {
+                        let i = at as usize;
+                        at = next[i];
                         if let Some(m) = merge(l, &right[i]) {
                             out.push(m);
                         }

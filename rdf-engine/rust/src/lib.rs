@@ -9,6 +9,7 @@ mod dict;
 mod hash;
 mod heap;
 mod host;
+mod idmap;
 mod iri;
 mod lex;
 mod ntriples;

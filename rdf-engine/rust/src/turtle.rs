@@ -5,7 +5,7 @@ use crate::dict::{Dict, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING};
 use crate::iri;
 use crate::lex::{Cur, Res, has_scheme, pn_chars, pn_chars_base, pn_chars_u};
 use crate::store::Quad;
-use alloc::collections::BTreeMap;
+use crate::idmap::{IdMap, bytes_key};
 use alloc::vec::Vec;
 
 const RDF: &[u8] = b"http://www.w3.org/1999/02/22-rdf-syntax-ns#";
@@ -15,9 +15,11 @@ struct Parser<'a, 'd> {
     c: Cur<'a>,
     dict: &'d mut Dict,
     out: &'d mut Vec<Quad>,
-    prefixes: BTreeMap<Vec<u8>, Vec<u8>>,
+    /// Namespaces by prefix (an index into `namespaces`).
+    prefixes: IdMap,
+    namespaces: Vec<Vec<u8>>,
     base: Vec<u8>,
-    bnodes: BTreeMap<Vec<u8>, u32>,
+    bnodes: IdMap,
     /// Where triples go: the load's graph, or the graph block being read.
     graph: u32,
     buf: Vec<u8>,
@@ -30,9 +32,10 @@ pub fn parse(text: &[u8], trig: bool, base: &[u8], graph: u32, dict: &mut Dict, 
         c: Cur::new(text),
         dict,
         out,
-        prefixes: BTreeMap::new(),
+        prefixes: IdMap::new(),
+        namespaces: Vec::new(),
         base: base.to_vec(),
-        bnodes: BTreeMap::new(),
+        bnodes: IdMap::new(),
         graph,
         buf: Vec::new(),
         lang: Vec::new(),
@@ -126,7 +129,8 @@ impl Parser<'_, '_> {
                 let prefix = self.pname_ns()?;
                 self.ws();
                 let ns = self.iri_string()?;
-                self.prefixes.insert(prefix, ns);
+                self.namespaces.push(ns);
+                self.prefixes.set(&bytes_key(&prefix), self.namespaces.len() as u32 - 1);
             }
             1 => self.base = self.iri_string()?,
             _ => match self.c.peek() {
@@ -499,11 +503,12 @@ impl Parser<'_, '_> {
             return self.c.err("expected blank node");
         }
         self.c.bnode_label(&mut self.buf)?;
-        if let Some(&id) = self.bnodes.get(&self.buf) {
+        let key = bytes_key(&self.buf);
+        if let Some(id) = self.bnodes.get(&key) {
             return Ok(id);
         }
         let id = self.dict.fresh_bnode();
-        self.bnodes.insert(self.buf.clone(), id);
+        self.bnodes.insert(&key, id);
         Ok(id)
     }
 
@@ -539,10 +544,10 @@ impl Parser<'_, '_> {
         if !self.c.eat(b':') {
             return self.c.err("expected prefixed name");
         }
-        let Some(ns) = self.prefixes.get(prefix) else {
+        let Some(ns) = self.prefixes.get(&bytes_key(prefix)) else {
             return self.c.err("undefined prefix");
         };
-        let mut out = ns.clone();
+        let mut out = self.namespaces[ns as usize].clone();
         // PN_LOCAL; a trailing unescaped '.' ends the statement instead.
         let (mut keep_len, mut keep_i) = (out.len(), self.c.i);
         let mut first = true;
