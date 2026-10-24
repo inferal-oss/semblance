@@ -61,6 +61,21 @@ The engines move in lockstep; each phase ends with both passing the same tests.
    HTTP `LOAD`).
 5. **Housekeeping and speed.** `collect`, and whatever the benchmarks point at.
 
+### Where they are
+
+| | Rust | WAT |
+|---|---|---|
+| 1. Terms and store | done | done |
+| 2. Turtle and TriG | done: rdf12 1,055/1,055 | done: rdf12 1,055/1,055 |
+| 3. Semblance's SPARQL | done: every Semblance page renders as on Oxigraph, with SPARQL and function rules | in progress |
+| 4. SPARQL 1.2 query and update | done: 2,304 of 2,317 W3C tests (Oxigraph 2,227); every failure is shared with Oxigraph | |
+| 5. Housekeeping and speed | `collect`; size pass (344 to 252 KiB) | |
+
+The Rust engine writes computed numbers the way XPath casts them to strings
+(`"2"`, `"2.5"`), as Oxigraph does and Semblance's output relies on; seven
+W3C tests expect XSD 1.0 canonical forms (`"2.0"`, `"2.5E0"`) and fail on
+both engines for that reason.
+
 ## Rules for a fair comparison
 
 - Same ABI, same host, same tests. No code is shared between the engines.

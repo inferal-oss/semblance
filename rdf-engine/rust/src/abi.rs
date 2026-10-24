@@ -314,8 +314,18 @@ pub extern "C" fn load(format: u32, text_len: u32, base_len: u32, graph: u32) ->
 
 #[unsafe(no_mangle)]
 pub extern "C" fn collect() -> i32 {
-    st().result.clear();
-    0
+    let s = st();
+    let mut alive = alloc::vec![false; s.dict.capacity()];
+    let dict = &s.dict;
+    s.store.each(|q| q.iter().for_each(|&id| dict.mark(id, &mut alive)));
+    for p in s.queries.iter().flatten() {
+        sparql::query_terms(&p.query, &mut |id| dict.mark(id, &mut alive));
+        p.binds.iter().flat_map(|(_, v)| v).for_each(|&id| dict.mark(id, &mut alive));
+    }
+    let freed = s.dict.sweep(&alive);
+    s.result.clear();
+    s.result.extend(freed);
+    s.result.len() as i32
 }
 
 // --- queries -----------------------------------------------------------------

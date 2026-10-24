@@ -1,6 +1,8 @@
 // Semblance's GraphStore over any engine build. Terms cross the boundary once:
-// each term object carries its engine id, ids map back to shared term objects,
-// and the factory hands out those same objects.
+// the adapter's own (shared) term objects carry their engine id, ids map back
+// to them, and the factory hands out those same objects. Terms from other
+// factories are looked up by value. In idle time (`maintain`) the engine frees
+// terms nothing uses any more; the adapter then forgets their ids.
 import type { DefaultGraph, Literal, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { Factory, GraphStore } from '../../src/store/types.ts'
 import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from './engine.ts'
@@ -75,7 +77,10 @@ class TripleTerm extends Base {
 /** A store quad; distinct from triple terms only in being used as a statement. */
 const quad = (s: Term, p: Term, o: Term, g: Term) => new TripleTerm(s, p, o, g) as unknown as Quad
 
-export function engineStore(module: WebAssembly.Module, kind: string): GraphStore {
+/** A GraphStore with the engine's own counters, for tests and benchmarks. */
+export type EngineStore = GraphStore & { termCount(): number }
+
+export function engineStore(module: WebAssembly.Module, kind: string): EngineStore {
   const e = new Engine(module)
   const defaultGraph = new Default()
   defaultGraph[ID] = DEFAULT_GRAPH
@@ -92,8 +97,9 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
   }
 
   const literals = new Map<string, Lit>()
+  const literalKey = (value: string, language: string, direction: string, datatype: string) => value + '\u0000' + (language ? language + '\u0000' + direction : datatype)
   function sharedLiteral(value: string, language: string, direction: '' | 'ltr' | 'rtl', datatype: string): Lit {
-    const k = value + '\u0000' + (language ? language + '\u0000' + direction : datatype)
+    const k = literalKey(value, language, direction, datatype)
     let t = literals.get(k)
     if (!t) {
       const dt = language ? (direction ? RDF_DIR_LANG : RDF_LANG) : datatype
@@ -125,17 +131,23 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
     switch (t.termType) {
       case 'NamedNode': {
         const shared = namedNode(t.value)
-        if (shared[ID] !== undefined) return (tagged[ID] = shared[ID])
+        if (shared[ID] !== undefined) return shared[ID]
         id = intern ? e.iri(t.value) : e.lookupIri(t.value)
-        if (id) shared[ID] = id
+        if (id) {
+          shared[ID] = id
+          byId[id] ??= shared
+        }
         break
       }
       case 'DefaultGraph':
         return DEFAULT_GRAPH
       case 'BlankNode': {
         const shared = blankNode(t.value)
-        if (shared[ID] === undefined) shared[ID] = e.bnode(t.value)
-        return (tagged[ID] = shared[ID])
+        if (shared[ID] === undefined) {
+          shared[ID] = e.bnode(t.value)
+          byId[shared[ID]] ??= shared
+        }
+        return shared[ID]
       }
       case 'Literal': {
         const l = t as Literal
@@ -147,7 +159,7 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
           shared[ID] = lang ? e.langLiteral(l.value, lang, dir) : e.literal(l.value, l.datatype.value === XSD_STRING ? 0 : idOf(l.datatype, true))
           byId[shared[ID]] ??= shared
         }
-        return (tagged[ID] = shared[ID])
+        return shared[ID]
       }
       case 'Quad': {
         const q = t as unknown as Quad
@@ -159,7 +171,7 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
       default:
         throw new Error(`cannot store a ${t.termType}`)
     }
-    if (id) {
+    if (id && t instanceof Base) {
       tagged[ID] = id
       byId[id] ??= t
     }
@@ -238,6 +250,21 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
     return out
   }
 
+  /** Free unused engine terms and forget them here. */
+  let liveAfterCollect = e.termCount()
+  function collect() {
+    for (const id of e.collect()) {
+      const t = byId[id] as (Base & Term) | undefined
+      if (!t) continue
+      byId[id] = undefined
+      delete t[ID]
+      if (t instanceof Iri) iris.delete(t.value)
+      else if (t instanceof Blank) bnodes.delete(t.value)
+      else if (t instanceof Lit) literals.delete(literalKey(t.value, t.language, t.direction, t.datatype.value))
+    }
+    liveAfterCollect = e.termCount()
+  }
+
   const ids = (q: Quad, intern: boolean) => [idOf(q.subject, intern), idOf(q.predicate, intern), idOf(q.object, intern), idOf(q.graph, intern)]
 
   const factory: Factory = {
@@ -307,6 +334,12 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
     },
     loadTurtle(text) {
       e.load(Format.Turtle, text)
+    },
+    termCount: () => e.termCount(),
+    maintain() {
+      // Collect once the dictionary has grown by half since the last collection.
+      if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
+      return false
     },
   }
 }

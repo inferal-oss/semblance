@@ -753,6 +753,10 @@ impl<'a> Ctx<'a> {
 }
 
 /// Whether evaluating with extra bindings substituted equals joining with them.
+/// True for matching (triples, paths, VALUES, and joins and unions of them),
+/// and for BIND / FILTER over such a pattern when the expression only reads
+/// variables the pattern always binds: a substituted value then equals the
+/// pattern's own, so the expression cannot tell.
 fn pure(p: &Pattern) -> bool {
     match p {
         Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) => true,
@@ -760,7 +764,64 @@ fn pure(p: &Pattern) -> bool {
         Pattern::Path(..) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) => pure(a) && pure(b),
         Pattern::Graph(_, a) => pure(a),
+        Pattern::Extend(a, _, e) | Pattern::Filter(e, a) => pure(a) && reads_only(e, &certain(a)),
         _ => false,
+    }
+}
+
+/// Variables a pattern binds in every solution.
+fn certain(p: &Pattern) -> Vec<Var> {
+    let mut out = Vec::new();
+    match p {
+        Pattern::Bgp(ts) => {
+            for t in ts {
+                for x in [&t.s, &t.p, &t.o] {
+                    tv_vars(x, &mut out);
+                }
+            }
+        }
+        Pattern::Path(s, _, o) => {
+            tv_vars(s, &mut out);
+            tv_vars(o, &mut out);
+        }
+        Pattern::Join(a, b) => {
+            out = certain(a);
+            out.extend(certain(b));
+        }
+        Pattern::Union(a, b) => {
+            let right = certain(b);
+            out = certain(a).into_iter().filter(|v| right.contains(v)).collect();
+        }
+        Pattern::Graph(g, a) => {
+            out = certain(a);
+            tv_vars(g, &mut out);
+        }
+        Pattern::Extend(a, _, _) | Pattern::Filter(_, a) => out = certain(a),
+        Pattern::Values(vars, rows) => out = vars.iter().enumerate().filter(|(i, _)| rows.iter().all(|r| r[*i] != NONE)).map(|(_, v)| *v).collect(),
+        _ => {}
+    }
+    out
+}
+
+fn tv_vars(t: &Tv, out: &mut Vec<Var>) {
+    match t {
+        Tv::Var(v) => out.push(*v),
+        Tv::Triple(b) => b.iter().for_each(|x| tv_vars(x, out)),
+        Tv::Term(_) => {}
+    }
+}
+
+/// Whether an expression reads only `vars` (and has no EXISTS, which sees more).
+fn reads_only(e: &Expr, vars: &[Var]) -> bool {
+    match e {
+        Expr::Var(v) | Expr::Bound(v) => vars.contains(v),
+        Expr::Const(_) | Expr::Unknown => true,
+        Expr::Exists(..) => false,
+        Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => reads_only(a, vars) && reads_only(b, vars),
+        Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => reads_only(a, vars),
+        Expr::In(a, l, _) => reads_only(a, vars) && l.iter().all(|x| reads_only(x, vars)),
+        Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().all(|x| reads_only(x, vars)),
+        Expr::If(a, b, c) => reads_only(a, vars) && reads_only(b, vars) && reads_only(c, vars),
     }
 }
 

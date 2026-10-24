@@ -136,6 +136,30 @@ check('load scopes blank nodes per document and is all or nothing', (e) => {
   assert.equal(e.quadCount(), 4)
 })
 
+check('collect frees unused terms and keeps the rest', (e) => {
+  const [s, p] = [e.iri('http://example/s'), e.iri('http://example/p')]
+  const o = e.literal('kept', e.iri('http://example/dt'))
+  const t = e.triple(s, p, e.literal('inside'))
+  e.add(s, p, o)
+  e.add(t, p, s, e.iri('http://example/g'))
+  const garbage = [e.iri('http://example/unused'), e.literal('unused'), e.langLiteral('x', 'en'), e.bnode('b')]
+  const before = e.termCount()
+  const freed = new Set(e.collect())
+  for (const id of garbage) assert.ok(freed.has(id), `id ${id} freed`)
+  for (const id of [s, p, o, t]) assert.ok(!freed.has(id), `id ${id} kept`)
+  assert.equal(e.termCount(), before - freed.size)
+  assert.equal(e.value(o), 'kept')
+  assert.equal(e.value(e.datatype(o)), 'http://example/dt', "a literal's datatype is kept")
+  assert.equal(e.value(e.tripleParts(t)[2]), 'inside', "a triple term's parts are kept")
+  assert.equal(e.lookupIri('http://example/s'), s, 'lookups work after collect')
+  assert.equal(e.lookupIri('http://example/unused'), 0)
+  assert.equal(e.match(s, p).length, 4)
+  const reused = e.iri('http://example/new')
+  assert.ok(freed.has(reused), 'freed ids are reused')
+  assert.equal(e.value(reused), 'http://example/new')
+  assert.equal(e.kind(DEFAULT_GRAPH), Kind.DefaultGraph)
+})
+
 let failed = 0
 for (const [label, f] of checks) {
   try {

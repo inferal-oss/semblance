@@ -70,6 +70,10 @@ impl Store {
         self.spog.len()
     }
 
+    pub fn each(&self, mut f: impl FnMut(&Quad)) {
+        self.spog.iter().for_each(|q| f(q));
+    }
+
     /// Every graph that holds a quad.
     pub fn graphs(&self) -> Vec<u32> {
         let mut out = Vec::new();

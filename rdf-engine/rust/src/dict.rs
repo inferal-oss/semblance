@@ -80,6 +80,8 @@ pub struct Dict {
     table: Vec<u32>,
     live: u32,
     fresh: u32,
+    /// Freed ids, reused before new ones.
+    free: Vec<u32>,
 }
 
 /// Lowercase ASCII into `buf` if `s` has any uppercase letter.
@@ -95,7 +97,7 @@ pub fn lowercase<'a>(s: &'a [u8], buf: &'a mut Vec<u8>) -> &'a [u8] {
 impl Dict {
     pub fn new() -> Dict {
         let none = Term { kind: FREE, dir: 0, a: 0, b: 0, c: 0, voff: 0, vlen: 0, loff: 0, llen: 0, hash: 0 };
-        let mut d = Dict { terms: Vec::new(), arena: Vec::new(), table: alloc::vec![0; 1024], live: 0, fresh: 0 };
+        let mut d = Dict { terms: Vec::new(), arena: Vec::new(), table: alloc::vec![0; 1024], live: 0, fresh: 0, free: Vec::new() };
         d.terms.push(none);
         d.terms.push(Term { kind: DEFAULT, ..none });
         d.intern(Key::iri(b"http://www.w3.org/2001/XMLSchema#string"));
@@ -142,12 +144,11 @@ impl Dict {
         if self.table[i] != NONE {
             return self.table[i];
         }
-        let id = self.terms.len() as u32;
         let voff = self.arena.len() as u32;
         self.arena.extend_from_slice(k.value);
         let loff = self.arena.len() as u32;
         self.arena.extend_from_slice(k.lang);
-        self.terms.push(Term {
+        let term = Term {
             kind: k.kind,
             dir: k.dir,
             a: k.a,
@@ -158,7 +159,17 @@ impl Dict {
             loff,
             llen: k.lang.len() as u32,
             hash: h,
-        });
+        };
+        let id = match self.free.pop() {
+            Some(id) => {
+                self.terms[id as usize] = term;
+                id
+            }
+            None => {
+                self.terms.push(term);
+                self.terms.len() as u32 - 1
+            }
+        };
         self.table[i] = id;
         self.live += 1;
         if self.live as usize * 4 > self.table.len() * 3 {
@@ -218,5 +229,76 @@ impl Dict {
 
     pub fn len(&self) -> u32 {
         self.live + 1
+    }
+
+    /// Ids ever handed out (live or free), for mark arrays.
+    pub fn capacity(&self) -> usize {
+        self.terms.len()
+    }
+
+    /// Mark a term live, with what it is made of (a literal's datatype, a triple's parts).
+    pub fn mark(&self, id: u32, alive: &mut [bool]) {
+        let i = id as usize;
+        if i >= alive.len() || alive[i] {
+            return;
+        }
+        alive[i] = true;
+        let Some(t) = self.term(id) else { return };
+        match t.kind {
+            LITERAL => self.mark(t.a, alive),
+            TRIPLE => {
+                let (a, b, c) = (t.a, t.b, t.c);
+                self.mark(a, alive);
+                self.mark(b, alive);
+                self.mark(c, alive);
+            }
+            _ => {}
+        }
+    }
+
+    /// Free every term not marked alive; compacts the strings and rebuilds the
+    /// table. Returns the freed ids.
+    pub fn sweep(&mut self, alive: &[bool]) -> Vec<u32> {
+        let mut freed = Vec::new();
+        let mut arena = Vec::with_capacity(self.arena.len());
+        for id in 0..self.terms.len() {
+            let t = self.terms[id];
+            if t.kind == FREE || t.kind == DEFAULT {
+                continue;
+            }
+            if !alive.get(id).copied().unwrap_or(true) && id > RDF_DIR_LANG_STRING as usize {
+                self.terms[id].kind = FREE;
+                self.free.push(id as u32);
+                self.live -= 1;
+                freed.push(id as u32);
+                continue;
+            }
+            let voff = arena.len() as u32;
+            arena.extend_from_slice(&self.arena[t.voff as usize..(t.voff + t.vlen) as usize]);
+            let loff = arena.len() as u32;
+            arena.extend_from_slice(&self.arena[t.loff as usize..(t.loff + t.llen) as usize]);
+            self.terms[id].voff = voff;
+            self.terms[id].loff = loff;
+        }
+        self.arena = arena;
+        // Lower ids are reused first.
+        self.free.sort_unstable_by(|a, b| b.cmp(a));
+        let mut size = 1024;
+        while self.live as usize * 4 > size * 3 {
+            size *= 2;
+        }
+        self.table = alloc::vec![NONE; size];
+        let mask = size - 1;
+        for (id, t) in self.terms.iter().enumerate() {
+            if t.kind == FREE || t.kind == DEFAULT {
+                continue;
+            }
+            let mut i = t.hash as usize & mask;
+            while self.table[i] != NONE {
+                i = (i + 1) & mask;
+            }
+            self.table[i] = id as u32;
+        }
+        freed
     }
 }

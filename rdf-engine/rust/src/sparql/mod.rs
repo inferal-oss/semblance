@@ -322,3 +322,112 @@ pub struct Update {
     pub ops: Vec<UpdateOp>,
     pub base: Vec<u8>,
 }
+
+/// Every term id a query holds (constants, VALUES data, templates).
+pub fn query_terms(q: &Query, f: &mut dyn FnMut(u32)) {
+    fn tv(t: &Tv, f: &mut dyn FnMut(u32)) {
+        match t {
+            Tv::Term(i) => f(*i),
+            Tv::Var(_) => {}
+            Tv::Triple(b) => b.iter().for_each(|x| tv(x, f)),
+        }
+    }
+    fn tt(t: &Tt, f: &mut dyn FnMut(u32)) {
+        match t {
+            Tt::Term(i) => f(*i),
+            Tt::Triple(b) => b.iter().for_each(|x| tt(x, f)),
+            _ => {}
+        }
+    }
+    fn path(p: &Path, f: &mut dyn FnMut(u32)) {
+        match p {
+            Path::Iri(i) => f(*i),
+            Path::Inverse(a) | Path::ZeroOrMore(a) | Path::OneOrMore(a) | Path::ZeroOrOne(a) => path(a, f),
+            Path::Seq(a, b) | Path::Alt(a, b) => {
+                path(a, f);
+                path(b, f);
+            }
+            Path::Negated(a, b) => a.iter().chain(b).for_each(|&i| f(i)),
+        }
+    }
+    fn expr(e: &Expr, f: &mut dyn FnMut(u32)) {
+        match e {
+            Expr::Const(c) | Expr::Cast(c, _) => {
+                f(*c);
+                if let Expr::Cast(_, a) = e {
+                    expr(a, f);
+                }
+            }
+            Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => {
+                expr(a, f);
+                expr(b, f);
+            }
+            Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) => expr(a, f),
+            Expr::In(a, l, _) => {
+                expr(a, f);
+                l.iter().for_each(|x| expr(x, f));
+            }
+            Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().for_each(|x| expr(x, f)),
+            Expr::If(a, b, c) => {
+                expr(a, f);
+                expr(b, f);
+                expr(c, f);
+            }
+            Expr::Exists(p, _) => pattern(p, f),
+            Expr::Var(_) | Expr::Bound(_) | Expr::Unknown => {}
+        }
+    }
+    fn pattern(p: &Pattern, f: &mut dyn FnMut(u32)) {
+        match p {
+            Pattern::Unit | Pattern::Service(_) => {}
+            Pattern::Bgp(ts) => ts.iter().for_each(|t| [&t.s, &t.p, &t.o].iter().for_each(|x| tv(x, f))),
+            Pattern::Path(s, p, o) => {
+                tv(s, f);
+                path(p, f);
+                tv(o, f);
+            }
+            Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) => {
+                pattern(a, f);
+                pattern(b, f);
+            }
+            Pattern::LeftJoin(a, b, e) => {
+                pattern(a, f);
+                pattern(b, f);
+                if let Some(e) = e {
+                    expr(e, f);
+                }
+            }
+            Pattern::Filter(e, a) | Pattern::Extend(a, _, e) => {
+                expr(e, f);
+                pattern(a, f);
+            }
+            Pattern::Graph(g, a) => {
+                tv(g, f);
+                pattern(a, f);
+            }
+            Pattern::Values(_, rows) => rows.iter().flatten().for_each(|&i| f(i)),
+            Pattern::Sub(s) => select(s, f),
+        }
+    }
+    fn select(s: &Select, f: &mut dyn FnMut(u32)) {
+        pattern(&s.pattern, f);
+        for (e, _) in s.group.iter().flatten() {
+            expr(e, f);
+        }
+        for (_, a) in &s.aggregates {
+            if let Some(e) = &a.expr {
+                expr(e, f);
+            }
+        }
+        s.having.iter().for_each(|e| expr(e, f));
+        s.extend.iter().for_each(|(_, e)| expr(e, f));
+        s.order.iter().for_each(|(e, _)| expr(e, f));
+        if let Some(v) = &s.values {
+            pattern(v, f);
+        }
+    }
+    select(&q.select, f);
+    q.template.iter().flatten().for_each(|t| tt(t, f));
+    q.describe.iter().for_each(|t| tv(t, f));
+    q.from.iter().chain(&q.from_named).for_each(|&i| f(i));
+}
