@@ -78,6 +78,15 @@ describe('the reference tree', () => {
     // A branch closed by hand stays closed even while it holds the selection.
     h.click(h.branch('Inputs').querySelector('.sem-twisty')!)
     expect(h.branch('Inputs').getAttribute('aria-expanded')).toBe('false')
+    // A selection from elsewhere (Back, Forward, a link to #reference/c:Draggable) is shown the same way.
+    const f = h.store.factory
+    const app = f.namedNode(UI + 'app')
+    const subject = f.namedNode(UI + 'referenceSubject')
+    h.runtime.apply({ remove: h.store.match(app, subject, null), add: [f.quad(app, subject, f.namedNode(C + 'Draggable'))] })
+    h.shell.flush()
+    expect(h.branch('Windows').getAttribute('aria-expanded')).toBe('true')
+    expect([...h.tree().querySelectorAll('[aria-selected=true] > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['Draggable'])
+    expect(h.overview().querySelector('h2')!.textContent).toBe('c:Draggable')
     // A branch's own name selects the group itself.
     h.click(h.branch('Layout').querySelector(':scope > .sem-row > .sem-label')!)
     expect(h.subject()).toBe(C + 'LayoutGroup')

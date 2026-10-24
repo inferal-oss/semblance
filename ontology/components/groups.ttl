@@ -88,6 +88,7 @@ c:CellKind sem:group c:DataGroup . c:Filter sem:group c:DataGroup . c:TextFilter
 c:ValueFilter sem:group c:DataGroup . c:FlagFilter sem:group c:DataGroup . c:TimeScale sem:group c:DataGroup .
 c:Representation sem:group c:DataGroup .
 c:Money sem:group c:DataGroup . c:Board sem:group c:DataGroup . c:BoardCard sem:group c:DataGroup .
+c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 
 # --- Navigation ---
 c:Tabs sem:group c:NavigationGroup . c:Tab sem:group c:NavigationGroup . c:NavList sem:group c:NavigationGroup .

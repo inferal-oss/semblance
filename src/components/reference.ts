@@ -471,9 +471,9 @@ const overview: FnRule = (ctx, focus) => {
     for (const item of fact.items) {
       const ik = `${fk}-${item.key}`
       if (item.specimen) {
-        // A link to the specimen, the resource itself; #components until the navigation layer resolves c:to.
+        // A link to the specimen, the resource itself: the navigation layer resolves where it is shown.
         const link = o.node(ik + '-link')
-        o.t(link, RDF_TYPE, ctx.nn(NS.c + 'Link')).t(link, R.to, item.value).t(link, NS.c + 'href', '#components')
+        o.t(link, RDF_TYPE, ctx.nn(NS.c + 'Link')).t(link, R.to, item.value)
         for (const l of ctx.objects(item.value, C.label)) o.t(link, C.label, l)
         const span = o.el(ik, 'Span', { class: 'sem-item' }, [link])
         o.t(span, SEM.orderKey, item.orderKey)

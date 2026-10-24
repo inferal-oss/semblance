@@ -425,7 +425,7 @@ CONSTRUCT {
   ?dtText a rdfhtml:Text ; rdfhtml:data ?factName .
   ?dd a rdfhtml:Dd ; rdfhtml:hasChild ?item .
   ?item a rdfhtml:Span ; rdfhtml:class "sem-item" ; sem:orderKey ?itemKey ; rdfhtml:hasChild ?term , ?note , ?constraint , ?link .
-  ?link a c:Link ; c:to ?spec ; c:href "#components" ; c:label ?specLabel .
+  ?link a c:Link ; c:to ?spec ; c:label ?specLabel .
   ?term a ?termElement ; rdfhtml:class ?termClass ; sem:orderKey "" ; rdfhtml:type ?buttonType ; rdfhtml:title ?termTitle ;
         c:selects ?selectsTerm ; rdfhtml:hasChild ?termText .
   ?termText a rdfhtml:Text ; rdfhtml:data ?vName .
@@ -571,7 +571,7 @@ WHERE {
     BIND(COALESCE(?gallery, false) AS ?isSpecimen)
     BIND(IF(?isSpecimen, ?none, IRI(CONCAT(STR(?item), "-term"))) AS ?term)
     BIND(IF(?isSpecimen, ?none, IRI(CONCAT(STR(?item), "-term-text"))) AS ?termText)
-    # A specimen is a c:Link to the resource itself; #components until the navigation layer resolves c:to.
+    # A specimen is a c:Link to the resource itself; the navigation layer resolves where it is shown.
     BIND(IF(?isSpecimen, IRI(CONCAT(STR(?item), "-link")), ?none) AS ?link)
     BIND(IF(?isSpecimen, ?v, ?none) AS ?spec)
     OPTIONAL { FILTER(?isSpecimen) ?v c:label ?specLabel }
