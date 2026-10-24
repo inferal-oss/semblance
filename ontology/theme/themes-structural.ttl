@@ -1251,7 +1251,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields are wells: white (or ink, by night), sunken two pixels.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll, [data-sem-c=code-editor] .sem-scroll):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-sunken)" ] ,
@@ -1911,7 +1911,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields are wells: white (or ink, by night), sunken two pixels.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll, [data-sem-c=code-editor] .sem-scroll):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-sunken)" ] ,

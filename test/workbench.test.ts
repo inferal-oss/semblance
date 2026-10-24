@@ -66,7 +66,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
   it('typing updates c:value and re-renders only the editor', () => {
     const h = workbench()
     const runs = (rule: string) => h.screen.engine.stats.byRule.get(C + rule)?.runs ?? 0
-    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-fn'), editor: runs('QueryEditorRendering-fn') }
+    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-fn'), editor: runs('CodeEditorRendering-fn') }
     const rows = panel(h).querySelector('tbody')!.innerHTML
     const query = 'SELECT ?tab WHERE { ?tab a c:Tab }'
     type(h, query)
@@ -77,7 +77,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(spans).toContain('tok-var:?tab')
     expect(spans).toContain('tok-pname:c:Tab')
     expect(highlighted(h).textContent).toBe(query + ' ')
-    expect(runs('QueryEditorRendering-fn')).toBe(before.editor + 1)
+    expect(runs('CodeEditorRendering-fn')).toBe(before.editor + 1)
     expect(runs('QueryWorkbenchRendering-fn')).toBe(before.bench)
     expect(runs('ResultTableRendering-fn')).toBe(before.table)
     expect(panel(h).querySelector('tbody')!.innerHTML).toBe(rows) // results change only on Run

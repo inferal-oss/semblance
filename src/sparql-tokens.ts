@@ -20,3 +20,16 @@ export function tokenizeSparql(q: string): SparqlToken[] {
   if (last < q.length) out.push({ kind: 'text', text: q.slice(last) })
   return out
 }
+
+/**
+ * Tokens of a code sample in a language that is colored (SPARQL, or Turtle, which is lexically
+ * close to it: its directives are keywords too); undefined for any other language.
+ */
+export function tokenizeCode(source: string, language: string | undefined): SparqlToken[] | undefined {
+  if (language !== 'sparql' && language !== 'turtle') return undefined
+  const out = tokenizeSparql(source)
+  if (language !== 'turtle') return out
+  return out.flatMap((t) =>
+    t.kind !== 'text' ? [t] : t.text.split(/(@prefix|@base)\b/).filter(Boolean).map((s): SparqlToken => ({ kind: s === '@prefix' || s === '@base' ? 'keyword' : 'text', text: s })),
+  )
+}

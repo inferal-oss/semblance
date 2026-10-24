@@ -146,161 +146,23 @@ WHERE {
     sem:function "workbench:run" .
 
 # --- the editor -----------------------------------------------------------------------------------------
+# The workbench's editor is a code editor (c:CodeEditor, ontology/components/editor.ttl) in SPARQL.
 
 c:QueryEditor a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf c:CodeEditor ;
     rdfs:label "SPARQL editor"@en , "Редактор SPARQL"@uk , "SPARQL-Editor"@de , "محرر SPARQL"@ar ;
-    rdfs:comment """A SPARQL editor: the text (c:value) highlighted by token kind under a transparent text
-area, with line numbers, and suggestions for the word before the caret (c:caret) while c:suggesting:
-SPARQL's words (c:SparqlWord), the prefixes the store knows, every class and property it declares
-(as prefixed names, classes first, the namespaces the query already uses first) and the query's
-variables. Up and Down move through them (c:activeSuggestion), Tab or Enter accepts, Escape closes,
-and clicking one accepts it. c:label is the editor's accessible name."""@en ;
+    rdfs:comment """A c:CodeEditor whose language is SPARQL (unless c:language says otherwise): SPARQL's
+words (c:SparqlWord) are highlighted and suggested beside the prefixes and terms, and so are the
+query's variables after ? or $."""@en ;
     sem:slug "query-editor" .
-c:caret a owl:DatatypeProperty ; rdfs:domain c:QueryEditor ; rdfs:range xsd:integer ;
-    rdfs:comment "Where the caret is in c:value (UTF-16 code units, as the text area counts)."@en .
-c:suggesting a owl:DatatypeProperty ; rdfs:domain c:QueryEditor ; rdfs:range xsd:boolean ;
-    rdfs:comment "Whether suggestions are shown: set by typing, cleared by accepting, Escape, a click or a run."@en .
-c:activeSuggestion a owl:DatatypeProperty ; rdfs:domain c:QueryEditor ; rdfs:range xsd:integer ;
-    rdfs:comment "The position of the highlighted suggestion (default 0)."@en .
-c:suggestionsOf a owl:ObjectProperty ; rdfs:range c:QueryEditor ;
-    rdfs:comment "On a rendered list of suggestions: the editor it completes."@en .
-c:replaceFrom a owl:DatatypeProperty ; rdfs:range xsd:integer ;
-    rdfs:comment "On a rendered list of suggestions: where the word an accepted suggestion replaces starts."@en .
-c:replaceTo a owl:DatatypeProperty ; rdfs:range xsd:integer ;
-    rdfs:comment "On a rendered list of suggestions: where the replaced text ends (the caret: text after it stays)."@en .
-c:suggestionCount a owl:DatatypeProperty ; rdfs:range xsd:integer ;
-    rdfs:comment "On a rendered list of suggestions: how many it shows."@en .
-c:suggestionIndex a owl:DatatypeProperty ; rdfs:range xsd:integer ;
-    rdfs:comment "On a rendered suggestion: its position in the list."@en .
-c:completion a owl:DatatypeProperty ;
-    rdfs:comment "On a rendered suggestion: the text that accepting it puts in place of the word."@en .
 
-c:QueryEditorRendering a sem:Rendering ; sem:targets c:QueryEditor ; sem:stratum 0 ;
-    sem:functionOnly "It tokenizes the text for highlighting and finds the word before the caret to complete, which needs a tokenizer; SPARQL cannot split text into tokens." .
-c:QueryEditorRendering-fn a sem:Rule ; sem:implements c:QueryEditorRendering ; sem:function "workbench:editor" .
-
-# Key presses the editor reacts to. Other keys are not events (the text area handles them), and a
-# key a reaction used does nothing else (no focus move on Tab, no new line on Enter).
-c:EditorKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
-    beh:key "tab" , "enter" , "escape" , "arrowdown" , "arrowup" ;
-    rdfs:comment "A key press in an editor that may move through, accept or close its suggestions (beh:key)."@en .
-
-# Recorded by the event bus (src/behaviour/events.ts); they belong with the behaviour layer.
-beh:caret a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer ;
-    rdfs:comment "A text control's caret (selectionStart) after the interaction."@en .
-beh:key a owl:DatatypeProperty ;
-    rdfs:comment """On an event: the key combination pressed, normalized like key:shortcut ("tab", "mod+enter").
-On an event class recorded from key presses: a combination it is for (none: every key)."""@en .
-
-c:QueryEditorInput a beh:Reaction ;
-    rdfs:label "Edit the query"@en ;
-    beh:when beh:Input ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:caret ?caret ; c:activeSuggestion ?active }
-WHERE { { $this c:value ?old } UNION { $this c:caret ?caret } UNION { $this c:activeSuggestion ?active } }""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?value ; c:caret ?caret ; c:suggesting true }
-WHERE { $event beh:value ?value . OPTIONAL { $event beh:caret ?at } BIND(COALESCE(?at, STRLEN(?value)) AS ?caret) }""" ;
-    sem:function "workbench:input" .
-
-# A click in the text (not on a suggestion) moves the caret somewhere suggestions don't belong.
-c:QueryEditorClick a beh:Reaction ;
-    rdfs:label "Close the suggestions"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:suggesting true ; c:activeSuggestion ?active }
-WHERE { $this c:suggesting true . OPTIONAL { $this c:activeSuggestion ?active } }""" ;
-    sem:function "workbench:click" .
-
-c:SuggestionDismiss a beh:Reaction ;
-    rdfs:label "Close the suggestions"@en ;
-    beh:when c:EditorKey ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:suggesting true ; c:activeSuggestion ?active }
-WHERE { $event beh:key "escape" . $this c:suggesting true . ?list c:suggestionsOf $this . OPTIONAL { $this c:activeSuggestion ?active } }""" ;
-    sem:function "workbench:dismiss" .
-
-c:SuggestionNext a beh:Reaction ;
-    rdfs:label "Next suggestion"@en ;
-    beh:when c:EditorKey ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:activeSuggestion ?active }
-WHERE { $event beh:key "arrowdown" . $this c:suggesting true ; c:activeSuggestion ?active . ?list c:suggestionsOf $this }""" ;
-    beh:inserts """CONSTRUCT { $this c:activeSuggestion ?next }
-WHERE {
-  $event beh:key "arrowdown" . $this c:suggesting true . ?list c:suggestionsOf $this ; c:suggestionCount ?count .
-  OPTIONAL { $this c:activeSuggestion ?at } BIND(COALESCE(?at, 0) AS ?active)
-  BIND(IF(?active + 1 >= ?count, 0, ?active + 1) AS ?next)
-}""" ;
-    sem:function "workbench:next" .
-
-c:SuggestionPrevious a beh:Reaction ;
-    rdfs:label "Previous suggestion"@en ;
-    beh:when c:EditorKey ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:activeSuggestion ?active }
-WHERE { $event beh:key "arrowup" . $this c:suggesting true ; c:activeSuggestion ?active . ?list c:suggestionsOf $this }""" ;
-    beh:inserts """CONSTRUCT { $this c:activeSuggestion ?next }
-WHERE {
-  $event beh:key "arrowup" . $this c:suggesting true . ?list c:suggestionsOf $this ; c:suggestionCount ?count .
-  OPTIONAL { $this c:activeSuggestion ?at } BIND(COALESCE(?at, 0) AS ?active)
-  BIND(IF(?active <= 0, ?count - 1, ?active - 1) AS ?next)
-}""" ;
-    sem:function "workbench:previous" .
-
-# Accepting replaces the word (c:replaceFrom .. c:replaceTo of the rendered list) with the
-# suggestion's c:completion and puts the caret after it; a completed prefix ("rdfs:") keeps
-# suggesting, for the term that follows it.
-c:SuggestionAccept a beh:Reaction ;
-    rdfs:label "Accept the suggestion"@en ;
-    beh:when c:EditorKey ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:caret ?caret ; c:suggesting true ; c:activeSuggestion ?active }
-WHERE {
-  $event beh:key ?key FILTER(?key IN ("tab", "enter"))
-  $this c:suggesting true ; c:value ?old . ?list c:suggestionsOf $this .
-  OPTIONAL { $this c:caret ?caret } OPTIONAL { $this c:activeSuggestion ?active }
-}""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?new ; c:caret ?after ; c:suggesting ?again }
-WHERE {
-  $event beh:key ?key FILTER(?key IN ("tab", "enter"))
-  $this c:suggesting true ; c:value ?old .
-  OPTIONAL { $this c:activeSuggestion ?at } BIND(COALESCE(?at, 0) AS ?active)
-  ?list c:suggestionsOf $this ; c:replaceFrom ?from ; c:replaceTo ?to ; rdfhtml:hasChild ?option .
-  ?option c:suggestionIndex ?active ; c:completion ?word .
-  BIND(CONCAT(SUBSTR(?old, 1, ?from), ?word, SUBSTR(?old, ?to + 1)) AS ?new)
-  BIND(?from + STRLEN(?word) AS ?after)
-  BIND(IF(STRENDS(?word, ":"), true, ?unbound) AS ?again)
-}""" ;
-    sem:function "workbench:accept" .
-
-c:SuggestionPick a beh:Reaction ;
-    rdfs:label "Accept the suggestion"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:QueryEditor ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:caret ?caret ; c:suggesting ?suggesting ; c:activeSuggestion ?active }
-WHERE {
-  $event beh:node ?hit . ?option rdfhtml:hasChild* ?hit . ?option c:completion ?word .
-  { $this c:value ?old } UNION { $this c:caret ?caret } UNION { $this c:suggesting ?suggesting } UNION { $this c:activeSuggestion ?active }
-}""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?new ; c:caret ?after ; c:suggesting ?again }
-WHERE {
-  $event beh:node ?hit . ?option rdfhtml:hasChild* ?hit . ?option c:completion ?word .
-  ?list rdfhtml:hasChild ?option ; c:suggestionsOf $this ; c:replaceFrom ?from ; c:replaceTo ?to .
-  OPTIONAL { $this c:value ?value } BIND(COALESCE(?value, "") AS ?old)
-  BIND(CONCAT(SUBSTR(?old, 1, ?from), ?word, SUBSTR(?old, ?to + 1)) AS ?new)
-  BIND(?from + STRLEN(?word) AS ?after)
-  BIND(IF(STRENDS(?word, ":"), true, ?unbound) AS ?again)
-}""" ;
-    sem:function "workbench:pick" .
-
-# --- SPARQL's own words ------------------------------------------------------------------------------------
+# --- SPARQL's own words (c:CodeWord, ontology/components/editor.ttl) ------------------------------------------------------------------------------------
 # Highlighted as keywords (in any case) and offered as completions. A c:SparqlWord's rdfs:label is
 # how it is written; its rdfs:comment is shown beside the suggestion.
 
-c:SparqlWord a owl:Class ; rdfs:comment "A word of the SPARQL 1.1 language."@en .
-c:SparqlKeyword a owl:Class ; rdfs:subClassOf c:SparqlWord ; rdfs:comment "A SPARQL keyword: a query form, clause or modifier."@en .
-c:SparqlFunction a owl:Class ; rdfs:subClassOf c:SparqlWord ; rdfs:comment "A SPARQL built-in function or aggregate."@en .
+c:SparqlWord a owl:Class ; rdfs:subClassOf c:CodeWord ; c:language "sparql" ; rdfs:comment "A word of the SPARQL 1.1 language."@en .
+c:SparqlKeyword a owl:Class ; rdfs:subClassOf c:SparqlWord , c:CodeKeyword ; rdfs:comment "A SPARQL keyword: a query form, clause or modifier."@en .
+c:SparqlFunction a owl:Class ; rdfs:subClassOf c:SparqlWord , c:CodeFunction ; rdfs:comment "A SPARQL built-in function or aggregate."@en .
 
 c:kw-select a c:SparqlKeyword ; rdfs:label "SELECT" ; rdfs:comment "Query form: a table of variable bindings."@en .
 c:kw-construct a c:SparqlKeyword ; rdfs:label "CONSTRUCT" ; rdfs:comment "Query form: a graph built from a template."@en .
@@ -595,10 +457,6 @@ c:ResultTurtleRendering-fn a sem:Rule ; sem:implements c:ResultTurtleRendering ;
 # --- phrases --------------------------------------------------------------------------------------------------
 
 c:SamplesPhrase a c:Phrase ; rdfs:label "Sample queries"@en , "Приклади запитів"@uk , "Beispielabfragen"@de , "استعلامات نموذجية"@ar .
-c:SuggestionsPhrase a c:Phrase ; rdfs:label "Suggestions"@en , "Підказки"@uk , "Vorschläge"@de , "اقتراحات"@ar .
-c:EditorKeysPhrase a c:Phrase ;
-    rdfs:label "Tab or Enter accepts a suggestion · Esc closes"@en , "Tab або Enter приймає підказку · Esc закриває"@uk ,
-               "Tab oder Enter übernimmt einen Vorschlag · Esc schließt"@de , "Tab أو Enter لقبول الاقتراح · Esc للإغلاق"@ar .
 c:NotRunPhrase a c:Phrase ;
     rdfs:label "Run a query, or pick a sample, to see its results here."@en , "Виконайте запит або виберіть приклад, щоб побачити результати тут."@uk ,
                "Führen Sie eine Abfrage aus oder wählen Sie ein Beispiel, um hier die Ergebnisse zu sehen."@de , "نفّذ استعلامًا أو اختر نموذجًا لعرض نتائجه هنا."@ar .
@@ -640,12 +498,6 @@ c:QueryWorkbenchShape a sh:NodeShape ; sh:targetClass c:QueryWorkbench ;
                 [ sh:path c:runs ; sh:minCount 1 ; sh:maxCount 1 ; sh:class sem:Query ; sh:message "A workbench needs one query node to run into (c:runs, a sem:Query)." ] ,
                 [ sh:path c:results ; sh:maxCount 1 ] ,
                 [ sh:path c:followUpdates ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
-c:QueryEditorShape a sh:NodeShape ; sh:targetClass c:QueryEditor ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An editor needs an accessible name (c:label)." ] ,
-                [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
-                [ sh:path c:caret ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
-                [ sh:path c:activeSuggestion ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ] ,
-                [ sh:path c:suggesting ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 c:QueryResultViewShape a sh:NodeShape ; sh:targetClass c:QueryResultView ;
     sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:class sem:Query ; sh:message "A result view shows one query (c:of, a sem:Query)." ] ,
                 [ sh:path c:limit ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .

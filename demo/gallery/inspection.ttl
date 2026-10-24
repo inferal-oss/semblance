@@ -10,7 +10,7 @@
 # section is its own graph (demo/gallery/_in-*.ttl).
 
 ui:gallery-inspection a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-inspection-intro ui:gallery-inspection-lede ui:in-grid ui:in-toolbar ui:in-panes ui:in-payload ) .
+    c:children ( ui:gallery-inspection-intro ui:gallery-inspection-lede ui:in-grid ui:in-toolbar ui:in-panes ui:in-payload ui:in-editors ) .
 ui:gallery-inspection-intro a c:Heading ; c:label "Inspection" .
 ui:gallery-inspection-lede a c:Text ;
     c:label "The parts of an in-app inspector, each on its own and general: a data grid whose rows, sort, selection, column widths and paging are graph state; a time scale for spans; filters as data the grid honours; split and docked panes; payloads as text, hex or a JSON tree. The Network page composes them over captured traffic." .

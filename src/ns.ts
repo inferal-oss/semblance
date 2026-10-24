@@ -376,3 +376,6 @@ export const DEP = {
   otherwise: NS.dep + 'otherwise',
   defaults: NS.dep + 'defaults',
 } as const
+
+/** The layers an app gets unless it names its own: what every page needs, none of the tools'. */
+export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer]

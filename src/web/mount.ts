@@ -1,14 +1,13 @@
 import { EventBus, type Handled, type ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
-import { A11Y, ANN, KEY, MOD, SEM, ST, STY, VAL } from '../ns.ts'
+import { DEFAULT_LAYERS, MOD } from '../ns.ts'
 import { DomRenderer } from '../render/dom.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
-/** The layers an app gets unless it names its own: what every page needs, none of the tools'. */
-export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer]
+export { DEFAULT_LAYERS }
 
 export interface MountOptions {
   /** The IRI of the component to show: the root of the projection. */

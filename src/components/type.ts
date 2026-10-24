@@ -3,7 +3,7 @@ import type { NamedNode } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out } from '../engine/context.ts'
 import { C, MOD, NS } from '../ns.ts'
-import { tokenizeSparql, type SparqlToken } from '../sparql-tokens.ts'
+import { tokenizeCode } from '../sparql-tokens.ts'
 import { isTrue, labelOf, named, rdfList, str, text } from './util.ts'
 
 const C_LINK = NS.c + 'Link'
@@ -90,15 +90,7 @@ const kbd: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** Turtle is lexically close to SPARQL; its directives are keywords too. */
-function tokens(source: string, language: string | undefined): SparqlToken[] | undefined {
-  if (language !== 'sparql' && language !== 'turtle') return undefined
-  const out = tokenizeSparql(source)
-  if (language !== 'turtle') return out
-  return out.flatMap((t) =>
-    t.kind !== 'text' ? [t] : t.text.split(/(@prefix|@base)\b/).filter(Boolean).map((s): SparqlToken => ({ kind: s === '@prefix' || s === '@base' ? 'keyword' : 'text', text: s })),
-  )
-}
+const tokens = tokenizeCode
 
 function colored(o: Out, key: string, source: string, language: string | undefined): NamedNode[] {
   const toks = tokens(source, language)

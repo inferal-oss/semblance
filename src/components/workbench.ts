@@ -2,9 +2,9 @@
 import type { BlankNode, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { tokenizeSparql } from '../sparql-tokens.ts'
+import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { turtleTokens } from '../turtle.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
 
@@ -18,6 +18,9 @@ const W = {
   runCount: c + 'runCount',
   loads: c + 'loads',
   caret: c + 'caret',
+  original: c + 'original',
+  QueryEditor: c + 'QueryEditor',
+  language: c + 'language',
   suggesting: c + 'suggesting',
   activeSuggestion: c + 'activeSuggestion',
   suggestionsOf: c + 'suggestionsOf',
@@ -26,8 +29,7 @@ const W = {
   suggestionCount: c + 'suggestionCount',
   suggestionIndex: c + 'suggestionIndex',
   completion: c + 'completion',
-  SparqlKeyword: c + 'SparqlKeyword',
-  SparqlFunction: c + 'SparqlFunction',
+  CodeFunction: c + 'CodeFunction',
   Alert: c + 'Alert',
   of: c + 'of',
   limit: c + 'limit',
@@ -390,25 +392,36 @@ function termIndex(ctx: RuleContext): TermEntry[] {
   )
 }
 
-/** SPARQL's own words (c:SparqlWord individuals). */
-function sparqlWords(ctx: RuleContext): Word[] {
-  return ctx.memo('workbench:words', () =>
-    ctx.untraced(() =>
-      (
-        [
-          [W.SparqlKeyword, 'keyword'],
-          [W.SparqlFunction, 'function'],
-        ] as const
-      ).flatMap(([cls, kind]) =>
+/** A language's own words (c:CodeWord individuals of the classes that say c:language it, and their subclasses). */
+function languageWords(ctx: RuleContext, language: string): Word[] {
+  return ctx.memo(`editor:words:${language}`, () =>
+    ctx.untraced(() => {
+      const classes = new Map<string, 'keyword' | 'function'>()
+      const isFunction = (cls: string, seen = new Set<string>()): boolean =>
+        cls === W.CodeFunction || (!seen.has(cls) && (seen.add(cls), ctx.objects(cls, RDFS_SUBCLASS).some((sup) => isFunction(sup.value, seen))))
+      const todo = ctx
+        .match(null, W.language, null)
+        .filter((q) => q.object.value.toLowerCase() === language && ctx.match(q.subject, RDF_TYPE, OWL + 'Class').length)
+        .map((q) => q.subject.value)
+      while (todo.length) {
+        const cls = todo.pop()!
+        if (classes.has(cls)) continue
+        classes.set(cls, isFunction(cls) ? 'function' : 'keyword')
+        todo.push(...ctx.match(null, RDFS_SUBCLASS, cls).map((q) => q.subject.value))
+      }
+      return [...classes].flatMap(([cls, kind]) =>
         ctx
           .match(null, RDF_TYPE, cls)
           .filter((q) => named(q.subject))
           .map((q) => ({ node: q.subject as NamedNode, label: str(ctx.object(q.subject, RDFS_LABEL)) ?? '', kind }))
           .filter((w) => w.label),
-      ),
-    ),
+      )
+    }),
   )
 }
+
+/** SPARQL's own words (c:SparqlWord individuals). */
+const sparqlWords = (ctx: RuleContext): Word[] => languageWords(ctx, 'sparql')
 
 /** Words to color as keywords that the tokenizer leaves as text (lower case, ASK, HAVING...). */
 function wordPattern(ctx: RuleContext): RegExp | undefined {
@@ -421,8 +434,9 @@ function wordPattern(ctx: RuleContext): RegExp | undefined {
   })
 }
 
-/** SPARQL tokens with the vocabulary's words colored too. */
-function highlight(ctx: RuleContext, query: string): { kind: string; text: string }[] {
+/** SPARQL tokens with the vocabulary's words colored too; another language's tokens as they are (plain text: none). */
+function highlight(ctx: RuleContext, query: string, language = 'sparql'): { kind: string; text: string }[] {
+  if (language !== 'sparql') return tokenizeCode(query, language) ?? [{ kind: 'text', text: query }]
   const pattern = wordPattern(ctx)
   const out: { kind: string; text: string }[] = []
   for (const t of tokenizeSparql(query)) {
@@ -443,6 +457,8 @@ function highlight(ctx: RuleContext, query: string): { kind: string; text: strin
 
 /** Whether the caret (at the end of `before`) sits in a comment, a string or an IRI. */
 function inLiteral(before: string): boolean {
+  // An open long string ("""), as Turtle holds a rule's query, spans lines.
+  if ((before.match(/"""/g)?.length ?? 0) % 2 === 1) return true
   const line = before.slice(before.lastIndexOf('\n') + 1)
   const tokens = tokenizeSparql(line)
   const last = tokens[tokens.length - 1]
@@ -466,14 +482,20 @@ const compareScores = (a: number[], b: number[]) => {
  * local name it starts (namespaces the query already uses first). Classes come before
  * properties, and the case typed before other cases.
  */
-export function suggest(ctx: RuleContext, value: string, caret: number): { from: number; to: number; items: Candidate[] } | undefined {
+export function suggest(ctx: RuleContext, value: string, caret: number, language = 'sparql'): { from: number; to: number; items: Candidate[] } | undefined {
+  // Only SPARQL has variables; each language has its own words (c:CodeWord).
+  const sparql = language === 'sparql'
+  // Plain text (a language the editor does not know) gets no suggestions.
+  if (!tokenizeCode('', language)) return undefined
   const before = value.slice(0, caret)
   if (inLiteral(before)) return undefined
   const m = /(?:[?$][A-Za-z0-9_]*|[A-Za-z_][\w-]*:[\w-]*|:[\w-]*|[A-Za-z_][\w-]*)$/.exec(before)
   if (!m) return undefined
-  const word = m[0]
-  const from = caret - word.length
+  let word = m[0]
+  let from = caret - word.length
   if (from > 0 && /[\w:?$-]/.test(value[from - 1]!)) return undefined
+  // Turtle's directives start with @ (@prefix).
+  if (!sparql && word[0] !== '?' && word[0] !== '$' && !word.includes(':') && value[from - 1] === '@') (word = '@' + word), from--
   // Accepting inserts in place of what was typed of the word; text after the caret stays.
   const to = caret
   const items: Candidate[] = []
@@ -486,6 +508,7 @@ export function suggest(ctx: RuleContext, value: string, caret: number): { from:
       .map(({ t }) => ({ completion: `${t.prefix}:${t.local}`, kind: t.kind, about: ctx.nn(t.iri) }) as Candidate)
 
   if (word[0] === '?' || word[0] === '$') {
+    if (!sparql) return undefined
     const rest = value.slice(0, from) + value.slice(to)
     const vars = [...new Set([...rest.matchAll(/[?$]([A-Za-z_]\w*)/g)].map((v) => v[1]!))].sort()
     for (const v of vars) if (v.startsWith(word.slice(1)) && v !== word.slice(1)) items.push({ completion: word[0] + v, kind: 'variable' })
@@ -497,7 +520,7 @@ export function suggest(ctx: RuleContext, value: string, caret: number): { from:
   } else {
     if (word.length < 2) return undefined
     const upper = word === lower
-    for (const w of sparqlWords(ctx).filter((x) => starts(x.label, word) && x.label.toLowerCase() !== lower).sort((a, b) => (a.kind === b.kind ? a.label.length - b.label.length || a.label.localeCompare(b.label) : a.kind === 'keyword' ? -1 : 1)))
+    for (const w of languageWords(ctx, language).filter((x) => starts(x.label, word) && x.label.toLowerCase() !== lower).sort((a, b) => (a.kind === b.kind ? a.label.length - b.label.length || a.label.localeCompare(b.label) : a.kind === 'keyword' ? -1 : 1)))
       items.push({ completion: upper && /^[A-Z_ ]+$/.test(w.label) ? w.label.toLowerCase() : w.label, kind: w.kind, about: w.node })
     for (const [p, ns] of Object.entries(prefixRecord(ctx)).sort((a, b) => a[0].length - b[0].length || a[0].localeCompare(b[0])))
       if (starts(p, word)) items.push({ completion: p + ':', kind: 'prefix', detail: ns })
@@ -515,10 +538,13 @@ const SPARQL_PLAIN = new Set(['text'])
 
 const editor: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const value = str(ctx.object(focus, C.value)) ?? ''
+  // The text as edited, else as written (c:original: a live example's source until it is edited).
+  const value = str(ctx.object(focus, C.value)) ?? str(ctx.object(focus, W.original)) ?? ''
+  // A SPARQL editor (c:QueryEditor) is in SPARQL unless it says otherwise; any other code editor is plain text.
+  const language = str(ctx.object(focus, W.language))?.toLowerCase() ?? (ctx.match(focus, RDF_TYPE, W.QueryEditor).length ? 'sparql' : 'text')
   const caret = Math.max(0, Math.min(value.length, Math.round(num(ctx, focus, W.caret, value.length))))
   const label = text(ctx, focus, C.label) ?? labelOf(ctx, focus)
-  const open = isTrue(ctx.object(focus, W.suggesting)) ? suggest(ctx, value, caret) : undefined
+  const open = isTrue(ctx.object(focus, W.suggesting)) ? suggest(ctx, value, caret, language) : undefined
   const active = open ? Math.max(0, Math.min(open.items.length - 1, Math.round(num(ctx, focus, W.activeSuggestion, 0)))) : 0
   const lineCount = value.split('\n').length
 
@@ -537,7 +563,7 @@ const editor: FnRule = (ctx, focus) => {
     o.text('gutter-text', Array.from({ length: lineCount }, (_, i) => String(i + 1)).join('\n')),
   ])
   const highlighted = o.el('highlight', 'Pre', { class: 'sem-highlight', 'aria-hidden': 'true' }, [
-    ...codeNodes(o, highlight(ctx, value), SPARQL_PLAIN, 'tok-'),
+    ...codeNodes(o, highlight(ctx, value, language), SPARQL_PLAIN, 'tok-'),
     // A last, empty line still has a height (as it has in the text area).
     o.text('tail', ' '),
   ])
