@@ -24,6 +24,9 @@ export function createStore(kind: StoreKind): GraphStore {
 }
 
 export function ontologySources(): string[] {
+  const missing = ONTOLOGY_FILES.filter((f) => sources['../../ontology/' + f] === undefined)
+  // Vite's eager glob is fixed when the dev server starts: a file added since is not in it.
+  if (missing.length) throw new Error(`Ontology files missing from the bundle: ${missing.join(', ')} (restart the dev server after adding files)`)
   return ONTOLOGY_FILES.map((f) => sources['../../ontology/' + f]!)
 }
 
