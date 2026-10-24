@@ -1,0 +1,288 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix prv: <https://semblance.dev/ns/privacy#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix ch: <https://semblance.dev/demo/chat#> .
+
+# =================================================================================================
+# Chat: channels, threads, a composer.
+#
+# Messages are data - ActivityStreams notes (as:Note with as:attributedTo, as:content,
+# as:published) - and a channel's thread is a c:MessageList of them. The list places its
+# messages member-wise, so sending one evaluates that message alone, however long the thread.
+# Which channel is open is one triple; switching channels is the nav list's own reaction plus
+# one of ours that clears the channel's unread count. A message can be sensitive (prv:sensitive):
+# private mode (⌘⇧H / Ctrl+Shift+H) hides it. Everything is in this file; the thread and the
+# counts beside the channels are framework components (c:MessageList, c:countProperty).
+# =================================================================================================
+
+# SPARQL in the reactions below can say ch: once the graph declares it.
+ui:prefixes sh:declare [ sh:prefix "ch" ; sh:namespace "https://semblance.dev/demo/chat#"^^xsd:anyURI ] .
+
+# --- the vocabulary -----------------------------------------------------------------------------
+
+ch:Channel a owl:Class ; rdfs:label "Channel" .
+ch:channel a owl:ObjectProperty ; rdfs:label "Channels" ; rdfs:range ch:Channel ;
+    rdfs:comment "The channel the client has open." .
+ch:thread a owl:ObjectProperty ; rdfs:domain ch:Channel ; rdfs:comment "The c:MessageList showing the channel's messages." .
+ch:unread a owl:DatatypeProperty ; rdfs:domain ch:Channel ; rdfs:range xsd:integer ; rdfs:label "Unread" .
+ch:bot a owl:ObjectProperty ; rdfs:domain ch:Channel ; rdfs:comment "Who answers in the channel, with ch:cannedReply." .
+ch:cannedReply a owl:DatatypeProperty ; rdfs:domain ch:Channel .
+ch:sendSensitive a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:label "Send as sensitive" ;
+    rdfs:comment "Messages sent while this is on are prv:sensitive: hidden in private mode." .
+# Enter in the composer (Shift+Enter is a new line: its key is "shift+enter").
+ch:ComposerKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "enter" ;
+    rdfs:comment "Enter pressed in the composer." .
+
+# --- people and channels ------------------------------------------------------------------------
+# The client is Ada's. Channels are ordered (sem:order) and marked (sem:symbol) for the nav list.
+
+ch:ada rdfs:label "Ada Lovelace" .
+ch:grace rdfs:label "Grace Hopper" .
+ch:tim rdfs:label "Tim Berners-Lee" .
+ch:katherine rdfs:label "Katherine Johnson" .
+ch:releaseBot rdfs:label "Release bot" .
+ch:helpBot rdfs:label "Help desk bot" .
+
+ch:client ch:channel ch:General ; ch:sendSensitive false .
+
+ch:General a ch:Channel ; rdfs:label "general" ; sem:symbol "#" ; sem:order 1 ; ch:unread 0 ; ch:thread ui:ch-general-thread .
+ch:Design a ch:Channel ; rdfs:label "design" ; sem:symbol "#" ; sem:order 2 ; ch:unread 3 ; ch:thread ui:ch-design-thread .
+ch:Releases a ch:Channel ; rdfs:label "releases" ; sem:symbol "#" ; sem:order 3 ; ch:unread 1 ; ch:thread ui:ch-releases-thread .
+ch:Help a ch:Channel ; rdfs:label "help" ; sem:symbol "#" ; sem:order 4 ; ch:unread 0 ; ch:thread ui:ch-help-thread ;
+    ch:bot ch:helpBot ;
+    ch:cannedReply "Thanks - I've logged that as a ticket. Someone from the platform team usually answers within the hour." .
+
+# --- the messages so far ------------------------------------------------------------------------
+
+ch:g1 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T09:02:00Z"^^xsd:dateTime ;
+    as:content "Morning! The planning doc for the analytics release is up - comments welcome before Thursday." .
+ch:g2 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:05:00Z"^^xsd:dateTime ;
+    as:content "Read it. The section on linked identifiers is great; I left two notes on the export format." .
+ch:g3 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:06:00Z"^^xsd:dateTime ; prv:sensitive true ;
+    as:content "Guest Wi-Fi for Thursday's visitors: network Lovelace-Guest, password brass-otter-1843." .
+ch:g4 a as:Note ; as:attributedTo ch:ada ; as:published "2024-05-14T09:11:00Z"^^xsd:dateTime ;
+    as:content "Thanks both. I'll fold the notes in this afternoon." .
+ch:g5 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T09:14:00Z"^^xsd:dateTime ;
+    as:content "Could someone double-check the orbit numbers in the appendix? They came from last quarter's run." .
+
+ch:d1 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T08:40:00Z"^^xsd:dateTime ;
+    as:content "New empty-state illustrations are in the shared folder." .
+ch:d2 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T08:52:00Z"^^xsd:dateTime ;
+    as:content "Love the second one. Can we try it with the accent color instead of gray?" .
+ch:d3 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T09:20:00Z"^^xsd:dateTime ;
+    as:content "Sure - give me ten minutes." .
+
+ch:r1 a as:Note ; as:attributedTo ch:releaseBot ; as:published "2024-05-14T07:30:00Z"^^xsd:dateTime ;
+    as:content "Version 2.4.1 is live: faster first render, and the export dialog remembers its last folder." .
+
+ch:h1 a as:Note ; as:attributedTo ch:helpBot ; as:published "2024-05-13T17:00:00Z"^^xsd:dateTime ;
+    as:content "Ask anything about the build, the staging servers or access. I'll make a ticket of it." .
+
+# --- the client ---------------------------------------------------------------------------------
+
+ui:ex-chat a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-chat-intro ui:ch-app ) .
+ui:ex-chat-intro a c:Text ; c:children (
+    "A team chat. Each thread is a list whose messages are placed one by one, so sending a message costs the same in a long thread as in a short one; switching channels clears its unread count; the help channel's bot answers. A message can be sensitive - press "
+    ui:ch-k-mod ui:ch-k-shift ui:ch-k-h " for private mode and it is hidden." ) .
+ui:ch-k-mod a c:Kbd ; c:label "⌘" .
+ui:ch-k-shift a c:Kbd ; c:label "⇧" .
+ui:ch-k-h a c:Kbd ; c:label "H" .
+
+ui:ch-app a c:Card ; c:label "Lovelace Labs" ; c:badge "team chat" ; c:content ui:ch-layout .
+ui:ch-layout a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-4 ; c:children ( ui:ch-channels ui:ch-main ) .
+
+# The channels: a nav list over ch:channel of the client, with each channel's unread count.
+ui:ch-channels a c:NavList ; c:label "Channels" ; c:controls ch:client ; c:property ch:channel ;
+    c:countProperty ch:unread ; c:countLabel "unread" .
+
+ui:ch-main a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:ch-panes ui:ch-composer-area ) .
+
+# --- the threads: one per channel, the open one shown ------------------------------------------
+# A c:Switch keeps every case rendered (hidden ones are not evaluated until first shown), so
+# going back to a channel finds its thread as it was.
+
+ui:ch-panes a c:Switch ; c:controls ch:client ; c:property ch:channel ;
+    c:cases ( ui:ch-case-general ui:ch-case-design ui:ch-case-releases ui:ch-case-help ) .
+ui:ch-case-general c:when ch:General ; c:content ui:ch-general .
+ui:ch-case-design c:when ch:Design ; c:content ui:ch-design .
+ui:ch-case-releases c:when ch:Releases ; c:content ui:ch-releases .
+ui:ch-case-help c:when ch:Help ; c:content ui:ch-help .
+
+# A thread scrolls inside its pane, and stays at the newest message: the pane stacks its one
+# child from the bottom (column-reverse), so it opens scrolled to the end.
+ch:ThreadPane a pos:Layout ; sem:slug "chat-thread-pane" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column-reverse" ] ,
+                 [ sty:property "max-height" ; sty:raw "24rem" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] ,
+                 [ sty:property "padding" ; sty:raw "var(--sem-space-3)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-md)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+
+ui:ch-general a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:ch-general-title ui:ch-general-topic ui:ch-general-pane ) .
+ui:ch-general-title a c:Heading ; c:label "# general" ; c:level 3 .
+ui:ch-general-topic a c:Text ; sty:textStyle sty:Caption ; c:label "Company-wide announcements and work-based matters." .
+ui:ch-general-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-general-thread ) .
+ui:ch-general-thread a c:MessageList ; c:label "Messages in # general" ; c:viewer ch:ada ;
+    c:item ch:g1 , ch:g2 , ch:g3 , ch:g4 , ch:g5 .
+
+ui:ch-design a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:ch-design-title ui:ch-design-topic ui:ch-design-pane ui:ch-design-typing ) .
+ui:ch-design-title a c:Heading ; c:label "# design" ; c:level 3 .
+ui:ch-design-topic a c:Text ; sty:textStyle sty:Caption ; c:label "Illustrations, layouts and the design system." .
+ui:ch-design-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-design-thread ) .
+ui:ch-design-thread a c:MessageList ; c:label "Messages in # design" ; c:viewer ch:ada ;
+    c:item ch:d1 , ch:d2 , ch:d3 .
+# A static touch: someone typing.
+ui:ch-design-typing a c:Text ; sty:textStyle sty:Caption ; c:label "Grace Hopper is typing…" .
+
+ui:ch-releases a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:ch-releases-title ui:ch-releases-topic ui:ch-releases-pane ) .
+ui:ch-releases-title a c:Heading ; c:label "# releases" ; c:level 3 .
+ui:ch-releases-topic a c:Text ; sty:textStyle sty:Caption ; c:label "What shipped, posted by the release bot." .
+ui:ch-releases-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-releases-thread ) .
+ui:ch-releases-thread a c:MessageList ; c:label "Messages in # releases" ; c:viewer ch:ada ; c:item ch:r1 .
+
+ui:ch-help a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:ch-help-title ui:ch-help-topic ui:ch-help-pane ) .
+ui:ch-help-title a c:Heading ; c:label "# help" ; c:level 3 .
+ui:ch-help-topic a c:Text ; sty:textStyle sty:Caption ; c:label "Questions for the platform team. The bot answers first." .
+ui:ch-help-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-help-thread ) .
+ui:ch-help-thread a c:MessageList ; c:label "Messages in # help" ; c:viewer ch:ada ; c:item ch:h1 .
+
+# --- the composer -------------------------------------------------------------------------------
+
+ui:ch-composer-area a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:ch-composer ui:ch-composer-bar ) .
+ui:ch-composer a c:TextArea ; c:label "Message" ; c:rows 2 ; c:placeholder "Write to the channel…" .
+ui:ch-composer-bar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
+    c:children ( ui:ch-sensitive ui:ch-hint ui:ch-send ) .
+ui:ch-sensitive a c:ToggleSwitch ; c:controls ch:client ; c:property ch:sendSensitive ; sty:size sty:Small .
+ui:ch-hint a c:Text ; c:inline true ; sty:textStyle sty:Caption ;
+    c:children ( ui:ch-k-enter " sends · " ui:ch-k-shift2 ui:ch-k-enter2 " adds a line" ) .
+ui:ch-k-enter a c:Kbd ; c:label "Enter" .
+ui:ch-k-shift2 a c:Kbd ; c:label "⇧" .
+ui:ch-k-enter2 a c:Kbd ; c:label "Enter" .
+ui:ch-send a c:Button ; c:label "Send" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+
+# --- reactions ----------------------------------------------------------------------------------
+# Sending: the composer's text (trimmed; nothing if it is blank) becomes a note by Ada in the
+# open channel's thread, published at the event's time and minted from the event's IRI. If the
+# channel has a bot, its canned reply is added in the same delta. The composer is emptied.
+# Clicking Send and pressing Enter in the composer are two events with the same CONSTRUCTs.
+
+ch:SendOnClick a beh:Reaction ; beh:when beh:Click ; beh:source ui:ch-send ;
+    ann:announces "Message sent" ; ann:tone sty:Success ;
+    beh:deletes """
+CONSTRUCT { ui:ch-composer c:value ?v ; c:error ?e }
+WHERE { ui:ch-composer c:value ?v FILTER(REPLACE(STR(?v), "\\\\s", "") != "") OPTIONAL { ui:ch-composer c:error ?e } }""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?thread c:item ?m . ?m a as:Note ; as:attributedTo ch:ada ; as:content ?text ; as:published ?at ; prv:sensitive ?sensitive .
+  ?thread c:item ?reply . ?reply a as:Note ; as:attributedTo ?bot ; as:content ?canned ; as:published ?at .
+  ui:ch-composer c:value "" .
+}
+WHERE {
+  ui:ch-composer c:value ?v .
+  BIND(REPLACE(REPLACE(STR(?v), "^\\\\s+", ""), "\\\\s+$", "") AS ?text) FILTER(?text != "")
+  ch:client ch:channel ?channel . ?channel ch:thread ?thread .
+  $event beh:at ?at .
+  BIND(IRI(CONCAT(STR(ch:), "m-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?m)
+  OPTIONAL { ch:client ch:sendSensitive true BIND(true AS ?sensitive) }
+  OPTIONAL { ?channel ch:bot ?bot ; ch:cannedReply ?canned }
+  BIND(IF(BOUND(?canned), IRI(CONCAT(STR(?m), "-reply")), ?none) AS ?reply)
+}""" .
+
+ch:SendOnEnter a beh:Reaction ; beh:when ch:ComposerKey ; beh:source ui:ch-composer ;
+    ann:announces "Message sent" ; ann:tone sty:Success ;
+    beh:deletes """
+CONSTRUCT { ui:ch-composer c:value ?v ; c:error ?e }
+WHERE { ui:ch-composer c:value ?v FILTER(REPLACE(STR(?v), "\\\\s", "") != "") OPTIONAL { ui:ch-composer c:error ?e } }""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?thread c:item ?m . ?m a as:Note ; as:attributedTo ch:ada ; as:content ?text ; as:published ?at ; prv:sensitive ?sensitive .
+  ?thread c:item ?reply . ?reply a as:Note ; as:attributedTo ?bot ; as:content ?canned ; as:published ?at .
+  ui:ch-composer c:value "" .
+}
+WHERE {
+  ui:ch-composer c:value ?v .
+  BIND(REPLACE(REPLACE(STR(?v), "^\\\\s+", ""), "\\\\s+$", "") AS ?text) FILTER(?text != "")
+  ch:client ch:channel ?channel . ?channel ch:thread ?thread .
+  $event beh:at ?at .
+  BIND(IRI(CONCAT(STR(ch:), "m-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?m)
+  OPTIONAL { ch:client ch:sendSensitive true BIND(true AS ?sensitive) }
+  OPTIONAL { ?channel ch:bot ?bot ; ch:cannedReply ?canned }
+  BIND(IF(BOUND(?canned), IRI(CONCAT(STR(?m), "-reply")), ?none) AS ?reply)
+}""" .
+
+# Opening a channel: the nav list's own reaction writes ch:client ch:channel; this one, on the
+# same click, sets the chosen channel's unread count to zero (the button says what it selects).
+ch:ClearUnread a beh:Reaction ; beh:when beh:Click ; beh:source ui:ch-channels ;
+    beh:deletes """
+CONSTRUCT { ?channel ch:unread ?n }
+WHERE { $event beh:node ?hit . ?b rdfhtml:hasChild* ?hit . ?b c:selects ?channel . ?channel ch:unread ?n FILTER(?n != 0) }""" ;
+    beh:inserts """
+CONSTRUCT { ?channel ch:unread 0 }
+WHERE { $event beh:node ?hit . ?b rdfhtml:hasChild* ?hit . ?b c:selects ?channel . ?channel ch:unread ?n FILTER(?n != 0) }""" .
+
+# --- how it works --------------------------------------------------------------------------------
+
+ui:ex-chat-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-chat-how-title ui:ex-chat-how-data ui:ex-chat-how-thread ui:ex-chat-how-send
+                 ui:ex-chat-how-channels ui:ex-chat-how-private ui:ex-chat-how-cost ) .
+ui:ex-chat-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
+ui:ex-chat-how-data a c:Text ; c:children (
+    "Messages are ActivityStreams notes: " ui:ex-chat-how-c1 " with " ui:ex-chat-how-c2 ", " ui:ex-chat-how-c3 " and " ui:ex-chat-how-c4
+    ". People are nodes with a label; channels are " ui:ex-chat-how-c5 " individuals, and which one is open is a single triple, " ui:ex-chat-how-c6 "." ) .
+ui:ex-chat-how-c1 a c:Code ; c:label "as:Note" .
+ui:ex-chat-how-c2 a c:Code ; c:label "as:attributedTo" .
+ui:ex-chat-how-c3 a c:Code ; c:label "as:content" .
+ui:ex-chat-how-c4 a c:Code ; c:label "as:published" .
+ui:ex-chat-how-c5 a c:Code ; c:label "ch:Channel" .
+ui:ex-chat-how-c6 a c:Code ; c:label "ch:client ch:channel ch:General" .
+ui:ex-chat-how-thread a c:Text ; c:children (
+    "Each channel's thread is a " ui:ex-chat-how-c7 " (a framework component, ontology/components/messages.ttl) whose " ui:ex-chat-how-c8
+    " are the notes. Its member rule (" ui:ex-chat-how-c9 ") mints one " ui:ex-chat-how-c10
+    " per note, with the author's avatar, name and time, ordered by publication; a " ui:ex-chat-how-c11 " shows the open channel's thread and keeps the others as they were." ) .
+ui:ex-chat-how-c7 a c:Code ; c:label "c:MessageList" .
+ui:ex-chat-how-c8 a c:Code ; c:label "c:item" .
+ui:ex-chat-how-c9 a c:Code ; c:label "sem:forEach c:item" .
+ui:ex-chat-how-c10 a c:Code ; c:label "c:Message" .
+ui:ex-chat-how-c11 a c:Code ; c:label "c:Switch" .
+ui:ex-chat-how-send a c:Text ; c:children (
+    "Sending is " ui:ex-chat-how-c12 " (the button) and " ui:ex-chat-how-c13 " (Enter in the composer, an event class of its own: " ui:ex-chat-how-c14
+    "). Their CONSTRUCT mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer; in # help the bot's " ui:ex-chat-how-c15 " comes in the same delta. A send is announced as a toast." ) .
+ui:ex-chat-how-c12 a c:Code ; c:label "ch:SendOnClick" .
+ui:ex-chat-how-c13 a c:Code ; c:label "ch:SendOnEnter" .
+ui:ex-chat-how-c14 a c:Code ; c:label "ch:ComposerKey" .
+ui:ex-chat-how-c15 a c:Code ; c:label "ch:cannedReply" .
+ui:ex-chat-how-channels a c:Text ; c:children (
+    "The channel list is a " ui:ex-chat-how-c16 " over " ui:ex-chat-how-c17 "; " ui:ex-chat-how-c18
+    " shows each channel's unread count beside it (and says \"3 unread\" to screen readers). Clicking a channel runs the list's own reaction and " ui:ex-chat-how-c19 ", which zeroes that channel's count." ) .
+ui:ex-chat-how-c16 a c:Code ; c:label "c:NavList" .
+ui:ex-chat-how-c17 a c:Code ; c:label "ch:channel" .
+ui:ex-chat-how-c18 a c:Code ; c:label "c:countProperty ch:unread" .
+ui:ex-chat-how-c19 a c:Code ; c:label "ch:ClearUnread" .
+ui:ex-chat-how-private a c:Text ; c:children (
+    "A note with " ui:ex-chat-how-c20 " is hidden in private mode: the thread copies the flag onto the note's " ui:ex-chat-how-c21
+    ", and the privacy layer blurs it. Turn on \"Send as sensitive\" and what you send is hidden too. Neither the thread nor the message knows." ) .
+ui:ex-chat-how-c20 a c:Code ; c:label "prv:sensitive true" .
+ui:ex-chat-how-c21 a c:Code ; c:label "c:Message" .
+ui:ex-chat-how-cost a c:Text ; c:children (
+    "Why it is cheap: a new note is a new " ui:ex-chat-how-c22
+    " link, and a member-wise rule hears only that link - one member evaluation, one message rendered, one list item inserted, the same in a thread of five or five hundred. The other threads, and every channel not yet opened, are not evaluated at all." ) .
+ui:ex-chat-how-c22 a c:Code ; c:label "c:item" .
