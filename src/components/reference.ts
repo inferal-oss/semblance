@@ -34,6 +34,10 @@ const R = {
   ownOnly: c + 'ownOnly',
   ShapeFacet: c + 'ShapeFacet',
   GalleryFacet: c + 'GalleryFacet',
+  membersOf: c + 'membersOf',
+  TermCard: c + 'TermCard',
+  role: c + 'role',
+  RenderingKind: c + 'RenderingKind',
   to: c + 'to',
   emptyText: c + 'emptyText',
 } as const
@@ -554,7 +558,191 @@ const alignment: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- what a group holds, as cards --------------------------------------------------------------
+
+const SUBCLASS = RDFS + 'subClassOf'
+const ROLES = { component: c + 'ComponentRole', mixin: c + 'MixinRole', cls: c + 'ClassRole', property: c + 'PropertyRole', rendering: c + 'RenderingRole', other: c + 'OtherRole' } as const
+
+/** Every component class: sem:Component's subclasses, to any depth (read once). */
+const componentClasses = (ctx: RuleContext): Set<string> =>
+  ctx.memo('reference:components', () =>
+    ctx.untraced(() => {
+      const out = new Set<string>()
+      const todo = [SEM.Component]
+      while (todo.length) for (const q of ctx.match(null, SUBCLASS, todo.pop()!)) if (named(q.subject) && !out.has(q.subject.value)) out.add(q.subject.value), todo.push(q.subject.value)
+      return out
+    }),
+  )
+
+/**
+ * A term's role in its group: a component, a mixin (a class components specialize, not one
+ * itself), another class, a property, a rendering, or anything else.
+ */
+function roleOf(ctx: RuleContext, t: NamedNode): string {
+  const components = componentClasses(ctx)
+  if (components.has(t.value)) return ROLES.component
+  const kind = kindOf(ctx, t).value
+  if (kind === R.ClassKind) {
+    // Some component specializes it, directly or through another mixin.
+    const seen = new Set<string>()
+    const below = [t.value]
+    let specialized = false
+    while (below.length && !specialized && t.value !== SEM.Component) {
+      for (const q of ctx.match(null, SUBCLASS, below.pop()!)) {
+        if (!named(q.subject) || seen.has(q.subject.value)) continue
+        seen.add(q.subject.value)
+        if (components.has(q.subject.value)) specialized = true
+        below.push(q.subject.value)
+      }
+    }
+    return specialized ? ROLES.mixin : ROLES.cls
+  }
+  if (kind === R.PropertyKind) return ROLES.property
+  if (kind === R.RenderingKind) return ROLES.rendering
+  return ROLES.other
+}
+
+/**
+ * When the bound term is a branch of the tree (c:membersOf) - a component group, a layer, a
+ * vocabulary - a card per term it holds, in a section per role, each a grid. Each card is a
+ * c:TermCard minted here and rendered on its own, so a term's card is built once.
+ */
+const members: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const root = o.el('root', 'Div')
+  o.renders(root)
+  const s = boundTerm(ctx, focus)
+  const tree = ctx.object(focus, R.membersOf)
+  if (!s || !named(tree)) return o.quads
+  const types = new Set(ctx.objects(s, RDF_TYPE).map((t) => t.value))
+  const found = new Map<string, NamedNode>()
+  for (const section of nodes(ctx, ctx.object(tree, R.sections))) {
+    const cls = ctx.object(section, R.branchClass)
+    if (named(cls) && types.has(cls.value)) for (const t of membersOf(ctx, s, section)) found.set(t.value, t)
+  }
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  const byRole = new Map<string, NamedNode[]>()
+  for (const t of found.values()) {
+    const role = roleOf(ctx, t)
+    byRole.set(role, [...(byRole.get(role) ?? []), t])
+  }
+  for (const [role, terms] of byRole) {
+    const r = ctx.nn(role)
+    const slug = str(ctx.object(r, SEM.slug)) ?? ''
+    const title = o.el(`r-${slug}-title`, 'H3', {}, [o.text(`r-${slug}-title-text`, text(ctx, r, LABEL) ?? slug)])
+    const grid = o.el(`r-${slug}-cards`, 'Div', { class: 'sem-cards' })
+    for (const t of terms) {
+      const card = o.node('card-' + key(t.value))
+      o.t(card, RDF_TYPE, ctx.nn(R.TermCard)).t(card, C.of, t).t(card, R.role, r)
+      if (named(target) && named(property)) o.t(card, C.controls, target).t(card, C.property, property)
+      o.t(card, SEM.orderKey, localOf(t.value))
+      o.t(grid, H.hasChild, card)
+    }
+    const section = o.el(`r-${slug}`, 'Section', { class: 'sem-role' }, [title, grid])
+    o.attr(section, 'data-sem-role', slug)
+    o.t(section, SEM.orderKey, str(ctx.object(r, SEM.order)) ?? '')
+    o.t(root, H.hasChild, section)
+  }
+  return o.quads
+}
+
+/** The first sentence of a text, on one line. */
+const firstSentence = (s: string) => s.replace(/[ \t\r\n]+/g, ' ').replace(/^(.*?[.!?]) .*$/, '$1')
+
+/** What a card counts: a phrase for one and for many ({n}). */
+const COUNTS: [string, string, string, string, string][] = [
+  ['properties', c + 'PropertyCountOnePhrase', '1 property', c + 'PropertiesCountPhrase', '{n} properties'],
+  ['renderings', c + 'RenderingCountOnePhrase', '1 rendering', c + 'RenderingsCountPhrase', '{n} renderings'],
+  ['sparql', c + 'SparqlRuleCountOnePhrase', '1 SPARQL rule', c + 'SparqlRulesCountPhrase', '{n} SPARQL rules'],
+  ['functions', c + 'FunctionRuleCountOnePhrase', '1 function rule', c + 'FunctionRulesCountPhrase', '{n} function rules'],
+  ['reactions', c + 'ReactionCountOnePhrase', '1 reaction', c + 'ReactionsCountPhrase', '{n} reactions'],
+]
+
+/**
+ * One term's card: its name (a button that selects it), its slug, the first sentence of its
+ * comment, its superclasses and range as tags (mixins marked), how many properties, renderings,
+ * rules (SPARQL and function) and reactions it has, and links to the gallery specimens showing it.
+ */
+const termCard: FnRule = (ctx, focus) => {
+  const t = ctx.object(focus, C.of)
+  if (!named(t)) return []
+  const o = ctx.out(focus)
+  const role = ctx.object(focus, R.role)
+  const selectable = named(ctx.object(focus, C.controls)) && named(ctx.object(focus, C.property))
+  const parts: NamedNode[] = []
+  const name = compact(ctx, t.value)
+  const title = selectable
+    ? o.el('title', 'Button', { type: 'button', class: 'sem-card-title', title: t.value }, [o.text('title-text', name)])
+    : o.el('title', 'Span', { class: 'sem-card-title', title: t.value }, [o.text('title-text', name)])
+  if (selectable) o.t(title, C.selects, t)
+  const slug = str(ctx.object(t, SEM.slug))
+  const head = o.el('head', 'Header', {}, slug !== undefined ? [title, o.el('slug', 'Code', { class: 'sem-slug' }, [o.text('slug-text', slug)])] : [title])
+  parts.push(head)
+  const comment = text(ctx, t, COMMENT)
+  if (comment !== undefined) parts.push(o.el('summary', 'P', { class: 'sem-summary' }, [o.text('summary-text', firstSentence(comment))]))
+  const components = componentClasses(ctx)
+  const tags = [
+    ...ctx.objects(t, SUBCLASS).filter((x) => named(x) && x.value !== SEM.Component).map((x) => ({ x, text: compact(ctx, x.value), mixin: !components.has(x.value) && isOwn(ctx, x.value) })),
+    ...ctx.objects(t, RDFS + 'subPropertyOf').filter(named).map((x) => ({ x, text: compact(ctx, x.value), mixin: false })),
+    ...ctx.objects(t, RDFS + 'range').filter(named).map((x) => ({ x, text: '→ ' + compact(ctx, x.value), mixin: false })),
+  ]
+  if (tags.length) {
+    const box = o.el('tags', 'Div', { class: 'sem-tags' })
+    for (const tag of tags) {
+      const k = 'tag-' + key(tag.x.value)
+      const span = o.el(k, 'Span', { class: 'sem-tag' }, [o.text(k + '-text', tag.text)])
+      if (tag.mixin) o.attr(span, 'data-sem-mixin', 'true')
+      o.t(span, SEM.orderKey, tag.text)
+      o.t(box, H.hasChild, span)
+    }
+    parts.push(box)
+  }
+  const renderings = ctx.match(null, SEM.targets, t).map((q) => q.subject)
+  const rules = renderings.flatMap((r) => ctx.match(null, SEM.implements, r).map((q) => q.subject))
+  const n = {
+    properties: ctx.match(null, RDFS + 'domain', t).length,
+    renderings: renderings.length,
+    sparql: rules.filter((r) => ctx.match(r, SEM.construct, null).length).length,
+    functions: rules.filter((r) => ctx.match(r, SEM.function, null).length).length,
+    reactions: ctx.match(null, BEH.sourceClass, t).length,
+  } as Record<string, number>
+  const stats = COUNTS.filter(([k]) => n[k]! > 0)
+  if (stats.length) {
+    const box = o.el('counts', 'Div', { class: 'sem-counts' })
+    COUNTS.forEach(([k, one, oneFallback, many, manyFallback], i) => {
+      if (!n[k]) return
+      const words = n[k] === 1 ? say(ctx, one, oneFallback) : say(ctx, many, manyFallback).replaceAll('{n}', String(n[k]))
+      const span = o.el('count-' + k, 'Span', { class: 'sem-stat' }, [o.text(`count-${k}-text`, words)])
+      o.t(span, SEM.orderKey, String(i + 1))
+      o.t(box, H.hasChild, span)
+    })
+    parts.push(box)
+  }
+  const specimens = specimensOf(ctx, t)
+  if (specimens.length) {
+    const box = o.el('shown', 'Div', { class: 'sem-shown' })
+    for (const spec of specimens) {
+      const link = o.node('shown-' + key(spec.value))
+      o.t(link, RDF_TYPE, ctx.nn(NS.c + 'Link')).t(link, R.to, spec)
+      for (const l of ctx.objects(spec, C.label)) o.t(link, C.label, l)
+      o.t(link, SEM.orderKey, compact(ctx, spec.value))
+      o.t(box, H.hasChild, link)
+    }
+    parts.push(box)
+  }
+  // Fixed places, so a part that is missing moves nothing: head, summary, tags, counts, links.
+  const root = o.el('root', 'Article')
+  const place: Record<string, string> = { head: '1', summary: '2', tags: '3', counts: '4', shown: '5' }
+  for (const p of parts) o.t(p, SEM.orderKey, place[p.value.slice(focus.value.length + 2)]!).t(root, H.hasChild, p)
+  if (named(role)) o.attr(root, 'data-sem-role', str(ctx.object(role, SEM.slug)) ?? '')
+  o.renders(root)
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
+  'reference:members': members,
+  'reference:card': termCard,
   'reference:tree': tree,
   'reference:branch': branch,
   'reference:overview': overview,

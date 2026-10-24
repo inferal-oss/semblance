@@ -730,3 +730,241 @@ WHERE {
     BIND(CONCAT(STR(COALESCE(?strengthOrder, "")), " ", ?relName, " ", ?targetName) AS ?rowKey)
   } }
 }""" .
+
+# --- what a group holds, as cards ------------------------------------------------------------------
+# Selecting a branch (a component group, a layer, a vocabulary) shows everything in it: a section
+# per role (components, mixins, other classes, properties, renderings), each a grid of cards. The
+# view mints one c:TermCard per term; each card is its own focus, rendered once per term, so a
+# group's cards cost their own evaluation only the first time the group is shown.
+
+c:TermMembers a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Everything a branch of a c:TermTree (c:membersOf) holds, when the term c:bindProperty of
+c:bindFrom holds is one: a section per role (c:TermRole, by sem:order) with a grid of c:TermCard,
+one per term, by local name. Empty for a term that is no branch. With c:controls and c:property,
+a card's name selects its term there."""@en ;
+    sem:slug "term-members" .
+c:membersOf a owl:ObjectProperty ; rdfs:domain c:TermMembers ; rdfs:range c:TermTree ;
+    rdfs:comment "The tree whose sections say what a branch holds."@en .
+c:TermCard a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Internal: one term's card, minted by a c:TermMembers (c:of the term, c:role its role). Its name
+(selecting it), its slug, the first sentence of its comment, its superclasses, super-properties
+and range as tags (mixins marked), how many properties, renderings, rules (SPARQL, function) and
+reactions it has, and links to the gallery specimens that show it (c:Link c:to)."""@en ;
+    sem:slug "term-card" .
+c:role a owl:ObjectProperty ; rdfs:domain c:TermCard ; rdfs:range c:TermRole .
+
+c:TermRole a owl:Class ;
+    rdfs:comment """A term's role in its group: a component (a sem:Component subclass), a mixin (a class components
+specialize that is not one itself, e.g. c:Draggable), another class, a property, a rendering, or
+anything else. rdfs:label names its section; sem:order places it."""@en .
+c:ComponentRole a c:TermRole ; sem:order 1 ; sem:slug "component" ;
+    rdfs:label "Components"@en , "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
+c:MixinRole a c:TermRole ; sem:order 2 ; sem:slug "mixin" ;
+    rdfs:label "Mixins"@en , "Домішки"@uk , "Mixins"@de , "المزيجات"@ar .
+c:ClassRole a c:TermRole ; sem:order 3 ; sem:slug "class" ;
+    rdfs:label "Other classes"@en , "Інші класи"@uk , "Weitere Klassen"@de , "أصناف أخرى"@ar .
+c:PropertyRole a c:TermRole ; sem:order 4 ; sem:slug "property" ;
+    rdfs:label "Properties"@en , "Властивості"@uk , "Eigenschaften"@de , "الخصائص"@ar .
+c:RenderingRole a c:TermRole ; sem:order 5 ; sem:slug "rendering" ;
+    rdfs:label "Renderings"@en , "Відображення"@uk , "Darstellungen"@de , "العروض"@ar .
+c:OtherRole a c:TermRole ; sem:order 6 ; sem:slug "other" ;
+    rdfs:label "Other terms"@en , "Інші терміни"@uk , "Weitere Begriffe"@de , "مصطلحات أخرى"@ar .
+
+c:PropertyCountOnePhrase a c:Phrase ; rdfs:label "1 property"@en , "1 властивість"@uk , "1 Eigenschaft"@de , "خاصية واحدة"@ar .
+c:PropertiesCountPhrase a c:Phrase ; rdfs:label "{n} properties"@en , "властивостей: {n}"@uk , "{n} Eigenschaften"@de , "الخصائص: {n}"@ar .
+c:RenderingCountOnePhrase a c:Phrase ; rdfs:label "1 rendering"@en , "1 відображення"@uk , "1 Darstellung"@de , "عرض واحد"@ar .
+c:RenderingsCountPhrase a c:Phrase ; rdfs:label "{n} renderings"@en , "відображень: {n}"@uk , "{n} Darstellungen"@de , "العروض: {n}"@ar .
+c:SparqlRuleCountOnePhrase a c:Phrase ; rdfs:label "1 SPARQL rule"@en , "1 правило SPARQL"@uk , "1 SPARQL-Regel"@de , "قاعدة SPARQL واحدة"@ar .
+c:SparqlRulesCountPhrase a c:Phrase ; rdfs:label "{n} SPARQL rules"@en , "правил SPARQL: {n}"@uk , "{n} SPARQL-Regeln"@de , "قواعد SPARQL: {n}"@ar .
+c:FunctionRuleCountOnePhrase a c:Phrase ; rdfs:label "1 function rule"@en , "1 правило-функція"@uk , "1 Funktionsregel"@de , "قاعدة دالة واحدة"@ar .
+c:FunctionRulesCountPhrase a c:Phrase ; rdfs:label "{n} function rules"@en , "правил-функцій: {n}"@uk , "{n} Funktionsregeln"@de , "قواعد الدوال: {n}"@ar .
+c:ReactionCountOnePhrase a c:Phrase ; rdfs:label "1 reaction"@en , "1 реакція"@uk , "1 Reaktion"@de , "تفاعل واحد"@ar .
+c:ReactionsCountPhrase a c:Phrase ; rdfs:label "{n} reactions"@en , "реакцій: {n}"@uk , "{n} Reaktionen"@de , "التفاعلات: {n}"@ar .
+
+c:TermMembersRendering a sem:Rendering ; sem:targets c:TermMembers ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:bindFrom .
+c:TermMembersRendering-fn a sem:Rule ; sem:implements c:TermMembersRendering ; sem:function "reference:members" .
+c:TermMembersRendering-sparql a sem:Rule ;
+    sem:implements c:TermMembersRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?section .
+  ?section a rdfhtml:Section ; rdfhtml:class "sem-role" ; sem:orderKey ?roleOrder ; rdfhtml:attribute ?sectionRole ; rdfhtml:hasChild ?title , ?grid .
+  ?sectionRole a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-role" ; rdfhtml:attributeValue ?roleSlug .
+  ?title a rdfhtml:H3 ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?grid .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?roleName .
+  ?grid a rdfhtml:Div ; rdfhtml:class "sem-cards" ; rdfhtml:hasChild ?card .
+  ?card a c:TermCard ; c:of ?t ; c:role ?role ; c:controls ?target ; c:property ?property ; sem:orderKey ?tlocal .
+}
+WHERE {
+  $this a c:TermMembers .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    $this c:bindFrom ?from ; c:bindProperty ?bp ; c:membersOf ?tree . ?from ?bp ?s FILTER(isIRI(?s))
+    ?tree c:sections/rdf:rest*/rdf:first ?branchSection . ?branchSection c:branchClass ?cls . ?s a ?cls .
+    OPTIONAL { ?branchSection c:membersVia ?mp }
+    OPTIONAL { ?branchSection c:exceptProperty ?xp }
+    # The terms the branch holds: the same test as c:TermBranch's.
+    LATERAL {
+      SELECT DISTINCT ?s ?mp ?xp ?t WHERE {
+        { ?t ?termVia ?s FILTER(BOUND(?mp) && sameTerm(?termVia, ?mp) && isIRI(?t)) }
+        UNION
+        { FILTER(!BOUND(?mp))
+          VALUES ?listedKind { c:ClassKind c:PropertyKind } ?listedKind c:kindOf ?listedType . ?t a ?listedType
+          FILTER(isIRI(?t) && STRSTARTS(STR(?t), CONCAT(STR(?s), "#")))
+          FILTER(!BOUND(?xp) || NOT EXISTS { ?t ?xp ?anything }) }
+      }
+    }
+    LATERAL { OPTIONAL { SELECT ?t ?kind WHERE { ?t a ?kindType . ?kind c:kindOf ?kindType ; sem:order ?kindOrder } ORDER BY ?kindOrder ?kind LIMIT 1 } }
+    BIND(COALESCE(?kind, c:IndividualKind) AS ?k)
+    BIND(IF(EXISTS { ?t rdfs:subClassOf+ sem:Component }, c:ComponentRole,
+         IF(sameTerm(?k, c:ClassKind),
+            IF(!sameTerm(?t, sem:Component) && EXISTS { ?specialization rdfs:subClassOf+ ?t . ?specialization rdfs:subClassOf+ sem:Component }, c:MixinRole, c:ClassRole),
+         IF(sameTerm(?k, c:PropertyKind), c:PropertyRole,
+         IF(sameTerm(?k, c:RenderingKind), c:RenderingRole, c:OtherRole)))) AS ?role)
+    OPTIONAL { ?role sem:slug ?roleSlug0 }
+    OPTIONAL { ?role sem:order ?roleOrder0 }
+    OPTIONAL { ?role rdfs:label ?rn0 FILTER(lang(?rn0) = "") }
+    OPTIONAL { ?role rdfs:label ?rn1 FILTER(langMatches(lang(?rn1), "en")) }
+    BIND(STR(COALESCE(?roleSlug0, "")) AS ?roleSlug)
+    BIND(STR(COALESCE(?roleOrder0, "")) AS ?roleOrder)
+    BIND(STR(COALESCE(?rn0, ?rn1, ?roleSlug)) AS ?roleName)
+    OPTIONAL { $this c:controls ?target ; c:property ?property FILTER(isIRI(?target) && isIRI(?property)) }
+    BIND(REPLACE(STR(?t), "^.*[#/]", "") AS ?tlocal)
+    BIND(IRI(CONCAT(STR($this), "/~r-", ?roleSlug)) AS ?section)
+    BIND(IRI(CONCAT(STR(?section), "-data-sem-role")) AS ?sectionRole)
+    BIND(IRI(CONCAT(STR(?section), "-title")) AS ?title)
+    BIND(IRI(CONCAT(STR(?section), "-title-text")) AS ?titleText)
+    BIND(IRI(CONCAT(STR(?section), "-cards")) AS ?grid)
+    BIND(IRI(CONCAT(STR($this), "/~card-", SUBSTR(MD5(STR(?t)), 1, 8))) AS ?card)
+  }
+}""" .
+
+c:TermCardRendering a sem:Rendering ; sem:targets c:TermCard ; sem:modality mod:Screen ; sem:stratum 0 .
+c:TermCardRendering-fn a sem:Rule ; sem:implements c:TermCardRendering ; sem:function "reference:card" .
+c:TermCardRendering-sparql a sem:Rule ;
+    sem:implements c:TermCardRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Article ; sem:renders $this ; rdfhtml:hasChild ?head , ?summary , ?tags , ?counts , ?shown ; rdfhtml:attribute ?roleAttr .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-role" ; rdfhtml:attributeValue ?roleSlug .
+  ?head a rdfhtml:Header ; sem:orderKey "1" ; rdfhtml:hasChild ?title , ?slugEl .
+  ?title a ?titleElement ; rdfhtml:type ?buttonType ; rdfhtml:class "sem-card-title" ; rdfhtml:title ?tIri ; c:selects ?selects ;
+         rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?slugEl .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?tName .
+  ?slugEl a rdfhtml:Code ; rdfhtml:class "sem-slug" ; rdfhtml:hasChild ?slugText .
+  ?slugText a rdfhtml:Text ; rdfhtml:data ?slug .
+  ?summary a rdfhtml:P ; rdfhtml:class "sem-summary" ; sem:orderKey "2" ; rdfhtml:hasChild ?summaryText .
+  ?summaryText a rdfhtml:Text ; rdfhtml:data ?summaryWords .
+  ?tags a rdfhtml:Div ; rdfhtml:class "sem-tags" ; sem:orderKey "3" ; rdfhtml:hasChild ?tag .
+  ?tag a rdfhtml:Span ; rdfhtml:class "sem-tag" ; sem:orderKey ?tagWords ; rdfhtml:hasChild ?tagText ; rdfhtml:attribute ?mixinAttr .
+  ?tagText a rdfhtml:Text ; rdfhtml:data ?tagWords .
+  ?mixinAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-mixin" ; rdfhtml:attributeValue "true" .
+  ?counts a rdfhtml:Div ; rdfhtml:class "sem-counts" ; sem:orderKey "4" ; rdfhtml:hasChild ?stat .
+  ?stat a rdfhtml:Span ; rdfhtml:class "sem-stat" ; sem:orderKey ?statOrder ; rdfhtml:hasChild ?statText .
+  ?statText a rdfhtml:Text ; rdfhtml:data ?statWords .
+  ?shown a rdfhtml:Div ; rdfhtml:class "sem-shown" ; sem:orderKey "5" ; rdfhtml:hasChild ?link .
+  ?link a c:Link ; c:to ?spec ; c:label ?specLabel ; sem:orderKey ?specName .
+}
+WHERE {
+  $this a c:TermCard ; c:of ?t FILTER(isIRI(?t))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { $this c:controls ?st ; c:property ?sp FILTER(isIRI(?st) && isIRI(?sp)) } AS ?selectable)
+  LATERAL { {
+    # The name (a button that selects the term) and the slug; the role on the card.
+    BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
+    BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+    BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
+    BIND(IF(?selectable, rdfhtml:Button, rdfhtml:Span) AS ?titleElement)
+    BIND(IF(?selectable, "button", ?none) AS ?buttonType)
+    BIND(IF(?selectable, ?t, ?none) AS ?selects)
+    BIND(STR(?t) AS ?tIri)
+    BIND(REPLACE(STR(?t), "[^#/]*$", "") AS ?tns)
+    BIND(REPLACE(STR(?t), "^.*[#/]", "") AS ?tlocal)
+    OPTIONAL { { SELECT ?tns (MIN(?tp0) AS ?tpfx) WHERE { ?td sh:prefix ?tp0 ; sh:namespace ?tn0 BIND(STR(?tn0) AS ?tns) } GROUP BY ?tns } }
+    BIND(IF(BOUND(?tpfx) && REGEX(?tlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?tpfx, ":", ?tlocal), CONCAT("<", STR(?t), ">")) AS ?tName)
+    OPTIONAL { ?t sem:slug ?slug0 }
+    BIND(STR(?slug0) AS ?slug)
+    BIND(IF(BOUND(?slug0), IRI(CONCAT(STR($this), "/~slug")), ?none) AS ?slugEl)
+    BIND(IF(BOUND(?slug0), IRI(CONCAT(STR($this), "/~slug-text")), ?none) AS ?slugText)
+    OPTIONAL { $this c:role ?role . ?role sem:slug ?roleSlug0 }
+    BIND(STR(?roleSlug0) AS ?roleSlug)
+    BIND(IF(BOUND(?role), IRI(CONCAT(STR(?root), "-data-sem-role")), ?none) AS ?roleAttr)
+  } UNION {
+    # The first sentence of the comment, on one line.
+    OPTIONAL { ?t rdfs:comment ?c0 FILTER(lang(?c0) = "") }
+    OPTIONAL { ?t rdfs:comment ?c1 FILTER(langMatches(lang(?c1), "en")) }
+    BIND(COALESCE(?c0, ?c1) AS ?comment)
+    FILTER(BOUND(?comment))
+    BIND(IRI(CONCAT(STR($this), "/~summary")) AS ?summary)
+    BIND(IRI(CONCAT(STR($this), "/~summary-text")) AS ?summaryText)
+    BIND(REPLACE(REPLACE(STR(?comment), "[ \\t\\r\\n]+", " "), "^(.*?[.!?]) .*$", "$1") AS ?summaryWords)
+  } UNION {
+    # Tags: superclasses but sem:Component (our classes that are no component marked: mixins), super-properties, the range.
+    { ?t rdfs:subClassOf ?x FILTER(isIRI(?x) && !sameTerm(?x, sem:Component)) BIND("" AS ?arrow)
+      BIND(NOT EXISTS { ?x rdfs:subClassOf+ sem:Component }
+           && EXISTS { ?xOntology a owl:Ontology FILTER(STRSTARTS(STR(?x), CONCAT(STR(?xOntology), "#"))) } AS ?mixin) }
+    UNION { ?t rdfs:subPropertyOf ?x FILTER(isIRI(?x)) BIND("" AS ?arrow) BIND(false AS ?mixin) }
+    UNION { ?t rdfs:range ?x FILTER(isIRI(?x)) BIND("→ " AS ?arrow) BIND(false AS ?mixin) }
+    BIND(IRI(CONCAT(STR($this), "/~tags")) AS ?tags)
+    BIND(IRI(CONCAT(STR($this), "/~tag-", SUBSTR(MD5(STR(?x)), 1, 8))) AS ?tag)
+    BIND(IRI(CONCAT(STR(?tag), "-text")) AS ?tagText)
+    BIND(IF(?mixin, IRI(CONCAT(STR(?tag), "-data-sem-mixin")), ?none) AS ?mixinAttr)
+    BIND(REPLACE(STR(?x), "[^#/]*$", "") AS ?xns)
+    BIND(REPLACE(STR(?x), "^.*[#/]", "") AS ?xlocal)
+    OPTIONAL { { SELECT ?xns (MIN(?xp0) AS ?xpfx) WHERE { ?xd sh:prefix ?xp0 ; sh:namespace ?xn0 BIND(STR(?xn0) AS ?xns) } GROUP BY ?xns } }
+    BIND(CONCAT(?arrow, IF(BOUND(?xpfx) && REGEX(?xlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?xpfx, ":", ?xlocal), CONCAT("<", STR(?x), ">"))) AS ?tagWords)
+  } UNION {
+    # How many properties, renderings, rules (SPARQL, function) and reactions it has.
+    VALUES (?statKey ?statOrder ?onePhrase ?oneFallback ?manyPhrase ?manyFallback) {
+      ("properties" "1" c:PropertyCountOnePhrase "1 property" c:PropertiesCountPhrase "{n} properties")
+      ("renderings" "2" c:RenderingCountOnePhrase "1 rendering" c:RenderingsCountPhrase "{n} renderings")
+      ("sparql" "3" c:SparqlRuleCountOnePhrase "1 SPARQL rule" c:SparqlRulesCountPhrase "{n} SPARQL rules")
+      ("functions" "4" c:FunctionRuleCountOnePhrase "1 function rule" c:FunctionRulesCountPhrase "{n} function rules")
+      ("reactions" "5" c:ReactionCountOnePhrase "1 reaction" c:ReactionsCountPhrase "{n} reactions")
+    }
+    LATERAL {
+      SELECT ?t ?statKey (COUNT(DISTINCT ?counted) AS ?n) WHERE {
+        { FILTER(?statKey = "properties") ?counted rdfs:domain ?t }
+        UNION { FILTER(?statKey = "renderings") ?counted sem:targets ?t }
+        UNION { FILTER(?statKey = "sparql") ?counted sem:implements/sem:targets ?t ; sem:construct ?body }
+        UNION { FILTER(?statKey = "functions") ?counted sem:implements/sem:targets ?t ; sem:function ?name }
+        UNION { FILTER(?statKey = "reactions") ?counted beh:sourceClass ?t }
+      } GROUP BY ?t ?statKey
+    }
+    FILTER(?n > 0)
+    BIND(IF(?n = 1, ?onePhrase, ?manyPhrase) AS ?phrase)
+    OPTIONAL { ?phrase rdfs:label ?p0 FILTER(lang(?p0) = "") }
+    OPTIONAL { ?phrase rdfs:label ?p1 FILTER(langMatches(lang(?p1), "en")) }
+    BIND(STR(COALESCE(?p0, ?p1, IF(?n = 1, ?oneFallback, ?manyFallback))) AS ?pattern)
+    BIND(REPLACE(?pattern, "[{]n[}]", STR(?n)) AS ?statWords)
+    BIND(IRI(CONCAT(STR($this), "/~counts")) AS ?counts)
+    BIND(IRI(CONCAT(STR($this), "/~count-", ?statKey)) AS ?stat)
+    BIND(IRI(CONCAT(STR(?stat), "-text")) AS ?statText)
+  } UNION {
+    # Links to the gallery specimens that show it (the overview's walk).
+    { SELECT DISTINCT ?t ?spec WHERE {
+        ?spec a c:Specimen ; c:children/rdf:rest*/rdf:first/((c:children|c:items|c:content|c:front|c:tabs|c:actions|c:steps|c:body)/((rdf:rest*/rdf:first)?))* ?inst
+        FILTER(isIRI(?inst))
+        FILTER(EXISTS { ?inst ?t ?shownValue } || EXISTS { ?inst a ?t }
+               || EXISTS { ?layerRendering sem:layer ?t ; sem:requires ?required . ?inst ?required ?requiredValue })
+    } }
+    BIND(IRI(CONCAT(STR($this), "/~shown")) AS ?shown)
+    BIND(IRI(CONCAT(STR($this), "/~shown-", SUBSTR(MD5(STR(?spec)), 1, 8))) AS ?link)
+    OPTIONAL { ?spec c:label ?specLabel }
+    BIND(REPLACE(STR(?spec), "[^#/]*$", "") AS ?gns)
+    BIND(REPLACE(STR(?spec), "^.*[#/]", "") AS ?glocal)
+    OPTIONAL { { SELECT ?gns (MIN(?gp0) AS ?gpfx) WHERE { ?gd sh:prefix ?gp0 ; sh:namespace ?gn0 BIND(STR(?gn0) AS ?gns) } GROUP BY ?gns } }
+    BIND(IF(BOUND(?gpfx) && REGEX(?glocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?gpfx, ":", ?glocal), CONCAT("<", STR(?spec), ">")) AS ?specName)
+  } }
+}""" .
+
+# A card's name selects its term, as the tree's names do.
+c:SelectCardTerm a beh:Reaction ;
+    rdfs:label "Select a term"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:TermCard ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
+    sem:function "segmented:select" .

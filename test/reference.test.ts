@@ -199,6 +199,38 @@ describe('a term', () => {
     expect(graph().querySelector('.sem-node[aria-label="sem:Component"]')!.getAttribute('data-sem-salience')).toBe('focused')
   })
 
+  it('shows everything a group holds as cards, by role: components, then mixins', () => {
+    const h = reference()
+    h.click(h.branch('Windows').querySelector(':scope > .sem-row > .sem-label')!)
+    const members = h.page().querySelector('[data-sem-c=term-members]')!
+    const sections = [...members.querySelectorAll('section.sem-role')]
+    expect(sections.map((x) => x.getAttribute('data-sem-role'))).toEqual(['component', 'mixin', 'class'])
+    // A mixin through another (c:Restorable, by way of c:Maximizable) is a mixin too.
+    expect([...sections[1]!.querySelectorAll('.sem-card-title')].map((t) => t.textContent)).toContain('c:Restorable')
+    expect(sections[0]!.querySelector('h3')!.textContent).toBe('Components')
+    const card = (name: string) => [...members.querySelectorAll('[data-sem-c=term-card]')].find((c) => c.querySelector('.sem-card-title')!.textContent === name)!
+    expect([...sections[1]!.querySelectorAll('.sem-card-title')].map((t) => t.textContent)).toEqual(expect.arrayContaining(['c:Draggable', 'c:Resizable']))
+    expect(card('c:Draggable').getAttribute('data-sem-role')).toBe('mixin')
+    const window = card('c:Window')
+    expect(window.querySelector('.sem-slug')!.textContent).toBe('window')
+    expect(window.querySelector('.sem-summary')!.textContent).toBe('A floating window with every capability: move, resize, raise, minimize, maximize, dock to an edge, close.')
+    // Its superclasses as tags, the mixins marked; its counts; the specimens that show it.
+    const tags = [...window.querySelectorAll('.sem-tag')]
+    expect(tags.map((t) => t.textContent)).toEqual(expect.arrayContaining(['c:Frame', 'c:Dockable']))
+    expect(tags.find((t) => t.textContent === 'c:Dockable')!.hasAttribute('data-sem-mixin')).toBe(true)
+    expect(tags.find((t) => t.textContent === 'c:Frame')!.hasAttribute('data-sem-mixin')).toBe(false)
+    expect(tags.find((t) => t.textContent === 'schema:WPSideBar')!.hasAttribute('data-sem-mixin')).toBe(false)
+    expect([...window.querySelectorAll('.sem-stat')].map((x) => x.textContent)).toEqual(expect.arrayContaining(['1 rendering', '1 function rule']))
+    expect(window.querySelectorAll('.sem-shown [data-sem-c=link]').length).toBeGreaterThan(0)
+    // A card's name is a button that selects its term.
+    h.click(window.querySelector('button.sem-card-title')!)
+    expect(h.subject()).toBe(C + 'Window')
+    expect(h.page().querySelectorAll('[data-sem-c=term-members] section').length).toBe(0) // a class holds nothing
+    // A vocabulary lists its classes and properties.
+    h.click(h.branch('Semblance persistence').querySelector(':scope > .sem-row > .sem-label')!)
+    expect([...h.page().querySelectorAll('[data-sem-c=term-members] section.sem-role')].map((x) => x.getAttribute('data-sem-role'))).toEqual(['class', 'property'])
+  })
+
   it('shows its triples as Turtle', () => {
     const h = reference()
     h.select('Inputs', 'CodeInput')
@@ -247,6 +279,9 @@ describe('the reference, as components', () => {
     both((h) => h.tab('Overview'))
     both((h) => h.select('Semblance style layer', 'Tone'))
     both((h) => h.click([...h.fact('Instances')!.querySelectorAll('button.sem-term')].find((b) => b.textContent === 'sty:Danger')!))
+    both((h) => h.click(h.branch('Windows').querySelector(':scope > .sem-row > .sem-label')!))
+    both((h) => h.click(h.branch('validation').querySelector(':scope > .sem-row > .sem-label')!))
+    both((h) => h.click(h.branch('Semblance style layer').querySelector(':scope > .sem-row > .sem-label')!))
   }, 240_000)
 
   it('a selection re-runs the term views and the tree rule, not the branches', () => {

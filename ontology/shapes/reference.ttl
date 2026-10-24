@@ -36,3 +36,13 @@ c:TermKindShape a sh:NodeShape ; sh:targetClass c:TermKind ;
     sh:property [ sh:path sem:order ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path sem:slug ; sh:minCount 1 ; sh:maxCount 1 ] ,
                 [ sh:path sem:symbol ; sh:minCount 1 ; sh:maxCount 1 ] .
+c:TermMembersShape a sh:NodeShape ; sh:targetClass c:TermMembers ;
+    sh:property [ sh:path c:membersOf ; sh:minCount 1 ; sh:maxCount 1 ; sh:class c:TermTree ; sh:message "A members view lists the branches of one term tree (c:membersOf)." ] ,
+                [ sh:path c:bindFrom ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path c:bindProperty ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+c:TermCardShape a sh:NodeShape ; sh:targetClass c:TermCard ;
+    sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path c:role ; sh:maxCount 1 ; sh:class c:TermRole ] .
+c:TermRoleShape a sh:NodeShape ; sh:targetClass c:TermRole ;
+    sh:property [ sh:path sem:order ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path sem:slug ; sh:minCount 1 ; sh:maxCount 1 ] .

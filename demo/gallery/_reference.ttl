@@ -57,7 +57,7 @@ ui:referenceLead a c:Text ; sty:textStyle sty:Caption ;
 
 ui:referenceTabs a c:Tabs ; c:tabs ( ui:refOverviewTab ui:refAlignmentTab ui:refGraphTab ui:refTurtleTab ) ;
     c:selected ui:refOverviewTab .
-ui:refOverviewTab a c:Tab ; c:label "Overview" , "Огляд"@uk , "Überblick"@de , "نظرة عامة"@ar ; c:content ui:referenceOverview .
+ui:refOverviewTab a c:Tab ; c:label "Overview" , "Огляд"@uk , "Überblick"@de , "نظرة عامة"@ar ; c:content ui:referenceOverviewPanel .
 ui:refAlignmentTab a c:Tab ; c:label "Alignment" , "Узгодження"@uk , "Abgleich"@de , "المواءمة"@ar ; c:content ui:referenceAlignment .
 ui:refGraphTab a c:Tab ; c:label "Graph" , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ; c:content ui:referenceGraph .
 ui:refTurtleTab a c:Tab ; c:label "Turtle" ; c:content ui:referenceTurtle .
@@ -65,6 +65,11 @@ ui:refTurtleTab a c:Tab ; c:label "Turtle" ; c:content ui:referenceTurtle .
 ui:referenceOverview a c:TermOverview ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject ;
     c:controls ui:app ; c:property ui:referenceSubject ;
     c:emptyText "Pick a term in the tree." , "Виберіть термін у дереві."@uk , "Wählen Sie einen Begriff im Baum."@de , "اختر مصطلحًا من الشجرة."@ar .
+# For a group, a layer or a vocabulary: everything in it, as cards, below what it says itself.
+ui:referenceOverviewPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ;
+    c:children ( ui:referenceOverview ui:referenceMembers ) .
+ui:referenceMembers a c:TermMembers ; c:membersOf ui:referenceTree ;
+    c:bindFrom ui:app ; c:bindProperty ui:referenceSubject ; c:controls ui:app ; c:property ui:referenceSubject .
 ui:referenceAlignment a c:TermAlignment ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
 ui:referenceTurtle a c:ClassDoc ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
 
@@ -106,6 +111,11 @@ ui:FocusPickedInGraph a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:Te
 WHERE { $this c:branchOf ui:referenceTree . $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . ui:referenceGraph c:selectedTerm ?old }""" ;
     beh:inserts """CONSTRUCT { ui:referenceGraph c:selectedTerm ?term }
 WHERE { $this c:branchOf ui:referenceTree . $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term }""" .
+ui:FocusCardInGraph a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:TermCard ;
+    beh:deletes """CONSTRUCT { ui:referenceGraph c:selectedTerm ?old }
+WHERE { $this c:controls ui:app . $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . ui:referenceGraph c:selectedTerm ?old }""" ;
+    beh:inserts """CONSTRUCT { ui:referenceGraph c:selectedTerm ?term }
+WHERE { $this c:controls ui:app . $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term }""" .
 ui:FocusLinkedInGraph a beh:Reaction ; beh:when beh:Click ; beh:source ui:referenceOverview ;
     beh:deletes """CONSTRUCT { ui:referenceGraph c:selectedTerm ?old }
 WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . ui:referenceGraph c:selectedTerm ?old }""" ;

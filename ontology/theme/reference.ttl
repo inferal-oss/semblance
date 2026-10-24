@@ -267,3 +267,85 @@
 [] a sty:StyleRule ; sty:appliesTo c:TermAlignment ; sty:part ".sem-empty" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+
+# --- what a group holds ---
+[] a sty:StyleRule ; sty:appliesTo c:TermMembers ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-5 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermMembers ; sty:part "h3" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0 0 var(--sem-space-3)" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.06em" ] ,
+                 [ sty:property "text-transform" ; sty:raw "uppercase" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermMembers ; sty:part ".sem-cards" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-3 ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+# Mixins are capabilities, not things: a dashed outline sets them apart.
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:state "[data-sem-role=mixin]" ;
+    sty:declares [ sty:property "border-style" ; sty:raw "dashed" ] ,
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "header" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "gap" ; sty:raw "4px var(--sem-space-2)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-card-title" ;
+    sty:declares [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "font" ; sty:raw "650 var(--sem-text-sm)/1.4 var(--sem-font-mono)" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "button.sem-card-title" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "button.sem-card-title:hover" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "underline" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part "button.sem-card-title:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-slug" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-summary" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "line-height" ; sty:token tok:leading-normal ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ":is(.sem-tags, .sem-counts, .sem-shown)" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-tag" ;
+    sty:declares [ sty:property "padding" ; sty:raw "1px 6px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "font" ; sty:raw "11px/1.5 var(--sem-font-mono)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-tag[data-sem-mixin]" ;
+    sty:declares [ sty:property "border-style" ; sty:raw "dashed" ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-stat" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-stat + .sem-stat::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "'· '" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TermCard ; sty:part ".sem-shown" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-3 ] .
