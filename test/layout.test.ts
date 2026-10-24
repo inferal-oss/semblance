@@ -95,3 +95,22 @@ describe('layout components', () => {
     expect(toText(text.index, 'https://example.org/s')).toBe('┌\nInside\n────────\n──── or ────\n└')
   })
 })
+
+describe('c:StatusBar (the shell’s performance panel)', () => {
+  it('is on every page and folds to its caption', async () => {
+    const { mountShell } = await import('./harness.ts')
+    const h = mountShell()
+    const bar = () => h.document.querySelector('[data-sem-c=status-bar]')!
+    for (const page of ['Playground', 'Performance', 'Components'] as const) {
+      h.showPage(page)
+      expect(bar().querySelectorAll('[data-sem-c=metrics]')).toHaveLength(2)
+    }
+    const fold = bar().querySelector('.sem-fold')!
+    expect(fold.getAttribute('aria-expanded')).toBe('true')
+    h.fire(fold, 'click')
+    expect(bar().getAttribute('data-expanded')).toBe('false')
+    expect(bar().querySelector('.sem-bar-body')!.hasAttribute('hidden')).toBe(true)
+    h.fire(bar().querySelector('.sem-fold')!, 'click')
+    expect(bar().getAttribute('data-expanded')).toBe('true')
+  })
+})

@@ -188,3 +188,58 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
                  [ sty:property "align-self" ; sty:raw "stretch" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] .
+
+# --- status bar ---
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ;
+    sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
+                 [ sty:property "bottom" ; sty:raw "0" ] ,
+                 [ sty:property "z-index" ; sty:raw "40" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "min-height" ; sty:raw "40px" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-1 tok:space-5 ) ] ,
+                 [ sty:property "border-top" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-surface-sunken) 82%, transparent)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "blur(14px) saturate(1.4)" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-fold" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 8px" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font" ; sty:raw "650 11px/1 var(--sem-font)" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.08em" ] ,
+                 [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-fold:hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-fold:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-fold .sem-chevron" ;
+    sty:declares [ sty:property "width" ; sty:raw "6px" ] ,
+                 [ sty:property "height" ; sty:raw "6px" ] ,
+                 [ sty:property "border-right" ; sty:raw "1.5px solid currentColor" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "1.5px solid currentColor" ] ,
+                 [ sty:property "transform" ; sty:raw "rotate(45deg) translate(-1px, -1px)" ] ,
+                 [ sty:property "transition" ; sty:raw "transform var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:state "[data-expanded=false]" ; sty:part "> .sem-fold .sem-chevron" ;
+    sty:declares [ sty:property "transform" ; sty:raw "rotate(-135deg) translate(-1px, -1px)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-bar-body" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex" ; sty:raw "1" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:tokens ( tok:space-2 tok:space-4 ) ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-bar-body[hidden]" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .

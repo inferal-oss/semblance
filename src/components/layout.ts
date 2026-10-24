@@ -2,6 +2,7 @@
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { C, MOD, NS, SEM, STY } from '../ns.ts'
+import { hitMarks, setFlag } from './feedback.ts'
 import { labelOf, nodes, str, text } from './util.ts'
 
 const POS_DIRECTION = NS.pos + 'direction'
@@ -126,6 +127,39 @@ const spacer: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { specimen, swatches, surface, divider, grid, spacer }
+/**
+ * A bar docked to the bottom of its container (sticky, so it stays in view while the
+ * page scrolls under it): a caption and components. c:expanded false folds it to the
+ * caption and its toggle.
+ */
+const statusBar: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const caption = text(ctx, focus, C.label)
+  const children = nodes(ctx, ctx.object(focus, C.children))
+  const open = ctx.object(focus, NS.c + 'expanded')?.value !== 'false'
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, [o.text('caption', `— ${caption ?? ''} —`), ...(open ? children : [])]))
+    return o.quads
+  }
+  const body = o.node('body')
+  const toggle = o.el('toggle', 'Button', { type: 'button', class: 'sem-fold', 'aria-expanded': String(open), 'aria-controls': body.value }, [
+    ...(caption ? [o.el('caption', 'Strong', {}, [o.text('caption-text', caption)])] : []),
+    o.el('chevron', 'Span', { class: 'sem-chevron', 'aria-hidden': 'true' }),
+  ])
+  o.t(toggle, NS.c + 'folds', focus)
+  const root = o.el('root', 'Footer', { 'data-expanded': String(open) }, [toggle, o.el('body', 'Div', { class: 'sem-bar-body', id: body.value, hidden: open ? undefined : '' }, children)])
+  if (caption) o.attr(root, 'aria-label', caption)
+  o.renders(root)
+  return o.quads
+}
 
-export const reactions: Record<string, ReactionFn> = {}
+/** Clicking a status bar's fold control flips c:expanded. */
+const statusBarFold: ReactionFn = (ctx) => {
+  if (!hitMarks(ctx, NS.c + 'folds')) return { add: [], remove: [] }
+  return setFlag(ctx, ctx.target, NS.c + 'expanded', ctx.object(ctx.target, NS.c + 'expanded')?.value === 'false')
+}
+
+export const functions: Record<string, FnRule> = {
+  'status-bar': statusBar, specimen, swatches, surface, divider, grid, spacer }
+
+export const reactions: Record<string, ReactionFn> = { 'status-bar:fold': statusBarFold }

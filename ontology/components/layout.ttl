@@ -77,3 +77,19 @@ c:Spacer a owl:Class ;
     sem:slug "spacer" .
 c:SpacerRendering a sem:Rendering ; sem:targets c:Spacer ; sem:stratum 0 .
 c:SpacerRendering-fn a sem:Rule ; sem:implements c:SpacerRendering ; sem:function "spacer" .
+
+# --- StatusBar: a bar docked to the bottom of its container ---------------------------------------
+
+c:StatusBar a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A bar that stays at the bottom of its container while the page scrolls under it:
+a caption (c:label) and components (c:children). Its caption is a fold control: c:expanded
+false folds the bar to the caption."""@en ;
+    sem:slug "status-bar" .
+c:folds a owl:ObjectProperty ; rdfs:comment "On a rendered element: the component whose c:expanded activating it flips."@en .
+c:StatusBarRendering a sem:Rendering ; sem:targets c:StatusBar ; sem:stratum 0 .
+c:StatusBarRendering-fn a sem:Rule ; sem:implements c:StatusBarRendering ; sem:function "status-bar" .
+c:StatusBarFold a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:StatusBar ;
+    beh:deletes """CONSTRUCT { $this c:expanded ?e } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . $this c:expanded ?e }""" ;
+    beh:inserts """CONSTRUCT { $this c:expanded ?next } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . OPTIONAL { $this c:expanded ?e } BIND(COALESCE(?e, true) = false AS ?next) }""" ;
+    sem:function "status-bar:fold" .

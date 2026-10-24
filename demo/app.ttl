@@ -71,12 +71,18 @@ ui:domNodes rdfs:label "DOM nodes" .
 
 # --- the shell ----------------------------------------------------------------------------------
 
-ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:desktop ) ;
+ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
     # Display settings of the whole interface: hooked axes whose values re-value tokens.
     mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable .
 
 # Detached views live here, outside the pages, so they survive page changes.
 ui:desktop a c:Desktop ; c:hosts ui:announcements .
+
+# What the last interaction cost and what memory holds, on every page: a bar
+# docked to the bottom of the shell. The host writes ui:stats; c:Metrics shows it.
+ui:perfPanel a c:StatusBar ; c:label "Performance" , "Продуктивність"@uk , "Leistung"@de , "الأداء"@ar ;
+    c:children ( ui:lastUpdate ui:memory ) .
+ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples ui:domNodes ) .
 
 # Announcing reactions (ann:announces) show up here as toasts, from the change log.
 ui:announcements a c:ToastRegion ; ann:from beh:ChangeLog ; c:limit 3 .
@@ -105,8 +111,7 @@ ui:playground a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:i
     c:children ( ui:toolbar ui:workspace ) .
 
 ui:toolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ui:lastUpdate ui:memory ) .
-ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples ui:domNodes ) .
+    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ) .
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
@@ -260,9 +265,7 @@ ui:performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:
     c:children ( ui:perfToolbar ui:perfWorkspace ) .
 
 ui:perfToolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
-    c:children ( ui:sizes ui:runButton ui:clearButton ui:perfProgress ui:perfLastUpdate ui:perfMemory ) .
-ui:perfLastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
-ui:perfMemory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples ui:domNodes ) .
+    c:children ( ui:sizes ui:runButton ui:clearButton ui:perfProgress ) .
 ui:sizes a c:TextField ; c:label "Sizes" ; c:value "100,1000" ; c:placeholder "100,1000,10000" .
 ui:runButton a c:Button ; c:label "Run matrix" ; sty:intent sty:Primary .
 ui:clearButton a c:Button ; c:label "Clear" ; sty:intent sty:Secondary .
