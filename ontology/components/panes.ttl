@@ -242,6 +242,25 @@ WHERE {
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-min"))) AS ?dMinPx)
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-step"))) AS ?dStep)
 }""" .
+c:SplitViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:SplitViewRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?primary , ?divider , ?secondary .
+  ?primary ord:precedes ?divider , ?secondary .
+  ?divider a rdfhtml:Text ; rdfhtml:data "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500" ; ord:precedes ?secondary .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SplitView .
+  BIND(EXISTS { $this c:collapsed ?flag FILTER(STR(?flag) = "true") } AS ?collapsed)
+  OPTIONAL { $this c:primary ?primary0 FILTER(isIRI(?primary0)) }
+  OPTIONAL { $this c:secondary ?secondary0 FILTER(isIRI(?secondary0)) }
+  BIND(?primary0 AS ?primary)
+  BIND(IF(?collapsed, ?none, ?secondary0) AS ?secondary)
+  BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider"))) AS ?divider)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
 
 # Dragging the divider (or an arrow key on it) sets the ratio: the new size over the room
 # there was, to three places, kept at least c:minSize (default 120 px) from either end
@@ -399,6 +418,47 @@ WHERE {
     $this c:footer ?footer FILTER(isIRI(?footer))
     BIND(IRI(CONCAT(STR($this), "/~footer")) AS ?footerWrap)
   }
+}""" .
+c:DockPanelRendering-sparql-text a sem:Rule ;
+    sem:implements c:DockPanelRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?caption , ?toolbar , ?content , ?footer .
+  ?caption a rdfhtml:Text ; rdfhtml:data ?line ; ord:precedes ?toolbar , ?content , ?footer .
+  ?toolbar ord:precedes ?content , ?footer .
+  ?content ord:precedes ?footer .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DockPanel .
+  OPTIONAL {
+    $this c:label ?picko . FILTER(isLiteral(?picko))
+    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
+    BIND(LCASE(LANG(?picko)) AS ?tago)
+    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
+    FILTER NOT EXISTS {
+      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
+      $this c:label ?othero . FILTER(isLiteral(?othero))
+      BIND(LCASE(LANG(?othero)) AS ?tag2o)
+      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
+      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
+    }
+  }
+  OPTIONAL { $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
+  OPTIONAL { $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
+  OPTIONAL { $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
+  OPTIONAL { $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?label)
+  BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
+  BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)
+  OPTIONAL { $this c:toolbar ?toolbar0 FILTER(isIRI(?toolbar0)) }
+  OPTIONAL { $this c:content ?content0 FILTER(isIRI(?content0)) }
+  OPTIONAL { $this c:footer ?footer0 FILTER(isIRI(?footer0)) }
+  BIND(IF(?open, ?toolbar0, ?none) AS ?toolbar)
+  BIND(IF(?open, ?content0, ?none) AS ?content)
+  BIND(IF(?open, ?footer0, ?none) AS ?footer)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~caption")) AS ?caption)
 }""" .
 
 # Dragging the free edge (or an arrow key on it) sets the panel's size along its axis: c:width
