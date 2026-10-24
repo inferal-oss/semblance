@@ -182,8 +182,8 @@ function syncSettings() {
 }
 
 /** Record what the last change cost in the graph (ui:stats), where c:Metrics shows it. */
-function recordStats(action: string, ms: number, ruleRuns: number, domOps: number) {
-  writeStats({ action: f.literal(action), ms: decimal(ms), ruleRuns: integer(ruleRuns), domOps: integer(domOps) })
+function recordStats(action: string, ms: number, ruleRuns: number, domOps: number, viewRows: number) {
+  writeStats({ action: f.literal(action), ms: decimal(ms), ruleRuns: integer(ruleRuns), domOps: integer(domOps), viewRows: integer(viewRows) })
 }
 
 /**
@@ -226,9 +226,9 @@ function writeStats(values: Record<string, Delta['add'][number]['object']>) {
 
 const apply = runtime.apply.bind(runtime)
 const runs = () => screen.engine.stats.ruleRuns + text.engine.stats.ruleRuns
-let mark = { t: 0, runs: 0, ops: 0 }
+let mark = { t: 0, runs: 0, ops: 0, views: 0 }
 runtime.apply = (delta) => {
-  mark = { t: performance.now(), runs: runs(), ops: shell.ops }
+  mark = { t: performance.now(), runs: runs(), ops: shell.ops, views: runtime.views.totals.rowsIn }
   return apply(delta)
 }
 
@@ -245,13 +245,20 @@ persistence.attach(runtime)
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
 network.attach()
 Object.assign(globalThis, { network })
+// Maintained views keep time on the bus's clock (their windows age with beh:at); a window that
+// moved by itself patches the page like an event does.
+runtime.views.clock = bus.clock
+runtime.onTimer(() => {
+  flush()
+  scheduleWarmup()
+})
 bus.attach(shell, (h: Handled) => {
   syncSettings()
   flush()
   scheduleWarmup()
   if (h.recorded) {
-    const cost = { ms: performance.now() - mark.t, runs: runs() - mark.runs, ops: shell.ops - mark.ops }
-    recordStats(`${short(h.type)} → ${h.reactions.map(short).join(', ')}`, cost.ms, cost.runs, cost.ops)
+    const cost = { ms: performance.now() - mark.t, runs: runs() - mark.runs, ops: shell.ops - mark.ops, views: runtime.views.totals.rowsIn - mark.views }
+    recordStats(`${short(h.type)} → ${h.reactions.map(short).join(', ')}`, cost.ms, cost.runs, cost.ops, cost.views)
     flush()
   }
 })
@@ -262,6 +269,7 @@ const scheduler = new Scheduler(bus, {
   onHandled: () => {
     syncSettings()
     flush()
+    scheduleWarmup()
   },
 })
 scheduler.attach()

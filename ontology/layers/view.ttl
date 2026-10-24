@@ -1,0 +1,87 @@
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Maintained views (docs/IVM.md). A view is a query - sem:select or sem:construct, plain
+# SPARQL that also runs from scratch - whose result the runtime keeps up to date from the
+# changes to its inputs, one tick per transaction, instead of re-running it. A query opts in
+# by also being an iv:View. Over an LDES, the stream's members are the input changes: an
+# appended member enters (+1), a retired one leaves (-1), so the retention policy bounds what
+# a view holds. CONSTRUCT views write their output to the views graph
+# (urn:semblance:views), which projections read like any input graph; SELECT views deliver
+# rows to subscribers. The runtime writes each view's plan there too, as data.
+
+iv:View a owl:Class ;
+    rdfs:subClassOf prov:Plan ;
+    rdfs:label "maintained view"@en ;
+    rdfs:comment """A query (sem:select or sem:construct) whose result is maintained from the changes to its
+inputs. Run from scratch, the same query gives the same result; tests check that after every tick."""@en .
+
+# --- how ---------------------------------------------------------------------------------------------
+
+iv:Strategy a owl:Class ; rdfs:comment "How a view is kept up to date."@en .
+iv:strategy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Strategy ;
+    rdfs:comment """Asked for on a view (iv:Incremental makes a fallback an error), and stated by the
+runtime in the views graph: what the view got."""@en .
+iv:Incremental a iv:Strategy ; rdfs:label "incremental"@en ;
+    rdfs:comment "Every operator does work in proportion to the change, not to the data."@en .
+iv:Recompute a iv:Strategy ; rdfs:label "recomputed"@en ;
+    rdfs:comment "Re-run from scratch whenever an input changes, and diffed (the fallback)."@en .
+iv:fallback a owl:DatatypeProperty ; rdfs:domain iv:View ;
+    rdfs:comment "Why the runtime recomputes a view rather than maintaining it (written by the runtime)."@en .
+
+# --- inputs and time -----------------------------------------------------------------------------------
+
+iv:over a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range ldes:EventStream ;
+    rdfs:comment "The stream whose members are the view's input changes. Optional: <stream> tree:member ?m in the query says the same."@en .
+iv:window a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Window ;
+    rdfs:comment "Only the members inside this window count; they leave it as time passes."@en .
+iv:Window a owl:Class .
+iv:SlidingWindow a owl:Class ; rdfs:subClassOf iv:Window ;
+    rdfs:comment "The members whose timestamp is within iv:range of now (wall clock). One timer, set to the next expiry, moves it."@en .
+iv:range a owl:DatatypeProperty ; rdfs:domain iv:Window ; rdfs:range xsd:dayTimeDuration ;
+    rdfs:comment "How far back a sliding window reaches (e.g. \"PT30S\")."@en .
+iv:timeBy a owl:ObjectProperty ; rdfs:domain iv:Window ; rdfs:range owl:DatatypeProperty ;
+    rdfs:comment "The member's timestamp (default: the stream's ldes:timestampPath)."@en .
+iv:whileShown a owl:ObjectProperty ; rdfs:domain iv:View ;
+    rdfs:comment """Maintain the view only while this component - or, given a class, one of its instances - is
+shown; otherwise it is suspended (no work per tick) and rebuilt from its inputs when shown again."""@en .
+# Designed, not built yet (docs/IVM.md §7.3-7.4): iv:TumblingWindow (iv:size, iv:keep),
+# iv:CountWindow, iv:clock (iv:WallClock, iv:EventTime) with iv:lateness; iv:parameter,
+# iv:partitionBy, iv:materialize (iv:Graph, iv:Ephemeral), iv:maxState, iv:deltaLog.
+
+# --- the plan, as data (written by the runtime) ---------------------------------------------------------
+
+iv:Operator a owl:Class ; rdfs:comment "One step of a view's circuit."@en .
+iv:operator a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Operator .
+iv:input a owl:ObjectProperty ; rdfs:domain iv:Operator ; rdfs:range iv:Operator ;
+    rdfs:comment "The operator whose changes this one consumes."@en .
+iv:kind a owl:ObjectProperty ; rdfs:domain iv:Operator .
+iv:algebra a owl:DatatypeProperty ; rdfs:domain iv:Operator ; rdfs:comment "The part of the query it evaluates, as text."@en .
+iv:partitionKey a owl:DatatypeProperty ; rdfs:domain iv:Operator ;
+    rdfs:comment "A partitioned operator's key: it re-evaluates only the partitions a change touches."@en .
+iv:Partition a owl:NamedIndividual ; rdfs:label "partition"@en ;
+    rdfs:comment "Evaluates the member-local part once per member, and caches its rows until the member retires or changes."@en .
+iv:Expire a owl:NamedIndividual ; rdfs:label "expire"@en ;
+    rdfs:comment "A window's edge: members leave the aggregates when their timestamp falls out of it."@en .
+iv:Group a owl:NamedIndividual ; rdfs:label "group"@en ;
+    rdfs:comment "GROUP BY with incremental aggregates: per group, COUNT and SUM add and subtract; MIN and MAX keep values in order."@en .
+iv:Sink a owl:NamedIndividual ; rdfs:label "sink"@en ;
+    rdfs:comment "Writes the triples of the groups that changed, reference-counted, to the views graph."@en .
+
+# --- figures (iv:measured views; written in idle time) ----------------------------------------------------
+
+iv:measured a owl:DatatypeProperty ; rdfs:domain iv:View ; rdfs:range xsd:boolean ;
+    rdfs:comment "Write this view's figures to the views graph in idle time, with a from-scratch run for comparison."@en .
+iv:stateRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Rows of state the view holds (cached member rows, accumulators, window)."@en .
+iv:ticks a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Ticks in which the view did work."@en .
+iv:lastRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Rows processed in the last tick that did work."@en .
+iv:lastMs a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Milliseconds that tick took for this view."@en .
+iv:meanMs a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Mean milliseconds per tick."@en .
+iv:scratchMs a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "Milliseconds a from-scratch run of the same query took (sampled)."@en .
+iv:scratchRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Results of that run."@en .
+iv:inputRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Member rows a from-scratch run reads."@en .

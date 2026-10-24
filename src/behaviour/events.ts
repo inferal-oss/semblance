@@ -255,31 +255,35 @@ export class EventBus {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
-    const applied = this.runtime.apply(delta)
-    // Event classes marked beh:recorded false (e.g. hovers) change state but stay out of the log.
-    if (this.value(nn(type), BEH.recorded)?.value === 'false') {
-      forget()
-      return { recorded: false, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
-    }
+    // The state change and the member that records it are one tick: views over the log and
+    // over the state agree after every event (docs/IVM.md, decision 8).
+    return this.runtime.transaction(() => {
+      const applied = this.runtime.apply(delta)
+      // Event classes marked beh:recorded false (e.g. hovers) change state but stay out of the log.
+      if (this.value(nn(type), BEH.recorded)?.value === 'false') {
+        forget()
+        return { recorded: false, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
+      }
 
-    // Completing the member: its effect, its predecessor, then the tree:member link
-    // and the stream's head pointer.
-    const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
-    const remove = this.expired()
-    const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
-    this.runtime.log({
-      remove: [...remove, ...head],
-      add: [
-        ...quads,
-        f.quad(event, nn(BEH.added), int(applied.add.length)),
-        f.quad(event, nn(BEH.removed), int(applied.remove.length)),
-        ...head.map((q) => f.quad(event, nn(BEH.previous), q.object)),
-        f.quad(this.stream, nn(LDES.member), event),
-        f.quad(this.stream, nn(BEH.latest), event),
-      ],
+      // Completing the member: its effect, its predecessor, then the tree:member link
+      // and the stream's head pointer.
+      const int = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
+      const remove = this.expired()
+      const head = this.runtime.store.match(this.stream, nn(BEH.latest), null, this.graph)
+      this.runtime.log({
+        remove: [...remove, ...head],
+        add: [
+          ...quads,
+          f.quad(event, nn(BEH.added), int(applied.add.length)),
+          f.quad(event, nn(BEH.removed), int(applied.remove.length)),
+          ...head.map((q) => f.quad(event, nn(BEH.previous), q.object)),
+          f.quad(this.stream, nn(LDES.member), event),
+          f.quad(this.stream, nn(BEH.latest), event),
+        ],
+      })
+      this.members().push({ event, at: Date.now() })
+      return { recorded: true, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
     })
-    this.members().push({ event, at: Date.now() })
-    return { recorded: true, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
   }
 
   /**

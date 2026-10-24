@@ -5,6 +5,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, L10N, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { el, marked } from './data.ts'
 import { labelOf, named, nodes, str, text } from './util.ts'
+import { C as VIEW_C } from '../view/functions.ts'
 
 const C_CLEARS = NS.c + 'clears'
 const C_TOGGLES = NS.c + 'toggles'
@@ -231,8 +232,14 @@ const countBadge: FnRule = (ctx, focus) => {
   if (!collection) return []
   const via = ctx.object(focus, C_MEMBER_PROPERTY) ?? ctx.nn(TREE_MEMBER)
   const cls = ctx.object(focus, C_MEMBER_CLASS)
-  const members = new Set(ctx.objects(collection, via).filter((m) => !cls || isA(ctx, m, cls)).map((m) => m.termType + ' ' + m.value))
-  const number = String(members.size)
+  // tree:member collections: the maintained counts (c:MemberCounts, c:MemberClassCounts); else counted here.
+  const counted = () => new Set(ctx.objects(collection, via).filter((m) => !cls || isA(ctx, m, cls)).map((m) => m.termType + ' ' + m.value)).size
+  const maintained = () => {
+    if (!cls) return Number(ctx.object(collection, VIEW_C.memberCount)?.value ?? 0)
+    const row = ctx.objects(collection, VIEW_C.classCount).find((r) => ctx.object(r, VIEW_C.countClass)?.equals(cls))
+    return Number((row && ctx.object(row, VIEW_C.count)?.value) ?? 0)
+  }
+  const number = String(via.value === TREE_MEMBER ? maintained() : counted())
   const label = text(ctx, focus, C.label)
   const aria = label === undefined ? number : `${number} ${label}`
   const o = ctx.out(focus)

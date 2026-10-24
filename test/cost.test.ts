@@ -35,6 +35,9 @@ function costHarness() {
     read: counters.read,
     sparqlRows: counters.sparqlRows,
     domOps: shell.shell.ops,
+    // Maintained views (docs/IVM.md): rows their operators processed, and the state they hold.
+    viewRows: shell.runtime.views.totals.rowsIn,
+    viewState: shell.runtime.views.totals.state,
   })
   const measure = (action: () => void) => {
     const a = snapshot()

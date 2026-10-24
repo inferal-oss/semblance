@@ -3,16 +3,59 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# A view over an LDES: summary statistics of a change log, computed by a single
-# SPARQL projection (aggregates, grouping, and a rank ordering expressed as
-# pairwise ord:precedes). It re-renders when members are appended or retired
-# because it follows c:of to the stream, whose tree:member triples change.
+# A view over an LDES: summary statistics of a change log. The aggregates are maintained
+# views (iv:View, docs/IVM.md): each member is counted once when it is appended and once more
+# (negatively) when it retires, so an event costs the same whatever the log's bound
+# (ldes:amount). The views write their rows about the stream into the views graph; the
+# rendering rules read those rows - a few per event kind and component, never the members -
+# rank them by pairwise ord:precedes, and re-render when the stream changes (sem:follows c:of).
+# The views are maintained while a c:StreamStats is shown (iv:whileShown) and rebuilt when one
+# is shown again.
 
 c:StreamStats a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Statistics over a Linked Data Event Stream of UI changes."@en ;
     sem:slug "stream-stats" .
+
+# --- the maintained views --------------------------------------------------------------------------
+
+c:eventCount a owl:DatatypeProperty ; rdfs:comment "On a stream: its members that record a change (beh:added, beh:removed)."@en .
+c:addedTotal a owl:DatatypeProperty ; rdfs:comment "On a stream: triples its members added, in all."@en .
+c:removedTotal a owl:DatatypeProperty ; rdfs:comment "On a stream: triples its members removed, in all."@en .
+c:targetCount a owl:DatatypeProperty ; rdfs:comment "On a stream: distinct components its members were addressed to."@en .
+c:keyCount a owl:ObjectProperty ; rdfs:comment "On a stream: a count of its members by one key (c:dimension, c:countKey, c:count)."@en .
+c:dimension a owl:DatatypeProperty ; rdfs:comment "What a key count counts by: \"kind\" (rdf:type) or \"component\" (beh:target)."@en .
+c:countKey a owl:ObjectProperty .
+c:count a owl:DatatypeProperty ; rdfs:range xsd:integer .
+
+c:StreamTotals a iv:View ; iv:whileShown c:StreamStats ;
+    rdfs:label "stream totals"@en ;
+    rdfs:comment "Per stream: members, triples added and removed, distinct components."@en ;
+    sem:function "stream-stats:totals" ;
+    sem:construct """
+CONSTRUCT { ?stream c:eventCount ?n ; c:addedTotal ?added ; c:removedTotal ?removed ; c:targetCount ?targets }
+WHERE {
+  { SELECT ?stream (COUNT(?m) AS ?n) (SUM(?a) AS ?added) (SUM(?r) AS ?removed) (COUNT(DISTINCT ?t) AS ?targets)
+    WHERE { ?stream tree:member ?m . ?m beh:added ?a ; beh:removed ?r . OPTIONAL { ?m beh:target ?t } }
+    GROUP BY ?stream }
+}""" .
+
+c:StreamKeyCounts a iv:View ; iv:whileShown c:StreamStats ;
+    rdfs:label "members per kind and per component"@en ;
+    sem:function "stream-stats:keys" ;
+    sem:construct """
+CONSTRUCT { ?stream c:keyCount ?row . ?row c:dimension ?dim ; c:countKey ?key ; c:count ?count }
+WHERE {
+  { SELECT ?stream ?dim ?key (COUNT(?m) AS ?count)
+    WHERE { ?stream tree:member ?m . { ?m a ?key BIND("kind" AS ?dim) } UNION { ?m beh:target ?key BIND("component" AS ?dim) } }
+    GROUP BY ?stream ?dim ?key }
+  BIND(IRI(CONCAT(STR(?stream), "/~", ?dim, "-", ENCODE_FOR_URI(STR(?key)))) AS ?row)
+}""" .
+
+# --- renderings -----------------------------------------------------------------------------------
 
 c:StreamStatsOnScreen a sem:Rendering ;
     sem:targets c:StreamStats ;
@@ -77,11 +120,8 @@ WHERE {
   {
     # Headline metrics.
     $this c:of ?stream .
-    OPTIONAL {
-      SELECT ?stream (COUNT(?m) AS ?n) (SUM(?a) AS ?added) (SUM(?r) AS ?removed) (COUNT(DISTINCT ?t) AS ?c)
-      WHERE { ?stream tree:member ?m . ?m beh:added ?a ; beh:removed ?r ; beh:target ?t }
-      GROUP BY ?stream
-    }
+    # The totals view's figures (c:StreamTotals).
+    OPTIONAL { ?stream c:eventCount ?n ; c:addedTotal ?added ; c:removedTotal ?removed ; c:targetCount ?c }
     BIND(STR(COALESCE(?n, 0)) AS ?events)
     BIND(CONCAT("+", STR(COALESCE(?added, 0)), " / −", STR(COALESCE(?removed, 0))) AS ?changes)
     BIND(STR(COALESCE(?c, 0)) AS ?components)
@@ -102,21 +142,10 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~m-components-dd-text")) AS ?mComponentsDdText)
   } UNION {
     # One row per event kind / per component, with its share of the busiest.
+    # The key counts view's rows (c:StreamKeyCounts), and the busiest per dimension.
     $this c:of ?stream .
-    {
-      SELECT ?stream ?dim ?key (COUNT(?m) AS ?count)
-      WHERE { ?stream tree:member ?m . { ?m a ?key BIND("kind" AS ?dim) } UNION { ?m beh:target ?key BIND("component" AS ?dim) } }
-      GROUP BY ?stream ?dim ?key
-    }
-    {
-      SELECT ?stream ?dim (MAX(?n) AS ?max)
-      WHERE {
-        { SELECT ?stream ?dim ?k (COUNT(?m) AS ?n)
-          WHERE { ?stream tree:member ?m . { ?m a ?k BIND("kind" AS ?dim) } UNION { ?m beh:target ?k BIND("component" AS ?dim) } }
-          GROUP BY ?stream ?dim ?k }
-      }
-      GROUP BY ?stream ?dim
-    }
+    ?stream c:keyCount ?keyRow . ?keyRow c:dimension ?dim ; c:countKey ?key ; c:count ?count .
+    { SELECT ?stream ?dim (MAX(?n) AS ?max) WHERE { ?stream c:keyCount ?r . ?r c:dimension ?dim ; c:count ?n } GROUP BY ?stream ?dim }
     # The component's c:label (untagged, else English, else any), else its item's label.
     LATERAL {
       OPTIONAL { ?key c:label ?componentLabel0 FILTER(isLiteral(?componentLabel0) && lang(?componentLabel0) = "") }
@@ -144,16 +173,9 @@ WHERE {
   } UNION {
     # Rank order: busier rows first, ties broken by IRI.
     $this c:of ?stream .
-    {
-      SELECT ?stream ?dim ?keyA (COUNT(?m) AS ?countA)
-      WHERE { ?stream tree:member ?m . { ?m a ?keyA BIND("kind" AS ?dim) } UNION { ?m beh:target ?keyA BIND("component" AS ?dim) } }
-      GROUP BY ?stream ?dim ?keyA
-    }
-    {
-      SELECT ?stream ?dim ?keyB (COUNT(?m) AS ?countB)
-      WHERE { ?stream tree:member ?m . { ?m a ?keyB BIND("kind" AS ?dim) } UNION { ?m beh:target ?keyB BIND("component" AS ?dim) } }
-      GROUP BY ?stream ?dim ?keyB
-    }
+    ?stream c:keyCount ?ra , ?rb .
+    ?ra c:dimension ?dim ; c:countKey ?keyA ; c:count ?countA .
+    ?rb c:dimension ?dim ; c:countKey ?keyB ; c:count ?countB .
     FILTER(?countA > ?countB || (?countA = ?countB && STR(?keyA) < STR(?keyB)))
     BIND(IRI(CONCAT(STR($this), "/~", ?dim, "-", ENCODE_FOR_URI(STR(?keyA)))) AS ?rowA)
     BIND(IRI(CONCAT(STR($this), "/~", ?dim, "-", ENCODE_FOR_URI(STR(?keyB)))) AS ?rowB)
@@ -182,11 +204,7 @@ WHERE {
   $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
-  OPTIONAL {
-    SELECT ?stream (COUNT(?m) AS ?n) (SUM(?a) AS ?added) (SUM(?r) AS ?removed)
-    WHERE { ?stream tree:member ?m . ?m beh:added ?a ; beh:removed ?r }
-    GROUP BY ?stream
-  }
+  OPTIONAL { ?stream c:eventCount ?n ; c:addedTotal ?added ; c:removedTotal ?removed }
   BIND(CONCAT("# ", UCASE(?label), ": ", STR(COALESCE(?n, 0)), " events, +", STR(COALESCE(?added, 0)), "/-", STR(COALESCE(?removed, 0)), " triples") AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)

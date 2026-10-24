@@ -99,6 +99,7 @@ ui:action rdfs:label "action" ; c:emphasis true ; c:hideLabel true .
 ui:ms rdfs:label "update + DOM" ; c:unit "ms" .
 ui:ruleRuns rdfs:label "rule runs" .
 ui:domOps rdfs:label "DOM operations" .
+ui:viewRows rdfs:label "view rows" ; rdfs:comment "Rows the maintained views processed (docs/IVM.md)." .
 ui:heap rdfs:label "JS heap" .
 ui:storage rdfs:label "storage (incl. session)" ; c:unit "KB" .
 ui:triples rdfs:label "triples" .
@@ -209,7 +210,7 @@ ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
     c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer ) .
-ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
+ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ui:viewRows ) .
 
 # Every tool is a view of the same graph. ↗ opens one in a window; tab and window state are graph state.
 # The tools are evaluated when first opened (about 40 ms); warming them ahead would hold

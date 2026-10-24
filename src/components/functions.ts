@@ -5,6 +5,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
@@ -585,19 +586,20 @@ const linkHint: FnRule = (ctx, focus) => {
 }
 
 // --- stream statistics (c:StreamStats) -------------------------------------------------------
-// Function twins of the SPARQL rules in ontology/components/stream-stats.ttl: the same
-// aggregates over the members of the stream (c:of), counted the way the SPARQL joins count.
+// Function twins of the SPARQL rules in ontology/components/stream-stats.ttl. Both read the
+// rows the maintained views write about the stream (c:StreamTotals, c:StreamKeyCounts), never
+// the stream's members: an event costs the same whatever the log's bound.
 
-const TREE_MEMBER = NS.tree + 'member'
-const asNumber = (t: Term) => Number(t.value) || 0
+const asNumber = (t: Term | undefined) => (t ? Number(t.value) || 0 : 0)
 
-/** The stream's members with their beh:added / beh:removed (one row per pair, as a join yields). */
-function changeRows(ctx: RuleContext, stream: Term) {
-  const rows: { m: Term; added: number; removed: number }[] = []
-  for (const m of ctx.objects(stream, TREE_MEMBER)) {
-    for (const a of ctx.objects(m, BEH.added)) for (const r of ctx.objects(m, BEH.removed)) rows.push({ m, added: asNumber(a), removed: asNumber(r) })
+/** The totals view's figures for a stream (zero before its first member). */
+function streamTotals(ctx: RuleContext, stream: Term) {
+  return {
+    events: asNumber(ctx.object(stream, VIEW_C.eventCount)),
+    added: asNumber(ctx.object(stream, VIEW_C.addedTotal)),
+    removed: asNumber(ctx.object(stream, VIEW_C.removedTotal)),
+    components: asNumber(ctx.object(stream, VIEW_C.targetCount)),
   }
-  return rows
 }
 
 const streamStatsScreen: FnRule = (ctx, focus) => {
@@ -605,36 +607,19 @@ const streamStatsScreen: FnRule = (ctx, focus) => {
   const label = text(ctx, focus, C.label)
   if (!stream || label === undefined) return []
   const o = ctx.out(focus)
-  // Headline metrics: one row per (member, added, removed, target).
-  let events = 0
-  let added = 0
-  let removed = 0
-  const targets = new Set<string>()
-  for (const row of changeRows(ctx, stream)) {
-    for (const t of ctx.objects(row.m, BEH.target)) {
-      events++
-      added += row.added
-      removed += row.removed
-      targets.add(t.value)
-    }
-  }
+  const { events, added, removed, components } = streamTotals(ctx, stream)
   const metric = (key: string, name: string, value: string) =>
     o.el(`m-${key}`, 'Div', {}, [o.el(`m-${key}-dt`, 'Dt', {}, [o.text(`m-${key}-dt-text`, name)]), o.el(`m-${key}-dd`, 'Dd', {}, [o.text(`m-${key}-dd-text`, value)])])
   const metrics = o.el('metrics', 'Dl', {}, [
     metric('events', 'events', String(events)),
     metric('changes', 'triples changed', `+${added} / −${removed}`),
-    metric('components', 'components', String(targets.size)),
+    metric('components', 'components', String(components)),
   ])
   // One row per event kind / per component, busiest first (ties by IRI), with its share of the busiest.
-  const rowsOf = (dim: 'kind' | 'component', keysOf: (m: Term) => Term[]) => {
+  const keyRows = ctx.objects(stream, VIEW_C.keyCount).map((r) => ({ dim: ctx.object(r, VIEW_C.dimension)?.value, key: ctx.object(r, VIEW_C.countKey), count: asNumber(ctx.object(r, VIEW_C.count)) }))
+  const rowsOf = (dim: 'kind' | 'component') => {
     const counts = new Map<string, { key: Term; count: number }>()
-    for (const m of ctx.objects(stream, TREE_MEMBER)) {
-      for (const key of keysOf(m)) {
-        const c = counts.get(key.value) ?? { key, count: 0 }
-        c.count++
-        counts.set(key.value, c)
-      }
-    }
+    for (const r of keyRows) if (r.dim === dim && r.key) counts.set(r.key.value, { key: r.key, count: r.count })
     const max = Math.max(...[...counts.values()].map((c) => c.count))
     return [...counts.values()]
       .sort((a, b) => b.count - a.count || (a.key.value < b.key.value ? -1 : 1))
@@ -649,8 +634,8 @@ const streamStatsScreen: FnRule = (ctx, focus) => {
         ])
       })
   }
-  const kinds = rowsOf('kind', (m) => ctx.objects(m, RDF_TYPE))
-  const components = rowsOf('component', (m) => ctx.objects(m, BEH.target))
+  const kinds = rowsOf('kind')
+  const targets = rowsOf('component')
   o.renders(
     o.el('root', 'Section', {}, [
       o.el('title', 'H2', {}, [o.text('title-text', label)]),
@@ -658,7 +643,7 @@ const streamStatsScreen: FnRule = (ctx, focus) => {
       o.el('kinds-title', 'H3', {}, [o.text('kinds-title-text', 'by kind')]),
       o.el('kinds', 'Ul', {}, kinds),
       o.el('targets-title', 'H3', {}, [o.text('targets-title-text', 'by component')]),
-      o.el('targets', 'Ul', {}, components),
+      o.el('targets', 'Ul', {}, targets),
     ]),
   )
   return o.quads
@@ -668,11 +653,9 @@ const streamStatsText: FnRule = (ctx, focus) => {
   const stream = ctx.object(focus, C.of)
   const label = text(ctx, focus, C.label)
   if (!stream || label === undefined) return []
-  const rows = changeRows(ctx, stream)
-  const added = rows.reduce((n, r) => n + r.added, 0)
-  const removed = rows.reduce((n, r) => n + r.removed, 0)
+  const { events, added, removed } = streamTotals(ctx, stream)
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Div', {}, [o.text('text', `# ${label.toUpperCase()}: ${rows.length} events, +${added}/-${removed} triples`)]))
+  o.renders(o.el('root', 'Div', {}, [o.text('text', `# ${label.toUpperCase()}: ${events} events, +${added}/-${removed} triples`)]))
   return o.quads
 }
 

@@ -10,6 +10,7 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 # Toolbar pieces (the inspection group): what sits around a data view. A toolbar of controls
 # (an inspector's filter bar), a search field bound to any node's property, a legend of
@@ -309,8 +310,31 @@ c:LiveIndicatorToggle a beh:Reaction ;
 # --- CountBadge: how many members ------------------------------------------------------------------
 # The number of members of c:collection (through c:memberProperty, tree:member by default),
 # optionally only those of c:memberClass (or a subclass), in a pill toned like a c:Badge
-# (sty:tone, sty:emphasis). Counting is linear in the members, so a bounded collection (an LDES
-# with a retention policy) keeps it cheap.
+# (sty:tone, sty:emphasis). The counts of tree:member collections (every LDES) are maintained
+# views (c:MemberCounts, c:MemberClassCounts; docs/IVM.md): a member is counted when it arrives
+# and uncounted when it retires, so a badge costs the same however long its collection is. A
+# collection linked by another property (c:memberProperty) is counted directly.
+
+c:memberCount a owl:DatatypeProperty ; rdfs:comment "On a collection: its members (tree:member), maintained."@en .
+c:classCount a owl:ObjectProperty ; rdfs:comment "On a collection: how many of its members are of one class (c:countClass), c:count."@en .
+c:countClass a owl:ObjectProperty .
+
+c:MemberCounts a iv:View ; iv:whileShown c:CountBadge ;
+    rdfs:label "members per collection"@en ;
+    sem:function "count:members" ;
+    sem:construct """
+CONSTRUCT { ?collection c:memberCount ?n }
+WHERE { { SELECT ?collection (COUNT(DISTINCT ?m) AS ?n) WHERE { ?collection tree:member ?m } GROUP BY ?collection } }""" .
+
+c:MemberClassCounts a iv:View ; iv:whileShown c:CountBadge ;
+    rdfs:label "members per collection and class"@en ;
+    sem:function "count:classes" ;
+    sem:construct """
+CONSTRUCT { ?collection c:classCount ?row . ?row c:countClass ?class ; c:count ?n }
+WHERE {
+  { SELECT ?collection ?class (COUNT(DISTINCT ?m) AS ?n) WHERE { ?collection tree:member ?m . ?m a/rdfs:subClassOf* ?class } GROUP BY ?collection ?class }
+  BIND(IRI(CONCAT(STR(?collection), "/~class-", ENCODE_FOR_URI(STR(?class)))) AS ?row)
+}""" .
 
 c:CountBadge a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -339,14 +363,18 @@ WHERE {
   OPTIONAL { $this c:memberProperty ?declared }
   BIND(COALESCE(?declared, tree:member) AS ?via)
   OPTIONAL { $this c:memberClass ?class }
-  # Counted from $this inside the subquery (outer variables of an aggregate are not
-  # substituted into it: a free ?collection ?via ?m would group the whole store).
-  { SELECT (COUNT(DISTINCT ?m) AS ?counted) WHERE {
-      $this c:collection ?c . OPTIONAL { $this c:memberProperty ?p0 } BIND(COALESCE(?p0, tree:member) AS ?p)
+  # tree:member collections: the maintained counts (c:MemberCounts, c:MemberClassCounts).
+  OPTIONAL { ?collection c:memberCount ?all }
+  OPTIONAL { $this c:memberClass ?wanted . ?collection c:classCount ?classRow . ?classRow c:countClass ?wanted ; c:count ?ofClass }
+  # Other member properties: counted from $this inside the subquery (outer variables of an
+  # aggregate are not substituted into it: a free ?collection ?via ?m would group the whole store).
+  { SELECT (COUNT(DISTINCT ?m) AS ?direct) WHERE {
+      $this c:collection ?c ; c:memberProperty ?p . FILTER(?p != tree:member)
       ?c ?p ?m .
       FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m a/rdfs:subClassOf* ?k })
   } }
-  BIND(STR(COALESCE(?counted, 0)) AS ?number)
+  BIND(IF(?via != tree:member, ?direct, IF(BOUND(?class), COALESCE(?ofClass, 0), COALESCE(?all, 0))) AS ?counted)
+  BIND(STR(?counted) AS ?number)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }

@@ -1,4 +1,5 @@
-import type { Delta } from './rdf.ts'
+import type { Quad } from '@rdfjs/types'
+import { type Delta, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
@@ -11,6 +12,8 @@ import { privacyFunctions } from './layers/privacy.ts'
 import { functions as workbenchFunctions } from './components/workbench.ts'
 import { exampleFunctions } from './examples/index.ts'
 import { functions as referenceFunctions } from './components/reference.ts'
+import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
+import { viewFunctions } from './view/functions.ts'
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -44,7 +47,96 @@ export class Runtime {
    */
   refreshShare = 0.25
 
-  constructor(readonly store: GraphStore) {}
+  /** Maintained views (docs/IVM.md): stepped once per tick, before the projections. */
+  readonly views: ViewRuntime
+  /** The open transaction: every effective change since it began, by graph and quad (net weight). */
+  private tx?: Map<string, { graph: string | undefined; q: Quad; w: number }>
+
+  constructor(readonly store: GraphStore) {
+    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH], functions: viewFunctions })
+    // A window's next expiry: a tick with no input.
+    this.views.onTimer = () => {
+      this.advance()
+      for (const l of this.timerListeners) l()
+    }
+    // A view maintained while something is shown asks the projections that show it.
+    this.views.shown = (component) => this.projections.some((p) => !p.engine.demand || p.engine.demand(component))
+  }
+
+  private readonly timerListeners: (() => void)[] = []
+
+  /** Hear about ticks time alone caused (a view's window moved), e.g. to patch the DOM. */
+  onTimer(listener: () => void): () => void {
+    this.timerListeners.push(listener)
+    return () => this.timerListeners.splice(this.timerListeners.indexOf(listener), 1)
+  }
+
+  /**
+   * Run `fn` as one tick: the changes it applies or writes (to any graph) reach views,
+   * projections and input listeners once, as one consolidated change, when it returns.
+   * The store itself changes at once, so `fn` reads its own writes. Nested calls join
+   * the outer transaction.
+   */
+  transaction<T>(fn: () => T): T {
+    if (this.tx) return fn()
+    this.tx = new Map()
+    try {
+      return fn()
+    } finally {
+      const tx = this.tx
+      this.tx = undefined
+      this.flush(tx)
+    }
+  }
+
+  /** A tick with no input change: time passed (windows of maintained views expire). */
+  advance(): void {
+    this.tick(new Map(), { add: [], remove: [] })
+  }
+
+  private changed(graph: string | undefined, effective: Delta) {
+    if (!effective.add.length && !effective.remove.length) return
+    // Outside a transaction a change is its own tick, exactly as applied.
+    if (!this.tx) return this.tick(new Map([[graph, effective]]), effective)
+    for (const [w, qs] of [[-1, effective.remove], [1, effective.add]] as const) {
+      for (const q of qs) {
+        const k = (graph ?? '') + ' ' + quadKey(q)
+        const e = this.tx.get(k)
+        if (e) e.w += w
+        else this.tx.set(k, { graph, q, w })
+      }
+    }
+  }
+
+  /** A transaction's changes, consolidated: a triple added and removed again is no change. */
+  private flush(tx: Map<string, { graph: string | undefined; q: Quad; w: number }>) {
+    const all: Delta = { add: [], remove: [] }
+    const byGraph = new Map<string | undefined, Delta>()
+    for (const { graph, q, w } of tx.values()) {
+      if (!w) continue
+      let d = byGraph.get(graph)
+      if (!d) byGraph.set(graph, (d = { add: [], remove: [] }))
+      ;(w > 0 ? d.add : d.remove).push(q)
+      ;(w > 0 ? all.add : all.remove).push(q)
+    }
+    if (all.add.length || all.remove.length) this.tick(byGraph, all)
+  }
+
+  /** One tick: views first, so the projections see their outputs in the same tick; then projections; then listeners. */
+  private tick(byGraph: Map<string | undefined, Delta>, input: Delta) {
+    const views = this.views.tick(input)
+    const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
+    if (!all.add.length && !all.remove.length) return
+    for (const p of this.projections) p.engine.process(all), settle(p)
+    this.resumeViews()
+    for (const [graph, d] of byGraph) for (const l of this.inputListeners) l(graph, d)
+  }
+
+  /** Views suspended while their components were hidden, shown now: rebuilt, and projected. */
+  private resumeViews() {
+    const resumed = this.views.resume()
+    if (resumed.add.length || resumed.remove.length) for (const p of this.projections) p.engine.process(resumed), settle(p)
+  }
 
   /** Hear about every refresh (after the projections are updated): the host flushes its renderers. */
   onRefresh(listener: () => void): () => void {
@@ -95,8 +187,10 @@ export class Runtime {
    * what is shown under them is evaluated (see Engine.demand); the rest waits.
    */
   project(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+    // Views start with the first projection (whose rule preference they share), before it reads the store.
+    if (!this.views.isStarted) this.views.start(opts.prefer)
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
@@ -126,6 +220,7 @@ export class Runtime {
     const p: Projection = { engine, index }
     settle(p)
     this.projections.push(p)
+    this.resumeViews()
     return p
   }
 
@@ -145,10 +240,7 @@ export class Runtime {
       const e = f.quad(q.subject, q.predicate, q.object, g)
       if (!this.store.has(e)) this.store.add(e), effective.add.push(e)
     }
-    if (effective.add.length || effective.remove.length) {
-      for (const p of this.projections) p.engine.process(effective), settle(p)
-      for (const l of this.inputListeners) l(graph, effective)
-    }
+    this.changed(graph, effective)
     return effective
   }
 
@@ -166,6 +258,10 @@ export class Runtime {
       more = p.engine.warm(share) || more
       settle(p)
     }
+    this.resumeViews()
+    // Figures of the views that publish them (iv:measured): a write to the views graph.
+    const figures = this.views.figures()
+    if (figures.add.length || figures.remove.length) this.write(VIEW_GRAPH, figures)
     // What time is left goes to the store's own upkeep (e.g. compaction).
     const left = until - performance.now()
     if (left > 1) more = (this.store.maintain?.(left) ?? false) || more
@@ -206,10 +302,7 @@ export class Runtime {
       const g = f.quad(q.subject, q.predicate, q.object, dg)
       if (!this.store.has(g)) this.store.add(g), effective.add.push(g)
     }
-    if (effective.add.length || effective.remove.length) {
-      for (const p of this.projections) p.engine.process(effective), settle(p)
-      for (const l of this.inputListeners) l(undefined, effective)
-    }
+    this.changed(undefined, effective)
     return effective
   }
 }

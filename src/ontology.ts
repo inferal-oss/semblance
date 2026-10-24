@@ -8,6 +8,7 @@ export const ONTOLOGY_FILES = [
   'layers/position.ttl',
   'layers/a11y.ttl',
   'layers/behaviour.ttl',
+  'layers/view.ttl',
   'layers/provenance.ttl',
   'layers/tooltip.ttl',
   'layers/motion.ttl',

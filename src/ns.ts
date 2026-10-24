@@ -39,6 +39,7 @@ export const NS = {
   as: 'https://www.w3.org/ns/activitystreams#',
   foaf: 'http://xmlns.com/foaf/0.1/',
   vann: 'http://purl.org/vocab/vann/',
+  iv: 'https://semblance.dev/ns/view#',
 } as const
 
 /** Prepended to every SPARQL rule body. */

@@ -50,6 +50,7 @@ describe('soak', () => {
       ...Object.fromEntries(Object.entries(h.screen.engine.footprint()).map(([k, v]) => ['engine.' + k, v])),
       ...Object.fromEntries(Object.entries(h.screen.index.footprint()).map(([k, v]) => ['index.' + k, v])),
       ...Object.fromEntries(Object.entries(h.shell.footprint()).map(([k, v]) => ['dom.' + k, v])),
+      ...Object.fromEntries(Object.entries(h.runtime.views.footprint()).map(([k, v]) => ['views.' + k, v])),
       log: h.bus.recent(10_000).length,
     })
     const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1]!
