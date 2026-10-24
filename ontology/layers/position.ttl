@@ -57,10 +57,10 @@ pos:Sidebar a pos:Layout ; sem:slug "sidebar" ;
 # and whose main column grows but is never narrower than 55% - so when both do not fit, the
 # navigation wraps above the main column. The children's share is in the theme (theme/layout.ttl).
 pos:Aside a pos:Layout ; sem:slug "aside" ;
-    rdfs:comment "A narrow navigation column beside the main column; the navigation goes on top when narrow."@en ;
+    rdfs:comment "A narrow navigation column beside the main column, running its full height; the navigation goes on top when narrow."@en ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
-                 [ sty:property "align-items" ; sty:raw "flex-start" ] .
+                 [ sty:property "align-items" ; sty:raw "stretch" ] .
 pos:Grid a pos:Layout ; sem:slug "grid" ;
     rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,

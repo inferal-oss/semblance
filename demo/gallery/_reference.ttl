@@ -21,20 +21,8 @@
 ui:referenceSubject rdfs:label "Term" , "Термін"@uk , "Begriff"@de , "المصطلح"@ar .
 ui:app ui:referenceSubject c:Window .
 
-ui:reference a c:Stack ; pos:layout ui:ReferenceLayout ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
+ui:reference a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:referenceTree ui:referenceMain ) .
-
-# The tree beside the term, the tree on top when narrow (an app's own layout, as data).
-ui:ReferenceLayout a pos:Layout ; sem:slug "reference" ;
-    rdfs:comment "A navigation column of about 16rem beside the main column; they stack when the two do not fit."@en ;
-    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
-                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
-                 [ sty:property "align-items" ; sty:raw "flex-start" ] .
-[] a sty:StyleRule ; sty:when ui:ReferenceLayout ; sty:part "> :first-child" ;
-    sty:declares [ sty:property "flex" ; sty:raw "1 1 15rem" ] .
-[] a sty:StyleRule ; sty:when ui:ReferenceLayout ; sty:part "> :last-child" ;
-    sty:declares [ sty:property "flex" ; sty:raw "999 1 28rem" ] ,
-                 [ sty:property "min-width" ; sty:raw "0" ] .
 
 ui:referenceTree a c:TermTree ; c:controls ui:app ; c:property ui:referenceSubject ;
     c:label "Vocabulary"@en , "Словник"@uk , "Vokabular"@de , "المفردات"@ar ;

@@ -9,8 +9,6 @@
 # --- the tree ---
 [] a sty:StyleRule ; sty:appliesTo c:TermTree ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
-                 [ sty:property "max-height" ; sty:raw "min(44rem, calc(100vh - 10rem))" ] ,
-                 [ sty:property "overflow" ; sty:raw "auto" ] ,
                  [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:token tok:space-2 ] ,
                  [ sty:property "list-style" ; sty:raw "none" ] ,
@@ -20,9 +18,10 @@
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "font-size" ; sty:token tok:text-sm ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-# Stacked above the term on a phone, the tree keeps to under half the screen and scrolls.
+# Beside the term, the tree is as long as it needs and runs the side's full height (pos:Aside);
+# stacked above the term on a phone, it keeps to under half the screen and scrolls.
 [] a sty:StyleRule ; sty:appliesTo c:TermTree ; sty:atWidth sty:CompactWidth ;
-    sty:declares [ sty:property "max-height" ; sty:raw "45dvh" ] .
+    sty:declares [ sty:property "max-height" ; sty:raw "45dvh" ] , [ sty:property "overflow" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:TermTree ; sty:part "[role=group]" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,

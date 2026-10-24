@@ -361,8 +361,11 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "padding" ; sty:raw "4px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] ,
-                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
-                 [ sty:property "overflow-x" ; sty:raw "auto" ] .
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+# On a phone, more tabs than fit scroll sideways, without a scrollbar taking the row's height
+# (where scrollbars always show, it would cut the labels off); elsewhere they fit.
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> [role=tablist]" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "scrollbar-width" ; sty:raw "none" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tab]" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 0 auto" ] ,
