@@ -15,7 +15,8 @@
     "bench": "tsx bench/node.ts",
     "build:single": "vite build --mode single && node scripts/name-single.mjs",
     "conformance": "tsx rdf-engine/conformance/run.ts",
-    "engine:build": "tsx rdf-engine/build.ts"
+    "engine:build": "tsx rdf-engine/build.ts",
+    "engine:check": "tsx rdf-engine/host/abi-check.ts"
   },
   "dependencies": {
     "n3": "^2.13.12",

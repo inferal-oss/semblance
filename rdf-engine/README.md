@@ -17,6 +17,7 @@ own tests and benchmarks.
 ```bash
 rdf-engine/conformance/fetch.sh               # W3C rdf-tests, pinned (gitignored)
 npm run engine:build                          # build/rust.wasm, build/wat.wasm + sizes
+npm run engine:check -- rust                  # term and store checks against ABI.md
 npm run conformance -- --target rust          # or wat, oxigraph; --suite rdf12 --only <iri part> -v --show
 ```
 
