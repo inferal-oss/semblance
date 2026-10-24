@@ -9,7 +9,7 @@
 # The landing page: what Semblance is, in a few claims, each with a way in.
 # Its buttons are c:Setter: they write the page (or the docs section) into the graph.
 
-ui:home a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-7 ; pos:inset tok:space-6 ;
+ui:home a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-7 ; pos:inset tok:space-6 ; pos:measure pos:PageMeasure ;
     c:children ( ui:hero ui:pillars ui:howItWorks ) .
 
 # --- hero ---
@@ -18,7 +18,7 @@ ui:hero a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align p
 ui:heroMark a c:GraphMark ; sty:size sty:Large ; rdfs:label "Semblance" .
 ui:heroTitle a c:Text ; sty:textStyle sty:Display ; pos:textAlign pos:TextCenter ;
     c:label "The interface is a graph." , "Інтерфейс — це граф."@uk , "Die Oberfläche ist ein Graph."@de , "الواجهة رسم بياني."@ar .
-ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ;
+ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ; pos:measure pos:ReadingMeasure ;
     c:label "Semblance is a web UI framework where components, layers, themes and behaviour are RDF ontologies. Rules - SPARQL queries or functions - project one graph to the screen, to text, to anything; every interaction is an event in the graph." ,
             "Semblance — вебфреймворк, де компоненти, шари, теми й поведінка є онтологіями RDF. Правила — запити SPARQL або функції — проєктують один граф на екран, у текст, будь-куди; кожна взаємодія — подія в графі."@uk ,
             "Semblance ist ein Web-UI-Framework, in dem Komponenten, Schichten, Designs und Verhalten RDF-Ontologien sind. Regeln - SPARQL-Abfragen oder Funktionen - projizieren einen Graphen auf den Bildschirm, in Text, überallhin; jede Interaktion ist ein Ereignis im Graphen."@de ,

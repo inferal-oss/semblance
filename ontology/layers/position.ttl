@@ -1,6 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
@@ -104,6 +105,33 @@ pos:PackStart a pos:Justification ; sem:slug "start" ; sty:declares [ sty:proper
 pos:PackCenter a pos:Justification ; sem:slug "center" ; sty:declares [ sty:property "justify-content" ; sty:raw "center" ] .
 pos:PackEnd a pos:Justification ; sem:slug "end" ; sty:declares [ sty:property "justify-content" ; sty:raw "flex-end" ] .
 pos:SpaceBetween a pos:Justification ; sem:slug "between" ; sty:declares [ sty:property "justify-content" ; sty:raw "space-between" ] .
+
+pos:measure a owl:ObjectProperty ;
+    rdfs:range pos:Measure ;
+    rdfs:comment """How wide a component may grow: at most its measure, and centred in the space it is given
+(logical margins, so right to left needs nothing more). A page that would otherwise stretch across a
+wide screen says pos:PageMeasure; running text says pos:ReadingMeasure. The lengths are tokens of the
+sty:Measure scale, so a theme or density can change them."""@en ;
+    sty:hookAttribute "data-sem-measure" .
+pos:Measure a owl:Class .
+pos:ReadingMeasure a pos:Measure ; sem:slug "reading" ;
+    rdfs:comment "A comfortable line of text."@en ;
+    sty:declares [ sty:property "max-inline-size" ; sty:token tok:measure-reading ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "margin-inline" ; sty:raw "auto" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+pos:PageMeasure a pos:Measure ; sem:slug "page" ;
+    rdfs:comment "A page of content: cards, grids and text side by side."@en ;
+    sty:declares [ sty:property "max-inline-size" ; sty:token tok:measure-page ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "margin-inline" ; sty:raw "auto" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+pos:WideMeasure a pos:Measure ; sem:slug "wide" ;
+    rdfs:comment "A working surface that still should not run edge to edge on a very wide screen."@en ;
+    sty:declares [ sty:property "max-inline-size" ; sty:token tok:measure-wide ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "margin-inline" ; sty:raw "auto" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] .
 
 pos:textAlign a owl:ObjectProperty ;
     rdfs:range pos:TextAlignment ;

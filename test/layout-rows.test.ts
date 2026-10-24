@@ -32,4 +32,15 @@ describe('rows that line up', () => {
     const themed = [...css.matchAll(/([^{}]*\.sem-window-body[^{}]*)\{([^}]*)\}/g)].filter(([, sel]) => sel!.includes('data-sem-theme'))
     expect(themed.filter(([, , body]) => /(^|;|\s)padding\s*:/.test(body!)).map(([, sel]) => sel!.trim().slice(0, 80))).toEqual([])
   })
+
+  it('a measure caps how wide a component grows and centres it, for every measure, by token', () => {
+    for (const m of ['reading', 'page', 'wide']) {
+      const rule = css.match(new RegExp(`\\[data-sem-measure="${m}"\\][^{]*\\{([^}]*)\\}`))
+      expect(rule, m).not.toBeNull()
+      expect(rule![1]).toMatch(new RegExp(`max-inline-size:\\s*var\\(--sem-measure-${m}\\)`))
+      expect(rule![1]).toMatch(/margin-inline:\s*auto/)
+      expect(rule![1]).toMatch(/inline-size:\s*100%/)
+    }
+    expect(css).toMatch(/--sem-measure-page:\s*1120px/)
+  })
 })

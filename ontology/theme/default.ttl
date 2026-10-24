@@ -16,6 +16,9 @@ tok:space-3 a sty:Token ; sty:scale sty:Space ; sem:slug "space-3" ; sty:value "
 tok:space-4 a sty:Token ; sty:scale sty:Space ; sem:slug "space-4" ; sty:value "16px" .
 tok:space-5 a sty:Token ; sty:scale sty:Space ; sem:slug "space-5" ; sty:value "24px" .
 tok:space-6 a sty:Token ; sty:scale sty:Space ; sem:slug "space-6" ; sty:value "32px" .
+tok:measure-reading a sty:Token ; sty:scale sty:Measure ; sem:slug "measure-reading" ; sty:value "68ch" .
+tok:measure-page a sty:Token ; sty:scale sty:Measure ; sem:slug "measure-page" ; sty:value "1120px" .
+tok:measure-wide a sty:Token ; sty:scale sty:Measure ; sem:slug "measure-wide" ; sty:value "1440px" .
 
 # --- shape, type, motion ---------------------------------------------------------------
 

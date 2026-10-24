@@ -28,6 +28,7 @@ sty:Space a sty:Scale .
 sty:Color a sty:Scale .
 sty:Radius a sty:Scale .
 sty:Font a sty:Scale .
+sty:Measure a sty:Scale ; rdfs:comment "Line lengths: how wide a column of content may grow (pos:measure)."@en .
 
 # --- Hooks ----------------------------------------------------------------------
 
