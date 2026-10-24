@@ -691,12 +691,17 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "font-weight" ; sty:raw "700" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "-0.02em" ] .
 
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand span" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > span" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] .
 
+# The byline is set off from the name by a hairline, in small type.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline" ;
+    sty:declares [ sty:property "padding-inline-start" ; sty:raw "10px" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "font-size" ; sty:raw "12px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
@@ -724,6 +729,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "stop-color" ; sty:raw "#8f86ff" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ".sem-stop-b" ;
     sty:declares [ sty:property "stop-color" ; sty:raw "#ff7ac6" ] .
+
+# An emblem is as tall as the text it sits in.
+[] a sty:StyleRule ; sty:appliesTo c:Emblem ;
+    sty:declares [ sty:property "height" ; sty:raw "1.15em" ] ,
+                 [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "vertical-align" ; sty:raw "-0.2em" ] .
 
 # --- metrics and toggle ------------------------------------------------------------------------
 

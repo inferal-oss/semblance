@@ -10,6 +10,12 @@ import { labelOf as textLabelOf, text } from './util.ts'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
 const C_ACTIVE = NS.c + 'active'
+const C_BYLINE = NS.c + 'byline'
+const C_VIEW_BOX = NS.c + 'viewBox'
+const C_PATH_DATA = NS.c + 'pathData'
+const C_FILL_RULE = NS.c + 'fillRule'
+const C_COLOR = NS.c + 'color'
+const C_DECORATIVE = NS.c + 'decorative'
 const C_MARK_PATH = NS.c + 'markPath'
 const C_MARK_ECHO = NS.c + 'markEcho'
 const C_MARK_NODE = NS.c + 'markNode'
@@ -70,10 +76,12 @@ const appbar: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.text('line', `${label}${subtitle ? ' — ' + subtitle : ''}`)]))
     return o.quads
   }
+  const byline = ctx.object(focus, C_BYLINE)
   const brand = o.el('brand', 'Div', { class: 'sem-brand' }, [
     ...(named(logo) ? [logo] : []),
     o.el('name', 'Strong', {}, [o.text('name-text', label)]),
     ...(subtitle ? [o.el('subtitle', 'Span', {}, [o.text('subtitle-text', subtitle)])] : []),
+    ...(named(byline) ? [o.el('byline', 'Span', { class: 'sem-byline' }, [byline])] : []),
   ])
   o.renders(o.el('root', 'Header', {}, [brand, o.el('actions', 'Div', { class: 'sem-actions' }, actions)]))
   return o.quads
@@ -103,6 +111,19 @@ const graphmark: FnRule = (ctx, focus) => {
   const edge = o.svg('edge', 'Path', { d, class: 'sem-edge' })
   const dots = nodes.map((n) => o.svg(`n${n.order}`, 'Circle', { cx: n.cx, cy: n.cy, r: n.r, class: 'sem-node' }))
   o.renders(o.svg('root', 'Svg', { viewBox: '0 0 32 32', role: 'img', 'aria-label': textLabelOf(ctx, focus) }, [defs, tile, echo, edge, ...dots]))
+  return o.quads
+}
+
+/** A logo drawn from data: one path in its view box, in its color or the text's. */
+const emblem: FnRule = (ctx, focus) => {
+  const viewBox = str(ctx.object(focus, C_VIEW_BOX))
+  const d = str(ctx.object(focus, C_PATH_DATA))
+  if (viewBox === undefined || d === undefined) return []
+  const o = ctx.out(focus)
+  const decorative = str(ctx.object(focus, C_DECORATIVE)) === 'true'
+  const label = decorative ? undefined : textLabelOf(ctx, focus)
+  const path = o.svg('path', 'Path', { d, fill: str(ctx.object(focus, C_COLOR)) ?? 'currentColor', 'fill-rule': str(ctx.object(focus, C_FILL_RULE)) ?? 'nonzero' })
+  o.renders(o.svg('root', 'Svg', { viewBox, role: decorative ? undefined : 'img', 'aria-label': label, 'aria-hidden': decorative ? 'true' : undefined }, [path]))
   return o.quads
 }
 
@@ -418,6 +439,7 @@ export const viewFunctions: Record<string, FnRule> = {
   card,
   appbar,
   graphmark,
+  emblem,
   'element-markup': elementMarkup,
   metrics,
   toggle,

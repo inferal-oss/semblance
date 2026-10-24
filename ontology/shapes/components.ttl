@@ -48,6 +48,11 @@ c:CharsetShape a sh:NodeShape ; sh:targetClass c:Charset ;
                 [ sh:path c:inputMode ; sh:maxCount 1 ; sh:in ( "none" "text" "decimal" "numeric" "tel" "search" "email" "url" ) ] .
 c:BadgeShape a sh:NodeShape ; sh:targetClass c:Badge ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxLength 32 ] .
+c:EmblemShape a sh:NodeShape ; sh:targetClass c:Emblem ;
+    sh:property [ sh:path c:viewBox ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^-?[0-9.]+( -?[0-9.]+){3}$" ;
+                  sh:message "An emblem's c:viewBox is four numbers: min-x min-y width height." ] ,
+                [ sh:path c:pathData ; sh:minCount 1 ; sh:maxCount 1 ] ,
+                [ sh:path c:fillRule ; sh:maxCount 1 ; sh:in ( "nonzero" "evenodd" ) ] .
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
     sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
                   sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .

@@ -111,9 +111,12 @@ WHERE {
 
 c:AppBar a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "The application's top bar: a logo, a name (c:label), a c:subtitle and c:actions."@en ;
+    rdfs:comment "The application's top bar: a logo, a name (c:label), a c:subtitle, a c:byline and c:actions."@en ;
     sem:slug "app-bar" .
-c:logo a owl:ObjectProperty ; rdfs:domain c:AppBar .
+c:byline a owl:ObjectProperty ; rdfs:domain c:AppBar ;
+    rdfs:comment "A component after an app bar's name and subtitle: who makes or sponsors it."@en .
+c:logo a owl:ObjectProperty ;
+    rdfs:comment "A component drawn before a name: the app bar's logo, a link's logo (c:AppBar, c:Link)."@en .
 c:AppBarRendering a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 .
 c:AppBarRendering-fn a sem:Rule ; sem:implements c:AppBarRendering ; sem:function "appbar" .
 
@@ -123,7 +126,9 @@ c:AppBarRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Header ; sem:renders $this ; rdfhtml:hasChild ?brand, ?actions .
-  ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logo, ?name, ?subtitle ; ord:immediatelyPrecedes ?actions .
+  ?brand a rdfhtml:Div ; rdfhtml:class "sem-brand" ; rdfhtml:hasChild ?logo, ?name, ?subtitle, ?bylineBox ; ord:immediatelyPrecedes ?actions .
+  ?bylineBox a rdfhtml:Span ; rdfhtml:class "sem-byline" ; rdfhtml:hasChild ?byline .
+  ?beforeByline ord:immediatelyPrecedes ?bylineBox .
   ?name a rdfhtml:Strong ; rdfhtml:hasChild ?nameText ; ord:immediatelyFollows ?logo ; ord:immediatelyPrecedes ?subtitle .
   ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
   ?subtitle a rdfhtml:Span ; rdfhtml:hasChild ?subtitleText .
@@ -147,13 +152,16 @@ WHERE {
   BIND(STR(COALESCE(?subtitle0_u, ?subtitle0_en, ?subtitle0_any)) AS ?subtitle0)
   BIND(IF(?subtitle0 != "", ?subtitle0, ?none) AS ?subtitleData)
   OPTIONAL { $this c:logo ?logo FILTER(isIRI(?logo)) }
+  OPTIONAL { $this c:byline ?byline FILTER(isIRI(?byline)) }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~brand")) AS ?brand)
+  BIND(IF(BOUND(?byline), IRI(CONCAT(STR($this), "/~byline")), ?none) AS ?bylineBox)
   BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
   BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle")), ?none) AS ?subtitle)
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle-text")), ?none) AS ?subtitleText)
   BIND(IRI(CONCAT(STR($this), "/~actions")) AS ?actions)
+  BIND(IF(BOUND(?bylineBox), COALESCE(?subtitle, ?name), ?none) AS ?beforeByline)
   {} UNION { $this c:actions/rdf:rest*/rdf:first ?action FILTER(isIRI(?action)) } UNION { $this c:actions/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
 }""" .
 
@@ -313,6 +321,64 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~", ?dotLocal, "-a-r")) AS ?dotA2)
     BIND(IRI(CONCAT(STR($this), "/~", ?dotLocal, "-a-class")) AS ?dotA3)
   }
+}""" .
+
+# --- Emblem ---------------------------------------------------------------------------------------
+
+c:Emblem a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A logo drawn from data: one path (c:pathData, with c:fillRule) in its c:viewBox, filled with
+c:color (default: the text color). It is as tall as the text it sits in. Named by rdfs:label for
+assistive technology, or hidden from it when c:decorative (a name follows it anyway)."""@en ;
+    sem:slug "emblem" .
+c:viewBox a owl:DatatypeProperty ; rdfs:domain c:Emblem ; rdfs:comment "The SVG view box of the path's coordinates."@en .
+c:pathData a owl:DatatypeProperty ; rdfs:domain c:Emblem ; rdfs:comment "SVG path data."@en .
+c:fillRule a owl:DatatypeProperty ; rdfs:domain c:Emblem ; rdfs:comment "\"nonzero\" (default) or \"evenodd\"."@en .
+c:color a owl:DatatypeProperty ; rdfs:comment "A CSS color for a mark that has its own (a brand color)."@en .
+c:decorative a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether a picture only decorates (its name is said by the text next to it)."@en .
+c:EmblemRendering a sem:Rendering ; sem:targets c:Emblem ; sem:modality mod:Screen ; sem:stratum 0 .
+c:EmblemRendering-fn a sem:Rule ; sem:implements c:EmblemRendering ; sem:function "emblem" .
+c:EmblemRendering-sparql a sem:Rule ;
+    sem:implements c:EmblemRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a svg:Svg ; sem:renders $this ; rdfhtml:hasChild ?path .
+  ?root rdfhtml:attribute ?rootA0 . ?rootA0 a rdfhtml:Attribute ; rdfhtml:attributeName "viewBox" ; rdfhtml:attributeValue ?viewBox .
+  ?root rdfhtml:attribute ?rootA1 . ?rootA1 a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue ?role .
+  ?root rdfhtml:attribute ?rootA2 . ?rootA2 a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?root rdfhtml:attribute ?rootA3 . ?rootA3 a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?path a svg:Path .
+  ?path rdfhtml:attribute ?pathA0 . ?pathA0 a rdfhtml:Attribute ; rdfhtml:attributeName "d" ; rdfhtml:attributeValue ?d .
+  ?path rdfhtml:attribute ?pathA1 . ?pathA1 a rdfhtml:Attribute ; rdfhtml:attributeName "fill" ; rdfhtml:attributeValue ?fill .
+  ?path rdfhtml:attribute ?pathA2 . ?pathA2 a rdfhtml:Attribute ; rdfhtml:attributeName "fill-rule" ; rdfhtml:attributeValue ?rule .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Emblem ; c:viewBox ?viewBox0 ; c:pathData ?d0 .
+  BIND(STR(?viewBox0) AS ?viewBox) BIND(STR(?d0) AS ?d)
+  OPTIONAL { $this c:color ?color0 } BIND(COALESCE(STR(?color0), "currentColor") AS ?fill)
+  OPTIONAL { $this c:fillRule ?rule0 } BIND(COALESCE(STR(?rule0), "nonzero") AS ?rule)
+  BIND(EXISTS { $this c:decorative ?dec FILTER(STR(?dec) = "true") } AS ?decorative)
+  OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?labelC_u)) $this c:label ?labelC_en FILTER(langMatches(lang(?labelC_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?labelC_u) && !BOUND(?labelC_en)) $this c:label ?labelC_any FILTER(isLiteral(?labelC_any)) }
+  BIND(STR(COALESCE(?labelC_u, ?labelC_en, ?labelC_any)) AS ?labelC)
+  OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?labelR_u)) $this rdfs:label ?labelR_en FILTER(langMatches(lang(?labelR_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?labelR_u) && !BOUND(?labelR_en)) $this rdfs:label ?labelR_any FILTER(isLiteral(?labelR_any)) }
+  BIND(STR(COALESCE(?labelR_u, ?labelR_en, ?labelR_any)) AS ?labelR)
+  BIND(COALESCE(?labelC, ?labelR, REPLACE(STR($this), "^.*[#/]", "")) AS ?label0)
+  BIND(IF(?decorative, ?none, "img") AS ?role)
+  BIND(IF(?decorative, ?none, ?label0) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~path")) AS ?path)
+  BIND(IRI(CONCAT(STR($this), "/~root-a-viewBox")) AS ?rootA0)
+  BIND(IF(BOUND(?role), IRI(CONCAT(STR($this), "/~root-a-role")), ?none) AS ?rootA1)
+  BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-a-aria-label")), ?none) AS ?rootA2)
+  BIND(IF(?decorative, IRI(CONCAT(STR($this), "/~root-a-aria-hidden")), ?none) AS ?rootA3)
+  BIND(IRI(CONCAT(STR($this), "/~path-a-d")) AS ?pathA0)
+  BIND(IRI(CONCAT(STR($this), "/~path-a-fill")) AS ?pathA1)
+  BIND(IRI(CONCAT(STR($this), "/~path-a-fill-rule")) AS ?pathA2)
 }""" .
 
 # --- Metrics -----------------------------------------------------------------------------------

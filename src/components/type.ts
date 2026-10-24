@@ -50,7 +50,9 @@ const link: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>` : `${label} <${href}>${external ? ' ↗' : ''}`)]))
     return o.quads
   }
-  const parts = [o.text('label', label)]
+  // A logo (c:logo, a component) comes before the label.
+  const logo = ctx.object(focus, C.logo)
+  const parts = [...(named(logo) ? [logo] : []), o.text('label', label)]
   if (external) {
     // The hint is the class's, in the viewer's language (c:externalHint on c:Link).
     const hint = ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'

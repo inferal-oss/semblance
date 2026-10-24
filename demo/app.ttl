@@ -83,6 +83,14 @@ ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
     # Display settings of the whole interface: hooked axes whose values re-value tokens.
     mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable ; sty:theme sty:Semblance ; prv:privacy prv:Conceal .
 
+# Who sponsors the project, in the app bar beside the name, with their chevron (a c:Emblem, drawn from data).
+ui:sponsorLine a c:Text ; c:inline true ;
+    c:children ( "Sponsored by " ui:inferalLink ) .
+ui:inferalLink a c:Link ; c:href "https://inferal.com/" ; c:external false ; c:label "Inferal" ; c:logo ui:inferalChevron ; sty:tone sty:Neutral .
+ui:inferalChevron a c:Emblem ; rdfs:label "Inferal" ; c:decorative true ;
+    c:viewBox "0 0 348.45 415.12" ; c:fillRule "evenodd" ; c:color "#0070f3" ;
+    c:pathData "M2.44,399.9c-5.45,5.86-1.16,15.22,6.97,15.22h126.55c3.88,0,7.6-1.5,10.33-4.16l197.28-191.95c2.98-2.9,4.6-6.63,4.84-10.43.29-4.47-1.33-9.04-4.84-12.46L146.29,4.16C143.55,1.5,139.83,0,135.96,0H9.4C1.27,0-3.01,9.35,2.44,15.22l193.06,184.2c2.4,2.58,3.46,5.91,3.18,9.15-.22,2.57-1.28,5.08-3.18,7.13L2.44,399.9Z" .
+
 # Detached views live here, outside the pages, so they survive page changes.
 ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools .
 
@@ -101,6 +109,7 @@ ui:ClearMatrix ann:announces "Results cleared" , "Результати очищ�
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
     c:subtitle "one component graph · many projections" ;
+    c:byline ui:sponsorLine ;
     c:logo ui:logo ;
     c:actions ( ui:nav ui:toolsToggle ui:theme ) .
 ui:logo a c:GraphMark ; rdfs:label "Semblance" .

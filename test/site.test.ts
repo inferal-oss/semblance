@@ -78,4 +78,17 @@ describe('the site', () => {
     click(button('Start over'))
     expect(code().querySelector('input')!.value).toBe('')
   })
+  it.each(['sparql', 'function'] as const)('says who sponsors it, with their chevron, in the app bar on every page (%s)', (prefer) => {
+    const { document } = mountSite('oxigraph', prefer)
+    const link = [...document.querySelectorAll('[data-sem-c=link]')].find((a) => a.textContent!.includes('Inferal'))!
+    expect(link.closest('[data-sem-c=text]')!.textContent).toBe('Sponsored by Inferal')
+    expect(link.closest('[data-sem-c=app-bar] .sem-brand > .sem-byline')).not.toBeNull()
+    expect(link.getAttribute('href')).toBe('https://inferal.com/')
+    const chevron = link.querySelector('[data-sem-c=emblem]')!
+    expect(chevron.localName).toBe('svg')
+    expect(chevron.getAttribute('aria-hidden')).toBe('true') // the name follows it
+    expect(chevron.querySelector('path')!.getAttribute('fill')).toBe('#0070f3')
+    expect(chevron.nextSibling!.textContent).toBe('Inferal')
+    expect(document.body.textContent).not.toContain('an experiment in ontologically defined interfaces')
+  })
 })

@@ -10,7 +10,7 @@
 # Its buttons are c:Setter: they write the page (or the docs section) into the graph.
 
 ui:home a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-7 ; pos:inset tok:space-6 ;
-    c:children ( ui:hero ui:pillars ui:howItWorks ui:homeFooter ) .
+    c:children ( ui:hero ui:pillars ui:howItWorks ) .
 
 # --- hero ---
 ui:hero a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align pos:Center ;
@@ -63,6 +63,3 @@ ui:howLive a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:childr
 ui:signinCode a c:CodeInput ; c:label "Sign-in code" ; c:length 6 ; c:groupSize 3 ; c:cellStyle c:Filled .
 ui:howNote a c:Text ; sty:textStyle sty:Caption ;
     c:label "Type or paste a code. Each keystroke is an RDF event; a reaction keeps the digits and writes c:value; the rules redraw the cells. Open the tools (⌘.) and hover the field to see its rules and provenance." .
-
-ui:homeFooter a c:Text ; sty:textStyle sty:Caption ; pos:textAlign pos:TextCenter ; c:children ( "Semblance · an experiment in ontologically defined interfaces · " ui:homeSource ) .
-ui:homeSource a c:Link ; c:label "README" ; c:href "./README.md" .
