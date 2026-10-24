@@ -1,0 +1,311 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix set: <https://semblance.dev/demo/settings#> .
+
+# =================================================================================================
+# Settings: a draft and a saved copy.
+#
+# Every control edits a draft (ui:set-draft). "Save" copies the draft to the saved settings
+# (ui:set-saved), "Discard" puts the saved values back. Whether they differ is not tracked by
+# anyone: a rule compares the two nodes and labels a badge. The saved settings are remembered on
+# this device by a per:Policy, so a reload brings them back. All of it is in this file, plus the
+# function twins of its two rules in src/examples/settings.ts.
+# =================================================================================================
+
+# SPARQL in reactions and policies can say set: once the graph declares it.
+ui:prefixes sh:declare [ sh:prefix "set" ; sh:namespace "https://semblance.dev/demo/settings#"^^xsd:anyURI ] .
+
+# --- the vocabulary -----------------------------------------------------------------------------
+# What a setting is: a property of a settings node. Every property typed set:Setting takes part
+# in saving, discarding and counting changes; the controls are labelled by its rdfs:label.
+
+set:Setting a owl:Class ; rdfs:label "Setting" ;
+    rdfs:comment "A property of a settings node that is edited in the draft and kept in the saved copy." .
+set:displayName a owl:DatatypeProperty, set:Setting ; rdfs:label "Display name" .
+set:email a owl:DatatypeProperty, set:Setting ; rdfs:label "Email" .
+set:bio a owl:DatatypeProperty, set:Setting ; rdfs:label "Bio" .
+set:mentions a owl:DatatypeProperty, set:Setting ; rdfs:label "Mentions and replies" ; rdfs:range xsd:boolean .
+set:digest a owl:DatatypeProperty, set:Setting ; rdfs:label "Weekly digest" ; rdfs:range xsd:boolean .
+set:productNews a owl:DatatypeProperty, set:Setting ; rdfs:label "Product news" ; rdfs:range xsd:boolean .
+set:theme a owl:ObjectProperty, set:Setting ; rdfs:label "Theme" ; rdfs:range sty:Theme .
+set:publicProfile a owl:DatatypeProperty, set:Setting ; rdfs:label "Public profile" ; rdfs:range xsd:boolean .
+set:showOnline a owl:DatatypeProperty, set:Setting ; rdfs:label "Show when I'm online" ; rdfs:range xsd:boolean .
+# When the settings were last saved: not a setting, but saving changes it, which is what tells
+# the persistence policy below to write.
+set:savedAt a owl:DatatypeProperty ; rdfs:label "Saved at" ; rdfs:range xsd:dateTime .
+
+# A text control whose typing goes to the draft: it says which setting it edits.
+set:SettingField a owl:Class ; rdfs:comment "A text field or area that edits one setting (set:edits) of the draft." .
+set:edits a owl:ObjectProperty ; rdfs:domain set:SettingField ; rdfs:range set:Setting .
+
+# --- the state: the saved settings and the draft ---------------------------------------------------
+# They start equal. The draft is what the controls show and change.
+
+ui:set-saved set:displayName "Ada Lovelace" ; set:email "ada@example.org" ;
+    set:bio "Writes about analytical engines and the poetry of numbers." ;
+    set:mentions true ; set:digest false ; set:productNews false ;
+    set:theme sty:Semblance ; set:publicProfile true ; set:showOnline true .
+ui:set-draft set:displayName "Ada Lovelace" ; set:email "ada@example.org" ;
+    set:bio "Writes about analytical engines and the poetry of numbers." ;
+    set:mentions true ; set:digest false ; set:productNews false ;
+    set:theme sty:Semblance ; set:publicProfile true ; set:showOnline true .
+
+# --- the page -------------------------------------------------------------------------------------
+
+ui:ex-settings a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-settings-intro ui:set-bar ui:set-sections ) .
+ui:ex-settings-intro a c:Text ;
+    c:label "A settings page with a draft and a saved copy: controls edit the draft, Save and Discard are reactions that copy one onto the other, a rule counts what differs, a SHACL shape checks the email, and a persistence policy keeps what you saved on this device. Change something, then reload." .
+
+# The bar: the derived badge, and the two actions. ⌘S / Ctrl+S saves, also while typing.
+ui:set-bar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ; pos:justify pos:SpaceBetween ;
+    c:children ( ui:set-status ui:set-actions ) .
+ui:set-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:set-discard ui:set-save ) .
+ui:set-discard a c:Button ; c:label "Discard" ; sty:emphasis sty:Ghost ; set:enabledBy ui:set-status .
+ui:set-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; key:shortcut "mod+s" ;
+    set:enabledBy ui:set-status ; val:requires ( ui:set-name ui:set-email ui:set-bio ) .
+
+# The badge says nothing by itself: set:Changes (below) labels and tones it.
+ui:set-status a c:Badge, set:ChangeIndicator ; set:draft ui:set-draft ; set:saved ui:set-saved .
+
+ui:set-sections a c:Grid ; c:minWidth "320px" ; c:columns 2 ; pos:gap tok:space-4 ;
+    c:children ( ui:set-profile ui:set-notifications ui:set-appearance ui:set-privacy ) .
+
+# --- profile: text fields that write to the draft as you type -------------------------------------
+
+ui:set-profile a c:Card ; c:label "Profile" ; c:note "How you appear to others." ; c:content ui:set-profile-fields .
+ui:set-profile-fields a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:set-name ui:set-email ui:set-bio ) .
+ui:set-name a c:TextField, set:SettingField ; set:edits set:displayName ;
+    c:label "Display name" ; c:value "Ada Lovelace" ; val:validates set:NameShape .
+ui:set-email a c:TextField, set:SettingField ; set:edits set:email ;
+    c:label "Email" ; c:inputType "email" ; c:value "ada@example.org" ;
+    c:help "Where we send notifications. Never shown to others." ; val:validates set:EmailShape .
+ui:set-bio a c:TextArea, set:SettingField ; set:edits set:bio ;
+    c:label "Bio" ; c:rows 3 ; c:value "Writes about analytical engines and the poetry of numbers." ;
+    c:help "Up to 160 characters." ; val:validates set:BioShape .
+
+# The validation layer checks each field against its shape and derives c:error; Save requires
+# all three (val:requires above), so it is disabled while one is wrong.
+set:NameShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ; sh:maxLength 60 ;
+    sh:message "Enter a name, up to 60 characters." .
+set:EmailShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ;
+    sh:pattern "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" ;
+    sh:message "Enter an email address like ada@example.org." .
+set:BioShape a sh:PropertyShape ; sh:path c:value ; sh:maxLength 160 ;
+    sh:message "Keep it to 160 characters." .
+
+# --- notifications and privacy: switches over the draft's booleans --------------------------------
+# A switch can edit a boolean property of another node (c:controls, c:property); its label is
+# the property's rdfs:label.
+
+ui:set-notifications a c:Card ; c:label "Notifications" ; c:note "What we tell you about, and when." ;
+    c:content ui:set-notification-switches .
+ui:set-notification-switches a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:set-mentions ui:set-digest ui:set-news ) .
+ui:set-mentions a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:mentions ; c:help "Right away, by push and email." .
+ui:set-digest a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:digest ; c:help "A summary of your week, every Monday morning." .
+ui:set-news a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:productNews ; c:help "A few times a year." .
+
+ui:set-privacy a c:Card ; c:label "Privacy" ; c:note "Who can see you." ; c:content ui:set-privacy-switches .
+ui:set-privacy-switches a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:set-public ui:set-online ) .
+ui:set-public a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:publicProfile ;
+    c:help "People outside your workspace can see your name and bio." .
+ui:set-online a c:ToggleSwitch ; c:controls ui:set-draft ; c:property set:showOnline ;
+    c:help "A green dot on your avatar while you're active." .
+
+# --- appearance: a theme choice, previewed on a sample card ---------------------------------------
+# The choice's options are the sty:Theme individuals (set:theme's range). The preview surface
+# takes its sty:theme from the draft through set:Preview (below), so it re-themes as you pick.
+
+ui:set-appearance a c:Card ; c:label "Appearance" ; c:note "Pick a theme; the card below previews it." ;
+    c:content ui:set-appearance-body .
+ui:set-appearance-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:set-theme ui:set-preview ) .
+ui:set-theme a c:Choice ; c:controls ui:set-draft ; c:property set:theme .
+ui:set-preview a c:Surface, set:ThemePreview ; set:draft ui:set-draft ; sty:elevation sty:Raised ;
+    pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:set-preview-title ui:set-preview-body ui:set-preview-tags ui:set-preview-actions ) .
+ui:set-preview-title a c:Heading ; c:level 3 ; c:label "Field notes" .
+ui:set-preview-body a c:Text ; sty:textStyle sty:Caption ; c:label "Type, color, corners and depth all come from the theme." .
+ui:set-preview-tags a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:set-preview-draft ui:set-preview-synced ) .
+ui:set-preview-draft a c:Badge ; c:label "Draft" ; sty:tone sty:Accent .
+ui:set-preview-synced a c:Badge ; c:label "Synced" ; sty:tone sty:Success ; sty:emphasis sty:Solid .
+ui:set-preview-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:set-preview-primary ui:set-preview-secondary ) .
+ui:set-preview-primary a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:set-preview-secondary a c:Button ; c:label "Preview" ; sty:emphasis sty:Outline .
+
+# --- rules: what is derived ---------------------------------------------------------------------
+# Both run before the components (a negative stratum), only while this example is shown (their
+# foci are shown components), and only when what they read changes: the draft and the saved
+# node, which they reach in one hop (sem:follows). Each has a function twin in
+# src/examples/settings.ts that writes the same triples.
+
+set:ChangeIndicator a owl:Class ;
+    rdfs:comment "A badge that counts the settings in which set:draft and set:saved differ." .
+set:draft a owl:ObjectProperty ; rdfs:comment "The draft settings node." .
+set:saved a owl:ObjectProperty ; rdfs:comment "The saved settings node." .
+set:enabledBy a owl:ObjectProperty ; rdfs:range set:ChangeIndicator ;
+    rdfs:comment "On a button: disabled while the indicator counts no changes." .
+
+# How many settings differ, as the badge's label, icon and tone; and with none, the buttons
+# that only make sense with changes are disabled.
+set:Changes a sem:Rendering ; sem:targets set:ChangeIndicator ; sem:stratum -15 ;
+    sem:inputOnly true ; sem:follows set:draft , set:saved .
+set:Changes-sparql a sem:Rule ; sem:implements set:Changes ;
+    sem:construct """PREFIX set: <https://semblance.dev/demo/settings#>
+CONSTRUCT { $this c:label ?label ; c:icon ?icon ; sty:tone ?tone . ?idle c:disabled true }
+WHERE {
+  $this set:draft ?d ; set:saved ?s .
+  LATERAL { OPTIONAL { SELECT ?d ?s (COUNT(DISTINCT ?p) AS ?changes) WHERE {
+    ?p a set:Setting .
+    { ?d ?p ?v FILTER NOT EXISTS { ?s ?p ?v } } UNION { ?s ?p ?v FILTER NOT EXISTS { ?d ?p ?v } }
+  } GROUP BY ?d ?s } }
+  BIND(COALESCE(?changes, 0) AS ?n)
+  BIND(IF(?n = 0, "All changes saved", IF(?n = 1, "1 unsaved change", CONCAT(STR(?n), " unsaved changes"))) AS ?label)
+  BIND(IF(?n = 0, "✓", "●") AS ?icon)
+  BIND(IF(?n = 0, sty:Success, sty:Warning) AS ?tone)
+  OPTIONAL { FILTER(?n = 0) ?idle set:enabledBy $this }
+}""" .
+set:Changes-fn a sem:Rule ; sem:implements set:Changes ; sem:function "settings:changes" .
+
+# The preview surface wears the draft's theme.
+set:ThemePreview a owl:Class ; rdfs:comment "A surface themed by the set:theme of its set:draft." .
+set:Preview a sem:Rendering ; sem:targets set:ThemePreview ; sem:stratum -15 ;
+    sem:inputOnly true ; sem:follows set:draft ; sem:watches set:draft , set:theme .
+set:Preview-sparql a sem:Rule ; sem:implements set:Preview ;
+    sem:construct """PREFIX set: <https://semblance.dev/demo/settings#>
+CONSTRUCT { $this sty:theme ?theme } WHERE { $this set:draft ?d . ?d set:theme ?theme }""" .
+set:Preview-fn a sem:Rule ; sem:implements set:Preview ; sem:function "settings:preview" .
+
+# --- reactions: what events mean -------------------------------------------------------------------
+# Switches and the choice already write the draft (their own reactions). Text fields keep their
+# own c:value; this reaction also copies what was typed into the draft, for every set:SettingField.
+
+set:TypeIntoDraft a beh:Reaction ; beh:when beh:Input ; beh:sourceClass set:SettingField ;
+    beh:deletes """CONSTRUCT { ui:set-draft ?p ?old } WHERE { $this set:edits ?p . ui:set-draft ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ui:set-draft ?p ?v } WHERE { $this set:edits ?p . $event beh:value ?v }""" .
+
+# Save: when something changed and no field is invalid, the draft's settings replace the saved
+# ones, stamped with the time of the click.
+set:Save a beh:Reaction ; beh:when beh:Click ; beh:source ui:set-save ;
+    beh:deletes """
+CONSTRUCT { ui:set-saved ?p ?old }
+WHERE {
+  FILTER(EXISTS { ?changed a set:Setting .
+                  { ui:set-draft ?changed ?x FILTER NOT EXISTS { ui:set-saved ?changed ?x } }
+                  UNION { ui:set-saved ?changed ?x FILTER NOT EXISTS { ui:set-draft ?changed ?x } } }
+         && NOT EXISTS { ?field a set:SettingField ; val:invalid true })
+  ui:set-saved ?p ?old FILTER(?p = set:savedAt || EXISTS { ?p a set:Setting })
+}""" ;
+    beh:inserts """
+CONSTRUCT { ui:set-saved ?p ?v ; set:savedAt ?at }
+WHERE {
+  FILTER(EXISTS { ?changed a set:Setting .
+                  { ui:set-draft ?changed ?x FILTER NOT EXISTS { ui:set-saved ?changed ?x } }
+                  UNION { ui:set-saved ?changed ?x FILTER NOT EXISTS { ui:set-draft ?changed ?x } } }
+         && NOT EXISTS { ?field a set:SettingField ; val:invalid true })
+  ui:set-draft ?p ?v . ?p a set:Setting .
+  $event beh:at ?at
+}""" ;
+    ann:announces "Settings saved" ; ann:tone sty:Success .
+
+# Discard: the saved values go back into the draft and into the text fields (whose stale errors
+# go too).
+set:Discard a beh:Reaction ; beh:when beh:Click ; beh:source ui:set-discard ;
+    beh:deletes """
+CONSTRUCT { ui:set-draft ?p ?v . ?field c:value ?text ; c:error ?error }
+WHERE {
+  FILTER EXISTS { ?changed a set:Setting .
+                  { ui:set-draft ?changed ?x FILTER NOT EXISTS { ui:set-saved ?changed ?x } }
+                  UNION { ui:set-saved ?changed ?x FILTER NOT EXISTS { ui:set-draft ?changed ?x } } }
+  { ui:set-draft ?p ?v . ?p a set:Setting }
+  UNION { ?field a set:SettingField ; c:value ?text }
+  UNION { ?field a set:SettingField ; c:error ?error }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ui:set-draft ?p ?v . ?field c:value ?v }
+WHERE {
+  FILTER EXISTS { ?changed a set:Setting .
+                  { ui:set-draft ?changed ?x FILTER NOT EXISTS { ui:set-saved ?changed ?x } }
+                  UNION { ui:set-saved ?changed ?x FILTER NOT EXISTS { ui:set-draft ?changed ?x } } }
+  ui:set-saved ?p ?v . ?p a set:Setting .
+  OPTIONAL { ?field set:edits ?p }
+}""" ;
+    ann:announces "Changes discarded" .
+
+# --- remembered on this device ----------------------------------------------------------------------
+# The saved settings, in localStorage (per:Device). Restoring puts them back before the first
+# render into the saved node, the draft and the text fields, so a reload starts saved and
+# unchanged. The policy writes after changes to what its query mentions: set:savedAt, stamped
+# by Save, is one of them.
+
+ui:rememberExampleSettings a per:Policy ; per:scope per:Device ;
+    rdfs:label "Settings example: what you saved" ;
+    per:construct """
+CONSTRUCT { ui:set-saved ?p ?v . ui:set-draft ?p ?v . ?field c:value ?v . ui:set-saved set:savedAt ?at }
+WHERE {
+  { ui:set-saved ?p ?v . ?p a set:Setting OPTIONAL { ?field set:edits ?p } }
+  UNION { ui:set-saved set:savedAt ?at }
+}""" .
+
+# --- how it works -------------------------------------------------------------------------------------
+
+ui:ex-settings-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-settings-how-title ui:ex-settings-how-state ui:ex-settings-how-edit ui:ex-settings-how-rules
+                 ui:ex-settings-how-check ui:ex-settings-how-keep ui:ex-settings-how-cost ) .
+ui:ex-settings-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
+ui:ex-settings-how-state a c:Text ; c:children (
+    "The state is two nodes with the same properties: " ui:ex-settings-how-c1 " and " ui:ex-settings-how-c2
+    ". Each property is typed " ui:ex-settings-how-c3 ", which is all that saving, discarding and counting changes need to know about it." ) .
+ui:ex-settings-how-c1 a c:Code ; c:label "ui:set-draft" .
+ui:ex-settings-how-c2 a c:Code ; c:label "ui:set-saved" .
+ui:ex-settings-how-c3 a c:Code ; c:label "set:Setting" .
+ui:ex-settings-how-edit a c:Text ; c:children (
+    "The switches and the theme " ui:ex-settings-how-c4 " edit the draft directly (" ui:ex-settings-how-c5
+    "). The text fields keep their own value; " ui:ex-settings-how-c6 " - one reaction for every " ui:ex-settings-how-c7
+    " - copies each keystroke into the draft. " ui:ex-settings-how-c8 " and " ui:ex-settings-how-c9
+    " are CONSTRUCT pairs that copy one node onto the other, only when something differs; Save is announced as a toast." ) .
+ui:ex-settings-how-c4 a c:Code ; c:label "c:Choice" .
+ui:ex-settings-how-c5 a c:Code ; c:label "c:controls ui:set-draft" .
+ui:ex-settings-how-c6 a c:Code ; c:label "set:TypeIntoDraft" .
+ui:ex-settings-how-c7 a c:Code ; c:label "set:SettingField" .
+ui:ex-settings-how-c8 a c:Code ; c:label "set:Save" .
+ui:ex-settings-how-c9 a c:Code ; c:label "set:Discard" .
+ui:ex-settings-how-rules a c:Text ; c:children (
+    "Two rules derive the rest. " ui:ex-settings-how-c10 " counts the settings in which the two nodes differ and writes the badge's label, icon and tone (and disables Save and Discard when there is nothing to do). "
+    ui:ex-settings-how-c11 " gives the sample card the draft's " ui:ex-settings-how-c12
+    ". Each is a SPARQL CONSTRUCT in this file with a function twin in src/examples/settings.ts, which the host registers; the engine runs whichever its store and preference allow, and both write the same triples." ) .
+ui:ex-settings-how-c10 a c:Code ; c:label "set:Changes" .
+ui:ex-settings-how-c11 a c:Code ; c:label "set:Preview" .
+ui:ex-settings-how-c12 a c:Code ; c:label "sty:theme" .
+ui:ex-settings-how-check a c:Text ; c:children (
+    "The fields point at SHACL property shapes (" ui:ex-settings-how-c13 "); the validation layer derives their errors, and Save, which " ui:ex-settings-how-c14
+    " all three, stays disabled while one is wrong. ⌘S / Ctrl+S is Save's " ui:ex-settings-how-c15 "." ) .
+ui:ex-settings-how-c13 a c:Code ; c:label "val:validates set:EmailShape" .
+ui:ex-settings-how-c14 a c:Code ; c:label "val:requires" .
+ui:ex-settings-how-c15 a c:Code ; c:label "key:shortcut" .
+ui:ex-settings-how-keep a c:Text ; c:children (
+    ui:ex-settings-how-c16 " is a " ui:ex-settings-how-c17 " with " ui:ex-settings-how-c18
+    ": its CONSTRUCT is what is kept in localStorage, and on load it is put back - into the saved node, the draft and the fields - before anything renders. It is listed with the others on the Layers page." ) .
+ui:ex-settings-how-c16 a c:Code ; c:label "ui:rememberExampleSettings" .
+ui:ex-settings-how-c17 a c:Code ; c:label "per:Policy" .
+ui:ex-settings-how-c18 a c:Code ; c:label "per:scope per:Device" .
+ui:ex-settings-how-cost a c:Text ; c:children (
+    "Why it is cheap: a keystroke changes two triples (the field's value and the draft's). It re-runs that field, its validation and "
+    ui:ex-settings-how-c19 " over nine settings; under SPARQL the other controls of the draft look again too (a SPARQL rule hears any change of the node it follows) and find nothing to change, so the page gets a single DOM operation. Nothing outside the example runs, and while it is not shown its rules are parked." ) .
+ui:ex-settings-how-c19 a c:Code ; c:label "set:Changes" .
