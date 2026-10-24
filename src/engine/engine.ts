@@ -6,6 +6,7 @@ import { createContext, type FnRule, LANGUAGE, type RuleContext } from './contex
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
+import { Parked } from './parked.ts'
 
 export interface EngineOptions {
   modality: string
@@ -107,6 +108,8 @@ export class Engine {
   private followers = new Map<string, Rule[]>()
   /** focus -> classes that have rules */
   private types = new Map<string, Set<string>>()
+  /** focus -> every superclass of its classes (what isInstance asks), until its types change. */
+  private targets = new Map<string, Set<string>>()
   /** object -> followed predicate -> subjects */
   private links = new Map<string, Map<string, Set<string>>>()
   private outputs = new Map<Rule, Map<string, Map<string, Quad>>>()
@@ -144,7 +147,14 @@ export class Engine {
   demand?: (focus: string) => boolean
   /** Whether parked work for a focus may be evaluated in idle time (see sem:warm). */
   warmable?: (focus: string) => boolean
-  private deferred = new Map<Rule, Set<string>>()
+  private deferred = new Parked<Rule>(focusOf)
+  /**
+   * Focuses with parked work whose types changed since they were parked (or parked without
+   * checking): only their pairs can have stopped being instances (see resume()).
+   */
+  private retyped = new Set<string>()
+  /** Whether every parked focus must be checked (the instance index was rebuilt). */
+  private retypedAll = false
   /** While warming, parked work is evaluated regardless of demand. */
   private warming = false
   /**
@@ -203,8 +213,7 @@ export class Engine {
     for (const byRule of this.readers.values()) for (const foci of byRule.values()) readers += foci.size
     let readsOf = 0
     for (const byFocus of this.readsOf.values()) readsOf += byFocus.size
-    let deferred = 0
-    for (const foci of this.deferred.values()) deferred += foci.size
+    const deferred = this.deferred.size
     let members = 0
     for (const byOwner of this.memberKeys.values()) for (const keys of byOwner.values()) members += keys.size
     let following = 0
@@ -240,8 +249,7 @@ export class Engine {
 
   /** Whether any undemanded work is parked. */
   get hasDeferred(): boolean {
-    for (const foci of this.deferred.values()) if (foci.size) return true
-    return false
+    return this.deferred.size > 0
   }
 
   /**
@@ -261,7 +269,7 @@ export class Engine {
           for (const focus of foci) {
             // Lazy parts stay parked until they are shown (or intended: `only`).
             if (allowed && !allowed(focusOf(focus))) continue
-            foci.delete(focus)
+            this.deferred.delete(rule, focus)
             this.markDirty(rule, focus)
             if (++picked >= slice) break
           }
@@ -278,25 +286,29 @@ export class Engine {
 
   /** Whether parked work remains that idle time may evaluate. */
   private hasWarmable(allowed = this.warmable): boolean {
-    for (const foci of this.deferred.values()) for (const focus of foci) if (!allowed || allowed(focusOf(focus))) return true
+    for (const [, foci] of this.deferred) for (const focus of foci) if (!allowed || allowed(focusOf(focus))) return true
     return false
   }
 
   /** Evaluate parked pairs whose focus is now demanded. Returns whether anything ran. */
   resume(): boolean {
     if (!this.demand) return false
-    let any = false
-    for (const [rule, foci] of this.deferred) {
-      for (const focus of foci) {
-        if (this.demand(focusOf(focus)) || !this.isInstance(focus, rule)) {
-          foci.delete(focus)
-          this.markDirty(rule, focus)
-          any = true
-        }
-      }
+    // A pair resumes when its focus is demanded or it is no longer an instance. Demand is
+    // asked once per focus; only focuses whose types changed since they were parked can hold
+    // pairs that stopped being instances. Pairs resume in the order they were parked.
+    const resumed: [Rule, string, number, number][] = []
+    const check = this.retypedAll ? undefined : this.retyped
+    for (const owner of this.deferred.foci()) {
+      if (this.demand(owner)) resumed.push(...this.deferred.take(owner))
+      else if (!check || check.has(owner)) resumed.push(...this.deferred.take(owner, (rule, key) => !this.isInstance(key, rule)))
     }
-    if (any) this.run()
-    return any
+    this.retyped.clear()
+    this.retypedAll = false
+    if (!resumed.length) return false
+    resumed.sort((a, b) => a[2] - b[2] || a[3] - b[3])
+    for (const [rule, focus] of resumed) this.markDirty(rule, focus)
+    this.run()
+    return true
   }
 
   /** Whether followed queries' reads changed since the last refresh() (see sem:refresh). */
@@ -390,6 +402,8 @@ export class Engine {
   private reindex() {
     const f = this.store.factory
     this.types.clear()
+    this.targets.clear()
+    this.retypedAll = true
     this.links.clear()
     for (const g of this.graphs) {
       for (const q of this.store.match(null, f.namedNode(RDF_TYPE), null, g)) this.index(q, 1)
@@ -407,9 +421,16 @@ export class Engine {
   }
 
   private isInstance(focus: string, rule: Rule): boolean {
-    const classes = this.types.get(focusOf(focus))
-    if (classes) for (const c of classes) if (this.supers(c).has(rule.target)) return true
-    return false
+    const owner = focusOf(focus)
+    let targets = this.targets.get(owner)
+    if (!targets) {
+      const classes = this.types.get(owner)
+      if (!classes) return false
+      targets = new Set()
+      for (const c of classes) for (const t of this.supers(c)) targets.add(t)
+      this.targets.set(owner, targets)
+    }
+    return targets.has(rule.target)
   }
 
   private watched(rule: Rule, focus: string, predicate: string): boolean {
@@ -479,6 +500,8 @@ export class Engine {
         classes.delete(q.object.value)
         if (!classes.size) this.types.delete(s)
       }
+      this.targets.delete(s)
+      if (this.deferred.hasFocus(s)) this.retyped.add(s)
     }
     if (this.followers.has(p) && q.object.termType === 'NamedNode') {
       const o = q.object.value
@@ -578,9 +601,8 @@ export class Engine {
         if (f.rule.stratum >= this.current) this.markDirty(f.rule, f.focus)
       } else if (this.demand && !this.warming && !f.rule.always && !this.demand(focus)) {
         // Not shown: it waits, parked, until it is (no frame needed).
-        let parked = this.deferred.get(f.rule)
-        if (!parked) this.deferred.set(f.rule, (parked = new Set()))
-        parked.add(f.focus)
+        this.deferred.add(f.rule, f.focus)
+        this.retyped.add(focus)
       } else {
         const first = !this.stale.size
         this.stale.add(f)
@@ -820,16 +842,14 @@ export class Engine {
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
     if (this.demand && !this.warming && !rule.always) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
-      let parked = this.deferred.get(rule)
       for (const focus of [...foci]) {
         if (this.isInstance(focus, rule) && !this.demand(focusOf(focus))) {
-          if (!parked) this.deferred.set(rule, (parked = new Set()))
-          parked.add(focus)
+          this.deferred.add(rule, focus)
           foci.delete(focus)
         }
       }
       if (!foci.size) return
-      for (const focus of foci) parked?.delete(focus)
+      for (const focus of foci) this.deferred.delete(rule, focus)
     }
     // A rule that requires a property its focus doesn't have (or is not for one it has) has nothing to say about it.
     if (rule.requires.length || rule.unless.length) {
