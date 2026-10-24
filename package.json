@@ -13,7 +13,9 @@
     "test": "lockf /tmp/semblance-vitest.lock vitest run --maxWorkers=4",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/node.ts",
-    "build:single": "vite build --mode single && node scripts/name-single.mjs"
+    "build:single": "vite build --mode single && node scripts/name-single.mjs",
+    "conformance": "tsx rdf-engine/conformance/run.ts",
+    "engine:build": "tsx rdf-engine/build.ts"
   },
   "dependencies": {
     "n3": "^2.13.12",
@@ -24,11 +26,13 @@
     "@rdfjs/types": "^2.0.1",
     "@types/n3": "^1.26.5",
     "@types/node": "^26.6.5",
+    "binaryen": "^132.0.0",
     "linkedom": "^0.18.14",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-singlefile": "^2.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wabt": "^1.0.39"
   }
 }

@@ -3,3 +3,6 @@ dist/
 dist-single/
 .DS_Store
 .claude/worktrees/
+rdf-engine/conformance/rdf-tests/
+rdf-engine/build/
+rdf-engine/rust/target/
