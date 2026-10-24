@@ -1,0 +1,159 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# The docs: a navigation list of sections and one page per section. Each page is
+# text and code built from the same components as everything else; the Performance
+# section is live (the benchmark matrix runs here and its charts are SPARQL views).
+
+ui:docSection rdfs:label "Docs" ; rdfs:range ui:DocSection .
+ui:DocOverview a ui:DocSection ; rdfs:label "Overview" ; sem:order 1 ; ui:key "overview" .
+ui:DocComponents a ui:DocSection ; rdfs:label "Components" ; sem:order 2 ; ui:key "components" .
+ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" ; sem:order 3 ; ui:key "rules" .
+ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 4 ; ui:key "layers" .
+ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 5 ; ui:key "behaviour" .
+ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 6 ; ui:key "styling" .
+ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 7 ; ui:key "persistence" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 8 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 9 ; ui:key "performance" .
+
+ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
+    c:children ( ui:docsNav ui:docPages ) .
+ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" .
+ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
+    c:cases ( ui:dcs-overview ui:dcs-components ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-tools ui:dcs-performance ) .
+ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
+ui:dcs-components c:when ui:DocComponents ; c:content ui:doc-components .
+ui:dcs-rules c:when ui:DocRules ; c:content ui:doc-rules .
+ui:dcs-layers c:when ui:DocLayers ; c:content ui:doc-layers .
+ui:dcs-behaviour c:when ui:DocBehaviour ; c:content ui:doc-behaviour .
+ui:dcs-styling c:when ui:DocStyling ; c:content ui:doc-styling .
+ui:dcs-persistence c:when ui:DocPersistence ; c:content ui:doc-persistence .
+ui:dcs-tools c:when ui:DocTools ; c:content ui:doc-tools .
+ui:dcs-performance c:when ui:DocPerformance ; c:content ui:doc-performance .
+
+# --- Overview ---
+ui:doc-overview a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-ov-h ui:doc-ov-1 ui:doc-ov-2 ui:doc-ov-code ui:doc-ov-3 ui:doc-ov-pipeline ui:doc-ov-4 ) .
+ui:doc-ov-h a c:Heading ; c:level 1 ; c:label "Overview" .
+ui:doc-ov-1 a c:Text ; c:label "Semblance describes a user interface as an RDF graph. The framework is a set of ontologies - components, layers, styles, behaviour - and an engine that projects a graph through rules into RDF/HTML, which a renderer patches into the DOM (or serializes as HTML or text)." .
+ui:doc-ov-2 a c:Text ; c:label "Your application is data: instances of component classes, wired to your own vocabulary. A button is a resource with a label; a list is a resource that names the property it shows; a page is a switch over a property of your app." .
+ui:doc-ov-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:page a c:Stack ; c:children ( ex:title ex:todos ex:add ) .
+ex:title a c:Heading ; c:label "Todos" .
+ex:todos a c:List ; c:of ex:inbox ; c:item ex:item ; c:orderBy ex:created .
+ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .""" .
+ui:doc-ov-3 a c:Text ; c:label "Rules turn that graph into a projection. Each rule is itself a resource - a SPARQL CONSTRUCT, or a function registered under a name - so the whole pipeline can be queried. The pipeline:" .
+ui:doc-ov-pipeline a c:Code ; c:block true ; c:label """component graph  ──►  rules (SPARQL | functions), stratified  ──►  RDF/HTML projection
+                                                                         ├─► DOM (keyed patching)
+                                                                         ├─► HTML (server-side)
+                                                                         └─► text
+DOM interaction ──► RDF event ──► reactions (CONSTRUCT pairs) ──► one delta ──► change log (LDES)""" .
+ui:doc-ov-4 a c:Text ; c:children ( "Everything you see on this site is built that way, including this page and the tools (" ui:doc-ov-kbd " opens them). The " ui:doc-ov-examples " show complete applications; the " ui:doc-ov-components " page shows every component on its own." ) .
+ui:doc-ov-kbd a c:Kbd ; c:keys ( "⌘" "." ) .
+ui:doc-ov-examples a c:Link , c:Setter ; c:label "examples" ; c:href "#examples" ; c:controls ui:app ; c:property ui:page ; c:value ui:Examples .
+ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "#components" ; c:controls ui:app ; c:property ui:page ; c:value ui:Components .
+
+# --- Components ---
+ui:doc-components a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-cp-h ui:doc-cp-1 ui:doc-cp-code ui:doc-cp-2 ui:doc-cp-shape ui:doc-cp-3 ) .
+ui:doc-cp-h a c:Heading ; c:level 1 ; c:label "Components" .
+ui:doc-cp-1 a c:Text ; c:label "A component is an OWL class under sem:Component. Its rendering is a sem:Rendering slot targeting the class, and one or more sem:Rule implementations of it. Capabilities are mixin classes: a c:Window is c:Draggable, c:Resizable, c:Minimizable, c:Dockable; an instance adds one by saying it is of that class too." .
+ui:doc-cp-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:CodeInput a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    sem:slug "code-input" .
+c:CodeInputRendering a sem:Rendering ; sem:targets c:CodeInput ; sem:stratum 0 .
+c:CodeInputRendering-fn a sem:Rule ; sem:implements c:CodeInputRendering ;
+    sem:function "inputs:code-input" .
+c:CodeInputRendering-sparql a sem:Rule ; sem:implements c:CodeInputRendering ;
+    sem:construct \"\"\"CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ... }\"\"\" .""" .
+ui:doc-cp-2 a c:Text ; c:label "What an instance must say is a SHACL shape on the class. The shapes layer validates every component as it renders, outlines the ones that do not conform and lists them." .
+ui:doc-cp-shape a c:Code ; c:block true ; c:language "turtle" ; c:label """c:CodeInputShape a sh:NodeShape ; sh:targetClass c:CodeInput ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] ,
+                [ sh:path c:length ; sh:minInclusive 1 ; sh:maxInclusive 32 ] ,
+                [ sh:path c:charset ; sh:class c:Charset ] .""" .
+ui:doc-cp-3 a c:Text ; c:label "Components come in groups - layout, type, actions, inputs, feedback, data, navigation, overlays, disclosure, windows - each one file of vocabulary, one of styles, one of functions and one gallery page." .
+
+# --- Rules and the engine ---
+ui:doc-rules a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-ru-h ui:doc-ru-1 ui:doc-ru-2 ui:doc-ru-3 ui:doc-ru-4 ui:doc-ru-5 ) .
+ui:doc-ru-h a c:Heading ; c:level 1 ; c:label "Rules and the engine" .
+ui:doc-ru-1 a c:Text ; c:label "Identity. Rules mint IRIs as <focus>/~<local>, never blank nodes, so a node keeps its identity across re-evaluation, its DOM element is reused, and its IRI doubles as an id that labels and descriptions point at." .
+ui:doc-ru-2 a c:Text ; c:label "Incrementality. Each (rule, focus) pair owns its output. A change marks pairs dirty through the focus's own triples, sem:follows links and the triples a function read; outputs are diffed and reference-counted. Member-wise rules (sem:forEach) evaluate once per member, so adding a list item touches only that item." .
+ui:doc-ru-3 a c:Text ; c:label "Demand. Only what is shown under a projection's roots is evaluated; hidden pages and tabs are parked. sem:warm says what to prepare ahead: sem:Eager in idle time, sem:OnIntent when a choice that would show it is pointed at." .
+ui:doc-ru-4 a c:Text ; c:label "Bulk. A SPARQL rule pending for several foci runs once with VALUES when every triple it constructs is attributable to $this. sem:requires skips foci without a property; strata order layers after the components they decorate." .
+ui:doc-ru-5 a c:Text ; c:label "Implementations. SPARQL and function rules render the same HTML, and the tests check that they do. Functions are faster in the browser; SPARQL is inspectable and portable. The Engine tool switches between them live." .
+
+# --- Layers ---
+ui:doc-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-la-h ui:doc-la-1 ui:doc-la-list ui:doc-la-2 ) .
+ui:doc-la-h a c:Heading ; c:level 1 ; c:label "Layers" .
+ui:doc-la-1 a c:Text ; c:label "A layer is a set of rules enabled per projection (sem:enables). Layers decorate what components render without the components knowing:" .
+ui:doc-la-list a c:DescriptionList ; c:of ui:doc-la-items ; c:fields ( ui:la-a11y ui:la-style ui:la-l10n ui:la-val ui:la-key ui:la-prv ui:la-per ui:la-docs ) .
+ui:doc-la-items ui:la-a11y "ARIA relationships by IRI, roles and live regions." ;
+    ui:la-style "Hookable properties become data-sem-* attributes the compiled theme styles." ;
+    ui:la-l10n "Language-tagged labels; the viewer's language is a projection setting; RTL flips the page." ;
+    ui:la-val "Fields point at SHACL property shapes; errors are derived; buttons wait for valid input." ;
+    ui:la-key "Shortcuts on any component, commands that belong to none, arrow-key navigation patterns." ;
+    ui:la-prv "prv:concealed masks or blurs any component; prv:sensitive ones hide in private mode (⌘⇧H)." ;
+    ui:la-per "Policies say what state to remember, where and for how long." ;
+    ui:la-docs "Under each gallery specimen, the ontology of the classes it uses." .
+ui:la-a11y rdfs:label "Accessibility" . ui:la-style rdfs:label "Style" . ui:la-l10n rdfs:label "Localization" .
+ui:la-val rdfs:label "Validation" . ui:la-key rdfs:label "Keyboard" . ui:la-prv rdfs:label "Privacy" .
+ui:la-per rdfs:label "Persistence" . ui:la-docs rdfs:label "Docs" .
+ui:doc-la-2 a c:Text ; c:label "Turn any of them off in the Engine tool and the same components render without them." .
+
+# --- Behaviour and events ---
+ui:doc-behaviour a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-be-h ui:doc-be-1 ui:doc-be-code ui:doc-be-2 ) .
+ui:doc-be-h a c:Heading ; c:level 1 ; c:label "Behaviour and events" .
+ui:doc-be-1 a c:Text ; c:label "An interaction becomes an RDF event addressed to the innermost component with a matching reaction. A reaction is a pair of CONSTRUCTs - what to delete, what to insert - over $event and $this. Every matching reaction sees the state before the event, and their union is applied as one change." .
+ui:doc-be-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:CodeInputInput a beh:Reaction ;
+    beh:when beh:Input ;
+    beh:sourceClass c:CodeInput ;
+    beh:deletes \"\"\"CONSTRUCT { $this c:value ?old } WHERE { $this c:value ?old }\"\"\" ;
+    beh:inserts \"\"\"CONSTRUCT { $this c:value ?code } WHERE {
+      $event beh:value ?typed .
+      BIND(SUBSTR(REPLACE(?typed, "[^0-9]", ""), 1, 6) AS ?code) }\"\"\" .""" .
+ui:doc-be-2 a c:Text ; c:label "Each event, with the size of the change it caused, becomes an immutable member of the beh:ChangeLog, an LDES stream bounded by its retention policy and linked from its newest member back, so the latest members are read in as many steps. The Change log and Activity tools are views of it." .
+
+# --- Styling and themes ---
+ui:doc-styling a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-st-h ui:doc-st-1 ui:doc-st-code ui:doc-st-2 ) .
+ui:doc-st-h a c:Heading ; c:level 1 ; c:label "Styling and themes" .
+ui:doc-st-1 a c:Text ; c:label "Styles compile from the ontology into cascade layers: tokens become custom properties, hookable properties (tone, emphasis, size, text style, layout) become data-sem-* attributes, and sty:StyleRules declare what each value looks like - once, for every component that has the axis." .
+ui:doc-st-code a c:Code ; c:block true ; c:language "turtle" ; c:label """[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Underlined ;
+    sty:part ".sem-code-cell" ;
+    sty:declares [ sty:property "border-width" ; sty:raw "0 0 2px" ] .""" .
+ui:doc-st-2 a c:Text ; c:label "A theme (sty:theme on any subtree) re-values every token; structural themes add rules narrowed to themselves that rebuild title bars, controls and docks. Contrast, motion and density compose with every theme." .
+
+# --- Persistence ---
+ui:doc-persistence a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-pe-h ui:doc-pe-1 ui:doc-pe-code ui:doc-pe-2 ) .
+ui:doc-pe-h a c:Heading ; c:level 1 ; c:label "Persistence" .
+ui:doc-pe-1 a c:Text ; c:label "What to remember is graph data too: a per:Policy names a subject and properties, or a CONSTRUCT, and a scope - this tab, this device, the browser database. A host effect restores policies before the first render and writes them back in idle time." .
+ui:doc-pe-code a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:rememberDisplay a per:Policy ; per:scope per:Session ;
+    per:subject ui:shell ;
+    per:properties ( mot:preference sty:contrast sty:density sty:theme ) .""" .
+ui:doc-pe-2 a c:Text ; c:label "Every write, restore and forget is a member of per:StateLog. On this site the tools, the display settings and the page you were on are remembered for the tab; the change log only if you switch it on." .
+
+# --- Tools ---
+ui:doc-tools a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-to-h ui:doc-to-1 ui:doc-to-keys ui:doc-to-2 ) .
+ui:doc-to-h a c:Heading ; c:level 1 ; c:label "Tools" .
+ui:doc-to-1 a c:Text ; c:label "The tools are on every page, in a window docked to the bottom: the Inspector (the rendered element, its provenance and the rule that made it, for whatever you hover), a SPARQL workbench over the live graph, Activity and the Change log, and the Engine (store, rule implementations, layers). Each tab can be torn off into its own window." .
+ui:doc-to-keys a c:DescriptionList ; c:of ui:doc-to-key-items ; c:fields ( ui:k-tools ui:k-here ui:k-pause ui:k-off ui:k-private ) .
+ui:doc-to-key-items ui:k-tools "⌘. - open or close the tools" ; ui:k-here "⌘Z - inspect what is under the pointer, in a window, paused" ;
+    ui:k-pause "Z - pause or resume the inspector" ; ui:k-off "⇧Z - turn the inspector off or on" ; ui:k-private "⌘⇧H - private mode" .
+ui:k-tools rdfs:label "Tools" . ui:k-here rdfs:label "Inspect here" . ui:k-pause rdfs:label "Pause" . ui:k-off rdfs:label "Off" . ui:k-private rdfs:label "Private" .
+ui:doc-to-2 a c:Text ; c:label "Below every page, the status bar shows what the last interaction cost - rule runs, DOM operations, milliseconds - and what memory holds." .
+
+# --- Performance (live) ---
+ui:doc-performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-pf-h ui:doc-pf-1 ui:performance ) .
+ui:doc-pf-h a c:Heading ; c:level 1 ; c:label "Performance" .
+ui:doc-pf-1 a c:Text ; c:label "Run the benchmark matrix in your browser. Each cell becomes a sosa:Observation; every chart below is a SPARQL view over them and every insight a SPARQL judgement - turn a card over to see its query." .
+ui:doc-performance sem:warm sem:OnIntent .

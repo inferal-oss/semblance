@@ -14,8 +14,10 @@
 # literals next to the untagged source text. The gallery's own content is in
 # English unless translated here.
 
-ui:Playground rdfs:label "Пісочниця"@uk , "Spielwiese"@de , "ساحة التجربة"@ar .
-ui:Performance rdfs:label "Продуктивність"@uk , "Leistung"@de , "الأداء"@ar .
+ui:Home rdfs:label "Головна"@uk , "Start"@de , "الرئيسية"@ar .
+ui:Docs rdfs:label "Документація"@uk , "Doku"@de , "التوثيق"@ar .
+ui:Examples rdfs:label "Приклади"@uk , "Beispiele"@de , "أمثلة"@ar .
+ui:DocPerformance rdfs:label "Продуктивність"@uk , "Leistung"@de , "الأداء"@ar .
 ui:Components rdfs:label "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
 ui:GroupFoundations rdfs:label "Основи"@uk , "Grundlagen"@de , "الأسس"@ar .
 ui:GroupLayout rdfs:label "Розкладка"@uk , "Layout"@de , "التخطيط"@ar .
@@ -46,7 +48,6 @@ ui:appBar c:subtitle "один граф компонентів · багато �
 ui:store rdfs:label "Сховище"@uk , "Speicher"@de , "المخزن"@ar .
 ui:rules rdfs:label "Правила"@uk , "Regeln"@de , "القواعد"@ar .
 ui:inspectorTab c:label "Інспектор"@uk , "Inspektor"@de , "المفتش"@ar .
-ui:textTab c:label "Текстова проєкція"@uk , "Textprojektion"@de , "الإسقاط النصي"@ar .
 ui:activityTab c:label "Активність"@uk , "Aktivität"@de , "النشاط"@ar .
 ui:logTab c:label "Журнал змін"@uk , "Änderungsprotokoll"@de , "سجل التغييرات"@ar .
 ui:screenCard c:label "Екран"@uk , "Bildschirm"@de , "الشاشة"@ar .

@@ -23,7 +23,8 @@ describe('persistence (per:Policy)', () => {
     const a = await mountRemembering(storage)
     pressZ(a) // paused
     a.fire(a.document.querySelector('[aria-label="Open Inspector in a window"]')!, 'click')
-    const win = a.document.querySelector('[data-sem-c=window]')!
+    const inspector = (d: Document) => [...d.querySelectorAll('[data-sem-c=window]')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Inspector')!
+    const win = inspector(a.document)
     win.querySelector('.sem-window-bar')!.dispatchEvent(new a.window.CustomEvent('sem-move', { bubbles: true, detail: { x: 333, y: 222 } }))
     await a.persistence.flush()
     expect(await storage[PER + 'Session']!.get('semblance:' + UI + 'rememberInspector')).toBeTruthy()
@@ -32,8 +33,7 @@ describe('persistence (per:Policy)', () => {
     // "Reload": a new shell over the same storage.
     const b = await mountRemembering(storage)
     expect(b.value(UI + 'inspectorMode')).toBe(UI + 'Paused')
-    const restored = b.document.querySelector('[data-sem-c=window]')!
-    expect(restored.querySelector('.sem-window-bar strong')!.textContent).toBe('Inspector')
+    const restored = inspector(b.document)
     expect(restored.getAttribute('style')).toContain('left: 333px; top: 222px')
     // The restore is in the state log, and the list says so.
     const restores = b.store.match(null, b.store.factory.namedNode(NS.rdf + 'type'), b.store.factory.namedNode(PER + 'Restore'))

@@ -23,7 +23,7 @@ const kind = (params.get('store') ?? 'hybrid') as StoreKind
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'function')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
-const PAGES = { playground: 'Playground', performance: 'Performance', components: 'Components' } as const
+const PAGES = { home: 'Home', docs: 'Docs', components: 'Components', examples: 'Examples' } as const
 
 await initWeb()
 // The Components page: one graph per component group (demo/gallery/*.ttl).
@@ -49,7 +49,7 @@ const setApp = (p: string, value: string) => {
 // Settings that arrive through the URL become graph state before projecting.
 setApp(UI + 'store', UI + STORES[kind])
 setApp(UI + 'rules', UI + RULES[prefer])
-setApp(UI + 'page', UI + (PAGES[location.hash.slice(1) as keyof typeof PAGES] ?? 'Playground'))
+setApp(UI + 'page', UI + (PAGES[location.hash.slice(1) as keyof typeof PAGES] ?? 'Home'))
 
 const runtime = new Runtime(store)
 const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
@@ -127,7 +127,7 @@ function syncSettings() {
     const v = appValues(p)[0]
     return v && store.match(nn(v.value), nn(UI + 'key'), null)[0]?.object.value
   }
-  const page = key(UI + 'page') ?? 'playground'
+  const page = key(UI + 'page') ?? 'home'
   if (location.hash.slice(1) !== page) history.replaceState(null, '', '#' + page)
   const nextStore = key(UI + 'store') ?? kind
   const nextRules = key(UI + 'rules') ?? prefer

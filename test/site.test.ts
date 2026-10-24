@@ -1,0 +1,81 @@
+import { describe, expect, it } from 'vitest'
+import { NS } from '../src/ns.ts'
+import { mountSite } from './harness.ts'
+
+const UI = 'https://semblance.dev/demo#'
+
+/** The site as a visitor first sees it, driven only through events. */
+function site() {
+  const h = mountSite()
+  const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
+  const button = (text: string) => [...h.document.querySelectorAll('button')].find((b) => b.textContent!.trim() === text && visible(b))!
+  const navItem = (text: string) => [...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === text && visible(b))!
+  const click = (el: Element) => h.fire(el, 'click')
+  return { ...h, visible, button, navItem, click }
+}
+
+describe('the site', () => {
+  it('opens on the landing page, with the tools closed', () => {
+    const { value, document, visible } = site()
+    expect(value(UI + 'page')).toBe(UI + 'Home')
+    expect(document.body.textContent).toContain('The interface is a graph.')
+    expect([...document.querySelectorAll('[data-sem-c=card]')].filter(visible).length).toBeGreaterThanOrEqual(6)
+    const tools = document.querySelector('[data-sem-c=app-bar] [data-sem-c=toggle]')!
+    expect(tools.getAttribute('aria-pressed')).toBe('false')
+    expect(tools.getAttribute('aria-keyshortcuts')).toBe('Control+.')
+  })
+
+  it('goes where its buttons say, through the graph', () => {
+    const { value, button, click } = site()
+    click(button('Read the docs'))
+    expect(value(UI + 'page')).toBe(UI + 'Docs')
+    click(button('Home'))
+    click(button('See examples'))
+    expect(value(UI + 'page')).toBe(UI + 'Examples')
+  })
+
+  it('opens the tools on any page, as a window docked to the bottom', () => {
+    const { document, button, click, store } = site()
+    click(button('Docs'))
+    click(document.querySelector('[data-sem-c=app-bar] [data-sem-c=toggle]')!)
+    const f = store.factory
+    expect(store.match(f.namedNode(UI + 'tools'), f.namedNode(NS.c + 'open'), null)[0]!.object.value).toBe('true')
+    const tools = [...document.querySelectorAll('[data-sem-c=window]')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Tools')!
+    expect(tools.getAttribute('data-sem-edge')).toBe('bottom')
+    expect([...tools.querySelectorAll('[role=tab]')].map((t) => t.textContent)).toEqual(['Inspector', 'Query', 'Activity', 'Change log', 'Engine'])
+  })
+
+  it('has a docs section per topic, the performance one live', () => {
+    const { document, value, button, navItem, click } = site()
+    click(button('Docs'))
+    expect(document.querySelector('[data-sem-c=heading]:not([hidden] *)')!.textContent).toBe('Overview')
+    click(navItem('Performance'))
+    expect(value(UI + 'docSection')).toBe(UI + 'DocPerformance')
+    expect([...document.querySelectorAll('[data-sem-c=bar-chart]')].some((c) => !c.closest('[hidden]'))).toBe(true)
+  })
+
+  it('runs the sign-in example: too short, wrong, then right', () => {
+    const { document, button, navItem, click, fire, visible, store } = site()
+    click(button('Examples'))
+    click(navItem('Sign in with a code'))
+    const code = () => [...document.querySelectorAll('[data-sem-c=code-input]')].find(visible)!
+    const alert = () => code().querySelector('[role=alert]')?.textContent
+    click(button('Verify'))
+    expect(alert()).toBe('Enter all 6 digits.')
+    const type = (text: string) => {
+      const input = code().querySelector('input')!
+      input.value = text
+      fire(input, 'input')
+    }
+    type('111222')
+    click(button('Verify'))
+    expect(alert()).toContain("isn't right")
+    type('246 810')
+    click(button('Verify'))
+    const f = store.factory
+    expect(store.match(f.namedNode(UI + 'signinFlow'), f.namedNode(UI + 'signinStep'), null)[0]!.object.value).toBe(UI + 'SigninDone')
+    expect([...document.querySelectorAll('[data-sem-c=alert]')].find(visible)!.textContent).toContain("You're signed in")
+    click(button('Start over'))
+    expect(code().querySelector('input')!.value).toBe('')
+  })
+})

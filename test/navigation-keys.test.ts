@@ -42,8 +42,8 @@ describe('arrow-key navigation (keyboard layer)', () => {
     expect(h.press(tab('Inspector'), 'ArrowRight')).toBe(true)
     expect(tab('Query').getAttribute('aria-selected')).toBe('true')
     h.press(tab('Query'), 'End')
-    expect(tab('Change log').getAttribute('aria-selected')).toBe('true')
-    h.press(tab('Change log'), 'ArrowRight') // wraps
+    expect(tab('Engine').getAttribute('aria-selected')).toBe('true')
+    h.press(tab('Engine'), 'ArrowRight') // wraps
     expect(tab('Inspector').getAttribute('aria-selected')).toBe('true')
   })
 
@@ -95,9 +95,11 @@ describe('arrow-key navigation (keyboard layer)', () => {
 
   it('changes pages with the arrow keys on the app’s segmented control', () => {
     const h = setup()
-    const nav = [...h.document.querySelectorAll('[data-sem-c=segmented]')].find((s) => s.textContent!.includes('Performance'))!
+    const nav = [...h.document.querySelectorAll('[data-sem-c=segmented]')].find((s) => s.textContent!.includes('Docs'))!
     const button = (t: string) => [...nav.querySelectorAll('button')].find((b) => b.textContent === t)!
-    h.press(button('Playground'), 'ArrowRight')
-    expect(h.value(UI + 'page')).toBe(UI + 'Performance')
+    h.press(button('Components'), 'ArrowRight')
+    expect(h.value(UI + 'page')).toBe(UI + 'Examples')
+    h.press(button('Examples'), 'ArrowLeft')
+    expect(h.value(UI + 'page')).toBe(UI + 'Components')
   })
 })

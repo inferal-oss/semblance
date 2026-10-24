@@ -16,7 +16,28 @@ const gallery = readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort()
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
 export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
-  return mount(loadStore(kind, todoApp(todos), appGraph, ...gallery), prefer)
+  return mount(workbench(loadStore(kind, todoApp(todos), appGraph, ...gallery)), prefer)
+}
+
+/** The site as a visitor first sees it: the landing page, tools closed. */
+export function mountSite(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+  return mount(loadStore(kind, todoApp(5), appGraph, ...gallery), prefer)
+}
+
+/**
+ * Most tests start where the demo's Playground page was: the todo example shown, with the
+ * tools open (written before the first projection, as a restored session would be).
+ */
+function workbench(store: GraphStore): GraphStore {
+  const f = store.factory
+  const set = (s: string, p: string, o: Parameters<typeof f.quad>[2]) => {
+    for (const q of store.match(f.namedNode(s), f.namedNode(p), null)) store.delete(q)
+    store.add(f.quad(f.namedNode(s), f.namedNode(p), o))
+  }
+  set(UI + 'app', UI + 'page', f.namedNode(UI + 'Examples'))
+  set(UI + 'app', UI + 'example', f.namedNode(UI + 'ExTodo'))
+  set(UI + 'tools', NS.c + 'open', f.literal('true', f.namedNode(NS.xsd + 'boolean')))
+  return store
 }
 
 /**
@@ -24,7 +45,7 @@ export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxig
  * state is restored before the first projection; `persistence.flush()` writes now.
  */
 export async function mountRemembering(backends: Record<string, Backend>) {
-  const store = loadStore('oxigraph', todoApp(5), appGraph, ...gallery)
+  const store = workbench(loadStore('oxigraph', todoApp(5), appGraph, ...gallery))
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
   const shell = mount(store, 'sparql')
@@ -46,9 +67,21 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function') {
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
-  const showPage = (page: 'Playground' | 'Performance' | 'Components') => {
+  const set = (s: string, p: string, o: string) => {
     const f = store.factory
-    runtime.apply({ remove: store.match(app(), f.namedNode(UI + 'page'), null), add: [f.quad(app(), f.namedNode(UI + 'page'), f.namedNode(UI + page))] })
+    runtime.apply({ remove: store.match(f.namedNode(s), f.namedNode(p), null), add: [f.quad(f.namedNode(s), f.namedNode(p), o.startsWith('"') ? f.literal(o.slice(1, -1), f.namedNode(NS.xsd + 'boolean')) : f.namedNode(o))] })
+  }
+  /**
+   * A page of the site. 'Playground' is the todo example with the tools open (what the
+   * Playground page was before the site had pages); 'Performance' is the docs' live section.
+   */
+  const showPage = (page: 'Home' | 'Docs' | 'Components' | 'Examples' | 'Playground' | 'Performance') => {
+    if (page === 'Playground') {
+      set(UI + 'app', UI + 'example', UI + 'ExTodo')
+      set(UI + 'tools', NS.c + 'open', '"true"')
+    }
+    if (page === 'Performance') set(UI + 'app', UI + 'docSection', UI + 'DocPerformance')
+    set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
   return { document, window, store, runtime, screen, shell, bus, fire, value, showPage }

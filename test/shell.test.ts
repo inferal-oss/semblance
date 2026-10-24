@@ -14,11 +14,15 @@ const UI = 'https://semblance.dev/demo#'
 
 describe('the demo shell is a component graph', () => {
   it('renders every part of the interface from the graph', () => {
-    const { document, showPage } = mountShell()
+    const shell = mountShell()
+    const { document, showPage } = shell
     const kinds = () => new Set([...document.querySelectorAll('[data-sem-c]')].map((e) => (e as HTMLElement).getAttribute('data-sem-c')))
-    for (const k of ['app-bar', 'graph-mark', 'theme-switcher', 'segmented', 'switch', 'choice', 'chips', 'metrics', 'card', 'tabs', 'flippable', 'query-view']) {
+    for (const k of ['app-bar', 'graph-mark', 'theme-switcher', 'segmented', 'toggle', 'switch', 'metrics', 'card', 'tabs', 'flippable', 'query-view', 'window']) {
       expect(kinds(), k).toContain(k)
     }
+    const { fire } = shell
+    fire([...document.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Engine')!, 'click')
+    for (const k of ['choice', 'chips']) expect(kinds(), k).toContain(k)
     showPage('Performance')
     for (const k of ['bar-chart', 'heatmap', 'line-chart', 'finding-list', 'progress', 'text-field']) expect(kinds(), k).toContain(k)
     // the logo is SVG built from the svg: vocabulary
@@ -43,20 +47,22 @@ describe('the demo shell is a component graph', () => {
     fire([...document.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Activity')!, 'click')
     const before = stats()
     expect(before).not.toBeNull()
+    // The tools are a window too; this is the one minted for the tab.
+    const activity = () => [...document.querySelectorAll('[data-sem-c=window]')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Activity')
     fire(document.querySelector('[aria-label="Open Activity in a window"]')!, 'click')
-    const win = document.querySelector('[data-sem-c=window]')!
+    const win = activity()!
     expect(win.querySelector('.sem-window-bar strong')!.textContent).toBe('Activity')
     expect(win.contains(stats())).toBe(true)
     expect(stats()).toBe(before) // the same DOM moved into the window
     win.querySelector('.sem-window-bar')!.dispatchEvent(new window.CustomEvent('sem-move', { bubbles: true, detail: { x: 300, y: 200 } }))
-    expect(document.querySelector('[data-sem-c=window]')!.getAttribute('style')).toContain('left: 300px; top: 200px')
-    fire(document.querySelector('[data-sem-c=window] .sem-window-control')!, 'click')
-    expect(document.querySelector('[data-sem-c=window]')).toBeNull()
+    expect(activity()!.getAttribute('style')).toContain('left: 300px; top: 200px')
+    fire(activity()!.querySelector('.sem-window-control')!, 'click')
+    expect(activity()).toBeUndefined()
     expect(document.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Activity')
     expect(stats()).toBe(before)
     // geometry outlives the window: re-detaching reopens where it was
     fire(document.querySelector('[aria-label="Open Activity in a window"]')!, 'click')
-    expect(document.querySelector('[data-sem-c=window]')!.getAttribute('style')).toContain('left: 300px')
+    expect(activity()!.getAttribute('style')).toContain('left: 300px')
     expect(store.match(null, store.factory.namedNode(NS.c + 'detached'), null).length).toBe(1)
   })
 
@@ -128,12 +134,15 @@ describe('the demo shell is a component graph', () => {
   })
 
   it('warms only what declares sem:warm sem:Eager in idle time', () => {
-    const { document, runtime, screen } = mountShell()
+    const { document, runtime, screen, store } = mountShell()
+    // The tools' tabs are lazy in the demo; declare them eager here.
+    const f = store.factory
+    runtime.apply({ remove: store.match(f.namedNode(UI + 'views'), f.namedNode(NS.sem + 'warm'), null), add: [f.quad(f.namedNode(UI + 'views'), f.namedNode(NS.sem + 'warm'), f.namedNode(NS.sem + 'Eager'))] })
     // Runs of every implementation of a rendering (SPARQL or function, whichever is preferred).
     const runs = (rendering: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(NS.c + rendering.replace(/-(fn|sparql)$/, '') + '-')).reduce((n, [, s]) => n + s.runs, 0)
     while (runtime.warm(50)) {}
-    // The Performance page (eager) is ready before it is shown...
-    expect(runs('BarChartRendering-fn')).toBeGreaterThan(0)
+    // The tools' hidden tabs (eager) are ready before they are shown...
+    expect(runs('StreamStatsOnScreen-fn')).toBeGreaterThan(0)
     // ...the gallery (lazy, the default) is not evaluated until a group is shown.
     expect(runs('SwatchesRendering-fn')).toBe(0)
     expect(document.querySelector('[data-sem-c=swatches]')).toBeNull()
@@ -142,8 +151,8 @@ describe('the demo shell is a component graph', () => {
   it('switches pages and theme through the same kind of control', () => {
     const { document, fire, value } = mountShell()
     const button = (text: string) => [...document.querySelectorAll('[data-sem-c=segmented] button, [data-sem-c=theme-switcher] button')].find((b) => b.textContent!.includes(text))!
-    fire(button('Performance'), 'click')
-    expect(value(UI + 'page')).toBe(UI + 'Performance')
+    fire(button('Docs'), 'click')
+    expect(value(UI + 'page')).toBe(UI + 'Docs')
     expect((document.querySelector('[data-sem-c=switch] > div:nth-child(1)') as HTMLElement).hasAttribute('hidden')).toBe(true)
     fire(button('Night'), 'click')
     expect(value(NS.sty + 'colorScheme')).toBe(NS.sty + 'Dark')

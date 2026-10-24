@@ -277,7 +277,8 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     run(a as unknown as Shell)
     a.fire([...a.document.querySelectorAll('[data-sem-c=query-workbench] [role=tab]')].find((t) => t.textContent === 'Turtle')!, 'click')
     a.fire(a.document.querySelector('[aria-label="Open Query in a window"]')!, 'click')
-    const win = a.document.querySelector('[data-sem-c=window]')!
+    const queryWindow = (d: Document) => [...d.querySelectorAll('[data-sem-c=window]')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Query')!
+    const win = queryWindow(a.document)
     expect(win.querySelector('[data-sem-c=query-workbench]')).not.toBeNull()
     win.querySelector('.sem-window-bar')!.dispatchEvent(new a.window.CustomEvent('sem-move', { bubbles: true, detail: { x: 120, y: 80 } }))
     // Typing in the window works like typing in the tab.
@@ -286,7 +287,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(await storage[PER + 'Session']!.get('semblance:' + UI + 'rememberWorkbench')).toBeTruthy()
 
     const b = await mountRemembering(storage)
-    const restored = b.document.querySelector('[data-sem-c=window]')!
+    const restored = queryWindow(b.document)
     expect(restored.querySelector('[data-sem-c=query-workbench]')).not.toBeNull()
     expect(restored.getAttribute('style')).toContain('left: 120px; top: 80px')
     expect((restored.querySelector('[data-sem-c=query-editor] textarea') as HTMLTextAreaElement).value).toBe(query + ' LIMIT 2')

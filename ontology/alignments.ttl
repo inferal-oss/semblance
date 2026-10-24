@@ -118,6 +118,8 @@ mot:Preference rdfs:subClassOf skos:Concept .
 pos:Direction rdfs:subClassOf skos:Concept .
 pos:Layout rdfs:subClassOf skos:Concept .
 pos:Alignment rdfs:subClassOf skos:Concept .
+pos:Justification rdfs:subClassOf skos:Concept .
+pos:TextAlignment rdfs:subClassOf skos:Concept .
 sty:Light skos:closeMatch schema:LightMode .
 sty:Dark skos:closeMatch schema:DarkMode .
 

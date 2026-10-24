@@ -36,7 +36,9 @@ ui:app sty:colorScheme sty:System ;
     l10n:language l10n:English ;
     ui:store ui:Hybrid ;
     ui:rules ui:PreferFunction ;
-    ui:page ui:Playground ;
+    ui:page ui:Home ;
+    ui:docSection ui:DocOverview ;
+    ui:example ui:ExTodo ;
     ui:inspectorMode ui:Live ;
     ui:galleryGroup ui:GroupFoundations .
 
@@ -48,9 +50,10 @@ ui:rules rdfs:label "Rules" ; rdfs:range ui:RuleKind .
 ui:PreferSparql a ui:RuleKind ; rdfs:label "Prefer SPARQL" ; sem:order 1 ; ui:key "sparql" .
 ui:PreferFunction a ui:RuleKind ; rdfs:label "Prefer functions" ; sem:order 2 ; ui:key "function" .
 ui:page rdfs:label "Page" ; rdfs:range ui:Page .
-ui:Playground a ui:Page ; rdfs:label "Playground" ; sem:order 1 ; ui:key "playground" .
-ui:Performance a ui:Page ; rdfs:label "Performance" ; sem:order 2 ; ui:key "performance" .
+ui:Home a ui:Page ; rdfs:label "Home" ; sem:order 1 ; ui:key "home" .
+ui:Docs a ui:Page ; rdfs:label "Docs" ; sem:order 2 ; ui:key "docs" .
 ui:Components a ui:Page ; rdfs:label "Components" ; sem:order 3 ; ui:key "components" .
+ui:Examples a ui:Page ; rdfs:label "Examples" ; sem:order 4 ; ui:key "examples" .
 ui:inspectorMode rdfs:label "Inspector" ; rdfs:range ui:InspectorMode .
 ui:Live a ui:InspectorMode ; rdfs:label "Live" ; sem:symbol "●" ; sem:order 1 .
 ui:Paused a ui:InspectorMode ; rdfs:label "Paused" ; sem:symbol "❙❙" ; sem:order 2 .
@@ -80,7 +83,7 @@ ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:perfPanel ui:desktop ) ;
     mot:preference mot:Full ; sty:contrast sty:StandardContrast ; sty:density sty:Comfortable ; sty:theme sty:Semblance ; prv:privacy prv:Conceal .
 
 # Detached views live here, outside the pages, so they survive page changes.
-ui:desktop a c:Desktop ; c:hosts ui:announcements .
+ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools .
 
 # What the last interaction cost and what memory holds, on every page: a bar
 # docked to the bottom of the shell. The host writes ui:stats; c:Metrics shows it.
@@ -98,30 +101,43 @@ ui:appBar a c:AppBar ;
     c:label "Semblance" ;
     c:subtitle "one component graph · many projections" ;
     c:logo ui:logo ;
-    c:actions ( ui:theme ui:nav ) .
+    c:actions ( ui:nav ui:toolsToggle ui:theme ) .
 ui:logo a c:GraphMark ; c:nodes 3 ; rdfs:label "Semblance" .
 ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
 
+# The site: a landing page, the docs, the component gallery and complete examples
+# (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl). Each page is evaluated when
+# its navigation item is pointed at or focused, so it is ready by the time it is clicked.
 ui:pages a c:Switch ; c:controls ui:app ; c:property ui:page ;
-    c:cases ( ui:playgroundCase ui:performanceCase ui:componentsCase ) .
-ui:playgroundCase c:when ui:Playground ; c:content ui:playground .
-# The two working pages are warmed in idle time, so switching between them is
-# instant; the gallery renders a group only when it is selected (lazy, the default).
-ui:playground sem:warm sem:Eager .
-ui:performance sem:warm sem:Eager .
-# The gallery is large: a group is evaluated when its navigation item is pointed
-# at or focused, so it is ready by the time it is clicked.
-ui:gallery sem:warm sem:OnIntent .
+    c:cases ( ui:homeCase ui:docsCase ui:componentsCase ui:examplesCase ) .
+ui:homeCase c:when ui:Home ; c:content ui:home .
+ui:docsCase c:when ui:Docs ; c:content ui:docs .
 ui:componentsCase c:when ui:Components ; c:content ui:gallery .
-ui:performanceCase c:when ui:Performance ; c:content ui:performance .
+ui:examplesCase c:when ui:Examples ; c:content ui:examples .
+ui:home sem:warm sem:OnIntent .
+ui:docs sem:warm sem:OnIntent .
+ui:gallery sem:warm sem:OnIntent .
+ui:examples sem:warm sem:OnIntent .
 
-# --- playground ---------------------------------------------------------------------------------
+# --- tools --------------------------------------------------------------------------------------
+# The developer tools are on every page: a window on the desktop, docked to the bottom
+# edge, opened and closed from the app bar (or ⌘.). It can float, move, resize and
+# minimize like any window; each of its tabs detaches into a window of its own.
 
-ui:playground a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:inset tok:space-5 ;
-    c:children ( ui:toolbar ui:workspace ) .
+ui:tools a c:Window ; c:title "Tools" ; c:open false ;
+    c:x 80 ; c:y 120 ; c:width 760 ; c:height 400 ;
+    c:windowState c:Normal ; c:attachedTo c:BottomEdge ;
+    c:body ui:views .
+ui:toolsToggle a c:Toggle ; c:controls ui:tools ; c:property c:open ;
+    c:label "Tools" , "Інструменти"@uk , "Werkzeuge"@de , "الأدوات"@ar ; c:icon "⌗" ;
+    key:shortcut "mod+." .
 
-ui:toolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+# --- the tool tabs --------------------------------------------------------------------------------
+
+# The engine: which store, which rule implementations, which layers.
+ui:engineTab a c:Tab ; c:label "Engine" , "Рушій"@uk , "Engine"@de , "المحرك"@ar ; c:content ui:toolbar .
+ui:toolbar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
     c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ) .
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
@@ -129,27 +145,16 @@ ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
     c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
 
-ui:workspace a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
-    c:children ( ui:screenCard ui:viewsCard ) .
-
-ui:screenCard a c:Card ;
-    c:label "Screen" ; c:badge "mod:Screen" ;
-    c:note "The todo app: a component graph projected to RDF/HTML and patched into the DOM. Hover anything to inspect it." ;
-    c:content ui:screenStage .
-ui:screenStage a c:Stack ; sty:backdrop sty:Dots ; c:children ( ui:todoCard ) .
-ui:todoCard a c:Flippable ; c:front ex:page .
-
-ui:viewsCard a c:Card ;
-    c:label "Views" ; c:badge "c:Tabs" ;
-    c:note "Every view is a projection of the same graph. ↗ opens one in a window; tab and window state are graph state." ;
-    c:content ui:views .
+# Every tool is a view of the same graph. ↗ opens one in a window; tab and window state are graph state.
+# The tools are evaluated when first opened (about 40 ms); warming them ahead would hold
+# some 20,000 more triples on every page for a panel most visitors never open.
+ui:views sem:warm sem:Lazy .
 ui:views a c:Tabs ; c:detachable true ; c:windowsOn ui:desktop ;
-    c:tabs ( ui:inspectorTab ui:queryTab ui:textTab ui:activityTab ui:logTab ) ;
+    c:tabs ( ui:inspectorTab ui:queryTab ui:activityTab ui:logTab ui:engineTab ) ;
     c:selected ui:inspectorTab .
 
 ui:inspectorTab a c:Tab ; c:label "Inspector" ; c:content ui:inspectorCard .
 ui:queryTab a c:Tab ; c:label "Query" , "Запит"@uk , "Abfrage"@de , "استعلام"@ar ; c:content ui:workbench .
-ui:textTab a c:Tab ; c:label "Text projection" ; c:content ui:textCard .
 ui:activityTab a c:Tab ; c:label "Activity" ; c:content ui:activityCard .
 ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
 
@@ -329,7 +334,7 @@ WHERE {
 }""" .
 # --- performance ---------------------------------------------------------------------------------
 
-ui:performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:inset tok:space-5 ;
+ui:performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:perfToolbar ui:perfWorkspace ) .
 
 ui:perfToolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
@@ -461,16 +466,19 @@ ui:gc-inspection c:when ui:GroupInspection ; c:content ui:gallery-inspection .
 # Every choice about the inspector: whether it is a window, where, how big, in
 # what window state, its mode, what it is inspecting, which view is selected.
 ui:rememberInspector a per:Policy ; per:scope per:Session ;
-    rdfs:label "The inspector" , "Інспектор"@uk , "Der Inspektor"@de , "المفتش"@ar ;
+    rdfs:label "The tools and the inspector" , "Інструменти та інспектор"@uk , "Die Werkzeuge und der Inspektor"@de , "الأدوات والمفتش"@ar ;
     per:construct """
 CONSTRUCT {
   ui:inspectorTab c:detached ?detached . ui:views c:selected ?tab .
+  ui:tools c:open ?open ; c:attachedTo ?edge ; c:x ?tx ; c:y ?ty ; c:width ?tw ; c:height ?th ; c:windowState ?ts .
   ?window c:x ?x ; c:y ?y ; c:width ?w ; c:height ?h ; c:windowState ?state .
   ui:app ui:inspectorMode ?mode ; ui:inspecting ?node .
 }
 WHERE {
   { ui:inspectorTab c:detached ?detached }
   UNION { ui:views c:selected ?tab }
+  UNION { { ui:tools c:open ?open } UNION { ui:tools c:attachedTo ?edge } UNION { ui:tools c:x ?tx } UNION { ui:tools c:y ?ty }
+          UNION { ui:tools c:width ?tw } UNION { ui:tools c:height ?th } UNION { ui:tools c:windowState ?ts } }
   UNION { ?window prov:wasDerivedFrom ui:inspectorTab . { ?window c:x ?x } UNION { ?window c:y ?y } UNION { ?window c:width ?w } UNION { ?window c:height ?h } UNION { ?window c:windowState ?state } }
   UNION { ui:app ui:inspectorMode ?mode }
   UNION { ui:app ui:inspectorMode ui:Paused ; ui:inspecting ?node }
@@ -482,7 +490,7 @@ ui:rememberDisplay a per:Policy ; per:scope per:Session ;
 
 ui:rememberSettings a per:Policy ; per:scope per:Session ;
     rdfs:label "Language, theme and gallery page" , "Мова, тема і сторінка галереї"@uk , "Sprache, Design und Galerieseite"@de , "اللغة والسمة وصفحة المعرض"@ar ;
-    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ui:galleryGroup ) .
+    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ui:galleryGroup ui:docSection ui:example ) .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
 ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ;

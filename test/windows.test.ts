@@ -3,14 +3,15 @@ import { loadStore } from '../src/node/load.ts'
 import { MOD, NS, STY } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
-import { mountShell } from './harness.ts'
+import { mountShell, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const c = NS.c
 
 /** The shell on the Components page, showing the Windows gallery group. */
 function showWindows(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
-  const h = mountShell(5, kind)
+  // The site as first seen: the tools window is closed, so the desktop starts empty.
+  const h = mountSite(kind)
   const f = h.store.factory
   const app = f.namedNode(UI + 'app')
   const group = f.namedNode(UI + 'galleryGroup')
@@ -199,14 +200,16 @@ describe('windows', () => {
   it('a window detached from a tab is a full window: it minimizes to the taskbar on any page', () => {
     const { document, fire, showPage, store } = mountShell()
     fire(document.querySelector('[aria-label="Open Activity in a window"]')!, 'click')
-    const win = () => document.querySelector('[data-sem-c=window]:not([hidden])') as HTMLElement
+    const win = () =>
+      [...document.querySelectorAll('[data-sem-c=window]:not([hidden])')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Activity') as HTMLElement
     const labels = [...win().querySelectorAll('.sem-window-control')].map((b) => b.getAttribute('aria-label'))
     expect(labels).toEqual(['Return to its tab: Activity', 'Minimize Activity', 'Maximize Activity', 'Close Activity'])
     fire(win().querySelector('[aria-label="Minimize Activity"]')!, 'click')
-    expect(document.querySelector('[data-sem-c=window]:not([hidden])')).toBeNull()
+    expect(win()).toBeUndefined()
     showPage('Performance')
-    const task = document.querySelector('[data-sem-c=desktop] > [data-sem-c=taskbar] .sem-task') as HTMLElement
-    expect(task.textContent).toContain('Activity')
+    // The taskbar lists every open frame, the docked tools too.
+    const task = [...document.querySelectorAll('[data-sem-c=desktop] > [data-sem-c=taskbar] .sem-task')].find((t) => t.textContent!.includes('Activity')) as HTMLElement
+    expect(task).toBeDefined()
     fire(task, 'click')
     expect(win().querySelector('[data-sem-c=stream-stats]')).not.toBeNull()
     expect(store.match(null, store.factory.namedNode(c + 'windowState'), store.factory.namedNode(c + 'Minimized')).length).toBe(0)

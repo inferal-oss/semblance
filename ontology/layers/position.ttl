@@ -77,3 +77,23 @@ pos:Start a pos:Alignment ; sem:slug "start" ; sty:declares [ sty:property "alig
 pos:Center a pos:Alignment ; sem:slug "center" ; sty:declares [ sty:property "align-items" ; sty:raw "center" ] .
 pos:End a pos:Alignment ; sem:slug "end" ; sty:declares [ sty:property "align-items" ; sty:raw "flex-end" ] .
 pos:Baseline a pos:Alignment ; sem:slug "baseline" ; sty:declares [ sty:property "align-items" ; sty:raw "baseline" ] .
+
+pos:justify a owl:ObjectProperty ;
+    rdfs:range pos:Justification ;
+    rdfs:comment "How children share the main axis: packed at the start, centre or end, or spread apart."@en ;
+    sty:hookAttribute "data-sem-justify" ;
+    sty:overrides pos:direction, pos:layout .
+pos:Justification a owl:Class .
+pos:PackStart a pos:Justification ; sem:slug "start" ; sty:declares [ sty:property "justify-content" ; sty:raw "flex-start" ] .
+pos:PackCenter a pos:Justification ; sem:slug "center" ; sty:declares [ sty:property "justify-content" ; sty:raw "center" ] .
+pos:PackEnd a pos:Justification ; sem:slug "end" ; sty:declares [ sty:property "justify-content" ; sty:raw "flex-end" ] .
+pos:SpaceBetween a pos:Justification ; sem:slug "between" ; sty:declares [ sty:property "justify-content" ; sty:raw "space-between" ] .
+
+pos:textAlign a owl:ObjectProperty ;
+    rdfs:range pos:TextAlignment ;
+    rdfs:comment "How lines of text line up within a component (logical: start and end follow the writing direction)."@en ;
+    sty:hookAttribute "data-sem-text-align" .
+pos:TextAlignment a owl:Class .
+pos:TextStart a pos:TextAlignment ; sem:slug "start" ; sty:declares [ sty:property "text-align" ; sty:raw "start" ] .
+pos:TextCenter a pos:TextAlignment ; sem:slug "center" ; sty:declares [ sty:property "text-align" ; sty:raw "center" ] .
+pos:TextEnd a pos:TextAlignment ; sem:slug "end" ; sty:declares [ sty:property "text-align" ; sty:raw "end" ] .

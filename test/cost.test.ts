@@ -74,15 +74,17 @@ function costHarness() {
       fire(button('Inspector'), 'click')
     },
     page: () => {
-      fire(button('Performance'), 'click')
-      fire(button('Playground'), 'click')
+      fire(button('Docs'), 'click')
+      fire(button('Examples'), 'click')
     },
     flip: () => {
       fire($('[data-sem-c=flippable] .sem-flip'), 'click')
       fire($('[data-sem-c=flippable] .sem-flip'), 'click')
     },
     move: () => {
-      $('[data-sem-c=window] .sem-window-bar').dispatchEvent(new window.CustomEvent('sem-move', { bubbles: true, detail: { x: 100 + (moved++ % 2) * 50, y: 120 } }))
+      // The Activity window (the tools are a window too, docked).
+      const activity = [...document.querySelectorAll('[data-sem-c=window]')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Activity')!
+      activity.querySelector('.sem-window-bar')!.dispatchEvent(new window.CustomEvent('sem-move', { bubbles: true, detail: { x: 100 + (moved++ % 2) * 50, y: 120 } }))
     },
     add: () => {
       type('another')

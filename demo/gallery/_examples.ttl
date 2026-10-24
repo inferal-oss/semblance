@@ -1,0 +1,98 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://example.org/todo#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# Complete examples: small applications, each one graph of components wired to its own
+# vocabulary and reactions. A navigation list picks one; the tools (⌘.) inspect any of them.
+
+ui:example rdfs:label "Examples" ; rdfs:range ui:Example .
+ui:ExTodo a ui:Example ; rdfs:label "Todo, two projections" ; sem:order 1 ; ui:key "todo" .
+ui:ExSignin a ui:Example ; rdfs:label "Sign in with a code" ; sem:order 2 ; ui:key "signin" .
+
+ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
+    c:children ( ui:examplesNav ui:examplePages ) .
+ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" .
+ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
+    c:cases ( ui:exc-todo ui:exc-signin ) .
+ui:exc-todo c:when ui:ExTodo ; c:content ui:ex-todo .
+ui:exc-signin c:when ui:ExSignin ; c:content ui:ex-signin .
+
+# --- Todo, on screen and as text ---------------------------------------------------------------
+# The same component graph, projected twice: to the screen (RDF/HTML patched into the DOM)
+# and to text (a second projection mounted in a slot). Change one; both follow.
+
+ui:ex-todo a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ex-todo-intro ui:ex-todo-body ) .
+ui:ex-todo-intro a c:Text ; c:label "A todo app built from list, field, button and stat components over its own vocabulary (ex:Todo, ex:done, ex:created). On the left its screen projection; on the right the same graph projected as text. Add, tick or reorder a todo and watch both - then open the tools and hover anything." .
+ui:ex-todo-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:screenCard ui:textProjectionCard ) .
+ui:screenCard a c:Card ;
+    c:label "Screen" ; c:badge "mod:Screen" ;
+    c:note "A component graph projected to RDF/HTML and patched into the DOM." ;
+    c:content ui:screenStage .
+ui:screenStage a c:Stack ; sty:backdrop sty:Dots ; c:children ( ui:todoCard ) .
+ui:todoCard a c:Flippable ; c:front ex:page .
+ui:textProjectionCard a c:Card ;
+    c:label "Text" ; c:badge "mod:Text" ;
+    c:note "The same graph through the text renderings of the same components." ;
+    c:content ui:textCard .
+
+# --- Sign in with a code -------------------------------------------------------------------------
+# A two-step flow as graph state: ui:signinStep is the code step or done. Verifying is three
+# reactions on one click, each with its own condition: too short, wrong, right. (The code is
+# 246810; a real app's reaction would ask a server, as an effect.)
+
+ui:signinStep rdfs:label "Sign-in step" ; rdfs:range ui:SigninStep .
+ui:SigninCode a ui:SigninStep ; rdfs:label "Code" ; sem:order 1 .
+ui:SigninDone a ui:SigninStep ; rdfs:label "Done" ; sem:order 2 .
+ui:signinFlow ui:signinStep ui:SigninCode .
+
+ui:ex-signin a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align pos:Center ;
+    c:children ( ui:ex-signin-intro ui:ex-signin-card ) .
+ui:ex-signin-intro a c:Text ; pos:textAlign pos:TextCenter ;
+    c:label "A verification step: a code input, a primary action whose reactions check the code, an announced result. The code is 246810." .
+ui:ex-signin-card a c:Card ; c:label "Check your email" ; c:badge "2-step" ; c:content ui:ex-signin-steps .
+ui:ex-signin-steps a c:Switch ; c:controls ui:signinFlow ; c:property ui:signinStep ;
+    c:cases ( ui:ex-signin-case-code ui:ex-signin-case-done ) .
+ui:ex-signin-case-code c:when ui:SigninCode ; c:content ui:ex-signin-form .
+ui:ex-signin-case-done c:when ui:SigninDone ; c:content ui:ex-signin-done .
+
+ui:ex-signin-form a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-signin-lead ui:ex-signin-code ui:ex-signin-actions ) .
+ui:ex-signin-lead a c:Text ; c:label "We sent a 6-digit code to ada@example.org. It expires in 10 minutes." .
+ui:ex-signin-code a c:CodeInput ; c:label "Verification code" ; c:length 6 ; c:groupSize 3 ; sty:size sty:Large .
+ui:ex-signin-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:ex-signin-verify ui:ex-signin-resend ) .
+ui:ex-signin-verify a c:Button ; c:label "Verify" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ex-signin-resend a c:Button ; c:label "Send a new code" ; sty:emphasis sty:Ghost .
+
+ui:ex-signin-done a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-signin-ok ui:ex-signin-again ) .
+ui:ex-signin-ok a c:Alert ; sty:tone sty:Success ; c:label "You're signed in" ; c:help "The code matched. In a real app this is where the session begins." .
+ui:ex-signin-again a c:Button ; c:label "Start over" ; sty:emphasis sty:Outline .
+
+ui:SigninTooShort a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-verify ;
+    beh:deletes """CONSTRUCT { ui:ex-signin-code c:error ?e } WHERE { ui:ex-signin-code c:error ?e }""" ;
+    beh:inserts """
+CONSTRUCT { ui:ex-signin-code c:error "Enter all 6 digits." }
+WHERE { OPTIONAL { ui:ex-signin-code c:value ?v } FILTER(STRLEN(COALESCE(STR(?v), "")) < 6) }""" .
+ui:SigninWrong a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-verify ;
+    beh:inserts """
+CONSTRUCT { ui:ex-signin-code c:error "That code isn't right. Check the email, or send a new one." }
+WHERE { ui:ex-signin-code c:value ?v FILTER(STRLEN(?v) = 6 && ?v != "246810") }""" .
+ui:SigninRight a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-verify ;
+    beh:deletes """CONSTRUCT { ui:signinFlow ui:signinStep ?s } WHERE { ui:ex-signin-code c:value "246810" . ui:signinFlow ui:signinStep ?s }""" ;
+    beh:inserts """CONSTRUCT { ui:signinFlow ui:signinStep ui:SigninDone } WHERE { ui:ex-signin-code c:value "246810" }""" ;
+    ann:announces "Signed in" ; ann:tone sty:Success .
+ui:SigninResend a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-resend ;
+    beh:deletes """CONSTRUCT { ui:ex-signin-code c:value ?v ; c:error ?e } WHERE { { ui:ex-signin-code c:value ?v } UNION { ui:ex-signin-code c:error ?e } }""" ;
+    beh:inserts """CONSTRUCT { ui:ex-signin-code c:value "" } WHERE {}""" ;
+    ann:announces "A new code is on its way" ; ann:tone sty:Info .
+ui:SigninAgain a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-again ;
+    beh:deletes """CONSTRUCT { ui:signinFlow ui:signinStep ?s . ui:ex-signin-code c:value ?v ; c:error ?e } WHERE { ui:signinFlow ui:signinStep ?s OPTIONAL { ui:ex-signin-code c:value ?v } OPTIONAL { ui:ex-signin-code c:error ?e } }""" ;
+    beh:inserts """CONSTRUCT { ui:signinFlow ui:signinStep ui:SigninCode . ui:ex-signin-code c:value "" } WHERE {}""" .

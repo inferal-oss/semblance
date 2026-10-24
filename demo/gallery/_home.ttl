@@ -1,0 +1,68 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# The landing page: what Semblance is, in a few claims, each with a way in.
+# Its buttons are c:Setter: they write the page (or the docs section) into the graph.
+
+ui:home a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-7 ; pos:inset tok:space-6 ;
+    c:children ( ui:hero ui:pillars ui:howItWorks ui:homeFooter ) .
+
+# --- hero ---
+ui:hero a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align pos:Center ;
+    c:children ( ui:heroMark ui:heroTitle ui:heroLead ui:heroActions ) .
+ui:heroMark a c:GraphMark ; c:nodes 5 ; rdfs:label "Semblance" .
+ui:heroTitle a c:Text ; sty:textStyle sty:Display ; pos:textAlign pos:TextCenter ;
+    c:label "The interface is a graph." , "Інтерфейс — це граф."@uk , "Die Oberfläche ist ein Graph."@de , "الواجهة رسم بياني."@ar .
+ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ;
+    c:label "Semblance is a web UI framework where components, layers, themes and behaviour are RDF ontologies. Rules - SPARQL queries or functions - project one graph to the screen, to text, to anything; every interaction is an event in the graph." ,
+            "Semblance — вебфреймворк, де компоненти, шари, теми й поведінка є онтологіями RDF. Правила — запити SPARQL або функції — проєктують один граф на екран, у текст, будь-куди; кожна взаємодія — подія в графі."@uk ,
+            "Semblance ist ein Web-UI-Framework, in dem Komponenten, Schichten, Designs und Verhalten RDF-Ontologien sind. Regeln - SPARQL-Abfragen oder Funktionen - projizieren einen Graphen auf den Bildschirm, in Text, überallhin; jede Interaktion ist ein Ereignis im Graphen."@de ,
+            "Semblance إطار لواجهات الويب تكون فيه المكونات والطبقات والسمات والسلوك أنطولوجيات RDF. تُسقط القواعد - استعلامات SPARQL أو دوال - رسمًا بيانيًا واحدًا على الشاشة أو في نص أو أي مكان؛ وكل تفاعل حدث في الرسم البياني."@ar .
+ui:heroActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:justify pos:PackCenter ;
+    c:children ( ui:goDocs ui:goExamples ui:goComponents ) .
+ui:goDocs a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ; c:value ui:Docs ;
+    c:label "Read the docs" , "Читати документацію"@uk , "Doku lesen"@de , "اقرأ التوثيق"@ar ;
+    sty:tone sty:Accent ; sty:emphasis sty:Solid ; sty:size sty:Large .
+ui:goExamples a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ; c:value ui:Examples ;
+    c:label "See examples" , "Приклади"@uk , "Beispiele ansehen"@de , "شاهد الأمثلة"@ar ;
+    sty:emphasis sty:Outline ; sty:size sty:Large .
+ui:goComponents a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ; c:value ui:Components ;
+    c:label "Browse components" , "Компоненти"@uk , "Komponenten"@de , "تصفح المكونات"@ar ;
+    sty:emphasis sty:Ghost ; sty:size sty:Large .
+
+# --- what it is, in six claims ---
+ui:pillars a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-5 ;
+    c:children ( ui:pillarData ui:pillarRules ui:pillarLayers ui:pillarEvents ui:pillarCost ui:pillarThemes ) .
+ui:pillarData a c:Card ; c:label "Components are data" ; c:badge "OWL · SHACL" ; c:content ui:pillarDataText .
+ui:pillarDataText a c:Text ; c:label "A component is a class in an ontology, with SHACL shapes for what an instance must say. Your app is instances of them: a graph you can query, validate, diff and store." .
+ui:pillarRules a c:Card ; c:label "Rules are queries" ; c:badge "SPARQL · functions" ; c:content ui:pillarRulesText .
+ui:pillarRulesText a c:Text ; c:label "Renderings are SPARQL CONSTRUCTs into RDF/HTML, with function twins that render the same. The engine re-runs only the rules whose input changed, member by member." .
+ui:pillarLayers a c:Card ; c:label "Layers decorate" ; c:badge "a11y · l10n · validation" ; c:content ui:pillarLayersText .
+ui:pillarLayersText a c:Text ; c:label "Accessibility, localization, validation, keyboard shortcuts, privacy, persistence and docs are layers: rules that add to every component without it knowing." .
+ui:pillarEvents a c:Card ; c:label "Interactions are events" ; c:badge "LDES" ; c:content ui:pillarEventsText .
+ui:pillarEventsText a c:Text ; c:label "A click is an RDF event; reactions are CONSTRUCT pairs; each event and its effect join a bounded, linked change log you can replay, inspect and remember." .
+ui:pillarCost a c:Card ; c:label "Cost stays constant" ; c:badge "measured" ; c:content ui:pillarCostText .
+ui:pillarCostText a c:Text ; c:label "Hidden views are not evaluated; reads are traced; logs are read from their head. Tests require the work of each interaction not to grow with the app or its history." .
+ui:pillarThemes a c:Card ; c:label "Themes restructure" ; c:badge "11 themes" ; c:content ui:pillarThemesText .
+ui:pillarThemesText a c:Text ; c:label "Styles compile from the ontology: tokens, variant axes, intents. A theme can re-colour the interface or rebuild its title bars, docks and controls - try Cupertino, Classic or Fluent." .
+
+# --- how it works: a component and what it renders ---
+ui:howItWorks a c:Card ; c:label "A component, and what it becomes" ; c:badge "try it" ; c:content ui:howBody .
+ui:howBody a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:howCode ui:howLive ) .
+ui:howCode a c:Code ; c:block true ; c:language "turtle" ; c:label """ui:signinCode a c:CodeInput ;
+    c:label "Sign-in code" ;
+    c:length 6 ;
+    c:groupSize 3 ;
+    c:cellStyle c:Filled .""" .
+ui:howLive a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:signinCode ui:howNote ) .
+ui:signinCode a c:CodeInput ; c:label "Sign-in code" ; c:length 6 ; c:groupSize 3 ; c:cellStyle c:Filled .
+ui:howNote a c:Text ; sty:textStyle sty:Caption ;
+    c:label "Type or paste a code. Each keystroke is an RDF event; a reaction keeps the digits and writes c:value; the rules redraw the cells. Open the tools (⌘.) and hover the field to see its rules and provenance." .
+
+ui:homeFooter a c:Text ; sty:textStyle sty:Caption ; pos:textAlign pos:TextCenter ; c:children ( "Semblance · an experiment in ontologically defined interfaces · " ui:homeSource ) .
+ui:homeSource a c:Link ; c:label "README" ; c:href "./README.md" .

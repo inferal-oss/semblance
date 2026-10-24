@@ -263,8 +263,7 @@ describe('⌘Z: inspect here', () => {
     press({})
     expect(h.value(UI + 'inspectorMode')).toBe(UI + 'Paused')
     expect(h.value(UI + 'inspecting')).toBe(node)
-    const win = h.document.querySelector('[data-sem-c=window]')!
-    expect(win.querySelector('.sem-window-bar strong')!.textContent).toBe('Inspector')
+    const win = [...h.document.querySelectorAll('[data-sem-c=window]')].find((w) => w.querySelector('.sem-window-bar strong')!.textContent === 'Inspector')!
     // Not enough room after the pointer (500 < 520 + 40): it opens before it.
     expect(win.getAttribute('style')).toContain('left: 356px; top: 144px')
     // In a text field ⌘Z is undo, not this.
