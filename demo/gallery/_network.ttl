@@ -27,7 +27,7 @@
 # a few sample entries from "a previous visit" (members of the same stream, written here).
 # Everything it remembers - filters, sort, selection, column widths and visibility, the split,
 # the panel's height and whether it is folded, whether it follows the newest entry - is graph
-# state on these nodes. The root is ui:networkExample.
+# state on these nodes. The root is ui:networkExample; ui:networkExample-how explains it.
 # =================================================================================================
 
 ui:networkExample a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
@@ -39,6 +39,78 @@ ui:net-intro a c:Text ;
 ui:net-stage a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:net-page ui:net-inspector ) .
 ui:net-page a c:Text ; sty:textStyle sty:Caption ;
     c:label "The page being inspected is above; the inspector is docked to its bottom edge. Fold it by its title, resize it by its top edge." .
+
+# --- how it works (shown under the example) ---------------------------------------------------------
+
+ui:networkExample-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:nh-title ui:nh-capture ui:nh-grid ui:nh-window ui:nh-details ui:nh-chrome ui:nh-state ui:nh-cost ) .
+ui:nh-title a c:Heading ; c:label "How it works" ; c:level 3 .
+
+ui:nh-capture a c:Text ;
+    c:children ( "The capture effect (src/network.ts) wraps fetch and WebSocket and records application events and spans. Each becomes a member of the LDES stream " ui:nh-c-capture
+                 " in the network graph: an " ui:nh-c-exchange " with its " ui:nh-c-resp ", a connection and its frames, an event or a span, with " ui:nh-c-started
+                 " and, once done, " ui:nh-c-ended ". The stream's retention policy bounds it. The samples further down this file are members of the same stream, written as data." ) .
+ui:nh-c-capture a c:Code ; c:label "net:Capture" .
+ui:nh-c-exchange a c:Code ; c:label "net:Exchange" .
+ui:nh-c-resp a c:Code ; c:label "http:resp" .
+ui:nh-c-started a c:Code ; c:label "net:startedAt" .
+ui:nh-c-ended a c:Code ; c:label "net:endedAt" .
+
+ui:nh-grid a c:Text ;
+    c:children ( "The list is a " ui:nh-c-grid " whose " ui:nh-c-collection " is that stream. Its columns are " ui:nh-c-column
+                 " nodes saying what each cell shows and how: the status as a badge in the status's tone, the size in bytes, and a " ui:nh-c-bars
+                 " waterfall whose bars sit on the scale of the rows shown, coloured by each kind's " ui:nh-c-swatch ". The header's " ui:nh-c-axis " ticks the same scale." ) .
+ui:nh-c-grid a c:Code ; c:label "c:DataGrid" .
+ui:nh-c-collection a c:Code ; c:label "c:collection" .
+ui:nh-c-column a c:Code ; c:label "c:GridColumn" .
+ui:nh-c-bars a c:Code ; c:label "c:TimeBarCell" .
+ui:nh-c-swatch a c:Code ; c:label "c:swatch" .
+ui:nh-c-axis a c:Code ; c:label "c:TimeAxis" .
+
+ui:nh-window a c:Text ;
+    c:children ( "Filters are nodes the grid is " ui:nh-c-filtered " (a " ui:nh-c-text ", two of " ui:nh-c-value " and a " ui:nh-c-flag
+                 "), edited by ordinary controls in a " ui:nh-c-toolbar " (a search field, two choices, a switch). The grid's window rule takes the members that pass them in capture order, follows the newest (or stays pinned at " ui:nh-c-end
+                 " once a row is selected), sorts them by the header clicked, and mints one row per member." ) .
+ui:nh-c-filtered a c:Code ; c:label "c:filteredBy" .
+ui:nh-c-text a c:Code ; c:label "c:TextFilter" .
+ui:nh-c-value a c:Code ; c:label "c:ValueFilter" .
+ui:nh-c-flag a c:Code ; c:label "c:FlagFilter" .
+ui:nh-c-toolbar a c:Code ; c:label "c:Toolbar" .
+ui:nh-c-end a c:Code ; c:label "c:windowEnd" .
+
+ui:nh-details a c:Text ;
+    c:children ( "Selecting a row writes the grid's " ui:nh-c-selected ". The details beside it, in a " ui:nh-c-split ", are bound to it with " ui:nh-c-bind
+                 ": description lists of the entry, of its response (one " ui:nh-c-via " hop) and of its headers, and body viewers that show a payload as text, hex or a JSON tree. Deselect is a button that is also a " ui:nh-c-unsetter "." ) .
+ui:nh-c-selected a c:Code ; c:label "c:selectedRow" .
+ui:nh-c-split a c:Code ; c:label "c:SplitView" .
+ui:nh-c-bind a c:Code ; c:label "c:bindFrom / c:bindProperty" .
+ui:nh-c-via a c:Code ; c:label "c:via" .
+ui:nh-c-unsetter a c:Code ; c:label "c:Unsetter" .
+
+ui:nh-chrome a c:Text ;
+    c:children ( "Around them, a " ui:nh-c-dock " docked to the stage's bottom edge holds a " ui:nh-c-count " of the stream, the display preferences (a " ui:nh-c-chips
+                 " over the grid's " ui:nh-c-shows " in a popover), a " ui:nh-c-live " over " ui:nh-c-recording " - which the capture effect reads - and a " ui:nh-c-legend " of the kinds." ) .
+ui:nh-c-dock a c:Code ; c:label "c:DockPanel" .
+ui:nh-c-count a c:Code ; c:label "c:CountBadge" .
+ui:nh-c-chips a c:Code ; c:label "c:Chips" .
+ui:nh-c-shows a c:Code ; c:label "c:shows" .
+ui:nh-c-live a c:Code ; c:label "c:LiveIndicator" .
+ui:nh-c-recording a c:Code ; c:label "net:recording" .
+ui:nh-c-legend a c:Code ; c:label "c:Legend" .
+
+ui:nh-state a c:Text ;
+    c:children ( "Every change is a reaction writing graph state: a header writes " ui:nh-c-sort ", a column's edge (dragged, or moved with the arrow keys) its " ui:nh-c-width
+                 ", the divider " ui:nh-c-ratio ", the panel's top edge its " ui:nh-c-height ". Every component has a SPARQL and a function implementation that render the same; switch the store's rule preference to compare them. A " ui:nh-c-policy " remembers the display settings for this tab." ) .
+ui:nh-c-sort a c:Code ; c:label "c:sortColumn" .
+ui:nh-c-width a c:Code ; c:label "c:width" .
+ui:nh-c-ratio a c:Code ; c:label "c:ratio" .
+ui:nh-c-height a c:Code ; c:label "c:height" .
+ui:nh-c-policy a c:Code ; c:label "per:Policy" .
+
+ui:nh-cost a c:Text ;
+    c:children ( "It stays cheap because each part depends only on what it reads. The grid's header never reads the rows; a row reads its member and the shown columns, so a response arriving re-renders that row, selecting re-renders two rows, and resizing a column re-renders its header alone. A new entry costs one window evaluation, bounded by the stream's retention, and one row. Bars and ticks are placed by custom properties (" ui:nh-c-props
+                 "), so a wider scale moves them without re-rendering a row." ) .
+ui:nh-c-props a c:Code ; c:label "--from, --to, --scale-start, --scale-end" .
 
 # --- the panel ---------------------------------------------------------------------------------------
 
