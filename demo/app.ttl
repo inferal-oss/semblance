@@ -164,8 +164,14 @@ ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
 # Inspector: hovering any component writes ui:inspecting (unrecorded hover events);
 # the view is CONSTRUCTs bound to it, and the node is highlighted.
 ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
-ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspector ui:highlight ) .
-ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ) .
+ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspectorMarkup ui:inspector ui:highlight ) .
+ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ui:inspectorStrip ) .
+# The hovered element as the HTML it becomes, its RDF/HTML encoding taken off; while it is shown,
+# the RDF/HTML section of the inspector steps aside (ui:qElement).
+ui:inspectorStrip a c:Checkbox ; c:controls ui:inspectorMarkup ; c:property c:active ;
+    c:label "Show as HTML" , "Показати як HTML"@uk , "Als HTML zeigen"@de , "عرض كـ HTML"@ar .
+ui:inspectorMarkup a c:ElementMarkup ; c:active false ; c:bindFrom ui:app ; c:bindProperty ui:inspecting ;
+    c:emptyText "Hover any element on the page to see the HTML it becomes." .
 ui:pauseHint a c:Text ; c:inline true ; sty:textStyle sty:Caption ;
     c:children ( ui:hereKey ui:hereKeyZ " here · " ui:pauseKey " pauses · " ui:offKey ui:offKeyZ " turns off" ) .
 ui:hereKey a c:Kbd ; c:label "⌘" .
@@ -250,6 +256,7 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ui:Off .
 ui:inspectingChip a c:Metrics ; c:of ui:app ; c:fields ( ui:inspecting ) .
 ui:inspector a c:QueryView ;
     c:queries ( ui:qElement ui:qProvenance ui:qGeneratedBy ui:qInfluencedBy ui:qDerivedFrom ) ;
+    c:of ui:inspectorMarkup ;
     c:bindVariable "node" ; c:bindFrom ui:app ; c:bindProperty ui:inspecting ;
     c:baseIri "https://example.org/todo" ;
     c:emptyText "With the inspector Live, hover any element on the page to see its RDF/HTML, the PROV-O activity and rule that generated it, the layers that decorated it, and the input it was derived from." .
@@ -258,6 +265,7 @@ ui:highlight a c:Highlight ; c:bindFrom ui:app ; c:bindProperty ui:inspecting .
 ui:qElement a sem:Query ; rdfs:label "rendered element (RDF/HTML)" ;
     sem:construct """CONSTRUCT { $node ?p ?o . ?attr ?ap ?ao }
 WHERE {
+  FILTER NOT EXISTS { ui:inspectorMarkup c:active true }
   { $node ?p ?o FILTER(!STRSTARTS(STR(?p), STR(prov:))) }
   UNION
   { $node rdfhtml:attribute ?attr . ?attr ?ap ?ao }
@@ -475,7 +483,7 @@ CONSTRUCT {
   ui:inspectorTab c:detached ?detached . ui:views c:selected ?tab .
   ui:tools c:open ?open ; c:attachedTo ?edge ; c:x ?tx ; c:y ?ty ; c:width ?tw ; c:height ?th ; c:windowState ?ts .
   ?window c:x ?x ; c:y ?y ; c:width ?w ; c:height ?h ; c:windowState ?state .
-  ui:app ui:inspectorMode ?mode ; ui:inspecting ?node .
+  ui:app ui:inspectorMode ?mode ; ui:inspecting ?node . ui:inspectorMarkup c:active ?markup .
 }
 WHERE {
   { ui:inspectorTab c:detached ?detached }
@@ -484,6 +492,7 @@ WHERE {
           UNION { ui:tools c:width ?tw } UNION { ui:tools c:height ?th } UNION { ui:tools c:windowState ?ts } }
   UNION { ?window prov:wasDerivedFrom ui:inspectorTab . { ?window c:x ?x } UNION { ?window c:y ?y } UNION { ?window c:width ?w } UNION { ?window c:height ?h } UNION { ?window c:windowState ?state } }
   UNION { ui:app ui:inspectorMode ?mode }
+  UNION { ui:inspectorMarkup c:active ?markup }
   UNION { ui:app ui:inspectorMode ui:Paused ; ui:inspecting ?node }
 }""" .
 

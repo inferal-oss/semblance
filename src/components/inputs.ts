@@ -110,7 +110,8 @@ const textArea: FnRule = (ctx, focus) => {
 const checkbox: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const label = text(ctx, focus, C.label)
-  const checked = isTrue(ctx.object(focus, C_CHECKED))
+  const [node, p] = switchState(ctx, focus)
+  const checked = isTrue(ctx.object(node, p))
   if (ctx.modality === MOD.Text) {
     const line = o.el('line', 'Div', {}, [o.text('line-text', `${checked ? '[x]' : '[ ]'}${label !== undefined ? ' ' + label : ''}`)])
     o.renders(o.el('root', 'Div', {}, [line, ...describeText(ctx, o, focus)]))
@@ -387,9 +388,10 @@ const checkboxChange: ReactionFn = ({ runtime, event, target, match, object }) =
   const f = runtime.store.factory
   const checked = object(event, BEH.checked)
   if (!checked) return none()
+  const [node, p] = switchState({ object }, target)
   return {
-    remove: [...match(target, C_CHECKED, null), ...match(target, C.error, null)],
-    add: [f.quad(target, f.namedNode(C_CHECKED), f.literal(checked.value, f.namedNode(XSD_BOOLEAN)))],
+    remove: [...match(node, p, null), ...match(target, C.error, null)],
+    add: [f.quad(node as NamedNode, f.namedNode(p), f.literal(checked.value, f.namedNode(XSD_BOOLEAN)))],
   }
 }
 

@@ -156,8 +156,9 @@ c:TextAreaInput a beh:Reaction ;
 
 c:Checkbox a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """A labelled check box: c:label, c:checked, c:help, c:error, c:disabled. Changing it sets
-c:checked from the event's beh:checked. Its checked color is its sty:tone (accent by default)."""@en ;
+    rdfs:comment """A labelled check box: c:label, c:help, c:error, c:disabled. Its state is its own c:checked
+or, like c:ToggleSwitch, the boolean c:property of the node it c:controls; changing it sets that
+state from the event's beh:checked. Its checked color is its sty:tone (accent by default)."""@en ;
     sem:slug "checkbox" ;
     c:labelPart "input" .
 c:CheckboxRendering a sem:Rendering ; sem:targets c:Checkbox ; sem:stratum 0 .
@@ -165,6 +166,7 @@ c:CheckboxRendering-fn a sem:Rule ; sem:implements c:CheckboxRendering ; sem:fun
 c:CheckboxRendering-sparql a sem:Rule ;
     sem:implements c:CheckboxRendering ;
     sem:modality mod:Screen ;
+    sem:follows c:controls ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?row, ?help, ?error .
@@ -187,7 +189,12 @@ WHERE {
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
-  BIND(IF(EXISTS { $this c:checked ?c FILTER(STR(?c) = "true") }, "", ?none) AS ?checked)
+  # On: the controlled property (c:controls, c:property), else its own c:checked.
+  OPTIONAL { $this c:controls ?stateNode0 ; c:property ?stateProperty0 }
+  BIND(COALESCE(?stateNode0, $this) AS ?stateNode)
+  BIND(COALESCE(?stateProperty0, c:checked) AS ?stateProperty)
+  BIND(EXISTS { ?stateNode ?stateProperty ?c FILTER(STR(?c) = "true") } AS ?on)
+  BIND(IF(?on, "", ?none) AS ?checked)
   BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
@@ -215,6 +222,7 @@ WHERE {
 c:CheckboxRendering-sparql-text a sem:Rule ;
     sem:implements c:CheckboxRendering ;
     sem:modality mod:Text ;
+    sem:follows c:controls ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line, ?help, ?error .
@@ -230,7 +238,12 @@ WHERE {
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
-  BIND(CONCAT(IF(EXISTS { $this c:checked ?c FILTER(STR(?c) = "true") }, "[x]", "[ ]"), COALESCE(CONCAT(" ", ?labelData), "")) AS ?lineData)
+  # On: the controlled property (c:controls, c:property), else its own c:checked.
+  OPTIONAL { $this c:controls ?stateNode0 ; c:property ?stateProperty0 }
+  BIND(COALESCE(?stateNode0, $this) AS ?stateNode)
+  BIND(COALESCE(?stateProperty0, c:checked) AS ?stateProperty)
+  BIND(EXISTS { ?stateNode ?stateProperty ?c FILTER(STR(?c) = "true") } AS ?on)
+  BIND(CONCAT(IF(?on, "[x]", "[ ]"), COALESCE(CONCAT(" ", ?labelData), "")) AS ?lineData)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
@@ -247,8 +260,21 @@ WHERE {
 c:CheckboxChange a beh:Reaction ;
     beh:when beh:Change ;
     beh:sourceClass c:Checkbox ;
-    beh:deletes """CONSTRUCT { $this c:checked ?old ; c:error ?error } WHERE { { $this c:checked ?old } UNION { $this c:error ?error } }""" ;
-    beh:inserts """CONSTRUCT { $this c:checked ?checked } WHERE { $event beh:checked ?checked }""" ;
+    beh:deletes """
+CONSTRUCT { ?node ?p ?old . $this c:error ?error }
+WHERE {
+  { $this c:controls ?node ; c:property ?p . ?node ?p ?old }
+  UNION { $this c:checked ?old BIND($this AS ?node) BIND(c:checked AS ?p) FILTER NOT EXISTS { $this c:controls ?n ; c:property ?q } }
+  UNION { $this c:error ?error }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?node ?p ?checked }
+WHERE {
+  $event beh:checked ?checked .
+  OPTIONAL { $this c:controls ?controlled ; c:property ?controlledProperty }
+  BIND(COALESCE(?controlled, $this) AS ?node)
+  BIND(COALESCE(?controlledProperty, c:checked) AS ?p)
+}""" ;
     sem:function "inputs:checkbox-change" .
 
 # --- RadioGroup ------------------------------------------------------------------------------------

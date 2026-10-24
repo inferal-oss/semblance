@@ -25,6 +25,36 @@ function node(index: HtmlIndex, k: string): string {
   return `${open}${inner}</${tag}>`
 }
 
+/**
+ * The HTML of a node's subtree, one element per line and indented by depth (a run of text and
+ * inline content stays on its element's line when it is short). For reading, not for parsing back.
+ */
+export function toIndentedHTML(index: HtmlIndex, focus: string): string {
+  const root = index.resolve(focus)
+  return root ? indented(index, root, 0).join('\n') : ''
+}
+
+function indented(index: HtmlIndex, k: string, depth: number): string[] {
+  const pad = '  '.repeat(depth)
+  const n = index.nodes.get(k)!
+  if (n.cls === 'Text') {
+    const text = (n.data ?? '').trim()
+    return text ? [pad + escapeText(text)] : []
+  }
+  const tag = index.tagName(k) ?? 'sem-unknown'
+  const attrs = index.attributes(k).map(([name, v]) => (v === '' ? ` ${name}` : ` ${name}="${escapeAttr(v)}"`))
+  const open = `<${tag}${attrs.join('')}>`
+  if (index.isVoid(k)) return [pad + open]
+  const children = index
+    .childrenOf(k)
+    .map((slot) => index.resolve(slot))
+    .filter((r): r is string => r !== undefined)
+  if (!children.length) return [`${pad}${open}</${tag}>`]
+  const flat = children.map((c) => node(index, c)).join('')
+  if (children.every((c) => index.nodes.get(c)!.cls === 'Text') && pad.length + open.length + flat.length < 100) return [`${pad}${open}${flat}</${tag}>`]
+  return [pad + open, ...children.flatMap((c) => indented(index, c, depth + 1)), `${pad}</${tag}>`]
+}
+
 const BLOCK = new Set(['div', 'p', 'ul', 'ol', 'li', 'pre', 'section', 'header', 'footer', 'main', 'form'])
 
 /** Plain-text reading of a (typically text-modality) projection: blocks become lines. */

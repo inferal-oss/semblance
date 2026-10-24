@@ -407,6 +407,25 @@ c:QueryViewRendering-fn a sem:Rule ; sem:implements c:QueryViewRendering ; sem:f
 # A rule may show the queries it runs on its back side (c:Flippable lists them).
 c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or view whose result it shows."@en .
 
+# --- ElementMarkup ---------------------------------------------------------------------------------
+
+c:ElementMarkup a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """The rendered element held in c:bindProperty of c:bindFrom, as the HTML it becomes: its
+subtree with the RDF/HTML encoding taken off - no attribute nodes, no ordering triples, nested
+components resolved - one element per line. Shown while c:active is true (a check box can drive it:
+c:controls it, c:property c:active); otherwise it renders an empty, hidden root."""@en ;
+    sem:slug "element-markup" .
+c:active a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether a component that can be switched on (c:ElementMarkup) is."@en .
+c:ElementMarkupRendering a sem:Rendering ;
+    sem:targets c:ElementMarkup ;
+    sem:modality mod:Screen ;
+    sem:stratum 40 ;
+    sem:follows c:bindFrom ;
+    sem:functionOnly """It orders each element's children (ord:immediatelyPrecedes, ord:precedes, sem:orderKey) and resolves nested components, as the HTML index does; SPARQL cannot linearize a partial order or serialize a tree in document order.""" .
+c:ElementMarkupRendering-fn a sem:Rule ; sem:implements c:ElementMarkupRendering ; sem:function "element-markup" .
+
 # --- Highlight ------------------------------------------------------------------------------------
 
 c:Highlight a owl:Class ;

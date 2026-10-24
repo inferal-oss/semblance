@@ -3,10 +3,13 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
 import { owningFocus } from '../rdf.ts'
+import { HtmlIndex } from '../render/html-index.ts'
+import { toIndentedHTML } from '../render/serialize.ts'
 import { type TurtleSection, turtleTokens } from '../turtle.ts'
 import { labelOf as textLabelOf, text } from './util.ts'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
+const C_ACTIVE = NS.c + 'active'
 const C_MARK_PATH = NS.c + 'markPath'
 const C_MARK_ECHO = NS.c + 'markEcho'
 const C_MARK_NODE = NS.c + 'markNode'
@@ -254,6 +257,53 @@ const queryview: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** The triples of a rendered element's subtree that the HTML index reads (no provenance, no input). */
+function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
+  const html = (iri: string) => iri.startsWith(H.ns) || iri.startsWith(NS.svg) || iri.startsWith(NS.ord)
+  const keep = (q: Quad) => html(q.predicate.value) || q.predicate.value === SEM.renders || q.predicate.value === SEM.orderKey || q.predicate.value === SEM.slot || (q.predicate.value === RDF_TYPE && html(q.object.value))
+  const out: Quad[] = []
+  const seen = new Set<string>()
+  const queue: Term[] = [start]
+  while (queue.length) {
+    const n = queue.pop()!
+    if (seen.has(n.value)) continue
+    seen.add(n.value)
+    // A child that is a component stands for its rendered root.
+    for (const q of ctx.match(null, SEM.renders, n)) out.push(q), queue.push(q.subject)
+    for (const q of ctx.match(n, null, null)) {
+      if (!keep(q)) continue
+      out.push(q)
+      if ((q.predicate.value === H.hasChild || q.predicate.value === H.attribute) && named(q.object)) queue.push(q.object)
+    }
+  }
+  return out
+}
+
+/** The bound element as HTML, while c:active. */
+const elementMarkup: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  if (str(ctx.object(focus, C_ACTIVE)) !== 'true') {
+    o.renders(o.el('root', 'Div', { hidden: '' }))
+    return o.quads
+  }
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  const node = from && property ? ctx.object(from, property) : undefined
+  const index = new HtmlIndex(() => {})
+  // Without the mark the inspector itself puts on what it inspects (c:Highlight).
+  const quads = named(node) ? renderedSubtree(ctx, node) : []
+  const marks = new Set(quads.filter((q) => q.predicate.value === H.attributeName && q.object.value === 'data-sem-highlighted').map((q) => q.subject.value))
+  index.apply({ add: quads.filter((q) => !marks.has(q.subject.value) && !marks.has(q.object.value)), remove: [] })
+  const markup = named(node) ? toIndentedHTML(index, node.value) : ''
+  if (!markup) {
+    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text(ctx, focus, C.emptyText) ?? 'Nothing selected.')]))
+    return o.quads
+  }
+  const title = o.el('title', 'Span', { class: 'ttl-comment' }, [o.text('title-text', '# the element as HTML\n')])
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }, [title, o.text('markup', markup)]))
+  return o.quads
+}
+
 /** Marks the selected node; owns only the attribute it adds. */
 const highlight: FnRule = (ctx, focus) => {
   const from = ctx.object(focus, C.bindFrom)
@@ -368,6 +418,7 @@ export const viewFunctions: Record<string, FnRule> = {
   card,
   appbar,
   graphmark,
+  'element-markup': elementMarkup,
   metrics,
   toggle,
   queryview,
