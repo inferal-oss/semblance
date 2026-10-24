@@ -100,15 +100,41 @@
   (i32.const 0))
 
 ;; The numeric type of term id (0: not a valid number), its value in $ni/$nsc/$nf.
+;; A literal's parse is kept in a table its record (+24) points into (index + 1).
+(global $ncache (mut i32) (i32.const 0))     ;; 24 bytes each: type, scale, i64 value, f64 value
+(global $ncache_n (mut i32) (i32.const 0))
+(global $ncache_cap (mut i32) (i32.const 0))
+
 (func $num (param $id i32) (result i32)
-  (local $c i32) (local $t i32)
+  (local $c i32) (local $t i32) (local $r i32) (local $e i32)
   (if (i32.ne (call $kind (local.get $id)) (i32.const 3)) (then (return (i32.const 0))))
+  (local.set $r (call $rec (local.get $id)))
+  (if (local.tee $e (i32.load offset=24 (local.get $r))) (then
+    (local.set $e (i32.add (global.get $ncache) (i32.mul (i32.sub (local.get $e) (i32.const 1)) (i32.const 24))))
+    (global.set $nsc (i32.load offset=4 (local.get $e)))
+    (global.set $ni (i64.load offset=8 (local.get $e)))
+    (global.set $nf (f64.load offset=16 (local.get $e)))
+    (return (i32.load (local.get $e)))))
   (local.set $c (call $dtc (call $tdt (local.get $id))))
-  (if (i32.gt_u (i32.sub (local.get $c) (i32.const C_INTEGER)) (i32.const 3)) (then (return (i32.const 0))))
-  (local.set $t (i32.sub (local.get $c) (i32.const 1)))
   (global.set $nsc (i32.const 0))
   (global.set $ni (i64.const 0))
-  (if (i32.eqz (call $parse_num (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $t))) (then (return (i32.const 0))))
+  (if (i32.le_u (i32.sub (local.get $c) (i32.const C_INTEGER)) (i32.const 3)) (then
+    (local.set $t (i32.sub (local.get $c) (i32.const 1)))
+    (if (i32.eqz (call $parse_num (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $t))) (then (local.set $t (i32.const 0))))))
+  (if (i32.eq (global.get $ncache_n) (global.get $ncache_cap)) (then
+    (local.set $c (i32.add (i32.shl (global.get $ncache_cap) (i32.const 1)) (i32.const 64)))
+    (global.set $ncache (if (result i32) (global.get $ncache_cap)
+      (then (call $realloc (global.get $ncache) (i32.mul (global.get $ncache_cap) (i32.const 24)) (i32.mul (local.get $c) (i32.const 24))
+                           (i32.mul (global.get $ncache_cap) (i32.const 24))))
+      (else (call $alloc (i32.mul (local.get $c) (i32.const 24))))))
+    (global.set $ncache_cap (local.get $c))))
+  (local.set $e (i32.add (global.get $ncache) (i32.mul (global.get $ncache_n) (i32.const 24))))
+  (i32.store (local.get $e) (local.get $t))
+  (i32.store offset=4 (local.get $e) (global.get $nsc))
+  (i64.store offset=8 (local.get $e) (global.get $ni))
+  (f64.store offset=16 (local.get $e) (global.get $nf))
+  (global.set $ncache_n (i32.add (global.get $ncache_n) (i32.const 1)))
+  (i32.store offset=24 (local.get $r) (global.get $ncache_n))
   (local.get $t))
 
 ;; a <=> b for numbers: -1, 0, 1, or 2 (not comparable, NaN).

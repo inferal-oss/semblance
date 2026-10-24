@@ -96,6 +96,12 @@
       (call $v_push1 (local.get $out) (local.get $id))))
     (local.set $id (i32.add (local.get $id) (i32.const 1))) (br $terms))))
   (call $free (global.get $marks) (global.get $next_id))
+  ;; parsed numbers: start over
+  (local.set $id (i32.const 5))
+  (loop $nums (if (i32.lt_u (local.get $id) (global.get $next_id)) (then
+    (if (i32.eq (call $kind (local.get $id)) (i32.const 3)) (then (i32.store offset=24 (call $rec (local.get $id)) (i32.const 0))))
+    (local.set $id (i32.add (local.get $id) (i32.const 1))) (br $nums))))
+  (global.set $ncache_n (i32.const 0))
   ;; caches of term ids
   (local.set $n (i32.load offset=4 (local.get $out)))
   (if (local.get $n) (then

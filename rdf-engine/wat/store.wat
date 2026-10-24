@@ -49,11 +49,26 @@
           (br $probe))))))
   (local.get $slot))
 
-(func $qset_grow
+;; Room for n quads in all: the table and the set (at most half full), grown
+;; once rather than doubling along the way.
+(func $quads_reserve (param $n i32)
+  (local $cap i32)
+  (if (i32.gt_u (local.get $n) (global.get $qcap)) (then
+    (local.set $cap (global.get $qcap))
+    (loop $double (if (i32.gt_u (local.get $n) (local.get $cap)) (then (local.set $cap (i32.shl (local.get $cap) (i32.const 1))) (br $double))))
+    (global.set $quads (call $realloc (global.get $quads) (i32.shl (global.get $qcap) (i32.const 5))
+      (i32.shl (local.get $cap) (i32.const 5)) (i32.shl (global.get $qn) (i32.const 5))))
+    (global.set $qcap (local.get $cap))))
+  (local.set $cap (global.get $qscap))
+  (loop $double (if (i32.gt_u (i32.shl (local.get $n) (i32.const 1)) (local.get $cap)) (then (local.set $cap (i32.shl (local.get $cap) (i32.const 1))) (br $double))))
+  (if (i32.gt_u (local.get $cap) (global.get $qscap)) (then (call $qset_grow (local.get $cap)))))
+
+;; Rehash the set into cap slots.
+(func $qset_grow (param $cap i32)
   (local $old i32) (local $n i32) (local $i i32) (local $v i32) (local $q i32)
   (local.set $old (global.get $qset))
   (local.set $n (global.get $qscap))
-  (global.set $qscap (i32.shl (local.get $n) (i32.const 1)))
+  (global.set $qscap (local.get $cap))
   (global.set $qset (call $alloc0 (i32.shl (global.get $qscap) (i32.const 2))))
   (loop $each
     (if (i32.lt_u (local.get $i) (local.get $n)) (then
@@ -142,7 +157,7 @@
   (i32.store offset=28 (local.get $r) (call $list_push (i32.add (call $post_of (local.get $g)) (i32.const 12)) (local.get $q)))
   (i32.store (local.get $slot) (i32.add (local.get $q) (i32.const 1)))
   (global.set $qn (i32.add (local.get $q) (i32.const 1)))
-  (if (i32.gt_u (i32.shl (global.get $qn) (i32.const 1)) (global.get $qscap)) (then (call $qset_grow)))
+  (if (i32.gt_u (i32.shl (global.get $qn) (i32.const 1)) (global.get $qscap)) (then (call $qset_grow (i32.shl (global.get $qscap) (i32.const 1)))))
   (i32.const 1))
 
 (func $remove (param $s i32) (param $p i32) (param $o i32) (param $g i32) (result i32)

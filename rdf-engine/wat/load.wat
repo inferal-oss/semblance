@@ -50,6 +50,7 @@
   (call $smap_clear (global.get $scope))
   (call $smap_clear (global.get $prefixes))
   (if (i32.lt_s (local.get $n) (i32.const 0)) (then (return (i32.const -1))))
+  (call $quads_reserve (i32.add (global.get $qn) (i32.shr_u (global.get $qb_len) (i32.const 4))))
   (local.set $q (global.get $qb))
   (local.set $end (i32.add (global.get $qb) (global.get $qb_len)))
   (loop $each

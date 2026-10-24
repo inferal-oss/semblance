@@ -51,7 +51,9 @@
                   (i32.eq (local.get $k) (i32.const P_LATERAL)))
         (then (drop (call $an_group (i32.load offset=4 (local.get $el))))))
       (if (i32.eq (local.get $k) (i32.const P_GRAPH)) (then (drop (call $an_group (i32.load offset=8 (local.get $el))))))
-      (if (i32.eq (local.get $k) (i32.const P_BIND)) (then (call $an_expr (i32.load offset=4 (local.get $el)))))
+      (if (i32.eq (local.get $k) (i32.const P_BIND)) (then
+        (call $an_expr (i32.load offset=4 (local.get $el)))
+        (call $an_bind (local.get $el))))
       (if (i32.eq (local.get $k) (i32.const P_SUB)) (then
         (call $an_query (i32.load offset=4 (local.get $el)))
         (local.set $sub (call $node3 (i32.const N_ITEM) (i32.load offset=4 (local.get $el)) (i32.const 0) (i32.const 0)))
@@ -62,6 +64,43 @@
   (call $an_filters (i32.load offset=8 (local.get $g)))
   (local.get $b))
 
+;; A BIND whose expression depends on its variables alone (no EXISTS, no
+;; RAND, BNODE, UUID): the list of those (+12: count, then slots), so rows
+;; with the same values share one evaluation.
+(func $an_bind (param $el i32)
+  (local $b i32)
+  (local.set $b (call $anew (i32.shl (i32.add (global.get $nvars) (i32.const 1)) (i32.const 2))))
+  (if (call $pure_vars (i32.load offset=4 (local.get $el)) (local.get $b))
+    (then (i32.store offset=12 (local.get $el) (local.get $b)))))
+
+;; Add the variables of e to list b; whether e is a function of them.
+(func $pure_vars (param $e i32) (param $b i32) (result i32)
+  (local $k i32) (local $s i32) (local $i i32) (local $f i32)
+  (local.set $k (i32.load (local.get $e)))
+  (if (i32.eq (local.get $k) (i32.const E_CONST)) (then (return (i32.const 1))))
+  (if (i32.eq (local.get $k) (i32.const E_VAR)) (then
+    (local.set $s (i32.load offset=4 (local.get $e)))
+    (loop $known
+      (if (i32.lt_u (local.get $i) (i32.load (local.get $b))) (then
+        (if (i32.eq (i32.load offset=4 (i32.add (local.get $b) (i32.shl (local.get $i) (i32.const 2)))) (local.get $s)) (then (return (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $known))))
+    (i32.store offset=4 (i32.add (local.get $b) (i32.shl (local.get $i) (i32.const 2))) (local.get $s))
+    (i32.store (local.get $b) (i32.add (local.get $i) (i32.const 1)))
+    (return (i32.const 1))))
+  (if (i32.ne (local.get $k) (i32.const E_CALL)) (then (return (i32.const 0))))
+  (local.set $f (i32.load offset=4 (local.get $e)))
+  (if (i32.or (i32.or (i32.eq (local.get $f) (i32.const F_RAND)) (i32.eq (local.get $f) (i32.const F_BNODE)))
+              (i32.or (i32.eq (local.get $f) (i32.const F_UUID)) (i32.eq (local.get $f) (i32.const F_STRUUID))))
+    (then (return (i32.const 0))))
+  (local.set $e (i32.load offset=8 (local.get $e)))
+  (loop $args
+    (if (local.get $e) (then
+      (if (i32.eqz (call $pure_vars (local.get $e) (local.get $b))) (then (return (i32.const 0))))
+      (local.set $e (i32.load offset=28 (local.get $e)))
+      (br $args))))
+  (i32.const 1))
+
 (func $an_union (param $n i32)
   (if (i32.eq (i32.load (local.get $n)) (i32.const P_UNION))
     (then
@@ -69,10 +108,16 @@
       (call $an_union (i32.load offset=8 (local.get $n))))
     (else (drop (call $an_group (local.get $n))))))
 
+;; Each filter that is a function of its variables gets their list (+8, as
+;; for BIND), so a group can apply it as soon as they are bound.
 (func $an_filters (param $f i32)
+  (local $b i32)
   (loop $each
     (if (local.get $f) (then
       (call $an_expr (i32.load offset=4 (local.get $f)))
+      (local.set $b (call $anew (i32.shl (i32.add (global.get $nvars) (i32.const 1)) (i32.const 2))))
+      (if (call $pure_vars (i32.load offset=4 (local.get $f)) (local.get $b))
+        (then (i32.store offset=8 (local.get $f) (local.get $b))))
       (local.set $f (i32.load offset=28 (local.get $f)))
       (br $each)))))
 

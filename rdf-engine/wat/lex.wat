@@ -538,6 +538,13 @@
       (br_if $done (i32.ge_u (global.get $p) (global.get $end)))
       (local.set $c (i32.load8_u (global.get $p)))
       (block $char
+        ;; fast path: ASCII letters, digits, '_' and (not first) '-'
+        (if (i32.or (i32.or (call $is_alpha (local.get $c)) (call $is_digit (local.get $c)))
+                    (i32.or (i32.eq (local.get $c) (i32.const '_')) (i32.and (i32.eq (local.get $c) (i32.const '-')) (i32.eqz (local.get $first))))) (then
+          (i32.store8 (local.get $w) (local.get $c))
+          (local.set $w (i32.add (local.get $w) (i32.const 1)))
+          (call $advance (i32.const 1))
+          (br $char)))
         (if (i32.eq (local.get $c) (i32.const '%')) (then
           (if (i32.or (i32.lt_s (call $hexval (call $peek_at (i32.const 1))) (i32.const 0))
                       (i32.lt_s (call $hexval (call $peek_at (i32.const 2))) (i32.const 0)))

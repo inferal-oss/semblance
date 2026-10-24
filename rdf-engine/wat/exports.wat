@@ -118,6 +118,7 @@
       (if (i32.eqz (call $kind (i32.load (local.get $q)))) (then (return (call $fail (@str "invalid argument")))))
       (local.set $q (i32.add (local.get $q) (i32.const 4)))
       (br $check))))
+  (call $quads_reserve (i32.add (global.get $qn) (local.get $adds)))
   (local.set $q (global.get $in))
   (loop $each
     (if (i32.lt_u (local.get $q) (local.get $end)) (then

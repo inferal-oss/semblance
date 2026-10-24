@@ -7,7 +7,7 @@
 ;;   +12 b: value len  (triple: predicate)
 ;;   +16 c: datatype   (triple: object)
 ;;   +20 language length; the tag is stored lowercased right after the value
-;;   +24 datatype class cache (expr.wat)
+;;   +24 an IRI: its datatype class (expr.wat); a literal: its parsed number (num.wat)
 ;;   +28 next freed id; for a live IRI or literal, the id of its STR() (or 0)
 ;; Value and tag share one block of value_len + lang_len bytes.
 ;;
