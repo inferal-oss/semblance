@@ -1,0 +1,128 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ss: <https://semblance.dev/demo/sheet#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# A spreadsheet whose cells are resources and whose formulas are queries.
+#
+# Each cell is a c:SheetCell at a row and a column. A number cell holds its c:value; a formula
+# cell names a SELECT (c:valueQuery) and the cells it reads (c:dataset). Nothing here recomputes
+# anything: the formula layer runs a cell's query when a cell it reads changes - and the cells
+# that read it follow, and so on - so the dependency graph is the data's own. Select a cell to
+# see its formula and arrows to and from the cells it depends on; change a number to see which
+# formulas re-ran (and only those), counted under the sheet.
+# =================================================================================================
+
+ui:ex-sheet-prefixes sh:declare [ sh:prefix "ss" ; sh:namespace "https://semblance.dev/demo/sheet#"^^xsd:anyURI ] .
+
+# --- the formulas: two queries over a cell's inputs ---------------------------------------------------
+# $this is the cell asking; its inputs are its c:dataset, which is also what the layer follows.
+
+ss:Sum a sem:View ; rdfs:label "the sum of the inputs" ;
+    sem:select """SELECT (SUM(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
+ss:Product a sem:View ; rdfs:label "the product of two inputs" ;
+    sem:select """
+SELECT ?value WHERE {
+  $this c:dataset ?x , ?y FILTER(STR(?x) < STR(?y))
+  ?x c:value ?a . ?y c:value ?b
+  BIND(xsd:decimal(?a) * xsd:decimal(?b) AS ?value)
+}""" .
+
+# --- the cells ---------------------------------------------------------------------------------------
+# A small order: items, their quantities and prices, line totals, a subtotal, tax and a total.
+
+ss:A1 a c:SheetCell ; c:row 1 ; c:column 1 ; c:value "Item" .
+ss:B1 a c:SheetCell ; c:row 1 ; c:column 2 ; c:value "Qty" .
+ss:C1 a c:SheetCell ; c:row 1 ; c:column 3 ; c:value "Price" .
+ss:D1 a c:SheetCell ; c:row 1 ; c:column 4 ; c:value "Total" .
+ss:A2 a c:SheetCell ; c:row 2 ; c:column 1 ; c:value "Kettle" .
+ss:B2 a c:SheetCell ; c:row 2 ; c:column 2 ; c:value "1"^^xsd:decimal .
+ss:C2 a c:SheetCell ; c:row 2 ; c:column 3 ; c:value "34.00"^^xsd:decimal .
+ss:D2 a c:SheetCell ; c:row 2 ; c:column 4 ;
+    c:valueQuery ss:Product ; c:dataset ss:B2 , ss:C2 ; c:formulaText "=B2*C2" .
+ss:A3 a c:SheetCell ; c:row 3 ; c:column 1 ; c:value "Mugs" .
+ss:B3 a c:SheetCell ; c:row 3 ; c:column 2 ; c:value "4"^^xsd:decimal .
+ss:C3 a c:SheetCell ; c:row 3 ; c:column 3 ; c:value "12.50"^^xsd:decimal .
+ss:D3 a c:SheetCell ; c:row 3 ; c:column 4 ;
+    c:valueQuery ss:Product ; c:dataset ss:B3 , ss:C3 ; c:formulaText "=B3*C3" .
+ss:A4 a c:SheetCell ; c:row 4 ; c:column 1 ; c:value "Beans" .
+ss:B4 a c:SheetCell ; c:row 4 ; c:column 2 ; c:value "3"^^xsd:decimal .
+ss:C4 a c:SheetCell ; c:row 4 ; c:column 3 ; c:value "9.50"^^xsd:decimal .
+ss:D4 a c:SheetCell ; c:row 4 ; c:column 4 ;
+    c:valueQuery ss:Product ; c:dataset ss:B4 , ss:C4 ; c:formulaText "=B4*C4" .
+ss:A5 a c:SheetCell ; c:row 5 ; c:column 1 ; c:value "Filters" .
+ss:B5 a c:SheetCell ; c:row 5 ; c:column 2 ; c:value "2"^^xsd:decimal .
+ss:C5 a c:SheetCell ; c:row 5 ; c:column 3 ; c:value "4.00"^^xsd:decimal .
+ss:D5 a c:SheetCell ; c:row 5 ; c:column 4 ;
+    c:valueQuery ss:Product ; c:dataset ss:B5 , ss:C5 ; c:formulaText "=B5*C5" .
+ss:A6 a c:SheetCell ; c:row 6 ; c:column 1 ; c:value "Subtotal" .
+ss:B6 a c:SheetCell ; c:row 6 ; c:column 2 ;
+    c:valueQuery ss:Sum ; c:dataset ss:B2 , ss:B3 , ss:B4 , ss:B5 ; c:formulaText "=SUM(B2:B5)" .
+ss:D6 a c:SheetCell ; c:row 6 ; c:column 4 ;
+    c:valueQuery ss:Sum ; c:dataset ss:D2 , ss:D3 , ss:D4 , ss:D5 ; c:formulaText "=SUM(D2:D5)" .
+ss:A7 a c:SheetCell ; c:row 7 ; c:column 1 ; c:value "Tax rate" .
+ss:C7 a c:SheetCell ; c:row 7 ; c:column 3 ; c:value "0.08"^^xsd:decimal .
+ss:D7 a c:SheetCell ; c:row 7 ; c:column 4 ;
+    c:valueQuery ss:Product ; c:dataset ss:D6 , ss:C7 ; c:formulaText "=D6*C7" .
+ss:A8 a c:SheetCell ; c:row 8 ; c:column 1 ; c:value "Total" .
+ss:D8 a c:SheetCell ; c:row 8 ; c:column 4 ;
+    c:valueQuery ss:Sum ; c:dataset ss:D6 , ss:D7 ; c:formulaText "=D6+D7" .
+
+# --- the sheet ---------------------------------------------------------------------------------------
+
+ss:order a c:Sheet ; c:label "Order" ; c:columns 4 ; c:traceRecalculation true ; c:selectedCell ss:D6 ;
+    c:cell ss:A1 , ss:B1 , ss:C1 , ss:D1 , ss:A2 , ss:B2 , ss:C2 , ss:D2 , ss:A3 , ss:B3 , ss:C3 , ss:D3 , ss:A4 , ss:B4 , ss:C4 , ss:D4 , ss:A5 , ss:B5 , ss:C5 , ss:D5 , ss:A6 , ss:B6 , ss:D6 , ss:A7 , ss:C7 , ss:D7 , ss:A8 , ss:D8 .
+
+ui:ex-sheet a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-sheet-intro ui:ex-sheet-card ) .
+ui:ex-sheet-intro a c:Text ;
+    c:label "A spreadsheet in the graph: cells are resources, formulas are queries over the cells they read. Change a quantity or a price - the formulas that read it recalculate, and only those, as the line under the sheet counts. Click a cell to see what it reads and what reads it." .
+ui:ex-sheet-card a c:Card ; c:label "Order" ; c:badge "8 formulas" ; c:content ss:order .
+
+# --- how it works -----------------------------------------------------------------------------------
+
+ui:ex-sheet-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-sheet-w1 ui:ex-sheet-w2 ui:ex-sheet-w3 ui:ex-sheet-w4 ui:ex-sheet-w5 ui:ex-sheet-w6 ) .
+
+ui:ex-sheet-w1 a c:WalkthroughStep ; rdfs:label "Cells are resources" ;
+    c:children ( ui:ex-sheet-m-order " is a " ui:ex-sheet-m-Sheet " that places its cells: each is a " ui:ex-sheet-m-SheetCell " with a row and a column - " ui:ex-sheet-m-c3 ", the mugs' price, is row 3, column 3. A cell like it holds a number (c:value, an xsd:decimal), and editing it is " ui:ex-sheet-m-edit ": one triple, typed as a number when it reads as one." ) .
+ui:ex-sheet-w2 a c:WalkthroughStep ; rdfs:label "Formulas are queries" ;
+    c:children ( ui:ex-sheet-m-d3 ", the mugs' line total, holds no value of its own. It names a query, " ui:ex-sheet-m-product " (its " ui:ex-sheet-m-valueQuery "), and the cells it reads, " ui:ex-sheet-m-b3 " and " ui:ex-sheet-m-c3b " (its " ui:ex-sheet-m-dataset "). The query is a SELECT over those inputs - here their product; " ui:ex-sheet-m-sum " adds them up. \"=B3*C3\" is only how it reads for people." ) .
+ui:ex-sheet-w3 a c:WalkthroughStep ; rdfs:label "The graph recomputes, through the graph" ;
+    c:children ( "The formula layer, " ui:ex-sheet-m-Formula ", runs a cell's query and writes the result as its value, and it follows c:dataset: when " ui:ex-sheet-m-c3c " changes, D3 runs again; D3's new value is a change " ui:ex-sheet-m-d6 " follows, then " ui:ex-sheet-m-d7 " (the tax) and " ui:ex-sheet-m-d8 " (the total). No code orders them: the dependencies are triples, and the engine propagates along them." ) .
+ui:ex-sheet-w4 a c:WalkthroughStep ; rdfs:label "Only what depends on a change runs" ;
+    c:children ( "Change the mugs' price and four formulas run - D3, D6, D7, D8 - not the other four: the kettle's line, the other lines and the item count read nothing that changed. With " ui:ex-sheet-m-trace ", the host hears the engine evaluate formulas and writes them on the sheet (" ui:ex-sheet-m-recalculated "); the cells flash, and the line under the sheet counts them: \"recalculated 4 of 8\"." ) .
+ui:ex-sheet-w5 a c:WalkthroughStep ; rdfs:label "Dependencies, drawn from the data" ;
+    c:children ( "Click a cell: " ui:ex-sheet-m-focus " shows its formula above the grid and draws its dependencies - solid arrows from the cells it reads, dashed ones to the cells that read it - straight from the c:dataset triples. The grid's tracks and the arrows share one geometry, so the rule computes them in whole pixels; nothing is measured in the page." ) .
+ui:ex-sheet-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "An edit is one triple. The formulas that read it run - each one query over its own inputs - and so do the ones that read them; a cell whose value did not change stops the wave. Each cell renders on its own, so only the cells whose value changed render again. Every rule here is SPARQL with a function twin that renders the same." ) .
+
+ui:ex-sheet-m-order a c:Mention ; c:label "ss:order" ; c:mentions ss:order .
+ui:ex-sheet-m-Sheet a c:Mention ; c:label "c:Sheet" ; c:mentions c:Sheet ; c:to c:Sheet .
+ui:ex-sheet-m-SheetCell a c:Mention ; c:label "c:SheetCell" ; c:mentions c:SheetCell ; c:to c:SheetCell .
+ui:ex-sheet-m-c3 a c:Mention ; c:label "ss:C3" ; c:mentions ss:C3 .
+ui:ex-sheet-m-c3b a c:Mention ; c:label "ss:C3" ; c:mentions ss:C3 .
+ui:ex-sheet-m-c3c a c:Mention ; c:label "the price" ; c:mentions ss:C3 .
+ui:ex-sheet-m-b3 a c:Mention ; c:label "ss:B3" ; c:mentions ss:B3 .
+ui:ex-sheet-m-edit a c:Mention ; c:label "c:EditSheetCell" ; c:mentions c:EditSheetCell ; c:to c:EditSheetCell .
+ui:ex-sheet-m-d3 a c:Mention ; c:label "ss:D3" ; c:mentions ss:D3 .
+ui:ex-sheet-m-product a c:Mention ; c:label "ss:Product" ; c:mentions ss:Product .
+ui:ex-sheet-m-sum a c:Mention ; c:label "ss:Sum" ; c:mentions ss:Sum .
+ui:ex-sheet-m-valueQuery a c:Mention ; c:label "c:valueQuery" ; c:mentions c:valueQuery ; c:to c:valueQuery .
+ui:ex-sheet-m-dataset a c:Mention ; c:label "c:dataset" ; c:mentions c:dataset ; c:to c:dataset .
+ui:ex-sheet-m-Formula a c:Mention ; c:label "c:Formula" ; c:mentions c:Formula ; c:to c:Formula .
+ui:ex-sheet-m-d6 a c:Mention ; c:label "the subtotal" ; c:mentions ss:D6 .
+ui:ex-sheet-m-d7 a c:Mention ; c:label "ss:D7" ; c:mentions ss:D7 .
+ui:ex-sheet-m-d8 a c:Mention ; c:label "ss:D8" ; c:mentions ss:D8 .
+ui:ex-sheet-m-trace a c:Mention ; c:label "c:traceRecalculation" ; c:mentions c:traceRecalculation ; c:to c:traceRecalculation .
+ui:ex-sheet-m-recalculated a c:Mention ; c:label "c:recalculated" ; c:mentions c:recalculated ; c:to c:recalculated .
+ui:ex-sheet-m-focus a c:Mention ; c:label "c:SheetFocus" ; c:mentions c:SheetFocus ; c:to c:SheetFocus .

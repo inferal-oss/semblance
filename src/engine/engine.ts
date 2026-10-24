@@ -190,6 +190,13 @@ export class Engine {
     return () => (this.listeners = this.listeners.filter((l) => l !== listener))
   }
 
+  private evaluationListeners: ((slot: string, focus: string) => void)[] = []
+  /** Hear every (rule, focus) evaluation: the rendering it implements (its slot) and the focus. For tracing what a change re-ran. */
+  onEvaluate(listener: (slot: string, focus: string) => void): () => void {
+    this.evaluationListeners.push(listener)
+    return () => (this.evaluationListeners = this.evaluationListeners.filter((l) => l !== listener))
+  }
+
   /** Initial projection of everything already in the store. */
   start(): void {
     this.reindex()
@@ -761,6 +768,7 @@ export class Engine {
   }
 
   private commit(rule: Rule, focus: string, quads: Quad[]) {
+    for (const l of this.evaluationListeners) l(rule.slot, focus)
     const pair = rule.iri + ' ' + focus
     const n = (this.evaluations.get(pair) ?? 0) + 1
     this.evaluations.set(pair, n)

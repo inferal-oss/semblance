@@ -16,6 +16,7 @@ import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
+import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
@@ -267,8 +268,11 @@ runtime.onTimer(() => {
   flush()
   scheduleWarmup()
 })
+// Sheets that trace recalculation are told which formulas each change re-ran.
+const recalculation = new RecalculationTrace(runtime, screen)
 bus.attach(shell, (h: Handled) => {
   syncSettings()
+  recalculation.record()
   flush()
   scheduleWarmup()
   if (h.recorded) {

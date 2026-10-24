@@ -38,6 +38,7 @@ import { viewFunctions } from './views.ts'
 import { functions as walkthroughFunctions } from './walkthrough.ts'
 import { functions as liveFunctions } from './live.ts'
 import { functions as formsFunctions } from './forms.ts'
+import { functions as sheetFunctions } from './sheet.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
 import { labelOf, RDFS_LABEL, text } from './util.ts'
@@ -740,6 +741,7 @@ export const functions: Record<string, FnRule> = {
   ...walkthroughFunctions,
   ...liveFunctions,
   ...formsFunctions,
+  ...sheetFunctions,
   stack,
   'heading:screen': headingScreen,
   'heading:text': headingText,
