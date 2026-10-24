@@ -261,7 +261,7 @@ export class Engine {
 }
 
 export type Solutions =
-  | { form: Form.Select; vars: string[]; rows: Uint32Array }
+  | { form: Form.Select; vars: string[]; count: number; rows: Uint32Array }
   | { form: Form.Construct | Form.Describe; triples: Uint32Array }
   | { form: Form.Ask; value: boolean }
 
@@ -287,7 +287,7 @@ export class Query {
   run(graphs: ArrayLike<number> = []): Solutions {
     const n = this.engine.runQuery(this.handle, graphs)
     if (this.form === Form.Ask) return { form: Form.Ask, value: n === 1 }
-    if (this.form === Form.Select) return { form: Form.Select, vars: this.vars, rows: this.engine.resultIds(n * this.vars.length) }
+    if (this.form === Form.Select) return { form: Form.Select, vars: this.vars, count: n, rows: this.engine.resultIds(n * this.vars.length) }
     return { form: this.form, triples: this.engine.resultIds(n * 3) }
   }
 

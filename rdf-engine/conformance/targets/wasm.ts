@@ -86,7 +86,9 @@ export function wasmTarget(name: string): Target {
         return {
           kind: 'bindings',
           vars: r.vars,
-          rows: rows(e, r.rows, r.vars.length).map((row) => new Map(row.flatMap((t, i) => (t ? [[r.vars[i]!, t] as [string, T]] : [])))),
+          rows: r.vars.length
+            ? rows(e, r.rows, r.vars.length).map((row) => new Map(row.flatMap((t, i) => (t ? [[r.vars[i]!, t] as [string, T]] : []))))
+            : Array.from({ length: r.count }, () => new Map<string, T>()),
         }
       }
       return { kind: 'graph', quads: rows(e, r.triples, 3) }

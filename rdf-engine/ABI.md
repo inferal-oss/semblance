@@ -105,7 +105,7 @@ scoped to the instance: interning the same label twice gives the same node.
 | `query_var_count(h)`, `query_var_ptr(h, i)`, `query_var_len(h, i)` | SELECT projection, in order. |
 | `bind(h, name_len, id) -> 0` | Bind a variable (name without `?`/`$`) to a term until rebound; `id = 0` unbinds. |
 | `bind_values(h, count, name_len) -> 0` | Bind a variable to several terms: the input buffer holds `count` ids, then the name. `run` then returns the results of running once with each term bound (CONSTRUCT and DESCRIBE triples deduplicated across runs). This is how Semblance evaluates one rule for several foci. |
-| `run(h, graphs) -> n` | Evaluate. The input buffer holds `graphs` graph ids whose union is the default graph (`graphs = 0`: the default graph alone); every named graph stays visible to `GRAPH`. `FROM` / `FROM NAMED` in the query take precedence. SELECT writes `n` rows of `query_var_count` ids; CONSTRUCT and DESCRIBE write `n` triples of 3 ids; ASK returns 0 or 1. |
+| `run(h, graphs) -> n` | Evaluate. The input buffer holds `graphs` graph ids whose union is the default graph (`graphs = 0`: the default graph alone); every named graph stays visible to `GRAPH`. `FROM` / `FROM NAMED` in the query take precedence. SELECT returns the number of solutions `n` and writes `n` rows of `query_var_count` ids (none when it projects no variables); CONSTRUCT and DESCRIBE write `n` triples of 3 ids; ASK returns 0 or 1. |
 | `release(h)` | |
 | `parse_update(text_len, base_len) -> 0` | Syntax check only. |
 | `update(text_len, base_len) -> 0` | Parse and apply SPARQL Update. All or nothing. |

@@ -418,8 +418,8 @@ pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
     let mut seen = alloc::collections::BTreeSet::new();
     for c in combos {
         match sparql::execute(&p.query, &mut s.dict, &s.store, &graph_ids, &c) {
-            sparql::Output::Rows(r) => {
-                count += if p.query.select.project.is_empty() { 0 } else { r.len() / p.query.select.project.len() };
+            sparql::Output::Rows(r, n) => {
+                count += n;
                 s.result.extend(r);
             }
             sparql::Output::Triples(t) => {
@@ -438,10 +438,6 @@ pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
         }
     }
     if p.query.form == sparql::Form::Ask {
-        return 0;
-    }
-    // A SELECT projecting nothing still has solutions.
-    if p.query.form == sparql::Form::Select && p.query.select.project.is_empty() {
         return 0;
     }
     count as i32

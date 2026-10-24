@@ -278,6 +278,7 @@ export function engineStore(module: WebAssembly.Module, kind: string): GraphStor
       if (r.form !== Form.Select) throw new Error('not a SELECT query')
       const out: Map<string, Term>[] = []
       const width = r.vars.length
+      if (!width) return Array.from({ length: r.count }, () => new Map<string, Term>())
       for (let i = 0; i < r.rows.length; i += width) {
         const m = new Map<string, Term>()
         for (let k = 0; k < width; k++) if (r.rows[i + k]) m.set(r.vars[k]!, termOf(r.rows[i + k]!))

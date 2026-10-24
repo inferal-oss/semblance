@@ -202,8 +202,8 @@ impl Ctx<'_> {
         }
         let l = self.lit(v).ok_or(())?;
         match self.dt_kind(l.dt) {
-            Dt::Boolean => self.boolean(v).ok_or(()).or(Ok(false)),
-            Dt::String | Dt::LangString => Ok(!l.value.is_empty()),
+            Dt::Boolean => self.boolean(v).ok_or(()),
+            Dt::String => Ok(!l.value.is_empty()),
             Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double => Ok(self.num(v).is_some_and(|n| !n.is_zero() && !n.is_nan())),
             _ => Err(()),
         }
@@ -241,23 +241,34 @@ impl Ctx<'_> {
         let (la, lb) = (self.lit(a), self.lit(b));
         match (la, lb) {
             (Some(x), Some(y)) => {
+                // An ill-formed literal of a known datatype compares like one of an unknown type.
                 let (kx, ky) = (self.dt_kind(x.dt), self.dt_kind(y.dt));
+                let (kx, ky) = (self.well_formed(a, &x, kx), self.well_formed(b, &y, ky));
                 match (kx, ky) {
                     (Dt::String, Dt::String) => Ok(x.value == y.value),
                     (Dt::LangString, Dt::LangString) => Ok(x.value == y.value && x.lang == y.lang),
                     (Dt::Boolean, Dt::Boolean) => Ok(self.boolean(a).ok_or(())? == self.boolean(b).ok_or(())?),
                     (Dt::DateTime, Dt::DateTime) => Ok(datetime_cmp(&x.value, &y.value).ok_or(())? == Ordering::Equal),
-                    (Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double, _) | (_, Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double)
-                        if kx == ky =>
-                    {
-                        Err(()) // ill-formed numerics
-                    }
-                    (Dt::Other, _) | (_, Dt::Other) if x.dt == y.dt || kx == Dt::Other && ky == Dt::Other => Err(()),
+                    // A language-tagged string differs from every typed literal.
+                    (Dt::LangString, _) | (_, Dt::LangString) => Ok(false),
+                    // Unknown datatypes (and ill-formed literals) may share values with any typed literal.
+                    (Dt::Other, _) | (_, Dt::Other) => Err(()),
+                    (Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double, Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double) => Err(()),
                     _ => Ok(false),
                 }
             }
             _ => Ok(false),
         }
+    }
+
+    fn well_formed(&mut self, v: &Val, l: &Lit, k: Dt) -> Dt {
+        let ok = match k {
+            Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double => self.num(v).is_some(),
+            Dt::Boolean => self.boolean(v).is_some(),
+            Dt::DateTime => datetime(&l.value).is_some(),
+            _ => true,
+        };
+        if ok { k } else { Dt::Other }
     }
 
     /// `<`, `>`, ...: an ordering for comparable values, else an error.
@@ -590,8 +601,8 @@ impl Ctx<'_> {
                     _ => Vec::new(),
                 }, None))
             }
-            HasLang => Ok(Val::Bool(self.lit(&v[0]).ok_or(())?.lang.is_some())),
-            HasLangDir => Ok(Val::Bool(self.lit(&v[0]).ok_or(())?.lang.is_some_and(|x| x.1 != 0))),
+            HasLang => Ok(Val::Bool(self.lit(&v[0]).is_some_and(|l| l.lang.is_some()))),
+            HasLangDir => Ok(Val::Bool(self.lit(&v[0]).is_some_and(|l| l.lang.is_some_and(|x| x.1 != 0)))),
             LangMatches => {
                 let (tag, _) = self.string(&v[0])?;
                 let (range, _) = self.string(&v[1])?;
@@ -821,7 +832,24 @@ impl Ctx<'_> {
                 }
                 Ok(Val::Str(out, None))
             }
-            Sha1 | Sha256 | Sha384 | Sha512 => Err(()),
+            Sha1 | Sha256 | Sha384 | Sha512 => {
+                let (s, l) = self.string(&v[0])?;
+                if l.is_some() {
+                    return Err(());
+                }
+                let h = match f {
+                    Sha1 => super::sha::sha1(&s),
+                    Sha256 => super::sha::sha256(&s),
+                    Sha384 => super::sha::sha384(&s),
+                    _ => super::sha::sha512(&s),
+                };
+                let mut out = Vec::with_capacity(h.len() * 2);
+                for b in h {
+                    out.push(b"0123456789abcdef"[(b >> 4) as usize]);
+                    out.push(b"0123456789abcdef"[(b & 15) as usize]);
+                }
+                Ok(Val::Str(out, None))
+            }
             StrLang | StrLangDir => {
                 let (s, l) = self.string(&v[0])?;
                 if l.is_some() {
@@ -962,15 +990,27 @@ pub fn datetime(s: &[u8]) -> Option<DateTime<'_>> {
 /// Compare two dateTimes (timezone-adjusted when both have one).
 pub fn datetime_cmp(a: &[u8], b: &[u8]) -> Option<Ordering> {
     let (x, y) = (datetime(a)?, datetime(b)?);
-    if x.offset_minutes.is_some() != y.offset_minutes.is_some() {
-        return None;
-    }
-    let key = |d: &DateTime| -> (i128, i128) {
+    // Seconds since the epoch (scaled decimal), as if in UTC when there is no timezone.
+    let key = |d: &DateTime| -> i128 {
         let days = days_from_civil(d.year, d.month, d.day) as i128;
         let mins = days * 1440 + d.hour as i128 * 60 + d.minute as i128 - d.offset_minutes.unwrap_or(0) as i128;
-        (mins, num::parse_dec(d.seconds).unwrap_or(0))
+        mins * 60 * num::SCALE + num::parse_dec(d.seconds).unwrap_or(0)
     };
-    Some(key(&x).cmp(&key(&y)))
+    let (kx, ky) = (key(&x), key(&y));
+    if x.offset_minutes.is_some() == y.offset_minutes.is_some() {
+        return Some(kx.cmp(&ky));
+    }
+    // One without a timezone could be anywhere from -14:00 to +14:00.
+    let spread = 14 * 3600 * num::SCALE;
+    let (t, n, flip) = if x.offset_minutes.is_some() { (kx, ky, false) } else { (ky, kx, true) };
+    let o = if t < n - spread {
+        Ordering::Less
+    } else if t > n + spread {
+        Ordering::Greater
+    } else {
+        return None;
+    };
+    Some(if flip { o.reverse() } else { o })
 }
 
 pub fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {

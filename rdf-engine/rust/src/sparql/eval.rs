@@ -37,6 +37,8 @@ pub struct Ctx<'a> {
     regexes: BTreeMap<(Vec<u8>, Vec<u8>), Rc<Regex>>,
     bnodes: BTreeMap<(Row, Vec<u8>), u32>,
     scan: Vec<u32>,
+    /// The active graph of the pattern being evaluated (for EXISTS in expressions).
+    active: Active,
 }
 
 impl<'a> Ctx<'a> {
@@ -53,6 +55,7 @@ impl<'a> Ctx<'a> {
             regexes: BTreeMap::new(),
             bnodes: BTreeMap::new(),
             scan: Vec::new(),
+            active: Active::Default,
         }
     }
 
@@ -127,7 +130,8 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn exists(&mut self, p: &Pattern, row: &[u32]) -> bool {
-        !self.eval(p, row, Active::Default).is_empty()
+        let active = self.active;
+        !self.eval(p, row, active).is_empty()
     }
 
     fn graphs(&self, active: Active) -> Vec<u32> {
@@ -147,6 +151,13 @@ impl<'a> Ctx<'a> {
     // --- patterns ----------------------------------------------------------------
 
     pub fn eval(&mut self, p: &Pattern, sub: &[u32], active: Active) -> Vec<Row> {
+        let outer = core::mem::replace(&mut self.active, active);
+        let rows = self.eval_in(p, sub, active);
+        self.active = outer;
+        rows
+    }
+
+    fn eval_in(&mut self, p: &Pattern, sub: &[u32], active: Active) -> Vec<Row> {
         match p {
             Pattern::Unit => alloc::vec![sub.to_vec()],
             Pattern::Bgp(ts) => self.bgp(ts, sub, active),
@@ -381,6 +392,10 @@ impl<'a> Ctx<'a> {
         let pairs = self.pairs(path, sb, ob, active);
         let mut out = Vec::new();
         for (x, y) in pairs {
+            // A zero-length match at a variable endpoint must be a node of the graph.
+            if x == y && (matches!(s, Tv::Var(_)) || matches!(o, Tv::Var(_))) && !self.is_node(x, active) {
+                continue;
+            }
             let mut r = sub.to_vec();
             if bind(s, x, &mut r, self.dict) && bind(o, y, &mut r, self.dict) {
                 out.push(r);
@@ -491,6 +506,24 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    fn is_node(&mut self, n: u32, active: Active) -> bool {
+        let mut scan = core::mem::take(&mut self.scan);
+        let mut found = false;
+        for g in self.graphs(active) {
+            scan.clear();
+            self.store.scan([n, 0, 0, g], &mut scan);
+            if scan.is_empty() {
+                self.store.scan([0, 0, n, g], &mut scan);
+            }
+            if !scan.is_empty() {
+                found = true;
+                break;
+            }
+        }
+        self.scan = scan;
+        found
+    }
+
     /// Nodes a zero-length path can start (and end) at.
     fn zero_nodes(&mut self, s: Option<u32>, o: Option<u32>, active: Active) -> Vec<u32> {
         match (s, o) {
@@ -539,6 +572,10 @@ impl<'a> Ctx<'a> {
         if s.group.is_some() || !s.aggregates.is_empty() {
             rows = self.group(s, rows);
             rows.retain(|r| s.having.iter().all(|h| self.test_owned(h, r)));
+        }
+        if let Some(v) = &s.values {
+            let data = self.eval(v, &alloc::vec![NONE; self.nvars], active);
+            rows = join_rows(rows, &data);
         }
         for (v, e) in &s.extend {
             for r in rows.iter_mut() {
@@ -688,7 +725,9 @@ impl<'a> Ctx<'a> {
 /// Whether evaluating with extra bindings substituted equals joining with them.
 fn pure(p: &Pattern) -> bool {
     match p {
-        Pattern::Unit | Pattern::Bgp(_) | Pattern::Path(..) | Pattern::Values(..) => true,
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) => true,
+        // (A zero-length match at a variable endpoint is checked in `path`.)
+        Pattern::Path(..) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) => pure(a) && pure(b),
         Pattern::Graph(_, a) => pure(a),
         _ => false,
@@ -753,7 +792,7 @@ pub fn merge(a: &[u32], b: &[u32]) -> Option<Row> {
 }
 
 /// Join two sets of rows; hashes on a variable bound on both sides throughout.
-fn join_rows(left: Vec<Row>, right: &[Row]) -> Vec<Row> {
+pub fn join_rows(left: Vec<Row>, right: &[Row]) -> Vec<Row> {
     let mut out = Vec::new();
     if left.is_empty() || right.is_empty() {
         return out;

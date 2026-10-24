@@ -8,6 +8,7 @@ pub mod md5;
 pub mod num;
 pub mod parse;
 pub mod regex;
+pub mod sha;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -134,6 +135,8 @@ pub struct Select {
     pub reduced: bool,
     pub offset: usize,
     pub limit: Option<usize>,
+    /// A VALUES clause after the query: joined after grouping, before SELECT expressions.
+    pub values: Option<Box<Pattern>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -173,8 +176,8 @@ impl Query {
 }
 
 pub enum Output {
-    /// SELECT: rows of the projected variables.
-    Rows(Vec<u32>),
+    /// SELECT: rows of the projected variables, and how many (rows may be empty).
+    Rows(Vec<u32>, usize),
     /// CONSTRUCT, DESCRIBE: triples.
     Triples(Vec<u32>),
     Bool(bool),
@@ -205,7 +208,7 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
             for r in &rows {
                 out.extend(q.select.project.iter().map(|&v| r[v as usize]));
             }
-            Output::Rows(out)
+            Output::Rows(out, rows.len())
         }
         Form::Ask => Output::Bool(!rows.is_empty()),
         Form::Construct => {

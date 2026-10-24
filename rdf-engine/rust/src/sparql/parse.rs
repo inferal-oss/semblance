@@ -23,13 +23,20 @@ struct P<'a, 'd> {
     prefixes: BTreeMap<Vec<u8>, Vec<u8>>,
     base: Vec<u8>,
     vars: Vec<Vec<u8>>,
-    bnodes: BTreeMap<Vec<u8>, Var>,
+    /// Blank node labels in patterns: their variable and the basic graph pattern they belong to.
+    bnodes: BTreeMap<Vec<u8>, (Var, u32)>,
+    /// Blank node labels in a CONSTRUCT template.
+    tbnodes: BTreeMap<Vec<u8>, Var>,
+    /// The current basic graph pattern; anything but FILTER between triples starts another.
+    bgp: u32,
     hidden: u32,
     aggs: Vec<(Var, Aggregate)>,
     agg_ok: bool,
     /// Variables standing for template blank nodes (CONSTRUCT), by variable.
     template_bnodes: BTreeMap<Var, u32>,
     in_template: bool,
+    /// The top-level SELECT was `SELECT *`.
+    top_star: bool,
 }
 
 /// One element of a triples block: a plain triple or a path.
@@ -46,11 +53,14 @@ pub fn parse_query(text: &[u8], base: &[u8], dict: &mut Dict) -> Res<Query> {
         base: base.to_vec(),
         vars: Vec::new(),
         bnodes: BTreeMap::new(),
+        tbnodes: BTreeMap::new(),
+        bgp: 0,
         hidden: 0,
         aggs: Vec::new(),
         agg_ok: false,
         template_bnodes: BTreeMap::new(),
         in_template: false,
+        top_star: false,
     };
     p.query()
 }
@@ -329,10 +339,17 @@ impl P<'_, '_> {
             } else if self.kw(b"PREFIX") {
                 self.ws();
                 let start = self.c.i;
+                let (ch, _) = self.c.ch();
+                if self.c.peek() != b':' && !pn_chars_base(ch) {
+                    return self.c.err("bad prefix name");
+                }
                 while !self.c.eof() && self.c.peek() != b':' && !self.c.peek().is_ascii_whitespace() {
                     self.c.i += 1;
                 }
                 let prefix = self.c.s[start..self.c.i].to_vec();
+                if prefix.last() == Some(&b'.') {
+                    return self.c.err("bad prefix name");
+                }
                 self.c.expect(b':', "expected prefix name")?;
                 let ns = self.iri_string()?;
                 self.prefixes.insert(prefix, ns);
@@ -424,29 +441,41 @@ impl P<'_, '_> {
         } else {
             return self.c.err("expected SELECT, CONSTRUCT, ASK or DESCRIBE");
         }
+        let mut values_vars = Vec::new();
         if self.kw(b"VALUES") {
             let values = self.data_block()?;
-            q.select.pattern = join(core::mem::replace(&mut q.select.pattern, Pattern::Unit), values);
+            pattern_vars(&values, &mut values_vars);
+            if self.top_star {
+                q.select.project = self.visible_in(&q.select.pattern);
+                for v in &values_vars {
+                    if !q.select.project.contains(v) {
+                        q.select.project.push(*v);
+                    }
+                }
+            }
+            q.select.values = Some(Box::new(values));
+        }
+        if q.form == Form::Select {
+            for (v, _) in &q.select.extend {
+                if values_vars.contains(v) {
+                    return self.c.err("a SELECT expression binds a variable of the VALUES clause");
+                }
+            }
+            if q.select.group.is_some() || !q.select.aggregates.is_empty() {
+                self.check_grouped(&q.select, &values_vars)?;
+            }
         }
         self.ws();
         if !self.c.eof() {
             return self.c.err("unexpected text after the query");
         }
-        if q.form != Form::Select || q.select.project.is_empty() && !self.star_seen(&q) {
-            // Projection for non-SELECT forms is every visible variable.
-            q.select.project = self.visible();
+        if q.form != Form::Select {
+            // No projection for the other forms: templates may use hidden variables.
+            q.select.project = (0..self.vars.len() as Var).collect();
         }
         q.vars = core::mem::take(&mut self.vars);
         q.base = core::mem::take(&mut self.base);
         Ok(q)
-    }
-
-    fn star_seen(&self, _q: &Query) -> bool {
-        false
-    }
-
-    fn visible(&self) -> Vec<Var> {
-        (0..self.vars.len() as Var).filter(|&v| self.vars[v as usize].first() != Some(&b'_')).collect()
     }
 
     fn to_template(&self, t: Tv) -> Tt {
@@ -528,6 +557,9 @@ impl P<'_, '_> {
         s.aggregates = core::mem::take(&mut self.aggs);
         s.aggregates.extend(body.aggregates);
         let _ = first_var;
+        if top {
+            self.top_star = star;
+        }
         if star {
             if s.group.is_some() || !s.aggregates.is_empty() {
                 return self.c.err("SELECT * with GROUP BY");
@@ -541,15 +573,30 @@ impl P<'_, '_> {
                 s.project.push(v);
             }
         }
-        if s.group.is_some() || !s.aggregates.is_empty() {
-            self.check_grouped(&s)?;
+        // A SELECT expression may not rebind a variable in scope: in a grouped
+        // query, the group keys; otherwise the WHERE clause's variables.
+        let grouped = s.group.is_some() || !s.aggregates.is_empty();
+        let mut scope = if grouped { Vec::new() } else { self.visible_in(&s.pattern) };
+        for (e, v) in s.group.iter().flatten() {
+            match (e, v) {
+                (_, Some(v)) | (Expr::Var(v), None) => scope.push(*v),
+                _ => {}
+            }
+        }
+        for (v, _) in &s.extend {
+            if scope.contains(v) {
+                return self.c.err("a SELECT expression binds a variable already in scope");
+            }
+        }
+        if !top && (s.group.is_some() || !s.aggregates.is_empty()) {
+            self.check_grouped(&s, &[])?;
         }
         self.aggs = outer_aggs;
         Ok(s)
     }
 
     /// In a grouped query, plain projected variables must be group keys.
-    fn check_grouped(&self, s: &Select) -> Res<()> {
+    fn check_grouped(&self, s: &Select, outer: &[Var]) -> Res<()> {
         let keys: Vec<Var> = s
             .group
             .iter()
@@ -562,6 +609,7 @@ impl P<'_, '_> {
             .collect();
         let mut allowed = keys.clone();
         allowed.extend(s.aggregates.iter().map(|(v, _)| *v));
+        allowed.extend_from_slice(outer);
         for (v, e) in &s.extend {
             if !expr_vars_within(e, &allowed) {
                 return self.c.err("a non-grouped variable is used in a grouped query");
@@ -694,6 +742,16 @@ impl P<'_, '_> {
     // --- graph patterns ------------------------------------------------------------
 
     fn group_pattern(&mut self) -> Res<Pattern> {
+        let (p, f) = self.group_parts()?;
+        Ok(match f {
+            Some(f) => Pattern::Filter(f, Box::new(p)),
+            None => p,
+        })
+    }
+
+    /// A group graph pattern, and the conjunction of its own FILTERs (kept
+    /// apart so OPTIONAL can make them its condition).
+    fn group_parts(&mut self) -> Res<(Pattern, Option<Expr>)> {
         self.expect(b"{", "expected {")?;
         if self.at_kw(b"SELECT") {
             let mut dummy = Query {
@@ -707,31 +765,30 @@ impl P<'_, '_> {
                 from_named: Vec::new(),
                 base: Vec::new(),
             };
-            let s = self.select(false, &mut dummy)?;
-            let mut p = Pattern::Sub(Box::new(s));
+            let mut s = self.select(false, &mut dummy)?;
             if self.kw(b"VALUES") {
-                let v = self.data_block()?;
-                p = join(p, v);
+                s.values = Some(Box::new(self.data_block()?));
             }
             self.expect(b"}", "expected }")?;
-            return Ok(p);
+            return Ok((Pattern::Sub(Box::new(s)), None));
         }
         let mut g = Pattern::Unit;
         let mut filters: Vec<Expr> = Vec::new();
+        self.bgp += 1;
         loop {
             self.ws();
             if self.eat(b"}") {
                 break;
             }
+            if !self.at_kw(b"FILTER") && !self.at_triple_start() {
+                self.bgp += 1;
+            }
             if self.c.eof() {
                 return self.c.err("unterminated group");
             }
             if self.kw(b"OPTIONAL") {
-                let p = self.group_pattern()?;
-                g = match p {
-                    Pattern::Filter(f, inner) => Pattern::LeftJoin(Box::new(g), inner, Some(f)),
-                    p => Pattern::LeftJoin(Box::new(g), Box::new(p), None),
-                };
+                let (p, f) = self.group_parts()?;
+                g = Pattern::LeftJoin(Box::new(g), Box::new(p), f);
             } else if self.kw(b"MINUS") {
                 let p = self.group_pattern()?;
                 g = Pattern::Minus(Box::new(g), Box::new(p));
@@ -789,19 +846,19 @@ impl P<'_, '_> {
                 for p in paths {
                     g = join(g, p);
                 }
-                self.eat(b".");
+                if !self.eat(b".") && self.at_triple_start() {
+                    return self.c.err("expected .");
+                }
                 continue;
             }
             self.eat(b".");
         }
-        if !filters.is_empty() {
-            let mut f = filters.pop().unwrap();
-            while let Some(x) = filters.pop() {
-                f = Expr::And(Box::new(x), Box::new(f));
-            }
-            g = Pattern::Filter(f, Box::new(g));
+        self.bgp += 1;
+        let mut f = filters.pop();
+        while let Some(x) = filters.pop() {
+            f = Some(Expr::And(Box::new(x), Box::new(f.unwrap())));
         }
-        Ok(g)
+        Ok((g, f))
     }
 
     fn var_or_iri(&mut self) -> Res<Tv> {
@@ -824,7 +881,11 @@ impl P<'_, '_> {
         } else {
             self.expect(b"(", "expected (")?;
             while !self.eat(b")") {
-                vars.push(self.var()?);
+                let v = self.var()?;
+                if vars.contains(&v) {
+                    return self.c.err("a variable appears twice in VALUES");
+                }
+                vars.push(v);
             }
             self.expect(b"{", "expected {")?;
             while !self.eat(b"}") {
@@ -851,7 +912,9 @@ impl P<'_, '_> {
             return self.c.err("unterminated VALUES");
         }
         match self.term()? {
-            Tv::Term(t) => Ok(t),
+            // Data must be RDF terms: a triple term's subject is an IRI or blank node.
+            Tv::Term(t) if !self.dict.term(t).is_some_and(|x| x.kind == crate::dict::TRIPLE && !self.dict.term(x.a).is_some_and(|s| matches!(s.kind, crate::dict::IRI | crate::dict::BNODE))) => Ok(t),
+            Tv::Term(_) => self.c.err("the subject of a triple term must be an IRI or blank node"),
             _ => self.c.err("expected a term in VALUES"),
         }
     }
@@ -894,7 +957,9 @@ impl P<'_, '_> {
                 }
                 b'(' if !self.c.starts(b"()") && !self.nil_ahead() => {
                     let s = self.collection(out)?;
-                    self.property_list(s.clone(), out)?;
+                    if self.at_verb() {
+                        self.property_list(s.clone(), out)?;
+                    }
                     s
                 }
                 b'<' if self.c.starts(b"<<") && !self.c.starts(b"<<(") => {
@@ -944,7 +1009,24 @@ impl P<'_, '_> {
     fn at_verb(&mut self) -> bool {
         self.ws();
         let c = self.c.peek();
-        !self.c.eof() && !matches!(c, b'.' | b'}' | b']' | b'|' | b';' | b')') && !self.c.starts(b">>")
+        if self.c.eof() || matches!(c, b'.' | b'}' | b']' | b'|' | b';' | b')' | b'{' | b',') || self.c.starts(b">>") {
+            return false;
+        }
+        for kw in [&b"OPTIONAL"[..], b"FILTER", b"BIND", b"VALUES", b"GRAPH", b"MINUS", b"SERVICE", b"LATERAL"] {
+            if self.at_kw(kw) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// A subject or object inside a triple term or reified triple: no collections or property lists.
+    fn inner_node(&mut self) -> Res<Tv> {
+        self.ws();
+        if self.c.peek() == b'(' || self.c.peek() == b'[' && !self.anon_ahead() {
+            return self.c.err("a collection or property list is not allowed here");
+        }
+        self.var_or_term()
     }
 
     fn anon_ahead(&self) -> bool {
@@ -1078,14 +1160,14 @@ impl P<'_, '_> {
     fn reified(&mut self, out: &mut Vec<Elt>) -> Res<Tv> {
         self.c.i += 2;
         self.ws();
-        let s = if self.c.starts(b"<<") && !self.c.starts(b"<<(") { self.reified(out)? } else { self.var_or_term()? };
+        let s = if self.c.starts(b"<<") && !self.c.starts(b"<<(") { self.reified(out)? } else { self.inner_node()? };
         self.ws();
         let p = match self.verb()? {
             Ok(p) => p,
             Err(_) => return self.c.err("a path cannot be reified"),
         };
         self.ws();
-        let o = if self.c.starts(b"<<") && !self.c.starts(b"<<(") { self.reified(out)? } else { self.var_or_term()? };
+        let o = if self.c.starts(b"<<") && !self.c.starts(b"<<(") { self.reified(out)? } else { self.inner_node()? };
         self.ws();
         let r = if self.c.peek() == b'~' { self.reifier()? } else { Tv::Var(self.fresh_var()) };
         self.expect(b">>", "expected >>")?;
@@ -1149,18 +1231,22 @@ impl P<'_, '_> {
         self.c.eat_str(b"_:");
         let mut label = Vec::new();
         self.c.bnode_label(&mut label)?;
-        if let Some(&v) = self.bnodes.get(&label) {
-            if self.in_template {
-                if let Some(&k) = self.template_bnodes.get(&v) {
-                    let _ = k;
-                    return Ok(Tv::Var(v));
-                }
-            } else {
+        if self.in_template {
+            if let Some(&v) = self.tbnodes.get(&label) {
                 return Ok(Tv::Var(v));
             }
+            let v = self.fresh_var();
+            self.tbnodes.insert(label, v);
+            return Ok(Tv::Var(v));
+        }
+        if let Some(&(v, bgp)) = self.bnodes.get(&label) {
+            if bgp != self.bgp {
+                return self.c.err("a blank node label is used in two basic graph patterns");
+            }
+            return Ok(Tv::Var(v));
         }
         let v = self.fresh_var();
-        self.bnodes.insert(label, v);
+        self.bnodes.insert(label, (v, self.bgp));
         Ok(Tv::Var(v))
     }
 
@@ -1171,12 +1257,12 @@ impl P<'_, '_> {
         match c {
             b'<' if self.c.starts(b"<<(") => {
                 self.c.i += 3;
-                let s = self.var_or_term()?;
+                let s = self.inner_node()?;
                 let p = match self.verb()? {
                     Ok(p) => p,
                     Err(_) => return self.c.err("a path cannot be in a triple term"),
                 };
-                let o = self.var_or_term()?;
+                let o = self.inner_node()?;
                 self.expect(b")>>", "expected )>>")?;
                 if let (Tv::Term(s), Tv::Term(p), Tv::Term(o)) = (&s, &p, &o) {
                     return Ok(Tv::Term(self.dict.intern(Key::triple(*s, *p, *o))));
@@ -1778,6 +1864,7 @@ fn empty_select() -> Select {
         reduced: false,
         offset: 0,
         limit: None,
+        values: None,
     }
 }
 
