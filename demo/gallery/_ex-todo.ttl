@@ -28,12 +28,43 @@ ui:textProjectionCard a c:Card ;
     c:note "The same graph through the text renderings of the same components." ;
     c:content ui:textCard .
 
-ui:ex-todo-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-todo-how-h ui:ex-todo-how-1 ui:ex-todo-how-2 ui:ex-todo-how-3 ui:ex-todo-how-4 ) .
-ui:ex-todo-how-h a c:Heading ; c:level 2 ; c:label "How it works" .
-ui:ex-todo-how-1 a c:Text ; c:children ( "The app is a " ui:ex-todo-c1 " of a heading, a text field, two buttons and a " ui:ex-todo-c2 " over the todos (" ui:ex-todo-c3 "), ordered by their priority. Nothing in it is code: below is the whole graph." ) .
-ui:ex-todo-how-2 a c:Text ; c:children ( "Typing, adding and ticking are RDF events. Their reactions are CONSTRUCT pairs: " ui:ex-todo-c4 " inserts a new " ui:ex-todo-c5 " with the field's value and clears the field; a check box's change writes " ui:ex-todo-c6 "." ) .
-ui:ex-todo-how-3 a c:Text ; c:label "The list renders member-wise: one rule run per todo, each placed by its sort key, so adding or re-sorting one todo touches only that todo - the cost tests hold the work of a tick constant as the list grows." .
-ui:ex-todo-how-4 a c:Text ; c:label "The right column is a second projection of the same graph, through the text renderings of the same components, mounted in a slot. It is evaluated only while it is shown." .
-ui:ex-todo-c1 a c:Code ; c:label "c:Stack" . ui:ex-todo-c2 a c:Code ; c:label "c:List" . ui:ex-todo-c3 a c:Code ; c:label "c:of ex:inbox" .
-ui:ex-todo-c4 a c:Code ; c:label "ex:AddTodo" . ui:ex-todo-c5 a c:Code ; c:label "ex:Todo" . ui:ex-todo-c6 a c:Code ; c:label "ex:done" .
+# --- How it works: a walkthrough (ontology/components/walkthrough.ttl) --------------------------------
+# Each step is running text whose phrases mention resources (c:Mention c:mentions): beside the steps,
+# a diagram of the mentioned resources and their links; activating a mention shows its statement in
+# the source (here the todo app's graph). Mentions of framework terms link to the Reference (c:to).
+
+ui:ex-todo-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-todo-w1 ui:ex-todo-w2 ui:ex-todo-w3 ui:ex-todo-w4 ui:ex-todo-w5 ) .
+
+ui:ex-todo-w1 a c:WalkthroughStep ; rdfs:label "The data has its own vocabulary" ;
+    c:children ( "A todo is a resource such as " ui:ex-todo-m-t1 ", described in the app's own terms: a label, a number " ui:ex-todo-m-priority " and a flag " ui:ex-todo-m-done ". Nothing in that is the framework's. The todos are gathered by " ui:ex-todo-m-todos ", which names each one with a c:item link - the graph is the whole state of the app." ) .
+ui:ex-todo-w2 a c:WalkthroughStep ; rdfs:label "Components describe how to show it" ;
+    c:children ( "The screen is a " ui:ex-todo-m-stack ", " ui:ex-todo-m-page ", whose children are a heading, the field " ui:ex-todo-m-newTodo ", a row of " ui:ex-todo-m-actions " and the list. The list " ui:ex-todo-m-todos2 " is a " ui:ex-todo-m-list " told which properties matter: it sorts by " ui:ex-todo-m-priority2 ", labels by rdfs:label and ticks by " ui:ex-todo-m-done2 ". Those are data too, so another app's list reads another vocabulary with the same component." ) .
+ui:ex-todo-w3 a c:WalkthroughStep ; rdfs:label "Reactions turn events into changes" ;
+    c:children ( "A click on " ui:ex-todo-m-add " is an RDF event. Two reactions answer it, each a pair of CONSTRUCT queries: " ui:ex-todo-m-require " writes an error on the field while it is empty, and " ui:ex-todo-m-addTodo " mints a todo from the field's value, gives it the next priority and clears the field. Both see the graph as it was before the click; their changes are applied together, as one delta, and recorded in the change log." ) .
+ui:ex-todo-w4 a c:WalkthroughStep ; rdfs:label "One graph, two projections" ;
+    c:children ( "Rendering rewrites the components into RDF/HTML that is patched into the page: the " ui:ex-todo-m-todoCard " flips to show the rules that made it. " ui:ex-todo-m-textCard " shows a second projection of the same graph, through the text renderings of the same components - change one, both follow. The text projection is evaluated only while it is shown." ) .
+ui:ex-todo-w5 a c:WalkthroughStep ; rdfs:label "Why a change is cheap" ;
+    c:children ( "The list renders member-wise: one rule run per todo, placed by its sort key. Ticking or adding one todo re-runs that todo's rules, not the list's, however long it is - the cost tests hold the work constant as the list grows. " ui:ex-todo-m-density " is cheaper still: " ui:ex-todo-m-toggle " changes one triple on " ui:ex-todo-m-page2 ", its density hook becomes one attribute in the DOM, and the theme re-values the spacing tokens for everything under it - no rule runs for the children. The status bar at the bottom of the page shows what each interaction cost." ) .
+
+ui:ex-todo-m-t1 a c:Mention ; c:label "ex:t1" ; c:mentions ex:t1 .
+ui:ex-todo-m-priority a c:Mention ; c:label "ex:priority" ; c:mentions ex:priority ; c:to ex:priority .
+ui:ex-todo-m-priority2 a c:Mention ; c:label "ex:priority" ; c:mentions ex:priority ; c:to ex:priority .
+ui:ex-todo-m-done a c:Mention ; c:label "ex:done" ; c:mentions ex:done ; c:to ex:done .
+ui:ex-todo-m-done2 a c:Mention ; c:label "ex:done" ; c:mentions ex:done ; c:to ex:done .
+ui:ex-todo-m-todos a c:Mention ; c:label "ex:todos" ; c:mentions ex:todos .
+ui:ex-todo-m-todos2 a c:Mention ; c:label "ex:todos" ; c:mentions ex:todos .
+ui:ex-todo-m-stack a c:Mention ; c:label "c:Stack" ; c:mentions c:Stack ; c:to c:Stack .
+ui:ex-todo-m-page a c:Mention ; c:label "ex:page" ; c:mentions ex:page .
+ui:ex-todo-m-page2 a c:Mention ; c:label "ex:page" ; c:mentions ex:page .
+ui:ex-todo-m-newTodo a c:Mention ; c:label "ex:newTodo" ; c:mentions ex:newTodo .
+ui:ex-todo-m-actions a c:Mention ; c:label "buttons" ; c:mentions ex:actions .
+ui:ex-todo-m-list a c:Mention ; c:label "c:List" ; c:mentions c:List ; c:to c:List .
+ui:ex-todo-m-add a c:Mention ; c:label "the Add button" ; c:mentions ex:add .
+ui:ex-todo-m-require a c:Mention ; c:label "ex:RequireText" ; c:mentions ex:RequireText .
+ui:ex-todo-m-addTodo a c:Mention ; c:label "ex:AddTodo" ; c:mentions ex:AddTodo .
+ui:ex-todo-m-todoCard a c:Mention ; c:label "screen card" ; c:mentions ui:todoCard ; c:to ui:todoCard .
+ui:ex-todo-m-textCard a c:Mention ; c:label "The text card" ; c:mentions ui:textProjectionCard ; c:to ui:textProjectionCard .
+ui:ex-todo-m-density a c:Mention ; c:label "The density button" ; c:mentions ex:density .
+ui:ex-todo-m-toggle a c:Mention ; c:label "its reaction" ; c:mentions ex:ToggleDensity .

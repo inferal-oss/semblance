@@ -147,37 +147,38 @@ ui:ex-activity-recent a c:Timeline ; c:label "Newest events" ; c:of beh:ChangeLo
 
 # --- how it works ---------------------------------------------------------------------------------
 
-ui:ex-activity-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-activity-how-title ui:ex-activity-how-log ui:ex-activity-how-views ui:ex-activity-how-open ui:ex-activity-how-cost ) .
-ui:ex-activity-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
-ui:ex-activity-how-log a c:Text ; c:children (
-    "The event bus records each interaction as an RDF event - its class (" ui:ex-activity-how-c1 ", " ui:ex-activity-how-c2
-    "), the component it was addressed to (" ui:ex-activity-how-c3 "), when (" ui:ex-activity-how-c4 ") and how many triples it changed - and appends it to "
-    ui:ex-activity-how-c5 ", an LDES whose retention policy keeps the newest 200 members. No code of this example records anything." ) .
-ui:ex-activity-how-c1 a c:Code ; c:label "beh:Click" .
-ui:ex-activity-how-c2 a c:Code ; c:label "beh:Input" .
-ui:ex-activity-how-c3 a c:Code ; c:label "beh:target" .
-ui:ex-activity-how-c4 a c:Code ; c:label "beh:at" .
-ui:ex-activity-how-c5 a c:Code ; c:label "beh:ChangeLog" .
-ui:ex-activity-how-views a c:Text ; c:children (
-    "Everything shown is a SELECT in this file: " ui:ex-activity-how-c6 " and " ui:ex-activity-how-c7 " feed the charts, "
-    ui:ex-activity-how-c8 " the table (classes by " ui:ex-activity-how-c9 "), and the Stats take their figures from queries through "
-    ui:ex-activity-how-c10 ". The newest events are a " ui:ex-activity-how-c11 ", which walks back from the stream's head (" ui:ex-activity-how-c12 ")." ) .
-ui:ex-activity-how-c6 a c:Code ; c:label "act:PerType" .
-ui:ex-activity-how-c7 a c:Code ; c:label "act:PerMinute" .
-ui:ex-activity-how-c8 a c:Code ; c:label "act:PerComponent" .
-ui:ex-activity-how-c9 a c:Code ; c:label "sem:slug" .
-ui:ex-activity-how-c10 a c:Code ; c:label "c:valueQuery" .
-ui:ex-activity-how-c11 a c:Code ; c:label "c:Timeline" .
-ui:ex-activity-how-c12 a c:Code ; c:label "beh:latest" .
-ui:ex-activity-how-open a c:Text ; c:children (
-    "\"Since you opened this page\" needs to know when that was. The click that chose this example is an event too, so "
-    ui:ex-activity-how-c13 " - a second reaction on the navigation's click - writes its sequence number and time on " ui:ex-activity-how-c14
-    "; the counts and the minutes start there." ) .
-ui:ex-activity-how-c13 a c:Code ; c:label "act:MarkOpened" .
-ui:ex-activity-how-c14 a c:Code ; c:label "act:visit" .
-ui:ex-activity-how-cost a c:Text ; c:children (
-    "Why it is cheap: each view names " ui:ex-activity-how-c15 " as its " ui:ex-activity-how-c16
-    ", so an event re-runs about seven small queries over at most 200 members - while this page is shown. Anywhere else they are parked, and an interaction costs exactly what it did before this dashboard existed (test/cost.test.ts measures it)." ) .
-ui:ex-activity-how-c15 a c:Code ; c:label "beh:ChangeLog" .
-ui:ex-activity-how-c16 a c:Code ; c:label "c:dataset" .
+ui:ex-activity-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-activity-w1 ui:ex-activity-w2 ui:ex-activity-w3 ui:ex-activity-w4 ui:ex-activity-w5 ) .
+
+ui:ex-activity-w1 a c:WalkthroughStep ; rdfs:label "Your interactions are already data" ;
+    c:children ( "The event bus records each interaction as an RDF event - its class (" ui:ex-activity-m-click ", " ui:ex-activity-m-input "), the component it was addressed to, when, and how many triples it changed - and appends it to " ui:ex-activity-m-log ", a Linked Data Event Stream whose retention keeps the newest 200 members. No code of this example records anything." ) .
+ui:ex-activity-w2 a c:WalkthroughStep ; rdfs:label "Figures are queries over the stream" ;
+    c:children ( "Each figure is a " ui:ex-activity-m-Stat " that takes its value from a SELECT: " ui:ex-activity-m-total " shows " ui:ex-activity-m-intheLog ", a COUNT of the stream's members; " ui:ex-activity-m-touched " counts the distinct components events were addressed to, " ui:ex-activity-m-changed " sums what they changed. The queries are sem:View s in this file." ) .
+ui:ex-activity-w3 a c:WalkthroughStep ; rdfs:label "Charts, a table and a timeline" ;
+    c:children ( ui:ex-activity-m-types " draws " ui:ex-activity-m-perType ", a GROUP BY over each event's class; " ui:ex-activity-m-time " draws " ui:ex-activity-m-perMinute " counted from when you opened the page; " ui:ex-activity-m-table " lists " ui:ex-activity-m-perComponent ". The newest events are " ui:ex-activity-m-recent ", a " ui:ex-activity-m-Timeline " that walks back from the stream's head one step per event." ) .
+ui:ex-activity-w4 a c:WalkthroughStep ; rdfs:label "When you opened this page" ;
+    c:children ( "\"Since you opened this page\" needs to know when that was. The click that chose this example in " ui:ex-activity-m-nav " is an event too, so " ui:ex-activity-m-mark " - a second reaction on that click - writes its sequence number and time on act:visit; " ui:ex-activity-m-since " counts the members after it, and the minutes start there." ) .
+ui:ex-activity-w5 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "Every view names " ui:ex-activity-m-log2 " as its dataset, so an event re-runs about seven small queries over at most 200 members - while this page is shown. Anywhere else they are parked, and an interaction costs exactly what it did before this dashboard existed: the cost tests measure it." ) .
+
+ui:ex-activity-m-click a c:Mention ; c:label "beh:Click" ; c:mentions beh:Click ; c:to beh:Click .
+ui:ex-activity-m-input a c:Mention ; c:label "beh:Input" ; c:mentions beh:Input ; c:to beh:Input .
+ui:ex-activity-m-log a c:Mention ; c:label "beh:ChangeLog" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
+ui:ex-activity-m-log2 a c:Mention ; c:label "the change log" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
+ui:ex-activity-m-Stat a c:Mention ; c:label "c:Stat" ; c:mentions c:Stat ; c:to c:Stat .
+ui:ex-activity-m-total a c:Mention ; c:label "\"In the log\"" ; c:mentions ui:ex-activity-total .
+ui:ex-activity-m-intheLog a c:Mention ; c:label "act:InTheLog" ; c:mentions act:InTheLog .
+ui:ex-activity-m-touched a c:Mention ; c:label "act:Touched" ; c:mentions act:Touched .
+ui:ex-activity-m-changed a c:Mention ; c:label "act:Changed" ; c:mentions act:Changed .
+ui:ex-activity-m-types a c:Mention ; c:label "The bar chart" ; c:mentions ui:ex-activity-types .
+ui:ex-activity-m-perType a c:Mention ; c:label "act:PerType" ; c:mentions act:PerType .
+ui:ex-activity-m-time a c:Mention ; c:label "the line chart" ; c:mentions ui:ex-activity-time .
+ui:ex-activity-m-perMinute a c:Mention ; c:label "act:PerMinute" ; c:mentions act:PerMinute .
+ui:ex-activity-m-table a c:Mention ; c:label "the table" ; c:mentions ui:ex-activity-components .
+ui:ex-activity-m-perComponent a c:Mention ; c:label "act:PerComponent" ; c:mentions act:PerComponent .
+ui:ex-activity-m-recent a c:Mention ; c:label "ui:ex-activity-recent" ; c:mentions ui:ex-activity-recent .
+ui:ex-activity-m-Timeline a c:Mention ; c:label "c:Timeline" ; c:mentions c:Timeline ; c:to c:Timeline .
+ui:ex-activity-m-nav a c:Mention ; c:label "the examples' list" ; c:mentions ui:examplesNav ; c:to ui:examplesNav .
+ui:ex-activity-m-mark a c:Mention ; c:label "act:MarkOpened" ; c:mentions act:MarkOpened .
+ui:ex-activity-m-since a c:Mention ; c:label "act:SinceOpened" ; c:mentions act:SinceOpened .

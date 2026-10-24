@@ -16,7 +16,7 @@ function example(name: string, prefer: 'sparql' | 'function' = 'sparql') {
 describe('every example shows how it works and its source', () => {
   it.each(['sparql', 'function'] as const)('sign in: the app, then how it works, then its own file verbatim (%s)', (prefer) => {
     const { shown } = example('Sign in with a code', prefer)
-    const how = shown('[data-sem-c=heading]').find((h) => h.textContent === 'How it works')!
+    const how = shown('[data-sem-c=walkthrough]').find((w) => w.querySelector('h2')?.textContent === 'How it works')!
     expect(how).toBeDefined()
     const [source] = shown('[data-sem-c=source-view]')
     expect(source!.querySelector('.sem-source-path')!.textContent).toBe('demo/gallery/_ex-signin.ttl')
@@ -26,9 +26,11 @@ describe('every example shows how it works and its source', () => {
     // ...and colored like Turtle.
     expect([...source!.querySelectorAll('.ttl-comment')].some((c) => c.textContent!.startsWith('# --- Sign in with a code'))).toBe(true)
     expect([...source!.querySelectorAll('.ttl-pname')].map((c) => c.textContent)).toContain('ui:SigninTooShort')
-    // The order on the page: the example, its explanation, its source.
-    const all = shown('[data-sem-c=card], [data-sem-c=heading], [data-sem-c=source-view]')
-    expect(all.indexOf(how)).toBeLessThan(all.indexOf(source!))
+    // The order on the page: the example, then its explanation, with its source beside the diagram.
+    const card = shown('[data-sem-c=card]').find((c) => c.textContent!.includes('Check your email'))!
+    const order = shown('[data-sem-c=card], [data-sem-c=walkthrough]')
+    expect(order.indexOf(card)).toBeLessThan(order.indexOf(how))
+    expect(how.contains(source!)).toBe(true)
   })
 
   it('the todo example shows the todo app graph it runs', () => {
@@ -36,6 +38,6 @@ describe('every example shows how it works and its source', () => {
     const [source] = shown('[data-sem-c=source-view]')
     expect(source!.querySelector('.sem-source-path')!.textContent).toBe('src/examples/todo.ts')
     expect(source!.textContent).toContain('ex:page a c:Stack')
-    expect(shown('[data-sem-c=heading]').some((h) => h.textContent === 'How it works')).toBe(true)
+    expect(shown('[data-sem-c=walkthrough] h2').some((h) => h.textContent === 'How it works')).toBe(true)
   })
 })

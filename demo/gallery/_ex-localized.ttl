@@ -97,30 +97,42 @@ shop:AddToCart a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-localized-
 
 # --- how it works ---------------------------------------------------------------------------------
 
-ui:ex-localized-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-localized-how-title ui:ex-localized-how-labels ui:ex-localized-how-price ui:ex-localized-how-rtl ui:ex-localized-how-cost ) .
-ui:ex-localized-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
-ui:ex-localized-how-labels a c:Text ; c:children (
-    "Each label has an untagged English source and tagged translations (" ui:ex-localized-how-c1 "). The viewer's language is "
-    ui:ex-localized-how-c2 " on " ui:ex-localized-how-c3 ", set by the " ui:ex-localized-how-c4
-    " above (the same property the site's Display settings set). Function rules pick a label in that language as they render; for SPARQL rules, which cannot see it, the localization layer first writes "
-    ui:ex-localized-how-c5 " - the label in the viewer's language - and they prefer it." ) .
-ui:ex-localized-how-c1 a c:Code ; c:label "\"Auf Lager\"@de" .
-ui:ex-localized-how-c2 a c:Code ; c:label "l10n:language" .
-ui:ex-localized-how-c3 a c:Code ; c:label "ui:app" .
-ui:ex-localized-how-c4 a c:Code ; c:label "c:Segmented" .
-ui:ex-localized-how-c5 a c:Code ; c:label "l10n:label" .
-ui:ex-localized-how-price a c:Text ; c:children (
-    "The price is a " ui:ex-localized-how-c6 ": an amount and an ISO currency code, as data. How it is written - €1,249.00, 1.249,00 €, 1 249,00 € - belongs to the viewer, so a function rule ("
-    ui:ex-localized-how-c7 ") formats it with Intl.NumberFormat in the viewer's language before anything renders, and both renderings show that text. The specifications are properties of "
-    ui:ex-localized-how-c8 " with translated labels and units; the description list writes their numbers the same way." ) .
-ui:ex-localized-how-c6 a c:Code ; c:label "c:Money" .
-ui:ex-localized-how-c7 a c:Code ; c:label "c:MoneyTexts" .
-ui:ex-localized-how-c8 a c:Code ; c:label "shop:halden" .
-ui:ex-localized-how-rtl a c:Text ; c:children (
-    "Arabic is declared right to left (" ui:ex-localized-how-c9 "). The host follows the graph: it sets dir and lang on the page, and the layout - stacks, the card, this text - mirrors through CSS logical properties. Adding to the cart is "
-    ui:ex-localized-how-c10 ", whose announcement is translated too." ) .
-ui:ex-localized-how-c9 a c:Code ; c:label "l10n:direction l10n:RTL" .
-ui:ex-localized-how-c10 a c:Code ; c:label "shop:AddToCart" .
-ui:ex-localized-how-cost a c:Text ; c:children (
-    "Why it is cheap: switching the language re-runs only the rules that chose a text by language (they record that they did), not the page." ) .
+# The walkthrough's title and step titles are translated like the page above (switch the language).
+ui:ex-localized-how a c:Walkthrough ;
+    c:label "How it works" , "Як це працює"@uk , "Wie es funktioniert"@de , "كيف يعمل"@ar ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-localized-w1 ui:ex-localized-w2 ui:ex-localized-w3 ui:ex-localized-w4 ui:ex-localized-w5 ui:ex-localized-w6 ) .
+
+ui:ex-localized-w1 a c:WalkthroughStep ;
+    rdfs:label "Every text, in every language" , "Кожен текст - кожною мовою"@uk , "Jeder Text in jeder Sprache"@de , "كل نص بكل لغة"@ar ;
+    c:children ( "Each label has an untagged English source and tagged translations: " ui:ex-localized-m-add " says \"Add to cart\", \"In den Warenkorb\"@de, \"أضف إلى السلة\"@ar. The product's specifications are properties - " ui:ex-localized-m-pressure ", " ui:ex-localized-m-tank " - whose labels and units are translated the same way." ) .
+ui:ex-localized-w2 a c:WalkthroughStep ;
+    rdfs:label "The viewer's language is one triple" , "Мова читача - одна трійка"@uk , "Die Sprache ist ein Tripel"@de , "لغة القارئ ثلاثية واحدة"@ar ;
+    c:children ( "Which language is shown is " ui:ex-localized-m-language " on the app (ui:app), the property the site's display settings set too. Here " ui:ex-localized-m-switch ", a " ui:ex-localized-m-Segmented ", controls it directly: choosing Deutsch writes one triple." ) .
+ui:ex-localized-w3 a c:WalkthroughStep ;
+    rdfs:label "Rules choose the text" , "Правила обирають текст"@uk , "Regeln wählen den Text"@de , "القواعد تختار النص"@ar ;
+    c:children ( "Function rules pick a label in the viewer's language as they render (the viewer's language, else the untagged source). SPARQL rules cannot see the viewer, so the localization layer first writes " ui:ex-localized-m-l10nlabel " - the label in that language - and they prefer it. Both render the same." ) .
+ui:ex-localized-w4 a c:WalkthroughStep ;
+    rdfs:label "Money and numbers are the viewer's" , "Гроші й числа - як у читача"@uk , "Geld und Zahlen nach Leserart"@de , "المال والأرقام بطريقة القارئ"@ar ;
+    c:children ( "The price, " ui:ex-localized-m-price ", is a " ui:ex-localized-m-Money ": an amount and an ISO currency code, as data. How it is written - €1,249.00, 1.249,00 €, 1 249,00 € - belongs to the viewer, so a rule formats it with Intl.NumberFormat before anything renders. The specifications in " ui:ex-localized-m-specs " show " ui:ex-localized-m-halden "'s numbers the same way: 1.8 L, 1,8 l, ١٫٨ لتر." ) .
+ui:ex-localized-w5 a c:WalkthroughStep ;
+    rdfs:label "Right to left, by declaration" , "Справа наліво - за оголошенням"@uk , "Von rechts nach links, per Deklaration"@de , "من اليمين إلى اليسار بالتصريح"@ar ;
+    c:children ( "Arabic is declared right to left (l10n:direction). The host follows the graph: it sets dir and lang on the page, and every layout - stacks, the card, this walkthrough and its arrows - mirrors through CSS logical properties. " ui:ex-localized-m-addtocart " counts " ui:ex-localized-m-cart " up, and its announcement is translated too." ) .
+ui:ex-localized-w6 a c:WalkthroughStep ;
+    rdfs:label "Why it is cheap" , "Чому це дешево"@uk , "Warum es billig ist"@de , "لماذا هو رخيص"@ar ;
+    c:children ( "A rule that chose a text by language records that it did. Switching the language re-runs only those rules - the labels, the price, the units - not the page; and a click on " ui:ex-localized-m-add2 " changes one triple, the count." ) .
+
+ui:ex-localized-m-add a c:Mention ; c:label "the button" ; c:mentions ui:ex-localized-add .
+ui:ex-localized-m-add2 a c:Mention ; c:label "the Add to cart button" ; c:mentions ui:ex-localized-add .
+ui:ex-localized-m-pressure a c:Mention ; c:label "shop:pressure" ; c:mentions shop:pressure .
+ui:ex-localized-m-tank a c:Mention ; c:label "shop:tank" ; c:mentions shop:tank .
+ui:ex-localized-m-language a c:Mention ; c:label "l10n:language" ; c:mentions l10n:language ; c:to l10n:language .
+ui:ex-localized-m-switch a c:Mention ; c:label "the language switch" ; c:mentions ui:ex-localized-language .
+ui:ex-localized-m-Segmented a c:Mention ; c:label "c:Segmented" ; c:mentions c:Segmented ; c:to c:Segmented .
+ui:ex-localized-m-l10nlabel a c:Mention ; c:label "l10n:label" ; c:mentions l10n:label ; c:to l10n:label .
+ui:ex-localized-m-price a c:Mention ; c:label "ui:ex-localized-price" ; c:mentions ui:ex-localized-price .
+ui:ex-localized-m-Money a c:Mention ; c:label "c:Money" ; c:mentions c:Money ; c:to c:Money .
+ui:ex-localized-m-specs a c:Mention ; c:label "the description list" ; c:mentions ui:ex-localized-specs .
+ui:ex-localized-m-halden a c:Mention ; c:label "shop:halden" ; c:mentions shop:halden .
+ui:ex-localized-m-addtocart a c:Mention ; c:label "shop:AddToCart" ; c:mentions shop:AddToCart .
+ui:ex-localized-m-cart a c:Mention ; c:label "the cart" ; c:mentions ui:ex-localized-cart .

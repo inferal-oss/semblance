@@ -63,13 +63,48 @@ ui:SigninAgain a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-signin-aga
     beh:deletes """CONSTRUCT { ui:signinFlow ui:signinStep ?s . ui:ex-signin-code c:value ?v ; c:error ?e } WHERE { ui:signinFlow ui:signinStep ?s OPTIONAL { ui:ex-signin-code c:value ?v } OPTIONAL { ui:ex-signin-code c:error ?e } }""" ;
     beh:inserts """CONSTRUCT { ui:signinFlow ui:signinStep ui:SigninCode . ui:ex-signin-code c:value "" } WHERE {}""" .
 
-ui:ex-signin-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-signin-how-h ui:ex-signin-how-1 ui:ex-signin-how-2 ui:ex-signin-how-3 ) .
-ui:ex-signin-how-h a c:Heading ; c:level 2 ; c:label "How it works" .
-ui:ex-signin-how-1 a c:Text ; c:children ( "Where the flow is, is one triple: " ui:ex-signin-c1 " is " ui:ex-signin-c2 " or " ui:ex-signin-c3 ", and a " ui:ex-signin-c4 " shows the matching step. Nothing is hidden state." ) .
-ui:ex-signin-how-2 a c:Text ; c:children ( "The code is a " ui:ex-signin-c5 ": one real field (paste and SMS autofill work) over six cells; its own reaction keeps the digits and writes " ui:ex-signin-c6 "." ) .
-ui:ex-signin-how-3 a c:Text ; c:children ( "Verify is one click with three reactions, each with its own condition in WHERE - " ui:ex-signin-c7 ", " ui:ex-signin-c8 ", " ui:ex-signin-c9 " - and only the one whose condition holds changes anything. They all see the state before the click; the right one moves the flow on and announces it as a toast (" ui:ex-signin-c10 ")." ) .
-ui:ex-signin-c1 a c:Code ; c:label "ui:signinFlow ui:signinStep" . ui:ex-signin-c2 a c:Code ; c:label "ui:SigninCode" . ui:ex-signin-c3 a c:Code ; c:label "ui:SigninDone" .
-ui:ex-signin-c4 a c:Code ; c:label "c:Switch" . ui:ex-signin-c5 a c:Code ; c:label "c:CodeInput" . ui:ex-signin-c6 a c:Code ; c:label "c:value" .
-ui:ex-signin-c7 a c:Code ; c:label "ui:SigninTooShort" . ui:ex-signin-c8 a c:Code ; c:label "ui:SigninWrong" . ui:ex-signin-c9 a c:Code ; c:label "ui:SigninRight" .
-ui:ex-signin-c10 a c:Code ; c:label "ann:announces" .
+# --- How it works: a walkthrough beside a diagram of what it mentions (ontology/components/walkthrough.ttl)
+
+ui:ex-signin-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-signin-w1 ui:ex-signin-w2 ui:ex-signin-w3 ui:ex-signin-w4 ui:ex-signin-w5 ui:ex-signin-w6 ) .
+
+ui:ex-signin-w1 a c:WalkthroughStep ; rdfs:label "Where the flow is, is one triple" ;
+    c:children ( "The flow is a resource, " ui:ex-signin-m-flow ", and its step is the value of one property, " ui:ex-signin-m-step ". The steps are individuals of the app's own class: " ui:ex-signin-m-code-step " and " ui:ex-signin-m-done-step ", ordered by sem:order. There is no hidden state: open the tools and the triple is there." ) .
+ui:ex-signin-w2 a c:WalkthroughStep ; rdfs:label "A switch shows the step" ;
+    c:children ( "The card's content is " ui:ex-signin-m-switch ", a " ui:ex-signin-m-Switch " that " ui:ex-signin-m-controls-flow " and follows " ui:ex-signin-m-step2 ". Each case pairs a value with what to show: " ui:ex-signin-m-case-code " shows the form, " ui:ex-signin-m-case-done " the confirmation. The case that is not shown is not evaluated at all until it is." ) .
+ui:ex-signin-w3 a c:WalkthroughStep ; rdfs:label "One field, six cells" ;
+    c:children ( "The code is " ui:ex-signin-m-code ", a " ui:ex-signin-m-CodeInput ": one real text field drawn as six cells in two groups, so paste and one-time-code autofill work. Its own reaction keeps only digits and writes them to the field's c:value - the value a reaction reads next." ) .
+ui:ex-signin-w4 a c:WalkthroughStep ; rdfs:label "One click, three reactions" ;
+    c:children ( "A click on " ui:ex-signin-m-verify " is one event, and three reactions answer it, each with its own condition in its WHERE clause: " ui:ex-signin-m-short " writes an error while fewer than six digits are there, " ui:ex-signin-m-wrong " when six are there but not the right ones, and " ui:ex-signin-m-right " moves " ui:ex-signin-m-flow2 " on to " ui:ex-signin-m-done-step2 " when the code matches. All three see the graph as it was before the click; only the one whose condition holds changes anything." ) .
+ui:ex-signin-w5 a c:WalkthroughStep ; rdfs:label "Said out loud, and undone" ;
+    c:children ( "Reactions say what they mean: " ui:ex-signin-m-right2 " carries " ui:ex-signin-m-announces " \"Signed in\", which the announcement layer shows as a toast and reads to assistive technology. " ui:ex-signin-m-resend " clears the field and announces a new code; " ui:ex-signin-m-again " - the " ui:ex-signin-m-again-button " - puts the flow back on " ui:ex-signin-m-code-step2 " and empties the field." ) .
+ui:ex-signin-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "A keystroke changes one triple, the field's value, so only " ui:ex-signin-m-code2 " renders again. Verifying changes the step: the switch shows another case, and the alert " ui:ex-signin-m-ok " is evaluated the first time it is shown. Nothing reads the whole page, so nothing re-reads it." ) .
+
+ui:ex-signin-m-flow a c:Mention ; c:label "ui:signinFlow" ; c:mentions ui:signinFlow .
+ui:ex-signin-m-flow2 a c:Mention ; c:label "the flow" ; c:mentions ui:signinFlow .
+ui:ex-signin-m-step a c:Mention ; c:label "ui:signinStep" ; c:mentions ui:signinStep .
+ui:ex-signin-m-step2 a c:Mention ; c:label "ui:signinStep" ; c:mentions ui:signinStep .
+ui:ex-signin-m-code-step a c:Mention ; c:label "ui:SigninCode" ; c:mentions ui:SigninCode .
+ui:ex-signin-m-code-step2 a c:Mention ; c:label "ui:SigninCode" ; c:mentions ui:SigninCode .
+ui:ex-signin-m-done-step a c:Mention ; c:label "ui:SigninDone" ; c:mentions ui:SigninDone .
+ui:ex-signin-m-done-step2 a c:Mention ; c:label "ui:SigninDone" ; c:mentions ui:SigninDone .
+ui:ex-signin-m-switch a c:Mention ; c:label "ui:ex-signin-steps" ; c:mentions ui:ex-signin-steps .
+ui:ex-signin-m-Switch a c:Mention ; c:label "c:Switch" ; c:mentions c:Switch ; c:to c:Switch .
+ui:ex-signin-m-controls-flow a c:Mention ; c:label "controls the flow" ; c:mentions ui:signinFlow .
+ui:ex-signin-m-case-code a c:Mention ; c:label "the code case" ; c:mentions ui:ex-signin-case-code .
+ui:ex-signin-m-case-done a c:Mention ; c:label "the done case" ; c:mentions ui:ex-signin-case-done .
+ui:ex-signin-m-code a c:Mention ; c:label "ui:ex-signin-code" ; c:mentions ui:ex-signin-code .
+ui:ex-signin-m-code2 a c:Mention ; c:label "the code input" ; c:mentions ui:ex-signin-code .
+ui:ex-signin-m-CodeInput a c:Mention ; c:label "c:CodeInput" ; c:mentions c:CodeInput ; c:to c:CodeInput .
+ui:ex-signin-m-verify a c:Mention ; c:label "the Verify button" ; c:mentions ui:ex-signin-verify .
+ui:ex-signin-m-short a c:Mention ; c:label "ui:SigninTooShort" ; c:mentions ui:SigninTooShort .
+ui:ex-signin-m-wrong a c:Mention ; c:label "ui:SigninWrong" ; c:mentions ui:SigninWrong .
+ui:ex-signin-m-right a c:Mention ; c:label "ui:SigninRight" ; c:mentions ui:SigninRight .
+ui:ex-signin-m-right2 a c:Mention ; c:label "ui:SigninRight" ; c:mentions ui:SigninRight .
+ui:ex-signin-m-announces a c:Mention ; c:label "ann:announces" ; c:mentions ann:announces ; c:to ann:announces .
+ui:ex-signin-m-resend a c:Mention ; c:label "ui:SigninResend" ; c:mentions ui:SigninResend .
+ui:ex-signin-m-again a c:Mention ; c:label "ui:SigninAgain" ; c:mentions ui:SigninAgain .
+ui:ex-signin-m-again-button a c:Mention ; c:label "Start over button" ; c:mentions ui:ex-signin-again .
+ui:ex-signin-m-ok a c:Mention ; c:label "ui:ex-signin-ok" ; c:mentions ui:ex-signin-ok .

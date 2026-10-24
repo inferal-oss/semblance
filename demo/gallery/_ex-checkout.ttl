@@ -434,44 +434,49 @@ WHERE { ui:co-steps c:current ui:co-step-done . OPTIONAL { ui:ex-checkout co:lin
 
 # --- how it works -----------------------------------------------------------------------------------
 
-ui:ex-checkout-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:co-how-title ui:co-how-1 ui:co-how-2 ui:co-how-3 ui:co-how-4 ui:co-how-5 ) .
-ui:co-how-title a c:Heading ; c:label "How it works" .
-ui:co-how-1 a c:Text ; c:children ( "The step is one triple: " ui:co-how-current " of the stepper " ui:co-how-steps
-    ". A " ui:co-how-switch " shows the panel whose " ui:co-how-when " matches it, and every Continue and Back is a reaction that rewrites it - only from the step it names, so a stale click does nothing." ) .
-ui:co-how-2 a c:Text ; c:children ( "The cart's lines are data (" ui:co-how-line ", " ui:co-how-qty ", " ui:co-how-price
-    "). One rule, " ui:co-how-pricing ", derives every figure from them before the components render (stratum -15): line totals, the summary, the order's "
-    ui:co-how-total ", the free-shipping hint, and which buttons are disabled. It is a SPARQL CONSTRUCT with aggregates over the lines, in cents; its function twin in "
-    ui:co-how-host " writes the same triples for stores without SPARQL." ) .
-ui:co-how-3 a c:Text ; c:children ( "The − / + / ✕ buttons are instances of " ui:co-how-fewer " and its siblings, so one reaction serves every line: the line is the one whose "
-    ui:co-how-fewerp " is the clicked button. Removing a line sets its " ui:co-how-status " to " ui:co-how-removed "; the row is a switch over that status, so Undo is just as small. The rows line up because the list declares its columns once ("
-    ui:co-how-columns ") and each row is a " ui:co-how-subgrid " that takes its columns from there; the switches between them take no part in layout." ) .
-ui:co-how-4 a c:Text ; c:children ( "The shipping fields point at SHACL shapes (" ui:co-how-validates "); the validation layer writes their errors and "
-    ui:co-how-invalid ", and disables Continue, which " ui:co-how-requires " them. Continue copies each field's value to the order property it " ui:co-how-fills
-    ". Country, delivery and payment are choices over the order itself; their options are the individuals of each property's range, so a new country is one triple." ) .
-ui:co-how-5 a c:Text ; c:children ( "Why it's cheap: changing a quantity changes one triple. The pricing rule re-runs because it follows "
-    ui:co-how-follows " to that line, and only the texts whose values changed re-render; the hidden steps are not evaluated at all until they are shown. Placing the order derives its number from the event ("
-    ui:co-how-md5 ") and announces itself (" ui:co-how-announces ")." ) .
-ui:co-how-current a c:Code ; c:label "c:current" .
-ui:co-how-steps a c:Code ; c:label "ui:co-steps" .
-ui:co-how-switch a c:Code ; c:label "c:Switch" .
-ui:co-how-when a c:Code ; c:label "c:when" .
-ui:co-how-line a c:Code ; c:label "co:line" .
-ui:co-how-qty a c:Code ; c:label "co:quantity" .
-ui:co-how-follows a c:Code ; c:label "sem:follows co:line" .
-ui:co-how-price a c:Code ; c:label "co:unitPrice" .
-ui:co-how-pricing a c:Code ; c:label "co:Pricing" .
-ui:co-how-total a c:Code ; c:label "co:totalDue" .
-ui:co-how-host a c:Code ; c:label "src/examples/checkout.ts" .
-ui:co-how-fewer a c:Code ; c:label "co:FewerButton" .
-ui:co-how-fewerp a c:Code ; c:label "co:fewer" .
-ui:co-how-status a c:Code ; c:label "co:status" .
-ui:co-how-removed a c:Code ; c:label "co:Removed" .
-ui:co-how-columns a c:Code ; c:label "co:CartColumns" .
-ui:co-how-subgrid a c:Code ; c:label "pos:Subgrid" .
-ui:co-how-validates a c:Code ; c:label "val:validates" .
-ui:co-how-invalid a c:Code ; c:label "val:invalid" .
-ui:co-how-requires a c:Code ; c:label "val:requires" .
-ui:co-how-fills a c:Code ; c:label "co:fills" .
-ui:co-how-md5 a c:Code ; c:label "MD5(STR($event))" .
-ui:co-how-announces a c:Code ; c:label "ann:announces" .
+ui:ex-checkout-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:co-w1 ui:co-w2 ui:co-w3 ui:co-w4 ui:co-w5 ui:co-w6 ui:co-w7 ) .
+
+ui:co-w1 a c:WalkthroughStep ; rdfs:label "The order is data" ;
+    c:children ( "The example's root, " ui:co-m-order ", is also a " ui:co-m-Order " in the example's own vocabulary. Its " ui:co-m-line " links name the cart's lines - " ui:co-m-mug " has a label, a unit price and a quantity - and the order holds the tax rate and the chosen " ui:co-m-speed ", " ui:co-m-country " and payment. No figure is stored." ) .
+ui:co-w2 a c:WalkthroughStep ; rdfs:label "The step is one triple" ;
+    c:children ( "Where you are is the c:current of " ui:co-m-steps ", a " ui:co-m-Stepper ". " ui:co-m-panels ", a switch over that triple, shows the matching panel. Every Continue and Back is a reaction that rewrites it - " ui:co-m-toshipping " only from the cart, so a stale click does nothing - and the steps not shown are not evaluated at all." ) .
+ui:co-w3 a c:WalkthroughStep ; rdfs:label "One rule prices everything" ;
+    c:children ( ui:co-m-pricing " derives every figure from the lines before the components render: each line's quantity and total texts (" ui:co-m-mugtotal "), the summary " ui:co-m-summary ", the order's co:totalDue, the free-shipping hint, and which buttons are disabled. It is a SPARQL CONSTRUCT with aggregates, in cents; its function twin in src/examples/checkout.ts writes the same triples." ) .
+ui:co-w4 a c:WalkthroughStep ; rdfs:label "One reaction per meaning, not per button" ;
+    c:children ( "The − / + / ✕ buttons are instances of classes: " ui:co-m-more " is a " ui:co-m-MoreButton ", so " ui:co-m-onemore " serves every line - the line is the one whose co:more is the clicked button. " ui:co-m-remove " sets the line's status to " ui:co-m-removed ", and the row " ui:co-m-mugswitch " is a switch over that status, so Undo is just as small. The rows line up because the list declares its columns once, " ui:co-m-columns "." ) .
+ui:co-w5 a c:WalkthroughStep ; rdfs:label "Shipping is checked by shapes" ;
+    c:children ( "Each field points at a SHACL property shape: " ui:co-m-postal " validates against " ui:co-m-postalshape ". The validation layer writes the errors and disables " ui:co-m-toreviewbutton ", which requires the four fields. " ui:co-m-toreview " copies each field's value onto the order property it fills (co:fills). Country, delivery and payment are choices over the order itself, their options the individuals of each range." ) .
+ui:co-w6 a c:WalkthroughStep ; rdfs:label "Placing the order" ;
+    c:children ( ui:co-m-place " derives the order's number from the event (MD5 of its IRI), moves on to Done, and says so with ann:announces; " ui:co-m-neworder " puts every line back as it began." ) .
+ui:co-w7 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "Changing a quantity changes one triple. The pricing rule re-runs because it follows " ui:co-m-line2 " to that line, and only the texts whose values changed render again; the hidden steps are parked until shown." ) .
+
+ui:co-m-order a c:Mention ; c:label "ui:ex-checkout" ; c:mentions ui:ex-checkout .
+ui:co-m-Order a c:Mention ; c:label "co:Order" ; c:mentions co:Order .
+ui:co-m-line a c:Mention ; c:label "co:line" ; c:mentions co:line .
+ui:co-m-line2 a c:Mention ; c:label "co:line" ; c:mentions co:line .
+ui:co-m-mug a c:Mention ; c:label "co:l-mug" ; c:mentions co:l-mug .
+ui:co-m-speed a c:Mention ; c:label "speed" ; c:mentions co:Standard .
+ui:co-m-country a c:Mention ; c:label "country" ; c:mentions co:US .
+ui:co-m-steps a c:Mention ; c:label "ui:co-steps" ; c:mentions ui:co-steps .
+ui:co-m-Stepper a c:Mention ; c:label "c:Stepper" ; c:mentions c:Stepper ; c:to c:Stepper .
+ui:co-m-panels a c:Mention ; c:label "ui:co-panels" ; c:mentions ui:co-panels .
+ui:co-m-toshipping a c:Mention ; c:label "co:ToShipping" ; c:mentions co:ToShipping .
+ui:co-m-pricing a c:Mention ; c:label "co:Pricing" ; c:mentions co:Pricing .
+ui:co-m-mugtotal a c:Mention ; c:label "the mug's total" ; c:mentions ui:co-mug-total .
+ui:co-m-summary a c:Mention ; c:label "ui:co-summary" ; c:mentions ui:co-summary .
+ui:co-m-more a c:Mention ; c:label "the mug's +" ; c:mentions ui:co-mug-more .
+ui:co-m-MoreButton a c:Mention ; c:label "co:MoreButton" ; c:mentions co:MoreButton .
+ui:co-m-onemore a c:Mention ; c:label "co:OneMore" ; c:mentions co:OneMore .
+ui:co-m-remove a c:Mention ; c:label "co:RemoveLine" ; c:mentions co:RemoveLine .
+ui:co-m-removed a c:Mention ; c:label "co:Removed" ; c:mentions co:Removed .
+ui:co-m-mugswitch a c:Mention ; c:label "ui:co-mug" ; c:mentions ui:co-mug .
+ui:co-m-columns a c:Mention ; c:label "co:CartColumns" ; c:mentions co:CartColumns .
+ui:co-m-postal a c:Mention ; c:label "the postal code" ; c:mentions ui:co-postal .
+ui:co-m-postalshape a c:Mention ; c:label "co:PostalShape" ; c:mentions co:PostalShape .
+ui:co-m-toreviewbutton a c:Mention ; c:label "Continue" ; c:mentions ui:co-to-review .
+ui:co-m-toreview a c:Mention ; c:label "co:ToReview" ; c:mentions co:ToReview .
+ui:co-m-place a c:Mention ; c:label "co:PlaceOrder" ; c:mentions co:PlaceOrder .
+ui:co-m-neworder a c:Mention ; c:label "co:NewOrder" ; c:mentions co:NewOrder .

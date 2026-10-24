@@ -265,47 +265,41 @@ WHERE {
 
 # --- how it works -------------------------------------------------------------------------------------
 
-ui:ex-settings-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-settings-how-title ui:ex-settings-how-state ui:ex-settings-how-edit ui:ex-settings-how-rules
-                 ui:ex-settings-how-check ui:ex-settings-how-keep ui:ex-settings-how-cost ) .
-ui:ex-settings-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
-ui:ex-settings-how-state a c:Text ; c:children (
-    "The state is two nodes with the same properties: " ui:ex-settings-how-c1 " and " ui:ex-settings-how-c2
-    ". Each property is typed " ui:ex-settings-how-c3 ", which is all that saving, discarding and counting changes need to know about it." ) .
-ui:ex-settings-how-c1 a c:Code ; c:label "ui:set-draft" .
-ui:ex-settings-how-c2 a c:Code ; c:label "ui:set-saved" .
-ui:ex-settings-how-c3 a c:Code ; c:label "set:Setting" .
-ui:ex-settings-how-edit a c:Text ; c:children (
-    "The switches and the theme " ui:ex-settings-how-c4 " edit the draft directly (" ui:ex-settings-how-c5
-    "). The text fields keep their own value; " ui:ex-settings-how-c6 " - one reaction for every " ui:ex-settings-how-c7
-    " - copies each keystroke into the draft. " ui:ex-settings-how-c8 " and " ui:ex-settings-how-c9
-    " are CONSTRUCT pairs that copy one node onto the other, only when something differs; Save is announced as a toast." ) .
-ui:ex-settings-how-c4 a c:Code ; c:label "c:Choice" .
-ui:ex-settings-how-c5 a c:Code ; c:label "c:controls ui:set-draft" .
-ui:ex-settings-how-c6 a c:Code ; c:label "set:TypeIntoDraft" .
-ui:ex-settings-how-c7 a c:Code ; c:label "set:SettingField" .
-ui:ex-settings-how-c8 a c:Code ; c:label "set:Save" .
-ui:ex-settings-how-c9 a c:Code ; c:label "set:Discard" .
-ui:ex-settings-how-rules a c:Text ; c:children (
-    "Two rules derive the rest. " ui:ex-settings-how-c10 " counts the settings in which the two nodes differ and writes the badge's label, icon and tone (and disables Save and Discard when there is nothing to do). "
-    ui:ex-settings-how-c11 " gives the sample card the draft's " ui:ex-settings-how-c12
-    ". Each is a SPARQL CONSTRUCT in this file with a function twin in src/examples/settings.ts, which the host registers; the engine runs whichever its store and preference allow, and both write the same triples." ) .
-ui:ex-settings-how-c10 a c:Code ; c:label "set:Changes" .
-ui:ex-settings-how-c11 a c:Code ; c:label "set:Preview" .
-ui:ex-settings-how-c12 a c:Code ; c:label "sty:theme" .
-ui:ex-settings-how-check a c:Text ; c:children (
-    "The fields point at SHACL property shapes (" ui:ex-settings-how-c13 "); the validation layer derives their errors, and Save, which " ui:ex-settings-how-c14
-    " all three, stays disabled while one is wrong. ⌘S / Ctrl+S is Save's " ui:ex-settings-how-c15 "." ) .
-ui:ex-settings-how-c13 a c:Code ; c:label "val:validates set:EmailShape" .
-ui:ex-settings-how-c14 a c:Code ; c:label "val:requires" .
-ui:ex-settings-how-c15 a c:Code ; c:label "key:shortcut" .
-ui:ex-settings-how-keep a c:Text ; c:children (
-    ui:ex-settings-how-c16 " is a " ui:ex-settings-how-c17 " with " ui:ex-settings-how-c18
-    ": its CONSTRUCT is what is kept in localStorage, and on load it is put back - into the saved node, the draft and the fields - before anything renders. It is listed with the others on the Layers page." ) .
-ui:ex-settings-how-c16 a c:Code ; c:label "ui:rememberExampleSettings" .
-ui:ex-settings-how-c17 a c:Code ; c:label "per:Policy" .
-ui:ex-settings-how-c18 a c:Code ; c:label "per:scope per:Device" .
-ui:ex-settings-how-cost a c:Text ; c:children (
-    "Why it is cheap: a keystroke changes two triples (the field's value and the draft's). It re-runs that field, its validation and "
-    ui:ex-settings-how-c19 " over nine settings; under SPARQL the other controls of the draft look again too (a SPARQL rule hears any change of the node it follows) and find nothing to change, so the page gets a single DOM operation. Nothing outside the example runs, and while it is not shown its rules are parked." ) .
-ui:ex-settings-how-c19 a c:Code ; c:label "set:Changes" .
+ui:ex-settings-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-settings-w1 ui:ex-settings-w2 ui:ex-settings-w3 ui:ex-settings-w4 ui:ex-settings-w5 ui:ex-settings-w6 ) .
+
+ui:ex-settings-w1 a c:WalkthroughStep ; rdfs:label "Two nodes: saved, and a draft" ;
+    c:children ( "The state is " ui:ex-settings-m-saved " and " ui:ex-settings-m-draft ", two nodes with the same properties. Each property is a " ui:ex-settings-m-Setting ", like " ui:ex-settings-m-name " or " ui:ex-settings-m-theme " - which is all that saving, discarding and counting changes need to know about it." ) .
+ui:ex-settings-w2 a c:WalkthroughStep ; rdfs:label "Controls edit the draft" ;
+    c:children ( "The switches and the theme choice edit the draft directly: " ui:ex-settings-m-digest " controls the draft's " ui:ex-settings-m-digestp ". The text fields keep their own value, and " ui:ex-settings-m-type " - one reaction for every " ui:ex-settings-m-SettingField ", like " ui:ex-settings-m-namefield " - copies each keystroke into the draft property the field edits." ) .
+ui:ex-settings-w3 a c:WalkthroughStep ; rdfs:label "Save and Discard copy one node onto the other" ;
+    c:children ( ui:ex-settings-m-save " copies the draft onto the saved node, " ui:ex-settings-m-discard " the saved node onto the draft - each a CONSTRUCT pair over every " ui:ex-settings-m-Setting2 ", that changes something only when the two differ. Save is announced as a toast; " ui:ex-settings-m-savebutton " also answers ⌘S." ) .
+ui:ex-settings-w4 a c:WalkthroughStep ; rdfs:label "Rules derive the rest" ;
+    c:children ( ui:ex-settings-m-changes " counts the settings in which the two nodes differ and writes the label, icon and tone of " ui:ex-settings-m-status ", disabling Save and Discard when there is nothing to do. " ui:ex-settings-m-preview " gives " ui:ex-settings-m-previewcard " the draft's theme. Each is a SPARQL CONSTRUCT here with a function twin in src/examples/settings.ts; both write the same triples." ) .
+ui:ex-settings-w5 a c:WalkthroughStep ; rdfs:label "Checked by shapes" ;
+    c:children ( "The fields point at SHACL property shapes - " ui:ex-settings-m-emailshape " for the email - and the validation layer derives their errors. Save requires all three fields, so it stays disabled while one is wrong." ) .
+ui:ex-settings-w6 a c:WalkthroughStep ; rdfs:label "Kept, and cheap" ;
+    c:children ( ui:ex-settings-m-keep " is a " ui:ex-settings-m-Policy " kept on this device: on load it is put back - into the saved node, the draft and the fields - before anything renders. A keystroke changes two triples, the field's value and the draft's: that field, its validation and the change count run again, and the page gets a single DOM operation." ) .
+
+ui:ex-settings-m-saved a c:Mention ; c:label "ui:set-saved" ; c:mentions ui:set-saved .
+ui:ex-settings-m-draft a c:Mention ; c:label "ui:set-draft" ; c:mentions ui:set-draft .
+ui:ex-settings-m-Setting a c:Mention ; c:label "set:Setting" ; c:mentions set:Setting .
+ui:ex-settings-m-Setting2 a c:Mention ; c:label "set:Setting" ; c:mentions set:Setting .
+ui:ex-settings-m-name a c:Mention ; c:label "set:displayName" ; c:mentions set:displayName .
+ui:ex-settings-m-theme a c:Mention ; c:label "set:theme" ; c:mentions set:theme .
+ui:ex-settings-m-digest a c:Mention ; c:label "ui:set-digest" ; c:mentions ui:set-digest .
+ui:ex-settings-m-digestp a c:Mention ; c:label "set:digest" ; c:mentions set:digest .
+ui:ex-settings-m-type a c:Mention ; c:label "set:TypeIntoDraft" ; c:mentions set:TypeIntoDraft .
+ui:ex-settings-m-SettingField a c:Mention ; c:label "set:SettingField" ; c:mentions set:SettingField .
+ui:ex-settings-m-namefield a c:Mention ; c:label "the name field" ; c:mentions ui:set-name .
+ui:ex-settings-m-save a c:Mention ; c:label "set:Save" ; c:mentions set:Save .
+ui:ex-settings-m-discard a c:Mention ; c:label "set:Discard" ; c:mentions set:Discard .
+ui:ex-settings-m-savebutton a c:Mention ; c:label "The Save button" ; c:mentions ui:set-save .
+ui:ex-settings-m-changes a c:Mention ; c:label "set:Changes" ; c:mentions set:Changes .
+ui:ex-settings-m-status a c:Mention ; c:label "the badge" ; c:mentions ui:set-status .
+ui:ex-settings-m-preview a c:Mention ; c:label "set:Preview" ; c:mentions set:Preview .
+ui:ex-settings-m-previewcard a c:Mention ; c:label "the sample card" ; c:mentions ui:set-preview .
+ui:ex-settings-m-emailshape a c:Mention ; c:label "set:EmailShape" ; c:mentions set:EmailShape .
+ui:ex-settings-m-keep a c:Mention ; c:label "ui:rememberExampleSettings" ; c:mentions ui:rememberExampleSettings .
+ui:ex-settings-m-Policy a c:Mention ; c:label "per:Policy" ; c:mentions per:Policy ; c:to per:Policy .

@@ -111,7 +111,7 @@ const prefixRecord = (ctx: RuleContext): Record<string, string> => ctx.memo('wor
 const PN_LOCAL = /^[A-Za-z_][\w-]*$/
 
 /** An IRI as a prefixed name when a known prefix fits, else <iri> (shortened when long). */
-function compact(ctx: RuleContext, iri: string): string {
+export function compact(ctx: RuleContext, iri: string): string {
   for (const [p, ns] of prefixMap(ctx)) if (iri.startsWith(ns) && PN_LOCAL.test(iri.slice(ns.length))) return `${p}:${iri.slice(ns.length)}`
   return iri.length > 60 ? `<…${iri.slice(-56)}>` : `<${iri}>`
 }
@@ -124,7 +124,7 @@ function display(ctx: RuleContext, t: Term | undefined): string {
 }
 
 /** FNV-1a, base 36: short, stable keys for content-addressed nodes. */
-function fnv(s: string): string {
+export function fnv(s: string): string {
   let h = 0x811c9dc5
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
   return (h >>> 0).toString(36)

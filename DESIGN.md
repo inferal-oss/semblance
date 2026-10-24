@@ -55,7 +55,7 @@ Thin vocabularies. Every component
 | group | components |
 |---|---|
 | **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches |
-| **Type** | Heading · Text · Link · Kbd · Code · Blockquote |
+| **Type** | Heading · Text · Link · Kbd · Code · Blockquote · Walkthrough (WalkthroughStep, Mention) |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem (+ Pressable, Setter mixins) |
 | **Inputs** | TextField · TextArea · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState |
@@ -68,6 +68,17 @@ Thin vocabularies. Every component
 Any component that shows a `c:value` may take it from a query instead: `c:valueQuery` names a
 `sem:View` whose first row's `?value` (and `?tone`) it shows, re-run when its `c:dataset` changes
 (`ontology/components/formula.ttl`).
+
+A **walkthrough** (`ontology/components/walkthrough.ttl`) is an explanation in steps whose phrases
+are `c:Mention`s of resources (`c:mentions`): beside the steps it draws a diagram of what they
+mention and the graph's links among it, in bands by the step that first mentions each, and stays
+in view while the steps scroll. The step being read is graph state (`c:current`, reported by the
+host as an unrecorded `c:StepInView` as the page scrolls, or by focus); a rule above the rendering
+derives each mark's `c:Salience` from it, and the host draws curved arrows from the current step's
+mentions to their nodes (`src/web/walkthrough.ts`: the graph says what, the host only where).
+Activating a mention shows its statement in the walkthrough's `c:sourceView` (`c:highlightsSubject`;
+the host records each statement's lines as a `c:SourceSpan`), or, with `c:to`, goes to the term's
+page. Every example on the Examples page explains itself with one.
 
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)

@@ -442,71 +442,47 @@ WHERE {
 
 # --- how it works --------------------------------------------------------------------------------
 
-ui:ex-chat-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-chat-how-title ui:ex-chat-how-data ui:ex-chat-how-thread ui:ex-chat-how-send ui:ex-chat-how-typing
-                 ui:ex-chat-how-time ui:ex-chat-how-channels ui:ex-chat-how-private ui:ex-chat-how-keep ui:ex-chat-how-cost ) .
-ui:ex-chat-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
-ui:ex-chat-how-data a c:Text ; c:children (
-    "Messages are ActivityStreams notes: " ui:ex-chat-how-c1 " with " ui:ex-chat-how-c2 ", " ui:ex-chat-how-c3 " and " ui:ex-chat-how-c4
-    ". People are nodes with a label; channels are " ui:ex-chat-how-c5 " individuals, and which one is open is a single triple, " ui:ex-chat-how-c6 "." ) .
-ui:ex-chat-how-c1 a c:Code ; c:label "as:Note" .
-ui:ex-chat-how-c2 a c:Code ; c:label "as:attributedTo" .
-ui:ex-chat-how-c3 a c:Code ; c:label "as:content" .
-ui:ex-chat-how-c4 a c:Code ; c:label "as:published" .
-ui:ex-chat-how-c5 a c:Code ; c:label "ch:Channel" .
-ui:ex-chat-how-c6 a c:Code ; c:label "ch:client ch:channel ch:General" .
-ui:ex-chat-how-thread a c:Text ; c:children (
-    "Each channel's thread is a " ui:ex-chat-how-c7 " (a framework component, ontology/components/messages.ttl) whose " ui:ex-chat-how-c8
-    " are the notes. Its member rule (" ui:ex-chat-how-c9 ") mints one " ui:ex-chat-how-c10
-    " per note, with the author's avatar, name and time, ordered by publication; a " ui:ex-chat-how-c11 " shows the open channel's thread and keeps the others as they were." ) .
-ui:ex-chat-how-c7 a c:Code ; c:label "c:MessageList" .
-ui:ex-chat-how-c8 a c:Code ; c:label "c:item" .
-ui:ex-chat-how-c9 a c:Code ; c:label "sem:forEach c:item" .
-ui:ex-chat-how-c10 a c:Code ; c:label "c:Message" .
-ui:ex-chat-how-c11 a c:Code ; c:label "c:Switch" .
-ui:ex-chat-how-send a c:Text ; c:children (
-    "Sending is " ui:ex-chat-how-c12 " (the button) and " ui:ex-chat-how-c13 " (Enter in the composer, an event class of its own: " ui:ex-chat-how-c14
-    "). Their CONSTRUCT mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer; if the channel's script is idle it also queues the channel's next " ui:ex-chat-how-c15 ". A send is announced as a toast." ) .
-ui:ex-chat-how-c12 a c:Code ; c:label "ch:SendOnClick" .
-ui:ex-chat-how-c13 a c:Code ; c:label "ch:SendOnEnter" .
-ui:ex-chat-how-c14 a c:Code ; c:label "ch:ComposerKey" .
-ui:ex-chat-how-c15 a c:Code ; c:label "ch:replies" .
-ui:ex-chat-how-typing a c:Text ; c:children (
-    "Someone typing is a note that is not published yet: it has " ui:ex-chat-how-c16 " and no " ui:ex-chat-how-c17
-    ". The thread places it where it started and shows its author with three dots (read out once, politely, as \"… is typing\" by the list's log role; the dots follow the motion preference). Publishing adds the content and the time to the same note, so the same entry becomes the message, in place." ) .
-ui:ex-chat-how-c16 a c:Code ; c:label "prov:startedAtTime" .
-ui:ex-chat-how-c17 a c:Code ; c:label "as:published" .
-ui:ex-chat-how-time a c:Text ; c:children (
-    "The others are " ui:ex-chat-how-c18 "s: chains of " ui:ex-chat-how-c19 "s saying who types what, for how long, after what pause. A script says when its next thing happens with "
-    ui:ex-chat-how-c20 "; the host's scheduler (src/behaviour/schedule.ts, one timer for the earliest due node, on a clock tests can move by hand) records a " ui:ex-chat-how-c21
-    " event addressed to the script when the time comes, and two ordinary reactions take the step: " ui:ex-chat-how-c22 " and " ui:ex-chat-how-c23 ". "
-    ui:ex-chat-how-c24 " holds a script while the chat is not on screen; it picks up where it was when it is." ) .
-ui:ex-chat-how-c18 a c:Code ; c:label "ch:Script" .
-ui:ex-chat-how-c19 a c:Code ; c:label "ch:Step" .
-ui:ex-chat-how-c20 a c:Code ; c:label "beh:dueAt" .
-ui:ex-chat-how-c21 a c:Code ; c:label "beh:Due" .
-ui:ex-chat-how-c22 a c:Code ; c:label "ch:StartTyping" .
-ui:ex-chat-how-c23 a c:Code ; c:label "ch:Publish" .
-ui:ex-chat-how-c24 a c:Code ; c:label "beh:dueWhileShown" .
-ui:ex-chat-how-channels a c:Text ; c:children (
-    "The channel list is a " ui:ex-chat-how-c25 " over " ui:ex-chat-how-c26 "; " ui:ex-chat-how-c27
-    " shows each channel's unread count beside it (and says \"3 unread\" to screen readers). A message published in a channel that is not open adds one; clicking a channel runs the list's own reaction and " ui:ex-chat-how-c28 ", which zeroes its count." ) .
-ui:ex-chat-how-c25 a c:Code ; c:label "c:NavList" .
-ui:ex-chat-how-c26 a c:Code ; c:label "ch:channel" .
-ui:ex-chat-how-c27 a c:Code ; c:label "c:countProperty ch:unread" .
-ui:ex-chat-how-c28 a c:Code ; c:label "ch:ClearUnread" .
-ui:ex-chat-how-private a c:Text ; c:children (
-    "A note with " ui:ex-chat-how-c29 " is hidden in private mode: the thread copies the flag onto the note's " ui:ex-chat-how-c30
-    ", and the privacy layer blurs it. Turn on \"Send as sensitive\" and what you send is hidden too. Neither the thread nor the message knows." ) .
-ui:ex-chat-how-c29 a c:Code ; c:label "prv:sensitive true" .
-ui:ex-chat-how-c30 a c:Code ; c:label "c:Message" .
-ui:ex-chat-how-keep a c:Text ; c:children (
-    ui:ex-chat-how-c31 " is a " ui:ex-chat-how-c32 " with " ui:ex-chat-how-c33
-    ": its CONSTRUCT - the threads, the counts, whose turn it is, where each script is and when it is due - is kept in localStorage and put back before the first render, so a reload continues the conversation, a half-typed note included." ) .
-ui:ex-chat-how-c31 a c:Code ; c:label "ui:rememberChat" .
-ui:ex-chat-how-c32 a c:Code ; c:label "per:Policy" .
-ui:ex-chat-how-c33 a c:Code ; c:label "per:scope per:Device" .
-ui:ex-chat-how-cost a c:Text ; c:children (
-    "Why it is cheap: a new note is a new " ui:ex-chat-how-c34
-    " link, and a member-wise rule hears only that link - one member evaluation, one message rendered, one list item inserted, the same in a thread of fifteen or fifteen hundred. A script step is one event, one CONSTRUCT and one note changed; the threads not shown are not evaluated at all." ) .
-ui:ex-chat-how-c34 a c:Code ; c:label "c:item" .
+ui:ex-chat-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-chat-w1 ui:ex-chat-w2 ui:ex-chat-w3 ui:ex-chat-w4 ui:ex-chat-w5 ui:ex-chat-w6 ui:ex-chat-w7 ) .
+
+ui:ex-chat-w1 a c:WalkthroughStep ; rdfs:label "Messages are ActivityStreams notes" ;
+    c:children ( "A message such as " ui:ex-chat-m-g01 " is an " ui:ex-chat-m-Note " with an author (" ui:ex-chat-m-grace "), a time and its content - a standard vocabulary, not a framework one. Channels are individuals of " ui:ex-chat-m-Channel ", like " ui:ex-chat-m-general ", and which one is open is a single triple on " ui:ex-chat-m-client "." ) .
+ui:ex-chat-w2 a c:WalkthroughStep ; rdfs:label "A thread lists a channel's notes" ;
+    c:children ( "Each channel names its thread; " ui:ex-chat-m-thread " is a " ui:ex-chat-m-MessageList " whose items are the notes. Its member rule mints one message per note - avatar, name, time - ordered by publication. " ui:ex-chat-m-panes ", a switch over the open channel, shows that channel's thread and keeps the others as they were." ) .
+ui:ex-chat-w3 a c:WalkthroughStep ; rdfs:label "Sending mints a note" ;
+    c:children ( ui:ex-chat-m-click " (the " ui:ex-chat-m-send ") and " ui:ex-chat-m-enter " (Enter in " ui:ex-chat-m-composer ", an event class of its own, " ui:ex-chat-m-key ") are one CONSTRUCT: it mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer. A send is announced as a toast." ) .
+ui:ex-chat-w4 a c:WalkthroughStep ; rdfs:label "Typing is a note not yet published" ;
+    c:children ( "When someone is typing, their note already exists - with an author and no time. The thread places it where it started and shows three dots, read out once as \"… is typing\". Publishing adds the content and the time to the same note, so the same entry becomes the message, in place." ) .
+ui:ex-chat-w5 a c:WalkthroughStep ; rdfs:label "Time is data too" ;
+    c:children ( "The others follow scripts: " ui:ex-chat-m-script " is a " ui:ex-chat-m-Script " whose next step, " ui:ex-chat-m-gs1 ", says who types what, for how long, after what pause. The script says when it is due (beh:dueAt); the host's one scheduler records a beh:Due event addressed to it when the time comes, and two ordinary reactions take the step: " ui:ex-chat-m-start " and " ui:ex-chat-m-publish ". A script waits while " ui:ex-chat-m-app " is not on screen." ) .
+ui:ex-chat-w6 a c:WalkthroughStep ; rdfs:label "Channels count what you missed" ;
+    c:children ( "The channel list " ui:ex-chat-m-channels " is a navigation list over the open channel, showing each channel's ch:unread beside it (and saying \"3 unread\" to screen readers). A note published in a channel that is not open adds one; opening it runs " ui:ex-chat-m-clear ", which zeroes the count." ) .
+ui:ex-chat-w7 a c:WalkthroughStep ; rdfs:label "Private, kept, and cheap" ;
+    c:children ( "A note with " ui:ex-chat-m-sensitive " - like " ui:ex-chat-m-g09 " - is blurred in private mode by the privacy layer; neither the thread nor the message knows. " ui:ex-chat-m-keep " keeps the conversation on this device, so a reload continues it, a half-typed note included. And a new note is one new c:item link: a member-wise rule hears only that, one message rendered, however long the thread." ) .
+
+ui:ex-chat-m-g01 a c:Mention ; c:label "ch:g01" ; c:mentions ch:g01 .
+ui:ex-chat-m-g09 a c:Mention ; c:label "ch:g09" ; c:mentions ch:g09 .
+ui:ex-chat-m-Note a c:Mention ; c:label "as:Note" ; c:mentions as:Note ; c:to as:Note .
+ui:ex-chat-m-grace a c:Mention ; c:label "ch:grace" ; c:mentions ch:grace .
+ui:ex-chat-m-Channel a c:Mention ; c:label "ch:Channel" ; c:mentions ch:Channel .
+ui:ex-chat-m-general a c:Mention ; c:label "ch:General" ; c:mentions ch:General .
+ui:ex-chat-m-client a c:Mention ; c:label "ch:client" ; c:mentions ch:client .
+ui:ex-chat-m-thread a c:Mention ; c:label "ui:ch-general-thread" ; c:mentions ui:ch-general-thread .
+ui:ex-chat-m-MessageList a c:Mention ; c:label "c:MessageList" ; c:mentions c:MessageList ; c:to c:MessageList .
+ui:ex-chat-m-panes a c:Mention ; c:label "ui:ch-panes" ; c:mentions ui:ch-panes .
+ui:ex-chat-m-click a c:Mention ; c:label "ch:SendOnClick" ; c:mentions ch:SendOnClick .
+ui:ex-chat-m-send a c:Mention ; c:label "Send button" ; c:mentions ui:ch-send .
+ui:ex-chat-m-enter a c:Mention ; c:label "ch:SendOnEnter" ; c:mentions ch:SendOnEnter .
+ui:ex-chat-m-composer a c:Mention ; c:label "the composer" ; c:mentions ui:ch-composer .
+ui:ex-chat-m-key a c:Mention ; c:label "ch:ComposerKey" ; c:mentions ch:ComposerKey .
+ui:ex-chat-m-script a c:Mention ; c:label "ch:generalScript" ; c:mentions ch:generalScript .
+ui:ex-chat-m-Script a c:Mention ; c:label "ch:Script" ; c:mentions ch:Script .
+ui:ex-chat-m-gs1 a c:Mention ; c:label "ch:gs1" ; c:mentions ch:gs1 .
+ui:ex-chat-m-start a c:Mention ; c:label "ch:StartTyping" ; c:mentions ch:StartTyping .
+ui:ex-chat-m-publish a c:Mention ; c:label "ch:Publish" ; c:mentions ch:Publish .
+ui:ex-chat-m-app a c:Mention ; c:label "the chat" ; c:mentions ui:ch-app .
+ui:ex-chat-m-channels a c:Mention ; c:label "ui:ch-channels" ; c:mentions ui:ch-channels .
+ui:ex-chat-m-clear a c:Mention ; c:label "ch:ClearUnread" ; c:mentions ch:ClearUnread .
+ui:ex-chat-m-sensitive a c:Mention ; c:label "prv:sensitive" ; c:mentions prv:sensitive ; c:to prv:sensitive .
+ui:ex-chat-m-keep a c:Mention ; c:label "ui:rememberChat" ; c:mentions ui:rememberChat .

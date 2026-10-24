@@ -49,6 +49,10 @@ nav:keyProperty a owl:ObjectProperty ; rdfs:domain nav:Dimension ; rdfs:range rd
 Values without one are spelled as prefixed names (c:Window), literals by their lexical form."""@en .
 nav:spelling a owl:ObjectProperty ; rdfs:domain nav:Dimension ; rdfs:range nav:Spelling ;
     rdfs:comment "How values are spelled: by key (nav:ByKey, the default) or as prefixed names (nav:PrefixedName, for terms of any vocabulary)."@en .
+nav:showsTerms a owl:DatatypeProperty ; rdfs:domain nav:Dimension ; rdfs:range xsd:boolean ;
+    rdfs:comment """Whether the dimension's values are terms of the vocabularies a view shows (the Reference's
+selected term): a link to a term that no component shows (c:to a class or a property) goes to it,
+with its parents' nav:when values."""@en .
 nav:Spelling a owl:Class .
 nav:ByKey a nav:Spelling ; rdfs:comment "By nav:keyProperty, then sem:slug, then as a prefixed name."@en .
 nav:PrefixedName a nav:Spelling ; rdfs:comment "As a prefixed name (c:Window, ui:page): any term, unambiguously."@en .

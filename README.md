@@ -2,7 +2,7 @@
 
 # Semblance
 
-A spike for an ontologically-defined web UI framework. A UI is a graph of
+An ontologically defined web UI framework. A UI is a graph of
 component instances described with RDF vocabularies. Rendering is an
 incremental, stratified rewrite of that graph into an
 [RDF/HTML](https://ia2.dev/spec/rdf-html) graph, which is then patched into the DOM.
@@ -11,15 +11,19 @@ provenance, source) are **layers**: vocabularies plus rules that run after the
 components and decorate their output. Interaction is recorded as RDF events in
 a Linked Data Event Stream, and declarative reactions turn events into state.
 
-**Demo:** <https://oss.inferal.org/semblance/> - the docs, the component reference,
-the examples and the benchmark matrix, running in your browser. It is served by
-GitHub Pages, which cannot send COOP/COEP headers, so the page is not cross-origin
-isolated: timings are coarser (~100 µs) and the heap meter may read n/a. For precise
-numbers run `npm run dev`.
+**Site:** <https://semblance.dev> - the docs, the component reference, the examples and the
+benchmark matrix, running in your browser, itself a Semblance app. GitHub Pages cannot send
+COOP/COEP headers, so the page is not cross-origin isolated: timings are coarser (~100 µs) and the
+heap meter may read n/a. For precise numbers run `npm run dev`.
+
+**Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
+own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
+with your app; [AGENTS.md](AGENTS.md) has the ground rules for working on the framework. The npm
+package will be `@inferal-oss/semblance` (not published yet).
 
 ```bash
 npm install
-npm run dev            # demo: Playground + Performance (http://localhost:5173)
+npm run dev            # the site (http://localhost:5173)
 npm test               # unit, integration, cost and soak tests
 npm run bench          # Node benchmarks, one process per cell -> bench/results/ (md, json, ttl)
 npm run build:single   # one self-contained, shareable file: dist-single/semblance.html (~6 MB)
@@ -215,6 +219,14 @@ a node of the graph (`c:selectedTerm`, by click or Enter) highlights it and its
 neighbourhood and dims the rest: a rule derives each mark's `c:Salience` from the
 rendered links, so a selection re-runs that rule only, not the query. Like
 any tab it can be detached into a window, and its state is remembered.
+
+Every example on the **Examples** page explains itself with a **walkthrough**
+(`ontology/components/walkthrough.ttl`): steps of text whose phrases are mentions of resources,
+beside a sticky diagram of those resources and their links in the graph. Scrolling makes a step
+current (graph state, unrecorded), its mentions' nodes stand out and curved arrows join each mention
+to its node; activating a mention highlights its statement in the example's own Turtle beside the
+diagram (each statement's lines are recorded with the source text), and a mention of a framework
+term links to its page in the Reference.
 
 The site's **Reference** is built the same way (`ontology/components/reference.ttl`):
 a `c:TermTree` derived from the ontology itself (component groups by `sem:group`,

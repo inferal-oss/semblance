@@ -37,7 +37,8 @@ describe('sty:textStyle', () => {
     expect(hooks).toMatch(/\[data-sem-text-style="mono"\] \{[^}]*font-family: var\(--sem-font-mono\)/)
     expect(hooks).toMatch(/\[data-sem-text-style="overline"\] \{[^}]*text-transform: uppercase/)
     // a tone colors text through --tone-text
-    expect(css).toMatch(/\[data-sem-c="text"\]\[data-sem-tone\] \{ color: var\(--tone-text\); \}/)
+    // (and its subclasses': a walkthrough's steps are running text too)
+    expect(css).toMatch(/\[data-sem-c="text"\]\[data-sem-tone\](, [^{]+)? \{ color: var\(--tone-text\); \}/)
   })
 })
 

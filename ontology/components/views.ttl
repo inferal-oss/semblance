@@ -335,10 +335,12 @@ c:SourceView a owl:Class ;
     rdfs:comment """A source text (c:of, a c:SourceText) shown verbatim and syntax-colored, under its c:path, with
 line numbers. c:label names it (default: the path)."""@en ;
     sem:slug "source-view" .
+# Not what it highlights (c:SourceHighlight's): showing another statement must not render the text again.
 c:SourceViewRendering a sem:Rendering ;
     sem:targets c:SourceView ;
     sem:stratum 0 ;
     sem:follows c:of ;
+    sem:watches rdf:type , c:of , c:label , c:emptyText ;
     sem:functionOnly """It splits the text into lexical tokens for coloring, which needs a tokenizer; SPARQL cannot split a string into tokens.""" .
 c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
 

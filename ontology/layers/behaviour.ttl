@@ -38,6 +38,12 @@ beh:Change a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "change" ;
 
 beh:Hover a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "mouseover" ; beh:recorded false ;
     rdfs:comment "The pointer entered a rendered element. Not recorded in the change log; reactions may still use it."@en .
+beh:Leave a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "mouseout" ; beh:recorded false ;
+    rdfs:comment "The pointer left a rendered element. Not recorded."@en .
+beh:Focus a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "focusin" ; beh:recorded false ;
+    rdfs:comment "A rendered element received focus. Not recorded."@en .
+beh:Blur a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "focusout" ; beh:recorded false ;
+    rdfs:comment "A rendered element lost focus. Not recorded."@en .
 beh:Move a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-move" ;
     rdfs:comment "A move gesture ended (beh:x, beh:y). While dragging, only the view moves; this commits the result."@en .
 beh:Resize a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-resize" ;

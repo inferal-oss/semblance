@@ -31,6 +31,7 @@ import { functions as toolbarFunctions } from './toolbar.ts'
 import { functions as messagesFunctions } from './messages.ts'
 import { containerFunctions } from './containers.ts'
 import { viewFunctions } from './views.ts'
+import { functions as walkthroughFunctions } from './walkthrough.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
 import { labelOf, RDFS_LABEL, text } from './util.ts'
@@ -746,6 +747,7 @@ export const functions: Record<string, FnRule> = {
   ...payloadFunctions,
   ...toolbarFunctions,
   ...messagesFunctions,
+  ...walkthroughFunctions,
   stack,
   'heading:screen': headingScreen,
   'heading:text': headingText,

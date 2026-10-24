@@ -224,41 +224,44 @@ ui:ex-budget-chart a c:BarChart ; rdfs:label "Spending by category" ;
 
 # --- how it works ---------------------------------------------------------------------------------
 
-ui:ex-budget-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-budget-how-title ui:ex-budget-how-data ui:ex-budget-how-formulas ui:ex-budget-how-edit ui:ex-budget-how-cost ) .
-ui:ex-budget-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
-ui:ex-budget-how-data a c:Text ; c:children (
-    "The data is the example's own vocabulary: " ui:ex-budget-how-c1 " has entries; each " ui:ex-budget-how-c2
-    " has a " ui:ex-budget-how-c3 " (whose " ui:ex-budget-how-c4 " is income or an expense) and an amount. Each amount is an ordinary "
-    ui:ex-budget-how-c5 " that says which entry it edits (" ui:ex-budget-how-c6 ") and validates against " ui:ex-budget-how-c7 ", a SHACL property shape. Each row is a " ui:ex-budget-how-c18 " of the sheet's own column tracks (" ui:ex-budget-how-c19 "), so fields and tags line up." ) .
-ui:ex-budget-how-c18 a c:Code ; c:label "pos:Subgrid" .
-ui:ex-budget-how-c19 a c:Code ; c:label "bud:SheetColumns" .
-ui:ex-budget-how-c1 a c:Code ; c:label "bud:sheet" .
-ui:ex-budget-how-c2 a c:Code ; c:label "bud:Entry" .
-ui:ex-budget-how-c3 a c:Code ; c:label "bud:category" .
-ui:ex-budget-how-c4 a c:Code ; c:label "bud:kind" .
-ui:ex-budget-how-c5 a c:Code ; c:label "c:TextField" .
-ui:ex-budget-how-c6 a c:Code ; c:label "bud:edits" .
-ui:ex-budget-how-c7 a c:Code ; c:label "bud:AmountShape" .
-ui:ex-budget-how-formulas a c:Text ; c:children (
-    "Every figure is a SELECT (a " ui:ex-budget-how-c8 "). The Stats take theirs through " ui:ex-budget-how-c9
-    ", a framework rule that runs the query before the components render and writes the first row's ?value as the Stat's value - and ?tone as its tone, which is how "
-    ui:ex-budget-how-c10 " turns the balance red when it is negative. The table (" ui:ex-budget-how-c11 ") and the bar chart (" ui:ex-budget-how-c12
-    ") take their rows from GROUP BY queries the same way the Performance page's charts do." ) .
-ui:ex-budget-how-c8 a c:Code ; c:label "sem:View" .
-ui:ex-budget-how-c9 a c:Code ; c:label "c:valueQuery" .
-ui:ex-budget-how-c10 a c:Code ; c:label "bud:Balance" .
-ui:ex-budget-how-c11 a c:Code ; c:label "bud:ByCategory" .
-ui:ex-budget-how-c12 a c:Code ; c:label "bud:Spending" .
-ui:ex-budget-how-edit a c:Text ; c:children (
-    "Typing is a " ui:ex-budget-how-c13 " event. The field's own reaction keeps its text; " ui:ex-budget-how-c14
-    " - a CONSTRUCT pair in this file - writes the number to the entry and stamps the sheet with " ui:ex-budget-how-c15
-    ". Text that is not a number changes nothing but the field, which then shows the shape's message." ) .
-ui:ex-budget-how-c13 a c:Code ; c:label "beh:Input" .
-ui:ex-budget-how-c14 a c:Code ; c:label "bud:EditAmount" .
-ui:ex-budget-how-c15 a c:Code ; c:label "dcterms:modified" .
-ui:ex-budget-how-cost a c:Text ; c:children (
-    "Why it is cheap: every view names " ui:ex-budget-how-c16 " as its " ui:ex-budget-how-c17
-    ", so a keystroke re-runs those seven SELECTs over eight entries and nothing else; and only while this example is shown - on any other page they are parked. Turn the table or the chart over (its Source button) to see the query it runs." ) .
-ui:ex-budget-how-c16 a c:Code ; c:label "bud:sheet" .
-ui:ex-budget-how-c17 a c:Code ; c:label "c:dataset" .
+ui:ex-budget-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-budget-w1 ui:ex-budget-w2 ui:ex-budget-w3 ui:ex-budget-w4 ui:ex-budget-w5 ui:ex-budget-w6 ) .
+
+ui:ex-budget-w1 a c:WalkthroughStep ; rdfs:label "The month is data" ;
+    c:children ( "The sheet, " ui:ex-budget-m-sheet ", lists its entries. Each " ui:ex-budget-m-Entry " - say " ui:ex-budget-m-rent " - has a description, an amount and a category, " ui:ex-budget-m-housing ", whose kind is " ui:ex-budget-m-expense " (or " ui:ex-budget-m-income ", for " ui:ex-budget-m-salary "). That is the whole model: no figure is stored, every one is derived." ) .
+ui:ex-budget-w2 a c:WalkthroughStep ; rdfs:label "One ordinary field per amount" ;
+    c:children ( "Each amount is a " ui:ex-budget-m-TextField ", like " ui:ex-budget-m-field ", that names the entry it edits and validates its text against " ui:ex-budget-m-shape ", a SHACL property shape: the validation layer shows the shape's message while the text is not an amount. The field and its category tag sit in a row, " ui:ex-budget-m-row ", that takes its columns from the sheet's own tracks, " ui:ex-budget-m-columns ", so every row lines up." ) .
+ui:ex-budget-w3 a c:WalkthroughStep ; rdfs:label "Typing becomes data" ;
+    c:children ( "Typing is a beh:Input event. The field's own reaction keeps its text; " ui:ex-budget-m-edit ", a CONSTRUCT pair that serves every field of the sheet, writes the number to the entry the field edits and stamps " ui:ex-budget-m-sheet2 " with the time. Text that is not a number changes nothing but the field." ) .
+ui:ex-budget-w4 a c:WalkthroughStep ; rdfs:label "Every figure is a query" ;
+    c:children ( "The Stats show SELECTs (sem:View s). " ui:ex-budget-m-balance " takes its figure from " ui:ex-budget-m-Balance ": the framework runs it before the components render and writes the first row's ?value as the Stat's value, and ?tone as its tone - that is how the balance turns red below zero. " ui:ex-budget-m-income-stat " and the expenses share one query, " ui:ex-budget-m-total ", each naming the kind it sums; " ui:ex-budget-m-rate " divides." ) .
+ui:ex-budget-w5 a c:WalkthroughStep ; rdfs:label "Tables and charts too" ;
+    c:children ( "The category table " ui:ex-budget-m-table " shows the rows of " ui:ex-budget-m-by ", a GROUP BY; the chart " ui:ex-budget-m-chart " draws " ui:ex-budget-m-spending ". Both sit on flippable cards: turn one over to read the query it runs, straight from the graph." ) .
+ui:ex-budget-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "Every view names " ui:ex-budget-m-sheet3 " as its dataset (c:dataset), so a view re-runs only when the sheet's stamp changes: a keystroke that is an amount re-runs seven small SELECTs over eight entries, and nothing else. On any other page they are parked, and an edit costs no query at all." ) .
+
+ui:ex-budget-m-sheet a c:Mention ; c:label "bud:sheet" ; c:mentions bud:sheet .
+ui:ex-budget-m-sheet2 a c:Mention ; c:label "the sheet" ; c:mentions bud:sheet .
+ui:ex-budget-m-sheet3 a c:Mention ; c:label "bud:sheet" ; c:mentions bud:sheet .
+ui:ex-budget-m-Entry a c:Mention ; c:label "bud:Entry" ; c:mentions bud:Entry ; c:to bud:Entry .
+ui:ex-budget-m-rent a c:Mention ; c:label "bud:rent" ; c:mentions bud:rent .
+ui:ex-budget-m-housing a c:Mention ; c:label "bud:Housing" ; c:mentions bud:Housing .
+ui:ex-budget-m-expense a c:Mention ; c:label "bud:Expense" ; c:mentions bud:Expense .
+ui:ex-budget-m-income a c:Mention ; c:label "bud:Income" ; c:mentions bud:Income .
+ui:ex-budget-m-salary a c:Mention ; c:label "bud:Salary" ; c:mentions bud:Salary .
+ui:ex-budget-m-TextField a c:Mention ; c:label "c:TextField" ; c:mentions c:TextField ; c:to c:TextField .
+ui:ex-budget-m-field a c:Mention ; c:label "the rent field" ; c:mentions ui:ex-budget-f-rent .
+ui:ex-budget-m-shape a c:Mention ; c:label "bud:AmountShape" ; c:mentions bud:AmountShape .
+ui:ex-budget-m-row a c:Mention ; c:label "a subgrid" ; c:mentions ui:ex-budget-r-rent .
+ui:ex-budget-m-columns a c:Mention ; c:label "bud:SheetColumns" ; c:mentions bud:SheetColumns .
+ui:ex-budget-m-edit a c:Mention ; c:label "bud:EditAmount" ; c:mentions bud:EditAmount .
+ui:ex-budget-m-balance a c:Mention ; c:label "The balance" ; c:mentions ui:ex-budget-balance .
+ui:ex-budget-m-Balance a c:Mention ; c:label "bud:Balance" ; c:mentions bud:Balance .
+ui:ex-budget-m-income-stat a c:Mention ; c:label "The income" ; c:mentions ui:ex-budget-income .
+ui:ex-budget-m-total a c:Mention ; c:label "bud:TotalOf" ; c:mentions bud:TotalOf .
+ui:ex-budget-m-rate a c:Mention ; c:label "the savings rate" ; c:mentions ui:ex-budget-rate .
+ui:ex-budget-m-table a c:Mention ; c:label "ui:ex-budget-table" ; c:mentions ui:ex-budget-table .
+ui:ex-budget-m-by a c:Mention ; c:label "bud:ByCategory" ; c:mentions bud:ByCategory .
+ui:ex-budget-m-chart a c:Mention ; c:label "ui:ex-budget-chart" ; c:mentions ui:ex-budget-chart .
+ui:ex-budget-m-spending a c:Mention ; c:label "bud:Spending" ; c:mentions bud:Spending .

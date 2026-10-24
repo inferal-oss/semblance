@@ -44,6 +44,8 @@ export interface Dimension {
   parent?: string
   when: Term[]
   target: boolean
+  /** Its values are terms of the vocabulary (nav:showsTerms): a link to a term no component shows goes here. */
+  terms: boolean
 }
 
 export interface Location {
@@ -91,6 +93,7 @@ export function readLocations(r: Reader): Location[] {
             parent: one(r, d, NAV + 'parent')?.value,
             when: r.match(d, NAV + 'when', null).map((q) => q.object),
             target: types.includes(NAV + 'TargetDimension'),
+            terms: one(r, d, NAV + 'showsTerms')?.value === 'true',
           },
         ]
       })
@@ -363,14 +366,39 @@ export function opening(r: Reader, loc: Location, resource: Term): Delta {
 
 /** The fragment of the location that shows `resource`, with it as the target. */
 export function addressOf(r: Reader, resource: Term): string | undefined {
-  for (const loc of readLocations(r)) {
+  const locations = readLocations(r)
+  for (const loc of locations) {
     const needs = shows(r, loc, resource)
     if (!needs) continue
     const target = loc.dimensions.find((d) => d.target && d.carriers.includes(NAV + 'Fragment'))
     if (target) needs.set(target.iri, resource)
     return spellAddress(r, loc, needs).fragment || '#'
   }
+  // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
+  // with the values its parents need (nav:when), e.g. #reference/c:List.
+  if (resource.termType !== 'NamedNode' || !isTerm(r, resource)) return undefined
+  for (const loc of locations) {
+    const d = loc.dimensions.find((x) => x.terms && x.carriers.includes(NAV + 'Fragment'))
+    if (!d) continue
+    const values: Values = new Map([[d.iri, resource]])
+    for (let at: Dimension | undefined = d, n = 0; at?.parent && n < 16; n++) {
+      const parent = loc.dimensions.find((x) => x.iri === at!.parent)
+      if (parent && at.when[0]) values.set(parent.iri, at.when[0])
+      at = parent
+    }
+    return spellAddress(r, loc, values).fragment || '#'
+  }
   return undefined
+}
+
+/**
+ * Whether a resource is a term of a vocabulary: used as a class or as a property, or named in the
+ * namespace of an owl:Ontology the graph has (a framework class, a reaction it declares).
+ */
+function isTerm(r: Reader, t: Term): boolean {
+  if (r.match(null, RDF_TYPE, t).length || r.match(null, t.value, null).length) return true
+  const ns = t.value.slice(0, Math.max(t.value.lastIndexOf('#'), t.value.lastIndexOf('/')) + 1)
+  return [ns, ns.slice(0, -1)].some((o) => r.match(r.f.namedNode(o), RDF_TYPE, r.f.namedNode(NS.owl + 'Ontology')).length > 0)
 }
 
 /** The change that makes the graph say what `address` says (a target absent from it is cleared). */

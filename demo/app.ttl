@@ -82,7 +82,7 @@ ui:atExample a nav:Dimension ; nav:subject ui:app ; nav:property ui:example ; na
 ui:atGalleryGroup a nav:Dimension ; nav:subject ui:app ; nav:property ui:galleryGroup ; nav:keyProperty ui:key ;
     nav:parent ui:atPage ; nav:when ui:Components ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
 # The Reference's selected term, as a prefixed name (its other state is ui:rememberReference's).
-ui:atReferenceTerm a nav:Dimension ; nav:subject ui:app ; nav:property ui:referenceSubject ; nav:spelling nav:PrefixedName ;
+ui:atReferenceTerm a nav:Dimension ; nav:subject ui:app ; nav:property ui:referenceSubject ; nav:spelling nav:PrefixedName ; nav:showsTerms true ;
     nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
 # What a followed link points at: where to look, not a place of its own.
 ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ;

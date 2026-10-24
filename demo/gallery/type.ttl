@@ -14,7 +14,7 @@
 # Gallery page: Type.
 
 ui:gallery-type a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-kbd ui:ty-code ui:ty-quote ) .
+    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-kbd ui:ty-code ui:ty-quote ui:ty-walk ) .
 ui:gallery-type-intro a c:Heading ; c:label "Type" .
 
 # --- the type scale ---
@@ -121,3 +121,27 @@ ui:ty-quote a c:Flippable ; c:front ui:ty-quote-spec .
 ui:ty-quote-spec a c:Specimen ; c:label "Blockquote" ;
     c:help "A quotation set off from the text, with an optional c:attribution." ;
     c:children ( ui:ty-quote-1 ) .
+
+# --- walkthrough: an explanation beside a diagram of what it mentions ---
+# It explains the running text above: each phrase is a c:Mention of a resource, drawn as a node.
+ui:ty-walk-1 a c:WalkthroughStep ; rdfs:label "Text is a list" ;
+    c:children ( ui:ty-walk-m-run " is a " ui:ty-walk-m-Text " whose c:children are strings and components, in list order: " ui:ty-walk-m-code ", " ui:ty-walk-m-kbd " and " ui:ty-walk-m-link " sit inside the sentence." ) .
+ui:ty-walk-2 a c:WalkthroughStep ; rdfs:label "Mentions point at the graph" ;
+    c:children ( "This step is running text too, and its colored phrases are " ui:ty-walk-m-Mention "s: each " ui:ty-walk-m-mentions " a resource, which the diagram draws. Hover one to see its node; the step in view is the walkthrough's c:current." ) .
+ui:ty-walk-3 a c:WalkthroughStep ; rdfs:label "Links come from the graph" ;
+    c:children ( "The arrows between nodes are the graph's own triples among what is mentioned: the text's list holds " ui:ty-walk-m-link2 ", and the link is a " ui:ty-walk-m-Link " - nothing about the diagram is written by hand." ) .
+ui:ty-walk-m-run a c:Mention ; c:label "ui:ty-run" ; c:mentions ui:ty-run ; c:to ui:ty-run .
+ui:ty-walk-m-Text a c:Mention ; c:label "c:Text" ; c:mentions c:Text ; c:to c:Text .
+ui:ty-walk-m-code a c:Mention ; c:label "the code" ; c:mentions ui:ty-run-code .
+ui:ty-walk-m-kbd a c:Mention ; c:label "the key" ; c:mentions ui:ty-run-kbd .
+ui:ty-walk-m-link a c:Mention ; c:label "the link" ; c:mentions ui:ty-run-link .
+ui:ty-walk-m-link2 a c:Mention ; c:label "the link" ; c:mentions ui:ty-run-link .
+ui:ty-walk-m-Mention a c:Mention ; c:label "c:Mention" ; c:mentions c:Mention ; c:to c:Mention .
+ui:ty-walk-m-mentions a c:Mention ; c:label "c:mentions" ; c:mentions c:mentions ; c:to c:mentions .
+ui:ty-walk-m-Link a c:Mention ; c:label "c:Link" ; c:mentions c:Link ; c:to c:Link .
+ui:ty-walkthrough a c:Walkthrough ; c:label "Running text, explained" ;
+    c:steps ( ui:ty-walk-1 ui:ty-walk-2 ui:ty-walk-3 ) .
+ui:ty-walk a c:Flippable ; c:front ui:ty-walk-spec .
+ui:ty-walk-spec a c:Specimen ; c:label "Walkthrough" ;
+    c:help "c:steps of running text whose c:Mention s point at resources; beside them a diagram of those resources and their links, following the step being read (scroll, or focus a step). With c:sourceView, activating a mention shows its statement in the source." ;
+    c:children ( ui:ty-walkthrough ) .

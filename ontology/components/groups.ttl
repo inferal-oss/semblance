@@ -51,6 +51,7 @@ c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockP
 c:Heading sem:group c:TypeGroup . c:Text sem:group c:TypeGroup . c:Link sem:group c:TypeGroup .
 c:Kbd sem:group c:TypeGroup . c:Code sem:group c:TypeGroup . c:Blockquote sem:group c:TypeGroup .
 c:GraphMark sem:group c:TypeGroup . c:MarkNode sem:group c:TypeGroup . c:Emblem sem:group c:TypeGroup .
+c:Walkthrough sem:group c:TypeGroup . c:WalkthroughStep sem:group c:TypeGroup . c:Mention sem:group c:TypeGroup .
 
 # --- Actions ---
 c:Button sem:group c:ActionsGroup . c:IconButton sem:group c:ActionsGroup . c:ButtonGroup sem:group c:ActionsGroup .

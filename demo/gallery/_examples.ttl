@@ -46,23 +46,33 @@ ui:exc-localized c:when ui:ExLocalized ; c:content ui:exp-localized .
 # _network.ttl; the todo app is built by src/examples/todo.ts). Below it, an explanation it defines
 # (<root>-how), then the file itself, verbatim: the host records each example file as a c:SourceText.
 
-ui:exp-todo a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-todo ui:ex-todo-how ui:exs-todo ) .
+ui:exp-todo a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-todo ui:ex-todo-how ) .
+ui:ex-todo-how c:sourceView ui:exs-todo .
 ui:exs-todo a c:SourceView ; c:label "Source: the todo app" ; c:of <urn:semblance:source:src/examples/todo.ts> .
-ui:exp-network a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:networkExample ui:networkExample-how ui:exs-network ) .
+ui:exp-network a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:networkExample ui:networkExample-how ) .
+ui:networkExample-how c:sourceView ui:exs-network .
 ui:exs-network a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_network.ttl> .
-ui:exp-signin a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-signin ui:ex-signin-how ui:exs-signin ) .
+ui:exp-signin a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-signin ui:ex-signin-how ) .
+ui:ex-signin-how c:sourceView ui:exs-signin .
 ui:exs-signin a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-signin.ttl> .
-ui:exp-kanban a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-kanban ui:ex-kanban-how ui:exs-kanban ) .
+ui:exp-kanban a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-kanban ui:ex-kanban-how ) .
+ui:ex-kanban-how c:sourceView ui:exs-kanban .
 ui:exs-kanban a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-kanban.ttl> .
-ui:exp-checkout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-checkout ui:ex-checkout-how ui:exs-checkout ) .
+ui:exp-checkout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-checkout ui:ex-checkout-how ) .
+ui:ex-checkout-how c:sourceView ui:exs-checkout .
 ui:exs-checkout a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-checkout.ttl> .
-ui:exp-budget a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-budget ui:ex-budget-how ui:exs-budget ) .
+ui:exp-budget a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-budget ui:ex-budget-how ) .
+ui:ex-budget-how c:sourceView ui:exs-budget .
 ui:exs-budget a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-budget.ttl> .
-ui:exp-activity a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-activity ui:ex-activity-how ui:exs-activity ) .
+ui:exp-activity a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-activity ui:ex-activity-how ) .
+ui:ex-activity-how c:sourceView ui:exs-activity .
 ui:exs-activity a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-activity.ttl> .
-ui:exp-chat a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-chat ui:ex-chat-how ui:exs-chat ) .
+ui:exp-chat a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-chat ui:ex-chat-how ) .
+ui:ex-chat-how c:sourceView ui:exs-chat .
 ui:exs-chat a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-chat.ttl> .
-ui:exp-settings a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-settings ui:ex-settings-how ui:exs-settings ) .
+ui:exp-settings a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-settings ui:ex-settings-how ) .
+ui:ex-settings-how c:sourceView ui:exs-settings .
 ui:exs-settings a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-settings.ttl> .
-ui:exp-localized a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-localized ui:ex-localized-how ui:exs-localized ) .
+ui:exp-localized a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-localized ui:ex-localized-how ) .
+ui:ex-localized-how c:sourceView ui:exs-localized .
 ui:exs-localized a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-localized.ttl> .

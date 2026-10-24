@@ -301,17 +301,25 @@ function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
   return out
 }
 
-/** Source text as tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their lexical forms). */
-function sourceTokens(text: string): Token[] {
-  const kinds = { keyword: 'keyword', var: 'pname', string: 'literal', pname: 'pname', iri: 'iri', number: 'number', comment: 'comment' } as const
-  return tokenizeSparql(text).flatMap((t): Token[] => {
-    if (t.kind !== 'text') return [{ kind: kinds[t.kind], text: t.text }]
-    // Plain runs: line breaks (with the next line's indent) are the line boundaries.
-    return t.text.split(/(\n[ \t]*)/).filter(Boolean).map((part) => ({ kind: part.startsWith('\n') ? ('space' as const) : ('punct' as const), text: part }))
-  })
+/** Source text as lines of tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their lexical forms). */
+function sourceLines(text: string): { kind: Token['kind']; text: string }[][] {
+  const kinds = { keyword: 'keyword', var: 'pname', string: 'literal', pname: 'pname', iri: 'iri', number: 'number', comment: 'comment', text: 'punct' } as const
+  const lines: { kind: Token['kind']; text: string }[][] = [[]]
+  for (const t of tokenizeSparql(text)) {
+    // A token over several lines (a long string) is cut at the line breaks, each piece keeping its kind.
+    t.text.split('\n').forEach((piece, i) => {
+      if (i > 0) lines.push([])
+      if (piece) lines[lines.length - 1]!.push({ kind: kinds[t.kind], text: piece })
+    })
+  }
+  return lines
 }
 
-/** A source text, verbatim and colored, under its path. */
+/**
+ * A source text, verbatim and colored, under its path: one element per line (numbered, c:line),
+ * so a statement's lines can be highlighted (c:SourceHighlight). Lines are keyed by their number:
+ * the text does not change while it is shown.
+ */
 const sourceView: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const source = ctx.object(focus, C.of)
@@ -325,7 +333,18 @@ const sourceView: FnRule = (ctx, focus) => {
     o.el('name', 'Span', { class: 'sem-source-name' }, [o.text('name-text', text(ctx, focus, C.label) ?? 'Source')]),
     o.el('path', 'Code', { class: 'sem-source-path' }, [o.text('path-text', path)]),
   ])
-  o.renders(o.el('root', 'Figure', {}, [head, o.el('code', 'Pre', { class: 'sem-turtle sem-source' }, turtleNodes(o, sourceTokens(body.replace(/\s+$/, ''))))]))
+  const lines = sourceLines(body.replace(/\s+$/, ''))
+  const number = (n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
+  const rows = lines.map((tokens, i) => {
+    const key = `L${i + 1}`
+    // Plain runs are text; colored tokens are spans. The line break belongs to the line it ends.
+    const parts = tokens.map((t, j) => (t.kind === 'punct' || t.kind === 'space' ? o.text(`${key}-${j}`, t.text) : o.el(`${key}-${j}s`, 'Span', { class: 'ttl-' + t.kind }, [o.text(`${key}-${j}`, t.text)])))
+    if (i < lines.length - 1) parts.push(o.text(`${key}-nl`, '\n'))
+    const row = o.el(key, 'Span', { class: 'sem-line' }, parts)
+    o.t(row, NS.c + 'line', number(i + 1))
+    return row
+  })
+  o.renders(o.el('root', 'Figure', {}, [head, o.el('code', 'Pre', { class: 'sem-turtle sem-source' }, rows)]))
   return o.quads
 }
 
