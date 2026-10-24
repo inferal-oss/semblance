@@ -3,18 +3,18 @@
   "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
   "summary": {
     "sparql12": {
-      "pass": 245,
-      "fail": 3,
+      "pass": 247,
+      "fail": 1,
       "skip": 23
     },
     "sparql11": {
-      "pass": 347,
-      "fail": 14,
+      "pass": 351,
+      "fail": 10,
       "skip": 149
     },
     "sparql10": {
-      "pass": 477,
-      "fail": 4,
+      "pass": 479,
+      "fail": 2,
       "skip": 0
     },
     "rdf12": {
@@ -24,8 +24,6 @@
     }
   },
   "failing": {
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-2": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-3": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/reduced/manifest#reduced-1": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/reduced/manifest#reduced-2": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-avg-02": "wrong result",
@@ -38,12 +36,6 @@
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#bnode01": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#coalesce01": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_more_set_end": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_more_set_start": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_one_set_end": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_one_set_start": "wrong result",
-    "sparql/sparql12/eval-triple-terms/manifest#construct-5": "wrong result",
-    "sparql/sparql12/syntax-triple-terms-negative/manifest#tripleterm-subject-03": "accepted invalid input",
-    "sparql/sparql12/syntax-triple-terms-negative/manifest#tripleterm-subject-06": "accepted invalid input"
+    "sparql/sparql12/eval-triple-terms/manifest#construct-5": "wrong result"
   }
 }

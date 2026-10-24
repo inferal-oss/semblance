@@ -393,7 +393,9 @@ impl<'a> Ctx<'a> {
         let mut out = Vec::new();
         for (x, y) in pairs {
             // A zero-length match at a variable endpoint must be a node of the graph.
-            if x == y && (matches!(s, Tv::Var(_)) || matches!(o, Tv::Var(_))) && !self.is_node(x, active) {
+            // (A constant endpoint matches itself even outside the graph.)
+            let constant = matches!(s, Tv::Term(_)) || matches!(o, Tv::Term(_));
+            if x == y && !constant && !self.is_node(x, active) {
                 continue;
             }
             let mut r = sub.to_vec();

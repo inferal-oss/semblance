@@ -1633,6 +1633,14 @@ impl P<'_, '_> {
         if c == b'<' && self.c.starts(b"<<(") {
             self.c.i += 3;
             let s = self.primary()?;
+            let bad_subject = match &s {
+                Expr::Call(Func::Triple, _) => true,
+                Expr::Const(c) => self.dict.term(*c).is_some_and(|t| matches!(t.kind, crate::dict::LITERAL | crate::dict::TRIPLE)),
+                _ => false,
+            };
+            if bad_subject {
+                return self.c.err("the subject of a triple term must be an IRI or blank node");
+            }
             let p = self.primary()?;
             let o = self.primary()?;
             self.expect(b")>>", "expected )>>")?;

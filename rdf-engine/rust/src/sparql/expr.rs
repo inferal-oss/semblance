@@ -34,6 +34,7 @@ pub enum Dt {
     String,
     LangString,
     DateTime,
+    Date,
     Other,
 }
 
@@ -49,6 +50,7 @@ pub fn classify(local: &[u8]) -> Dt {
         b"boolean" => Dt::Boolean,
         b"string" => Dt::String,
         b"dateTime" | b"dateTimeStamp" => Dt::DateTime,
+        b"date" => Dt::Date,
         _ => Dt::Other,
     }
 }
@@ -249,6 +251,7 @@ impl Ctx<'_> {
                     (Dt::LangString, Dt::LangString) => Ok(x.value == y.value && x.lang == y.lang),
                     (Dt::Boolean, Dt::Boolean) => Ok(self.boolean(a).ok_or(())? == self.boolean(b).ok_or(())?),
                     (Dt::DateTime, Dt::DateTime) => Ok(datetime_cmp(&x.value, &y.value).ok_or(())? == Ordering::Equal),
+                    (Dt::Date, Dt::Date) => Ok(datetime_cmp(&date_as_datetime(&x.value).ok_or(())?, &date_as_datetime(&y.value).ok_or(())?).ok_or(())? == Ordering::Equal),
                     // A language-tagged string differs from every typed literal.
                     (Dt::LangString, _) | (_, Dt::LangString) => Ok(false),
                     // Unknown datatypes (and ill-formed literals) may share values with any typed literal.
@@ -266,6 +269,7 @@ impl Ctx<'_> {
             Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double => self.num(v).is_some(),
             Dt::Boolean => self.boolean(v).is_some(),
             Dt::DateTime => datetime(&l.value).is_some(),
+            Dt::Date => date_as_datetime(&l.value).is_some(),
             _ => true,
         };
         if ok { k } else { Dt::Other }
@@ -282,6 +286,7 @@ impl Ctx<'_> {
             (Dt::LangString, Dt::LangString) if x.lang == y.lang => Ok(x.value.cmp(&y.value)),
             (Dt::Boolean, Dt::Boolean) => Ok(self.boolean(a).ok_or(())?.cmp(&self.boolean(b).ok_or(())?)),
             (Dt::DateTime, Dt::DateTime) => datetime_cmp(&x.value, &y.value).ok_or(()),
+            (Dt::Date, Dt::Date) => datetime_cmp(&date_as_datetime(&x.value).ok_or(())?, &date_as_datetime(&y.value).ok_or(())?).ok_or(()),
             _ => Err(()),
         }
     }
@@ -985,6 +990,23 @@ pub fn datetime(s: &[u8]) -> Option<DateTime<'_>> {
         return None;
     }
     Some(DateTime { year: if neg { -year } else { year }, month, day, hour, minute, seconds, tz, offset_minutes })
+}
+
+/// An xsd:date as the dateTime at its start ("2001-01-01Z" -> "2001-01-01T00:00:00Z").
+pub fn date_as_datetime(s: &[u8]) -> Option<Vec<u8>> {
+    let neg = s.first() == Some(&b'-');
+    let body = if neg { &s[1..] } else { s };
+    let dash = body.iter().position(|&c| c == b'-')?;
+    let end = dash + 6;
+    if body.len() < end || body[dash + 3] != b'-' {
+        return None;
+    }
+    let cut = s.len() - body.len() + end;
+    let mut out = s[..cut].to_vec();
+    out.extend_from_slice(b"T00:00:00");
+    out.extend_from_slice(&s[cut..]);
+    datetime(&out)?;
+    Some(out)
 }
 
 /// Compare two dateTimes (timezone-adjusted when both have one).
