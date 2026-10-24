@@ -8,12 +8,22 @@
 # Localization layer. Labels are ordinary RDF literals: the untagged one is the
 # source text, language-tagged ones are translations ("Компоненти"@uk). The
 # viewer's language (l10n:language on the application) is a projection
-# setting: function rules read every label through util.text(), which picks
-# the viewer's language, then English, then the source. For SPARQL rules this
-# layer derives l10n:label - the label in the viewer's language - for every
-# component that has translations, before anything renders (stratum -20);
-# their queries prefer it over the source label. A language with
-# l10n:direction l10n:RTL lays the page out right to left.
+# setting, which each engine also states as graph data: its agent is an
+# l10n:Viewer that l10n:prefers ranked l10n:Preferences (see below). Function
+# rules read every label through util.text(), which picks the viewer's
+# language, then the untagged source, then English. SPARQL rules pick the same
+# way from the viewer's preferences; this layer does it once for every
+# component that has translations, before anything renders (stratum -20),
+# deriving l10n:label - the label in the viewer's language - which their
+# queries prefer over the source label. A language with l10n:direction
+# l10n:RTL lays the page out right to left.
+#
+# Picking a value in the viewer's language, in SPARQL (the pattern every rule
+# that localizes a text uses, as util.text does): the value whose language tag
+# is the most preferred l10n:code (an exact tag before a sub-tag: "uk" before
+# "uk-UA"), found as a candidate with no better one (FILTER NOT EXISTS); else
+# the untagged value; else English; else any. A rule that reads l10n:prefers is
+# re-run for every focus when the viewer's languages change.
 
 <https://semblance.dev/ns/l10n> a owl:Ontology ;
     rdfs:label "Semblance localization layer"@en .
@@ -42,8 +52,48 @@ l10n:Labels a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches c:label ;
-    sem:functionOnly "It is how the viewer's language reaches SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:requires c:label .
 l10n:Labels-fn a sem:Rule ; sem:implements l10n:Labels ; sem:function "l10n:label" .
+# Only for components with translations (two labels, or a tagged one).
+l10n:Labels-sparql a sem:Rule ;
+    sem:implements l10n:Labels ;
+    sem:construct """
+CONSTRUCT { $this l10n:label ?label }
+WHERE {
+  $this c:label ?some . FILTER(isLiteral(?some))
+  FILTER(EXISTS { $this c:label ?tagged FILTER(LANG(?tagged) != "") } || EXISTS { $this c:label ?a , ?b FILTER(isLiteral(?a) && isLiteral(?b) && ?a != ?b) })
+  OPTIONAL {
+    $this c:label ?pick . FILTER(isLiteral(?pick))
+    ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
+    BIND(LCASE(LANG(?pick)) AS ?tag)
+    FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
+    FILTER NOT EXISTS {
+      ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
+      $this c:label ?other . FILTER(isLiteral(?other))
+      BIND(LCASE(LANG(?other)) AS ?tag2)
+      FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+    }
+  }
+  OPTIONAL { $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { $this c:label ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { $this c:label ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?label)
+}""" .
+
+# --- the viewer, as graph data --------------------------------------------------------
+# Each engine states, in its own derived graph, whom it renders for: its agent
+# (urn:semblance:projection:<name>) is an l10n:Viewer that l10n:prefers one
+# l10n:Preference per language of its `languages` option (BCP 47 l10n:code,
+# sem:order 1 the most preferred). Nothing when it has no preference.
+
+l10n:Viewer a owl:Class ;
+    rdfs:comment "Whom a projection renders for. The engine states it, in its derived graph, from its languages option."@en .
+l10n:prefers a owl:ObjectProperty ; rdfs:domain l10n:Viewer ; rdfs:range l10n:Preference ;
+    rdfs:comment "A language the viewer reads; sem:order ranks them (1 is the most preferred)."@en .
+l10n:Preference a owl:Class ;
+    rdfs:comment "One of a viewer's languages: its l10n:code and its rank (sem:order)."@en .
 
 # --- Dates and times in the viewer's locale ---------------------------------------------------------
 # A component that shows or reads dates or times (a month grid, a date field, a time field) is an

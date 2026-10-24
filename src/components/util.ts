@@ -51,3 +51,6 @@ export function text(ctx: RuleContext, s: Term, p: string): string | undefined {
 /** What to call a node: its c:label, its rdfs:label, or its IRI's local name. */
 export const labelOf = (ctx: RuleContext, t: Term): string =>
   text(ctx, t, C.label) ?? text(ctx, t, RDFS_LABEL) ?? t.value.replace(/^.*[#/]/, '')
+
+/** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
+export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())

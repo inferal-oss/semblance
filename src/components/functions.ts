@@ -52,12 +52,11 @@ import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
-import { labelOf, RDFS_LABEL, text } from './util.ts'
+import { encodeForUri, labelOf, RDFS_LABEL, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
 const str = (t: Term | undefined) => t?.value
-/** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
-export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+export { encodeForUri } from './util.ts'
 const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
 
 function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
@@ -174,7 +173,7 @@ const listMember: FnRule = (ctx, focus, item) => {
   const labelFrom = ctx.object(focus, C.itemLabel)
   const checkedFrom = ctx.object(focus, C.itemChecked)
   const key = sortBy ? ctx.object(item, sortBy) : undefined
-  const inst = o.node('i-' + encodeURIComponent(item.value))
+  const inst = o.node('i-' + encodeForUri(item.value))
   o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
   o.t(inst, C.of, item)
   o.t(inst, C.inList, focus)
@@ -240,7 +239,7 @@ const tabs: FnRule = (ctx, focus) => {
   const panels: NamedNode[] = []
   const windows: NamedNode[] = []
   items.forEach((tab, index) => {
-    const key = encodeURIComponent(tab.value)
+    const key = encodeForUri(tab.value)
     const name = label(ctx, tab)
     const detached = isDetached(tab)
     if (text) {

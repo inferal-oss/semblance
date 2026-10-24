@@ -43,11 +43,64 @@ c:SegmentedCounts a sem:Rendering ;
     sem:targets c:Segmented ;
     sem:requires c:countProperty ;
     sem:modality mod:Screen ;
-    sem:stratum 0 ;
-    sem:functionOnly """The counts are properties of the options, which are not linked from the component (they are the
-individuals of the property's range): SPARQL rules re-run only for changes one sem:follows hop away, so a
-count changing would not reach them. The function's reads are traced, so it hears each option's count.""" .
+    sem:stratum 0 .
 c:SegmentedCounts-fn a sem:Rule ; sem:implements c:SegmentedCounts ; sem:function "nav:counts" .
+# The options are the members of c:options or the individuals of the property's range; their counts
+# are theirs, so the rule follows both ways to them (the range's instances: [ sem:inverse rdf:type ]).
+c:SegmentedCounts-sparql a sem:Rule ;
+    sem:implements c:SegmentedCounts ;
+    sem:follows ( c:property rdfs:range [ sem:inverse rdf:type ] ) , ( c:options [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?button rdfhtml:hasChild ?count .
+  ?label ord:immediatelyPrecedes ?count .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:hasChild ?figure , ?spoken .
+  ?figure a rdfhtml:Span ; rdfhtml:attribute ?figureHidden ; rdfhtml:hasChild ?figureText ; ord:immediatelyPrecedes ?spoken .
+  ?figureHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?spoken a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?spokenText .
+  ?spokenText a rdfhtml:Text ; rdfhtml:data ?spokenLine .
+}
+WHERE {
+  $this c:property ?property ; c:countProperty ?countProperty . FILTER(isIRI(?property) && isIRI(?countProperty))
+  { $this c:options/rdf:rest*/rdf:first ?opt . FILTER(isIRI(?opt)) }
+  UNION
+  { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range . FILTER(isIRI(?opt)) }
+  ?opt ?countProperty ?raw .
+  BIND(xsd:double(?raw) AS ?n)
+  FILTER(?n > 0)
+  BIND(IF(?n = FLOOR(?n), STR(xsd:integer(?n)), STR(?raw)) AS ?figureValue)
+  BIND(IF(?n > 99, "99+", ?figureValue) AS ?shown)
+  OPTIONAL {
+    $this c:countLabel ?pick . FILTER(isLiteral(?pick))
+    ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
+    BIND(LCASE(LANG(?pick)) AS ?tag)
+    FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
+    FILTER NOT EXISTS {
+      ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
+      $this c:countLabel ?other . FILTER(isLiteral(?other))
+      BIND(LCASE(LANG(?other)) AS ?tag2)
+      FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+    }
+  }
+  OPTIONAL { $this c:countLabel ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { $this c:countLabel ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { $this c:countLabel ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { $this c:countLabel ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?spokenWord)
+  BIND(CONCAT(", ", ?figureValue, IF(COALESCE(?spokenWord, "") != "", CONCAT(" ", ?spokenWord), "")) AS ?spokenLine)
+  BIND(CONCAT("opt-", ENCODE_FOR_URI(STR(?opt))) AS ?key)
+  BIND(IRI(CONCAT(STR($this), "/~", ?key)) AS ?button)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-label"))) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count"))) AS ?count)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-figure"))) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-figure-aria-hidden"))) AS ?figureHidden)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-text"))) AS ?figureText)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-spoken"))) AS ?spoken)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-spoken-text"))) AS ?spokenText)
+}""" .
 
 # --- Breadcrumbs: where you are in a hierarchy ----------------------------------------------------
 # The trail is c:items (nodes, labelled), or derived: from an end node up through c:parentProperty

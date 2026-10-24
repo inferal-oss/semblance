@@ -9,6 +9,8 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix prv: <https://semblance.dev/ns/privacy#> .
 
 # Messages: a conversation, a comment thread, a feed. The messages are data items
 # in ActivityStreams terms (as:attributedTo a person with an rdfs:label and
@@ -76,8 +78,41 @@ c:MessageListMembers a sem:Rendering ;
     sem:targets c:MessageList ;
     sem:stratum 0 ;
     sem:forEach c:item ;
-    sem:functionOnly "Member-wise (sem:forEach): the engine evaluates it once per (list, message) and hands the message to the rule as an argument, which it does for function rules only." .
+    sem:watches rdf:type .
 c:MessageListMembers-fn a sem:Rule ; sem:implements c:MessageListMembers ; sem:function "messages:member" .
+# The key is the time in UTC with milliseconds (as JavaScript's toISOString writes it), so keys
+# sort as time does whatever fraction digits or offset the store wrote; a time without an offset
+# counts as UTC, and a missing or unreadable one sorts last.
+c:MessageListMembers-sparql a sem:Rule ;
+    sem:implements c:MessageListMembers ;
+    sem:memberWatches as:published , prov:startedAtTime , prv:sensitive ;
+    sem:construct """
+CONSTRUCT {
+  ?inst a c:Message ; c:of $member ; c:inList $this ; prv:sensitive ?sensitive ; sem:orderKey ?key .
+  ?root rdfhtml:hasChild ?inst .
+}
+WHERE {
+  $this a c:MessageList .
+  OPTIONAL { $member as:published ?published }
+  OPTIONAL { $member prov:startedAtTime ?started }
+  BIND(xsd:dateTime(COALESCE(?published, ?started)) AS ?at)
+  BIND(IF(TZ(?at) = "" || TZ(?at) = "Z", ?at, ?at - TIMEZONE(?at)) AS ?utc)
+  BIND(xsd:integer(FLOOR(SECONDS(?utc) * 1000)) AS ?ms)
+  BIND(xsd:integer(FLOOR(?ms / 1000)) AS ?s)
+  BIND(?ms - ?s * 1000 AS ?frac)
+  BIND(CONCAT(
+    SUBSTR(CONCAT("000", STR(YEAR(?utc))), STRLEN(STR(YEAR(?utc)))), "-",
+    SUBSTR(CONCAT("0", STR(MONTH(?utc))), STRLEN(STR(MONTH(?utc)))), "-",
+    SUBSTR(CONCAT("0", STR(DAY(?utc))), STRLEN(STR(DAY(?utc)))), "T",
+    SUBSTR(CONCAT("0", STR(HOURS(?utc))), STRLEN(STR(HOURS(?utc)))), ":",
+    SUBSTR(CONCAT("0", STR(MINUTES(?utc))), STRLEN(STR(MINUTES(?utc)))), ":",
+    SUBSTR(CONCAT("0", STR(?s)), STRLEN(STR(?s))), ".",
+    SUBSTR(CONCAT("00", STR(?frac)), STRLEN(STR(?frac))), "Z") AS ?time)
+  BIND(COALESCE(?time, "\\uFFFF") AS ?key)
+  BIND(IF(EXISTS { $member prv:sensitive ?flag FILTER(STR(?flag) = "true") }, true, ?none) AS ?sensitive)
+  BIND(IRI(CONCAT(STR($this), "/~m-", ENCODE_FOR_URI(STR($member)))) AS ?inst)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
 
 # --- Message: one entry --------------------------------------------------------------------------
 

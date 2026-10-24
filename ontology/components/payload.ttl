@@ -286,9 +286,38 @@ WHERE {
 c:BodyViewerTexts a sem:Rendering ;
     sem:targets c:BodyViewer ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rule: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:BodyViewerTexts-fn a sem:Rule ; sem:implements c:BodyViewerTexts ; sem:function "payload:body-viewer-texts" .
+c:BodyViewerTexts-sparql a sem:Rule ; sem:implements c:BodyViewerTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this a ?type .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  ?representation a c:Representation . FILTER(isIRI(?representation))
+  FILTER EXISTS { ?representation rdfs:label ?some FILTER(isLiteral(?some)) }
+  OPTIONAL { ?representation sem:slug ?declared }
+  BIND(COALESCE(STR(?declared), REPLACE(STR(?representation), "^.*[#/]", "")) AS ?slug)
+  OPTIONAL {
+    ?representation rdfs:label ?pick . FILTER(isLiteral(?pick))
+    ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
+    BIND(LCASE(LANG(?pick)) AS ?tag)
+    FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
+    FILTER NOT EXISTS {
+      ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
+      ?representation rdfs:label ?other . FILTER(isLiteral(?other))
+      BIND(LCASE(LANG(?other)) AS ?tag2)
+      FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+    }
+  }
+  OPTIONAL { ?representation rdfs:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { ?representation rdfs:label ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { ?representation rdfs:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { ?representation rdfs:label ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ?slug)) AS ?node)
+}""" .
 
 c:BodyViewerSelect a beh:Reaction ;
     beh:when beh:Click ;

@@ -236,6 +236,484 @@ c:WindowRendering-fn a sem:Rule ;
     sem:function "window" .
 c:PaletteRendering a sem:Rendering ; sem:targets c:Palette ; sem:stratum 0 .
 c:PaletteRendering-fn a sem:Rule ; sem:implements c:PaletteRendering ; sem:function "window" .
+# SPARQL twins of the "window" function (src/components/containers.ts).
+c:WindowRendering-sparql-screen a sem:Rule ;
+    sem:implements c:WindowRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
+        rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
+  ?bar a rdfhtml:Header ; rdfhtml:class "sem-window-bar" ; rdfhtml:attribute ?moveAttr ; rdfhtml:hasChild ?titleEl ;
+       ord:immediatelyPrecedes ?body .
+  ?barNode rdfhtml:hasChild ?control .
+  ?moveAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "move" .
+  ?titleEl a rdfhtml:Strong ; rdfhtml:hasChild ?titleText ; sem:orderKey "0" .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?title .
+  ?control a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-window-control" ; rdfhtml:attribute ?controlAttr , ?controlLabelAttr ;
+           rdfhtml:hasChild ?controlText ; sem:tooltip ?controlLabel ; ?marker $this ; sem:orderKey ?controlKey .
+  ?controlAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-control" ; rdfhtml:attributeValue ?controlName .
+  ?controlLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?controlLabel .
+  ?controlText a rdfhtml:Text ; rdfhtml:data ?glyph .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip .
+  ?grip a rdfhtml:Div ; rdfhtml:class "sem-window-grip" ; rdfhtml:attribute ?gripGesture , ?gripHidden .
+  ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "resize" .
+  ?gripHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+}
+WHERE {
+  $this a c:Window .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Window } AS ?isWindow)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Draggable } AS ?draggable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Resizable } AS ?resizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Maximizable } AS ?maximizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
+  BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
+  OPTIONAL {
+    $this c:title ?pickt . FILTER(isLiteral(?pickt))
+    ?viewert l10n:prefers ?preft . ?preft l10n:code ?codet ; sem:order ?rankt .
+    BIND(LCASE(LANG(?pickt)) AS ?tagt)
+    FILTER(?tagt = ?codet || STRSTARTS(?tagt, CONCAT(?codet, "-")))
+    FILTER NOT EXISTS {
+      ?viewert l10n:prefers ?bettert . ?bettert l10n:code ?code2t ; sem:order ?rank2t .
+      $this c:title ?othert . FILTER(isLiteral(?othert))
+      BIND(LCASE(LANG(?othert)) AS ?tag2t)
+      FILTER(?tag2t = ?code2t || STRSTARTS(?tag2t, CONCAT(?code2t, "-")))
+      FILTER(?rank2t < ?rankt || (?rank2t = ?rankt && ?tag2t = ?code2t && ?tagt != ?codet))
+    }
+  }
+  OPTIONAL { $this c:title ?plaint FILTER(isLiteral(?plaint) && LANG(?plaint) = "") }
+  OPTIONAL { $this c:title ?ent FILTER(LCASE(LANG(?ent)) = "en") }
+  OPTIONAL { $this c:title ?enxt FILTER(STRSTARTS(LCASE(LANG(?enxt)), "en-")) }
+  OPTIONAL { $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?plaint, ?ent, ?enxt, ?anyt)) AS ?ownTitle)
+  OPTIONAL {
+    $this c:label ?pickl . FILTER(isLiteral(?pickl))
+    ?viewerl l10n:prefers ?prefl . ?prefl l10n:code ?codel ; sem:order ?rankl .
+    BIND(LCASE(LANG(?pickl)) AS ?tagl)
+    FILTER(?tagl = ?codel || STRSTARTS(?tagl, CONCAT(?codel, "-")))
+    FILTER NOT EXISTS {
+      ?viewerl l10n:prefers ?betterl . ?betterl l10n:code ?code2l ; sem:order ?rank2l .
+      $this c:label ?otherl . FILTER(isLiteral(?otherl))
+      BIND(LCASE(LANG(?otherl)) AS ?tag2l)
+      FILTER(?tag2l = ?code2l || STRSTARTS(?tag2l, CONCAT(?code2l, "-")))
+      FILTER(?rank2l < ?rankl || (?rank2l = ?rankl && ?tag2l = ?code2l && ?tagl != ?codel))
+    }
+  }
+  OPTIONAL { $this c:label ?plainl FILTER(isLiteral(?plainl) && LANG(?plainl) = "") }
+  OPTIONAL { $this c:label ?enl FILTER(LCASE(LANG(?enl)) = "en") }
+  OPTIONAL { $this c:label ?enxl FILTER(STRSTARTS(LCASE(LANG(?enxl)), "en-")) }
+  OPTIONAL { $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?plainl, ?enl, ?enxl, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {
+    # The frame itself (or, closed, its empty hidden root).
+    BIND("frame" AS ?part)
+  } UNION {
+    # Its controls, in order: dock (a window from a tab), minimize, maximize or restore, undock, close.
+    VALUES (?controlName ?glyph ?phraseNode ?fallback ?controlKey ?separator) {
+      ("dock" "\u21F2" c:ReturnToTabCommand "Return to its tab" "1" ": ")
+      ("minimize" "\u2013" c:MinimizeCommand "Minimize" "2" " ")
+      ("restore" "\u2750" c:RestoreCommand "Restore" "3" " ")
+      ("maximize" "\u25A1" c:MaximizeCommand "Maximize" "3" " ")
+      ("undock" "\u25F3" c:UndockCommand "Float" "4" " ")
+      ("close" "\u2715" c:CloseCommand "Close" "5" " ")
+    }
+    OPTIONAL {
+    ?phraseNode rdfs:label ?pickp . FILTER(isLiteral(?pickp))
+    ?viewerp l10n:prefers ?prefp . ?prefp l10n:code ?codep ; sem:order ?rankp .
+    BIND(LCASE(LANG(?pickp)) AS ?tagp)
+    FILTER(?tagp = ?codep || STRSTARTS(?tagp, CONCAT(?codep, "-")))
+    FILTER NOT EXISTS {
+      ?viewerp l10n:prefers ?betterp . ?betterp l10n:code ?code2p ; sem:order ?rank2p .
+      ?phraseNode rdfs:label ?otherp . FILTER(isLiteral(?otherp))
+      BIND(LCASE(LANG(?otherp)) AS ?tag2p)
+      FILTER(?tag2p = ?code2p || STRSTARTS(?tag2p, CONCAT(?code2p, "-")))
+      FILTER(?rank2p < ?rankp || (?rank2p = ?rankp && ?tag2p = ?code2p && ?tagp != ?codep))
+    }
+  }
+  OPTIONAL { ?phraseNode rdfs:label ?plainp FILTER(isLiteral(?plainp) && LANG(?plainp) = "") }
+  OPTIONAL { ?phraseNode rdfs:label ?enp FILTER(LCASE(LANG(?enp)) = "en") }
+  OPTIONAL { ?phraseNode rdfs:label ?enxp FILTER(STRSTARTS(LCASE(LANG(?enxp)), "en-")) }
+  OPTIONAL { ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?plainp, ?enp, ?enxp, ?anyp)) AS ?phrase)
+  }
+  FILTER(!?closed || BOUND(?part))
+  FILTER(!BOUND(?controlName)
+    || (?controlName = "dock" && ?fromTab)
+    || (?controlName = "minimize" && ?minimizable)
+    || (?controlName = "restore" && ?maximizable && ?maximized)
+    || (?controlName = "maximize" && ?maximizable && !?maximized)
+    || (?controlName = "undock" && BOUND(?edge) && ?dockable)
+    || ?controlName = "close")
+  BIND(CONCAT(COALESCE(?phrase, ?fallback), ?separator, ?title) AS ?controlLabel)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName)), ?none) AS ?control)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?barNode)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-data-sem-control")), ?none) AS ?controlAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-aria-label")), ?none) AS ?controlLabelAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-text")), ?none) AS ?controlText)
+  BIND(IF(?controlName = "close" && !?fromTab, c:closes,
+       IF(?controlName = "close" || ?controlName = "dock", c:docks,
+       IF(?controlName = "minimize", c:minimizes, IF(?controlName = "maximize", c:maximizes,
+       IF(?controlName = "restore", c:restores, IF(?controlName = "undock", c:undocks, ?none)))))) AS ?marker)
+  # The frame's parts (not for a control row, nor for a closed frame).
+  BIND(BOUND(?part) && !?closed AS ?shown)
+  BIND(IF(?closed || (?shown && ?minimized), "", ?none) AS ?hidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?bar)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar-data-sem-gesture")), ?none) AS ?barGesture)
+  BIND(IF(?draggable && !?maximized, ?barGesture, ?none) AS ?moveAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~body")), ?none) AS ?body)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IF(?shown, ?bodyNode, ?none) AS ?content)
+  BIND(IF(?shown && ?resizable && !?maximized && !BOUND(?edge), IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-data-sem-gesture")), ?none) AS ?gripGesture)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-aria-hidden")), ?none) AS ?gripHidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-role")), ?none) AS ?roleAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?nameAttr)
+  # Geometry: all of it floating, the docked dimension docked, none maximized; then the stacking order.
+  OPTIONAL { $this c:index ?indexRaw }
+  OPTIONAL { $this c:width ?widthRaw }
+  OPTIONAL { $this c:height ?heightRaw }
+  OPTIONAL { $this c:x ?xRaw }
+  OPTIONAL { $this c:y ?yRaw }
+  OPTIONAL { $this c:z ?zRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?indexRaw))), 0) AS ?index)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?width)
+  BIND(IF(BOUND(?heightRaw) || ?isWindow, COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), 440), ?none) AS ?height)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 96 + ?index * 28) AS ?x)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 120 + ?index * 28) AS ?y)
+  BIND(CONCAT("width: ", STR(?width), "px;") AS ?widthDecl)
+  BIND(IF(BOUND(?height), CONCAT("height: ", STR(?height), "px;"), "") AS ?heightDecl)
+  BIND(IF(?maximized, "",
+       IF(?edge = "start" || ?edge = "end", ?widthDecl,
+       IF(?edge = "top" || ?edge = "bottom", ?heightDecl,
+       CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))))) AS ?placed)
+  BIND(COALESCE(?placed, CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))) AS ?decls)
+  BIND(IF(BOUND(?zRaw), CONCAT("z-index: ", STR(COALESCE(xsd:integer(ROUND(xsd:double(?zRaw))), 0)), ";"), "") AS ?zDecl)
+  BIND(IF(?decls = "", ?zDecl, IF(?zDecl = "", ?decls, CONCAT(?decls, " ", ?zDecl))) AS ?allDecls)
+  BIND(IF(?shown && ?allDecls != "", ?allDecls, ?none) AS ?style)
+}""" .
+c:WindowRendering-sparql-text a sem:Rule ;
+    sem:implements c:WindowRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?titleEl , ?content .
+  ?titleEl a rdfhtml:Div ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?content .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Window .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  OPTIONAL {
+    $this c:title ?pickt . FILTER(isLiteral(?pickt))
+    ?viewert l10n:prefers ?preft . ?preft l10n:code ?codet ; sem:order ?rankt .
+    BIND(LCASE(LANG(?pickt)) AS ?tagt)
+    FILTER(?tagt = ?codet || STRSTARTS(?tagt, CONCAT(?codet, "-")))
+    FILTER NOT EXISTS {
+      ?viewert l10n:prefers ?bettert . ?bettert l10n:code ?code2t ; sem:order ?rank2t .
+      $this c:title ?othert . FILTER(isLiteral(?othert))
+      BIND(LCASE(LANG(?othert)) AS ?tag2t)
+      FILTER(?tag2t = ?code2t || STRSTARTS(?tag2t, CONCAT(?code2t, "-")))
+      FILTER(?rank2t < ?rankt || (?rank2t = ?rankt && ?tag2t = ?code2t && ?tagt != ?codet))
+    }
+  }
+  OPTIONAL { $this c:title ?plaint FILTER(isLiteral(?plaint) && LANG(?plaint) = "") }
+  OPTIONAL { $this c:title ?ent FILTER(LCASE(LANG(?ent)) = "en") }
+  OPTIONAL { $this c:title ?enxt FILTER(STRSTARTS(LCASE(LANG(?enxt)), "en-")) }
+  OPTIONAL { $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?plaint, ?ent, ?enxt, ?anyt)) AS ?ownTitle)
+  OPTIONAL {
+    $this c:label ?pickl . FILTER(isLiteral(?pickl))
+    ?viewerl l10n:prefers ?prefl . ?prefl l10n:code ?codel ; sem:order ?rankl .
+    BIND(LCASE(LANG(?pickl)) AS ?tagl)
+    FILTER(?tagl = ?codel || STRSTARTS(?tagl, CONCAT(?codel, "-")))
+    FILTER NOT EXISTS {
+      ?viewerl l10n:prefers ?betterl . ?betterl l10n:code ?code2l ; sem:order ?rank2l .
+      $this c:label ?otherl . FILTER(isLiteral(?otherl))
+      BIND(LCASE(LANG(?otherl)) AS ?tag2l)
+      FILTER(?tag2l = ?code2l || STRSTARTS(?tag2l, CONCAT(?code2l, "-")))
+      FILTER(?rank2l < ?rankl || (?rank2l = ?rankl && ?tag2l = ?code2l && ?tagl != ?codel))
+    }
+  }
+  OPTIONAL { $this c:label ?plainl FILTER(isLiteral(?plainl) && LANG(?plainl) = "") }
+  OPTIONAL { $this c:label ?enl FILTER(LCASE(LANG(?enl)) = "en") }
+  OPTIONAL { $this c:label ?enxl FILTER(STRSTARTS(LCASE(LANG(?enxl)), "en-")) }
+  OPTIONAL { $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?plainl, ?enl, ?enxl, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  OPTIONAL { $this c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+  OPTIONAL { $this c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+  BIND(IF(?maximized, ?stateSymbol, IF(BOUND(?edge), ?edgeSymbol, ?none)) AS ?mark)
+  BIND(IF(?minimized, CONCAT(COALESCE(?stateSymbol, "\u2581"), " ", ?title),
+       CONCAT("\u250C ", ?title, IF(BOUND(?mark), CONCAT(" ", ?mark), ""), " \u2510")) AS ?frameLine)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?closed, "", ?none) AS ?hidden)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title"))) AS ?titleEl)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title-text"))) AS ?titleText)
+  BIND(IF(?closed, ?none, ?frameLine) AS ?line)
+  BIND(IF(?closed || ?minimized, ?none, ?bodyNode) AS ?content)
+}""" .
+# SPARQL twins of the "window" function (src/components/containers.ts).
+c:PaletteRendering-sparql-screen a sem:Rule ;
+    sem:implements c:PaletteRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
+        rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
+  ?bar a rdfhtml:Header ; rdfhtml:class "sem-window-bar" ; rdfhtml:attribute ?moveAttr ; rdfhtml:hasChild ?titleEl ;
+       ord:immediatelyPrecedes ?body .
+  ?barNode rdfhtml:hasChild ?control .
+  ?moveAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "move" .
+  ?titleEl a rdfhtml:Strong ; rdfhtml:hasChild ?titleText ; sem:orderKey "0" .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?title .
+  ?control a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-window-control" ; rdfhtml:attribute ?controlAttr , ?controlLabelAttr ;
+           rdfhtml:hasChild ?controlText ; sem:tooltip ?controlLabel ; ?marker $this ; sem:orderKey ?controlKey .
+  ?controlAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-control" ; rdfhtml:attributeValue ?controlName .
+  ?controlLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?controlLabel .
+  ?controlText a rdfhtml:Text ; rdfhtml:data ?glyph .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip .
+  ?grip a rdfhtml:Div ; rdfhtml:class "sem-window-grip" ; rdfhtml:attribute ?gripGesture , ?gripHidden .
+  ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "resize" .
+  ?gripHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+}
+WHERE {
+  $this a c:Palette .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Window } AS ?isWindow)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Draggable } AS ?draggable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Resizable } AS ?resizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Maximizable } AS ?maximizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
+  BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
+  OPTIONAL {
+    $this c:title ?pickt . FILTER(isLiteral(?pickt))
+    ?viewert l10n:prefers ?preft . ?preft l10n:code ?codet ; sem:order ?rankt .
+    BIND(LCASE(LANG(?pickt)) AS ?tagt)
+    FILTER(?tagt = ?codet || STRSTARTS(?tagt, CONCAT(?codet, "-")))
+    FILTER NOT EXISTS {
+      ?viewert l10n:prefers ?bettert . ?bettert l10n:code ?code2t ; sem:order ?rank2t .
+      $this c:title ?othert . FILTER(isLiteral(?othert))
+      BIND(LCASE(LANG(?othert)) AS ?tag2t)
+      FILTER(?tag2t = ?code2t || STRSTARTS(?tag2t, CONCAT(?code2t, "-")))
+      FILTER(?rank2t < ?rankt || (?rank2t = ?rankt && ?tag2t = ?code2t && ?tagt != ?codet))
+    }
+  }
+  OPTIONAL { $this c:title ?plaint FILTER(isLiteral(?plaint) && LANG(?plaint) = "") }
+  OPTIONAL { $this c:title ?ent FILTER(LCASE(LANG(?ent)) = "en") }
+  OPTIONAL { $this c:title ?enxt FILTER(STRSTARTS(LCASE(LANG(?enxt)), "en-")) }
+  OPTIONAL { $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?plaint, ?ent, ?enxt, ?anyt)) AS ?ownTitle)
+  OPTIONAL {
+    $this c:label ?pickl . FILTER(isLiteral(?pickl))
+    ?viewerl l10n:prefers ?prefl . ?prefl l10n:code ?codel ; sem:order ?rankl .
+    BIND(LCASE(LANG(?pickl)) AS ?tagl)
+    FILTER(?tagl = ?codel || STRSTARTS(?tagl, CONCAT(?codel, "-")))
+    FILTER NOT EXISTS {
+      ?viewerl l10n:prefers ?betterl . ?betterl l10n:code ?code2l ; sem:order ?rank2l .
+      $this c:label ?otherl . FILTER(isLiteral(?otherl))
+      BIND(LCASE(LANG(?otherl)) AS ?tag2l)
+      FILTER(?tag2l = ?code2l || STRSTARTS(?tag2l, CONCAT(?code2l, "-")))
+      FILTER(?rank2l < ?rankl || (?rank2l = ?rankl && ?tag2l = ?code2l && ?tagl != ?codel))
+    }
+  }
+  OPTIONAL { $this c:label ?plainl FILTER(isLiteral(?plainl) && LANG(?plainl) = "") }
+  OPTIONAL { $this c:label ?enl FILTER(LCASE(LANG(?enl)) = "en") }
+  OPTIONAL { $this c:label ?enxl FILTER(STRSTARTS(LCASE(LANG(?enxl)), "en-")) }
+  OPTIONAL { $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?plainl, ?enl, ?enxl, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {
+    # The frame itself (or, closed, its empty hidden root).
+    BIND("frame" AS ?part)
+  } UNION {
+    # Its controls, in order: dock (a window from a tab), minimize, maximize or restore, undock, close.
+    VALUES (?controlName ?glyph ?phraseNode ?fallback ?controlKey ?separator) {
+      ("dock" "\u21F2" c:ReturnToTabCommand "Return to its tab" "1" ": ")
+      ("minimize" "\u2013" c:MinimizeCommand "Minimize" "2" " ")
+      ("restore" "\u2750" c:RestoreCommand "Restore" "3" " ")
+      ("maximize" "\u25A1" c:MaximizeCommand "Maximize" "3" " ")
+      ("undock" "\u25F3" c:UndockCommand "Float" "4" " ")
+      ("close" "\u2715" c:CloseCommand "Close" "5" " ")
+    }
+    OPTIONAL {
+    ?phraseNode rdfs:label ?pickp . FILTER(isLiteral(?pickp))
+    ?viewerp l10n:prefers ?prefp . ?prefp l10n:code ?codep ; sem:order ?rankp .
+    BIND(LCASE(LANG(?pickp)) AS ?tagp)
+    FILTER(?tagp = ?codep || STRSTARTS(?tagp, CONCAT(?codep, "-")))
+    FILTER NOT EXISTS {
+      ?viewerp l10n:prefers ?betterp . ?betterp l10n:code ?code2p ; sem:order ?rank2p .
+      ?phraseNode rdfs:label ?otherp . FILTER(isLiteral(?otherp))
+      BIND(LCASE(LANG(?otherp)) AS ?tag2p)
+      FILTER(?tag2p = ?code2p || STRSTARTS(?tag2p, CONCAT(?code2p, "-")))
+      FILTER(?rank2p < ?rankp || (?rank2p = ?rankp && ?tag2p = ?code2p && ?tagp != ?codep))
+    }
+  }
+  OPTIONAL { ?phraseNode rdfs:label ?plainp FILTER(isLiteral(?plainp) && LANG(?plainp) = "") }
+  OPTIONAL { ?phraseNode rdfs:label ?enp FILTER(LCASE(LANG(?enp)) = "en") }
+  OPTIONAL { ?phraseNode rdfs:label ?enxp FILTER(STRSTARTS(LCASE(LANG(?enxp)), "en-")) }
+  OPTIONAL { ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?plainp, ?enp, ?enxp, ?anyp)) AS ?phrase)
+  }
+  FILTER(!?closed || BOUND(?part))
+  FILTER(!BOUND(?controlName)
+    || (?controlName = "dock" && ?fromTab)
+    || (?controlName = "minimize" && ?minimizable)
+    || (?controlName = "restore" && ?maximizable && ?maximized)
+    || (?controlName = "maximize" && ?maximizable && !?maximized)
+    || (?controlName = "undock" && BOUND(?edge) && ?dockable)
+    || ?controlName = "close")
+  BIND(CONCAT(COALESCE(?phrase, ?fallback), ?separator, ?title) AS ?controlLabel)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName)), ?none) AS ?control)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?barNode)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-data-sem-control")), ?none) AS ?controlAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-aria-label")), ?none) AS ?controlLabelAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-text")), ?none) AS ?controlText)
+  BIND(IF(?controlName = "close" && !?fromTab, c:closes,
+       IF(?controlName = "close" || ?controlName = "dock", c:docks,
+       IF(?controlName = "minimize", c:minimizes, IF(?controlName = "maximize", c:maximizes,
+       IF(?controlName = "restore", c:restores, IF(?controlName = "undock", c:undocks, ?none)))))) AS ?marker)
+  # The frame's parts (not for a control row, nor for a closed frame).
+  BIND(BOUND(?part) && !?closed AS ?shown)
+  BIND(IF(?closed || (?shown && ?minimized), "", ?none) AS ?hidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?bar)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar-data-sem-gesture")), ?none) AS ?barGesture)
+  BIND(IF(?draggable && !?maximized, ?barGesture, ?none) AS ?moveAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~body")), ?none) AS ?body)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IF(?shown, ?bodyNode, ?none) AS ?content)
+  BIND(IF(?shown && ?resizable && !?maximized && !BOUND(?edge), IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-data-sem-gesture")), ?none) AS ?gripGesture)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-aria-hidden")), ?none) AS ?gripHidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-role")), ?none) AS ?roleAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?nameAttr)
+  # Geometry: all of it floating, the docked dimension docked, none maximized; then the stacking order.
+  OPTIONAL { $this c:index ?indexRaw }
+  OPTIONAL { $this c:width ?widthRaw }
+  OPTIONAL { $this c:height ?heightRaw }
+  OPTIONAL { $this c:x ?xRaw }
+  OPTIONAL { $this c:y ?yRaw }
+  OPTIONAL { $this c:z ?zRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?indexRaw))), 0) AS ?index)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?width)
+  BIND(IF(BOUND(?heightRaw) || ?isWindow, COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), 440), ?none) AS ?height)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 96 + ?index * 28) AS ?x)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 120 + ?index * 28) AS ?y)
+  BIND(CONCAT("width: ", STR(?width), "px;") AS ?widthDecl)
+  BIND(IF(BOUND(?height), CONCAT("height: ", STR(?height), "px;"), "") AS ?heightDecl)
+  BIND(IF(?maximized, "",
+       IF(?edge = "start" || ?edge = "end", ?widthDecl,
+       IF(?edge = "top" || ?edge = "bottom", ?heightDecl,
+       CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))))) AS ?placed)
+  BIND(COALESCE(?placed, CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))) AS ?decls)
+  BIND(IF(BOUND(?zRaw), CONCAT("z-index: ", STR(COALESCE(xsd:integer(ROUND(xsd:double(?zRaw))), 0)), ";"), "") AS ?zDecl)
+  BIND(IF(?decls = "", ?zDecl, IF(?zDecl = "", ?decls, CONCAT(?decls, " ", ?zDecl))) AS ?allDecls)
+  BIND(IF(?shown && ?allDecls != "", ?allDecls, ?none) AS ?style)
+}""" .
+c:PaletteRendering-sparql-text a sem:Rule ;
+    sem:implements c:PaletteRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?titleEl , ?content .
+  ?titleEl a rdfhtml:Div ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?content .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Palette .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  OPTIONAL {
+    $this c:title ?pickt . FILTER(isLiteral(?pickt))
+    ?viewert l10n:prefers ?preft . ?preft l10n:code ?codet ; sem:order ?rankt .
+    BIND(LCASE(LANG(?pickt)) AS ?tagt)
+    FILTER(?tagt = ?codet || STRSTARTS(?tagt, CONCAT(?codet, "-")))
+    FILTER NOT EXISTS {
+      ?viewert l10n:prefers ?bettert . ?bettert l10n:code ?code2t ; sem:order ?rank2t .
+      $this c:title ?othert . FILTER(isLiteral(?othert))
+      BIND(LCASE(LANG(?othert)) AS ?tag2t)
+      FILTER(?tag2t = ?code2t || STRSTARTS(?tag2t, CONCAT(?code2t, "-")))
+      FILTER(?rank2t < ?rankt || (?rank2t = ?rankt && ?tag2t = ?code2t && ?tagt != ?codet))
+    }
+  }
+  OPTIONAL { $this c:title ?plaint FILTER(isLiteral(?plaint) && LANG(?plaint) = "") }
+  OPTIONAL { $this c:title ?ent FILTER(LCASE(LANG(?ent)) = "en") }
+  OPTIONAL { $this c:title ?enxt FILTER(STRSTARTS(LCASE(LANG(?enxt)), "en-")) }
+  OPTIONAL { $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?plaint, ?ent, ?enxt, ?anyt)) AS ?ownTitle)
+  OPTIONAL {
+    $this c:label ?pickl . FILTER(isLiteral(?pickl))
+    ?viewerl l10n:prefers ?prefl . ?prefl l10n:code ?codel ; sem:order ?rankl .
+    BIND(LCASE(LANG(?pickl)) AS ?tagl)
+    FILTER(?tagl = ?codel || STRSTARTS(?tagl, CONCAT(?codel, "-")))
+    FILTER NOT EXISTS {
+      ?viewerl l10n:prefers ?betterl . ?betterl l10n:code ?code2l ; sem:order ?rank2l .
+      $this c:label ?otherl . FILTER(isLiteral(?otherl))
+      BIND(LCASE(LANG(?otherl)) AS ?tag2l)
+      FILTER(?tag2l = ?code2l || STRSTARTS(?tag2l, CONCAT(?code2l, "-")))
+      FILTER(?rank2l < ?rankl || (?rank2l = ?rankl && ?tag2l = ?code2l && ?tagl != ?codel))
+    }
+  }
+  OPTIONAL { $this c:label ?plainl FILTER(isLiteral(?plainl) && LANG(?plainl) = "") }
+  OPTIONAL { $this c:label ?enl FILTER(LCASE(LANG(?enl)) = "en") }
+  OPTIONAL { $this c:label ?enxl FILTER(STRSTARTS(LCASE(LANG(?enxl)), "en-")) }
+  OPTIONAL { $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?plainl, ?enl, ?enxl, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  OPTIONAL { $this c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+  OPTIONAL { $this c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+  BIND(IF(?maximized, ?stateSymbol, IF(BOUND(?edge), ?edgeSymbol, ?none)) AS ?mark)
+  BIND(IF(?minimized, CONCAT(COALESCE(?stateSymbol, "\u2581"), " ", ?title),
+       CONCAT("\u250C ", ?title, IF(BOUND(?mark), CONCAT(" ", ?mark), ""), " \u2510")) AS ?frameLine)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?closed, "", ?none) AS ?hidden)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title"))) AS ?titleEl)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title-text"))) AS ?titleText)
+  BIND(IF(?closed, ?none, ?frameLine) AS ?line)
+  BIND(IF(?closed || ?minimized, ?none, ?bodyNode) AS ?content)
+}""" .
 
 # --- behaviour: tabs and their windows --------------------------------------------------------
 
@@ -466,6 +944,53 @@ c:windowsOn a owl:ObjectProperty ; rdfs:range c:Desktop ;
     rdfs:comment "Where a component's windows are placed (else: inside the component)."@en .
 c:DesktopRendering a sem:Rendering ; sem:targets c:Desktop ; sem:stratum 0 .
 c:DesktopRendering-fn a sem:Rule ; sem:implements c:DesktopRendering ; sem:function "desktop" .
+# SPARQL twins of the "desktop" function (src/components/containers.ts). Hosted nodes are placed
+# in IRI order (sem:orderKey); the frames' stacking layer comes first.
+c:DesktopRendering-sparql-screen a sem:Rule ;
+    sem:implements c:DesktopRendering ;
+    sem:modality mod:Screen ;
+    sem:follows c:hosts ;
+    sem:watches rdf:type , c:hosts , c:open ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?frames , ?other .
+  ?frames a rdfhtml:Div ; rdfhtml:class "sem-frames" ; sem:orderKey "" ; rdfhtml:hasChild ?frame .
+  ?frame sem:orderKey ?key .
+  ?other sem:orderKey ?key .
+}
+WHERE {
+  $this a c:Desktop .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~frames")) AS ?frames)
+  OPTIONAL {
+    $this c:hosts ?hosted . FILTER(isIRI(?hosted))
+    BIND(EXISTS { ?hosted a/rdfs:subClassOf* c:Raisable } AS ?raisable)
+    BIND(EXISTS { ?hosted c:open ?open FILTER(STR(?open) = "false") } AS ?closed)
+    BIND(IF(?raisable && !?closed, ?hosted, ?none) AS ?frame)
+    BIND(IF(?raisable, ?none, ?hosted) AS ?other)
+    BIND(STR(?hosted) AS ?key)
+  }
+}""" .
+c:DesktopRendering-sparql-text a sem:Rule ;
+    sem:implements c:DesktopRendering ;
+    sem:modality mod:Text ;
+    sem:follows c:hosts ;
+    sem:watches rdf:type , c:hosts , c:open ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?shown .
+  ?shown sem:orderKey ?key .
+}
+WHERE {
+  $this a c:Desktop .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    $this c:hosts ?hosted . FILTER(isIRI(?hosted))
+    FILTER(NOT EXISTS { ?hosted a/rdfs:subClassOf* c:Raisable } || NOT EXISTS { ?hosted c:open ?open FILTER(STR(?open) = "false") })
+    BIND(?hosted AS ?shown)
+    BIND(STR(?hosted) AS ?key)
+  }
+}""" .
 
 # --- the taskbar: a desktop's open frames -----------------------------------------------------------
 
@@ -481,6 +1006,268 @@ end it stands upright, and the page keeps that edge clear."""@en ;
     sem:slug "taskbar" .
 c:TaskbarRendering a sem:Rendering ; sem:targets c:Taskbar ; sem:stratum 0 .
 c:TaskbarRendering-fn a sem:Rule ; sem:implements c:TaskbarRendering ; sem:function "taskbar" .
+# SPARQL twins of the "taskbar" function (src/components/containers.ts). It reads its desktop's
+# frames, two steps away: it follows the path ( c:of c:hosts ), watching what an entry shows.
+c:TaskbarRendering-sparql-screen a sem:Rule ;
+    sem:implements c:TaskbarRendering ;
+    sem:modality mod:Screen ;
+    sem:follows ( c:of c:hosts ) ;
+    sem:watches rdf:type , c:of , c:label , c:hosts , c:topmost , c:open , c:windowState , c:attachedTo , c:title ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?task .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?task a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-task" ; sem:orderKey ?key ; c:activates ?w ;
+        rdfhtml:attribute ?stateAttr , ?currentAttr ; sem:tooltip ?tip ; rdfhtml:hasChild ?icon , ?labelEl .
+  ?stateAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-state" ; rdfhtml:attributeValue ?slug .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "true" .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText ; ord:immediatelyPrecedes ?labelEl .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data ?symbol .
+  ?labelEl a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?title .
+}
+WHERE {
+  $this a c:Taskbar .
+  OPTIONAL {
+    $this c:label ?picko . FILTER(isLiteral(?picko))
+    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
+    BIND(LCASE(LANG(?picko)) AS ?tago)
+    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
+    FILTER NOT EXISTS {
+      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
+      $this c:label ?othero . FILTER(isLiteral(?othero))
+      BIND(LCASE(LANG(?othero)) AS ?tag2o)
+      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
+      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
+    }
+  }
+  OPTIONAL { $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
+  OPTIONAL { $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
+  OPTIONAL { $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
+  OPTIONAL { $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?ownLabel)
+  OPTIONAL {
+    c:WindowsRegion rdfs:label ?pickp . FILTER(isLiteral(?pickp))
+    ?viewerp l10n:prefers ?prefp . ?prefp l10n:code ?codep ; sem:order ?rankp .
+    BIND(LCASE(LANG(?pickp)) AS ?tagp)
+    FILTER(?tagp = ?codep || STRSTARTS(?tagp, CONCAT(?codep, "-")))
+    FILTER NOT EXISTS {
+      ?viewerp l10n:prefers ?betterp . ?betterp l10n:code ?code2p ; sem:order ?rank2p .
+      c:WindowsRegion rdfs:label ?otherp . FILTER(isLiteral(?otherp))
+      BIND(LCASE(LANG(?otherp)) AS ?tag2p)
+      FILTER(?tag2p = ?code2p || STRSTARTS(?tag2p, CONCAT(?code2p, "-")))
+      FILTER(?rank2p < ?rankp || (?rank2p = ?rankp && ?tag2p = ?code2p && ?tagp != ?codep))
+    }
+  }
+  OPTIONAL { c:WindowsRegion rdfs:label ?plainp FILTER(isLiteral(?plainp) && LANG(?plainp) = "") }
+  OPTIONAL { c:WindowsRegion rdfs:label ?enp FILTER(LCASE(LANG(?enp)) = "en") }
+  OPTIONAL { c:WindowsRegion rdfs:label ?enxp FILTER(STRSTARTS(LCASE(LANG(?enxp)), "en-")) }
+  OPTIONAL { c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?plainp, ?enp, ?enxp, ?anyp)) AS ?phrase)
+  BIND(COALESCE(?ownLabel, ?phrase, "Windows") AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?nameAttr)
+  BIND(IF(EXISTS { $this c:of ?d . ?d c:hosts ?f . ?f a/rdfs:subClassOf* c:Frame FILTER NOT EXISTS { ?f c:open ?o FILTER(STR(?o) = "false") } }, ?none, "") AS ?hidden)
+  OPTIONAL {
+      $this c:of ?desktop . FILTER(isIRI(?desktop))
+      ?desktop c:hosts ?w . FILTER(isIRI(?w))
+      FILTER EXISTS { ?w a/rdfs:subClassOf* c:Frame }
+      FILTER NOT EXISTS { ?w c:open ?open FILTER(STR(?open) = "false") }
+      OPTIONAL { ?w c:windowState ?state }
+      BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+      BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+      OPTIONAL { ?w c:attachedTo ?edgeNode . VALUES ?edgeNode { c:StartEdge c:EndEdge c:TopEdge c:BottomEdge } }
+      BIND(!?maximized && BOUND(?edgeNode) AS ?docked)
+      OPTIONAL { ?w c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+      OPTIONAL { ?w c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+      BIND(COALESCE(IF(?minimized || ?maximized, ?stateSymbol, IF(?docked, ?edgeSymbol, ?none)), "\u25AD") AS ?symbol)
+      BIND(IF(?minimized, "minimized", IF(?maximized, "maximized", IF(?docked, "docked", "normal"))) AS ?slug)
+      OPTIONAL {
+    ?w c:title ?pickt . FILTER(isLiteral(?pickt))
+    ?viewert l10n:prefers ?preft . ?preft l10n:code ?codet ; sem:order ?rankt .
+    BIND(LCASE(LANG(?pickt)) AS ?tagt)
+    FILTER(?tagt = ?codet || STRSTARTS(?tagt, CONCAT(?codet, "-")))
+    FILTER NOT EXISTS {
+      ?viewert l10n:prefers ?bettert . ?bettert l10n:code ?code2t ; sem:order ?rank2t .
+      ?w c:title ?othert . FILTER(isLiteral(?othert))
+      BIND(LCASE(LANG(?othert)) AS ?tag2t)
+      FILTER(?tag2t = ?code2t || STRSTARTS(?tag2t, CONCAT(?code2t, "-")))
+      FILTER(?rank2t < ?rankt || (?rank2t = ?rankt && ?tag2t = ?code2t && ?tagt != ?codet))
+    }
+  }
+  OPTIONAL { ?w c:title ?plaint FILTER(isLiteral(?plaint) && LANG(?plaint) = "") }
+  OPTIONAL { ?w c:title ?ent FILTER(LCASE(LANG(?ent)) = "en") }
+  OPTIONAL { ?w c:title ?enxt FILTER(STRSTARTS(LCASE(LANG(?enxt)), "en-")) }
+  OPTIONAL { ?w c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?plaint, ?ent, ?enxt, ?anyt)) AS ?wTitle)
+      OPTIONAL {
+    ?w c:label ?pickl . FILTER(isLiteral(?pickl))
+    ?viewerl l10n:prefers ?prefl . ?prefl l10n:code ?codel ; sem:order ?rankl .
+    BIND(LCASE(LANG(?pickl)) AS ?tagl)
+    FILTER(?tagl = ?codel || STRSTARTS(?tagl, CONCAT(?codel, "-")))
+    FILTER NOT EXISTS {
+      ?viewerl l10n:prefers ?betterl . ?betterl l10n:code ?code2l ; sem:order ?rank2l .
+      ?w c:label ?otherl . FILTER(isLiteral(?otherl))
+      BIND(LCASE(LANG(?otherl)) AS ?tag2l)
+      FILTER(?tag2l = ?code2l || STRSTARTS(?tag2l, CONCAT(?code2l, "-")))
+      FILTER(?rank2l < ?rankl || (?rank2l = ?rankl && ?tag2l = ?code2l && ?tagl != ?codel))
+    }
+  }
+  OPTIONAL { ?w c:label ?plainl FILTER(isLiteral(?plainl) && LANG(?plainl) = "") }
+  OPTIONAL { ?w c:label ?enl FILTER(LCASE(LANG(?enl)) = "en") }
+  OPTIONAL { ?w c:label ?enxl FILTER(STRSTARTS(LCASE(LANG(?enxl)), "en-")) }
+  OPTIONAL { ?w c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?plainl, ?enl, ?enxl, ?anyl)) AS ?wLabel)
+      BIND(COALESCE(?wTitle, ?wLabel, "Window") AS ?title)
+      BIND(EXISTS { ?desktop c:topmost ?w } && !?minimized AS ?active)
+      OPTIONAL {
+    ?w c:windowState ?state . ?state rdfs:label ?picks . FILTER(isLiteral(?picks))
+    ?viewers l10n:prefers ?prefs . ?prefs l10n:code ?codes ; sem:order ?ranks .
+    BIND(LCASE(LANG(?picks)) AS ?tags)
+    FILTER(?tags = ?codes || STRSTARTS(?tags, CONCAT(?codes, "-")))
+    FILTER NOT EXISTS {
+      ?viewers l10n:prefers ?betters . ?betters l10n:code ?code2s ; sem:order ?rank2s .
+      ?state rdfs:label ?others . FILTER(isLiteral(?others))
+      BIND(LCASE(LANG(?others)) AS ?tag2s)
+      FILTER(?tag2s = ?code2s || STRSTARTS(?tag2s, CONCAT(?code2s, "-")))
+      FILTER(?rank2s < ?ranks || (?rank2s = ?ranks && ?tag2s = ?code2s && ?tags != ?codes))
+    }
+  }
+  OPTIONAL { ?w c:windowState ?state . ?state rdfs:label ?plains FILTER(isLiteral(?plains) && LANG(?plains) = "") }
+  OPTIONAL { ?w c:windowState ?state . ?state rdfs:label ?ens FILTER(LCASE(LANG(?ens)) = "en") }
+  OPTIONAL { ?w c:windowState ?state . ?state rdfs:label ?enxs FILTER(STRSTARTS(LCASE(LANG(?enxs)), "en-")) }
+  OPTIONAL { ?w c:windowState ?state . ?state rdfs:label ?anys FILTER(isLiteral(?anys)) }
+  BIND(STR(COALESCE(?picks, ?plains, ?ens, ?enxs, ?anys)) AS ?stateName)
+      BIND(IF(BOUND(?state), COALESCE(?stateName, ?slug), ?none) AS ?stateLabel)
+      BIND(IF(BOUND(?stateLabel), CONCAT(?title, " \u00B7 ", ?stateLabel), ?none) AS ?tip)
+      BIND(CONCAT("task-", ENCODE_FOR_URI(STR(?w))) AS ?local)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local)) AS ?task)
+      BIND(STR(?w) AS ?key)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-data-state")) AS ?stateAttr)
+      BIND(IF(?active, IRI(CONCAT(STR($this), "/~", ?local, "-aria-current")), ?none) AS ?currentAttr)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-icon")) AS ?icon)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-icon-aria-hidden")) AS ?iconHidden)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-icon-text")) AS ?iconText)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-label")) AS ?labelEl)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-label-text")) AS ?labelText)
+  }
+}""" .
+c:TaskbarRendering-sparql-text a sem:Rule ;
+    sem:implements c:TaskbarRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:follows ( c:of c:hosts ) ;
+    sem:watches rdf:type , c:of , c:label , c:hosts , c:topmost , c:open , c:windowState , c:attachedTo , c:title ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Taskbar .
+  OPTIONAL {
+    $this c:label ?picko . FILTER(isLiteral(?picko))
+    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
+    BIND(LCASE(LANG(?picko)) AS ?tago)
+    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
+    FILTER NOT EXISTS {
+      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
+      $this c:label ?othero . FILTER(isLiteral(?othero))
+      BIND(LCASE(LANG(?othero)) AS ?tag2o)
+      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
+      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
+    }
+  }
+  OPTIONAL { $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
+  OPTIONAL { $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
+  OPTIONAL { $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
+  OPTIONAL { $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?ownLabel)
+  OPTIONAL {
+    c:WindowsRegion rdfs:label ?pickp . FILTER(isLiteral(?pickp))
+    ?viewerp l10n:prefers ?prefp . ?prefp l10n:code ?codep ; sem:order ?rankp .
+    BIND(LCASE(LANG(?pickp)) AS ?tagp)
+    FILTER(?tagp = ?codep || STRSTARTS(?tagp, CONCAT(?codep, "-")))
+    FILTER NOT EXISTS {
+      ?viewerp l10n:prefers ?betterp . ?betterp l10n:code ?code2p ; sem:order ?rank2p .
+      c:WindowsRegion rdfs:label ?otherp . FILTER(isLiteral(?otherp))
+      BIND(LCASE(LANG(?otherp)) AS ?tag2p)
+      FILTER(?tag2p = ?code2p || STRSTARTS(?tag2p, CONCAT(?code2p, "-")))
+      FILTER(?rank2p < ?rankp || (?rank2p = ?rankp && ?tag2p = ?code2p && ?tagp != ?codep))
+    }
+  }
+  OPTIONAL { c:WindowsRegion rdfs:label ?plainp FILTER(isLiteral(?plainp) && LANG(?plainp) = "") }
+  OPTIONAL { c:WindowsRegion rdfs:label ?enp FILTER(LCASE(LANG(?enp)) = "en") }
+  OPTIONAL { c:WindowsRegion rdfs:label ?enxp FILTER(STRSTARTS(LCASE(LANG(?enxp)), "en-")) }
+  OPTIONAL { c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?plainp, ?enp, ?enxp, ?anyp)) AS ?phrase)
+  BIND(COALESCE(?ownLabel, ?phrase, "Windows") AS ?label)
+  OPTIONAL {
+    SELECT (GROUP_CONCAT(?entry; separator=" ") AS ?entries) (COUNT(?entry) AS ?n) WHERE {
+      { SELECT ?entry WHERE {
+        $this c:of ?desktop . FILTER(isIRI(?desktop))
+      ?desktop c:hosts ?w . FILTER(isIRI(?w))
+      FILTER EXISTS { ?w a/rdfs:subClassOf* c:Frame }
+      FILTER NOT EXISTS { ?w c:open ?open FILTER(STR(?open) = "false") }
+      OPTIONAL { ?w c:windowState ?state }
+      BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+      BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+      OPTIONAL { ?w c:attachedTo ?edgeNode . VALUES ?edgeNode { c:StartEdge c:EndEdge c:TopEdge c:BottomEdge } }
+      BIND(!?maximized && BOUND(?edgeNode) AS ?docked)
+      OPTIONAL { ?w c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+      OPTIONAL { ?w c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+      BIND(COALESCE(IF(?minimized || ?maximized, ?stateSymbol, IF(?docked, ?edgeSymbol, ?none)), "\u25AD") AS ?symbol)
+      BIND(IF(?minimized, "minimized", IF(?maximized, "maximized", IF(?docked, "docked", "normal"))) AS ?slug)
+      OPTIONAL {
+    ?w c:title ?pickt . FILTER(isLiteral(?pickt))
+    ?viewert l10n:prefers ?preft . ?preft l10n:code ?codet ; sem:order ?rankt .
+    BIND(LCASE(LANG(?pickt)) AS ?tagt)
+    FILTER(?tagt = ?codet || STRSTARTS(?tagt, CONCAT(?codet, "-")))
+    FILTER NOT EXISTS {
+      ?viewert l10n:prefers ?bettert . ?bettert l10n:code ?code2t ; sem:order ?rank2t .
+      ?w c:title ?othert . FILTER(isLiteral(?othert))
+      BIND(LCASE(LANG(?othert)) AS ?tag2t)
+      FILTER(?tag2t = ?code2t || STRSTARTS(?tag2t, CONCAT(?code2t, "-")))
+      FILTER(?rank2t < ?rankt || (?rank2t = ?rankt && ?tag2t = ?code2t && ?tagt != ?codet))
+    }
+  }
+  OPTIONAL { ?w c:title ?plaint FILTER(isLiteral(?plaint) && LANG(?plaint) = "") }
+  OPTIONAL { ?w c:title ?ent FILTER(LCASE(LANG(?ent)) = "en") }
+  OPTIONAL { ?w c:title ?enxt FILTER(STRSTARTS(LCASE(LANG(?enxt)), "en-")) }
+  OPTIONAL { ?w c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?plaint, ?ent, ?enxt, ?anyt)) AS ?wTitle)
+      OPTIONAL {
+    ?w c:label ?pickl . FILTER(isLiteral(?pickl))
+    ?viewerl l10n:prefers ?prefl . ?prefl l10n:code ?codel ; sem:order ?rankl .
+    BIND(LCASE(LANG(?pickl)) AS ?tagl)
+    FILTER(?tagl = ?codel || STRSTARTS(?tagl, CONCAT(?codel, "-")))
+    FILTER NOT EXISTS {
+      ?viewerl l10n:prefers ?betterl . ?betterl l10n:code ?code2l ; sem:order ?rank2l .
+      ?w c:label ?otherl . FILTER(isLiteral(?otherl))
+      BIND(LCASE(LANG(?otherl)) AS ?tag2l)
+      FILTER(?tag2l = ?code2l || STRSTARTS(?tag2l, CONCAT(?code2l, "-")))
+      FILTER(?rank2l < ?rankl || (?rank2l = ?rankl && ?tag2l = ?code2l && ?tagl != ?codel))
+    }
+  }
+  OPTIONAL { ?w c:label ?plainl FILTER(isLiteral(?plainl) && LANG(?plainl) = "") }
+  OPTIONAL { ?w c:label ?enl FILTER(LCASE(LANG(?enl)) = "en") }
+  OPTIONAL { ?w c:label ?enxl FILTER(STRSTARTS(LCASE(LANG(?enxl)), "en-")) }
+  OPTIONAL { ?w c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?plainl, ?enl, ?enxl, ?anyl)) AS ?wLabel)
+      BIND(COALESCE(?wTitle, ?wLabel, "Window") AS ?title)
+      BIND(EXISTS { ?desktop c:topmost ?w } && !?minimized AS ?active)
+        BIND(CONCAT("[", ?symbol, " ", ?title, IF(?active, "*", ""), "]") AS ?entry)
+      } ORDER BY STR(?w) }
+    }
+  }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
+  BIND(IF(COALESCE(?n, 0) > 0, ?none, "") AS ?hidden)
+  BIND(CONCAT("\u25A4 ", ?label, ": ", COALESCE(?entries, "")) AS ?line)
+}""" .
 
 # Three reactions that all see the state before the click, so the right ones act.
 c:TaskbarRestore a beh:Reaction ;

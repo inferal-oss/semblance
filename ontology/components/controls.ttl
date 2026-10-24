@@ -32,14 +32,217 @@ c:slot a owl:DatatypeProperty ; rdfs:comment "Name of a host-owned slot (a tab's
 
 c:TabsRendering a sem:Rendering ;
     sem:targets c:Tabs ;
-    sem:stratum 0 ;
-    sem:functionOnly """Its output depends on state held by the members of its c:tabs list (each tab's
-c:detached, which detaching and docking change): the engine notices such changes for function rules
-(read tracing) but a SPARQL rule only hears about its focus and what sem:follows reaches directly,
-and no predicate leads from the tabs to their list's members.""" .
+    sem:stratum 0 .
 c:TabsRendering-fn a sem:Rule ;
     sem:implements c:TabsRendering ;
     sem:function "tabs" .
+# SPARQL twins of the "tabs" function (src/components/functions.ts). They read the members of the
+# c:tabs list (a tab's c:detached, its label and content), following the list to them.
+c:TabsRendering-sparql-screen a sem:Rule ;
+    sem:implements c:TabsRendering ;
+    sem:modality mod:Screen ;
+    sem:follows ( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:watches rdf:type , c:tabs , c:selected , c:detachable , c:windowsOn , c:detached , c:content , c:slot , c:label , rdfs:label , rdf:first , rdf:rest ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?list , ?panel , ?looseWindow .
+  ?list a rdfhtml:Div ; sem:orderKey "-1" ; rdfhtml:attribute ?listRole ; rdfhtml:hasChild ?button , ?detach .
+  ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tablist" .
+  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?tabId ; rdfhtml:tabIndex ?tabIndex ; sem:orderKey ?buttonKey ;
+          rdfhtml:attribute ?roleAttr , ?selectedAttr , ?controlsAttr ; c:selects ?tab ; rdfhtml:hasChild ?tabLabel .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tab" .
+  ?selectedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue ?onText .
+  ?controlsAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?panelId .
+  ?tabLabel a rdfhtml:Span ; rdfhtml:class "sem-tab-label" ; rdfhtml:hasChild ?tabLabelText .
+  ?tabLabelText a rdfhtml:Text ; rdfhtml:data ?shownName .
+  ?detach a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-detach" ; sem:orderKey ?detachKey ;
+          rdfhtml:attribute ?detachLabelAttr ; sem:tooltip ?detachLabel ; c:detaches ?tab ; rdfhtml:hasChild ?detachText .
+  ?detachLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?detachLabel .
+  ?detachText a rdfhtml:Text ; rdfhtml:data "\u29C9" .
+  ?panel a rdfhtml:Div ; rdfhtml:id ?panelId ; rdfhtml:hidden ?panelHidden ; sem:orderKey ?panelKey ;
+         rdfhtml:attribute ?panelRole , ?panelBy ; rdfhtml:hasChild ?panelContent .
+  ?panelRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tabpanel" .
+  ?panelBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?tabId .
+  ?slotEl a rdfhtml:Div ; sem:slot ?slot .
+  ?window a c:Window ; c:title ?windowTitle ; c:index ?index ; prov:wasDerivedFrom ?windowTab ; c:body ?windowBody .
+  ?looseWindow sem:orderKey ?windowKey .
+  ?desktop c:hosts ?hostedWindow .
+}
+WHERE {
+  $this c:tabs ?tabList .
+  BIND(IRI(CONCAT(STR($this), "/~", "root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~", "tablist")) AS ?list)
+  BIND(IRI(CONCAT(STR($this), "/~", "tablist-role")) AS ?listRole)
+  BIND(EXISTS { $this c:detachable ?detachableFlag FILTER(STR(?detachableFlag) = "true") } AS ?detachable)
+  OPTIONAL { $this c:windowsOn ?desktop0 FILTER(isIRI(?desktop0)) }
+  OPTIONAL { $this c:selected ?chosen .
+    FILTER EXISTS { $this c:tabs/rdf:rest*/rdf:first ?chosen }
+    FILTER NOT EXISTS { ?chosen c:detached ?chosenDetached FILTER(STR(?chosenDetached) = "true") } }
+  OPTIONAL { SELECT ?first WHERE {
+    $this c:tabs/rdf:rest* ?firstCell . ?firstCell rdf:first ?first . FILTER(isIRI(?first))
+    FILTER NOT EXISTS { ?first c:detached ?firstDetached FILTER(STR(?firstDetached) = "true") }
+    { SELECT ?firstCell (COUNT(?before) AS ?firstAt) WHERE { $this c:tabs/rdf:rest* ?before . ?before rdf:rest* ?firstCell } GROUP BY ?firstCell }
+  } ORDER BY ?firstAt LIMIT 1 }
+  BIND(COALESCE(?chosen, ?first) AS ?selected)
+  OPTIONAL {
+    $this c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab . FILTER(isIRI(?tab))
+    { SELECT ?cell (COUNT(?before) - 1 AS ?index) WHERE { $this c:tabs/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    BIND(EXISTS { ?tab c:detached ?flag FILTER(STR(?flag) = "true") } AS ?detached)
+    BIND(ENCODE_FOR_URI(STR(?tab)) AS ?key)
+    OPTIONAL {
+    ?tab c:label ?pickc . FILTER(isLiteral(?pickc))
+    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
+    BIND(LCASE(LANG(?pickc)) AS ?tagc)
+    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
+    FILTER NOT EXISTS {
+      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
+      ?tab c:label ?otherc . FILTER(isLiteral(?otherc))
+      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
+      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
+      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
+    }
+  }
+  OPTIONAL { ?tab c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { ?tab c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { ?tab c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { ?tab c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+    OPTIONAL {
+    ?tab rdfs:label ?pickr . FILTER(isLiteral(?pickr))
+    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
+    BIND(LCASE(LANG(?pickr)) AS ?tagr)
+    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
+    FILTER NOT EXISTS {
+      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
+      ?tab rdfs:label ?otherr . FILTER(isLiteral(?otherr))
+      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
+      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
+      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
+    }
+  }
+  OPTIONAL { ?tab rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { ?tab rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { ?tab rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { ?tab rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+    BIND(COALESCE(?c, ?r, REPLACE(STR(?tab), "^.*[#/]", "")) AS ?name)
+    OPTIONAL { ?tab c:content ?component FILTER(isIRI(?component)) }
+    OPTIONAL { ?tab c:slot ?slotRaw }
+    BIND(IF(!BOUND(?component) && BOUND(?slotRaw), IRI(CONCAT(STR($this), "/~slot-", ?key)), ?none) AS ?slotEl)
+    BIND(IF(BOUND(?slotEl), STR(?slotRaw), ?none) AS ?slot)
+    BIND(COALESCE(?component, ?slotEl) AS ?content)
+  }
+  BIND(BOUND(?tab) && !?detached AS ?attached)
+  BIND(?attached && ?tab = ?selected AS ?on)
+  # An attached tab: its button (and detach control) in the list, and its panel.
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key))), ?none) AS ?button)
+  BIND(STR(?button) AS ?tabId)
+  BIND(IF(?on, "0", "-1") AS ?tabIndex)
+  BIND(?index * 2 AS ?buttonKey)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-role"))), ?none) AS ?roleAttr)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-selected"))), ?none) AS ?selectedAttr)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-controls"))), ?none) AS ?controlsAttr)
+  BIND(IF(?on, "true", "false") AS ?onText)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-name"))), ?none) AS ?tabLabel)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-label"))), ?none) AS ?tabLabelText)
+  BIND(IF(?attached, ?name, ?none) AS ?shownName)
+  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("detach-", ?key))), ?none) AS ?detach)
+  BIND(?index * 2 + 1 AS ?detachKey)
+  BIND(IF(BOUND(?detach), IRI(CONCAT(STR($this), "/~", CONCAT("detach-", ?key, "-aria-label"))), ?none) AS ?detachLabelAttr)
+  BIND(IF(BOUND(?detach), IRI(CONCAT(STR($this), "/~", CONCAT("detach-", ?key, "-label"))), ?none) AS ?detachText)
+  BIND(CONCAT("Open ", ?name, " in a window") AS ?detachLabel)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("panel-", ?key))), ?none) AS ?panel)
+  BIND(STR(IRI(CONCAT(STR($this), "/~", CONCAT("panel-", ?key)))) AS ?panelId)
+  BIND(IF(?on, ?none, "") AS ?panelHidden)
+  BIND(?index AS ?panelKey)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("panel-", ?key, "-role"))), ?none) AS ?panelRole)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("panel-", ?key, "-aria-labelledby"))), ?none) AS ?panelBy)
+  BIND(IF(?attached, ?content, ?none) AS ?panelContent)
+  # A detached tab: a window derived from it, on the desktop the tabs name (else inside the tabs).
+  BIND(IF(BOUND(?tab) && ?detached, IRI(CONCAT(STR($this), "/~", CONCAT("window-", ?key))), ?none) AS ?window)
+  BIND(IF(BOUND(?window), ?name, ?none) AS ?windowTitle)
+  BIND(IF(BOUND(?window), ?tab, ?none) AS ?windowTab)
+  BIND(IF(BOUND(?window), ?content, ?none) AS ?windowBody)
+  BIND(IF(BOUND(?window) && BOUND(?desktop0), ?window, ?none) AS ?hostedWindow)
+  BIND(IF(BOUND(?hostedWindow), ?desktop0, ?none) AS ?desktop)
+  BIND(IF(BOUND(?window) && !BOUND(?desktop0), ?window, ?none) AS ?looseWindow)
+  BIND(100000 + ?index AS ?windowKey)
+}""" .
+c:TabsRendering-sparql-text a sem:Rule ;
+    sem:implements c:TabsRendering ;
+    sem:modality mod:Text ;
+    sem:follows ( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:watches rdf:type , c:tabs , c:selected , c:detachable , c:windowsOn , c:detached , c:content , c:slot , c:label , rdfs:label , rdf:first , rdf:rest ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?list .
+  ?list a rdfhtml:Div ; rdfhtml:hasChild ?span .
+  ?span a rdfhtml:Span ; sem:orderKey ?index ; rdfhtml:hasChild ?spanText .
+  ?spanText a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this c:tabs ?tabList .
+  BIND(IRI(CONCAT(STR($this), "/~", "root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~", "tablist")) AS ?list)
+  OPTIONAL { $this c:selected ?chosen .
+    FILTER EXISTS { $this c:tabs/rdf:rest*/rdf:first ?chosen }
+    FILTER NOT EXISTS { ?chosen c:detached ?chosenDetached FILTER(STR(?chosenDetached) = "true") } }
+  OPTIONAL { SELECT ?first WHERE {
+    $this c:tabs/rdf:rest* ?firstCell . ?firstCell rdf:first ?first . FILTER(isIRI(?first))
+    FILTER NOT EXISTS { ?first c:detached ?firstDetached FILTER(STR(?firstDetached) = "true") }
+    { SELECT ?firstCell (COUNT(?before) AS ?firstAt) WHERE { $this c:tabs/rdf:rest* ?before . ?before rdf:rest* ?firstCell } GROUP BY ?firstCell }
+  } ORDER BY ?firstAt LIMIT 1 }
+  BIND(COALESCE(?chosen, ?first) AS ?selected)
+  OPTIONAL {
+    $this c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab . FILTER(isIRI(?tab))
+    { SELECT ?cell (COUNT(?before) - 1 AS ?index) WHERE { $this c:tabs/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    BIND(EXISTS { ?tab c:detached ?flag FILTER(STR(?flag) = "true") } AS ?detached)
+    BIND(ENCODE_FOR_URI(STR(?tab)) AS ?key)
+    OPTIONAL {
+    ?tab c:label ?pickc . FILTER(isLiteral(?pickc))
+    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
+    BIND(LCASE(LANG(?pickc)) AS ?tagc)
+    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
+    FILTER NOT EXISTS {
+      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
+      ?tab c:label ?otherc . FILTER(isLiteral(?otherc))
+      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
+      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
+      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
+    }
+  }
+  OPTIONAL { ?tab c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { ?tab c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { ?tab c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { ?tab c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+    OPTIONAL {
+    ?tab rdfs:label ?pickr . FILTER(isLiteral(?pickr))
+    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
+    BIND(LCASE(LANG(?pickr)) AS ?tagr)
+    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
+    FILTER NOT EXISTS {
+      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
+      ?tab rdfs:label ?otherr . FILTER(isLiteral(?otherr))
+      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
+      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
+      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
+    }
+  }
+  OPTIONAL { ?tab rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { ?tab rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { ?tab rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { ?tab rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+    BIND(COALESCE(?c, ?r, REPLACE(STR(?tab), "^.*[#/]", "")) AS ?name)
+    
+  }
+  BIND(IF(BOUND(?tab), IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key))), ?none) AS ?span)
+  BIND(IF(BOUND(?tab), IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-label"))), ?none) AS ?spanText)
+  BIND(IF(?detached, CONCAT(" ", ?name, "\u2197 "), IF(?tab = ?selected, CONCAT("[", ?name, "]"), CONCAT(" ", ?name, " "))) AS ?line)
+}""" .
 
 c:TabsSelect a beh:Reaction ;
     beh:when beh:Click ;
@@ -297,9 +500,59 @@ WHERE {
 c:SegmentedTexts a sem:Rendering ;
     sem:targets c:Segmented ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:SegmentedTexts-fn a sem:Rule ; sem:implements c:SegmentedTexts ; sem:function "l10n:option-labels" .
+c:SegmentedTexts-sparql a sem:Rule ; sem:implements c:SegmentedTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this c:property ?property .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  { $this c:property ?subject . BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?node) }
+  UNION
+  { $this c:options/rdf:rest*/rdf:first ?subject . FILTER(isIRI(?subject))
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  UNION
+  { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?subject a ?range . FILTER(isIRI(?subject))
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  OPTIONAL {
+    ?subject c:label ?pickc . FILTER(isLiteral(?pickc))
+    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
+    BIND(LCASE(LANG(?pickc)) AS ?tagc)
+    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
+    FILTER NOT EXISTS {
+      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
+      ?subject c:label ?otherc . FILTER(isLiteral(?otherc))
+      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
+      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
+      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
+    }
+  }
+  OPTIONAL { ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  OPTIONAL {
+    ?subject rdfs:label ?pickr . FILTER(isLiteral(?pickr))
+    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
+    BIND(LCASE(LANG(?pickr)) AS ?tagr)
+    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
+    FILTER NOT EXISTS {
+      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
+      ?subject rdfs:label ?otherr . FILTER(isLiteral(?otherr))
+      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
+      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
+      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
+    }
+  }
+  OPTIONAL { ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
+}""" .
 
 c:SegmentedSelect a beh:Reaction ;
     beh:when beh:Click ;
@@ -717,9 +970,59 @@ WHERE {
 c:ChoiceTexts a sem:Rendering ;
     sem:targets c:Choice ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:ChoiceTexts-fn a sem:Rule ; sem:implements c:ChoiceTexts ; sem:function "l10n:option-labels" .
+c:ChoiceTexts-sparql a sem:Rule ; sem:implements c:ChoiceTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this c:property ?property .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  { $this c:property ?subject . BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?node) }
+  UNION
+  { $this c:options/rdf:rest*/rdf:first ?subject . FILTER(isIRI(?subject))
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  UNION
+  { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?subject a ?range . FILTER(isIRI(?subject))
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  OPTIONAL {
+    ?subject c:label ?pickc . FILTER(isLiteral(?pickc))
+    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
+    BIND(LCASE(LANG(?pickc)) AS ?tagc)
+    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
+    FILTER NOT EXISTS {
+      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
+      ?subject c:label ?otherc . FILTER(isLiteral(?otherc))
+      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
+      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
+      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
+    }
+  }
+  OPTIONAL { ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  OPTIONAL {
+    ?subject rdfs:label ?pickr . FILTER(isLiteral(?pickr))
+    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
+    BIND(LCASE(LANG(?pickr)) AS ?tagr)
+    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
+    FILTER NOT EXISTS {
+      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
+      ?subject rdfs:label ?otherr . FILTER(isLiteral(?otherr))
+      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
+      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
+      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
+    }
+  }
+  OPTIONAL { ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
+}""" .
 c:ChoiceSelect a beh:Reaction ;
     beh:when beh:Change ;
     beh:sourceClass c:Choice ;
@@ -922,9 +1225,59 @@ WHERE {
 c:ChipsTexts a sem:Rendering ;
     sem:targets c:Chips ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:ChipsTexts-fn a sem:Rule ; sem:implements c:ChipsTexts ; sem:function "l10n:option-labels" .
+c:ChipsTexts-sparql a sem:Rule ; sem:implements c:ChipsTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this c:property ?property .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  { $this c:property ?subject . BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?node) }
+  UNION
+  { $this c:options/rdf:rest*/rdf:first ?subject . FILTER(isIRI(?subject))
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  UNION
+  { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?subject a ?range . FILTER(isIRI(?subject))
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  OPTIONAL {
+    ?subject c:label ?pickc . FILTER(isLiteral(?pickc))
+    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
+    BIND(LCASE(LANG(?pickc)) AS ?tagc)
+    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
+    FILTER NOT EXISTS {
+      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
+      ?subject c:label ?otherc . FILTER(isLiteral(?otherc))
+      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
+      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
+      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
+    }
+  }
+  OPTIONAL { ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  OPTIONAL {
+    ?subject rdfs:label ?pickr . FILTER(isLiteral(?pickr))
+    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
+    BIND(LCASE(LANG(?pickr)) AS ?tagr)
+    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
+    FILTER NOT EXISTS {
+      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
+      ?subject rdfs:label ?otherr . FILTER(isLiteral(?otherr))
+      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
+      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
+      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
+    }
+  }
+  OPTIONAL { ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
+}""" .
 c:ChipsToggle a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Chips ;

@@ -225,9 +225,57 @@ WHERE {
 c:LegendTexts a sem:Rendering ;
     sem:targets c:Legend ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rule: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:LegendTexts-fn a sem:Rule ; sem:implements c:LegendTexts ; sem:function "toolbar:legend-texts" .
+# The categories: the members of c:items, or the instances of the class it is c:of.
+c:LegendTexts-sparql a sem:Rule ; sem:implements c:LegendTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this a ?type .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  { $this c:items/rdf:rest*/rdf:first ?item . FILTER(isIRI(?item)) }
+  UNION
+  { FILTER NOT EXISTS { $this c:items ?list } $this c:of ?class . FILTER(isIRI(?class)) ?item a ?class . FILTER(isIRI(?item)) }
+  OPTIONAL {
+    ?item c:label ?pickc . FILTER(isLiteral(?pickc))
+    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
+    BIND(LCASE(LANG(?pickc)) AS ?tagc)
+    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
+    FILTER NOT EXISTS {
+      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
+      ?item c:label ?otherc . FILTER(isLiteral(?otherc))
+      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
+      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
+      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
+    }
+  }
+  OPTIONAL { ?item c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { ?item c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { ?item c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { ?item c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  OPTIONAL {
+    ?item rdfs:label ?pickr . FILTER(isLiteral(?pickr))
+    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
+    BIND(LCASE(LANG(?pickr)) AS ?tagr)
+    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
+    FILTER NOT EXISTS {
+      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
+      ?item rdfs:label ?otherr . FILTER(isLiteral(?otherr))
+      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
+      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
+      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
+    }
+  }
+  OPTIONAL { ?item rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { ?item rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { ?item rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { ?item rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  BIND(COALESCE(?c, ?r, REPLACE(STR(?item), "^.*[#/]", "")) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?item)))) AS ?node)
+}""" .
 
 # --- LiveIndicator: is it live? -------------------------------------------------------------------
 # Shows the boolean c:property of the node it c:controls (absent counts as true: live), e.g.

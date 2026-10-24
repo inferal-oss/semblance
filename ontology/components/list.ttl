@@ -66,11 +66,34 @@ c:ListMembers a sem:Rendering ;
     sem:targets c:List ;
     sem:stratum 0 ;
     sem:forEach c:item ;
-    sem:functionOnly "Member-wise (sem:forEach): the engine evaluates it once per (list, item) and hands the item to the rule as an argument, which it does for function rules only (a SPARQL rule would need the member bound like $this)." .
+    sem:watches rdf:type , c:sortBy , c:itemLabel , c:itemChecked .
 
 c:ListMembers-fn a sem:Rule ;
     sem:implements c:ListMembers ;
     sem:function "list:member" .
+
+# $member is the item. Missing sort keys sort last.
+c:ListMembers-sparql a sem:Rule ;
+    sem:implements c:ListMembers ;
+    sem:memberWatchesVia c:sortBy , c:itemLabel ;
+    sem:construct """
+CONSTRUCT {
+  ?inst a c:ListItem ; c:of $member ; c:inList $this ; c:labelFrom ?labelFrom ; c:checkedFrom ?checkedFrom ; sem:orderKey ?key .
+  ?drag a dnd:Draggable ; dnd:carries $member ; dnd:name ?name .
+  ?root rdfhtml:hasChild ?inst .
+}
+WHERE {
+  $this a c:List .
+  OPTIONAL { $this c:itemLabel ?labelFrom }
+  OPTIONAL { $this c:itemChecked ?checkedFrom }
+  OPTIONAL { $this c:sortBy ?sortBy . $member ?sortBy ?rawKey }
+  BIND(COALESCE(STR(?rawKey), "\\uFFFF") AS ?key)
+  BIND(IRI(CONCAT(STR($this), "/~i-", ENCODE_FOR_URI(STR($member)))) AS ?inst)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { $this a dnd:Sortable }, ?inst, ?none) AS ?drag)
+  OPTIONAL { $this c:itemLabel ?nameFrom . $member ?nameFrom ?rawName }
+  BIND(IF(BOUND(?drag), STR(?rawName), ?none) AS ?name)
+}""" .
 
 # --- items: screen -----------------------------------------------------------------
 

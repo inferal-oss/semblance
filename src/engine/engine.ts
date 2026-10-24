@@ -1,5 +1,5 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
-import { H, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
+import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
@@ -111,6 +111,12 @@ export class Engine {
   /** class -> those of its rules that read what is minted under their focus (sem:readsMinted). */
   private mintReadersByClass = new Map<string, Rule[]>()
   private followers = new Map<string, Rule[]>()
+  /** Path follows (sem:follows a list), by the last predicate of each of their prefixes. */
+  private pathFollowers = new Map<string, { rule: Rule; path: string[] }[]>()
+  /** Path prefixes whose last step is against a predicate ("^p"): reached from the changed node itself. */
+  private inverseFollowers: { rule: Rule; path: string[] }[] = []
+  /** Every predicate whose links are indexed: followed alone or on a path. */
+  private linkedPredicates = new Set<string>()
   /** focus -> classes that have rules */
   private types = new Map<string, Set<string>>()
   /** focus -> every superclass of its classes (what isInstance asks), until its types change. */
@@ -136,6 +142,11 @@ export class Engine {
   private dirty = new Map<number, Map<Rule, Set<string>>>()
   /** Member-wise rules: rule -> focus -> member keys with output (to retract them). */
   private memberKeys = new Map<Rule, Map<string, Set<string>>>()
+  /**
+   * Member-wise SPARQL rules read their member's triples ($member) untraced, so a change to
+   * a member re-runs its pairs: member -> rule -> pair keys (function rules trace their reads).
+   */
+  private memberReaders = new Map<string, Map<Rule, Set<string>>>()
   private current = -Infinity
   /** Whether the triple being propagated types a minted (derived) instance. */
   private derivedTrigger = false
@@ -231,7 +242,9 @@ export class Engine {
     for (const byOwner of this.memberKeys.values()) for (const keys of byOwner.values()) members += keys.size
     let following = 0
     for (const byFocus of this.queryFollowers.values()) following += byFocus.size
-    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, types: this.types.size, links: this.links.size, following, stale: this.stale.size }
+    let memberReaders = 0
+    for (const byRule of this.memberReaders.values()) for (const keys of byRule.values()) memberReaders += keys.size
+    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size }
   }
 
   onChange(listener: Listener): () => void {
@@ -248,6 +261,7 @@ export class Engine {
 
   /** Initial projection of everything already in the store. */
   start(): void {
+    this.stateViewer()
     this.reindex()
     for (const [focus, classes] of this.types) for (const cls of classes) for (const r of this.rulesFor(cls)) this.markFocus(r, focus)
     this.run()
@@ -356,12 +370,15 @@ export class Engine {
     if (sel.languages && sel.modality === undefined && sel.prefer === undefined && sel.layers === undefined) {
       this.selection = { ...this.selection, languages: sel.languages }
       this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
+      this.stateViewer()
       for (const [rule, foci] of this.readers.get(LANGUAGE) ?? []) for (const focus of foci.keys()) this.markDirty(rule, focus)
+      this.markLanguageReaders()
       this.run()
       return
     }
     this.selection = { ...this.selection, ...sel }
     if (sel.modality || sel.languages) this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
+    if (sel.languages) this.stateViewer(), this.markLanguageReaders()
     const after = selectRules(this.allRules, this.selection, warn)
     // Swapping modality or implementations can change every output:
     // re-evaluate all. Otherwise (layers) only added rules run; rules reading what
@@ -371,6 +388,10 @@ export class Engine {
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
     for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r), this.forgetAllFollowing(r)
+    for (const [member, byRule] of [...this.memberReaders]) {
+      for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
+      if (!byRule.size) this.memberReaders.delete(member)
+    }
     // Keep what the retractions dirtied for rules that stay; drop the rest.
     for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
     this.activate(after)
@@ -397,6 +418,46 @@ export class Engine {
     this.outputs.clear()
   }
 
+  // --- the viewer ------------------------------------------------------------
+
+  /** What this engine states about its viewer (l10n:Viewer), by quad key. */
+  private viewer = new Map<string, Quad>()
+
+  /**
+   * State the viewer's languages as graph data, in this engine's derived graph, so SPARQL
+   * rules can read them: the agent standing for this projection is the l10n:Viewer, and
+   * each language it prefers is an l10n:Preference with its l10n:code and rank (sem:order 1
+   * is the most preferred). Function rules read the same through ctx.languages.
+   */
+  private stateViewer() {
+    const f = this.store.factory
+    const nn = (iri: string) => f.namedNode(iri)
+    const g = this.graph
+    const next = new Map<string, Quad>()
+    const put = (q: Quad) => next.set(quadKey(q), q)
+    const languages = this.selection.languages ?? []
+    if (languages.length) put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
+    languages.forEach((code, i) => {
+      const pref = nn(mint(this.agent.value, 'prefers-' + (i + 1)))
+      put(f.quad(this.agent, nn(L10N.prefers), pref, g))
+      put(f.quad(pref, nn(RDF_TYPE), nn(L10N.Preference), g))
+      put(f.quad(pref, nn(L10N.code), f.literal(code), g))
+      put(f.quad(pref, nn(SEM.order), f.literal(String(i + 1), nn(NS.xsd + 'integer')), g))
+    })
+    for (const [k, q] of this.viewer) if (!next.has(k)) this.release(k, q)
+    for (const [k, q] of next) if (!this.viewer.has(k)) this.retain(k, q)
+    this.viewer = next
+  }
+
+  /** SPARQL rules that read the viewer's languages re-run for every focus when they change. */
+  private markLanguageReaders() {
+    const readers = this.rules.filter((r) => r.readsLanguage)
+    if (!readers.length) return
+    for (const [focus, classes] of this.types) {
+      for (const r of readers) if ([...classes].some((c) => this.supers(c).has(r.target))) this.markFocus(r, focus)
+    }
+  }
+
   // --- rule bookkeeping ------------------------------------------------------
 
   private activate(rules: Rule[]) {
@@ -405,11 +466,27 @@ export class Engine {
     this.rulesByClass.clear()
     this.mintReadersByClass.clear()
     this.followers.clear()
+    this.pathFollowers.clear()
+    this.inverseFollowers = []
     for (const r of rules) for (const p of r.follows) this.followers.set(p, [...(this.followers.get(p) ?? []), r])
+    // A path's first step is followed like a single predicate; every longer prefix by its last step.
+    for (const r of rules) {
+      for (const path of r.followPaths) {
+        if (!(this.followers.get(path[0]!) ?? []).includes(r)) this.followers.set(path[0]!, [...(this.followers.get(path[0]!) ?? []), r])
+        for (let k = 2; k <= path.length; k++) {
+          if (path[k - 1]!.startsWith('^')) {
+            this.inverseFollowers.push({ rule: r, path: path.slice(0, k) })
+            continue
+          }
+          const last = path[k - 1]!.replace(/^\*/, '')
+          this.pathFollowers.set(last, [...(this.pathFollowers.get(last) ?? []), { rule: r, path: path.slice(0, k) }])
+        }
+      }
+    }
+    this.linkedPredicates = new Set([...this.followers.keys(), ...rules.flatMap((r) => r.followPaths.flat().filter((p) => !p.startsWith('^')).map((p) => p.replace(/^\*/, '')))])
     for (const r of rules) {
       if (r.kind === 'function' && !this.functions[r.fn!]) throw new Error(`No function registered for "${r.fn}" (rule <${r.iri}>)`)
       if (r.kind === 'sparql' && !this.store.sparql) throw new Error(`Store "${this.store.kind}" cannot run SPARQL rule <${r.iri}>`)
-      if (r.kind === 'sparql' && r.forEach) throw new Error(`Member-wise (sem:forEach) rules must be functions (rule <${r.iri}>)`)
     }
   }
 
@@ -422,7 +499,7 @@ export class Engine {
     this.links.clear()
     for (const g of this.graphs) {
       for (const q of this.store.match(null, f.namedNode(RDF_TYPE), null, g)) this.index(q, 1)
-      for (const p of this.followers.keys()) for (const q of this.store.match(null, f.namedNode(p), null, g)) this.index(q, 1)
+      for (const p of this.linkedPredicates) for (const q of this.store.match(null, f.namedNode(p), null, g)) this.index(q, 1)
     }
   }
 
@@ -536,7 +613,8 @@ export class Engine {
       this.targets.delete(s)
       if (this.deferred.hasFocus(s)) this.retyped.add(s)
     }
-    if (this.followers.has(p) && q.object.termType === 'NamedNode') {
+    // (List cells are blank nodes: a path may go through them.)
+    if (this.linkedPredicates.has(p) && (q.object.termType === 'NamedNode' || q.object.termType === 'BlankNode')) {
       const o = q.object.value
       let byPred = this.links.get(o)
       if (!byPred) this.links.set(o, (byPred = new Map()))
@@ -589,7 +667,17 @@ export class Engine {
         for (const r of this.followers.get(fp) ?? []) {
           for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
         }
+        // Along a path: back from the nodes linking here, one step at a time, to the foci.
+        for (const { rule: r, path } of this.pathFollowers.get(fp) ?? []) {
+          // The last step was taken (into this node); a repeated last step may also have been taken before.
+          const start = path[path.length - 1]!.startsWith('*') ? this.backClosure(subjects, fp) : new Set(subjects)
+          for (const x of this.walkBack(start, path.slice(0, -1))) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+        }
       }
+    }
+    // Along a path whose last step is against a predicate: from this node itself.
+    for (const { rule: r, path } of this.inverseFollowers) {
+      for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
     const readers = this.readers.get(s)
@@ -600,6 +688,14 @@ export class Engine {
           if (this.committing?.rule === r && this.committing.focus === focus) continue
           if (preds.has('*') || preds.has(p)) this.markDirty(r, focus)
         }
+      }
+    }
+    // Member-wise SPARQL rules read their members: a member's change re-runs its pairs.
+    const pairs = this.memberReaders.get(s)
+    if (pairs && !isPlacementOrProvenance(p)) {
+      for (const [r, keys] of pairs) {
+        if (r.stratum < this.current) continue
+        for (const key of keys) if (!(this.committing?.rule === r && this.committing.focus === key) && this.memberWatched(r, key, p)) this.markDirty(r, key)
       }
     }
     // Function rules that follow a query re-run if the triple matches what it reads.
@@ -961,6 +1057,9 @@ export class Engine {
       }
     }
     this.stats.queries++
+    const member = memberOf(focus)
+    // A member-wise pair: the member is written in place of $member, the focus of $this.
+    if (member !== undefined) return this.construct(rule, rule.queryParts!.join('<' + focusOf(focus) + '>').replaceAll('$member', '<' + member + '>'))
     if (this.store.constructFor) return this.constructFor(rule, [focus])
     return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
   }
@@ -1080,6 +1179,7 @@ export class Engine {
       // unless it is still an instance (its next input may produce output).
       if (!this.isInstance(focus, rule) || !this.linked(rule, focus)) this.forgetReads(rule, focus), this.forgetFollowing(rule, focus)
     }
+    if (rule.forEach && rule.kind === 'sparql' && memberOf(focus) !== undefined) this.trackMember(rule, focus, this.isInstance(focus, rule) && this.linked(rule, focus))
     if (rule.forEach && memberOf(focus) !== undefined) {
       let byOwner = this.memberKeys.get(rule)
       if (!byOwner) this.memberKeys.set(rule, (byOwner = new Map()))
@@ -1093,6 +1193,65 @@ export class Engine {
         if (!keys.size) byOwner.delete(owner)
       }
     }
+  }
+
+  /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
+  private walkBack(nodes: Set<string>, steps: string[]): Set<string> {
+    const f = this.store.factory
+    for (let i = steps.length - 1; i >= 0 && nodes.size; i--) {
+      const step = steps[i]!
+      if (step.startsWith('*')) {
+        nodes = this.backClosure(nodes, step.slice(1))
+        continue
+      }
+      const next = new Set<string>()
+      if (step.startsWith('^')) {
+        // Against p: back is forward, to what the node is p of.
+        const p = f.namedNode(step.slice(1))
+        for (const n of nodes) {
+          for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+        }
+      } else for (const n of nodes) for (const x of this.links.get(n)?.get(step) ?? []) next.add(x)
+      nodes = next
+    }
+    return nodes
+  }
+
+  /** The nodes, and every node linking to one of them by any number of `p` steps. */
+  private backClosure(nodes: ReadonlySet<string>, p: string): Set<string> {
+    const out = new Set(nodes)
+    const todo = [...nodes]
+    while (todo.length) for (const x of this.links.get(todo.pop()!)?.get(p) ?? []) if (!out.has(x)) out.add(x), todo.push(x)
+    return out
+  }
+
+  /** Whether a member-wise SPARQL pair reads this predicate of its member (sem:memberWatches). */
+  private memberWatched(rule: Rule, key: string, predicate: string): boolean {
+    const w = rule.memberWatches
+    if (!w || w.predicates.has(predicate)) return true
+    if (!w.via.length) return false
+    const f = this.store.factory
+    const focus = f.namedNode(focusOf(key))
+    const p = f.namedNode(predicate)
+    return w.via.some((via) => this.graphs.some((g) => this.store.match(focus, f.namedNode(via), p, g).length > 0))
+  }
+
+  /** Register (or drop) a member-wise SPARQL pair as a reader of its member. */
+  private trackMember(rule: Rule, key: string, on: boolean) {
+    const member = memberOf(key)!
+    let byRule = this.memberReaders.get(member)
+    if (on) {
+      if (!byRule) this.memberReaders.set(member, (byRule = new Map()))
+      let keys = byRule.get(rule)
+      if (!keys) byRule.set(rule, (keys = new Set()))
+      keys.add(key)
+      return
+    }
+    const keys = byRule?.get(rule)
+    if (!keys) return
+    keys.delete(key)
+    if (!keys.size) byRule!.delete(rule)
+    if (!byRule!.size) this.memberReaders.delete(member)
   }
 
   /**

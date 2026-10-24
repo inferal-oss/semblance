@@ -61,7 +61,15 @@ sem:construct a owl:DatatypeProperty ;
     rdfs:comment "SPARQL CONSTRUCT body. $this is substituted with the focus IRI, or with ?this for bulk evaluation, so the WHERE clause must bind $this through a triple pattern."@en .
 sem:function a owl:DatatypeProperty ; rdfs:comment "Identifier of a registered function implementation."@en .
 sem:follows a owl:ObjectProperty ;
-    rdfs:comment "Predicate from the focus to nodes the rule reads; changes on those nodes make the focus dirty."@en .
+    rdfs:comment """Predicate from the focus to nodes the rule reads; changes on those nodes make the focus dirty.
+Its value may also be an RDF list of predicates, a path: changes on the nodes reached along it, and on
+every node on the way, make the focus dirty (a taskbar reads its desktop's frames: ( c:of c:hosts )).
+A step [ sem:zeroOrMore p ] is any number of p steps: tabs read their list's members with
+( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first )."""@en .
+sem:zeroOrMore a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment "In a sem:follows path: any number (zero included) of steps along this predicate."@en .
+sem:inverse a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment "In a sem:follows path: a step against this predicate (from a class to its instances: [ sem:inverse rdf:type ])."@en .
 sem:watches a owl:ObjectProperty ;
     rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
 
@@ -82,7 +90,20 @@ sem:forEach a owl:ObjectProperty ;
     rdfs:range rdf:Property ;
     rdfs:comment """Makes a rule member-wise: it is evaluated once per (focus, member) for each
 `focus <property> member`, so adding, removing or changing one member re-evaluates only that
-member. Its output places the member's part itself (e.g. hasChild + sem:orderKey)."""@en .
+member. Its output places the member's part itself (e.g. hasChild + sem:orderKey). A function
+rule gets the member as an argument; in a SPARQL rule it is `$member`, substituted like `$this`
+(one query per pair, never in bulk). A SPARQL pair re-runs when its member's triples change, as
+a function pair does when a triple it read changes."""@en .
+
+sem:memberWatches a owl:ObjectProperty ;
+    rdfs:range rdf:Property ;
+    rdfs:comment """On a member-wise SPARQL rule: a predicate of the member it reads. With this (or
+sem:memberWatchesVia), only changes of those predicates on a member re-run its pair; without either,
+any change on the member does."""@en .
+sem:memberWatchesVia a owl:ObjectProperty ;
+    rdfs:range rdf:Property ;
+    rdfs:comment """On a member-wise SPARQL rule: a property of the focus whose value is a predicate of the
+member the rule reads (a list's c:sortBy names the key it reads on each item)."""@en .
 
 # --- Rendering output -------------------------------------------------------
 
