@@ -1,5 +1,5 @@
 import type { NamedNode, Quad, Quad_Graph } from '@rdfjs/types'
-import { H, NS, PROV, RDF_TYPE } from '../ns.ts'
+import { H, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, type RuleContext } from './context.ts'
@@ -35,8 +35,22 @@ type Listener = (delta: Delta) => void
 
 const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
 
+/**
+ * Member-wise rules (sem:forEach) evaluate per (focus, member); the pair is keyed
+ * as "focus member" (a space never occurs in an IRI).
+ */
+const SEP = ' '
+const focusOf = (key: string) => {
+  const i = key.indexOf(SEP)
+  return i < 0 ? key : key.slice(0, i)
+}
+const memberOf = (key: string) => {
+  const i = key.indexOf(SEP)
+  return i < 0 ? undefined : key.slice(i + 1)
+}
+
 /** Triples about a focus that never invalidate it: its placement and its provenance. */
-const isPlacementOrProvenance = (p: string) => p.startsWith(H.ns) || p.startsWith(NS.ord) || p.startsWith(NS.prov)
+const isPlacementOrProvenance = (p: string) => p.startsWith(H.ns) || p.startsWith(NS.ord) || p.startsWith(NS.prov) || p === SEM.orderKey
 
 /**
  * Incremental, stratified projection of a component graph into RDF/HTML.
@@ -76,6 +90,8 @@ export class Engine {
   private readsOf = new Map<Rule, Map<string, string[]>>()
   private refs = new Map<string, { q: Quad; n: number }>()
   private dirty = new Map<number, Map<Rule, Set<string>>>()
+  /** Member-wise rules: rule -> focus -> member keys with output (to retract them). */
+  private memberKeys = new Map<Rule, Map<string, Set<string>>>()
   private current = -Infinity
   /** The (rule, focus) whose output is being committed: its own writes never re-dirty it. */
   private committing?: { rule: Rule; focus: string }
@@ -132,7 +148,7 @@ export class Engine {
   /** Initial projection of everything already in the store. */
   start(): void {
     this.reindex()
-    for (const [focus, classes] of this.types) for (const cls of classes) for (const r of this.rulesFor(cls)) this.markDirty(r, focus)
+    for (const [focus, classes] of this.types) for (const cls of classes) for (const r of this.rulesFor(cls)) this.markFocus(r, focus)
     this.run()
   }
 
@@ -184,7 +200,7 @@ export class Engine {
     let any = false
     for (const [rule, foci] of this.deferred) {
       for (const focus of foci) {
-        if (this.demand(focus) || !this.isInstance(focus, rule)) {
+        if (this.demand(focusOf(focus)) || !this.isInstance(focus, rule)) {
           foci.delete(focus)
           this.markDirty(rule, focus)
           any = true
@@ -212,12 +228,12 @@ export class Engine {
     const before = new Set(this.rules)
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
-    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r)
+    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r)
     // Keep what the retractions dirtied for rules that stay; drop the rest.
     for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
     this.activate(after)
     this.reindex()
-    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markDirty(r, focus)
+    for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markFocus(r, focus)
     this.run()
   }
 
@@ -225,7 +241,8 @@ export class Engine {
   explain(node: string): { rule: string; focus: string } | undefined {
     for (let focus = owningFocus(node); ; focus = owningFocus(focus)) {
       for (const [rule, byFocus] of this.outputs) {
-        for (const q of byFocus.get(focus)?.values() ?? []) if (q.subject.value === node) return { rule: rule.iri, focus }
+        const keys = rule.forEach ? [...(this.memberKeys.get(rule)?.get(focus) ?? [])] : [focus]
+        for (const key of keys) for (const q of byFocus.get(key)?.values() ?? []) if (q.subject.value === node) return { rule: rule.iri, focus }
       }
       if (owningFocus(focus) === focus) return undefined
     }
@@ -249,6 +266,7 @@ export class Engine {
     for (const r of rules) {
       if (r.kind === 'function' && !this.functions[r.fn!]) throw new Error(`No function registered for "${r.fn}" (rule <${r.iri}>)`)
       if (r.kind === 'sparql' && !this.store.sparql) throw new Error(`Store "${this.store.kind}" cannot run SPARQL rule <${r.iri}>`)
+      if (r.kind === 'sparql' && r.forEach) throw new Error(`Member-wise (sem:forEach) rules must be functions (rule <${r.iri}>)`)
     }
   }
 
@@ -273,7 +291,7 @@ export class Engine {
   }
 
   private isInstance(focus: string, rule: Rule): boolean {
-    const classes = this.types.get(focus)
+    const classes = this.types.get(focusOf(focus))
     if (classes) for (const c of classes) if (this.supers(c).has(rule.target)) return true
     return false
   }
@@ -293,6 +311,27 @@ export class Engine {
     let foci = byRule.get(rule)
     if (!foci) byRule.set(rule, (foci = new Set()))
     foci.add(focus)
+  }
+
+  /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
+  private markFocus(rule: Rule, focus: string) {
+    if (!rule.forEach) return this.markDirty(rule, focus)
+    const f = this.store.factory
+    for (const g of this.graphs) {
+      for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
+        if (q.object.termType === 'NamedNode') this.markDirty(rule, focus + SEP + q.object.value)
+      }
+    }
+    for (const key of this.memberKeys.get(rule)?.get(focus) ?? []) this.markDirty(rule, key)
+  }
+
+  /** Whether a member-wise pair's link (`focus forEach member`) still holds. */
+  private linked(rule: Rule, key: string): boolean {
+    const member = memberOf(key)
+    if (!rule.forEach || member === undefined) return true
+    const f = this.store.factory
+    const [s, p, o] = [f.namedNode(focusOf(key)), f.namedNode(rule.forEach), f.namedNode(member)]
+    return this.graphs.some((g) => this.store.match(s, p, o, g).length > 0)
   }
 
   // --- change propagation ----------------------------------------------------
@@ -327,17 +366,26 @@ export class Engine {
     const p = q.predicate.value
     // Removing a type: dirty its rules while the instance is still indexed, so
     // they re-run, find the focus gone, and retract their output.
-    if (p === RDF_TYPE) for (const r of this.rulesFor(q.object.value)) this.markDirty(r, s)
+    if (p === RDF_TYPE) for (const r of this.rulesFor(q.object.value)) this.markFocus(r, s)
     if (sign < 0) this.index(q, sign)
     // A rule never reads its focus's own placement (where a parent put it) or
     // provenance, so those triples about a focus don't invalidate it.
     const classes = isPlacementOrProvenance(p) ? undefined : this.types.get(s)
-    if (classes) for (const c of classes) for (const r of this.rulesFor(c)) if (this.watched(r, s, p)) this.markDirty(r, s)
+    if (classes) {
+      for (const c of classes) {
+        for (const r of this.rulesFor(c)) {
+          // A member link touches only that member's evaluation.
+          if (r.forEach === p) {
+            if (q.object.termType === 'NamedNode') this.markDirty(r, s + SEP + q.object.value)
+          } else if (this.watched(r, s, p)) this.markFocus(r, s)
+        }
+      }
+    }
     const back = this.links.get(s)
     if (back) {
       for (const [fp, subjects] of back) {
         for (const r of this.followers.get(fp) ?? []) {
-          for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markDirty(r, x)
+          for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
         }
       }
     }
@@ -358,7 +406,7 @@ export class Engine {
     if (owner !== s) {
       const ownerClasses = this.types.get(owner)
       if (ownerClasses) {
-        for (const c of ownerClasses) for (const r of this.rulesFor(c)) if (r.readsMinted && r.stratum > this.current) this.markDirty(r, owner)
+        for (const c of ownerClasses) for (const r of this.rulesFor(c)) if (r.readsMinted && r.stratum > this.current) this.markFocus(r, owner)
       }
     }
     if (sign > 0) this.index(q, sign)
@@ -403,7 +451,7 @@ export class Engine {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       let parked = this.deferred.get(rule)
       for (const focus of [...foci]) {
-        if (this.isInstance(focus, rule) && !this.demand(focus)) {
+        if (this.isInstance(focus, rule) && !this.demand(focusOf(focus))) {
           if (!parked) this.deferred.set(rule, (parked = new Set()))
           parked.add(focus)
           foci.delete(focus)
@@ -417,7 +465,7 @@ export class Engine {
       for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) ? (groups.get(focus) ?? []) : [])
       return
     }
-    for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) ? this.evaluateOne(rule, focus) : [])
+    for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : [])
   }
 
   private evaluateOne(rule: Rule, focus: string): Quad[] {
@@ -427,7 +475,9 @@ export class Engine {
       const trace = new Map<string, Set<string>>()
       this.ctx.trace = trace
       try {
-        return this.functions[rule.fn!]!(this.ctx, this.store.factory.namedNode(focus))
+        const f = this.store.factory
+        const member = memberOf(focus)
+        return this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
       } finally {
         this.ctx.trace = undefined
         this.recordReads(rule, focus, trace)
@@ -442,7 +492,7 @@ export class Engine {
     let byFocus = this.readsOf.get(rule)
     if (!byFocus) this.readsOf.set(rule, (byFocus = new Map()))
     for (const subject of byFocus.get(focus) ?? []) this.readers.get(subject)?.get(rule)?.delete(focus)
-    trace.delete(focus) // the focus's own triples are covered by its self-watch
+    trace.delete(focusOf(focus)) // the focus's own triples are covered by its self-watch
     byFocus.set(focus, [...trace.keys()])
     for (const [subject, preds] of trace) {
       let byRule = this.readers.get(subject)
@@ -499,6 +549,19 @@ export class Engine {
     }
     if (next.size) byFocus.set(focus, next)
     else byFocus.delete(focus)
+    if (rule.forEach && memberOf(focus) !== undefined) {
+      let byOwner = this.memberKeys.get(rule)
+      if (!byOwner) this.memberKeys.set(rule, (byOwner = new Map()))
+      const owner = focusOf(focus)
+      let keys = byOwner.get(owner)
+      if (next.size) {
+        if (!keys) byOwner.set(owner, (keys = new Set()))
+        keys.add(focus)
+      } else if (keys) {
+        keys.delete(focus)
+        if (!keys.size) byOwner.delete(owner)
+      }
+    }
   }
 
   /**
@@ -512,7 +575,9 @@ export class Engine {
     const nn = (iri: string) => f.namedNode(iri)
     const g = this.graph
     const local = rule.iri.slice(Math.max(rule.iri.lastIndexOf('#'), rule.iri.lastIndexOf('/')) + 1)
-    const activity = nn(mint(focus, 'prov-' + encodeURIComponent(local)))
+    const member = memberOf(focus)
+    focus = focusOf(focus)
+    const activity = nn(mint(focus, 'prov-' + encodeURIComponent(local) + (member === undefined ? '' : '-' + encodeURIComponent(member))))
     const association = nn(activity.value + '-association')
     const out = [
       f.quad(activity, nn(RDF_TYPE), nn(PROV.Activity), g),
@@ -523,6 +588,7 @@ export class Engine {
       f.quad(association, nn(PROV.agent), this.agent, g),
       f.quad(association, nn(PROV.hadPlan), nn(rule.iri), g),
       f.quad(activity, nn(PROV.used), nn(focus), g),
+      ...(member === undefined ? [] : [f.quad(activity, nn(PROV.used), nn(member), g)]),
     ]
     for (const p of rule.follows) {
       for (const q of this.store.match(nn(focus), nn(p), null)) if (q.object.termType === 'NamedNode') out.push(f.quad(activity, nn(PROV.used), q.object, g))

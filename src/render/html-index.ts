@@ -16,6 +16,8 @@ export interface HNode {
   parents: Set<string>
   /** Host-owned slot name: renderers never manage this element's children. */
   slot?: string
+  /** sem:orderKey: position among siblings that have no ord: precedence. */
+  orderKey?: string
 }
 
 interface AttrNode {
@@ -153,6 +155,10 @@ export class HtmlIndex {
         }
       }
     }
+    // Siblings placed by order key (member-wise rules) are sorted, not linearized.
+    if ([...all].every((c) => this.nodes.get(c)?.orderKey !== undefined)) {
+      return [...all].sort((a, b) => compareKeys(this.nodes.get(a)!.orderKey!, this.nodes.get(b)!.orderKey!) || (a < b ? -1 : a > b ? 1 : 0))
+    }
     try {
       return linearize(parent, all, this.immediate, this.strict)
     } catch (e) {
@@ -222,6 +228,10 @@ export class HtmlIndex {
         if (focus) this.rootChanged(focus)
         return
       }
+      case SEM.orderKey:
+        this.node(s).orderKey = sign > 0 ? o : undefined
+        this.structureChanged(s)
+        return
       case H.data:
         this.node(s).data = sign > 0 ? o : undefined
         this.mark('data', s)
@@ -287,4 +297,12 @@ export class HtmlIndex {
     this.mark('roots', focus)
     this.structureChanged(focus)
   }
+}
+
+/** Order keys: numerically when both are numbers, else as strings. */
+function compareKeys(a: string, b: string): number {
+  const na = Number(a)
+  const nb = Number(b)
+  if (a !== '' && b !== '' && !Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
+  return a < b ? -1 : a > b ? 1 : 0
 }

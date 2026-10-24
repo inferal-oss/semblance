@@ -54,7 +54,13 @@ const flippableFlip: ReactionFn = (ctx) => {
     if (ctx.object(node, C.flips)?.equals(ctx.target)) {
       const current = ctx.match(ctx.target, C.flipped, null)
       const flipped = current.some((q) => q.object.value === 'true')
-      return { remove: current, add: [f.quad(ctx.target, f.namedNode(C.flipped), f.literal(String(!flipped), f.namedNode(XSD_BOOLEAN)))] }
+      return {
+        remove: current,
+        add: [
+          f.quad(ctx.target, f.namedNode(C.flipped), f.literal(String(!flipped), f.namedNode(XSD_BOOLEAN))),
+          f.quad(ctx.target, f.namedNode(C.revealed), f.literal('true', f.namedNode(XSD_BOOLEAN))),
+        ],
+      }
     }
     node = ctx.match(null, H.hasChild, node)[0]?.subject
   }

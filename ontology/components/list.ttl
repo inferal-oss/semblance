@@ -29,16 +29,28 @@ c:inList a owl:ObjectProperty ; rdfs:domain c:ListItem .
 c:labelFrom a owl:ObjectProperty ; rdfs:domain c:ListItem .
 c:checkedFrom a owl:ObjectProperty ; rdfs:domain c:ListItem .
 
-# --- list (function-only: data-dependent ordering is O(n^2) in SPARQL) -----------
+# --- list: the container, and its items member-wise ------------------------------
+# The container rule renders the list element only. The items are placed by a
+# member-wise rule (sem:forEach c:item): one evaluation per item, which mints the
+# item's c:ListItem and places it by sem:orderKey (its c:sortBy value). Adding,
+# removing or re-sorting an item re-runs that item's evaluation alone.
 
 c:ListRendering a sem:Rendering ;
     sem:targets c:List ;
-    sem:stratum 0 ;
-    sem:follows c:item .
+    sem:stratum 0 .
 
 c:ListRendering-fn a sem:Rule ;
     sem:implements c:ListRendering ;
     sem:function "list" .
+
+c:ListMembers a sem:Rendering ;
+    sem:targets c:List ;
+    sem:stratum 0 ;
+    sem:forEach c:item .
+
+c:ListMembers-fn a sem:Rule ;
+    sem:implements c:ListMembers ;
+    sem:function "list:member" .
 
 # --- items: screen -----------------------------------------------------------------
 

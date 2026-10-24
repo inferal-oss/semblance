@@ -18,6 +18,11 @@ export interface Rule {
   watches?: Set<string>
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
+  /**
+   * Member-wise rule: evaluated once per (focus, member) for each `focus <forEach> member`,
+   * so adding, removing or changing one member re-runs only that member's evaluation.
+   */
+  forEach?: string
 }
 
 export interface Selection {
@@ -64,6 +69,7 @@ export function loadRules(store: GraphStore): Rule[] {
       follows: getAll(SEM.follows),
       watches: watches.length ? new Set(watches) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
+      forEach: get(SEM.forEach)?.value,
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || a.iri.localeCompare(b.iri))

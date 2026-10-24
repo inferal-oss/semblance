@@ -65,10 +65,21 @@ sem:follows a owl:ObjectProperty ;
 sem:watches a owl:ObjectProperty ;
     rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
 
+sem:forEach a owl:ObjectProperty ;
+    rdfs:range rdf:Property ;
+    rdfs:comment """Makes a rule member-wise: it is evaluated once per (focus, member) for each
+`focus <property> member`, so adding, removing or changing one member re-evaluates only that
+member. Its output places the member's part itself (e.g. hasChild + sem:orderKey)."""@en .
+
 # --- Rendering output -------------------------------------------------------
 
 sem:renders a owl:ObjectProperty ;
     rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
+
+sem:orderKey a owl:DatatypeProperty ;
+    rdfs:comment """On an RDF/HTML node: orders it among siblings that carry no ord: precedence (numerically
+when both keys are numbers, else as strings; the node IRI breaks ties). Member-wise rules
+place their parts this way, so inserting one is O(log n) instead of rewriting a chain."""@en .
 
 sem:slot a owl:DatatypeProperty ;
     rdfs:comment "Marks an RDF/HTML element as a host-owned slot: renderers create it but never manage its children, so a host application can mount its own content there."@en .

@@ -86,6 +86,24 @@ bodies syntax-colored. c:flipped holds which side faces the viewer."""@en ;
 c:front a owl:ObjectProperty ; rdfs:domain c:Flippable ; rdfs:range sem:Component .
 c:flipped a owl:DatatypeProperty ; rdfs:domain c:Flippable ; rdfs:range xsd:boolean .
 c:flips a owl:ObjectProperty ; rdfs:comment "On a rendered element: the c:Flippable that activating it turns over."@en .
+c:revealed a owl:DatatypeProperty ; rdfs:domain c:Flippable ; rdfs:range xsd:boolean ;
+    rdfs:comment "The back has been shown at least once, so it is built and kept (turning over again is free)."@en .
+
+c:SourceBack a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """The back of a c:Flippable (c:of its front): the queries the front shows data from and
+the rules that rendered it. A snapshot taken when first revealed; its cost is the number of
+kinds of component inside the front, not their count."""@en ;
+    sem:slug "source-back" .
+# After the flippable's own source rule (95), so every layer that decorated the front is listed.
+c:SourceBackRendering a sem:Rendering ;
+    sem:targets c:SourceBack ;
+    sem:modality mod:Screen ;
+    sem:layer sem:SourceLayer ;
+    sem:stratum 96 .
+c:SourceBackRendering-fn a sem:Rule ;
+    sem:implements c:SourceBackRendering ;
+    sem:function "source-back" .
 
 # The base rendering only wraps the front; the source layer (below) adds the
 # floating flip control, the back face and the flipped state.
@@ -111,7 +129,7 @@ c:FlippableFlip a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Flippable ;
     beh:deletes """CONSTRUCT { $this c:flipped ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:flips $this . $this c:flipped ?old }""" ;
-    beh:inserts """CONSTRUCT { $this c:flipped ?new } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:flips $this . OPTIONAL { $this c:flipped ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    beh:inserts """CONSTRUCT { $this c:flipped ?new ; c:revealed true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:flips $this . OPTIONAL { $this c:flipped ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
     sem:function "flippable:flip" .
 
 # --- Choice (dropdown) and Chips (multi-select pills) ------------------------------------------

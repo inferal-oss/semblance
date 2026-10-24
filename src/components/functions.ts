@@ -109,31 +109,37 @@ function compareValues(a: Term | undefined, b: Term | undefined): number {
   return a.value < b.value ? -1 : a.value > b.value ? 1 : 0
 }
 
+/** The list's container. Its items are placed member-wise (listMember), one evaluation each. */
 const list: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  o.renders(o.el('root', ctx.modality === MOD.Text ? 'Div' : 'Ul'))
+  return o.quads
+}
+list.watches = () => new Set<string>()
+
+/**
+ * One item of a list (sem:forEach c:item): mints its c:ListItem instance and places it
+ * in the list by its sort key. Adding, removing or re-sorting one item touches only it.
+ */
+const listMember: FnRule = (ctx, focus, item) => {
+  if (!item) return []
   const o = ctx.out(focus)
   const sortBy = ctx.object(focus, C.sortBy)
   const labelFrom = ctx.object(focus, C.itemLabel)
   const checkedFrom = ctx.object(focus, C.itemChecked)
-  const items = ctx.objects(focus, C.item).filter((t): t is NamedNode => t.termType === 'NamedNode')
-  const keyed = items.map((item) => ({ item, key: sortBy ? ctx.object(item, sortBy) : undefined }))
-  keyed.sort((a, b) => compareValues(a.key, b.key) || (a.item.value < b.item.value ? -1 : 1))
-  const slots = keyed.map(({ item }) => {
-    const inst = o.node('i-' + encodeURIComponent(item.value))
-    o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
-    o.t(inst, C.of, item)
-    o.t(inst, C.inList, focus)
-    if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
-    if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
-    return inst
-  })
-  o.renders(o.el('root', ctx.modality === MOD.Text ? 'Div' : 'Ul', {}, slots))
+  const key = sortBy ? ctx.object(item, sortBy) : undefined
+  const inst = o.node('i-' + encodeURIComponent(item.value))
+  o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
+  o.t(inst, C.of, item)
+  o.t(inst, C.inList, focus)
+  if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
+  if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
+  // Missing keys sort last.
+  o.t(inst, SEM.orderKey, key?.value ?? '\uffff')
+  o.t(o.node('root'), H.hasChild, inst)
   return o.quads
 }
-// The list depends on its items only through the sort key.
-list.watches = (ctx, focus) => {
-  const sortBy = ctx.object(focus, C.sortBy)
-  return new Set([C.item, C.sortBy, C.itemLabel, C.itemChecked, ...(sortBy ? [sortBy.value] : [])])
-}
+listMember.watches = () => new Set([C.sortBy, C.itemLabel, C.itemChecked])
 
 function itemData(ctx: RuleContext, focus: NamedNode) {
   const item = ctx.object(focus, C.of)
@@ -346,6 +352,11 @@ const flippable: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const frontFace = o.el('front', 'Div', { class: 'sem-face sem-front' }, [front])
   o.renders(o.el('root', 'Div', {}, [o.el('faces', 'Div', { class: 'sem-faces' }, [frontFace])]))
+  // The back's content is a component of its own, minted here (stratum 0) so every
+  // layer applies to it; the source layer places it once the card has been turned over.
+  if (isTrue(ctx.object(focus, C.revealed)) || isTrue(ctx.object(focus, C.flipped))) {
+    o.t(o.node('source'), RDF_TYPE, ctx.nn(C.SourceBack)).t(o.node('source'), C.of, front)
+  }
   return o.quads
 }
 
@@ -368,6 +379,32 @@ const flippableSource: FnRule = (ctx, focus) => {
     o.t(b, C.flips, focus)
     return b
   }
+  // The back is a c:SourceBack, built the first time the card is turned over
+  // (c:revealed) and kept: flipping again only changes c:flipped.
+  const revealed = flipped || isTrue(ctx.object(focus, C.revealed))
+  const source = revealed ? [o.node('source')] : []
+  // Both faces float their flip control in the same corner.
+  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', '↺ View', 'Show the view')])
+  const back = o.el('back', 'Div', { class: 'sem-face sem-back', inert: flipped ? undefined : '' }, [backBar, ...source])
+  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', '</> Source', 'Show how this view is made')])
+  o.t(frontFace, H.hasChild, bar).t(bar, ORD.precedes, front)
+  o.t(faces, H.hasChild, back).t(frontFace, ORD.precedes, back)
+  if (flipped) o.t(frontFace, H.ns + 'inert', '')
+  o.attr(root, 'data-flipped', String(flipped))
+  return o.quads
+}
+
+/**
+ * The back of a c:Flippable: how its front is made - the queries it shows data
+ * from and the rules that rendered it (SPARQL tokenized into colored spans).
+ * A snapshot: the walk over the front's subtree is untraced and visits each
+ * component class once, so it costs the number of kinds of component inside,
+ * and changes inside the front never re-run it.
+ */
+const sourceBack: FnRule = (ctx, focus) => {
+  const front = ctx.object(focus, C.of)
+  if (front?.termType !== 'NamedNode') return []
+  const o = ctx.out(focus)
   const code = (key: string, source: string) =>
     o.el(key + '-code', 'Pre', { class: 'sem-code' }, tokenizeSparql(source.trim()).map((t, j) =>
       t.kind === 'text' ? o.text(`${key}-t${j}`, t.text) : o.el(`${key}-s${j}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-t${j}`, t.text)]),
@@ -378,23 +415,25 @@ const flippableSource: FnRule = (ctx, focus) => {
       o.el(key + '-meta', 'P', {}, [o.text(key + '-meta-text', meta)]),
       body,
     ])
-  // The back is built only while the card is turned over: it is the expensive
-  // part (every rule's source as colored spans) and is invisible otherwise.
-  const data = (flipped ? dataQueriesOf(ctx, front) : []).map((q, i) => {
+  const { queries, plans } = ctx.untraced(() => {
+    // A projection view's rules live in that projection's derived graph (its PROV-O says which).
+    const projection = str(ctx.object(front, C.projectionGraph))
+    return {
+      queries: dataQueriesOf(ctx, front),
+      plans:
+        projection && ctx.sparql
+          ? ctx
+              .select(`SELECT DISTINCT ?plan WHERE { GRAPH <${projection}> { ?association <http://www.w3.org/ns/prov#hadPlan> ?plan } }`)
+              .map((b) => ({ plan: b.get('plan')!, role: 'generated' as const }))
+              .sort((a, b) => a.plan.value.localeCompare(b.plan.value))
+          : plansOf(ctx, front),
+    }
+  })
+  const data = queries.map((q, i) => {
     const select = str(ctx.object(q, SEM.select))
     const construct = str(ctx.object(q, SEM.construct))
     return section(`data-${i}`, shortIri(q.value), `data · ${label(ctx, q)}`, code(`data-${i}`, select ?? construct ?? ''))
   })
-  // A projection view's rules live in that projection's derived graph (its PROV-O says which).
-  const projection = str(ctx.object(front, C.projectionGraph))
-  const plans = !flipped
-    ? []
-    : projection && ctx.sparql
-    ? ctx
-        .select(`SELECT DISTINCT ?plan WHERE { GRAPH <${projection}> { ?association <http://www.w3.org/ns/prov#hadPlan> ?plan } }`)
-        .map((b) => ({ plan: b.get('plan')!, role: 'generated' as const }))
-        .sort((a, b) => a.plan.value.localeCompare(b.plan.value))
-    : plansOf(ctx, front)
   const rules = plans.map(({ plan, role }, i) => {
     const key = `rule-${i}`
     const query = str(ctx.object(plan, SEM.construct))
@@ -405,18 +444,9 @@ const flippableSource: FnRule = (ctx, focus) => {
     const meta = [role === 'generated' ? 'renders' : 'decorates', `stratum ${stratum}`, layer ? `layer ${shortIri(layer.value)}` : 'component rule'].join(' · ')
     return section(key, shortIri(plan.value), meta, code(key, query ?? `# a function rule: "${fn ?? '?'}" (src/components)`))
   })
-  const header = o.el('back-header', 'Div', { class: 'sem-back-header' }, [
-    o.el('back-title', 'Strong', {}, [o.text('back-title-text', 'How this view is made')]),
-  ])
-  const empty = !flipped || data.length || rules.length ? [] : [o.el('back-empty', 'P', {}, [o.text('back-empty-text', 'Enable provenance to see the rules behind this view.')])]
-  // Both faces float their flip control in the same corner.
-  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', '↺ View', 'Show the view')])
-  const back = o.el('back', 'Div', { class: 'sem-face sem-back', inert: flipped ? undefined : '' }, [backBar, header, ...empty, ...data, ...rules])
-  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', '</> Source', 'Show how this view is made')])
-  o.t(frontFace, H.hasChild, bar).t(bar, ORD.precedes, front)
-  o.t(faces, H.hasChild, back).t(frontFace, ORD.precedes, back)
-  if (flipped) o.t(frontFace, H.ns + 'inert', '')
-  o.attr(root, 'data-flipped', String(flipped))
+  const header = o.el('header', 'Div', { class: 'sem-back-header' }, [o.el('title', 'Strong', {}, [o.text('title-text', 'How this view is made')])])
+  const empty = data.length || rules.length ? [] : [o.el('empty', 'P', {}, [o.text('empty-text', 'Enable provenance to see the rules behind this view.')])]
+  o.renders(o.el('root', 'Div', {}, [header, ...empty, ...data, ...rules]))
   return o.quads
 }
 
@@ -547,12 +577,14 @@ export const functions: Record<string, FnRule> = {
   'textfield:screen': textFieldScreen,
   'textfield:text': textFieldText,
   list,
+  'list:member': listMember,
   'listitem:screen': listItemScreen,
   'listitem:text': listItemText,
   tabs,
   segmented,
   flippable,
   'flippable:source': flippableSource,
+  'source-back': sourceBack,
   choice,
   chips,
   'style:hooks': styleHooks,

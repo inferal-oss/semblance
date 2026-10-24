@@ -22,6 +22,11 @@ export interface RuleContext {
    * pattern read is recorded as subject -> predicates ('*' = any predicate).
    */
   trace?: Map<string, Set<string>>
+  /**
+   * Run `read` without recording its reads: the rule is not re-run when what it
+   * read there changes (for snapshots, such as a view's source on its back side).
+   */
+  untraced<T>(read: () => T): T
   /** Per-engine memo, e.g. for ontology lookups that never change during a run. */
   memo<T>(key: string, compute: () => T): T
   out(focus: NamedNode): Out
@@ -32,7 +37,8 @@ export interface RuleContext {
  * make the focus dirty, for dependencies that are only known from the data.
  */
 export interface FnRule {
-  (ctx: RuleContext, focus: NamedNode): Quad[]
+  /** `member` is set for member-wise rules (sem:forEach): one evaluation per member. */
+  (ctx: RuleContext, focus: NamedNode, member?: NamedNode): Quad[]
   watches?: (ctx: RuleContext, focus: NamedNode) => ReadonlySet<string>
 }
 
@@ -75,6 +81,15 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
     objects: (s, p) => match(s, p, null).map((q) => q.object),
+    untraced<T>(read: () => T): T {
+      const trace = ctx.trace
+      ctx.trace = undefined
+      try {
+        return read()
+      } finally {
+        ctx.trace = trace
+      }
+    },
     memo<T>(key: string, compute: () => T): T {
       if (!memo.has(key)) memo.set(key, compute())
       return memo.get(key) as T
