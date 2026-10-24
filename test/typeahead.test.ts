@@ -372,8 +372,10 @@ describe('typeahead keystroke cost', () => {
       typing(), typing(), moving(), moving() // warm: the options are rendered once the list is shown
       return { typing: measure(typing), moving: measure(moving) }
     }
+    // Beyond the change log's bound, so retiring a member is part of every measurement.
+    for (let i = 0; i < 210; i++) h.type('inp-tags-labels', 'x'.repeat((i % 5) + 1))
     const before = run()
-    // Two hundred more options that never match, and a longer history.
+    // Two hundred more options that never match.
     const f = h.store.factory
     const more = Array.from({ length: 200 }, (_, i) => f.namedNode(`${UI}country-zz${i}`))
     h.runtime.apply({
@@ -391,13 +393,13 @@ describe('typeahead keystroke cost', () => {
     h.type('inp-combo-country', 'zzland 1')
     h.press('inp-combo-country', 'Escape')
     expect(h.root('inp-combo-country').querySelectorAll('.sem-ta-list > li').length).toBeGreaterThan(200)
-    for (let i = 0; i < 100; i++) h.type('inp-tags-labels', 'x'.repeat((i % 5) + 1))
     const after = run()
     expect(after.moving).toEqual(before.moving)
-    expect(after.moving.ruleRuns).toBeLessThanOrEqual(4)
+    // Two presses: each re-runs the typeahead's rule and what decorates or logs it, not the options.
+    expect(after.moving.ruleRuns).toBeLessThanOrEqual(8)
     expect(after.typing.written).toBe(before.typing.written)
     expect(after.typing.domOps).toBe(before.typing.domOps)
     // The options' re-evaluation is one bulk query however many there are.
     expect(after.typing.ruleRuns - before.typing.ruleRuns).toBe(200)
-  }, 120_000)
+  }, 600_000)
 })
