@@ -820,14 +820,15 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-more-toggle" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
-# On a compact screen: one row - the brand (its byline under the name), the actions (a page
-# switcher presenting itself as a picker, c:compactAs c:Picker, fits) and the More button, which
-# opens the more actions in a panel below it. Focus order is the visual order.
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ;
+# On a compact or medium screen: one row - the brand (its byline under the name), the actions (on
+# a phone a page switcher presenting itself as a picker, c:compactAs c:Picker, fits; on a tablet
+# the switcher itself does) and the More button, which opens the more actions in a panel below it.
+# Focus order is the visual order.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "gap" ; sty:raw "10px" ] ,
                  [ sty:property "padding" ; sty:raw "8px 12px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "auto 1fr" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
@@ -838,30 +839,30 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "min-width" ; sty:raw "min-content" ] .
 # The byline goes on a line of its own under the name (past the logo), whether the logo and the
 # name stand alone or are one home link.
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > *, .sem-brand > .sem-byline *" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand > *, .sem-brand > .sem-byline *" ;
     sty:declares [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > .sem-byline" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand > .sem-byline" ;
     sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
                  [ sty:property "padding-inline-start" ; sty:raw "36px" ] ,
                  [ sty:property "border-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "align-self" ; sty:raw "start" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > strong" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-brand > strong" ;
     sty:declares [ sty:property "align-self" ; sty:raw "end" ] ,
                  [ sty:property "line-height" ; sty:raw "1.1" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-actions" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
                  [ sty:property "gap" ; sty:raw "8px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > :not(.sem-more)" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-actions > :not(.sem-more)" ;
     sty:declares [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
                  [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-toggle" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more-toggle" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,
                  [ sty:property "width" ; sty:raw "44px" ] ,
@@ -874,15 +875,15 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "font" ; sty:raw "700 20px/1 var(--sem-font)" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-toggle[aria-expanded=true]" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more-toggle[aria-expanded=true]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-toggle:focus-visible" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more-toggle:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-body" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more-body" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more[data-open=true] > .sem-more-body" ;
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part ".sem-more[data-open=true] > .sem-more-body" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-direction" ; sty:raw "column" ] ,
                  [ sty:property "align-items" ; sty:raw "stretch" ] ,

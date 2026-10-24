@@ -118,7 +118,7 @@ c:AppBar a owl:Class ;
     rdfs:comment """The application's top bar: a logo, a name (c:label), a c:subtitle, a c:byline, c:actions and
 c:moreActions. With c:to (a resource: the app's home, found as a c:Link finds its target) or c:href, the
 logo and the name are a link there. Where there is room the more actions follow the others; on a
-compact screen (sty:CompactWidth) they fold behind a More button, shown while the bar is c:expanded; Escape or a
+compact or medium screen (sty:CompactWidth, sty:MediumWidth) they fold behind a More button, shown while the bar is c:expanded; Escape or a
 press outside closes them."""@en ;
     sem:slug "app-bar" .
 c:moreActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;

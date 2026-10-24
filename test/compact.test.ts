@@ -62,17 +62,21 @@ describe('width classes (sty:atWidth)', () => {
     expect(wide).toContain('  @media (min-width: 1400px) {\n    [data-sem-c="card"] { max-width: 72rem; }\n  }')
   })
 
-  it('show the app bar’s More button only on a compact screen', () => {
+  it('show the app bar’s More button only on a compact or medium screen (a rule at several widths)', () => {
     const components = layerOf(css, 'components')
-    const media = components.indexOf(COMPACT)
+    // A rule with several width classes applies at any of them: one media query list.
+    const narrow = '@media (max-width: 640px), (min-width: 641px) and (max-width: 1099px) {'
+    const media = components.indexOf(narrow)
     expect(media).toBeGreaterThan(0)
-    // Where there is room the More button is not shown; on a compact screen it is.
+    // Where there is room the More button is not shown; on a compact or medium screen it is.
     const plain = components.indexOf('  [data-sem-c="app-bar"] .sem-more-toggle { display: none; }')
-    const compact = components.indexOf('    [data-sem-c="app-bar"] .sem-more-toggle { ', media)
+    const shown = components.indexOf('    [data-sem-c="app-bar"] .sem-more-toggle { ', media)
     expect(plain).toBeGreaterThan(0)
     expect(plain).toBeLessThan(media)
-    expect(compact).toBeGreaterThan(media)
-    expect(components.slice(compact, components.indexOf('}', compact))).toContain('display: inline-grid;')
+    expect(shown).toBeGreaterThan(media)
+    expect(components.slice(shown, components.indexOf('}', shown))).toContain('display: inline-grid;')
+    // The page switcher becomes a picker on a compact screen only (a tablet has room for it).
+    expect(css.slice(css.indexOf(narrow))).not.toContain(narrow + '\n    [data-sem-c="segmented"][data-sem-compact-as')
   })
 
   it('narrows rules by a hooked value inside the condition too (a segmented control as a picker)', () => {

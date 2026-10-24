@@ -15,7 +15,7 @@ import type { GraphStore } from '../store/types.ts'
  *
  * A rule with sty:atWidth (a sty:WidthClass such as sty:CompactWidth) is compiled into its
  * layer inside the width class's media condition, after that layer's other rules, so at
- * equal specificity it wins where the condition holds.
+ * equal specificity it wins where the condition holds. With several, it applies at any of them.
  */
 const hyphens = (decl: string) => decl.slice(0, decl.indexOf(':')).split('-').length
 const STY_AT_WIDTH = NS.sty + 'atWidth'
@@ -150,8 +150,12 @@ export function compileStyles(store: GraphStore): string {
     const state = object(r, STY.state)?.value
     const part = object(r, STY.part)?.value
     const when = objects(r, STY.when).map(whenAttr).filter(Boolean).sort().join('')
-    const width = object(r, STY_AT_WIDTH)
-    const media = (width && object(width, STY_MEDIA)?.value) ?? ''
+    // Several width classes: the rule applies at any of them (a media query list).
+    const media = objects(r, STY_AT_WIDTH)
+      .map((w) => object(w, STY_MEDIA)?.value)
+      .filter((m): m is string => !!m)
+      .sort()
+      .join(', ')
     // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
     // may add), or every element carrying its sty:when value.
     if (!cls) {

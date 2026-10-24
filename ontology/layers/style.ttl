@@ -160,12 +160,13 @@ sty:raw a owl:DatatypeProperty ; rdfs:comment "Literal CSS value (escape hatch).
 # actions fold into a menu, a navigation list that becomes a picker - says at which widths a
 # rule applies: sty:atWidth a sty:WidthClass. The compiler puts such a rule in its layer inside
 # the class's media condition (sty:media), after the layer's other rules, so it wins there at
-# equal specificity. Two classes, after the size classes of phone and tablet platforms.
+# equal specificity; with several width classes it applies at any of them. Compact and regular
+# follow the size classes of phone and tablet platforms; medium is the narrow part of regular.
 
 sty:WidthClass a owl:Class ;
     rdfs:comment "A range of viewport widths a style rule can be limited to (sty:atWidth)."@en .
 sty:atWidth a owl:ObjectProperty ; rdfs:domain sty:StyleRule ; rdfs:range sty:WidthClass ;
-    rdfs:comment "Limits a style rule to viewports of this width class."@en .
+    rdfs:comment "Limits a style rule to viewports of this width class (with several, of any of them)."@en .
 sty:media a owl:DatatypeProperty ; rdfs:domain sty:WidthClass ;
     rdfs:comment "The width class's CSS media condition."@en .
 sty:CompactWidth a sty:WidthClass ; rdfs:label "Compact"@en ;
@@ -174,6 +175,11 @@ sty:CompactWidth a sty:WidthClass ; rdfs:label "Compact"@en ;
 sty:RegularWidth a sty:WidthClass ; rdfs:label "Regular"@en ;
     rdfs:comment "Everything wider than compact: tablets, laptops, desktops."@en ;
     sty:media "(min-width: 641px)" .
+# Within regular: a tablet, or a laptop's narrow window - room for a row of navigation, not for
+# every setting beside it.
+sty:MediumWidth a sty:WidthClass ; rdfs:label "Medium"@en ;
+    rdfs:comment "Between compact and a wide desktop window (641-1099px): tablets, narrow windows."@en ;
+    sty:media "(min-width: 641px) and (max-width: 1099px)" .
 
 # --- The single style rule ------------------------------------------------------------
 

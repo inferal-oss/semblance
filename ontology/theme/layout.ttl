@@ -267,21 +267,21 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-bar-body[hidden]" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
-# On a compact screen the bar is one line: what it holds scrolls sideways instead of wrapping
+# On a compact or medium screen the bar is one line: what it holds scrolls sideways instead of wrapping
 # into rows that would take a quarter of the screen.
-[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ;
     sty:declares [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "padding" ; sty:raw "2px 12px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-bar-body" ;
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-bar-body" ;
     sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "padding-block" ; sty:raw "4px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-bar-body > *" ;
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-bar-body > *" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-fold" ;
+[] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-fold" ;
     sty:declares [ sty:property "min-height" ; sty:raw "36px" ] .
 
 # --- pos:Aside: the navigation and the main column's shares --------------------------------------
