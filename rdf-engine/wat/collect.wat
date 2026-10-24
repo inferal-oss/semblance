@@ -74,6 +74,12 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $values))))
     (local.set $q (i32.load offset=240 (local.get $q)))
     (br $queries))))
+  ;; graphs made by CREATE
+  (if (global.get $made_graphs) (then
+    (local.set $i (i32.const 0))
+    (loop $made (if (i32.lt_u (local.get $i) (i32.load offset=4 (global.get $made_graphs))) (then
+      (call $mark (i32.load (call $set_key (global.get $made_graphs) (local.get $i))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $made))))))
   ;; sweep
   (local.set $out (call $v_new))
   (local.set $id (i32.const 5))

@@ -136,9 +136,12 @@
 
 ;; After parsing: slot table, parameters, projected variables.
 (func $analyze (param $q i32) (result i32)
-  (local $e i32) (local $slots i32) (local $item i32)
   (global.set $subqueries (i32.const 0))
   (call $an_query (local.get $q))
+  (call $analyze_slots (local.get $q)))
+
+(func $analyze_slots (param $q i32) (result i32)
+  (local $e i32) (local $slots i32) (local $item i32)
   (i32.store offset=52 (local.get $q) (global.get $nvars))
   (local.set $slots (call $anew (i32.shl (i32.add (global.get $nvars) (i32.const 1)) (i32.const 2))))
   (local.set $e (global.get $vars))

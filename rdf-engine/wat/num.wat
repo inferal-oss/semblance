@@ -510,12 +510,27 @@
            (f64.add (f64.mul (f64.convert_i32_s (call $days_from_civil (global.get $d_year) (global.get $d_month) (global.get $d_day))) (f64.const 86400))
                     (local.get $s))))
 
+;; a <=> b for dateTimes (or dates): -1, 0, 1, or 2 (incomparable). A value
+;; without a timezone stands for any between -14:00 and +14:00.
 (func $date_cmp (param $a i32) (param $b i32) (result i32)
-  (local $x f64) (local $y f64)
+  (local $x f64) (local $y f64) (local $tx i32) (local $ty i32) (local $w f64)
   (if (i32.eqz (call $date_parse (call $tval (local.get $a)) (call $tlen (local.get $a)))) (then (return (i32.const 2))))
   (local.set $x (call $date_instant))
+  (local.set $tx (i32.ne (global.get $d_tz) (i32.const 0)))
   (if (i32.eqz (call $date_parse (call $tval (local.get $b)) (call $tlen (local.get $b)))) (then (return (i32.const 2))))
   (local.set $y (call $date_instant))
+  (local.set $ty (i32.ne (global.get $d_tz) (i32.const 0)))
+  (if (i32.ne (local.get $tx) (local.get $ty)) (then
+    ;; 14 hours either way
+    (local.set $w (f64.const 50400))
+    (if (local.get $tx)
+      (then
+        (if (f64.lt (local.get $x) (f64.sub (local.get $y) (local.get $w))) (then (return (i32.const -1))))
+        (if (f64.gt (local.get $x) (f64.add (local.get $y) (local.get $w))) (then (return (i32.const 1)))))
+      (else
+        (if (f64.lt (f64.add (local.get $x) (local.get $w)) (local.get $y)) (then (return (i32.const -1))))
+        (if (f64.gt (f64.sub (local.get $x) (local.get $w)) (local.get $y)) (then (return (i32.const 1))))))
+    (return (i32.const 2))))
   (i32.sub (f64.gt (local.get $x) (local.get $y)) (f64.lt (local.get $x) (local.get $y))))
 
 ;; YEAR ... TZ of a dateTime.

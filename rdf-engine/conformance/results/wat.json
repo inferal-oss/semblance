@@ -3,18 +3,18 @@
   "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
   "summary": {
     "sparql12": {
-      "pass": 247,
+      "pass": 270,
       "fail": 1,
-      "skip": 23
+      "skip": 0
     },
     "sparql11": {
-      "pass": 352,
+      "pass": 501,
       "fail": 9,
-      "skip": 149
+      "skip": 0
     },
     "sparql10": {
-      "pass": 479,
-      "fail": 2,
+      "pass": 481,
+      "fail": 0,
       "skip": 0
     },
     "rdf12": {
@@ -24,8 +24,6 @@
     }
   },
   "failing": {
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-2": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-3": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-avg-02": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-err-02": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-sum-02": "wrong result",

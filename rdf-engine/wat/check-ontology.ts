@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import * as ox from 'oxigraph'
 import { ONTOLOGY_FILES } from '../../src/ontology.ts'
 import { Engine, Format, Kind } from '../host/engine.ts'
-import { quadRow, isomorphic, iri, lit, type Row, type T } from '../conformance/terms.ts'
+import { quadRow, isomorphic, iri, lit, rowKey, type Row, type T } from '../conformance/terms.ts'
 
 const root = new URL('../../', import.meta.url)
 const name = process.argv[2] ?? 'wat'
@@ -49,7 +49,14 @@ for (const [file, text] of files) {
   // Document order on both sides keeps the blank node matching cheap.
   const want = ox.parse(text, { format: 'text/turtle' }).map(quadRow)
   total += rows.length
-  const same = rows.length === want.length && isomorphic(rows, want, false)
+  // Large files can exceed the matcher's recursion; then compare with blank nodes blanked out.
+  const ground = (rs: Row[]) => rs.map((r) => rowKey(r, true)).sort().join('\n')
+  let same: boolean | undefined
+  try {
+    same = rows.length === want.length && isomorphic(rows, want, false)
+  } catch {
+    same = ground(rows) === ground(want)
+  }
   if (same !== true) {
     console.log(`FAIL ${file}: ${rows.length} quads, Oxigraph ${want.length}${rows.length === want.length ? ` (different quads: ${same})` : ''}`)
     bad++

@@ -170,6 +170,7 @@
   (if (i32.eq (local.get $ca) (i32.const C_STRING)) (then (return (i32.const 2))))
   (if (i32.eq (local.get $ca) (i32.const C_BOOLEAN)) (then (return (i32.const 3))))
   (if (i32.eq (local.get $ca) (i32.const C_DATETIME)) (then (return (i32.const 4))))
+  (if (i32.eq (local.get $ca) (i32.const C_DATE)) (then (return (i32.const 4))))
   (i32.const 0))
 
 (func $bytes_cmp (param $p i32) (param $n i32) (param $q i32) (param $m i32) (result i32)
@@ -199,27 +200,28 @@
   (if (i32.eq (local.get $c) (i32.const 4)) (then (return (call $date_cmp (local.get $a) (local.get $b)))))
   (i32.const 2))
 
-;; a = b: 1, 0, or -1 for an error.
+;; a = b: 1, 0, or -1 for an error. Literals of known, different types are
+;; different; an unknown datatype or an ill-typed literal is an error.
 (func $rdf_eq (param $a i32) (param $b i32) (result i32)
   (local $c i32) (local $r i32) (local $x i32) (local $y i32)
   (if (i32.or (i32.eqz (local.get $a)) (i32.eqz (local.get $b))) (then (return (i32.const -1))))
   (if (i32.and (i32.eq (call $kind (local.get $a)) (i32.const 3)) (i32.eq (call $kind (local.get $b)) (i32.const 3))) (then
+    (local.set $x (call $dtc (call $tdt (local.get $a))))
+    (local.set $y (call $dtc (call $tdt (local.get $b))))
     (local.set $c (call $pair_class (local.get $a) (local.get $b)))
     (if (local.get $c) (then
       (if (i32.and (i32.eq (local.get $a) (local.get $b)) (i32.ne (local.get $c) (i32.const 1))) (then (return (i32.const 1))))
       (local.set $r (call $rel_cmp (local.get $a) (local.get $b)))
-      (if (i32.eq (local.get $r) (i32.const 2)) (then
-        ;; NaN, or ill-typed values
-        (if (i32.eq (local.get $c) (i32.const 1)) (then
-          (if (i32.and (i32.ne (call $num (local.get $a)) (i32.const 0)) (i32.ne (call $num (local.get $b)) (i32.const 0))) (then (return (i32.const 0))))))
-        (return (select (i32.const 1) (i32.const -1) (i32.eq (local.get $a) (local.get $b))))))
-      (return (i32.eqz (local.get $r)))))
+      (if (i32.ne (local.get $r) (i32.const 2)) (then (return (i32.eqz (local.get $r)))))
+      ;; NaN is unequal; ill-typed values and indeterminate dates are errors
+      (if (i32.eq (local.get $c) (i32.const 1)) (then
+        (if (i32.and (i32.ne (call $num (local.get $a)) (i32.const 0)) (i32.ne (call $num (local.get $b)) (i32.const 0))) (then (return (i32.const 0))))))
+      (return (select (i32.const 1) (i32.const -1) (i32.eq (local.get $a) (local.get $b))))))
     (if (i32.eq (local.get $a) (local.get $b)) (then (return (i32.const 1))))
-    ;; language strings and simple literals of different values are different
-    (local.set $x (call $dtc (call $tdt (local.get $a))))
-    (local.set $y (call $dtc (call $tdt (local.get $b))))
     (if (i32.or (i32.eq (local.get $x) (i32.const C_LANG)) (i32.eq (local.get $y) (i32.const C_LANG))) (then (return (i32.const 0))))
-    (return (i32.const -1))))
+    (if (i32.or (i32.eq (local.get $x) (i32.const C_OTHER)) (i32.eq (local.get $y) (i32.const C_OTHER))) (then (return (i32.const -1))))
+    (if (i32.or (i32.eqz (call $well_typed (local.get $a) (local.get $x))) (i32.eqz (call $well_typed (local.get $b) (local.get $y)))) (then (return (i32.const -1))))
+    (return (i32.const 0))))
   (if (i32.eq (local.get $a) (local.get $b)) (then (return (i32.const 1))))
   ;; triple terms: by their parts
   (if (i32.and (i32.eq (call $kind (local.get $a)) (i32.const 4)) (i32.eq (call $kind (local.get $b)) (i32.const 4))) (then
@@ -231,6 +233,14 @@
     (if (i32.ne (local.get $r) (i32.const 1)) (then (return (local.get $r))))
     (return (call $rdf_eq (i32.load offset=16 (local.get $x)) (i32.load offset=16 (local.get $y))))))
   (i32.const 0))
+
+;; Whether literal id of datatype class c has a valid lexical form.
+(func $well_typed (param $id i32) (param $c i32) (result i32)
+  (if (i32.le_u (i32.sub (local.get $c) (i32.const C_INTEGER)) (i32.const 3)) (then (return (i32.ne (call $num (local.get $id)) (i32.const 0)))))
+  (if (i32.eq (local.get $c) (i32.const C_BOOLEAN)) (then (return (i32.ge_s (call $bool_value (local.get $id)) (i32.const 0)))))
+  (if (i32.or (i32.eq (local.get $c) (i32.const C_DATETIME)) (i32.eq (local.get $c) (i32.const C_DATE)))
+    (then (return (call $date_parse (call $tval (local.get $id)) (call $tlen (local.get $id))))))
+  (i32.const 1))
 
 ;; ORDER BY: unbound < blank nodes < IRIs < literals < triple terms.
 (func $order_cmp (param $a i32) (param $b i32) (result i32)

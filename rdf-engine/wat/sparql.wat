@@ -852,6 +852,12 @@
       (br $done)))
     (if (i32.eq (local.get $t) (i32.const T_BNODE)) (then
       (local.set $id (call $var_in (global.get $str) (global.get $str_len) (global.get $bscope) (global.get $bflags)))
+      ;; a label of INSERT DATA belongs to one operation
+      (if (i32.and (i32.eq (global.get $bscope) (i32.const -3)) (i32.ne (global.get $data_op) (i32.const 0))) (then
+        (if (i32.load offset=24 (global.get $last_var))
+          (then (if (i32.ne (i32.load offset=24 (global.get $last_var)) (global.get $data_op))
+            (then (return (call $syntax (@str "blank node label used in two operations"))))))
+          (else (i32.store offset=24 (global.get $last_var) (global.get $data_op))))))
       ;; a label belongs to one basic graph pattern
       (if (i32.eq (global.get $bscope) (i32.const -2)) (then
         (if (i32.load offset=24 (global.get $last_var))

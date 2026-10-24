@@ -139,5 +139,3 @@
 
 ;; --- queries (later phases) -------------------------------------------------------
 
-(func (export "parse_update") (param i32 i32) (result i32) (call $ni))
-(func (export "update") (param i32 i32) (result i32) (call $ni))
