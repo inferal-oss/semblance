@@ -550,6 +550,11 @@
   (local $el i32) (local $cur i32) (local $next i32) (local $n i32) (local $e i32) (local $applied i32)
   (local.set $cur (local.get $t))
   (local.set $el (i32.load offset=4 (local.get $g)))
+  ;; filters on what the input binds already, before any element
+  (if (i32.eqz (local.get $nf)) (then
+    (if (call $early_ready (i32.load offset=8 (local.get $g)) (local.get $t)) (then
+      (local.set $cur (call $t_copy (local.get $t)))
+      (local.set $applied (call $early_filters (i32.load offset=8 (local.get $g)) (local.get $cur) (i32.const 0)))))))
   (block $done
     (loop $elements
       (br_if $done (i32.eqz (local.get $el)))
@@ -601,6 +606,16 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $filters))))
   (local.get $applied))
+
+;; Whether some filter of list f could apply early to t.
+(func $early_ready (param $f i32) (param $t i32) (result i32)
+  (loop $filters
+    (if (local.get $f) (then
+      (if (i32.load offset=8 (local.get $f)) (then
+        (if (call $all_bound (local.get $t) (i32.load offset=8 (local.get $f))) (then (return (i32.const 1))))))
+      (local.set $f (i32.load offset=28 (local.get $f)))
+      (br $filters))))
+  (i32.const 0))
 
 ;; Keep the rows of t for which expression e holds.
 (func $filter_one (param $t i32) (param $e i32)
