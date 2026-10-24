@@ -322,3 +322,116 @@
                  [ sty:property "justify-self" ; sty:raw "stretch" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Field ; sty:part "> :is([data-sem-c=choice], [data-sem-c=segmented], [data-sem-c=chips], [data-sem-c=toggle-switch], [data-sem-c=checkbox])" ;
     sty:declares [ sty:property "justify-self" ; sty:raw "start" ] .
+
+# --- code input: a row of cells over one invisible field ---
+# The field covers the cells, so a click anywhere focuses it; the cell where the next character
+# goes shows the focus and a caret. c:cellStyle draws the cells as boxes, underlines, filled
+# wells or one joined segment per group. Cells scale with sty:size (--control-h).
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "justify-items" ; sty:raw "start" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> label" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box > input" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "height" ; sty:raw "100%" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "opacity" ; sty:raw "0" ] ,
+                 [ sty:property "font-size" ; sty:raw "16px" ] ,
+                 [ sty:property "cursor" ; sty:raw "text" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box > input:disabled" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "not-allowed" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box > .sem-code-cells" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "calc(var(--control-h, 38px) * 0.16)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-cell" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "width" ; sty:raw "calc(var(--control-h, 38px) * 1.05)" ] ,
+                 [ sty:property "height" ; sty:raw "calc(var(--control-h, 38px) * 1.3)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:raw "calc(var(--control-h, 38px) * 0.55)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "transition" ; sty:raw "border-color var(--sem-motion), box-shadow var(--sem-motion), background var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-sep" ;
+    sty:declares [ sty:property "width" ; sty:raw "calc(var(--control-h, 38px) * 0.3)" ] ,
+                 [ sty:property "height" ; sty:raw "2px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:faint ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box:hover .sem-code-cell" ;
+    sty:declares [ sty:property "border-color" ; sty:token tok:faint ] .
+# Focus: the cell the next character goes to, with a blinking caret.
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box:focus-within .sem-code-cell[data-state=active]" ;
+    sty:declares [ sty:property "border-color" ; sty:token tok:accent ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box:focus-within .sem-code-cell[data-state=active]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "width" ; sty:raw "2px" ] ,
+                 [ sty:property "height" ; sty:raw "45%" ] ,
+                 [ sty:property "border-radius" ; sty:raw "1px" ] ,
+                 [ sty:property "background" ; sty:token tok:accent ] ,
+                 [ sty:property "animation" ; sty:raw "sem-caret-blink calc(var(--sem-duration-slow, 320ms) * 3.5) steps(1, end) infinite" ] .
+[] a sty:Keyframes ; sty:name "sem-caret-blink" ;
+    sty:step [ sty:at "50%" ; sty:declares [ sty:property "opacity" ; sty:raw "0" ] ] .
+# A complete code: every cell takes the success color for a moment's reassurance.
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:state "[data-complete=true]" ; sty:part ".sem-code-cell" ;
+    sty:declares [ sty:property "border-color" ; sty:token tok:success ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box:has(> input[aria-invalid=true]) .sem-code-cell" ;
+    sty:declares [ sty:property "border-color" ; sty:token tok:danger ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box:has(> input:disabled) .sem-code-cells" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-help" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:font-size-small ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-error" ;
+    sty:declares [ sty:property "color" ; sty:token tok:danger ] ,
+                 [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] .
+
+# Cell styles.
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Underlined ; sty:part ".sem-code-cell" ;
+    sty:declares [ sty:property "border-width" ; sty:raw "0 0 2px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Filled ; sty:part ".sem-code-cell" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "background" ; sty:raw "var(--tone-soft, var(--sem-gray-3))" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part "> .sem-code-box > .sem-code-cells" ;
+    sty:declares [ sty:property "gap" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part ".sem-code-cell" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "-1px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part ":is(.sem-code-cell:first-child, .sem-code-sep + .sem-code-cell)" ;
+    sty:declares [ sty:property "border-start-start-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
+                 [ sty:property "border-end-start-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part ":is(.sem-code-cell:last-child, .sem-code-cell:has(+ .sem-code-sep))" ;
+    sty:declares [ sty:property "border-start-end-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
+                 [ sty:property "border-end-end-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part ".sem-code-sep" ;
+    sty:declares [ sty:property "margin-inline" ; sty:raw "calc(var(--control-h, 38px) * 0.16)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part "> .sem-code-box:focus-within .sem-code-cell[data-state=active]" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .

@@ -401,6 +401,16 @@ export class EventBus {
       }
     }
     for (const t of domTypes) renderer.host.addEventListener(t, listener)
+    // A field marked data-sem-controlled shows what the graph says once its input is handled,
+    // also when nothing changed (a code input drops characters its charset does not allow).
+    const controlled = (e: Event) => {
+      const field = e.target as HTMLInputElement
+      const key = field.hasAttribute?.('data-sem-controlled') ? renderer.keyOf(field) : undefined
+      if (!key) return
+      const value = new Map(renderer.index.attributes(key)).get('value') ?? ''
+      if (field.value !== value) field.value = value
+    }
+    renderer.host.addEventListener('input', controlled)
     const gestures = (e: Event) => this.gesture(e as PointerEvent, renderer)
     renderer.host.addEventListener('pointerdown', gestures)
     // Keyboard layer: a key combination activates the element that declares it.
@@ -449,6 +459,7 @@ export class EventBus {
     renderer.host.addEventListener('focusin', entered)
     return () => {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
+      renderer.host.removeEventListener('input', controlled)
       renderer.host.removeEventListener('pointerdown', gestures)
       doc.removeEventListener('keydown', keys)
       doc.removeEventListener('pointermove', track)

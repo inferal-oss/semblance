@@ -35,6 +35,17 @@ c:TextFieldShape a sh:NodeShape ; sh:targetClass c:TextField ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A text field needs a label (c:label): placeholders are not labels." ] ,
                 [ sh:path c:value ; sh:maxCount 1 ] ,
                 [ sh:path c:inputType ; sh:maxCount 1 ; sh:in ( "text" "password" "email" "number" "search" "tel" "url" ) ] .
+c:CodeInputShape a sh:NodeShape ; sh:targetClass c:CodeInput ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A code input needs a label (c:label): say what the code is for." ] ,
+                [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
+                [ sh:path c:length ; sh:maxCount 1 ; sh:minInclusive 1 ; sh:maxInclusive 32 ; sh:message "A code has 1 to 32 characters (c:length)." ] ,
+                [ sh:path c:groupSize ; sh:maxCount 1 ; sh:minInclusive 1 ] ,
+                [ sh:path c:charset ; sh:maxCount 1 ; sh:class c:Charset ] ,
+                [ sh:path c:case ; sh:maxCount 1 ; sh:class c:Case ] ,
+                [ sh:path c:cellStyle ; sh:maxCount 1 ; sh:class c:CellStyle ] .
+c:CharsetShape a sh:NodeShape ; sh:targetClass c:Charset ;
+    sh:property [ sh:path c:characters ; sh:minCount 1 ; sh:maxCount 1 ] ,
+                [ sh:path c:inputMode ; sh:maxCount 1 ; sh:in ( "none" "text" "decimal" "numeric" "tel" "search" "email" "url" ) ] .
 c:BadgeShape a sh:NodeShape ; sh:targetClass c:Badge ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxLength 32 ] .
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;

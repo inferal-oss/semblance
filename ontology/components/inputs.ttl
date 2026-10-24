@@ -858,3 +858,209 @@ WHERE {
   BIND(COALESCE(?help, ?error) AS ?afterDescribed)
   BIND(COALESCE(?contentNode, ?afterDescribed) AS ?afterHead)
 }""" .
+
+# --- CodeInput (one-time codes) -------------------------------------------------------------------
+# One real <input> (so paste, autofill of SMS codes - autocomplete=one-time-code - and assistive
+# technology see one field), laid invisibly over a row of cells that show the code a character
+# each. What a code may contain is a c:Charset: a regular-expression character class
+# (c:characters) and the keyboard to offer (c:inputMode). Typing or pasting keeps the allowed
+# characters, in c:case, up to c:length; anything else is dropped, and the field (marked
+# data-sem-controlled) is reset to what the graph says. A code of c:length characters is
+# complete (data-complete on the root).
+
+c:CodeInput a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """An input for one-time codes of any length and alphabet: c:label, c:value, c:length (6),
+c:charset (c:Digits), c:case, c:groupSize (cells per group, separated), c:masked, c:cellStyle,
+c:help, c:error, c:disabled, sty:size. Typing sets c:value to the allowed part of what was typed."""@en ;
+    sem:slug "code-input" ;
+    c:labelPart "input" .
+c:length a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "How many characters a code has (1 to 32)."@en .
+c:groupSize a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "Cells per group; groups are shown apart (123 456). None: one group."@en .
+c:masked a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Show each entered character as a dot (and the field as a password)."@en .
+
+c:charset a owl:ObjectProperty ; rdfs:range c:Charset ; rdfs:label "Characters"@en .
+c:Charset a owl:Class ;
+    rdfs:comment "What a code may contain: c:characters, the body of a regular-expression character class, and c:inputMode."@en .
+c:characters a owl:DatatypeProperty ; rdfs:domain c:Charset ;
+    rdfs:comment "A character class body, as inside [...]: \"0-9\", \"A-Za-z0-9\", \"2-9A-HJ-NP-Z\"."@en .
+c:inputMode a owl:DatatypeProperty ; rdfs:domain c:Charset ;
+    rdfs:comment "The virtual keyboard to offer (the inputmode attribute): numeric, text, decimal..."@en .
+c:Digits a c:Charset ; rdfs:label "Digits"@en ; sem:order 1 ; c:characters "0-9" ; c:inputMode "numeric" .
+c:Letters a c:Charset ; rdfs:label "Letters"@en ; sem:order 2 ; c:characters "A-Za-z" ; c:inputMode "text" .
+c:Alphanumeric a c:Charset ; rdfs:label "Letters and digits"@en ; sem:order 3 ; c:characters "A-Za-z0-9" ; c:inputMode "text" .
+c:Hexadecimal a c:Charset ; rdfs:label "Hexadecimal"@en ; sem:order 4 ; c:characters "0-9A-Fa-f" ; c:inputMode "text" .
+c:AnyCharacter a c:Charset ; rdfs:label "Any character but space"@en ; sem:order 5 ; c:characters "\\S" ; c:inputMode "text" .
+
+c:case a owl:ObjectProperty ; rdfs:range c:Case ; rdfs:comment "Letter case a code is kept in."@en .
+c:Case a owl:Class .
+c:UpperCase a c:Case ; rdfs:label "Upper case"@en ; sem:order 1 .
+c:LowerCase a c:Case ; rdfs:label "Lower case"@en ; sem:order 2 .
+
+c:cellStyle a owl:ObjectProperty ;
+    rdfs:range c:CellStyle ;
+    rdfs:label "Cells"@en ;
+    rdfs:comment "How a code's cells are drawn."@en ;
+    sty:hookAttribute "data-sem-cells" .
+c:CellStyle a owl:Class .
+c:Boxes a c:CellStyle ; rdfs:label "Boxes"@en ; sem:slug "boxes" ; sem:order 1 .
+c:Underlined a c:CellStyle ; rdfs:label "Underlined"@en ; sem:slug "underlined" ; sem:order 2 .
+c:Filled a c:CellStyle ; rdfs:label "Filled"@en ; sem:slug "filled" ; sem:order 3 .
+c:Joined a c:CellStyle ; rdfs:label "Joined"@en ; sem:slug "joined" ; sem:order 4 ;
+    rdfs:comment "Cells of a group share borders, like a segmented field."@en .
+
+c:CodeInputRendering a sem:Rendering ; sem:targets c:CodeInput ; sem:stratum 0 .
+c:CodeInputRendering-fn a sem:Rule ; sem:implements c:CodeInputRendering ; sem:function "inputs:code-input" .
+# Cell indexes come from a VALUES table (SPARQL cannot count up to c:length), hence at most 32.
+c:CodeInputRendering-sparql a sem:Rule ;
+    sem:implements c:CodeInputRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label, ?box, ?help, ?error ; rdfhtml:attribute ?complete .
+  ?complete a rdfhtml:Attribute ; rdfhtml:attributeName "data-complete" ; rdfhtml:attributeValue "true" .
+  ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?box .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?box a rdfhtml:Div ; rdfhtml:class "sem-code-box" ; rdfhtml:hasChild ?input, ?cells ; ord:immediatelyPrecedes ?afterBox .
+  ?input a rdfhtml:Input ; rdfhtml:type ?type ; rdfhtml:id ?inputId ; rdfhtml:value ?value ; rdfhtml:inputmode ?mode ;
+         rdfhtml:autocomplete "one-time-code" ; rdfhtml:spellcheck "false" ; rdfhtml:disabled ?disabled ;
+         rdfhtml:attribute ?controlled ; ord:immediatelyPrecedes ?cells .
+  ?controlled a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-controlled" ; rdfhtml:attributeValue "" .
+  ?cells a rdfhtml:Div ; rdfhtml:class "sem-code-cells" ; rdfhtml:attribute ?hidden ; rdfhtml:hasChild ?cell, ?sep .
+  ?hidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?cell a rdfhtml:Div ; rdfhtml:class "sem-code-cell" ; rdfhtml:attribute ?state ; rdfhtml:hasChild ?cellText ; ord:immediatelyPrecedes ?afterCell .
+  ?state a rdfhtml:Attribute ; rdfhtml:attributeName "data-state" ; rdfhtml:attributeValue ?stateValue .
+  ?cellText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?sep a rdfhtml:Div ; rdfhtml:class "sem-code-sep" ; ord:immediatelyPrecedes ?next .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:CodeInput .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { $this c:length ?rawLength }
+  BIND(COALESCE(ROUND(xsd:decimal(?rawLength)), 6) AS ?roundedLength)
+  BIND(xsd:integer(IF(?roundedLength < 1, 1, IF(?roundedLength > 32, 32, ?roundedLength))) AS ?length)
+  OPTIONAL { $this c:value ?rawValue }
+  BIND(SUBSTR(STR(COALESCE(?rawValue, "")), 1, ?length) AS ?value)
+  BIND(STRLEN(?value) AS ?filled)
+  OPTIONAL { $this c:charset/c:inputMode ?declaredMode }
+  BIND(COALESCE(?declaredMode, "numeric") AS ?mode)
+  BIND(EXISTS { $this c:masked ?m FILTER(STR(?m) = "true") } AS ?masked)
+  BIND(IF(?masked, "password", "text") AS ?type)
+  OPTIONAL { $this c:groupSize ?rawGroup }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:decimal(?rawGroup))), 0) AS ?group)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?filled = ?length, IRI(CONCAT(STR($this), "/~root-data-complete")), ?none) AS ?complete)
+  BIND(IRI(CONCAT(STR($this), "/~box")) AS ?box)
+  BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
+  BIND(STR(?input) AS ?inputId)
+  BIND(IRI(CONCAT(STR($this), "/~input-data-sem-controlled")) AS ?controlled)
+  BIND(IRI(CONCAT(STR($this), "/~cells")) AS ?cells)
+  BIND(IRI(CONCAT(STR($this), "/~cells-aria-hidden")) AS ?hidden)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
+  BIND(?input AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterBox)
+  VALUES ?i { 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 }
+  FILTER(?i < ?length)
+  BIND(IRI(CONCAT(STR($this), "/~cell-", STR(?i))) AS ?cell)
+  BIND(IRI(CONCAT(STR($this), "/~cell-", STR(?i), "-data-state")) AS ?state)
+  BIND(IF(?i < ?filled, "filled", IF(?i = ?filled, "active", "empty")) AS ?stateValue)
+  BIND(IF(?i < ?filled, IF(?masked, "•", SUBSTR(?value, ?i + 1, 1)), ?none) AS ?shown)
+  BIND(IF(BOUND(?shown), IRI(CONCAT(STR($this), "/~cell-", STR(?i), "-text")), ?none) AS ?cellText)
+  BIND(?group > 0 && ?i + 1 < ?length && (?i + 1) - xsd:integer(FLOOR((?i + 1) / ?group)) * ?group = 0 AS ?groupEnds)
+  BIND(IF(?groupEnds, IRI(CONCAT(STR($this), "/~sep-", STR(?i))), ?none) AS ?sep)
+  BIND(IF(?i + 1 < ?length, IRI(CONCAT(STR($this), "/~cell-", STR(?i + 1))), ?none) AS ?next)
+  BIND(COALESCE(?sep, ?next) AS ?afterCell)
+}""" .
+c:CodeInputRendering-sparql-text a sem:Rule ;
+    sem:implements c:CodeInputRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line, ?help, ?error .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?afterLine .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?lineData .
+  ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+}
+WHERE {
+  $this a c:CodeInput .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { $this c:length ?rawLength }
+  BIND(COALESCE(ROUND(xsd:decimal(?rawLength)), 6) AS ?roundedLength)
+  BIND(xsd:integer(IF(?roundedLength < 1, 1, IF(?roundedLength > 32, 32, ?roundedLength))) AS ?length)
+  OPTIONAL { $this c:value ?rawValue }
+  BIND(SUBSTR(STR(COALESCE(?rawValue, "")), 1, ?length) AS ?value)
+  BIND(EXISTS { $this c:masked ?m FILTER(STR(?m) = "true") } AS ?masked)
+  OPTIONAL { $this c:groupSize ?rawGroup }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:decimal(?rawGroup))), 0) AS ?group)
+  # Each cell is its character (or a dot) or an underscore; groups are joined by " ".
+  BIND(IF(?masked, REPLACE(?value, ".", "•", "s"), ?value) AS ?shownValue)
+  BIND(CONCAT(?shownValue, SUBSTR("________________________________", 1, ?length - STRLEN(?value))) AS ?cells)
+  BIND(IF(?group > 0 && ?group < ?length,
+          REPLACE(REPLACE(?cells, CONCAT("(.{", STR(?group), "})"), "$1 ", "s"), " $", ""),
+          ?cells) AS ?grouped)
+  BIND(CONCAT(IF(BOUND(?labelData), CONCAT(?labelData, ": "), ""), "[", ?grouped, "]") AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(CONCAT("  ", STR(?helpValue)) AS ?helpData)
+  BIND(CONCAT("  ! ", STR(?errorValue)) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(COALESCE(?help, ?error) AS ?afterLine)
+}""" .
+# Keep what the charset allows, in the code's case, up to its length.
+c:CodeInputInput a beh:Reaction ;
+    beh:when beh:Input ;
+    beh:sourceClass c:CodeInput ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
+    beh:inserts """
+CONSTRUCT { $this c:value ?code }
+WHERE {
+  $event beh:value ?typed .
+  OPTIONAL { $this c:charset/c:characters ?declared }
+  BIND(COALESCE(?declared, "0-9") AS ?characters)
+  OPTIONAL { $this c:length ?rawLength }
+  BIND(COALESCE(ROUND(xsd:decimal(?rawLength)), 6) AS ?roundedLength)
+  BIND(xsd:integer(IF(?roundedLength < 1, 1, IF(?roundedLength > 32, 32, ?roundedLength))) AS ?length)
+  BIND(IF(EXISTS { $this c:case c:UpperCase }, UCASE(STR(?typed)), IF(EXISTS { $this c:case c:LowerCase }, LCASE(STR(?typed)), STR(?typed))) AS ?cased)
+  BIND(SUBSTR(REPLACE(?cased, CONCAT("[^", ?characters, "]"), ""), 1, ?length) AS ?code)
+}""" ;
+    sem:function "inputs:code-input-input" .

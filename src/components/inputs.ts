@@ -16,6 +16,13 @@ const C_UNIT = NS.c + 'unit'
 const C_LABEL_PART = NS.c + 'labelPart'
 const C_TOGGLES = NS.c + 'toggles'
 const XSD_DECIMAL = NS.xsd + 'decimal'
+const C_LENGTH = NS.c + 'length'
+const C_CHARSET = NS.c + 'charset'
+const C_CHARACTERS = NS.c + 'characters'
+const C_INPUT_MODE = NS.c + 'inputMode'
+const C_CASE = NS.c + 'case'
+const C_GROUP_SIZE = NS.c + 'groupSize'
+const C_MASKED = NS.c + 'masked'
 
 const none = (): Delta => ({ add: [], remove: [] })
 
@@ -312,6 +319,59 @@ const field: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- CodeInput ----------------------------------------------------------------------------------------
+
+/** Cells of a code input (the SPARQL rule's index table). */
+const MAX_CODE = 32
+
+const codeLength = (ctx: { object(s: Term, p: string): Term | undefined }, focus: Term) => {
+  const n = Math.round(Number(ctx.object(focus, C_LENGTH)?.value ?? 6))
+  return Number.isFinite(n) ? Math.min(MAX_CODE, Math.max(1, n)) : 6
+}
+
+const codeInput: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const label = text(ctx, focus, C.label)
+  const length = codeLength(ctx, focus)
+  const chars = [...(ctx.object(focus, C.value)?.value ?? '')].slice(0, length)
+  const masked = isTrue(ctx.object(focus, C_MASKED))
+  const group = Math.round(num(ctx, focus, C_GROUP_SIZE, 0))
+  const charset = ctx.object(focus, C_CHARSET)
+  const shown = chars.map((ch) => (masked ? '•' : ch))
+  if (ctx.modality === MOD.Text) {
+    const cells = [...shown, ...Array<string>(length - chars.length).fill('_')]
+    const grouped = group > 0 && group < length ? cells.map((c, i) => (i > 0 && i % group === 0 ? ' ' + c : c)).join('') : cells.join('')
+    const line = o.el('line', 'Div', {}, [o.text('line-text', `${label !== undefined ? label + ': ' : ''}[${grouped}]`)])
+    o.renders(o.el('root', 'Div', {}, [line, ...describeText(ctx, o, focus)]))
+    return o.quads
+  }
+  const inputId = o.node('input').value
+  const input = o.el('input', 'Input', {
+    type: masked ? 'password' : 'text',
+    id: inputId,
+    value: chars.join(''),
+    inputmode: (charset && ctx.object(charset, C_INPUT_MODE)?.value) ?? 'numeric',
+    autocomplete: 'one-time-code',
+    spellcheck: 'false',
+    disabled: disabledOf(ctx, focus),
+    'data-sem-controlled': '',
+  })
+  const cells: NamedNode[] = []
+  for (let i = 0; i < length; i++) {
+    const state = i < chars.length ? 'filled' : i === chars.length ? 'active' : 'empty'
+    cells.push(o.el(`cell-${i}`, 'Div', { class: 'sem-code-cell', 'data-state': state }, i < chars.length ? [o.text(`cell-${i}-text`, shown[i]!)] : []))
+    if (group > 0 && i + 1 < length && (i + 1) % group === 0) cells.push(o.el(`sep-${i}`, 'Div', { class: 'sem-code-sep' }))
+  }
+  const box = o.el('box', 'Div', { class: 'sem-code-box' }, [input, o.el('cells', 'Div', { class: 'sem-code-cells', 'aria-hidden': 'true' }, cells)])
+  const parts = [
+    ...(label !== undefined ? [o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])] : []),
+    box,
+    ...describe(ctx, o, focus, input),
+  ]
+  o.renders(o.el('root', 'Div', { 'data-complete': chars.length === length ? 'true' : undefined }, parts))
+  return o.quads
+}
+
 // --- reactions --------------------------------------------------------------------------------------
 
 const textAreaInput: ReactionFn = ({ runtime, event, target, match, object }) => {
@@ -355,6 +415,22 @@ const sliderInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   return { remove: match(target, C.value, null), add: [f.quad(target, f.namedNode(C.value), f.literal(value.value, f.namedNode(XSD_DECIMAL)))] }
 }
 
+/** What typing or pasting leaves of a code: the charset's characters, in the code's case, up to its length. */
+const codeInputInput: ReactionFn = ({ runtime, event, target, match, object }) => {
+  const f = runtime.store.factory
+  const typed = object(event, BEH.value)
+  if (!typed) return none()
+  const charset = object(target, C_CHARSET)
+  const characters = (charset && object(charset, C_CHARACTERS)?.value) ?? '0-9'
+  const kase = object(target, C_CASE)?.value
+  const cased = kase === NS.c + 'UpperCase' ? typed.value.toUpperCase() : kase === NS.c + 'LowerCase' ? typed.value.toLowerCase() : typed.value
+  const code = [...cased.replace(new RegExp(`[^${characters}]`, 'gu'), '')].slice(0, codeLength({ object }, target)).join('')
+  return {
+    remove: [...match(target, C.value, null), ...match(target, C.error, null)],
+    add: [f.quad(target, f.namedNode(C.value), f.literal(code))],
+  }
+}
+
 export const functions: Record<string, FnRule> = {
   'inputs:text-area': textArea,
   'inputs:checkbox': checkbox,
@@ -362,6 +438,7 @@ export const functions: Record<string, FnRule> = {
   'inputs:toggle-switch': toggleSwitch,
   'inputs:slider': slider,
   'inputs:field': field,
+  'inputs:code-input': codeInput,
 }
 
 export const reactions: Record<string, ReactionFn> = {
@@ -370,4 +447,5 @@ export const reactions: Record<string, ReactionFn> = {
   'inputs:radio-group-select': radioGroupSelect,
   'inputs:toggle-switch-flip': toggleSwitchFlip,
   'inputs:slider-input': sliderInput,
+  'inputs:code-input-input': codeInputInput,
 }

@@ -14,7 +14,7 @@
 # Gallery page: Inputs.
 
 ui:gallery-inputs a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-checkboxes ui:inp-radios ui:inp-switches
+    c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-codes ui:inp-checkboxes ui:inp-radios ui:inp-switches
                  ui:inp-sliders ui:inp-fields ui:inp-selection ) .
 ui:gallery-inputs-intro a c:Heading ; c:label "Inputs" .
 
@@ -54,6 +54,30 @@ ui:inp-text a c:Flippable ; c:front ui:inp-text-spec .
 ui:inp-text-spec a c:Specimen ; c:label "Text field and text area" ;
     c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value." ;
     c:children ( ui:inp-text-col ) .
+
+# --- Code input: one-time codes of any length and alphabet ----------------------------------------
+# What a code may contain is a c:Charset; this one is defined here, not in the framework: no
+# 0/O, 1/I/L, so it can be read aloud.
+
+ui:Unambiguous a c:Charset ; rdfs:label "Unambiguous letters and digits" ; c:characters "2-9A-HJ-KMNP-Z" ; c:inputMode "text" .
+
+ui:inp-code-signin a c:CodeInput ; c:label "Sign-in code" ; c:length 6 ;
+    c:help "We sent a 6-digit code to ada@example.com. Paste it, or type it." .
+ui:inp-code-recovery a c:CodeInput ; c:label "Recovery code" ; c:length 8 ; c:groupSize 4 ;
+    c:charset c:Alphanumeric ; c:case c:UpperCase ; c:cellStyle c:Joined .
+ui:inp-code-pair a c:CodeInput ; c:label "Pairing code (read aloud)" ; c:length 6 ; c:groupSize 3 ;
+    c:charset ui:Unambiguous ; c:case c:UpperCase ; c:cellStyle c:Filled ; sty:tone sty:Accent .
+ui:inp-code-pin a c:CodeInput ; c:label "PIN" ; c:length 4 ; c:masked true ; c:cellStyle c:Underlined ; sty:size sty:Large .
+ui:inp-code-key a c:CodeInput ; c:label "Device key" ; c:length 16 ; c:groupSize 4 ; c:charset c:Hexadecimal ;
+    c:case c:LowerCase ; sty:size sty:Small .
+ui:inp-code-expired a c:CodeInput ; c:label "Expired code" ; c:length 6 ; c:value "482913" ; c:error "That code has expired. Ask for a new one." .
+ui:inp-code-off a c:CodeInput ; c:label "Waiting for a code" ; c:length 6 ; c:disabled true .
+ui:inp-code-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:inp-code-signin ui:inp-code-recovery ui:inp-code-pair ui:inp-code-pin ui:inp-code-key ui:inp-code-expired ui:inp-code-off ) .
+ui:inp-codes a c:Flippable ; c:front ui:inp-codes-spec .
+ui:inp-codes-spec a c:Specimen ; c:label "Code input" ;
+    c:help "A c:CodeInput is one real field (so paste and SMS autofill work) over a row of cells. Its c:Charset says what it accepts - digits, letters, hexadecimal, or your own character class - and typing keeps only that, in its c:case, up to c:length. Groups, masking, sizes and four c:cellStyle values are variations; a complete code turns green." ;
+    c:children ( ui:inp-code-col ) .
 
 # --- Checkbox ---------------------------------------------------------------------------------------
 
