@@ -24,12 +24,13 @@ ui:ExActivity a ui:Example ; rdfs:label "Your activity" ; sem:order 7 ; ui:key "
 ui:ExChat a ui:Example ; rdfs:label "Chat" ; sem:order 8 ; ui:key "chat" .
 ui:ExSettings a ui:Example ; rdfs:label "Settings" ; sem:order 9 ; ui:key "settings" .
 ui:ExLocalized a ui:Example ; rdfs:label "Localized product page" ; sem:order 10 ; ui:key "localized" .
+ui:ExViews a ui:Example ; rdfs:label "Maintained views" ; sem:order 11 ; ui:key "views" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:examplesNav ui:examplePages ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
-    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ) .
+    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-views ) .
 ui:exc-todo c:when ui:ExTodo ; c:content ui:exp-todo .
 ui:exc-signin c:when ui:ExSignin ; c:content ui:exp-signin .
 ui:exc-network c:when ui:ExNetwork ; c:content ui:exp-network .
@@ -40,6 +41,7 @@ ui:exc-activity c:when ui:ExActivity ; c:content ui:exp-activity .
 ui:exc-chat c:when ui:ExChat ; c:content ui:exp-chat .
 ui:exc-settings c:when ui:ExSettings ; c:content ui:exp-settings .
 ui:exc-localized c:when ui:ExLocalized ; c:content ui:exp-localized .
+ui:exc-views c:when ui:ExViews ; c:content ui:exp-views .
 
 # --- Each example: the app, how it works, and its source ---------------------------------------------
 # An example is its own graph, in its own file (demo/gallery/_ex-<key>.ttl; the network inspector in
@@ -76,3 +78,6 @@ ui:exs-settings a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:d
 ui:exp-localized a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-localized ui:ex-localized-how ) .
 ui:ex-localized-how c:sourceView ui:exs-localized .
 ui:exs-localized a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-localized.ttl> .
+ui:exp-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-views ui:ex-views-how ) .
+ui:ex-views-how c:sourceView ui:exs-views .
+ui:exs-views a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-views.ttl> .
