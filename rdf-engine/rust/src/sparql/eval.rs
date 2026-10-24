@@ -44,6 +44,9 @@ pub struct Ctx<'a> {
     bnodes: IdMap,
     bnode_row: usize,
     scan: Vec<u32>,
+    /// Per pattern (by address): the variables a join may pass into it.
+    side: IdMap,
+    side_list: Vec<Rc<[bool]>>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
     active: Active,
 }
@@ -64,6 +67,8 @@ impl<'a> Ctx<'a> {
             bnodes: IdMap::new(),
             bnode_row: 0,
             scan: Vec::new(),
+            side: IdMap::new(),
+            side_list: Vec::new(),
             active: Active::Default,
         }
     }
@@ -178,55 +183,54 @@ impl<'a> Ctx<'a> {
             Pattern::Bgp(ts) => self.bgp(ts, sub, active),
             Pattern::Join(a, b) => {
                 let left = self.eval(a, sub, active);
-                if pure(b) {
+                if left.is_empty() {
+                    left
+                } else if pure(b) {
                     let mut out = Vec::new();
                     for r in &left {
                         out.extend(self.eval(b, r, active));
                     }
                     out
                 } else {
-                    let right = self.eval(b, sub, active);
-                    join_rows(left, &right)
+                    let safe = self.sideways(b);
+                    if !left.iter().any(|r| useful(r, sub, &safe)) {
+                        let right = self.eval(b, sub, active);
+                        return join_rows(left, &right);
+                    }
+                    let (mut whole, mut out) = (None, Vec::new());
+                    for r in &left {
+                        self.join_one(b, sub, r, &safe, &mut whole, active, &mut out);
+                    }
+                    out
                 }
             }
             Pattern::LeftJoin(a, b, f) => {
                 let left = self.eval(a, sub, active);
                 let mut out = Vec::new();
-                if pure(b) {
-                    for r in left {
-                        let mut any = false;
-                        for m in self.eval(b, &r, active) {
-                            // An OPTIONAL pair is a budget step, as a join pair is (and as in WAT).
-                            if crate::budget::step() {
-                                break;
-                            }
-                            if f.as_ref().is_none_or(|f| self.test(f, &m)) {
-                                out.push(m);
-                                any = true;
-                            }
-                        }
-                        if !any {
-                            out.push(r);
+                let safe = if pure(b) { None } else { Some(self.sideways(b)) };
+                let (mut whole, mut ms) = (None, Vec::new());
+                for r in left {
+                    match &safe {
+                        None => ms = self.eval(b, &r, active),
+                        Some(safe) => {
+                            ms.clear();
+                            // join_one counts each pair it tries as a budget step.
+                            self.join_one(b, sub, &r, safe, &mut whole, active, &mut ms);
                         }
                     }
-                } else {
-                    let right = self.eval(b, sub, active);
-                    for r in left {
-                        let mut any = false;
-                        for x in &right {
-                            if crate::budget::step() {
-                                break;
-                            }
-                            if let Some(m) = merge(&r, x) {
-                                if f.as_ref().is_none_or(|f| self.test(f, &m)) {
-                                    out.push(m);
-                                    any = true;
-                                }
-                            }
+                    let mut any = false;
+                    for m in ms.drain(..) {
+                        // An OPTIONAL pair is a budget step, as a join pair is (and as in WAT).
+                        if safe.is_none() && crate::budget::step() {
+                            break;
                         }
-                        if !any {
-                            out.push(r);
+                        if f.as_ref().is_none_or(|f| self.test(f, &m)) {
+                            out.push(m);
+                            any = true;
                         }
+                    }
+                    if !any {
+                        out.push(r);
                     }
                 }
                 out
@@ -329,6 +333,47 @@ impl<'a> Ctx<'a> {
                 } else {
                     Vec::new()
                 }
+            }
+        }
+    }
+
+    /// For each variable, whether a left row may pass its binding into `b`
+    /// (`b` mentions it and substituting it is safe), cached per pattern.
+    fn sideways(&mut self, b: &Pattern) -> Rc<[bool]> {
+        let key = [b as *const Pattern as usize as u32];
+        if let Some(i) = self.side.get(&key) {
+            return self.side_list[i as usize].clone();
+        }
+        let mut m = alloc::vec![false; self.nvars];
+        pattern_vars(b, &mut m);
+        for (v, x) in m.iter_mut().enumerate() {
+            *x = *x && subst_ok(b, v as Var);
+        }
+        let safe: Rc<[bool]> = m.into();
+        self.side_list.push(safe.clone());
+        self.side.insert(&key, self.side_list.len() as u32 - 1);
+        safe
+    }
+
+    /// Join one left row with `b`: evaluated with the row's safe bindings
+    /// substituted, or (when it has none) from `b` evaluated once, unsubstituted.
+    #[allow(clippy::too_many_arguments)]
+    fn join_one(&mut self, b: &Pattern, sub: &[u32], r: &[u32], safe: &[bool], whole: &mut Option<Vec<Row>>, active: Active, out: &mut Vec<Row>) {
+        let rows;
+        let right: &[Row] = if useful(r, sub, safe) {
+            let s: Row = sub.iter().zip(r).zip(safe).map(|((&x, &y), &ok)| if x == NONE && ok { y } else { x }).collect();
+            rows = self.eval(b, &s, active);
+            &rows
+        } else {
+            whole.get_or_insert_with(|| self.eval(b, sub, active))
+        };
+        for x in right {
+            // Each pair tried is a budget step, as in join_rows.
+            if crate::budget::step() {
+                return;
+            }
+            if let Some(m) = merge(r, x) {
+                out.push(m);
             }
         }
     }
@@ -806,10 +851,11 @@ fn certain(p: &Pattern) -> Vec<Var> {
                 }
             }
         }
-        Pattern::Join(a, b) => {
+        Pattern::Join(a, b) | Pattern::Lateral(a, b) => {
             out = certain(a);
             out.extend(certain(b));
         }
+        Pattern::LeftJoin(a, ..) | Pattern::Minus(a, _) => out = certain(a),
         Pattern::Union(a, b) => {
             let right = certain(b);
             out = certain(a).into_iter().filter(|v| right.contains(v)).collect();
@@ -823,6 +869,137 @@ fn certain(p: &Pattern) -> Vec<Var> {
         _ => {}
     }
     out
+}
+
+/// Whether a left row's binding of `v` may be substituted into `p`: evaluating
+/// with it then merging equals evaluating without it and joining. Matching
+/// patterns take any binding; an expression must not read `v` unless the
+/// pattern under it always binds `v` (then it reads the same value either way).
+/// MINUS compares domains, which substitution changes, and a subquery scopes
+/// its own variables, so neither takes a variable it mentions.
+fn subst_ok(p: &Pattern, v: Var) -> bool {
+    let sure = |a: &Pattern| certain(a).contains(&v);
+    match p {
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => true,
+        Pattern::Join(a, b) | Pattern::Union(a, b) => subst_ok(a, v) && subst_ok(b, v),
+        Pattern::Graph(_, a) => subst_ok(a, v),
+        Pattern::Filter(e, a) => subst_ok(a, v) && (!reads(e, v) || sure(a)),
+        Pattern::Extend(a, w, e) => *w != v && subst_ok(a, v) && (!reads(e, v) || sure(a)),
+        Pattern::LeftJoin(a, b, f) => {
+            subst_ok(a, v) && subst_ok(b, v) && (sure(a) || (!mentions(b, v) && f.as_ref().is_none_or(|f| !reads(f, v))))
+        }
+        Pattern::Lateral(a, b) => subst_ok(a, v) && subst_ok(b, v) && (sure(a) || !mentions(b, v)),
+        Pattern::Sub(s) => {
+            let mut m = alloc::vec![false; v as usize + 1];
+            select_vars(s, &mut m);
+            !m[v as usize] && subst_ok(&s.pattern, v)
+        }
+        Pattern::Minus(..) => false,
+    }
+}
+
+/// Whether an expression reads `v` (EXISTS is taken to read every variable).
+fn reads(e: &Expr, v: Var) -> bool {
+    match e {
+        Expr::Var(w) | Expr::Bound(w) => *w == v,
+        Expr::Const(_) | Expr::Unknown => false,
+        Expr::Exists(..) => true,
+        Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => reads(a, v) || reads(b, v),
+        Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => reads(a, v),
+        Expr::In(a, l, _) => reads(a, v) || l.iter().any(|x| reads(x, v)),
+        Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().any(|x| reads(x, v)),
+        Expr::If(a, b, c) => reads(a, v) || reads(b, v) || reads(c, v),
+    }
+}
+
+fn mentions(p: &Pattern, v: Var) -> bool {
+    let mut m = alloc::vec![false; v as usize + 1];
+    pattern_vars(p, &mut m);
+    m[v as usize]
+}
+
+/// Mark every variable a pattern mentions (in `m`, when it is in range).
+fn pattern_vars(p: &Pattern, m: &mut [bool]) {
+    fn tv(t: &Tv, m: &mut [bool]) {
+        match t {
+            Tv::Var(v) => set(*v, m),
+            Tv::Triple(b) => b.iter().for_each(|x| tv(x, m)),
+            Tv::Term(_) => {}
+        }
+    }
+    match p {
+        Pattern::Unit | Pattern::Service(_) => {}
+        Pattern::Bgp(ts) => ts.iter().for_each(|t| [&t.s, &t.p, &t.o].iter().for_each(|x| tv(x, m))),
+        Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) => {
+            pattern_vars(a, m);
+            pattern_vars(b, m);
+        }
+        Pattern::LeftJoin(a, b, e) => {
+            pattern_vars(a, m);
+            pattern_vars(b, m);
+            if let Some(e) = e {
+                expr_vars(e, m);
+            }
+        }
+        Pattern::Filter(e, a) => {
+            expr_vars(e, m);
+            pattern_vars(a, m);
+        }
+        Pattern::Extend(a, w, e) => {
+            set(*w, m);
+            expr_vars(e, m);
+            pattern_vars(a, m);
+        }
+        Pattern::Graph(g, a) => {
+            tv(g, m);
+            pattern_vars(a, m);
+        }
+        Pattern::Values(vars, _) => vars.iter().for_each(|&v| set(v, m)),
+        Pattern::Sub(s) => select_vars(s, m),
+    }
+}
+
+fn set(v: Var, m: &mut [bool]) {
+    if let Some(x) = m.get_mut(v as usize) {
+        *x = true;
+    }
+}
+
+fn select_vars(s: &Select, m: &mut [bool]) {
+    let vars = s.project.iter().chain(s.aggregates.iter().map(|(v, _)| v)).chain(s.extend.iter().map(|(v, _)| v));
+    vars.chain(s.group.iter().flatten().filter_map(|(_, v)| v.as_ref())).for_each(|&v| set(v, m));
+    pattern_vars(&s.pattern, m);
+    for (e, _) in s.group.iter().flatten() {
+        expr_vars(e, m);
+    }
+    s.aggregates.iter().filter_map(|(_, a)| a.expr.as_ref()).for_each(|e| expr_vars(e, m));
+    s.having.iter().chain(s.extend.iter().map(|(_, e)| e)).chain(s.order.iter().map(|(e, _)| e)).for_each(|e| expr_vars(e, m));
+    if let Some(v) = &s.values {
+        pattern_vars(v, m);
+    }
+}
+
+fn expr_vars(e: &Expr, m: &mut [bool]) {
+    match e {
+        Expr::Var(v) | Expr::Bound(v) => set(*v, m),
+        Expr::Const(_) | Expr::Unknown => {}
+        Expr::Exists(p, _) => pattern_vars(p, m),
+        Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => {
+            expr_vars(a, m);
+            expr_vars(b, m);
+        }
+        Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => expr_vars(a, m),
+        Expr::In(a, l, _) => {
+            expr_vars(a, m);
+            l.iter().for_each(|x| expr_vars(x, m));
+        }
+        Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().for_each(|x| expr_vars(x, m)),
+        Expr::If(a, b, c) => {
+            expr_vars(a, m);
+            expr_vars(b, m);
+            expr_vars(c, m);
+        }
+    }
 }
 
 fn tv_vars(t: &Tv, out: &mut Vec<Var>) {
@@ -845,6 +1022,11 @@ fn reads_only(e: &Expr, vars: &[Var]) -> bool {
         Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().all(|x| reads_only(x, vars)),
         Expr::If(a, b, c) => reads_only(a, vars) && reads_only(b, vars) && reads_only(c, vars),
     }
+}
+
+/// Whether a row binds a variable, beyond `sub`, that may be passed into a pattern.
+fn useful(r: &[u32], sub: &[u32], safe: &[bool]) -> bool {
+    r.iter().zip(sub).zip(safe).any(|((&x, &s), &ok)| ok && s == NONE && x != NONE)
 }
 
 fn mark(x: &Tv, bound: &mut [bool]) {
