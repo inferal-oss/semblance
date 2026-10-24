@@ -372,6 +372,16 @@
                  [ sty:property "font-size" ; sty:raw "calc(var(--control-h, 38px) * 0.55)" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "transition" ; sty:raw "border-color var(--sem-motion), box-shadow var(--sem-motion), background var(--sem-motion)" ] .
+# On a phone the cells give way rather than wrap: each may narrow (to about two thirds) before the
+# row breaks, so a short code stays on one line and a long one still wraps.
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-cell" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 calc(var(--control-h, 38px) * 0.7)" ] ,
+                 [ sty:property "max-width" ; sty:raw "calc(var(--control-h, 38px) * 1.05)" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-sep" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box > .sem-code-cells" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "gap" ; sty:raw "calc(var(--control-h, 38px) * 0.12)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-sep" ;
     sty:declares [ sty:property "width" ; sty:raw "calc(var(--control-h, 38px) * 0.3)" ] ,
                  [ sty:property "height" ; sty:raw "2px" ] ,

@@ -446,7 +446,8 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "width" ; sty:raw "100%" ] ,
                  [ sty:property "min-height" ; sty:raw "44px" ] ,
-                 [ sty:property "padding" ; sty:raw "0 32px 0 12px" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "12px 32px" ] ,
                  [ sty:property "appearance" ; sty:raw "none" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
@@ -456,6 +457,9 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "font" ; sty:raw "600 14px/1.2 var(--sem-font)" ] ,
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
+# Right to left, the chevron is at the start of the line too.
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker:dir(rtl)" ;
+    sty:declares [ sty:property "background-position" ; sty:raw "14px 50%, 20px 50%, 0 0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
