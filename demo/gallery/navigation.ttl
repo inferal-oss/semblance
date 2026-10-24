@@ -14,5 +14,61 @@
 # Gallery page: Navigation.
 
 ui:gallery-navigation a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-navigation-intro ) .
+    c:children ( ui:gallery-navigation-intro ui:nv-breadcrumbs ui:nv-pagination ui:nv-stepper ui:nv-navlist ) .
 ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" .
+
+# --- Breadcrumbs ----------------------------------------------------------------------------------
+
+ui:nv-crumb-home c:label "Semblance" .
+ui:nv-crumb-components c:label "Components" .
+ui:nv-crumb-navigation c:label "Navigation" .
+ui:nv-crumb-breadcrumbs c:label "Breadcrumbs" .
+ui:nv-crumbs-explicit a c:Breadcrumbs ;
+    c:items ( ui:nv-crumb-home ui:nv-crumb-components ui:nv-crumb-navigation ui:nv-crumb-breadcrumbs ) .
+ui:nv-crumbs-derived a c:Breadcrumbs ; c:label "Class path" ; c:of c:ThemeSwitcher ; c:parentProperty rdfs:subClassOf .
+ui:nv-crumbs-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:nv-crumbs-explicit ui:nv-crumbs-derived ) .
+ui:nv-breadcrumbs a c:Flippable ; c:front ui:nv-breadcrumbs-spec .
+ui:nv-breadcrumbs-spec a c:Specimen ; c:label "Breadcrumbs" ;
+    c:help "A trail in a <nav>, the last crumb aria-current=page: explicit c:items, or derived by walking c:parentProperty up from a node (here rdfs:subClassOf from c:ThemeSwitcher). With c:controls and c:property, crumbs navigate (see the Tree on the Data page)." ;
+    c:children ( ui:nv-crumbs-col ) .
+
+# --- Pagination -----------------------------------------------------------------------------------
+
+ui:nv-pages-long a c:Pagination ; c:label "Results pages" ; c:page 5 ; c:pages 20 .
+ui:nv-pages-short a c:Pagination ; c:label "Short pagination" ; c:page 2 ; c:pages 5 ; sty:size sty:Small .
+ui:nv-pages-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:nv-pages-long ui:nv-pages-short ) .
+ui:nv-pagination a c:Flippable ; c:front ui:nv-pagination-spec .
+ui:nv-pagination-spec a c:Specimen ; c:label "Pagination" ;
+    c:help "Previous, next and numbered pages; long runs fold into an ellipsis around the current page. Clicking writes c:page on the component. Sized by sty:size." ;
+    c:children ( ui:nv-pages-col ) .
+
+# --- Stepper --------------------------------------------------------------------------------------
+
+ui:nv-step-describe c:label "Describe" ; c:help "A class, a slug, its properties" .
+ui:nv-step-render c:label "Render" ; c:help "A function or SPARQL rule" .
+ui:nv-step-style c:label "Style" ; c:help "Theme style rules on its parts" .
+ui:nv-step-react c:label "React" ; c:help "Reactions to its events" .
+ui:nv-step-ship c:label "Ship" ; c:help "A specimen in the gallery" .
+ui:nv-stepper-make a c:Stepper ; c:label "Making a component" ;
+    c:steps ( ui:nv-step-describe ui:nv-step-render ui:nv-step-style ui:nv-step-react ui:nv-step-ship ) ;
+    c:current ui:nv-step-style ; c:navigable true .
+ui:nv-stepper a c:Flippable ; c:front ui:nv-stepper-spec .
+ui:nv-stepper-spec a c:Specimen ; c:label "Stepper" ;
+    c:help "Ordered steps: those before c:current are complete, c:current is aria-current=step, the rest are upcoming. With c:navigable, clicking a step makes it current." ;
+    c:children ( ui:nv-stepper-make ) .
+
+# --- NavList --------------------------------------------------------------------------------------
+
+ui:nvSection a owl:ObjectProperty ; rdfs:label "Section"@en ; rdfs:range ui:NvSection .
+ui:NvOverview a ui:NvSection ; rdfs:label "Overview"@en ; sem:order 1 .
+ui:NvRules a ui:NvSection ; rdfs:label "Rules"@en ; sem:order 2 .
+ui:NvTheme a ui:NvSection ; rdfs:label "Theme"@en ; sem:order 3 .
+ui:NvBehaviour a ui:NvSection ; rdfs:label "Behaviour"@en ; sem:order 4 .
+ui:nv-doc ui:nvSection ui:NvRules .
+ui:nv-navlist-sections a c:NavList ; c:controls ui:nv-doc ; c:property ui:nvSection ; c:label "Sections" .
+ui:nv-navlist a c:Flippable ; c:front ui:nv-navlist-spec .
+ui:nv-navlist-spec a c:Specimen ; c:label "Nav list" ;
+    c:help "Vertical navigation over one property's values: the options are the individuals in its rdfs:range, ordered by sem:order. The same contract and reaction as c:Segmented." ;
+    c:children ( ui:nv-navlist-sections ) .

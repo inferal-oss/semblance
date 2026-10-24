@@ -14,5 +14,110 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-timeline ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
+
+# --- Table: the project's own component classes, from a SELECT -------------------------------------
+
+ui:q-components a sem:View ;
+    rdfs:label "component classes"@en ;
+    sem:select """
+SELECT ?class ?slug (SAMPLE(?super) AS ?parent)
+       (COUNT(DISTINCT ?rendering) AS ?renderings) (COUNT(DISTINCT ?reaction) AS ?reactions)
+WHERE {
+  ?class rdfs:subClassOf+ sem:Component ; sem:slug ?slug ; rdfs:subClassOf ?super .
+  OPTIONAL { ?rendering sem:targets ?class }
+  OPTIONAL { ?reaction beh:sourceClass ?class }
+}
+GROUP BY ?class ?slug""" .
+
+ui:dt-col-class a c:Column ; c:variable "class" ; c:label "Component" .
+ui:dt-col-slug a c:Column ; c:variable "slug" ; c:label "Slug" ; c:format "code" .
+ui:dt-col-parent a c:Column ; c:variable "parent" ; c:label "Extends" .
+ui:dt-col-renderings a c:Column ; c:variable "renderings" ; c:label "Renderings" ; c:align "end" ; c:format "number" .
+ui:dt-col-reactions a c:Column ; c:variable "reactions" ; c:label "Reactions" ; c:align "end" ; c:format "number" .
+
+ui:dt-table-component a c:Table ; c:label "Component classes" ; c:query ui:q-components ;
+    c:tableColumns ( ui:dt-col-class ui:dt-col-slug ui:dt-col-parent ui:dt-col-renderings ui:dt-col-reactions ) ;
+    c:sortColumn ui:dt-col-renderings ; c:sortDescending true ;
+    c:emptyText "No component classes found." .
+ui:dt-table a c:Flippable ; c:front ui:dt-table-spec .
+ui:dt-table-spec a c:Specimen ; c:label "Table" ;
+    c:help "Rows from a SPARQL SELECT over this project's ontology: every component class, what it extends, and how many renderings and reactions it has. Click a header to sort (again to reverse); the sort is graph state on the table." ;
+    c:children ( ui:dt-table-component ) .
+
+# --- Stat -----------------------------------------------------------------------------------------
+
+ui:dt-stat-toggle a c:Stat ; c:label "Toggle, end to end" ; c:value 0.48 ; c:unit "ms" ;
+    c:delta -12 ; c:deltaUnit "%" ; c:lowerIsBetter true ; c:help "With the Inspector shown." .
+ui:dt-stat-members a c:Stat ; c:label "Change-log members" ; c:value 200 ;
+    c:help "Retained by the LDES view's policy." .
+ui:dt-stat-runs a c:Stat ; c:label "Rule runs per toggle" ; c:value 3 ; c:delta 0 ;
+    c:help "The same after 300 more items." .
+ui:dt-stat-bundle a c:Stat ; c:label "Single-file build" ; c:value 6.1 ; c:unit "MB" ;
+    c:delta 4.2 ; c:deltaUnit "%" ; c:lowerIsBetter true ; c:help "dist-single/semblance.html" .
+ui:dt-stats a c:Flippable ; c:front ui:dt-stats-spec .
+ui:dt-stats-spec a c:Specimen ; c:label "Stat" ;
+    c:help "A key figure with its unit and a signed change. The trend is toned good or bad; c:lowerIsBetter flips which, for costs like latency or size." ;
+    c:children ( ui:dt-stat-toggle ui:dt-stat-members ui:dt-stat-runs ui:dt-stat-bundle ) .
+
+# --- Tree: the component class hierarchy ----------------------------------------------------------
+
+ui:browsing a owl:ObjectProperty ; rdfs:label "browsing"@en .
+ui:dt-browse ui:browsing c:NavList .
+
+ui:dt-tree-crumbs a c:Breadcrumbs ; c:label "Class path" ;
+    c:controls ui:dt-browse ; c:property ui:browsing ; c:parentProperty rdfs:subClassOf .
+ui:dt-tree-classes a c:Tree ; c:label "Component classes" ;
+    c:of sem:Component ; c:parentProperty rdfs:subClassOf ; c:detailProperty sem:slug ;
+    c:expandedNode sem:Component , c:Segmented ;
+    c:controls ui:dt-browse ; c:property ui:browsing .
+ui:dt-tree-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-tree-crumbs ui:dt-tree-classes ) .
+ui:dt-tree a c:Flippable ; c:front ui:dt-tree-spec .
+ui:dt-tree-spec a c:Specimen ; c:label "Tree" ;
+    c:help "Every component class in the project, under sem:Component: a node's children are the classes that are rdfs:subClassOf it. The twisty opens a node (c:expandedNode on the tree); a label selects it, and the breadcrumbs above follow the selection and navigate back up." ;
+    c:children ( ui:dt-tree-col ) .
+
+# --- DescriptionList ------------------------------------------------------------------------------
+
+ui:dt-dl-class a c:DescriptionList ; c:of c:Table ; c:fields ( sem:slug rdfs:subClassOf rdfs:comment ) .
+ui:dt-dl-item-store c:label "Store" ; c:value "Oxigraph (SPARQL), N3.js fallback" .
+ui:dt-dl-item-strata c:label "Strata" ; c:value "0 components · 10 a11y · 20 style · 95 source" .
+ui:dt-dl-item-log c:label "Change log" ; c:value "LDES, latest 200 members" .
+ui:dt-dl-item-ids c:label "Identity" ; c:value "<focus>/~<local>, never blank nodes" .
+ui:dt-dl-explicit a c:DescriptionList ; c:items ( ui:dt-dl-item-store ui:dt-dl-item-strata ui:dt-dl-item-log ui:dt-dl-item-ids ) .
+ui:dt-dl a c:Flippable ; c:front ui:dt-dl-spec .
+ui:dt-dl-spec a c:Specimen ; c:label "Description list" ;
+    c:help "Key / value pairs: the values of chosen properties on a node (here the class c:Table itself), or explicit items." ;
+    c:children ( ui:dt-dl-class ui:dt-dl-explicit ) .
+
+# --- Avatar and AvatarGroup -----------------------------------------------------------------------
+
+ui:dt-av-ada a c:Avatar ; c:label "Ada Lovelace" ; sty:size sty:Small .
+ui:dt-av-tim a c:Avatar ; c:label "Tim Berners-Lee" ; sty:size sty:Medium .
+ui:dt-av-grace a c:Avatar ; c:label "Grace Hopper" ; sty:size sty:Large .
+ui:dt-av-image a c:Avatar ; c:label "Semblance" ; sty:size sty:Large ;
+    c:image "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cf6'/%3E%3Cstop offset='1' stop-color='%232a78d6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' fill='url(%23g)'/%3E%3Ccircle cx='14' cy='15' r='4' fill='white'/%3E%3Ccircle cx='27' cy='25' r='4' fill='white'/%3E%3Cpath d='M14 15L27 25' stroke='white' stroke-width='2'/%3E%3C/svg%3E" .
+ui:dt-av-1 a c:Avatar ; c:label "Alan Kay" .
+ui:dt-av-2 a c:Avatar ; c:label "Ted Nelson" .
+ui:dt-av-3 a c:Avatar ; c:label "Douglas Engelbart" .
+ui:dt-av-4 a c:Avatar ; c:label "Vannevar Bush" .
+ui:dt-av-5 a c:Avatar ; c:label "Ivan Sutherland" .
+ui:dt-av-6 a c:Avatar ; c:label "Adele Goldberg" .
+ui:dt-av-7 a c:Avatar ; c:label "Barbara Liskov" .
+ui:dt-av-group a c:AvatarGroup ; c:label "Reviewers" ; c:max 4 ;
+    c:children ( ui:dt-av-1 ui:dt-av-2 ui:dt-av-3 ui:dt-av-4 ui:dt-av-5 ui:dt-av-6 ui:dt-av-7 ) .
+ui:dt-avatars a c:Flippable ; c:front ui:dt-avatars-spec .
+ui:dt-avatars-spec a c:Specimen ; c:label "Avatar" ;
+    c:help "Initials on a hue derived from the label (the same name always gets the same color), or an image; sized by sty:size. A group overlaps them and counts the rest past c:max." ;
+    c:children ( ui:dt-av-ada ui:dt-av-tim ui:dt-av-grace ui:dt-av-image ui:dt-av-group ) .
+
+# --- Timeline: the change log -------------------------------------------------------------------
+
+ui:dt-timeline-log a c:Timeline ; c:label "Recent events" ; c:of beh:ChangeLog ; c:limit 6 ;
+    c:emptyText "No events yet: sort the table or open the tree, and they appear here." .
+ui:dt-timeline a c:Flippable ; c:front ui:dt-timeline-spec .
+ui:dt-timeline-spec a c:Specimen ; c:label "Timeline" ;
+    c:help "The newest members of the change-log LDES, read from its head (beh:latest, then beh:previous): what happened, to which component, when, and the size of the change. Members are immutable, so each is rendered once." ;
+    c:children ( ui:dt-timeline-log ) .

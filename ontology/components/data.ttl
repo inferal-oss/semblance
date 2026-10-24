@@ -10,3 +10,147 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Data components (DESIGN.md §3): Table, DescriptionList, Stat, Avatar, Timeline and Tree.
+
+# Shared by the data components.
+# c:items (an rdf:List of entries) is shared with the action and disclosure components.
+c:parentProperty a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment "Hierarchy link: a node's parents are its values of this property, so its children are the subjects that point at it (e.g. rdfs:subClassOf)."@en .
+
+# --- Table: rows from a SELECT, columns declared -----------------------------------------------
+# The rows are the solutions of c:query (a sem:View: sem:select). Columns are c:Column nodes
+# naming a variable. Sorting is graph state on the table (c:sortColumn, c:sortDescending),
+# written by a reaction when a header is clicked; the rule sorts the selected rows. A row's
+# elements are keyed by its content, so re-sorting moves rows without re-rendering them.
+
+c:Table a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Rows of a SPARQL SELECT (c:query, a sem:View with sem:select) under declared columns
+(c:tableColumns, an rdf:List of c:Column). Headers sort: clicking one writes c:sortColumn (and toggles
+c:sortDescending on a second click). c:label names the table; c:emptyText shows when there are no rows;
+c:dataset names a node whose changes mean the rows changed."""@en ;
+    sem:slug "table" .
+c:query a owl:ObjectProperty ; rdfs:subPropertyOf c:dataQuery ; rdfs:range sem:View ;
+    rdfs:comment "The SELECT whose solutions are the rows (sem:select)."@en .
+c:tableColumns a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range rdf:List ;
+    rdfs:comment "The columns, in order (c:Column nodes). Not c:columns, which is a c:Grid's column count."@en .
+c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format and c:unit."@en .
+c:variable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:comment "Name of a SELECT variable, without the '?'."@en .
+c:align a owl:DatatypeProperty ; rdfs:domain c:Column ;
+    rdfs:comment "\"end\" aligns the column's cells to the end (numbers); \"start\" (default) or \"center\"."@en .
+c:format a owl:DatatypeProperty ; rdfs:domain c:Column ;
+    rdfs:comment "How cells are written: \"number\" (grouped), \"decimal\" (2 places), \"percent\" (of a fraction), \"code\" (monospace), \"time\" (an xsd:dateTime's clock time). IRIs show their label."@en .
+c:sortColumn a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range c:Column ; rdfs:comment "The column the rows are sorted by."@en .
+c:sortDescending a owl:DatatypeProperty ; rdfs:domain c:Table ; rdfs:range xsd:boolean .
+c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column that activating it sorts by."@en .
+
+c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:follows c:dataset .
+c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .
+
+c:TableSort a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Table ;
+    beh:deletes """CONSTRUCT { $this c:sortColumn ?old . $this c:sortDescending ?desc }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
+        { $this c:sortColumn ?old } UNION { $this c:sortDescending ?desc } }""" ;
+    beh:inserts """CONSTRUCT { $this c:sortColumn ?col ; c:sortDescending ?desc }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
+        BIND(EXISTS { $this c:sortColumn ?col . FILTER NOT EXISTS { $this c:sortDescending true } } AS ?desc) }""" ;
+    sem:function "data:table-sort" .
+
+# --- DescriptionList: key / value pairs -----------------------------------------------------------
+
+c:DescriptionList a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Key / value pairs as a <dl>: the values of c:fields (properties, labelled by their
+rdfs:label, with their c:unit) on c:of, or explicit c:items (each a c:label and a c:value)."""@en ;
+    sem:slug "description-list" .
+c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem:stratum 0 .
+c:DescriptionListRendering-fn a sem:Rule ; sem:implements c:DescriptionListRendering ; sem:function "data:description-list" .
+
+# --- Stat: a KPI tile -------------------------------------------------------------------------------
+
+c:Stat a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A key figure: c:label, c:value (numbers are grouped) with c:unit, a signed change
+(c:delta, with c:deltaUnit) shown as a trend arrow toned good or bad (c:lowerIsBetter flips which),
+and c:help."""@en ;
+    sem:slug "stat" .
+c:delta a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:decimal ; rdfs:comment "Signed change since the previous period."@en .
+c:deltaUnit a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:comment "Unit of c:delta (e.g. \"%\")."@en .
+c:lowerIsBetter a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:boolean ;
+    rdfs:comment "A falling value is good news (latency, errors): the trend's tone flips."@en .
+c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 .
+c:StatRendering-fn a sem:Rule ; sem:implements c:StatRendering ; sem:function "data:stat" .
+
+# --- Avatar and AvatarGroup ---------------------------------------------------------------------
+
+c:Avatar a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A person or thing as a round tile: c:image (a URL) or the initials of c:label on a
+background whose hue is derived from the label (the same label always gets the same hue). Sized by sty:size."""@en ;
+    sem:slug "avatar" .
+c:image a owl:DatatypeProperty ; rdfs:range xsd:anyURI ; rdfs:comment "URL of an image."@en .
+c:AvatarRendering a sem:Rendering ; sem:targets c:Avatar ; sem:stratum 0 .
+c:AvatarRendering-fn a sem:Rule ; sem:implements c:AvatarRendering ; sem:function "data:avatar" .
+
+c:AvatarGroup a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Overlapping avatars (c:children); past c:max, the rest are counted in a \"+N\" tile."@en ;
+    sem:slug "avatar-group" .
+c:AvatarGroupRendering a sem:Rendering ; sem:targets c:AvatarGroup ; sem:stratum 0 .
+c:AvatarGroupRendering-fn a sem:Rule ; sem:implements c:AvatarGroupRendering ; sem:function "data:avatar-group" .
+
+# --- Timeline: the newest members of an event stream ------------------------------------------------
+# Read from the stream's head (beh:latest, then beh:previous), c:limit steps. One c:TimelineItem
+# is minted per member and keyed by it; members are immutable, so each is rendered once.
+
+c:Timeline a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A vertical list of the newest events of a stream (c:of an ldes:EventStream that names its
+head, beh:latest / beh:previous), newest first, at most c:limit (default 8): when (beh:at), what (the
+event's class) and on what (beh:target)."""@en ;
+    sem:slug "timeline" .
+c:TimelineItem a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal: one event (c:of) of a c:Timeline."@en ;
+    sem:slug "timeline-item" .
+c:TimelineRendering a sem:Rendering ; sem:targets c:Timeline ; sem:stratum 0 .
+c:TimelineRendering-fn a sem:Rule ; sem:implements c:TimelineRendering ; sem:function "data:timeline" .
+c:TimelineItemRendering a sem:Rendering ; sem:targets c:TimelineItem ; sem:stratum 0 .
+c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ; sem:function "data:timeline-item" .
+
+# --- Tree: an expandable hierarchy ----------------------------------------------------------------
+# The tree starts at c:of; a node's children are the subjects whose c:parentProperty is the node
+# (for rdfs:subClassOf: its direct subclasses). Which nodes are open is graph state on the tree
+# (c:expandedNode), toggled by a reaction on the twisty. With c:controls and c:property, a node's label
+# selects it: clicking writes `<controls> <property> <node>`, and that node is aria-selected.
+
+c:Tree a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """An expandable tree (role=tree) of a hierarchy: c:of is the root; children are the subjects
+pointing at a node through c:parentProperty. c:expandedNode lists the open nodes; the twisty toggles one.
+c:detailProperty is shown beside each label. With c:controls and c:property, clicking a label selects it."""@en ;
+    sem:slug "tree" .
+c:expandedNode a owl:ObjectProperty ; rdfs:domain c:Tree ;
+    rdfs:comment "A node whose children are shown (c:expanded is a disclosure's own boolean)."@en .
+c:detailProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A property whose value is shown beside each node's label."@en .
+c:expands a owl:ObjectProperty ; rdfs:comment "On a rendered twisty: the tree node that activating it opens or closes."@en .
+
+c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 .
+c:TreeRendering-fn a sem:Rule ; sem:implements c:TreeRendering ; sem:function "data:tree" .
+
+c:TreeToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Tree ;
+    beh:deletes """CONSTRUCT { $this c:expandedNode ?node }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?node . $this c:expandedNode ?node }""" ;
+    beh:inserts """CONSTRUCT { $this c:expandedNode ?node }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?node . FILTER NOT EXISTS { $this c:expandedNode ?node } }""" ;
+    sem:function "data:tree-toggle" .
+
+c:TreeSelect a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Tree ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?node } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p }""" ;
+    sem:function "segmented:select" .

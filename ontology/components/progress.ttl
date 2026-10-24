@@ -12,7 +12,7 @@ c:Progress a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "A determinate progress bar with a status label (c:value of c:max)."@en ;
     sem:slug "progress" .
-c:max a owl:DatatypeProperty ; rdfs:domain c:Progress ; rdfs:range xsd:decimal .
+c:max a owl:DatatypeProperty ; rdfs:range xsd:decimal ; rdfs:comment "An upper bound (a progress bar's total, how many avatars a group shows)."@en .
 c:active a owl:DatatypeProperty ; rdfs:domain c:Progress ; rdfs:range xsd:boolean .
 
 c:ProgressRendering a sem:Rendering ;

@@ -19,3 +19,64 @@ c:NavList a owl:Class ;
     rdfs:subClassOf c:Segmented ;
     rdfs:comment "Vertical navigation: picks one value of c:property on c:controls, from the property's range."@en ;
     sem:slug "nav-list" .
+
+# --- Breadcrumbs: where you are in a hierarchy ----------------------------------------------------
+# The trail is c:items (nodes, labelled), or derived: from an end node up through c:parentProperty
+# (`?node <parentProperty> ?parent`) to a node with no parent. The end node is c:of, or the
+# current value of c:property on c:controls. With c:controls and c:property, an ancestor is a
+# button that writes `<controls> <property> <ancestor>` (the c:Segmented reaction). The last crumb
+# is the current page (aria-current=page).
+
+c:Breadcrumbs a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A trail of nodes in a <nav> (c:label names it, default "Breadcrumb"): c:items, or the path
+from the root down to c:of (or to c:property of c:controls) through c:parentProperty. The last is
+aria-current=page. With c:controls and c:property, earlier crumbs navigate there."""@en ;
+    sem:slug "breadcrumbs" .
+c:BreadcrumbsRendering a sem:Rendering ; sem:targets c:Breadcrumbs ; sem:stratum 0 .
+c:BreadcrumbsRendering-fn a sem:Rule ; sem:implements c:BreadcrumbsRendering ; sem:function "nav:breadcrumbs" .
+c:BreadcrumbsSelect a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Breadcrumbs ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?node } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p }""" ;
+    sem:function "segmented:select" .
+
+# --- Pagination ------------------------------------------------------------------------------------
+
+c:Pagination a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Pages 1 to c:pages, the current one c:page: previous / next and numbered buttons, with
+an ellipsis for long runs. Clicking writes c:page."""@en ;
+    sem:slug "pagination" .
+c:page a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "The current page (1-based)."@en .
+c:pages a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "How many pages there are."@en .
+c:goesTo a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "On a rendered button: the page that activating it shows."@en .
+c:PaginationRendering a sem:Rendering ; sem:targets c:Pagination ; sem:stratum 0 .
+c:PaginationRendering-fn a sem:Rule ; sem:implements c:PaginationRendering ; sem:function "nav:pagination" .
+c:PaginationGo a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Pagination ;
+    beh:deletes """CONSTRUCT { $this c:page ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:goesTo ?page . $this c:page ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:page ?page } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:goesTo ?page }""" ;
+    sem:function "nav:pagination-go" .
+
+# --- Stepper ------------------------------------------------------------------------------------
+
+c:Stepper a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Progress through ordered steps (c:steps, an rdf:List of nodes with c:label and c:help):
+steps before c:current are complete, c:current is current (aria-current=step), the rest upcoming.
+With c:navigable true, clicking a step makes it current."""@en ;
+    sem:slug "stepper" .
+c:steps a owl:ObjectProperty ; rdfs:domain c:Stepper ; rdfs:range rdf:List .
+c:current a owl:ObjectProperty ; rdfs:domain c:Stepper ; rdfs:comment "The step being worked on."@en .
+c:navigable a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Steps can be visited by clicking them."@en .
+c:StepperRendering a sem:Rendering ; sem:targets c:Stepper ; sem:stratum 0 .
+c:StepperRendering-fn a sem:Rule ; sem:implements c:StepperRendering ; sem:function "nav:stepper" .
+c:StepperGo a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Stepper ;
+    beh:deletes """CONSTRUCT { $this c:current ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?step . $this c:navigable true ; c:current ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:current ?step } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?step . $this c:navigable true }""" ;
+    sem:function "nav:stepper-go" .

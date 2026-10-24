@@ -342,7 +342,7 @@ function dataQueriesOf(ctx: RuleContext, component: Term): Term[] {
   const visit = (instance: Term) => {
     if (visited.has(instance.value)) return
     visited.add(instance.value)
-    for (const p of [C.dataQuery, C.view]) for (const q of ctx.objects(instance, p)) out.set(q.value, q)
+    for (const p of [C.dataQuery, C.view, NS.c + 'query']) for (const q of ctx.objects(instance, p)) out.set(q.value, q)
     for (const q of rdfList(ctx, ctx.object(instance, C.queries))) out.set(q.value, q)
     for (const cls of ctx.objects(instance, C.judgementClass)) for (const j of ctx.match(null, RDF_TYPE, cls)) out.set(j.subject.value, j.subject)
     const root = ctx.match(null, SEM.renders, instance)[0]?.subject
