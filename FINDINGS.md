@@ -114,3 +114,32 @@ the time per event, to stay flat. It found leaks and one store problem:
   11–12 ms per event, including the 8 ms idle budget, across 5,000 events. The
   pure-Oxigraph configuration still degrades, which is a reason to keep it as a
   comparison only.
+
+## Where interaction time went next
+
+Measured in the demo (Chrome, hybrid store, functions preferred):
+
+- **A todo toggle took 30 ms** once persistence and the gallery were loaded.
+  The event bus looked up reactions by scanning every reaction and every class
+  on each event (29,000 triples matched), and persistence re-read its policies
+  on every input change. Both now cache what they read and drop the cache when
+  a reaction, class or policy changes. The toggle is back to about 5 ms.
+- **Warming everything** in idle time grew the store to 74,000 triples and the
+  heap to about 160 MB. Warmth is now declared (`sem:warm`): the Playground and
+  Performance pages are eager, the gallery is `sem:OnIntent`. The idle store
+  is 29,000 triples.
+- **Switching gallery pages** costs about 350 ms cold. Pointing at the
+  navigation item first preloads the page in idle slices, and the click then
+  costs 15–25 ms.
+- **SPARQL against functions.** Rendering a page back in costs 1.5 s with the
+  SPARQL implementations and 134 ms with the function ones (they render the
+  same HTML, which the tests check). Bulk evaluation (one query with `VALUES`
+  for many foci) closes part of the gap. The demo prefers functions; the Rules
+  menu switches.
+- **A language switch** re-ran every rule that produced text. Rules that read
+  the viewer's language are now traced as reading it (`readsLanguage`), and a
+  language change re-runs only those.
+- **Bulk SPARQL broke ordering** at first: rows that relate two components'
+  children (`ord:precedes` between nodes minted under different foci) cannot be
+  split per focus. Rules whose templates are not attributable to `$this` now
+  run per focus; the check is static, on the query text.

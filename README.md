@@ -65,6 +65,16 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 - **Warmth.** In idle time the host evaluates hidden parts ahead of time, but
   only under a component that declares `sem:warm sem:Eager` (inherited down the
   rendered tree); everything else is lazy, evaluated when first shown.
+  `sem:OnIntent` is in between: pointing at or focusing a choice (a navigation
+  item, a tab) evaluates what it would show, and builds its DOM hidden, before
+  the click. What a choice would show is itself graph data: `sem:IntentPreview`
+  queries (`src/intent.ts`).
+- **Bulk SPARQL.** A rule pending for several foci runs once, with
+  `VALUES ?this { … }`, when its template is *attributable*: every triple it
+  constructs has `$this`, or an IRI minted from it, as subject, so the rows can
+  be split back per focus. Other rules run per focus. `sem:requires` skips a
+  rule for a focus without the given property; `sem:inputOnly` keeps a layer
+  rule from being re-triggered by derived data.
 - **Ordering** uses RDF/HTML flat ordering (`hasChild` plus `ord:precedes` /
   `ord:immediatelyPrecedes`), which CONSTRUCT can emit. Ambiguity is an error.
   Siblings placed member-wise carry `sem:orderKey` and are sorted instead.
@@ -111,6 +121,10 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
   Paper, Terminal, Blueprint, Sunset; contrast and motion compose with them.
+- **Network capture**: a host effect (`src/network.ts`) records the page's own
+  fetches, WebSockets and the events and spans it reports as members of
+  `net:Capture`, a bounded LDES in the network graph
+  (`ontology/domain/network.ttl`, aligned with the W3C HTTP vocabulary).
 - **Persistence**: `per:Policy` nodes say what to remember, where (this tab,
   this device, the browser database) and whether; a host effect restores them
   before the first render and writes them back; `per:StateLog` records every
@@ -159,6 +173,12 @@ A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 page, so it survives navigation. Dock and close follow the provenance back.
 Dialogs, drawers and toast regions are hosted there too.
 
+The Playground's **Query** tab is a SPARQL workbench made of components
+(`ontology/components/workbench.ttl`): an editor whose highlighting and
+completions come from the graph (keywords, functions and every prefixed term the
+store knows), sample queries, and results as a table, a graph or Turtle. Like
+any tab it can be detached into a window, and its state is remembered.
+
 ### Performance as data
 Benchmark cells become `sosa:Observation`s. Every chart and table on the
 Performance page is a `perf:View` (a SPARQL SELECT), and every insight is a
@@ -194,6 +214,7 @@ unpurged deletions and how the hybrid store works around them.
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
+| `ontology/domain/` | domain vocabularies the demo views (network activity) |
 | `ontology/vendor/` | RDF/HTML vocabulary snapshot (`npm run gen:vocab` regenerates `src/vocab`) |
 | `src/engine/` | rule registry and incremental engine |
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
@@ -201,6 +222,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, keyboard, status, l10n and announcement layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
+| `src/persistence.ts`, `src/intent.ts`, `src/network.ts` | host effects: remembering state, intent preloading, network capture |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 
