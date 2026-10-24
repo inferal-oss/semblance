@@ -4,8 +4,8 @@
 (func $init
   (global.set $top (global.get $HEAP))
   (global.set $errbuf (call $alloc (i32.const 160)))
-  (global.set $qb_cap (i32.const 256))
-  (global.set $qb (call $alloc (i32.const 256)))
+  (call $init_load)
+  (call $init_knowns)
   (call $init_terms)
   (call $init_store))
 
@@ -131,9 +131,8 @@
 (func (export "quad_count") (result i32) (global.get $qn))
 
 (func (export "load") (param $fmt i32) (param $len i32) (param $base_len i32) (param $graph i32) (result i32)
-  (if (i32.lt_u (i32.sub (local.get $fmt) (i32.const 3)) (i32.const 2)) (then (return (call $ni))))
-  (if (i32.gt_u (i32.sub (local.get $fmt) (i32.const 1)) (i32.const 1)) (then (return (call $fail (@str "unknown format")))))
-  (call $load (local.get $fmt) (local.get $len) (local.get $graph)))
+  (if (i32.gt_u (i32.sub (local.get $fmt) (i32.const 1)) (i32.const 3)) (then (return (call $fail (@str "unknown format")))))
+  (call $load (local.get $fmt) (local.get $len) (local.get $base_len) (local.get $graph)))
 
 (func (export "collect") (result i32) (i32.const 0))
 
@@ -145,6 +144,7 @@
 (func (export "query_var_ptr") (param i32 i32) (result i32) (call $ni))
 (func (export "query_var_len") (param i32 i32) (result i32) (call $ni))
 (func (export "bind") (param i32 i32 i32) (result i32) (call $ni))
+(func (export "bind_values") (param i32 i32 i32) (result i32) (call $ni))
 (func (export "run") (param i32 i32) (result i32) (call $ni))
 (func (export "release") (param i32) (result i32) (call $ni))
 (func (export "parse_update") (param i32 i32) (result i32) (call $ni))

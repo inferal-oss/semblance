@@ -18,9 +18,9 @@
       "skip": 481
     },
     "rdf12": {
-      "pass": 218,
+      "pass": 1055,
       "fail": 0,
-      "skip": 919
+      "skip": 82
     }
   },
   "failing": {}

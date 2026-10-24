@@ -1,8 +1,9 @@
 // Assembles the hand-written engine: `npx tsx rdf-engine/wat/build.ts <out.wasm>`.
 //
 // The sources are plain WAT bodies concatenated into one module, in the order of
-// FILES. The macro layer is three textual expansions, nothing more:
+// FILES. The macro layer is four textual expansions, nothing more:
 //
+//   (@define NAME n)  a named constant; (i32.const NAME) then stands for (i32.const n)
 //   (i32.const 'c')   a character literal: the code of one ASCII character
 //   (@str "text")     a static string: expands to (i32.const ptr) (i32.const len)
 //                     and lands, deduplicated, in one data segment
@@ -12,7 +13,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 
-const FILES = ['alloc.wat', 'terms.wat', 'store.wat', 'ntriples.wat', 'exports.wat']
+const FILES = ['alloc.wat', 'terms.wat', 'store.wat', 'lex.wat', 'iri.wat', 'ntriples.wat', 'turtle.wat', 'load.wat', 'exports.wat']
 // Static data starts after the allocator's free-list heads (see alloc.wat).
 const DATA = 272
 
@@ -21,6 +22,13 @@ const out = process.argv[2]
 if (!out) throw new Error('usage: build.ts <output.wasm>')
 
 let src = FILES.map((f) => `;; ---- ${f}\n` + readFileSync(new URL(f, here), 'utf8')).join('\n')
+
+const defines = new Map<string, string>()
+src = src.replace(/\(@define ([A-Z_][A-Z0-9_]*) (-?\w+)\)/g, (_, name: string, value: string) => (defines.set(name, value), ''))
+src = src.replace(/\(i32\.const ([A-Z_][A-Z0-9_]*)\)/g, (m, name: string) => {
+  if (!defines.has(name)) throw new Error('undefined constant ' + name)
+  return `(i32.const ${defines.get(name)})`
+})
 
 src = src.replace(/\(i32\.const '(\\.|[^'\\])'\)/g, (_, c: string) => {
   const ch = c.length === 2 ? ({ n: '\n', r: '\r', t: '\t' } as Record<string, string>)[c[1]!] ?? c[1]! : c
