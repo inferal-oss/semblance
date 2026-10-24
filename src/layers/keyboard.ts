@@ -21,7 +21,8 @@ export function comboOf(e: KeyboardEvent, apple: boolean): string {
   if (e.altKey) parts.push('alt')
   if (e.shiftKey) parts.push('shift')
   if (!apple && e.metaKey) parts.push('meta')
-  parts.push(e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase())
+  // The space bar is "space" (its key, " ", would be trimmed away).
+  parts.push(e.key === ' ' ? 'space' : e.key.toLowerCase())
   return normalizeShortcut(parts.join('+'))
 }
 

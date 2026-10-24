@@ -181,8 +181,8 @@ ORDER BY ?priority""" .
 
 # --- remembered state ---------------------------------------------------------------------------------------
 # The editor's text and caret, the query last run (both forms, so a restored CONSTRUCT replaces a
-# SELECT: an empty text is "none"), the results tab, and whether the Query tab is a
-# window, with its geometry. For this tab only.
+# SELECT: an empty text is "none"), the results tab, the node selected in the graph, and whether
+# the Query tab is a window, with its geometry. For this tab only.
 
 ui:rememberWorkbench a per:Policy ; per:scope per:Session ;
     rdfs:label "The SPARQL workbench" , "Робоче місце SPARQL"@uk , "Die SPARQL-Werkbank"@de , "منضدة SPARQL"@ar ;
@@ -191,6 +191,7 @@ CONSTRUCT {
   ui:queryEditor c:value ?text ; c:caret ?caret .
   ui:currentQuery sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
   ui:queryResults c:selected ?view .
+  ui:queryGraph c:selectedTerm ?node .
   ui:queryTab c:detached ?detached .
   ?window c:x ?x ; c:y ?y ; c:width ?w ; c:height ?h ; c:windowState ?state .
 }
@@ -201,6 +202,7 @@ WHERE {
   UNION { OPTIONAL { ui:currentQuery sem:construct ?c } BIND(COALESCE(?c, "") AS ?construct) }
   UNION { ui:currentQuery c:runCount ?runs }
   UNION { ui:queryResults c:selected ?view }
+  UNION { ui:queryGraph c:selectedTerm ?node }
   UNION { ui:queryTab c:detached ?detached }
   UNION { ?window prov:wasDerivedFrom ui:queryTab . { ?window c:x ?x } UNION { ?window c:y ?y } UNION { ?window c:width ?w } UNION { ?window c:height ?h } UNION { ?window c:windowState ?state } }
 }""" .

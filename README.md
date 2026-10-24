@@ -176,7 +176,10 @@ Dialogs, drawers and toast regions are hosted there too.
 The Playground's **Query** tab is a SPARQL workbench made of components
 (`ontology/components/workbench.ttl`): an editor whose highlighting and
 completions come from the graph (keywords, functions and every prefixed term the
-store knows), sample queries, and results as a table, a graph or Turtle. Like
+store knows), sample queries, and results as a table, a graph or Turtle. Selecting
+a node of the graph (`c:selectedTerm`, by click or Enter) highlights it and its
+neighbourhood and dims the rest: a rule derives each mark's `c:Salience` from the
+rendered links, so a selection re-runs that rule only, not the query. Like
 any tab it can be detached into a window, and its state is remembered.
 
 ### Performance as data

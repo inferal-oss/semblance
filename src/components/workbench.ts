@@ -34,6 +34,15 @@ const W = {
   actions: c + 'actions',
   caretEvent: NS.beh + 'caret',
   key: NS.beh + 'key',
+  selectedTerm: c + 'selectedTerm',
+  neighbourhood: c + 'neighbourhood',
+  term: c + 'term',
+  edgeFrom: c + 'edgeFrom',
+  edgeTo: c + 'edgeTo',
+  salience: c + 'salience',
+  Focused: c + 'Focused',
+  Neighbour: c + 'Neighbour',
+  Dimmed: c + 'Dimmed',
 } as const
 
 const P = {
@@ -53,6 +62,10 @@ const P = {
   resultSet: c + 'ResultSetPhrase',
   ranSample: c + 'RanSamplePhrase',
   ranQuery: c + 'RanQueryPhrase',
+  graphHint: c + 'GraphHintPhrase',
+  graphSelection: c + 'GraphSelectionPhrase',
+  graphSelectionOne: c + 'GraphSelectionOnePhrase',
+  clearSelection: c + 'ClearSelectionPhrase',
 } as const
 
 const RS = 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#'
@@ -886,22 +899,31 @@ const graphview: FnRule = (ctx, focus) => {
           o.text(`${id}-label-text`, truncate(e.label, 22)),
         ]),
       )
-    marks.push(o.svg(id, 'G', { class: 'sem-link' }, parts))
+    const link = o.svg(id, 'G', { class: 'sem-link' }, parts)
+    // What the link joins, as data: the selection rule finds a node's neighbours through it.
+    o.t(link, W.edgeFrom, o.node(ids.get(e.from)!)).t(link, W.edgeTo, o.node(ids.get(e.to)!))
+    marks.push(link)
   })
-  for (const n of kept) {
+  kept.forEach((n, i) => {
     const id = ids.get(n.key)!
     const kind = n.term.termType === 'Literal' ? 'sem-literal' : n.term.termType === 'BlankNode' ? 'sem-bnode' : 'sem-iri'
     const dot = o.svg(`${id}-dot`, n.term.termType === 'Literal' ? 'Rect' : 'Circle', n.term.termType === 'Literal' ? { x: n.x - 6, y: n.y - 6, width: 12, height: 12, rx: 3, class: 'sem-dot' } : { cx: n.x, cy: n.y, r: 7, class: 'sem-dot' })
     o.tip(dot, n.term.termType === 'Literal' ? n.term.value : n.term.value)
-    marks.push(
-      o.svg(id, 'G', { class: `sem-node ${kind}` }, [
-        dot,
-        o.svg(`${id}-label`, 'Text', { x: n.x, y: n.y + 20, 'text-anchor': 'middle', class: 'sem-node-label' }, [o.text(`${id}-label-text`, n.label)]),
-      ]),
-    )
-  }
-  const svg = o.svg('plot', 'Svg', { viewBox: `0 0 ${VIEW_W} ${Math.max(160, height)}`, role: 'img', 'aria-label': size, class: 'sem-plot' }, marks)
-  const parts = [summary(o, size + (more ? ` · ${more}` : '')), o.el('canvas', 'Div', { class: 'sem-canvas' }, [svg])]
+    // A node is a toggle button (its aria-pressed is the selection rule's); one is in the tab order,
+    // and arrow keys move among them (key:navigation).
+    const mark = o.svg(id, 'G', { class: `sem-node ${kind}`, role: 'button', tabindex: i ? '-1' : '0', 'aria-label': truncate(display(ctx, n.term), 120) }, [
+      dot,
+      o.svg(`${id}-label`, 'Text', { x: n.x, y: n.y + 20, 'text-anchor': 'middle', class: 'sem-node-label' }, [o.text(`${id}-label-text`, n.label)]),
+    ])
+    // The term it shows (c:selectedTerm names one); a blank node is stood in for by its mark.
+    o.t(mark, W.term, n.term.termType === 'BlankNode' ? mark : n.term)
+    marks.push(mark)
+  })
+  const svg = o.svg('plot', 'Svg', { viewBox: `0 0 ${VIEW_W} ${Math.max(160, height)}`, role: 'group', 'aria-label': size, class: 'sem-plot' }, marks)
+  // The selection rule (c:ResultGraphSelection) fills this line: a hint, or the selected node and its connections.
+  const details = o.el('selection', 'P', { id: mint(focus.value, 'selection'), class: 'sem-selection' })
+  o.attr(details, 'aria-live', 'polite')
+  const parts = [summary(o, size + (more ? ` · ${more}` : '')), details, o.el('canvas', 'Div', { class: 'sem-canvas' }, [svg])]
   if (!labels) {
     const counts = new Map<string, number>()
     for (const e of edges) counts.set(e.label, (counts.get(e.label) ?? 0) + 1)
@@ -909,6 +931,66 @@ const graphview: FnRule = (ctx, focus) => {
     parts.splice(1, 0, o.el('legend', 'P', { class: 'sem-legend' }, [o.text('legend-text', legend)]))
   }
   o.renders(o.el('root', 'Div', {}, parts))
+  return o.quads
+}
+
+// --- results: a graph, its selection --------------------------------------------------------------------
+
+/**
+ * How salient each mark of a graph view is while a node is selected (c:selectedTerm): the node is
+ * focused, the nodes within c:neighbourhood links of it (1 to 3, default 1) and the links that reach
+ * them are neighbours, the rest is dimmed. It reads the rendering's marks (c:term, c:edgeFrom /
+ * c:edgeTo), never the query, so a selection costs only this rule. The SPARQL variant is
+ * c:ResultGraphSelection-sparql; both write the same triples.
+ */
+const graphSelection: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const plot = o.node('plot')
+  const details = o.node('selection')
+  if (!ctx.match(plot, RDF_TYPE, NS.svg + 'Svg').length || !ctx.match(details, RDF_TYPE, H.ns + 'P').length) return o.quads
+  const nodes: NamedNode[] = []
+  const edges: { mark: NamedNode; a: string; b: string }[] = []
+  for (const m of ctx.objects(plot, H.hasChild)) {
+    if (!named(m)) continue
+    if (ctx.object(m, W.term)) nodes.push(m)
+    const [a, b] = [ctx.object(m, W.edgeFrom), ctx.object(m, W.edgeTo)]
+    if (a && b) edges.push({ mark: m, a: a.value, b: b.value })
+  }
+  const term = ctx.object(focus, W.selectedTerm)
+  const selected = term && nodes.find((n) => ctx.objects(n, W.term).some((t) => t.equals(term)))
+  for (const n of nodes) o.attr(n, 'aria-pressed', String(n === selected))
+  if (!selected) {
+    o.children(details, [o.text('selection-text', say(ctx, P.graphHint, 'Select a node to highlight its connections: click it, or press Enter on it.'))])
+    return o.quads
+  }
+  const raw = num(ctx, focus, W.neighbourhood, 1)
+  const depth = raw <= 1 ? 1 : raw <= 2 ? 2 : 3
+  // Breadth first over the links, either way.
+  const next = new Map<string, string[]>()
+  for (const e of edges) next.set(e.a, [...(next.get(e.a) ?? []), e.b]), next.set(e.b, [...(next.get(e.b) ?? []), e.a])
+  const distance = new Map([[selected.value, 0]])
+  for (let ring = [selected.value], d = 1; d <= depth; d++) {
+    const out: string[] = []
+    for (const k of ring) for (const m of next.get(k) ?? []) if (!distance.has(m)) distance.set(m, d), out.push(m)
+    ring = out
+  }
+  const mark = (m: NamedNode, salience: string) => {
+    o.t(m, W.salience, ctx.nn(salience))
+    o.attr(m, 'data-sem-salience', str(ctx.object(salience, SEM.slug)) ?? '')
+  }
+  for (const n of nodes) mark(n, n === selected ? W.Focused : distance.has(n.value) ? W.Neighbour : W.Dimmed)
+  // A link is on the way when an end is nearer than the neighbourhood's edge.
+  for (const e of edges) mark(e.mark, Math.min(distance.get(e.a) ?? Infinity, distance.get(e.b) ?? Infinity) < depth ? W.Neighbour : W.Dimmed)
+  o.attr(selected, 'aria-describedby', details.value)
+  const count = edges.filter((e) => e.a === selected.value || e.b === selected.value).length
+  const name = str(ctx.object(o.node(selected.value.slice(focus.value.length + 2) + '-a-aria-label'), H.attributeValue)) ?? ''
+  const line =
+    count === 1
+      ? say(ctx, P.graphSelectionOne, '{name} — 1 connection', { name })
+      : say(ctx, P.graphSelection, '{name} — {n} connections', { name, n: count })
+  const clear = o.el('selection-clear', 'Button', { type: 'button', class: 'sem-clear' }, [o.text('selection-clear-text', '✕')])
+  o.attr(clear, 'aria-label', say(ctx, P.clearSelection, 'Clear the selection')).attr(clear, 'data-sem-escape', '')
+  o.children(details, [o.text('selection-text', line), clear])
   return o.quads
 }
 
@@ -990,6 +1072,7 @@ export const functions: Record<string, FnRule> = {
   'workbench:editor': editor,
   'workbench:table': table,
   'workbench:graph': graphview,
+  'workbench:graph-selection': graphSelection,
   'workbench:turtle': turtleview,
 }
 
@@ -1126,6 +1209,19 @@ const load: ReactionFn = (ctx) => {
   return { remove, add }
 }
 
+// Selecting in a graph view: the term of the node hit, or nothing (the selected node again, the background).
+const selectNode: ReactionFn = (ctx) => {
+  const hit = hitWith(ctx, W.term)
+  const old = own(ctx, ctx.target, W.selectedTerm)
+  const again = hit && old.some((q) => q.object.equals(hit.value))
+  return { remove: old, add: hit && !again ? [put(ctx, ctx.target, W.selectedTerm, hit.value)] : [] }
+}
+
+/** Enter or Space on a focused node does what a click on it does. */
+const selectNodeByKey: ReactionFn = (ctx) => (keyIs(ctx, 'enter', 'space') && hitWith(ctx, W.term) ? selectNode(ctx) : none())
+
+const clearNode: ReactionFn = (ctx) => (keyIs(ctx, 'escape') ? { remove: own(ctx, ctx.target, W.selectedTerm), add: [] } : none())
+
 export const reactions: Record<string, ReactionFn> = {
   'workbench:input': input,
   'workbench:click': click,
@@ -1136,4 +1232,7 @@ export const reactions: Record<string, ReactionFn> = {
   'workbench:pick': pick,
   'workbench:run': run,
   'workbench:load': load,
+  'workbench:select-node': selectNode,
+  'workbench:select-node-by-key': selectNodeByKey,
+  'workbench:clear-node': clearNode,
 }

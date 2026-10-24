@@ -387,11 +387,183 @@ c:ResultGraph a owl:Class ;
     rdfs:comment """The results as a node-link diagram: the triples of a CONSTRUCT, or of SELECT rows (?s ?p ?o,
 or each row's first value linked to the others by variable name). The best-connected nodes are
 shown (at most c:limit, default 40), laid out in layers when the graph is acyclic and narrow
-enough, else around its hub; nodes are prefixed names, edges are labelled by predicate."""@en ;
+enough, else around its hub; nodes are prefixed names, edges are labelled by predicate. Selecting a
+node (a click, or Enter or Space on it) highlights it and its connections and dims the rest; see
+c:selectedTerm."""@en ;
     sem:slug "result-graph" .
+# Not the selection: changing it must not run the query or lay the graph out again.
 c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ;
+    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount ;
     sem:functionOnly "It runs the query held in the data and computes a layout (trigonometry, layering by longest path), which SPARQL cannot do." .
 c:ResultGraphRendering-fn a sem:Rule ; sem:implements c:ResultGraphRendering ; sem:function "workbench:graph" .
+
+# --- selecting in the graph ----------------------------------------------------------------------------
+# The selection is graph state on the view (c:selectedTerm), changed by reactions. The rendering says
+# what its marks show: each node the term it stands for (c:term), each link the nodes it joins
+# (c:edgeFrom, c:edgeTo). A rule above it (c:ResultGraphSelection) derives from those how salient
+# every mark is, a c:Salience: the selected node is focused, the nodes within c:neighbourhood links
+# of it and the links that reach them are neighbours, the rest is dimmed. It also says so: the node's
+# aria-pressed, and a line naming the node and its connections. A selection re-runs that rule only.
+
+c:selectedTerm a rdf:Property ; rdfs:domain c:ResultGraph ;
+    rdfs:comment "The term of the selected node: an IRI or a literal, as the node's c:term (a blank node's stand-in is its mark). None: nothing is selected."@en .
+c:neighbourhood a owl:DatatypeProperty ; rdfs:domain c:ResultGraph ; rdfs:range xsd:integer ;
+    rdfs:comment "How many links away from the selected node its neighbours are (1 to 3, default 1)."@en .
+c:term a rdf:Property ;
+    rdfs:comment "On a rendered node of a c:ResultGraph: the term it shows. Rules mint no blank nodes, so a blank node's mark stands in for it."@en .
+c:edgeFrom a owl:ObjectProperty ; rdfs:comment "On a rendered link of a c:ResultGraph: the node mark it starts at."@en .
+c:edgeTo a owl:ObjectProperty ; rdfs:comment "On a rendered link of a c:ResultGraph: the node mark it points to."@en .
+c:salience a owl:ObjectProperty ; rdfs:range c:Salience ;
+    rdfs:comment "On a rendered mark: how it stands out while a node is selected. Shown as data-sem-salience, the salience's sem:slug."@en .
+
+c:Salience a owl:Class ; rdfs:comment "How much a mark of a view stands out while something in it is selected."@en .
+c:Focused a c:Salience ; sem:slug "focused" ; rdfs:label "focused"@en ; rdfs:comment "The selected node."@en .
+c:Neighbour a c:Salience ; sem:slug "neighbour" ; rdfs:label "neighbour"@en ;
+    rdfs:comment "Connected to the selection: a node within c:neighbourhood links of it, or a link on the way there."@en .
+c:Dimmed a c:Salience ; sem:slug "dimmed" ; rdfs:label "dimmed"@en ; rdfs:comment "Not connected to the selection."@en .
+
+# Stratum 40, above the tooltip layer (30), which re-runs for any change under a focus below it.
+c:ResultGraphSelection a sem:Rendering ; sem:targets c:ResultGraph ; sem:modality mod:Screen ; sem:stratum 40 ;
+    sem:readsMinted true ; sem:watches rdf:type , c:selectedTerm , c:neighbourhood .
+c:ResultGraphSelection-fn a sem:Rule ; sem:implements c:ResultGraphSelection ; sem:function "workbench:graph-selection" .
+
+# A step is one link, either way: node <-edgeFrom- link -edgeTo-> node, or back. SPARQL has no
+# bounded repetition, so each distance (1 to 3) is its own fixed-length path, asked only when the
+# neighbourhood reaches it (IF is lazy). Not S? segments: a zero-length step with an unbound end
+# matches every term in the store. The marks are the rendered view's, so paths stay within it.
+# LATERAL lets every branch see the selected node.
+c:ResultGraphSelection-sparql a sem:Rule ;
+    sem:implements c:ResultGraphSelection ;
+    sem:construct """
+CONSTRUCT {
+  ?node rdfhtml:attribute ?pressed .
+  ?pressed a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?isPressed .
+  ?mark c:salience ?salience ; rdfhtml:attribute ?shown .
+  ?shown a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-salience" ; rdfhtml:attributeValue ?slug .
+  ?described rdfhtml:attribute ?describedBy .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?detailsId .
+  ?details rdfhtml:hasChild ?line , ?clear .
+  ?line a rdfhtml:Text ; rdfhtml:data ?text ; ord:immediatelyPrecedes ?clear .
+  ?clear a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-clear" ; rdfhtml:hasChild ?clearText ; rdfhtml:attribute ?clearLabel , ?escape .
+  ?clearText a rdfhtml:Text ; rdfhtml:data "✕" .
+  ?clearLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?clearWord .
+  ?escape a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-escape" ; rdfhtml:attributeValue "" .
+}
+WHERE {
+  $this a c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~plot")) AS ?plot)
+  BIND(IRI(CONCAT(STR($this), "/~selection")) AS ?details)
+  ?plot a svg:Svg . ?details a rdfhtml:P .
+  # Every variable LATERAL passes in is bound (an unbound one would be free inside): with nothing
+  # selected, ?sel is $this, which is no mark.
+  OPTIONAL { $this c:selectedTerm ?term . ?plot rdfhtml:hasChild ?chosen . ?chosen c:term ?term }
+  BIND(BOUND(?chosen) AS ?selected)
+  BIND(COALESCE(?chosen, $this) AS ?sel)
+  OPTIONAL { { SELECT ?sel (COUNT(?link) AS ?count) WHERE { ?link c:edgeFrom|c:edgeTo ?sel } GROUP BY ?sel } }
+  BIND(COALESCE(?count, 0) AS ?links)
+  OPTIONAL { $this c:neighbourhood ?wanted }
+  BIND(COALESCE(?wanted, 1) AS ?w)
+  BIND(IF(?w <= 1, 1, IF(?w <= 2, 2, 3)) AS ?depth)
+  LATERAL {
+    {
+      ?plot rdfhtml:hasChild ?node . ?node c:term ?shows .
+      BIND(IRI(CONCAT(STR(?node), "-aria-pressed")) AS ?pressed)
+      BIND(IF(sameTerm(?node, ?sel), "true", "false") AS ?isPressed)
+    } UNION {
+      FILTER(?selected)
+      ?plot rdfhtml:hasChild ?mark . ?mark c:term ?shows .
+      BIND(IF(sameTerm(?mark, ?sel), c:Focused,
+           IF(EXISTS { ?sel (^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom) ?mark }
+              || IF(?depth >= 2, EXISTS { ?sel (^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom)/(^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom) ?mark }, false)
+              || IF(?depth >= 3, EXISTS { ?sel (^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom)/(^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom)/(^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom) ?mark }, false),
+              c:Neighbour, c:Dimmed)) AS ?salience)
+      ?salience sem:slug ?slug .
+      BIND(IRI(CONCAT(STR(?mark), "-data-sem-salience")) AS ?shown)
+    } UNION {
+      # A link is on the way when an end is nearer than the neighbourhood's edge.
+      FILTER(?selected)
+      ?plot rdfhtml:hasChild ?mark . ?mark c:edgeFrom ?from .
+      BIND(IF(EXISTS { ?mark c:edgeFrom|c:edgeTo ?sel }
+              || IF(?depth >= 2, EXISTS { ?mark c:edgeFrom|c:edgeTo ?end . ?sel (^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom) ?end }, false)
+              || IF(?depth >= 3, EXISTS { ?mark c:edgeFrom|c:edgeTo ?end . ?sel (^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom)/(^c:edgeFrom/c:edgeTo|^c:edgeTo/c:edgeFrom) ?end }, false),
+              c:Neighbour, c:Dimmed) AS ?salience)
+      ?salience sem:slug ?slug .
+      BIND(IRI(CONCAT(STR(?mark), "-data-sem-salience")) AS ?shown)
+    } UNION {
+      FILTER(!?selected)
+      BIND(IRI(CONCAT(STR($this), "/~selection-text")) AS ?line)
+      OPTIONAL { c:GraphHintPhrase rdfs:label ?hint0 FILTER(lang(?hint0) = "") }
+      OPTIONAL { c:GraphHintPhrase rdfs:label ?hint1 FILTER(langMatches(lang(?hint1), "en")) }
+      BIND(STR(COALESCE(?hint0, ?hint1, "Select a node to highlight its connections: click it, or press Enter on it.")) AS ?text)
+    } UNION {
+      FILTER(?selected)
+      BIND(?sel AS ?described)
+      BIND(IRI(CONCAT(STR(?sel), "-aria-describedby")) AS ?describedBy)
+      BIND(STR(?details) AS ?detailsId)
+    } UNION {
+      # The line: the node's name (its aria-label) and how many links it has.
+      FILTER(?selected)
+      BIND(IRI(CONCAT(STR(?sel), "-a-aria-label")) AS ?nameAttribute)
+      ?nameAttribute rdfhtml:attributeValue ?name .
+      OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
+      OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) }
+      OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
+      OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) }
+      BIND(IF(?links = 1, STR(COALESCE(?one0, ?one1, "{name} — 1 connection")), STR(COALESCE(?many0, ?many1, "{name} — {n} connections"))) AS ?pattern)
+      BIND(IF(CONTAINS(?pattern, "{name}"), CONCAT(STRBEFORE(?pattern, "{name}"), ?name, STRAFTER(?pattern, "{name}")), ?pattern) AS ?named)
+      BIND(IF(CONTAINS(?named, "{n}"), CONCAT(STRBEFORE(?named, "{n}"), STR(?links), STRAFTER(?named, "{n}")), ?named) AS ?text)
+      BIND(IRI(CONCAT(STR($this), "/~selection-text")) AS ?line)
+      BIND(IRI(CONCAT(STR($this), "/~selection-clear")) AS ?clear)
+      BIND(IRI(CONCAT(STR($this), "/~selection-clear-text")) AS ?clearText)
+      BIND(IRI(CONCAT(STR($this), "/~selection-clear-aria-label")) AS ?clearLabel)
+      BIND(IRI(CONCAT(STR($this), "/~selection-clear-data-sem-escape")) AS ?escape)
+      OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear0 FILTER(lang(?clear0) = "") }
+      OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear1 FILTER(langMatches(lang(?clear1), "en")) }
+      BIND(STR(COALESCE(?clear0, ?clear1, "Clear the selection")) AS ?clearWord)
+    }
+  }
+}""" .
+
+# Arrow keys move among the nodes (focus only); Enter or Space selects the focused one.
+c:GraphNodeNavigation a key:Navigation ; key:items ".sem-plot > .sem-node" ; key:orientation key:Horizontal ; key:wrap true .
+c:ResultGraph key:navigation c:GraphNodeNavigation .
+
+c:GraphKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
+    beh:key "enter" , "space" , "escape" ;
+    rdfs:comment "A key press in a c:ResultGraph: Enter or Space on a node selects it (or clears it, if selected); Escape clears the selection."@en .
+
+# A click on a node selects it, or clears the selection when it is the selected one; a click
+# anywhere else in the view (the background, the clear button) clears it.
+c:SelectGraphNode a beh:Reaction ;
+    rdfs:label "Select a node"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:ResultGraph ;
+    beh:deletes """CONSTRUCT { $this c:selectedTerm ?old } WHERE { $this c:selectedTerm ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:selectedTerm ?term }
+WHERE { $event beh:node ?hit . ?node rdfhtml:hasChild* ?hit . ?node c:term ?term . FILTER NOT EXISTS { $this c:selectedTerm ?term } }""" ;
+    sem:function "workbench:select-node" .
+
+# The same from the keyboard, on a node only: Enter on the clear button is that button's click.
+c:SelectGraphNodeByKey a beh:Reaction ;
+    rdfs:label "Select a node"@en ;
+    beh:when c:GraphKey ;
+    beh:sourceClass c:ResultGraph ;
+    beh:deletes """CONSTRUCT { $this c:selectedTerm ?old }
+WHERE { $event beh:key ?key FILTER(?key IN ("enter", "space")) $event beh:node ?hit . ?node rdfhtml:hasChild* ?hit . ?node c:term ?any . $this c:selectedTerm ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:selectedTerm ?term }
+WHERE {
+  $event beh:key ?key FILTER(?key IN ("enter", "space"))
+  $event beh:node ?hit . ?node rdfhtml:hasChild* ?hit . ?node c:term ?term . FILTER NOT EXISTS { $this c:selectedTerm ?term }
+}""" ;
+    sem:function "workbench:select-node-by-key" .
+
+# Escape from within the view; from elsewhere it reaches the clear button (data-sem-escape).
+c:ClearGraphSelection a beh:Reaction ;
+    rdfs:label "Clear the selection"@en ;
+    beh:when c:GraphKey ;
+    beh:sourceClass c:ResultGraph ;
+    beh:deletes """CONSTRUCT { $this c:selectedTerm ?old } WHERE { $event beh:key "escape" . $this c:selectedTerm ?old }""" ;
+    sem:function "workbench:clear-node" .
 
 c:ResultTurtle a owl:Class ;
     rdfs:subClassOf c:QueryResultView ;
@@ -430,6 +602,17 @@ c:ResultSetPhrase a c:Phrase ;
     rdfs:label "The bindings, as a SPARQL result set"@en , "Привʼязки як набір результатів SPARQL"@uk ,
                "Die Bindungen als SPARQL-Ergebnismenge"@de , "الارتباطات كمجموعة نتائج SPARQL"@ar .
 c:RanSamplePhrase a c:Phrase ; rdfs:label "Results of: {name}"@en , "Результати: {name}"@uk , "Ergebnisse von: {name}"@de , "نتائج: {name}"@ar .
+c:GraphHintPhrase a c:Phrase ;
+    rdfs:label "Select a node to highlight its connections: click it, or press Enter on it."@en ,
+               "Виберіть вузол, щоб підсвітити його звʼязки: клацніть його або натисніть на ньому Enter."@uk ,
+               "Wählen Sie einen Knoten, um seine Verbindungen hervorzuheben: klicken Sie ihn an oder drücken Sie darauf Enter."@de ,
+               "اختر عقدة لإبراز اتصالاتها: انقر عليها أو اضغط Enter عليها."@ar .
+c:GraphSelectionPhrase a c:Phrase ;
+    rdfs:label "{name} — {n} connections"@en , "{name} — звʼязків: {n}"@uk , "{name} — {n} Verbindungen"@de , "{name} — الاتصالات: {n}"@ar .
+c:GraphSelectionOnePhrase a c:Phrase ;
+    rdfs:label "{name} — 1 connection"@en , "{name} — 1 звʼязок"@uk , "{name} — 1 Verbindung"@de , "{name} — اتصال واحد"@ar .
+c:ClearSelectionPhrase a c:Phrase ;
+    rdfs:label "Clear the selection"@en , "Скасувати вибір"@uk , "Auswahl aufheben"@de , "مسح التحديد"@ar .
 c:RanQueryPhrase a c:Phrase ; rdfs:label "Results of your query"@en , "Результати вашого запиту"@uk , "Ergebnisse Ihrer Abfrage"@de , "نتائج استعلامك"@ar .
 
 # --- shapes ---------------------------------------------------------------------------------------------------
@@ -447,5 +630,8 @@ c:QueryEditorShape a sh:NodeShape ; sh:targetClass c:QueryEditor ;
 c:QueryResultViewShape a sh:NodeShape ; sh:targetClass c:QueryResultView ;
     sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:class sem:Query ; sh:message "A result view shows one query (c:of, a sem:Query)." ] ,
                 [ sh:path c:limit ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .
+c:ResultGraphShape a sh:NodeShape ; sh:targetClass c:ResultGraph ;
+    sh:property [ sh:path c:selectedTerm ; sh:maxCount 1 ; sh:message "A graph view selects at most one node (c:selectedTerm)." ] ,
+                [ sh:path c:neighbourhood ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ; sh:maxInclusive 3 ] .
 c:RunQueryButtonShape a sh:NodeShape ; sh:targetClass c:RunQueryButton ;
     sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:class c:QueryWorkbench ; sh:message "A run button runs one workbench (c:of)." ] .
