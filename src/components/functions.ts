@@ -1,0 +1,561 @@
+// Function implementations of rules. Each mirrors its SPARQL sibling in the
+// ontology (same minted IRIs, same rendered HTML), so implementations can be
+// swapped per rule and compared head-to-head.
+import type { NamedNode, Term } from '@rdfjs/types'
+import type { FnRule, RuleContext } from '../engine/context.ts'
+import { C, H, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { chartFunctions } from './charts.ts'
+import { containerFunctions } from './containers.ts'
+import { viewFunctions } from './views.ts'
+import { mint } from '../rdf.ts'
+import { tokenizeSparql } from '../sparql-tokens.ts'
+
+const str = (t: Term | undefined) => t?.value
+const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
+
+function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
+  const out: Term[] = []
+  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
+    const first = ctx.object(n, RDF_FIRST)
+    if (first) out.push(first)
+  }
+  return out
+}
+
+// --- components ----------------------------------------------------------------
+
+const stack: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const children = rdfList(ctx, ctx.object(focus, C.children)).filter((t): t is NamedNode => t.termType === 'NamedNode')
+  o.renders(o.el('root', 'Div', {}, children))
+  return o.quads
+}
+
+const headingScreen: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const level = Math.min(6, Math.max(1, Number(str(ctx.object(focus, C.level)) ?? 2)))
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'H' + level, {}, [o.text('label', label)]))
+  return o.quads
+}
+
+const headingText: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Div', {}, [o.text('label', '# ' + label.toUpperCase())]))
+  return o.quads
+}
+
+const buttonScreen: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const o = ctx.out(focus)
+  const disabled = isTrue(ctx.object(focus, C.disabled)) ? '' : undefined
+  o.renders(o.el('root', 'Button', { type: 'button', disabled }, [o.text('label', label)]))
+  return o.quads
+}
+
+const buttonText: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Span', {}, [o.text('label', `[ ${label} ]`)]))
+  return o.quads
+}
+
+const textFieldScreen: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const help = str(ctx.object(focus, C.help))
+  const error = str(ctx.object(focus, C.error))
+  const o = ctx.out(focus)
+  const inputId = mint(focus.value, 'input')
+  const parts = [
+    o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)]),
+    o.el('input', 'Input', {
+      type: 'text',
+      id: inputId,
+      value: str(ctx.object(focus, C.value)),
+      placeholder: str(ctx.object(focus, C.placeholder)),
+    }),
+  ]
+  if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', help)]))
+  if (error !== undefined) parts.push(o.el('error', 'Div', {}, [o.text('error-text', error)]))
+  o.renders(o.el('root', 'Div', {}, parts))
+  return o.quads
+}
+
+const textFieldText: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const help = str(ctx.object(focus, C.help))
+  const error = str(ctx.object(focus, C.error))
+  const o = ctx.out(focus)
+  const parts = [o.el('line', 'Div', {}, [o.text('line-text', `${label}: [${str(ctx.object(focus, C.value)) ?? ''}_]`)])]
+  if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', `  ${help}`)]))
+  if (error !== undefined) parts.push(o.el('error', 'Div', {}, [o.text('error-text', `  ! ${error}`)]))
+  o.renders(o.el('root', 'Div', {}, parts))
+  return o.quads
+}
+
+/** Sort key: numbers numerically, everything else as strings; missing sorts last. */
+function compareValues(a: Term | undefined, b: Term | undefined): number {
+  if (!a || !b) return a ? -1 : b ? 1 : 0
+  const na = Number(a.value)
+  const nb = Number(b.value)
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
+  return a.value < b.value ? -1 : a.value > b.value ? 1 : 0
+}
+
+const list: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const sortBy = ctx.object(focus, C.sortBy)
+  const labelFrom = ctx.object(focus, C.itemLabel)
+  const checkedFrom = ctx.object(focus, C.itemChecked)
+  const items = ctx.objects(focus, C.item).filter((t): t is NamedNode => t.termType === 'NamedNode')
+  const keyed = items.map((item) => ({ item, key: sortBy ? ctx.object(item, sortBy) : undefined }))
+  keyed.sort((a, b) => compareValues(a.key, b.key) || (a.item.value < b.item.value ? -1 : 1))
+  const slots = keyed.map(({ item }) => {
+    const inst = o.node('i-' + encodeURIComponent(item.value))
+    o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
+    o.t(inst, C.of, item)
+    o.t(inst, C.inList, focus)
+    if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
+    if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
+    return inst
+  })
+  o.renders(o.el('root', ctx.modality === MOD.Text ? 'Div' : 'Ul', {}, slots))
+  return o.quads
+}
+// The list depends on its items only through the sort key.
+list.watches = (ctx, focus) => {
+  const sortBy = ctx.object(focus, C.sortBy)
+  return new Set([C.item, C.sortBy, C.itemLabel, C.itemChecked, ...(sortBy ? [sortBy.value] : [])])
+}
+
+function itemData(ctx: RuleContext, focus: NamedNode) {
+  const item = ctx.object(focus, C.of)
+  const labelFrom = ctx.object(focus, C.labelFrom)
+  if (!item || !labelFrom) return undefined
+  const label = str(ctx.object(item, labelFrom))
+  if (label === undefined) return undefined
+  const checkedFrom = ctx.object(focus, C.checkedFrom)
+  return { label, checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false }
+}
+
+const listItemScreen: FnRule = (ctx, focus) => {
+  const d = itemData(ctx, focus)
+  if (!d) return []
+  const o = ctx.out(focus)
+  const checkId = mint(focus.value, 'check')
+  const check = o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined })
+  const label = o.el('label', 'Label', { for: checkId }, [o.text('label-text', d.label)])
+  o.renders(o.el('root', 'Li', {}, [check, label]))
+  return o.quads
+}
+
+const listItemText: FnRule = (ctx, focus) => {
+  const d = itemData(ctx, focus)
+  if (!d) return []
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checked ? '  [x] ' : '  [ ] '}${d.label}`)]))
+  return o.quads
+}
+
+const label = (ctx: RuleContext, t: Term) =>
+  str(ctx.object(t, C.label)) ?? str(ctx.object(t, 'http://www.w3.org/2000/01/rdf-schema#label')) ?? t.value.replace(/^.*[#/]/, '')
+
+const tabs: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const items = rdfList(ctx, ctx.object(focus, C.tabs)).filter((t): t is NamedNode => t.termType === 'NamedNode')
+  const detachable = isTrue(ctx.object(focus, C.detachable))
+  const isDetached = (tab: NamedNode) => isTrue(ctx.object(tab, C.detached))
+  const attached = items.filter((t) => !isDetached(t))
+  // A detached selection falls back to the first attached tab (view logic, no state change).
+  const chosen = ctx.object(focus, C.selected)?.value
+  const selected = attached.some((t) => t.value === chosen) ? chosen : attached[0]?.value
+  const text = ctx.modality === MOD.Text
+  const buttons: NamedNode[] = []
+  const panels: NamedNode[] = []
+  const windows: NamedNode[] = []
+  items.forEach((tab, index) => {
+    const key = encodeURIComponent(tab.value)
+    const name = label(ctx, tab)
+    const detached = isDetached(tab)
+    if (text) {
+      buttons.push(o.el('tab-' + key, 'Span', {}, [o.text('tab-' + key + '-label', detached ? ` ${name}↗ ` : tab.value === selected ? `[${name}]` : ` ${name} `)]))
+      return
+    }
+    // The content node is created here whether it sits in a panel or a window,
+    // so the same DOM subtree moves between them.
+    const component = ctx.object(tab, C.content)
+    const slot = str(ctx.object(tab, C.slot))
+    let content: NamedNode | undefined
+    if (component?.termType === 'NamedNode') content = component
+    else if (slot !== undefined) {
+      content = o.el('slot-' + key, 'Div')
+      o.t(content, SEM.slot, slot)
+    }
+    if (detached) {
+      const window = o.node('window-' + key)
+      o.t(window, RDF_TYPE, ctx.nn(C.Window))
+      o.t(window, C.title, name)
+      o.t(window, C.index, ctx.f.literal(String(index), ctx.nn(XSD_INTEGER)))
+      o.t(window, PROV_DERIVED_FROM, tab)
+      if (content) o.t(window, C.body, content)
+      windows.push(window)
+      return
+    }
+    const on = tab.value === selected
+    const tabId = mint(focus.value, 'tab-' + key)
+    const panelId = mint(focus.value, 'panel-' + key)
+    const button = o.el('tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [o.text('tab-' + key + '-label', name)])
+    o.attr(button, 'role', 'tab').attr(button, 'aria-selected', String(on)).attr(button, 'aria-controls', panelId)
+    o.t(button, C.selects, tab)
+    buttons.push(button)
+    if (detachable) {
+      const detach = o.el('detach-' + key, 'Button', { type: 'button', class: 'sem-detach' }, [o.text('detach-' + key + '-label', '⧉')])
+      o.attr(detach, 'aria-label', `Open ${name} in a window`)
+      o.tip(detach, `Open ${name} in a window`)
+      o.t(detach, C.detaches, tab)
+      buttons.push(detach)
+    }
+    const panel = o.el('panel-' + key, 'Div', { id: panelId, hidden: on ? undefined : '' }, content ? [content] : [])
+    o.attr(panel, 'role', 'tabpanel').attr(panel, 'aria-labelledby', tabId)
+    panels.push(panel)
+  })
+  const list = o.el('tablist', 'Div', {}, buttons)
+  if (!text) o.attr(list, 'role', 'tablist')
+  // Windows go where the tabs say (a c:Desktop outlives page changes), else inside the tabs.
+  const desktop = ctx.object(focus, C.windowsOn)
+  if (desktop?.termType === 'NamedNode') for (const w of windows) o.t(desktop, C.hosts, w)
+  o.renders(o.el('root', 'Div', {}, [list, ...panels, ...(desktop ? [] : windows)]))
+  return o.quads
+}
+
+const segmented: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  if (!target || !property) return []
+  const o = ctx.out(focus)
+  const current = ctx.object(target, property)?.value
+  const caption = str(ctx.object(focus, C.label)) ?? label(ctx, property)
+  if (ctx.modality === MOD.Text) {
+    const line = options(ctx, focus, property).map((opt) => `(${opt.value === current ? '•' : ' '}) ${label(ctx, opt)}`).join('  ')
+    o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${line}`)]))
+    return o.quads
+  }
+  const buttons = options(ctx, focus, property).map((opt) => {
+    const key = encodeURIComponent(opt.value)
+    const symbol = str(ctx.object(opt, SEM.symbol))
+    const parts = [
+      ...(symbol ? [o.el('opt-' + key + '-symbol', 'Span', {}, [o.text('opt-' + key + '-symbol-text', symbol)])] : []),
+      o.el('opt-' + key + '-label', 'Span', {}, [o.text('opt-' + key + '-label-text', label(ctx, opt))]),
+    ]
+    const b = o.el('opt-' + key, 'Button', { type: 'button' }, parts)
+    o.attr(b, 'aria-pressed', String(opt.value === current))
+    o.t(b, C.selects, opt)
+    return b
+  })
+  const root = o.el('root', 'Div', {}, buttons)
+  o.attr(root, 'role', 'group').attr(root, 'aria-label', caption)
+  o.renders(root)
+  return o.quads
+}
+
+const PROV_NS = 'http://www.w3.org/ns/prov#'
+const PROV_DERIVED_FROM = PROV_NS + 'wasDerivedFrom'
+const shortIri = (iri: string) => {
+  for (const [p, ns] of Object.entries(NS)) if (iri.startsWith(ns)) return `${p}:${iri.slice(ns.length)}`
+  return `<${iri}>`
+}
+
+/**
+ * The rules that made a view: for the component and every component rendered
+ * inside it, the plans of the activities that generated or decorated its root
+ * (its PROV-O trail). Deduplicated, ordered by stratum.
+ */
+function plansOf(ctx: RuleContext, component: Term): { plan: Term; role: 'generated' | 'decorated' }[] {
+  const plan = (activity: Term) => {
+    const association = ctx.object(activity, PROV_NS + 'qualifiedAssociation')
+    return association && ctx.object(association, PROV_NS + 'hadPlan')
+  }
+  const found = new Map<string, { plan: Term; role: 'generated' | 'decorated'; seen: number }>()
+  const visited = new Set<string>()
+  const visit = (instance: Term) => {
+    const root = ctx.match(null, SEM.renders, instance)[0]?.subject
+    if (!root || visited.has(root.value)) return
+    visited.add(root.value)
+    for (const [p, role] of [
+      [PROV_NS + 'wasGeneratedBy', 'generated'],
+      [PROV_NS + 'wasInfluencedBy', 'decorated'],
+    ] as const) {
+      for (const a of ctx.objects(root, p)) {
+        const pl = plan(a)
+        if (!pl) continue
+        const had = found.get(pl.value)
+        if (!had) found.set(pl.value, { plan: pl, role, seen: found.size })
+        else if (role === 'generated') had.role = role
+      }
+    }
+    walk(root)
+  }
+  const walk = (node: Term) => {
+    for (const child of ctx.objects(node, H.hasChild)) {
+      if (ctx.match(null, SEM.renders, child).length) visit(child)
+      else walk(child)
+    }
+  }
+  visit(component)
+  const stratum = (t: Term) => {
+    const slot = ctx.object(t, SEM.implements)
+    return Number(str(ctx.object(t, SEM.stratum)) ?? (slot && str(ctx.object(slot, SEM.stratum))) ?? 0)
+  }
+  return [...found.values()].sort((a, b) => stratum(a.plan) - stratum(b.plan) || a.seen - b.seen)
+}
+
+/** Queries and views a component (or one inside it) shows data from (c:dataQuery and its subproperties). */
+function dataQueriesOf(ctx: RuleContext, component: Term): Term[] {
+  const out = new Map<string, Term>()
+  const visited = new Set<string>()
+  const visit = (instance: Term) => {
+    if (visited.has(instance.value)) return
+    visited.add(instance.value)
+    for (const p of [C.dataQuery, C.view]) for (const q of ctx.objects(instance, p)) out.set(q.value, q)
+    for (const q of rdfList(ctx, ctx.object(instance, C.queries))) out.set(q.value, q)
+    for (const cls of ctx.objects(instance, C.judgementClass)) for (const j of ctx.match(null, RDF_TYPE, cls)) out.set(j.subject.value, j.subject)
+    const root = ctx.match(null, SEM.renders, instance)[0]?.subject
+    const walk = (node: Term) => {
+      for (const child of ctx.objects(node, H.hasChild)) {
+        if (ctx.match(null, SEM.renders, child).length) visit(child)
+        else walk(child)
+      }
+    }
+    if (root) walk(root)
+  }
+  visit(component)
+  return [...out.values()]
+}
+
+/** Base Flippable: just the front, wrapped so the source layer can add a back. */
+const flippable: FnRule = (ctx, focus) => {
+  const front = ctx.object(focus, C.front)
+  if (front?.termType !== 'NamedNode') return []
+  const o = ctx.out(focus)
+  const frontFace = o.el('front', 'Div', { class: 'sem-face sem-front' }, [front])
+  o.renders(o.el('root', 'Div', {}, [o.el('faces', 'Div', { class: 'sem-faces' }, [frontFace])]))
+  return o.quads
+}
+
+/**
+ * Source layer for Flippable: a floating flip control on the front, and a back
+ * face showing how the view is made - the queries it shows data from and the
+ * rules that rendered it (their SPARQL tokenized into colored spans).
+ */
+const flippableSource: FnRule = (ctx, focus) => {
+  const front = ctx.object(focus, C.front)
+  if (front?.termType !== 'NamedNode') return []
+  const o = ctx.out(focus)
+  const flipped = isTrue(ctx.object(focus, C.flipped))
+  const root = o.node('root')
+  const faces = o.node('faces')
+  const frontFace = o.node('front')
+  const flipButton = (local: string, text: string, hint: string) => {
+    const b = o.el(local, 'Button', { type: 'button', class: 'sem-flip' }, [o.text(local + '-text', text)])
+    o.attr(b, 'aria-label', hint)
+    o.t(b, C.flips, focus)
+    return b
+  }
+  const code = (key: string, source: string) =>
+    o.el(key + '-code', 'Pre', { class: 'sem-code' }, tokenizeSparql(source.trim()).map((t, j) =>
+      t.kind === 'text' ? o.text(`${key}-t${j}`, t.text) : o.el(`${key}-s${j}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-t${j}`, t.text)]),
+    ))
+  const section = (key: string, title: string, meta: string, body: NamedNode) =>
+    o.el(key, 'Section', { class: 'sem-rule' }, [
+      o.el(key + '-title', 'H4', {}, [o.text(key + '-title-text', title)]),
+      o.el(key + '-meta', 'P', {}, [o.text(key + '-meta-text', meta)]),
+      body,
+    ])
+  // The back is built only while the card is turned over: it is the expensive
+  // part (every rule's source as colored spans) and is invisible otherwise.
+  const data = (flipped ? dataQueriesOf(ctx, front) : []).map((q, i) => {
+    const select = str(ctx.object(q, SEM.select))
+    const construct = str(ctx.object(q, SEM.construct))
+    return section(`data-${i}`, shortIri(q.value), `data · ${label(ctx, q)}`, code(`data-${i}`, select ?? construct ?? ''))
+  })
+  // A projection view's rules live in that projection's derived graph (its PROV-O says which).
+  const projection = str(ctx.object(front, C.projectionGraph))
+  const plans = !flipped
+    ? []
+    : projection && ctx.sparql
+    ? ctx
+        .select(`SELECT DISTINCT ?plan WHERE { GRAPH <${projection}> { ?association <http://www.w3.org/ns/prov#hadPlan> ?plan } }`)
+        .map((b) => ({ plan: b.get('plan')!, role: 'generated' as const }))
+        .sort((a, b) => a.plan.value.localeCompare(b.plan.value))
+    : plansOf(ctx, front)
+  const rules = plans.map(({ plan, role }, i) => {
+    const key = `rule-${i}`
+    const query = str(ctx.object(plan, SEM.construct))
+    const fn = str(ctx.object(plan, SEM.function))
+    const slot = ctx.object(plan, SEM.implements)
+    const layer = ctx.object(plan, SEM.layer) ?? (slot && ctx.object(slot, SEM.layer))
+    const stratum = str(ctx.object(plan, SEM.stratum)) ?? (slot && str(ctx.object(slot, SEM.stratum))) ?? '0'
+    const meta = [role === 'generated' ? 'renders' : 'decorates', `stratum ${stratum}`, layer ? `layer ${shortIri(layer.value)}` : 'component rule'].join(' · ')
+    return section(key, shortIri(plan.value), meta, code(key, query ?? `# a function rule: "${fn ?? '?'}" (src/components)`))
+  })
+  const header = o.el('back-header', 'Div', { class: 'sem-back-header' }, [
+    o.el('back-title', 'Strong', {}, [o.text('back-title-text', 'How this view is made')]),
+  ])
+  const empty = !flipped || data.length || rules.length ? [] : [o.el('back-empty', 'P', {}, [o.text('back-empty-text', 'Enable provenance to see the rules behind this view.')])]
+  // Both faces float their flip control in the same corner.
+  const backBar = o.el('back-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-back', '↺ View', 'Show the view')])
+  const back = o.el('back', 'Div', { class: 'sem-face sem-back', inert: flipped ? undefined : '' }, [backBar, header, ...empty, ...data, ...rules])
+  const bar = o.el('front-bar', 'Div', { class: 'sem-face-bar' }, [flipButton('flip-front', '</> Source', 'Show how this view is made')])
+  o.t(frontFace, H.hasChild, bar).t(bar, ORD.precedes, front)
+  o.t(faces, H.hasChild, back).t(frontFace, ORD.precedes, back)
+  if (flipped) o.t(frontFace, H.ns + 'inert', '')
+  o.attr(root, 'data-flipped', String(flipped))
+  return o.quads
+}
+
+/** Options for a property-editing control: c:options, else the individuals in the property's range. */
+function options(ctx: RuleContext, focus: Term, property: Term): NamedNode[] {
+  const explicit = ctx.object(focus, C.options)
+  if (explicit) return rdfList(ctx, explicit).filter((t): t is NamedNode => t.termType === 'NamedNode')
+  const range = ctx.object(property, 'http://www.w3.org/2000/01/rdf-schema#range')
+  if (!range) return []
+  return ctx
+    .match(null, RDF_TYPE, range)
+    .map((q) => q.subject)
+    .filter((t): t is NamedNode => t.termType === 'NamedNode')
+    .map((t) => ({ t, order: Number(str(ctx.object(t, SEM.order)) ?? 0) }))
+    .sort((a, b) => a.order - b.order || (a.t.value < b.t.value ? -1 : 1))
+    .map(({ t }) => t)
+}
+
+/** Re-render property editors when the controlled values change (reached through c:controls). */
+const watchControlled: FnRule['watches'] = (ctx, focus) => {
+  const property = ctx.object(focus, C.property)
+  return new Set([C.controls, C.property, C.label, C.options, ...(property ? [property.value] : [])])
+}
+
+const choice: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  if (!target || !property) return []
+  const o = ctx.out(focus)
+  const current = ctx.object(target, property)?.value
+  const caption = str(ctx.object(focus, C.label)) ?? label(ctx, property)
+  const opts = options(ctx, focus, property)
+  if (ctx.modality === MOD.Text) {
+    const chosen = opts.find((t) => t.value === current)
+    o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${chosen ? label(ctx, chosen) : '–'} ▾`)]))
+    return o.quads
+  }
+  const selectId = mint(focus.value, 'select')
+  const select = o.el('select', 'Select', { id: selectId }, opts.map((opt) => {
+    const key = encodeURIComponent(opt.value)
+    return o.el('opt-' + key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text('opt-' + key + '-text', label(ctx, opt))])
+  }))
+  o.renders(o.el('root', 'Label', { for: selectId }, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), select]))
+  return o.quads
+}
+choice.watches = watchControlled
+
+const chips: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  if (!target || !property) return []
+  const o = ctx.out(focus)
+  const on = new Set(ctx.objects(target, property).map((t) => t.value))
+  const caption = str(ctx.object(focus, C.label)) ?? label(ctx, property)
+  const opts = options(ctx, focus, property)
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${opts.map((t) => `${on.has(t.value) ? '[x]' : '[ ]'} ${label(ctx, t)}`).join('  ')}`)]))
+    return o.quads
+  }
+  const pills = opts.map((opt) => {
+    const key = encodeURIComponent(opt.value)
+    const b = o.el('chip-' + key, 'Button', { type: 'button' }, [o.text('chip-' + key + '-text', label(ctx, opt))])
+    o.attr(b, 'aria-pressed', String(on.has(opt.value)))
+    o.t(b, C.selects, opt)
+    return b
+  })
+  const root = o.el('root', 'Div', {}, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), ...pills])
+  o.attr(root, 'role', 'group').attr(root, 'aria-label', caption)
+  o.renders(root)
+  return o.quads
+}
+chips.watches = watchControlled
+segmented.watches = watchControlled
+
+// --- layers ------------------------------------------------------------------------
+
+/** Style layer: expose hookable properties of the instance on its root. */
+const styleHooks: FnRule = (ctx, focus) => {
+  const hooks = ctx.memo('style:hooks', () => new Map(ctx.match(null, STY.hookAttribute, null).map((q) => [q.subject.value, q.object.value])))
+  const o = ctx.out(focus)
+  const root = o.node('root')
+  for (const q of ctx.match(focus, null, null)) {
+    const name = hooks.get(q.predicate.value)
+    if (!name) continue
+    const slug = str(ctx.object(q.object, SEM.slug))
+    if (slug !== undefined) o.attr(root, name, slug, 'root-hook-' + name)
+  }
+  return o.quads
+}
+
+const a11yTextField: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const input = o.node('input')
+  const ids: string[] = []
+  if (ctx.object(focus, C.help)) {
+    const help = o.node('help')
+    o.t(help, H.ns + 'id', help.value)
+    ids.push(help.value)
+  }
+  if (ctx.object(focus, C.error)) {
+    const error = o.node('error')
+    o.t(error, H.ns + 'id', error.value)
+    o.attr(error, 'role', 'alert', 'error-role')
+    o.attr(input, 'aria-invalid', 'true', 'input-aria-invalid')
+    ids.push(error.value)
+  }
+  if (ids.length) o.attr(input, 'aria-describedby', ids.join(' '), 'input-aria-describedby')
+  return o.quads
+}
+
+const a11yList: FnRule = (ctx, focus) => {
+  const label = str(ctx.object(focus, C.label))
+  if (label === undefined) return []
+  const o = ctx.out(focus)
+  o.attr(o.node('root'), 'aria-label', label, 'root-aria-label')
+  return o.quads
+}
+
+export const functions: Record<string, FnRule> = {
+  ...containerFunctions,
+  ...viewFunctions,
+  ...chartFunctions,
+  stack,
+  'heading:screen': headingScreen,
+  'heading:text': headingText,
+  'button:screen': buttonScreen,
+  'button:text': buttonText,
+  'textfield:screen': textFieldScreen,
+  'textfield:text': textFieldText,
+  list,
+  'listitem:screen': listItemScreen,
+  'listitem:text': listItemText,
+  tabs,
+  segmented,
+  flippable,
+  'flippable:source': flippableSource,
+  choice,
+  chips,
+  'style:hooks': styleHooks,
+  'a11y:textfield': a11yTextField,
+  'a11y:list': a11yList,
+}

@@ -1,0 +1,128 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Style layer. Styling is described semantically (tokens, intents, densities,
+# per-component declarations) and compiled to CSS: custom properties for
+# tokens, attribute selectors for semantic hooks, and @layer for precedence.
+#
+# Only one rule runs per component instance: it copies "hookable" properties
+# of the instance onto its DOM root as data-* attributes. Everything else is
+# CSS generated from this vocabulary (src/style/compile.ts).
+
+<https://semblance.dev/ns/style> a owl:Ontology ;
+    rdfs:label "Semblance style layer"@en .
+
+sty:Layer a sem:Layer ; rdfs:label "style"@en .
+
+# --- Tokens -------------------------------------------------------------------
+
+sty:Token a owl:Class ; rdfs:comment "A named design value, emitted as --sem-<slug>."@en .
+sty:value a owl:DatatypeProperty ; rdfs:comment "CSS value of a token or an override."@en .
+sty:scale a owl:ObjectProperty ; rdfs:domain sty:Token .
+sty:Scale a owl:Class .
+sty:Space a sty:Scale .
+sty:Color a sty:Scale .
+sty:Radius a sty:Scale .
+sty:Font a sty:Scale .
+
+# --- Hooks ----------------------------------------------------------------------
+
+sty:hookAttribute a owl:DatatypeProperty ;
+    rdfs:comment "Marks a property as hookable: the instance's value (by its sem:slug) is exposed on its DOM root as this attribute."@en .
+sty:hookCssProperty a owl:DatatypeProperty ;
+    rdfs:comment "For token-valued hooks: CSS property set to the token value."@en .
+sty:tokenScale a owl:ObjectProperty ; rdfs:comment "For token-valued hooks: which tokens are allowed."@en .
+
+sty:overrides a owl:ObjectProperty ;
+    rdfs:comment """Between hookable properties: where both apply to an element and set the same CSS
+property, this one wins (e.g. an explicit alignment over a direction's default alignment)."""@en .
+
+rdf:type sty:hookAttribute "data-sem-c" .
+
+# --- Intents and densities ------------------------------------------------------
+
+sty:intent a owl:ObjectProperty ;
+    rdfs:range sty:Intent ;
+    rdfs:comment "Semantic emphasis of a component."@en ;
+    sty:hookAttribute "data-sem-intent" .
+sty:Intent a owl:Class .
+sty:Primary a sty:Intent ; sem:slug "primary" .
+sty:Secondary a sty:Intent ; sem:slug "secondary" .
+sty:Danger a sty:Intent ; sem:slug "danger" .
+
+sty:density a owl:ObjectProperty ;
+    rdfs:range sty:Density ;
+    rdfs:comment "Spacing density of a subtree; implemented as token overrides scoped to the subtree."@en ;
+    sty:hookAttribute "data-sem-density" .
+sty:Density a owl:Class .
+sty:override a owl:ObjectProperty ; rdfs:domain sty:Density ;
+    rdfs:comment "A token re-valued within the density's subtree."@en .
+
+sty:colorScheme a owl:ObjectProperty ;
+    rdfs:range sty:ColorScheme ;
+    rdfs:label "Theme"@en ;
+    rdfs:comment "Day, night, or match the viewer's system. Theme colors are light-dark() pairs, so the CSS color-scheme of a subtree picks the side."@en ;
+    sty:hookAttribute "data-sem-color-scheme" .
+sty:ColorScheme a owl:Class .
+sty:Light a sty:ColorScheme ; rdfs:label "Day"@en ; sem:symbol "☀" ; sem:order 1 ; sem:slug "light" ;
+    sty:declares [ sty:property "color-scheme" ; sty:raw "light" ] .
+sty:Dark a sty:ColorScheme ; rdfs:label "Night"@en ; sem:symbol "☾" ; sem:order 2 ; sem:slug "dark" ;
+    sty:declares [ sty:property "color-scheme" ; sty:raw "dark" ] .
+sty:System a sty:ColorScheme ; rdfs:label "Match"@en ; sem:symbol "◐" ; sem:order 3 ; sem:slug "system" ;
+    sty:declares [ sty:property "color-scheme" ; sty:raw "light dark" ] .
+
+sty:backdrop a owl:ObjectProperty ;
+    rdfs:range sty:Backdrop ;
+    rdfs:comment "What a surface shows behind its content."@en ;
+    sty:hookAttribute "data-sem-backdrop" .
+sty:Backdrop a owl:Class .
+
+sty:elevation a owl:ObjectProperty ;
+    rdfs:range sty:Elevation ;
+    rdfs:comment "How far a surface stands off the page."@en ;
+    sty:hookAttribute "data-sem-elevation" .
+sty:Elevation a owl:Class .
+
+# --- Declarations ------------------------------------------------------------------
+
+sty:StyleRule a owl:Class ;
+    rdfs:comment "Declarations for a component class, optionally narrowed by intent and a part selector."@en .
+sty:appliesTo a owl:ObjectProperty ; rdfs:domain sty:StyleRule .
+sty:part a owl:DatatypeProperty ; rdfs:comment "Descendant selector suffix (escape hatch for component internals)."@en .
+sty:state a owl:DatatypeProperty ; rdfs:comment "Pseudo-class of the component root, e.g. \":hover\" or \":focus-within\"."@en .
+sty:declares a owl:ObjectProperty ; rdfs:comment "A declaration: sty:property plus one of sty:token, sty:tokens (list), sty:raw."@en .
+sty:property a owl:DatatypeProperty .
+sty:token a owl:ObjectProperty .
+sty:tokens a owl:ObjectProperty .
+sty:raw a owl:DatatypeProperty ; rdfs:comment "Literal CSS value (escape hatch)."@en .
+
+# --- The single style rule ------------------------------------------------------------
+
+sty:HookAttributes a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:modality mod:Screen ;
+    sem:layer sty:Layer ;
+    sem:stratum 20 .
+
+sty:HookAttributes-sparql a sem:Rule ;
+    sem:implements sty:HookAttributes ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?a .
+  ?a a rdfhtml:Attribute ; rdfhtml:attributeName ?name ; rdfhtml:attributeValue ?slug .
+}
+WHERE {
+  $this ?p ?v .
+  ?p sty:hookAttribute ?name .
+  ?v sem:slug ?slug .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-hook-", ?name)) AS ?a)
+}""" .
+
+sty:HookAttributes-fn a sem:Rule ;
+    sem:implements sty:HookAttributes ;
+    sem:function "style:hooks" .

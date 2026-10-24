@@ -1,0 +1,133 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# Behaviour layer: interaction is data.
+#
+# A relevant DOM interaction is recorded as an RDF *event*, addressed to the
+# component it happened in, and appended as an immutable member of the
+# beh:ChangeLog Linked Data Event Stream (LDES), together with the change it
+# caused - kept in the events graph urn:semblance:events. *Reactions*
+# - declared in component vocabularies (built-in behaviour) or in the app graph
+# (app logic) - turn events into changes of component state. Every reaction
+# matching an event is evaluated against the state before the event, and the
+# union of their changes is applied as one delta; projections follow from it.
+# An event none of whose reactions produce anything is not recorded.
+# The graph is the single source of truth: nothing touches the DOM directly.
+
+<https://semblance.dev/ns/behaviour> a owl:Ontology ;
+    rdfs:label "Semblance behaviour layer"@en .
+
+beh:Layer a sem:Layer ; rdfs:label "behaviour"@en .
+
+# --- Events ------------------------------------------------------------------------
+
+beh:Event a owl:Class ; rdfs:comment "Something that happened to a component."@en .
+beh:domEvent a owl:DatatypeProperty ; rdfs:comment "DOM event type an event class is recorded from."@en .
+
+beh:Click a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "click" .
+beh:Input a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "input" ;
+    rdfs:comment "The value of a text control changed (per keystroke)."@en .
+beh:Change a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "change" ;
+    rdfs:comment "A control's committed state changed (e.g. a checkbox)."@en .
+
+beh:Hover a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "mouseover" ; beh:recorded false ;
+    rdfs:comment "The pointer entered a rendered element. Not recorded in the change log; reactions may still use it."@en .
+beh:Move a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-move" ;
+    rdfs:comment "A move gesture ended (beh:x, beh:y). While dragging, only the view moves; this commits the result."@en .
+beh:Resize a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "sem-resize" ;
+    rdfs:comment "A resize gesture ended (beh:width, beh:height)."@en .
+
+beh:recorded a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On an event class: false means its events are not appended to the change log."@en .
+beh:gesture a owl:DatatypeProperty ;
+    rdfs:comment "Rendered as data-sem-gesture=\"move\"|\"resize\" on a handle: dragging it moves or resizes the nearest component root, then emits beh:Move / beh:Resize."@en .
+beh:x a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:y a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:width a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:height a owl:DatatypeProperty ; rdfs:range xsd:integer .
+
+beh:target a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:comment "The component instance the event is addressed to."@en .
+beh:node a owl:ObjectProperty ; rdfs:domain beh:Event ;
+    rdfs:comment "The RDF/HTML node the interaction hit (nearest rendered element), for reactions that care where inside a component it happened."@en .
+beh:value a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:comment "The control's value after the interaction."@en .
+beh:checked a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:boolean .
+beh:sequence a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer .
+beh:at a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:dateTime .
+beh:handledBy a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range beh:Reaction .
+
+beh:added a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer ;
+    rdfs:comment "Number of input-graph triples the event's reactions added."@en .
+beh:removed a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer ;
+    rdfs:comment "Number of input-graph triples the event's reactions removed."@en .
+
+# --- The change log (LDES) ---------------------------------------------------------
+# An event becomes a member (`beh:ChangeLog tree:member <event>`) once its
+# reactions have been applied and its effect recorded; members are never
+# modified afterwards. The retention policy below bounds the log.
+
+beh:ChangeLog a ldes:EventStream ;
+    rdfs:label "UI interactions and the state changes they caused"@en ;
+    ldes:timestampPath beh:at ;
+    ldes:sequencePath beh:sequence ;
+    tree:shape beh:EventShape ;
+    tree:view beh:ChangeLogView .
+
+beh:ChangeLogView a tree:Node ;
+    ldes:retentionPolicy beh:ChangeLogRetention .
+
+# The log is bounded by member count, so neither memory nor anything that
+# aggregates over it (c:StreamStats, the inspector) grows with the session.
+# Set ldes:amount on the policy (in the app graph) to change the bound; an
+# ldes:DurationAgoPolicy (tree:value "PT10M") bounds by age instead. With
+# several policies a member is kept while any of them keeps it (LDES semantics).
+beh:ChangeLogRetention a beh:LatestMembersPolicy ;
+    ldes:amount 200 .
+
+beh:LatestMembersPolicy a owl:Class ;
+    rdfs:subClassOf ldes:RetentionPolicy ;
+    rdfs:comment "Keeps the ldes:amount most recent members of the stream (by its sequence path)."@en .
+
+# Constant-time access to the head of the log: the stream names its newest
+# member, and each member names the one before it (written once, with the
+# member). Reading the N newest members is N steps whatever the log's length.
+beh:latest a owl:ObjectProperty ; rdfs:domain ldes:EventStream ; rdfs:range beh:Event ;
+    rdfs:comment "The stream's most recent member."@en .
+beh:previous a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range beh:Event ;
+    rdfs:comment "The member appended to the same stream immediately before this one."@en .
+
+beh:EventShape a sh:NodeShape ;
+    sh:targetClass beh:Event ;
+    sh:property [ sh:path beh:target ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path beh:at ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:dateTime ] ,
+                [ sh:path beh:sequence ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:node ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path beh:value ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
+                [ sh:path beh:checked ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path beh:x ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:y ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:width ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:height ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:handledBy ; sh:class beh:Reaction ] ,
+                [ sh:path beh:previous ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path beh:added ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
+                [ sh:path beh:removed ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] .
+
+# --- Reactions ---------------------------------------------------------------------
+
+beh:Reaction a owl:Class ;
+    rdfs:comment """Turns an event into a change of state. Matches on beh:when (event class)
+and beh:source (an instance) or beh:sourceClass (a component class). The body is a
+pair of SPARQL CONSTRUCTs - beh:deletes and beh:inserts - in which $event is the
+event and $this its target, or a registered function (sem:function). A reaction
+may carry both; the function is used where SPARQL is unavailable or not preferred."""@en .
+beh:when a owl:ObjectProperty ; rdfs:domain beh:Reaction .
+beh:source a owl:ObjectProperty ; rdfs:domain beh:Reaction .
+beh:sourceClass a owl:ObjectProperty ; rdfs:domain beh:Reaction .
+beh:deletes a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
+beh:inserts a owl:DatatypeProperty ; rdfs:domain beh:Reaction .

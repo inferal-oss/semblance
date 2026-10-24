@@ -1,0 +1,686 @@
+{
+  "micro": [
+    {
+      "op": "oxigraph: CONSTRUCT, 2-pattern join, focus bound",
+      "us": 32.632391599999984
+    },
+    {
+      "op": "oxigraph: CONSTRUCT, same, all 2k foci (per focus)",
+      "us": 4449.862499999995
+    },
+    {
+      "op": "oxigraph: match(s, p, ?)",
+      "us": 3.1737525000000004
+    },
+    {
+      "op": "oxigraph: add + delete quad",
+      "us": 16.704694159999995
+    },
+    {
+      "op": "oxigraph: read term .value (s, p, o)",
+      "us": 4.434902499999998
+    },
+    {
+      "op": "n3: getQuads(s, p, ?)",
+      "us": 0.580044375
+    },
+    {
+      "op": "n3: add + remove quad",
+      "us": 2.5782439599999996
+    },
+    {
+      "op": "comunica over n3: CONSTRUCT, focus bound",
+      "us": 1157.9949999999985
+    }
+  ],
+  "rows": [
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 100,
+      "scenario": "initial render",
+      "engineMs": 119.041584,
+      "ruleRuns": 10,
+      "derived": 2632
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 100,
+      "scenario": "toggle item",
+      "engineMs": 0.5161110666666597,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 100,
+      "scenario": "rename item",
+      "engineMs": 0.575324866666665,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 100,
+      "scenario": "reorder item",
+      "engineMs": 6.821891599999988,
+      "ruleRuns": 2,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 100,
+      "scenario": "add item",
+      "engineMs": 7.927138933333352,
+      "ruleRuns": 5,
+      "derived": 2994
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 100,
+      "scenario": "type in field",
+      "engineMs": 0.6628610666666418,
+      "ruleRuns": 3,
+      "derived": 2995
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 100,
+      "scenario": "initial render",
+      "engineMs": 148.45679199999995,
+      "ruleRuns": 218,
+      "derived": 2632
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 100,
+      "scenario": "toggle item",
+      "engineMs": 0.3859945999999885,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 100,
+      "scenario": "rename item",
+      "engineMs": 0.4114778666666931,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 100,
+      "scenario": "reorder item",
+      "engineMs": 7.307213733333341,
+      "ruleRuns": 2,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 100,
+      "scenario": "add item",
+      "engineMs": 8.271900066666657,
+      "ruleRuns": 5,
+      "derived": 2994
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 100,
+      "scenario": "type in field",
+      "engineMs": 0.7183332666666502,
+      "ruleRuns": 3,
+      "derived": 2995
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 100,
+      "scenario": "initial render",
+      "engineMs": 120.60758300000003,
+      "ruleRuns": 218,
+      "derived": 2632
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 100,
+      "scenario": "toggle item",
+      "engineMs": 0.30453893333333326,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 100,
+      "scenario": "rename item",
+      "engineMs": 0.3946526666666614,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 100,
+      "scenario": "reorder item",
+      "engineMs": 6.921677733333339,
+      "ruleRuns": 2,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 100,
+      "scenario": "add item",
+      "engineMs": 7.37719453333334,
+      "ruleRuns": 5,
+      "derived": 2994
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 100,
+      "scenario": "type in field",
+      "engineMs": 0.40638880000000577,
+      "ruleRuns": 3,
+      "derived": 2995
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 100,
+      "scenario": "initial render",
+      "engineMs": 76.94879099999997,
+      "ruleRuns": 10,
+      "derived": 2632
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 100,
+      "scenario": "toggle item",
+      "engineMs": 0.42248059999999443,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 100,
+      "scenario": "rename item",
+      "engineMs": 0.35870826666665606,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 100,
+      "scenario": "reorder item",
+      "engineMs": 1.5432779333333353,
+      "ruleRuns": 2,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 100,
+      "scenario": "add item",
+      "engineMs": 2.075924866666666,
+      "ruleRuns": 5,
+      "derived": 2994
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 100,
+      "scenario": "type in field",
+      "engineMs": 0.6947306000000177,
+      "ruleRuns": 3,
+      "derived": 2995
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 100,
+      "scenario": "initial render",
+      "engineMs": 65.78304200000002,
+      "ruleRuns": 218,
+      "derived": 2632
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 100,
+      "scenario": "toggle item",
+      "engineMs": 0.08812233333332718,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 100,
+      "scenario": "rename item",
+      "engineMs": 0.05595846666666375,
+      "ruleRuns": 1,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 100,
+      "scenario": "reorder item",
+      "engineMs": 0.7803499333333245,
+      "ruleRuns": 2,
+      "derived": 2634
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 100,
+      "scenario": "add item",
+      "engineMs": 1.0733889999999975,
+      "ruleRuns": 5,
+      "derived": 2994
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 100,
+      "scenario": "type in field",
+      "engineMs": 0.06708893333335103,
+      "ruleRuns": 3,
+      "derived": 2995
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 100,
+      "scenario": "initial render",
+      "engineMs": 27.629917000000034,
+      "ruleRuns": 217,
+      "derived": 2563
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 100,
+      "scenario": "toggle item",
+      "engineMs": 0.09176400000000437,
+      "ruleRuns": 1,
+      "derived": 2565
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 100,
+      "scenario": "rename item",
+      "engineMs": 0.041447266666655956,
+      "ruleRuns": 1,
+      "derived": 2565
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 100,
+      "scenario": "reorder item",
+      "engineMs": 0.743294333333328,
+      "ruleRuns": 2,
+      "derived": 2565
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 100,
+      "scenario": "add item",
+      "engineMs": 0.8604694666666736,
+      "ruleRuns": 5,
+      "derived": 2925
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 100,
+      "scenario": "type in field",
+      "engineMs": 0.0940998666666701,
+      "ruleRuns": 3,
+      "derived": 2926
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 1000,
+      "scenario": "initial render",
+      "engineMs": 729.7800839999999,
+      "ruleRuns": 10,
+      "derived": 24532
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 1000,
+      "scenario": "toggle item",
+      "engineMs": 0.5068501333333189,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 1000,
+      "scenario": "rename item",
+      "engineMs": 0.4701721999999942,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 1000,
+      "scenario": "reorder item",
+      "engineMs": 87.626111,
+      "ruleRuns": 2,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 1000,
+      "scenario": "add item",
+      "engineMs": 124.94275546666664,
+      "ruleRuns": 5,
+      "derived": 24895
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · bulk",
+      "size": 1000,
+      "scenario": "type in field",
+      "engineMs": 1.1211166666667851,
+      "ruleRuns": 3,
+      "derived": 24896
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 1000,
+      "scenario": "initial render",
+      "engineMs": 985.2075,
+      "ruleRuns": 2018,
+      "derived": 24532
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 1000,
+      "scenario": "toggle item",
+      "engineMs": 0.44513620000002446,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 1000,
+      "scenario": "rename item",
+      "engineMs": 0.4284886666666656,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 1000,
+      "scenario": "reorder item",
+      "engineMs": 87.54691106666664,
+      "ruleRuns": 2,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 1000,
+      "scenario": "add item",
+      "engineMs": 115.61751660000006,
+      "ruleRuns": 5,
+      "derived": 24895
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · sparql · per-focus",
+      "size": 1000,
+      "scenario": "type in field",
+      "engineMs": 1.417352733333367,
+      "ruleRuns": 3,
+      "derived": 24896
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 1000,
+      "scenario": "initial render",
+      "engineMs": 718.6717919999999,
+      "ruleRuns": 2018,
+      "derived": 24532
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 1000,
+      "scenario": "toggle item",
+      "engineMs": 0.2659694000000096,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 1000,
+      "scenario": "rename item",
+      "engineMs": 0.27059706666668715,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 1000,
+      "scenario": "reorder item",
+      "engineMs": 83.302561,
+      "ruleRuns": 2,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 1000,
+      "scenario": "add item",
+      "engineMs": 137.67035840000005,
+      "ruleRuns": 5,
+      "derived": 24895
+    },
+    {
+      "env": "node",
+      "config": "oxigraph · function",
+      "size": 1000,
+      "scenario": "type in field",
+      "engineMs": 0.9136582000000999,
+      "ruleRuns": 3,
+      "derived": 24896
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 1000,
+      "scenario": "initial render",
+      "engineMs": 364.645125,
+      "ruleRuns": 10,
+      "derived": 24532
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 1000,
+      "scenario": "toggle item",
+      "engineMs": 0.49211113333331014,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 1000,
+      "scenario": "rename item",
+      "engineMs": 0.41831673333332825,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 1000,
+      "scenario": "reorder item",
+      "engineMs": 7.542677866666676,
+      "ruleRuns": 2,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 1000,
+      "scenario": "add item",
+      "engineMs": 8.708661199999975,
+      "ruleRuns": 5,
+      "derived": 24895
+    },
+    {
+      "env": "node",
+      "config": "hybrid · sparql · bulk",
+      "size": 1000,
+      "scenario": "type in field",
+      "engineMs": 0.7502944666666888,
+      "ruleRuns": 3,
+      "derived": 24896
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 1000,
+      "scenario": "initial render",
+      "engineMs": 231.62704199999996,
+      "ruleRuns": 2018,
+      "derived": 24532
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 1000,
+      "scenario": "toggle item",
+      "engineMs": 0.09205533333333733,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 1000,
+      "scenario": "rename item",
+      "engineMs": 0.0842750666666537,
+      "ruleRuns": 1,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 1000,
+      "scenario": "reorder item",
+      "engineMs": 5.841566800000002,
+      "ruleRuns": 2,
+      "derived": 24535
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 1000,
+      "scenario": "add item",
+      "engineMs": 6.81091933333333,
+      "ruleRuns": 5,
+      "derived": 24895
+    },
+    {
+      "env": "node",
+      "config": "hybrid · function",
+      "size": 1000,
+      "scenario": "type in field",
+      "engineMs": 0.10699993333333471,
+      "ruleRuns": 3,
+      "derived": 24896
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 1000,
+      "scenario": "initial render",
+      "engineMs": 121.91391599999997,
+      "ruleRuns": 2017,
+      "derived": 24463
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 1000,
+      "scenario": "toggle item",
+      "engineMs": 0.06043326666666265,
+      "ruleRuns": 1,
+      "derived": 24466
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 1000,
+      "scenario": "rename item",
+      "engineMs": 0.0761971333333425,
+      "ruleRuns": 1,
+      "derived": 24466
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 1000,
+      "scenario": "reorder item",
+      "engineMs": 6.238138866666691,
+      "ruleRuns": 2,
+      "derived": 24466
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 1000,
+      "scenario": "add item",
+      "engineMs": 5.740922133333326,
+      "ruleRuns": 5,
+      "derived": 24826
+    },
+    {
+      "env": "node",
+      "config": "n3 · function",
+      "size": 1000,
+      "scenario": "type in field",
+      "engineMs": 0.04084993333334144,
+      "ruleRuns": 3,
+      "derived": 24827
+    }
+  ]
+}

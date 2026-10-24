@@ -1,0 +1,76 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+
+# ---------------------------------------------------------------------------
+# Semblance core: components, layers and the rules that project them into
+# RDF/HTML. A UI is a graph of component instances; rendering is a stratified
+# rewrite of that graph into an RDF/HTML graph, which is then materialized.
+# ---------------------------------------------------------------------------
+
+<https://semblance.dev/ns/core> a owl:Ontology ;
+    rdfs:label "Semblance core"@en .
+
+sem:Component a owl:Class ;
+    rdfs:comment "Anything that can be rendered. Component vocabularies subclass this."@en .
+
+sem:Layer a owl:Class ;
+    rdfs:comment "A cross-cutting aspect (modality, style, a11y, behaviour, provenance...). Rules may belong to a layer; disabled layers' rules do not run."@en .
+
+sem:SourceLayer a sem:Layer ;
+    rdfs:label "source"@en ;
+    rdfs:comment "Lets c:Flippable views turn over to show the rules that make them."@en .
+
+sem:enables a owl:ObjectProperty ;
+    rdfs:range sem:Layer ;
+    rdfs:label "Layers"@en ;
+    rdfs:comment "Layers an application (or a projection of it) has switched on."@en .
+
+sem:DebugLayer a sem:Layer ;
+    rdfs:label "debug"@en ;
+    rdfs:comment "Exposes provenance (which rule rendered which node) as DOM attributes."@en .
+
+sem:slug a owl:DatatypeProperty ;
+    rdfs:comment "Short machine name used in generated attribute values and CSS."@en .
+
+# --- Rules -----------------------------------------------------------------
+
+sem:Rendering a owl:Class ;
+    rdfs:comment "An abstract rule slot. Several sem:Rule implementations (SPARQL, function) may implement it; the engine picks one by preference."@en .
+
+sem:Rule a owl:Class ;
+    rdfs:subClassOf prov:Plan ;
+    rdfs:comment """A projection from a focus node ($this) to a set of triples. The body is
+either a SPARQL CONSTRUCT (sem:construct) or a registered function (sem:function).
+Rules must not emit blank nodes; they mint IRIs as <focus>/~<local> so results are
+stable across re-evaluation and DOM identity is preserved."""@en .
+
+sem:implements a owl:ObjectProperty ; rdfs:domain sem:Rule ; rdfs:range sem:Rendering .
+sem:targets a owl:ObjectProperty ;
+    rdfs:comment "Class whose instances are the rule's focus nodes. Inherited from the implemented sem:Rendering when absent."@en .
+sem:modality a owl:ObjectProperty ;
+    rdfs:comment "Modality the rule renders for; absent means every modality."@en .
+sem:stratum a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "Evaluation stratum. Component instances may only be created in stratum 0; later strata (layers) decorate."@en .
+sem:layer a owl:ObjectProperty ; rdfs:range sem:Layer .
+sem:construct a owl:DatatypeProperty ;
+    rdfs:comment "SPARQL CONSTRUCT body. $this is substituted with the focus IRI, or with ?this for bulk evaluation, so the WHERE clause must bind $this through a triple pattern."@en .
+sem:function a owl:DatatypeProperty ; rdfs:comment "Identifier of a registered function implementation."@en .
+sem:follows a owl:ObjectProperty ;
+    rdfs:comment "Predicate from the focus to nodes the rule reads; changes on those nodes make the focus dirty."@en .
+sem:watches a owl:ObjectProperty ;
+    rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
+
+# --- Rendering output -------------------------------------------------------
+
+sem:renders a owl:ObjectProperty ;
+    rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
+
+sem:slot a owl:DatatypeProperty ;
+    rdfs:comment "Marks an RDF/HTML element as a host-owned slot: renderers create it but never manage its children, so a host application can mount its own content there."@en .
+sem:symbol a owl:DatatypeProperty ; rdfs:comment "A short glyph standing for an individual in compact UIs."@en .
+sem:order a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Presentation order among sibling individuals (ascending)."@en .

@@ -1,0 +1,158 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Selection controls. Their state lives in the graph (c:selected, or the
+# controlled property itself); selecting is an RDF event handled by a reaction.
+# Rendered buttons carry `c:selects <option>` so reactions can tell, from the
+# event's beh:node (or any RDF/HTML ancestor of it: rdfhtml:hasChild*), which
+# option was hit.
+
+c:selects a owl:ObjectProperty ;
+    rdfs:comment "On a rendered element: the option or tab that activating it selects."@en .
+
+# --- Tabs ----------------------------------------------------------------------------
+
+c:Tabs a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Panels of which one is shown at a time."@en ;
+    sem:slug "tabs" .
+c:Tab a owl:Class ; rdfs:comment "A panel of a c:Tabs: a label plus either a component (c:content) or a host-owned slot (c:slot)."@en .
+c:tabs a owl:ObjectProperty ; rdfs:domain c:Tabs ; rdfs:range rdf:List .
+c:selected a owl:ObjectProperty ; rdfs:domain c:Tabs ; rdfs:range c:Tab .
+c:content a owl:ObjectProperty ; rdfs:domain c:Tab ; rdfs:range sem:Component .
+c:slot a owl:DatatypeProperty ; rdfs:domain c:Tab ; rdfs:comment "Name of a host-owned slot rendered as the panel's content."@en .
+
+c:TabsRendering a sem:Rendering ;
+    sem:targets c:Tabs ;
+    sem:stratum 0 .
+c:TabsRendering-fn a sem:Rule ;
+    sem:implements c:TabsRendering ;
+    sem:function "tabs" .
+
+c:TabsSelect a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Tabs ;
+    beh:deletes """CONSTRUCT { $this c:selected ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?tab . $this c:selected ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:selected ?tab } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?tab }""" ;
+    sem:function "tabs:select" .
+
+# --- Segmented control -------------------------------------------------------------------
+
+c:Segmented a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Sets one property (c:property) of one node (c:controls). The options are not
+configured: they are the individuals in the property's rdfs:range, ordered by sem:order,
+labelled by rdfs:label and sem:symbol."""@en ;
+    sem:slug "segmented" .
+c:controls a owl:ObjectProperty ; rdfs:domain c:Segmented .
+c:property a owl:ObjectProperty ; rdfs:domain c:Segmented ; rdfs:range rdf:Property .
+
+c:ThemeSwitcher a owl:Class ;
+    rdfs:subClassOf c:Segmented ;
+    rdfs:comment "Day / night / match-the-system switch: a segmented control over sty:colorScheme."@en ;
+    sem:slug "theme-switcher" .
+
+c:SegmentedRendering a sem:Rendering ;
+    sem:targets c:Segmented ;
+    sem:stratum 0 ;
+    sem:follows c:controls .
+c:SegmentedRendering-fn a sem:Rule ;
+    sem:implements c:SegmentedRendering ;
+    sem:function "segmented" .
+
+c:SegmentedSelect a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Segmented ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p }""" ;
+    sem:function "segmented:select" .
+
+# --- Flippable: any component, with its making on the back ----------------------------------
+
+c:Flippable a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A two-sided card attachable to any component (c:front). The front is the
+component itself; the back shows how it is made - the rules that rendered it, found through
+its PROV-O trail (prov:wasGeneratedBy / prov:wasInfluencedBy -> prov:hadPlan), with SPARQL
+bodies syntax-colored. c:flipped holds which side faces the viewer."""@en ;
+    sem:slug "flippable" .
+c:front a owl:ObjectProperty ; rdfs:domain c:Flippable ; rdfs:range sem:Component .
+c:flipped a owl:DatatypeProperty ; rdfs:domain c:Flippable ; rdfs:range xsd:boolean .
+c:flips a owl:ObjectProperty ; rdfs:comment "On a rendered element: the c:Flippable that activating it turns over."@en .
+
+# The base rendering only wraps the front; the source layer (below) adds the
+# floating flip control, the back face and the flipped state.
+c:FlippableRendering a sem:Rendering ;
+    sem:targets c:Flippable ;
+    sem:stratum 0 .
+c:FlippableRendering-fn a sem:Rule ;
+    sem:implements c:FlippableRendering ;
+    sem:function "flippable" .
+
+# Stratum 95: after every other layer, so the back lists the layers that decorated the front.
+c:FlippableSource a sem:Rendering ;
+    sem:targets c:Flippable ;
+    sem:modality mod:Screen ;
+    sem:layer sem:SourceLayer ;
+    sem:stratum 95 ;
+    sem:follows c:front .
+c:FlippableSource-fn a sem:Rule ;
+    sem:implements c:FlippableSource ;
+    sem:function "flippable:source" .
+
+c:FlippableFlip a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Flippable ;
+    beh:deletes """CONSTRUCT { $this c:flipped ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:flips $this . $this c:flipped ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:flipped ?new } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:flips $this . OPTIONAL { $this c:flipped ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "flippable:flip" .
+
+# --- Choice (dropdown) and Chips (multi-select pills) ------------------------------------------
+# Like c:Segmented they edit c:property of c:controls, with options from the
+# property's rdfs:range - or from an explicit c:options list.
+
+c:options a owl:ObjectProperty ; rdfs:range rdf:List ;
+    rdfs:comment "Explicit, ordered options (overrides the property's range)."@en .
+
+c:Choice a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A dropdown setting a single-valued property."@en ;
+    sem:slug "choice" .
+c:ChoiceRendering a sem:Rendering ;
+    sem:targets c:Choice ;
+    sem:stratum 0 ;
+    sem:follows c:controls .
+c:ChoiceRendering-fn a sem:Rule ;
+    sem:implements c:ChoiceRendering ;
+    sem:function "choice" .
+c:ChoiceSelect a beh:Reaction ;
+    beh:when beh:Change ;
+    beh:sourceClass c:Choice ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
+    sem:function "choice:select" .
+
+c:Chips a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Pills toggling membership of values of a multi-valued property."@en ;
+    sem:slug "chips" .
+c:ChipsRendering a sem:Rendering ;
+    sem:targets c:Chips ;
+    sem:stratum 0 ;
+    sem:follows c:controls .
+c:ChipsRendering-fn a sem:Rule ;
+    sem:implements c:ChipsRendering ;
+    sem:function "chips" .
+c:ChipsToggle a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Chips ;
+    beh:deletes """CONSTRUCT { ?target ?p ?option } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p . ?target ?p ?option }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p . FILTER NOT EXISTS { ?target ?p ?option } }""" ;
+    sem:function "chips:toggle" .

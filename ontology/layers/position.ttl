@@ -1,0 +1,68 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Positioning layer. It has no rules of its own: its properties are declared
+# hookable, so the style layer's hook rule exposes them and the CSS compiler
+# turns them into layout. A layer can be pure vocabulary riding on another.
+
+<https://semblance.dev/ns/position> a owl:Ontology ;
+    rdfs:label "Semblance positioning layer"@en .
+
+pos:Layer a sem:Layer ; rdfs:label "position"@en .
+
+pos:direction a owl:ObjectProperty ;
+    rdfs:range pos:Direction ;
+    rdfs:comment "Main axis along which a container arranges its children."@en ;
+    sty:hookAttribute "data-sem-direction" .
+
+pos:Direction a owl:Class .
+pos:Row a pos:Direction ; sem:slug "row" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "row" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] .
+pos:Column a pos:Direction ; sem:slug "column" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] .
+
+pos:gap a owl:ObjectProperty ;
+    rdfs:comment "Spacing between children, as a space token."@en ;
+    sty:hookAttribute "data-sem-gap" ;
+    sty:hookCssProperty "gap" ;
+    sty:tokenScale sty:Space .
+
+pos:layout a owl:ObjectProperty ;
+    rdfs:range pos:Layout ;
+    rdfs:comment "How a container lays its children out in two dimensions."@en ;
+    sty:hookAttribute "data-sem-layout" .
+pos:Layout a owl:Class .
+pos:Columns a pos:Layout ; sem:slug "columns" ;
+    rdfs:comment "Equal columns that wrap when narrow."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 420px), 1fr))" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] .
+pos:Sidebar a pos:Layout ; sem:slug "sidebar" ;
+    rdfs:comment "A wide main column and a narrower side column, stacking when narrow."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 380px), 1fr))" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] .
+
+pos:inset a owl:ObjectProperty ;
+    rdfs:comment "Padding inside a container, as a space token."@en ;
+    sty:hookAttribute "data-sem-inset" ;
+    sty:hookCssProperty "padding" ;
+    sty:tokenScale sty:Space .
+
+pos:align a owl:ObjectProperty ;
+    rdfs:range pos:Alignment ;
+    rdfs:comment "How children line up across the main axis."@en ;
+    sty:hookAttribute "data-sem-align" ;
+    sty:overrides pos:direction, pos:layout .
+pos:Alignment a owl:Class .
+pos:Start a pos:Alignment ; sem:slug "start" ; sty:declares [ sty:property "align-items" ; sty:raw "flex-start" ] .
+pos:Center a pos:Alignment ; sem:slug "center" ; sty:declares [ sty:property "align-items" ; sty:raw "center" ] .
+pos:End a pos:Alignment ; sem:slug "end" ; sty:declares [ sty:property "align-items" ; sty:raw "flex-end" ] .
+pos:Baseline a pos:Alignment ; sem:slug "baseline" ; sty:declares [ sty:property "align-items" ; sty:raw "baseline" ] .

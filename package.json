@@ -1,0 +1,32 @@
+{
+  "name": "semblance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike: an ontologically-defined web UI framework",
+  "scripts": {
+    "gen:vocab": "tsx scripts/gen-rdfhtml-vocab.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "bench": "tsx bench/node.ts",
+    "build:single": "vite build --mode single && node scripts/name-single.mjs"
+  },
+  "dependencies": {
+    "n3": "^2.13.12",
+    "oxigraph": "^0.5.13"
+  },
+  "devDependencies": {
+    "@comunica/query-sparql-rdfjs": "^5.4.1",
+    "@rdfjs/types": "^2.0.1",
+    "@types/n3": "^1.26.5",
+    "@types/node": "^26.6.5",
+    "linkedom": "^0.18.14",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.0.5"
+  }
+}

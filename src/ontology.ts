@@ -1,0 +1,27 @@
+// The ontology files that make up the framework, in load order. Loaders for
+// Node (fs) and the browser (Vite raw imports) both use this list.
+export const ONTOLOGY_FILES = [
+  'core.ttl',
+  'svg.ttl',
+  'layers/modality.ttl',
+  'layers/style.ttl',
+  'layers/position.ttl',
+  'layers/a11y.ttl',
+  'layers/behaviour.ttl',
+  'layers/provenance.ttl',
+  'layers/tooltip.ttl',
+  'components/common.ttl',
+  'components/stack.ttl',
+  'components/heading.ttl',
+  'components/button.ttl',
+  'components/textfield.ttl',
+  'components/list.ttl',
+  'components/stream-stats.ttl',
+  'components/controls.ttl',
+  'components/views.ttl',
+  'components/window.ttl',
+  'components/progress.ttl',
+  'components/charts.ttl',
+  'perf/perf.ttl',
+  'theme/default.ttl',
+] as const

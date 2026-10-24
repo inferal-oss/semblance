@@ -1,0 +1,22 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+c:Stack a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "An ordered container. Arrangement comes from the positioning layer."@en ;
+    sem:slug "stack" .
+
+c:children a owl:ObjectProperty ; rdfs:domain c:Stack ; rdfs:range rdf:List ;
+    rdfs:comment "Ordered child components."@en .
+
+# Function-only: walking an rdf:List in order is awkward in SPARQL.
+c:StackRendering a sem:Rendering ;
+    sem:targets c:Stack ;
+    sem:stratum 0 .
+
+c:StackRendering-fn a sem:Rule ;
+    sem:implements c:StackRendering ;
+    sem:function "stack" .

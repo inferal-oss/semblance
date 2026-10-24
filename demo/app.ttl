@@ -1,0 +1,294 @@
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix ex: <https://example.org/todo#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix a11y: <https://semblance.dev/ns/a11y#> .
+@prefix perf: <https://semblance.dev/ns/perf#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# =================================================================================================
+# The demo's entire interface as a component graph. The host page is a mount
+# point; everything visible below is a Semblance component (or a slot where
+# another projection is mounted), and every setting is graph state.
+# =================================================================================================
+
+# --- application state ---------------------------------------------------------------------------
+
+ui:app sty:colorScheme sty:System ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer ;
+    ui:store ui:Hybrid ;
+    ui:rules ui:PreferSparql ;
+    ui:page ui:Playground ;
+    ui:inspectorMode ui:Live .
+
+ui:store rdfs:label "Store" ; rdfs:range ui:StoreKind .
+ui:Hybrid a ui:StoreKind ; rdfs:label "Hybrid · Oxigraph + N3 mirror" ; sem:order 1 ; ui:key "hybrid" .
+ui:Oxigraph a ui:StoreKind ; rdfs:label "Oxigraph" ; sem:order 2 ; ui:key "oxigraph" .
+ui:N3 a ui:StoreKind ; rdfs:label "N3.js · functions only" ; sem:order 3 ; ui:key "n3" .
+ui:rules rdfs:label "Rules" ; rdfs:range ui:RuleKind .
+ui:PreferSparql a ui:RuleKind ; rdfs:label "Prefer SPARQL" ; sem:order 1 ; ui:key "sparql" .
+ui:PreferFunction a ui:RuleKind ; rdfs:label "Prefer functions" ; sem:order 2 ; ui:key "function" .
+ui:page rdfs:label "Page" ; rdfs:range ui:Page .
+ui:Playground a ui:Page ; rdfs:label "Playground" ; sem:order 1 ; ui:key "playground" .
+ui:Performance a ui:Page ; rdfs:label "Performance" ; sem:order 2 ; ui:key "performance" .
+ui:inspectorMode rdfs:label "Inspector" ; rdfs:range ui:InspectorMode .
+ui:Live a ui:InspectorMode ; rdfs:label "Live" ; sem:symbol "●" ; sem:order 1 .
+ui:Paused a ui:InspectorMode ; rdfs:label "Paused" ; sem:symbol "❙❙" ; sem:order 2 .
+ui:Off a ui:InspectorMode ; rdfs:label "Off" ; sem:symbol "○" ; sem:order 3 .
+ui:inspecting rdfs:label "inspecting" .
+
+# Prefixes for showing IRIs compactly (sh:declare style).
+ui:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/todo#"^^xsd:anyURI ] ,
+                       [ sh:prefix "ui" ; sh:namespace "https://semblance.dev/demo#"^^xsd:anyURI ] ,
+                       [ sh:prefix "perf" ; sh:namespace "https://semblance.dev/ns/perf#"^^xsd:anyURI ] ,
+                       [ sh:prefix "sosa" ; sh:namespace "http://www.w3.org/ns/sosa/"^^xsd:anyURI ] .
+
+# What the last interaction cost, written by the host after each one.
+ui:action rdfs:label "action" ; c:emphasis true ; c:hideLabel true .
+ui:ms rdfs:label "update + DOM" ; c:unit "ms" .
+ui:ruleRuns rdfs:label "rule runs" .
+ui:domOps rdfs:label "DOM operations" .
+ui:heap rdfs:label "JS heap" ; c:unit "MB" .
+ui:storage rdfs:label "storage (incl. session)" ; c:unit "KB" .
+ui:triples rdfs:label "triples" .
+ui:domNodes rdfs:label "DOM nodes" .
+
+# --- the shell ----------------------------------------------------------------------------------
+
+ui:shell a c:Stack ; c:children ( ui:appBar ui:pages ui:desktop ) .
+
+# Detached views live here, outside the pages, so they survive page changes.
+ui:desktop a c:Desktop .
+
+ui:appBar a c:AppBar ;
+    c:label "Semblance" ;
+    c:subtitle "one component graph · many projections" ;
+    c:logo ui:logo ;
+    c:actions ( ui:theme ui:nav ) .
+ui:logo a c:GraphMark ; c:nodes 3 ; rdfs:label "Semblance" .
+ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
+ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
+
+ui:pages a c:Switch ; c:controls ui:app ; c:property ui:page ;
+    c:cases ( ui:playgroundCase ui:performanceCase ) .
+ui:playgroundCase c:when ui:Playground ; c:content ui:playground .
+ui:performanceCase c:when ui:Performance ; c:content ui:performance .
+
+# --- playground ---------------------------------------------------------------------------------
+
+ui:playground a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:inset tok:space-5 ;
+    c:children ( ui:toolbar ui:workspace ) .
+
+ui:toolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ui:lastUpdate ui:memory ) .
+ui:memory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples ui:domNodes ) .
+ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
+ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
+ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer ) .
+ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
+
+ui:workspace a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
+    c:children ( ui:screenCard ui:viewsCard ) .
+
+ui:screenCard a c:Card ;
+    c:label "Screen" ; c:badge "mod:Screen" ;
+    c:note "The todo app: a component graph projected to RDF/HTML and patched into the DOM. Hover anything to inspect it." ;
+    c:content ui:screenStage .
+ui:screenStage a c:Stack ; sty:backdrop sty:Dots ; c:children ( ui:todoCard ) .
+ui:todoCard a c:Flippable ; c:front ex:page .
+
+ui:viewsCard a c:Card ;
+    c:label "Views" ; c:badge "c:Tabs" ;
+    c:note "Every view is a projection of the same graph. ↗ opens one in a window; tab and window state are graph state." ;
+    c:content ui:views .
+ui:views a c:Tabs ; c:detachable true ; c:windowsOn ui:desktop ;
+    c:tabs ( ui:inspectorTab ui:textTab ui:activityTab ui:logTab ) ;
+    c:selected ui:inspectorTab .
+
+ui:inspectorTab a c:Tab ; c:label "Inspector" ; c:content ui:inspectorCard .
+ui:textTab a c:Tab ; c:label "Text projection" ; c:content ui:textCard .
+ui:activityTab a c:Tab ; c:label "Activity" ; c:content ui:activityCard .
+ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
+
+# Inspector: hovering any component writes ui:inspecting (unrecorded hover events);
+# the view is CONSTRUCTs bound to it, and the node is highlighted.
+ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
+ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspector ui:highlight ) .
+ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:inspectingChip ) .
+ui:inspectorModes a c:Segmented ; c:controls ui:app ; c:property ui:inspectorMode .
+
+# Turning the inspector off also clears what it showed.
+ui:ClearInspection a beh:Reaction ; beh:when beh:Click ; beh:source ui:inspectorModes ;
+    beh:deletes """CONSTRUCT { ui:app ui:inspecting ?node }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ui:Off . ui:app ui:inspecting ?node }""" .
+ui:inspectingChip a c:Metrics ; c:of ui:app ; c:fields ( ui:inspecting ) .
+ui:inspector a c:QueryView ;
+    c:queries ( ui:qElement ui:qProvenance ui:qGeneratedBy ui:qInfluencedBy ui:qDerivedFrom ) ;
+    c:bindVariable "node" ; c:bindFrom ui:app ; c:bindProperty ui:inspecting ;
+    c:baseIri "https://example.org/todo" ;
+    c:emptyText "With the inspector Live, hover any element on the page to see its RDF/HTML, the PROV-O activity and rule that generated it, the layers that decorated it, and the input it was derived from." .
+ui:highlight a c:Highlight ; c:bindFrom ui:app ; c:bindProperty ui:inspecting .
+
+ui:qElement a sem:Query ; rdfs:label "rendered element (RDF/HTML)" ;
+    sem:construct """CONSTRUCT { $node ?p ?o . ?attr ?ap ?ao }
+WHERE {
+  { $node ?p ?o FILTER(!STRSTARTS(STR(?p), STR(prov:))) }
+  UNION
+  { $node rdfhtml:attribute ?attr . ?attr ?ap ?ao }
+}""" .
+ui:qProvenance a sem:Query ; rdfs:label "provenance" ;
+    sem:construct """CONSTRUCT { $node ?p ?activity }
+WHERE { $node ?p ?activity FILTER(?p IN (prov:wasGeneratedBy, prov:wasInfluencedBy)) }""" .
+ui:qGeneratedBy a sem:Query ; rdfs:label "generated by: the activity, its plan, and the rule" ;
+    sem:construct """CONSTRUCT { ?activity ?ap ?ao . ?assoc ?sp ?so . ?plan ?pp ?po . ?slot ?lp ?lo }
+WHERE {
+  $node prov:wasGeneratedBy ?activity .
+  ?activity prov:qualifiedAssociation ?assoc .
+  ?assoc prov:hadPlan ?plan .
+  # LATERAL keeps the branches correlated (uncorrelated UNIONs scan every triple).
+  LATERAL {
+    { ?activity ?ap ?ao } UNION { ?assoc ?sp ?so } UNION { ?plan ?pp ?po }
+    UNION { ?plan sem:implements ?slot . ?slot ?lp ?lo }
+  }
+}""" .
+ui:qInfluencedBy a sem:Query ; rdfs:label "influenced by: layers that decorated it" ;
+    sem:construct """CONSTRUCT { ?activity ?ap ?ao . ?assoc ?sp ?so }
+WHERE {
+  $node prov:wasInfluencedBy ?activity .
+  ?activity prov:qualifiedAssociation ?assoc .
+  LATERAL { { ?activity ?ap ?ao } UNION { ?assoc ?sp ?so } }
+}""" .
+ui:qDerivedFrom a sem:Query ; rdfs:label "derived from: the input the activity used" ;
+    sem:construct """CONSTRUCT { ?used ?p ?o . ?b ?bp ?bo . ?cell ?cp ?co }
+WHERE {
+  $node prov:wasGeneratedBy/prov:used ?used .
+  LATERAL {
+    { ?used ?p ?o FILTER(!STRSTARTS(STR(?p), STR(prov:))) }
+    UNION { ?used ?x ?b FILTER(isBlank(?b)) ?b ?bp ?bo }
+    UNION { ?used ?y ?list FILTER(isBlank(?list)) ?list rdf:rest* ?cell . ?cell ?cp ?co }
+  }
+}""" .
+
+# Hovering any component inspects the hit node while the inspector is Live (not over itself).
+ui:InspectOnHover a beh:Reaction ;
+    beh:when beh:Hover ;
+    beh:sourceClass sem:Component ;
+    beh:deletes """CONSTRUCT { ui:app ui:inspecting ?old }
+WHERE {
+  ui:app ui:inspectorMode ui:Live .
+  $event beh:node ?hit .
+  FILTER NOT EXISTS { ?inside sem:renders ui:inspectorCard ; (rdfhtml:hasChild|^sem:renders)* ?hit }
+  ui:app ui:inspecting ?old FILTER(?old != ?hit)
+}""" ;
+    beh:inserts """CONSTRUCT { ui:app ui:inspecting ?hit }
+WHERE {
+  ui:app ui:inspectorMode ui:Live .
+  $event beh:node ?hit .
+  FILTER NOT EXISTS { ?inside sem:renders ui:inspectorCard ; (rdfhtml:hasChild|^sem:renders)* ?hit }
+}""" .
+
+ui:textCard a c:Flippable ; c:front ui:textProjection .
+ui:textProjection a c:ProjectionView ; rdfs:label "Text projection" ;
+    c:slot "text" ; c:projectionGraph "urn:semblance:derived:text" .
+
+ui:activityCard a c:Flippable ; c:front ex:activity .
+
+ui:logCard a c:Flippable ; c:front ui:changeLog .
+ui:changeLog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:changeLogHead ui:changeLogMembers ) .
+ui:changeLogHead a c:QueryView ; c:queries ( ui:qStream ui:qStreamView ) .
+ui:changeLogMembers a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 8 ;
+    c:emptyText "Click, type or tick something. Each relevant interaction becomes an immutable member of the beh:ChangeLog LDES, with the size of the change it caused." .
+ui:qStream a sem:Query ; rdfs:label "the event stream" ;
+    sem:construct """CONSTRUCT { beh:ChangeLog ?p ?o }
+WHERE { beh:ChangeLog ?p ?o FILTER(?p != tree:member) }""" .
+ui:qStreamView a sem:Query ; rdfs:label "its view and retention policy" ;
+    sem:construct """CONSTRUCT { ?view ?p ?o . ?policy ?pp ?po }
+WHERE {
+  beh:ChangeLog tree:view ?view .
+  ?view ?p ?o .
+  OPTIONAL { ?view ldes:retentionPolicy ?policy . ?policy ?pp ?po }
+}""" .
+# --- performance ---------------------------------------------------------------------------------
+
+ui:performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; pos:inset tok:space-5 ;
+    c:children ( ui:perfToolbar ui:perfWorkspace ) .
+
+ui:perfToolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+    c:children ( ui:sizes ui:runButton ui:clearButton ui:perfProgress ui:perfLastUpdate ui:perfMemory ) .
+ui:perfLastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
+ui:perfMemory a c:Metrics ; c:of ui:stats ; c:fields ( ui:heap ui:storage ui:triples ui:domNodes ) .
+ui:sizes a c:TextField ; c:label "Sizes" ; c:value "100,1000" ; c:placeholder "100,1000,10000" .
+ui:runButton a c:Button ; c:label "Run matrix" ; sty:intent sty:Primary .
+ui:clearButton a c:Button ; c:label "Clear" ; sty:intent sty:Secondary .
+ui:perfProgress a c:Progress ; c:value 0 ; c:max 1 ; c:label "" ; c:active false .
+
+# Pressing Run or Clear records a request; the host performs it (cells run in fresh realms).
+ui:RunMatrix a beh:Reaction ; beh:when beh:Click ; beh:source ui:runButton ;
+    beh:inserts """CONSTRUCT { ui:perf ui:request "run" } WHERE { }""" .
+ui:ClearMatrix a beh:Reaction ; beh:when beh:Click ; beh:source ui:clearButton ;
+    beh:inserts """CONSTRUCT { ui:perf ui:request "clear" } WHERE { }""" .
+
+ui:perfWorkspace a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ;
+    c:children ( ui:perfCharts ui:insightsCard ) .
+ui:perfCharts a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:initialCard ui:mixCard ui:matrixCard ui:scalingCard ) .
+
+ui:initialCard a c:Flippable ; c:front ui:initialPanel .
+ui:initialPanel a c:Card ; c:label "Initial render" ; c:badge "stacked" ;
+    c:note "Building the whole UI from the graph, split into graph engine and DOM time. One panel per size." ;
+    c:content ui:initialChart .
+ui:initialChart a c:BarChart ; rdfs:label "Initial render" ;
+    c:view perf:InitialRenderView ; c:dataset perf:run ;
+    c:facetVariable "items" ; c:facetLabel "{value} items" ;
+    c:categoryVariable "label" ; c:seriesVariable "part" ; c:valueVariable "value" ; c:unit "ms" ;
+    c:legend ( ui:engineSeries ui:domSeries ) .
+ui:engineSeries c:key "engine" ; rdfs:label "graph engine (store writes, rules, index)" .
+ui:domSeries c:key "dom" ; rdfs:label "DOM patching" .
+
+ui:mixCard a c:Flippable ; c:front ui:mixPanel .
+ui:mixPanel a c:Card ; c:label "Where update time goes" ; c:badge "stacked" ;
+    c:note "One operation of each kind per configuration, each segment one scenario (ms per operation)." ;
+    c:content ui:mixChart .
+ui:mixChart a c:BarChart ; rdfs:label "Update mix" ;
+    c:view perf:UpdateMixView ; c:dataset perf:run ;
+    c:facetVariable "items" ; c:facetLabel "{value} items" ;
+    c:categoryVariable "label" ; c:seriesVariable "part" ; c:valueVariable "value" ; c:unit "ms" .
+
+ui:matrixCard a c:Flippable ; c:front ui:matrixPanel .
+ui:matrixPanel a c:Card ; c:label "Update latency" ; c:badge "table" ;
+    c:note "Graph change to patched DOM, mean of 15 operations. The view's query flags cells over the 16.7 ms frame budget." ;
+    c:content ui:matrixChart .
+ui:matrixChart a c:Heatmap ; rdfs:label "Update latency" ;
+    c:view perf:UpdateMatrixView ; c:dataset perf:run ;
+    c:facetVariable "items" ; c:facetLabel "{value} items · ms per operation" ;
+    c:seriesVariable "part" ; c:categoryVariable "label" ; c:valueVariable "value" ; c:unit "ms" ;
+    c:flagVariable "overBudget" ; c:flagLabel "over 16.7 ms: misses a 60 fps frame" .
+
+ui:scalingCard a c:Flippable ; c:front ui:scalingPanel .
+ui:scalingPanel a c:Card ; c:label "Scaling" ; c:badge "log–log" ;
+    c:note "Initial render as the list grows. Steeper than the dotted reference means worse than linear." ;
+    c:content ui:scalingChart .
+ui:scalingChart a c:LineChart ; rdfs:label "Scaling" ;
+    c:view perf:ScalingView ; c:dataset perf:run ;
+    c:seriesVariable "label" ; c:categoryVariable "items" ; c:valueVariable "value" ; c:unit "ms" ;
+    c:logScale true ; c:referenceLine "linear" ;
+    c:emptyText "Run at least two sizes to see scaling." .
+
+ui:insightsCard a c:Flippable ; c:front ui:insightsPanel .
+ui:insightsPanel a c:Card ; c:label "Insights" ; c:badge "SPARQL judgements" ;
+    c:note "Results are sosa:Observations in the graph; each judgement is a CONSTRUCT that writes findings." ;
+    c:content ui:insights .
+ui:insights a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:findings ui:observations ) .
+ui:findings a c:FindingList ; c:judgementClass perf:Judgement ; c:dataset perf:run ;
+    c:emptyText "Findings appear once there are observations." .
+ui:observations a c:QueryView ; c:of perf:run ; c:queries ( perf:ObservationsQuery ) ;
+    c:emptyText "No observations yet. Results of a run are kept for this tab." .

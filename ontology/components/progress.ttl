@@ -1,0 +1,53 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Progress: how far along something is. Hidden unless c:active is true.
+
+c:Progress a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A determinate progress bar with a status label (c:value of c:max)."@en ;
+    sem:slug "progress" .
+c:max a owl:DatatypeProperty ; rdfs:domain c:Progress ; rdfs:range xsd:decimal .
+c:active a owl:DatatypeProperty ; rdfs:domain c:Progress ; rdfs:range xsd:boolean .
+
+c:ProgressRendering a sem:Rendering ;
+    sem:targets c:Progress ;
+    sem:stratum 0 .
+c:ProgressRendering-fn a sem:Rule ;
+    sem:implements c:ProgressRendering ;
+    sem:function "progress" .
+
+[] a sty:StyleRule ; sty:appliesTo c:Progress ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "10px" ] ,
+                 [ sty:property "min-width" ; sty:raw "260px" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] .
+
+[] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:state "[hidden]" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+[] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:part ".sem-track" ;
+    sty:declares [ sty:property "width" ; sty:raw "160px" ] ,
+                 [ sty:property "height" ; sty:raw "6px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "6px" ] ,
+                 [ sty:property "background" ; sty:token tok:border ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] .
+
+[] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:part ".sem-fill" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "height" ; sty:raw "100%" ] ,
+                 [ sty:property "width" ; sty:raw "var(--sem-progress, 0%)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "6px" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(90deg, var(--sem-accent), #ff7ac6)" ] ,
+                 [ sty:property "transition" ; sty:raw "width 300ms" ] .
+
+[] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:part ".sem-status" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:raw "12px" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .

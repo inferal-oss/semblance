@@ -1,0 +1,101 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+
+# Windows: floating, movable, resizable, closable containers.
+#
+# A window usually is not written by hand: c:Tabs mints one (in stratum 0) for
+# each tab marked c:detached, places the tab's content node in it, and records
+# `<window> prov:wasDerivedFrom <tab>`. Docking or closing the window follows
+# that provenance back to the tab and clears c:detached; the same content node
+# returns to its panel, so its DOM (and any host state in it) is preserved.
+#
+# Geometry (c:x, c:y, c:width, c:height) is input state on the window's IRI,
+# committed by one RDF event per gesture; the IRI is deterministic, so a
+# re-detached tab reopens where it was.
+
+c:Window a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A floating container with a title bar, dock/close controls and a resize handle."@en ;
+    sem:slug "window" .
+
+c:title a owl:DatatypeProperty ; rdfs:domain c:Window .
+c:body a owl:ObjectProperty ; rdfs:domain c:Window ; rdfs:comment "The node shown inside the window (a component or a slot)."@en .
+c:x a owl:DatatypeProperty ; rdfs:range xsd:integer .
+c:y a owl:DatatypeProperty ; rdfs:range xsd:integer .
+c:width a owl:DatatypeProperty ; rdfs:range xsd:integer .
+c:height a owl:DatatypeProperty ; rdfs:range xsd:integer .
+c:docks a owl:ObjectProperty ; rdfs:comment "On a rendered element: the window that activating it docks (returns to its origin)."@en .
+
+c:detachable a owl:DatatypeProperty ; rdfs:domain c:Tabs ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether the tabs offer a detach control."@en .
+c:detached a owl:DatatypeProperty ; rdfs:domain c:Tab ; rdfs:range xsd:boolean ;
+    rdfs:comment "The tab's content is shown in a window instead of a panel."@en .
+c:detaches a owl:ObjectProperty ; rdfs:comment "On a rendered element: the tab that activating it detaches."@en .
+
+c:WindowRendering a sem:Rendering ;
+    sem:targets c:Window ;
+    sem:stratum 0 .
+c:WindowRendering-fn a sem:Rule ;
+    sem:implements c:WindowRendering ;
+    sem:function "window" .
+
+# --- behaviour ----------------------------------------------------------------------------
+
+c:TabsDetach a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Tabs ;
+    beh:inserts """CONSTRUCT { ?tab c:detached true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:detaches ?tab }""" ;
+    sem:function "tabs:detach" .
+
+# Dock or close: the window was derived from a tab; send the content back and select it.
+c:WindowDock a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Window ;
+    beh:deletes """CONSTRUCT { ?tab c:detached ?d . ?tabs c:selected ?old }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:docks $this .
+  $this prov:wasDerivedFrom ?tab . ?tab a c:Tab ; c:detached ?d .
+  ?tabs c:tabs/rdf:rest*/rdf:first ?tab .
+  OPTIONAL { ?tabs c:selected ?old }
+}""" ;
+    beh:inserts """CONSTRUCT { ?tabs c:selected ?tab }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:docks $this .
+  $this prov:wasDerivedFrom ?tab . ?tab a c:Tab .
+  ?tabs c:tabs/rdf:rest*/rdf:first ?tab .
+}""" ;
+    sem:function "window:dock" .
+
+c:WindowMove a beh:Reaction ;
+    beh:when beh:Move ;
+    beh:sourceClass c:Window ;
+    beh:deletes """CONSTRUCT { $this c:x ?x ; c:y ?y } WHERE { { $this c:x ?x } UNION { $this c:y ?y } }""" ;
+    beh:inserts """CONSTRUCT { $this c:x ?x ; c:y ?y } WHERE { $event beh:x ?x ; beh:y ?y }""" ;
+    sem:function "window:move" .
+
+c:WindowResize a beh:Reaction ;
+    beh:when beh:Resize ;
+    beh:sourceClass c:Window ;
+    beh:deletes """CONSTRUCT { $this c:width ?w ; c:height ?h } WHERE { { $this c:width ?w } UNION { $this c:height ?h } }""" ;
+    beh:inserts """CONSTRUCT { $this c:width ?w ; c:height ?h } WHERE { $event beh:width ?w ; beh:height ?h }""" ;
+    sem:function "window:resize" .
+
+# --- the desktop: where windows live across pages ------------------------------------------------
+
+c:Desktop a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A surface for windows that is not part of any page: it places the windows it
+c:hosts. Components that open windows say where with c:windowsOn, so a detached view
+survives navigation between pages that would hide its origin."""@en ;
+    sem:slug "desktop" .
+c:hosts a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range c:Window .
+c:windowsOn a owl:ObjectProperty ; rdfs:range c:Desktop ;
+    rdfs:comment "Where a component's windows are placed (else: inside the component)."@en .
+c:DesktopRendering a sem:Rendering ; sem:targets c:Desktop ; sem:stratum 0 .
+c:DesktopRendering-fn a sem:Rule ; sem:implements c:DesktopRendering ; sem:function "desktop" .

@@ -1,0 +1,19 @@
+/* The host page only provides a backdrop; everything inside #app is styled by
+   CSS compiled from the theme graph. Colors follow the theme switcher, which
+   sets color-scheme on <html> through the compiled hook CSS. */
+:root:not([data-sem-color-scheme]) { color-scheme: light dark; }
+html {
+  background: light-dark(#f5f5f9, #0c0c11);
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 15% -10%, light-dark(#ebe8ff, #1c1840) 0%, transparent 60%),
+    radial-gradient(900px 400px at 100% 0%, light-dark(#ffe9f5, #2a1326) 0%, transparent 55%),
+    light-dark(#f5f5f9, #0c0c11);
+  background-attachment: fixed;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }

@@ -1,0 +1,370 @@
+// Function rules for general view components and the tooltip layer.
+import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import type { FnRule, RuleContext } from '../engine/context.ts'
+import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
+import { owningFocus } from '../rdf.ts'
+import { type TurtleSection, turtleTokens } from '../turtle.ts'
+
+const RDFS_LABEL = NS.rdfs + 'label'
+const SH = 'http://www.w3.org/ns/shacl#'
+const str = (t: Term | undefined) => t?.value
+const named = (t: Term | undefined): t is NamedNode => t?.termType === 'NamedNode'
+
+export function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
+  const out: Term[] = []
+  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
+    const first = ctx.object(n, RDF_FIRST)
+    if (first) out.push(first)
+  }
+  return out
+}
+
+export const labelOf = (ctx: RuleContext, t: Term) =>
+  str(ctx.object(t, C.label)) ?? str(ctx.object(t, RDFS_LABEL)) ?? t.value.replace(/^.*[#/]/, '')
+
+// --- Card ----------------------------------------------------------------------------------
+
+const card: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const label = str(ctx.object(focus, C.label))
+  const badge = str(ctx.object(focus, C.badge))
+  const note = str(ctx.object(focus, C.note))
+  const content = ctx.object(focus, C.content)
+  const actions = rdfList(ctx, ctx.object(focus, C.actions)).filter(named)
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `── ${label ?? ''} ──`)]), ...(named(content) ? [content] : [])]))
+    return o.quads
+  }
+  const head: NamedNode[] = []
+  if (label) head.push(o.el('title', 'H2', {}, [o.text('title-text', label)]))
+  if (badge) head.push(o.el('badge', 'Span', { class: 'sem-badge' }, [o.text('badge-text', badge)]))
+  if (actions.length) head.push(o.el('actions', 'Div', { class: 'sem-actions' }, actions))
+  if (note) head.push(o.el('note', 'P', {}, [o.text('note-text', note)]))
+  const parts = [o.el('head', 'Header', {}, head)]
+  if (named(content)) parts.push(o.el('body', 'Div', { class: 'sem-card-body' }, [content]))
+  o.renders(o.el('root', 'Article', {}, parts))
+  return o.quads
+}
+
+// --- App bar and its logo ------------------------------------------------------------------
+
+const appbar: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const logo = ctx.object(focus, C.logo)
+  const label = str(ctx.object(focus, C.label)) ?? ''
+  const subtitle = str(ctx.object(focus, C.subtitle))
+  const actions = rdfList(ctx, ctx.object(focus, C.actions)).filter(named)
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, [o.text('line', `${label}${subtitle ? ' — ' + subtitle : ''}`)]))
+    return o.quads
+  }
+  const brand = o.el('brand', 'Div', { class: 'sem-brand' }, [
+    ...(named(logo) ? [logo] : []),
+    o.el('name', 'Strong', {}, [o.text('name-text', label)]),
+    ...(subtitle ? [o.el('subtitle', 'Span', {}, [o.text('subtitle-text', subtitle)])] : []),
+  ])
+  o.renders(o.el('root', 'Header', {}, [brand, o.el('actions', 'Div', { class: 'sem-actions' }, actions)]))
+  return o.quads
+}
+
+/** A logo drawn as a graph: c:nodes points on a ring, fully connected, on a gradient tile. */
+const graphmark: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const n = Math.max(2, Math.min(6, Number(str(ctx.object(focus, C.nodes)) ?? 3)))
+  const id = 'g' + focus.value.replace(/[^a-z0-9]/gi, '').slice(-12)
+  const pts = Array.from({ length: n }, (_, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
+    return { x: 16 + Math.cos(a) * 7.5, y: 17 + Math.sin(a) * 7.5 }
+  })
+  const edges: NamedNode[] = []
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      edges.push(o.svg(`e${i}-${j}`, 'Line', { x1: pts[i]!.x.toFixed(1), y1: pts[i]!.y.toFixed(1), x2: pts[j]!.x.toFixed(1), y2: pts[j]!.y.toFixed(1), class: 'sem-edge' }))
+  const dots = pts.map((p, i) => o.svg(`n${i}`, 'Circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 3, class: 'sem-node' }))
+  const defs = o.svg('defs', 'Defs', {}, [
+    o.svg('gradient', 'LinearGradient', { id, x1: 0, y1: 0, x2: 1, y2: 1 }, [
+      o.svg('stop-a', 'Stop', { offset: 0, class: 'sem-stop-a' }),
+      o.svg('stop-b', 'Stop', { offset: 1, class: 'sem-stop-b' }),
+    ]),
+  ])
+  const tile = o.svg('tile', 'Rect', { width: 32, height: 32, rx: 9, fill: `url(#${id})` })
+  const root = o.svg('root', 'Svg', { viewBox: '0 0 32 32', role: 'img', 'aria-label': labelOf(ctx, focus) }, [defs, tile, ...edges, ...dots])
+  o.renders(root)
+  return o.quads
+}
+
+/** An IRI as prefix:local when a declared prefix fits, else its last segments. */
+function compact(ctx: RuleContext, iri: string): string {
+  for (const [p, ns] of Object.entries(prefixes(ctx))) if (iri.startsWith(ns)) return `${p}:${decodeURIComponent(iri.slice(ns.length))}`
+  return iri.length > 48 ? '…' + iri.slice(-46) : iri
+}
+
+// --- Metrics and Toggle --------------------------------------------------------------------
+
+const metrics: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const of = ctx.object(focus, C.of)
+  const fields = rdfList(ctx, ctx.object(focus, C.fields)).filter(named)
+  if (!of) return []
+  const chips = fields.flatMap((p, i) => {
+    const v = ctx.object(of, p)
+    if (!v) return []
+    const unit = str(ctx.object(p, C.unit))
+    const value =
+      v.termType === 'NamedNode'
+        ? compact(ctx, v.value)
+        : v.termType === 'Literal' && /^-?\d+(\.\d+)?$/.test(v.value) && v.value.includes('.')
+          ? Number(v.value).toFixed(2)
+          : v.value
+    const label = str(ctx.object(p, RDFS_LABEL))
+    // Presentation is declared on the property: c:emphasis, c:hideLabel.
+    const emphasis = str(ctx.object(p, C.emphasis)) === 'true'
+    const showLabel = label && str(ctx.object(p, C.hideLabel)) !== 'true'
+    const chip = o.el(`m${i}`, 'Span', { class: emphasis ? 'sem-metric sem-lead' : 'sem-metric' }, [
+      o.el(`m${i}-v`, 'B', {}, [o.text(`m${i}-v-text`, unit ? `${value} ${unit}` : value)]),
+      ...(showLabel ? [o.text(`m${i}-l`, label)] : []),
+    ])
+    if (label) o.tip(chip, label)
+    return [chip]
+  })
+  o.renders(o.el('root', 'Div', { hidden: chips.length ? undefined : '' }, chips))
+  return o.quads
+}
+
+const toggle: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  if (!target || !property) return []
+  const o = ctx.out(focus)
+  const on = ctx.object(target, property)?.value === 'true'
+  const label = str(ctx.object(focus, C.label)) ?? labelOf(ctx, property)
+  const b = o.el('root', 'Button', { type: 'button' }, [o.text('label', label)])
+  o.attr(b, 'aria-pressed', String(on))
+  const note = str(ctx.object(focus, C.note))
+  if (note) o.tip(b, note)
+  o.renders(b)
+  return o.quads
+}
+
+// --- Query views -----------------------------------------------------------------------------
+
+/** Prefixes declared in the graph (sh:declare style: sh:prefix + sh:namespace), plus the framework's. */
+function prefixes(ctx: RuleContext): Record<string, string> {
+  return ctx.memo('prefixes', () => {
+    const out: Record<string, string> = {}
+    for (const q of ctx.match(null, SH + 'prefix', null)) {
+      const ns = str(ctx.object(q.subject, SH + 'namespace'))
+      if (ns) out[q.object.value] = ns
+    }
+    return { ...out, ...NS }
+  })
+}
+
+/**
+ * Turtle tokens as RDF/HTML nodes. Nodes are keyed by the content of their line
+ * (and position in it), not by their position in the document: when results
+ * shift, unchanged lines keep their nodes and only what changed is written.
+ */
+function turtleNodes(o: ReturnType<RuleContext['out']>, tokens: ReturnType<typeof turtleTokens>): NamedNode[] {
+  const lines: (typeof tokens)[] = [[]]
+  for (const t of tokens) {
+    lines[lines.length - 1]!.push(t)
+    if (t.kind === 'space' && t.text.includes('\n')) lines.push([])
+  }
+  const seen = new Map<string, number>()
+  const nodes: NamedNode[] = []
+  for (const line of lines) {
+    const text = line.map((t) => t.text).join('')
+    const n = seen.get(text) ?? 0
+    seen.set(text, n + 1)
+    const key = `${fnv(text)}${n ? '-' + n : ''}`
+    // Whitespace and punctuation merge into plain text runs; only colored tokens get spans.
+    let plain = ''
+    let j = 0
+    const flushPlain = () => {
+      if (plain) nodes.push(o.text(`l${key}-${j++}`, plain))
+      plain = ''
+    }
+    for (const t of line) {
+      if (t.kind === 'space' || t.kind === 'punct') {
+        plain += t.text
+        continue
+      }
+      flushPlain()
+      const id = `l${key}-${j++}`
+      nodes.push(o.el(id + 's', 'Span', { class: 'ttl-' + t.kind }, [o.text(id, t.text)]))
+    }
+    flushPlain()
+  }
+  return nodes
+}
+
+/** FNV-1a, base 36: short, stable keys for content-addressed nodes. */
+function fnv(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
+}
+
+const queryview: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const queries = rdfList(ctx, ctx.object(focus, C.queries)).filter(named)
+  const variable = str(ctx.object(focus, C.bindVariable))
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  const value = from && property ? ctx.object(from, property) : undefined
+  const message = (text: string) => {
+    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text)]))
+    return o.quads
+  }
+  if (!ctx.sparql) return message('This view runs SPARQL; choose a store with SPARQL (Oxigraph or Hybrid).')
+  if (variable && !named(value)) return message(str(ctx.object(focus, C.emptyText)) ?? 'Nothing selected.')
+  const sections: TurtleSection[] = []
+  for (const q of queries) {
+    let text = str(ctx.object(q, SEM.construct)) ?? ''
+    if (variable && named(value)) text = text.replaceAll('$' + variable, `<${value.value}>`)
+    let quads: Quad[]
+    try {
+      quads = ctx.construct(text)
+    } catch (e) {
+      return message(`Query ${labelOf(ctx, q)} failed: ${(e as Error).message}`)
+    }
+    const orderBy = ctx.object(q, SEM.orderBy)
+    if (orderBy) {
+      const rank = new Map(quads.filter((x) => x.predicate.value === orderBy.value).map((x) => [x.subject.value, Number(x.object.value)]))
+      const sign = str(ctx.object(q, SEM.descending)) === 'true' ? -1 : 1
+      const order = (s: string) => (rank.has(s) ? rank.get(s)! * sign : -Infinity * sign)
+      quads = [...quads].sort((a, b) => order(a.subject.value) - order(b.subject.value))
+    }
+    if (quads.length) sections.push({ title: str(ctx.object(q, RDFS_LABEL)), quads })
+  }
+  if (!sections.length) return message(str(ctx.object(focus, C.emptyText)) ?? 'No results.')
+  const nodes = turtleNodes(o, turtleTokens(sections, prefixes(ctx), str(ctx.object(focus, C.baseIri))))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, nodes))
+  return o.quads
+}
+
+/** Marks the selected node; owns only the attribute it adds. */
+const highlight: FnRule = (ctx, focus) => {
+  const from = ctx.object(focus, C.bindFrom)
+  const property = ctx.object(focus, C.bindProperty)
+  const node = from && property ? ctx.object(from, property) : undefined
+  if (!named(node)) return []
+  const o = ctx.out(focus)
+  o.attr(node, 'data-sem-highlighted', 'true', 'mark')
+  return o.quads
+}
+
+// --- tooltip layer ---------------------------------------------------------------------------
+
+/** Projects sem:tooltip annotations on nodes minted under the focus. */
+const tooltips: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  for (const q of ctx.match(null, SEM.tooltip, null)) {
+    const node = q.subject
+    if (!named(node) || owningFocus(node.value) !== focus.value) continue
+    const svg = ctx.match(node, RDF_TYPE, null).some((t) => t.object.value.startsWith(NS.svg))
+    const local = node.value.slice(focus.value.length + 2) + '-tip'
+    if (svg) {
+      // Only leaf marks get a title (ignoring the title this layer itself adds).
+      const tipIri = o.node(local).value
+      if (ctx.match(node, H.hasChild, null).some((c) => c.object.value !== tipIri)) continue
+      const title = o.svg(local, 'Title', {}, [o.text(local + '-text', q.object.value)])
+      o.t(node, H.hasChild, title)
+    } else {
+      o.attr(node, 'data-sem-tooltip', q.object.value, local)
+      o.attr(node, 'aria-description', q.object.value, local + '-aria')
+    }
+  }
+  return o.quads
+}
+
+// --- stream members -----------------------------------------------------------------------
+
+const LDES_NS = 'https://w3id.org/ldes#'
+const TREE_MEMBER = 'https://w3id.org/tree#member'
+
+const streammembers: FnRule = (ctx, focus) => {
+  const stream = ctx.object(focus, C.of)
+  if (!named(stream)) return []
+  const limit = Number(str(ctx.object(focus, C.limit)) ?? 8)
+  const sequence = ctx.object(stream, LDES_NS + 'sequencePath')
+  const rank = (m: Term) => (sequence ? Number(str(ctx.object(m, sequence)) ?? 0) : 0)
+  // A stream that names its head (beh:latest / beh:previous) is read in `limit` steps;
+  // any other LDES is ranked by its sequence path.
+  const members: { m: NamedNode }[] = []
+  const head = ctx.object(stream, BEH.latest)
+  if (named(head)) {
+    for (let m: Term | undefined = head; named(m) && members.length < limit && ctx.object(m, RDF_TYPE); m = ctx.object(m, BEH.previous)) members.push({ m })
+  } else {
+    members.push(
+      ...ctx
+        .objects(stream, TREE_MEMBER)
+        .filter(named)
+        .map((m) => ({ m, n: rank(m) }))
+        .sort((a, b) => b.n - a.n)
+        .slice(0, limit),
+    )
+  }
+  const o = ctx.out(focus)
+  const views = members.map(({ m }) => {
+    const view = o.node('m-' + fnv(m.value))
+    o.t(view, RDF_TYPE, ctx.nn(C.TriplesView))
+    o.t(view, C.of, m)
+    return view
+  })
+  if (!views.length) {
+    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', str(ctx.object(focus, C.emptyText)) ?? 'No members yet.')]))
+    return o.quads
+  }
+  o.renders(o.el('root', 'Div', {}, views))
+  return o.quads
+}
+
+const triplesview: FnRule = (ctx, focus) => {
+  const subject = ctx.object(focus, C.of)
+  if (!named(subject)) return []
+  const quads = ctx.match(subject, null, null)
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, turtleNodes(o, turtleTokens([{ quads }], prefixes(ctx), undefined, false))))
+  return o.quads
+}
+
+// --- Switch and projection view ------------------------------------------------------------
+
+const switchCases: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  const current = target && property ? ctx.object(target, property)?.value : undefined
+  const o = ctx.out(focus)
+  const cases = rdfList(ctx, ctx.object(focus, C.cases)).map((c, i) => {
+    const content = ctx.object(c, C.content)
+    const on = ctx.object(c, C.when)?.value === current
+    return o.el(`case-${i}`, 'Div', { hidden: on ? undefined : '' }, named(content) ? [content] : [])
+  })
+  o.renders(o.el('root', 'Div', {}, cases))
+  return o.quads
+}
+
+const projectionview: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const slot = o.el('root', 'Div', {})
+  o.t(slot, SEM.slot, str(ctx.object(focus, C.slot)) ?? 'projection')
+  o.renders(slot)
+  return o.quads
+}
+
+export const viewFunctions: Record<string, FnRule> = {
+  card,
+  appbar,
+  graphmark,
+  metrics,
+  toggle,
+  queryview,
+  highlight,
+  tooltips,
+  switch: switchCases,
+  projectionview,
+  streammembers,
+  triplesview,
+}

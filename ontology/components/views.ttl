@@ -1,0 +1,160 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# General-purpose view components: cards, an app bar and logo, metric chips,
+# a toggle, query views (CONSTRUCTs rendered as Turtle) and a highlight.
+
+# --- shared properties -------------------------------------------------------------------
+
+c:subtitle a owl:DatatypeProperty .
+c:badge a owl:DatatypeProperty ; rdfs:comment "A short tag shown next to a title."@en .
+c:note a owl:DatatypeProperty ; rdfs:comment "A one-line description."@en .
+c:actions a owl:ObjectProperty ; rdfs:range rdf:List ; rdfs:comment "Components placed in a header."@en .
+c:unit a owl:DatatypeProperty ; rdfs:comment "Unit a property's values are shown with."@en .
+c:fields a owl:ObjectProperty ; rdfs:range rdf:List ; rdfs:comment "Properties to show, in order."@en .
+c:emphasis a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On a property: show its values emphasized."@en .
+c:hideLabel a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On a property: show its values without its label."@en .
+
+# --- Card ------------------------------------------------------------------------------------
+
+c:Card a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A titled surface (c:label, c:badge, c:note, header c:actions) around one component (c:content)."@en ;
+    sem:slug "card" .
+c:CardRendering a sem:Rendering ; sem:targets c:Card ; sem:stratum 0 .
+c:CardRendering-fn a sem:Rule ; sem:implements c:CardRendering ; sem:function "card" .
+
+# --- App bar and logo ----------------------------------------------------------------------
+
+c:AppBar a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "The application's top bar: a logo, a name (c:label), a c:subtitle and c:actions."@en ;
+    sem:slug "app-bar" .
+c:logo a owl:ObjectProperty ; rdfs:domain c:AppBar .
+c:AppBarRendering a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 .
+c:AppBarRendering-fn a sem:Rule ; sem:implements c:AppBarRendering ; sem:function "appbar" .
+
+c:GraphMark a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A logo drawn as what it stands for: a few nodes and edges (c:nodes) on a gradient tile."@en ;
+    sem:slug "graph-mark" .
+c:nodes a owl:DatatypeProperty ; rdfs:range xsd:integer .
+c:GraphMarkRendering a sem:Rendering ; sem:targets c:GraphMark ; sem:modality mod:Screen ; sem:stratum 0 .
+c:GraphMarkRendering-fn a sem:Rule ; sem:implements c:GraphMarkRendering ; sem:function "graphmark" .
+
+# --- Metrics -----------------------------------------------------------------------------------
+
+c:Metrics a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Chips showing c:fields of one node (c:of), labelled by the properties' rdfs:label and c:unit."@en ;
+    sem:slug "metrics" .
+c:MetricsRendering a sem:Rendering ; sem:targets c:Metrics ; sem:stratum 0 ; sem:follows c:of .
+c:MetricsRendering-fn a sem:Rule ; sem:implements c:MetricsRendering ; sem:function "metrics" .
+
+# --- Toggle ------------------------------------------------------------------------------------
+
+c:Toggle a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A pressed / not pressed button for a boolean property (c:property of c:controls)."@en ;
+    sem:slug "toggle" .
+c:ToggleRendering a sem:Rendering ; sem:targets c:Toggle ; sem:stratum 0 ; sem:follows c:controls .
+c:ToggleRendering-fn a sem:Rule ; sem:implements c:ToggleRendering ; sem:function "toggle" .
+c:ToggleFlip a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Toggle ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?new } WHERE { $this c:controls ?target ; c:property ?p . OPTIONAL { ?target ?p ?old } BIND(!COALESCE(?old, false) AS ?new) }""" ;
+    sem:function "toggle:flip" .
+
+# --- Query views -----------------------------------------------------------------------------
+
+sem:Query a owl:Class ;
+    rdfs:comment "A named CONSTRUCT (sem:construct). $-variables are bound by the view that runs it."@en .
+sem:orderBy a owl:ObjectProperty ; rdfs:domain sem:Query ;
+    rdfs:comment "Present the result's subjects ordered by this property."@en .
+sem:descending a owl:DatatypeProperty ; rdfs:domain sem:Query ; rdfs:range xsd:boolean .
+
+c:QueryView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Runs named CONSTRUCTs (c:queries) and shows their results as syntax-colored Turtle,
+one section per query. A variable (c:bindVariable) may be bound to the value of c:bindProperty
+on c:bindFrom; c:of names a node whose changes should refresh the view (e.g. an event stream)."""@en ;
+    sem:slug "query-view" .
+c:queries a owl:ObjectProperty ; rdfs:range rdf:List .
+c:bindVariable a owl:DatatypeProperty .
+c:bindFrom a owl:ObjectProperty .
+c:bindProperty a owl:ObjectProperty .
+c:emptyText a owl:DatatypeProperty .
+c:baseIri a owl:DatatypeProperty ; rdfs:comment "Base IRI for relative display of long IRIs."@en .
+c:QueryViewRendering a sem:Rendering ;
+    sem:targets c:QueryView ;
+    sem:stratum 0 ;
+    sem:follows c:bindFrom, c:of .
+c:QueryViewRendering-fn a sem:Rule ; sem:implements c:QueryViewRendering ; sem:function "queryview" .
+
+# A rule may show the queries it runs on its back side (c:Flippable lists them).
+c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or view whose result it shows."@en .
+
+# --- Highlight ------------------------------------------------------------------------------------
+
+c:Highlight a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Marks the RDF/HTML node held in c:bindProperty of c:bindFrom (data-sem-highlighted); renders nothing of its own."@en ;
+    sem:slug "highlight" .
+c:HighlightRendering a sem:Rendering ;
+    sem:targets c:Highlight ;
+    sem:modality mod:Screen ;
+    sem:stratum 40 ;
+    sem:follows c:bindFrom .
+c:HighlightRendering-fn a sem:Rule ; sem:implements c:HighlightRendering ; sem:function "highlight" .
+
+# --- Switch ------------------------------------------------------------------------------------------
+
+c:Switch a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """Shows the case (c:cases) whose c:when equals c:property of c:controls. Every case stays
+rendered (inactive ones hidden), so switching moves no DOM and keeps state."""@en ;
+    sem:slug "switch" .
+c:cases a owl:ObjectProperty ; rdfs:range rdf:List .
+c:when a owl:ObjectProperty .
+c:SwitchRendering a sem:Rendering ; sem:targets c:Switch ; sem:stratum 0 ; sem:follows c:controls .
+c:SwitchRendering-fn a sem:Rule ; sem:implements c:SwitchRendering ; sem:function "switch" .
+
+# --- Projection view ---------------------------------------------------------------------------------
+
+c:ProjectionView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A host-owned slot (c:slot) where another projection of the graph is mounted - e.g. the
+Text modality. c:projectionGraph names that projection's derived graph; its PROV-O says which
+rules made it, so a c:Flippable around this view can show them."""@en ;
+    sem:slug "projection-view" .
+c:projectionGraph a owl:DatatypeProperty .
+c:ProjectionViewRendering a sem:Rendering ; sem:targets c:ProjectionView ; sem:stratum 0 .
+c:ProjectionViewRendering-fn a sem:Rule ; sem:implements c:ProjectionViewRendering ; sem:function "projectionview" .
+
+# --- stream members and triples views ---------------------------------------------------------
+
+c:StreamMembers a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """The newest members of an event stream (c:of an ldes:EventStream), newest first,
+ordered by the stream's own ldes:sequencePath; one c:TriplesView per member. LDES members are
+immutable, so a member's view is rendered once and never again."""@en ;
+    sem:slug "stream-members" .
+c:limit a owl:DatatypeProperty ; rdfs:range xsd:integer .
+c:StreamMembersRendering a sem:Rendering ; sem:targets c:StreamMembers ; sem:stratum 0 .
+c:StreamMembersRendering-fn a sem:Rule ; sem:implements c:StreamMembersRendering ; sem:function "streammembers" .
+
+c:TriplesView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "The triples about one node (c:of) as syntax-colored Turtle."@en ;
+    sem:slug "triples-view" .
+c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 .
+c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; sem:function "triplesview" .
