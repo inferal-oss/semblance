@@ -819,21 +819,20 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "padding" ; sty:raw "8px 12px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
-                 [ sty:property "grid-template-columns" ; sty:raw "auto auto" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "auto 1fr" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "justify-items" ; sty:raw "start" ] ,
                  [ sty:property "column-gap" ; sty:raw "8px" ] ,
                  [ sty:property "row-gap" ; sty:raw "2px" ] ,
                  [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
                  [ sty:property "min-width" ; sty:raw "min-content" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > :first-child:not(strong)" ;
-    sty:declares [ sty:property "grid-row" ; sty:raw "1 / span 2" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > :not(:first-child)" ;
-    sty:declares [ sty:property "grid-column" ; sty:raw "2" ] ,
-                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > .sem-byline *" ;
+# The byline goes on a line of its own under the name (past the logo), whether the logo and the
+# name stand alone or are one home link.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > *, .sem-brand > .sem-byline *" ;
     sty:declares [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > .sem-byline" ;
-    sty:declares [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+    sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "36px" ] ,
                  [ sty:property "border-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "align-self" ; sty:raw "start" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > strong" ;
