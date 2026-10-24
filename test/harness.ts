@@ -13,17 +13,17 @@ const galleryDir = new URL('../demo/gallery/', import.meta.url)
 const gallery = readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => readFileSync(new URL(f, galleryDir), 'utf8'))
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
-export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
+export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const store = loadStore(kind, todoApp(todos), appGraph, ...gallery)
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer]
-  const screen = runtime.project({ modality: MOD.Screen, layers, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
+  const screen = runtime.project({ modality: MOD.Screen, layers, prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
     throw e
   })
   const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
   shell.flush()
-  const bus = new EventBus(runtime, screen, { functions: todoReactions })
+  const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
   bus.attach(shell, () => shell.flush())
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')

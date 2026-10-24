@@ -76,6 +76,12 @@ member. Its output places the member's part itself (e.g. hasChild + sem:orderKey
 sem:renders a owl:ObjectProperty ;
     rdfs:comment "Links the RDF/HTML root node produced for a component instance to that instance. By convention the root is <focus>/~root."@en .
 
+sem:functionOnly a owl:DatatypeProperty ;
+    rdfs:comment """On a rendering: it has no SPARQL implementation, on purpose, and this says why
+(e.g. it tokenizes source text into colored spans, runs a query named in the data, or needs a
+logarithm, none of which SPARQL 1.1 can do). Every other rendering has both a SPARQL and a
+function implementation (test/implementations.ts checks)."""@en .
+
 sem:inputOnly a owl:DatatypeProperty ;
     rdfs:comment """On a rendering: it applies only to instances typed in the input graphs, not to
 instances other rules mint. Pre-render rules (strata below the components, e.g. localization
