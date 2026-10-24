@@ -1,0 +1,145 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix kb: <https://semblance.dev/demo/kanban#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Kanban board: cards in columns, a work-in-progress limit as a SHACL shape.
+#
+# The cards and the columns are this example's own vocabulary (kb:). A c:Board lays them out:
+# its lanes are the kb:Column individuals (the range of kb:column, by sem:order), each card goes
+# where its kb:column points. Moving a card is a reaction that rewrites that one triple; the
+# limit on Doing is a shape the move reaction reads; counts are aggregates in the board's rule.
+# =================================================================================================
+
+ui:ex-kanban-prefixes sh:declare [ sh:prefix "kb" ; sh:namespace "https://semblance.dev/demo/kanban#"^^xsd:anyURI ] .
+
+# --- the columns ----------------------------------------------------------------------------------
+# kb:column ranges over kb:Column; the board shows its individuals as lanes, in sem:order.
+
+kb:column rdfs:label "Column" ; rdfs:range kb:Column .
+kb:todo a kb:Column ; rdfs:label "To do" ; sem:order 1 .
+kb:doing a kb:Column ; rdfs:label "Doing" ; sem:order 2 .
+kb:done a kb:Column ; rdfs:label "Done" ; sem:order 3 .
+
+# The work-in-progress limit: at most three cards point at Doing (the inverse of kb:column).
+# A standard SHACL node shape on the column. The board's move reaction refuses a move that
+# would break it, and the Doing header counts against it ("3 / 3").
+kb:DoingLimit a sh:NodeShape ; sh:targetNode kb:doing ;
+    sh:property [ sh:path [ sh:inversePath kb:column ] ; sh:maxCount 3 ;
+                  sh:message "Doing holds at most three cards." ] .
+
+# --- the cards ------------------------------------------------------------------------------------
+# A card has a title, a column, someone it is assigned to, a tag and a rank (its place in a column).
+
+kb:Bug a kb:Tag ; rdfs:label "bug" ; sty:tone sty:Danger .
+kb:Feature a kb:Tag ; rdfs:label "feature" ; sty:tone sty:Accent .
+kb:Docs a kb:Tag ; rdfs:label "docs" ; sty:tone sty:Info .
+kb:Chore a kb:Tag ; rdfs:label "chore" ; sty:tone sty:Neutral .
+
+kb:ada rdfs:label "Ada Lovelace" .
+kb:grace rdfs:label "Grace Hopper" .
+kb:alan rdfs:label "Alan Kay" .
+kb:barbara rdfs:label "Barbara Liskov" .
+
+kb:c1 a kb:Card ; kb:title "Offline mode for the editor" ; kb:column kb:todo ; kb:assignee kb:ada ; kb:tag kb:Feature ; kb:rank 1 .
+kb:c2 a kb:Card ; kb:title "Crash when pasting an empty query" ; kb:column kb:todo ; kb:assignee kb:grace ; kb:tag kb:Bug ; kb:rank 2 .
+kb:c3 a kb:Card ; kb:title "Write the persistence guide" ; kb:column kb:todo ; kb:assignee kb:barbara ; kb:tag kb:Docs ; kb:rank 3 .
+kb:c4 a kb:Card ; kb:title "Keyboard shortcuts for the board" ; kb:column kb:doing ; kb:assignee kb:alan ; kb:tag kb:Feature ; kb:rank 4 .
+kb:c5 a kb:Card ; kb:title "Bump Oxigraph" ; kb:column kb:doing ; kb:assignee kb:grace ; kb:tag kb:Chore ; kb:rank 5 .
+kb:c6 a kb:Card ; kb:title "Toast overlaps the dock" ; kb:column kb:done ; kb:assignee kb:ada ; kb:tag kb:Bug ; kb:rank 6 .
+
+# --- the interface ---------------------------------------------------------------------------------
+
+ui:ex-kanban a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-kanban-intro ui:ex-kanban-add-row ui:ex-kanban-board ui:ex-kanban-keys ) .
+ui:ex-kanban-intro a c:Text ;
+    c:label "A board of the example's own cards, laid out by a c:Board from where each card's kb:column points. Move cards with ← and →, or focus one and use the arrow keys; Doing has a work-in-progress limit of three, a SHACL shape the move respects." .
+
+# The board: lanes from kb:column's range, cards from c:card, its look from the card's properties.
+ui:ex-kanban-board a c:Board ; c:label "Sprint 14" ;
+    c:property kb:column ; c:cardTitle kb:title ; c:cardTag kb:tag ; c:cardPerson kb:assignee ; c:cardOrder kb:rank ;
+    c:removable true ;
+    c:card kb:c1 , kb:c2 , kb:c3 , kb:c4 , kb:c5 , kb:c6 .
+
+# Adding a card: a field whose shape says what a title is, and a button gated on it (val:requires).
+kb:TitleShape a sh:PropertyShape ; sh:path kb:title ; sh:minCount 1 ; sh:maxLength 80 ;
+    sh:message "A title of up to 80 characters." .
+ui:ex-kanban-add-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+    c:children ( ui:ex-kanban-new ui:ex-kanban-add ) .
+ui:ex-kanban-new a c:TextField ; c:label "New card" ; c:placeholder "What needs doing?" ; val:validates kb:TitleShape .
+ui:ex-kanban-add a c:Button ; c:label "Add to To do" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
+    val:requires ( ui:ex-kanban-new ) ; key:shortcut "mod+enter" .
+
+ui:ex-kanban-keys a c:Text ; sty:textStyle sty:Caption ;
+    c:children ( "Tab to a card, then " ui:ex-kanban-key-left " / " ui:ex-kanban-key-right " moves it. " ui:ex-kanban-key-add " adds the card you typed." ) .
+ui:ex-kanban-key-left a c:Kbd ; c:label "←" .
+ui:ex-kanban-key-right a c:Kbd ; c:label "→" .
+ui:ex-kanban-key-add a c:Kbd ; c:label "⌘↵" .
+
+# --- the reaction: adding a card ---------------------------------------------------------------------
+# A new card, minted from the event's IRI, goes to the end of To do: its rank is one more than
+# the highest. The field is cleared. (Moving, refusing a full column and removing are the
+# board's own reactions, c:BoardMove, c:BoardRefuse and c:BoardRemove in ontology/components/board.ttl.)
+
+kb:AddCard a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-kanban-add ;
+    beh:deletes """
+CONSTRUCT { ui:ex-kanban-new c:value ?v }
+WHERE { ui:ex-kanban-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 80) }""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?card a kb:Card ; kb:title ?title ; kb:column kb:todo ; kb:rank ?rank .
+  ui:ex-kanban-board c:card ?card .
+}
+WHERE {
+  ui:ex-kanban-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 80)
+  BIND(STR(?v) AS ?title)
+  BIND(IRI(CONCAT(STR(kb:), "card-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?card)
+  { SELECT (COALESCE(MAX(?r) + 1, 1) AS ?rank) WHERE { ?any kb:rank ?r } }
+}""" ;
+    ann:announces "Card added to To do" ; ann:tone sty:Success .
+
+# --- how it works ---------------------------------------------------------------------------------
+
+ui:ex-kanban-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-kanban-how-title ui:ex-kanban-how-board ui:ex-kanban-how-move ui:ex-kanban-how-limit ui:ex-kanban-how-add ui:ex-kanban-how-cost ) .
+ui:ex-kanban-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
+ui:ex-kanban-how-board a c:Text ; c:children (
+    "The board is a " ui:ex-kanban-how-c1 ", a framework component. It is told which property places a card (" ui:ex-kanban-how-c2
+    ") and finds the lanes itself: the individuals of that property's range (" ui:ex-kanban-how-c3 "), by sem:order. Each card is minted member-wise as a "
+    ui:ex-kanban-how-c4 ", which composes a c:Tag, a c:Avatar and c:IconButtons from the card's own properties - nothing about kanban is in the framework." ) .
+ui:ex-kanban-how-c1 a c:Code ; c:label "c:Board" .
+ui:ex-kanban-how-c2 a c:Code ; c:label "c:property kb:column" .
+ui:ex-kanban-how-c3 a c:Code ; c:label "kb:Column" .
+ui:ex-kanban-how-c4 a c:Code ; c:label "c:BoardCard" .
+ui:ex-kanban-how-move a c:Text ; c:children (
+    "Moving is one triple: " ui:ex-kanban-how-c5 " deletes the card's kb:column and inserts the lane the clicked button names (" ui:ex-kanban-how-c6
+    "). An arrow key on a focused card is a " ui:ex-kanban-how-c7 " event that " ui:ex-kanban-how-c8 " handles the same way, using the lanes the board noted on the card (c:previousLane, c:nextLane) - mirrored when the page is right to left." ) .
+ui:ex-kanban-how-c5 a c:Code ; c:label "c:BoardMove" .
+ui:ex-kanban-how-c6 a c:Code ; c:label "c:movesTo" .
+ui:ex-kanban-how-c7 a c:Code ; c:label "c:BoardKey" .
+ui:ex-kanban-how-c8 a c:Code ; c:label "c:BoardMoveByKey" .
+ui:ex-kanban-how-limit a c:Text ; c:children (
+    "The limit is " ui:ex-kanban-how-c9 ", a SHACL node shape: at most three things have kb:column Doing. The move reactions read it in their WHERE (a COUNT against sh:maxCount), so a move into a full lane changes nothing; "
+    ui:ex-kanban-how-c10 " matches exactly that case, marks the card (it shakes) and announces why. The lane counts in the headers are a COUNT per lane in the board's own rule, toned warning at the limit." ) .
+ui:ex-kanban-how-c9 a c:Code ; c:label "kb:DoingLimit" .
+ui:ex-kanban-how-c10 a c:Code ; c:label "c:BoardRefuse" .
+ui:ex-kanban-how-add a c:Text ; c:children (
+    "Adding is this file's reaction, " ui:ex-kanban-how-c11 ": it mints a card from the event's IRI, ranks it last in To do and clears the field. The button is disabled until the field conforms to "
+    ui:ex-kanban-how-c12 " (the validation layer's " ui:ex-kanban-how-c13 "). Removing is the board's " ui:ex-kanban-how-c14 "." ) .
+ui:ex-kanban-how-c11 a c:Code ; c:label "kb:AddCard" .
+ui:ex-kanban-how-c12 a c:Code ; c:label "kb:TitleShape" .
+ui:ex-kanban-how-c13 a c:Code ; c:label "val:requires" .
+ui:ex-kanban-how-c14 a c:Code ; c:label "c:BoardRemove" .
+ui:ex-kanban-how-cost a c:Text ; c:children (
+    "Why it is cheap: cards are placed member-wise (sem:forEach c:card), so a move re-places that one card and re-renders it; the only other work is the board's lane headers, whose counts follow the cards." ) .

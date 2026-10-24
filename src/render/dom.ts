@@ -53,6 +53,14 @@ export class DomRenderer {
   }
 
   flush(): void {
+    // A focused node that moves to another parent (a card to another lane) is detached on the
+    // way, which blurs it: it gets its focus back once it is in place.
+    const focused = this.doc.activeElement as HTMLElement | null
+    this.patch()
+    if (focused && focused !== this.doc.activeElement && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
+  }
+
+  private patch(): void {
     const d = this.takeDirty()
     for (const k of d.recreate) {
       const el = this.els.get(k)

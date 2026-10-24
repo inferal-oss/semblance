@@ -7,6 +7,7 @@ import { BEH, C, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, 
 import { chartFunctions } from './charts.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
+import { functions as boardFunctions } from './board.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
@@ -712,6 +713,7 @@ export const functions: Record<string, FnRule> = {
   ...chartFunctions,
   ...formulaFunctions,
   ...moneyFunctions,
+  ...boardFunctions,
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,

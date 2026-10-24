@@ -10,11 +10,12 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
 
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-timeline ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-timeline ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -60,6 +61,55 @@ ui:dt-stats a c:Flippable ; c:front ui:dt-stats-spec .
 ui:dt-stats-spec a c:Specimen ; c:label "Stat" ;
     c:help "A key figure with its unit and a signed change. The trend is toned good or bad; c:lowerIsBetter flips which, for costs like latency or size." ;
     c:children ( ui:dt-stat-toggle ui:dt-stat-members ui:dt-stat-runs ui:dt-stat-bundle ) .
+
+# --- Formula: a Stat whose value is a query -------------------------------------------------------
+
+ui:q-component-count a sem:View ; rdfs:label "number of component classes" ;
+    sem:select """SELECT (COUNT(DISTINCT ?class) AS ?value) WHERE { ?class rdfs:subClassOf+ sem:Component ; sem:slug ?slug }""" .
+ui:q-reactionless a sem:View ; rdfs:label "component classes without a reaction" ;
+    sem:select """
+SELECT ?value ?tone WHERE {
+  { SELECT (COUNT(DISTINCT ?class) AS ?value) WHERE {
+      ?class rdfs:subClassOf+ sem:Component ; sem:slug ?slug FILTER NOT EXISTS { ?reaction beh:sourceClass ?class } } }
+  BIND(IF(?value > 40, sty:Warning, sty:Success) AS ?tone)
+}""" .
+ui:dt-formula-classes a c:Stat ; c:label "Component classes" ; c:valueQuery ui:q-component-count ; c:help "COUNT over the ontology." .
+ui:dt-formula-quiet a c:Stat ; c:label "Without reactions" ; c:valueQuery ui:q-reactionless ; c:help "Toned by the query (?tone)." .
+ui:dt-formula a c:Flippable ; c:front ui:dt-formula-spec .
+ui:dt-formula-spec a c:Specimen ; c:label "Formula (c:valueQuery)" ;
+    c:help "Any component's value may be a SELECT: the first row's ?value becomes its c:value, and ?tone its tone. It re-runs when its c:dataset changes; these count this project's own component classes." ;
+    c:children ( ui:dt-formula-classes ui:dt-formula-quiet ) .
+
+# --- Money: an amount, written the viewer's way -----------------------------------------------------
+
+ui:dt-money-eur a c:Money ; c:value 1249.00 ; c:currency "EUR" ; sty:textStyle sty:Title .
+ui:dt-money-uah a c:Money ; c:value 52990 ; c:currency "UAH" .
+ui:dt-money-usd a c:Money ; c:value 19.99 ; c:currency "USD" .
+ui:dt-money-jpy a c:Money ; c:value 4800 ; c:currency "JPY" .
+ui:dt-money a c:Flippable ; c:front ui:dt-money-spec .
+ui:dt-money-spec a c:Specimen ; c:label "Money" ;
+    c:help "An amount and an ISO 4217 currency, formatted for the viewer's locale: switch the language in the display settings and the grouping, decimals and symbol follow. The <data> element keeps the machine-readable amount." ;
+    c:children ( ui:dt-money-eur ui:dt-money-uah ui:dt-money-usd ui:dt-money-jpy ) .
+
+# --- Board: items in lanes, a lane with a limit ------------------------------------------------------
+
+ui:stage rdfs:label "Stage" ; rdfs:range ui:Stage .
+ui:StageBuild a ui:Stage ; rdfs:label "Build" ; sem:order 1 .
+ui:StageReview a ui:Stage ; rdfs:label "Review" ; sem:order 2 .
+ui:StageShipped a ui:Stage ; rdfs:label "Shipped" ; sem:order 3 .
+ui:ReviewLimit a sh:NodeShape ; sh:targetNode ui:StageReview ;
+    sh:property [ sh:path [ sh:inversePath ui:stage ] ; sh:maxCount 2 ] .
+ui:dt-change-1 rdfs:label "Formula rule" ; ui:stage ui:StageShipped ; ui:by "Ada Lovelace" ; ui:order 1 .
+ui:dt-change-2 rdfs:label "Money component" ; ui:stage ui:StageReview ; ui:by "Grace Hopper" ; ui:order 2 .
+ui:dt-change-3 rdfs:label "Board lanes" ; ui:stage ui:StageReview ; ui:by "Alan Kay" ; ui:order 3 .
+ui:dt-change-4 rdfs:label "Board keyboard moves" ; ui:stage ui:StageBuild ; ui:by "Barbara Liskov" ; ui:order 4 .
+ui:dt-board-pipeline a c:Board ; c:label "Release pipeline" ;
+    c:property ui:stage ; c:cardTitle rdfs:label ; c:cardPerson ui:by ; c:cardOrder ui:order ;
+    c:card ui:dt-change-1 , ui:dt-change-2 , ui:dt-change-3 , ui:dt-change-4 .
+ui:dt-board a c:Flippable ; c:front ui:dt-board-spec .
+ui:dt-board-spec a c:Specimen ; c:label "Board" ;
+    c:help "Items in lanes: the lanes are the range of c:property (here ui:stage), each item goes where its value points. Move a card with its arrows, or focus it and use ← →. Review is limited to two by a SHACL shape (sh:maxCount on the inverse path), so a third is refused." ;
+    c:children ( ui:dt-board-pipeline ) .
 
 # --- Tree: the component class hierarchy ----------------------------------------------------------
 
