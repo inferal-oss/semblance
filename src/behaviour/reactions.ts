@@ -24,6 +24,7 @@ import { reactions as panesReactions } from '../components/panes.ts'
 import { reactions as payloadReactions } from '../components/payload.ts'
 import { reactions as toolbarReactions } from '../components/toolbar.ts'
 import { reactions as boardReactions } from '../components/board.ts'
+import { reactions as calendarReactions } from '../components/calendar.ts'
 import { reactions as walkthroughReactions } from '../components/walkthrough.ts'
 import { reactions as liveReactions } from '../components/live.ts'
 import { reactions as formsReactions } from '../components/forms.ts'
@@ -154,6 +155,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...payloadReactions,
   ...toolbarReactions,
   ...boardReactions,
+  ...calendarReactions,
   ...walkthroughReactions,
   ...liveReactions,
   ...formsReactions,

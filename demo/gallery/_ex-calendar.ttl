@@ -1,0 +1,223 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix cal: <https://semblance.dev/demo/calendar#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Room bookings: a week of meetings, a room held by one meeting at a time, rooms that seat so many.
+#
+# The meetings are this example's own vocabulary (cal:): a title, a day, a start and a length in
+# hours, a room and how many come. A c:Calendar lays them out in a week; a c:Table lists the same
+# meetings as an agenda - one graph, two views, and moving a meeting is one change both follow.
+# Two rules come from shapes: a room is booked by one meeting at a time (a shape with
+# c:exclusiveBy, the constraint SHACL Core lacks), and a room seats so many (sh:maxInclusive).
+# The calendar marks the meetings that break the first; dragging a meeting asks both, so a cell
+# where it would double-book its room, or a room it does not fit, refuses it with the shape's
+# message.
+# =================================================================================================
+
+ui:ex-calendar-prefixes sh:declare [ sh:prefix "cal" ; sh:namespace "https://semblance.dev/demo/calendar#"^^xsd:anyURI ] .
+
+# --- days and rooms -------------------------------------------------------------------------------
+# cal:day ranges over cal:Day: the calendar's columns are its individuals, in sem:order. A room's
+# sty:tone tints its meetings.
+
+cal:day rdfs:label "Day" ; rdfs:range cal:Day .
+cal:mon a cal:Day ; rdfs:label "Monday" ; sem:order 1 .
+cal:tue a cal:Day ; rdfs:label "Tuesday" ; sem:order 2 .
+cal:wed a cal:Day ; rdfs:label "Wednesday" ; sem:order 3 .
+cal:thu a cal:Day ; rdfs:label "Thursday" ; sem:order 4 .
+cal:fri a cal:Day ; rdfs:label "Friday" ; sem:order 5 .
+
+cal:room rdfs:label "Room" ; rdfs:range cal:Room .
+cal:lovelace a cal:Room ; rdfs:label "Lovelace" ; cal:seats 8 ; sty:tone sty:Accent ; sem:order 1 .
+cal:babbage a cal:Room ; rdfs:label "Babbage" ; cal:seats 4 ; sty:tone sty:Info ; sem:order 2 .
+cal:hopper a cal:Room ; rdfs:label "Hopper" ; cal:seats 12 ; sty:tone sty:Success ; sem:order 3 .
+
+# --- the rules, as shapes -------------------------------------------------------------------------
+# One meeting per room at a time: two meetings sharing a cal:room must not overlap. The calendar
+# implements c:exclusiveBy (c:NoOverlapConstraintComponent): it marks meetings that do, and
+# refuses a drop that would make them, with this shape's message.
+cal:OneMeetingPerRoom a sh:NodeShape ; sh:targetClass cal:Meeting ; c:exclusiveBy cal:room ;
+    sh:message "That room is booked then." .
+
+# What each room seats, as standard SHACL on the meeting a room is asked to take (dnd:accepts).
+cal:FitsLovelace a sh:NodeShape ;
+    sh:property [ sh:path cal:attendees ; sh:maxInclusive 8 ; sh:message "Lovelace seats 8." ] .
+cal:FitsBabbage a sh:NodeShape ;
+    sh:property [ sh:path cal:attendees ; sh:maxInclusive 4 ; sh:message "Babbage seats 4." ] .
+cal:FitsHopper a sh:NodeShape ;
+    sh:property [ sh:path cal:attendees ; sh:maxInclusive 12 ; sh:message "Hopper seats 12." ] .
+
+# --- the week's meetings ----------------------------------------------------------------------------
+# Starts and lengths are hours (9.5 is half past nine). The customer call and the planning session
+# on Tuesday were booked into Lovelace at overlapping times: a conflict to resolve.
+
+cal:m1 a cal:Meeting ; cal:title "Standup" ; cal:day cal:mon ; cal:start 9.5 ; cal:hours 0.5 ; cal:room cal:babbage ; cal:attendees 4 .
+cal:m2 a cal:Meeting ; cal:title "Design review" ; cal:day cal:mon ; cal:start 13 ; cal:hours 1.5 ; cal:room cal:lovelace ; cal:attendees 7 .
+cal:m3 a cal:Meeting ; cal:title "Hiring sync" ; cal:day cal:tue ; cal:start 10 ; cal:hours 1 ; cal:room cal:babbage ; cal:attendees 3 .
+cal:m4 a cal:Meeting ; cal:title "Customer call" ; cal:day cal:tue ; cal:start 14 ; cal:hours 1 ; cal:room cal:lovelace ; cal:attendees 5 .
+cal:m5 a cal:Meeting ; cal:title "Planning" ; cal:day cal:tue ; cal:start 14.5 ; cal:hours 1.5 ; cal:room cal:lovelace ; cal:attendees 6 .
+cal:m6 a cal:Meeting ; cal:title "Standup" ; cal:day cal:wed ; cal:start 9.5 ; cal:hours 0.5 ; cal:room cal:babbage ; cal:attendees 4 .
+cal:m7 a cal:Meeting ; cal:title "All hands" ; cal:day cal:wed ; cal:start 16 ; cal:hours 1 ; cal:room cal:hopper ; cal:attendees 12 .
+cal:m8 a cal:Meeting ; cal:title "1:1 with Grace" ; cal:day cal:thu ; cal:start 11 ; cal:hours 0.5 ; cal:room cal:babbage ; cal:attendees 2 .
+cal:m9 a cal:Meeting ; cal:title "Architecture" ; cal:day cal:thu ; cal:start 13 ; cal:hours 2 ; cal:room cal:hopper ; cal:attendees 9 .
+cal:m10 a cal:Meeting ; cal:title "Retro" ; cal:day cal:fri ; cal:start 15 ; cal:hours 1 ; cal:room cal:lovelace ; cal:attendees 8 .
+cal:m11 a cal:Meeting ; cal:title "Demo prep" ; cal:day cal:fri ; cal:start 10 ; cal:hours 1.5 ; cal:room cal:hopper ; cal:attendees 5 .
+
+# --- the interface ----------------------------------------------------------------------------------
+
+ui:ex-calendar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-calendar-intro ui:ex-calendar-conflicts ui:ex-calendar-week ui:ex-calendar-keys ui:ex-calendar-rooms ui:ex-calendar-agenda-card ) .
+ui:ex-calendar-intro a c:Text ;
+    c:label "A week of room bookings, laid out by a c:Calendar from each meeting's day, start and length. Drag a meeting to another time or day, or onto a room: a room holds one meeting at a time and seats so many, and both rules are SHACL shapes the drop asks. Below, the same meetings as an agenda." .
+
+# What is double-booked, as a query over the meetings: an alert that turns green when nothing is.
+ui:ex-calendar-conflicts a c:Alert ; c:valueQuery cal:qConflicts ;
+    c:dataset cal:m1 , cal:m2 , cal:m3 , cal:m4 , cal:m5 , cal:m6 , cal:m7 , cal:m8 , cal:m9 , cal:m10 , cal:m11 .
+
+# The week: days from cal:day's range, hours 9 to 18, a meeting at its cal:start for cal:hours.
+ui:ex-calendar-week a c:Calendar ; c:label "Week 43" ;
+    c:dayProperty cal:day ; c:startProperty cal:start ; c:durationProperty cal:hours ;
+    c:entryTitle cal:title ; c:entryDetail cal:room ; c:fromHour 9 ; c:toHour 18 ;
+    c:entry cal:m1 , cal:m2 , cal:m3 , cal:m4 , cal:m5 , cal:m6 , cal:m7 , cal:m8 , cal:m9 , cal:m10 , cal:m11 .
+
+ui:ex-calendar-keys a c:Text ; sty:textStyle sty:Caption ;
+    c:children ( "Tab to a meeting, " ui:ex-calendar-key-space " picks it up; the arrows carry it a day (" ui:ex-calendar-key-left " " ui:ex-calendar-key-right ") or an hour (" ui:ex-calendar-key-up " " ui:ex-calendar-key-down "), and " ui:ex-calendar-key-space2 " puts it down. " ui:ex-calendar-key-esc " puts it back." ) .
+ui:ex-calendar-key-space a c:Kbd ; c:label "Space" .
+ui:ex-calendar-key-space2 a c:Kbd ; c:label "Space" .
+ui:ex-calendar-key-left a c:Kbd ; c:label "←" .
+ui:ex-calendar-key-right a c:Kbd ; c:label "→" .
+ui:ex-calendar-key-up a c:Kbd ; c:label "↑" .
+ui:ex-calendar-key-down a c:Kbd ; c:label "↓" .
+ui:ex-calendar-key-esc a c:Kbd ; c:label "Esc" .
+
+# The rooms, as drop targets: a meeting dropped on one moves there - if it fits (dnd:accepts, the
+# room's seats) and the room is free while it is on (the calendar objects otherwise).
+ui:ex-calendar-rooms a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-calendar-room-lovelace ui:ex-calendar-room-babbage ui:ex-calendar-room-hopper ) .
+ui:ex-calendar-room-lovelace a c:Card , cal:RoomTarget ; c:label "Lovelace" ; c:badge "8 seats" ; c:note "Drop a meeting to move it here." ;
+    dnd:receptacle cal:lovelace ; dnd:memberOf cal:room ; dnd:accepts cal:FitsLovelace .
+ui:ex-calendar-room-babbage a c:Card , cal:RoomTarget ; c:label "Babbage" ; c:badge "4 seats" ; c:note "Drop a meeting to move it here." ;
+    dnd:receptacle cal:babbage ; dnd:memberOf cal:room ; dnd:accepts cal:FitsBabbage .
+ui:ex-calendar-room-hopper a c:Card , cal:RoomTarget ; c:label "Hopper" ; c:badge "12 seats" ; c:note "Drop a meeting to move it here." ;
+    dnd:receptacle cal:hopper ; dnd:memberOf cal:room ; dnd:accepts cal:FitsHopper .
+cal:RoomTarget rdfs:subClassOf dnd:DropTarget .
+
+# The same meetings as an agenda: a SELECT, re-run when one of them changes.
+ui:ex-calendar-agenda-card a c:Card ; c:label "Agenda" ; c:badge "c:Table" ;
+    c:note "The same meetings, as rows of a SELECT: in order of day and time, each with what it overlaps." ;
+    c:content ui:ex-calendar-agenda .
+ui:ex-calendar-col-day a c:Column ; c:variable "day" ; c:label "Day" .
+ui:ex-calendar-col-time a c:Column ; c:variable "time" ; c:label "Time" ; c:format "code" .
+ui:ex-calendar-col-title a c:Column ; c:variable "title" ; c:label "Meeting" .
+ui:ex-calendar-col-room a c:Column ; c:variable "room" ; c:label "Room" .
+ui:ex-calendar-col-people a c:Column ; c:variable "people" ; c:label "People" ; c:align "end" ; c:format "number" .
+ui:ex-calendar-col-conflict a c:Column ; c:variable "conflict" ; c:label "Overlaps" .
+ui:ex-calendar-agenda a c:Table ; c:label "Agenda" ; c:query cal:qAgenda ;
+    c:dataset cal:m1 , cal:m2 , cal:m3 , cal:m4 , cal:m5 , cal:m6 , cal:m7 , cal:m8 , cal:m9 , cal:m10 , cal:m11 ;
+    c:tableColumns ( ui:ex-calendar-col-day ui:ex-calendar-col-time ui:ex-calendar-col-title ui:ex-calendar-col-room ui:ex-calendar-col-people ui:ex-calendar-col-conflict ) .
+
+# --- the queries ------------------------------------------------------------------------------------
+# Minutes are whole numbers (start and length times 60), so the times are exact.
+
+cal:qAgenda a sem:View ; sem:select """
+SELECT ?day ?time ?title ?room ?people ?conflict WHERE {
+  ?m a cal:Meeting ; cal:title ?title ; cal:day ?d ; cal:start ?s ; cal:hours ?len ; cal:room ?r ; cal:attendees ?people .
+  ?d rdfs:label ?day ; sem:order ?dayOrder . ?r rdfs:label ?room .
+  BIND(xsd:integer(ROUND(?s * 60)) AS ?sm) BIND(?sm + xsd:integer(ROUND(?len * 60)) AS ?em)
+  BIND(xsd:integer(FLOOR(?sm / 60)) AS ?sh) BIND(xsd:integer(FLOOR(?em / 60)) AS ?eh)
+  BIND(CONCAT(IF(?sh < 10, "0", ""), STR(?sh), ":", IF(?sm - ?sh * 60 < 10, "0", ""), STR(?sm - ?sh * 60), "–",
+              IF(?eh < 10, "0", ""), STR(?eh), ":", IF(?em - ?eh * 60 < 10, "0", ""), STR(?em - ?eh * 60)) AS ?time)
+  OPTIONAL { SELECT ?m (MIN(?otherTitle) AS ?conflict) WHERE {
+    ?m a cal:Meeting ; cal:room ?r2 ; cal:day ?d2 ; cal:start ?s2 ; cal:hours ?len2 .
+    ?o a cal:Meeting ; cal:room ?r2 ; cal:day ?d2 ; cal:start ?os ; cal:hours ?olen ; cal:title ?otherTitle FILTER(?o != ?m)
+    FILTER(?os < ?s2 + ?len2 && ?s2 < ?os + ?olen)
+  } GROUP BY ?m }
+}
+ORDER BY ?dayOrder ?sm ?title""" .
+
+# The double bookings: how many pairs, and the first of them in words.
+cal:qConflicts a sem:View ; sem:select """
+SELECT ?label ?tone WHERE {
+  { SELECT (COUNT(*) AS ?n) (MIN(?pair) AS ?first) WHERE {
+      ?a a cal:Meeting ; cal:room ?r ; cal:day ?d ; cal:start ?as ; cal:hours ?alen ; cal:title ?at .
+      ?b a cal:Meeting ; cal:room ?r ; cal:day ?d ; cal:start ?bs ; cal:hours ?blen ; cal:title ?bt .
+      FILTER(STR(?a) < STR(?b) && ?bs < ?as + ?alen && ?as < ?bs + ?blen)
+      ?r rdfs:label ?room . ?d rdfs:label ?day .
+      BIND(CONCAT(?at, " and ", ?bt, " overlap in ", ?room, " on ", ?day) AS ?pair)
+  } }
+  BIND(IF(?n = 0, "No room is double-booked.", CONCAT(IF(?n = 1, "1 double booking: ", CONCAT(STR(?n), " double bookings - first: ")), ?first, ".")) AS ?label)
+  BIND(IF(?n = 0, sty:Success, sty:Danger) AS ?tone)
+}""" .
+
+# --- the reaction: a meeting dropped on a room ------------------------------------------------------
+# A drop the room accepted (it fits, and the room is free then) moves the meeting there. A drop on a
+# cell of the calendar is the calendar's own reaction (c:CalendarMove): the day and the hour.
+
+cal:ChangeRoom a beh:Reaction ; beh:when dnd:Drop ; beh:sourceClass cal:RoomTarget ;
+    beh:deletes """
+CONSTRUCT { ?m cal:room ?old }
+WHERE { $event dnd:carrying ?m ; dnd:into ?room . ?m a cal:Meeting ; cal:room ?old FILTER(?old != ?room) }""" ;
+    beh:inserts """
+CONSTRUCT { ?m cal:room ?room }
+WHERE { $event dnd:carrying ?m ; dnd:into ?room . ?m a cal:Meeting ; cal:room ?old FILTER(?old != ?room) }""" ;
+    ann:announces "Moved to another room" ; ann:tone sty:Success .
+
+# --- how it works -----------------------------------------------------------------------------------
+
+ui:ex-calendar-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-calendar-w1 ui:ex-calendar-w2 ui:ex-calendar-w3 ui:ex-calendar-w4 ui:ex-calendar-w5 ui:ex-calendar-w6 ui:ex-calendar-w7 ) .
+
+ui:ex-calendar-w1 a c:WalkthroughStep ; rdfs:label "Meetings are the example's own data" ;
+    c:children ( "A meeting such as " ui:ex-calendar-m-m4 " is data in the cal: vocabulary: a title, " ui:ex-calendar-m-day ", a start and a length in hours, " ui:ex-calendar-m-room " and how many come. The days are the individuals of cal:day's range - " ui:ex-calendar-m-mon " to Friday, in sem:order - and a room such as " ui:ex-calendar-m-lovelace " has a tone its meetings are tinted with. Nothing about meetings is in the framework." ) .
+ui:ex-calendar-w2 a c:WalkthroughStep ; rdfs:label "A calendar lays them out" ;
+    c:children ( ui:ex-calendar-m-week " is a " ui:ex-calendar-m-Calendar ", told which property is a meeting's day (" ui:ex-calendar-m-dayProperty "), its start (" ui:ex-calendar-m-startProperty ") and length. One SPARQL rule draws the week: a row per hour, a cell per day, and each meeting in the cell of its day and hour, as far down it as its minutes and as tall as it lasts; meetings that overlap share the day side by side. Every cell is a drop zone into its slot: a day and an hour." ) .
+ui:ex-calendar-w3 a c:WalkthroughStep ; rdfs:label "A room holds one meeting at a time" ;
+    c:children ( ui:ex-calendar-m-one " is a SHACL shape on every cal:Meeting with " ui:ex-calendar-m-exclusiveBy " cal:room: two meetings in one room must not overlap. SHACL Core has no word for that, so the calendar defines one, " ui:ex-calendar-m-NoOverlap ", and implements it: " ui:ex-calendar-m-m4b " and " ui:ex-calendar-m-m5 " overlap in Lovelace, so each is outlined and names the other. " ui:ex-calendar-m-alert " asks the same of the data with " ui:ex-calendar-m-qConflicts ", and turns green once nothing is double-booked." ) .
+ui:ex-calendar-w4 a c:WalkthroughStep ; rdfs:label "Dragging asks the shape" ;
+    c:children ( "Pick a meeting up and, while it is carried, " ui:ex-calendar-m-objections " works out where it would overlap a meeting in its room: each such slot gets a " ui:ex-calendar-m-Objection " carrying the shape's message. The drag and drop layer refuses a drop there - the cell dims, the message over it - and a drop anywhere else is " ui:ex-calendar-m-move ": the meeting takes the slot's day and hour. Hovering is not history; only the drop is recorded." ) .
+ui:ex-calendar-w5 a c:WalkthroughStep ; rdfs:label "Rooms take what fits" ;
+    c:children ( "The rooms are cards that are also drop targets. " ui:ex-calendar-m-babbage " " ui:ex-calendar-m-accepts " " ui:ex-calendar-m-fitsBabbage ": a meeting must have at most four attendees, standard SHACL (sh:maxInclusive), so the all-hands is refused with \"Babbage seats 4.\" A room booked while the meeting is on objects too, by the same shape as the cells. A drop a room takes is " ui:ex-calendar-m-changeRoom ", one triple." ) .
+ui:ex-calendar-w6 a c:WalkthroughStep ; rdfs:label "One graph, two views" ;
+    c:children ( ui:ex-calendar-m-agenda " is a table of " ui:ex-calendar-m-qAgenda ", a SELECT over the same meetings in order of day and time, each with what it overlaps. Its " ui:ex-calendar-m-dataset " is the meetings, so a move re-runs it: the calendar and the agenda show one change, recorded once in the change log." ) .
+ui:ex-calendar-w7 a c:WalkthroughStep ; rdfs:label "Why a move is cheap" ;
+    c:children ( "A move changes two triples of one meeting. The week's rule runs again and writes only what differs - the meeting's place, and the marks of those it now overlaps or no longer does - and only those entries render again. A drag costs one objection rule when it starts; moving over cells changes nothing but the drag's own state. The keyboard is the same drag: " ui:ex-calendar-m-space " lifts, the arrows carry, Space drops." ) .
+
+ui:ex-calendar-m-m4 a c:Mention ; c:label "cal:m4" ; c:mentions cal:m4 .
+ui:ex-calendar-m-m4b a c:Mention ; c:label "cal:m4" ; c:mentions cal:m4 .
+ui:ex-calendar-m-m5 a c:Mention ; c:label "cal:m5" ; c:mentions cal:m5 .
+ui:ex-calendar-m-day a c:Mention ; c:label "cal:day" ; c:mentions cal:day .
+ui:ex-calendar-m-room a c:Mention ; c:label "cal:room" ; c:mentions cal:room .
+ui:ex-calendar-m-mon a c:Mention ; c:label "cal:mon" ; c:mentions cal:mon .
+ui:ex-calendar-m-lovelace a c:Mention ; c:label "cal:lovelace" ; c:mentions cal:lovelace .
+ui:ex-calendar-m-week a c:Mention ; c:label "ui:ex-calendar-week" ; c:mentions ui:ex-calendar-week .
+ui:ex-calendar-m-Calendar a c:Mention ; c:label "c:Calendar" ; c:mentions c:Calendar ; c:to c:Calendar .
+ui:ex-calendar-m-dayProperty a c:Mention ; c:label "c:dayProperty" ; c:mentions c:dayProperty ; c:to c:dayProperty .
+ui:ex-calendar-m-startProperty a c:Mention ; c:label "c:startProperty" ; c:mentions c:startProperty ; c:to c:startProperty .
+ui:ex-calendar-m-one a c:Mention ; c:label "cal:OneMeetingPerRoom" ; c:mentions cal:OneMeetingPerRoom .
+ui:ex-calendar-m-exclusiveBy a c:Mention ; c:label "c:exclusiveBy" ; c:mentions c:exclusiveBy ; c:to c:exclusiveBy .
+ui:ex-calendar-m-NoOverlap a c:Mention ; c:label "c:NoOverlapConstraintComponent" ; c:mentions c:NoOverlapConstraintComponent ; c:to c:NoOverlapConstraintComponent .
+ui:ex-calendar-m-alert a c:Mention ; c:label "The alert" ; c:mentions ui:ex-calendar-conflicts .
+ui:ex-calendar-m-qConflicts a c:Mention ; c:label "cal:qConflicts" ; c:mentions cal:qConflicts .
+ui:ex-calendar-m-objections a c:Mention ; c:label "c:CalendarObjections" ; c:mentions c:CalendarObjections ; c:to c:CalendarObjections .
+ui:ex-calendar-m-Objection a c:Mention ; c:label "dnd:Objection" ; c:mentions dnd:Objection ; c:to dnd:Objection .
+ui:ex-calendar-m-move a c:Mention ; c:label "c:CalendarMove" ; c:mentions c:CalendarMove ; c:to c:CalendarMove .
+ui:ex-calendar-m-babbage a c:Mention ; c:label "Babbage's card" ; c:mentions ui:ex-calendar-room-babbage .
+ui:ex-calendar-m-accepts a c:Mention ; c:label "dnd:accepts" ; c:mentions dnd:accepts ; c:to dnd:accepts .
+ui:ex-calendar-m-fitsBabbage a c:Mention ; c:label "cal:FitsBabbage" ; c:mentions cal:FitsBabbage .
+ui:ex-calendar-m-changeRoom a c:Mention ; c:label "cal:ChangeRoom" ; c:mentions cal:ChangeRoom .
+ui:ex-calendar-m-agenda a c:Mention ; c:label "The agenda" ; c:mentions ui:ex-calendar-agenda .
+ui:ex-calendar-m-qAgenda a c:Mention ; c:label "cal:qAgenda" ; c:mentions cal:qAgenda .
+ui:ex-calendar-m-dataset a c:Mention ; c:label "c:dataset" ; c:mentions c:dataset ; c:to c:dataset .
+ui:ex-calendar-m-space a c:Mention ; c:label "Space" ; c:mentions ui:ex-calendar-keys .

@@ -47,6 +47,24 @@ function instanceOf(ctx: Reader, value: Term, cls: string): boolean {
   return false
 }
 
+/** The SHACL ranges dnd:accepts supports: the bound's local name, and when a value meets it. */
+const RANGES: [string, (v: number, limit: number) => boolean][] = [
+  ['minInclusive', (v, l) => v >= l],
+  ['maxInclusive', (v, l) => v <= l],
+  ['minExclusive', (v, l) => v > l],
+  ['maxExclusive', (v, l) => v < l],
+]
+
+/** The least reason a rule objects to the drag going into a receptacle (dnd:Objection), if any. */
+function objected(ctx: RuleContext, drag: Term, receptacle: Term): string | undefined {
+  return ctx
+    .match(null, DND.receptacle, receptacle)
+    .map((q) => q.subject)
+    .filter((n) => ctx.match(n, RDF_TYPE, ctx.nn(NS.dnd + 'Objection')).length && ctx.match(n, NS.dnd + 'against', drag).length)
+    .flatMap((n) => ctx.objects(n, DND.reason).map((t) => t.value))
+    .sort()[0]
+}
+
 /** The least message of the target's dnd:accepts shapes that `x` violates, if any. */
 function unfit(ctx: RuleContext, focus: NamedNode, x: Term): string | undefined {
   const said: string[] = []
@@ -61,6 +79,16 @@ function unfit(ctx: RuleContext, focus: NamedNode, x: Term): string | undefined 
           for (const v of ctx.objects(x, p)) if (!list.some((a) => a.equals(v))) fail(ps)
         }
         for (const cls of ctx.objects(ps, SH + 'class')) for (const v of ctx.objects(x, p)) if (!instanceOf(ctx, v, cls.value)) fail(ps)
+        // Ranges, as SPARQL compares numbers: a value that is not a number fails them.
+        for (const [bound, ok] of RANGES) {
+          for (const limit of ctx.objects(ps, SH + bound)) {
+            for (const v of ctx.objects(x, p)) {
+              const a = Number(v.value)
+              const b = Number(limit.value)
+              if (v.termType !== 'Literal' || Number.isNaN(a) || Number.isNaN(b) || !ok(a, b)) fail(ps)
+            }
+          }
+        }
       }
     }
   }
@@ -117,7 +145,8 @@ const receive: FnRule = (ctx, focus) => {
     const holding = members.reduce((n, m) => n + ctx.match(r, m.value, null).length, 0)
     const capacity = capacityOf(ctx, focus, r)
     const overfull = !origin && !inside && capacity !== undefined && (pointing || holding || 0) + 1 > capacity.max
-    const reasons = [origin ? undefined : misfit, overfull ? capacity!.said : undefined].filter((s): s is string => s !== undefined).sort()
+    const objection = origin || inside ? undefined : objected(ctx, drag, r)
+    const reasons = [origin ? undefined : misfit, overfull ? capacity!.said : undefined, objection].filter((s): s is string => s !== undefined).sort()
     const reason = reasons[0]
     const reception = ctx.nn(receptionOf(focus.value, r.value))
     o.t(reception, RDF_TYPE, ctx.nn(DND.Reception)).t(reception, DND.receptacle, r).t(reception, DND.verdict, ctx.nn(reason === undefined ? DND.Accepted : DND.Refused))

@@ -10,6 +10,7 @@ import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
 import { typeaheadFunctions } from './typeahead.ts'
+import { functions as calendarFunctions } from './calendar.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
@@ -727,6 +728,7 @@ export const functions: Record<string, FnRule> = {
   ...moneyFunctions,
   ...boardFunctions,
   ...typeaheadFunctions,
+  ...calendarFunctions,
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,

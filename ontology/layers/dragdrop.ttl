@@ -20,7 +20,9 @@
 # (dnd:zone). Whether a target takes what is carried is SHACL: the carried resource must conform
 # to the target's dnd:accepts node shapes, and the receptacle must still conform to the shapes
 # that target it once the drop has added one more member (sh:maxCount on the membership path,
-# dnd:memberOf or dnd:members: a capacity, a work-in-progress limit).
+# dnd:memberOf or dnd:members: a capacity, a work-in-progress limit). What SHACL Core cannot say
+# about a place (that it would overlap a booking there) a rule can: any rule may derive a
+# dnd:Objection to the drag going into a receptacle, with its reason, and the target refuses it.
 #
 # While something is carried, the drag is graph state: dnd:Current says what is carried, from
 # where, by what means and where it would go. Every target is offered the drag (dnd:offered) and
@@ -83,14 +85,25 @@ dnd:zone a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ;
     rdfs:comment "One of the target's drop zones: a rendered node with its own dnd:receptacle (derived by components with several, e.g. a board's lanes)."@en .
 dnd:accepts a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range sh:NodeShape ;
     rdfs:comment """A shape the carried resource must conform to. Supported: sh:class on the node, and on
-property shapes with a predicate path sh:hasValue, sh:in and sh:class. The violation's
-sh:message (the property shape's, else the node shape's) is the reason given."""@en .
+property shapes with a predicate path sh:hasValue, sh:in, sh:class, and the ranges sh:minInclusive,
+sh:maxInclusive, sh:minExclusive and sh:maxExclusive (a room's seats against a meeting's
+attendees). The violation's sh:message (the property shape's, else the node shape's) is the
+reason given."""@en .
 dnd:memberOf a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range rdf:Property ;
     rdfs:comment "After a drop the carried resource has this property with the receptacle as its value (a card's column)."@en .
 dnd:members a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range rdf:Property ;
     rdfs:comment "After a drop the receptacle has this property with the carried resource as its value (a list's c:item)."@en .
 dnd:orderBy a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range rdf:Property ;
     rdfs:comment "Makes the target ordered: its members are in ascending order of this property, and a drop has a position among them."@en .
+
+# Objections: what a component knows about a place that no shape on the target says. A rule (of
+# any component, while the drag is offered to it) derives one per receptacle it objects to; every
+# target with a zone receiving into that receptacle refuses the drag there, with the reason - unless
+# it is where the drag came from, or already holds it (putting it back changes nothing).
+dnd:Objection a owl:Class ;
+    rdfs:comment "Derived: the drag (dnd:against) may not go into a receptacle (dnd:receptacle), and why (dnd:reason)."@en .
+dnd:against a owl:ObjectProperty ; rdfs:domain dnd:Objection ; rdfs:range dnd:Drag ;
+    rdfs:comment "The drag an objection is to."@en .
 
 # --- the drag in progress ---------------------------------------------------------------------------
 # One drag at a time: dnd:Current. Its properties are written by the layer's reactions (below) and
@@ -148,7 +161,8 @@ dnd:RefusedPhrase a c:Phrase ; rdfs:label "refuses it:"@en , "не прийма�
 # --- events ----------------------------------------------------------------------------------------
 # Recorded by the host's gestures (not from a DOM event). beh:key names the keys of the keyboard
 # drag: on a focused draggable, Space starts it; while it is held, the arrows are dnd:Over (Up and
-# Down between positions, Left and Right between zones), Space or Enter drops, Escape cancels.
+# Down between positions - or, in a zone without positions, to the zone above or below, as a
+# calendar's cells are laid out - Left and Right between zones), Space or Enter drops, Escape cancels.
 
 dnd:Start a owl:Class ; rdfs:subClassOf beh:Event ; beh:recorded false ; beh:key "space" ;
     rdfs:comment "A draggable was picked up (dnd:from, dnd:by, dnd:effect). Addressed to the draggable; not recorded."@en .
@@ -272,8 +286,9 @@ WHERE {
 
 # While there is a drag: each zone's reception of what is carried. Refused if it does not conform
 # to a dnd:accepts shape, or if one more member would exceed a sh:maxCount on the receptacle; the
-# reason is the (lexically first) violated shape's untagged sh:message. The zone it came from
-# accepts it back (a reorder adds no member).
+# reason is the (lexically first) violated shape's untagged sh:message - or an objection's reason
+# (dnd:Objection), whichever is first. The zone it came from accepts it back (a reorder adds no
+# member), and a receptacle already holding it is not objected to.
 dnd:Receive a sem:Rendering ;
     sem:targets dnd:DropTarget ;
     sem:modality mod:Screen ;
@@ -305,6 +320,10 @@ WHERE {
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:hasValue ?wanted FILTER(isIRI(?p)) FILTER NOT EXISTS { ?x ?p ?wanted } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:in ?allowed FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?allowed rdf:rest*/rdf:first ?v } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:class ?valueClass FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?v a/rdfs:subClassOf* ?valueClass } BIND(?ps AS ?violated) }
+    UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; ?rangeBound ?limit FILTER(isIRI(?p) && ?rangeBound IN (sh:minInclusive, sh:maxInclusive, sh:minExclusive, sh:maxExclusive))
+            ?x ?p ?v
+            FILTER(!COALESCE(IF(?rangeBound = sh:minInclusive, ?v >= ?limit, IF(?rangeBound = sh:maxInclusive, ?v <= ?limit, IF(?rangeBound = sh:minExclusive, ?v > ?limit, ?v < ?limit))), false))
+            BIND(?ps AS ?violated) }
     OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
     OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
     BIND(STR(COALESCE(?own, ?general, "It does not belong here.")) AS ?said)
@@ -319,12 +338,16 @@ WHERE {
     OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
     BIND(STR(COALESCE(?own, ?general, "There is no room for it here.")) AS ?said)
   } GROUP BY ?this ?r } }
+  # What a rule objects to (dnd:Objection): the least reason given for this receptacle.
+  LATERAL { OPTIONAL { SELECT ?r ?drag (MIN(?why) AS ?objected) WHERE { ?objection a dnd:Objection ; dnd:receptacle ?r ; dnd:against ?drag ; dnd:reason ?why } GROUP BY ?r ?drag } }
   BIND(EXISTS { ?drag dnd:from ?r } AS ?origin)
   BIND(EXISTS { $this dnd:memberOf ?m1 . ?x ?m1 ?r } || EXISTS { $this dnd:members ?m2 . ?r ?m2 ?x } AS ?inside)
   BIND(!?origin && !?inside && BOUND(?max) && COALESCE(?pointing, ?holding, 0) + 1 > ?max AS ?overfull)
   BIND(IF(?origin, ?none, ?unfit) AS ?unfitHere)
   BIND(IF(?overfull, ?full, ?none) AS ?fullHere)
-  BIND(IF(BOUND(?unfitHere) && BOUND(?fullHere), IF(?unfitHere < ?fullHere, ?unfitHere, ?fullHere), COALESCE(?unfitHere, ?fullHere)) AS ?reason)
+  BIND(IF(?origin || ?inside, ?none, STR(?objected)) AS ?objectedHere)
+  BIND(IF(BOUND(?unfitHere) && BOUND(?fullHere), IF(?unfitHere < ?fullHere, ?unfitHere, ?fullHere), COALESCE(?unfitHere, ?fullHere)) AS ?shaped)
+  BIND(IF(BOUND(?shaped) && BOUND(?objectedHere), IF(?shaped < ?objectedHere, ?shaped, ?objectedHere), COALESCE(?shaped, ?objectedHere)) AS ?reason)
   BIND(IF(BOUND(?reason), dnd:Refused, dnd:Accepted) AS ?verdict)
   BIND(IF(BOUND(?reason), "refuses", "accepts") AS ?verdictSlug)
   BIND(IRI(CONCAT(STR($this), "/~drop-", ENCODE_FOR_URI(STR(?r)))) AS ?reception)

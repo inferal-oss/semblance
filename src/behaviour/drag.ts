@@ -309,8 +309,9 @@ export class DragHost {
 
   /**
    * Keys of the keyboard drag (the beh:key of dnd:Start, dnd:Over, dnd:Drop, dnd:Cancel): on a
-   * focused draggable, Space lifts it at its place; Up and Down move it between positions, Left
-   * and Right between zones (mirrored right to left); Space or Enter drops; Escape and Tab put it
+   * focused draggable, Space lifts it at its place; Up and Down move it between positions (in a
+   * zone without positions, to the zone above or below), Left and Right between zones (mirrored
+   * right to left); Space or Enter drops; Escape and Tab put it
    * back. During a pointer drag, Escape cancels it. Returns whether the key was used.
    */
   key(k: KeyboardEvent, apple: boolean): boolean {
@@ -340,7 +341,10 @@ export class DragHost {
     const rtl = this.doc.documentElement.dir === 'rtl'
     const step = (n: number) => Math.max(0, Math.min(zones.length - 1, slot.zone + n))
     let { zone, index } = slot
-    if (combo === 'arrowup') index--
+    const vertical = combo === 'arrowup' || combo === 'arrowdown'
+    // In a zone without positions (a calendar's cell), Up and Down go to the zone above or below.
+    if (vertical && zones[zone] && !zones[zone]!.hasAttribute('data-sem-drop-ordered')) zone = this.verticalNeighbour(zones, zone, combo === 'arrowup' ? -1 : 1)
+    else if (combo === 'arrowup') index--
     else if (combo === 'arrowdown') index++
     else zone = step((combo === 'arrowright') !== rtl ? 1 : -1)
     const z = zones[zone]
@@ -353,6 +357,27 @@ export class DragHost {
     const mark = this.itemsOf(z)[s.slot.index] ?? this.itemsOf(z)[s.slot.index - 1] ?? z
     mark.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
     return true
+  }
+
+  /**
+   * The nearest zone straight above (-1) or below (1) the given one: the closest whose box is on
+   * that side and overlaps it horizontally. The same zone when there is none (or no layout).
+   */
+  private verticalNeighbour(zones: HTMLElement[], at: number, dir: -1 | 1): number {
+    const from = zones[at]!.getBoundingClientRect()
+    let best = at
+    let distance = Infinity
+    zones.forEach((z, i) => {
+      if (i === at) return
+      const r = z.getBoundingClientRect()
+      const overlaps = Math.min(r.right, from.right) - Math.max(r.left, from.left) > 1
+      const gap = dir > 0 ? r.top - from.top : from.top - r.top
+      if (overlaps && gap > 1 && gap < distance) {
+        best = i
+        distance = gap
+      }
+    })
+    return best
   }
 
   /** The zones shown, in document order. */
