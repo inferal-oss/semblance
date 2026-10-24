@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-spacer ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-spacer ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -124,3 +124,66 @@ ui:ly-spacer a c:Flippable ; c:front ui:ly-spacer-spec .
 ui:ly-spacer-spec a c:Specimen ; c:label "Spacer" ;
     c:help "Space that grows: in a row it pushes what follows it to the far end." ;
     c:children ( ui:ly-sp-bar ) .
+
+# --- rows that line up -------------------------------------------------------------------------------
+# The same three rows twice. On the left each row is its own flex row: its cells sit wherever its own
+# content puts them. On the right the list declares its column tracks once (ui:LedgerColumns, a
+# pos:Layout of this page's own) and each row is pos:Subgrid, so cells line up across rows - also the
+# last row, which sits inside a c:Switch (switches take no part in layout).
+
+ui:LedgerColumns a pos:Layout ; sem:slug "ledger-columns" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(4.5rem, auto)" ] ,
+                 [ sty:property "column-gap" ; sty:raw "var(--sem-space-4)" ] ,
+                 [ sty:property "row-gap" ; sty:raw "var(--sem-space-3)" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] .
+ui:lyRowsState ui:lyRowShown ui:LyShown .
+ui:LyShown rdfs:label "Shown" .
+
+ui:lyf-r0 a c:Stack ; pos:direction pos:Row ; pos:justify pos:SpaceBetween ; pos:align pos:Center ; pos:gap tok:space-3 ; c:children ( ui:lyf-r0-about ui:lyf-r0-tag ui:lyf-r0-price ) .
+ui:lyf-r0-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:lyf-r0-name ui:lyf-r0-detail ) .
+ui:lyf-r0-name a c:Text ; c:label "Pour-over kettle" .
+ui:lyf-r0-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Stainless steel, 1 L" .
+ui:lyf-r0-tag a c:Badge ; c:label "In stock" ; sty:tone sty:Success .
+ui:lyf-r0-price a c:Text ; c:inline true ; pos:textAlign pos:TextEnd ; c:label "$34.00" .
+ui:lyf-r1 a c:Stack ; pos:direction pos:Row ; pos:justify pos:SpaceBetween ; pos:align pos:Center ; pos:gap tok:space-3 ; c:children ( ui:lyf-r1-about ui:lyf-r1-tag ui:lyf-r1-price ) .
+ui:lyf-r1-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:lyf-r1-name ui:lyf-r1-detail ) .
+ui:lyf-r1-name a c:Text ; c:label "Stoneware mug" .
+ui:lyf-r1-detail a c:Text ; sty:textStyle sty:Caption ; c:label "350 ml, speckled glaze" .
+ui:lyf-r1-tag a c:Badge ; c:label "In stock" ; sty:tone sty:Success .
+ui:lyf-r1-price a c:Text ; c:inline true ; pos:textAlign pos:TextEnd ; c:label "$12.50" .
+ui:lyf-r2 a c:Stack ; pos:direction pos:Row ; pos:justify pos:SpaceBetween ; pos:align pos:Center ; pos:gap tok:space-3 ; c:children ( ui:lyf-r2-about ui:lyf-r2-tag ui:lyf-r2-price ) .
+ui:lyf-r2-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:lyf-r2-name ui:lyf-r2-detail ) .
+ui:lyf-r2-name a c:Text ; c:label "Single-origin beans" .
+ui:lyf-r2-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Ethiopia Guji, 250 g" .
+ui:lyf-r2-tag a c:Badge ; c:label "Low" ; sty:tone sty:Warning .
+ui:lyf-r2-price a c:Text ; c:inline true ; pos:textAlign pos:TextEnd ; c:label "$9.50" .
+ui:lyg-r0 a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:lyg-r0-about ui:lyg-r0-tag ui:lyg-r0-price ) .
+ui:lyg-r0-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:lyg-r0-name ui:lyg-r0-detail ) .
+ui:lyg-r0-name a c:Text ; c:label "Pour-over kettle" .
+ui:lyg-r0-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Stainless steel, 1 L" .
+ui:lyg-r0-tag a c:Badge ; c:label "In stock" ; sty:tone sty:Success .
+ui:lyg-r0-price a c:Text ; c:inline true ; pos:textAlign pos:TextEnd ; c:label "$34.00" .
+ui:lyg-r1 a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:lyg-r1-about ui:lyg-r1-tag ui:lyg-r1-price ) .
+ui:lyg-r1-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:lyg-r1-name ui:lyg-r1-detail ) .
+ui:lyg-r1-name a c:Text ; c:label "Stoneware mug" .
+ui:lyg-r1-detail a c:Text ; sty:textStyle sty:Caption ; c:label "350 ml, speckled glaze" .
+ui:lyg-r1-tag a c:Badge ; c:label "In stock" ; sty:tone sty:Success .
+ui:lyg-r1-price a c:Text ; c:inline true ; pos:textAlign pos:TextEnd ; c:label "$12.50" .
+ui:lyg-r2 a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:lyg-r2-about ui:lyg-r2-tag ui:lyg-r2-price ) .
+ui:lyg-r2-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:lyg-r2-name ui:lyg-r2-detail ) .
+ui:lyg-r2-name a c:Text ; c:label "Single-origin beans" .
+ui:lyg-r2-detail a c:Text ; sty:textStyle sty:Caption ; c:label "Ethiopia Guji, 250 g" .
+ui:lyg-r2-tag a c:Badge ; c:label "Low" ; sty:tone sty:Warning .
+ui:lyg-r2-price a c:Text ; c:inline true ; pos:textAlign pos:TextEnd ; c:label "$9.50" .
+ui:lyf-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:lyf-r0 ui:lyf-r1 ui:lyf-r2 ) .
+ui:lyg-list a c:Stack ; pos:layout ui:LedgerColumns ; c:children ( ui:lyg-r0 ui:lyg-r1 ui:lyg-switch ) .
+ui:lyg-switch a c:Switch ; c:controls ui:lyRowsState ; c:property ui:lyRowShown ; c:cases ( ui:lyg-case ) .
+ui:lyg-case c:when ui:LyShown ; c:content ui:lyg-r2 .
+ui:lyf-card a c:Card ; c:label "Each row on its own" ; c:badge "pos:Row" ; c:content ui:lyf-list .
+ui:lyg-card a c:Card ; c:label "Rows that share columns" ; c:badge "pos:Subgrid" ; c:content ui:lyg-list .
+ui:ly-rows-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:lyf-card ui:lyg-card ) .
+ui:ly-rows a c:Flippable ; c:front ui:ly-rows-spec .
+ui:ly-rows-spec a c:Specimen ; c:label "Rows that line up" ;
+    c:help "Rows of a list are often built as stacks, but a stack lays out only its own children: each row places its cells from its own content, so nothing lines up. Declare the column tracks once on the list (a pos:Layout with grid-template-columns) and make each row pos:Subgrid: the rows share the columns. A c:Switch between them takes no part in layout, so the last row lines up too." ;
+    c:children ( ui:ly-rows-body ) .

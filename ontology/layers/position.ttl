@@ -61,6 +61,19 @@ pos:Grid a pos:Layout ; sem:slug "grid" ;
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" ] ,
                  [ sty:property "align-items" ; sty:raw "start" ] .
 
+# Rows that line up. A container that holds rows declares its column tracks once - a pos:Layout
+# of its own whose sty:declares give grid-template-columns (an app may declare one, as data) -
+# and each row says pos:Subgrid: it spans the container's columns and places its children in
+# them, so a cell's width is decided by its column across all the rows, not by its own row.
+# Components that only choose what is shown (c:Switch) take no part in layout, so the tracks
+# reach the rows through them.
+pos:Subgrid a pos:Layout ; sem:slug "subgrid" ;
+    rdfs:comment "Takes its columns from the nearest grid it is in (a row of a list whose container declares the tracks)."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "subgrid" ] ,
+                 [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] .
+
 pos:inset a owl:ObjectProperty ;
     rdfs:comment "Padding inside a container, as a space token."@en ;
     sty:hookAttribute "data-sem-inset" ;

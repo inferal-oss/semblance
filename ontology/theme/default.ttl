@@ -743,6 +743,14 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "vertical-align" ; sty:raw "-0.2em" ] .
 
+# A switch chooses what is shown; it does not lay out. Its box and its shown case's box take
+# no part in layout, so the shown content is laid out by the switch's container (a grid's
+# tracks reach through it to rows that are pos:Subgrid).
+[] a sty:StyleRule ; sty:appliesTo c:Switch ;
+    sty:declares [ sty:property "display" ; sty:raw "contents" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Switch ; sty:part "> :not([hidden])" ;
+    sty:declares [ sty:property "display" ; sty:raw "contents" ] .
+
 # --- metrics and toggle ------------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:Metrics ;
