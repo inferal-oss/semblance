@@ -135,7 +135,10 @@ ui:appBar a c:AppBar ;
     c:label "Semblance" ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
-    c:actions ( ui:nav ui:toolsToggle ui:theme ) .
+    c:actions ( ui:nav ui:toolsToggle ui:theme ui:themePicker ) .
+# Which theme, beside the colour scheme: the shell's sty:theme, the same property the gallery's
+# Display settings edit, so either control shows the other's choice.
+ui:themePicker a c:Choice ; c:controls ui:shell ; c:property sty:theme .
 ui:logo a c:GraphMark ; rdfs:label "Semblance" .
 ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .

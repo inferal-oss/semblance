@@ -91,4 +91,19 @@ describe('the site', () => {
     expect(chevron.nextSibling!.textContent).toBe('Inferal')
     expect(document.body.textContent).not.toContain('an experiment in ontologically defined interfaces')
   })
+
+  it('picks the theme from the app bar, beside the colour scheme', () => {
+    const { document, store, fire } = site()
+    const picker = [...document.querySelectorAll('[data-sem-c=app-bar] [data-sem-c=choice]')].find((c) => c.querySelector('select'))!
+    expect(picker).toBeDefined()
+    const select = picker.querySelector('select')!
+    const options = [...select.querySelectorAll('option')].map((o) => o.textContent)
+    expect(options).toEqual(expect.arrayContaining(['Semblance', 'Cupertino', 'Classic', 'Fluent']))
+    const fluent = [...select.querySelectorAll('option')].find((o) => o.textContent === 'Fluent')!
+    Object.defineProperty(select, 'value', { value: fluent.getAttribute('value'), configurable: true })
+    fire(select, 'change')
+    const f = store.factory
+    expect(store.match(f.namedNode('https://semblance.dev/demo#shell'), f.namedNode(NS.sty + 'theme'), null)[0]!.object.value).toBe(NS.sty + 'Fluent')
+    expect(document.querySelector('[data-sem-c=stack][data-sem-theme]')!.getAttribute('data-sem-theme')).toBe('fluent')
+  })
 })
