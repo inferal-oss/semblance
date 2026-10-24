@@ -1178,9 +1178,12 @@ const run: ReactionFn = (ctx) => {
   if (!bench || !query || !editorNode) return none()
   const text = ctx.object(editorNode, C.value)?.value ?? ''
   const d = runInto(ctx, query, text)
-  d.remove.push(...own(ctx, editorNode, W.suggesting), ...own(ctx, editorNode, W.activeSuggestion))
+  d.remove.push(...own(ctx, editorNode, W.suggesting), ...own(ctx, editorNode, W.activeSuggestion), ...staleSelections(ctx, query))
   return d
 }
+
+/** Selections in the graph views of a query's results: a new run may not have the selected node. */
+const staleSelections = (ctx: RCtx, query: Term) => ctx.match(null, W.of, query).flatMap((q) => own(ctx, q.subject, W.selectedTerm))
 
 const load: ReactionFn = (ctx) => {
   const hit = hitWith(ctx, W.loads)
@@ -1196,6 +1199,7 @@ const load: ReactionFn = (ctx) => {
   const remove = [
     ...[C.value, W.caret, W.suggesting, W.activeSuggestion].flatMap((p) => own(ctx, editorNode, p)),
     ...[SEM.select, SEM.construct, W.runCount].flatMap((p) => own(ctx, query, p)),
+    ...staleSelections(ctx, query),
   ]
   const add = [
     put(ctx, editorNode, C.value, lit(ctx, text)),

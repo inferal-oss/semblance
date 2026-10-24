@@ -440,6 +440,18 @@ describe('selecting a node in the graph view', () => {
     expect(value(h, UI + 'queryGraph', C + 'selectedTerm')).toBeUndefined()
   })
 
+  it.each(['sparql', 'function'] as const)('lets go of the selection when the query runs again or a sample loads (%s)', (prefer) => {
+    const h = tabsGraph(prefer)
+    h.fire(graphNode(h, 'c:Tabs').querySelector('circle')!, 'click')
+    expect(value(h, UI + 'queryGraph', C + 'selectedTerm')).toBe(C + 'Tabs')
+    run(h)
+    expect(value(h, UI + 'queryGraph', C + 'selectedTerm')).toBeUndefined()
+    expect(selectionLine(h).textContent).toMatch(/^Select a node/)
+    h.fire(graphNode(h, 'c:Tabs').querySelector('circle')!, 'click')
+    sample(h, 'How c:Tabs is made')
+    expect(value(h, UI + 'queryGraph', C + 'selectedTerm')).toBeUndefined()
+  })
+
   it('reaches as far as c:neighbourhood says', () => {
     const h = tabsGraph()
     const f = h.store.factory

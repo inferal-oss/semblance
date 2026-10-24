@@ -65,6 +65,7 @@ CONSTRUCT {
   ?editor c:value ?value ; c:caret ?caret ; c:suggesting ?suggesting ; c:activeSuggestion ?active .
   ?query sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
   ?results c:selected ?tab .
+  ?graph c:selectedTerm ?term .
 }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:loads ?sample .
@@ -73,6 +74,8 @@ WHERE {
   UNION { ?editor c:activeSuggestion ?active } UNION { ?query sem:select ?select } UNION { ?query sem:construct ?construct }
   UNION { ?query c:runCount ?runs }
   UNION { ?sample c:resultTab ?want . $this c:results ?results . ?results c:selected ?tab }
+  # A new run's graph may not have the selected node: the selection goes with the old results.
+  UNION { ?graph c:of ?query ; c:selectedTerm ?term }
 }""" ;
     beh:inserts """
 CONSTRUCT {
@@ -112,11 +115,13 @@ c:RunQuery a beh:Reaction ;
 CONSTRUCT {
   ?query sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
   ?editor c:suggesting ?suggesting ; c:activeSuggestion ?active .
+  ?graph c:selectedTerm ?term .
 }
 WHERE {
   $this c:of ?workbench . ?workbench c:runs ?query ; c:editor ?editor .
   { ?query sem:select ?select } UNION { ?query sem:construct ?construct } UNION { ?query c:runCount ?runs }
   UNION { ?editor c:suggesting ?suggesting } UNION { ?editor c:activeSuggestion ?active }
+  UNION { ?graph c:of ?query ; c:selectedTerm ?term }
 }""" ;
     beh:inserts """
 CONSTRUCT { ?query ?form ?text ; c:runCount ?next }
