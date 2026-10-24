@@ -246,6 +246,11 @@ impl Ctx<'_> {
                 // An ill-formed literal of a known datatype compares like one of an unknown type.
                 let (kx, ky) = (self.dt_kind(x.dt), self.dt_kind(y.dt));
                 let (kx, ky) = (self.well_formed(a, &x, kx), self.well_formed(b, &y, ky));
+                if (kx, ky) == (Dt::Other, Dt::Other) {
+                    if let Some(o) = self.temporal_cmp(&x, &y, true) {
+                        return o.map(|o| o == Ordering::Equal);
+                    }
+                }
                 match (kx, ky) {
                     (Dt::String, Dt::String) => Ok(x.value == y.value),
                     (Dt::LangString, Dt::LangString) => Ok(x.value == y.value && x.lang == y.lang),
@@ -287,6 +292,7 @@ impl Ctx<'_> {
             (Dt::Boolean, Dt::Boolean) => Ok(self.boolean(a).ok_or(())?.cmp(&self.boolean(b).ok_or(())?)),
             (Dt::DateTime, Dt::DateTime) => datetime_cmp(&x.value, &y.value).ok_or(()),
             (Dt::Date, Dt::Date) => datetime_cmp(&date_as_datetime(&x.value).ok_or(())?, &date_as_datetime(&y.value).ok_or(())?).ok_or(()),
+            (Dt::Other, Dt::Other) => self.temporal_cmp(&x, &y, false).unwrap_or(Err(())),
             _ => Err(()),
         }
     }
@@ -399,7 +405,7 @@ impl Ctx<'_> {
             }
             Expr::Arith(op, a, b) => {
                 let (x, y) = (self.expr(a, row)?, self.expr(b, row)?);
-                let (x, y) = (self.num(&x).ok_or(())?, self.num(&y).ok_or(())?);
+                let (Some(x), Some(y)) = (self.num(&x), self.num(&y)) else { return self.temporal_arith(*op, &x, &y) };
                 if *op == Op::Div && matches!(Num::promote(x, y), (Num::Int(_) | Num::Dec(_), _)) && y.is_zero() {
                     return Err(());
                 }
@@ -407,7 +413,7 @@ impl Ctx<'_> {
             }
             Expr::Neg(a) => {
                 let v = self.expr(a, row)?;
-                let n = self.num(&v).ok_or(())?;
+                let Some(n) = self.num(&v) else { return self.temporal_neg(&v) };
                 Ok(Val::Num(match n {
                     Num::Int(i) => Num::Int(-i),
                     Num::Dec(d) => Num::Dec(-d),

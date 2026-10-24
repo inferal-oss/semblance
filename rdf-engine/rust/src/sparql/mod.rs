@@ -9,6 +9,7 @@ pub mod num;
 pub mod parse;
 pub mod regex;
 pub mod sha;
+pub mod temporal;
 pub mod update;
 
 use alloc::boxed::Box;
