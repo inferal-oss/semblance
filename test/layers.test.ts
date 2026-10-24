@@ -137,3 +137,26 @@ describe('display axes', () => {
     expect(css).toContain('@keyframes sem-spin')
   })
 })
+
+describe('keyboard layer: commands', () => {
+  it('pauses and resumes the inspector with Z, from anywhere, through the graph', () => {
+    const h = mountShell()
+    const mode = () => h.value(UI + 'inspectorMode')
+    const press = (target: EventTarget) => {
+      const e = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+      Object.assign(e, { key: 'z', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+      target.dispatchEvent(e)
+    }
+    press(h.document)
+    expect(mode()).toBe(UI + 'Paused')
+    // Typing a z into a field is just typing.
+    const field = h.document.querySelector('[data-sem-c=text-field] input')!
+    press(field)
+    expect(mode()).toBe(UI + 'Paused')
+    press(h.document)
+    expect(mode()).toBe(UI + 'Live')
+    // Each press is an event in the change log, handled by exactly one of the two reactions.
+    const handled = h.bus.recent(2).map((quads) => quads.filter((q) => q.predicate.value.endsWith('#handledBy')).map((q) => q.object.value))
+    expect(handled).toEqual([[UI + 'ResumeInspector'], [UI + 'PauseInspector']])
+  })
+})

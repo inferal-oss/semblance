@@ -3,6 +3,7 @@
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
@@ -82,3 +83,14 @@ key:Navigation-rendering a sem:Rendering ;
     sem:stratum 10 ;
     sem:watches rdf:type .
 key:Navigation-fn a sem:Rule ; sem:implements key:Navigation-rendering ; sem:function "keyboard:navigation" .
+
+# --- Commands: shortcuts that belong to no visible component ------------------------------------
+# A key:Command is a node with a key:shortcut. Pressing it records a key:Press
+# event addressed to the command (a member of the change log like any other)
+# and runs the reactions whose beh:source is the command. What a command does
+# is therefore graph data: its reactions' SPARQL deletes / inserts.
+
+key:Command a owl:Class ;
+    rdfs:comment "A keyboard command: a key:shortcut whose key:Press events its reactions handle."@en .
+key:Press a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "A command's shortcut was pressed (recorded by the event bus, not from a DOM event)."@en .

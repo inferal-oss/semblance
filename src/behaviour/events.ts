@@ -1,10 +1,10 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
-import { BEH, EVENTS_GRAPH, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import type { Delta } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
-import { comboOf, navigate, rove } from '../layers/keyboard.ts'
+import { comboOf, navigate, normalizeShortcut, rove } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
@@ -130,6 +130,17 @@ export class EventBus {
     return this.reactions()
       .filter((r) => r.when === type && (r.source === target || (r.sourceClass !== undefined && types.has(r.sourceClass))))
       .sort((a, b) => a.iri.localeCompare(b.iri))
+  }
+
+  /** The key:Command bound to a (normalized) key combination, if any. */
+  commandFor(combo: string): string | undefined {
+    const store = this.runtime.store
+    const type = this.f.namedNode(RDF_TYPE)
+    const command = this.f.namedNode(KEY.Command)
+    for (const q of store.match(null, this.f.namedNode(KEY.shortcut), null, this.f.defaultGraph())) {
+      if (normalizeShortcut(q.object.value) === combo && store.match(q.subject, type, command, this.f.defaultGraph()).length) return q.subject.value
+    }
+    return undefined
   }
 
   /** Event classes recorded from a DOM event type. */
@@ -337,6 +348,14 @@ export class EventBus {
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
+      // Commands (key:Command) are graph nodes, not elements: the press becomes their event.
+      const command = this.commandFor(combo)
+      if (command) {
+        k.preventDefault()
+        const handled = this.emit(KEY.Press, command)
+        if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
+        return
+      }
       const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo) as HTMLElement | undefined
       if (!el && combo === 'escape') {
         // Escape dismisses the most recent open overlay: its control marked data-sem-escape.

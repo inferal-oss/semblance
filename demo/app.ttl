@@ -140,7 +140,26 @@ ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
 # the view is CONSTRUCTs bound to it, and the node is highlighted.
 ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
 ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspector ui:highlight ) .
-ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:inspectingChip ) .
+ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ) .
+ui:pauseHint a c:Text ; c:inline true ; sty:textStyle sty:Caption ;
+    c:children ( ui:pauseKey " pauses / resumes" ) .
+ui:pauseKey a c:Kbd ; c:label "Z" .
+
+# Z, anywhere: freeze the inspector on what it shows, and Z again to resume. A
+# keyboard command (key:Command) whose press is an RDF event; its two reactions
+# see the state before the event, so exactly one of them acts.
+ui:pauseInspector a key:Command ; key:shortcut "z" ;
+    rdfs:label "Pause or resume the inspector" , "Призупинити або відновити інспектор"@uk ,
+               "Inspektor anhalten oder fortsetzen"@de , "إيقاف المفتش مؤقتًا أو استئنافه"@ar .
+ui:PauseInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:pauseInspector ;
+    beh:deletes """CONSTRUCT { ui:app ui:inspectorMode ui:Live } WHERE { ui:app ui:inspectorMode ui:Live }""" ;
+    beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Paused } WHERE { ui:app ui:inspectorMode ui:Live }""" ;
+    ann:announces "Inspector paused · Z to resume" , "Інспектор призупинено · Z, щоб продовжити"@uk ,
+                  "Inspektor angehalten · Z zum Fortsetzen"@de , "تم إيقاف المفتش مؤقتًا · اضغط Z للاستئناف"@ar ; ann:tone sty:Info .
+ui:ResumeInspector a beh:Reaction ; beh:when key:Press ; beh:source ui:pauseInspector ;
+    beh:deletes """CONSTRUCT { ui:app ui:inspectorMode ui:Paused } WHERE { ui:app ui:inspectorMode ui:Paused }""" ;
+    beh:inserts """CONSTRUCT { ui:app ui:inspectorMode ui:Live } WHERE { ui:app ui:inspectorMode ui:Paused }""" ;
+    ann:announces "Inspector resumed" , "Інспектор відновлено"@uk , "Inspektor fortgesetzt"@de , "تم استئناف المفتش"@ar .
 ui:inspectorModes a c:Segmented ; c:controls ui:app ; c:property ui:inspectorMode .
 
 # Turning the inspector off also clears what it showed.
