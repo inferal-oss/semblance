@@ -33,7 +33,8 @@ c:HeadingShape a sh:NodeShape ; sh:targetClass c:Heading ;
                 [ sh:path c:level ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ; sh:maxInclusive 6 ] .
 c:TextFieldShape a sh:NodeShape ; sh:targetClass c:TextField ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A text field needs a label (c:label): placeholders are not labels." ] ,
-                [ sh:path c:value ; sh:maxCount 1 ] .
+                [ sh:path c:value ; sh:maxCount 1 ] ,
+                [ sh:path c:inputType ; sh:maxCount 1 ; sh:in ( "text" "password" "email" "number" "search" "tel" "url" ) ] .
 c:BadgeShape a sh:NodeShape ; sh:targetClass c:Badge ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxLength 32 ] .
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;

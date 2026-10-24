@@ -218,3 +218,11 @@ describe('ontology docs layer', () => {
     expect(spec.lastElementChild!.classList.contains('sem-docs')).toBe(true)
   })
 })
+
+describe('c:inputType', () => {
+  it('masks the password and asks for an email address', () => {
+    const h = showLayers()
+    expect((h.byId(`${UI}signupPassword/~input`) as HTMLInputElement).getAttribute('type')).toBe('password')
+    expect((h.byId(`${UI}signupEmail/~input`) as HTMLInputElement).getAttribute('type')).toBe('email')
+  })
+})

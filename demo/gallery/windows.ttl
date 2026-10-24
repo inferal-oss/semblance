@@ -10,7 +10,96 @@
 @prefix ui: <https://semblance.dev/demo#> .
 
 # Gallery page: Windows.
+#
+# The demo windows live on the shell's desktop (outside every page), closed until a
+# button c:opens them, so they survive navigation and their content is not evaluated
+# while closed. The desktop also hosts the taskbar: it lists every open frame, on every
+# page, and hides itself while there is none.
 
 ui:gallery-windows a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-windows-intro ) .
+    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ) .
 ui:gallery-windows-intro a c:Heading ; c:label "Windows" .
+ui:gallery-windows-lede a c:Text ;
+    c:label "A window is not one behaviour but several. Each capability is a mixin class with its own reactions (c:Draggable, c:Resizable, c:Raisable, c:Minimizable, c:Maximizable, c:Dockable); c:Window has them all, c:Palette only some, and a frame's title bar shows the controls of the capabilities its instance has. Window state is two hookable axes, so the theme styles each value once and any control that sets a property can drive it." .
+
+ui:desktop c:hosts ui:win-checklist , ui:win-log , ui:win-activity , ui:win-display , ui:taskbar .
+ui:taskbar a c:Taskbar ; c:of ui:desktop .
+
+# --- the demo frames --------------------------------------------------------------------------------
+
+ui:win-checklist a c:Window ; c:title "Checklist" ; c:open false ;
+    c:x 140 ; c:y 140 ; c:width 380 ; c:height 330 ;
+    c:windowState c:Normal ; c:attachedTo c:NoEdge ;
+    c:body ui:win-checklist-body .
+ui:win-checklist-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:win-check-drag ui:win-check-resize ui:win-check-min ui:win-check-max ui:win-check-dock ui:win-check-raise ) .
+ui:win-check-drag a c:Checkbox ; c:label "Drag me by my title bar" ; c:checked false .
+ui:win-check-resize a c:Checkbox ; c:label "Resize me from the bottom corner" ; c:checked false .
+ui:win-check-min a c:Checkbox ; c:label "Minimize me (–), then find me in the taskbar" ; c:checked false .
+ui:win-check-max a c:Checkbox ; c:label "Maximize me (□), then restore me (❐)" ; c:checked false .
+ui:win-check-dock a c:Checkbox ; c:label "Drop me at an edge of the screen to dock me" ; c:checked false .
+ui:win-check-raise a c:Checkbox ; c:label "Open another window, then click me to bring me back to the front" ; c:checked false .
+
+ui:win-log a c:Window ; c:title "Change log" ; c:open false ;
+    c:x 560 ; c:y 110 ; c:width 440 ; c:height 460 ;
+    c:body ui:win-log-members .
+ui:win-log-members a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 6 ;
+    c:emptyText "Every move, resize, minimize and raise is an event in the change log, with the size of the change it caused." .
+
+ui:win-activity a c:Window ; c:title "Activity" ; c:open false ;
+    c:x 220 ; c:y 200 ; c:width 460 ; c:height 420 ;
+    c:body ui:win-activity-stats .
+ui:win-activity-stats a c:StreamStats ; c:label "What you did" ; c:of beh:ChangeLog .
+
+# A palette has no minimize or maximize (c:Palette is not c:Minimizable); this one also
+# opts into c:Resizable, so it has a grip.
+ui:win-display a c:Palette , c:Resizable ; c:title "Display" ; c:open false ;
+    c:x 760 ; c:y 160 ; c:width 260 ;
+    c:body ui:win-display-body .
+ui:win-display-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:win-display-theme ui:win-display-contrast ) .
+ui:win-display-theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
+ui:win-display-contrast a c:Segmented ; c:controls ui:shell ; c:property sty:contrast .
+
+# --- specimens -----------------------------------------------------------------------------------------
+
+ui:wn-open-checklist a c:Button ; c:label "Checklist" ; c:icon "☑" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:win-checklist .
+ui:wn-open-log a c:Button ; c:label "Change log" ; c:icon "≡" ; sty:emphasis sty:Outline ; c:opens ui:win-log .
+ui:wn-open-activity a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:emphasis sty:Outline ; c:opens ui:win-activity .
+ui:wn-windows a c:Flippable ; c:front ui:wn-windows-spec .
+ui:wn-windows-spec a c:Specimen ; c:label "Window" ;
+    c:help "Three windows on the desktop, closed until a button c:opens them (c:Window is a c:Overlay: c:open, c:opens, c:closes). Opening one also restores it if it was minimized and brings it to the front. The title bar shows minimize, maximize and close because a c:Window is c:Minimizable and c:Maximizable; a window detached from a tab adds a control that returns it there." ;
+    c:children ( ui:wn-open-checklist ui:wn-open-log ui:wn-open-activity ) .
+
+ui:wn-state-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:windowState .
+ui:wn-state a c:Flippable ; c:front ui:wn-state-spec .
+ui:wn-state-spec a c:Specimen ; c:label "Window state" ;
+    c:help "c:windowState is one fact on the window: c:Normal, c:Minimized or c:Maximized. The title bar's controls set it (c:minimizes, c:maximizes, c:restores), and so does this segmented control, whose options are the individuals of the property's range. It is hooked (data-sem-window-state), so the theme styles each state once for every frame. A minimized window keeps its parts under a hidden root: its content is parked, not dropped, and the taskbar brings it back." ;
+    c:children ( ui:wn-open-checklist-2 ui:wn-state-control ) .
+ui:wn-open-checklist-2 a c:Button ; c:label "Open the checklist" ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-checklist .
+
+ui:wn-dock-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:attachedTo .
+ui:wn-dock a c:Flippable ; c:front ui:wn-dock-spec .
+ui:wn-dock-spec a c:Specimen ; c:label "Attached to an edge" ;
+    c:help "A c:Dockable frame c:attachedTo an edge fills it: a side panel at the start or end, a bar at the top or bottom. Drag a window and release the pointer within 24px of an edge (c:Dockable c:snapDistance 24) to snap it there; drag it away, or press ◳, to float it again where it was. Edges are logical, so start and end follow the writing direction. The axis is orthogonal to the window state: maximize a docked window and restore it, and it is docked again." ;
+    c:children ( ui:wn-open-checklist-3 ui:wn-dock-control ) .
+ui:wn-open-checklist-3 a c:Button ; c:label "Open the checklist" ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-checklist .
+
+ui:wn-stack a c:Flippable ; c:front ui:wn-stack-spec .
+ui:wn-stack-spec a c:Specimen ; c:label "Stacking" ;
+    c:help "Which window is in front is graph state too. Pressing anywhere in a c:Raisable frame (a c:PointerDown event) makes it its desktop's c:topmost and gives it a c:z one higher than any other there; the desktop puts its frames in one stacking layer ordered by c:z, below its dialogs and toasts. Open two windows and click the one behind." ;
+    c:children ( ui:wn-open-log-2 ui:wn-open-activity-2 ) .
+ui:wn-open-log-2 a c:Button ; c:label "Change log" ; c:icon "≡" ; sty:emphasis sty:Outline ; c:opens ui:win-log .
+ui:wn-open-activity-2 a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:emphasis sty:Outline ; c:opens ui:win-activity .
+
+ui:wn-taskbar-inline a c:Taskbar ; c:of ui:desktop ; c:label "Windows on the desktop" .
+ui:wn-taskbar a c:Flippable ; c:front ui:wn-taskbar-spec .
+ui:wn-taskbar-spec a c:Specimen ; c:label "Taskbar" ;
+    c:help "A c:Taskbar lists the open frames of a desktop (c:of), each with its state's symbol. Activating an entry restores a minimized frame, brings another to the front, or minimizes the one already in front: three reactions that all see the state before the click. The desktop hosts one, so minimized windows (including those detached from the Playground's tabs) can always be found; this is a second instance of the same component." ;
+    c:children ( ui:wn-taskbar-inline ) .
+
+ui:wn-open-display a c:Button ; c:label "Display palette" ; c:icon "◐" ; sty:emphasis sty:Outline ; c:opens ui:win-display .
+ui:wn-palette a c:Flippable ; c:front ui:wn-palette-spec .
+ui:wn-palette-spec a c:Specimen ; c:label "Palette" ;
+    c:help "A c:Palette is a c:Frame that is c:Dockable but not c:Minimizable or c:Maximizable: a slim strip with only a close control. This one is also c:Resizable (`a c:Palette, c:Resizable`), so it has a grip. The same rendering serves both frames; capabilities are classes, so an instance adds one by saying so." ;
+    c:children ( ui:wn-open-display ) .

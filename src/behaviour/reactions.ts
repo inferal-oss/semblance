@@ -14,6 +14,7 @@ import { reactions as workbenchReactions } from '../components/workbench.ts'
 import { docsReactions } from '../layers/docs.ts'
 import { persistenceReactions } from '../persistence.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
+import { reactions as windowReactions } from '../components/containers.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
@@ -130,4 +131,5 @@ export const reactions: Record<string, ReactionFn> = {
   ...docsReactions,
   ...persistenceReactions,
   ...disclosureReactions,
+  ...windowReactions,
 }

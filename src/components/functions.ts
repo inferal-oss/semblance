@@ -91,7 +91,7 @@ const textFieldScreen: FnRule = (ctx, focus) => {
   const parts = [
     o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)]),
     o.el('input', 'Input', {
-      type: 'text',
+      type: str(ctx.object(focus, NS.c + 'inputType')) ?? 'text',
       id: inputId,
       value: str(ctx.object(focus, C.value)),
       placeholder: text(ctx, focus, C.placeholder),

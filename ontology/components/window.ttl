@@ -2,35 +2,173 @@
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 
-# Windows: floating, movable, resizable, closable containers.
+# Windows: floating frames on a desktop, and the capabilities they are made of.
 #
-# A window usually is not written by hand: c:Tabs mints one (in stratum 0) for
-# each tab marked c:detached, places the tab's content node in it, and records
-# `<window> prov:wasDerivedFrom <tab>`. Docking or closing the window follows
-# that provenance back to the tab and clears c:detached; the same content node
-# returns to its panel, so its DOM (and any host state in it) is preserved.
+# A window is not one behaviour but several, each a mixin class (like c:Pressable
+# and c:Setter in actions.ttl): a class without a rendering whose reactions any
+# instance opts into by having it. c:Window has them all; c:Palette, a small tool
+# frame, only some; an instance may add more (`a c:Palette, c:Resizable`). A frame's
+# rendering shows the controls of the capabilities its instance has, so the title
+# bar of each frame says what it can do.
 #
-# Geometry (c:x, c:y, c:width, c:height) is input state on the window's IRI,
-# committed by one RDF event per gesture; the IRI is deterministic, so a
-# re-detached tab reopens where it was.
+#   c:Draggable    its handle (data-sem-gesture="move") moves it: c:x, c:y
+#   c:Resizable    its grip (data-sem-gesture="resize") resizes it: c:width, c:height
+#   c:Raisable     pressing anywhere in it brings it to the front of its desktop: c:z, c:topmost
+#   c:Minimizable  c:windowState c:Minimized (hidden; its desktop's c:Taskbar restores it)
+#   c:Maximizable  c:windowState c:Maximized (fills the viewport)
+#   c:Dockable     c:attachedTo an edge of the viewport; dropped near an edge, it snaps there
+#
+# State is two orthogonal, hookable axes (sty:hookAttribute), so the theme styles each
+# value once for every frame: c:windowState (data-sem-window-state) and c:attachedTo
+# (data-sem-edge). A docked window that is minimized and restored is docked again.
+# Each axis is a range of individuals, so a c:Segmented or a c:Setter can set it
+# (`c:controls ui:win ; c:property c:attachedTo`).
+#
+# A window usually is not written by hand: c:Tabs mints one (in stratum 0) for each
+# tab marked c:detached, places the tab's content node in it, and records
+# `<window> prov:wasDerivedFrom <tab>`. Docking or closing such a window follows that
+# provenance back to the tab and clears c:detached; the same content node returns to
+# its panel, so its DOM (and any host state in it) is preserved. Other windows are
+# overlays (c:open, c:opens / c:closes): `c:open false` keeps one closed, and its
+# content is not evaluated until it opens.
+#
+# Geometry (c:x, c:y, c:width, c:height) is input state on the window's IRI, committed
+# by one RDF event per gesture; the IRI is deterministic, so a re-detached tab reopens
+# where it was.
 
-c:Window a owl:Class ;
-    rdfs:subClassOf sem:Component ;
-    rdfs:comment "A floating container with a title bar, dock/close controls and a resize handle."@en ;
-    sem:slug "window" .
+# --- capabilities (mixins) ------------------------------------------------------------------
 
-c:title a owl:DatatypeProperty ; rdfs:domain c:Window .
-c:body a owl:ObjectProperty ; rdfs:domain c:Window ; rdfs:comment "The node shown inside the window (a component or a slot)."@en .
+c:Draggable a owl:Class ;
+    rdfs:label "Draggable"@en , "Перетягуване"@uk , "Verschiebbar"@de , "قابل للسحب"@ar ;
+    rdfs:comment "Mixin: dragging the component's handle (an element marked data-sem-gesture=\"move\") moves it; one beh:Move event commits c:x and c:y."@en .
+c:Resizable a owl:Class ;
+    rdfs:label "Resizable"@en , "Змінюваний розмір"@uk , "Größenveränderbar"@de , "قابل لتغيير الحجم"@ar ;
+    rdfs:comment "Mixin: dragging its grip (data-sem-gesture=\"resize\") resizes it; one beh:Resize event commits c:width and c:height."@en .
+c:Raisable a owl:Class ;
+    rdfs:label "Raisable"@en , "Виводиться наперед"@uk , "In den Vordergrund"@de , "قابل للإظهار في المقدمة"@ar ;
+    rdfs:comment """Mixin: pressing anywhere in it (c:PointerDown) brings it in front of the other frames on
+its desktop. The desktop names its c:topmost frame and each frame keeps the c:z it was raised to
+(one more than the highest on the desktop), so stacking is graph state and raising changes two
+frames' worth of triples."""@en .
+c:Restorable a owl:Class ;
+    rdfs:label "Restorable"@en , "Відновлюється"@uk , "Wiederherstellbar"@de , "قابل للاستعادة"@ar ;
+    rdfs:comment "Mixin: has a c:windowState; a control marked c:restores sets it back to c:Normal."@en .
+c:Minimizable a owl:Class ;
+    rdfs:subClassOf c:Restorable ;
+    rdfs:label "Minimizable"@en , "Згортається"@uk , "Minimierbar"@de , "قابل للتصغير"@ar ;
+    rdfs:comment "Mixin: a control marked c:minimizes sets c:windowState c:Minimized. A minimized frame is hidden (its content is parked, not dropped); its desktop's c:Taskbar shows it and restores it."@en .
+c:Maximizable a owl:Class ;
+    rdfs:subClassOf c:Restorable ;
+    rdfs:label "Maximizable"@en , "Розгортається"@uk , "Maximierbar"@de , "قابل للتكبير"@ar ;
+    rdfs:comment "Mixin: a control marked c:maximizes sets c:windowState c:Maximized: the frame fills the viewport, and c:restores returns it to its place (floating or docked)."@en .
+c:Dockable a owl:Class ;
+    rdfs:label "Dockable"@en , "Прикріплюється"@uk , "Andockbar"@de , "قابل للإرساء"@ar ;
+    rdfs:comment """Mixin: c:attachedTo an edge of the viewport, the frame fills that edge (a side panel, a
+top or bottom bar). Dropping it with the pointer within c:snapDistance of an edge attaches it there;
+dragging it away, or a control marked c:undocks, floats it again where it was."""@en ;
+    c:snapDistance 24 .
+
+c:snapDistance a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:integer ;
+    rdfs:comment "How close to an edge (CSS px) the pointer must be released for a c:Dockable frame to snap to it."@en .
+
+# --- state axes -------------------------------------------------------------------------------
+
+c:windowState a owl:ObjectProperty ;
+    rdfs:range c:WindowState ;
+    rdfs:label "Window state"@en , "Стан вікна"@uk , "Fensterzustand"@de , "حالة النافذة"@ar ;
+    rdfs:comment "Normal, minimized or maximized (absent: normal)."@en ;
+    sty:hookAttribute "data-sem-window-state" .
+c:WindowState a owl:Class .
+c:Normal a c:WindowState ; sem:slug "normal" ; sem:order 1 ; sem:symbol "▭" ;
+    rdfs:label "Normal"@en , "Звичайний"@uk , "Normal"@de , "عادي"@ar .
+c:Minimized a c:WindowState ; sem:slug "minimized" ; sem:order 2 ; sem:symbol "▁" ;
+    rdfs:label "Minimized"@en , "Згорнуто"@uk , "Minimiert"@de , "مصغرة"@ar .
+c:Maximized a c:WindowState ; sem:slug "maximized" ; sem:order 3 ; sem:symbol "▣" ;
+    rdfs:label "Maximized"@en , "Розгорнуто"@uk , "Maximiert"@de , "مكبرة"@ar .
+
+c:attachedTo a owl:ObjectProperty ;
+    rdfs:range c:Edge ;
+    rdfs:label "Attached to"@en , "Прикріплено до"@uk , "Angedockt an"@de , "مثبتة على"@ar ;
+    rdfs:comment "The viewport edge a frame fills (absent or c:NoEdge: floating). Edges are logical: start and end follow the writing direction."@en ;
+    sty:hookAttribute "data-sem-edge" .
+c:Edge a owl:Class .
+c:NoEdge a c:Edge ; sem:slug "none" ; sem:order 0 ; sem:symbol "◳" ;
+    rdfs:label "Floating"@en , "Вільно"@uk , "Frei"@de , "عائمة"@ar .
+c:StartEdge a c:Edge ; sem:slug "start" ; sem:order 1 ; sem:symbol "⇤" ;
+    rdfs:label "Start"@en , "Початок"@uk , "Anfang"@de , "البداية"@ar .
+c:EndEdge a c:Edge ; sem:slug "end" ; sem:order 2 ; sem:symbol "⇥" ;
+    rdfs:label "End"@en , "Кінець"@uk , "Ende"@de , "النهاية"@ar .
+c:TopEdge a c:Edge ; sem:slug "top" ; sem:order 3 ; sem:symbol "⤒" ;
+    rdfs:label "Top"@en , "Верх"@uk , "Oben"@de , "الأعلى"@ar .
+c:BottomEdge a c:Edge ; sem:slug "bottom" ; sem:order 4 ; sem:symbol "⤓" ;
+    rdfs:label "Bottom"@en , "Низ"@uk , "Unten"@de , "الأسفل"@ar .
+
+c:z a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:label "Stacking order"@en , "Порядок накладання"@uk , "Stapelreihenfolge"@de , "ترتيب التكديس"@ar ;
+    rdfs:comment "A raisable frame's stacking order on its desktop: higher is in front."@en .
+c:topmost a owl:ObjectProperty ; rdfs:domain c:Desktop ;
+    rdfs:label "In front"@en , "Попереду"@uk , "Im Vordergrund"@de , "في المقدمة"@ar ;
+    rdfs:comment "The frame most recently brought to the front of this desktop."@en .
+
+# Markers on rendered elements (title-bar controls, taskbar entries): what activating them does.
+c:minimizes a owl:ObjectProperty ; rdfs:comment "On a rendered element: the frame that activating it minimizes."@en .
+c:maximizes a owl:ObjectProperty ; rdfs:comment "On a rendered element: the frame that activating it maximizes."@en .
+c:restores a owl:ObjectProperty ; rdfs:comment "On a rendered element: the frame that activating it returns to c:Normal."@en .
+c:undocks a owl:ObjectProperty ; rdfs:comment "On a rendered element: the frame that activating it detaches from its edge."@en .
+c:activates a owl:ObjectProperty ; rdfs:comment "On a taskbar entry: the frame it restores, raises, or (when already in front) minimizes."@en .
+
+# Pressing a pointer (mouse, pen, touch) inside a component: what raises a frame.
+# (A DOM event class; it belongs with the others in the behaviour layer.)
+c:PointerDown a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "pointerdown" ;
+    rdfs:comment "A pointer was pressed inside the component."@en .
+
+# Numeric details of a move gesture's release (events.ts adds them as beh:* integers):
+# how far the pointer was from each edge of the viewport, in CSS px, with start and end
+# following the writing direction. A move without them never snaps.
+beh:toStart a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:toEnd a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:toTop a owl:DatatypeProperty ; rdfs:range xsd:integer .
+beh:toBottom a owl:DatatypeProperty ; rdfs:range xsd:integer .
+
+# Phrases a frame shows of its own accord (c:Phrase, feedback.ttl), in the viewer's language.
+c:MinimizeCommand a c:Phrase ; rdfs:label "Minimize"@en , "Згорнути"@uk , "Minimieren"@de , "تصغير"@ar .
+c:MaximizeCommand a c:Phrase ; rdfs:label "Maximize"@en , "Розгорнути"@uk , "Maximieren"@de , "تكبير"@ar .
+c:RestoreCommand a c:Phrase ; rdfs:label "Restore"@en , "Відновити"@uk , "Wiederherstellen"@de , "استعادة"@ar .
+c:UndockCommand a c:Phrase ; rdfs:label "Float"@en , "Відкріпити"@uk , "Lösen"@de , "فك التثبيت"@ar .
+c:ReturnToTabCommand a c:Phrase ; rdfs:label "Return to its tab"@en , "Повернути у вкладку"@uk , "Zurück in den Tab"@de , "إرجاع إلى علامة التبويب"@ar .
+c:WindowsRegion a c:Phrase ; rdfs:label "Windows"@en , "Вікна"@uk , "Fenster"@de , "النوافذ"@ar .
+
+# --- frames -----------------------------------------------------------------------------------
+
+c:Frame a owl:Class ;
+    rdfs:subClassOf c:Overlay , c:Draggable , c:Raisable ;
+    rdfs:comment """A floating container: a title bar (c:title) over a body (c:body), placed on a c:Desktop.
+Every frame moves and comes to the front; its other capabilities are its classes'."""@en .
+c:title a owl:DatatypeProperty ; rdfs:domain c:Frame .
+c:body a owl:ObjectProperty ; rdfs:domain c:Frame ; rdfs:comment "The node shown inside the frame (a component or a slot)."@en .
 c:x a owl:DatatypeProperty ; rdfs:range xsd:integer .
 c:y a owl:DatatypeProperty ; rdfs:range xsd:integer .
 c:width a owl:DatatypeProperty ; rdfs:range xsd:integer .
 c:height a owl:DatatypeProperty ; rdfs:range xsd:integer .
 c:docks a owl:ObjectProperty ; rdfs:comment "On a rendered element: the window that activating it docks (returns to its origin)."@en .
+
+c:Window a owl:Class ;
+    rdfs:subClassOf c:Frame , c:Resizable , c:Minimizable , c:Maximizable , c:Dockable ;
+    rdfs:comment "A floating window with every capability: move, resize, raise, minimize, maximize, dock to an edge, close."@en ;
+    sem:slug "window" .
+
+c:Palette a owl:Class ;
+    rdfs:subClassOf c:Frame , c:Dockable ;
+    rdfs:comment """A small floating tool frame: a slim title strip, no minimize or maximize. It moves, comes to
+the front, docks to an edge and closes; an instance that is also c:Resizable gets a grip."""@en ;
+    sem:slug "palette" .
 
 c:detachable a owl:DatatypeProperty ; rdfs:domain c:Tabs ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether the tabs offer a detach control."@en .
@@ -44,8 +182,10 @@ c:WindowRendering a sem:Rendering ;
 c:WindowRendering-fn a sem:Rule ;
     sem:implements c:WindowRendering ;
     sem:function "window" .
+c:PaletteRendering a sem:Rendering ; sem:targets c:Palette ; sem:stratum 0 .
+c:PaletteRendering-fn a sem:Rule ; sem:implements c:PaletteRendering ; sem:function "window" .
 
-# --- behaviour ----------------------------------------------------------------------------
+# --- behaviour: tabs and their windows --------------------------------------------------------
 
 c:TabsDetach a beh:Reaction ;
     beh:when beh:Click ;
@@ -72,19 +212,114 @@ WHERE {
 }""" ;
     sem:function "window:dock" .
 
-c:WindowMove a beh:Reaction ;
-    beh:when beh:Move ;
-    beh:sourceClass c:Window ;
-    beh:deletes """CONSTRUCT { $this c:x ?x ; c:y ?y } WHERE { { $this c:x ?x } UNION { $this c:y ?y } }""" ;
-    beh:inserts """CONSTRUCT { $this c:x ?x ; c:y ?y } WHERE { $event beh:x ?x ; beh:y ?y }""" ;
-    sem:function "window:move" .
+# --- behaviour: capabilities ----------------------------------------------------------------------
 
-c:WindowResize a beh:Reaction ;
+# A move that snaps a dockable frame to an edge is the dock's: the floating position stays
+# where it was, so floating again returns there.
+c:DraggableMove a beh:Reaction ;
+    beh:when beh:Move ;
+    beh:sourceClass c:Draggable ;
+    beh:deletes """CONSTRUCT { $this c:x ?x ; c:y ?y }
+WHERE {
+  { $this c:x ?x } UNION { $this c:y ?y }
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:Dockable . c:Dockable c:snapDistance ?limit . $event beh:toStart|beh:toEnd|beh:toTop|beh:toBottom ?d FILTER(?d <= ?limit) }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:x ?x ; c:y ?y }
+WHERE {
+  $event beh:x ?x ; beh:y ?y .
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:Dockable . c:Dockable c:snapDistance ?limit . $event beh:toStart|beh:toEnd|beh:toTop|beh:toBottom ?d FILTER(?d <= ?limit) }
+}""" ;
+    sem:function "frame:move" .
+
+# Every move re-decides the attachment: the nearest edge within c:snapDistance, else none.
+c:DockableSnap a beh:Reaction ;
+    beh:when beh:Move ;
+    beh:sourceClass c:Dockable ;
+    beh:deletes """CONSTRUCT { $this c:attachedTo ?old } WHERE { $this c:attachedTo ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:attachedTo ?edge }
+WHERE {
+  c:Dockable c:snapDistance ?limit .
+  {
+    SELECT ?edge ?d WHERE {
+      { $event beh:toStart ?d BIND(c:StartEdge AS ?edge) BIND(1 AS ?rank) } UNION { $event beh:toEnd ?d BIND(c:EndEdge AS ?edge) BIND(2 AS ?rank) }
+      UNION { $event beh:toTop ?d BIND(c:TopEdge AS ?edge) BIND(3 AS ?rank) } UNION { $event beh:toBottom ?d BIND(c:BottomEdge AS ?edge) BIND(4 AS ?rank) }
+    } ORDER BY ?d ?rank LIMIT 1
+  }
+  FILTER(?d <= ?limit)
+}""" ;
+    sem:function "frame:snap" .
+
+c:ResizableResize a beh:Reaction ;
     beh:when beh:Resize ;
-    beh:sourceClass c:Window ;
+    beh:sourceClass c:Resizable ;
     beh:deletes """CONSTRUCT { $this c:width ?w ; c:height ?h } WHERE { { $this c:width ?w } UNION { $this c:height ?h } }""" ;
     beh:inserts """CONSTRUCT { $this c:width ?w ; c:height ?h } WHERE { $event beh:width ?w ; beh:height ?h }""" ;
-    sem:function "window:resize" .
+    sem:function "frame:resize" .
+
+# Raising: unless it already is, the frame becomes its desktop's c:topmost, at one more than
+# the highest c:z there (LATERAL: the aggregate is over this desktop's frames only).
+c:RaisableRaise a beh:Reaction ;
+    beh:when c:PointerDown ;
+    beh:sourceClass c:Raisable ;
+    beh:deletes """CONSTRUCT { ?d c:topmost ?old . $this c:z ?z }
+WHERE { ?d c:hosts $this . FILTER NOT EXISTS { ?d c:topmost $this } { ?d c:topmost ?old } UNION { $this c:z ?z } }""" ;
+    beh:inserts """CONSTRUCT { ?d c:topmost $this . $this c:z ?next }
+WHERE {
+  ?d c:hosts $this . FILTER NOT EXISTS { ?d c:topmost $this }
+  LATERAL { SELECT (MAX(?oz) AS ?top) WHERE { ?d c:hosts ?o . ?o c:z ?oz } }
+  BIND(COALESCE(?top, 0) + 1 AS ?next)
+}""" ;
+    sem:function "frame:raise" .
+
+c:MinimizableMinimize a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Minimizable ;
+    beh:deletes """CONSTRUCT { $this c:windowState ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:minimizes $this . $this c:windowState ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:windowState c:Minimized } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:minimizes $this }""" ;
+    sem:function "frame:minimize" .
+
+c:MaximizableMaximize a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Maximizable ;
+    beh:deletes """CONSTRUCT { $this c:windowState ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:maximizes $this . $this c:windowState ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:windowState c:Maximized } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:maximizes $this }""" ;
+    sem:function "frame:maximize" .
+
+c:RestorableRestore a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Restorable ;
+    beh:deletes """CONSTRUCT { $this c:windowState ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:restores $this . $this c:windowState ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:windowState c:Normal } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:restores $this }""" ;
+    sem:function "frame:restore" .
+
+c:DockableUndock a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Dockable ;
+    beh:deletes """CONSTRUCT { $this c:attachedTo ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:undocks $this . $this c:attachedTo ?old }""" ;
+    sem:function "frame:undock" .
+
+# A button that c:opens a frame also restores it if it is minimized and brings it to the front
+# (c:Opens, overlays.ttl, sets c:open in the same delta).
+c:OpensFrame a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Button ;
+    beh:deletes """CONSTRUCT { ?w c:windowState c:Minimized . ?d c:topmost ?old . ?w c:z ?z }
+WHERE {
+  $this c:opens ?w . ?w a/rdfs:subClassOf* c:Raisable .
+  { ?w c:windowState c:Minimized }
+  UNION { ?d c:hosts ?w . FILTER NOT EXISTS { ?d c:topmost ?w } { ?d c:topmost ?old } UNION { ?w c:z ?z } }
+}""" ;
+    beh:inserts """CONSTRUCT { ?w c:windowState ?normal . ?d c:topmost ?w . ?w c:z ?next }
+WHERE {
+  $this c:opens ?w . ?w a/rdfs:subClassOf* c:Raisable .
+  { ?w c:windowState c:Minimized BIND(c:Normal AS ?normal) }
+  UNION {
+    ?d c:hosts ?w . FILTER NOT EXISTS { ?d c:topmost ?w }
+    LATERAL { SELECT (MAX(?oz) AS ?top) WHERE { ?d c:hosts ?o . ?o c:z ?oz } }
+    BIND(COALESCE(?top, 0) + 1 AS ?next)
+  }
+}""" ;
+    sem:function "frame:open" .
 
 # --- the desktop: where windows live across pages ------------------------------------------------
 
@@ -92,10 +327,51 @@ c:Desktop a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A surface for windows that is not part of any page: it places the windows it
 c:hosts. Components that open windows say where with c:windowsOn, so a detached view
-survives navigation between pages that would hide its origin."""@en ;
+survives navigation between pages that would hide its origin. Raisable frames go in one
+stacking layer, ordered by their c:z; other hosted overlays (dialogs, toasts) stay above it."""@en ;
     sem:slug "desktop" .
-c:hosts a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range c:Window .
+c:hosts a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range sem:Component .
 c:windowsOn a owl:ObjectProperty ; rdfs:range c:Desktop ;
     rdfs:comment "Where a component's windows are placed (else: inside the component)."@en .
 c:DesktopRendering a sem:Rendering ; sem:targets c:Desktop ; sem:stratum 0 .
 c:DesktopRendering-fn a sem:Rule ; sem:implements c:DesktopRendering ; sem:function "desktop" .
+
+# --- the taskbar: a desktop's open frames -----------------------------------------------------------
+
+c:Taskbar a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """The open frames of a desktop (c:of), one entry each with its state's symbol and its
+title. Activating an entry restores a minimized frame, brings another to the front, and
+minimizes the frame already in front (if it is c:Minimizable). Hidden while no frame is open.
+Hosted on the desktop itself, it is there on every page."""@en ;
+    sem:slug "taskbar" .
+c:TaskbarRendering a sem:Rendering ; sem:targets c:Taskbar ; sem:stratum 0 .
+c:TaskbarRendering-fn a sem:Rule ; sem:implements c:TaskbarRendering ; sem:function "taskbar" .
+
+# Three reactions that all see the state before the click, so the right ones act.
+c:TaskbarRestore a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Taskbar ;
+    beh:deletes """CONSTRUCT { ?w c:windowState c:Minimized } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:activates ?w . ?w c:windowState c:Minimized }""" ;
+    beh:inserts """CONSTRUCT { ?w c:windowState c:Normal } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:activates ?w . ?w c:windowState c:Minimized }""" ;
+    sem:function "taskbar:restore" .
+c:TaskbarMinimize a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Taskbar ;
+    beh:deletes """CONSTRUCT { ?w c:windowState ?old }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:activates ?w . ?d c:topmost ?w . ?w a/rdfs:subClassOf* c:Minimizable ; c:windowState ?old . FILTER(?old != c:Minimized) }""" ;
+    beh:inserts """CONSTRUCT { ?w c:windowState c:Minimized }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:activates ?w . ?d c:topmost ?w . ?w a/rdfs:subClassOf* c:Minimizable . FILTER NOT EXISTS { ?w c:windowState c:Minimized } }""" ;
+    sem:function "taskbar:minimize" .
+c:TaskbarRaise a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Taskbar ;
+    beh:deletes """CONSTRUCT { ?d c:topmost ?old . ?w c:z ?z }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:activates ?w . ?d c:hosts ?w . FILTER NOT EXISTS { ?d c:topmost ?w } { ?d c:topmost ?old } UNION { ?w c:z ?z } }""" ;
+    beh:inserts """CONSTRUCT { ?d c:topmost ?w . ?w c:z ?next }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:activates ?w . ?d c:hosts ?w . FILTER NOT EXISTS { ?d c:topmost ?w }
+  LATERAL { SELECT (MAX(?oz) AS ?top) WHERE { ?d c:hosts ?o . ?o c:z ?oz } }
+  BIND(COALESCE(?top, 0) + 1 AS ?next)
+}""" ;
+    sem:function "taskbar:raise" .

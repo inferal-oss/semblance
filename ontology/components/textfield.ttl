@@ -26,7 +26,7 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label, ?input, ?help, ?error .
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:precedes ?input .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
-  ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:id ?inputId ;
+  ?input a rdfhtml:Input ; rdfhtml:type ?inputType ; rdfhtml:id ?inputId ;
          rdfhtml:value ?value ; rdfhtml:placeholder ?placeholder ; ord:precedes ?help, ?error .
   ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:precedes ?error .
   ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
@@ -40,6 +40,8 @@ WHERE {
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?labelData)
   OPTIONAL { $this c:value ?value }
   OPTIONAL { $this c:placeholder ?placeholder }
+  OPTIONAL { $this c:inputType ?declaredType }
+  BIND(COALESCE(?declaredType, "text") AS ?inputType)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)

@@ -807,9 +807,9 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "background" ; sty:token tok:surface ] .
 
-# --- window ---------------------------------------------------------------------------------------------
+# --- frames (windows, palettes; their states and the taskbar are in windows.ttl) ---------------------------
 
-[] a sty:StyleRule ; sty:appliesTo c:Window ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ;
     sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
                  [ sty:property "z-index" ; sty:raw "50" ] ,
                  [ sty:property "display" ; sty:raw "grid" ] ,
@@ -823,9 +823,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:state ":focus-within" ;
-    sty:declares [ sty:property "z-index" ; sty:raw "51" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:part ".sem-window-bar" ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-bar" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "6px" ] ,
@@ -835,11 +833,11 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "cursor" ; sty:raw "grab" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] ,
                  [ sty:property "touch-action" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:part ".sem-window-bar strong" ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-bar strong" ;
     sty:declares [ sty:property "flex" ; sty:raw "1" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "font-weight" ; sty:raw "650" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:part ".sem-window-control" ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-control" ;
     sty:declares [ sty:property "width" ; sty:raw "26px" ] ,
                  [ sty:property "height" ; sty:raw "26px" ] ,
                  [ sty:property "display" ; sty:raw "grid" ] ,
@@ -850,13 +848,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font" ; sty:raw "600 13px/1 var(--sem-font)" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:part ".sem-window-control:hover" ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-control:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:part ".sem-window-body" ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-body" ;
     sty:declares [ sty:property "overflow" ; sty:raw "auto" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Window ; sty:part ".sem-window-grip" ;
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-grip" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "right" ; sty:raw "0" ] ,
                  [ sty:property "bottom" ; sty:raw "0" ] ,

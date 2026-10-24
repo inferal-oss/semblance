@@ -1,51 +1,200 @@
-// Function rules for windows and progress bars.
-import type { NamedNode, Term } from '@rdfjs/types'
-import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, MOD } from '../ns.ts'
-import { text } from './util.ts'
+// Function rules and reactions for frames (windows, palettes), the desktop that hosts them,
+// its taskbar (ontology/components/window.ttl), and progress bars.
+import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
+import type { FnRule, Out, RuleContext } from '../engine/context.ts'
+import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import type { Delta } from '../rdf.ts'
+import { FB, hitMarks, phrase } from './feedback.ts'
+import { named, RDFS_LABEL, str, text } from './util.ts'
 
-const str = (t: Term | undefined) => t?.value
+const c = NS.c
+/** Frame vocabulary (window.ttl) not in ns.ts. */
+export const WIN = {
+  Frame: c + 'Frame',
+  Window: c + 'Window',
+  Draggable: c + 'Draggable',
+  Resizable: c + 'Resizable',
+  Raisable: c + 'Raisable',
+  Minimizable: c + 'Minimizable',
+  Maximizable: c + 'Maximizable',
+  Dockable: c + 'Dockable',
+  windowState: c + 'windowState',
+  Normal: c + 'Normal',
+  Minimized: c + 'Minimized',
+  Maximized: c + 'Maximized',
+  attachedTo: c + 'attachedTo',
+  NoEdge: c + 'NoEdge',
+  StartEdge: c + 'StartEdge',
+  EndEdge: c + 'EndEdge',
+  TopEdge: c + 'TopEdge',
+  BottomEdge: c + 'BottomEdge',
+  snapDistance: c + 'snapDistance',
+  z: c + 'z',
+  topmost: c + 'topmost',
+  minimizes: c + 'minimizes',
+  maximizes: c + 'maximizes',
+  restores: c + 'restores',
+  undocks: c + 'undocks',
+  activates: c + 'activates',
+  opens: c + 'opens',
+  Tab: c + 'Tab',
+  tabs: c + 'tabs',
+  selected: c + 'selected',
+  detached: c + 'detached',
+  detaches: c + 'detaches',
+  Minimize: c + 'MinimizeCommand',
+  Maximize: c + 'MaximizeCommand',
+  Restore: c + 'RestoreCommand',
+  Undock: c + 'UndockCommand',
+  ReturnToTab: c + 'ReturnToTabCommand',
+  Windows: c + 'WindowsRegion',
+} as const
+const PROV_DERIVED_FROM = 'http://www.w3.org/ns/prov#wasDerivedFrom'
+/** The edges a frame can be attached to, by slug, with the event detail that measures each. */
+const EDGES = [
+  { iri: WIN.StartEdge, slug: 'start', distance: NS.beh + 'toStart' },
+  { iri: WIN.EndEdge, slug: 'end', distance: NS.beh + 'toEnd' },
+  { iri: WIN.TopEdge, slug: 'top', distance: NS.beh + 'toTop' },
+  { iri: WIN.BottomEdge, slug: 'bottom', distance: NS.beh + 'toBottom' },
+] as const
+const SNAP_DEFAULT = 24
+
 const int = (ctx: RuleContext, s: Term, p: string, fallback: number) => {
   const v = Number(str(ctx.object(s, p)))
   return Number.isFinite(v) ? Math.round(v) : fallback
+}
+const isFalse = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'false'
+
+/** Every class `cls` is a (reflexive, transitive) subclass of. */
+function supers(match: (s: Term | string, p: string) => Term[], cls: string): Set<string> {
+  const out = new Set([cls])
+  const todo = [cls]
+  while (todo.length) for (const sup of match(todo.pop()!, RDFS_SUBCLASS)) if (!out.has(sup.value)) out.add(sup.value), todo.push(sup.value)
+  return out
+}
+
+/** The classes of a node, with their superclasses (the ontology part memoized, untraced). */
+export function classesOf(ctx: RuleContext, node: Term): Set<string> {
+  const out = new Set<string>()
+  for (const t of ctx.objects(node, RDF_TYPE)) {
+    const all = ctx.memo('frame:supers:' + t.value, () => ctx.untraced(() => supers((s, p) => ctx.objects(s, p), t.value)))
+    for (const cls of all) out.add(cls)
+  }
+  return out
+}
+
+/** The same for reactions, which read the state before the event. */
+function classesIn(ctx: ReactionContext, node: Term): Set<string> {
+  const f = ctx.runtime.store.factory
+  const out = new Set<string>()
+  const objects = (s: Term | string, p: string) => ctx.match(typeof s === 'string' ? f.namedNode(s) : s, p, null).map((q) => q.object)
+  for (const t of objects(node, RDF_TYPE)) for (const cls of supers(objects, t.value)) out.add(cls)
+  return out
+}
+
+/** A frame's state, read once for its rendering and its taskbar entry. */
+function stateOf(ctx: RuleContext, frame: Term) {
+  const state = ctx.object(frame, WIN.windowState)
+  const edgeNode = ctx.object(frame, WIN.attachedTo)
+  const edge = EDGES.find((e) => e.iri === edgeNode?.value)
+  const minimized = state?.value === WIN.Minimized
+  const maximized = state?.value === WIN.Maximized
+  return { state, edgeNode, edge: maximized ? undefined : edge, minimized, maximized }
+}
+
+const titleOf = (ctx: RuleContext, frame: Term) => text(ctx, frame, C.title) ?? text(ctx, frame, C.label) ?? 'Window'
+
+/** The tab a window was minted from (c:Tabs records it), if any. */
+function originTab(ctx: RuleContext, frame: Term): Term | undefined {
+  const origin = ctx.object(frame, PROV_DERIVED_FROM)
+  return origin && ctx.objects(origin, RDF_TYPE).some((t) => t.value === WIN.Tab) ? origin : undefined
+}
+
+/**
+ * A frame: a title bar over a body, with the controls of the capabilities its instance has.
+ * Closed (c:open false) it is an empty hidden root, and its body is not evaluated; minimized,
+ * it keeps its parts under a hidden root (the body is parked, not dropped), and its desktop's
+ * taskbar brings it back. Geometry is inline style; everything else is hooks for the theme.
+ */
+export const frame: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const text = ctx.modality === MOD.Text
+  if (isFalse(ctx.object(focus, FB.open))) {
+    o.renders(o.el('root', text ? 'Div' : 'Section', { hidden: '' }))
+    return o.quads
+  }
+  const caps = classesOf(ctx, focus)
+  const title = titleOf(ctx, focus)
+  const { state, edge, edgeNode, minimized, maximized } = stateOf(ctx, focus)
+  const body = ctx.object(focus, C.body)
+  const content = named(body) ? [body] : []
+  if (text) {
+    if (minimized) {
+      o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `${symbolOf(ctx, state) ?? '▁'} ${title}`)])]))
+      return o.quads
+    }
+    const mark = maximized ? symbolOf(ctx, state) : edge ? symbolOf(ctx, edgeNode) : undefined
+    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `┌ ${title}${mark ? ' ' + mark : ''} ┐`)]), ...content]))
+    return o.quads
+  }
+  const tab = originTab(ctx, focus)
+  const control = (local: string, glyph: string, label: string, marker: string) => {
+    const b = o.el(local, 'Button', { type: 'button', class: 'sem-window-control' }, [o.text(local + '-text', glyph)])
+    o.attr(b, 'aria-label', label)
+    o.tip(b, label)
+    o.t(b, marker, focus)
+    return b
+  }
+  const controls: NamedNode[] = []
+  if (tab) controls.push(control('dock', '⇲', `${phrase(ctx, WIN.ReturnToTab, 'Return to its tab')}: ${title}`, C.docks))
+  if (caps.has(WIN.Minimizable)) controls.push(control('minimize', '–', `${phrase(ctx, WIN.Minimize, 'Minimize')} ${title}`, WIN.minimizes))
+  if (caps.has(WIN.Maximizable)) {
+    if (maximized) controls.push(control('restore', '❐', `${phrase(ctx, WIN.Restore, 'Restore')} ${title}`, WIN.restores))
+    else controls.push(control('maximize', '□', `${phrase(ctx, WIN.Maximize, 'Maximize')} ${title}`, WIN.maximizes))
+  }
+  if (edge && caps.has(WIN.Dockable)) controls.push(control('undock', '◳', `${phrase(ctx, WIN.Undock, 'Float')} ${title}`, WIN.undocks))
+  // A window minted from a tab closes back into it; any other frame is an overlay that closes.
+  controls.push(control('close', '✕', `${phrase(ctx, FB.Close, 'Close')} ${title}`, tab ? C.docks : FB.closes))
+
+  const bar = o.el('bar', 'Header', { class: 'sem-window-bar' }, [o.el('title', 'Strong', {}, [o.text('title-text', title)]), ...controls])
+  if (caps.has(WIN.Draggable) && !maximized) o.attr(bar, 'data-sem-gesture', 'move')
+  const parts = [bar, o.el('body', 'Div', { class: 'sem-window-body' }, content)]
+  if (caps.has(WIN.Resizable) && !maximized && !edge) {
+    const grip = o.el('grip', 'Div', { class: 'sem-window-grip' })
+    o.attr(grip, 'data-sem-gesture', 'resize').attr(grip, 'aria-hidden', 'true')
+    parts.push(grip)
+  }
+  o.renders(o.el('root', 'Section', { style: geometry(ctx, focus, caps, maximized, edge?.slug), hidden: minimized ? '' : undefined }, parts))
+  const root = o.node('root')
+  o.attr(root, 'role', 'dialog').attr(root, 'aria-label', title)
+  return o.quads
 }
 
 /** Default geometry, staggered by the window's position among its siblings. */
 const STAGGER = 28
 
-export const window: FnRule = (ctx, focus) => {
-  const body = ctx.object(focus, C.body)
-  const title = text(ctx, focus, C.title) ?? 'Window'
-  const o = ctx.out(focus)
-  if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `┌ ${title} ┐`)]), ...(body?.termType === 'NamedNode' ? [body] : [])]))
-    return o.quads
-  }
+/** Inline geometry: all of it floating, the docked dimension docked, none maximized; then the stacking order. */
+function geometry(ctx: RuleContext, focus: NamedNode, caps: Set<string>, maximized: boolean, edge: string | undefined): string | undefined {
+  const window = caps.has(WIN.Window)
   const index = int(ctx, focus, C.index, 0)
-  const x = int(ctx, focus, C.x, 96 + index * STAGGER)
-  const y = int(ctx, focus, C.y, 120 + index * STAGGER)
-  const width = int(ctx, focus, C.width, 520)
-  const height = int(ctx, focus, C.height, 440)
-  const control = (local: string, label: string, aria: string) => {
-    const b = o.el(local, 'Button', { type: 'button', class: 'sem-window-control' }, [o.text(local + '-text', label)])
-    o.attr(b, 'aria-label', aria)
-    o.t(b, C.docks, focus)
-    return b
-  }
-  const bar = o.el('bar', 'Header', { class: 'sem-window-bar' }, [
-    o.el('title', 'Strong', {}, [o.text('title-text', title)]),
-    control('dock', '⇲', `Dock ${title} back into its tab`),
-    control('close', '✕', `Close ${title} (returns it to its tab)`),
-  ])
-  o.attr(bar, 'data-sem-gesture', 'move')
-  const content = o.el('body', 'Div', { class: 'sem-window-body' }, body?.termType === 'NamedNode' ? [body] : [])
-  const grip = o.el('grip', 'Div', { class: 'sem-window-grip' })
-  o.attr(grip, 'data-sem-gesture', 'resize').attr(grip, 'aria-hidden', 'true')
-  const root = o.el('root', 'Section', { style: `left: ${x}px; top: ${y}px; width: ${width}px; height: ${height}px;` }, [bar, content, grip])
-  o.attr(root, 'role', 'dialog').attr(root, 'aria-label', title)
-  o.renders(root)
-  return o.quads
+  const width = int(ctx, focus, C.width, window ? 520 : 240)
+  // A palette is as tall as its content unless it says otherwise.
+  const height = (ctx.object(focus, C.height) || window) ? int(ctx, focus, C.height, 440) : undefined
+  const px = (p: string, v: number | undefined) => (v === undefined ? [] : [`${p}: ${v}px;`])
+  const decls = maximized
+    ? []
+    : edge === 'start' || edge === 'end'
+      ? px('width', width)
+      : edge === 'top' || edge === 'bottom'
+        ? px('height', height)
+        : [...px('left', int(ctx, focus, C.x, 96 + index * STAGGER)), ...px('top', int(ctx, focus, C.y, 120 + index * STAGGER)), ...px('width', width), ...px('height', height)]
+  const z = ctx.object(focus, WIN.z)
+  if (z) decls.push(`z-index: ${int(ctx, focus, WIN.z, 0)};`)
+  return decls.length ? decls.join(' ') : undefined
 }
+
+const symbolOf = (ctx: RuleContext, t: Term | undefined) => (t ? str(ctx.object(t, SEM.symbol)) : undefined)
 
 export const progress: FnRule = (ctx, focus) => {
   const value = Number(str(ctx.object(focus, C.value)) ?? 0)
@@ -72,14 +221,187 @@ export const progress: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** Places the windows other components asked to put here (c:hosts). */
+const byIri = (a: Term, b: Term) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
+
+/**
+ * Places what other components asked to put here (c:hosts). Raisable frames share one
+ * stacking layer, inside which their c:z orders them; dialogs and toasts stay above it.
+ * A closed frame (c:open false) is not placed at all, so it costs nothing until it opens.
+ */
 export const desktop: FnRule = (ctx, focus) => {
-  const windows = ctx.objects(focus, C.hosts).filter((t): t is NamedNode => t.termType === 'NamedNode')
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Div', {}, windows.sort((a, b) => (a.value < b.value ? -1 : 1))))
+  const hosted = ctx.objects(focus, C.hosts).filter(named).sort(byIri)
+  const raisable = hosted.filter((n) => classesOf(ctx, n).has(WIN.Raisable))
+  const frames = raisable.filter((n) => !isFalse(ctx.object(n, FB.open)))
+  const others = hosted.filter((n) => !raisable.includes(n))
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, hosted.filter((n) => !raisable.includes(n) || frames.includes(n))))
+    return o.quads
+  }
+  o.renders(o.el('root', 'Div', {}, [o.el('frames', 'Div', { class: 'sem-frames' }, frames), ...others]))
   return o.quads
 }
 
-export const containerFunctions: Record<string, FnRule> = { window, progress, desktop }
+/** The open frames of a desktop, each an entry that restores, raises or minimizes it. */
+export const taskbar: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const desktop = ctx.object(focus, C.of)
+  const frames = named(desktop)
+    ? ctx
+        .objects(desktop, C.hosts)
+        .filter(named)
+        .filter((n) => classesOf(ctx, n).has(WIN.Frame) && !isFalse(ctx.object(n, FB.open)))
+        .sort(byIri)
+    : []
+  const top = desktop ? ctx.object(desktop, WIN.topmost)?.value : undefined
+  const label = text(ctx, focus, C.label) ?? phrase(ctx, WIN.Windows, 'Windows')
+  const entries = frames.map((w) => {
+    const s = stateOf(ctx, w)
+    const symbol = (s.minimized || s.maximized ? symbolOf(ctx, s.state) : s.edge ? symbolOf(ctx, s.edgeNode) : undefined) ?? '▭'
+    const slug = s.minimized ? 'minimized' : s.maximized ? 'maximized' : s.edge ? 'docked' : 'normal'
+    const stateLabel = s.state ? (text(ctx, s.state, RDFS_LABEL) ?? slug) : undefined
+    return { w, key: encodeURIComponent(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
+  })
+  if (ctx.modality === MOD.Text) {
+    const line = entries.map((e) => `[${e.symbol} ${e.title}${e.active ? '*' : ''}]`).join(' ')
+    o.renders(o.el('root', 'Div', { hidden: entries.length ? undefined : '' }, [o.text('line', `▤ ${label}: ${line}`)]))
+    return o.quads
+  }
+  const buttons = entries.map((e) => {
+    const glyph = o.el(`task-${e.key}-icon`, 'Span', { class: 'sem-icon' }, [o.text(`task-${e.key}-icon-text`, e.symbol)])
+    o.attr(glyph, 'aria-hidden', 'true')
+    const b = o.el(`task-${e.key}`, 'Button', { type: 'button', class: 'sem-task' }, [glyph, o.el(`task-${e.key}-label`, 'Span', { class: 'sem-label' }, [o.text(`task-${e.key}-label-text`, e.title)])])
+    o.attr(b, 'data-state', e.slug)
+    if (e.active) o.attr(b, 'aria-current', 'true')
+    if (e.stateLabel) o.tip(b, `${e.title} · ${e.stateLabel}`)
+    o.t(b, WIN.activates, e.w)
+    return b
+  })
+  const root = o.el('root', 'Div', { hidden: entries.length ? undefined : '' }, buttons)
+  o.attr(root, 'role', 'toolbar').attr(root, 'aria-label', label)
+  o.renders(root)
+  return o.quads
+}
 
-export type { NamedNode }
+export const containerFunctions: Record<string, FnRule> = { window: frame, progress, desktop, taskbar }
+
+// --- reactions (function twins of the SPARQL in window.ttl) ----------------------------------------
+
+const none = (): Delta => ({ add: [], remove: [] })
+const merge = (...ds: Delta[]): Delta => ({ remove: ds.flatMap((d) => d.remove), add: ds.flatMap((d) => d.add) })
+const nn = (ctx: ReactionContext, iri: string) => ctx.runtime.store.factory.namedNode(iri)
+const integer = (ctx: ReactionContext, n: number) => ctx.runtime.store.factory.literal(String(n), nn(ctx, XSD_INTEGER))
+const quad = (ctx: ReactionContext, s: Term, p: string, o: Term): Quad => ctx.runtime.store.factory.quad(s as NamedNode, nn(ctx, p), o as NamedNode)
+
+/** Replace every `node p ?old` by `node p value` (or by nothing). */
+function put(ctx: ReactionContext, node: Term, p: string, value: Term | undefined): Delta {
+  return { remove: ctx.match(node, p, null), add: value ? [quad(ctx, node, p, value)] : [] }
+}
+
+/** The object of `marker` on the event's node or its nearest RDF/HTML ancestor that has one. */
+function hitObject(ctx: ReactionContext, marker: string): Term | undefined {
+  for (let node = ctx.object(ctx.event, BEH.node), hops = 0; node && hops < 32; hops++) {
+    const hit = ctx.object(node, marker)
+    if (hit) return hit
+    node = ctx.match(null, H.hasChild, node)[0]?.subject
+  }
+  return undefined
+}
+
+/** Bring a frame to the front of the desktops hosting it, unless it already is. */
+function raise(ctx: ReactionContext, w: Term): Delta {
+  const out = none()
+  for (const { subject: d } of ctx.match(null, C.hosts, w)) {
+    const current = ctx.match(d, WIN.topmost, null)
+    if (current.some((q) => q.object.equals(w))) continue
+    let top = 0
+    for (const h of ctx.match(d, C.hosts, null)) for (const z of ctx.match(h.object, WIN.z, null)) top = Math.max(top, Number(z.object.value) || 0)
+    out.remove.push(...current, ...ctx.match(w, WIN.z, null))
+    out.add.push(quad(ctx, d, WIN.topmost, w), quad(ctx, w, WIN.z, integer(ctx, top + 1)))
+  }
+  return out
+}
+
+/** The edge a move's release snaps a dockable frame to (the nearest within c:snapDistance). */
+function snapEdge(ctx: ReactionContext): string | undefined {
+  const limit = Number(ctx.object(nn(ctx, WIN.Dockable), WIN.snapDistance)?.value ?? SNAP_DEFAULT)
+  let best: { iri: string; d: number } | undefined
+  for (const e of EDGES) {
+    const d = Number(ctx.object(ctx.event, e.distance)?.value ?? NaN)
+    if (d <= limit && (!best || d < best.d)) best = { iri: e.iri, d }
+  }
+  return best?.iri
+}
+
+const isState = (ctx: ReactionContext, w: Term, state: string) => ctx.match(w, WIN.windowState, nn(ctx, state)).length > 0
+const setState = (ctx: ReactionContext, w: Term, state: string) => put(ctx, w, WIN.windowState, nn(ctx, state))
+/** A control marked `marker $this` sets the target's window state. */
+const stateControl = (marker: string, state: string): ReactionFn => (ctx) => (hitMarks(ctx, marker) ? setState(ctx, ctx.target, state) : none())
+
+/** The c:Tabs whose c:tabs list holds `tab`. */
+function tabsOf(ctx: ReactionContext, tab: Term): Term[] {
+  const out: Term[] = []
+  for (const q of ctx.match(null, RDF_FIRST, tab)) {
+    let head: Term = q.subject
+    for (let hops = 0; hops < 10_000; hops++) {
+      const prev: Quad | undefined = ctx.match(null, RDF_REST, head)[0]
+      if (!prev) break
+      head = prev.subject
+    }
+    for (const t of ctx.match(null, WIN.tabs, head)) out.push(t.subject)
+  }
+  return out
+}
+
+export const reactions: Record<string, ReactionFn> = {
+  'tabs:detach': (ctx) => {
+    const tab = hitObject(ctx, WIN.detaches)
+    return tab ? { remove: [], add: [quad(ctx, tab, WIN.detached, ctx.runtime.store.factory.literal('true', nn(ctx, XSD_BOOLEAN)))] } : none()
+  },
+  'window:dock': (ctx) => {
+    if (!hitMarks(ctx, C.docks)) return none()
+    const tab = ctx.object(ctx.target, PROV_DERIVED_FROM)
+    if (!tab || !ctx.match(tab, RDF_TYPE, nn(ctx, WIN.Tab)).length) return none()
+    return merge({ remove: ctx.match(tab, WIN.detached, null), add: [] }, ...tabsOf(ctx, tab).map((tabs) => put(ctx, tabs, WIN.selected, tab)))
+  },
+  'frame:move': (ctx) => {
+    if (classesIn(ctx, ctx.target).has(WIN.Dockable) && snapEdge(ctx)) return none()
+    const x = ctx.object(ctx.event, NS.beh + 'x')
+    const y = ctx.object(ctx.event, NS.beh + 'y')
+    return merge(put(ctx, ctx.target, C.x, x), put(ctx, ctx.target, C.y, y))
+  },
+  'frame:snap': (ctx) => {
+    const edge = snapEdge(ctx)
+    return put(ctx, ctx.target, WIN.attachedTo, edge ? nn(ctx, edge) : undefined)
+  },
+  'frame:resize': (ctx) =>
+    merge(put(ctx, ctx.target, C.width, ctx.object(ctx.event, NS.beh + 'width')), put(ctx, ctx.target, C.height, ctx.object(ctx.event, NS.beh + 'height'))),
+  'frame:raise': (ctx) => raise(ctx, ctx.target),
+  'frame:minimize': stateControl(WIN.minimizes, WIN.Minimized),
+  'frame:maximize': stateControl(WIN.maximizes, WIN.Maximized),
+  'frame:restore': stateControl(WIN.restores, WIN.Normal),
+  'frame:undock': (ctx) => (hitMarks(ctx, WIN.undocks) ? put(ctx, ctx.target, WIN.attachedTo, undefined) : none()),
+  'frame:open': (ctx) =>
+    merge(
+      ...ctx
+        .match(ctx.target, WIN.opens, null)
+        .map((q) => q.object)
+        .filter((w) => classesIn(ctx, w).has(WIN.Raisable))
+        .map((w) => merge(isState(ctx, w, WIN.Minimized) ? setState(ctx, w, WIN.Normal) : none(), raise(ctx, w))),
+    ),
+  'taskbar:restore': (ctx) => {
+    const w = hitObject(ctx, WIN.activates)
+    return w && isState(ctx, w, WIN.Minimized) ? setState(ctx, w, WIN.Normal) : none()
+  },
+  'taskbar:minimize': (ctx) => {
+    const w = hitObject(ctx, WIN.activates)
+    if (!w || isState(ctx, w, WIN.Minimized) || !classesIn(ctx, w).has(WIN.Minimizable)) return none()
+    return ctx.match(null, WIN.topmost, w).length ? setState(ctx, w, WIN.Minimized) : none()
+  },
+  'taskbar:raise': (ctx) => {
+    const w = hitObject(ctx, WIN.activates)
+    return w ? raise(ctx, w) : none()
+  },
+}
+
+export type { NamedNode, Out }

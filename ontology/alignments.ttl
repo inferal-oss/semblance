@@ -1,0 +1,146 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix mot: <https://semblance.dev/ns/motion#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix st: <https://semblance.dev/ns/status#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix a11y: <https://semblance.dev/ns/a11y#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix schema: <https://schema.org/> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix vann: <http://purl.org/vocab/vann/> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+
+# Alignments of Semblance's vocabularies with established ones, so data written
+# with ours means something to tools that know only theirs (and the reverse,
+# for a reasoner). The strength of each link is deliberate:
+#   owl:equivalentClass / owl:equivalentProperty - the same meaning;
+#   rdfs:subClassOf / rdfs:subPropertyOf          - ours is narrower (safe to infer theirs);
+#   skos:closeMatch / skos:relatedMatch           - similar, but don't infer.
+# Our terms never redefine theirs: every link points from ours to theirs.
+
+# --- the ontologies themselves (VANN, DCMI) ---------------------------------------------------
+
+<https://semblance.dev/ns/core> a owl:Ontology ; dcterms:title "Semblance core"@en ;
+    dcterms:description "Components, rules, renderings, strata, layers and slots."@en ;
+    vann:preferredNamespacePrefix "sem" ; vann:preferredNamespaceUri "https://semblance.dev/ns/core#" .
+<https://semblance.dev/ns/component> dcterms:title "Semblance components"@en ;
+    vann:preferredNamespacePrefix "c" ; vann:preferredNamespaceUri "https://semblance.dev/ns/component#" .
+<https://semblance.dev/ns/style> dcterms:title "Semblance style layer"@en ;
+    vann:preferredNamespacePrefix "sty" ; vann:preferredNamespaceUri "https://semblance.dev/ns/style#" .
+<https://semblance.dev/ns/behaviour> a owl:Ontology ; dcterms:title "Semblance behaviour"@en ;
+    vann:preferredNamespacePrefix "beh" ; vann:preferredNamespaceUri "https://semblance.dev/ns/behaviour#" .
+<https://semblance.dev/ns/l10n> dcterms:title "Semblance localization"@en ;
+    vann:preferredNamespacePrefix "l10n" ; vann:preferredNamespaceUri "https://semblance.dev/ns/l10n#" .
+<https://semblance.dev/ns/persistence> dcterms:title "Semblance persistence"@en ;
+    vann:preferredNamespacePrefix "per" ; vann:preferredNamespaceUri "https://semblance.dev/ns/persistence#" .
+<https://semblance.dev/ns/validation> dcterms:title "Semblance validation"@en ;
+    vann:preferredNamespacePrefix "val" ; vann:preferredNamespaceUri "https://semblance.dev/ns/validation#" .
+<https://semblance.dev/ns/keyboard> dcterms:title "Semblance keyboard layer"@en ;
+    vann:preferredNamespacePrefix "key" ; vann:preferredNamespaceUri "https://semblance.dev/ns/keyboard#" .
+
+# --- labels and descriptions (RDFS, SKOS, DCMI) --------------------------------------------------
+
+c:label rdfs:subPropertyOf rdfs:label ; skos:closeMatch skos:prefLabel .
+c:help rdfs:subPropertyOf dcterms:description ; skos:closeMatch skos:scopeNote .
+c:title rdfs:subPropertyOf dcterms:title .
+c:subtitle rdfs:subPropertyOf dcterms:alternative .
+c:note rdfs:subPropertyOf skos:note .
+c:placeholder skos:relatedMatch schema:valueName .
+sem:tooltip rdfs:subPropertyOf rdfs:comment .
+sem:order skos:closeMatch schema:position .
+sem:symbol skos:relatedMatch schema:identifier .
+c:content rdfs:subPropertyOf dcterms:hasPart .
+
+# --- what components are (schema.org's web page elements) --------------------------------------
+
+sem:Component rdfs:subClassOf schema:WebPageElement .
+c:AppBar rdfs:subClassOf schema:WPHeader .
+c:StatusBar rdfs:subClassOf schema:WPFooter .
+c:NavList rdfs:subClassOf schema:SiteNavigationElement .
+c:Breadcrumbs rdfs:subClassOf schema:SiteNavigationElement ; skos:closeMatch schema:BreadcrumbList .
+c:Table rdfs:subClassOf schema:Table .
+c:Window rdfs:subClassOf schema:WPSideBar ; skos:relatedMatch schema:WPAdBlock .
+c:Link skos:closeMatch schema:LinkRole .
+c:href rdfs:subPropertyOf schema:url .
+c:image rdfs:subPropertyOf schema:image , foaf:depiction .
+c:Avatar skos:relatedMatch foaf:Image .
+c:Stat skos:relatedMatch sosa:Observation .
+c:Toast skos:relatedMatch schema:Message .
+c:Alert skos:relatedMatch schema:Message .
+
+# --- rules and queries (PROV-O) -------------------------------------------------------------------
+
+sem:Rule rdfs:subClassOf prov:Plan .
+sem:Query skos:closeMatch <http://spinrdf.org/sp#Query> .
+
+# --- interaction: events are activities (ActivityStreams, PROV-O) --------------------------------
+
+beh:Event rdfs:subClassOf as:Activity , prov:InstantaneousEvent .
+beh:Click rdfs:subClassOf beh:Event .
+beh:target rdfs:subPropertyOf as:object .
+beh:at rdfs:subPropertyOf as:published , prov:atTime .
+beh:handledBy skos:relatedMatch prov:wasAssociatedWith .
+beh:Reaction skos:closeMatch prov:Plan .
+beh:ChangeLog skos:relatedMatch as:OrderedCollection .
+ann:announces rdfs:subPropertyOf as:summary .
+key:Command skos:relatedMatch schema:Action .
+
+# --- design tokens and variant values are concepts (SKOS) ----------------------------------------
+
+sty:Token rdfs:subClassOf skos:Concept .
+sty:Scale rdfs:subClassOf skos:ConceptScheme .
+sty:scale rdfs:subPropertyOf skos:inScheme .
+sty:Tone rdfs:subClassOf skos:Concept .
+sty:Emphasis rdfs:subClassOf skos:Concept .
+sty:ControlSize rdfs:subClassOf skos:Concept .
+sty:Intent rdfs:subClassOf skos:Concept .
+sty:ColorScheme rdfs:subClassOf skos:Concept .
+sty:Contrast rdfs:subClassOf skos:Concept .
+sty:Density rdfs:subClassOf skos:Concept .
+sty:Elevation rdfs:subClassOf skos:Concept .
+mot:Preference rdfs:subClassOf skos:Concept .
+pos:Direction rdfs:subClassOf skos:Concept .
+pos:Layout rdfs:subClassOf skos:Concept .
+pos:Alignment rdfs:subClassOf skos:Concept .
+sty:Light skos:closeMatch schema:LightMode .
+sty:Dark skos:closeMatch schema:DarkMode .
+
+# --- languages (DCMI) -----------------------------------------------------------------------------
+
+l10n:Language owl:equivalentClass dcterms:LinguisticSystem .
+l10n:language rdfs:subPropertyOf dcterms:language .
+l10n:code skos:closeMatch dcterms:identifier .
+
+# --- modality (DCMI media types) -------------------------------------------------------------------
+
+mod:Modality skos:closeMatch dcterms:MediaType .
+
+# --- persistence and validation ---------------------------------------------------------------------
+
+per:Policy skos:relatedMatch odrl:Policy .
+per:Write rdfs:subClassOf prov:Activity .
+per:Restore rdfs:subClassOf prov:Activity .
+per:Forget rdfs:subClassOf prov:Activity .
+per:lastWritten rdfs:subPropertyOf dcterms:modified .
+st:busy skos:closeMatch schema:actionStatus .
+
+# --- accessibility (schema.org accessibility properties) -------------------------------------------
+
+key:shortcut skos:relatedMatch schema:accessibilityControl .
+a11y:Layer skos:relatedMatch schema:accessibilityFeature .

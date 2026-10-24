@@ -16,3 +16,6 @@ c:placeholder a owl:DatatypeProperty .
 c:help a owl:DatatypeProperty ; rdfs:comment "Supplementary description."@en .
 c:error a owl:DatatypeProperty ; rdfs:comment "Validation message; its presence means the value is invalid."@en .
 c:disabled a owl:DatatypeProperty ; rdfs:range xsd:boolean .
+
+c:inputType a owl:DatatypeProperty ;
+    rdfs:comment "What a text field takes: text (the default), password (masked), email, number, search, tel or url - the HTML input type, which also picks the on-screen keyboard."@en .

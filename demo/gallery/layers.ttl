@@ -32,10 +32,10 @@ ui:l-validation-spec a c:Specimen ; c:label "Validation" , "Валідація"@
 ui:signup a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:signupEmail ui:signupPassword ui:signupAge ui:signupSubmit ) .
 ui:signupEmail a c:TextField ; c:label "Email" , "Ел. пошта"@uk , "E-Mail"@de , "البريد الإلكتروني"@ar ;
-    c:placeholder "you@example.org" ; val:validates ui:EmailShape .
+    c:placeholder "you@example.org" ; c:inputType "email" ; val:validates ui:EmailShape .
 ui:signupPassword a c:TextField ; c:label "Password" , "Пароль"@uk , "Passwort"@de , "كلمة المرور"@ar ;
-    c:help "At least 8 characters, one digit." ; val:validates ui:PasswordShape .
-ui:signupAge a c:TextField ; c:label "Age" , "Вік"@uk , "Alter"@de , "العمر"@ar ; val:validates ui:AgeShape .
+    c:help "At least 8 characters, one digit." ; c:inputType "password" ; val:validates ui:PasswordShape .
+ui:signupAge a c:TextField ; c:label "Age" , "Вік"@uk , "Alter"@de , "العمر"@ar ; c:inputType "number" ; val:validates ui:AgeShape .
 ui:signupSubmit a c:Button ; c:label "Create account" , "Створити обліковий запис"@uk , "Konto erstellen"@de , "إنشاء حساب"@ar ;
     sty:tone sty:Accent ; sty:emphasis sty:Solid ; val:requires ( ui:signupEmail ui:signupPassword ui:signupAge ) .
 

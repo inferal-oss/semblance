@@ -404,20 +404,49 @@ export class EventBus {
     const kind = handle.dataset.semGesture
     const start = { x: e.clientX, y: e.clientY, left: box.offsetLeft, top: box.offsetTop, width: box.offsetWidth, height: box.offsetHeight }
     const target = box
+    // What the graph says (the renderer's last write); the drag only changes the view until release.
+    const original = target.getAttribute('style')
     e.preventDefault()
     handle.setPointerCapture(e.pointerId)
     const move = (m: PointerEvent) => {
       const dx = m.clientX - start.x
       const dy = m.clientY - start.y
-      if (kind === 'move') Object.assign(target.style, { left: `${start.left + dx}px`, top: `${Math.max(0, start.top + dy)}px` })
+      // Pinned to its size while dragged, so a frame attached to an edge comes away whole.
+      if (kind === 'move')
+        Object.assign(target.style, {
+          left: `${start.left + dx}px`,
+          top: `${Math.max(0, start.top + dy)}px`,
+          right: 'auto',
+          bottom: 'auto',
+          width: `${start.width}px`,
+          height: `${start.height}px`,
+        })
       else Object.assign(target.style, { width: `${Math.max(280, start.width + dx)}px`, height: `${Math.max(180, start.height + dy)}px` })
     }
-    const up = () => {
+    const up = (u: PointerEvent) => {
       handle.removeEventListener('pointermove', move)
       handle.removeEventListener('pointerup', up)
       handle.removeEventListener('pointercancel', up)
-      const detail =
-        kind === 'move' ? { x: target.offsetLeft, y: target.offsetTop } : { width: target.offsetWidth, height: target.offsetHeight }
+      let detail: Record<string, number>
+      if (kind === 'move') {
+        // Where the pointer was released, as distances to the viewport's logical edges (for snapping).
+        const view = target.ownerDocument.documentElement
+        const rtl = target.ownerDocument.defaultView?.getComputedStyle(target).direction === 'rtl'
+        const fromLeft = u.clientX
+        const fromRight = view.clientWidth - u.clientX
+        detail = {
+          x: target.offsetLeft,
+          y: target.offsetTop,
+          toStart: rtl ? fromRight : fromLeft,
+          toEnd: rtl ? fromLeft : fromRight,
+          toTop: u.clientY,
+          toBottom: view.clientHeight - u.clientY,
+        }
+      } else detail = { width: target.offsetWidth, height: target.offsetHeight }
+      // Back to the graph's state: the reactions decide what the gesture did (moved, snapped
+      // to an edge, or nothing), and the renderer shows that.
+      if (original === null) target.removeAttribute('style')
+      else target.setAttribute('style', original)
       handle.dispatchEvent(new CustomEvent(kind === 'move' ? 'sem-move' : 'sem-resize', { bubbles: true, detail }))
     }
     handle.addEventListener('pointermove', move)

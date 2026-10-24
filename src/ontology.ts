@@ -43,6 +43,7 @@ export const ONTOLOGY_FILES = [
   'components/workbench.ttl',
   'perf/perf.ttl',
   'shapes/components.ttl',
+  'alignments.ttl',
   'theme/foundations.ttl',
   'theme/default.ttl',
   'theme/variants.ttl',
