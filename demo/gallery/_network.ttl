@@ -1,0 +1,230 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix net: <https://semblance.dev/ns/network#> .
+@prefix http: <http://www.w3.org/2011/http#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+
+
+# =================================================================================================
+# The network inspector: an example composed only of general parts (a dock panel, a toolbar of
+# filters, a split view, a data grid with a waterfall, description lists and body viewers)
+# over net: data. Its rows are this page's own activity - the members of net:Capture the
+# capture effect (src/network.ts) writes into the network graph - and, until they are hidden,
+# a few sample entries from "a previous visit" (members of the same stream, written here).
+# Everything it remembers - filters, sort, selection, column widths and visibility, the split,
+# the panel's height and whether it is folded, whether it follows the newest entry - is graph
+# state on these nodes. The root is ui:networkExample.
+# =================================================================================================
+
+ui:networkExample a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:net-intro ui:net-stage ) .
+ui:networkExample sem:warm sem:OnIntent .
+ui:net-intro a c:Text ;
+    c:label "An in-app network inspector, built from the Inspection components. It lists what this page does on the network - fetches, sockets and their messages, application events and spans - as the capture records it, beside sample entries from an earlier visit. Filter, sort, select a row to see its headers and bodies, drag the column edges, the divider and the panel's top edge; all of it is graph state." .
+
+ui:net-stage a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:net-page ui:net-inspector ) .
+ui:net-page a c:Text ; sty:textStyle sty:Caption ;
+    c:label "The page being inspected is above; the inspector is docked to its bottom edge. Fold it by its title, resize it by its top edge." .
+
+# --- the panel ---------------------------------------------------------------------------------------
+
+ui:net-inspector a c:DockPanel ; c:label "Network activity" ; c:height 560 ; c:minSize 220 ;
+    c:actions ( ui:net-count ui:net-preferences ) ;
+    c:toolbar ui:net-filters ; c:content ui:net-split ; c:footer ui:net-footer .
+
+ui:net-count a c:CountBadge ; c:label "entries" ; c:collection net:Capture ; sty:tone sty:Accent .
+ui:net-preferences a c:Popover ; c:label "Display preferences" ;
+    c:help "Which columns the list shows." ; c:content ui:net-columns .
+ui:net-columns a c:Chips ; c:label "Columns" ; c:controls ui:net-grid ; c:property c:shows ;
+    c:options ( ui:net-col-entry ui:net-col-kind ui:net-col-status ui:net-col-code ui:net-col-size ui:net-col-took ui:net-col-bars ) .
+
+ui:net-footer a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
+    c:children ( ui:net-live ui:net-kinds ) .
+ui:net-live a c:LiveIndicator ; c:controls net:Capture ; c:property net:recording .
+ui:net-kinds a c:Legend ; c:label "Kinds" ; c:of net:Kind .
+
+# --- filters: nodes the grid honours, edited by ordinary controls -------------------------------------
+
+ui:net-search a c:TextFilter ; c:searches net:label , http:absoluteURI , net:url , net:correlation , net:data .
+ui:net-kind a c:ValueFilter ; c:filterProperty net:kind ; c:filterValue c:AnyValue .
+ui:net-status a c:ValueFilter ; c:filterProperty net:status ; c:filterValue c:AnyValue .
+ui:net-samples a c:FlagFilter ; c:filterProperty ui:sample ; c:filterValue true ; c:included true .
+
+ui:net-filters a c:Toolbar ; c:label "Filters" ;
+    c:children ( ui:net-filter-text ui:net-filter-kind ui:net-filter-status ui:net-filter-samples ) .
+ui:net-filter-text a c:SearchField ; c:label "Filter entries" ; c:placeholder "Filter URL, event or correlation…" ;
+    c:controls ui:net-search ; c:property c:filterText .
+ui:net-filter-kind a c:Choice ; c:label "Activity" ; c:controls ui:net-kind ; c:property c:filterValue ;
+    c:options ( c:AnyValue net:HttpKind net:SocketKind net:FrameKind net:EventKind ) .
+ui:net-filter-status a c:Choice ; c:label "Status" ; c:controls ui:net-status ; c:property c:filterValue ;
+    c:options ( c:AnyValue net:Pending net:Complete net:Failed net:Open net:Closed net:Sent net:Received net:Recorded ) .
+ui:net-filter-samples a c:ToggleSwitch ; c:label "Earlier visit" ; sty:size sty:Small ;
+    c:controls ui:net-samples ; c:property c:included .
+
+# --- the list and the details, side by side -------------------------------------------------------------
+
+ui:net-split a c:SplitView ; c:label "the list and the details" ; c:ratio 0.64 ; c:minSize 240 ;
+    c:primary ui:net-grid ; c:secondary ui:net-details .
+
+ui:net-col-entry a c:GridColumn ; c:label "Request / event" ; c:cellProperty net:label ; c:detailProperty net:correlation ; c:width 220 .
+ui:net-col-kind a c:GridColumn ; c:label "Kind" ; c:cellProperty net:kind ; c:width 110 .
+ui:net-col-status a c:GridColumn ; c:label "Status" ; c:cellProperty net:status ; c:cellAs c:BadgeCell ; c:width 100 .
+ui:net-col-code a c:GridColumn ; c:label "HTTP code" ; c:via http:resp ; c:cellProperty http:statusCodeValue ; c:cellAs c:CodeCell ; c:width 92 .
+ui:net-col-size a c:GridColumn ; c:label "Size" ; c:cellProperty net:size ; c:cellAs c:BytesCell ; c:align "end" ; c:width 76 .
+ui:net-col-took a c:GridColumn ; c:label "Took" ; c:cellAs c:DurationCell ; c:startProperty net:startedAt ; c:endProperty net:endedAt ; c:align "end" ; c:width 80 .
+ui:net-col-bars a c:GridColumn ; c:label "Waterfall" ; c:cellAs c:TimeBarCell ; c:width 220 ;
+    c:startProperty net:startedAt ; c:endProperty net:endedAt ; c:colorProperty net:kind .
+
+ui:net-grid a c:DataGrid ; c:label "Network activity" ; c:collection net:Capture ; c:pageSize 50 ;
+    c:gridColumns ( ui:net-col-entry ui:net-col-kind ui:net-col-status ui:net-col-code ui:net-col-size ui:net-col-took ui:net-col-bars ) ;
+    c:shows ui:net-col-entry , ui:net-col-status , ui:net-col-size , ui:net-col-bars ;
+    c:filteredBy ui:net-search , ui:net-kind , ui:net-status , ui:net-samples ;
+    c:emptyText "Nothing matches. Clear the filters, or use the page: its fetches, sockets and events appear here." .
+
+# The details follow the selection: each part describes what c:selectedRow of the grid holds.
+ui:net-details a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:net-detail-bar ui:net-summary ui:net-sections ) .
+ui:net-detail-bar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; pos:align pos:Center ;
+    c:children ( ui:net-detail-title ui:net-detail-space ui:net-deselect ) .
+ui:net-detail-title a c:Text ; sty:textStyle sty:Overline ; c:label "Details" .
+ui:net-detail-space a c:Spacer .
+ui:net-deselect a c:Button , c:Unsetter ; c:label "Deselect" ; sty:size sty:Small ; sty:emphasis sty:Ghost ;
+    c:controls ui:net-grid ; c:property c:selectedRow .
+ui:net-summary a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
+    c:fields ( net:label net:kind net:status http:methodName http:absoluteURI net:url net:level net:size net:startedAt net:endedAt net:correlation net:initiator ) ;
+    c:emptyText "Select a request, message or event to inspect it." .
+ui:net-sections a c:Accordion ; c:items ( ui:net-sec-response ui:net-sec-headers ui:net-sec-request-body ui:net-sec-response-body ui:net-sec-payload ) .
+ui:net-sec-response a c:AccordionItem ; c:label "Response" ; c:content ui:net-response ; c:expanded true .
+ui:net-response a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ; c:via http:resp ;
+    c:fields ( http:statusCodeValue net:contentType ) ; c:emptyText "No response." .
+ui:net-sec-headers a c:AccordionItem ; c:label "Headers" ; c:content ui:net-headers .
+ui:net-headers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:net-req-headers ui:net-resp-headers ) .
+ui:net-req-headers a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
+    c:entryProperty http:headers ; c:keyProperty http:fieldName ; c:valueProperty http:fieldValue ; c:emptyText "No request headers." .
+ui:net-resp-headers a c:DescriptionList ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ; c:via http:resp ;
+    c:entryProperty http:headers ; c:keyProperty http:fieldName ; c:valueProperty http:fieldValue ; c:emptyText "No response headers." .
+ui:net-sec-request-body a c:AccordionItem ; c:label "Request body" ; c:content ui:net-request-body .
+ui:net-request-body a c:BodyViewer ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
+    c:payloadProperty net:body ; c:emptyText "No request body." .
+ui:net-sec-response-body a c:AccordionItem ; c:label "Response body" ; c:content ui:net-response-body ; c:expanded true .
+ui:net-response-body a c:BodyViewer ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ; c:via http:resp ;
+    c:payloadProperty net:body ; c:typeProperty net:contentType ; c:emptyText "No response body." .
+ui:net-sec-payload a c:AccordionItem ; c:label "Message or event data" ; c:content ui:net-payload ; c:expanded true .
+ui:net-payload a c:BodyViewer ; c:bindFrom ui:net-grid ; c:bindProperty c:selectedRow ;
+    c:payloadProperty net:data ; c:emptyText "No message or event data." .
+
+# --- what it remembers (for this tab): see PERSISTENCE.md -------------------------------------------
+# The selection and the window are not remembered: they point at entries of this visit.
+
+ui:rememberNetworkInspector a per:Policy ; per:scope per:Session ;
+    rdfs:label "The network inspector" , "Мережевий інспектор"@uk , "Der Netzwerkinspektor"@de , "مفتش الشبكة"@ar ;
+    per:construct """
+CONSTRUCT { ui:net-grid ?gp ?go . ?col c:width ?width . ?filter ?fp ?fo . ui:net-split c:ratio ?ratio . ui:net-inspector ?pp ?po . }
+WHERE {
+  { ui:net-grid ?gp ?go FILTER(?gp IN (c:sortColumn, c:sortDescending, c:shows)) }
+  UNION { ui:net-grid c:gridColumns/rdf:rest*/rdf:first ?col . ?col c:width ?width }
+  UNION { VALUES ?filter { ui:net-search ui:net-kind ui:net-status ui:net-samples } ?filter ?fp ?fo FILTER(?fp IN (c:filterText, c:filterValue, c:included)) }
+  UNION { ui:net-split c:ratio ?ratio }
+  UNION { ui:net-inspector ?pp ?po FILTER(?pp IN (c:height, c:expanded)) }
+}""" .
+
+# --- sample entries: an earlier visit -------------------------------------------------------------
+# Members of the same stream as the captured ones, before them in capture order (negative
+# sequences) and flagged ui:sample, so the "Earlier visit" switch can hide them.
+
+ui:sample a owl:DatatypeProperty ; rdfs:label "Earlier visit"@en .
+
+net:Capture tree:member ui:s1 , ui:s2 , ui:s3 , ui:s4 , ui:s5 , ui:s6 , ui:s7 , ui:s8 , ui:s9 , ui:s10 , ui:s11 , ui:s12 ,
+    ui:s13 , ui:s14 , ui:s15 , ui:s16 , ui:s17 , ui:s18 .
+
+ui:s1 a net:Exchange , http:Request ; ui:sample true ; net:sequence -18 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "GET /api/todos" ; http:methodName "GET" ; http:absoluteURI "https://example.org/api/todos" ; net:initiator "fetch" ;
+    net:startedAt 120.0e0 ; net:endedAt 204.5e0 ; net:size 1268 ; net:correlation "load-1" ; http:headers ui:s1-h1 ; http:resp ui:s1-r .
+ui:s1-h1 a http:MessageHeader ; http:fieldName "accept" ; http:fieldValue "application/json" ; sem:order 0 .
+ui:s1-r a http:Response ; http:statusCodeValue 200 ; net:contentType "application/json" ; http:headers ui:s1-r1 , ui:s1-r2 ;
+    net:body """[{"id":1,"title":"Write the report","done":false},{"id":2,"title":"Review the grid","done":true},{"id":3,"title":"Ship it","done":false}]""" .
+ui:s1-r1 a http:MessageHeader ; http:fieldName "content-type" ; http:fieldValue "application/json" ; sem:order 0 .
+ui:s1-r2 a http:MessageHeader ; http:fieldName "cache-control" ; http:fieldValue "no-store" ; sem:order 1 .
+
+ui:s2 a net:Exchange , http:Request ; ui:sample true ; net:sequence -17 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "GET /api/user" ; http:methodName "GET" ; http:absoluteURI "https://example.org/api/user" ; net:initiator "fetch" ;
+    net:startedAt 131.0e0 ; net:endedAt 189.0e0 ; net:size 214 ; net:correlation "load-1" ; http:resp ui:s2-r .
+ui:s2-r a http:Response ; http:statusCodeValue 200 ; net:contentType "application/json" ;
+    net:body """{"id":"u_7","name":"Ada Lovelace","roles":["admin","editor"],"settings":{"theme":"dark","density":"compact","beta":true}}""" .
+
+ui:s3 a net:Exchange , http:Request ; ui:sample true ; net:sequence -16 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "GET /styles/app.css" ; http:methodName "GET" ; http:absoluteURI "https://example.org/styles/app.css" ; net:initiator "resource" ;
+    net:startedAt 140.0e0 ; net:endedAt 262.0e0 ; net:size 48211 ; http:resp ui:s3-r .
+ui:s3-r a http:Response ; http:statusCodeValue 200 ; net:contentType "text/css" ;
+    net:body """:root { --accent: #6e56cf; }
+body { margin: 0; font: 15px/1.5 system-ui, sans-serif; }""" .
+
+ui:s4 a net:Connection ; ui:sample true ; net:sequence -15 ; net:kind net:SocketKind ; net:status net:Closed ;
+    net:label "wss://example.org/live" ; net:url "wss://example.org/live" ; net:startedAt 300.0e0 ; net:endedAt 3900.0e0 .
+ui:s5 a net:Frame ; ui:sample true ; net:sequence -14 ; net:kind net:FrameKind ; net:status net:Sent ; net:connection ui:s4 ;
+    net:label """{"type":"subscribe","topic":"todos"}""" ; net:startedAt 352.0e0 ; net:endedAt 352.0e0 ; net:size 36 ;
+    net:data """{"type":"subscribe","topic":"todos"}""" .
+ui:s6 a net:Frame ; ui:sample true ; net:sequence -13 ; net:kind net:FrameKind ; net:status net:Received ; net:connection ui:s4 ;
+    net:label """{"type":"subscribed","topic":"todos","since":1042}""" ; net:startedAt 401.0e0 ; net:endedAt 401.0e0 ; net:size 49 ;
+    net:data """{"type":"subscribed","topic":"todos","since":1042}""" .
+
+ui:s7 a net:Event ; ui:sample true ; net:sequence -12 ; net:kind net:EventKind ; net:status net:Recorded ; net:level net:Info ;
+    net:label "Opened the editor" ; net:startedAt 812.0e0 ; net:endedAt 812.0e0 ; net:correlation "edit-3" ;
+    net:data """{"todo":3,"from":"list","shortcut":"enter"}""" .
+ui:s8 a net:Exchange , http:Request ; ui:sample true ; net:sequence -11 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "PATCH /api/todos/3" ; http:methodName "PATCH" ; http:absoluteURI "https://example.org/api/todos/3" ; net:initiator "fetch" ;
+    net:startedAt 1406.0e0 ; net:endedAt 1497.0e0 ; net:size 64 ; net:correlation "edit-3" ; http:headers ui:s8-h1 , ui:s8-h2 ; http:resp ui:s8-r ;
+    net:body """{"title":"Ship it on Friday"}""" .
+ui:s8-h1 a http:MessageHeader ; http:fieldName "content-type" ; http:fieldValue "application/json" ; sem:order 0 .
+ui:s8-h2 a http:MessageHeader ; http:fieldName "x-request-id" ; http:fieldValue "9f2c1e" ; sem:order 1 .
+ui:s8-r a http:Response ; http:statusCodeValue 200 ; net:contentType "application/json" ;
+    net:body """{"id":3,"title":"Ship it on Friday","done":false,"updated":"2026-10-24T09:12:03Z"}""" .
+ui:s9 a net:Span ; ui:sample true ; net:sequence -10 ; net:kind net:EventKind ; net:status net:Complete ; net:level net:Success ;
+    net:label "Save draft" ; net:startedAt 1390.0e0 ; net:endedAt 1532.0e0 ; net:correlation "edit-3" ;
+    net:data """{"todo":3,"fields":["title"],"took":"142 ms"}""" .
+ui:s10 a net:Frame ; ui:sample true ; net:sequence -9 ; net:kind net:FrameKind ; net:status net:Received ; net:connection ui:s4 ;
+    net:label """{"type":"changed","id":3}""" ; net:startedAt 1544.0e0 ; net:endedAt 1544.0e0 ; net:size 26 ; net:data """{"type":"changed","id":3}""" .
+ui:s11 a net:Exchange , http:Request ; ui:sample true ; net:sequence -8 ; net:kind net:HttpKind ; net:status net:Failed ;
+    net:label "GET /api/stats" ; http:methodName "GET" ; http:absoluteURI "https://example.org/api/stats" ; net:initiator "fetch" ;
+    net:startedAt 2010.0e0 ; net:endedAt 2215.0e0 ; net:size 87 ; http:resp ui:s11-r .
+ui:s11-r a http:Response ; http:statusCodeValue 503 ; net:contentType "application/json" ;
+    net:body """{"error":"unavailable","retryAfter":2}""" .
+ui:s12 a net:Event ; ui:sample true ; net:sequence -7 ; net:kind net:EventKind ; net:status net:Recorded ; net:level net:Warning ;
+    net:label "Stats unavailable, retrying" ; net:startedAt 2216.0e0 ; net:endedAt 2216.0e0 ; net:data """{"attempt":1,"retryAfter":2}""" .
+ui:s13 a net:Exchange , http:Request ; ui:sample true ; net:sequence -6 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "GET /api/stats" ; http:methodName "GET" ; http:absoluteURI "https://example.org/api/stats" ; net:initiator "fetch" ;
+    net:startedAt 4220.0e0 ; net:endedAt 4371.0e0 ; net:size 342 ; http:resp ui:s13-r .
+ui:s13-r a http:Response ; http:statusCodeValue 200 ; net:contentType "application/json" ;
+    net:body """{"open":2,"done":1,"streak":{"days":4,"best":9},"series":[3,5,2,6,4]}""" .
+ui:s14 a net:Exchange , http:Request ; ui:sample true ; net:sequence -5 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "GET /avatar/7.png" ; http:methodName "GET" ; http:absoluteURI "https://example.org/avatar/7.png" ; net:initiator "resource" ;
+    net:startedAt 4232.0e0 ; net:endedAt 4310.0e0 ; net:size 18342 ; http:resp ui:s14-r .
+ui:s14-r a http:Response ; http:statusCodeValue 200 ; net:contentType "image/png" .
+ui:s15 a net:Exchange , http:Request ; ui:sample true ; net:sequence -4 ; net:kind net:HttpKind ; net:status net:Complete ;
+    net:label "POST /api/todos" ; http:methodName "POST" ; http:absoluteURI "https://example.org/api/todos" ; net:initiator "fetch" ;
+    net:startedAt 5102.0e0 ; net:endedAt 5190.0e0 ; net:size 71 ; net:correlation "add-4" ; http:headers ui:s15-h1 ; http:resp ui:s15-r ;
+    net:body """{"title":"Write the docs","done":false}""" .
+ui:s15-h1 a http:MessageHeader ; http:fieldName "content-type" ; http:fieldValue "application/json" ; sem:order 0 .
+ui:s15-r a http:Response ; http:statusCodeValue 201 ; net:contentType "application/json" ;
+    net:body """{"id":4,"title":"Write the docs","done":false}""" .
+ui:s16 a net:Event ; ui:sample true ; net:sequence -3 ; net:kind net:EventKind ; net:status net:Recorded ; net:level net:Success ;
+    net:label "Todo added" ; net:startedAt 5191.0e0 ; net:endedAt 5191.0e0 ; net:correlation "add-4" ; net:data """{"id":4}""" .
+ui:s17 a net:Frame ; ui:sample true ; net:sequence -2 ; net:kind net:FrameKind ; net:status net:Received ; net:connection ui:s4 ;
+    net:label """{"type":"added","id":4}""" ; net:startedAt 5236.0e0 ; net:endedAt 5236.0e0 ; net:size 24 ; net:data """{"type":"added","id":4}""" .
+ui:s18 a net:Span ; ui:sample true ; net:sequence -1 ; net:kind net:EventKind ; net:status net:Pending ; net:level net:Info ;
+    net:label "Sync offline changes" ; net:startedAt 5400.0e0 ; net:correlation "sync-1" ;
+    net:data """{"pending":2,"since":"2026-10-24T09:10:00Z"}""" .

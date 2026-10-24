@@ -18,6 +18,8 @@
 
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "max-height" ; sty:raw "100%" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "flex-direction" ; sty:raw "column" ] ,
                  [ sty:property "flex" ; sty:raw "1 1 100%" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
@@ -27,10 +29,10 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
+# In a bounded container (a pane, a panel) the grid fills it and its rows scroll under the header.
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-scroll" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] ,
-                 [ sty:property "max-height" ; sty:raw "26rem" ] ,
                  [ sty:property "overflow" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "table" ;
     sty:declares [ sty:property "width" ; sty:raw "100%" ] ,

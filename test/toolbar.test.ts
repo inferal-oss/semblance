@@ -126,7 +126,8 @@ describe.each([
     expect(root('in-tb-count-all')!.getAttribute('aria-label')).toBe('3 entries')
     expect(root('in-tb-count-all')!.getAttribute('role')).toBe('img')
     expect(root('in-tb-count-http')!.textContent).toBe('2')
-    expect(root('in-tb-count-capture')!.textContent).toBe('0')
+    // net:Capture holds the network example's sample entries (demo/gallery/_network.ttl).
+    expect(root('in-tb-count-capture')!.textContent).toBe('18')
     // The demo's add button is a SPARQL-only reaction; N3 has no SPARQL, so add the member directly.
     if (kind === 'n3') {
       const m = f.namedNode(UI + 'in-tb-e4')
@@ -141,6 +142,6 @@ describe.each([
       add: [f.quad(f.namedNode(NET + 'Capture'), f.namedNode(NS.tree + 'member'), e), f.quad(e, f.namedNode(NS.rdf + 'type'), f.namedNode(NET + 'Exchange'))],
     })
     shell.flush()
-    expect(root('in-tb-count-capture')!.textContent).toBe('1')
+    expect(root('in-tb-count-capture')!.textContent).toBe('19')
   })
 })

@@ -78,6 +78,24 @@ net:Sent sty:tone sty:Accent .
 net:Received sty:tone sty:Info .
 net:Recorded sty:tone sty:Neutral .
 
+# What the properties are called where an entry is described (a detail pane, a grid's columns).
+net:label rdfs:label "Entry"@en , "Запис"@uk , "Eintrag"@de , "الإدخال"@ar .
+net:kind rdfs:label "Kind"@en , "Вид"@uk , "Art"@de , "النوع"@ar .
+net:status rdfs:label "Status"@en , "Статус"@uk , "Status"@de , "الحالة"@ar .
+net:startedAt rdfs:label "Started (ms)"@en , "Початок (мс)"@uk , "Beginn (ms)"@de , "البدء (مللي ثانية)"@ar .
+net:endedAt rdfs:label "Ended (ms)"@en , "Кінець (мс)"@uk , "Ende (ms)"@de , "الانتهاء (مللي ثانية)"@ar .
+net:size rdfs:label "Size (bytes)"@en , "Розмір (байти)"@uk , "Größe (Bytes)"@de , "الحجم (بايت)"@ar .
+net:sequence rdfs:label "Sequence"@en , "Номер"@uk , "Folge"@de , "التسلسل"@ar .
+net:correlation rdfs:label "Correlation"@en , "Кореляція"@uk , "Korrelation"@de , "الارتباط"@ar .
+net:level rdfs:label "Level"@en , "Рівень"@uk , "Stufe"@de , "المستوى"@ar .
+net:initiator rdfs:label "Initiator"@en , "Ініціатор"@uk , "Auslöser"@de , "المُبادِر"@ar .
+net:url rdfs:label "URL"@en .
+net:connection rdfs:label "Connection"@en , "З'єднання"@uk , "Verbindung"@de , "الاتصال"@ar .
+net:contentType rdfs:label "Content type"@en , "Тип вмісту"@uk , "Inhaltstyp"@de , "نوع المحتوى"@ar .
+http:methodName rdfs:label "Method"@en , "Метод"@uk , "Methode"@de , "الطريقة"@ar .
+http:absoluteURI rdfs:label "URL"@en .
+http:statusCodeValue rdfs:label "HTTP code"@en , "Код HTTP"@uk , "HTTP-Code"@de , "رمز HTTP"@ar .
+
 # --- HTTP (aligned with the W3C HTTP vocabulary) ---------------------------------------------------
 
 net:Exchange a owl:Class ; rdfs:subClassOf net:Entry , http:Request ;

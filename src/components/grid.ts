@@ -264,27 +264,28 @@ function isA(ctx: RuleContext, node: NamedNode, cls: NamedNode): boolean {
   return false
 }
 
-/** Whether a member passes every filter the grid is c:filteredBy. */
-function passes(ctx: RuleContext, grid: NamedNode, m: NamedNode): boolean {
+/** The grid's filters (read once per evaluation): a test each member must pass. */
+function filtersOf(ctx: RuleContext, grid: NamedNode): ((m: NamedNode) => boolean)[] {
+  const tests: ((m: NamedNode) => boolean)[] = []
   for (const f of ctx.objects(grid, GRID.filteredBy)) {
     if (!named(f)) continue
     const types = new Set(ctx.objects(f, RDF_TYPE).map((t) => t.value))
     if (types.has(GRID.TextFilter)) {
       const needle = str(ctx.object(f, GRID.filterText))?.toLowerCase()
       if (!needle) continue
-      const hit = ctx.objects(f, GRID.searches).some((p) => named(p) && ctx.objects(m, p).some((v) => v.value.toLowerCase().includes(needle)))
-      if (!hit) return false
+      const searched = ctx.objects(f, GRID.searches).filter(named)
+      tests.push((m) => searched.some((p) => ctx.objects(m, p).some((v) => v.value.toLowerCase().includes(needle))))
     } else if (types.has(GRID.ValueFilter)) {
       const p = ctx.object(f, GRID.filterProperty)
       const v = ctx.object(f, GRID.filterValue)
-      if (named(p) && v && v.value !== GRID.AnyValue && !ctx.match(m, p, v).length) return false
+      if (named(p) && v && v.value !== GRID.AnyValue) tests.push((m) => ctx.match(m, p, v).length > 0)
     } else if (types.has(GRID.FlagFilter)) {
       const p = ctx.object(f, GRID.filterProperty)
       const v = ctx.object(f, GRID.filterValue)
-      if (named(p) && v && ctx.object(f, GRID.included)?.value === 'false' && ctx.match(m, p, v).length) return false
+      if (named(p) && v && ctx.object(f, GRID.included)?.value === 'false') tests.push((m) => ctx.match(m, p, v).length === 0)
     }
   }
-  return true
+  return tests
 }
 
 /**
@@ -303,11 +304,12 @@ const window: FnRule = (ctx, focus) => {
   const via = ctx.object(focus, GRID.memberProperty) ?? ctx.nn(TREE_MEMBER)
   const memberClass = ctx.object(focus, GRID.memberClass)
   const sequence = ctx.object(focus, GRID.sequenceProperty) ?? (collection ? ctx.object(collection, LDES_SEQUENCE) : undefined)
+  const tests = filtersOf(ctx, focus)
   // Members in capture order: by their (numeric) sequence, ties by IRI; members without one are not rows.
   const ordered = (named(collection) && named(via) ? ctx.match(collection, via, null).map((q) => q.object).filter(named) : [])
     .filter((m) => !named(memberClass) || isA(ctx, m, memberClass))
     .map((m) => ({ m, n: named(sequence) ? numberOf(ctx.object(m, sequence))! : undefined }))
-    .filter((r): r is { m: NamedNode; n: number } => r.n !== undefined && passes(ctx, focus, r.m))
+    .filter((r): r is { m: NamedNode; n: number } => r.n !== undefined && tests.every((pass) => pass(r.m)))
     .sort((a, b) => a.n - b.n || (a.m.value < b.m.value ? -1 : a.m.value > b.m.value ? 1 : 0))
   const total = ordered.length
   const size = Math.max(1, Math.round(numberOf(ctx.object(focus, GRID.pageSize)) ?? DEFAULT_PAGE))

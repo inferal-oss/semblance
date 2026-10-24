@@ -290,13 +290,38 @@ const tableSort: ReactionFn = (ctx) => {
 
 // --- DescriptionList ----------------------------------------------------------------------------
 
+/** The node a view describes: c:of, or the value of c:bindProperty on c:bindFrom (e.g. a selection); then one c:via hop. */
+function describedNode(ctx: RuleContext, focus: NamedNode): Term | undefined {
+  const from = ctx.object(focus, C.bindFrom)
+  const bound = ctx.object(focus, C.bindProperty)
+  const subject = ctx.object(focus, C.of) ?? (named(from) && named(bound) ? ctx.object(from, bound) : undefined)
+  const via = ctx.object(focus, NS.c + 'via')
+  return subject && named(via) ? ctx.object(subject, via) : subject
+}
+
+/** Entries of a node (c:entryProperty values, each a c:keyProperty / c:valueProperty pair), by sem:order. */
+function entriesOf(ctx: RuleContext, focus: NamedNode, of: Term): { key: string; term: string; value: string }[] {
+  const entry = ctx.object(focus, NS.c + 'entryProperty')
+  const keyP = ctx.object(focus, NS.c + 'keyProperty')
+  const valueP = ctx.object(focus, NS.c + 'valueProperty')
+  if (!named(entry) || !named(keyP) || !named(valueP)) return []
+  return ctx
+    .objects(of, entry)
+    .filter(named)
+    .map((e) => ({ e, order: Number(str(ctx.object(e, SEM.order)) ?? NaN), term: display(ctx, ctx.object(e, keyP)) }))
+    .sort((a, b) => (Number.isFinite(a.order) && Number.isFinite(b.order) ? a.order - b.order : 0) || a.term.localeCompare(b.term) || (a.e.value < b.e.value ? -1 : 1))
+    .map(({ e, term }) => ({ key: hashKey(e.value), term, value: display(ctx, ctx.object(e, valueP)) }))
+}
+
 const descriptionList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const of = ctx.object(focus, C.of)
+  const of = describedNode(ctx, focus)
   const items = nodes(ctx, ctx.object(focus, C_ITEMS))
   const pairs: { key: string; term: string; value: string }[] = items.length
     ? items.map((item) => ({ key: hashKey(item.value), term: labelOf(ctx, item), value: display(ctx, ctx.object(item, C.value)) }))
-    : of
+    : of && ctx.object(focus, NS.c + 'entryProperty')
+      ? entriesOf(ctx, focus, of)
+      : of
       ? nodes(ctx, ctx.object(focus, C.fields)).flatMap((p) => {
           const values = ctx.objects(of, p)
           if (!values.length) return []

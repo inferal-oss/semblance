@@ -324,6 +324,7 @@ c:CountBadgeRendering-fn a sem:Rule ; sem:implements c:CountBadgeRendering ; sem
 c:CountBadgeRendering-sparql a sem:Rule ;
     sem:implements c:CountBadgeRendering ;
     sem:modality mod:Screen ;
+    sem:bulk false ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:attribute ?role, ?name ; rdfhtml:hasChild ?count .
@@ -338,10 +339,13 @@ WHERE {
   OPTIONAL { $this c:memberProperty ?declared }
   BIND(COALESCE(?declared, tree:member) AS ?via)
   OPTIONAL { $this c:memberClass ?class }
-  LATERAL { OPTIONAL { SELECT ?collection ?via ?class (COUNT(DISTINCT ?m) AS ?counted) WHERE {
-    ?collection ?via ?m .
-    FILTER(!BOUND(?class) || EXISTS { ?m a/rdfs:subClassOf* ?class })
-  } GROUP BY ?collection ?via ?class } }
+  # Counted from $this inside the subquery (outer variables of an aggregate are not
+  # substituted into it: a free ?collection ?via ?m would group the whole store).
+  { SELECT (COUNT(DISTINCT ?m) AS ?counted) WHERE {
+      $this c:collection ?c . OPTIONAL { $this c:memberProperty ?p0 } BIND(COALESCE(?p0, tree:member) AS ?p)
+      ?c ?p ?m .
+      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m a/rdfs:subClassOf* ?k })
+  } }
   BIND(STR(COALESCE(?counted, 0)) AS ?number)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }

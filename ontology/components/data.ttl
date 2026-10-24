@@ -63,8 +63,14 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
 c:DescriptionList a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """Key / value pairs as a <dl>: the values of c:fields (properties, labelled by their
-rdfs:label, with their c:unit) on c:of, or explicit c:items (each a c:label and a c:value)."""@en ;
+rdfs:label, with their c:unit) on c:of, or explicit c:items (each a c:label and a c:value), or the
+entries of c:of (its c:entryProperty values, each a c:keyProperty / c:valueProperty pair, by
+sem:order: HTTP headers). Instead of c:of it may describe what c:bindProperty of c:bindFrom holds
+(a grid's selection), and c:via takes one hop from there first (an exchange's response)."""@en ;
     sem:slug "description-list" .
+c:entryProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A multi-valued property whose values are the pairs to list (e.g. http:headers)."@en .
+c:keyProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's key (e.g. http:fieldName)."@en .
+c:valueProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's value (e.g. http:fieldValue)."@en .
 c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem:stratum 0 ;
     sem:functionOnly "Numeric values are written in the viewer's locale (Intl.NumberFormat: grouping, separators, digits), which SPARQL 1.1 cannot do." .
 c:DescriptionListRendering-fn a sem:Rule ; sem:implements c:DescriptionListRendering ; sem:function "data:description-list" .

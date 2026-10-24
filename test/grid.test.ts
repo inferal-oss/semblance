@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { md5Key } from '../src/components/data.ts'
-import { NS } from '../src/ns.ts'
+import { NETWORK_GRAPH, NS } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
 import { expectSameRendering, implementationGaps } from './implementations.ts'
 
@@ -244,6 +244,72 @@ describe('data grid', () => {
         expect([...root('in-grid-axis-short').querySelectorAll('.sem-tick')].map((t) => t.textContent)).toEqual(['0 ms', '50 ms', '100 ms', '150 ms'])
         expect([...root('in-grid-axis-long').querySelectorAll('.sem-tick')].map((t) => t.textContent)).toEqual(['0 ms', '2 s', '4 s', '6 s', '8 s'])
       })
+    })
+  }
+})
+
+/** The site's Examples page, showing the network inspector (demo/gallery/_network.ttl). */
+function showNetwork(prefer: 'sparql' | 'function') {
+  const h = showGrids(prefer)
+  const { f } = h
+  const app = f.namedNode(UI + 'app')
+  h.runtime.apply({
+    remove: [...h.store.match(app, f.namedNode(UI + 'page'), null), ...h.store.match(app, f.namedNode(UI + 'example'), null)],
+    add: [f.quad(app, f.namedNode(UI + 'page'), f.namedNode(UI + 'Examples')), f.quad(app, f.namedNode(UI + 'example'), f.namedNode(UI + 'ExNetwork'))],
+  })
+  h.shell.flush()
+  return h
+}
+
+describe('the network inspector example', () => {
+  it('renders the same with SPARQL and with functions', () => {
+    const [a, b] = (['sparql', 'function'] as const).map((p) => showNetwork(p).root('net-inspector').outerHTML)
+    if (a !== b) {
+      let i = 0
+      while (i < a!.length && a![i] === b![i]) i++
+      expect(a!.slice(Math.max(0, i - 300), i + 300)).toBe(b!.slice(Math.max(0, i - 300), i + 300))
+    }
+  })
+
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`lists captured entries, filters them and shows the selected one's details (${prefer})`, () => {
+      const h = showNetwork(prefer)
+      const { root, rows, part, click, f } = h
+      expect(rows('net-grid')).toHaveLength(18)
+      expect(root('net-count').textContent).toContain('18')
+      // The page's own activity arrives as members of net:Capture in the network graph.
+      const g = f.namedNode(NETWORK_GRAPH)
+      const e = f.namedNode('urn:semblance:net:test-1')
+      h.runtime.write(NETWORK_GRAPH, {
+        remove: [],
+        add: [
+          f.quad(f.namedNode(NS.net + 'Capture'), f.namedNode(NS.tree + 'member'), e, g),
+          f.quad(e, f.namedNode(NS.rdf + 'type'), f.namedNode(NS.net + 'Event'), g),
+          f.quad(e, f.namedNode(NS.net + 'kind'), f.namedNode(NS.net + 'EventKind'), g),
+          f.quad(e, f.namedNode(NS.net + 'label'), f.literal('Pressed the button'), g),
+          f.quad(e, f.namedNode(NS.net + 'sequence'), f.literal('1', f.namedNode(NS.xsd + 'integer')), g),
+          f.quad(e, f.namedNode(NS.net + 'startedAt'), f.literal('6000', f.namedNode(NS.xsd + 'double')), g),
+          f.quad(e, f.namedNode(NS.net + 'status'), f.namedNode(NS.net + 'Recorded'), g),
+          f.quad(e, f.namedNode(NS.net + 'data'), f.literal('{"button":"save"}'), g),
+        ],
+      })
+      h.shell.flush()
+      expect(rows('net-grid').at(-1)).toContain('Pressed the button')
+      // The earlier visit's samples hide with their switch.
+      click(root('net-filter-samples').querySelector('button')!)
+      expect(rows('net-grid')).toHaveLength(1)
+      click(root('net-filter-samples').querySelector('button')!)
+      // Select the failed request: its summary, response and body follow the selection.
+      const failed = [...root('net-grid').querySelectorAll('tbody > tr')].find((tr) => tr.textContent!.includes('Failed'))!
+      click(failed.querySelector('td')!)
+      expect(root('net-summary').textContent).toContain('https://example.org/api/stats')
+      expect(root('net-response').textContent).toContain('503')
+      expect(root('net-response-body').textContent).toContain('unavailable')
+      // Deselect (a c:Unsetter) clears it.
+      click(root('net-deselect').querySelector('button') ?? root('net-deselect'))
+      expect(h.store.match(f.namedNode(UI + 'net-grid'), f.namedNode(NS.c + 'selectedRow'), null)).toHaveLength(0)
+      expect(root('net-summary').textContent).toBe('Select a request, message or event to inspect it.')
+      expect(part('net-grid', 'status')!.textContent).toBe('19 matching · showing 1–19')
     })
   }
 })

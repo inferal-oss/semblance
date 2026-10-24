@@ -207,7 +207,8 @@ WHERE {
     } UNION {
       # Each shown column: its header cell (sort button or label, time axis, resize separator).
       $this c:gridColumns ?list .
-      { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
+      # LATERAL: positions within this list only (a free ?list would walk every list in the store).
+      LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
       FILTER(isIRI(?col))
       FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
       OPTIONAL { ?col c:label ?colLabel0 FILTER(lang(?colLabel0) = "") }
@@ -590,9 +591,9 @@ WHERE {
       BIND(IRI(CONCAT(?r, "/~root-", ?name)) AS ?attr)
     } UNION {
       # One cell per shown column, by the column's c:cellAs.
-      ?cols c:visibleColumn ?col .
       ?grid c:gridColumns ?list .
-      { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
+      LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
+      ?cols c:visibleColumn ?col .
       BIND(CONCAT(?r, "/~c-", SUBSTR(MD5(STR(?col)), 1, 8)) AS ?id)
       OPTIONAL { ?col c:cellAs ?kindRaw } BIND(COALESCE(?kindRaw, c:TextCell) AS ?kind)
       OPTIONAL { ?col c:align ?alignRaw } BIND(COALESCE(?alignRaw, "") AS ?align)
