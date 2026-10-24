@@ -323,6 +323,25 @@ WHERE {
   }
 }""" .
 
+# --- SourceView ------------------------------------------------------------------------------------
+
+c:SourceText a owl:Class ;
+    rdfs:comment """A text a graph was loaded from, as data: its c:path, its c:language and the c:text itself
+(comments and layout included). The host records the ones worth showing (an example's file)."""@en .
+c:path a owl:DatatypeProperty ; rdfs:domain c:SourceText ; rdfs:comment "Where the text lives, relative to the project."@en .
+c:text a owl:DatatypeProperty ; rdfs:domain c:SourceText ; rdfs:comment "The text, verbatim."@en .
+c:SourceView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment """A source text (c:of, a c:SourceText) shown verbatim and syntax-colored, under its c:path, with
+line numbers. c:label names it (default: the path)."""@en ;
+    sem:slug "source-view" .
+c:SourceViewRendering a sem:Rendering ;
+    sem:targets c:SourceView ;
+    sem:stratum 0 ;
+    sem:follows c:of ;
+    sem:functionOnly """It splits the text into lexical tokens for coloring, which needs a tokenizer; SPARQL cannot split a string into tokens.""" .
+c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
+
 # --- Emblem ---------------------------------------------------------------------------------------
 
 c:Emblem a owl:Class ;

@@ -5,6 +5,7 @@ import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
+import { isExampleSource, recordSources } from '../src/sources.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -28,8 +29,14 @@ const PAGES = { home: 'Home', docs: 'Docs', components: 'Components', reference:
 
 await initWeb()
 // The Components page: one graph per component group (demo/gallery/*.ttl).
-const gallery = Object.values(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
+const galleryFiles = import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const gallery = Object.values(galleryFiles)
 const store = loadStore(kind, todoApp(5), appGraph, ...gallery)
+// The examples show their own source, recorded as data (c:SourceText).
+recordSources(store, {
+  'src/examples/todo.ts': todoApp(5),
+  ...Object.fromEntries(Object.entries(galleryFiles).map(([p, t]) => ['demo/' + p.slice(2), t]).filter(([p]) => isExampleSource(p!))),
+})
 // Remembered state (per:Policy nodes in the graph) is restored before the first projection.
 const persistence = new Persistence(store, {
   [NS.per + 'Session']: webStorageBackend(sessionStorage),

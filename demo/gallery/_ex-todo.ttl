@@ -1,0 +1,39 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://example.org/todo#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# --- Todo, on screen and as text ---------------------------------------------------------------
+# The same component graph, projected twice: to the screen (RDF/HTML patched into the DOM)
+# and to text (a second projection mounted in a slot). Change one; both follow.
+
+ui:ex-todo a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ex-todo-intro ui:ex-todo-body ) .
+ui:ex-todo-intro a c:Text ; c:label "A todo app built from list, field, button and stat components over its own vocabulary (ex:Todo, ex:done, ex:created). On the left its screen projection; on the right the same graph projected as text. Add, tick or reorder a todo and watch both - then open the tools and hover anything." .
+ui:ex-todo-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:screenCard ui:textProjectionCard ) .
+ui:screenCard a c:Card ;
+    c:label "Screen" ; c:badge "mod:Screen" ;
+    c:note "A component graph projected to RDF/HTML and patched into the DOM." ;
+    c:content ui:screenStage .
+ui:screenStage a c:Stack ; sty:backdrop sty:Dots ; c:children ( ui:todoCard ) .
+ui:todoCard a c:Flippable ; c:front ex:page .
+ui:textProjectionCard a c:Card ;
+    c:label "Text" ; c:badge "mod:Text" ;
+    c:note "The same graph through the text renderings of the same components." ;
+    c:content ui:textCard .
+
+ui:ex-todo-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-todo-how-h ui:ex-todo-how-1 ui:ex-todo-how-2 ui:ex-todo-how-3 ui:ex-todo-how-4 ) .
+ui:ex-todo-how-h a c:Heading ; c:level 2 ; c:label "How it works" .
+ui:ex-todo-how-1 a c:Text ; c:children ( "The app is a " ui:ex-todo-c1 " of a heading, a text field, two buttons and a " ui:ex-todo-c2 " over the todos (" ui:ex-todo-c3 "), ordered by their priority. Nothing in it is code: below is the whole graph." ) .
+ui:ex-todo-how-2 a c:Text ; c:children ( "Typing, adding and ticking are RDF events. Their reactions are CONSTRUCT pairs: " ui:ex-todo-c4 " inserts a new " ui:ex-todo-c5 " with the field's value and clears the field; a check box's change writes " ui:ex-todo-c6 "." ) .
+ui:ex-todo-how-3 a c:Text ; c:label "The list renders member-wise: one rule run per todo, each placed by its sort key, so adding or re-sorting one todo touches only that todo - the cost tests hold the work of a tick constant as the list grows." .
+ui:ex-todo-how-4 a c:Text ; c:label "The right column is a second projection of the same graph, through the text renderings of the same components, mounted in a slot. It is evaluated only while it is shown." .
+ui:ex-todo-c1 a c:Code ; c:label "c:Stack" . ui:ex-todo-c2 a c:Code ; c:label "c:List" . ui:ex-todo-c3 a c:Code ; c:label "c:of ex:inbox" .
+ui:ex-todo-c4 a c:Code ; c:label "ex:AddTodo" . ui:ex-todo-c5 a c:Code ; c:label "ex:Todo" . ui:ex-todo-c6 a c:Code ; c:label "ex:done" .

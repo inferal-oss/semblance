@@ -4,6 +4,7 @@ import { EventBus } from '../src/behaviour/events.ts'
 import { exampleFunctions } from '../src/examples/index.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
+import { isExampleSource, recordSources } from '../src/sources.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { loadStore } from '../src/node/load.ts'
 import { A11Y, ANN, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
@@ -13,16 +14,22 @@ import { Runtime } from '../src/runtime.ts'
 const UI = 'https://semblance.dev/demo#'
 const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
 const galleryDir = new URL('../demo/gallery/', import.meta.url)
-const gallery = readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => readFileSync(new URL(f, galleryDir), 'utf8'))
+const galleryFiles = Object.fromEntries(readdirSync(galleryDir).filter((f) => f.endsWith('.ttl')).sort().map((f) => ['demo/gallery/' + f, readFileSync(new URL(f, galleryDir), 'utf8')]))
+const gallery = Object.values(galleryFiles)
+/** As the host does: the examples' own files (and the todo app's graph) as c:SourceText. */
+const sources = (store: GraphStore) => {
+  recordSources(store, { 'src/examples/todo.ts': todoApp(5), ...Object.fromEntries(Object.entries(galleryFiles).filter(([p]) => isExampleSource(p))) })
+  return store
+}
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
 export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
-  return mount(workbench(loadStore(kind, todoApp(todos), appGraph, ...gallery)), prefer)
+  return mount(workbench(sources(loadStore(kind, todoApp(todos), appGraph, ...gallery))), prefer)
 }
 
 /** The site as a visitor first sees it: the landing page, tools closed. */
 export function mountSite(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
-  return mount(loadStore(kind, todoApp(5), appGraph, ...gallery), prefer)
+  return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery)), prefer)
 }
 
 /**
@@ -46,7 +53,7 @@ function workbench(store: GraphStore): GraphStore {
  * state is restored before the first projection; `persistence.flush()` writes now.
  */
 export async function mountRemembering(backends: Record<string, Backend>) {
-  const store = workbench(loadStore('oxigraph', todoApp(5), appGraph, ...gallery))
+  const store = workbench(sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery)))
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
   const shell = mount(store, 'sparql')

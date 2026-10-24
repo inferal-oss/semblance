@@ -5,6 +5,7 @@ import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from 
 import { MINT_SEPARATOR, owningFocus } from '../rdf.ts'
 import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
+import { tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
 import { labelOf as textLabelOf, text } from './util.ts'
 
@@ -300,6 +301,34 @@ function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
   return out
 }
 
+/** Source text as tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their lexical forms). */
+function sourceTokens(text: string): Token[] {
+  const kinds = { keyword: 'keyword', var: 'pname', string: 'literal', pname: 'pname', iri: 'iri', number: 'number', comment: 'comment' } as const
+  return tokenizeSparql(text).flatMap((t): Token[] => {
+    if (t.kind !== 'text') return [{ kind: kinds[t.kind], text: t.text }]
+    // Plain runs: line breaks (with the next line's indent) are the line boundaries.
+    return t.text.split(/(\n[ \t]*)/).filter(Boolean).map((part) => ({ kind: part.startsWith('\n') ? ('space' as const) : ('punct' as const), text: part }))
+  })
+}
+
+/** A source text, verbatim and colored, under its path. */
+const sourceView: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const source = ctx.object(focus, C.of)
+  const body = named(source) ? str(ctx.object(source, NS.c + 'text')) : undefined
+  if (body === undefined) {
+    o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text(ctx, focus, C.emptyText) ?? 'No source.')]))
+    return o.quads
+  }
+  const path = str(ctx.object(source!, NS.c + 'path')) ?? ''
+  const head = o.el('head', 'Div', { class: 'sem-source-head' }, [
+    o.el('name', 'Span', { class: 'sem-source-name' }, [o.text('name-text', text(ctx, focus, C.label) ?? 'Source')]),
+    o.el('path', 'Code', { class: 'sem-source-path' }, [o.text('path-text', path)]),
+  ])
+  o.renders(o.el('root', 'Figure', {}, [head, o.el('code', 'Pre', { class: 'sem-turtle sem-source' }, turtleNodes(o, sourceTokens(body.replace(/\s+$/, ''))))]))
+  return o.quads
+}
+
 /** HTML as tokens of the Turtle highlighter's kinds: tag names, attribute names, values; text plain. */
 function htmlTokens(markup: string): Token[] {
   const out: Token[] = []
@@ -494,6 +523,7 @@ export const viewFunctions: Record<string, FnRule> = {
   graphmark,
   emblem,
   'element-markup': elementMarkup,
+  'source-view': sourceView,
   metrics,
   toggle,
   queryview,

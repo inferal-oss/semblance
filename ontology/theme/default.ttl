@@ -799,6 +799,51 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "white-space" ; sty:raw "normal" ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+# The inspector's element without RDF/HTML: a code block like the query view's.
+[] a sty:StyleRule ; sty:appliesTo c:ElementMarkup ; sty:state ":not(.sem-empty)" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-4 tok:space-4 ) ] ,
+                 [ sty:property "max-height" ; sty:raw "min(50vh, 480px)" ] ,
+                 [ sty:property "overflow" ; sty:raw "auto" ] ,
+                 [ sty:property "background" ; sty:token tok:code-bg ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius ] ,
+                 [ sty:property "font" ; sty:raw "12px/1.6 var(--sem-mono)" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:ElementMarkup ; sty:state ".sem-empty" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
+
+# A source text: a header (its name and path) over a code block with room to scroll.
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part "> .sem-source-head" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] .
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part ".sem-source-name" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
+                 [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0.06em" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part ".sem-source-path" ;
+    sty:declares [ sty:property "font" ; sty:raw "12px var(--sem-mono)" ] ,
+                 [ sty:property "color" ; sty:token tok:faint ] .
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part "> .sem-source" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-4 tok:space-4 ) ] ,
+                 [ sty:property "max-height" ; sty:raw "min(80vh, 760px)" ] ,
+                 [ sty:property "overflow" ; sty:raw "auto" ] ,
+                 [ sty:property "background" ; sty:token tok:code-bg ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius ] ,
+                 [ sty:property "font" ; sty:raw "12px/1.6 var(--sem-mono)" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "tab-size" ; sty:raw "4" ] .
+
 [] a sty:StyleRule ; sty:part ".ttl-pname" ; sty:declares [ sty:property "color" ; sty:token tok:code-name ] .
 [] a sty:StyleRule ; sty:part ".ttl-iri" ; sty:declares [ sty:property "color" ; sty:token tok:code-iri ] .
 [] a sty:StyleRule ; sty:part ".ttl-literal" ; sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
