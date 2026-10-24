@@ -196,7 +196,20 @@ ui:ch-k-shift a c:Kbd ; c:label "⇧" .
 ui:ch-k-h a c:Kbd ; c:label "H" .
 
 ui:ch-app a c:Card ; c:label "Lovelace Labs" ; c:badge "team chat" ; c:content ui:ch-layout .
-ui:ch-layout a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-4 ; c:children ( ui:ch-channels ui:ch-main ) .
+ui:ch-layout a c:Stack ; pos:layout ch:ChatLayout ; c:children ( ui:ch-channels ui:ch-main ) .
+# The channels beside the conversation, the conversation taking the room; on a narrow screen
+# (less than the two side by side need) the channels go on top. A layout of the example's own:
+# a flex row that wraps, whose first child keeps to about 11rem and whose last one grows.
+ch:ChatLayout a pos:Layout ; sem:slug "chat-layout" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] ,
+                 [ sty:property "gap" ; sty:raw "var(--sem-space-4)" ] .
+[] a sty:StyleRule ; sty:when ch:ChatLayout ; sty:part "> :first-child" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 11rem" ] .
+[] a sty:StyleRule ; sty:when ch:ChatLayout ; sty:part "> :last-child" ;
+    sty:declares [ sty:property "flex" ; sty:raw "999 1 22rem" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
 
 # The channels: a nav list over ch:channel of the client, with each channel's unread count.
 ui:ch-channels a c:NavList ; c:label "Channels" ; c:controls ch:client ; c:property ch:channel ;
