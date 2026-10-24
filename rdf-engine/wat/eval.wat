@@ -92,44 +92,64 @@
 (func $row_put (param $r i32)
   (global.set $rs_top (local.get $r)))
 
-;; Whether rows a and b agree where both are bound.
+;; Whether rows a and b agree where both are bound (two slots at a time:
+;; equal words need no look at their halves).
 (func $compatible (param $a i32) (param $b i32) (result i32)
-  (local $i i32) (local $x i32) (local $y i32)
-  (loop $slots
-    (if (i32.lt_u (local.get $i) (global.get $W)) (then
-      (local.set $x (i32.load (i32.add (local.get $a) (local.get $i))))
-      (local.set $y (i32.load (i32.add (local.get $b) (local.get $i))))
-      (if (i32.and (i32.and (i32.ne (local.get $x) (i32.const 0)) (i32.ne (local.get $y) (i32.const 0))) (i32.ne (local.get $x) (local.get $y)))
-        (then (return (i32.const 0))))
-      (local.set $i (i32.add (local.get $i) (i32.const 4)))
-      (br $slots))))
+  (local $i i32) (local $x i64) (local $y i64)
+  (loop $pairs
+    (if (i32.le_u (i32.add (local.get $i) (i32.const 8)) (global.get $W)) (then
+      (if (i64.ne (local.tee $x (i64.load (i32.add (local.get $a) (local.get $i)))) (local.tee $y (i64.load (i32.add (local.get $b) (local.get $i))))) (then
+        (if (i32.eqz (call $agree (i32.wrap_i64 (local.get $x)) (i32.wrap_i64 (local.get $y)))) (then (return (i32.const 0))))
+        (if (i32.eqz (call $agree (i32.wrap_i64 (i64.shr_u (local.get $x) (i64.const 32))) (i32.wrap_i64 (i64.shr_u (local.get $y) (i64.const 32)))))
+          (then (return (i32.const 0))))))
+      (local.set $i (i32.add (local.get $i) (i32.const 8)))
+      (br $pairs))))
+  (if (i32.lt_u (local.get $i) (global.get $W)) (then
+    (return (call $agree (i32.load (i32.add (local.get $a) (local.get $i))) (i32.load (i32.add (local.get $b) (local.get $i)))))))
   (i32.const 1))
 
-;; Push to t the merge of compatible rows a and b.
-(func $push_merge (param $t i32) (param $a i32) (param $b i32)
-  (local $r i32) (local $i i32)
-  (local.set $r (call $t_add (local.get $t)))
-  (loop $slots
-    (if (i32.lt_u (local.get $i) (global.get $W)) (then
-      (i32.store (i32.add (local.get $r) (local.get $i))
-        (select (i32.load (i32.add (local.get $a) (local.get $i))) (i32.load (i32.add (local.get $b) (local.get $i)))
-                (i32.load (i32.add (local.get $a) (local.get $i)))))
-      (local.set $i (i32.add (local.get $i) (i32.const 4)))
-      (br $slots)))))
+;; Whether slot values x and y agree: equal, or one unbound.
+(func $agree (param $x i32) (param $y i32) (result i32)
+  (i32.or (i32.or (i32.eqz (local.get $x)) (i32.eqz (local.get $y))) (i32.eq (local.get $x) (local.get $y))))
 
-;; Copy row src to dst keeping only the slots of bitset bits (and parameters,
-;; and the substituted row's variables).
-(func $mask (param $dst i32) (param $src i32) (param $bits i32)
-  (local $i i32) (local $s i32)
+;; Push to t the merge of compatible rows a and b: where both are bound they
+;; are equal, so the merge is their bitwise or.
+(func $push_merge (param $t i32) (param $a i32) (param $b i32)
+  (call $row_or (call $t_add (local.get $t)) (local.get $a) (local.get $b) (i32.const 0)))
+
+;; dst = a | b, or with and_ a & b, slot by slot.
+(func $row_or (param $dst i32) (param $a i32) (param $b i32) (param $and_ i32)
+  (local $i i32) (local $x i64) (local $y i64)
+  (loop $pairs
+    (if (i32.le_u (i32.add (local.get $i) (i32.const 8)) (global.get $W)) (then
+      (local.set $x (i64.load (i32.add (local.get $a) (local.get $i))))
+      (local.set $y (i64.load (i32.add (local.get $b) (local.get $i))))
+      (i64.store (i32.add (local.get $dst) (local.get $i))
+        (select (i64.and (local.get $x) (local.get $y)) (i64.or (local.get $x) (local.get $y)) (local.get $and_)))
+      (local.set $i (i32.add (local.get $i) (i32.const 8)))
+      (br $pairs))))
+  (if (i32.lt_u (local.get $i) (global.get $W)) (then
+    (local.set $x (i64.load32_u (i32.add (local.get $a) (local.get $i))))
+    (local.set $y (i64.load32_u (i32.add (local.get $b) (local.get $i))))
+    (i32.store (i32.add (local.get $dst) (local.get $i))
+      (i32.wrap_i64 (select (i64.and (local.get $x) (local.get $y)) (i64.or (local.get $x) (local.get $y)) (local.get $and_)))))))
+
+;; The slots a nested group with certain variables bits sees (and parameters,
+;; and the substituted row's variables): a scratch row of all-ones and zero
+;; slots, for $row_or with and_.
+(func $keep_mask (param $bits i32) (result i32)
+  (local $m i32) (local $s i32) (local $i i32)
+  (local.set $m (call $row_get))
+  (memory.fill (local.get $m) (i32.const 0) (global.get $W))
   (loop $slots
     (if (i32.lt_u (local.get $s) (global.get $NV)) (then
       (local.set $i (i32.shl (local.get $s) (i32.const 2)))
-      (i32.store (i32.add (local.get $dst) (local.get $i))
-        (select (i32.load (i32.add (local.get $src) (local.get $i))) (i32.const 0)
-          (i32.or (i32.or (call $bit (local.get $bits) (local.get $s)) (i32.load (i32.add (global.get $params) (local.get $i))))
-                  (if (result i32) (global.get $lat) (then (i32.load (i32.add (global.get $lat) (local.get $i)))) (else (i32.const 0))))))
+      (if (i32.or (i32.or (call $bit (local.get $bits) (local.get $s)) (i32.load (i32.add (global.get $params) (local.get $i))))
+                  (if (result i32) (global.get $lat) (then (i32.load (i32.add (global.get $lat) (local.get $i)))) (else (i32.const 0))))
+        (then (i32.store (i32.add (local.get $m) (local.get $i)) (i32.const -1))))
       (local.set $s (i32.add (local.get $s) (i32.const 1)))
-      (br $slots)))))
+      (br $slots))))
+  (local.get $m))
 
 (func $bit (param $bits i32) (param $s i32) (result i32)
   (i32.and (i32.shr_u (i32.load (i32.add (local.get $bits) (i32.shl (i32.shr_u (local.get $s) (i32.const 5)) (i32.const 2))))
@@ -391,25 +411,30 @@
   (global.set $bg_out (local.get $save_o))
   (local.get $row))
 
-;; How many positions of pattern pt are bound in row (-1: it cannot match).
+;; How well bound pattern pt is in row, to pick the next pattern: 2 per bound
+;; position of a triple pattern; a path (whose predicate is fixed) scores as a
+;; triple with its bound ends and predicate, less one, so a triple wins a tie
+;; (-1: it cannot match).
 (func $bound_count (param $pt i32) (param $row i32) (result i32)
-  (local $k i32) (local $n i32) (local $v i32)
+  (local $k i32) (local $n i32) (local $v i32) (local $path i32)
+  (local.set $path (i32.eq (i32.load (local.get $pt)) (i32.const P_PATH)))
   (loop $positions
-    (local.set $v (call $resolve_ref (i32.load (i32.add (local.get $pt) (i32.shl (i32.add (local.get $k) (i32.const 1)) (i32.const 2)))) (local.get $row)))
-    (if (i32.lt_s (local.get $v) (i32.const 0)) (then (return (i32.const -1))))
-    (local.set $n (i32.add (local.get $n) (i32.ne (local.get $v) (i32.const 0))))
+    (if (i32.eqz (i32.and (local.get $path) (i32.eq (local.get $k) (i32.const 1)))) (then
+      (local.set $v (call $resolve_ref (i32.load (i32.add (local.get $pt) (i32.shl (i32.add (local.get $k) (i32.const 1)) (i32.const 2)))) (local.get $row)))
+      (if (i32.lt_s (local.get $v) (i32.const 0)) (then (return (i32.const -1))))
+      (local.set $n (i32.add (local.get $n) (i32.ne (local.get $v) (i32.const 0))))))
     (br_if $positions (i32.ne (local.tee $k (i32.add (local.get $k) (i32.const 1))) (i32.const 3))))
-  ;; a bound subject or object narrows more than a bound predicate
-  (local.get $n))
+  (i32.sub (i32.shl (i32.add (local.get $n) (local.get $path)) (i32.const 1)) (local.get $path)))
 
-;; Match the `left` remaining patterns, most bound first, extending row.
+;; Match the `left` remaining patterns, most bound first, extending row; row
+;; is as it was on return.
 (func $bgp_dfs (param $row i32) (param $left i32)
   (local $l i32) (local $ln i32) (local $i i32) (local $best i32) (local $score i32) (local $c i32) (local $pt i32)
   (local $s i32) (local $p i32) (local $o i32) (local $gi i32) (local $gn i32) (local $j i32) (local $r i32) (local $snap i32)
+  (local $g i32) (local $ok i32)
   (if (i32.eqz (local.get $left)) (then (call $t_push (global.get $bg_out) (local.get $row)) (return)))
   (local.set $best (i32.const -1))
   (local.set $score (i32.const -1))
-  (local.set $l (i32.const 0))
   (loop $choose
     (if (i32.lt_u (local.get $i) (global.get $bg_n)) (then
       (if (i32.eqz (i32.load8_u (i32.add (global.get $bg_done) (local.get $i)))) (then
@@ -423,14 +448,38 @@
   (local.set $pt (i32.load (i32.add (global.get $bg_pats) (i32.shl (local.get $best) (i32.const 2)))))
   (i32.store8 (i32.add (global.get $bg_done) (local.get $best)) (i32.const 1))
   (local.set $s (call $resolve_ref (i32.load offset=4 (local.get $pt)) (local.get $row)))
-  (local.set $p (call $resolve_ref (i32.load offset=8 (local.get $pt)) (local.get $row)))
   (local.set $o (call $resolve_ref (i32.load offset=12 (local.get $pt)) (local.get $row)))
-  (local.set $snap (call $row_get))
-  (memory.copy (local.get $snap) (local.get $row) (global.get $W))
+  ;; a candidate binds the unbound positions: plain variables are unbound again
+  ;; after it; a triple term pattern may bind more, so the row is copied back
+  (local.set $snap (call $rs_alloc (i32.add (global.get $W) (i32.const 8))))
+  (if (i32.eq (i32.load (local.get $pt)) (i32.const P_PATH)) (then
+    (local.set $p (i32.const 1))
+    ;; a path: its pairs from the bound ends (see $eval_path)
+    (local.set $l (call $v_new))
+    (global.set $zero_check (i32.or (i32.and (i32.lt_s (i32.load offset=4 (local.get $pt)) (i32.const 0)) (i32.ne (local.get $s) (i32.const 0)))
+                                    (i32.and (i32.lt_s (i32.load offset=12 (local.get $pt)) (i32.const 0)) (i32.ne (local.get $o) (i32.const 0)))))
+    (call $pp (i32.load offset=8 (local.get $pt)) (local.get $s) (local.get $o) (local.get $l))
+    (global.set $zero_check (i32.const 0))
+    (local.set $snap (call $undo_plan (local.get $pt) (local.get $row) (local.get $s) (local.get $p) (local.get $o) (local.get $snap)))
+    (loop $pairs
+      (if (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $l))) (then
+        (if (i32.and (call $unify (i32.load offset=4 (local.get $pt)) (call $v_at (local.get $l) (local.get $j)) (local.get $row))
+                     (call $unify (i32.load offset=12 (local.get $pt)) (call $v_at (local.get $l) (i32.add (local.get $j) (i32.const 1))) (local.get $row)))
+          (then (call $bgp_dfs (local.get $row) (i32.sub (local.get $left) (i32.const 1)))))
+        (call $row_undo (local.get $row) (local.get $snap))
+        (local.set $j (i32.add (local.get $j) (i32.const 2)))
+        (br $pairs))))
+    (call $v_free (local.get $l))
+    (call $row_put (local.get $snap))
+    (i32.store8 (i32.add (global.get $bg_done) (local.get $best)) (i32.const 0))
+    (return)))
+  (local.set $p (call $resolve_ref (i32.load offset=8 (local.get $pt)) (local.get $row)))
+  (local.set $snap (call $undo_plan (local.get $pt) (local.get $row) (local.get $s) (local.get $p) (local.get $o) (local.get $snap)))
   (local.set $gn (call $graph_count))
   (loop $graphs
     (if (i32.lt_u (local.get $gi) (local.get $gn)) (then
-      (call $scan (local.get $s) (local.get $p) (local.get $o) (call $graph_at (local.get $gi)))
+      (local.set $g (call $graph_at (local.get $gi)))
+      (call $scan (local.get $s) (local.get $p) (local.get $o) (local.get $g))
       ;; the recursion below scans too: keep this scan's list
       (local.set $l (global.get $sc_list))
       (local.set $ln (global.get $sc_n))
@@ -439,13 +488,15 @@
         (if (if (result i32) (i32.lt_u (local.get $j) (local.get $ln)) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
           (local.set $r (call $list_quad (local.get $l) (local.get $j)))
           (if (i32.and (call $quad_is (local.get $r) (local.get $s) (local.get $p) (local.get $o))
-                       (i32.eq (i32.load offset=12 (local.get $r)) (call $graph_at (local.get $gi)))) (then
+                       (i32.eq (i32.load offset=12 (local.get $r)) (local.get $g))) (then
             (if (i32.eqz (if (result i32) (local.get $gi) (then (call $seen_before (local.get $gi) (local.get $r))) (else (i32.const 0)))) (then
-              (if (i32.and (i32.and (call $unify (i32.load offset=4 (local.get $pt)) (i32.load (local.get $r)) (local.get $row))
-                                    (call $unify (i32.load offset=8 (local.get $pt)) (i32.load offset=4 (local.get $r)) (local.get $row)))
-                           (call $unify (i32.load offset=12 (local.get $pt)) (i32.load offset=8 (local.get $r)) (local.get $row)))
-                (then (call $bgp_dfs (local.get $row) (i32.sub (local.get $left) (i32.const 1)))))
-              (memory.copy (local.get $row) (local.get $snap) (global.get $W))))))
+              ;; bound positions matched already
+              (local.set $ok (i32.const 1))
+              (if (i32.eqz (local.get $s)) (then (local.set $ok (call $unify (i32.load offset=4 (local.get $pt)) (i32.load (local.get $r)) (local.get $row)))))
+              (if (i32.and (local.get $ok) (i32.eqz (local.get $p))) (then (local.set $ok (call $unify (i32.load offset=8 (local.get $pt)) (i32.load offset=4 (local.get $r)) (local.get $row)))))
+              (if (i32.and (local.get $ok) (i32.eqz (local.get $o))) (then (local.set $ok (call $unify (i32.load offset=12 (local.get $pt)) (i32.load offset=8 (local.get $r)) (local.get $row)))))
+              (if (local.get $ok) (then (call $bgp_dfs (local.get $row) (i32.sub (local.get $left) (i32.const 1)))))
+              (call $row_undo (local.get $row) (local.get $snap))))))
           (local.set $j (i32.add (local.get $j) (i32.const 1)))
           (br $quads))))
       (local.set $gi (i32.add (local.get $gi) (i32.const 1)))
@@ -453,7 +504,45 @@
   (call $row_put (local.get $snap))
   (i32.store8 (i32.add (global.get $bg_done) (local.get $best)) (i32.const 0)))
 
+;; How to put row back after a candidate for pattern pt with positions s, p, o
+;; (0: unbound) binds, written to scratch u (W + 8 bytes): 0 and the slot
+;; offsets to clear (ended by -1), or 1 and a copy of row to copy back.
+(func $undo_plan (param $pt i32) (param $row i32) (param $s i32) (param $p i32) (param $o i32) (param $u i32) (result i32)
+  (local $k i32) (local $ref i32) (local $w i32)
+  (local.set $w (i32.add (local.get $u) (i32.const 4)))
+  (loop $positions
+    (if (i32.eqz (select (local.get $s) (select (local.get $p) (local.get $o) (i32.eq (local.get $k) (i32.const 1))) (i32.eqz (local.get $k)))) (then
+      (local.set $ref (i32.load (i32.add (local.get $pt) (i32.shl (i32.add (local.get $k) (i32.const 1)) (i32.const 2)))))
+      (if (i32.and (i32.lt_s (local.get $ref) (i32.const 0)) (i32.gt_s (local.get $ref) (i32.const -0x100000)))
+        (then
+          (i32.store (local.get $w) (i32.shl (i32.sub (i32.const -1) (local.get $ref)) (i32.const 2)))
+          (local.set $w (i32.add (local.get $w) (i32.const 4))))
+        (else
+          ;; a triple term pattern
+          (i32.store (local.get $u) (i32.const 1))
+          (memory.copy (i32.add (local.get $u) (i32.const 4)) (local.get $row) (global.get $W))
+          (return (local.get $u))))))
+    (br_if $positions (i32.ne (local.tee $k (i32.add (local.get $k) (i32.const 1))) (i32.const 3))))
+  (i32.store (local.get $u) (i32.const 0))
+  (i32.store (local.get $w) (i32.const -1))
+  (local.get $u))
+
+(func $row_undo (param $row i32) (param $u i32)
+  (local $at i32)
+  (if (i32.load (local.get $u)) (then
+    (memory.copy (local.get $row) (i32.add (local.get $u) (i32.const 4)) (global.get $W))
+    (return)))
+  (loop $slots
+    (if (i32.ge_s (local.tee $at (i32.load offset=4 (local.get $u))) (i32.const 0)) (then
+      (i32.store (i32.add (local.get $row) (local.get $at)) (i32.const 0))
+      (local.set $u (i32.add (local.get $u) (i32.const 4)))
+      (br $slots)))))
+
 ;; --- groups ----------------------------------------------------------------------
+
+;; Whether element el is a triple or path pattern.
+(func $is_tp (param $el i32) (result i32)
+  (i32.le_u (i32.sub (i32.load (local.get $el)) (i32.const P_TRIPLE)) (i32.const 1)))
 
 ;; Group g joined with table t (not freed): a new table. With nf, the group's
 ;; own filters are left to the caller (OPTIONAL's condition).
@@ -465,23 +554,28 @@
     (loop $elements
       (br_if $done (i32.eqz (local.get $el)))
       (br_if $done (i32.eqz (i32.load offset=4 (local.get $cur))))
-      (if (i32.eq (i32.load (local.get $el)) (i32.const P_TRIPLE))
+      (if (call $is_tp (local.get $el))
         (then
-          ;; a basic graph pattern: the run of triple patterns
+          ;; a basic graph pattern: the run of triple and path patterns
           (local.set $n (i32.const 0))
           (local.set $e (local.get $el))
           (loop $run
             (if (local.get $e) (then
-              (if (i32.eq (i32.load (local.get $e)) (i32.const P_TRIPLE)) (then
+              (if (call $is_tp (local.get $e)) (then
                 (local.set $n (i32.add (local.get $n) (i32.const 1)))
                 (local.set $e (i32.load offset=28 (local.get $e)))
                 (br $run))))))
           (local.set $next (call $eval_bgp (local.get $el) (local.get $n) (local.get $cur)))
           (local.set $el (local.get $e)))
         (else
-          (local.set $next (call $eval_elem (local.get $el) (local.get $cur)))
+          (if (i32.and (i32.eq (i32.load (local.get $el)) (i32.const P_BIND)) (i32.ne (local.get $cur) (local.get $t)))
+            (then
+              ;; BIND on a table of our own: in place
+              (call $bind_rows (local.get $el) (local.get $cur))
+              (local.set $next (local.get $cur)))
+            (else (local.set $next (call $eval_elem (local.get $el) (local.get $cur)))))
           (local.set $el (i32.load offset=28 (local.get $el)))))
-      (if (i32.ne (local.get $cur) (local.get $t)) (then (call $t_free (local.get $cur))))
+      (if (i32.and (i32.ne (local.get $cur) (local.get $t)) (i32.ne (local.get $cur) (local.get $next))) (then (call $t_free (local.get $cur))))
       (local.set $cur (local.get $next))
       (br $elements)))
   (if (i32.eq (local.get $cur) (local.get $t)) (then (local.set $cur (call $t_copy (local.get $t)))))
@@ -511,21 +605,34 @@
   (i32.const 1))
 
 ;; A nested group g joined with t: each row passes only g's certain variables
-;; in; consecutive rows passing the same bindings share one evaluation.
+;; in; rows passing the same bindings share one evaluation (the last one, or,
+;; once there are several, any earlier one: they are kept by key).
 ;; mode 0 join, 1 left join (OPTIONAL, with g's filters as its condition).
 (func $join_group (param $g i32) (param $t i32) (param $mode i32) (param $out i32)
   (local $i i32) (local $mu i32) (local $key i32) (local $prev i32) (local $r i32) (local $j i32) (local $m i32) (local $matched i32)
+  (local $memo i32) (local $tabs i32) (local $x i32) (local $keep i32)
   (local.set $key (call $row_get))
   (local.set $prev (call $row_get))
+  (local.set $keep (call $keep_mask (i32.load offset=12 (local.get $g))))
   (loop $rows
     (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
       (local.set $mu (call $t_row (local.get $t) (local.get $i)))
-      (call $mask (local.get $key) (local.get $mu) (i32.load offset=12 (local.get $g)))
+      (call $row_or (local.get $key) (local.get $mu) (local.get $keep) (i32.const 1))
       (if (i32.or (i32.eqz (local.get $r)) (i32.eqz (call $memeq (local.get $key) (local.get $prev) (global.get $W)))) (then
-        (if (local.get $r) (then (call $t_free (local.get $r))))
-        (local.set $m (call $t_one (local.get $key)))
-        (local.set $r (call $eval_group (local.get $g) (local.get $m) (local.get $mode)))
-        (call $t_free (local.get $m))
+        (if (i32.and (i32.ne (local.get $r) (i32.const 0)) (i32.eqz (local.get $memo))) (then
+          ;; a second key: keep results by key from now on
+          (local.set $memo (call $set_make (i32.shr_u (global.get $W) (i32.const 2))))
+          (local.set $tabs (call $v_new))
+          (drop (call $set_add (local.get $memo) (local.get $prev)))
+          (call $v_push1 (local.get $tabs) (local.get $r))))
+        (local.set $x (if (result i32) (local.get $memo) (then (call $set_add (local.get $memo) (local.get $key))) (else (i32.const 0))))
+        (if (i32.or (i32.eqz (local.get $memo)) (global.get $set_new))
+          (then
+            (local.set $m (call $t_one (local.get $key)))
+            (local.set $r (call $eval_group (local.get $g) (local.get $m) (local.get $mode)))
+            (call $t_free (local.get $m))
+            (if (local.get $memo) (then (call $v_push1 (local.get $tabs) (local.get $r)))))
+          (else (local.set $r (call $v_at (local.get $tabs) (local.get $x)))))
         (memory.copy (local.get $prev) (local.get $key) (global.get $W))))
       (local.set $matched (i32.const 0))
       (local.set $j (i32.const 0))
@@ -543,7 +650,17 @@
       (if (i32.and (local.get $mode) (i32.eqz (local.get $matched))) (then (call $t_push (local.get $out) (local.get $mu))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $rows))))
-  (if (local.get $r) (then (call $t_free (local.get $r))))
+  (if (local.get $memo)
+    (then
+      (local.set $i (i32.const 0))
+      (loop $tables
+        (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $tabs))) (then
+          (call $t_free (call $v_at (local.get $tabs) (local.get $i)))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $tables))))
+      (call $v_free (local.get $tabs))
+      (call $set_free (local.get $memo)))
+    (else (if (local.get $r) (then (call $t_free (local.get $r))))))
   (call $row_put (local.get $key)))
 
 ;; A group as an element: P_GROUP, or a UNION of groups.
@@ -593,15 +710,12 @@
           (br $rows))))
       (br $done)))
     (if (i32.eq (local.get $k) (i32.const P_BIND)) (then
-      (local.set $v (i32.shl (i32.load offset=8 (local.get $el)) (i32.const 2)))
       (loop $rows
         (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
-          (local.set $row (call $t_add (local.get $out)))
-          (memory.copy (local.get $row) (call $t_row (local.get $t) (local.get $i)) (global.get $W))
-          (if (i32.eqz (i32.load (i32.add (local.get $row) (local.get $v))))
-            (then (i32.store (i32.add (local.get $row) (local.get $v)) (call $ev (i32.load offset=4 (local.get $el)) (local.get $row)))))
+          (call $t_push (local.get $out) (call $t_row (local.get $t) (local.get $i)))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
           (br $rows))))
+      (call $bind_rows (local.get $el) (local.get $out))
       (br $done)))
     (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then
       (call $join_values (local.get $el) (local.get $t) (local.get $out))
@@ -614,6 +728,18 @@
       (call $eval_path (local.get $el) (local.get $t) (local.get $out))
       (br $done))))
   (local.get $out))
+
+;; BIND el: set its variable in each row of t where it is unbound.
+(func $bind_rows (param $el i32) (param $t i32)
+  (local $i i32) (local $at i32) (local $v i32)
+  (local.set $v (i32.shl (i32.load offset=8 (local.get $el)) (i32.const 2)))
+  (loop $rows
+    (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
+      (local.set $at (i32.add (call $t_row (local.get $t) (local.get $i)) (local.get $v)))
+      (if (i32.eqz (i32.load (local.get $at)))
+        (then (i32.store (local.get $at) (call $ev (i32.load offset=4 (local.get $el)) (call $t_row (local.get $t) (local.get $i))))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $rows)))))
 
 ;; Push to out the compatible merges of t's and r's rows.
 (func $join_tables (param $t i32) (param $r i32) (param $out i32)

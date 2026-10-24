@@ -99,6 +99,13 @@
   ;; caches of term ids
   (local.set $n (i32.load offset=4 (local.get $out)))
   (if (local.get $n) (then
+    ;; STR() of live terms
+    (local.set $id (i32.const 5))
+    (loop $strs (if (i32.lt_u (local.get $id) (global.get $next_id)) (then
+      (local.set $r (call $rec (local.get $id)))
+      (if (i32.and (i32.ne (call $kind (local.get $id)) (i32.const 0)) (i32.ne (i32.load offset=28 (local.get $r)) (i32.const 0))) (then
+        (if (i32.eqz (call $kind (i32.load offset=28 (local.get $r)))) (then (i32.store offset=28 (local.get $r) (i32.const 0))))))
+      (local.set $id (i32.add (local.get $id) (i32.const 1))) (br $strs))))
     (local.set $k (i32.const 0))
     (loop $knowns (if (i32.lt_u (local.get $k) (i32.const 9)) (then
       (if (i32.eqz (call $kind (i32.load offset=8 (i32.add (global.get $knowns) (i32.mul (local.get $k) (i32.const 12))))))

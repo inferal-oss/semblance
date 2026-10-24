@@ -78,8 +78,13 @@
 (global $xb (mut i32) (i32.const 0))
 (global $xb_len (mut i32) (i32.const 0))
 (global $xb_cap (mut i32) (i32.const 0))
+;; Where the string being built starts: CONCAT appends its arguments in place,
+;; and moves the base past what it has so far while an argument is evaluated.
+(global $xb_base (mut i32) (i32.const 0))
 
-(func $xb_reset (global.set $xb_len (i32.const 0)))
+(func $xb_reset (global.set $xb_len (global.get $xb_base)))
+(func $xb_ptr (result i32) (i32.add (global.get $xb) (global.get $xb_base)))
+(func $xb_n (result i32) (i32.sub (global.get $xb_len) (global.get $xb_base)))
 
 (func $xb_room (param $n i32)
   (local $cap i32)
@@ -109,7 +114,7 @@
 
 ;; The built string as a literal: simple, or with the language of `like`.
 (func $xb_string (param $like i32) (result i32)
-  (call $str_like (global.get $xb) (global.get $xb_len) (local.get $like)))
+  (call $str_like (call $xb_ptr) (call $xb_n) (local.get $like)))
 
 ;; A string literal [p, p+n) with the language and direction of like (0: simple).
 (func $str_like (param $p i32) (param $n i32) (param $like i32) (result i32)
@@ -427,32 +432,23 @@
     (if (local.get $err) (then (return (i32.const 0))))
     (return (call $bool (i32.eq (local.get $f) (i32.const F_NOTIN))))))
   (if (i32.eq (local.get $f) (i32.const F_CONCAT)) (then
-    ;; evaluate every argument first (they may build strings themselves); the
-    ;; result has a language when every argument has the same one
-    (local.set $p (call $rs_alloc (i32.shl (local.get $argc) (i32.const 2))))
+    (local.set $p (call $xb_open))
+    (local.set $c (call $concat_parts (local.get $e) (local.get $row)))
+    (local.set $x (if (result i32) (i32.lt_s (local.get $c) (i32.const 0)) (then (i32.const 0)) (else (call $xb_string (local.get $c)))))
+    (call $xb_close (local.get $p))
+    (return (local.get $x))))
+  (if (i32.and (i32.le_u (i32.sub (local.get $f) (i32.const F_IRI)) (i32.const 1)) (i32.eq (local.get $argc) (i32.const 1))) (then
     (local.set $a (i32.load offset=8 (local.get $e)))
-    (local.set $c (i32.const -1))
-    (local.set $i (i32.const 0))
-    (loop $args
-      (if (local.get $a) (then
-        (local.set $x (call $ev (local.get $a) (local.get $row)))
-        (if (i32.eqz (call $is_str (local.get $x))) (then (call $row_put (local.get $p)) (return (i32.const 0))))
-        (if (i32.eq (local.get $c) (i32.const -1))
-          (then (local.set $c (local.get $x)))
-          (else (if (i32.and (i32.ne (local.get $c) (i32.const 0)) (i32.eqz (call $same_lang (local.get $c) (local.get $x)))) (then (local.set $c (i32.const 0))))))
-        (i32.store (i32.add (local.get $p) (i32.shl (local.get $i) (i32.const 2))) (local.get $x))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (local.set $a (i32.load offset=28 (local.get $a)))
-        (br $args))))
-    (call $xb_reset)
-    (local.set $n (i32.const 0))
-    (loop $parts
-      (if (i32.lt_u (local.get $n) (local.get $i)) (then
-        (call $xb_put_term (i32.load (i32.add (local.get $p) (i32.shl (local.get $n) (i32.const 2)))))
-        (local.set $n (i32.add (local.get $n) (i32.const 1)))
-        (br $parts))))
-    (call $row_put (local.get $p))
-    (return (call $xb_string (select (i32.const 0) (local.get $c) (i32.eq (local.get $c) (i32.const -1)))))))
+    (if (i32.and (i32.eq (i32.load (local.get $a)) (i32.const E_CALL)) (i32.eq (i32.load offset=4 (local.get $a)) (i32.const F_CONCAT))) (then
+      ;; IRI(CONCAT(...)): the IRI straight from the built string
+      (local.set $p (call $xb_open))
+      (local.set $x (i32.const 0))
+      (if (i32.eqz (call $concat_parts (local.get $a) (local.get $row))) (then
+        (global.set $base_p (i32.load offset=108 (global.get $q)))
+        (global.set $base_n (i32.load offset=112 (global.get $q)))
+        (local.set $x (call $iri_ref (call $xb_ptr) (call $xb_n)))))
+      (call $xb_close (local.get $p))
+      (return (local.get $x))))))
   (if (i32.and (i32.eq (local.get $f) (i32.const F_CAST)) (i32.eq (local.get $argc) (i32.const 1))) (then
     (if (i32.eqz (local.tee $x (call $ev (call $arg (local.get $e) (i32.const 0)) (local.get $row)))) (then (return (i32.const 0))))
     (return (call $cast (local.get $x) (i32.load offset=16 (local.get $e))))))
@@ -473,6 +469,57 @@
            (i32.and (i32.eq (call $tdir (local.get $a)) (call $tdir (local.get $b)))
                     (call $same (call $tlang (local.get $a)) (call $tlang_len (local.get $a)) (call $tlang (local.get $b)) (call $tlang_len (local.get $b)) (i32.const 0)))))
 
+;; Start a string after what is being built (returns the base to restore).
+(func $xb_open (result i32)
+  (local $b i32)
+  (local.set $b (global.get $xb_base))
+  (global.set $xb_base (global.get $xb_len))
+  (local.get $b))
+
+;; Drop the string started by $xb_open, back to base b.
+(func $xb_close (param $b i32)
+  (global.set $xb_len (global.get $xb_base))
+  (global.set $xb_base (local.get $b)))
+
+;; Append CONCAT e's arguments to the string being built: -1 for an error, else
+;; the language source of the result (0: simple; a literal: its language).
+(func $concat_parts (param $e i32) (param $row i32) (result i32)
+  (local $a i32) (local $c i32) (local $r i32)
+  (local.set $c (i32.const -2))
+  (local.set $a (i32.load offset=8 (local.get $e)))
+  (loop $args
+    (if (local.get $a) (then
+      (if (i32.lt_s (local.tee $r (call $ev_append (local.get $a) (local.get $row))) (i32.const 0)) (then (return (i32.const -1))))
+      (if (i32.eq (local.get $c) (i32.const -2))
+        (then (local.set $c (local.get $r)))
+        (else (if (i32.and (i32.gt_s (local.get $c) (i32.const 0))
+                           (i32.or (i32.eqz (local.get $r)) (i32.eqz (call $same_lang (local.get $c) (local.get $r)))))
+          (then (local.set $c (i32.const 0))))))
+      (local.set $a (i32.load offset=28 (local.get $a)))
+      (br $args))))
+  (select (i32.const 0) (local.get $c) (i32.eq (local.get $c) (i32.const -2))))
+
+;; Append the string value of e (a string literal; STR() of an IRI or literal,
+;; and nested CONCATs, without making their terms): as $concat_parts.
+(func $ev_append (param $e i32) (param $row i32) (result i32)
+  (local $x i32) (local $b i32) (local $str i32)
+  (if (i32.eq (i32.load (local.get $e)) (i32.const E_CALL)) (then
+    (if (i32.eq (i32.load offset=4 (local.get $e)) (i32.const F_CONCAT)) (then (return (call $concat_parts (local.get $e) (local.get $row)))))
+    (if (i32.eq (i32.load offset=4 (local.get $e)) (i32.const F_STR)) (then
+      (local.set $str (i32.const 1))
+      (local.set $e (i32.load offset=8 (local.get $e)))))))
+  ;; what an argument builds goes after ours, and is dropped
+  (local.set $b (call $xb_open))
+  (local.set $x (call $ev (local.get $e) (local.get $row)))
+  (call $xb_close (local.get $b))
+  (if (local.get $str) (then
+    (if (i32.and (i32.ne (call $kind (local.get $x)) (i32.const 1)) (i32.ne (call $kind (local.get $x)) (i32.const 3))) (then (return (i32.const -1))))
+    (call $xb_put_term (local.get $x))
+    (return (i32.const 0))))
+  (if (i32.eqz (call $is_str (local.get $x))) (then (return (i32.const -1))))
+  (call $xb_put_term (local.get $x))
+  (select (local.get $x) (i32.const 0) (i32.ge_u (call $tdt (local.get $x)) (i32.const 3))))
+
 ;; BNODE(s): the row the strings belong to, and their nodes.
 (global $ev_row (mut i32) (i32.const 0))
 (global $bn_row (mut i32) (i32.const 0))
@@ -483,11 +530,13 @@
 (func $fn (param $f i32) (param $argc i32) (param $a i32) (param $b i32) (param $c i32) (param $d i32) (result i32)
   (local $x i32) (local $y i32) (local $p i32) (local $n i32) (local $i i32) (local $k i32) (local $s f64) (local $l f64)
   (if (i32.eq (local.get $f) (i32.const F_STR)) (then
-    (if (i32.eq (call $kind (local.get $a)) (i32.const 1)) (then (return (call $simple (call $tval (local.get $a)) (call $tlen (local.get $a))))))
-    (if (i32.eq (call $kind (local.get $a)) (i32.const 3)) (then
-      (if (call $is_plain (local.get $a)) (then (return (local.get $a))))
-      (return (call $simple (call $tval (local.get $a)) (call $tlen (local.get $a))))))
-    (return (i32.const 0))))
+    (if (i32.gt_u (i32.sub (call $kind (local.get $a)) (i32.const 1)) (i32.const 2)) (then (return (i32.const 0))))
+    (if (i32.eq (call $kind (local.get $a)) (i32.const 2)) (then (return (i32.const 0))))
+    (if (call $is_plain (local.get $a)) (then (return (local.get $a))))
+    ;; the simple literal, kept in the term's record (+28; collect clears it)
+    (if (i32.eqz (local.tee $x (i32.load offset=28 (call $rec (local.get $a))))) (then
+      (i32.store offset=28 (call $rec (local.get $a)) (local.tee $x (call $simple (call $tval (local.get $a)) (call $tlen (local.get $a)))))))
+    (return (local.get $x))))
   (if (i32.or (i32.eq (local.get $f) (i32.const F_IRI)) (i32.eq (local.get $f) (i32.const F_URI))) (then
     (if (i32.eq (call $kind (local.get $a)) (i32.const 1)) (then (return (local.get $a))))
     (if (i32.eqz (call $is_plain (local.get $a))) (then (return (i32.const 0))))
@@ -618,8 +667,8 @@
     (if (i32.eqz (call $tlen (local.get $b))) (then (return (i32.const 0))))
     (call $xb_reset)
     (call $xb_put_term (local.get $b))
-    (call $lower (global.get $xb) (global.get $xb_len))
-    (return (call $intern (i32.const 3) (call $tval (local.get $a)) (call $tlen (local.get $a)) (i32.const 3) (global.get $xb) (global.get $xb_len) (i32.const 1)))))
+    (call $lower (call $xb_ptr) (call $xb_n))
+    (return (call $intern (i32.const 3) (call $tval (local.get $a)) (call $tlen (local.get $a)) (i32.const 3) (call $xb_ptr) (call $xb_n) (i32.const 1)))))
   (if (i32.eq (local.get $f) (i32.const F_STRLANGDIR)) (then
     (if (i32.eqz (i32.and (call $is_plain (local.get $a)) (i32.and (call $is_plain (local.get $b)) (call $is_plain (local.get $c))))) (then (return (i32.const 0))))
     (if (i32.eqz (call $tlen (local.get $b))) (then (return (i32.const 0))))
@@ -629,8 +678,8 @@
     (if (i32.eqz (local.get $x)) (then (return (i32.const 0))))
     (call $xb_reset)
     (call $xb_put_term (local.get $b))
-    (call $lower (global.get $xb) (global.get $xb_len))
-    (return (call $intern (i32.or (i32.const 3) (i32.shl (local.get $x) (i32.const 8))) (call $tval (local.get $a)) (call $tlen (local.get $a)) (i32.const 4) (global.get $xb) (global.get $xb_len) (i32.const 1)))))
+    (call $lower (call $xb_ptr) (call $xb_n))
+    (return (call $intern (i32.or (i32.const 3) (i32.shl (local.get $x) (i32.const 8))) (call $tval (local.get $a)) (call $tlen (local.get $a)) (i32.const 4) (call $xb_ptr) (call $xb_n) (i32.const 1)))))
   (if (i32.eq (local.get $f) (i32.const F_STRDT)) (then
     (if (i32.eqz (i32.and (call $is_plain (local.get $a)) (i32.eq (call $kind (local.get $b)) (i32.const 1)))) (then (return (i32.const 0))))
     (if (i32.le_u (i32.sub (local.get $b) (i32.const 3)) (i32.const 1)) (then (return (i32.const 0))))
@@ -688,7 +737,7 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $digits))))
     (if (i32.eq (local.get $f) (i32.const F_UUID))
-      (then (return (call $iri_const (global.get $xb) (global.get $xb_len)))))
+      (then (return (call $iri_const (call $xb_ptr) (call $xb_n)))))
     (return (call $xb_string (i32.const 0)))))
   (if (i32.le_u (i32.sub (local.get $f) (i32.const F_MD5)) (i32.const 4)) (then
     (if (i32.eqz (call $is_plain (local.get $a))) (then (return (i32.const 0))))

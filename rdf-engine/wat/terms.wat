@@ -7,7 +7,8 @@
 ;;   +12 b: value len  (triple: predicate)
 ;;   +16 c: datatype   (triple: object)
 ;;   +20 language length; the tag is stored lowercased right after the value
-;;   +24 datatype class cache (expr.wat)  +28 next freed id
+;;   +24 datatype class cache (expr.wat)
+;;   +28 next freed id; for a live IRI or literal, the id of its STR() (or 0)
 ;; Value and tag share one block of value_len + lang_len bytes.
 ;;
 ;; The interning table is open addressing with linear probing over term ids
@@ -38,7 +39,7 @@
     (then (i32.load8_u (call $rec (local.get $id))))
     (else (i32.const 0))))
 
-;; --- hashing (MurmurHash3 x86_32 rounds) -------------------------------------
+;; --- hashing (MurmurHash3 x86_32 rounds; byte strings eight bytes a step) -------------------------------------
 
 (func $mix (param $h i32) (param $k i32) (result i32)
   (i32.add
@@ -53,20 +54,28 @@
   (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 16))))
 
 (func $hash_bytes (param $h i32) (param $p i32) (param $n i32) (result i32)
-  (local.set $h (call $mix (local.get $h) (local.get $n)))
+  (local $x i64)
+  ;; eight bytes a step (multiply, fold the high bits down), seeded with h and n;
+  ;; the last 1-7 bytes as one overlapping word
+  (local.set $x (i64.extend_i32_u (call $mix (local.get $h) (local.get $n))))
   (loop $words
-    (if (i32.ge_u (local.get $n) (i32.const 4)) (then
-      (local.set $h (call $mix (local.get $h) (i32.load (local.get $p))))
-      (local.set $p (i32.add (local.get $p) (i32.const 4)))
-      (local.set $n (i32.sub (local.get $n) (i32.const 4)))
+    (if (i32.ge_u (local.get $n) (i32.const 8)) (then
+      (local.set $x (call $mix64 (local.get $x) (i64.load (local.get $p))))
+      (local.set $p (i32.add (local.get $p) (i32.const 8)))
+      (local.set $n (i32.sub (local.get $n) (i32.const 8)))
       (br $words))))
-  (loop $bytes
-    (if (local.get $n) (then
-      (local.set $h (call $mix (local.get $h) (i32.load8_u (local.get $p))))
-      (local.set $p (i32.add (local.get $p) (i32.const 1)))
-      (local.set $n (i32.sub (local.get $n) (i32.const 1)))
-      (br $bytes))))
-  (local.get $h))
+  (if (i32.ge_u (local.get $n) (i32.const 4))
+    (then (local.set $x (call $mix64 (local.get $x)
+      (i64.or (i64.shl (i64.load32_u (local.get $p)) (i64.const 32)) (i64.load32_u (i32.sub (i32.add (local.get $p) (local.get $n)) (i32.const 4)))))))
+    (else (if (local.get $n) (then (local.set $x (call $mix64 (local.get $x)
+      (i64.extend_i32_u (i32.or (i32.or (i32.shl (i32.load8_u (local.get $p)) (i32.const 16))
+                                        (i32.shl (i32.load8_u (i32.add (local.get $p) (i32.shr_u (local.get $n) (i32.const 1)))) (i32.const 8)))
+                                (i32.load8_u (i32.sub (i32.add (local.get $p) (local.get $n)) (i32.const 1)))))))))))
+  (i32.wrap_i64 (i64.xor (local.get $x) (i64.shr_u (local.get $x) (i64.const 32)))))
+
+(func $mix64 (param $x i64) (param $w i64) (result i64)
+  (local.set $x (i64.mul (i64.xor (local.get $x) (local.get $w)) (i64.const 0x9e3779b97f4a7c15)))
+  (i64.xor (local.get $x) (i64.shr_u (local.get $x) (i64.const 29))))
 
 ;; --- the term table ----------------------------------------------------------
 
