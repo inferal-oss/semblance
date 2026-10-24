@@ -10,6 +10,9 @@ import { reactions as feedbackReactions } from '../components/feedback.ts'
 import { reactions as dataReactions } from '../components/data.ts'
 import { reactions as navigationReactions } from '../components/navigation.ts'
 import { reactions as overlaysReactions } from '../components/overlays.ts'
+import { reactions as workbenchReactions } from '../components/workbench.ts'
+import { docsReactions } from '../layers/docs.ts'
+import { persistenceReactions } from '../persistence.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
@@ -123,5 +126,8 @@ export const reactions: Record<string, ReactionFn> = {
   ...dataReactions,
   ...navigationReactions,
   ...overlaysReactions,
+  ...workbenchReactions,
+  ...docsReactions,
+  ...persistenceReactions,
   ...disclosureReactions,
 }
