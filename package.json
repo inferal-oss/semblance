@@ -2,6 +2,7 @@
   "name": "semblance",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT OR Apache-2.0",
   "type": "module",
   "description": "Spike: an ontologically-defined web UI framework",
   "scripts": {
