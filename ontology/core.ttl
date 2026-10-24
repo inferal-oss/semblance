@@ -148,3 +148,12 @@ sem:slot a owl:DatatypeProperty ;
     rdfs:comment "Marks an RDF/HTML element as a host-owned slot: renderers create it but never manage its children, so a host application can mount its own content there."@en .
 sem:symbol a owl:DatatypeProperty ; rdfs:comment "A short glyph standing for an individual in compact UIs."@en .
 sem:order a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Presentation order among sibling individuals (ascending)."@en .
+
+# --- Component groups -------------------------------------------------------
+# Component classes come in groups (layout, inputs, windows...): the docs, the
+# gallery and the reference list them that way. A class says which group it is in.
+
+sem:ComponentGroup a owl:Class ;
+    rdfs:comment "A group of related component classes, with their mixins and parts (rdfs:label, sem:order)."@en .
+sem:group a owl:AnnotationProperty ; rdfs:domain owl:Class ; rdfs:range sem:ComponentGroup ;
+    rdfs:comment "The group a component class (or one of its mixins or parts) belongs to."@en .
