@@ -113,8 +113,8 @@ ui:act-copy-button a c:Button , clip:Copier ; clip:copies ui:act-copy-sample ; c
     c:label "Copy" , "Копіювати"@uk , "Kopieren"@de , "نسخ"@ar ; sty:size sty:Small .
 ui:act-copy-off a c:IconButton , clip:Copier ; clip:copies ui:act-copy-sample ; clip:property c:label ; c:disabled true ;
     c:label "Copy (disabled)" , "Копіювати (вимкнено)"@uk , "Kopieren (deaktiviert)"@de , "نسخ (معطّل)"@ar .
-ui:act-copy-controls a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:act-copy-icon ui:act-copy-button ui:act-copy-off ) .
-ui:act-copy-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-copy-sample ui:act-copy-controls ) .
+ui:act-copy-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-copy-icon ui:act-copy-button ui:act-copy-off ) .
+ui:act-copy-row a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:act-copy-controls ui:act-copy-sample ) .
 ui:act-copiers a c:Flippable ; c:front ui:act-copiers-spec .
 ui:act-copiers-spec a c:Specimen ; c:label "Copy to the clipboard" ;
     c:help "Any button that is also a clip:Copier copies a value of a node (clip:copies, clip:property): here the sample's c:label, elsewhere a result table's c:markdown or an editor's text. The click records a clip:Request; the host's clipboard effect writes it and reports back as an event, so the glyph shows ✓ (or ✕) for a moment and a toast says what was copied. A button is keyboard accessible by construction: Enter or Space copies." ;

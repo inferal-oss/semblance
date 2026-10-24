@@ -356,7 +356,7 @@ c:selectedTerm."""@en ;
     sem:slug "result-graph" .
 # Not the selection: changing it must not run the query or lay the graph out again.
 c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
-    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates ;
+    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
     sem:functionOnly "It runs the query held in the data and computes a layout (trigonometry, layering by longest path), which SPARQL cannot do." .
 c:ResultGraphRendering-fn a sem:Rule ; sem:implements c:ResultGraphRendering ; sem:function "workbench:graph" .
 

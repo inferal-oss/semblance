@@ -1082,7 +1082,7 @@ const graphview: FnRule = (ctx, focus) => {
   // The selection rule (c:ResultGraphSelection) fills this line: a hint, or the selected node and its connections.
   const details = o.el('selection', 'P', { id: mint(focus.value, 'selection'), class: 'sem-selection' })
   o.attr(details, 'aria-live', 'polite')
-  const parts = [summary(o, size + (more ? ` · ${more}` : '')), details, o.el('canvas', 'Div', { class: 'sem-canvas' }, [svg])]
+  const parts = [summaryBar(ctx, o, size + (more ? ` · ${more}` : '')), details, o.el('canvas', 'Div', { class: 'sem-canvas' }, [svg])]
   if (!labels) {
     const counts = new Map<string, number>()
     for (const e of edges) counts.set(e.label, (counts.get(e.label) ?? 0) + 1)
@@ -1222,7 +1222,7 @@ const turtleview: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.text('turtle', tokens.map((t) => t.text).join(''))]))
     return o.quads
   }
-  o.renders(o.el('root', 'Div', {}, [summary(o, line), o.el('code', 'Pre', { class: 'sem-turtle' }, codeNodes(o, tokens, TURTLE_PLAIN, 'ttl-'))]))
+  o.renders(o.el('root', 'Div', {}, [summaryBar(ctx, o, line), o.el('code', 'Pre', { class: 'sem-turtle' }, codeNodes(o, tokens, TURTLE_PLAIN, 'ttl-'))]))
   return o.quads
 }
 

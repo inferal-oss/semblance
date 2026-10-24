@@ -15,4 +15,5 @@ export { EventBus, type Handled, type ReactionContext, type ReactionFn } from '.
 export { Persistence, memoryBackend, webStorageBackend, indexedDbBackend, type Backend } from './persistence.ts'
 export { Navigation, rendererReveal, type NavigationOptions } from './navigation.ts'
 export { Clipboard, type ClipboardLike, type ClipboardOptions } from './clipboard.ts'
+export { Scheduler } from './behaviour/schedule.ts'
 export { labelOf, text, rdfList, nodes } from './components/util.ts'

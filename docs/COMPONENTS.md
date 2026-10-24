@@ -136,6 +136,21 @@ Say what a reaction means for people with `ann:announces` (a toast and a live-re
 Keyboard: `key:shortcut "mod+k"` on any component activates it by key; a class declares its
 arrow-key pattern with `key:navigation` (roving focus for menus, tabs, trees).
 
+A capability several components share is a **mixin class** with its own reactions: an instance
+opts in by also having the class. `c:Pressable` flips `c:pressed`; `clip:Copier` copies a value
+to the clipboard:
+
+```turtle
+ex:copy a c:IconButton , clip:Copier ;
+    clip:copies ex:report ; clip:property c:markdown ; clip:format clip:Markdown ;
+    c:label "Copy as Markdown"@en , "Копіювати як Markdown"@uk .
+```
+
+The click records a `clip:Request` in the graph; the clipboard effect (`Clipboard`, below) writes
+it and reports back as an event (`clip:Copied`, `clip:CopyFailed`), so the button shows ✓ or ✕ for
+a moment and a toast says what was copied. When the browser must act, the graph says what and a
+host effect does it, the same way `beh:dueAt` becomes a timer.
+
 ## Validation and shapes
 
 Two kinds of SHACL, both data:
@@ -223,6 +238,9 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
 - **The address.** `nav:Location` and `nav:Dimension`s say which state lives in the URL;
   attach `Navigation` and links can point at resources (`c:to`) instead of addresses.
+- **Things due later, the clipboard.** Attach a `Scheduler` (`beh:dueAt` becomes a `beh:Due`
+  event) and a `Clipboard` (a `clip:Request` is written with `navigator.clipboard`, or a stand-in
+  you pass, e.g. in tests); both report back as events on the bus.
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
   shown; `sem:warm sem:Eager | sem:OnIntent` says which.
 - **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
