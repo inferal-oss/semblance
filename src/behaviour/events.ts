@@ -316,7 +316,10 @@ export class EventBus {
           const custom = (e as CustomEvent).detail
           if (custom && typeof custom === 'object') detail.numbers = custom as Record<string, number>
           const handled = this.emit(type, focus, detail, reactions)
-          if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
+          // Reactions that changed nothing let the event reach the enclosing components
+          // (a generic reaction on c:Button must not swallow its container's click).
+          if (!handled.recorded && !handled.delta.add.length && !handled.delta.remove.length) continue
+          onHandled(handled)
           return
         }
       }
@@ -334,6 +337,12 @@ export class EventBus {
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
       const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo) as HTMLElement | undefined
+      if (!el && combo === 'escape') {
+        // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
+        const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]')).at(-1) as HTMLElement | undefined
+        if (dismiss) k.preventDefault(), dismiss.click()
+        return
+      }
       if (!el || el.closest('[hidden], [inert]')) return
       k.preventDefault()
       const field = el.matches('input, textarea, select') ? el : (el.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select') as HTMLElement | null)

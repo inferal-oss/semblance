@@ -50,7 +50,8 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
     }
     const closeLabel = phrase(ctx, FB.Close, 'Close')
     const close = o.el('close', 'Button', { type: 'button', class: 'sem-close' }, [o.text('close-text', '✕')])
-    o.attr(close, 'aria-label', closeLabel)
+    // Escape activates the close control of the topmost open overlay (keyboard layer).
+    o.attr(close, 'aria-label', closeLabel).attr(close, 'data-sem-escape', '')
     o.t(close, FB.closes, focus)
     const titleNode = o.node('title')
     const bodyNode = o.node('desc')
@@ -104,6 +105,7 @@ const popover: FnRule = (ctx, focus) => {
     decor(o, o.el('caret', 'Span', { class: 'sem-caret' })),
   ])
   o.attr(trigger, 'aria-haspopup', 'dialog').attr(trigger, 'aria-expanded', String(open)).attr(trigger, 'aria-controls', panelNode.value)
+  if (open) o.attr(trigger, 'data-sem-escape', '')
   o.t(trigger, FB.toggles, focus)
   const inner: NamedNode[] = []
   if (body) inner.push(o.el('desc', 'P', { class: 'sem-desc' }, [o.text('desc-text', body)]))

@@ -3,6 +3,7 @@ import { H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { mint } from '../rdf.ts'
 import type { Factory, GraphStore } from '../store/types.ts'
+import { ATTRIBUTE_NAMES } from '../vocab/rdfhtml.generated.ts'
 
 /** What a function rule sees: the input graph plus this engine's derived graph. */
 export interface RuleContext {
@@ -133,7 +134,13 @@ export class Out {
   el(local: string, cls: string, attrs: Attrs = {}, children: NamedNode[] = []): NamedNode {
     const n = this.node(local)
     this.t(n, RDF_TYPE, this.ctx.nn(H.ns + cls))
-    for (const [name, value] of Object.entries(attrs)) if (value !== undefined) this.t(n, H.ns + name, value)
+    for (const [name, value] of Object.entries(attrs)) {
+      if (value === undefined) continue
+      // RDF/HTML has properties for the standard attributes; others (aria-*, data-*, role)
+      // are attribute nodes.
+      if (Object.hasOwn(ATTRIBUTE_NAMES, name)) this.t(n, H.ns + name, value)
+      else this.attr(n, name, value)
+    }
     this.children(n, children)
     return n
   }

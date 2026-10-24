@@ -56,8 +56,21 @@ document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
 const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
 // The Text projection mounts into its slot once the slot is shown (it is evaluated on demand).
 let textDom: DomRenderer | undefined
+// Modal overlays take focus when they open and give it back when they close.
+let modal: Element | null = null
+let opener: HTMLElement | null = null
+function focusModal() {
+  const open = [...document.querySelectorAll('[aria-modal=true]')].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
+  if (open === modal) return
+  if (open && !modal) opener = document.activeElement as HTMLElement | null
+  modal = open
+  if (open) (open.querySelector('input, textarea, select, button:not(.sem-close), [tabindex]') as HTMLElement | null ?? (open as HTMLElement)).focus?.()
+  else opener?.focus?.(), (opener = null)
+}
+
 const flush = () => {
   shell.flush()
+  focusModal()
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
   textDom?.flush()

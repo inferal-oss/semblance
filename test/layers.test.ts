@@ -67,6 +67,24 @@ describe('keyboard layer', () => {
   })
 })
 
+describe('keyboard layer: Escape', () => {
+  it('dismisses the open dialog through its own close control', () => {
+    const h = showLayers()
+    const f = h.store.factory
+    const app = f.namedNode(UI + 'app')
+    const group = f.namedNode(UI + 'galleryGroup')
+    h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupOverlays'))] })
+    h.shell.flush()
+    const open = () => h.store.match(f.namedNode(UI + 'ov-dialog'), f.namedNode('https://semblance.dev/ns/component#open'), null).map((q) => q.object.value)
+    h.fire(h.byId(`${UI}ov-open-dialog/~root`), 'click')
+    expect(open()).toEqual(['true'])
+    const e = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+    Object.assign(e, { key: 'Escape', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+    h.document.dispatchEvent(e)
+    expect(open()).toEqual(['false'])
+  })
+})
+
 describe('status layer', () => {
   it('marks busy components aria-busy', () => {
     const h = showLayers()

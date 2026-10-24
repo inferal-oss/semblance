@@ -143,8 +143,10 @@ export function compileStyles(store: GraphStore): string {
       continue
     }
     // A rule for a class also styles its subclasses (data-sem-c names only the direct class).
+    // A part listing several selectors (a, b) is scoped to the component in each.
+    const parts = part ? splitSelectors(part) : ['']
     const selector = withSubclasses(cls)
-      .map((c) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (part ? ' ' + part : ''))
+      .flatMap((c) => parts.map((p) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (p ? ' ' + p : '')))
       .join(', ')
     ;(intent ? intentRules : when ? variantRules : componentRules).push([classDepth(cls), block(selector, declarations(r))])
   }
@@ -173,4 +175,26 @@ export function compileStyles(store: GraphStore): string {
   ]
     .filter(Boolean)
     .join('\n\n')
+}
+
+/** Split a selector list on its top-level commas (not those inside :is(), :not(), [attr="a,b"]). */
+function splitSelectors(list: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let quote = ''
+  let start = 0
+  for (let i = 0; i < list.length; i++) {
+    const ch = list[i]!
+    if (quote) {
+      if (ch === quote) quote = ''
+    } else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth--
+    else if (ch === ',' && depth === 0) {
+      out.push(list.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  out.push(list.slice(start).trim())
+  return out.filter(Boolean)
 }
