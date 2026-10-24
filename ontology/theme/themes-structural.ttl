@@ -5,7 +5,7 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
-# Structural themes: four more values of sty:theme that change how things are built, not only
+# Structural themes: five more values of sty:theme that change how things are built, not only
 # their colours. Each is a sty:Theme like those in themes.ttl, restating the same token set
 # (ramps, roles, type, radii, shadows, easing, marks, backdrop: see the header of themes.ttl),
 # and adds sty:StyleRules narrowed by sty:when to that theme:
@@ -19,6 +19,9 @@
 #   Classic    silver faces and two-pixel bevels (Windows 95-ish): navy caption bars, square caption
 #              buttons on the right, sunken white fields, pushed-in toggles, a taskbar along the
 #              bottom; no corners, no easing.
+#   Fluent     today's desktop (Windows 11-ish): Mica and Acrylic, hairline strokes with a darker
+#              bottom edge, an accent underline on the focused field, an accent pill on whatever is
+#              selected, wide flat caption buttons on the right with a red close, a centred taskbar.
 #   Doodle     drawn by hand: inked strokes on wobbly corners, a marker for titles, highlighter for
 #              choices, paper notes and tape, ruled paper by day and a blackboard by night.
 #
@@ -42,9 +45,8 @@
 # after the variants: those name the class and intent, and scope themselves with a state,
 # :where([data-sem-theme=classic] *) plus the guard.
 #
-# Window controls are found by their place in the title bar: the frame rule renders them in a fixed
-# order, [dock] [minimize] [maximize | restore] [undock] close, so close is the last child and the
-# others are counted from the end (one further while the undock control is there).
+# Window controls are found by the control they are (data-sem-control: close, minimize, maximize,
+# restore, dock, undock), so a theme can reorder and recolour them.
 #
 # Contrast and motion keep winning: high contrast restates the role tokens on top of each theme
 # (below, and in themes.ttl for nested subtrees) and makes the focus outline heavy; every
@@ -421,6 +423,129 @@ sty:Classic a sty:Theme ; sem:slug "classic" ; sem:order 8 ; sem:symbol "⊞" ;
         [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
         [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
 
+sty:Fluent a sty:Theme ; sem:slug "fluent" ; sem:order 10 ; sem:symbol "◫" ;
+    rdfs:label "Fluent"@en , "Флюент"@uk , "Fluent"@de , "فلوينت"@ar ;
+    rdfs:comment "Today's desktop (Windows 11-ish): a Mica-tinted canvas, Acrylic flyouts, menus and toasts, Segoe UI Variable, four-pixel controls and eight-pixel windows and flyouts, hairline strokes with a darker bottom edge, a two-pixel accent underline on the focused field, an accent pill on the selected tab, segment and navigation item, pill switches whose knob grows on hover, wide flat caption buttons with a red close, soft layered shadows and a centred taskbar with an accent dash under the active window. Light and dark."@en ;
+    sty:declares
+        # neutral ramp
+        [ sty:property "--sem-gray-1" ; sty:raw "light-dark(#ffffff, #1c1c1c)" ] ,
+        [ sty:property "--sem-gray-2" ; sty:raw "light-dark(#fafafa, #202020)" ] ,
+        [ sty:property "--sem-gray-3" ; sty:raw "light-dark(#f3f3f3, #282828)" ] ,
+        [ sty:property "--sem-gray-4" ; sty:raw "light-dark(#ebebeb, #2d2d2d)" ] ,
+        [ sty:property "--sem-gray-5" ; sty:raw "light-dark(#e5e5e5, #323232)" ] ,
+        [ sty:property "--sem-gray-6" ; sty:raw "light-dark(#dcdcdc, #3a3a3a)" ] ,
+        [ sty:property "--sem-gray-7" ; sty:raw "light-dark(#cccccc, #454545)" ] ,
+        [ sty:property "--sem-gray-8" ; sty:raw "light-dark(#b4b4b4, #5c5c5c)" ] ,
+        [ sty:property "--sem-gray-9" ; sty:raw "light-dark(#8a8a8a, #737373)" ] ,
+        [ sty:property "--sem-gray-10" ; sty:raw "light-dark(#7a7a7a, #848484)" ] ,
+        [ sty:property "--sem-gray-11" ; sty:raw "light-dark(#5d5d5d, #c5c5c5)" ] ,
+        [ sty:property "--sem-gray-12" ; sty:raw "light-dark(#1b1b1b, #ffffff)" ] ,
+        # accent ramp
+        [ sty:property "--sem-accent-1" ; sty:raw "light-dark(#f7fbff, #0c1621)" ] ,
+        [ sty:property "--sem-accent-2" ; sty:raw "light-dark(#eef6fe, #0f1c2b)" ] ,
+        [ sty:property "--sem-accent-3" ; sty:raw "light-dark(#e0eefc, #12283d)" ] ,
+        [ sty:property "--sem-accent-4" ; sty:raw "light-dark(#cfe4fa, #15324d)" ] ,
+        [ sty:property "--sem-accent-5" ; sty:raw "light-dark(#bad8f7, #193d5f)" ] ,
+        [ sty:property "--sem-accent-6" ; sty:raw "light-dark(#a0c8f2, #1e4b73)" ] ,
+        [ sty:property "--sem-accent-7" ; sty:raw "light-dark(#7fb3ea, #255d8c)" ] ,
+        [ sty:property "--sem-accent-8" ; sty:raw "light-dark(#4f94dc, #2f75ad)" ] ,
+        [ sty:property "--sem-accent-9" ; sty:raw "light-dark(#005fb8, #60cdff)" ] ,
+        [ sty:property "--sem-accent-10" ; sty:raw "light-dark(#196ebf, #75d3ff)" ] ,
+        [ sty:property "--sem-accent-11" ; sty:raw "light-dark(#00539f, #99ebff)" ] ,
+        [ sty:property "--sem-accent-12" ; sty:raw "light-dark(#001d47, #d9f6ff)" ] ,
+        # status
+        [ sty:property "--sem-info-3" ; sty:raw "light-dark(#e6f1fb, #142636)" ] ,
+        [ sty:property "--sem-info-4" ; sty:raw "light-dark(#d4e7f8, #183047)" ] ,
+        [ sty:property "--sem-info-6" ; sty:raw "light-dark(#9cc6ee, #23507a)" ] ,
+        [ sty:property "--sem-info-9" ; sty:raw "light-dark(#005fb8, #60cdff)" ] ,
+        [ sty:property "--sem-info-10" ; sty:raw "light-dark(#196ebf, #75d3ff)" ] ,
+        [ sty:property "--sem-info-11" ; sty:raw "light-dark(#005fb8, #99ebff)" ] ,
+        [ sty:property "--sem-success-3" ; sty:raw "light-dark(#dff6dd, #2a331a)" ] ,
+        [ sty:property "--sem-success-4" ; sty:raw "light-dark(#cdeec9, #313d1e)" ] ,
+        [ sty:property "--sem-success-6" ; sty:raw "light-dark(#96d38e, #4f6f2c)" ] ,
+        [ sty:property "--sem-success-9" ; sty:raw "light-dark(#0f7b0f, #6ccb5f)" ] ,
+        [ sty:property "--sem-success-10" ; sty:raw "light-dark(#0e6f0e, #7fd673)" ] ,
+        [ sty:property "--sem-success-11" ; sty:raw "light-dark(#0f7b0f, #6ccb5f)" ] ,
+        [ sty:property "--sem-warning-3" ; sty:raw "light-dark(#fff4ce, #3a2f17)" ] ,
+        [ sty:property "--sem-warning-4" ; sty:raw "light-dark(#ffecb0, #45381b)" ] ,
+        [ sty:property "--sem-warning-6" ; sty:raw "light-dark(#f5d27a, #6b5313)" ] ,
+        [ sty:property "--sem-warning-9" ; sty:raw "light-dark(#fce100, #fce100)" ] ,
+        [ sty:property "--sem-warning-10" ; sty:raw "light-dark(#e8cf00, #fde93d)" ] ,
+        [ sty:property "--sem-warning-11" ; sty:raw "light-dark(#9d5d00, #fce100)" ] ,
+        [ sty:property "--sem-danger-3" ; sty:raw "light-dark(#fde7e9, #3d2423)" ] ,
+        [ sty:property "--sem-danger-4" ; sty:raw "light-dark(#fbd5d9, #4a2a29)" ] ,
+        [ sty:property "--sem-danger-6" ; sty:raw "light-dark(#f1a3aa, #7a3b3a)" ] ,
+        [ sty:property "--sem-danger-9" ; sty:raw "light-dark(#c42b1c, #ff99a4)" ] ,
+        [ sty:property "--sem-danger-10" ; sty:raw "light-dark(#b02619, #ffadb6)" ] ,
+        [ sty:property "--sem-danger-11" ; sty:raw "light-dark(#c42b1c, #ff99a4)" ] ,
+        # roles
+        [ sty:property "--sem-canvas" ; sty:raw "light-dark(#eff1f6, #202227)" ] ,
+        [ sty:property "--sem-surface" ; sty:raw "light-dark(#fbfbfc, #2b2b2d)" ] ,
+        [ sty:property "--sem-surface-sunken" ; sty:raw "light-dark(#f7f8fa, #1d1d1f)" ] ,
+        [ sty:property "--sem-surface-hover" ; sty:raw "light-dark(#f2f3f5, #323234)" ] ,
+        [ sty:property "--sem-surface-overlay" ; sty:raw "light-dark(#fcfcfc, #2c2c2e)" ] ,
+        [ sty:property "--sem-text" ; sty:raw "light-dark(#1b1b1b, #ffffff)" ] ,
+        [ sty:property "--sem-muted" ; sty:raw "light-dark(#5d5d5d, #c5c5c5)" ] ,
+        [ sty:property "--sem-faint" ; sty:raw "light-dark(#8a8a8a, #8a8a8a)" ] ,
+        [ sty:property "--sem-border" ; sty:raw "light-dark(#e3e3e6, #3b3b3e)" ] ,
+        [ sty:property "--sem-border-strong" ; sty:raw "light-dark(#c4c4c8, #5a5a5e)" ] ,
+        [ sty:property "--sem-accent" ; sty:raw "light-dark(#005fb8, #99ebff)" ] ,
+        [ sty:property "--sem-accent-strong" ; sty:raw "light-dark(#004c94, #c2f3ff)" ] ,
+        [ sty:property "--sem-accent-soft" ; sty:raw "color-mix(in srgb, var(--sem-accent-9) 12%, transparent)" ] ,
+        [ sty:property "--sem-on-accent" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
+        [ sty:property "--sem-accent-contrast" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
+        [ sty:property "--sem-on-status" ; sty:raw "light-dark(#ffffff, #000000)" ] ,
+        [ sty:property "--sem-danger" ; sty:raw "light-dark(#c42b1c, #ff99a4)" ] ,
+        [ sty:property "--sem-success" ; sty:raw "light-dark(#0f7b0f, #6ccb5f)" ] ,
+        [ sty:property "--sem-ring" ; sty:raw "0 0 #0000" ] ,
+        [ sty:property "--sem-scrim" ; sty:raw "light-dark(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.45))" ] ,
+        [ sty:property "--sem-tooltip-bg" ; sty:raw "light-dark(#f9f9f9, #2c2c2c)" ] ,
+        [ sty:property "--sem-tooltip-fg" ; sty:raw "light-dark(#1b1b1b, #ffffff)" ] ,
+        [ sty:property "--sem-code-bg" ; sty:raw "light-dark(#f7f8fa, #1d1d1f)" ] ,
+        # type
+        [ sty:property "--sem-font" ; sty:raw "'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif" ] ,
+        [ sty:property "--sem-font-display" ; sty:raw "'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif" ] ,
+        [ sty:property "--sem-font-mono" ; sty:raw "'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace" ] ,
+        [ sty:property "--sem-mono" ; sty:raw "'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace" ] ,
+        [ sty:property "--sem-font-features" ; sty:raw "normal" ] ,
+        [ sty:property "--sem-display-weight" ; sty:raw "600" ] ,
+        [ sty:property "--sem-display-tracking" ; sty:raw "0" ] ,
+        [ sty:property "--sem-display-case" ; sty:raw "none" ] ,
+        # shape and depth
+        [ sty:property "--sem-radius-sm" ; sty:raw "4px" ] ,
+        [ sty:property "--sem-radius-md" ; sty:raw "4px" ] ,
+        [ sty:property "--sem-radius-lg" ; sty:raw "8px" ] ,
+        [ sty:property "--sem-radius-xl" ; sty:raw "8px" ] ,
+        [ sty:property "--sem-radius-full" ; sty:raw "999px" ] ,
+        [ sty:property "--sem-radius" ; sty:raw "4px" ] ,
+        [ sty:property "--sem-radius-card" ; sty:raw "8px" ] ,
+        [ sty:property "--sem-radius-control" ; sty:raw "4px" ] ,
+        [ sty:property "--sem-shadow" ; sty:raw "0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.2))" ] ,
+        [ sty:property "--sem-shadow-raised" ; sty:raw "0 2px 4px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.26))" ] ,
+        [ sty:property "--sem-shadow-1" ; sty:raw "0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.2))" ] ,
+        [ sty:property "--sem-shadow-2" ; sty:raw "0 2px 4px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.26)), 0 4px 8px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.2))" ] ,
+        [ sty:property "--sem-shadow-3" ; sty:raw "0 8px 16px light-dark(rgb(0 0 0 / 0.14), rgb(0 0 0 / 0.26))" ] ,
+        [ sty:property "--sem-shadow-4" ; sty:raw "0 32px 64px light-dark(rgb(0 0 0 / 0.19), rgb(0 0 0 / 0.37)), 0 2px 21px light-dark(rgb(0 0 0 / 0.15), rgb(0 0 0 / 0.37))" ] ,
+        # motion
+        [ sty:property "--sem-ease" ; sty:raw "cubic-bezier(0, 0, 0, 1)" ] ,
+        [ sty:property "--sem-spring" ; sty:raw "cubic-bezier(0.1, 0.9, 0.2, 1)" ] ,
+        [ sty:property "--sem-motion" ; sty:raw "var(--sem-duration) var(--sem-ease)" ] ,
+        # marks and backdrop
+        [ sty:property "--sem-mark" ; sty:raw "var(--sem-accent-9)" ] ,
+        [ sty:property "--sem-mark-width" ; sty:raw "16px" ] ,
+        [ sty:property "--sem-mark-height" ; sty:raw "3px" ] ,
+        [ sty:property "--sem-mark-radius" ; sty:raw "2px" ] ,
+        [ sty:property "--sem-gradient" ; sty:raw "linear-gradient(90deg, var(--sem-accent-9), var(--sem-accent-9))" ] ,
+        [ sty:property "--sem-gradient-from" ; sty:raw "light-dark(#0078d4, #60cdff)" ] ,
+        [ sty:property "--sem-gradient-to" ; sty:raw "light-dark(#005fb8, #0078d4)" ] ,
+        [ sty:property "--sem-check" ; sty:raw "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l2.9 2.9 6.1-6.6' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")" ] ,
+        [ sty:property "--sem-backdrop" ; sty:raw "radial-gradient(1200px 700px at 8% -12%, light-dark(#dde6f5, #1b2534) 0%, transparent 62%), radial-gradient(1000px 620px at 100% 0%, light-dark(#ebe5f3, #252030) 0%, transparent 56%), var(--sem-canvas)" ] ,
+        # the themed element itself paints the theme
+        [ sty:property "background" ; sty:raw "var(--sem-backdrop)" ] ,
+        [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+        [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
+        [ sty:property "accent-color" ; sty:raw "var(--sem-accent-9)" ] .
+
 sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     rdfs:label "Doodle"@en , "Каракулі"@uk , "Gekritzel"@de , "خربشة"@ar ;
     rdfs:comment "Drawn by hand: inked two-pixel strokes on wobbly corners, a handwriting face and a marker for titles, pencil shadows, highlighter for whatever is chosen, menus on sticky notes, dialogs taped on, cards set down askew; ruled paper and blue ink by day, a blackboard and chalk by night."@en ;
@@ -788,28 +913,28 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "light-dark(#d6d6d6, #5a5a5e)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:last-child:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=close]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "-3" ] ,
                  [ sty:property "background" ; sty:raw "#ff5f57" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=window]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(3), [data-sem-c=window]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(4)):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=minimize]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "-2" ] ,
                  [ sty:property "background" ; sty:raw "#febc2e" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=window]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(2), [data-sem-c=window]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(3)):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=maximize], [data-sem-control=restore]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "-1" ] ,
                  [ sty:property "background" ; sty:raw "#28c840" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:last-child:hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=close]):hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "#ff5f57" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=window]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(3), [data-sem-c=window]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(4)):hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=minimize]):hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "#febc2e" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=window]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(2), [data-sem-c=window]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(3)):hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=maximize], [data-sem-control=restore]):hover:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "#28c840" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is(:is([data-sem-c=window]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(4), [data-sem-c=window]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(5), [data-sem-c=palette]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(2), [data-sem-c=palette]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(3)), :is([data-sem-c=window], [data-sem-c=palette]):not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(2)):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=dock], [data-sem-control=undock]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "1" ] ,
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
@@ -1553,10 +1678,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # Every frame is a panel under a yellow tab: the tab is as wide as its title and sits on the
 # frame's top edge at the left, with the close box at its left end and the zoom box at its right.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:last-child:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=close]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "-1" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=window]:not(:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none])) .sem-window-control:nth-last-child(2), [data-sem-c=window]:not([data-sem-window-state=maximized])[data-sem-edge]:not([data-sem-edge=none]) .sem-window-control:nth-last-child(3)):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=maximize], [data-sem-control=restore]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "linear-gradient(#8a6d00, #8a6d00) 2px 2px / 6px 6px no-repeat, linear-gradient(#fff9c4, #fff9c4) 3px 3px / 4px 4px no-repeat, linear-gradient(135deg, #fff9c4, #f3c300)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-grip:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
@@ -2185,7 +2310,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Caption buttons sit at the right: minimize and maximize together, close a step apart.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:last-child:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=close]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "2px" ] .
 
 # Small, crisp type on controls, as on a 640x480 screen.
@@ -2665,6 +2790,663 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--hl-strong)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
 
+# --- Fluent ----------------------------------------------------------------------------------
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:declares [ sty:property "--fl-mica" ; sty:raw "light-dark(#eef0f5, #202227)" ] ,
+                 [ sty:property "--fl-acrylic" ; sty:raw "color-mix(in srgb, var(--sem-surface-overlay) 80%, transparent)" ] ,
+                 [ sty:property "--fl-blur" ; sty:raw "blur(30px) saturate(1.3)" ] ,
+                 [ sty:property "--fl-stroke" ; sty:raw "light-dark(rgb(0 0 0 / 0.0578), rgb(255 255 255 / 0.0698))" ] ,
+                 [ sty:property "--fl-stroke-flyout" ; sty:raw "light-dark(rgb(0 0 0 / 0.0578), rgb(0 0 0 / 0.2))" ] ,
+                 [ sty:property "--fl-stroke-bottom" ; sty:raw "light-dark(rgb(0 0 0 / 0.1622), rgb(255 255 255 / 0.093))" ] ,
+                 [ sty:property "--fl-stroke-strong" ; sty:raw "light-dark(rgb(0 0 0 / 0.4458), rgb(255 255 255 / 0.5442))" ] ,
+                 [ sty:property "--fl-fill" ; sty:raw "light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.0605))" ] ,
+                 [ sty:property "--fl-fill-hover" ; sty:raw "light-dark(rgb(249 249 249 / 0.5), rgb(255 255 255 / 0.0837))" ] ,
+                 [ sty:property "--fl-fill-pressed" ; sty:raw "light-dark(rgb(249 249 249 / 0.3), rgb(255 255 255 / 0.0326))" ] ,
+                 [ sty:property "--fl-fill-input" ; sty:raw "light-dark(#ffffff, #1f1f1f)" ] ,
+                 [ sty:property "--fl-fill-off" ; sty:raw "light-dark(rgb(0 0 0 / 0.0241), rgb(0 0 0 / 0.1))" ] ,
+                 [ sty:property "--fl-subtle-hover" ; sty:raw "light-dark(rgb(0 0 0 / 0.0373), rgb(255 255 255 / 0.0605))" ] ,
+                 [ sty:property "--fl-subtle-pressed" ; sty:raw "light-dark(rgb(0 0 0 / 0.0241), rgb(255 255 255 / 0.0419))" ] ,
+                 [ sty:property "--fl-accent-edge" ; sty:raw "inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 -1px 0 light-dark(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.14))" ] ,
+                 [ sty:property "--fl-knob" ; sty:raw "light-dark(rgb(0 0 0 / 0.62), rgb(255 255 255 / 0.79))" ] ,
+                 [ sty:property "--s-focus" ; sty:raw "2px solid light-dark(#000000, #ffffff)" ] ,
+                 [ sty:property "--s-focus-offset" ; sty:raw "1px" ] ,
+                 [ sty:property "scrollbar-color" ; sty:raw "light-dark(rgb(0 0 0 / 0.45), rgb(255 255 255 / 0.45)) transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "*:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "scrollbar-width" ; sty:raw "thin" ] .
+
+# Focus is a two-pixel rectangle (black by day, white by night) a pixel outside the control;
+# text fields show focus with their accent underline instead.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is(button, summary, a[href], select, input[type=checkbox], input[type=radio], input[type=range], [tabindex]:not([tabindex=\"-1\"])):focus-visible:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "var(--s-focus-offset)" ] .
+
+# Buttons: a translucent fill, a hairline stroke whose bottom edge is a shade darker, four-pixel
+# corners, regular weight; pressed, the label greys and nothing moves. Accent buttons carry an inner
+# bottom edge.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "400" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "transform" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-width" ; sty:raw "1px" ] ,
+                 [ sty:property "border-style" ; sty:raw "solid" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-hover)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:disabled):active:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-pressed)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button)[data-sem-emphasis=solid]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=menu] > button:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=button-group]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=chips] button, [data-sem-c=toggle], [data-sem-c=icon-button])[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
+    sty:state ":where([data-sem-theme=fluent] *):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-contrast)" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
+    sty:state ":where([data-sem-theme=fluent] *):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *)):hover" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-accent-9) 90%, var(--sem-canvas))" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
+    sty:state ":where([data-sem-theme=fluent] *):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *)):active" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-accent-9) 80%, var(--sem-canvas))" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+
+# Text fields: a hairline box with a darker bottom stroke that turns into a two-pixel accent
+# underline while focused; combo boxes look like buttons.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "6px 11px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-hover)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-strong)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-input)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--sem-accent-9)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 0 -1px 0 var(--sem-accent-9)" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea)[aria-invalid=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-bottom-color" ; sty:raw "var(--sem-danger)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=choice]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=choice] select:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "padding" ; sty:raw "5px 10px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=choice] select:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-hover)" ] .
+
+# Check boxes and radios: a strong hairline at rest, an accent fill when on; the radio dot grows on hover.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=checkbox] > .sem-row > input:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "--check-size" ; sty:raw "20px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--fl-fill-off)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=checkbox] > .sem-row > input:checked:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "linear-gradient(45deg, transparent 0 38%, var(--tone-on-solid, var(--sem-accent-contrast)) 38% 60%, transparent 60%) 22% 64% / 34% 34% no-repeat, linear-gradient(-45deg, transparent 0 41%, var(--tone-on-solid, var(--sem-accent-contrast)) 41% 60%, transparent 60%) 72% 44% / 48% 56% no-repeat, var(--tone-solid, var(--sem-accent-9))" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=radio-group] .sem-radio:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 0" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=radio-group] .sem-radio:has(> input:checked):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=radio-group] .sem-radio > input:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "--radio-size" ; sty:raw "20px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--fl-fill-off)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-strong)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=radio-group] .sem-radio > input:checked:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-on-solid, var(--sem-accent-contrast)) 0 28%, var(--tone-solid, var(--sem-accent-9)) 31%)" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=radio-group] .sem-radio:hover > input:checked:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-on-solid, var(--sem-accent-contrast)) 0 33%, var(--tone-solid, var(--sem-accent-9)) 36%)" ] .
+
+# Toggle switches are pills: an outlined knob at rest, white on accent when on; the knob grows under the pointer.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] .sem-track:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "40px" ] ,
+                 [ sty:property "height" ; sty:raw "20px" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "background" ; sty:raw "var(--fl-fill-off)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "999px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] .sem-thumb:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "12px" ] ,
+                 [ sty:property "height" ; sty:raw "12px" ] ,
+                 [ sty:property "top" ; sty:raw "3px" ] ,
+                 [ sty:property "left" ; sty:raw "3px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--fl-knob)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "transition" ; sty:raw "transform var(--sem-duration) var(--sem-spring), width var(--sem-duration-fast) var(--sem-ease), height var(--sem-duration-fast) var(--sem-ease), top var(--sem-duration-fast) var(--sem-ease), left var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] > button:not(:disabled):hover .sem-thumb:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "14px" ] ,
+                 [ sty:property "height" ; sty:raw "14px" ] ,
+                 [ sty:property "top" ; sty:raw "2px" ] ,
+                 [ sty:property "left" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] > button:not(:disabled):hover .sem-track:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] > button[aria-checked=true] .sem-track:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--tone-solid, var(--sem-accent-9))" ] ,
+                 [ sty:property "border-color" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] > button[aria-checked=true]:not(:disabled):hover .sem-track:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--tone-solid, var(--sem-accent-9)) 90%, var(--sem-canvas))" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=toggle-switch] > button[aria-checked=true] .sem-thumb:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--tone-on-solid, var(--sem-accent-contrast))" ] ,
+                 [ sty:property "transform" ; sty:raw "translateX(20px)" ] .
+
+# Sliders: a four-pixel rail, the accent part filled; the thumb is a ring around an accent dot that grows on hover.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=slider] > input:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::-webkit-slider-runnable-track" ;
+    sty:declares [ sty:property "height" ; sty:raw "4px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(to right, var(--tone-solid, var(--sem-accent-9)) var(--sem-fill, 0%), var(--fl-stroke-strong) var(--sem-fill, 0%))" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=slider] > input:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::-moz-range-track" ;
+    sty:declares [ sty:property "height" ; sty:raw "4px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(to right, var(--tone-solid, var(--sem-accent-9)) var(--sem-fill, 0%), var(--fl-stroke-strong) var(--sem-fill, 0%))" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=slider] > input:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::-webkit-slider-thumb" ;
+    sty:declares [ sty:property "width" ; sty:raw "20px" ] ,
+                 [ sty:property "height" ; sty:raw "20px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "50%" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "0 1px 2px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.5))" ] ,
+                 [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-solid, var(--sem-accent-9)) 0 5px, light-dark(#ffffff, #454545) 5.5px)" ] ,
+                 [ sty:property "margin-top" ; sty:raw "-8px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=slider] > input:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::-webkit-slider-thumb" ;
+    sty:declares [ sty:property "width" ; sty:raw "20px" ] ,
+                 [ sty:property "height" ; sty:raw "20px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "50%" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "0 1px 2px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.5))" ] ,
+                 [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-solid, var(--sem-accent-9)) 0 7px, light-dark(#ffffff, #454545) 7.5px)" ] ,
+                 [ sty:property "margin-top" ; sty:raw "-8px" ] ,
+                 [ sty:property "transform" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=slider] > input:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::-moz-range-thumb" ;
+    sty:declares [ sty:property "width" ; sty:raw "20px" ] ,
+                 [ sty:property "height" ; sty:raw "20px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "50%" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "0 1px 2px light-dark(rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.5))" ] ,
+                 [ sty:property "background" ; sty:raw "radial-gradient(circle, var(--tone-solid, var(--sem-accent-9)) 0 5px, light-dark(#ffffff, #454545) 5.5px)" ] .
+
+# The accent pill: a short rounded bar marks what is selected - under the chosen segment and
+# tab, at the left of the chosen navigation item and tree row, under the active task.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-off)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "2px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "6px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 12px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "0 0 0 1px var(--fl-stroke), 0 1px 0 var(--fl-stroke-bottom)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "left" ; sty:raw "50%" ] ,
+                 [ sty:property "bottom" ; sty:raw "1px" ] ,
+                 [ sty:property "width" ; sty:raw "16px" ] ,
+                 [ sty:property "height" ; sty:raw "3px" ] ,
+                 [ sty:property "translate" ; sty:raw "-50% 0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tabs] > [role=tablist]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0 0 4px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tabs] [role=tab]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "flex" ; sty:raw "0 0 auto" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] ,
+                 [ sty:property "padding" ; sty:raw "6px 12px 9px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tabs] [role=tab]:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tabs] [role=tab][aria-selected=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tabs] [role=tab][aria-selected=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "left" ; sty:raw "50%" ] ,
+                 [ sty:property "bottom" ; sty:raw "1px" ] ,
+                 [ sty:property "width" ; sty:raw "16px" ] ,
+                 [ sty:property "height" ; sty:raw "3px" ] ,
+                 [ sty:property "translate" ; sty:raw "-50% 0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=nav-list]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--sem-canvas) 86%, transparent)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "var(--fl-blur)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "4px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "8px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] ,
+                 [ sty:property "padding" ; sty:raw "8px 12px 8px 16px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=nav-list] button:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "left" ; sty:raw "0" ] ,
+                 [ sty:property "top" ; sty:raw "50%" ] ,
+                 [ sty:property "width" ; sty:raw "3px" ] ,
+                 [ sty:property "height" ; sty:raw "16px" ] ,
+                 [ sty:property "translate" ; sty:raw "0 -50%" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "left" ; sty:raw "0" ] ,
+                 [ sty:property "top" ; sty:raw "50%" ] ,
+                 [ sty:property "width" ; sty:raw "3px" ] ,
+                 [ sty:property "height" ; sty:raw "16px" ] ,
+                 [ sty:property "translate" ; sty:raw "0 -50%" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row > .sem-label:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] .
+
+# Acrylic: menus, popovers, toasts and palettes are translucent and blurred, with eight-pixel corners and a flyout shadow.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=menu] > .sem-menu-popup, [data-sem-c=popover] > .sem-panel, [data-sem-c=toast], [data-sem-c=palette]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-acrylic)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "var(--fl-blur)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-flyout)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "8px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-3)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=menu] > .sem-menu-popup:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "padding" ; sty:raw "4px" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=menu-item]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] ,
+                 [ sty:property "min-height" ; sty:raw "32px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=menu-item]:not(:disabled):is(:hover, :focus-visible):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] .
+
+# Content dialogs: an eight-pixel sheet on a smoke layer, the actions on a darker footer band, buttons
+# sharing its width.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-overlay)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-flyout)" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-4)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=dialog] > .sem-panel:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "8px" ] ,
+                 [ sty:property "padding" ; sty:raw "24px 24px 0" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "font-family" ; sty:raw "var(--sem-font-display)" ] ,
+                 [ sty:property "font-size" ; sty:raw "20px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=dialog] > .sem-panel > .sem-actions:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "margin" ; sty:raw "8px -24px 0" ] ,
+                 [ sty:property "padding" ; sty:raw "24px" ] ,
+                 [ sty:property "background" ; sty:raw "light-dark(#f3f3f3, #202020)" ] ,
+                 [ sty:property "border-top" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=dialog] > .sem-panel > .sem-actions > *:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 0" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-radius" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "backdrop-filter" ; sty:raw "none" ] .
+
+# Frames: an eight-pixel window on Mica with a soft layered shadow; the title sits at the left after
+# the window's icon; the caption buttons are wide and flat at the right, and close turns red under the pointer.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-flyout)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "8px" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-4)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=window]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-mica)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-bar:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0 0 0 12px" ] ,
+                 [ sty:property "gap" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "32px" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] ,
+                 [ sty:property "cursor" ; sty:raw "default" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-bar strong:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "center" ] ,
+                 [ sty:property "font-size" ; sty:raw "12px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "400" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0" ] ,
+                 [ sty:property "text-transform" ; sty:raw "none" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:raw "12px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-bar strong:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "width" ; sty:raw "16px" ] ,
+                 [ sty:property "height" ; sty:raw "16px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(135deg, var(--sem-gradient-from), var(--sem-gradient-to))" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "46px" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] ,
+                 [ sty:property "min-height" ; sty:raw "32px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "font" ; sty:raw "400 11px/1 'Segoe Fluent Icons', 'Segoe MDL2 Assets', var(--sem-font)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:active:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-pressed)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=close]):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "#c42b1c" ] ,
+                 [ sty:property "color" ; sty:raw "#ffffff" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-control:is([data-sem-control=close]):active:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "#c83c31" ] ,
+                 [ sty:property "color" ; sty:raw "rgb(255 255 255 / 0.7)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=window], [data-sem-c=palette]) .sem-window-body:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+                 [ sty:property "border-top" ; sty:raw "1px solid var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=palette] .sem-window-bar:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "min-height" ; sty:raw "28px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=palette] .sem-window-body:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=palette] .sem-window-control:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "width" ; sty:raw "36px" ] ,
+                 [ sty:property "min-height" ; sty:raw "28px" ] .
+
+# The taskbar: on the desktop an acrylic band along the bottom with its icons centred; an entry is an
+# icon button (its title becomes its tooltip), and the active window has an accent dash under it, the others a grey one.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-acrylic)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "var(--fl-blur)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-flyout)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "8px" ] ,
+                 [ sty:property "padding" ; sty:raw "4px" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=desktop] > [data-sem-c=taskbar]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "left" ; sty:raw "0" ] ,
+                 [ sty:property "right" ; sty:raw "0" ] ,
+                 [ sty:property "translate" ; sty:raw "none" ] ,
+                 [ sty:property "max-width" ; sty:raw "none" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "border-width" ; sty:raw "1px 0 0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "min-height" ; sty:raw "48px" ] ,
+                 [ sty:property "z-index" ; sty:raw "56" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "width" ; sty:raw "44px" ] ,
+                 [ sty:property "height" ; sty:raw "40px" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task .sem-icon:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "20px" ] ,
+                 [ sty:property "line-height" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task .sem-label:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "left" ; sty:raw "50%" ] ,
+                 [ sty:property "bottom" ; sty:raw "2px" ] ,
+                 [ sty:property "width" ; sty:raw "6px" ] ,
+                 [ sty:property "height" ; sty:raw "3px" ] ,
+                 [ sty:property "translate" ; sty:raw "-50% 0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-faint)" ] ,
+                 [ sty:property "transition" ; sty:raw "width var(--sem-duration) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task[aria-current=\"true\"]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=taskbar] .sem-task[aria-current=\"true\"]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::after" ;
+    sty:declares [ sty:property "width" ; sty:raw "16px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
+
+# Bars on Mica, edged with a hairline; cards and specimens are layers with a stroke.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=app-bar]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--fl-mica) 82%, transparent)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "var(--fl-blur)" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "1px solid var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=status-bar]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in srgb, var(--fl-mica) 86%, transparent)" ] ,
+                 [ sty:property "backdrop-filter" ; sty:raw "var(--fl-blur)" ] ,
+                 [ sty:property "border-top" ; sty:raw "1px solid var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=card], [data-sem-c=specimen], [data-sem-c=stat], [data-sem-c=accordion], [data-sem-c=table]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=specimen] > .sem-stage:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-mica)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "8px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=card] > header h2:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "14px" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=table] thead th:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "1px solid var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=table] tbody tr:nth-child(even):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=table] tbody tr:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=table] tbody :is(th, td):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=metrics] .sem-metric:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=kbd] > kbd, [data-sem-c=kbd]:not(:has(kbd))):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+                 [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
+                 [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] .
+
+# Progress is a thin rail with a three-pixel accent bar.
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=progress] .sem-track:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "height" ; sty:raw "3px" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(var(--fl-stroke-strong), var(--fl-stroke-strong)) center / 100% 1px no-repeat" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] ,
+                 [ sty:property "overflow" ; sty:raw "visible" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part "[data-sem-c=progress] .sem-fill:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--tone-solid, var(--sem-accent-9))" ] ,
+                 [ sty:property "border-radius" ; sty:raw "2px" ] .
+
 # --- composing with the viewer's settings ----------------------------------------------------
 # High contrast restated on the same element as each structural theme (themes.ttl restates it for
 # a themed subtree under a high-contrast ancestor), and the structural focus outline made heavier.
@@ -2677,7 +3459,9 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares _:hcText , _:hcMuted , _:hcFaint , _:hcBorder , _:hcBorderStrong , _:hcAccent , _:hcAccentStrong , _:hcRing , _:hcFocus , _:hcFocusOffset .
 [] a sty:StyleRule ; sty:when sty:HighContrast , sty:Doodle ;
     sty:declares _:hcText , _:hcMuted , _:hcFaint , _:hcBorder , _:hcBorderStrong , _:hcAccent , _:hcAccentStrong , _:hcRing , _:hcFocus , _:hcFocusOffset .
-[] a sty:StyleRule ; sty:when sty:HighContrast ; sty:part ":is([data-sem-theme=cupertino], [data-sem-theme=tracker], [data-sem-theme=classic], [data-sem-theme=doodle])" ;
+[] a sty:StyleRule ; sty:when sty:HighContrast , sty:Fluent ;
+    sty:declares _:hcText , _:hcMuted , _:hcFaint , _:hcBorder , _:hcBorderStrong , _:hcAccent , _:hcAccentStrong , _:hcRing , _:hcFocus , _:hcFocusOffset .
+[] a sty:StyleRule ; sty:when sty:HighContrast ; sty:part ":is([data-sem-theme=cupertino], [data-sem-theme=tracker], [data-sem-theme=classic], [data-sem-theme=doodle], [data-sem-theme=fluent])" ;
     sty:declares _:hcFocus , _:hcFocusOffset .
 
 _:hcText sty:property "--sem-text" ; sty:raw "color-mix(in oklab, var(--sem-gray-12) 35%, light-dark(#000000, #ffffff))" .

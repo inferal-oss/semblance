@@ -113,7 +113,9 @@
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font" ; sty:raw "500 12px/1.3 var(--sem-font)" ] ,
                  [ sty:property "text-align" ; sty:raw "start" ] ,
-                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+                 [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 # its width never depends on the (unwrapped) class list, so a long list cannot widen the card
+                 [ sty:property "contain" ; sty:raw "inline-size" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] , [ sty:property "color" ; sty:token tok:text ] .
 [] a sty:StyleRule ; sty:appliesTo c:Specimen ; sty:part "> .sem-docs > .sem-docs-toggle:focus-visible" ;

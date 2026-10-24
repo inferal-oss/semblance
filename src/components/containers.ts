@@ -140,7 +140,8 @@ export const frame: FnRule = (ctx, focus) => {
   }
   const tab = originTab(ctx, focus)
   const control = (local: string, glyph: string, label: string, marker: string) => {
-    const b = o.el(local, 'Button', { type: 'button', class: 'sem-window-control' }, [o.text(local + '-text', glyph)])
+    // data-sem-control names the control for the theme (close, minimize, maximize, restore, dock, undock).
+    const b = o.el(local, 'Button', { type: 'button', class: 'sem-window-control', 'data-sem-control': local }, [o.text(local + '-text', glyph)])
     o.attr(b, 'aria-label', label)
     o.tip(b, label)
     o.t(b, marker, focus)

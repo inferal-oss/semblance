@@ -5,7 +5,7 @@ import { compileStyles } from '../src/style/compile.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
-const STRUCTURAL = ['cupertino', 'tracker', 'classic', 'doodle']
+const STRUCTURAL = ['cupertino', 'tracker', 'classic', 'doodle', 'fluent']
 const store = loadStore('n3')
 const css = compileStyles(store)
 const f = store.factory
@@ -84,7 +84,7 @@ const solidRoles: [string, string, number][] = [
 describe('themes are values of a hookable axis', () => {
   it('declares sty:theme as a hooked property over sty:Theme individuals', () => {
     expect(store.match(f.namedNode(NS.sty + 'theme'), f.namedNode(STY.hookAttribute), null)[0]?.object.value).toBe('data-sem-theme')
-    expect(themes.map((t) => t.slug)).toEqual(['blueprint', 'classic', 'cupertino', 'doodle', 'paper', 'semblance', 'sunset', 'terminal', 'tracker'])
+    expect(themes.map((t) => t.slug)).toEqual(['blueprint', 'classic', 'cupertino', 'doodle', 'fluent', 'paper', 'semblance', 'sunset', 'terminal', 'tracker'])
     for (const t of themes) {
       const labels = store.match(f.namedNode(t.iri), f.namedNode(NS.rdfs + 'label'), null).map((q) => q.object)
       expect(labels.some((l) => l.termType === 'Literal' && l.language === 'en'), t.slug).toBe(true)
@@ -205,7 +205,7 @@ describe('switching themes', () => {
     const option = (label: string) =>
       [...root('themeSwitch')!.querySelectorAll('button')].find((b) => b.textContent!.includes(label))!
     expect([...root('themeSwitch')!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
-      '◇Semblance', '¶Paper', '▮Terminal', '⌗Blueprint', '◓Sunset', '⌘Cupertino', '▀Tracker', '⊞Classic', '✎Doodle',
+      '◇Semblance', '¶Paper', '▮Terminal', '⌗Blueprint', '◓Sunset', '⌘Cupertino', '▀Tracker', '⊞Classic', '✎Doodle', '◫Fluent',
     ])
     fire(option('Paper'), 'click')
     expect(shellRoot().getAttribute('data-sem-theme')).toBe('paper')
@@ -241,6 +241,7 @@ describe('structural themes', () => {
     return r[2]
   }
   const FRAME = ':is([data-sem-c=window], [data-sem-c=palette])'
+  const control = (...names: string[]) => `${FRAME} .sem-window-control:is(${names.map((n) => `[data-sem-control=${n}]`).join(', ')})`
 
   it('style what is inside the themed element, in the variants layer, each rule guarded against nested themes', () => {
     for (const slug of STRUCTURAL) {
@@ -262,11 +263,12 @@ describe('structural themes', () => {
 
   it('rebuild the title bar of every frame', () => {
     // Cupertino: traffic lights on the left (close is the last control, ordered first), the title centred over the bar
-    expect(find('cupertino', `${FRAME} .sem-window-control:last-child`)).toMatch(/(?=.*order: -3;)(?=.*#ff5f57)/)
+    expect(find('cupertino', control('close'))).toMatch(/(?=.*order: -3;)(?=.*#ff5f57)/)
+    expect(find('cupertino', control('maximize', 'restore'))).toContain('#28c840')
     expect(find('cupertino', `${FRAME} .sem-window-bar strong`)).toMatch(/position: absolute;.*text-align: center/)
     // Tracker: a yellow tab only as wide as its title, close box first
     expect(find('tracker', `${FRAME} .sem-window-bar`)).toContain('justify-self: start')
-    expect(find('tracker', `${FRAME} .sem-window-control:last-child`)).toContain('order: -1')
+    expect(find('tracker', control('close'))).toContain('order: -1')
     expect(rules.find(([, sel]) => sel === '[data-sem-theme="tracker"]' )).toBeDefined()
     // Classic: a navy caption gradient from the bevel kit, square raised controls
     expect(find('classic', `${FRAME} .sem-window-bar`)).toContain('background: var(--bv-title)')
@@ -275,6 +277,10 @@ describe('structural themes', () => {
     expect(classicVars).toMatch(/--bv-title: linear-gradient\(90deg, light-dark\(#000080/)
     // Doodle: inked strokes on wobbly corners
     expect(find('doodle', `${FRAME}`)).toContain('border-radius: var(--wob-c)')
+    // Fluent: wide flat caption buttons on the right, close red under the pointer, the window's icon before the title
+    expect(find('fluent', `${FRAME} .sem-window-control`)).toMatch(/(?=.*width: 46px)(?=.*border-radius: 0)/)
+    expect(find('fluent', `${control('close')}:hover`)).toContain('background: #c42b1c')
+    expect(rules.some(([, sel, body]) => sel.startsWith('[data-sem-theme="fluent"] ') && sel.endsWith('::before') && sel.includes('.sem-window-bar strong') && body.includes('width: 16px'))).toBe(true)
   })
 
   it('restyle controls, not only colours', () => {
@@ -284,6 +290,11 @@ describe('structural themes', () => {
     expect(find('classic', '[data-sem-c=checkbox] > .sem-row > input:checked')).toContain('linear-gradient(45deg')
     expect(find('doodle', '[data-sem-c=text-field] input')).toContain('border-bottom: 2px solid var(--ink)')
     for (const slug of ['classic', 'tracker']) expect(find(slug, '*'), slug).toContain('border-radius: 0')
+    // Fluent: the accent underline on a focused field, the accent pill on the selected tab and nav item, a growing knob
+    expect(find('fluent', ':is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):focus')).toMatch(/(?=.*border-bottom-color: var\(--sem-accent-9\))(?=.*inset 0 -1px 0 var\(--sem-accent-9\))/)
+    expect(rules.some(([, sel, body]) => sel === `[data-sem-theme="fluent"] [data-sem-c=tabs] [role=tab][aria-selected=true]${guard('fluent')}::after` && body.includes('background: var(--sem-accent-9)'))).toBe(true)
+    expect(rules.some(([, sel, body]) => sel === `[data-sem-theme="fluent"] [data-sem-c=nav-list] button[aria-pressed=true]${guard('fluent')}::before` && body.includes('height: 16px'))).toBe(true)
+    expect(find('fluent', '[data-sem-c=toggle-switch] > button:not(:disabled):hover .sem-thumb')).toContain('width: 14px')
   })
 
   it('compose with contrast and motion', () => {
@@ -302,7 +313,7 @@ describe('structural themes', () => {
     }
   })
 
-  it('keep frames in their tile on the Themes page, with the controls in rendering order', () => {
+  it('keep frames in their tile on the Themes page, each control named by data-sem-control', () => {
     const m = mountShell()
     const sf = m.store.factory
     const app = sf.namedNode(UI + 'app')
@@ -316,10 +327,9 @@ describe('structural themes', () => {
       const tile = root(`thf-${slug}`)!
       expect(tile.getAttribute('data-sem-theme')).toBe(slug)
       const bar = tile.querySelector('[data-sem-c=window] .sem-window-bar')!
-      const controls = [...bar.children].map((c) => c.getAttribute('aria-label') ?? c.tagName)
-      // the CSS finds close as the last child and counts the others from the end
-      expect(controls).toEqual(['STRONG', expect.stringMatching(/^Minimize/), expect.stringMatching(/^Maximize/), expect.stringMatching(/^Close/)])
-      expect([...tile.querySelector('[data-sem-c=palette] .sem-window-bar')!.children].at(-1)!.getAttribute('aria-label')).toMatch(/^Close/)
+      // the CSS finds each control by what it is
+      expect([...bar.querySelectorAll('.sem-window-control')].map((c) => c.getAttribute('data-sem-control'))).toEqual(['minimize', 'maximize', 'close'])
+      expect([...tile.querySelectorAll('[data-sem-c=palette] .sem-window-control')].map((c) => c.getAttribute('data-sem-control'))).toEqual(['close'])
     }
     // switching the shell to a structural theme is still one triple
     const option = (label: string) => [...root('themeSwitch')!.querySelectorAll('button')].find((b) => b.textContent!.includes(label))!
