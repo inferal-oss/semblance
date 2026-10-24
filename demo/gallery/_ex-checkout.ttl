@@ -143,16 +143,29 @@ ui:co-case-done c:when ui:co-step-done ; c:content ui:co-done .
 
 # --- step 1: the cart -------------------------------------------------------------------------------
 # One row per line. Each row is a c:Switch over the line's status: in the cart it shows the
-# product, − / + and the line total; removed, it says so and offers Undo. The quantity and
+# product, − / + and the line total; removed, it says so (first column) and offers Undo
+# (second column). The quantity and
 # the line total are texts with no label of their own: co:Pricing writes it.
 
 ui:co-cart a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ; c:children ( ui:co-lines ui:co-cart-side ) .
-ui:co-lines a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:co-kettle ui:co-mug ui:co-beans ) .
+ui:co-lines a c:Stack ; pos:layout co:CartColumns ; c:children ( ui:co-kettle ui:co-mug ui:co-beans ) .
+
+# The cart's columns, declared once: product, − / +, line total, remove. Each row is a
+# pos:Subgrid, so it takes its columns from here and every row's cells line up; the
+# switches between the list and its rows take no part in layout. Figures are tabular.
+co:CartColumns a pos:Layout ; sem:slug "cart-columns" ;
+    rdfs:comment "The cart's four columns: what, how many, line total, remove."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(5.5rem, auto) auto" ] ,
+                 [ sty:property "column-gap" ; sty:raw "var(--sem-space-4)" ] ,
+                 [ sty:property "row-gap" ; sty:raw "var(--sem-space-3)" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
 
 ui:co-kettle a c:Switch ; c:controls co:l-kettle ; c:property co:status ; c:cases ( ui:co-kettle-in ui:co-kettle-out ) .
 ui:co-kettle-in c:when co:InCart ; c:content ui:co-kettle-row .
 ui:co-kettle-out c:when co:Removed ; c:content ui:co-kettle-gone .
-ui:co-kettle-row a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:justify pos:SpaceBetween ; pos:gap tok:space-3 ;
+ui:co-kettle-row a c:Stack ; pos:layout pos:Subgrid ;
     c:children ( ui:co-kettle-about ui:co-kettle-count ui:co-kettle-total ui:co-kettle-remove ) .
 ui:co-kettle-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:co-kettle-name ui:co-kettle-detail ) .
 ui:co-kettle-name a c:Text ; c:label "Pour-over kettle" .
@@ -162,17 +175,17 @@ ui:co-kettle-count a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; po
 ui:co-kettle-fewer a c:IconButton , co:FewerButton ; c:icon "−" ; c:label "Remove one Pour-over kettle" ; sty:size sty:Small .
 ui:co-kettle-qty a c:Text ; c:inline true .
 ui:co-kettle-more a c:IconButton , co:MoreButton ; c:icon "+" ; c:label "Add one Pour-over kettle" ; sty:size sty:Small .
-ui:co-kettle-total a c:Text ; c:inline true .
+ui:co-kettle-total a c:Text ; c:inline true ; pos:textAlign pos:TextEnd .
 ui:co-kettle-remove a c:IconButton , co:RemoveButton ; c:icon "✕" ; c:label "Remove Pour-over kettle from the cart" ;
     sty:tone sty:Danger ; sty:emphasis sty:Ghost ; sty:size sty:Small .
-ui:co-kettle-gone a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-3 ; c:children ( ui:co-kettle-gone-text ui:co-kettle-undo ) .
+ui:co-kettle-gone a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:co-kettle-gone-text ui:co-kettle-undo ) .
 ui:co-kettle-gone-text a c:Text ; sty:textStyle sty:Caption ; c:label "Pour-over kettle removed." .
 ui:co-kettle-undo a c:Button , co:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 
 ui:co-mug a c:Switch ; c:controls co:l-mug ; c:property co:status ; c:cases ( ui:co-mug-in ui:co-mug-out ) .
 ui:co-mug-in c:when co:InCart ; c:content ui:co-mug-row .
 ui:co-mug-out c:when co:Removed ; c:content ui:co-mug-gone .
-ui:co-mug-row a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:justify pos:SpaceBetween ; pos:gap tok:space-3 ;
+ui:co-mug-row a c:Stack ; pos:layout pos:Subgrid ;
     c:children ( ui:co-mug-about ui:co-mug-count ui:co-mug-total ui:co-mug-remove ) .
 ui:co-mug-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:co-mug-name ui:co-mug-detail ) .
 ui:co-mug-name a c:Text ; c:label "Stoneware mug" .
@@ -182,17 +195,17 @@ ui:co-mug-count a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:g
 ui:co-mug-fewer a c:IconButton , co:FewerButton ; c:icon "−" ; c:label "Remove one Stoneware mug" ; sty:size sty:Small .
 ui:co-mug-qty a c:Text ; c:inline true .
 ui:co-mug-more a c:IconButton , co:MoreButton ; c:icon "+" ; c:label "Add one Stoneware mug" ; sty:size sty:Small .
-ui:co-mug-total a c:Text ; c:inline true .
+ui:co-mug-total a c:Text ; c:inline true ; pos:textAlign pos:TextEnd .
 ui:co-mug-remove a c:IconButton , co:RemoveButton ; c:icon "✕" ; c:label "Remove Stoneware mug from the cart" ;
     sty:tone sty:Danger ; sty:emphasis sty:Ghost ; sty:size sty:Small .
-ui:co-mug-gone a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-3 ; c:children ( ui:co-mug-gone-text ui:co-mug-undo ) .
+ui:co-mug-gone a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:co-mug-gone-text ui:co-mug-undo ) .
 ui:co-mug-gone-text a c:Text ; sty:textStyle sty:Caption ; c:label "Stoneware mug removed." .
 ui:co-mug-undo a c:Button , co:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 
 ui:co-beans a c:Switch ; c:controls co:l-beans ; c:property co:status ; c:cases ( ui:co-beans-in ui:co-beans-out ) .
 ui:co-beans-in c:when co:InCart ; c:content ui:co-beans-row .
 ui:co-beans-out c:when co:Removed ; c:content ui:co-beans-gone .
-ui:co-beans-row a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:justify pos:SpaceBetween ; pos:gap tok:space-3 ;
+ui:co-beans-row a c:Stack ; pos:layout pos:Subgrid ;
     c:children ( ui:co-beans-about ui:co-beans-count ui:co-beans-total ui:co-beans-remove ) .
 ui:co-beans-about a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ; c:children ( ui:co-beans-name ui:co-beans-detail ) .
 ui:co-beans-name a c:Text ; c:label "Single-origin beans" .
@@ -202,10 +215,10 @@ ui:co-beans-count a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos
 ui:co-beans-fewer a c:IconButton , co:FewerButton ; c:icon "−" ; c:label "Remove one Single-origin beans" ; sty:size sty:Small .
 ui:co-beans-qty a c:Text ; c:inline true .
 ui:co-beans-more a c:IconButton , co:MoreButton ; c:icon "+" ; c:label "Add one Single-origin beans" ; sty:size sty:Small .
-ui:co-beans-total a c:Text ; c:inline true .
+ui:co-beans-total a c:Text ; c:inline true ; pos:textAlign pos:TextEnd .
 ui:co-beans-remove a c:IconButton , co:RemoveButton ; c:icon "✕" ; c:label "Remove Single-origin beans from the cart" ;
     sty:tone sty:Danger ; sty:emphasis sty:Ghost ; sty:size sty:Small .
-ui:co-beans-gone a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-3 ; c:children ( ui:co-beans-gone-text ui:co-beans-undo ) .
+ui:co-beans-gone a c:Stack ; pos:layout pos:Subgrid ; c:children ( ui:co-beans-gone-text ui:co-beans-undo ) .
 ui:co-beans-gone-text a c:Text ; sty:textStyle sty:Caption ; c:label "Single-origin beans removed." .
 ui:co-beans-undo a c:Button , co:UndoButton ; c:label "Undo" ; sty:emphasis sty:Ghost ; sty:size sty:Small .
 
@@ -431,7 +444,8 @@ ui:co-how-2 a c:Text ; c:children ( "The cart's lines are data (" ui:co-how-line
     ui:co-how-total ", the free-shipping hint, and which buttons are disabled. It is a SPARQL CONSTRUCT with aggregates over the lines, in cents; its function twin in "
     ui:co-how-host " writes the same triples for stores without SPARQL." ) .
 ui:co-how-3 a c:Text ; c:children ( "The − / + / ✕ buttons are instances of " ui:co-how-fewer " and its siblings, so one reaction serves every line: the line is the one whose "
-    ui:co-how-fewerp " is the clicked button. Removing a line sets its " ui:co-how-status " to " ui:co-how-removed "; the row is a switch over that status, so Undo is just as small." ) .
+    ui:co-how-fewerp " is the clicked button. Removing a line sets its " ui:co-how-status " to " ui:co-how-removed "; the row is a switch over that status, so Undo is just as small. The rows line up because the list declares its columns once ("
+    ui:co-how-columns ") and each row is a " ui:co-how-subgrid " that takes its columns from there; the switches between them take no part in layout." ) .
 ui:co-how-4 a c:Text ; c:children ( "The shipping fields point at SHACL shapes (" ui:co-how-validates "); the validation layer writes their errors and "
     ui:co-how-invalid ", and disables Continue, which " ui:co-how-requires " them. Continue copies each field's value to the order property it " ui:co-how-fills
     ". Country, delivery and payment are choices over the order itself; their options are the individuals of each property's range, so a new country is one triple." ) .
@@ -453,6 +467,8 @@ ui:co-how-fewer a c:Code ; c:label "co:FewerButton" .
 ui:co-how-fewerp a c:Code ; c:label "co:fewer" .
 ui:co-how-status a c:Code ; c:label "co:status" .
 ui:co-how-removed a c:Code ; c:label "co:Removed" .
+ui:co-how-columns a c:Code ; c:label "co:CartColumns" .
+ui:co-how-subgrid a c:Code ; c:label "pos:Subgrid" .
 ui:co-how-validates a c:Code ; c:label "val:validates" .
 ui:co-how-invalid a c:Code ; c:label "val:invalid" .
 ui:co-how-requires a c:Code ; c:label "val:requires" .

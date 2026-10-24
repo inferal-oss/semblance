@@ -52,6 +52,10 @@ describe('the checkout example', () => {
     expect(h.hint()).toBe('Standard shipping is free on this order.')
     expect(h.button('Remove one Stoneware mug').disabled).toBe(false)
     expect([h.text('co-mug-qty'), h.text('co-mug-total')]).toEqual(['2', '$25.00'])
+    // The rows take their columns from the list, so their cells line up.
+    const lines = h.shell.nodeOf(`${UI}co-lines/~root`) as Element
+    expect(lines.getAttribute('data-sem-layout')).toBe('cart-columns')
+    expect((h.shell.nodeOf(`${UI}co-mug-row/~root`) as Element).getAttribute('data-sem-layout')).toBe('subgrid')
     // Back under the threshold.
     h.click(h.button('Remove one Stoneware mug'))
     expect(h.figures().Shipping).toBe('$4.90')
