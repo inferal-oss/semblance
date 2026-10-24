@@ -66,8 +66,10 @@ net:Exchange a owl:Class ; rdfs:subClassOf net:Entry , http:Request ;
     rdfs:comment "An HTTP request and its response, as made by fetch, XMLHttpRequest or the browser."@en .
 net:initiator a owl:DatatypeProperty ; rdfs:domain net:Exchange ; rdfs:comment "fetch, xhr or resource."@en .
 # Used from the HTTP vocabulary: http:methodName, http:absoluteURI, http:resp (the http:Response),
-# http:statusCodeValue (on the response), http:headers (an rdf:List of http:MessageHeader with
-# http:fieldName / http:fieldValue), and on messages net:body / net:contentType.
+# http:statusCodeValue (on the response), http:headers and on messages net:body / net:contentType.
+# Unlike the HTTP vocabulary (where http:headers is an rdf:List), each header is its own value of
+# http:headers - an http:MessageHeader with http:fieldName, http:fieldValue and sem:order - so a
+# view can take them member-wise.
 net:body a owl:DatatypeProperty ; rdfs:comment "A message body as text, bounded by the capture's preview limit."@en .
 net:contentType a owl:DatatypeProperty .
 
