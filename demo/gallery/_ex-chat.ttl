@@ -273,7 +273,8 @@ ui:ch-help-thread a c:MessageList ; c:label "Messages in # help" ; c:viewer ch:a
 
 # --- the composer -------------------------------------------------------------------------------
 
-ui:ch-composer-area a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+# On one's own side of the conversation, where one's own messages are (c:OwnSide).
+ui:ch-composer-area a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:align c:OwnSide ;
     c:children ( ui:ch-composer ui:ch-composer-bar ) .
 ui:ch-composer a c:TextArea ; c:label "Message" ; c:rows 2 ; c:placeholder "Write to the channel…" .
 ui:ch-composer-bar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
@@ -451,7 +452,7 @@ ui:ex-chat-w1 a c:WalkthroughStep ; rdfs:label "Messages are ActivityStreams not
 ui:ex-chat-w2 a c:WalkthroughStep ; rdfs:label "A thread lists a channel's notes" ;
     c:children ( "Each channel names its thread; " ui:ex-chat-m-thread " is a " ui:ex-chat-m-MessageList " whose items are the notes. Its member rule mints one message per note - avatar, name, time - ordered by publication. " ui:ex-chat-m-panes ", a switch over the open channel, shows that channel's thread and keeps the others as they were." ) .
 ui:ex-chat-w3 a c:WalkthroughStep ; rdfs:label "Sending mints a note" ;
-    c:children ( ui:ex-chat-m-click " (the " ui:ex-chat-m-send ") and " ui:ex-chat-m-enter " (Enter in " ui:ex-chat-m-composer ", an event class of its own, " ui:ex-chat-m-key ") are one CONSTRUCT: it mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer. A send is announced as a toast." ) .
+    c:children ( ui:ex-chat-m-click " (the " ui:ex-chat-m-send ") and " ui:ex-chat-m-enter " (Enter in " ui:ex-chat-m-composer ", an event class of its own, " ui:ex-chat-m-key ") are one CONSTRUCT: it mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer. A send is announced as a toast. " ui:ex-chat-m-composer-area " sits on " ui:ex-chat-m-OwnSide ", where one's own messages are: both take the theme's one notion of that side, so right to left mirrors them together." ) .
 ui:ex-chat-w4 a c:WalkthroughStep ; rdfs:label "Typing is a note not yet published" ;
     c:children ( "When someone is typing, their note already exists - with an author and no time. The thread places it where it started and shows three dots, read out once as \"… is typing\". Publishing adds the content and the time to the same note, so the same entry becomes the message, in place." ) .
 ui:ex-chat-w5 a c:WalkthroughStep ; rdfs:label "Time is data too" ;
@@ -475,6 +476,8 @@ ui:ex-chat-m-click a c:Mention ; c:label "ch:SendOnClick" ; c:mentions ch:SendOn
 ui:ex-chat-m-send a c:Mention ; c:label "Send button" ; c:mentions ui:ch-send .
 ui:ex-chat-m-enter a c:Mention ; c:label "ch:SendOnEnter" ; c:mentions ch:SendOnEnter .
 ui:ex-chat-m-composer a c:Mention ; c:label "the composer" ; c:mentions ui:ch-composer .
+ui:ex-chat-m-composer-area a c:Mention ; c:label "The composer" ; c:mentions ui:ch-composer-area .
+ui:ex-chat-m-OwnSide a c:Mention ; c:label "c:OwnSide" ; c:mentions c:OwnSide ; c:to c:OwnSide .
 ui:ex-chat-m-key a c:Mention ; c:label "ch:ComposerKey" ; c:mentions ch:ComposerKey .
 ui:ex-chat-m-script a c:Mention ; c:label "ch:generalScript" ; c:mentions ch:generalScript .
 ui:ex-chat-m-Script a c:Mention ; c:label "ch:Script" ; c:mentions ch:Script .

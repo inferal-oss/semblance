@@ -52,10 +52,14 @@
                  [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
                  [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 
-# One's own messages (c:viewer): at the end, the bubble in the accent's soft fill.
+# The side that is one's own in a conversation (c:OwnSide): one's messages, and what one writes.
+tok:own-side a sty:Token ; sem:slug "own-side" ; sty:value "flex-end" ;
+    rdfs:comment "Where one's own messages sit in a thread (a flex alignment): the inline end."@en .
+
+# One's own messages (c:viewer): on one's own side, the bubble in the accent's soft fill.
 [] a sty:StyleRule ; sty:appliesTo c:Message ; sty:state ".sem-mine" ;
     sty:declares [ sty:property "flex-direction" ; sty:raw "row-reverse" ] ,
-                 [ sty:property "align-self" ; sty:raw "flex-end" ] .
+                 [ sty:property "align-self" ; sty:raw "var(--sem-own-side)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Message ; sty:state ".sem-mine" ; sty:part ".sem-message-main" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
                  [ sty:property "border-color" ; sty:raw "transparent" ] ,

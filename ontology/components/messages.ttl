@@ -3,6 +3,7 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -33,7 +34,14 @@ prv:sensitive true is hidden in private mode. A message being written (prov:star
 as:published) shows as its author typing, until it is published. c:label names the thread."""@en ;
     sem:slug "message-list" .
 c:viewer a owl:ObjectProperty ; rdfs:domain c:MessageList ;
-    rdfs:comment "The person reading: their messages are their own (aligned to the end)."@en .
+    rdfs:comment "The person reading: their messages are their own (on the conversation's own side, c:OwnSide)."@en .
+
+# The side of a conversation that is one's own: where one's own messages sit, and so where what one
+# writes belongs too (a composer: pos:align c:OwnSide). One notion for both, valued by the theme's
+# own-side token (the inline end by default, so right to left mirrors it).
+c:OwnSide a pos:Alignment ; sem:slug "own" ; rdfs:label "One's own side"@en ;
+    rdfs:comment "The side of a conversation one's own messages take; aligns a group's items there (a composer under the thread)."@en ;
+    sty:declares [ sty:property "align-items" ; sty:raw "var(--sem-own-side)" ] .
 
 c:MessageListRendering a sem:Rendering ; sem:targets c:MessageList ; sem:stratum 0 ; sem:watches c:label .
 c:MessageListRendering-fn a sem:Rule ; sem:implements c:MessageListRendering ; sem:function "messages:list" .

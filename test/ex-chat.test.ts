@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { ManualClock } from '../src/behaviour/clock.ts'
 import { type Backend, memoryBackend } from '../src/persistence.ts'
 import { mountRemembering, mountSite } from './harness.ts'
+import { loadStore } from '../src/node/load.ts'
+import { compileStyles } from '../src/style/compile.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const CH = 'https://semblance.dev/demo/chat#'
@@ -58,6 +60,19 @@ describe('the chat example', () => {
     // In order of publication; Ada's own messages are marked as hers.
     expect(h.bodies()[5]).toBe("Thanks. I'll hold the demo data refresh until it's done.")
     expect(h.messages().flatMap((m, i) => (m.classList.contains('sem-mine') ? [i] : []))).toEqual([5, 9, 14])
+  })
+
+  it("puts the composer on one's own side, where one's own messages are", () => {
+    const h = chatOn(mountSite('oxigraph', 'function'))
+    // One notion for both: the composer's group aligns to c:OwnSide; one's messages sit there too.
+    const area = h.composer().closest('[data-sem-align]')!
+    expect(area.getAttribute('data-sem-align')).toBe('own')
+    expect(h.messages().some((m) => m.classList.contains('sem-mine'))).toBe(true)
+    // Both read the theme's own-side token (the inline end, which right to left mirrors).
+    const css = compileStyles(loadStore('n3'))
+    expect(css).toMatch(/\[data-sem-align="own"\] \{ align-items: var\(--sem-own-side\); \}/)
+    expect(css).toMatch(/\.sem-mine \{[^}]*align-self: var\(--sem-own-side\)/)
+    expect(css).toContain('--sem-own-side: flex-end;')
   })
 
   it('sends with the button and with Enter, not with Shift+Enter or when blank', () => {
