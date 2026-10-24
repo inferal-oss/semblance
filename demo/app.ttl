@@ -18,6 +18,9 @@
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix st: <https://semblance.dev/ns/status#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix tree: <https://w3id.org/tree#> .
 
 # =================================================================================================
 # The demo's entire interface as a component graph. The host page is a mount
@@ -64,7 +67,7 @@ ui:action rdfs:label "action" ; c:emphasis true ; c:hideLabel true .
 ui:ms rdfs:label "update + DOM" ; c:unit "ms" .
 ui:ruleRuns rdfs:label "rule runs" .
 ui:domOps rdfs:label "DOM operations" .
-ui:heap rdfs:label "JS heap" ; c:unit "MB" .
+ui:heap rdfs:label "JS heap" .
 ui:storage rdfs:label "storage (incl. session)" ; c:unit "KB" .
 ui:triples rdfs:label "triples" .
 ui:domNodes rdfs:label "DOM nodes" .
@@ -260,7 +263,7 @@ ui:activityCard a c:Flippable ; c:front ex:activity .
 
 ui:logCard a c:Flippable ; c:front ui:changeLog .
 ui:changeLog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:changeLogHead ui:changeLogMembers ) .
+    c:children ( ui:rememberLogSwitch ui:changeLogHead ui:changeLogMembers ) .
 ui:changeLogHead a c:QueryView ; c:queries ( ui:qStream ui:qStreamView ) .
 ui:changeLogMembers a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 8 ;
     c:emptyText "Click, type or tick something. Each relevant interaction becomes an immutable member of the beh:ChangeLog LDES, with the size of the change it caused." .
@@ -396,3 +399,44 @@ ui:gc-disclosure c:when ui:GroupDisclosure ; c:content ui:gallery-disclosure .
 ui:gc-layers c:when ui:GroupLayers ; c:content ui:gallery-layers .
 ui:gc-windows c:when ui:GroupWindows ; c:content ui:gallery-windows .
 ui:gc-themes c:when ui:GroupThemes ; c:content ui:gallery-themes .
+
+# --- remembered state (per:Policy; see PERSISTENCE.md) ------------------------------------------
+# Restored before the first render, written back after the changes they cover.
+# Everything here is kept for this tab only (per:Session) unless it says otherwise.
+
+# Every choice about the inspector: whether it is a window, where, how big, in
+# what window state, its mode, what it is inspecting, which view is selected.
+ui:rememberInspector a per:Policy ; per:scope per:Session ;
+    rdfs:label "The inspector" , "Інспектор"@uk , "Der Inspektor"@de , "المفتش"@ar ;
+    per:construct """
+CONSTRUCT {
+  ui:inspectorTab c:detached ?detached . ui:views c:selected ?tab .
+  ?window c:x ?x ; c:y ?y ; c:width ?w ; c:height ?h ; c:windowState ?state .
+  ui:app ui:inspectorMode ?mode ; ui:inspecting ?node .
+}
+WHERE {
+  { ui:inspectorTab c:detached ?detached }
+  UNION { ui:views c:selected ?tab }
+  UNION { ?window prov:wasDerivedFrom ui:inspectorTab . { ?window c:x ?x } UNION { ?window c:y ?y } UNION { ?window c:width ?w } UNION { ?window c:height ?h } UNION { ?window c:windowState ?state } }
+  UNION { ui:app ui:inspectorMode ?mode }
+  UNION { ui:app ui:inspectorMode ui:Paused ; ui:inspecting ?node }
+}""" .
+
+ui:rememberDisplay a per:Policy ; per:scope per:Session ;
+    rdfs:label "Display settings" , "Налаштування відображення"@uk , "Anzeigeeinstellungen"@de , "إعدادات العرض"@ar ;
+    per:subject ui:shell ; per:properties ( mot:preference sty:contrast sty:density sty:theme ) .
+
+ui:rememberSettings a per:Policy ; per:scope per:Session ;
+    rdfs:label "Language, theme and gallery page" , "Мова, тема і сторінка галереї"@uk , "Sprache, Design und Galerieseite"@de , "اللغة والسمة وصفحة المعرض"@ar ;
+    per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ui:galleryGroup ) .
+
+# Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
+ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ;
+    rdfs:label "The change log" , "Журнал змін"@uk , "Das Änderungsprotokoll"@de , "سجل التغييرات"@ar ;
+    per:construct """
+CONSTRUCT { beh:ChangeLog tree:member ?m ; beh:latest ?latest . ?m ?p ?o }
+WHERE { { beh:ChangeLog tree:member ?m . ?m ?p ?o } UNION { beh:ChangeLog tree:member ?m } UNION { beh:ChangeLog beh:latest ?latest } }""" .
+
+ui:rememberLogSwitch a c:ToggleSwitch ; c:controls ui:rememberChangeLog ; c:property per:enabled ;
+    c:label "Keep the change log across reloads (this tab)" , "Зберігати журнал змін між перезавантаженнями (ця вкладка)"@uk ,
+            "Änderungsprotokoll über Neuladen hinweg behalten (dieser Tab)"@de , "الاحتفاظ بسجل التغييرات عند إعادة التحميل (علامة التبويب هذه)"@ar .

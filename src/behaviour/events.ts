@@ -158,6 +158,10 @@ export class EventBus {
   emit(type: string, target: string, detail: EventDetail = {}, reactions = this.reactionsFor(type, target)): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
+    // A restored log (persistence) continues where it left off.
+    if (this.sequence === 0) {
+      for (const q of this.runtime.store.match(null, f.namedNode(BEH.sequence), null, this.graph)) this.sequence = Math.max(this.sequence, Number(q.object.value) || 0)
+    }
     const seq = ++this.sequence
     const event = nn(`urn:semblance:event:${RUN}-${seq}`)
     const quads = [

@@ -3,8 +3,9 @@ import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, PERF_GRAPH } from './ns.ts'
+import { EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
+import { persistenceFunctions } from './persistence.ts'
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -19,8 +20,18 @@ export interface Projection {
  */
 export class Runtime {
   readonly projections: Projection[] = []
+  private readonly inputListeners: ((graph: string | undefined, delta: Delta) => void)[] = []
 
   constructor(readonly store: GraphStore) {}
+
+  /**
+   * Hear about every effective change to the input graphs (`graph` undefined = the
+   * default graph): host effects such as persistence follow the input this way.
+   */
+  onInput(listener: (graph: string | undefined, delta: Delta) => void): () => void {
+    this.inputListeners.push(listener)
+    return () => this.inputListeners.splice(this.inputListeners.indexOf(listener), 1)
+  }
 
   /**
    * `roots` (optional) are the instances this projection is mounted at: only
@@ -28,9 +39,9 @@ export class Runtime {
    */
   project(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH],
       ...opts,
-      functions: { ...builtinFunctions, ...docsFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError)
     engine.onChange((d) => index.apply(d))
@@ -61,7 +72,10 @@ export class Runtime {
       const e = f.quad(q.subject, q.predicate, q.object, g)
       if (!this.store.has(e)) this.store.add(e), effective.add.push(e)
     }
-    if (effective.add.length || effective.remove.length) for (const p of this.projections) p.engine.process(effective), settle(p)
+    if (effective.add.length || effective.remove.length) {
+      for (const p of this.projections) p.engine.process(effective), settle(p)
+      for (const l of this.inputListeners) l(graph, effective)
+    }
     return effective
   }
 
@@ -98,7 +112,10 @@ export class Runtime {
       const g = f.quad(q.subject, q.predicate, q.object, dg)
       if (!this.store.has(g)) this.store.add(g), effective.add.push(g)
     }
-    if (effective.add.length || effective.remove.length) for (const p of this.projections) p.engine.process(effective), settle(p)
+    if (effective.add.length || effective.remove.length) {
+      for (const p of this.projections) p.engine.process(effective), settle(p)
+      for (const l of this.inputListeners) l(undefined, effective)
+    }
     return effective
   }
 }

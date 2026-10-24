@@ -150,3 +150,62 @@
                  [ sty:property "animation" ; sty:raw "sem-rise-in var(--sem-duration) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ClassDoc ; sty:part ".ttl-comment" ;
     sty:declares [ sty:property "color" ; sty:token tok:faint ] , [ sty:property "font-style" ; sty:raw "italic" ] .
+
+# --- remembered state: the policy list ---
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "> li" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "auto 1fr auto" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-what" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "gap" ; sty:raw "2px" ] , [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-what span" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] , [ sty:property "font-size" ; sty:token tok:text-xs ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "[role=switch]" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "width" ; sty:raw "34px" ] ,
+                 [ sty:property "height" ; sty:raw "20px" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 [ sty:property "transition" ; sty:raw "background var(--sem-motion), border-color var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "[role=switch] > span" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "top" ; sty:raw "2px" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "2px" ] ,
+                 [ sty:property "width" ; sty:raw "14px" ] ,
+                 [ sty:property "height" ; sty:raw "14px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "50%" ] ,
+                 [ sty:property "background" ; sty:token tok:muted ] ,
+                 [ sty:property "transition" ; sty:raw "transform var(--sem-motion), background var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "[role=switch][aria-checked=true]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent ] , [ sty:property "border-color" ; sty:token tok:accent ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part "[role=switch][aria-checked=true] > span" ;
+    sty:declares [ sty:property "transform" ; sty:raw "translateX(14px)" ] , [ sty:property "background" ; sty:raw "#ffffff" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ":is([role=switch], .sem-forget):focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] , [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-forget" ;
+    sty:declares [ sty:property "width" ; sty:raw "28px" ] ,
+                 [ sty:property "height" ; sty:raw "28px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:PolicyList ; sty:part ".sem-forget:disabled" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.4" ] , [ sty:property "cursor" ; sty:raw "default" ] .

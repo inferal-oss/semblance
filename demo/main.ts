@@ -2,6 +2,7 @@ import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { docsReactions } from '../src/layers/docs.ts'
+import { indexedDbBackend, Persistence, persistenceReactions, webStorageBackend } from '../src/persistence.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -26,6 +27,13 @@ await initWeb()
 // The Components page: one graph per component group (demo/gallery/*.ttl).
 const gallery = Object.values(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)
 const store = loadStore(kind, todoApp(5), appGraph, ...gallery)
+// Remembered state (per:Policy nodes in the graph) is restored before the first projection.
+const persistence = new Persistence(store, {
+  [NS.per + 'Session']: webStorageBackend(sessionStorage),
+  [NS.per + 'Device']: webStorageBackend(localStorage),
+  [NS.per + 'Database']: indexedDbBackend(),
+})
+await persistence.restore().catch((e) => console.warn('[semblance] could not restore remembered state', e))
 const f = store.factory
 const nn = (iri: string) => f.namedNode(iri)
 const app = nn(UI + 'app')
@@ -130,9 +138,16 @@ function recordStats(action: string, ms: number, ruleRuns: number, domOps: numbe
   writeStats({ action: f.literal(action), ms: decimal(ms), ruleRuns: integer(ruleRuns), domOps: integer(domOps) })
 }
 
-/** Observable memory: JS heap (where the browser reports it), storage, graph and DOM size. */
+/**
+ * Observable memory: JS heap, storage, graph and DOM size. Only Chromium reports the
+ * heap (performance.memory, or measureUserAgentSpecificMemory when cross-origin
+ * isolated); elsewhere it says so instead of disappearing.
+ */
 async function recordMemory() {
-  const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize
+  const legacy = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize
+  let heap = legacy
+  const measure = (performance as unknown as { measureUserAgentSpecificMemory?: () => Promise<{ bytes: number }> }).measureUserAgentSpecificMemory
+  if (heap === undefined && measure && crossOriginIsolated) heap = (await measure.call(performance).catch(() => undefined))?.bytes
   const estimated = (await navigator.storage?.estimate?.().catch(() => undefined))?.usage ?? 0
   let session = 0
   try {
@@ -140,7 +155,7 @@ async function recordMemory() {
   } catch {}
   const storage = estimated + session
   writeStats({
-    ...(heap !== undefined ? { heap: decimal(heap / 1024 / 1024) } : {}),
+    heap: f.literal(heap !== undefined ? `${(heap / 1024 / 1024).toFixed(1)} MB` : 'n/a (not reported by this browser)'),
     storage: decimal(storage / 1024),
     triples: integer(store.match(null, null, null).length),
     domNodes: integer(document.getElementsByTagName('*').length),
@@ -173,7 +188,8 @@ const short = (iri: string) => {
   for (const [p, ns] of Object.entries({ ...NS, ui: UI, ex: EX })) if (iri.startsWith(ns)) return `${p}:${iri.slice(ns.length)}`
   return iri
 }
-const bus = new EventBus(runtime, screen, { functions: { ...todoReactions, ...docsReactions }, prefer })
+const bus = new EventBus(runtime, screen, { functions: { ...todoReactions, ...docsReactions, ...persistenceReactions }, prefer })
+persistence.attach(runtime)
 bus.attach(shell, (h: Handled) => {
   syncSettings()
   flush()

@@ -20,7 +20,7 @@
 # layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ) .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ui:l-persistence ) .
 ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
 
 # --- validation: SHACL shapes on fields -------------------------------------------------------------
@@ -118,3 +118,11 @@ ui:badLink a c:Link ; c:label "A link that runs script" ; c:href "javascript:ale
 ui:badProgress a c:Progress ; c:label "Over budget" ; c:value 140 ; c:max 100 ; c:active true .
 ui:badBadge a c:Badge ; c:label "Solid?" ; sty:tone sty:Solid .
 ui:shapeReport a c:ShapeReport ; c:label "Shape violations" .
+
+# --- persistence: remembered state as policies ------------------------------------------------------
+
+ui:l-persistence a c:Flippable ; c:front ui:l-persistence-spec .
+ui:l-persistence-spec a c:Specimen ; c:label "Remembered state" , "Збережений стан"@uk , "Gespeicherter Zustand"@de , "الحالة المحفوظة"@ar ;
+    c:help "What is remembered is a per:Policy in the graph: which triples (a node's properties, or a CONSTRUCT), where (this tab, this device, the browser database) and whether. They are restored before the first render and written back after the changes they cover; every write, restore and forget is a member of per:StateLog. Turn one off to forget it; ⌫ forgets without turning it off. Detach the inspector, move it, reload: it is where you left it." ;
+    c:children ( ui:policies ) .
+ui:policies a c:PolicyList .

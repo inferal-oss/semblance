@@ -26,6 +26,7 @@ export const NS = {
   l10n: 'https://semblance.dev/ns/l10n#',
   ann: 'https://semblance.dev/ns/announce#',
   st: 'https://semblance.dev/ns/status#',
+  per: 'https://semblance.dev/ns/persistence#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -268,6 +269,8 @@ export const LDES = {
 export const EVENTS_GRAPH = 'urn:semblance:events'
 /** Named graph holding performance observations. */
 export const PERF_GRAPH = 'urn:semblance:perf'
+/** What the persistence effect reports: per:StateLog and each policy's size and last write. */
+export const PERSIST_GRAPH = 'urn:semblance:persistence'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {
