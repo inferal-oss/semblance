@@ -436,7 +436,9 @@ c:Tree a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """An expandable tree (role=tree) of a hierarchy: c:of is the root; children are the subjects
 pointing at a node through c:parentProperty. c:expandedNode lists the open nodes; the twisty toggles one.
-c:detailProperty is shown beside each label. With c:controls and c:property, clicking a label selects it."""@en ;
+c:detailProperty is shown beside each label. With c:controls and c:property, clicking a label selects it.
+A tree that is a dnd:DropTarget receives drops into its nodes: each node's row is a zone whose
+receptacle is the node."""@en ;
     sem:slug "tree" .
 c:expandedNode a owl:ObjectProperty ; rdfs:domain c:Tree ;
     rdfs:comment "A node whose children are shown (c:expanded is a disclosure's own boolean)."@en .

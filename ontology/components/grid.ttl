@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -68,7 +69,8 @@ one are not rows - after the filters it is c:filteredBy; the window is the c:pag
 ending at the newest (c:followTail, the default) or at c:windowEnd. Among them, rows sort by
 c:sortColumn (c:sortDescending), missing values last. Clicking a row (or arrow keys) selects its
 member (c:selectedRow) and pins the window; the footer counts, follows, jumps to the latest and
-pages older / newer. c:label names it; c:emptyText shows when no member matches."""@en ;
+pages older / newer. c:label names it; c:emptyText shows when no member matches. A grid that is a
+dnd:DragSource makes each row a draggable carrying its member (drop targets elsewhere receive it)."""@en ;
     sem:slug "data-grid" ;
     key:navigation key:GridNavigation .
 c:GridColumn a owl:Class ;
@@ -132,6 +134,8 @@ c:GridRow a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Internal: one row of a c:DataGrid (c:of its member, c:inGrid the grid), minted by its window and placed by sem:orderKey."@en ;
     sem:slug "grid-row" .
+# A row is a roving tab stop of its grid; dragged (a dnd:DragSource grid), it keeps that.
+c:GridRow dnd:keepsFocus true .
 c:inGrid a owl:ObjectProperty ; rdfs:domain c:GridRow .
 c:columnsFrom a owl:ObjectProperty ; rdfs:domain c:GridRow ; rdfs:comment "The grid's <grid>/~cols node, naming its c:visibleColumn s (the rows follow it)."@en .
 c:visibleColumn a owl:ObjectProperty .
@@ -304,6 +308,7 @@ c:DataGridWindow-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?row a c:GridRow ; c:of ?m ; c:inGrid $this ; c:columnsFrom ?cols ; sem:orderKey ?orderKey ; c:isSelected ?isSelected ; c:tabStop ?tabStop .
+  ?dragRow a dnd:Draggable ; dnd:carries ?m .
   ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:type ?type ; rdfhtml:disabled ?disabled ; rdfhtml:colSpan ?colSpan ; sem:orderKey ?elKey ;
       c:windowTo ?windowTo ; c:followsLatest ?followsLatest .
   ?parent rdfhtml:hasChild ?el .
@@ -501,6 +506,8 @@ WHERE {
       BIND(STR(?rank) AS ?orderKey)
       BIND(IF(?m = ?sel, true, ?unset) AS ?isSelected)
       BIND(IF(IF(?selectionShown, ?m = ?sel, ?rank = 1), true, ?unset) AS ?tabStop)
+      # A grid that is a drag source: each row can be picked up, carrying its member.
+      BIND(IF(EXISTS { $this a/rdfs:subClassOf* dnd:DragSource }, ?row, ?unset) AS ?dragRow)
     } UNION {
       # No matching member: a row saying so, across the shown columns.
       FILTER(!?any)

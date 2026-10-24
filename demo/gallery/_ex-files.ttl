@@ -1,0 +1,183 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix fx: <https://semblance.dev/demo/files#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# A file explorer: folders and files as data, and folders that say what they take.
+#
+# Folders form a tree (fx:parent); a folder holds its files (fx:contains). The tree, the trail
+# and the grid are general components told which properties to follow. The grid's rows can be
+# dragged onto the tree's folders, and whether a folder takes a file is SHACL: Photos takes
+# images, the Archive takes files up to 10 MB, Projects holds four files at most - a refused
+# drop says why, in the shape's own words.
+# =================================================================================================
+
+ui:ex-files-prefixes sh:declare [ sh:prefix "fx" ; sh:namespace "https://semblance.dev/demo/files#"^^xsd:anyURI ] .
+
+# --- the vocabulary -----------------------------------------------------------------------------------
+
+fx:name rdfs:label "Name" . fx:kind rdfs:label "Kind" . fx:size rdfs:label "Size" ; c:unit "bytes" .
+fx:modified rdfs:label "Modified" . fx:owner rdfs:label "Owner" . fx:preview rdfs:label "Preview" .
+fx:Image a fx:Kind ; rdfs:label "Image" . fx:Pdf a fx:Kind ; rdfs:label "PDF" . fx:Text a fx:Kind ; rdfs:label "Text" .
+fx:Sheet a fx:Kind ; rdfs:label "Spreadsheet" . fx:Video a fx:Kind ; rdfs:label "Video" .
+
+# --- the folders: a tree by fx:parent ------------------------------------------------------------------
+
+fx:home rdfs:label "Home" .
+fx:documents rdfs:label "Documents" ; fx:parent fx:home .
+fx:projects rdfs:label "Projects" ; fx:parent fx:documents .
+fx:photos rdfs:label "Photos" ; fx:parent fx:home ; dnd:accepts fx:ImagesOnly .
+fx:archive rdfs:label "Archive" ; fx:parent fx:home ; dnd:accepts fx:SmallFiles .
+
+# What a folder takes, as SHACL: a shape the file must conform to (on the folder), and one the
+# folder must still conform to with one more file (a capacity, sh:maxCount on fx:contains).
+fx:ImagesOnly a sh:NodeShape ;
+    sh:property [ sh:path fx:kind ; sh:in ( fx:Image ) ; sh:message "Photos takes images only." ] .
+fx:SmallFiles a sh:NodeShape ;
+    sh:property [ sh:path fx:size ; sh:maxInclusive 10000000 ; sh:message "The archive takes files up to 10 MB." ] .
+fx:ProjectsLimit a sh:NodeShape ; sh:targetNode fx:projects ;
+    sh:property [ sh:path fx:contains ; sh:maxCount 4 ; sh:message "Projects holds four files at most." ] .
+
+# --- the files ---------------------------------------------------------------------------------------
+
+fx:documents fx:contains fx:report , fx:budget , fx:notes , fx:scan , fx:talk .
+fx:projects fx:contains fx:plan , fx:mockup , fx:config .
+fx:photos fx:contains fx:beach , fx:harbour .
+fx:archive fx:contains fx:old .
+
+fx:report a fx:File ; fx:name "Quarterly report.pdf" ; fx:kind fx:Pdf ; fx:size 482113 ; fx:modified "2026-09-30"^^xsd:date ; fx:owner "Ada" ; fx:order 1 .
+fx:budget a fx:File ; fx:name "Budget 2027.xlsx" ; fx:kind fx:Sheet ; fx:size 73240 ; fx:modified "2026-10-12"^^xsd:date ; fx:owner "Grace" ; fx:order 2 .
+fx:notes a fx:File ; fx:name "Meeting notes.txt" ; fx:kind fx:Text ; fx:size 2210 ; fx:modified "2026-10-21"^^xsd:date ; fx:owner "Ada" ; fx:order 3 ;
+    fx:preview "Agreed: ship the walkthroughs first; the file explorer after.\nOpen: who owns the archive?" .
+fx:scan a fx:File ; fx:name "Signed contract.jpg" ; fx:kind fx:Image ; fx:size 1840221 ; fx:modified "2026-08-02"^^xsd:date ; fx:owner "Tim" ; fx:order 4 .
+fx:talk a fx:File ; fx:name "Conference talk.mp4" ; fx:kind fx:Video ; fx:size 48112903 ; fx:modified "2026-06-17"^^xsd:date ; fx:owner "Katherine" ; fx:order 5 .
+fx:plan a fx:File ; fx:name "Roadmap.pdf" ; fx:kind fx:Pdf ; fx:size 210554 ; fx:modified "2026-10-01"^^xsd:date ; fx:owner "Grace" ; fx:order 6 .
+fx:mockup a fx:File ; fx:name "Home screen.png" ; fx:kind fx:Image ; fx:size 912003 ; fx:modified "2026-10-18"^^xsd:date ; fx:owner "Tim" ; fx:order 7 .
+fx:config a fx:File ; fx:name "settings.json" ; fx:kind fx:Text ; fx:size 418 ; fx:modified "2026-10-20"^^xsd:date ; fx:owner "Ada" ; fx:order 8 ;
+    fx:preview "{ \"theme\": \"paper\", \"density\": \"comfortable\" }" .
+fx:beach a fx:File ; fx:name "Beach.jpg" ; fx:kind fx:Image ; fx:size 3301877 ; fx:modified "2026-07-08"^^xsd:date ; fx:owner "Katherine" ; fx:order 9 .
+fx:harbour a fx:File ; fx:name "Harbour at dusk.jpg" ; fx:kind fx:Image ; fx:size 2764310 ; fx:modified "2026-07-09"^^xsd:date ; fx:owner "Katherine" ; fx:order 10 .
+fx:old a fx:File ; fx:name "Old invoices.pdf" ; fx:kind fx:Pdf ; fx:size 5120000 ; fx:modified "2025-12-31"^^xsd:date ; fx:owner "Grace" ; fx:order 11 .
+
+# Where the explorer is: the folder shown.
+fx:explorer fx:current fx:documents .
+
+# --- the explorer ------------------------------------------------------------------------------------
+
+ui:ex-files a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-files-intro ui:ex-files-card ) .
+ui:ex-files-intro a c:Text ;
+    c:label "Folders and files as data. Pick a folder in the tree or the trail, sort and filter its files, select one for its details - and drag files onto folders: Photos takes images only, the Archive files up to 10 MB, Projects four files at most. A folder that refuses says why." .
+ui:ex-files-card a c:Card ; c:label "Files" ; c:content ui:ex-files-layout .
+ui:ex-files-layout a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-4 ;
+    c:children ( ui:fx-tree ui:ex-files-main ) .
+
+# The tree: folders by fx:parent; selecting one is fx:current; each folder's row is a drop zone
+# that receives into the folder (fx:contains).
+ui:fx-tree a c:Tree , dnd:DropTarget ; c:label "Folders" ; c:of fx:home ; c:parentProperty fx:parent ;
+    c:controls fx:explorer ; c:property fx:current ; c:expandedNode fx:home , fx:documents ;
+    dnd:members fx:contains .
+
+ui:ex-files-main a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:fx-crumbs ui:fx-tools ui:fx-grid ui:fx-details ) .
+ui:fx-tools a c:Toolbar ; c:label "Filter" ; c:children ( ui:fx-search ) .
+ui:fx-crumbs a c:Breadcrumbs ; c:label "Path" ; c:controls fx:explorer ; c:property fx:current ; c:parentProperty fx:parent .
+ui:fx-filter a c:TextFilter ; c:searches fx:name .
+ui:fx-search a c:SearchField ; c:label "Filter files" ; c:placeholder "Filter by name…" ; c:controls ui:fx-filter ; c:property c:filterText .
+
+# The grid: the shown folder's files (its c:collection, through fx:contains). Its rows can be
+# dragged (a dnd:DragSource): each carries its file.
+ui:fx-col-name a c:GridColumn ; c:label "Name" ; c:cellProperty fx:name ; c:width 220 .
+ui:fx-col-kind a c:GridColumn ; c:label "Kind" ; c:cellProperty fx:kind ; c:width 110 .
+ui:fx-col-size a c:GridColumn ; c:label "Size" ; c:cellProperty fx:size ; c:cellAs c:BytesCell ; c:align "end" ; c:width 90 .
+ui:fx-col-modified a c:GridColumn ; c:label "Modified" ; c:cellProperty fx:modified ; c:width 120 .
+ui:fx-grid a c:DataGrid , dnd:DragSource ; c:label "Files" ; c:collection fx:documents ; c:memberProperty fx:contains ;
+    c:sequenceProperty fx:order ; c:gridColumns ( ui:fx-col-name ui:fx-col-kind ui:fx-col-size ui:fx-col-modified ) ;
+    c:filteredBy ui:fx-filter ; c:emptyText "Nothing here. Drop files on this folder in the tree." .
+
+# The details follow the grid's selection.
+ui:fx-details a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:fx-summary ui:fx-preview ) .
+ui:fx-summary a c:DescriptionList ; c:bindFrom ui:fx-grid ; c:bindProperty c:selectedRow ;
+    c:fields ( fx:name fx:kind fx:size fx:modified fx:owner ) ; c:emptyText "Select a file to see its details." .
+ui:fx-preview a c:BodyViewer ; c:bindFrom ui:fx-grid ; c:bindProperty c:selectedRow ; c:payloadProperty fx:preview ;
+    c:emptyText "No preview." .
+
+# --- reactions -----------------------------------------------------------------------------------------
+
+# Opening a folder (in the tree or the trail) shows its files: the grid's collection follows, and
+# its selection is let go.
+fx:OpenFromTree a beh:Reaction ; beh:when beh:Click ; beh:source ui:fx-tree ;
+    beh:deletes """CONSTRUCT { ui:fx-grid c:collection ?old ; c:selectedRow ?row }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?folder .
+        { ui:fx-grid c:collection ?old } UNION { ui:fx-grid c:selectedRow ?row }
+        FILTER(!BOUND(?old) || ?old != ?folder) }""" ;
+    beh:inserts """CONSTRUCT { ui:fx-grid c:collection ?folder }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?folder }""" .
+fx:OpenFromTrail a beh:Reaction ; beh:when beh:Click ; beh:source ui:fx-crumbs ;
+    beh:deletes """CONSTRUCT { ui:fx-grid c:collection ?old ; c:selectedRow ?row }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?folder .
+        { ui:fx-grid c:collection ?old } UNION { ui:fx-grid c:selectedRow ?row }
+        FILTER(!BOUND(?old) || ?old != ?folder) }""" ;
+    beh:inserts """CONSTRUCT { ui:fx-grid c:collection ?folder }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?folder }""" .
+
+# A drop the folder takes moves the file: out of the folder that held it, into this one.
+fx:Move a beh:Reaction ; beh:when dnd:Drop ; beh:source ui:fx-tree ;
+    beh:deletes """CONSTRUCT { ?held fx:contains ?file } WHERE { $event dnd:carrying ?file ; dnd:into ?into . ?held fx:contains ?file FILTER(?held != ?into) }""" ;
+    beh:inserts """CONSTRUCT { ?into fx:contains ?file } WHERE { $event dnd:carrying ?file ; dnd:into ?into }""" ;
+    ann:announces "Moved" ; ann:tone sty:Success .
+
+# --- how it works -----------------------------------------------------------------------------------
+
+ui:ex-files-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-files-w1 ui:ex-files-w2 ui:ex-files-w3 ui:ex-files-w4 ui:ex-files-w5 ui:ex-files-w6 ) .
+
+ui:ex-files-w1 a c:WalkthroughStep ; rdfs:label "Folders and files are data" ;
+    c:children ( "A file such as " ui:ex-files-m-report " is a resource with a name, a kind, a size and a date. A folder holds its files - " ui:ex-files-m-documents " fx:contains it - and sits under another by fx:parent, up to " ui:ex-files-m-home ". Where the explorer is, is one triple on " ui:ex-files-m-explorer ": the folder shown." ) .
+ui:ex-files-w2 a c:WalkthroughStep ; rdfs:label "A tree and a trail over the same triples" ;
+    c:children ( ui:ex-files-m-tree " is a " ui:ex-files-m-Tree " of the folders by fx:parent; " ui:ex-files-m-crumbs " is a " ui:ex-files-m-Breadcrumbs " up the same property. Both control the explorer's folder, and opening one runs " ui:ex-files-m-open " too: the grid's collection becomes that folder, and its selection is let go." ) .
+ui:ex-files-w3 a c:WalkthroughStep ; rdfs:label "A grid of the folder's files" ;
+    c:children ( ui:ex-files-m-grid " is a " ui:ex-files-m-DataGrid " of its collection's members through fx:contains, under columns that say what each cell shows - sizes as bytes (" ui:ex-files-m-size "). Clicking a header sorts; " ui:ex-files-m-search " edits " ui:ex-files-m-filter ", a text filter the grid honours. " ui:ex-files-m-summary " is bound to the selected row: select a file, see its details and, for text, a preview." ) .
+ui:ex-files-w4 a c:WalkthroughStep ; rdfs:label "Rows drag, folders receive" ;
+    c:children ( "The grid is also a " ui:ex-files-m-DragSource ": each row is a draggable carrying its file. The tree is a " ui:ex-files-m-DropTarget ": each folder's row is a zone receiving into that folder, and a drop adds to it by fx:contains. What the drop means is " ui:ex-files-m-move ": out of the folder that held the file, into this one." ) .
+ui:ex-files-w5 a c:WalkthroughStep ; rdfs:label "Folders say what they take" ;
+    c:children ( "While a file is carried, every folder works out whether it would take it, by SHACL. " ui:ex-files-m-photos " " ui:ex-files-m-accepts " " ui:ex-files-m-images ": the file's kind must be an image. " ui:ex-files-m-archive " takes " ui:ex-files-m-small ", up to 10 MB. And " ui:ex-files-m-limit " targets " ui:ex-files-m-projects " with sh:maxCount 4 on fx:contains: with one more file it would not conform. A folder that refuses is dimmed with the shape's own message, and a drop there is announced, never applied." ) .
+ui:ex-files-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "A move changes two triples. The grid's window follows its collection, so the folder shown re-runs once and its rows render as members; the tree, the trail and the details do not run at all. While a drag is over the tree, only the folders' receptions change - and moving over them is not history: only the drop is recorded." ) .
+
+ui:ex-files-m-report a c:Mention ; c:label "fx:report" ; c:mentions fx:report .
+ui:ex-files-m-documents a c:Mention ; c:label "fx:documents" ; c:mentions fx:documents .
+ui:ex-files-m-home a c:Mention ; c:label "fx:home" ; c:mentions fx:home .
+ui:ex-files-m-explorer a c:Mention ; c:label "fx:explorer" ; c:mentions fx:explorer .
+ui:ex-files-m-tree a c:Mention ; c:label "The tree" ; c:mentions ui:fx-tree .
+ui:ex-files-m-Tree a c:Mention ; c:label "c:Tree" ; c:mentions c:Tree ; c:to c:Tree .
+ui:ex-files-m-crumbs a c:Mention ; c:label "the trail" ; c:mentions ui:fx-crumbs .
+ui:ex-files-m-Breadcrumbs a c:Mention ; c:label "c:Breadcrumbs" ; c:mentions c:Breadcrumbs ; c:to c:Breadcrumbs .
+ui:ex-files-m-open a c:Mention ; c:label "fx:OpenFromTree" ; c:mentions fx:OpenFromTree .
+ui:ex-files-m-grid a c:Mention ; c:label "ui:fx-grid" ; c:mentions ui:fx-grid .
+ui:ex-files-m-DataGrid a c:Mention ; c:label "c:DataGrid" ; c:mentions c:DataGrid ; c:to c:DataGrid .
+ui:ex-files-m-size a c:Mention ; c:label "the size column" ; c:mentions ui:fx-col-size .
+ui:ex-files-m-search a c:Mention ; c:label "The search field" ; c:mentions ui:fx-search .
+ui:ex-files-m-filter a c:Mention ; c:label "ui:fx-filter" ; c:mentions ui:fx-filter .
+ui:ex-files-m-summary a c:Mention ; c:label "The details" ; c:mentions ui:fx-summary .
+ui:ex-files-m-DragSource a c:Mention ; c:label "dnd:DragSource" ; c:mentions dnd:DragSource ; c:to dnd:DragSource .
+ui:ex-files-m-DropTarget a c:Mention ; c:label "dnd:DropTarget" ; c:mentions dnd:DropTarget ; c:to dnd:DropTarget .
+ui:ex-files-m-move a c:Mention ; c:label "fx:Move" ; c:mentions fx:Move .
+ui:ex-files-m-photos a c:Mention ; c:label "fx:photos" ; c:mentions fx:photos .
+ui:ex-files-m-accepts a c:Mention ; c:label "dnd:accepts" ; c:mentions dnd:accepts ; c:to dnd:accepts .
+ui:ex-files-m-images a c:Mention ; c:label "fx:ImagesOnly" ; c:mentions fx:ImagesOnly .
+ui:ex-files-m-archive a c:Mention ; c:label "fx:archive" ; c:mentions fx:archive .
+ui:ex-files-m-small a c:Mention ; c:label "fx:SmallFiles" ; c:mentions fx:SmallFiles .
+ui:ex-files-m-limit a c:Mention ; c:label "fx:ProjectsLimit" ; c:mentions fx:ProjectsLimit .
+ui:ex-files-m-projects a c:Mention ; c:label "fx:projects" ; c:mentions fx:projects .

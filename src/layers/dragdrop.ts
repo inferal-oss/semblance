@@ -66,9 +66,10 @@ function objected(ctx: RuleContext, drag: Term, receptacle: Term): string | unde
 }
 
 /** The least message of the target's dnd:accepts shapes that `x` violates, if any. */
-function unfit(ctx: RuleContext, focus: NamedNode, x: Term): string | undefined {
+function unfit(ctx: RuleContext, focus: NamedNode, x: Term, receptacle?: Term): string | undefined {
   const said: string[] = []
-  for (const shape of ctx.objects(focus, DND.accepts)) {
+  // The target's shapes, and the receptacle's own (a folder says what it takes).
+  for (const shape of [...ctx.objects(focus, DND.accepts), ...(receptacle ? ctx.objects(receptacle, DND.accepts) : [])]) {
     const fail = (violated: Term) => said.push(plain(ctx, violated, SH + 'message')[0] ?? plain(ctx, shape, SH + 'message')[0] ?? 'It does not belong here.')
     for (const cls of ctx.objects(shape, SH + 'class')) if (!instanceOf(ctx, x, cls.value)) fail(shape)
     for (const ps of ctx.objects(shape, SH + 'property')) {
@@ -134,7 +135,6 @@ const receive: FnRule = (ctx, focus) => {
   const x = drag && ctx.object(drag, DND.carrying)
   if (!drag || !x) return []
   const o = ctx.out(focus)
-  const misfit = unfit(ctx, focus, x)
   const memberOf = ctx.objects(focus, DND.memberOf)
   const members = ctx.objects(focus, DND.members)
   for (const { zone, receptacle: r } of zonesOf(ctx, focus)) {
@@ -145,6 +145,7 @@ const receive: FnRule = (ctx, focus) => {
     const holding = members.reduce((n, m) => n + ctx.match(r, m.value, null).length, 0)
     const capacity = capacityOf(ctx, focus, r)
     const overfull = !origin && !inside && capacity !== undefined && (pointing || holding || 0) + 1 > capacity.max
+    const misfit = unfit(ctx, focus, x, r)
     const objection = origin || inside ? undefined : objected(ctx, drag, r)
     const reasons = [origin ? undefined : misfit, overfull ? capacity!.said : undefined, objection].filter((s): s is string => s !== undefined).sort()
     const reason = reasons[0]
@@ -175,12 +176,28 @@ const hover: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** Whether the component's class (or a superclass) keeps its own tab stops (dnd:keepsFocus). */
+function keepsFocus(ctx: RuleContext, focus: NamedNode): boolean {
+  const seen = new Set<string>()
+  const todo = ctx.objects(focus, RDF_TYPE).map((t) => t.value)
+  while (todo.length) {
+    const c = todo.pop()!
+    if (seen.has(c)) continue
+    seen.add(c)
+    if (ctx.objects(ctx.nn(c), NS.dnd + 'keepsFocus').some((t) => t.value === 'true')) return true
+    for (const q of ctx.match(ctx.nn(c), RDFS_SUBCLASS, null)) todo.push(q.object.value)
+  }
+  return false
+}
+
 const handle: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const root = ctx.nn(mint(focus.value, 'root'))
   const x = ctx.object(focus, DND.carries) ?? focus
   const phrase = (p: string) => text(ctx, ctx.nn(NS.dnd + p), RDFS_LABEL) ?? ''
-  o.attr(root, 'data-sem-gesture', 'drag').attr(root, 'data-sem-drag', x.value).attr(root, 'aria-roledescription', phrase('DraggablePhrase')).attr(root, 'tabindex', '0')
+  o.attr(root, 'data-sem-gesture', 'drag').attr(root, 'data-sem-drag', x.value).attr(root, 'aria-roledescription', phrase('DraggablePhrase'))
+  // A tab stop, unless its class keeps its own (a roving grid row).
+  if (!keepsFocus(ctx, focus)) o.attr(root, 'tabindex', '0')
   const drag = ctx.object(focus, DND.lifted)
   if (drag) {
     const name = plain(ctx, focus, DND.name)[0] ?? plain(ctx, focus, C.label)[0] ?? local(x)

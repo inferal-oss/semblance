@@ -53,6 +53,8 @@ dnd:Draggable a owl:Class ;
 movement, or a long press on touch) or by keyboard (Space). Dragging it carries dnd:carries -
 the resource it shows - or, without one, the component itself. Collections that are
 dnd:Sortable mint their members' components as draggables."""@en .
+dnd:keepsFocus a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a component class: its instances keep their own tab stops (a grid's roving rows), so as draggables the layer gives them none."@en .
 dnd:carries a owl:ObjectProperty ; rdfs:domain dnd:Draggable ;
     rdfs:comment "The resource a drag of this component carries (default: the component)."@en .
 dnd:name a owl:DatatypeProperty ; rdfs:domain dnd:Draggable ;
@@ -75,7 +77,10 @@ node shapes the carried resource must conform to, and shapes that target a recep
 (sh:targetNode) with sh:maxCount on the membership path (the inverse of dnd:memberOf, or
 dnd:members), which the receptacle must still meet with one more member. Its reactions to
 dnd:Drop say what a drop means."""@en .
-dnd:Sortable a owl:Class ; rdfs:subClassOf dnd:DropTarget ;
+dnd:DragSource a owl:Class ;
+    rdfs:comment """A collection whose members can be dragged out: its members' components are draggables carrying
+the members (a data grid's rows). It receives nothing itself unless it is also a dnd:DropTarget."""@en .
+dnd:Sortable a owl:Class ; rdfs:subClassOf dnd:DropTarget , dnd:DragSource ;
     rdfs:comment """A collection whose members can be dragged - reordered within it (dnd:orderBy) and
 moved to other targets. Its members' components are draggables carrying the members."""@en .
 
@@ -83,9 +88,10 @@ dnd:receptacle a owl:ObjectProperty ;
     rdfs:comment "On a target or one of its zones: the resource a drop there puts things into."@en .
 dnd:zone a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ;
     rdfs:comment "One of the target's drop zones: a rendered node with its own dnd:receptacle (derived by components with several, e.g. a board's lanes)."@en .
-dnd:accepts a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range sh:NodeShape ;
-    rdfs:comment """A shape the carried resource must conform to. Supported: sh:class on the node, and on
-property shapes with a predicate path sh:hasValue, sh:in, sh:class, and the ranges sh:minInclusive,
+dnd:accepts a owl:ObjectProperty ; rdfs:range sh:NodeShape ;
+    rdfs:comment """A shape the carried resource must conform to - on a target (every receptacle of it), or on a
+receptacle itself (a folder saying what it takes). Supported: sh:class on the node, and on property
+shapes with a predicate path sh:hasValue, sh:in, sh:class, and the ranges sh:minInclusive,
 sh:maxInclusive, sh:minExclusive and sh:maxExclusive (a room's seats against a meeting's
 attendees). The violation's sh:message (the property shape's, else the node shape's) is the
 reason given."""@en .
@@ -314,8 +320,8 @@ WHERE {
   BIND(IF(?zoned, ?declaredZone, IRI(CONCAT(STR($this), "/~root"))) AS ?zone)
   BIND(IF(?zoned, ?zoneReceptacle, COALESCE(?declared, $this)) AS ?r)
   # Does what is carried conform to the target's shapes? The first violation's message, if not.
-  LATERAL { OPTIONAL { SELECT ?this ?x (MIN(?said) AS ?unfit) WHERE {
-    $this dnd:accepts ?shape .
+  LATERAL { OPTIONAL { SELECT ?this ?x ?r (MIN(?said) AS ?unfit) WHERE {
+    { $this dnd:accepts ?shape } UNION { ?r dnd:accepts ?shape }
     { ?shape sh:class ?class FILTER NOT EXISTS { ?x a/rdfs:subClassOf* ?class } BIND(?shape AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:hasValue ?wanted FILTER(isIRI(?p)) FILTER NOT EXISTS { ?x ?p ?wanted } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:in ?allowed FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?allowed rdf:rest*/rdf:first ?v } BIND(?ps AS ?violated) }
@@ -327,7 +333,7 @@ WHERE {
     OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
     OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
     BIND(STR(COALESCE(?own, ?general, "It does not belong here.")) AS ?said)
-  } GROUP BY ?this ?x } }
+  } GROUP BY ?this ?x ?r } }
   # How many members the receptacle has, whether this is one already, and its capacity.
   LATERAL { OPTIONAL { SELECT ?this ?r (COUNT(?o) AS ?pointing) WHERE { $this dnd:memberOf ?m . ?o ?m ?r } GROUP BY ?this ?r } }
   LATERAL { OPTIONAL { SELECT ?this ?r (COUNT(?o) AS ?holding) WHERE { $this dnd:members ?m . ?r ?m ?o } GROUP BY ?this ?r } }
@@ -447,7 +453,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-gesture")) AS ?gesture)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-drag")) AS ?carriedAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-roledescription")) AS ?describe)
-  BIND(IRI(CONCAT(STR($this), "/~root-tabindex")) AS ?tab)
+  # A tab stop, unless its class keeps its own (a roving grid row).
+  BIND(IF(EXISTS { $this a/rdfs:subClassOf* ?keeper . ?keeper dnd:keepsFocus true }, ?none, IRI(CONCAT(STR($this), "/~root-tabindex"))) AS ?tab)
   BIND(IF(?lifted, IRI(CONCAT(STR($this), "/~root-data-sem-lifted")), ?none) AS ?liftedAttr)
   BIND(IF(BOUND(?status), IRI(CONCAT(STR($this), "/~root-data-sem-drag-status")), ?none) AS ?statusAttr)
   BIND(IF(EXISTS { $this dnd:refusedBy ?refusal }, IRI(CONCAT(STR($this), "/~root-data-sem-refused")), ?none) AS ?refusedAttr)

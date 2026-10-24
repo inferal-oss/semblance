@@ -535,6 +535,7 @@ const tree: FnRule = (ctx, focus) => {
       .map((t) => ({ t, label: labelOf(ctx, t) }))
       .sort((a, b) => a.label.localeCompare(b.label, locale(ctx)) || (a.t.value < b.t.value ? -1 : 1))
   const caption = text(ctx, focus, C.label) ?? labelOf(ctx, root)
+  const dropTarget = ctx.match(focus, NS.rdf + 'type', null).some((q) => q.object.value === NS.dnd + 'DropTarget' || q.object.value === NS.dnd + 'Sortable')
 
   if (ctx.modality === MOD.Text) {
     const lines: string[] = []
@@ -571,7 +572,10 @@ const tree: FnRule = (ctx, focus) => {
     const detailText = named(detail) ? display(ctx, ctx.object(n, detail)) : ''
     if (detailText) rowParts.push(el(o, `${id}-detail`, 'Code', { class: 'sem-detail' }, [o.text(`${id}-detail-text`, detailText)]))
     if (kids.length) rowParts.push(el(o, `${id}-count`, 'Span', { class: 'sem-count' }, [o.text(`${id}-count-text`, String(kids.length))]))
-    const parts = [el(o, `${id}-row`, 'Div', { class: 'sem-row' }, rowParts)]
+    const row = el(o, `${id}-row`, 'Div', { class: 'sem-row' }, rowParts)
+    // A tree that is a drop target receives into each node: its row is the node's zone.
+    if (dropTarget) o.t(focus, NS.dnd + 'zone', row).t(row, NS.dnd + 'receptacle', n)
+    const parts = [row]
     if (open) {
       const inner = new Set([...path, n.value])
       const group = el(o, `${id}-group`, 'Ul', {}, kids.map((k) => item(k.t, k.label, level + 1, hashKey(key + ' ' + k.t.value), inner)))

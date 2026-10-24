@@ -341,6 +341,7 @@ const window: FnRule = (ctx, focus) => {
     })
   }
   const selected = ctx.object(focus, GRID.selectedRow)
+  const dragSource = isA(ctx, focus, ctx.nn(NS.dnd + 'DragSource'))
   const selectedShown = selected ? ranked.some((r) => r.m.equals(selected)) : false
   ranked.forEach((r, k) => {
     const row = o.node('r-' + md5Key(r.m.value))
@@ -351,6 +352,8 @@ const window: FnRule = (ctx, focus) => {
     o.t(row, SEM.orderKey, num(k + 1))
     if (selected?.equals(r.m)) o.t(row, GRID.isSelected, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     if (selectedShown ? selected!.equals(r.m) : k === 0) o.t(row, GRID.tabStop, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
+    // A grid that is a drag source: each row can be picked up, carrying its member.
+    if (dragSource) o.t(row, RDF_TYPE, ctx.nn(NS.dnd + 'Draggable')).t(row, NS.dnd + 'carries', r.m)
     o.t(body, H.hasChild, row)
   })
   if (!rows.length) {
