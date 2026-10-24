@@ -6,7 +6,7 @@ import * as ox from 'oxigraph'
 import { oxigraphStore } from '../src/store/oxigraph.ts'
 import { judge, observationsTurtle } from './observations.ts'
 import type { MicroRow } from './micro.ts'
-import { CONFIGS, type Row, toMarkdown } from './scenarios.ts'
+import { NODE_CONFIGS, type Row, toMarkdown } from './scenarios.ts'
 
 const sizes = (process.argv[2] ?? '100,1000,10000').split(',').map(Number)
 const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
@@ -26,10 +26,10 @@ const micro = child<MicroRow[]>('micro')
 console.table(micro.map((m) => ({ op: m.op, 'µs/op': Number(m.us.toFixed(2)) })))
 
 const rows: Row[] = []
-for (const size of sizes) for (const config of CONFIGS) rows.push(...child<Row[]>('run', config.id, String(size)))
+for (const size of sizes) for (const config of NODE_CONFIGS) rows.push(...child<Row[]>('run', config.id, String(size)))
 
 // Results as RDF observations, judged by the SPARQL in ontology/perf/perf.ttl.
-const observations = observationsTurtle(rows)
+const observations = observationsTurtle(rows, NODE_CONFIGS)
 const store = oxigraphStore(ox)
 store.loadTurtle(readFileSync('ontology/perf/perf.ttl', 'utf8'))
 store.loadTurtle(observations)

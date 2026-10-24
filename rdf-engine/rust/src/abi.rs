@@ -3,6 +3,7 @@
 use crate::dict::{self, Dict, Key, lowercase};
 use crate::lex;
 use crate::ntriples;
+use crate::turtle;
 use crate::store::{Quad, Store};
 use alloc::vec::Vec;
 use core::cell::UnsafeCell;
@@ -288,13 +289,13 @@ pub extern "C" fn quad_count() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn load(format: u32, text_len: u32, _base_len: u32, graph: u32) -> i32 {
+pub extern "C" fn load(format: u32, text_len: u32, base_len: u32, graph: u32) -> i32 {
     let s = st();
-    let text = &s.input[..text_len as usize];
+    let [text, base] = args(&s.input, [text_len, base_len]);
     let mut quads = Vec::new();
     let parsed = match format {
         1 | 2 => ntriples::parse(text, format == 2, graph, &mut s.dict, &mut quads),
-        3 | 4 => return not_implemented(),
+        3 | 4 => turtle::parse(text, format == 4, base, graph, &mut s.dict, &mut quads),
         _ => return fail(b"unknown format"),
     };
     if let Err(e) = parsed {

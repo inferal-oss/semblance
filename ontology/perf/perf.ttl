@@ -25,6 +25,8 @@ perf:evaluation a owl:ObjectProperty ; rdfs:domain perf:Configuration .
 perf:Oxigraph rdfs:label "Oxigraph (WASM)"@en .
 perf:Hybrid rdfs:label "Oxigraph + N3.js mirror"@en .
 perf:N3 rdfs:label "N3.js"@en .
+perf:RustEngine rdfs:label "rdf-engine (Rust)"@en .
+perf:WatEngine rdfs:label "rdf-engine (WAT)"@en .
 perf:Sparql rdfs:label "SPARQL rules"@en .
 perf:Function rdfs:label "function rules"@en .
 perf:Bulk rdfs:label "bulk evaluation"@en .

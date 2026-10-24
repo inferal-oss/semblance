@@ -7,7 +7,7 @@ import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 import type { GraphStore } from '../src/store/types.ts'
 
-export type StoreKind = 'oxigraph' | 'n3' | 'hybrid'
+export type StoreKind = 'oxigraph' | 'n3' | 'hybrid' | 'rust' | 'wat'
 
 export interface BenchEnv {
   name: string
@@ -33,6 +33,13 @@ export const CONFIGS: Config[] = [
   { id: 'hybrid · sparql · bulk', store: 'hybrid', prefer: 'sparql', bulkThreshold: 16 },
   { id: 'hybrid · function', store: 'hybrid', prefer: 'function', bulkThreshold: 16 },
   { id: 'n3 · function', store: 'n3', prefer: 'function', bulkThreshold: 16 },
+]
+
+/** Node also runs the rdf-engine builds (function rules until they have SPARQL). */
+export const NODE_CONFIGS: Config[] = [
+  ...CONFIGS,
+  { id: 'rust · function', store: 'rust', prefer: 'function', bulkThreshold: 16 },
+  { id: 'wat · function', store: 'wat', prefer: 'function', bulkThreshold: 16 },
 ]
 
 export interface Row {

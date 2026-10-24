@@ -8,9 +8,11 @@ mod abi;
 mod dict;
 mod hash;
 mod heap;
+mod iri;
 mod lex;
 mod ntriples;
 mod store;
+mod turtle;
 
 #[global_allocator]
 static HEAP: heap::Heap = heap::Heap::new();

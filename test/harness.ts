@@ -8,7 +8,7 @@ import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
 import type { GraphStore } from '../src/store/types.ts'
-import { loadStore } from '../src/node/load.ts'
+import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { A11Y, ANN, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
@@ -25,12 +25,12 @@ const sources = (store: GraphStore) => {
 }
 
 /** The demo's whole interface (demo/app.ttl), projected into a DOM and driven only through events. */
-export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+export function mountShell(todos = 5, kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
   return mount(workbench(sources(loadStore(kind, todoApp(todos), appGraph, ...gallery))), prefer)
 }
 
 /** The site as a visitor first sees it: the landing page, tools closed. */
-export function mountSite(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock) {
+export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock) {
   return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery)), prefer, clock)
 }
 
