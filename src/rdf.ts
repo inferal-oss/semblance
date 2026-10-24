@@ -39,3 +39,11 @@ export function owningFocus(iri: string): string {
   const i = iri.lastIndexOf(MINT_SEPARATOR)
   return i < 0 ? iri : iri.slice(0, i)
 }
+
+/** Milliseconds in an ISO 8601 duration (days, hours, minutes, seconds). */
+export function parseDuration(iso: string): number | undefined {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(iso)
+  if (!m) return undefined
+  const [, d = 0, h = 0, min = 0, sec = 0] = m.map((x) => (x === undefined ? undefined : Number(x)))
+  return (((Number(d) * 24 + Number(h)) * 60 + Number(min)) * 60 + Number(sec)) * 1000
+}

@@ -9,11 +9,10 @@ import type { ReactionFn } from './behaviour/events.ts'
 import type { FnRule } from './engine/context.ts'
 import { BEH, EVENTS_GRAPH, MOD, NS, PERSIST_GRAPH, RDF_TYPE, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { prefixesFor } from './prefixes.ts'
-import type { Delta } from './rdf.ts'
+import { type Delta, parseDuration } from './rdf.ts'
 import type { Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { labelOf, named, str } from './components/util.ts'
-import { parseDuration } from './behaviour/events.ts'
 
 const PER = NS.per
 const PROV = NS.prov

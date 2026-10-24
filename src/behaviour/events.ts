@@ -1,6 +1,6 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
-import { type Delta, MINT_SEPARATOR, owningFocus } from '../rdf.ts'
+import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
@@ -11,13 +11,8 @@ const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
 /** Distinguishes event IRIs across page loads sharing a store snapshot. */
 const RUN = Date.now().toString(36)
 
-/** Milliseconds in an ISO 8601 duration (days, hours, minutes, seconds). */
-export function parseDuration(iso: string): number | undefined {
-  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(iso)
-  if (!m) return undefined
-  const [, d = 0, h = 0, min = 0, sec = 0] = m.map((x) => (x === undefined ? undefined : Number(x)))
-  return (((Number(d) * 24 + Number(h)) * 60 + Number(min)) * 60 + Number(sec)) * 1000
-}
+// Re-exported: persistence imports it from rdf.ts, so it does not import this module (which imports it back).
+export { parseDuration }
 
 export interface ReactionContext {
   runtime: Runtime
