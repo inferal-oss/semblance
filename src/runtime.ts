@@ -3,7 +3,7 @@ import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
+import { EVENTS_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { privacyFunctions } from './layers/privacy.ts'
@@ -42,7 +42,7 @@ export class Runtime {
    */
   project(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH],
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...workbenchFunctions, ...privacyFunctions, ...opts.functions },
     })
