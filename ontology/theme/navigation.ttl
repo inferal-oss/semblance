@@ -37,6 +37,13 @@
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .
 
+# A nav list presenting itself as a picker on a compact screen (c:compactAs c:Picker; the picker's
+# own look is c:Segmented's) sheds its card.
+[] a sty:StyleRule ; sty:appliesTo c:NavList ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "position" ; sty:raw "static" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "none" ] .
+
 # Counts after an option's label (c:countProperty): a small solid pill at the end of the row.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,

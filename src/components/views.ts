@@ -12,6 +12,10 @@ import { labelOf as textLabelOf, text } from './util.ts'
 const C_GRAPH_MARK = NS.c + 'GraphMark'
 const C_ACTIVE = NS.c + 'active'
 const C_BYLINE = NS.c + 'byline'
+const C_MORE_ACTIONS = NS.c + 'moreActions'
+const C_MORE_LABEL = NS.c + 'moreLabel'
+const C_EXPANDED = NS.c + 'expanded'
+const C_FOLDS = NS.c + 'folds'
 const C_VIEW_BOX = NS.c + 'viewBox'
 const C_PATH_DATA = NS.c + 'pathData'
 const C_FILL_RULE = NS.c + 'fillRule'
@@ -84,7 +88,24 @@ const appbar: FnRule = (ctx, focus) => {
     ...(subtitle ? [o.el('subtitle', 'Span', {}, [o.text('subtitle-text', subtitle)])] : []),
     ...(named(byline) ? [o.el('byline', 'Span', { class: 'sem-byline' }, [byline])] : []),
   ])
-  o.renders(o.el('root', 'Header', {}, [brand, o.el('actions', 'Div', { class: 'sem-actions' }, actions)]))
+  // The more actions: after the others where there is room, behind a More button on a compact
+  // screen (the theme decides which); the button's c:folds opens and closes them (c:expanded).
+  const more = rdfList(ctx, ctx.object(focus, C_MORE_ACTIONS)).filter(named)
+  const group: NamedNode[] = []
+  if (more.length) {
+    const open = ctx.object(focus, C_EXPANDED)?.value === 'true'
+    const body = o.node('more-body')
+    const icon = o.el('more-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('more-icon-text', '⋯')])
+    const toggle = o.el(
+      'more-toggle',
+      'Button',
+      { type: 'button', class: 'sem-more-toggle', 'aria-expanded': String(open), 'aria-controls': body.value, 'aria-label': text(ctx, focus, C_MORE_LABEL) ?? 'More' },
+      [icon],
+    )
+    o.t(toggle, C_FOLDS, focus)
+    group.push(o.el('more', 'Div', { class: 'sem-more', 'data-open': String(open) }, [toggle, o.el('more-body', 'Div', { class: 'sem-more-body', id: body.value }, more)]))
+  }
+  o.renders(o.el('root', 'Header', {}, [brand, o.el('actions', 'Div', { class: 'sem-actions' }, [...actions, ...group])]))
   return o.quads
 }
 

@@ -134,17 +134,22 @@ ex:AddTodo ann:announces "Todo added" , "Завдання додано"@uk , "Au
 ui:RunMatrix ann:announces "Benchmark started" , "Бенчмарк запущено"@uk , "Benchmark gestartet"@de , "بدأ القياس"@ar ; ann:tone sty:Info .
 ui:ClearMatrix ann:announces "Results cleared" , "Результати очищено"@uk , "Ergebnisse gelöscht"@de , "تم مسح النتائج"@ar .
 
+# The page switcher first; the tools and the display settings after it, folded behind a More
+# button on a phone (c:moreActions), so the bar is one row there.
 ui:appBar a c:AppBar ;
     c:label "Semblance" ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
-    c:actions ( ui:nav ui:toolsToggle ui:theme ui:themePicker ) .
+    c:actions ( ui:nav ) ;
+    c:moreActions ( ui:toolsToggle ui:theme ui:themePicker ) ;
+    c:moreLabel "Tools and display" , "Інструменти та вигляд"@uk , "Werkzeuge und Darstellung"@de , "الأدوات والعرض"@ar .
 # Which theme, beside the colour scheme: the shell's sty:theme, the same property the gallery's
 # Display settings edit, so either control shows the other's choice.
 ui:themePicker a c:Choice ; c:controls ui:shell ; c:property sty:theme .
 ui:logo a c:GraphMark ; rdfs:label "Semblance" .
 ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
-ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
+# On a phone the page switcher is a picker (one line, the current page shown), which fits the bar.
+ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page ; c:compactAs c:Picker .
 
 # The site: a landing page, the docs, the component gallery and complete examples
 # (demo/gallery/_home.ttl, _docs.ttl, _examples.ttl). Each page is evaluated when
@@ -506,8 +511,15 @@ ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset to
     c:children ( ui:galleryAside ui:galleryPages ) .
 ui:galleryAside a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:galleryNav ui:display ) .
-# Display settings: each a control over one property of the shell (or the app).
-ui:display a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+# Display settings: each a control over one property of the shell (or the app). A column beside
+# the navigation; on a phone, where they stack above the page, two to a row (ui:Settings).
+ui:Settings a pos:Layout ; sem:slug "settings" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] .
+[] a sty:StyleRule ; sty:when ui:Settings ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(150px, 1fr))" ] .
+ui:display a c:Stack ; pos:layout ui:Settings ; pos:gap tok:space-2 ;
     c:children ( ui:themeChoice ui:languageChoice ui:contrastChoice ui:motionChoice ui:densityChoice ui:privacyChoice ) .
 ui:privacyChoice a c:Choice ; c:controls ui:shell ; c:property prv:privacy .
 ui:themeChoice a c:Choice ; c:controls ui:shell ; c:property sty:theme .
@@ -515,7 +527,7 @@ ui:languageChoice a c:Choice ; c:controls ui:app ; c:property l10n:language .
 ui:contrastChoice a c:Choice ; c:controls ui:shell ; c:property sty:contrast .
 ui:motionChoice a c:Choice ; c:controls ui:shell ; c:property mot:preference .
 ui:densityChoice a c:Choice ; c:controls ui:shell ; c:property sty:density .
-ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" .
+ui:galleryNav a c:NavList ; c:controls ui:app ; c:property ui:galleryGroup ; c:label "Components" ; c:compactAs c:Picker .
 ui:galleryPages a c:Switch ; c:controls ui:app ; c:property ui:galleryGroup ;
     c:cases ( ui:gc-foundations ui:gc-layout ui:gc-type ui:gc-actions ui:gc-inputs ui:gc-feedback
               ui:gc-data ui:gc-navigation ui:gc-overlays ui:gc-disclosure ui:gc-layers ui:gc-windows ui:gc-themes ui:gc-inspection ) .

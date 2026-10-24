@@ -162,4 +162,10 @@ const statusBarFold: ReactionFn = (ctx) => {
 export const functions: Record<string, FnRule> = {
   'status-bar': statusBar, specimen, swatches, surface, divider, grid, spacer }
 
-export const reactions: Record<string, ReactionFn> = { 'status-bar:fold': statusBarFold }
+/** Clicking an app bar's More button opens or closes its folded actions (c:expanded; closed when absent). */
+const appBarMore: ReactionFn = (ctx) => {
+  if (!hitMarks(ctx, NS.c + 'folds')) return { add: [], remove: [] }
+  return setFlag(ctx, ctx.target, NS.c + 'expanded', ctx.object(ctx.target, NS.c + 'expanded')?.value !== 'true')
+}
+
+export const reactions: Record<string, ReactionFn> = { 'status-bar:fold': statusBarFold, 'appbar:more': appBarMore }

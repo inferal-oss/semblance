@@ -111,8 +111,14 @@ WHERE {
 
 c:AppBar a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "The application's top bar: a logo, a name (c:label), a c:subtitle, a c:byline and c:actions."@en ;
+    rdfs:comment """The application's top bar: a logo, a name (c:label), a c:subtitle, a c:byline, c:actions and
+c:moreActions. Where there is room the more actions follow the others; on a compact screen
+(sty:CompactWidth) they fold behind a More button, shown while the bar is c:expanded."""@en ;
     sem:slug "app-bar" .
+c:moreActions a owl:ObjectProperty ; rdfs:domain c:AppBar ; rdfs:range rdf:List ;
+    rdfs:comment "Secondary actions (settings, tools): after c:actions where there is room, behind a More button on a compact screen."@en .
+c:moreLabel a owl:DatatypeProperty ; rdfs:domain c:AppBar ;
+    rdfs:comment "What the More button is called for assistive technology (default \"More\")."@en .
 c:byline a owl:ObjectProperty ; rdfs:domain c:AppBar ;
     rdfs:comment "A component after an app bar's name and subtitle: who makes or sponsors it."@en .
 c:logo a owl:ObjectProperty ;
@@ -133,8 +139,21 @@ CONSTRUCT {
   ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
   ?subtitle a rdfhtml:Span ; rdfhtml:hasChild ?subtitleText .
   ?subtitleText a rdfhtml:Text ; rdfhtml:data ?subtitleData .
-  ?actions a rdfhtml:Div ; rdfhtml:class "sem-actions" ; rdfhtml:hasChild ?action .
+  ?actions a rdfhtml:Div ; rdfhtml:class "sem-actions" ; rdfhtml:hasChild ?action, ?more .
   ?a ord:immediatelyPrecedes ?b .
+  ?lastAction ord:immediatelyPrecedes ?more .
+  ?more a rdfhtml:Div ; rdfhtml:class "sem-more" ; rdfhtml:attribute ?moreOpenAttr ; rdfhtml:hasChild ?moreToggle, ?moreBody .
+  ?moreOpenAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-open" ; rdfhtml:attributeValue ?openText .
+  ?moreToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-more-toggle" ; c:folds $this ;
+      rdfhtml:attribute ?ariaExpanded, ?ariaControls, ?ariaLabel ; rdfhtml:hasChild ?moreIcon ; ord:immediatelyPrecedes ?moreBody .
+  ?ariaExpanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
+  ?ariaControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?moreBodyId .
+  ?ariaLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?moreLabel .
+  ?moreIcon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?moreIconText .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?moreIconText a rdfhtml:Text ; rdfhtml:data "⋯" .
+  ?moreBody a rdfhtml:Div ; rdfhtml:class "sem-more-body" ; rdfhtml:id ?moreBodyId ; rdfhtml:hasChild ?moreAction .
+  ?ma ord:immediatelyPrecedes ?mb .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
@@ -162,8 +181,39 @@ WHERE {
   BIND(IF(BOUND(?subtitleData), IRI(CONCAT(STR($this), "/~subtitle-text")), ?none) AS ?subtitleText)
   BIND(IRI(CONCAT(STR($this), "/~actions")) AS ?actions)
   BIND(IF(BOUND(?bylineBox), COALESCE(?subtitle, ?name), ?none) AS ?beforeByline)
+  # The more actions, in a group after the last action: a toggle and the body it opens.
+  OPTIONAL { $this c:moreActions/rdf:first ?firstMore FILTER(isIRI(?firstMore)) }
+  OPTIONAL { FILTER(BOUND(?firstMore)) $this c:actions/rdf:rest* ?lastCell . ?lastCell rdf:first ?lastAction0 ; rdf:rest rdf:nil FILTER(isIRI(?lastAction0)) }
+  BIND(IF(BOUND(?firstMore), ?lastAction0, ?none) AS ?lastAction)
+  BIND(STR(EXISTS { $this c:expanded ?expanded FILTER(STR(?expanded) = "true") }) AS ?openText0)
+  OPTIONAL { $this c:moreLabel ?moreLabel_u FILTER(isLiteral(?moreLabel_u) && lang(?moreLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?moreLabel_u)) $this c:moreLabel ?moreLabel_en FILTER(langMatches(lang(?moreLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?moreLabel_u) && !BOUND(?moreLabel_en)) $this c:moreLabel ?moreLabel_any FILTER(isLiteral(?moreLabel_any)) }
+  BIND(COALESCE(STR(COALESCE(?moreLabel_u, ?moreLabel_en, ?moreLabel_any)), "More") AS ?moreLabel0)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more")), ?none) AS ?more)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-data-open")), ?none) AS ?moreOpenAttr)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-toggle")), ?none) AS ?moreToggle)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-toggle-aria-expanded")), ?none) AS ?ariaExpanded)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-toggle-aria-controls")), ?none) AS ?ariaControls)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-toggle-aria-label")), ?none) AS ?ariaLabel)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-icon")), ?none) AS ?moreIcon)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-icon-aria-hidden")), ?none) AS ?iconHidden)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-icon-text")), ?none) AS ?moreIconText)
+  BIND(IF(BOUND(?firstMore), IRI(CONCAT(STR($this), "/~more-body")), ?none) AS ?moreBody)
+  BIND(STR(?moreBody) AS ?moreBodyId)
+  BIND(IF(BOUND(?firstMore), ?openText0, ?none) AS ?openText)
+  BIND(IF(BOUND(?firstMore), ?moreLabel0, ?none) AS ?moreLabel)
   {} UNION { $this c:actions/rdf:rest*/rdf:first ?action FILTER(isIRI(?action)) } UNION { $this c:actions/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
+  UNION { $this c:moreActions/rdf:rest*/rdf:first ?moreAction FILTER(isIRI(?moreAction)) } UNION { $this c:moreActions/rdf:rest* ?morePairCell . ?morePairCell rdf:first ?ma ; rdf:rest/rdf:first ?mb FILTER(isIRI(?ma) && isIRI(?mb)) }
 }""" .
+
+# The More button opens and closes the folded actions (c:expanded; closed when absent).
+c:AppBarMore a beh:Reaction ;
+    beh:when beh:Click ;
+    beh:sourceClass c:AppBar ;
+    beh:deletes """CONSTRUCT { $this c:expanded ?e } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . $this c:expanded ?e }""" ;
+    beh:inserts """CONSTRUCT { $this c:expanded ?next } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . OPTIONAL { $this c:expanded ?e } BIND(STR(COALESCE(?e, false)) != "true" AS ?next) }""" ;
+    sem:function "appbar:more" .
 
 c:AppBarRendering-sparql-text a sem:Rule ;
     sem:implements c:AppBarRendering ;

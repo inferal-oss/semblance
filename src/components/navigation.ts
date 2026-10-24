@@ -243,7 +243,54 @@ const counts: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- A segmented control's (or nav list's) picker, for a compact screen (c:compactAs c:Picker) -----
+
+const C_COMPACT_AS = NS.c + 'compactAs'
+const C_PICKER = NS.c + 'Picker'
+
+/**
+ * A native select of the control's options, before its first option button: the theme shows it
+ * in place of the buttons on a compact screen. Option keys as the segmented rule's, prefixed
+ * pick- (the buttons are opt-); the selected one is the controlled property's value.
+ */
+const picker: FnRule = (ctx, focus) => {
+  if (ctx.modality === MOD.Text || ctx.object(focus, C_COMPACT_AS)?.value !== C_PICKER) return []
+  const target = ctx.object(focus, C.controls)
+  const property = ctx.object(focus, C.property)
+  if (!target || !named(property)) return []
+  const explicit = ctx.object(focus, NS.c + 'options')
+  const range = ctx.object(property, 'http://www.w3.org/2000/01/rdf-schema#range')
+  const options = explicit
+    ? nodes(ctx, explicit)
+    : range
+      ? ctx
+          .match(null, NS.rdf + 'type', range)
+          .map((q) => q.subject)
+          .filter(named)
+          .map((t) => ({ t, order: num(ctx, t, NS.sem + 'order', 0) }))
+          .sort((a, b) => a.order - b.order || (a.t.value < b.t.value ? -1 : 1))
+          .map(({ t }) => t)
+      : []
+  const current = ctx.object(target, property)?.value
+  const caption = text(ctx, focus, C.label) ?? labelOf(ctx, property)
+  const o = ctx.out(focus)
+  const select = el(
+    o,
+    'picker',
+    'Select',
+    { class: 'sem-picker', 'aria-label': caption },
+    options.map((opt) => {
+      const key = 'pick-' + encodeForUri(opt.value)
+      return o.el(key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text(key + '-text', labelOf(ctx, opt))])
+    }),
+  )
+  o.t(o.node('root'), H_HAS_CHILD, select)
+  if (options[0]) o.t(select, NS.ord + 'immediatelyPrecedes', o.node('opt-' + encodeForUri(options[0].value)))
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
+  'segmented:picker': picker,
   'nav:counts': counts,
   'nav:breadcrumbs': breadcrumbs,
   'nav:pagination': pagination,

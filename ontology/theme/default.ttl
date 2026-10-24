@@ -427,6 +427,43 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
                  [ sty:property "transition" ; sty:raw "color var(--sem-motion), background var(--sem-motion)" ] .
 
+# The picker (c:compactAs c:Picker) is shown only on a compact screen, in place of the options.
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "> .sem-picker" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "none" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "background" ; sty:raw "none" ] ,
+                 [ sty:property "overflow" ; sty:raw "visible" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> :not(.sem-picker)" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+# One line, as tall as a finger: the current option and a chevron.
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "min-height" ; sty:raw "44px" ] ,
+                 [ sty:property "padding" ; sty:raw "0 32px 0 12px" ] ,
+                 [ sty:property "appearance" ; sty:raw "none" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 20px) 50% / 6px 6px no-repeat, linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 14px) 50% / 6px 6px no-repeat, var(--sem-surface)" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font" ; sty:raw "600 14px/1.2 var(--sem-font)" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+
+# On a touch screen, options tall enough to hit (40px; with the track's padding, 46px).
+[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:atWidth sty:CompactWidth ; sty:part "button" ;
+    sty:declares [ sty:property "min-height" ; sty:raw "40px" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part "button:hover" ;
     sty:declares [ sty:property "color" ; sty:token tok:text ] .
 
@@ -754,6 +791,95 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "gap" ; sty:raw "12px" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
+
+# The more actions (c:moreActions): where there is room they simply follow the others - the group
+# and its body take no part in layout and the More button is not shown.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-more, .sem-more-body" ;
+    sty:declares [ sty:property "display" ; sty:raw "contents" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-more-toggle" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+# On a compact screen: one row - the brand (its byline under the name), the actions (a page
+# switcher presenting itself as a picker, c:compactAs c:Picker, fits) and the More button, which
+# opens the more actions in a panel below it. Focus order is the visual order.
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
+                 [ sty:property "gap" ; sty:raw "10px" ] ,
+                 [ sty:property "padding" ; sty:raw "8px 12px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "auto auto" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "column-gap" ; sty:raw "8px" ] ,
+                 [ sty:property "row-gap" ; sty:raw "2px" ] ,
+                 [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
+                 [ sty:property "min-width" ; sty:raw "min-content" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > :first-child:not(strong)" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "1 / span 2" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > :not(:first-child)" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "2" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > .sem-byline *" ;
+    sty:declares [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > .sem-byline" ;
+    sty:declares [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "align-self" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-brand > strong" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "end" ] ,
+                 [ sty:property "line-height" ; sty:raw "1.1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "gap" ; sty:raw "8px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-actions > :not(.sem-more)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "0 1 auto" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-toggle" ;
+    sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "width" ; sty:raw "44px" ] ,
+                 [ sty:property "height" ; sty:raw "44px" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font" ; sty:raw "700 20px/1 var(--sem-font)" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-toggle[aria-expanded=true]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-toggle:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more-body" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:atWidth sty:CompactWidth ; sty:part ".sem-more[data-open=true] > .sem-more-body" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] ,
+                 [ sty:property "gap" ; sty:raw "12px" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "0" ] ,
+                 [ sty:property "top" ; sty:raw "calc(100% + 8px)" ] ,
+                 [ sty:property "z-index" ; sty:raw "30" ] ,
+                 [ sty:property "width" ; sty:raw "max-content" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(260px, calc(100vw - 24px))" ] ,
+                 [ sty:property "max-width" ; sty:raw "calc(100vw - 24px)" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-4 ] ,
+                 [ sty:property "background" ; sty:token tok:surface-overlay ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-3 ] ,
+                 [ sty:property "animation" ; sty:raw "sem-scale-in var(--sem-duration) var(--sem-ease)" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ;
     sty:declares [ sty:property "width" ; sty:raw "28px" ] ,

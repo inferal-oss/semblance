@@ -26,7 +26,7 @@ ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 12 ; ui
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsNav ui:docPages ) .
-ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" .
+ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
     c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-components ui:dcs-integrate ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .

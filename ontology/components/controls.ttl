@@ -240,6 +240,135 @@ c:SegmentedSelect a beh:Reaction ;
     beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p }""" ;
     sem:function "segmented:select" .
 
+# --- On a compact screen: a picker ------------------------------------------------------------------
+# A nav list down the side of a page is a column of ten or fifteen rows, and an app bar's page
+# switcher a row wider than a phone; stacked above the content they push it off the first screen,
+# or scroll the current option out of sight. c:compactAs c:Picker asks a segmented control (a nav
+# list is one) to present itself on a compact screen (sty:CompactWidth) as one line instead: a
+# native select of the same options, showing the current one and opening the platform's own
+# picker. Both are rendered; the theme shows one (hooked: data-sem-compact-as), so focus and
+# screen readers meet only that one. A change of the select writes the property as a click on an
+# option does (c:SegmentedPick).
+
+c:compactAs a owl:ObjectProperty ;
+    rdfs:range c:CompactPresentation ;
+    rdfs:comment "How a component presents itself on a compact screen (sty:CompactWidth)."@en ;
+    sty:hookAttribute "data-sem-compact-as" .
+c:CompactPresentation a owl:Class ;
+    rdfs:comment "A way for a component to present itself on a compact screen."@en .
+c:Picker a c:CompactPresentation ; sem:slug "picker" ; rdfs:label "Picker"@en ;
+    rdfs:comment "A native select of the options in place of the list: one line, the current option shown."@en .
+
+c:SegmentedPicker a sem:Rendering ;
+    sem:targets c:Segmented ;
+    sem:requires c:compactAs ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:follows c:controls .
+c:SegmentedPicker-fn a sem:Rule ; sem:implements c:SegmentedPicker ; sem:function "segmented:picker" .
+c:SegmentedPicker-sparql a sem:Rule ;
+    sem:implements c:SegmentedPicker ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?picker .
+  ?picker a rdfhtml:Select ; rdfhtml:class "sem-picker" ; rdfhtml:attribute ?labelAttr ; rdfhtml:hasChild ?option ; ord:immediatelyPrecedes ?firstButton .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
+  ?option a rdfhtml:Option ; rdfhtml:value ?optValue ; rdfhtml:selected ?selected ; rdfhtml:hasChild ?optText .
+  ?optText a rdfhtml:Text ; rdfhtml:data ?optLabel .
+  ?before ord:immediatelyPrecedes ?after .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Segmented ; c:compactAs c:Picker ; c:controls ?target ; c:property ?property .
+  BIND($this AS ?self)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?ownCaption)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
+  LATERAL { OPTIONAL { ?captionNode l10n:label ?localCaption } }
+  LATERAL { OPTIONAL { ?property c:label ?propertyLabelC_u FILTER(isLiteral(?propertyLabelC_u) && lang(?propertyLabelC_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?propertyLabelC_u)) ?property c:label ?propertyLabelC_en FILTER(langMatches(lang(?propertyLabelC_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?propertyLabelC_u) && !BOUND(?propertyLabelC_en)) ?property c:label ?propertyLabelC_any FILTER(isLiteral(?propertyLabelC_any)) }
+  BIND(STR(COALESCE(?propertyLabelC_u, ?propertyLabelC_en, ?propertyLabelC_any)) AS ?propertyLabelC)
+  OPTIONAL { ?property rdfs:label ?propertyLabelR_u FILTER(isLiteral(?propertyLabelR_u) && lang(?propertyLabelR_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?propertyLabelR_u)) ?property rdfs:label ?propertyLabelR_en FILTER(langMatches(lang(?propertyLabelR_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?propertyLabelR_u) && !BOUND(?propertyLabelR_en)) ?property rdfs:label ?propertyLabelR_any FILTER(isLiteral(?propertyLabelR_any)) }
+  BIND(STR(COALESCE(?propertyLabelR_u, ?propertyLabelR_en, ?propertyLabelR_any)) AS ?propertyLabelR)
+  BIND(COALESCE(?propertyLabelC, ?propertyLabelR, REPLACE(STR(?property), "^.*[#/]", "")) AS ?propertyLabel) }
+  BIND(COALESCE(?ownCaption, ?localCaption, ?propertyLabel) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~picker")) AS ?picker)
+  BIND(IRI(CONCAT(STR($this), "/~picker-aria-label")) AS ?labelAttr)
+  # The first option button, which the picker goes before.
+  OPTIONAL {
+    { $this c:options/rdf:first ?first FILTER(isIRI(?first)) }
+    UNION
+    { FILTER NOT EXISTS { $this c:options ?firstExplicit }
+      $this c:property/rdfs:range ?firstRange . ?first a ?firstRange FILTER(isIRI(?first))
+      OPTIONAL { ?first sem:order ?firstOrder0 } BIND(COALESCE(xsd:double(?firstOrder0), 0) AS ?firstOrder)
+      FILTER NOT EXISTS {
+        ?earlier a ?firstRange FILTER(isIRI(?earlier))
+        OPTIONAL { ?earlier sem:order ?earlierOrder0 } BIND(COALESCE(xsd:double(?earlierOrder0), 0) AS ?earlierOrder)
+        FILTER(?earlierOrder < ?firstOrder || (?earlierOrder = ?firstOrder && STR(?earlier) < STR(?first)))
+      } }
+  }
+  BIND(IF(BOUND(?first), IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?first)))), ?none) AS ?firstButton)
+  {
+    {} UNION {
+      { $this c:options/rdf:rest*/rdf:first ?opt FILTER(isIRI(?opt)) BIND($this AS ?self) }
+      UNION
+      { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?opt a ?range FILTER(isIRI(?opt)) BIND($this AS ?self) }
+      BIND(CONCAT("pick-", ENCODE_FOR_URI(STR(?opt))) AS ?key)
+      BIND(IRI(CONCAT(STR(?self), "/~", ?key)) AS ?option)
+      BIND(IRI(CONCAT(STR(?self), "/~", ?key, "-text")) AS ?optText)
+      BIND(STR(?opt) AS ?optValue)
+      BIND(IF(EXISTS { $this c:controls ?pt ; c:property ?pp . ?pt ?pp ?opt }, "", ?none) AS ?selected)
+      BIND(IRI(CONCAT(STR(?self), "/~l10n-", ENCODE_FOR_URI(STR(?opt)))) AS ?optLabelNode)
+      LATERAL { OPTIONAL { ?optLabelNode l10n:label ?optLabelLocal } OPTIONAL { ?opt c:label ?optLabelBaseC_u FILTER(isLiteral(?optLabelBaseC_u) && lang(?optLabelBaseC_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?optLabelBaseC_u)) ?opt c:label ?optLabelBaseC_en FILTER(langMatches(lang(?optLabelBaseC_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?optLabelBaseC_u) && !BOUND(?optLabelBaseC_en)) ?opt c:label ?optLabelBaseC_any FILTER(isLiteral(?optLabelBaseC_any)) }
+  BIND(STR(COALESCE(?optLabelBaseC_u, ?optLabelBaseC_en, ?optLabelBaseC_any)) AS ?optLabelBaseC)
+  OPTIONAL { ?opt rdfs:label ?optLabelBaseR_u FILTER(isLiteral(?optLabelBaseR_u) && lang(?optLabelBaseR_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?optLabelBaseR_u)) ?opt rdfs:label ?optLabelBaseR_en FILTER(langMatches(lang(?optLabelBaseR_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?optLabelBaseR_u) && !BOUND(?optLabelBaseR_en)) ?opt rdfs:label ?optLabelBaseR_any FILTER(isLiteral(?optLabelBaseR_any)) }
+  BIND(STR(COALESCE(?optLabelBaseR_u, ?optLabelBaseR_en, ?optLabelBaseR_any)) AS ?optLabelBaseR)
+  BIND(COALESCE(?optLabelBaseC, ?optLabelBaseR, REPLACE(STR(?opt), "^.*[#/]", "")) AS ?optLabelBase) }
+      BIND(COALESCE(?optLabelLocal, ?optLabelBase) AS ?optLabel)
+    } UNION {
+      { $this c:options/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) BIND($this AS ?self) }
+      UNION
+      { { SELECT ?self ?a (COUNT(?posOther) AS ?posA) WHERE {
+          FILTER NOT EXISTS { $this c:options ?posExplicit }
+          $this c:property/rdfs:range ?posRange . ?a a ?posRange . ?posOther a ?posRange FILTER(isIRI(?a) && isIRI(?posOther))
+          OPTIONAL { ?a sem:order ?posOrder0 } OPTIONAL { ?posOther sem:order ?posOtherOrder0 }
+          BIND(COALESCE(xsd:double(?posOrder0), 0) AS ?posOrder) BIND(COALESCE(xsd:double(?posOtherOrder0), 0) AS ?posOtherOrder)
+          FILTER(?posOtherOrder < ?posOrder || (?posOtherOrder = ?posOrder && STR(?posOther) <= STR(?a)))
+          BIND($this AS ?self)
+        } GROUP BY ?self ?a }
+        { SELECT ?self ?b (COUNT(?posOther) AS ?posB) WHERE {
+          FILTER NOT EXISTS { $this c:options ?posExplicit }
+          $this c:property/rdfs:range ?posRange . ?b a ?posRange . ?posOther a ?posRange FILTER(isIRI(?b) && isIRI(?posOther))
+          OPTIONAL { ?b sem:order ?posOrder0 } OPTIONAL { ?posOther sem:order ?posOtherOrder0 }
+          BIND(COALESCE(xsd:double(?posOrder0), 0) AS ?posOrder) BIND(COALESCE(xsd:double(?posOtherOrder0), 0) AS ?posOtherOrder)
+          FILTER(?posOtherOrder < ?posOrder || (?posOtherOrder = ?posOrder && STR(?posOther) <= STR(?b)))
+          BIND($this AS ?self)
+        } GROUP BY ?self ?b }
+        FILTER(?posB = ?posA + 1) }
+      BIND(IRI(CONCAT(STR(?self), "/~pick-", ENCODE_FOR_URI(STR(?a)))) AS ?before)
+      BIND(IRI(CONCAT(STR(?self), "/~pick-", ENCODE_FOR_URI(STR(?b)))) AS ?after)
+    }
+  }
+}""" .
+# Choosing in the picker writes the property, as a click on an option does.
+c:SegmentedPick a beh:Reaction ;
+    beh:when beh:Change ;
+    beh:sourceClass c:Segmented ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
+    sem:function "choice:select" .
+
 # --- Flippable: any component, with its making on the back ----------------------------------
 
 c:Flippable a owl:Class ;
