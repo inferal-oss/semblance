@@ -69,7 +69,9 @@ export function attachWalkthroughs(host: HTMLElement): WalkthroughHost {
     if (!steps.length) return
     const rect = root.getBoundingClientRect()
     if (rect.bottom < 0 || rect.top > win.innerHeight) return
-    const line = win.innerHeight * READING_LINE
+    // Under a diagram that stays at the top (a phone), the reading line is as far into what is left.
+    const cover = coverOf(root)
+    const line = cover ? cover + (win.innerHeight - cover) * READING_LINE * 0.75 : win.innerHeight * READING_LINE
     let reading = steps[0]!
     for (const s of steps) if (s.getBoundingClientRect().top <= line) reading = s
     // At the end of the page the last steps cannot reach the line: the lowest one fully in view is read.
@@ -78,6 +80,19 @@ export function attachWalkthroughs(host: HTMLElement): WalkthroughHost {
     if (reading.getAttribute('aria-current') === 'step' || reported.get(root) === reading) return
     reported.set(root, reading)
     reading.dispatchEvent(new win.CustomEvent('sem-step', { bubbles: true }))
+  }
+
+  /**
+   * Where a diagram that stays at the top of the screen ends: the aside shown before the steps
+   * (as on a phone, the theme's order) and sticky covers the steps that scroll under it. 0 otherwise.
+   */
+  function coverOf(root: HTMLElement): number {
+    const aside = root.querySelector<HTMLElement>(':scope > .sem-walk-body > .sem-walk-aside')
+    const steps = root.querySelector<HTMLElement>(':scope > .sem-walk-body > .sem-walk-steps')
+    if (!aside || !steps) return 0
+    const a = win.getComputedStyle(aside)
+    if (a.position !== 'sticky' || (Number(a.order) || 0) >= (Number(win.getComputedStyle(steps).order) || 0)) return 0
+    return Math.max(0, aside.getBoundingClientRect().bottom)
   }
 
   /** Curved arrows from the mentions being read to their nodes, in the walkthrough's slot. */
@@ -94,6 +109,8 @@ export function attachWalkthroughs(host: HTMLElement): WalkthroughHost {
     const aside = root.querySelector<HTMLElement>('.sem-walk-aside')
     // What scrolls under the app bar is out of sight: no arrow starts there.
     const top = Math.max(0, aside ? parseFloat(win.getComputedStyle(aside).top) || 0 : 0)
+    // What scrolls under a diagram that stays at the top is out of sight too.
+    const cover = Math.max(top, coverOf(root))
     const current = root.querySelector('.sem-walk-step[aria-current=step]')
     const mentions = new Set<Element>([...(current?.querySelectorAll('[data-sem-mentions]') ?? []), ...root.querySelectorAll('[data-sem-lit]')])
     const wanted: { key: string; d: string; leader: string; start: [number, number]; lit: boolean }[] = []
@@ -104,18 +121,23 @@ export function attachWalkthroughs(host: HTMLElement): WalkthroughHost {
       if (!dot) continue
       const a = m.getBoundingClientRect()
       const b = dot.getBoundingClientRect()
-      const inView = (r: DOMRect) => r.bottom > top && r.top < win.innerHeight && r.width > 0
-      if (!inView(a) || !inView(b)) continue
+      const inView = (r: DOMRect, above: number) => r.bottom > above && r.top < win.innerHeight && r.width > 0
+      if (!inView(a, cover) || !inView(b, top)) continue
       const end: [number, number] = [b.left + b.width / 2 - base.left, b.top + b.height / 2 - base.top]
       const radius = b.width / 2 + 3
       // Beside (either side: right to left, the diagram is on the left): a leader under the rest of
       // the line, between the lines and never through words, to the step's edge, then the curve.
-      // Stacked (a narrow page): straight down from the word.
-      const side = b.left > a.right ? 1 : b.right < a.left ? -1 : 0
+      // Stacked (a narrow page): straight down from the word. Under a diagram that stays at the top
+      // (a phone), out to the nearer edge of the step and up, never through the words.
+      const toward = b.left + b.width / 2 >= a.left + a.width / 2 ? 1 : -1
+      const side = b.left > a.right ? 1 : b.right < a.left ? -1 : cover > top && b.bottom < a.top ? toward : 0
+      const up = !side && b.bottom < a.top
       const box = (m.closest('.sem-walk-step') ?? m).getBoundingClientRect()
       const edge = (side > 0 ? box.right : box.left) - base.left
       const y = a.bottom - base.top
-      const start: [number, number] = side ? [(side > 0 ? a.right : a.left) - base.left, y] : [a.left + a.width / 2 - base.left, a.bottom + 2 - base.top]
+      const start: [number, number] = side
+        ? [(side > 0 ? a.right : a.left) - base.left, y]
+        : [a.left + a.width / 2 - base.left, (up ? a.top - 2 : a.bottom + 2) - base.top]
       const from: [number, number] = side ? [side > 0 ? Math.max(edge, start[0] + 6) : Math.min(edge, start[0] - 6), y] : start
       const leader = side ? `M${start[0].toFixed(1)},${y.toFixed(1)} L${from[0].toFixed(1)},${y.toFixed(1)}` : ''
       wanted.push({ key: m.id || term, d: path(from, end, radius, side), leader, start, lit: m.hasAttribute('data-sem-lit') })
@@ -207,8 +229,10 @@ function path(start: [number, number], end: [number, number], radius: number, si
   const len = Math.hypot(dx, dy) || 1
   // Stop at the node's ring, coming in along the last control's direction.
   const k = Math.max(40, Math.abs(side ? dx : dy) * 0.5)
-  const c1: [number, number] = side ? [x0 + side * k, y0] : [x0, y0 + k]
-  const c2: [number, number] = side ? [cx - side * k * 0.6, cy] : [cx, cy - k * 0.6]
+  // Stacked, the curve leaves the word downwards, or upwards to a node above it.
+  const v = dy < 0 ? -1 : 1
+  const c1: [number, number] = side ? [x0 + side * k, y0] : [x0, y0 + v * k]
+  const c2: [number, number] = side ? [cx - side * k * 0.6, cy] : [cx, cy - v * k * 0.6]
   const [ux, uy] = [cx - c2[0], cy - c2[1]]
   const ul = Math.hypot(ux, uy) || len
   const x1 = cx - (ux / ul) * radius

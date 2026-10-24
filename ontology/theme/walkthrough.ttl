@@ -193,6 +193,32 @@
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-link[data-sem-salience=neighbour] .sem-arrow" ;
     sty:declares [ sty:property "fill" ; sty:token tok:accent ] .
 
+# On a phone the steps and the diagram cannot sit side by side, and under the steps the diagram
+# would be read after them. It goes above them instead and stays there, a band of about a third of
+# the screen under the app bar, so the arrows and the highlights follow the step being read (the
+# host puts the reading line below it). The source's lines are left to the source view after the
+# walkthrough.
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part "> .sem-walk-body" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-steps" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-aside" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "order" ; sty:raw "-1" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] ,
+                 [ sty:property "max-height" ; sty:raw "35dvh" ] ,
+                 [ sty:property "padding-block" ; sty:raw "4px" ] ,
+                 [ sty:property "background" ; sty:token tok:canvas ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-aside [data-sem-c=source-view]" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-plot" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "max-height" ; sty:raw "calc(35dvh - 28px)" ] .
+
 # --- the arrows (drawn by the host into the slot, over the walkthrough) ---
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part "> .sem-walk-arrows" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
