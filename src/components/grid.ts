@@ -120,18 +120,22 @@ interface Column {
   width?: number
 }
 
-function column(ctx: RuleContext, node: NamedNode, at: number): Column {
+/**
+ * A column as the header needs it (`header`: its label, width and whether it sorts) or as cells
+ * need it (what they show): rows do not read a column's width, so resizing it re-renders no row.
+ */
+function column(ctx: RuleContext, node: NamedNode, at: number, header = true): Column {
   const p = (pred: string) => {
     const t = ctx.object(node, pred)
     return named(t) ? t : undefined
   }
   const kind = p(GRID.cellAs)?.value ?? GRID.TextCell
-  const width = numberOf(ctx.object(node, GRID.width))
+  const width = header ? numberOf(ctx.object(node, GRID.width)) : undefined
   return {
     node,
     at,
     key: md5Key(node.value),
-    label: text(ctx, node, C + 'label') ?? text(ctx, node, RDFS_LABEL) ?? node.value.replace(/^.*[#/]/, ''),
+    label: header ? (text(ctx, node, C + 'label') ?? text(ctx, node, RDFS_LABEL) ?? node.value.replace(/^.*[#/]/, '')) : '',
     kind,
     property: p(GRID.cellProperty),
     via: p(GRID.via),
@@ -140,14 +144,14 @@ function column(ctx: RuleContext, node: NamedNode, at: number): Column {
     end: p(GRID.endProperty),
     color: p(GRID.colorProperty),
     align: str(ctx.object(node, GRID.align)),
-    sortable: ctx.object(node, GRID.sortable)?.value !== 'false',
+    sortable: header && ctx.object(node, GRID.sortable)?.value !== 'false',
     width: width === undefined ? undefined : Math.round(width),
   }
 }
 
 /** The grid's columns in order, and which of them are shown (c:shows; all when it names none). */
-function columnsOf(ctx: RuleContext, grid: NamedNode): { all: Column[]; visible: Column[] } {
-  const all = nodes(ctx, ctx.object(grid, GRID.gridColumns)).map((n, i) => column(ctx, n, i + 1))
+function columnsOf(ctx: RuleContext, grid: NamedNode, header = true): { all: Column[]; visible: Column[] } {
+  const all = nodes(ctx, ctx.object(grid, GRID.gridColumns)).map((n, i) => column(ctx, n, i + 1, header))
   const shows = new Set(ctx.objects(grid, GRID.shows).map((t) => t.value))
   return { all, visible: shows.size ? all.filter((c) => shows.has(c.node.value)) : all }
 }
@@ -298,7 +302,7 @@ function filtersOf(ctx: RuleContext, grid: NamedNode): ((m: NamedNode) => boolea
 const window: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const collection = ctx.object(focus, GRID.collection)
-  const { all, visible } = columnsOf(ctx, focus)
+  const { all, visible } = columnsOf(ctx, focus, false)
   const body = o.node('body')
   const footer = o.node('footer')
   const via = ctx.object(focus, GRID.memberProperty) ?? ctx.nn(TREE_MEMBER)
@@ -473,7 +477,7 @@ const row: FnRule = (ctx, focus) => {
   const columns = nodes(ctx, ctx.object(grid, GRID.gridColumns))
     .map((n, i) => ({ n, i }))
     .filter(({ n }) => shownCols.has(n.value))
-    .map(({ n, i }) => column(ctx, n, i + 1))
+    .map(({ n, i }) => column(ctx, n, i + 1, false))
   const selected = isTrue(ctx.object(focus, GRID.isSelected))
   if (ctx.modality === MOD.Text) {
     const line = columns

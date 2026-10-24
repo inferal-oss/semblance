@@ -162,7 +162,10 @@ the component set. The demo's **Components** page shows all of it.
 ### Components
 Eighty-one component classes in nine groups (layout, type, actions, inputs,
 feedback, data, navigation, overlays, disclosure), plus the views and charts
-the demo is built from; [DESIGN.md](DESIGN.md) lists them. Each group is one
+the demo is built from, and the inspection parts (a data grid with a time axis
+and filters, split and docked panes, payload views, toolbar pieces; files
+`grid`, `panes`, `payload`, `toolbar`, gallery page Inspection) that the
+network inspector example is composed of; [DESIGN.md](DESIGN.md) lists them. Each group is one
 file of each kind: `ontology/components/<group>.ttl` (the vocabulary,
 renderings and reactions), `ontology/theme/<group>.ttl` (its styles),
 `src/components/<group>.ts` (function rules and reactions) and

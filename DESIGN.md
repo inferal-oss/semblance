@@ -63,9 +63,21 @@ Thin vocabularies. Every component
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Window · Palette · Taskbar · Tooltip (layer) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
+| **Inspection** | DataGrid (GridColumn, filters) · TimeAxis · SplitView · DockPanel · JsonTree · HexView · BodyViewer · Toolbar · SearchField · Legend · LiveIndicator · CountBadge (+ Unsetter mixin) |
 
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)
+
+The **Inspection** group is what in-app inspectors, log viewers, event browsers and trace
+viewers are made of. A `c:DataGrid` shows a collection's members (an LDES stream by default)
+under declared columns; its sort, selection, column widths and visibility, and its window
+(following the newest member, or pinned; older / newer) are graph state, and filters are nodes
+it is `c:filteredBy` (`c:TextFilter`, `c:ValueFilter`, `c:FlagFilter`) that ordinary controls
+edit. A waterfall column draws spans on the window's time scale, which a `c:TimeAxis` ticks. Detail
+views follow a selection through `c:bindFrom` / `c:bindProperty`. Separators (a split's divider,
+a column's edge, a dock panel's free edge) are one-axis size handles: dragged, or moved with the
+arrow keys, they commit one `beh:Size` event. The Examples page's network inspector
+(`demo/gallery/_network.ttl`) is composed only of these parts.
 
 Floating frames get their abilities from capability classes an instance opts
 into: `c:Draggable`, `c:Resizable`, `c:Raisable`, `c:Minimizable`,
