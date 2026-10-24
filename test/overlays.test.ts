@@ -31,7 +31,9 @@ describe('overlay components', () => {
     expect(dialog.children).toHaveLength(0)
     expect(document.querySelector('[data-sem-c=desktop]')!.contains(dialog)).toBe(true)
     expect(root('ov-dialog-field')).toBeNull()
-    expect(screen.engine.stats.byRule.get(NS.c + 'DrawerRendering-fn')?.runs ?? 0).toBeGreaterThan(0)
+    // The drawers on the desktop render (closed), through whichever rule the store prefers.
+    const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+    expect(runs('DrawerRendering-fn') + runs('DrawerRendering-sparql')).toBeGreaterThan(0)
   })
 
   it('opens from a c:opens button, with dialog ARIA, and closes by ✕, scrim and action buttons', () => {

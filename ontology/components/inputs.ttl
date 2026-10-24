@@ -8,6 +8,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 
 # Inputs components (DESIGN.md §3): TextArea, Checkbox, RadioGroup, ToggleSwitch, Slider and the
 # Field wrapper. TextField (textfield.ttl), Choice, Segmented and Chips (controls.ttl) complete
@@ -37,6 +38,113 @@ input alone, to be labelled by a c:Field."""@en ;
     c:labelPart "input" .
 c:TextAreaRendering a sem:Rendering ; sem:targets c:TextArea ; sem:stratum 0 .
 c:TextAreaRendering-fn a sem:Rule ; sem:implements c:TextAreaRendering ; sem:function "inputs:text-area" .
+c:TextAreaRendering-sparql a sem:Rule ;
+    sem:implements c:TextAreaRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label, ?input, ?help, ?error .
+  ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?input .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?input a rdfhtml:Textarea ; rdfhtml:id ?inputId ; rdfhtml:rows ?rows ; rdfhtml:placeholder ?placeholder ;
+         rdfhtml:disabled ?disabled ; rdfhtml:hasChild ?inputText ; ord:immediatelyPrecedes ?afterDescribed .
+  ?inputText a rdfhtml:Text ; rdfhtml:data ?value .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:TextArea .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { $this c:value ?rawValue }
+  BIND(STR(COALESCE(?rawValue, "")) AS ?value)
+  OPTIONAL { $this c:placeholder ?rawPlaceholder }
+  BIND(STR(?rawPlaceholder) AS ?placeholder)
+  OPTIONAL { $this c:rows ?rawRows }
+  BIND(COALESCE(ROUND(xsd:decimal(?rawRows)), 3) AS ?roundedRows)
+  BIND(STR(xsd:integer(IF(?roundedRows < 1, 1, ?roundedRows))) AS ?rows)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
+  BIND(STR(?input) AS ?inputId)
+  BIND(IRI(CONCAT(STR($this), "/~input-text")) AS ?inputText)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
+  BIND(?input AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
+# Text: one line element per line of the value. The line index comes from a VALUES table (SPARQL
+# cannot split a string into rows), so there are at most 100 line elements: the last one holds the
+# remaining lines, joined by newlines. The function rule does the same, so both read and derive alike.
+c:TextAreaRendering-sparql-text a sem:Rule ;
+    sem:implements c:TextAreaRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?head, ?line, ?help, ?error .
+  ?head a rdfhtml:Div ; rdfhtml:hasChild ?headText ; ord:immediatelyPrecedes ?firstLine .
+  ?headText a rdfhtml:Text ; rdfhtml:data ?headData .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?nextLine .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?lineData .
+  ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+}
+WHERE {
+  $this a c:TextArea .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  BIND(CONCAT(?labelData, ":") AS ?headData)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?head)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?headText)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line-0")) AS ?firstLine)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(CONCAT("  ", STR(?helpValue)) AS ?helpData)
+  BIND(CONCAT("  ! ", STR(?errorValue)) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+  OPTIONAL { $this c:value ?rawValue }
+  BIND(IF(COALESCE(STR(?rawValue), "") = "", " ", STR(?rawValue)) AS ?value)
+  BIND(STRLEN(?value) - STRLEN(REPLACE(?value, "\\n", "")) AS ?breaks)
+  VALUES ?i { 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 }
+  FILTER(?i <= ?breaks)
+  BIND(?i = 99 && ?breaks > 99 AS ?rest)
+  BIND(IF(?rest,
+          REPLACE(REPLACE(?value, "^(?:[^\\n]*\\n){99}(.*)$", "$1", "s"), "\\n", "\\n  | "),
+          REPLACE(?value, CONCAT("^(?:[^\\n]*\\n){", STR(?i), "}([^\\n]*).*$"), "$1", "s")) AS ?lineValue)
+  BIND(CONCAT("  | ", ?lineValue) AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~line-", STR(?i))) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-", STR(?i), "-text")) AS ?lineText)
+  BIND(IF(?i < ?breaks && ?i < 99, IRI(CONCAT(STR($this), "/~line-", STR(?i + 1))), ?afterDescribed) AS ?nextLine)
+}""" .
 c:TextAreaInput a beh:Reaction ;
     beh:when beh:Input ;
     beh:sourceClass c:TextArea ;
@@ -54,6 +162,88 @@ c:checked from the event's beh:checked. Its checked color is its sty:tone (accen
     c:labelPart "input" .
 c:CheckboxRendering a sem:Rendering ; sem:targets c:Checkbox ; sem:stratum 0 .
 c:CheckboxRendering-fn a sem:Rule ; sem:implements c:CheckboxRendering ; sem:function "inputs:checkbox" .
+c:CheckboxRendering-sparql a sem:Rule ;
+    sem:implements c:CheckboxRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?row, ?help, ?error .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?input, ?label ; ord:immediatelyPrecedes ?afterDescribed .
+  ?input a rdfhtml:Input ; rdfhtml:type "checkbox" ; rdfhtml:id ?inputId ; rdfhtml:checked ?checked ; rdfhtml:disabled ?disabled ;
+         ord:immediatelyPrecedes ?label .
+  ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:Checkbox .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  BIND(IF(EXISTS { $this c:checked ?c FILTER(STR(?c) = "true") }, "", ?none) AS ?checked)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
+  BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
+  BIND(STR(?input) AS ?inputId)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
+  BIND(?input AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
+c:CheckboxRendering-sparql-text a sem:Rule ;
+    sem:implements c:CheckboxRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line, ?help, ?error .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?afterDescribed .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?lineData .
+  ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+}
+WHERE {
+  $this a c:Checkbox .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  BIND(CONCAT(IF(EXISTS { $this c:checked ?c FILTER(STR(?c) = "true") }, "[x]", "[ ]"), COALESCE(CONCAT(" ", ?labelData), "")) AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(CONCAT("  ", STR(?helpValue)) AS ?helpData)
+  BIND(CONCAT("  ! ", STR(?errorValue)) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
 c:CheckboxChange a beh:Reaction ;
     beh:when beh:Change ;
     beh:sourceClass c:Checkbox ;
@@ -73,6 +263,180 @@ pos:direction pos:Row lays the options out in a row."""@en ;
     sem:slug "radio-group" .
 c:RadioGroupRendering a sem:Rendering ; sem:targets c:RadioGroup ; sem:stratum 0 .
 c:RadioGroupRendering-fn a sem:Rule ; sem:implements c:RadioGroupRendering ; sem:function "inputs:radio-group" .
+# The options are c:options (in list order), else the individuals of the property's range by
+# sem:order, then IRI. Each option row finds the option just before it (a LATERAL subquery), which
+# places it. The text sketch is one text node per option, as GROUP_CONCAT has no defined order.
+c:RadioGroupRendering-sparql a sem:Rule ;
+    sem:implements c:RadioGroupRendering ;
+    sem:follows c:controls ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?caption, ?options, ?help, ?error ;
+        rdfhtml:attribute ?role, ?labelledBy, ?ariaLabel .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "radiogroup" .
+  ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?captionId .
+  ?ariaLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?propLabel .
+  ?caption a rdfhtml:Div ; rdfhtml:id ?captionId ; rdfhtml:class "sem-caption" ; rdfhtml:hasChild ?captionText ; ord:immediatelyPrecedes ?options .
+  ?captionText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?options a rdfhtml:Div ; rdfhtml:class "sem-options" ; rdfhtml:hasChild ?radio ; ord:immediatelyPrecedes ?afterDescribed .
+  ?radio a rdfhtml:Label ; rdfhtml:class "sem-radio" ; rdfhtml:hasChild ?radioInput, ?radioText ; c:selects ?opt .
+  ?prevRadio ord:immediatelyPrecedes ?radio .
+  ?radioInput a rdfhtml:Input ; rdfhtml:type "radio" ; rdfhtml:id ?radioInputId ; rdfhtml:name ?groupName ; rdfhtml:value ?optValue ;
+              rdfhtml:checked ?radioChecked ; rdfhtml:disabled ?disabled ; ord:immediatelyPrecedes ?radioText .
+  ?radioText a rdfhtml:Span ; rdfhtml:class "sem-option-text" ; rdfhtml:hasChild ?optLabel, ?optNote .
+  ?optLabel a rdfhtml:Span ; rdfhtml:class "sem-option-label" ; rdfhtml:hasChild ?optLabelText ; ord:immediatelyPrecedes ?optNote .
+  ?optLabelText a rdfhtml:Text ; rdfhtml:data ?optLabelData .
+  ?optNote a rdfhtml:Span ; rdfhtml:class "sem-option-note" ; rdfhtml:hasChild ?optNoteText .
+  ?optNoteText a rdfhtml:Text ; rdfhtml:data ?optNoteData .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~options")) AS ?options)
+  BIND(STR($this) AS ?groupName)
+  {
+  $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+  OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
+  OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
+  BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel0)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~caption")), ?none) AS ?caption)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~caption-text")), ?none) AS ?captionText)
+  BIND(STR(?caption) AS ?captionId)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~root-aria-labelledby")), ?none) AS ?labelledBy)
+  BIND(IF(!BOUND(?labelData), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?ariaLabel)
+  BIND(IF(BOUND(?labelData), ?none, ?propLabel0) AS ?propLabel)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+  } UNION {
+  $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  {
+    $this c:options/rdf:rest* ?cell . ?cell rdf:first ?opt FILTER(isIRI(?opt))
+    OPTIONAL { $this c:options/rdf:rest* ?prevCell . ?prevCell rdf:first ?prev ; rdf:rest ?cell FILTER(isIRI(?prev)) }
+  } UNION {
+    $this a c:RadioGroup ; c:property ?prop .
+    FILTER NOT EXISTS { $this c:options ?anyList }
+    ?prop rdfs:range ?range . ?opt a ?range FILTER(isIRI(?opt))
+    OPTIONAL { ?opt sem:order ?rawOrder }
+    BIND(COALESCE(xsd:decimal(?rawOrder), 0) AS ?order)
+    # The option just before it (LATERAL: the inner query sees ?range, ?opt and ?order).
+    LATERAL {
+      OPTIONAL {
+        SELECT ?prev ?range ?opt ?order WHERE {
+          ?prev a ?range FILTER(isIRI(?prev))
+          OPTIONAL { ?prev sem:order ?rawPrevOrder }
+          BIND(COALESCE(xsd:decimal(?rawPrevOrder), 0) AS ?prevOrder)
+          FILTER(?prevOrder < ?order || (?prevOrder = ?order && STR(?prev) < STR(?opt)))
+        } ORDER BY DESC(?prevOrder) DESC(STR(?prev)) LIMIT 1
+      }
+    }
+  }
+  OPTIONAL { ?opt c:label ?optL0 FILTER(lang(?optL0) = "") }
+  OPTIONAL { ?opt rdfs:label ?optL1 FILTER(lang(?optL1) = "") }
+  OPTIONAL { ?opt rdfs:label ?optL2 FILTER(langMatches(lang(?optL2), "en")) }
+  BIND(STR(COALESCE(?optL0, ?optL1, ?optL2, REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?optLabelData)
+  OPTIONAL { ?opt rdfs:comment ?comment }
+  BIND(STR(?comment) AS ?optNoteData)
+  BIND(CONCAT(STR($this), "/~opt-", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(?opt)), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?radioBase)
+  BIND(IRI(?radioBase) AS ?radio)
+  BIND(IRI(CONCAT(STR($this), "/~opt-", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(?prev)), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*"))) AS ?prevRadio)
+  BIND(IRI(CONCAT(?radioBase, "-input")) AS ?radioInput)
+  BIND(STR(?radioInput) AS ?radioInputId)
+  BIND(STR(?opt) AS ?optValue)
+  BIND(IF(EXISTS { ?target ?prop ?opt }, "", ?none) AS ?radioChecked)
+  BIND(IRI(CONCAT(?radioBase, "-text")) AS ?radioText)
+  BIND(IRI(CONCAT(?radioBase, "-label")) AS ?optLabel)
+  BIND(IRI(CONCAT(?radioBase, "-label-text")) AS ?optLabelText)
+  BIND(IF(BOUND(?optNoteData), IRI(CONCAT(?radioBase, "-note")), ?none) AS ?optNote)
+  BIND(IF(BOUND(?optNoteData), IRI(CONCAT(?radioBase, "-note-text")), ?none) AS ?optNoteText)
+  }
+}""" .
+c:RadioGroupRendering-sparql-text a sem:Rule ;
+    sem:implements c:RadioGroupRendering ;
+    sem:follows c:controls ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line, ?optLine .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData ; ord:immediatelyPrecedes ?firstLine .
+  ?optLine a rdfhtml:Text ; rdfhtml:data ?optLineData .
+  ?prevLine ord:immediatelyPrecedes ?optLine .
+}
+WHERE {
+  $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  {
+  $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+  OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
+  OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
+  BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel)
+  BIND(CONCAT(COALESCE(?labelData, ?propLabel), ":") AS ?lineData)
+  } UNION {
+  $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  {
+    $this c:options/rdf:rest* ?cell . ?cell rdf:first ?opt FILTER(isIRI(?opt))
+    OPTIONAL { $this c:options/rdf:rest* ?prevCell . ?prevCell rdf:first ?prev ; rdf:rest ?cell FILTER(isIRI(?prev)) }
+  } UNION {
+    $this a c:RadioGroup ; c:property ?prop .
+    FILTER NOT EXISTS { $this c:options ?anyList }
+    ?prop rdfs:range ?range . ?opt a ?range FILTER(isIRI(?opt))
+    OPTIONAL { ?opt sem:order ?rawOrder }
+    BIND(COALESCE(xsd:decimal(?rawOrder), 0) AS ?order)
+    # The option just before it (LATERAL: the inner query sees ?range, ?opt and ?order).
+    LATERAL {
+      OPTIONAL {
+        SELECT ?prev ?range ?opt ?order WHERE {
+          ?prev a ?range FILTER(isIRI(?prev))
+          OPTIONAL { ?prev sem:order ?rawPrevOrder }
+          BIND(COALESCE(xsd:decimal(?rawPrevOrder), 0) AS ?prevOrder)
+          FILTER(?prevOrder < ?order || (?prevOrder = ?order && STR(?prev) < STR(?opt)))
+        } ORDER BY DESC(?prevOrder) DESC(STR(?prev)) LIMIT 1
+      }
+    }
+  }
+  OPTIONAL { ?opt c:label ?optL0 FILTER(lang(?optL0) = "") }
+  OPTIONAL { ?opt rdfs:label ?optL1 FILTER(lang(?optL1) = "") }
+  OPTIONAL { ?opt rdfs:label ?optL2 FILTER(langMatches(lang(?optL2), "en")) }
+  BIND(STR(COALESCE(?optL0, ?optL1, ?optL2, REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?optLabel)
+  BIND(CONCAT(IF(BOUND(?prev), " ", ""), IF(EXISTS { ?target ?prop ?opt }, "(•) ", "( ) "), ?optLabel) AS ?optLineData)
+  BIND(IRI(CONCAT(STR($this), "/~opt-", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(?opt)), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*"), "-line")) AS ?optLine)
+  BIND(IRI(CONCAT(STR($this), "/~opt-", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(?prev)), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*"), "-line")) AS ?prevLine)
+  BIND(IF(BOUND(?prev), ?none, ?optLine) AS ?firstLine)
+  }
+}""" .
 c:RadioGroupSelect a beh:Reaction ;
     beh:when beh:Change ;
     beh:sourceClass c:RadioGroup ;
@@ -93,6 +457,120 @@ default); sty:size scales it."""@en ;
     c:labelPart "input" .
 c:ToggleSwitchRendering a sem:Rendering ; sem:targets c:ToggleSwitch ; sem:stratum 0 .
 c:ToggleSwitchRendering-fn a sem:Rule ; sem:implements c:ToggleSwitchRendering ; sem:function "inputs:toggle-switch" .
+c:ToggleSwitchRendering-sparql a sem:Rule ;
+    sem:implements c:ToggleSwitchRendering ;
+    sem:follows c:controls ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?input, ?help, ?error .
+  ?input a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?inputId ; rdfhtml:disabled ?disabled ; c:toggles $this ;
+         rdfhtml:hasChild ?track, ?label ; rdfhtml:attribute ?role, ?ariaChecked ; ord:immediatelyPrecedes ?afterDescribed .
+  ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "switch" .
+  ?ariaChecked a rdfhtml:Attribute ; rdfhtml:attributeName "aria-checked" ; rdfhtml:attributeValue ?onValue .
+  ?track a rdfhtml:Span ; rdfhtml:class "sem-track" ; rdfhtml:hasChild ?thumb ; rdfhtml:attribute ?trackHidden ; ord:immediatelyPrecedes ?label .
+  ?trackHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?thumb a rdfhtml:Span ; rdfhtml:class "sem-thumb" .
+  ?label a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:ToggleSwitch .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData0)
+  OPTIONAL {
+    $this c:controls ?target ; c:property ?prop .
+    OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+    OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
+    OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
+    BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel)
+  }
+  BIND(COALESCE(?target, $this) AS ?stateNode)
+  BIND(COALESCE(?prop, c:checked) AS ?stateProperty)
+  BIND(EXISTS { ?stateNode ?stateProperty ?v FILTER(STR(?v) = "true") } AS ?on)
+  BIND(COALESCE(?labelData0, IF(?stateProperty = c:checked, ?none, ?propLabel)) AS ?labelData)
+  BIND(IF(?on, "true", "false") AS ?onValue)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
+  BIND(STR(?input) AS ?inputId)
+  BIND(IRI(CONCAT(STR($this), "/~input-role")) AS ?role)
+  BIND(IRI(CONCAT(STR($this), "/~input-aria-checked")) AS ?ariaChecked)
+  BIND(IRI(CONCAT(STR($this), "/~track")) AS ?track)
+  BIND(IRI(CONCAT(STR($this), "/~track-aria-hidden")) AS ?trackHidden)
+  BIND(IRI(CONCAT(STR($this), "/~thumb")) AS ?thumb)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
+  BIND(?input AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
+c:ToggleSwitchRendering-sparql-text a sem:Rule ;
+    sem:implements c:ToggleSwitchRendering ;
+    sem:follows c:controls ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line, ?help, ?error .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?afterDescribed .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?lineData .
+  ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+}
+WHERE {
+  $this a c:ToggleSwitch .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData0)
+  OPTIONAL {
+    $this c:controls ?target ; c:property ?prop .
+    OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+    OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
+    OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
+    BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel)
+  }
+  BIND(COALESCE(?target, $this) AS ?stateNode)
+  BIND(COALESCE(?prop, c:checked) AS ?stateProperty)
+  BIND(EXISTS { ?stateNode ?stateProperty ?v FILTER(STR(?v) = "true") } AS ?on)
+  BIND(COALESCE(?labelData0, IF(?stateProperty = c:checked, ?none, ?propLabel)) AS ?labelData)
+  BIND(CONCAT(IF(?on, "[on ]", "[off]"), COALESCE(CONCAT(" ", ?labelData), "")) AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(CONCAT("  ", STR(?helpValue)) AS ?helpData)
+  BIND(CONCAT("  ! ", STR(?errorValue)) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
 c:ToggleSwitchFlip a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:ToggleSwitch ;
@@ -121,6 +599,146 @@ the label and paints the filled part of the track."""@en ;
     c:labelPart "input" .
 c:SliderRendering a sem:Rendering ; sem:targets c:Slider ; sem:stratum 0 .
 c:SliderRendering-fn a sem:Rule ; sem:implements c:SliderRendering ; sem:function "inputs:slider" .
+# Numbers are formatted like JavaScript's String() (Oxigraph's canonical decimals) and toFixed()
+# (an integer count of 10^-d units, zero-padded and split at the decimal point).
+c:SliderRendering-sparql a sem:Rule ;
+    sem:implements c:SliderRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?head, ?input, ?help, ?error .
+  ?head a rdfhtml:Div ; rdfhtml:class "sem-head" ; rdfhtml:hasChild ?label, ?output ; ord:immediatelyPrecedes ?input .
+  ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?output .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?output a rdfhtml:Span ; rdfhtml:class "sem-value" ; rdfhtml:hasChild ?outputText ; rdfhtml:attribute ?outputHidden .
+  ?outputText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?outputHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?input a rdfhtml:Input ; rdfhtml:type "range" ; rdfhtml:id ?inputId ; rdfhtml:min ?minValue ; rdfhtml:max ?maxValue ;
+         rdfhtml:step ?stepValue ; rdfhtml:value ?valueValue ; rdfhtml:disabled ?disabled ; rdfhtml:style ?style ;
+         rdfhtml:attribute ?valueText ; ord:immediatelyPrecedes ?afterDescribed .
+  ?valueText a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuetext" ; rdfhtml:attributeValue ?shown .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:Slider .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { $this c:min ?rawMin }
+  OPTIONAL { $this c:max ?rawMax }
+  OPTIONAL { $this c:step ?rawStep }
+  OPTIONAL { $this c:value ?rawValue }
+  OPTIONAL { $this c:unit ?rawUnit FILTER(STR(?rawUnit) != "") }
+  BIND(COALESCE(xsd:decimal(?rawMin), 0) AS ?min)
+  BIND(COALESCE(xsd:decimal(?rawMax), 100) AS ?max0)
+  BIND(IF(?max0 < ?min, ?min, ?max0) AS ?max)
+  BIND(COALESCE(xsd:decimal(?rawStep), 1) AS ?step)
+  BIND(COALESCE(xsd:decimal(?rawValue), ?min) AS ?value0)
+  BIND(IF(?value0 < ?min, ?min, IF(?value0 > ?max, ?max, ?value0)) AS ?value)
+  BIND(IF(?step > 0 && CONTAINS(STR(?step), "."), STRLEN(STRAFTER(STR(?step), ".")), 0) AS ?decimals0)
+  BIND(IF(?decimals0 > 6, 6, ?decimals0) AS ?decimals)
+  BIND(STR(xsd:integer(ROUND(ABS(?value) * xsd:integer(SUBSTR("1000000", 1, ?decimals + 1))))) AS ?valueFixedDigits)
+  BIND(IF(STRLEN(?valueFixedDigits) <= ?decimals, CONCAT(SUBSTR("0000000", 1, ?decimals + 1 - STRLEN(?valueFixedDigits)), ?valueFixedDigits), ?valueFixedDigits) AS ?valueFixedPadded)
+  BIND(CONCAT(IF(?value < 0, "-", ""), SUBSTR(?valueFixedPadded, 1, STRLEN(?valueFixedPadded) - ?decimals),
+              IF(?decimals > 0, CONCAT(".", SUBSTR(?valueFixedPadded, STRLEN(?valueFixedPadded) - ?decimals + 1)), "")) AS ?valueFixed)
+  BIND(CONCAT(?valueFixed, COALESCE(CONCAT(" ", STR(?rawUnit)), "")) AS ?shown)
+  BIND(STR(?min) AS ?minValue)
+  BIND(STR(?max) AS ?maxValue)
+  BIND(IF(?step > 0, STR(?step), "any") AS ?stepValue)
+  BIND(STR(?value) AS ?valueValue)
+  BIND(IF(?max > ?min, (?value - ?min) / (?max - ?min) * 100, 0) AS ?fill)
+  BIND(STR(xsd:integer(ROUND(ABS(?fill) * xsd:integer(SUBSTR("1000000", 1, 2 + 1))))) AS ?fillFixedDigits)
+  BIND(IF(STRLEN(?fillFixedDigits) <= 2, CONCAT(SUBSTR("0000000", 1, 2 + 1 - STRLEN(?fillFixedDigits)), ?fillFixedDigits), ?fillFixedDigits) AS ?fillFixedPadded)
+  BIND(CONCAT(IF(?fill < 0, "-", ""), SUBSTR(?fillFixedPadded, 1, STRLEN(?fillFixedPadded) - 2),
+              IF(2 > 0, CONCAT(".", SUBSTR(?fillFixedPadded, STRLEN(?fillFixedPadded) - 2 + 1)), "")) AS ?fillFixed)
+  BIND(CONCAT("--sem-fill: ", ?fillFixed, "%") AS ?style)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
+  BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
+  BIND(STR(?input) AS ?inputId)
+  BIND(IRI(CONCAT(STR($this), "/~value")) AS ?output)
+  BIND(IRI(CONCAT(STR($this), "/~value-text")) AS ?outputText)
+  BIND(IRI(CONCAT(STR($this), "/~value-aria-hidden")) AS ?outputHidden)
+  BIND(IF(BOUND(?rawUnit), IRI(CONCAT(STR($this), "/~input-aria-valuetext")), ?none) AS ?valueText)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
+  BIND(?input AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
+c:SliderRendering-sparql-text a sem:Rule ;
+    sem:implements c:SliderRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line, ?help, ?error .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?afterDescribed .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?lineData .
+  ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+}
+WHERE {
+  $this a c:Slider .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { $this c:min ?rawMin }
+  OPTIONAL { $this c:max ?rawMax }
+  OPTIONAL { $this c:step ?rawStep }
+  OPTIONAL { $this c:value ?rawValue }
+  OPTIONAL { $this c:unit ?rawUnit FILTER(STR(?rawUnit) != "") }
+  BIND(COALESCE(xsd:decimal(?rawMin), 0) AS ?min)
+  BIND(COALESCE(xsd:decimal(?rawMax), 100) AS ?max0)
+  BIND(IF(?max0 < ?min, ?min, ?max0) AS ?max)
+  BIND(COALESCE(xsd:decimal(?rawStep), 1) AS ?step)
+  BIND(COALESCE(xsd:decimal(?rawValue), ?min) AS ?value0)
+  BIND(IF(?value0 < ?min, ?min, IF(?value0 > ?max, ?max, ?value0)) AS ?value)
+  BIND(IF(?step > 0 && CONTAINS(STR(?step), "."), STRLEN(STRAFTER(STR(?step), ".")), 0) AS ?decimals0)
+  BIND(IF(?decimals0 > 6, 6, ?decimals0) AS ?decimals)
+  BIND(STR(xsd:integer(ROUND(ABS(?value) * xsd:integer(SUBSTR("1000000", 1, ?decimals + 1))))) AS ?valueFixedDigits)
+  BIND(IF(STRLEN(?valueFixedDigits) <= ?decimals, CONCAT(SUBSTR("0000000", 1, ?decimals + 1 - STRLEN(?valueFixedDigits)), ?valueFixedDigits), ?valueFixedDigits) AS ?valueFixedPadded)
+  BIND(CONCAT(IF(?value < 0, "-", ""), SUBSTR(?valueFixedPadded, 1, STRLEN(?valueFixedPadded) - ?decimals),
+              IF(?decimals > 0, CONCAT(".", SUBSTR(?valueFixedPadded, STRLEN(?valueFixedPadded) - ?decimals + 1)), "")) AS ?valueFixed)
+  BIND(CONCAT(?valueFixed, COALESCE(CONCAT(" ", STR(?rawUnit)), "")) AS ?shown)
+  BIND(xsd:integer(IF(?max > ?min, ROUND((?value - ?min) / (?max - ?min) * 20), 0)) AS ?filled)
+  BIND(CONCAT(SUBSTR("━━━━━━━━━━━━━━━━━━━━", 1, ?filled), "●", SUBSTR("────────────────────", 1, 20 - ?filled)) AS ?bar)
+  BIND(CONCAT(COALESCE(CONCAT(?labelData, ": "), ""), ?bar, " ", ?shown) AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(CONCAT("  ", STR(?helpValue)) AS ?helpData)
+  BIND(CONCAT("  ! ", STR(?errorValue)) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+}""" .
 c:SliderInput a beh:Reaction ;
     beh:when beh:Input ;
     beh:sourceClass c:Slider ;
@@ -139,3 +757,104 @@ describe it (aria-describedby, aria-invalid) unless the content has its own."""@
     sem:slug "field" .
 c:FieldRendering a sem:Rendering ; sem:targets c:Field ; sem:stratum 0 .
 c:FieldRendering-fn a sem:Rule ; sem:implements c:FieldRendering ; sem:function "inputs:field" .
+# The field decorates its content's elements (label for, aria-describedby, aria-labelledby), so it
+# follows c:content, watching only what it reads there.
+c:FieldRendering-sparql a sem:Rule ;
+    sem:implements c:FieldRendering ;
+    sem:follows c:content ;
+    sem:watches rdf:type, c:label, l10n:label, c:help, c:error, c:content ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label, ?contentNode, ?help, ?error .
+  ?label a ?labelClass ; rdfhtml:id ?labelId ; rdfhtml:for ?forId ; rdfhtml:class "sem-field-label" ; rdfhtml:hasChild ?labelText ;
+         ord:immediatelyPrecedes ?afterLabel .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
+  ?contentNode ord:immediatelyPrecedes ?afterDescribed .
+  ?contentRoot rdfhtml:attribute ?labelledBy .
+  ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?labelId .
+  ?help a rdfhtml:Div ; rdfhtml:id ?helpId ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:id ?errorId ; rdfhtml:class "sem-error" ; rdfhtml:hasChild ?errorText ; rdfhtml:attribute ?errorRole .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+  ?errorRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "alert" .
+  ?described rdfhtml:attribute ?invalid, ?describedBy .
+  ?invalid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?describedIds .
+}
+WHERE {
+  $this a c:Field .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL {
+    $this c:content ?content .
+    OPTIONAL { ?content a/rdfs:subClassOf* ?partClass . ?partClass c:labelPart ?part }
+  }
+  BIND(IF(isIRI(?content), ?content, ?none) AS ?contentNode)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
+  BIND(STR(?label) AS ?labelId)
+  BIND(IF(BOUND(?part), CONCAT(STR(?content), "/~", STR(?part)), ?none) AS ?forId)
+  BIND(IF(BOUND(?forId), rdfhtml:Label, rdfhtml:Div) AS ?labelClass)
+  BIND(IF(BOUND(?contentNode) && !EXISTS { ?contentNode c:help ?contentHelp } && !EXISTS { ?contentNode c:error ?contentError },
+          IRI(CONCAT(STR(?contentNode), "/~", COALESCE(STR(?part), "root"))), ?none) AS ?described)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(STR(?helpValue) AS ?helpData)
+  BIND(STR(?errorValue) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?help) AS ?helpId)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-role")), ?none) AS ?errorRole)
+  BIND(STR(?error) AS ?errorId)
+  BIND(IF(BOUND(?errorData) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-invalid")), ?none) AS ?invalid)
+  BIND(IF(BOUND(?help) || BOUND(?error), CONCAT(COALESCE(?helpId, ""), IF(BOUND(?help) && BOUND(?error), " ", ""), COALESCE(?errorId, "")), ?none) AS ?describedIds)
+  BIND(IF(BOUND(?describedIds) && BOUND(?described), IRI(CONCAT(STR($this), "/~described-aria-describedby")), ?none) AS ?describedBy)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+  BIND(COALESCE(?contentNode, ?afterDescribed) AS ?afterLabel)
+  BIND(IF(BOUND(?contentNode) && !BOUND(?part) && BOUND(?labelData) && !EXISTS { ?contentNode c:label ?contentLabel },
+          IRI(CONCAT(STR(?contentNode), "/~root")), ?none) AS ?contentRoot)
+  BIND(IF(BOUND(?contentRoot), IRI(CONCAT(STR($this), "/~content-aria-labelledby")), ?none) AS ?labelledBy)
+}""" .
+c:FieldRendering-sparql-text a sem:Rule ;
+    sem:implements c:FieldRendering ;
+    sem:follows c:content ;
+    sem:watches rdf:type, c:label, l10n:label, c:help, c:error, c:content ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?head, ?contentNode, ?help, ?error .
+  ?head a rdfhtml:Div ; rdfhtml:hasChild ?headText ; ord:immediatelyPrecedes ?afterHead .
+  ?headText a rdfhtml:Text ; rdfhtml:data ?headData .
+  ?contentNode ord:immediatelyPrecedes ?afterDescribed .
+  ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?error .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
+  ?errorText a rdfhtml:Text ; rdfhtml:data ?errorData .
+}
+WHERE {
+  $this a c:Field .
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { $this c:content ?content }
+  BIND(IF(isIRI(?content), ?content, ?none) AS ?contentNode)
+  BIND(CONCAT(?labelData, ":") AS ?headData)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?head)
+  BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?headText)
+  OPTIONAL { $this c:help ?helpValue }
+  OPTIONAL { $this c:error ?errorValue }
+  BIND(CONCAT("  ", STR(?helpValue)) AS ?helpData)
+  BIND(CONCAT("  ! ", STR(?errorValue)) AS ?errorData)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error")), ?none) AS ?error)
+  BIND(IF(BOUND(?errorData), IRI(CONCAT(STR($this), "/~error-text")), ?none) AS ?errorText)
+  BIND(COALESCE(?help, ?error) AS ?afterDescribed)
+  BIND(COALESCE(?contentNode, ?afterDescribed) AS ?afterHead)
+}""" .

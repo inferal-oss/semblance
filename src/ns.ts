@@ -105,6 +105,7 @@ export const SEM = {
   readsMinted: sem + 'readsMinted',
   forEach: sem + 'forEach',
   inputOnly: sem + 'inputOnly',
+  bulk: sem + 'bulk',
   TooltipLayer: sem + 'TooltipLayer',
   Layer: sem + 'Layer',
   DocsLayer: sem + 'DocsLayer',

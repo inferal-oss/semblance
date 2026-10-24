@@ -222,3 +222,15 @@ describe('reconfiguration and layers', () => {
     expect(toHTML(screen.index, page)).not.toContain('data-sem-c')
   })
 })
+
+describe('bulk attributability', () => {
+  it('evaluates per focus any SPARQL rule whose template writes about nodes not minted from the focus', async () => {
+    const { attributable } = await import('../src/engine/rules.ts')
+    expect(attributable('CONSTRUCT { ?root sem:renders $this . ?a ord:immediatelyPrecedes ?b } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }')).toBe(false)
+    expect(
+      attributable(
+        'CONSTRUCT { ?root sem:renders $this ; rdfhtml:hasChild ?icon . ?icon rdfhtml:data "a. b" } WHERE { BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(IF(BOUND(?x), IRI(CONCAT(STR(?root), "-icon")), ?none) AS ?icon) }',
+      ),
+    ).toBe(true)
+  })
+})

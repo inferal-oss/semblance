@@ -28,6 +28,12 @@ export interface Rule {
    * mint (pre-render rules in strata below the components: localization, validation).
    */
   inputOnly: boolean
+  /**
+   * Whether a SPARQL rule may be evaluated once for many foci (bulk). Only if every
+   * subject its template writes is the focus or a node minted under it, so the output
+   * can be grouped back by focus (see attributable()); sem:bulk false opts out.
+   */
+  bulk: boolean
 }
 
 export interface Selection {
@@ -78,6 +84,7 @@ export function loadRules(store: GraphStore): Rule[] {
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach: get(SEM.forEach)?.value,
       inputOnly: get(SEM.inputOnly)?.value === 'true',
+      bulk: get(SEM.bulk)?.value !== 'false' && (!query || attributable(query)),
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || a.iri.localeCompare(b.iri))
@@ -119,4 +126,44 @@ export function superclasses(store: GraphStore): (cls: string) => Set<string> {
     cache.set(cls, out)
     return out
   }
+}
+
+/**
+ * Whether every subject in a CONSTRUCT template is $this or a variable bound to an
+ * IRI minted from it (BIND(IRI(CONCAT(STR($this), ...)) AS ?v)). Bulk evaluation
+ * groups output by the focus a subject was minted under; a triple about any other
+ * node (another component, a list member) could not be given back to its focus.
+ */
+export function attributable(query: string): boolean {
+  const open = query.search(/CONSTRUCT\s*\{/i)
+  if (open < 0) return true
+  let depth = 0
+  let end = -1
+  const start = query.indexOf('{', open)
+  for (let i = start; i < query.length; i++) {
+    if (query[i] === '{') depth++
+    else if (query[i] === '}' && --depth === 0) {
+      end = i
+      break
+    }
+  }
+  if (end < 0) return false
+  // Drop string literals, so their dots and semicolons don't split statements.
+  const template = query.slice(start + 1, end).replace(/"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"/g, '""')
+  // Minted from $this, or from a node minted from it (to a fixed point).
+  const minted = new Set(['$this', '?this'])
+  // A BIND whose expression builds an IRI from a minted node (IRI(CONCAT(STR(?x), ...)),
+  // possibly inside IF / COALESCE) mints too.
+  const binds = [...query.matchAll(/BIND\s*\(([\s\S]*?)\s+AS\s+(\?\w+)\s*\)/gi)]
+    .filter((m) => /IRI\s*\(/i.test(m[1]!))
+    .map((m) => ({ from: [...m[1]!.matchAll(/STR\s*\(\s*([$?]\w+)\s*\)/gi)].map((x) => x[1]!), to: m[2]! }))
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const { from, to } of binds) if (!minted.has(to) && from.length && from.every((v) => minted.has(v))) minted.add(to), (grew = true)
+  }
+  const subjects = template
+    .split(/\s\.(?=\s|$)/)
+    .map((statement) => statement.trim().split(/\s+/)[0])
+    .filter((t): t is string => !!t)
+  return subjects.every((t) => minted.has(t))
 }

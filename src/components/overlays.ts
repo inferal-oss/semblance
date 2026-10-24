@@ -124,8 +124,12 @@ const isA = (ctx: RuleContext, node: NamedNode, cls: string) => ctx.objects(node
  * that it opens a dialog, and whether that is open now.
  */
 const openerAria: FnRule = (ctx, focus) => {
-  const target = ctx.object(focus, OV.opens)
-  if (!named(target)) return []
+  // A button may open several overlays: it names the first by IRI (store order is not stable).
+  const target = ctx
+    .objects(focus, OV.opens)
+    .filter(named)
+    .sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))[0]
+  if (!target) return []
   const o = ctx.out(focus)
   const root = o.node('root')
   o.attr(root, 'aria-controls', mint(target.value, 'root'), 'root-aria-controls')

@@ -60,12 +60,19 @@ const disabledOf = (ctx: RuleContext, focus: Term) => (isTrue(ctx.object(focus, 
 
 // --- TextArea ---------------------------------------------------------------------------------------
 
+/** Line elements of a text area's text sketch (see c:TextAreaRendering-sparql-text). */
+const TEXT_LINES = 100
+
 const textArea: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const label = text(ctx, focus, C.label)
   const value = ctx.object(focus, C.value)?.value ?? ''
   if (ctx.modality === MOD.Text) {
-    const lines = (value || ' ').split('\n').map((l, i) => o.el(`line-${i}`, 'Div', {}, [o.text(`line-${i}-text`, `  | ${l}`)]))
+    // At most TEXT_LINES line elements (the SPARQL rule's index table): the last one holds the
+    // rest, joined by newlines, so the text reads the same.
+    const all = (value || ' ').split('\n')
+    const split = all.length > TEXT_LINES ? [...all.slice(0, TEXT_LINES - 1), all.slice(TEXT_LINES - 1).join('\n  | ')] : all
+    const lines = split.map((l, i) => o.el(`line-${i}`, 'Div', {}, [o.text(`line-${i}-text`, `  | ${l}`)]))
     const head = label !== undefined ? [o.el('label', 'Div', {}, [o.text('label-text', `${label}:`)])] : []
     o.renders(o.el('root', 'Div', {}, [...head, ...lines, ...describeText(ctx, o, focus)]))
     return o.quads
@@ -138,8 +145,12 @@ const radioGroup: FnRule = (ctx, focus) => {
   const caption = text(ctx, focus, C.label)
   const opts = options(ctx, focus, property)
   if (ctx.modality === MOD.Text) {
-    const line = opts.map((opt) => `(${opt.value === current ? '•' : ' '}) ${labelOf(ctx, opt)}`).join('  ')
-    o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption ?? labelOf(ctx, property)}: ${line}`)]))
+    // One text node per option (not one joined string): SPARQL can order nodes, but its
+    // GROUP_CONCAT has no defined order. The text reads "Plan: ( ) Free  (•) Pro".
+    const line = opts.map((opt, i) =>
+      o.text(`opt-${encodeURIComponent(opt.value)}-line`, `${i ? ' ' : ''}(${opt.value === current ? '•' : ' '}) ${labelOf(ctx, opt)}`),
+    )
+    o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption ?? labelOf(ctx, property)}:`), ...line]))
     return o.quads
   }
   const disabled = disabledOf(ctx, focus)

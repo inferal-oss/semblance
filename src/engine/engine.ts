@@ -509,7 +509,7 @@ export class Engine {
       this.evaluateAll(rule, foci)
     } finally {
       const entry = this.stats.byRule.get(rule.iri) ?? { runs: 0, ms: 0 }
-      entry.runs += rule.kind === 'sparql' && foci.size >= this.bulkThreshold ? 1 : foci.size
+      entry.runs += rule.kind === 'sparql' && rule.bulk && foci.size >= this.bulkThreshold ? 1 : foci.size
       entry.ms += performance.now() - t
       this.stats.byRule.set(rule.iri, entry)
     }
@@ -529,7 +529,7 @@ export class Engine {
       if (!foci.size) return
       for (const focus of foci) parked?.delete(focus)
     }
-    if (rule.kind === 'sparql' && foci.size >= this.bulkThreshold) {
+    if (rule.kind === 'sparql' && rule.bulk && foci.size >= this.bulkThreshold) {
       const groups = this.bulk(rule)
       for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) ? (groups.get(focus) ?? []) : [])
       return
