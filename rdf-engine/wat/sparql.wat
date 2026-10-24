@@ -913,6 +913,12 @@
 (func $blank_var (result i32)
   (call $new_var (i32.const 0) (i32.const 0) (i32.const -1) (global.get $bflags)))
 
+;; A reifier the query leaves unnamed ({| |}, << >>, ~): a hidden variable, and in
+;; CONSTRUCT WHERE also a template blank node, fresh per solution.
+(global $reif_flags (mut i32) (i32.const 0))
+(func $reifier_var (result i32)
+  (call $new_var (i32.const 0) (i32.const 0) (i32.const -1) (i32.or (global.get $bflags) (global.get $reif_flags))))
+
 ;; Add triple pattern (s, p, o) to g.
 (func $ptriple (param $g i32) (param $s i32) (param $p i32) (param $o i32)
   (call $add_elem (local.get $g) (call $node3 (i32.const P_TRIPLE) (local.get $s) (local.get $p) (local.get $o))))
@@ -979,13 +985,13 @@
           (if (i32.or (i32.or (call $is_iri_tok) (i32.eq (global.get $tok) (i32.const T_VAR)))
                       (i32.or (i32.eq (global.get $tok) (i32.const T_BNODE)) (i32.eq (global.get $tok) (i32.const '['))))
             (then (if (i32.eqz (local.tee $r (call $pterm (local.get $g) (i32.const 0)))) (then (return (i32.const 0)))))
-            (else (local.set $r (call $vref (call $blank_var)))))
+            (else (local.set $r (call $vref (call $reifier_var)))))
           (call $ptriple (local.get $g) (local.get $r) (call $known (i32.const K_REIFIES)) (call $tt_ref (local.get $s) (local.get $p) (local.get $o)))
           (local.set $pending (local.get $r)))
         (else
           (call $lex)
           (if (i32.eqz (local.tee $r (local.get $pending))) (then
-            (local.set $r (call $vref (call $blank_var)))
+            (local.set $r (call $vref (call $reifier_var)))
             (call $ptriple (local.get $g) (local.get $r) (call $known (i32.const K_REIFIES)) (call $tt_ref (local.get $s) (local.get $p) (local.get $o)))))
           (local.set $pending (i32.const 0))
           (if (i32.eqz (call $ppol (local.get $g) (local.get $r))) (then (return (i32.const 0))))
@@ -1024,7 +1030,7 @@
                 (i32.or (i32.eq (global.get $tok) (i32.const T_BNODE)) (i32.eq (global.get $tok) (i32.const '['))))
       (then (if (i32.eqz (local.tee $r (call $pterm (local.get $g) (i32.const 0)))) (then (return (i32.const 0))))))))
   (if (i32.eqz (call $eat (i32.const T_GTGT) (@str "expected '>>'"))) (then (return (i32.const 0))))
-  (if (i32.eqz (local.get $r)) (then (local.set $r (call $vref (call $blank_var)))))
+  (if (i32.eqz (local.get $r)) (then (local.set $r (call $vref (call $reifier_var)))))
   (call $ptriple (local.get $g) (local.get $r) (call $known (i32.const K_REIFIES)) (call $tt_ref (local.get $s) (local.get $v) (local.get $o)))
   (local.get $r))
 
@@ -1498,6 +1504,7 @@
   (global.set $nscopes (i32.const 0))
   (global.set $bscope (i32.const -2))
   (global.set $bflags (i32.const V_HIDDEN))
+  (global.set $reif_flags (i32.const 0))
   (global.set $in_agg (i32.const 0))
   (global.set $aggs_ok (i32.const 0))
   (global.set $cq (local.tee $q (call $q_new)))
@@ -1524,10 +1531,12 @@
       (if (i32.eqz (call $eat_kw (@str "WHERE"))) (then (return (i32.const 0))))
       (if (i32.eqz (call $eat (i32.const '{') (@str "expected '{'"))) (then (return (i32.const 0))))
       (local.set $g (call $node (i32.const P_GROUP)))
+      (global.set $reif_flags (i32.const V_TEMPLATE))
       (loop $triples
         (if (i32.ne (global.get $tok) (i32.const '}')) (then
           (if (i32.eqz (call $ptriples (local.get $g))) (then (return (i32.const 0))))
           (if (i32.eq (global.get $tok) (i32.const '.')) (then (call $lex) (br $triples))))))
+      (global.set $reif_flags (i32.const 0))
       (if (i32.eqz (call $eat (i32.const '}') (@str "expected '}'"))) (then (return (i32.const 0))))
       (i32.store offset=12 (local.get $q) (local.get $g))
       (i32.store offset=36 (local.get $q) (i32.load offset=4 (local.get $g)))

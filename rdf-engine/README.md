@@ -67,9 +67,9 @@ The engines move in lockstep; each phase ends with both passing the same tests.
 |---|---|---|
 | 1. Terms and store | done | done |
 | 2. Turtle and TriG | done: rdf12 1,055/1,055 | done: rdf12 1,055/1,055 |
-| 3. Semblance's SPARQL | done: every Semblance page renders as on Oxigraph, with SPARQL and function rules | in progress: all 294 Semblance queries parse |
-| 4. SPARQL 1.2 query and update | done: 2,304 of 2,317 W3C tests (Oxigraph 2,227); every failure is shared with Oxigraph | next |
-| 5. Housekeeping and speed | `collect`; size pass (344 to 262 KiB); sessions flat at 17–24 ms/event | `collect` done; rest after phase 4 |
+| 3. Semblance's SPARQL | done: every Semblance page renders as on Oxigraph, with SPARQL and function rules | done: the same |
+| 4. SPARQL 1.2 query and update | done: 2,305 of 2,317 W3C tests, sparql12 271/271 (Oxigraph 2,227) | done: 2,308 of 2,317, sparql12 271/271 |
+| 5. Housekeeping and speed | `collect`; size pass (344 to 262 KiB); sessions flat at 17–24 ms/event | `collect`; the fastest store on Semblance's pages |
 
 The Rust engine writes computed numbers the way XPath casts them to strings
 (`"2"`, `"2.5"`), as Oxigraph does and Semblance's output relies on; seven

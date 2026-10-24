@@ -3,8 +3,8 @@
   "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
   "summary": {
     "sparql12": {
-      "pass": 270,
-      "fail": 1,
+      "pass": 271,
+      "fail": 0,
       "skip": 0
     },
     "sparql11": {
@@ -35,7 +35,6 @@
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-string": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#bnode01": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#coalesce01": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected": "wrong result",
-    "sparql/sparql12/eval-triple-terms/manifest#construct-5": "wrong result"
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected": "wrong result"
   }
 }

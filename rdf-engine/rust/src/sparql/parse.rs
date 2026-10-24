@@ -42,6 +42,8 @@ struct P<'a, 'd> {
     /// Variables standing for template blank nodes (CONSTRUCT), by variable.
     template_bnodes: IdMap,
     in_template: bool,
+    /// Variables standing for reifiers the query leaves unnamed (`{| |}`, `<< >>`, `~`).
+    anon_reifiers: Vec<Var>,
     /// The top-level SELECT was `SELECT *`.
     top_star: bool,
 }
@@ -78,6 +80,7 @@ fn new_parser<'a, 'd>(text: &'a [u8], base: &[u8], dict: &'d mut Dict) -> P<'a, 
         agg_ok: false,
         template_bnodes: IdMap::new(),
         in_template: false,
+        anon_reifiers: Vec::new(),
         top_star: false,
     }
 }
@@ -416,7 +419,13 @@ impl P<'_, '_> {
                 self.dataset(&mut q)?;
                 self.expect_kw(b"WHERE", "expected WHERE")?;
                 self.expect(b"{", "expected {")?;
+                self.anon_reifiers.clear();
                 self.triples_block_until(b"}", &mut template)?;
+                // The template's unnamed reifiers are blank nodes: fresh for each solution.
+                for v in core::mem::take(&mut self.anon_reifiers) {
+                    let k = self.template_bnodes.len() as u32;
+                    self.template_bnodes.insert(&[v], k);
+                }
                 self.expect(b"}", "expected }")?;
                 let triples: Vec<Triple> = template.iter().map(|t| Triple { s: t[0].clone(), p: t[1].clone(), o: t[2].clone() , path: None }).collect();
                 q.select = empty_select();
@@ -1140,7 +1149,7 @@ impl P<'_, '_> {
                 let r = match reifier.take() {
                     Some(r) => r,
                     None => {
-                        let r = Tv::Var(self.fresh_var());
+                        let r = self.anon_reifier();
                         self.reifies(&r, s, p, o, out);
                         r
                     }
@@ -1170,7 +1179,13 @@ impl P<'_, '_> {
         if self.c.starts(b"_:") || self.c.peek() == b'[' && self.anon_ahead() {
             return self.bnode();
         }
-        Ok(Tv::Var(self.fresh_var()))
+        Ok(self.anon_reifier())
+    }
+
+    fn anon_reifier(&mut self) -> Tv {
+        let v = self.fresh_var();
+        self.anon_reifiers.push(v);
+        Tv::Var(v)
     }
 
     fn reified(&mut self, out: &mut Vec<Elt>) -> Res<Tv> {
@@ -1185,7 +1200,7 @@ impl P<'_, '_> {
         self.ws();
         let o = if self.c.starts(b"<<") && !self.c.starts(b"<<(") { self.reified(out)? } else { self.inner_node()? };
         self.ws();
-        let r = if self.c.peek() == b'~' { self.reifier()? } else { Tv::Var(self.fresh_var()) };
+        let r = if self.c.peek() == b'~' { self.reifier()? } else { self.anon_reifier() };
         self.expect(b">>", "expected >>")?;
         self.reifies(&r, &s, &p, &o, out);
         Ok(r)
