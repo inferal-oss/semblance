@@ -701,7 +701,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline" ;
     sty:declares [ sty:property "padding-inline-start" ; sty:raw "10px" ] ,
                  [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border)" ] ,
-                 [ sty:property "font-size" ; sty:raw "12px" ] .
+                 [ sty:property "font-size" ; sty:raw "11px" ] ,
+                 [ sty:property "line-height" ; sty:raw "1" ] ,
+                 [ sty:property "color" ; sty:token tok:faint ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=link]" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part ".sem-brand > .sem-byline [data-sem-c=text]" ;
+    sty:declares [ sty:property "font-size" ; sty:raw "inherit" ] , [ sty:property "line-height" ; sty:raw "inherit" ] , [ sty:property "color" ; sty:raw "inherit" ] .
 [] a sty:StyleRule ; sty:appliesTo c:AppBar ; sty:part "> .sem-actions" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,

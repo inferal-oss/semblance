@@ -105,10 +105,15 @@ sty:Mono sty:declares
 # underlined only while pointed at.
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:state ":has(> [data-sem-c=emblem], > [data-sem-c=graph-mark])" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
-                 [ sty:property "align-items" ; sty:raw "center" ] ,
-                 [ sty:property "gap" ; sty:raw "0.35em" ] ,
-                 [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "gap" ; sty:raw "0.3em" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "text-decoration-color" ; sty:raw "transparent" ] .
+# Its logo stands on the baseline, as tall as a capital letter.
+[] a sty:StyleRule ; sty:appliesTo c:Link ; sty:part "> [data-sem-c=emblem]" ;
+    sty:declares [ sty:property "height" ; sty:raw "0.72em" ] ,
+                 [ sty:property "align-self" ; sty:raw "baseline" ] ,
+                 [ sty:property "vertical-align" ; sty:raw "baseline" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:state ":has(> [data-sem-c=emblem], > [data-sem-c=graph-mark]):hover" ;
     sty:declares [ sty:property "text-decoration-color" ; sty:raw "currentColor" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:part ".sem-external" ;
