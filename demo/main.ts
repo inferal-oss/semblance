@@ -13,7 +13,7 @@ import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
-import { initWeb, loadStore, type StoreKind } from '../src/web/load.ts'
+import { hasStore, initWeb, loadStore, type StoreKind } from '../src/web/load.ts'
 import { perfRunner } from './perf-runner.ts'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
@@ -22,15 +22,17 @@ import { perfRunner } from './perf-runner.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const params = new URLSearchParams(location.search)
-// Semblance's own WASM engine by default: the fastest store (rdf-engine/results).
-const kind = (params.get('store') ?? 'wat') as StoreKind
+// Semblance's own WASM engine by default: the fastest store (rdf-engine/results); Hybrid
+// if this build has no engine builds.
+const kind = (params.get('store') ?? (hasStore('wat') ? 'wat' : 'hybrid')) as StoreKind
 // SPARQL by default: the rules are queries, inspectable and portable. Function twins render the same
 // HTML, faster in the browser (Rules menu, ?prefer=function); a store without SPARQL (N3) needs them.
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { wat: 'SemblanceWasm', rust: 'SemblanceRust', hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 
-await initWeb()
+// Only the chosen store's code and WASM are loaded.
+await initWeb(kind)
 // The Components page: one graph per component group (demo/gallery/*.ttl).
 const galleryFiles = import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const gallery = Object.values(galleryFiles)

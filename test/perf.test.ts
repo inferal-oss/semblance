@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import * as ox from 'oxigraph'
 import { describe, expect, it } from 'vitest'
 import { judge, observationsTurtle, select, views } from '../bench/observations.ts'
-import type { Row } from '../bench/scenarios.ts'
+import { CONFIGS, type Row } from '../bench/scenarios.ts'
 import { oxigraphStore } from '../src/store/oxigraph.ts'
 
 const perfOntology = readFileSync(new URL('../ontology/perf/perf.ttl', import.meta.url), 'utf8')
@@ -79,8 +79,9 @@ describe('performance judgements', () => {
     const all = views(store)
     expect(all.map((v) => v.iri.split('#')[1])).toEqual(['InitialRenderView', 'UpdateMixView', 'UpdateMatrixView', 'ScalingView'])
     const initial = select(store, all[0]!)
-    expect(initial).toHaveLength(24) // 2 sizes × 6 configurations × (engine, dom)
-    expect(initial[0]).toMatchObject({ items: 100, part: 'dom', value: 1 })
+    expect(initial).toHaveLength(2 * CONFIGS.length * 2) // 2 sizes × configurations × (engine, dom)
+    // The recorded rows predate the engine configurations, which come first and are unmeasured.
+    expect(initial.find((r) => r.value !== undefined)).toMatchObject({ items: 100, part: 'dom', value: 1 })
     const matrix = select(store, all[2]!)
     expect(matrix.filter((r) => r.overBudget).map((r) => `${r.label}@${r.items}`).sort()).toEqual([
       'oxigraph · function@1000',

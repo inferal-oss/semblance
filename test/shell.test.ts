@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { Parser } from 'n3'
+import { CONFIGS } from '../bench/scenarios.ts'
 import { describe, expect, it } from 'vitest'
 import { observationsTurtle } from '../bench/observations.ts'
 import type { Row } from '../bench/scenarios.ts'
@@ -169,7 +170,7 @@ describe('the demo shell is a component graph', () => {
     shell.flush()
     const bars = document.querySelectorAll('[data-sem-c=bar-chart]')[0]!
     expect(bars.querySelectorAll('.sem-seg').length).toBe(6) // 3 measured configurations × (engine, DOM)
-    expect(bars.querySelectorAll('.sem-pending').length).toBe(3) // planned but not measured
+    expect(bars.querySelectorAll('.sem-pending').length).toBe(CONFIGS.length - 3) // planned but not measured
     expect(document.querySelectorAll('[data-sem-c=heatmap] td.sem-flagged').length).toBe(2) // 24.5 and 54.5 ms reorders
     expect(document.querySelector('[data-sem-c=finding-list]')!.textContent).toContain('At 100 items, hybrid · function renders from scratch in 11 ms, 2.8× faster than oxigraph · sparql · bulk (31 ms).')
   })

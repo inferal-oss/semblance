@@ -12,7 +12,7 @@ try {
   document.body.replaceChildren()
   const stage = document.body.appendChild(document.createElement('div'))
   stage.style.cssText = 'position:absolute;left:-10000px;top:0;width:600px'
-  await initWeb()
+  await initWeb(config.store)
   const rows = await runBench({ name: 'browser', loadStore, host: () => stage.appendChild(document.createElement('div')), log: () => {} }, [size], [config])
   post({ rows })
 } catch (e) {

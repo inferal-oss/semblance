@@ -9,6 +9,15 @@ const here = fileURLToPath(new URL('.', import.meta.url))
 const out = here + 'build/'
 mkdirSync(out, { recursive: true })
 
+const hasCargo = (() => {
+  try {
+    execFileSync('cargo', ['--version'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+
 const ENGINES: Record<string, () => void> = {
   rust() {
     // From the crate's directory, so its .cargo/config.toml (target features) applies.
@@ -26,6 +35,12 @@ const sizes: Record<string, { raw: number; gzip: number; brotli: number }> = {}
 for (const [name, build] of Object.entries(ENGINES)) {
   if (wanted.length && !wanted.includes(name)) continue
   if (name === 'wat' && !existsSync(here + 'wat/build.ts')) continue
+  if (name === 'rust' && !hasCargo) {
+    // The WAT engine needs only Node; the Rust one needs a Rust toolchain with the
+    // wasm32-unknown-unknown target (rustup target add wasm32-unknown-unknown).
+    console.warn('rdf-engine: no cargo on PATH, so no Rust engine build (the Semblance Rust store is not offered)')
+    continue
+  }
   build()
   const bytes = readFileSync(out + name + '.wasm')
   sizes[name] = { raw: bytes.length, gzip: gzipSync(bytes, { level: 9 }).length, brotli: brotliCompressSync(bytes).length }
