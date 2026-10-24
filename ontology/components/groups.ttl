@@ -94,6 +94,7 @@ c:ValueFilter sem:group c:DataGroup . c:FlagFilter sem:group c:DataGroup . c:Tim
 c:Representation sem:group c:DataGroup .
 c:Money sem:group c:DataGroup . c:Board sem:group c:DataGroup . c:BoardCard sem:group c:DataGroup .
 c:Calendar sem:group c:DataGroup . c:CalendarEntry sem:group c:DataGroup .
+c:Outline sem:group c:DataGroup . c:OutlineItem sem:group c:DataGroup .
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 
 # --- Navigation ---

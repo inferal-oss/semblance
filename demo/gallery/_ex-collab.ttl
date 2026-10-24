@@ -1,0 +1,410 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ag: <https://semblance.dev/demo/collab#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# A shared agenda: three people write one outline at once - two of them simulated - and every
+# change is kept, attributed, and can be replayed.
+#
+# The points are this example's own data (ag:), and so is everything about writing them together:
+# who is on which point (ag:here) and writing there (ag:typingBy) is graph state on the point, so
+# a c:Outline shows it; each change is a ag:Edit, a member of the document's history (an LDES),
+# attributed to its author (prov:wasAttributedTo) and numbered (ag:seq). An edit remembers the
+# version its author had seen (ag:basedOn): when that is older than the point's version, someone
+# else wrote in between, unseen - a conflict. The graph resolves it the same way for everyone (the
+# later write wins) and keeps the overwritten text on the point, flagged, until someone who has
+# seen it writes the point again. Grace and Tim are scripts on a schedule (beh:dueAt), as in the
+# Chat example; you write too. A slider replays the history: the agenda as it was at any step is
+# a query over the edits up to it.
+# =================================================================================================
+
+ui:ex-collab-prefixes sh:declare [ sh:prefix "ag" ; sh:namespace "https://semblance.dev/demo/collab#"^^xsd:anyURI ] .
+
+# --- the vocabulary ---------------------------------------------------------------------------------
+
+ag:Point a owl:Class ; rdfs:comment "A point of the agenda: ag:text, ag:rank (its place), ag:level (its indent), ag:version (its last edit's ag:seq)." .
+ag:cursor a owl:ObjectProperty ; rdfs:comment "The point a person has picked (yours is set by the outline)." .
+ag:here a owl:ObjectProperty ; rdfs:domain ag:Point ; rdfs:comment "Someone on this point (their cursor is here)." .
+ag:typingBy a owl:ObjectProperty ; rdfs:domain ag:Point ; rdfs:comment "Someone writing this point now." .
+ag:edited a owl:DatatypeProperty ; rdfs:domain ag:Point ; rdfs:comment "Who wrote it last, and at which step." .
+ag:conflict a owl:DatatypeProperty ; rdfs:domain ag:Point ;
+    rdfs:comment "Set when an edit overwrote a version its author had not seen: what was lost. Cleared by the next edit made having seen it." .
+ag:Edit a owl:Class ; rdfs:subClassOf prov:Entity ;
+    rdfs:comment "A change to a point (ag:on): its text after (ag:text), its step (ag:seq), its author (prov:wasAttributedTo), the version its author had seen (ag:basedOn), the edit it replaced (ag:replaced) and, if unseen, overwrote (ag:overwrote)." .
+ag:basedOn a owl:DatatypeProperty ; rdfs:comment "On an edit, and on a person: the version of the point they had seen when they began." .
+ag:Added a ag:Kind ; rdfs:label "added" .
+ag:Rewrote a ag:Kind ; rdfs:label "rewrote" .
+
+ag:ada rdfs:label "Ada Lovelace" .
+ag:grace rdfs:label "Grace Hopper" .
+ag:tim rdfs:label "Tim Berners-Lee" .
+
+# --- the agenda, and how it came to be ----------------------------------------------------------------
+# Six points, written in six steps: the history begins with them.
+
+ag:doc ag:seq 6 .
+ag:replay ag:live true .
+
+ag:p1 a ag:Point ; ag:text "Welcome and goals" ; ag:rank 1 ; ag:level 0 ; ag:version 1 ; ag:edited "Ada Lovelace, step 1" .
+ag:p2 a ag:Point ; ag:text "Review last quarter" ; ag:rank 2 ; ag:level 0 ; ag:version 2 ; ag:edited "Grace Hopper, step 2" .
+ag:p3 a ag:Point ; ag:text "Revenue and churn" ; ag:rank 3 ; ag:level 1 ; ag:version 3 ; ag:edited "Tim Berners-Lee, step 3" .
+ag:p4 a ag:Point ; ag:text "Roadmap for spring" ; ag:rank 4 ; ag:level 0 ; ag:version 4 ; ag:edited "Ada Lovelace, step 4" .
+ag:p5 a ag:Point ; ag:text "Hiring plan" ; ag:rank 5 ; ag:level 1 ; ag:version 5 ; ag:edited "Grace Hopper, step 5" .
+ag:p6 a ag:Point ; ag:text "Dinner at seven" ; ag:rank 6 ; ag:level 0 ; ag:version 6 ; ag:edited "Tim Berners-Lee, step 6" .
+
+ag:history a ldes:EventStream ; tree:member ag:edit-1 , ag:edit-2 , ag:edit-3 , ag:edit-4 , ag:edit-5 , ag:edit-6 .
+ag:edit-1 a ag:Edit ; ag:seq 1 ; ag:on ag:p1 ; ag:kind ag:Added ; ag:text "Welcome and goals" ; ag:basedOn 0 ; prov:wasAttributedTo ag:ada .
+ag:edit-2 a ag:Edit ; ag:seq 2 ; ag:on ag:p2 ; ag:kind ag:Added ; ag:text "Review last quarter" ; ag:basedOn 1 ; prov:wasAttributedTo ag:grace .
+ag:edit-3 a ag:Edit ; ag:seq 3 ; ag:on ag:p3 ; ag:kind ag:Added ; ag:text "Revenue and churn" ; ag:basedOn 2 ; prov:wasAttributedTo ag:tim .
+ag:edit-4 a ag:Edit ; ag:seq 4 ; ag:on ag:p4 ; ag:kind ag:Added ; ag:text "Roadmap for spring" ; ag:basedOn 3 ; prov:wasAttributedTo ag:ada .
+ag:edit-5 a ag:Edit ; ag:seq 5 ; ag:on ag:p5 ; ag:kind ag:Added ; ag:text "Hiring plan" ; ag:basedOn 4 ; prov:wasAttributedTo ag:grace .
+ag:edit-6 a ag:Edit ; ag:seq 6 ; ag:on ag:p6 ; ag:kind ag:Added ; ag:text "Dinner at seven" ; ag:basedOn 5 ; prov:wasAttributedTo ag:tim .
+
+# --- Grace and Tim: scripts on a schedule -------------------------------------------------------------
+# A script's next step (ag:at) is due at beh:dueAt; the host turns that into a beh:Due event and
+# one of the reactions below takes the step, by its class: go to a point and start writing
+# (ag:Visit), write it (ag:Write), add a point (ag:Add), go away (ag:Leave). Each step names the
+# next (ag:then) and the pause before it (on the next, ag:after). Both start as soon as the
+# agenda is on screen, and hold while it is not. Grace begins on point 3 and takes her time; Tim
+# rewrites the same point meanwhile, and Grace, who has not seen it, writes over it.
+
+ag:graceScript a ag:Script ; ag:at ag:g1 ; beh:dueAt "2024-01-01T00:00:00Z"^^xsd:dateTime ; beh:dueWhileShown ui:ex-collab .
+ag:g1 a ag:Visit ; ag:by ag:grace ; ag:on ag:p3 ; ag:then ag:g2 .
+ag:g2 a ag:Write ; ag:by ag:grace ; ag:on ag:p3 ; ag:after "PT4.5S"^^xsd:duration ; ag:says "Revenue, churn and the pricing test" ; ag:then ag:g3 .
+ag:g3 a ag:Visit ; ag:by ag:grace ; ag:on ag:p4 ; ag:after "PT2S"^^xsd:duration ; ag:then ag:g4 .
+ag:g4 a ag:Write ; ag:by ag:grace ; ag:on ag:p4 ; ag:after "PT3S"^^xsd:duration ; ag:says "Roadmap for spring: two bets, one owner each" ; ag:then ag:g5 .
+ag:g5 a ag:Leave ; ag:by ag:grace ; ag:after "PT2S"^^xsd:duration ; ag:then ag:Done .
+
+ag:timScript a ag:Script ; ag:at ag:t1 ; beh:dueAt "2024-01-01T00:00:00Z"^^xsd:dateTime ; beh:dueWhileShown ui:ex-collab .
+ag:t1 a ag:Visit ; ag:by ag:tim ; ag:on ag:p1 ; ag:then ag:t2 .
+ag:t2 a ag:Visit ; ag:by ag:tim ; ag:on ag:p3 ; ag:after "PT1.5S"^^xsd:duration ; ag:then ag:t3 .
+ag:t3 a ag:Write ; ag:by ag:tim ; ag:on ag:p3 ; ag:after "PT1.5S"^^xsd:duration ; ag:says "Revenue and churn, by region" ; ag:then ag:t4 .
+ag:t4 a ag:Visit ; ag:by ag:tim ; ag:on ag:p6 ; ag:after "PT2.5S"^^xsd:duration ; ag:then ag:t5 .
+ag:t5 a ag:Write ; ag:by ag:tim ; ag:on ag:p6 ; ag:after "PT2S"^^xsd:duration ; ag:says "Dinner at seven, at Nopi" ; ag:then ag:t6 .
+ag:t6 a ag:Add ; ag:by ag:tim ; ag:after "PT2.5S"^^xsd:duration ; ag:says "Offsite budget" ; ag:rank 5.5 ; ag:level 1 ; ag:then ag:t7 .
+ag:t7 a ag:Leave ; ag:by ag:tim ; ag:after "PT2S"^^xsd:duration ; ag:then ag:Done .
+
+# --- the interface ------------------------------------------------------------------------------------
+
+ui:ex-collab a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-collab-intro ui:ex-collab-doc-card ui:ex-collab-history-card ) .
+ui:ex-collab-intro a c:Text ;
+    c:label "An agenda three people are writing at once: you, and Grace and Tim, who follow a script. Who is on which point, and who is typing, is graph state the outline shows. Pick a point to rewrite it. Every change is an edit in the document's history, attributed to its author; when someone writes over a version they had not seen, the later write wins and the point is flagged. Scrub the history to replay it." .
+
+# The agenda: an outline of the points, with who is where; it also picks your point (ag:cursor).
+ui:ex-collab-doc-card a c:Card ; c:label "Offsite agenda" ; c:badge "c:Outline" ; c:content ui:ex-collab-doc-body .
+ui:ex-collab-doc-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-collab-doc ui:ex-collab-editor ) .
+ui:ex-collab-doc a c:Outline ; c:label "Offsite agenda" ;
+    c:entry ag:p1 , ag:p2 , ag:p3 , ag:p4 , ag:p5 , ag:p6 ;
+    c:sortBy ag:rank ; c:entryTitle ag:text ; c:levelProperty ag:level ;
+    c:presenceProperty ag:here ; c:typingProperty ag:typingBy ; c:noteProperty ag:edited ; c:flagProperty ag:conflict ;
+    c:controls ag:ada ; c:property ag:cursor .
+ui:ex-collab-editor a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+    c:children ( ui:ex-collab-field ui:ex-collab-save ) .
+ui:ex-collab-field a c:TextField ; c:label "Your edit" ; c:placeholder "Pick a point above to rewrite it" .
+ui:ex-collab-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; key:shortcut "mod+enter" .
+
+# The history: a step to look at (a slider over the steps), what happened then, and the agenda as
+# it was - both queries over the edits up to that step. Following live keeps it on the latest.
+ui:ex-collab-history-card a c:Card ; c:label "History" ; c:badge "ag:history" ;
+    c:note "Every change, attributed and numbered. The agenda at a step is the last edit of each point up to it." ;
+    c:content ui:ex-collab-history .
+ui:ex-collab-history a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-collab-scrubber ui:ex-collab-step-alert ui:ex-collab-tables ) .
+ui:ex-collab-scrubber a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
+    c:children ( ui:ex-collab-back ui:ex-collab-step ui:ex-collab-forward ui:ex-collab-live ) .
+ui:ex-collab-back a c:IconButton ; c:icon "◀" ; c:label "One step back" ; sty:emphasis sty:Ghost .
+ui:ex-collab-forward a c:IconButton ; c:icon "▶" ; c:label "One step forward" ; sty:emphasis sty:Ghost .
+ui:ex-collab-step a c:Slider ; c:label "Step" ; c:min 0 ; c:step 1 ; c:value 6 ;
+    c:valueQuery ag:qLastStep ; c:dataset ag:doc .
+ui:ex-collab-live a c:ToggleSwitch ; c:label "Follow live" ; c:controls ag:replay ; c:property ag:live ; sty:size sty:Small .
+ui:ex-collab-step-alert a c:Alert ; c:valueQuery ag:qStep ; c:dataset ag:doc , ui:ex-collab-step .
+ui:ex-collab-tables a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-collab-then-card ui:ex-collab-changes-card ) .
+ui:ex-collab-then-card a c:Card ; c:label "The agenda then" ; c:content ui:ex-collab-then .
+ui:ex-collab-col-point a c:Column ; c:variable "point" ; c:label "Point" .
+ui:ex-collab-col-by a c:Column ; c:variable "by" ; c:label "Last written by" .
+ui:ex-collab-col-at a c:Column ; c:variable "at" ; c:label "Step" ; c:align "end" .
+ui:ex-collab-then a c:Table ; c:label "The agenda at this step" ; c:query ag:qThen ; c:dataset ag:doc , ui:ex-collab-step ;
+    c:tableColumns ( ui:ex-collab-col-point ui:ex-collab-col-by ui:ex-collab-col-at ) ;
+    c:emptyText "Nothing written yet." .
+ui:ex-collab-changes-card a c:Card ; c:label "Changes up to it" ; c:content ui:ex-collab-changes .
+ui:ex-collab-col-seq a c:Column ; c:variable "step" ; c:label "Step" ; c:align "end" .
+ui:ex-collab-col-who a c:Column ; c:variable "who" ; c:label "Who" .
+ui:ex-collab-col-what a c:Column ; c:variable "what" ; c:label "Did" .
+ui:ex-collab-col-text a c:Column ; c:variable "text" ; c:label "Text" .
+ui:ex-collab-col-over a c:Column ; c:variable "over" ; c:label "Wrote over" .
+ui:ex-collab-changes a c:Table ; c:label "Changes up to this step" ; c:query ag:qChanges ; c:dataset ag:doc , ui:ex-collab-step ;
+    c:tableColumns ( ui:ex-collab-col-seq ui:ex-collab-col-who ui:ex-collab-col-what ui:ex-collab-col-text ui:ex-collab-col-over ) .
+
+# --- the queries: the history, replayed ------------------------------------------------------------------
+
+ag:qLastStep a sem:View ; sem:select """SELECT ?max WHERE { ag:doc ag:seq ?max }""" .
+
+# The agenda at the slider's step: each point's last edit up to it, in the points' order.
+ag:qThen a sem:View ; sem:select """
+SELECT ?point ?by ?at WHERE {
+  { SELECT ?p (MAX(?s) AS ?at) WHERE {
+      ui:ex-collab-step c:value ?k . ag:history tree:member ?e . ?e ag:on ?p ; ag:seq ?s FILTER(?s <= xsd:integer(?k))
+  } GROUP BY ?p }
+  ?last ag:on ?p ; ag:seq ?at ; ag:text ?point ; prov:wasAttributedTo ?author .
+  ?author rdfs:label ?by . ?p ag:rank ?rank .
+}
+ORDER BY ?rank""" .
+
+# The edits up to the step, newest first: who did what, and what they wrote over unseen.
+ag:qChanges a sem:View ; sem:select """
+SELECT ?step ?who ?what ?text ?over WHERE {
+  ui:ex-collab-step c:value ?k .
+  ag:history tree:member ?e . ?e ag:seq ?step ; ag:kind ?kind ; ag:text ?text ; prov:wasAttributedTo ?author FILTER(?step <= xsd:integer(?k))
+  ?author rdfs:label ?who . ?kind rdfs:label ?what .
+  OPTIONAL { ?e ag:overwrote ?lost . ?lost ag:seq ?lostStep ; prov:wasAttributedTo/rdfs:label ?lostWho }
+  BIND(IF(BOUND(?lostStep), CONCAT("step ", STR(?lostStep), " (", ?lostWho, ")"), "") AS ?over)
+}
+ORDER BY DESC(?step)""" .
+
+# What happened at the step, in words; a warning when it overwrote something unseen.
+ag:qStep a sem:View ; sem:select """
+SELECT ?label ?tone WHERE {
+  ui:ex-collab-step c:value ?k0 . ag:doc ag:seq ?n . BIND(xsd:integer(?k0) AS ?k)
+  OPTIONAL { ?e ag:seq ?k ; ag:kind/rdfs:label ?what ; ag:text ?text ; prov:wasAttributedTo/rdfs:label ?who . ag:history tree:member ?e
+             OPTIONAL { ?e ag:overwrote ?lost . ?lost ag:seq ?lostStep ; prov:wasAttributedTo/rdfs:label ?lostWho } }
+  BIND(IF(?k = 0, "Before the first step: an empty page.",
+       CONCAT("Step ", STR(?k), " of ", STR(?n), ": ", ?who, " ", ?what, " “", ?text, "”",
+              IF(BOUND(?lostStep), CONCAT(" - over step ", STR(?lostStep), " by ", ?lostWho, ", which ", ?who, " had not seen."), "."))) AS ?label)
+  BIND(IF(BOUND(?lostStep), sty:Warning, sty:Info) AS ?tone)
+}""" .
+
+# --- the scripts' steps -------------------------------------------------------------------------------------
+# Each reaction takes one kind of step and makes the next one due after its pause. (Times are
+# computed in steps - BIND the dateTime, BIND the duration, then add - as in the Chat example.)
+
+# Going to a point: the cursor moves there, and they remember the version they saw; if they are
+# going to write it next, the point says they are writing.
+ag:DoVisit a beh:Reaction ; beh:when beh:Due ; beh:sourceClass ag:Script ;
+    beh:deletes """
+CONSTRUCT { ?was ag:here ?who . ?writing ag:typingBy ?who . ?who ag:basedOn ?seen . $this ag:at ?step ; beh:dueAt ?due }
+WHERE {
+  $this ag:at ?step . ?step a ag:Visit ; ag:by ?who .
+  OPTIONAL { ?was ag:here ?who } OPTIONAL { ?writing ag:typingBy ?who } OPTIONAL { ?who ag:basedOn ?seen } OPTIONAL { $this beh:dueAt ?due }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?point ag:here ?who ; ag:typingBy ?writer . ?who ag:basedOn ?version . $this ag:at ?next ; beh:dueAt ?nextAt }
+WHERE {
+  $this ag:at ?step . ?step a ag:Visit ; ag:by ?who ; ag:on ?point ; ag:then ?next . ?point ag:version ?version .
+  BIND(IF(EXISTS { ?next a ag:Write ; ag:on ?point }, ?who, ?none) AS ?writer)
+  $event beh:at ?at . OPTIONAL { ?next ag:after ?pause }
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(COALESCE(?pause, "PT1S")) AS ?wait) BIND(IF(?next = ag:Done, ?none, ?now + ?wait) AS ?nextAt)
+}""" .
+
+# Writing the point: one more step in the history, attributed, based on the version they saw. If
+# that is older than the point's version, someone wrote in between: the later write (this one)
+# wins, and the point keeps what it overwrote as a flag. Otherwise any flag is cleared.
+ag:DoWrite a beh:Reaction ; beh:when beh:Due ; beh:sourceClass ag:Script ;
+    beh:deletes """
+CONSTRUCT { ag:doc ag:seq ?n . ?point ag:text ?old ; ag:version ?v ; ag:edited ?note ; ag:conflict ?flag ; ag:typingBy ?who .
+            ?who ag:basedOn ?seen . $this ag:at ?step ; beh:dueAt ?due . ui:ex-collab-step c:value ?shown }
+WHERE {
+  $this ag:at ?step . ?step a ag:Write ; ag:by ?who ; ag:on ?point . ag:doc ag:seq ?n .
+  ?point ag:text ?old ; ag:version ?v ; ag:edited ?note .
+  OPTIONAL { ?point ag:conflict ?flag } OPTIONAL { ?who ag:basedOn ?seen } OPTIONAL { $this beh:dueAt ?due }
+  OPTIONAL { ag:replay ag:live true . ui:ex-collab-step c:value ?shown }
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ag:doc ag:seq ?n1 . ag:history tree:member ?edit .
+  ?edit a ag:Edit ; ag:seq ?n1 ; ag:on ?point ; ag:kind ag:Rewrote ; ag:text ?text ; ag:basedOn ?seen ; prov:wasAttributedTo ?who ;
+        ag:replaced ?prev ; ag:overwrote ?lost .
+  ?point ag:text ?text ; ag:version ?n1 ; ag:edited ?note ; ag:conflict ?flag .
+  ?who ag:basedOn ?n1 .
+  $this ag:at ?next ; beh:dueAt ?nextAt .
+  ui:ex-collab-step c:value ?shown .
+}
+WHERE {
+  $this ag:at ?step . ?step a ag:Write ; ag:by ?who ; ag:on ?point ; ag:says ?text ; ag:then ?next .
+  ag:doc ag:seq ?n . BIND(?n + 1 AS ?n1)
+  ?point ag:text ?old ; ag:version ?v .
+  ?prev ag:on ?point ; ag:seq ?v ; prov:wasAttributedTo ?prevWho .
+  OPTIONAL { ?who ag:basedOn ?seen0 } BIND(COALESCE(?seen0, ?v) AS ?seen)
+  ?who rdfs:label ?whoName . ?prevWho rdfs:label ?prevName .
+  BIND(?seen < ?v AS ?unseen)
+  BIND(IF(?unseen, ?prev, ?none) AS ?lost)
+  BIND(CONCAT(?whoName, ", step ", STR(?n1)) AS ?note)
+  BIND(IF(?unseen, CONCAT(?whoName, " wrote over ", ?prevName, "'s “", STR(?old), "” (step ", STR(?v), ") without having seen it"), ?none) AS ?flag)
+  BIND(IRI(CONCAT(STR(ag:), "edit-", STR(?n1))) AS ?edit)
+  $event beh:at ?at . OPTIONAL { ?next ag:after ?pause }
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(COALESCE(?pause, "PT1S")) AS ?wait) BIND(IF(?next = ag:Done, ?none, ?now + ?wait) AS ?nextAt)
+  BIND(IF(EXISTS { ag:replay ag:live true }, ?n1, ?none) AS ?shown)
+}""" .
+
+# Adding a point: a new point at its rank and level, written by them, with their cursor on it.
+ag:DoAdd a beh:Reaction ; beh:when beh:Due ; beh:sourceClass ag:Script ;
+    beh:deletes """
+CONSTRUCT { ag:doc ag:seq ?n . ?was ag:here ?who . ?writing ag:typingBy ?who . ?who ag:basedOn ?seen . $this ag:at ?step ; beh:dueAt ?due . ui:ex-collab-step c:value ?shown }
+WHERE {
+  $this ag:at ?step . ?step a ag:Add ; ag:by ?who . ag:doc ag:seq ?n .
+  OPTIONAL { ?was ag:here ?who } OPTIONAL { ?writing ag:typingBy ?who } OPTIONAL { ?who ag:basedOn ?seen } OPTIONAL { $this beh:dueAt ?due }
+  OPTIONAL { ag:replay ag:live true . ui:ex-collab-step c:value ?shown }
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ag:doc ag:seq ?n1 . ag:history tree:member ?edit . ui:ex-collab-doc c:entry ?point .
+  ?edit a ag:Edit ; ag:seq ?n1 ; ag:on ?point ; ag:kind ag:Added ; ag:text ?text ; ag:basedOn ?n ; prov:wasAttributedTo ?who .
+  ?point a ag:Point ; ag:text ?text ; ag:rank ?rank ; ag:level ?level ; ag:version ?n1 ; ag:edited ?note ; ag:here ?who .
+  ?who ag:basedOn ?n1 .
+  $this ag:at ?next ; beh:dueAt ?nextAt .
+  ui:ex-collab-step c:value ?shown .
+}
+WHERE {
+  $this ag:at ?step . ?step a ag:Add ; ag:by ?who ; ag:says ?text ; ag:rank ?rank ; ag:level ?level ; ag:then ?next .
+  ag:doc ag:seq ?n . BIND(?n + 1 AS ?n1) ?who rdfs:label ?whoName .
+  BIND(CONCAT(?whoName, ", step ", STR(?n1)) AS ?note)
+  BIND(IRI(CONCAT(STR(ag:), "edit-", STR(?n1))) AS ?edit)
+  BIND(IRI(CONCAT(STR(ag:), "p-", STR(?n1))) AS ?point)
+  $event beh:at ?at . OPTIONAL { ?next ag:after ?pause }
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(COALESCE(?pause, "PT1S")) AS ?wait) BIND(IF(?next = ag:Done, ?none, ?now + ?wait) AS ?nextAt)
+  BIND(IF(EXISTS { ag:replay ag:live true }, ?n1, ?none) AS ?shown)
+}""" .
+
+# Going away: their cursor leaves the agenda.
+ag:DoLeave a beh:Reaction ; beh:when beh:Due ; beh:sourceClass ag:Script ;
+    beh:deletes """
+CONSTRUCT { ?was ag:here ?who . ?writing ag:typingBy ?who . ?who ag:basedOn ?seen . $this ag:at ?step ; beh:dueAt ?due }
+WHERE {
+  $this ag:at ?step . ?step a ag:Leave ; ag:by ?who .
+  OPTIONAL { ?was ag:here ?who } OPTIONAL { ?writing ag:typingBy ?who } OPTIONAL { ?who ag:basedOn ?seen } OPTIONAL { $this beh:dueAt ?due }
+}""" ;
+    beh:inserts """CONSTRUCT { $this ag:at ?next } WHERE { $this ag:at ?step . ?step a ag:Leave ; ag:then ?next }""" .
+
+# --- you ---------------------------------------------------------------------------------------------------
+# Picking a point (the outline sets ag:ada ag:cursor) puts your cursor there, writing, puts its
+# text in the field, and remembers the version you saw. Saving writes it, exactly as the scripts
+# write: if someone wrote the point since you picked it, you write over them, and it is flagged.
+
+ag:AdaVisit a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:OutlineItem ;
+    beh:deletes """
+CONSTRUCT { ?was ag:here ag:ada . ?writing ag:typingBy ag:ada . ag:ada ag:basedOn ?seen . ui:ex-collab-field c:value ?old }
+WHERE {
+  $this c:inOutline ui:ex-collab-doc .
+  OPTIONAL { ?was ag:here ag:ada } OPTIONAL { ?writing ag:typingBy ag:ada } OPTIONAL { ag:ada ag:basedOn ?seen } OPTIONAL { ui:ex-collab-field c:value ?old }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?point ag:here ag:ada ; ag:typingBy ag:ada . ag:ada ag:basedOn ?version . ui:ex-collab-field c:value ?text }
+WHERE { $this c:inOutline ui:ex-collab-doc ; c:of ?point . ?point ag:text ?text ; ag:version ?version }""" .
+
+ag:AdaWrite a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-collab-save ;
+    ann:announces "Saved" ; ann:tone sty:Success ;
+    beh:deletes """
+CONSTRUCT { ag:doc ag:seq ?n . ?point ag:text ?old ; ag:version ?v ; ag:edited ?note ; ag:conflict ?flag ; ag:typingBy ag:ada .
+            ag:ada ag:basedOn ?seen . ui:ex-collab-field c:value ?typed . ui:ex-collab-step c:value ?shown }
+WHERE {
+  ag:ada ag:cursor ?point . ui:ex-collab-field c:value ?typed FILTER(STRLEN(STR(?typed)) > 0)
+  ag:doc ag:seq ?n . ?point ag:text ?old ; ag:version ?v ; ag:edited ?note .
+  OPTIONAL { ?point ag:conflict ?flag } OPTIONAL { ag:ada ag:basedOn ?seen }
+  OPTIONAL { ag:replay ag:live true . ui:ex-collab-step c:value ?shown }
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ag:doc ag:seq ?n1 . ag:history tree:member ?edit .
+  ?edit a ag:Edit ; ag:seq ?n1 ; ag:on ?point ; ag:kind ag:Rewrote ; ag:text ?text ; ag:basedOn ?seen ; prov:wasAttributedTo ag:ada ;
+        ag:replaced ?prev ; ag:overwrote ?lost .
+  ?point ag:text ?text ; ag:version ?n1 ; ag:edited ?note ; ag:conflict ?flag .
+  ag:ada ag:basedOn ?n1 .
+  ui:ex-collab-step c:value ?shown .
+}
+WHERE {
+  ag:ada ag:cursor ?point . ui:ex-collab-field c:value ?typed . BIND(STR(?typed) AS ?text) FILTER(STRLEN(?text) > 0)
+  ag:doc ag:seq ?n . BIND(?n + 1 AS ?n1)
+  ?point ag:text ?old ; ag:version ?v .
+  ?prev ag:on ?point ; ag:seq ?v ; prov:wasAttributedTo ?prevWho . ?prevWho rdfs:label ?prevName .
+  OPTIONAL { ag:ada ag:basedOn ?seen0 } BIND(COALESCE(?seen0, ?v) AS ?seen)
+  BIND(?seen < ?v AS ?unseen)
+  BIND(IF(?unseen, ?prev, ?none) AS ?lost)
+  BIND(CONCAT("Ada Lovelace, step ", STR(?n1)) AS ?note)
+  BIND(IF(?unseen, CONCAT("Ada Lovelace wrote over ", ?prevName, "'s “", STR(?old), "” (step ", STR(?v), ") without having seen it"), ?none) AS ?flag)
+  BIND(IRI(CONCAT(STR(ag:), "edit-", STR(?n1))) AS ?edit)
+  BIND(IF(EXISTS { ag:replay ag:live true }, ?n1, ?none) AS ?shown)
+}""" .
+
+# --- the history controls ------------------------------------------------------------------------------------
+# A step back or forward stops following live; moving the slider does too. Turning following back on
+# jumps to the latest step.
+
+ag:Back a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-collab-back ;
+    beh:deletes """CONSTRUCT { ui:ex-collab-step c:value ?k . ag:replay ag:live ?live } WHERE { ui:ex-collab-step c:value ?k FILTER(xsd:integer(?k) > 0) ag:replay ag:live ?live }""" ;
+    beh:inserts """CONSTRUCT { ui:ex-collab-step c:value ?back . ag:replay ag:live false } WHERE { ui:ex-collab-step c:value ?k FILTER(xsd:integer(?k) > 0) BIND(xsd:integer(?k) - 1 AS ?back) }""" .
+ag:Forward a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-collab-forward ;
+    beh:deletes """CONSTRUCT { ui:ex-collab-step c:value ?k . ag:replay ag:live ?live } WHERE { ui:ex-collab-step c:value ?k . ag:doc ag:seq ?n FILTER(xsd:integer(?k) < ?n) ag:replay ag:live ?live }""" ;
+    beh:inserts """CONSTRUCT { ui:ex-collab-step c:value ?on . ag:replay ag:live false } WHERE { ui:ex-collab-step c:value ?k . ag:doc ag:seq ?n FILTER(xsd:integer(?k) < ?n) BIND(xsd:integer(?k) + 1 AS ?on) }""" .
+ag:Scrub a beh:Reaction ; beh:when beh:Input ; beh:source ui:ex-collab-step ;
+    beh:deletes """CONSTRUCT { ag:replay ag:live true } WHERE { ag:replay ag:live true }""" ;
+    beh:inserts """CONSTRUCT { ag:replay ag:live false } WHERE { ag:replay ag:live true }""" .
+ag:FollowAgain a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-collab-live ;
+    beh:deletes """CONSTRUCT { ui:ex-collab-step c:value ?k } WHERE { FILTER NOT EXISTS { ag:replay ag:live true } ui:ex-collab-step c:value ?k }""" ;
+    beh:inserts """CONSTRUCT { ui:ex-collab-step c:value ?n } WHERE { FILTER NOT EXISTS { ag:replay ag:live true } ag:doc ag:seq ?n }""" .
+
+# --- how it works ---------------------------------------------------------------------------------------------
+
+ui:ex-collab-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-collab-w1 ui:ex-collab-w2 ui:ex-collab-w3 ui:ex-collab-w4 ui:ex-collab-w5 ui:ex-collab-w6 ui:ex-collab-w7 ) .
+
+ui:ex-collab-w1 a c:WalkthroughStep ; rdfs:label "Points, and who is on them" ;
+    c:children ( "A point such as " ui:ex-collab-m-p3 " is data: its text, its rank, its level. Who is on it is data on it too - " ui:ex-collab-m-here " for a cursor, " ui:ex-collab-m-typingBy " for someone writing - so " ui:ex-collab-m-doc ", a " ui:ex-collab-m-Outline ", shows each person as an avatar on their point, those writing marked, with no idea of what a cursor is." ) .
+ui:ex-collab-w2 a c:WalkthroughStep ; rdfs:label "Grace and Tim follow a script" ;
+    c:children ( ui:ex-collab-m-grace " is " ui:ex-collab-m-graceScript ": a chain of steps, each due at a time (" ui:ex-collab-m-dueAt "). The host turns a due time into a " ui:ex-collab-m-Due " event, and the reaction for the step's kind takes it: " ui:ex-collab-m-visit " moves her cursor to a point and remembers the version she saw there; a write comes some seconds later." ) .
+ui:ex-collab-w3 a c:WalkthroughStep ; rdfs:label "Every change is an edit in the history" ;
+    c:children ( ui:ex-collab-m-write " writes the point and adds a " ui:ex-collab-m-Edit " to " ui:ex-collab-m-history ", an LDES: the text after, its step, the version its author had seen (" ui:ex-collab-m-basedOn "), and who wrote it (" ui:ex-collab-m-attributed "). The point's note says who and when; the edit is the record." ) .
+ui:ex-collab-w4 a c:WalkthroughStep ; rdfs:label "A conflict, resolved in the graph" ;
+    c:children ( "Grace visits point 3 and takes her time; meanwhile Tim (" ui:ex-collab-m-t3 ") rewrites it. When Grace writes (" ui:ex-collab-m-g2 "), the version she saw is older than the point's: she has written over Tim unseen. The rule is the same for everyone - the later write wins - and the point keeps what it overwrote in " ui:ex-collab-m-conflict ", flagged in the outline, until someone who has seen it writes the point again." ) .
+ui:ex-collab-w5 a c:WalkthroughStep ; rdfs:label "You write the same way" ;
+    c:children ( "Activating a point is " ui:ex-collab-m-pick ": the outline sets your " ui:ex-collab-m-cursor ". On the same click " ui:ex-collab-m-adaVisit " puts your avatar there, the text in the field, and remembers the version you saw; " ui:ex-collab-m-adaWrite " saves like a script's write - so if Grace or Tim writes your point first, you write over them, flagged. Pick the flagged point, merge the two, save: the flag is gone." ) .
+ui:ex-collab-w6 a c:WalkthroughStep ; rdfs:label "Replaying the history" ;
+    c:children ( ui:ex-collab-m-step " is a slider over the steps. " ui:ex-collab-m-qThen " is the agenda at its step: for each point, its last edit up to it - the history replayed by a query, not by undoing anything. " ui:ex-collab-m-qChanges " lists the edits up to it, with what each wrote over, and " ui:ex-collab-m-qStep " says the step in words." ) .
+ui:ex-collab-w7 a c:WalkthroughStep ; rdfs:label "Live, or looking back" ;
+    c:children ( "While " ui:ex-collab-m-live " is on, each write moves the slider to the new step; " ui:ex-collab-m-back ", forward or dragging the slider turns it off, and turning it on again jumps to the latest. The tables follow the slider and the document (their " ui:ex-collab-m-dataset "), so a step re-runs only them; a write re-renders one point of the outline." ) .
+
+ui:ex-collab-m-p3 a c:Mention ; c:label "ag:p3" ; c:mentions ag:p3 .
+ui:ex-collab-m-here a c:Mention ; c:label "ag:here" ; c:mentions ag:here .
+ui:ex-collab-m-typingBy a c:Mention ; c:label "ag:typingBy" ; c:mentions ag:typingBy .
+ui:ex-collab-m-doc a c:Mention ; c:label "the agenda" ; c:mentions ui:ex-collab-doc .
+ui:ex-collab-m-Outline a c:Mention ; c:label "c:Outline" ; c:mentions c:Outline ; c:to c:Outline .
+ui:ex-collab-m-grace a c:Mention ; c:label "Grace" ; c:mentions ag:grace .
+ui:ex-collab-m-graceScript a c:Mention ; c:label "ag:graceScript" ; c:mentions ag:graceScript .
+ui:ex-collab-m-dueAt a c:Mention ; c:label "beh:dueAt" ; c:mentions beh:dueAt ; c:to beh:dueAt .
+ui:ex-collab-m-Due a c:Mention ; c:label "beh:Due" ; c:mentions beh:Due ; c:to beh:Due .
+ui:ex-collab-m-visit a c:Mention ; c:label "ag:DoVisit" ; c:mentions ag:DoVisit .
+ui:ex-collab-m-write a c:Mention ; c:label "ag:DoWrite" ; c:mentions ag:DoWrite .
+ui:ex-collab-m-Edit a c:Mention ; c:label "ag:Edit" ; c:mentions ag:Edit .
+ui:ex-collab-m-history a c:Mention ; c:label "ag:history" ; c:mentions ag:history .
+ui:ex-collab-m-basedOn a c:Mention ; c:label "ag:basedOn" ; c:mentions ag:basedOn .
+ui:ex-collab-m-attributed a c:Mention ; c:label "prov:wasAttributedTo" ; c:mentions prov:wasAttributedTo ; c:to prov:wasAttributedTo .
+ui:ex-collab-m-t3 a c:Mention ; c:label "ag:t3" ; c:mentions ag:t3 .
+ui:ex-collab-m-g2 a c:Mention ; c:label "ag:g2" ; c:mentions ag:g2 .
+ui:ex-collab-m-conflict a c:Mention ; c:label "ag:conflict" ; c:mentions ag:conflict .
+ui:ex-collab-m-pick a c:Mention ; c:label "c:OutlinePick" ; c:mentions c:OutlinePick ; c:to c:OutlinePick .
+ui:ex-collab-m-cursor a c:Mention ; c:label "ag:cursor" ; c:mentions ui:ex-collab-doc .
+ui:ex-collab-m-adaVisit a c:Mention ; c:label "ag:AdaVisit" ; c:mentions ag:AdaVisit .
+ui:ex-collab-m-adaWrite a c:Mention ; c:label "ag:AdaWrite" ; c:mentions ag:AdaWrite .
+ui:ex-collab-m-step a c:Mention ; c:label "The step" ; c:mentions ui:ex-collab-step .
+ui:ex-collab-m-qThen a c:Mention ; c:label "ag:qThen" ; c:mentions ag:qThen .
+ui:ex-collab-m-qChanges a c:Mention ; c:label "ag:qChanges" ; c:mentions ag:qChanges .
+ui:ex-collab-m-qStep a c:Mention ; c:label "ag:qStep" ; c:mentions ag:qStep .
+ui:ex-collab-m-live a c:Mention ; c:label "Follow live" ; c:mentions ui:ex-collab-live .
+ui:ex-collab-m-back a c:Mention ; c:label "a step back" ; c:mentions ag:Back .
+ui:ex-collab-m-dataset a c:Mention ; c:label "c:dataset" ; c:mentions c:dataset ; c:to c:dataset .

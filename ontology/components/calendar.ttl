@@ -45,7 +45,7 @@ day side by side. A shape with c:exclusiveBy on the items' class makes overlaps 
 conflicts: they are marked, and drops that would make one are refused with the shape's message.
 Items are dragged between cells (dnd); c:label names the calendar."""@en ;
     sem:slug "calendar" .
-c:entry a owl:ObjectProperty ; rdfs:domain c:Calendar ; rdfs:comment "A data item shown on the calendar (unordered set)."@en .
+c:entry a owl:ObjectProperty ; rdfs:comment "A data item shown by a calendar or an outline (an unordered set; the component orders it)."@en .
 c:dayProperty a owl:ObjectProperty ; rdfs:domain c:Calendar ; rdfs:range rdf:Property ;
     rdfs:comment "Property of an item that is its day: an individual of the property's rdfs:range (the calendar's columns, by sem:order)."@en .
 c:startProperty a owl:ObjectProperty ; rdfs:domain c:Calendar ; rdfs:range rdf:Property ;
@@ -54,7 +54,7 @@ c:durationProperty a owl:ObjectProperty ; rdfs:domain c:Calendar ; rdfs:range rd
     rdfs:comment "Property of an item that is its length in hours (default 1)."@en .
 c:fromHour a owl:DatatypeProperty ; rdfs:domain c:Calendar ; rdfs:range xsd:integer ; rdfs:comment "The first hour shown (default 8)."@en .
 c:toHour a owl:DatatypeProperty ; rdfs:domain c:Calendar ; rdfs:range xsd:integer ; rdfs:comment "The hour the day ends (exclusive; default 18)."@en .
-c:entryTitle a owl:ObjectProperty ; rdfs:domain c:Calendar ; rdfs:range rdf:Property ; rdfs:comment "Property of an item that is its title."@en .
+c:entryTitle a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "Property of an item (c:entry) that is its title or text."@en .
 c:entryDetail a owl:ObjectProperty ; rdfs:domain c:Calendar ; rdfs:range rdf:Property ;
     rdfs:comment "Property of an item whose value (a node with an rdfs:label, or a literal) is shown under its time; the value's sty:tone tints the item."@en .
 

@@ -12,8 +12,8 @@ c:List a owl:Class ;
     sem:slug "list" .
 
 c:item a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:comment "A data item shown by the list (unordered set)."@en .
-c:sortBy a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:range rdf:Property ;
-    rdfs:comment "Property of the items to order by (ascending); ties break on item IRI."@en .
+c:sortBy a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment "Property of the items to order by (ascending); ties break on item IRI. On a c:List or a c:Outline."@en .
 c:itemLabel a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:range rdf:Property .
 c:itemChecked a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:range rdf:Property ;
     rdfs:comment "Boolean property of the items rendered as a checkbox."@en .
