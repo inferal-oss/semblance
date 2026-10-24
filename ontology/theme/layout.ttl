@@ -251,3 +251,16 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
                  [ sty:property "min-width" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:part "> .sem-bar-body[hidden]" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
+# --- pos:Aside: the navigation and the main column's shares --------------------------------------
+# The first child is the navigation; everything else is the main column - also content a c:Switch
+# shows, since a switch takes no part in layout (its root and shown case are display: contents).
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 220px" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:part ":is([data-sem-layout=aside] > :not(:first-child, [data-sem-c=switch]), [data-sem-layout=aside] > [data-sem-c=switch] > :not([hidden]) > *)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "999 1 0" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(100%, 55%)" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child:not(:only-child)" ;
+    sty:declares [ sty:property "max-width" ; sty:raw "min(100%, 240px)" ] .
