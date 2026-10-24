@@ -46,6 +46,10 @@ describe('implementations', () => {
     ['hybrid', 'sparql'],
     ['hybrid', 'function'],
     ['n3', 'function'],
+    ['wat', 'sparql'],
+    ['wat', 'function'],
+    ['rust', 'sparql'],
+    ['rust', 'function'],
   ] as const)('%s + %s renders the same HTML as oxigraph + sparql', (kind, prefer) => {
     const { screen } = setup(kind, { prefer })
     expect(toHTML(screen.index, page)).toBe(reference)
@@ -97,6 +101,8 @@ describe('incremental updates', () => {
   for (const [kind, prefer] of [
     ['oxigraph', 'sparql'],
     ['n3', 'function'],
+    ['wat', 'sparql'],
+    ['rust', 'sparql'],
   ] as const) {
     it(`matches a from-scratch projection after every step (${kind} + ${prefer})`, () => {
       const opts = { modality: MOD.Screen, layers: ALL_LAYERS, prefer, provenance: kind !== 'n3' }

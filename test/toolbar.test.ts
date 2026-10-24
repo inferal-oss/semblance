@@ -7,7 +7,7 @@ const UI = 'https://semblance.dev/demo#'
 const NET = NS.net
 
 /** The demo shell on the Components page, showing the Inspection group. */
-function inspection(kind: 'oxigraph' | 'n3', prefer: 'sparql' | 'function') {
+function inspection(kind: 'oxigraph' | 'n3' | 'wat' | 'rust', prefer: 'sparql' | 'function') {
   const shell = mountShell(5, kind, prefer)
   shell.showPage('Components')
   const { store, runtime } = shell
@@ -44,6 +44,8 @@ describe.each([
   ['oxigraph', 'sparql'],
   ['oxigraph', 'function'],
   ['n3', 'function'],
+  ['wat', 'sparql'],
+  ['rust', 'sparql'],
 ] as const)('toolbar components (%s, %s)', (kind, prefer) => {
   it('a toolbar is a named row of its children', () => {
     const { root } = inspection(kind, prefer)

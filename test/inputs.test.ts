@@ -7,7 +7,7 @@ const UI = 'https://semblance.dev/demo#'
 const C = NS.c
 
 /** The demo shell on the Components page, showing the Inputs group. */
-let kind: 'oxigraph' | 'n3' = 'oxigraph'
+let kind: 'oxigraph' | 'n3' | 'wat' | 'rust' = 'oxigraph'
 function inputs() {
   const shell = mountShell(5, kind)
   shell.showPage('Components')
@@ -27,7 +27,7 @@ function inputs() {
 }
 
 // SPARQL reactions on Oxigraph; the function fallbacks (rules and reactions) on N3.
-describe.each(['oxigraph', 'n3'] as const)('inputs components (%s)', (store) => {
+describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('inputs components (%s)', (store) => {
   beforeEach(() => {
     kind = store
   })

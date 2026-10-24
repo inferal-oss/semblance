@@ -671,6 +671,7 @@
   (global.set $W (i32.shl (select (global.get $NV) (i32.const 3) (i32.gt_u (global.get $NV) (i32.const 3))) (i32.const 2)))
   (global.set $params (i32.load offset=60 (local.get $q)))
   (global.set $epoch (i32.add (global.get $epoch) (i32.const 1)))
+  (global.set $lat (i32.const 0))
   (global.set $ag (i32.const 0))
   (global.set $now (i32.const 0))
   (global.set $bn_row (i32.const -1))
@@ -717,6 +718,9 @@
       (loop $values
         (if (i32.lt_u (local.get $i) (local.get $cnt)) (then
           (call $set_params (local.get $q) (i32.load offset=84 (local.get $q)) (i32.load offset=116 (local.get $q)) (i32.load (i32.add (local.get $vals) (i32.shl (local.get $i) (i32.const 2)))))
+          ;; each value is its own run: subquery caches hold the previous params
+          (global.set $epoch (i32.add (global.get $epoch) (i32.const 1)))
+          (call $cache_clear)
           (local.set $ans (i32.or (local.get $ans) (call $run_once (local.get $q))))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
           (br $values))))

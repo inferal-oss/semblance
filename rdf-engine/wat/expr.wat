@@ -285,7 +285,10 @@
   (if (i32.eq (local.get $k) (i32.const E_AGG)) (then (return (i32.load (i32.add (local.get $row) (i32.shl (i32.load offset=20 (local.get $e)) (i32.const 2)))))))
   ;; EXISTS: the group with this row substituted
   (local.set $t (call $t_one (local.get $row)))
+  (local.set $k (global.get $lat))
+  (global.set $lat (local.get $row))
   (local.set $r (call $eval_group (i32.load offset=4 (local.get $e)) (local.get $t) (i32.const 0)))
+  (global.set $lat (local.get $k))
   (local.set $n (i32.ne (i32.load offset=4 (local.get $r)) (i32.const 0)))
   (call $t_free (local.get $r))
   (call $t_free (local.get $t))

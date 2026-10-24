@@ -55,7 +55,7 @@ describe('c:Accordion', () => {
     expect(button.textContent).toBe('ModalityScreen and Text projections of one graph')
   })
 
-  for (const [kind, prefer] of [['oxigraph', 'sparql'], ['oxigraph', 'function'], ['n3', undefined]] as const) {
+  for (const [kind, prefer] of [['oxigraph', 'sparql'], ['oxigraph', 'function'], ['n3', undefined], ['wat', 'sparql'], ['rust', 'sparql']] as const) {
     it(`toggles through a reaction; exclusive accordions close the others (${kind}${prefer ? ', ' + prefer : ''})`, () => {
       const { store, click, header, expanded, item } = showPage(kind, prefer)
       const f = store.factory

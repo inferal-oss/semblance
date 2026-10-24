@@ -516,12 +516,12 @@
   (i32.ge_s (call $re_find (local.get $prog) (local.get $s) (local.get $n) (local.get $from)) (i32.const 0)))
 
 ;; REPLACE(str, pattern, replacement): every non-overlapping match replaced;
-;; $n in the replacement is group n. A pattern matching "" is an error.
+;; $n in the replacement is group n. A pattern that matches "" is not the
+;; XPath error (FORX0003): as in Oxigraph, an empty match advances one character.
 (func $re_replace (param $prog i32) (param $str i32) (param $repl i32) (result i32)
   (local $s i32) (local $n i32) (local $at i32) (local $m i32) (local $r i32) (local $rn i32) (local $i i32) (local $c i32) (local $g i32)
   (local $out i32) (local $outn i32)
   (if (i32.eqz (global.get $caps)) (then (global.set $caps (call $alloc (i32.const 272)))))
-  (if (call $re_run (local.get $prog) (i32.const 0) (i32.const 0) (i32.const 0)) (then (return (i32.const 0))))
   (local.set $s (call $tval (local.get $str)))
   (local.set $n (call $tlen (local.get $str)))
   (local.set $r (call $tval (local.get $repl)))

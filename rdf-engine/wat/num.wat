@@ -260,25 +260,85 @@
 
 ;; --- arithmetic --------------------------------------------------------------------
 
+;; 128-bit magnitudes for decimal products and quotients: ($wh, $wl).
+(global $wh (mut i64) (i64.const 0))
+(global $wl (mut i64) (i64.const 0))
+
+;; ($wh, $wl) = a * b, both unsigned.
+(func $wmul (param $a i64) (param $b i64)
+  (local $a0 i64) (local $a1 i64) (local $b0 i64) (local $b1 i64) (local $p01 i64) (local $p10 i64) (local $mid i64) (local $p00 i64)
+  (local.set $a0 (i64.and (local.get $a) (i64.const 0xffffffff))) (local.set $a1 (i64.shr_u (local.get $a) (i64.const 32)))
+  (local.set $b0 (i64.and (local.get $b) (i64.const 0xffffffff))) (local.set $b1 (i64.shr_u (local.get $b) (i64.const 32)))
+  (local.set $p00 (i64.mul (local.get $a0) (local.get $b0)))
+  (local.set $p01 (i64.mul (local.get $a0) (local.get $b1)))
+  (local.set $p10 (i64.mul (local.get $a1) (local.get $b0)))
+  (local.set $mid (i64.add (i64.add (i64.shr_u (local.get $p00) (i64.const 32)) (i64.and (local.get $p01) (i64.const 0xffffffff))) (i64.and (local.get $p10) (i64.const 0xffffffff))))
+  (global.set $wl (i64.or (i64.and (local.get $p00) (i64.const 0xffffffff)) (i64.shl (local.get $mid) (i64.const 32))))
+  (global.set $wh (i64.add (i64.add (i64.mul (local.get $a1) (local.get $b1)) (i64.shr_u (local.get $mid) (i64.const 32)))
+                           (i64.add (i64.shr_u (local.get $p01) (i64.const 32)) (i64.shr_u (local.get $p10) (i64.const 32))))))
+
+;; ($wh, $wl) /= 10, truncating.
+(func $wdiv10
+  (local $r i64) (local $x i64) (local $q1 i64)
+  (local.set $r (i64.rem_u (global.get $wh) (i64.const 10)))
+  (global.set $wh (i64.div_u (global.get $wh) (i64.const 10)))
+  (local.set $x (i64.or (i64.shl (local.get $r) (i64.const 32)) (i64.shr_u (global.get $wl) (i64.const 32))))
+  (local.set $q1 (i64.div_u (local.get $x) (i64.const 10)))
+  (local.set $x (i64.or (i64.shl (i64.rem_u (local.get $x) (i64.const 10)) (i64.const 32)) (i64.and (global.get $wl) (i64.const 0xffffffff))))
+  (global.set $wl (i64.or (i64.shl (local.get $q1) (i64.const 32)) (i64.div_u (local.get $x) (i64.const 10)))))
+
+;; The decimal ±($wh, $wl) / 10^s, truncated to 18 fraction digits and to a
+;; mantissa that fits; 0 when the integer part does not.
+(func $dec_wide (param $neg i32) (param $s i32) (result i32)
+  (loop $fit
+    (if (i32.gt_s (local.get $s) (i32.const 0)) (then
+      (if (i32.or (i32.gt_s (local.get $s) (i32.const 18))
+                  (i32.or (i64.ne (global.get $wh) (i64.const 0)) (i64.lt_s (global.get $wl) (i64.const 0)))) (then
+        (call $wdiv10)
+        (local.set $s (i32.sub (local.get $s) (i32.const 1)))
+        (br $fit))))))
+  (if (i32.or (i64.ne (global.get $wh) (i64.const 0)) (i64.lt_s (global.get $wl) (i64.const 0))) (then (return (i32.const 0))))
+  (call $dec_term (select (i64.sub (i64.const 0) (global.get $wl)) (global.get $wl) (local.get $neg)) (local.get $s)))
+
+(func $dec_mul (param $a i64) (param $sa i32) (param $b i64) (param $sb i32) (result i32)
+  (local $neg i32)
+  (local.set $neg (i32.xor (i64.lt_s (local.get $a) (i64.const 0)) (i64.lt_s (local.get $b) (i64.const 0))))
+  (call $wmul (call $abs64 (local.get $a)) (call $abs64 (local.get $b)))
+  (call $dec_wide (local.get $neg) (i32.add (local.get $sa) (local.get $sb))))
+
+(func $abs64 (param $x i64) (result i64)
+  (select (i64.sub (i64.const 0) (local.get $x)) (local.get $x) (i64.lt_s (local.get $x) (i64.const 0))))
+
+;; a/10^sa ÷ b/10^sb = (|a| ÷ |b|) / 10^(sa-sb): long division to 18 fraction digits.
 (func $dec_div (param $a i64) (param $sa i32) (param $b i64) (param $sb i32) (result i32)
-  (local $x i64) (local $y i64) (local $neg i32) (local $m i64) (local $r i64) (local $s i32)
-  (local.set $x (i64.mul (local.get $a) (call $i10 (local.get $sb))))
-  (local.set $y (i64.mul (local.get $b) (call $i10 (local.get $sa))))
-  (if (i64.eqz (local.get $y)) (then (return (i32.const 0))))
-  (local.set $neg (i32.xor (i64.lt_s (local.get $x) (i64.const 0)) (i64.lt_s (local.get $y) (i64.const 0))))
-  (if (i64.lt_s (local.get $x) (i64.const 0)) (then (local.set $x (i64.sub (i64.const 0) (local.get $x)))))
-  (if (i64.lt_s (local.get $y) (i64.const 0)) (then (local.set $y (i64.sub (i64.const 0) (local.get $y)))))
-  (local.set $m (i64.div_u (local.get $x) (local.get $y)))
+  (local $x i64) (local $y i64) (local $neg i32) (local $r i64) (local $s i32)
+  (if (i64.eqz (local.get $b)) (then (return (i32.const 0))))
+  (local.set $neg (i32.xor (i64.lt_s (local.get $a) (i64.const 0)) (i64.lt_s (local.get $b) (i64.const 0))))
+  (local.set $x (call $abs64 (local.get $a)))
+  (local.set $y (call $abs64 (local.get $b)))
+  (global.set $wh (i64.const 0))
+  (global.set $wl (i64.div_u (local.get $x) (local.get $y)))
   (local.set $r (i64.rem_u (local.get $x) (local.get $y)))
+  (local.set $s (i32.sub (local.get $sa) (local.get $sb)))
+  ;; a negative scale: multiply out
+  (loop $up (if (i32.lt_s (local.get $s) (i32.const 0)) (then
+    (if (i32.or (i64.ne (global.get $wh) (i64.const 0)) (i64.lt_s (global.get $wl) (i64.const 0))) (then (return (i32.const 0))))
+    (call $wmul (global.get $wl) (i64.const 10))
+    (local.set $r (i64.mul (local.get $r) (i64.const 10)))
+    (global.set $wl (i64.add (global.get $wl) (i64.div_u (local.get $r) (local.get $y))))
+    (local.set $r (i64.rem_u (local.get $r) (local.get $y)))
+    (local.set $s (i32.add (local.get $s) (i32.const 1)))
+    (br $up))))
   (loop $digits
-    (if (i32.and (i64.ne (local.get $r) (i64.const 0))
-                 (i32.and (i32.lt_u (local.get $s) (i32.const 18)) (i64.lt_u (local.get $m) (i64.const 922337203685477580)))) (then
-      (local.set $r (i64.mul (local.get $r) (i64.const 10)))
-      (local.set $m (i64.add (i64.mul (local.get $m) (i64.const 10)) (i64.div_u (local.get $r) (local.get $y))))
-      (local.set $r (i64.rem_u (local.get $r) (local.get $y)))
-      (local.set $s (i32.add (local.get $s) (i32.const 1)))
-      (br $digits))))
-  (call $dec_term (select (i64.sub (i64.const 0) (local.get $m)) (local.get $m) (local.get $neg)) (local.get $s)))
+    (if (i64.ne (local.get $r) (i64.const 0)) (then
+      (if (i32.lt_s (local.get $s) (i32.const 18)) (then
+        (if (i64.lt_u (global.get $wl) (i64.const 922337203685477580)) (then
+          (local.set $r (i64.mul (local.get $r) (i64.const 10)))
+          (global.set $wl (i64.add (i64.mul (global.get $wl) (i64.const 10)) (i64.div_u (local.get $r) (local.get $y))))
+          (local.set $r (i64.rem_u (local.get $r) (local.get $y)))
+          (local.set $s (i32.add (local.get $s) (i32.const 1)))
+          (br $digits))))))))
+  (call $dec_wide (local.get $neg) (local.get $s)))
 
 ;; a op b for + - * / with numeric type promotion.
 (func $arith (param $op i32) (param $a i32) (param $b i32) (result i32)
@@ -293,7 +353,7 @@
     (if (i32.eq (local.get $op) (i32.const F_DIV)) (then (return (call $dec_div (local.get $ia) (local.get $sa) (local.get $ib) (local.get $sb)))))
     (if (i32.eq (local.get $op) (i32.const F_MUL)) (then
       (if (i32.eq (local.get $t) (i32.const 1)) (then (return (call $int_term (i64.mul (local.get $ia) (local.get $ib))))))
-      (return (call $dec_term (i64.mul (local.get $ia) (local.get $ib)) (i32.add (local.get $sa) (local.get $sb))))))
+      (return (call $dec_mul (local.get $ia) (local.get $sa) (local.get $ib) (local.get $sb)))))
     ;; + and -: align the scales
     (local.set $s (select (local.get $sa) (local.get $sb) (i32.gt_u (local.get $sa) (local.get $sb))))
     (local.set $ia (i64.mul (local.get $ia) (call $i10 (i32.sub (local.get $s) (local.get $sa)))))

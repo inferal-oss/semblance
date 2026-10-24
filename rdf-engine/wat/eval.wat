@@ -117,7 +117,8 @@
       (local.set $i (i32.add (local.get $i) (i32.const 4)))
       (br $slots)))))
 
-;; Copy row src to dst keeping only the slots of bitset bits (and parameters).
+;; Copy row src to dst keeping only the slots of bitset bits (and parameters,
+;; and the substituted row's variables).
 (func $mask (param $dst i32) (param $src i32) (param $bits i32)
   (local $i i32) (local $s i32)
   (loop $slots
@@ -125,7 +126,8 @@
       (local.set $i (i32.shl (local.get $s) (i32.const 2)))
       (i32.store (i32.add (local.get $dst) (local.get $i))
         (select (i32.load (i32.add (local.get $src) (local.get $i))) (i32.const 0)
-          (i32.or (call $bit (local.get $bits) (local.get $s)) (i32.load (i32.add (global.get $params) (local.get $i))))))
+          (i32.or (i32.or (call $bit (local.get $bits) (local.get $s)) (i32.load (i32.add (global.get $params) (local.get $i))))
+                  (if (result i32) (global.get $lat) (then (i32.load (i32.add (global.get $lat) (local.get $i)))) (else (i32.const 0))))))
       (local.set $s (i32.add (local.get $s) (i32.const 1)))
       (br $slots)))))
 
@@ -575,7 +577,10 @@
       (loop $rows
         (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
           (local.set $row (call $t_one (call $t_row (local.get $t) (local.get $i))))
+          (local.set $saved (global.get $lat))
+          (global.set $lat (call $t_row (local.get $t) (local.get $i)))
           (local.set $r (call $eval_group (i32.load offset=4 (local.get $el)) (local.get $row) (i32.const 0)))
+          (global.set $lat (local.get $saved))
           (local.set $j (i32.const 0))
           (loop $results
             (if (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $r))) (then
@@ -734,13 +739,37 @@
       (br $rows))))
   (call $row_put (local.get $row)))
 
+;; The row substituted into the pattern being evaluated (LATERAL, EXISTS), or 0.
+(global $lat (mut i32) (i32.const 0))
+
 ;; A subquery's solutions with its projected variables moved to the outer
-;; slots; computed once per run and active graph.
+;; slots; computed once per run and active graph, unless substitution binds
+;; a projected variable: then those are constants of this solve.
 (func $subquery (param $sq i32) (result i32)
   (local $t i32) (local $out i32) (local $i i32) (local $row i32) (local $src i32) (local $m i32)
-  (if (i32.and (i32.eq (i32.load offset=88 (local.get $sq)) (global.get $epoch)) (i32.eq (i32.load offset=96 (local.get $sq)) (global.get $ag)))
-    (then (return (i32.load offset=92 (local.get $sq)))))
+  (local $sub i32) (local $v i32) (local $saved i32) (local $savedlat i32)
+  (if (global.get $lat) (then
+    (local.set $m (i32.load offset=72 (local.get $sq)))
+    (loop $map
+      (if (local.get $m) (then
+        (if (local.tee $v (i32.load (i32.add (global.get $lat) (i32.shl (i32.load offset=8 (local.get $m)) (i32.const 2))))) (then
+          (if (i32.eqz (local.get $sub)) (then
+            (local.set $sub (call $row_get))
+            (memory.copy (local.get $sub) (global.get $params) (global.get $W))))
+          (i32.store (i32.add (local.get $sub) (i32.shl (i32.load offset=4 (local.get $m)) (i32.const 2))) (local.get $v))))
+        (local.set $m (i32.load offset=28 (local.get $m)))
+        (br $map))))))
+  (if (i32.eqz (local.get $sub)) (then
+    (if (i32.and (i32.eq (i32.load offset=88 (local.get $sq)) (global.get $epoch)) (i32.eq (i32.load offset=96 (local.get $sq)) (global.get $ag)))
+      (then (return (i32.load offset=92 (local.get $sq)))))))
+  (local.set $saved (global.get $params))
+  (local.set $savedlat (global.get $lat))
+  (if (local.get $sub) (then (global.set $params (local.get $sub))))
+  (global.set $lat (local.get $sub))
   (local.set $t (call $solve (local.get $sq)))
+  (global.set $params (local.get $saved))
+  (global.set $lat (local.get $savedlat))
+  (if (local.get $sub) (then (call $row_put (local.get $sub))))
   (local.set $out (call $t_new))
   (loop $rows
     (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
@@ -758,6 +787,7 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $rows))))
   (call $t_free (local.get $t))
+  (if (local.get $sub) (then (call $cache_keep (local.get $out)) (return (local.get $out))))
   ;; the cache keeps the table until the next run replaces it
   (if (i32.eq (i32.load offset=88 (local.get $sq)) (global.get $epoch)) (then (call $cache_drop (i32.load offset=92 (local.get $sq)))))
   (i32.store offset=88 (local.get $sq) (global.get $epoch))

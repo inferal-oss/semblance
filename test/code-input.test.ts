@@ -7,7 +7,7 @@ const UI = 'https://semblance.dev/demo#'
 const C = NS.c
 
 /** The demo shell on the Components page, showing the Inputs group. */
-function inputs(kind: 'oxigraph' | 'n3', prefer: 'sparql' | 'function' = 'sparql') {
+function inputs(kind: 'oxigraph' | 'n3' | 'wat' | 'rust', prefer: 'sparql' | 'function' = 'sparql') {
   const shell = mountShell(5, kind, prefer)
   shell.showPage('Components')
   const { store, runtime } = shell
@@ -33,7 +33,7 @@ function inputs(kind: 'oxigraph' | 'n3', prefer: 'sparql' | 'function' = 'sparql
 }
 
 // SPARQL rules and reactions on Oxigraph; the function ones on N3.
-describe.each(['oxigraph', 'n3'] as const)('code input (%s)', (kind) => {
+describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('code input (%s)', (kind) => {
   it('renders one labelled field over a cell per character', () => {
     const { root, cells } = inputs(kind)
     const signin = root('inp-code-signin')!

@@ -565,6 +565,7 @@
   (global.set $NV (i32.load offset=52 (local.get $q)))
   (global.set $W (i32.shl (select (global.get $NV) (i32.const 3) (i32.gt_u (global.get $NV) (i32.const 3))) (i32.const 2)))
   (global.set $params (i32.load offset=60 (local.get $q)))
+  (global.set $lat (i32.const 0))
   (global.set $now (i32.const 0))
   (global.set $bn_row (i32.const -1))
   (global.set $rs_base (call $alloc (i32.add (i32.const 65536) (i32.shl (global.get $W) (i32.const 8)))))
