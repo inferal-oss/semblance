@@ -47,6 +47,16 @@ performs the effects of graph state (the address, storage, timers, network captu
 10. **New ontology files** go into `ONTOLOGY_FILES` (`src/ontology.ts`) in load order; the dev
     server must be restarted to see a new file (Vite's glob is fixed at start).
 
+## Skills
+
+Project skills live in `.agents/skills/<name>/SKILL.md` (linked from `.claude/skills/` for Claude
+Code and `.codex/skills/` for Codex; read the file directly if your tool does not load skills):
+
+- **generalize-review** - review components and layers for properties, styles, rules and behaviour
+  that are not specific to them, report where each belongs, or move them into a shared vocabulary or
+  layer across ontology, rules, theme, examples, walkthroughs, docs and tests. Its finder:
+  `npx tsx .agents/skills/generalize-review/scripts/candidates.ts --demo [focus …]`.
+
 ## Building and testing
 
 ```bash
