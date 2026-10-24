@@ -134,3 +134,39 @@ hundreds of times with the same bindings, which is not Semblance's profile. To
 change the verdict the compiler would have to own the string and numeric
 expressions (typed values in locals, no allocation), not just the joins.
 The bench keeps the compiled configurations so the question can be re-asked.
+
+## Phase 2 (WAT): more of the query in the module
+
+Measured first with `compiled-bench.ts wat --profile`, which times every
+callback and names it by WAT node. Three call sites held 37.5 of the 42.2 ms of
+compiled query time in a render (corpus now 539 queries, 603 distinct calls):
+SHACL validation (191 calls, closure paths, LATERAL), the swatch scale (6 calls,
+one `cq_eval` of GROUP BY ordering subqueries) and the tooltip layer (196 calls,
+string expressions and EXISTS).
+
+Done so far, WAT only:
+- `p*` / `p+` (IRI or ^IRI) from a constant or certainly bound end: a
+  breadth-first walk in the module, the reached nodes compacted on the stack.
+- LATERAL compiled in line. Elements left to the interpreter inside it see a
+  copy of the row as `$lat`.
+- Triple patterns with a surely bound position read the store's posting lists
+  in line, with no `cq_scan` and no copy. A triple found in an earlier default
+  graph is skipped (`has`).
+
+| WAT, 603 calls | interpreted | compiled |
+|---|---:|---:|
+| median per call | 27.3 µs | 23.5 µs |
+| p90 per call | 99.7 µs | 82.8 µs |
+| total | 44.6 ms | 40.0 ms (−10%) |
+| SHACL site | 18.1 ms | 15.3 ms |
+| tooltip site | 5.3 ms | 4.6 ms |
+| swatch site | 15.5 ms | 15.3 ms |
+
+Size: 74.3 → 77.2 KiB. Correctness: 603/603 calls replay equal; W3C with
+compilation shows 0 differences.
+
+Still to do for the 2× target, in measured order:
+1. Subqueries with GROUP BY / COUNT compiled, including the single linear walk
+   for list positions and ranks.
+2. Typed string and number expressions: IRI, CONCAT, CAST, IF, COALESCE,
+   CONTAINS, plus EXISTS as an inline loop.
