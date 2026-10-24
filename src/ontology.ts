@@ -60,6 +60,7 @@ export const ONTOLOGY_FILES = [
   'components/walkthrough.ttl',
   'components/typeahead.ttl',
   'components/live.ttl',
+  'components/forms.ttl',
   'perf/perf.ttl',
   'domain/network.ttl',
   'shapes/components.ttl',
@@ -73,6 +74,7 @@ export const ONTOLOGY_FILES = [
   'shapes/board.ttl',
   'shapes/walkthrough.ttl',
   'shapes/typeahead.ttl',
+  'shapes/forms.ttl',
   'alignments.ttl',
   'theme/foundations.ttl',
   'theme/default.ttl',
@@ -105,4 +107,5 @@ export const ONTOLOGY_FILES = [
   'theme/walkthrough.ttl',
   'theme/typeahead.ttl',
   'theme/live.ttl',
+  'theme/forms.ttl',
 ] as const

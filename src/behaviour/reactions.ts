@@ -26,6 +26,7 @@ import { reactions as toolbarReactions } from '../components/toolbar.ts'
 import { reactions as boardReactions } from '../components/board.ts'
 import { reactions as walkthroughReactions } from '../components/walkthrough.ts'
 import { reactions as liveReactions } from '../components/live.ts'
+import { reactions as formsReactions } from '../components/forms.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
@@ -154,4 +155,5 @@ export const reactions: Record<string, ReactionFn> = {
   ...boardReactions,
   ...walkthroughReactions,
   ...liveReactions,
+  ...formsReactions,
 }

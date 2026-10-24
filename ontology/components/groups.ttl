@@ -69,6 +69,7 @@ c:Typeahead sem:group c:InputsGroup . c:Combobox sem:group c:InputsGroup . c:Tag
 c:TypeaheadOption sem:group c:InputsGroup . c:CustomValueKind sem:group c:InputsGroup .
 c:Charset sem:group c:InputsGroup . c:Case sem:group c:InputsGroup . c:CellStyle sem:group c:InputsGroup .
 c:SearchKey sem:group c:InputsGroup .
+c:ShapeForm sem:group c:InputsGroup . c:ShapeField sem:group c:InputsGroup .
 
 # --- Feedback ---
 c:Alert sem:group c:FeedbackGroup . c:Badge sem:group c:FeedbackGroup . c:Tag sem:group c:FeedbackGroup .

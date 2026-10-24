@@ -1,0 +1,153 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix pf: <https://semblance.dev/demo/profile#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# A form from a shape: nobody wrote this form.
+#
+# A member's record (pf:ada) and the SHACL shape a member's record should conform to
+# (pf:MemberShape) are data. A c:ShapeForm shows the shape for the record: a rule derives a
+# section per property group and a field per property shape - its control from the datatype or
+# the allowed values, its message from the constraints - and editing a field writes the record.
+# The buttons beside it change the shape, not the form: add a property, change a datatype, make
+# a property required - and the form follows.
+# =================================================================================================
+
+ui:ex-shapes-prefixes sh:declare [ sh:prefix "pf" ; sh:namespace "https://semblance.dev/demo/profile#"^^xsd:anyURI ] .
+
+# --- the record -------------------------------------------------------------------------------------
+
+pf:ada a pf:Member ;
+    pf:name "Ada Lovelace" ; pf:email "ada@example.org" ; pf:born "1815-12-10"^^xsd:date ;
+    pf:role pf:Engineer ; pf:experience 12 ; pf:bio "Writes about analytical engines and the poetry of numbers." ;
+    pf:newsletter true .
+
+pf:Engineer rdfs:label "Engineer" . pf:Designer rdfs:label "Designer" . pf:Researcher rdfs:label "Researcher" .
+
+# --- the shape --------------------------------------------------------------------------------------
+# What a member's record should be: standard SHACL, also usable by any SHACL validator. Its groups
+# become the form's sections; each property shape becomes a field.
+
+pf:MemberShape a sh:NodeShape ; sh:targetClass pf:Member ; rdfs:label "Member" ;
+    sh:property pf:nameShape , pf:emailShape , pf:bornShape , pf:roleShape , pf:experienceShape , pf:bioShape , pf:newsletterShape .
+
+pf:Identity a sh:PropertyGroup ; rdfs:label "Identity" ; sh:order 1 .
+pf:Work a sh:PropertyGroup ; rdfs:label "Work" ; sh:order 2 .
+pf:Preferences a sh:PropertyGroup ; rdfs:label "Preferences" ; sh:order 3 .
+
+pf:nameShape a sh:PropertyShape ; sh:path pf:name ; sh:name "Full name" ; sh:group pf:Identity ; sh:order 1 ;
+    sh:datatype xsd:string ; sh:minCount 1 ; sh:minLength 2 ; sh:maxLength 60 .
+pf:emailShape a sh:PropertyShape ; sh:path pf:email ; sh:name "Email" ; sh:group pf:Identity ; sh:order 2 ;
+    sh:datatype xsd:string ; sh:pattern "^[^@ ]+@[^@ ]+[.][^@ ]+$" ;
+    sh:message "An email address, like ada@example.org." .
+pf:bornShape a sh:PropertyShape ; sh:path pf:born ; sh:name "Born" ; sh:group pf:Identity ; sh:order 3 ;
+    sh:datatype xsd:date .
+pf:roleShape a sh:PropertyShape ; sh:path pf:role ; sh:name "Role" ; sh:group pf:Work ; sh:order 1 ;
+    sh:in ( pf:Engineer pf:Designer pf:Researcher ) ; sh:minCount 1 .
+pf:experienceShape a sh:PropertyShape ; sh:path pf:experience ; sh:name "Years of experience" ; sh:group pf:Work ; sh:order 2 ;
+    sh:datatype xsd:integer ; sh:minInclusive 0 ; sh:maxInclusive 60 .
+pf:bioShape a sh:PropertyShape ; sh:path pf:bio ; sh:name "Bio" ; sh:group pf:Work ; sh:order 3 ;
+    sh:datatype xsd:string ; sh:maxLength 200 ; sh:description "Up to 200 characters, shown on your profile." .
+pf:newsletterShape a sh:PropertyShape ; sh:path pf:newsletter ; sh:name "Monthly newsletter" ; sh:group pf:Preferences ; sh:order 1 ;
+    sh:datatype xsd:boolean .
+# Not part of the shape until "Add a phone number" links it.
+pf:phoneShape a sh:PropertyShape ; sh:path pf:phone ; sh:name "Phone" ; sh:group pf:Identity ; sh:order 4 ;
+    sh:datatype xsd:string ; sh:pattern "^[+]?[0-9 ()-]{7,}$" ; sh:description "With the country code, like +44 20 7946 0000." ;
+    sh:message "A phone number: digits, spaces, + ( ) -." .
+
+# --- the page ---------------------------------------------------------------------------------------
+
+ui:ex-shapes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-shapes-intro ui:ex-shapes-body ) .
+ui:ex-shapes-intro a c:Text ;
+    c:label "The form below is not written anywhere: it is the SHACL shape of a member's record, shown for one record. Edit a field and the record changes; press a button on the right and the shape changes - so does the form." .
+ui:ex-shapes-body a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-shapes-card ui:ex-shapes-side ) .
+ui:ex-shapes-card a c:Card ; c:label "Member profile" ; c:badge "pf:MemberShape" ; c:content ui:ex-shapes-form .
+ui:ex-shapes-form a c:ShapeForm ; c:nodeShape pf:MemberShape ; c:of pf:ada .
+
+ui:ex-shapes-side a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-shapes-edit-card ui:ex-shapes-record-card ) .
+ui:ex-shapes-edit-card a c:Card ; c:label "Change the shape" ; c:note "Each button edits pf:MemberShape or one of its property shapes." ;
+    c:content ui:ex-shapes-edits .
+ui:ex-shapes-edits a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:align pos:Start ;
+    c:children ( ui:ex-shapes-phone ui:ex-shapes-experience ui:ex-shapes-required ui:ex-shapes-shape-now ) .
+ui:ex-shapes-phone a c:Button ; c:label "Add or remove a phone number" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:ex-shapes-experience a c:Button ; c:label "Experience: a number or text" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:ex-shapes-required a c:Button ; c:label "Bio: required or optional" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:ex-shapes-shape-now a c:TriplesView ; c:of pf:MemberShape .
+ui:ex-shapes-record-card a c:Card ; c:label "The record" ; c:badge "pf:ada" ; c:note "What the form edits: typed literals, as the shape says." ;
+    c:content ui:ex-shapes-record .
+ui:ex-shapes-record a c:TriplesView ; c:of pf:ada .
+
+# --- changing the shape -----------------------------------------------------------------------------
+# Ordinary reactions, on the shape rather than on the record.
+
+pf:TogglePhone a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-shapes-phone ;
+    beh:deletes """CONSTRUCT { pf:MemberShape sh:property pf:phoneShape } WHERE { pf:MemberShape sh:property pf:phoneShape }""" ;
+    beh:inserts """CONSTRUCT { pf:MemberShape sh:property pf:phoneShape } WHERE { FILTER NOT EXISTS { pf:MemberShape sh:property pf:phoneShape } }""" ;
+    ann:announces "The shape changed: phone" .
+pf:ToggleExperience a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-shapes-experience ;
+    beh:deletes """CONSTRUCT { pf:experienceShape sh:datatype ?d } WHERE { pf:experienceShape sh:datatype ?d }""" ;
+    beh:inserts """CONSTRUCT { pf:experienceShape sh:datatype ?next }
+WHERE { pf:experienceShape sh:datatype ?d BIND(IF(?d = xsd:integer, xsd:string, xsd:integer) AS ?next) }""" ;
+    ann:announces "The shape changed: experience" .
+pf:ToggleBioRequired a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-shapes-required ;
+    beh:deletes """CONSTRUCT { pf:bioShape sh:minCount ?n } WHERE { pf:bioShape sh:minCount ?n }""" ;
+    beh:inserts """CONSTRUCT { pf:bioShape sh:minCount 1 } WHERE { FILTER NOT EXISTS { pf:bioShape sh:minCount ?n } }""" ;
+    ann:announces "The shape changed: bio" .
+
+# --- how it works -----------------------------------------------------------------------------------
+
+ui:ex-shapes-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-shapes-w1 ui:ex-shapes-w2 ui:ex-shapes-w3 ui:ex-shapes-w4 ui:ex-shapes-w5 ui:ex-shapes-w6 ) .
+
+ui:ex-shapes-w1 a c:WalkthroughStep ; rdfs:label "A record, and the shape it should have" ;
+    c:children ( "The data is one member, " ui:ex-shapes-m-ada ", described in the example's own vocabulary. What a member's record should look like is " ui:ex-shapes-m-shape ", a standard SHACL " ui:ex-shapes-m-NodeShape ": a property shape per property - " ui:ex-shapes-m-name " says the name is text of 2 to 60 characters and required. Any SHACL validator could check the record against it." ) .
+ui:ex-shapes-w2 a c:WalkthroughStep ; rdfs:label "The form is derived from the shape" ;
+    c:children ( ui:ex-shapes-m-form " is a " ui:ex-shapes-m-ShapeForm " that names the shape and the record, and nothing else. Its rule reads the shape: a section per " ui:ex-shapes-m-PropertyGroup " - " ui:ex-shapes-m-identity ", " ui:ex-shapes-m-work ", " ui:ex-shapes-m-preferences " - in sh:order, and in each a field per property shape. The fields are minted " ui:ex-shapes-m-ShapeField "s, one per property shape." ) .
+ui:ex-shapes-w3 a c:WalkthroughStep ; rdfs:label "Each field is what its property shape says" ;
+    c:children ( "A field reads its property shape: " ui:ex-shapes-m-role " has sh:in, so it is a list of " ui:ex-shapes-m-engineer " and the others, by their labels; " ui:ex-shapes-m-experience " is an integer between 0 and 60, so a number input with those bounds; " ui:ex-shapes-m-born " a date; " ui:ex-shapes-m-newsletter " a boolean, so a check box; " ui:ex-shapes-m-bio ", up to 200 characters, a text area. sh:name labels each one, sh:description helps." ) .
+ui:ex-shapes-w4 a c:WalkthroughStep ; rdfs:label "Editing writes the record, and the shape judges it" ;
+    c:children ( "Typing is a beh:Input event; " ui:ex-shapes-m-edit " writes the value onto " ui:ex-shapes-m-ada2 " as a literal of the shape's datatype - the record is the state, so " ui:ex-shapes-m-recordview " changes as you type. The field's message is the first constraint the value breaks: type something without an @ and " ui:ex-shapes-m-email "'s own sh:message shows, with aria-invalid on the input. A list or a check box is " ui:ex-shapes-m-choose "." ) .
+ui:ex-shapes-w5 a c:WalkthroughStep ; rdfs:label "Change the shape, and the form follows" ;
+    c:children ( ui:ex-shapes-m-togglephone " links " ui:ex-shapes-m-phone " into the shape: the form's rule follows the shape, so a phone field appears under Identity, in its sh:order. " ui:ex-shapes-m-toggleexperience " changes one triple, the datatype of experience: that field follows its property shape and becomes a text field. " ui:ex-shapes-m-togglebio " adds sh:minCount, and an empty bio becomes a problem." ) .
+ui:ex-shapes-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "Each field follows only its own property shape and the record: typing re-renders one field (and the record's view), changing a datatype re-renders one field, and only a change to the node shape itself - a property shape added or removed - runs the form's rule again. Both are SPARQL rules with function twins that render the same." ) .
+
+ui:ex-shapes-m-ada a c:Mention ; c:label "pf:ada" ; c:mentions pf:ada .
+ui:ex-shapes-m-ada2 a c:Mention ; c:label "the record" ; c:mentions pf:ada .
+ui:ex-shapes-m-shape a c:Mention ; c:label "pf:MemberShape" ; c:mentions pf:MemberShape .
+ui:ex-shapes-m-NodeShape a c:Mention ; c:label "sh:NodeShape" ; c:mentions sh:NodeShape ; c:to sh:NodeShape .
+ui:ex-shapes-m-name a c:Mention ; c:label "pf:nameShape" ; c:mentions pf:nameShape .
+ui:ex-shapes-m-form a c:Mention ; c:label "The form" ; c:mentions ui:ex-shapes-form .
+ui:ex-shapes-m-ShapeForm a c:Mention ; c:label "c:ShapeForm" ; c:mentions c:ShapeForm ; c:to c:ShapeForm .
+ui:ex-shapes-m-PropertyGroup a c:Mention ; c:label "sh:PropertyGroup" ; c:mentions sh:PropertyGroup ; c:to sh:PropertyGroup .
+ui:ex-shapes-m-identity a c:Mention ; c:label "Identity" ; c:mentions pf:Identity .
+ui:ex-shapes-m-work a c:Mention ; c:label "Work" ; c:mentions pf:Work .
+ui:ex-shapes-m-preferences a c:Mention ; c:label "Preferences" ; c:mentions pf:Preferences .
+ui:ex-shapes-m-ShapeField a c:Mention ; c:label "c:ShapeField" ; c:mentions c:ShapeField ; c:to c:ShapeField .
+ui:ex-shapes-m-role a c:Mention ; c:label "pf:roleShape" ; c:mentions pf:roleShape .
+ui:ex-shapes-m-engineer a c:Mention ; c:label "pf:Engineer" ; c:mentions pf:Engineer .
+ui:ex-shapes-m-experience a c:Mention ; c:label "pf:experienceShape" ; c:mentions pf:experienceShape .
+ui:ex-shapes-m-born a c:Mention ; c:label "pf:bornShape" ; c:mentions pf:bornShape .
+ui:ex-shapes-m-newsletter a c:Mention ; c:label "pf:newsletterShape" ; c:mentions pf:newsletterShape .
+ui:ex-shapes-m-bio a c:Mention ; c:label "pf:bioShape" ; c:mentions pf:bioShape .
+ui:ex-shapes-m-edit a c:Mention ; c:label "c:EditShapeField" ; c:mentions c:EditShapeField ; c:to c:EditShapeField .
+ui:ex-shapes-m-choose a c:Mention ; c:label "c:ChooseShapeField" ; c:mentions c:ChooseShapeField ; c:to c:ChooseShapeField .
+ui:ex-shapes-m-recordview a c:Mention ; c:label "the record's view" ; c:mentions ui:ex-shapes-record .
+ui:ex-shapes-m-email a c:Mention ; c:label "pf:emailShape" ; c:mentions pf:emailShape .
+ui:ex-shapes-m-togglephone a c:Mention ; c:label "pf:TogglePhone" ; c:mentions pf:TogglePhone .
+ui:ex-shapes-m-phone a c:Mention ; c:label "pf:phoneShape" ; c:mentions pf:phoneShape .
+ui:ex-shapes-m-toggleexperience a c:Mention ; c:label "pf:ToggleExperience" ; c:mentions pf:ToggleExperience .
+ui:ex-shapes-m-togglebio a c:Mention ; c:label "pf:ToggleBioRequired" ; c:mentions pf:ToggleBioRequired .
