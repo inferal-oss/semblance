@@ -296,6 +296,12 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
                  [ sty:property "min-width" ; sty:raw "min(100%, 55%)" ] .
 [] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child:not(:only-child)" ;
     sty:declares [ sty:property "max-width" ; sty:raw "min(100%, 240px)" ] .
+# The navigation column runs the main column's height (pos:Aside stretches it); what it holds keeps
+# its own size at the top: a vertical list's items do not share out the extra height.
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child > *" ;
+    sty:declares [ sty:property "flex-grow" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child" ;
+    sty:declares [ sty:property "align-content" ; sty:raw "start" ] , [ sty:property "justify-content" ; sty:raw "flex-start" ] .
 
 # Components whose size is their content - a badge, a tag, a count, a key cap - stay that size in a
 # grid cell. A grid stretches its items to the track by default, so in rows that share columns
