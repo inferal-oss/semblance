@@ -6,7 +6,7 @@
 # Theme for what the layers add: shortcut hints, busy state, shortcut lists.
 
 # --- keyboard: a hint after any element that declares a shortcut (Apple or other glyphs) ---
-[] a sty:StyleRule ; sty:part "[data-sem-shortcut]:not(input, textarea, select)::after" ;
+[] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other)" ] ,
                  [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
                  [ sty:property "padding" ; sty:raw "2px 5px" ] ,
@@ -15,7 +15,7 @@
                  [ sty:property "font" ; sty:raw "600 10px/1 var(--sem-font-mono)" ] ,
                  [ sty:property "opacity" ; sty:raw "0.75" ] ,
                  [ sty:property "vertical-align" ; sty:raw "1px" ] .
-[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-shortcut]:not(input, textarea, select)::after" ;
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple)" ] .
 
 # --- shortcut list ---

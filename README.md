@@ -92,8 +92,12 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   (`mot:preference`, `sty:contrast`) whose values re-value the motion and role
   tokens for the subtree.
 
+- **Announcements**: reactions say what they mean (`ann:announces`); a
+  `c:ToastRegion` reading the change log shows them as toasts.
+
 See [DESIGN.md](DESIGN.md) for the design system: foundations, the shared
-variant axes (`sty:tone` × `sty:emphasis` × `sty:size`), and the component set.
+variant axes (`sty:tone` × `sty:emphasis` × `sty:size`, `sty:textStyle`), and
+the component set. The demo's **Components** page shows all of it.
 
 ### Behaviour: events, reactions, LDES
 - A relevant interaction becomes an RDF event addressed to the innermost
@@ -115,19 +119,20 @@ variant axes (`sty:tone` × `sty:emphasis` × `sty:size`), and the component set
   rule aggregates that stream.
 
 ### Components
-Containers and controls: `c:Stack`, `c:Card`, `c:AppBar`, `c:Tabs` (detachable),
-`c:Window`, `c:Desktop`, `c:Switch`, `c:Flippable`, `c:Heading`, `c:Button`,
-`c:TextField`, `c:List`/`c:ListItem`, `c:Toggle`, `c:Progress`, and four controls
-editing one property of one node with options drawn from its `rdfs:range`:
-`c:Segmented`, `c:ThemeSwitcher`, `c:Choice` (dropdown) and `c:Chips` (pills).
-Views: `c:Metrics`, `c:QueryView`, `c:Highlight`, `c:StreamStats`,
-`c:StreamMembers`, `c:TriplesView`, `c:ProjectionView`, `c:BarChart`,
-`c:Heatmap`, `c:LineChart`, `c:FindingList`. The whole demo (`demo/app.ttl`) is
-built from these; the host only mounts it and performs effects of graph state.
+Eighty-one component classes in nine groups (layout, type, actions, inputs,
+feedback, data, navigation, overlays, disclosure), plus the views and charts
+the demo is built from; [DESIGN.md](DESIGN.md) lists them. Each group is one
+file of each kind: `ontology/components/<group>.ttl` (the vocabulary,
+renderings and reactions), `ontology/theme/<group>.ttl` (its styles),
+`src/components/<group>.ts` (function rules and reactions) and
+`demo/gallery/<group>.ttl` (its gallery page). The whole demo
+(`demo/app.ttl`) is built from these; the host only mounts it and performs
+effects of graph state.
 
 A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 (`prov:wasDerivedFrom`), and hosted on a `c:Desktop` that is not part of any
 page, so it survives navigation. Dock and close follow the provenance back.
+Dialogs, drawers and toast regions are hosted there too.
 
 ### Performance as data
 Benchmark cells become `sosa:Observation`s. Every chart and table on the
@@ -160,17 +165,18 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, keyboard, status, l10n, announce |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
-| `ontology/theme/default.ttl` | the default theme |
+| `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
 | `ontology/vendor/` | RDF/HTML vocabulary snapshot (`npm run gen:vocab` regenerates `src/vocab`) |
 | `src/engine/` | rule registry and incremental engine |
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
-| `src/components/` | function implementations of rules (controls, views, charts, containers) |
+| `src/components/` | function rules and reactions, one module per group |
+| `src/layers/` | function rules of the validation, keyboard, status, l10n and announcement layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
-| `demo/` | the demo (boot, playground, performance view, benchmark cells) |
+| `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 
 See [FINDINGS.md](FINDINGS.md) for benchmark results and what they imply.

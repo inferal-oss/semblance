@@ -65,7 +65,6 @@ ui:resetCounter a c:Button ; c:label "Reset" , "Скинути"@uk , "Zurückset
     sty:emphasis sty:Ghost ; key:shortcut "mod+shift+i" .
 ui:counter a c:Badge ; c:label "0" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
 ui:shortcuts a c:ShortcutList .
-ui:galleryNav key:shortcut "mod+shift+g" .
 
 ui:Increment a beh:Reaction ; beh:when beh:Click ; beh:source ui:increment ;
     ann:announces "Counter incremented" , "Лічильник збільшено"@uk , "Zähler erhöht"@de , "تمت زيادة العداد"@ar ; ann:tone sty:Accent ;

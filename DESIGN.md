@@ -38,6 +38,8 @@ and the theme styles it once for every component that has it.
   toned component (button, badge, tag, alert, chip, icon button, toast).
 - **`sty:size`** — `sty:Small`, `sty:Medium`, `sty:Large`: sets `--control-h`,
   the font size and the padding.
+- **`sty:textStyle`** — `sty:Display`, `sty:Title`, `sty:Subtitle`, `sty:Body`,
+  `sty:Caption`, `sty:Overline`, `sty:Mono`: the type scale, for any component.
 - **`sty:density`**, **`sty:elevation`**, **`sty:colorScheme`** as before.
 
 ## 3. Components
@@ -52,15 +54,18 @@ Thin vocabularies. Every component
 
 | group | components |
 |---|---|
-| **Layout** | Stack · Grid · Surface · Divider · Card · Columns |
-| **Type** | Heading · Text · Link · Kbd · Code |
-| **Actions** | Button · IconButton · ButtonGroup · Menu |
-| **Inputs** | TextField · TextArea · Checkbox · RadioGroup · Switch · Slider · Select (Choice) · Segmented · Chips |
-| **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast region · EmptyState |
-| **Data** | List · Table · DescriptionList · Stat (Metrics) · Avatar · Timeline · Tree · charts |
-| **Navigation** | Tabs · Breadcrumbs · Pagination · Stepper · NavList · AppBar |
+| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches |
+| **Type** | Heading · Text · Link · Kbd · Code · Blockquote |
+| **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem (+ Pressable, Setter mixins) |
+| **Inputs** | TextField · TextArea · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips |
+| **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState |
+| **Data** | List · Table · DescriptionList · Stat · Metrics · Avatar · AvatarGroup · Timeline · Tree · charts |
+| **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Window · Tooltip (layer) |
-| **Disclosure** | Accordion · Flippable |
+| **Disclosure** | Accordion / AccordionItem · Flippable |
+
+(`c:Switch` is the case switcher that picks one child by a property's value;
+the on/off control is `c:ToggleSwitch`.)
 
 ## 4. Layers
 
@@ -71,19 +76,23 @@ per projection. New ones:
 |---|---|---|
 | **Validation** (`val:`) | SHACL: `c:validates` a `sh:PropertyShape` on the data | Each field shows the shape's `sh:message` (and `aria-invalid`) while the value violates `sh:minLength`, `sh:maxLength`, `sh:pattern`, `sh:minInclusive`/`sh:maxInclusive`, `sh:minCount`. A form's submit is disabled while any of its fields is invalid. |
 | **Keyboard** (`key:`) | `key:shortcut "mod+k"` on any component | `aria-keyshortcuts` and a `<kbd>` hint on the element; the key press becomes a `beh:Shortcut` event addressed to that component, which runs its click reactions. `c:ShortcutList` lists them all (SPARQL). |
-| **Motion** (`mot:`) | `mot:enter mot:Rise` / `mot:Fade` / `mot:Scale` on components; `mot:preference` Full / Reduced / None on the app | Enter animations by attribute; the preference re-values the duration tokens (Reduced = opacity only, None = 0ms). |
+| **Motion** (`mot:`) | `mot:preference` Full / Reduced / None on a subtree | Re-values the duration and easing tokens every transition and animation uses (shared `sty:Keyframes` in the foundations). |
 | **Localization** (`l10n:`) | `l10n:language` on the app; language-tagged `rdfs:label` / `c:label` | Components read labels through the layer: the app language wins, then English, then untagged. Languages with `l10n:direction l10n:RTL` set `dir="rtl"` on the shell. |
-| **Announcements** (`ann:`) | `ann:announces "…"` on a reaction | Each recorded event whose reaction announces something becomes a toast in a `c:ToastRegion` (an `aria-live` region), from the change log. |
-| **Status** (`st:`) | `st:busy true` on a component | `aria-busy` and a skeleton or spinner instead of the content while busy. |
-| **Contrast** | `sty:HighContrast` color scheme | Re-values the role tokens for 7:1 text and visible borders. |
+| **Announcements** (`ann:`) | `ann:announces "…"` (and `ann:tone`) on a reaction | A `c:ToastRegion` with `ann:from` a change log shows the newest announcing events as toasts, reading the log from its head. |
+| **Status** (`st:`) | `st:busy true` on a component | `aria-busy`; the theme dims it under a shimmer. |
+| **Contrast** | `sty:contrast sty:HighContrast` on a subtree | Re-values the role tokens for stronger text and visible borders. |
 
 Existing: modality, style, position, a11y, behaviour, provenance, tooltip,
 source, debug.
 
 ## 5. Demo
 
-A third page, **Components**: a navigation list of the groups and a page per
-group. Each specimen is a flippable card (its back shows the rules), with
-every variant laid out (tone × emphasis, sizes, states). The toolbar has
-the layer toggles: theme, contrast, density, motion, language, and validation
-and keyboard on or off.
+A third page, **Components**: a navigation list of the groups (Foundations,
+Layout, Type, Actions, Inputs, Feedback, Data, Navigation, Overlays, Disclosure,
+Layers) and a page per group (`demo/gallery/<group>.ttl`). Each specimen is a
+flippable card whose back shows the rules that made it. Beside the navigation,
+display settings — language, contrast, motion, density — are controls over
+the shell's properties. The Layers page demonstrates each layer working:
+a SHACL-validated form, shortcuts with their list, a busy state, the
+language switch (RTL for Arabic), and the display axes. Layers are switched
+on and off in the Playground's layer chips.

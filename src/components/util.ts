@@ -32,17 +32,18 @@ export const nodes = (ctx: RuleContext, head: Term | undefined): NamedNode[] => 
 
 /**
  * A text-valued property in the viewer's language: the first of ctx.languages
- * that has a value, then English, then an untagged literal, then anything.
+ * that has a value, then the untagged source text, then English, then anything.
  */
 export function text(ctx: RuleContext, s: Term, p: string): string | undefined {
   const values = ctx.objects(s, p).filter((t) => t.termType === 'Literal')
   if (values.length <= 1) return values[0]?.value
   const lang = (t: Term) => (t.termType === 'Literal' ? t.language.toLowerCase() : '')
-  for (const want of [...ctx.languages, 'en']) {
-    const hit = values.find((t) => lang(t) === want) ?? values.find((t) => lang(t).startsWith(want + '-'))
+  const tagged = (want: string) => values.find((t) => lang(t) === want) ?? values.find((t) => lang(t).startsWith(want + '-'))
+  for (const want of ctx.languages) {
+    const hit = tagged(want)
     if (hit) return hit.value
   }
-  return (values.find((t) => lang(t) === '') ?? values[0])!.value
+  return (values.find((t) => lang(t) === '') ?? tagged('en') ?? values[0])!.value
 }
 
 /** What to call a node: its c:label, its rdfs:label, or its IRI's local name. */
