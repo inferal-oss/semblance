@@ -90,6 +90,7 @@ describe('performance judgements', () => {
     ])
     // planned but unmeasured cells come back unbound
     const pending = select(store, all[1]!).filter((r) => r.value === undefined)
-    expect(pending.length).toBe(2 * 6 * 3) // rename/add/type were not measured in this fixture
+    // The fixture measured 6 configurations, without rename/add/type; the later ones (the engines) not at all.
+    expect(pending.length).toBe(2 * (6 * 3 + (CONFIGS.length - 6) * 5))
   })
 })
