@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { EventBus } from '../src/behaviour/events.ts'
+import { exampleFunctions } from '../src/examples/index.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
 import type { GraphStore } from '../src/store/types.ts'
@@ -57,7 +58,7 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function') {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer']
-  const screen = runtime.project({ modality: MOD.Screen, layers, prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
+  const screen = runtime.project({ modality: MOD.Screen, layers, prefer, functions: exampleFunctions, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
     throw e
   })
   const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')

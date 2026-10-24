@@ -1,5 +1,6 @@
 import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
+import { exampleFunctions } from '../src/examples/index.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { attachIntent } from '../src/intent.ts'
@@ -54,8 +55,8 @@ setApp(UI + 'page', UI + (PAGES[location.hash.slice(1) as keyof typeof PAGES] ??
 const runtime = new Runtime(store)
 const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
 // Each projection evaluates only what is shown under its mount root (demand-driven).
-const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] })
-const text = runtime.project({ modality: MOD.Text, prefer, provenance: true, name: 'text', roots: [EX + 'page'] })
+const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, functions: exampleFunctions, provenance: true, name: 'screen', roots: [UI + 'shell'] })
+const text = runtime.project({ modality: MOD.Text, prefer, functions: exampleFunctions, provenance: true, name: 'text', roots: [EX + 'page'] })
 
 // The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere.
 if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
