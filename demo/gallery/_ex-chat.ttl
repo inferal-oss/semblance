@@ -6,6 +6,8 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -15,18 +17,27 @@
 @prefix ch: <https://semblance.dev/demo/chat#> .
 
 # =================================================================================================
-# Chat: channels, threads, a composer.
+# Chat: channels, threads, a composer, and colleagues who type back.
 #
 # Messages are data - ActivityStreams notes (as:Note with as:attributedTo, as:content,
-# as:published) - and a channel's thread is a c:MessageList of them. The list places its
-# messages member-wise, so sending one evaluates that message alone, however long the thread.
-# Which channel is open is one triple; switching channels is the nav list's own reaction plus
-# one of ours that clears the channel's unread count. A message can be sensitive (prv:sensitive):
-# private mode (⌘⇧H / Ctrl+Shift+H) hides it. Everything is in this file; the thread and the
-# counts beside the channels are framework components (c:MessageList, c:countProperty).
+# as:published) - and a channel's thread is a c:MessageList of them, placed member-wise: a
+# new message evaluates that message alone, however long the thread. A note someone is
+# still writing is the same note before it is published (prov:startedAtTime, no
+# as:published yet): the thread shows it as its author typing, and when it is published the
+# same entry becomes the message.
+#
+# The other people are scripts: chains of steps (who, what, how long they type, how long
+# they pause) that play out over time. Time is data too: a script says when its next step
+# is due (beh:dueAt), the host turns that into one beh:Due event when the time comes, and
+# ordinary reactions take the step - start typing, publish. The conversation is remembered
+# on this device (a per:Policy), so a reload continues where it was, scripts included.
+#
+# Everything is in this file. From the framework it uses c:MessageList (the thread and its
+# pending entries), c:countProperty (unread counts in the nav list), beh:dueAt (the host's
+# scheduler, src/behaviour/schedule.ts) and the privacy layer (private mode, ⌘⇧H).
 # =================================================================================================
 
-# SPARQL in the reactions below can say ch: once the graph declares it.
+# SPARQL in the reactions and the policy below can say ch: once the graph declares it.
 ui:prefixes sh:declare [ sh:prefix "ch" ; sh:namespace "https://semblance.dev/demo/chat#"^^xsd:anyURI ] .
 
 # --- the vocabulary -----------------------------------------------------------------------------
@@ -36,13 +47,34 @@ ch:channel a owl:ObjectProperty ; rdfs:label "Channels" ; rdfs:range ch:Channel 
     rdfs:comment "The channel the client has open." .
 ch:thread a owl:ObjectProperty ; rdfs:domain ch:Channel ; rdfs:comment "The c:MessageList showing the channel's messages." .
 ch:unread a owl:DatatypeProperty ; rdfs:domain ch:Channel ; rdfs:range xsd:integer ; rdfs:label "Unread" .
-ch:bot a owl:ObjectProperty ; rdfs:domain ch:Channel ; rdfs:comment "Who answers in the channel, with ch:cannedReply." .
-ch:cannedReply a owl:DatatypeProperty ; rdfs:domain ch:Channel .
+ch:replies a owl:ObjectProperty ; rdfs:domain ch:Channel ; rdfs:range ch:Step ;
+    rdfs:comment "The step someone answers with when Ada writes and the channel's script is idle." .
 ch:sendSensitive a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:label "Send as sensitive" ;
     rdfs:comment "Messages sent while this is on are prv:sensitive: hidden in private mode." .
 # Enter in the composer (Shift+Enter is a new line: its key is "shift+enter").
 ch:ComposerKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "enter" ;
     rdfs:comment "Enter pressed in the composer." .
+
+# A script: the other side of the conversation in one channel. ch:at is the step to take
+# next (ch:Done when there is none); ch:typing the note being written (ch:Nobody when no one
+# is). Its beh:dueAt says when the next thing happens; beh:dueWhileShown holds it while the
+# chat is not on screen.
+ch:Script a owl:Class ; rdfs:comment "Steps that play out over time in a channel (ch:in)." .
+ch:in a owl:ObjectProperty ; rdfs:domain ch:Script ; rdfs:range ch:Channel .
+ch:at a owl:ObjectProperty ; rdfs:domain ch:Script ; rdfs:comment "The next step, or ch:Done." .
+ch:typing a owl:ObjectProperty ; rdfs:domain ch:Script ; rdfs:comment "The note being written, or ch:Nobody." .
+ch:Done a owl:NamedIndividual ; rdfs:comment "No step left: the script waits for Ada to write." .
+ch:Nobody a owl:NamedIndividual ; rdfs:comment "No one is typing." .
+# A step: someone (ch:by) pauses (ch:after), types for a while (ch:typingFor), says something
+# (ch:says); then the script goes on (ch:then). A reply step also names the reply after it.
+ch:Step a owl:Class .
+ch:by a owl:ObjectProperty ; rdfs:domain ch:Step .
+ch:says a owl:DatatypeProperty ; rdfs:domain ch:Step .
+ch:after a owl:DatatypeProperty ; rdfs:domain ch:Step ; rdfs:range xsd:duration .
+ch:typingFor a owl:DatatypeProperty ; rdfs:domain ch:Step ; rdfs:range xsd:duration .
+ch:then a owl:ObjectProperty ; rdfs:domain ch:Step .
+ch:nextReply a owl:ObjectProperty ; rdfs:domain ch:Step ; rdfs:range ch:Step .
+ch:fromStep a owl:ObjectProperty ; rdfs:comment "On a scripted note: the step that wrote it." .
 
 # --- people and channels ------------------------------------------------------------------------
 # The client is Ada's. Channels are ordered (sem:order) and marked (sem:symbol) for the nav list.
@@ -56,25 +88,49 @@ ch:helpBot rdfs:label "Help desk bot" .
 
 ch:client ch:channel ch:General ; ch:sendSensitive false .
 
-ch:General a ch:Channel ; rdfs:label "general" ; sem:symbol "#" ; sem:order 1 ; ch:unread 0 ; ch:thread ui:ch-general-thread .
-ch:Design a ch:Channel ; rdfs:label "design" ; sem:symbol "#" ; sem:order 2 ; ch:unread 3 ; ch:thread ui:ch-design-thread .
-ch:Releases a ch:Channel ; rdfs:label "releases" ; sem:symbol "#" ; sem:order 3 ; ch:unread 1 ; ch:thread ui:ch-releases-thread .
-ch:Help a ch:Channel ; rdfs:label "help" ; sem:symbol "#" ; sem:order 4 ; ch:unread 0 ; ch:thread ui:ch-help-thread ;
-    ch:bot ch:helpBot ;
-    ch:cannedReply "Thanks - I've logged that as a ticket. Someone from the platform team usually answers within the hour." .
+ch:General a ch:Channel ; rdfs:label "general" ; sem:symbol "#" ; sem:order 1 ; ch:unread 0 ;
+    ch:thread ui:ch-general-thread ; ch:replies ch:gr1 .
+ch:Design a ch:Channel ; rdfs:label "design" ; sem:symbol "#" ; sem:order 2 ; ch:unread 3 ;
+    ch:thread ui:ch-design-thread ; ch:replies ch:dr1 .
+ch:Releases a ch:Channel ; rdfs:label "releases" ; sem:symbol "#" ; sem:order 3 ; ch:unread 1 ;
+    ch:thread ui:ch-releases-thread .
+ch:Help a ch:Channel ; rdfs:label "help" ; sem:symbol "#" ; sem:order 4 ; ch:unread 0 ;
+    ch:thread ui:ch-help-thread ; ch:replies ch:hr1 .
 
-# --- the messages so far ------------------------------------------------------------------------
+# --- the morning so far -------------------------------------------------------------------------
 
-ch:g1 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T09:02:00Z"^^xsd:dateTime ;
-    as:content "Morning! The planning doc for the analytics release is up - comments welcome before Thursday." .
-ch:g2 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:05:00Z"^^xsd:dateTime ;
+ch:g01 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T08:31:00Z"^^xsd:dateTime ;
+    as:content "Morning, all. Coffee machine on the third floor is fixed, finally." .
+ch:g02 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T08:33:00Z"^^xsd:dateTime ;
+    as:content "The single best news of the quarter." .
+ch:g03 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T08:40:00Z"^^xsd:dateTime ;
+    as:content "Is anyone else seeing the staging dashboard load slowly, or is it just my connection?" .
+ch:g04 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T08:42:00Z"^^xsd:dateTime ;
+    as:content "Slow here too. Looks like the nightly import is still running." .
+ch:g05 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T08:44:00Z"^^xsd:dateTime ;
+    as:content "It is - it picked up last week's backlog. Should finish by nine." .
+ch:g06 a as:Note ; as:attributedTo ch:ada ; as:published "2024-05-14T08:47:00Z"^^xsd:dateTime ;
+    as:content "Thanks. I'll hold the demo data refresh until it's done." .
+ch:g07 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T09:02:00Z"^^xsd:dateTime ;
+    as:content "The planning doc for the analytics release is up - comments welcome before Thursday." .
+ch:g08 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:05:00Z"^^xsd:dateTime ;
     as:content "Read it. The section on linked identifiers is great; I left two notes on the export format." .
-ch:g3 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:06:00Z"^^xsd:dateTime ; prv:sensitive true ;
+ch:g09 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:06:00Z"^^xsd:dateTime ; prv:sensitive true ;
     as:content "Guest Wi-Fi for Thursday's visitors: network Lovelace-Guest, password brass-otter-1843." .
-ch:g4 a as:Note ; as:attributedTo ch:ada ; as:published "2024-05-14T09:11:00Z"^^xsd:dateTime ;
+ch:g10 a as:Note ; as:attributedTo ch:ada ; as:published "2024-05-14T09:11:00Z"^^xsd:dateTime ;
     as:content "Thanks both. I'll fold the notes in this afternoon." .
-ch:g5 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T09:14:00Z"^^xsd:dateTime ;
+ch:g11 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T09:14:00Z"^^xsd:dateTime ;
     as:content "Could someone double-check the orbit numbers in the appendix? They came from last quarter's run." .
+ch:g12 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T09:16:00Z"^^xsd:dateTime ;
+    as:content "I can, after standup." .
+ch:g13 a as:Note ; as:attributedTo ch:tim ; as:published "2024-05-14T09:30:00Z"^^xsd:dateTime ;
+    as:content "Standup in five. Same room as yesterday." .
+ch:g14 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T09:52:00Z"^^xsd:dateTime ;
+    as:content "Notes from standup: export format settled, appendix to be re-run, demo moves to Thursday 14:00." .
+ch:g15 a as:Note ; as:attributedTo ch:ada ; as:published "2024-05-14T09:55:00Z"^^xsd:dateTime ;
+    as:content "Thursday works. I'll send the invite." .
+ch:g16 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T10:20:00Z"^^xsd:dateTime ;
+    as:content "Heads-up: the import finished, staging is fast again." .
 
 ch:d1 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T08:40:00Z"^^xsd:dateTime ;
     as:content "New empty-state illustrations are in the shared folder." .
@@ -83,18 +139,57 @@ ch:d2 a as:Note ; as:attributedTo ch:katherine ; as:published "2024-05-14T08:52:
 ch:d3 a as:Note ; as:attributedTo ch:grace ; as:published "2024-05-14T09:20:00Z"^^xsd:dateTime ;
     as:content "Sure - give me ten minutes." .
 
-ch:r1 a as:Note ; as:attributedTo ch:releaseBot ; as:published "2024-05-14T07:30:00Z"^^xsd:dateTime ;
+ch:r1 a as:Note ; as:attributedTo ch:releaseBot ; as:published "2024-05-13T16:10:00Z"^^xsd:dateTime ;
+    as:content "Version 2.4.0 is live: the new export dialog and saved filters." .
+ch:r2 a as:Note ; as:attributedTo ch:releaseBot ; as:published "2024-05-14T07:30:00Z"^^xsd:dateTime ;
     as:content "Version 2.4.1 is live: faster first render, and the export dialog remembers its last folder." .
 
 ch:h1 a as:Note ; as:attributedTo ch:helpBot ; as:published "2024-05-13T17:00:00Z"^^xsd:dateTime ;
     as:content "Ask anything about the build, the staging servers or access. I'll make a ticket of it." .
+
+# --- what the others are about to say -----------------------------------------------------------
+# Each channel with someone in it has a script. They start as soon as the chat is on screen
+# (their first beh:dueAt has long passed) and hold while it is not.
+
+ch:generalScript a ch:Script ; ch:in ch:General ; ch:at ch:gs1 ; ch:typing ch:Nobody ;
+    beh:dueAt "2024-01-01T00:00:00Z"^^xsd:dateTime ; beh:dueWhileShown ui:ch-app .
+ch:gs1 a ch:Step ; ch:by ch:grace ; ch:typingFor "PT2.5S"^^xsd:duration ; ch:then ch:gs2 ;
+    ch:says "Reminder: the review with the analytics team is Thursday at 14:00, in the big room." .
+ch:gs2 a ch:Step ; ch:by ch:tim ; ch:after "PT3S"^^xsd:duration ; ch:typingFor "PT2S"^^xsd:duration ; ch:then ch:gs3 ;
+    ch:says "I'll bring the export samples." .
+ch:gs3 a ch:Step ; ch:by ch:katherine ; ch:after "PT4S"^^xsd:duration ; ch:typingFor "PT4S"^^xsd:duration ; ch:then ch:gs4 ;
+    ch:says "Appendix re-run and attached: two orbits moved by a few seconds, the rest hold." .
+ch:gs4 a ch:Step ; ch:by ch:grace ; ch:after "PT5S"^^xsd:duration ; ch:typingFor "PT1.5S"^^xsd:duration ; ch:then ch:Done ;
+    ch:says "Perfect, thanks Katherine." .
+# When Ada writes and the script is idle, someone answers (in turn).
+ch:gr1 a ch:Step ; ch:by ch:grace ; ch:after "PT1.5S"^^xsd:duration ; ch:typingFor "PT2S"^^xsd:duration ; ch:then ch:Done ; ch:nextReply ch:gr2 ;
+    ch:says "Thanks Ada!" .
+ch:gr2 a ch:Step ; ch:by ch:tim ; ch:after "PT2S"^^xsd:duration ; ch:typingFor "PT2.5S"^^xsd:duration ; ch:then ch:Done ; ch:nextReply ch:gr3 ;
+    ch:says "Sounds good to me." .
+ch:gr3 a ch:Step ; ch:by ch:katherine ; ch:after "PT2S"^^xsd:duration ; ch:typingFor "PT3S"^^xsd:duration ; ch:then ch:Done ; ch:nextReply ch:gr1 ;
+    ch:says "Noted - I'll keep an eye on it." .
+
+# Grace is busy in # design while Ada is elsewhere: its unread count goes up.
+ch:designScript a ch:Script ; ch:in ch:Design ; ch:at ch:ds1 ; ch:typing ch:Nobody ;
+    beh:dueAt "2024-01-01T00:00:00Z"^^xsd:dateTime ; beh:dueWhileShown ui:ch-app .
+ch:ds1 a ch:Step ; ch:by ch:grace ; ch:after "PT2S"^^xsd:duration ; ch:typingFor "PT5S"^^xsd:duration ; ch:then ch:ds2 ;
+    ch:says "Here's the accent version - it holds up much better on dark backgrounds." .
+ch:ds2 a ch:Step ; ch:by ch:katherine ; ch:after "PT6S"^^xsd:duration ; ch:typingFor "PT2S"^^xsd:duration ; ch:then ch:Done ;
+    ch:says "Agreed. Let's ship it." .
+ch:dr1 a ch:Step ; ch:by ch:grace ; ch:after "PT2S"^^xsd:duration ; ch:typingFor "PT2S"^^xsd:duration ; ch:then ch:Done ; ch:nextReply ch:dr1 ;
+    ch:says "On it." .
+
+# The help desk bot only answers.
+ch:helpScript a ch:Script ; ch:in ch:Help ; ch:at ch:Done ; ch:typing ch:Nobody ; beh:dueWhileShown ui:ch-app .
+ch:hr1 a ch:Step ; ch:by ch:helpBot ; ch:after "PT1S"^^xsd:duration ; ch:typingFor "PT1.5S"^^xsd:duration ; ch:then ch:Done ; ch:nextReply ch:hr1 ;
+    ch:says "Thanks - I've logged that as a ticket. Someone from the platform team usually answers within the hour." .
 
 # --- the client ---------------------------------------------------------------------------------
 
 ui:ex-chat a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-chat-intro ui:ch-app ) .
 ui:ex-chat-intro a c:Text ; c:children (
-    "A team chat. Each thread is a list whose messages are placed one by one, so sending a message costs the same in a long thread as in a short one; switching channels clears its unread count; the help channel's bot answers. A message can be sensitive - press "
+    "A team chat whose colleagues type back. Threads place their messages one by one, so a message costs the same in a long thread as in a short one; someone typing is a message not yet published; the conversation plays out on a schedule that is graph data, and is remembered on this device. A message can be sensitive - press "
     ui:ch-k-mod ui:ch-k-shift ui:ch-k-h " for private mode and it is hidden." ) .
 ui:ch-k-mod a c:Kbd ; c:label "⌘" .
 ui:ch-k-shift a c:Kbd ; c:label "⇧" .
@@ -138,24 +233,23 @@ ui:ch-general-title a c:Heading ; c:label "# general" ; c:level 3 .
 ui:ch-general-topic a c:Text ; sty:textStyle sty:Caption ; c:label "Company-wide announcements and work-based matters." .
 ui:ch-general-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-general-thread ) .
 ui:ch-general-thread a c:MessageList ; c:label "Messages in # general" ; c:viewer ch:ada ;
-    c:item ch:g1 , ch:g2 , ch:g3 , ch:g4 , ch:g5 .
+    c:item ch:g01 , ch:g02 , ch:g03 , ch:g04 , ch:g05 , ch:g06 , ch:g07 , ch:g08 ,
+           ch:g09 , ch:g10 , ch:g11 , ch:g12 , ch:g13 , ch:g14 , ch:g15 , ch:g16 .
 
 ui:ch-design a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
-    c:children ( ui:ch-design-title ui:ch-design-topic ui:ch-design-pane ui:ch-design-typing ) .
+    c:children ( ui:ch-design-title ui:ch-design-topic ui:ch-design-pane ) .
 ui:ch-design-title a c:Heading ; c:label "# design" ; c:level 3 .
 ui:ch-design-topic a c:Text ; sty:textStyle sty:Caption ; c:label "Illustrations, layouts and the design system." .
 ui:ch-design-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-design-thread ) .
 ui:ch-design-thread a c:MessageList ; c:label "Messages in # design" ; c:viewer ch:ada ;
     c:item ch:d1 , ch:d2 , ch:d3 .
-# A static touch: someone typing.
-ui:ch-design-typing a c:Text ; sty:textStyle sty:Caption ; c:label "Grace Hopper is typing…" .
 
 ui:ch-releases a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
     c:children ( ui:ch-releases-title ui:ch-releases-topic ui:ch-releases-pane ) .
 ui:ch-releases-title a c:Heading ; c:label "# releases" ; c:level 3 .
 ui:ch-releases-topic a c:Text ; sty:textStyle sty:Caption ; c:label "What shipped, posted by the release bot." .
 ui:ch-releases-pane a c:Stack ; pos:layout ch:ThreadPane ; c:children ( ui:ch-releases-thread ) .
-ui:ch-releases-thread a c:MessageList ; c:label "Messages in # releases" ; c:viewer ch:ada ; c:item ch:r1 .
+ui:ch-releases-thread a c:MessageList ; c:label "Messages in # releases" ; c:viewer ch:ada ; c:item ch:r1 , ch:r2 .
 
 ui:ch-help a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
     c:children ( ui:ch-help-title ui:ch-help-topic ui:ch-help-pane ) .
@@ -179,58 +273,127 @@ ui:ch-k-shift2 a c:Kbd ; c:label "⇧" .
 ui:ch-k-enter2 a c:Kbd ; c:label "Enter" .
 ui:ch-send a c:Button ; c:label "Send" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
 
-# --- reactions ----------------------------------------------------------------------------------
-# Sending: the composer's text (trimmed; nothing if it is blank) becomes a note by Ada in the
-# open channel's thread, published at the event's time and minted from the event's IRI. If the
-# channel has a bot, its canned reply is added in the same delta. The composer is emptied.
-# Clicking Send and pressing Enter in the composer are two events with the same CONSTRUCTs.
+# --- sending ------------------------------------------------------------------------------------
+# (Times are computed in steps - BIND the dateTime, BIND the duration, then add - which Oxigraph
+# evaluates reliably; written as one expression, the sum of two casts can come out unbound.)
+# The composer's text (trimmed; nothing if it is blank) becomes a note by Ada in the open
+# channel's thread, published at the event's time and minted from the event (its IRI and its
+# time, so notes from another visit never collide); the
+# composer is emptied. If the channel's script is idle, the channel's next reply is queued:
+# the script's next step, due after that step's pause. Clicking Send and pressing Enter in
+# the composer are two event classes with the same CONSTRUCTs.
 
 ch:SendOnClick a beh:Reaction ; beh:when beh:Click ; beh:source ui:ch-send ;
     ann:announces "Message sent" ; ann:tone sty:Success ;
     beh:deletes """
-CONSTRUCT { ui:ch-composer c:value ?v ; c:error ?e }
-WHERE { ui:ch-composer c:value ?v FILTER(REPLACE(STR(?v), "\\\\s", "") != "") OPTIONAL { ui:ch-composer c:error ?e } }""" ;
+CONSTRUCT { ui:ch-composer c:value ?v ; c:error ?e . ?script ch:at ch:Done ; beh:dueAt ?due . ?channel ch:replies ?reply }
+WHERE {
+  ui:ch-composer c:value ?v FILTER(REPLACE(STR(?v), "\\\\s", "") != "")
+  OPTIONAL { ui:ch-composer c:error ?e }
+  OPTIONAL { ch:client ch:channel ?channel . ?script ch:in ?channel ; ch:at ch:Done ; ch:typing ch:Nobody . ?channel ch:replies ?reply
+             OPTIONAL { ?script beh:dueAt ?due } }
+}""" ;
     beh:inserts """
 CONSTRUCT {
   ?thread c:item ?m . ?m a as:Note ; as:attributedTo ch:ada ; as:content ?text ; as:published ?at ; prv:sensitive ?sensitive .
-  ?thread c:item ?reply . ?reply a as:Note ; as:attributedTo ?bot ; as:content ?canned ; as:published ?at .
   ui:ch-composer c:value "" .
+  ?script ch:at ?reply ; beh:dueAt ?replyAt . ?channel ch:replies ?following .
 }
 WHERE {
   ui:ch-composer c:value ?v .
   BIND(REPLACE(REPLACE(STR(?v), "^\\\\s+", ""), "\\\\s+$", "") AS ?text) FILTER(?text != "")
   ch:client ch:channel ?channel . ?channel ch:thread ?thread .
   $event beh:at ?at .
-  BIND(IRI(CONCAT(STR(ch:), "m-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?m)
+  BIND(IRI(CONCAT(STR(ch:), "m-", SUBSTR(MD5(CONCAT(STR($event), STR(?at))), 1, 12))) AS ?m)
   OPTIONAL { ch:client ch:sendSensitive true BIND(true AS ?sensitive) }
-  OPTIONAL { ?channel ch:bot ?bot ; ch:cannedReply ?canned }
-  BIND(IF(BOUND(?canned), IRI(CONCAT(STR(?m), "-reply")), ?none) AS ?reply)
+  OPTIONAL { ?script ch:in ?channel ; ch:at ch:Done ; ch:typing ch:Nobody . ?channel ch:replies ?reply . ?reply ch:after ?pause ; ch:nextReply ?following }
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(?pause) AS ?wait) BIND(?now + ?wait AS ?replyAt)
 }""" .
 
 ch:SendOnEnter a beh:Reaction ; beh:when ch:ComposerKey ; beh:source ui:ch-composer ;
     ann:announces "Message sent" ; ann:tone sty:Success ;
     beh:deletes """
-CONSTRUCT { ui:ch-composer c:value ?v ; c:error ?e }
-WHERE { ui:ch-composer c:value ?v FILTER(REPLACE(STR(?v), "\\\\s", "") != "") OPTIONAL { ui:ch-composer c:error ?e } }""" ;
+CONSTRUCT { ui:ch-composer c:value ?v ; c:error ?e . ?script ch:at ch:Done ; beh:dueAt ?due . ?channel ch:replies ?reply }
+WHERE {
+  ui:ch-composer c:value ?v FILTER(REPLACE(STR(?v), "\\\\s", "") != "")
+  OPTIONAL { ui:ch-composer c:error ?e }
+  OPTIONAL { ch:client ch:channel ?channel . ?script ch:in ?channel ; ch:at ch:Done ; ch:typing ch:Nobody . ?channel ch:replies ?reply
+             OPTIONAL { ?script beh:dueAt ?due } }
+}""" ;
     beh:inserts """
 CONSTRUCT {
   ?thread c:item ?m . ?m a as:Note ; as:attributedTo ch:ada ; as:content ?text ; as:published ?at ; prv:sensitive ?sensitive .
-  ?thread c:item ?reply . ?reply a as:Note ; as:attributedTo ?bot ; as:content ?canned ; as:published ?at .
   ui:ch-composer c:value "" .
+  ?script ch:at ?reply ; beh:dueAt ?replyAt . ?channel ch:replies ?following .
 }
 WHERE {
   ui:ch-composer c:value ?v .
   BIND(REPLACE(REPLACE(STR(?v), "^\\\\s+", ""), "\\\\s+$", "") AS ?text) FILTER(?text != "")
   ch:client ch:channel ?channel . ?channel ch:thread ?thread .
   $event beh:at ?at .
-  BIND(IRI(CONCAT(STR(ch:), "m-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?m)
+  BIND(IRI(CONCAT(STR(ch:), "m-", SUBSTR(MD5(CONCAT(STR($event), STR(?at))), 1, 12))) AS ?m)
   OPTIONAL { ch:client ch:sendSensitive true BIND(true AS ?sensitive) }
-  OPTIONAL { ?channel ch:bot ?bot ; ch:cannedReply ?canned }
-  BIND(IF(BOUND(?canned), IRI(CONCAT(STR(?m), "-reply")), ?none) AS ?reply)
+  OPTIONAL { ?script ch:in ?channel ; ch:at ch:Done ; ch:typing ch:Nobody . ?channel ch:replies ?reply . ?reply ch:after ?pause ; ch:nextReply ?following }
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(?pause) AS ?wait) BIND(?now + ?wait AS ?replyAt)
 }""" .
 
-# Opening a channel: the nav list's own reaction writes ch:client ch:channel; this one, on the
-# same click, sets the chosen channel's unread count to zero (the button says what it selects).
+# --- the scripts, step by step --------------------------------------------------------------------
+# Each is a reaction to the script's beh:Due event; exactly one applies, by the script's state.
+# Starting a step: its author begins a note in the channel's thread (started now, not
+# published: the thread shows them typing), due to be published after ch:typingFor.
+
+ch:StartTyping a beh:Reaction ; beh:when beh:Due ; beh:sourceClass ch:Script ;
+    beh:deletes """
+CONSTRUCT { $this ch:typing ch:Nobody ; beh:dueAt ?due }
+WHERE { $this ch:typing ch:Nobody ; ch:at ?step . ?step ch:by ?who . OPTIONAL { $this beh:dueAt ?due } }""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?thread c:item ?note . ?note a as:Note ; as:attributedTo ?who ; prov:startedAtTime ?at ; ch:fromStep ?step .
+  $this ch:typing ?note ; beh:dueAt ?publishAt .
+}
+WHERE {
+  $this ch:typing ch:Nobody ; ch:at ?step ; ch:in ?channel . ?step ch:by ?who ; ch:typingFor ?typing .
+  ?channel ch:thread ?thread .
+  $event beh:at ?at .
+  BIND(IRI(CONCAT(STR(ch:), "m-", SUBSTR(MD5(CONCAT(STR($event), STR(?at))), 1, 12))) AS ?note)
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(?typing) AS ?wait) BIND(?now + ?wait AS ?publishAt)
+}""" .
+
+# Publishing: the note gets its content and is published now - the same thread entry turns
+# from typing into the message. The script moves to the next step, due after its pause; a
+# channel that is not open counts one more unread message.
+ch:Publish a beh:Reaction ; beh:when beh:Due ; beh:sourceClass ch:Script ;
+    beh:deletes """
+CONSTRUCT { $this ch:typing ?note ; ch:at ?step ; beh:dueAt ?due . ?channel ch:unread ?n }
+WHERE {
+  $this ch:typing ?note ; ch:at ?step ; ch:in ?channel FILTER(?note != ch:Nobody)
+  OPTIONAL { $this beh:dueAt ?due }
+  BIND(NOT EXISTS { ch:client ch:channel ?channel } AS ?away)
+  OPTIONAL { ?channel ch:unread ?count }
+  BIND(IF(?away, ?count, ?none) AS ?n)
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?note as:content ?text ; as:published ?at .
+  $this ch:typing ch:Nobody ; ch:at ?next ; beh:dueAt ?nextAt .
+  ?channel ch:unread ?more .
+}
+WHERE {
+  $this ch:typing ?note ; ch:at ?step ; ch:in ?channel FILTER(?note != ch:Nobody)
+  ?step ch:says ?text ; ch:then ?next .
+  $event beh:at ?at .
+  OPTIONAL { ?next ch:after ?pause }
+  BIND(xsd:dateTime(?at) AS ?now) BIND(xsd:duration(COALESCE(?pause, "PT2S")) AS ?wait)
+  BIND(IF(?next = ch:Done, ?none, ?now + ?wait) AS ?nextAt)
+  BIND(NOT EXISTS { ch:client ch:channel ?channel } AS ?away)
+  OPTIONAL { ?channel ch:unread ?n }
+  BIND(IF(?away, COALESCE(?n, 0) + 1, ?none) AS ?more)
+}""" .
+
+# --- opening a channel ----------------------------------------------------------------------------
+# The nav list's own reaction writes ch:client ch:channel; this one, on the same click, sets the
+# chosen channel's unread count to zero (the button says what it selects).
+
 ch:ClearUnread a beh:Reaction ; beh:when beh:Click ; beh:source ui:ch-channels ;
     beh:deletes """
 CONSTRUCT { ?channel ch:unread ?n }
@@ -239,11 +402,36 @@ WHERE { $event beh:node ?hit . ?b rdfhtml:hasChild* ?hit . ?b c:selects ?channel
 CONSTRUCT { ?channel ch:unread 0 }
 WHERE { $event beh:node ?hit . ?b rdfhtml:hasChild* ?hit . ?b c:selects ?channel . ?channel ch:unread ?n FILTER(?n != 0) }""" .
 
+# --- remembered --------------------------------------------------------------------------------------
+# The conversation is kept on this device (localStorage), like a chat app's local copy: every
+# thread's notes, unread counts, whose turn it is to reply, which channel is open and where
+# each script is - including a note being typed and when its next step is due. On a reload it
+# is put back before the first render; a step that came due meanwhile is taken as soon as the
+# chat is shown. Device rather than session: a conversation outlives the tab.
+
+ui:rememberChat a per:Policy ; per:scope per:Device ;
+    rdfs:label "The chat example's conversation" ;
+    per:construct """
+CONSTRUCT {
+  ?thread c:item ?m . ?m ?p ?o .
+  ?channel ch:unread ?n ; ch:replies ?r .
+  ?script ch:at ?at ; ch:typing ?typing ; beh:dueAt ?due .
+  ch:client ch:channel ?open .
+}
+WHERE {
+  { ?channel a ch:Channel ; ch:thread ?thread . ?thread c:item ?m . ?m ?p ?o }
+  UNION { ?channel a ch:Channel ; ch:unread ?n }
+  UNION { ?channel a ch:Channel ; ch:replies ?r }
+  UNION { ?script a ch:Script ; ch:at ?at ; ch:typing ?typing }
+  UNION { ?script a ch:Script ; beh:dueAt ?due }
+  UNION { ch:client ch:channel ?open }
+}""" .
+
 # --- how it works --------------------------------------------------------------------------------
 
 ui:ex-chat-how a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-chat-how-title ui:ex-chat-how-data ui:ex-chat-how-thread ui:ex-chat-how-send
-                 ui:ex-chat-how-channels ui:ex-chat-how-private ui:ex-chat-how-cost ) .
+    c:children ( ui:ex-chat-how-title ui:ex-chat-how-data ui:ex-chat-how-thread ui:ex-chat-how-send ui:ex-chat-how-typing
+                 ui:ex-chat-how-time ui:ex-chat-how-channels ui:ex-chat-how-private ui:ex-chat-how-keep ui:ex-chat-how-cost ) .
 ui:ex-chat-how-title a c:Heading ; c:label "How it works" ; c:level 2 .
 ui:ex-chat-how-data a c:Text ; c:children (
     "Messages are ActivityStreams notes: " ui:ex-chat-how-c1 " with " ui:ex-chat-how-c2 ", " ui:ex-chat-how-c3 " and " ui:ex-chat-how-c4
@@ -265,24 +453,47 @@ ui:ex-chat-how-c10 a c:Code ; c:label "c:Message" .
 ui:ex-chat-how-c11 a c:Code ; c:label "c:Switch" .
 ui:ex-chat-how-send a c:Text ; c:children (
     "Sending is " ui:ex-chat-how-c12 " (the button) and " ui:ex-chat-how-c13 " (Enter in the composer, an event class of its own: " ui:ex-chat-how-c14
-    "). Their CONSTRUCT mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer; in # help the bot's " ui:ex-chat-how-c15 " comes in the same delta. A send is announced as a toast." ) .
+    "). Their CONSTRUCT mints a note from the event's IRI, publishes it at the event's time, adds it to the open channel's thread and empties the composer; if the channel's script is idle it also queues the channel's next " ui:ex-chat-how-c15 ". A send is announced as a toast." ) .
 ui:ex-chat-how-c12 a c:Code ; c:label "ch:SendOnClick" .
 ui:ex-chat-how-c13 a c:Code ; c:label "ch:SendOnEnter" .
 ui:ex-chat-how-c14 a c:Code ; c:label "ch:ComposerKey" .
-ui:ex-chat-how-c15 a c:Code ; c:label "ch:cannedReply" .
+ui:ex-chat-how-c15 a c:Code ; c:label "ch:replies" .
+ui:ex-chat-how-typing a c:Text ; c:children (
+    "Someone typing is a note that is not published yet: it has " ui:ex-chat-how-c16 " and no " ui:ex-chat-how-c17
+    ". The thread places it where it started and shows its author with three dots (read out once, politely, as \"… is typing\" by the list's log role; the dots follow the motion preference). Publishing adds the content and the time to the same note, so the same entry becomes the message, in place." ) .
+ui:ex-chat-how-c16 a c:Code ; c:label "prov:startedAtTime" .
+ui:ex-chat-how-c17 a c:Code ; c:label "as:published" .
+ui:ex-chat-how-time a c:Text ; c:children (
+    "The others are " ui:ex-chat-how-c18 "s: chains of " ui:ex-chat-how-c19 "s saying who types what, for how long, after what pause. A script says when its next thing happens with "
+    ui:ex-chat-how-c20 "; the host's scheduler (src/behaviour/schedule.ts, one timer for the earliest due node, on a clock tests can move by hand) records a " ui:ex-chat-how-c21
+    " event addressed to the script when the time comes, and two ordinary reactions take the step: " ui:ex-chat-how-c22 " and " ui:ex-chat-how-c23 ". "
+    ui:ex-chat-how-c24 " holds a script while the chat is not on screen; it picks up where it was when it is." ) .
+ui:ex-chat-how-c18 a c:Code ; c:label "ch:Script" .
+ui:ex-chat-how-c19 a c:Code ; c:label "ch:Step" .
+ui:ex-chat-how-c20 a c:Code ; c:label "beh:dueAt" .
+ui:ex-chat-how-c21 a c:Code ; c:label "beh:Due" .
+ui:ex-chat-how-c22 a c:Code ; c:label "ch:StartTyping" .
+ui:ex-chat-how-c23 a c:Code ; c:label "ch:Publish" .
+ui:ex-chat-how-c24 a c:Code ; c:label "beh:dueWhileShown" .
 ui:ex-chat-how-channels a c:Text ; c:children (
-    "The channel list is a " ui:ex-chat-how-c16 " over " ui:ex-chat-how-c17 "; " ui:ex-chat-how-c18
-    " shows each channel's unread count beside it (and says \"3 unread\" to screen readers). Clicking a channel runs the list's own reaction and " ui:ex-chat-how-c19 ", which zeroes that channel's count." ) .
-ui:ex-chat-how-c16 a c:Code ; c:label "c:NavList" .
-ui:ex-chat-how-c17 a c:Code ; c:label "ch:channel" .
-ui:ex-chat-how-c18 a c:Code ; c:label "c:countProperty ch:unread" .
-ui:ex-chat-how-c19 a c:Code ; c:label "ch:ClearUnread" .
+    "The channel list is a " ui:ex-chat-how-c25 " over " ui:ex-chat-how-c26 "; " ui:ex-chat-how-c27
+    " shows each channel's unread count beside it (and says \"3 unread\" to screen readers). A message published in a channel that is not open adds one; clicking a channel runs the list's own reaction and " ui:ex-chat-how-c28 ", which zeroes its count." ) .
+ui:ex-chat-how-c25 a c:Code ; c:label "c:NavList" .
+ui:ex-chat-how-c26 a c:Code ; c:label "ch:channel" .
+ui:ex-chat-how-c27 a c:Code ; c:label "c:countProperty ch:unread" .
+ui:ex-chat-how-c28 a c:Code ; c:label "ch:ClearUnread" .
 ui:ex-chat-how-private a c:Text ; c:children (
-    "A note with " ui:ex-chat-how-c20 " is hidden in private mode: the thread copies the flag onto the note's " ui:ex-chat-how-c21
+    "A note with " ui:ex-chat-how-c29 " is hidden in private mode: the thread copies the flag onto the note's " ui:ex-chat-how-c30
     ", and the privacy layer blurs it. Turn on \"Send as sensitive\" and what you send is hidden too. Neither the thread nor the message knows." ) .
-ui:ex-chat-how-c20 a c:Code ; c:label "prv:sensitive true" .
-ui:ex-chat-how-c21 a c:Code ; c:label "c:Message" .
+ui:ex-chat-how-c29 a c:Code ; c:label "prv:sensitive true" .
+ui:ex-chat-how-c30 a c:Code ; c:label "c:Message" .
+ui:ex-chat-how-keep a c:Text ; c:children (
+    ui:ex-chat-how-c31 " is a " ui:ex-chat-how-c32 " with " ui:ex-chat-how-c33
+    ": its CONSTRUCT - the threads, the counts, whose turn it is, where each script is and when it is due - is kept in localStorage and put back before the first render, so a reload continues the conversation, a half-typed note included." ) .
+ui:ex-chat-how-c31 a c:Code ; c:label "ui:rememberChat" .
+ui:ex-chat-how-c32 a c:Code ; c:label "per:Policy" .
+ui:ex-chat-how-c33 a c:Code ; c:label "per:scope per:Device" .
 ui:ex-chat-how-cost a c:Text ; c:children (
-    "Why it is cheap: a new note is a new " ui:ex-chat-how-c22
-    " link, and a member-wise rule hears only that link - one member evaluation, one message rendered, one list item inserted, the same in a thread of five or five hundred. The other threads, and every channel not yet opened, are not evaluated at all." ) .
-ui:ex-chat-how-c22 a c:Code ; c:label "c:item" .
+    "Why it is cheap: a new note is a new " ui:ex-chat-how-c34
+    " link, and a member-wise rule hears only that link - one member evaluation, one message rendered, one list item inserted, the same in a thread of fifteen or fifteen hundred. A script step is one event, one CONSTRUCT and one note changed; the threads not shown are not evaluated at all." ) .
+ui:ex-chat-how-c34 a c:Code ; c:label "c:item" .
