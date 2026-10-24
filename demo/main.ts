@@ -22,8 +22,9 @@ import { perfRunner } from './perf-runner.ts'
 const UI = 'https://semblance.dev/demo#'
 const params = new URLSearchParams(location.search)
 const kind = (params.get('store') ?? 'hybrid') as StoreKind
-// Functions by default: measured several times faster in the browser; SPARQL renders identically (Rules menu).
-const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'function')) as 'sparql' | 'function'
+// SPARQL by default: the rules are queries, inspectable and portable. Function twins render the same
+// HTML, faster in the browser (Rules menu, ?prefer=function); a store without SPARQL (N3) needs them.
+const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
 const STORES: Record<StoreKind, string> = { hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 

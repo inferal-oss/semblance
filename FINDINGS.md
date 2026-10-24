@@ -134,8 +134,8 @@ Measured in the demo (Chrome, hybrid store, functions preferred):
 - **SPARQL against functions.** Rendering a page back in costs 1.5 s with the
   SPARQL implementations and 134 ms with the function ones (they render the
   same HTML, which the tests check). Bulk evaluation (one query with `VALUES`
-  for many foci) closes part of the gap. The demo prefers functions; the Rules
-  menu switches.
+  for many foci) closes part of the gap. The demo prefers SPARQL, the rules being
+  queries one can read and run; the Rules menu (or `?prefer=function`) switches.
 - **A language switch** re-ran every rule that produced text. Rules that read
   the viewer's language are now traced as reading it (`readsLanguage`), and a
   language change re-runs only those.
