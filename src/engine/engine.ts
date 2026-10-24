@@ -472,7 +472,8 @@ export class Engine {
     // A path's first step is followed like a single predicate; every longer prefix by its last step.
     for (const r of rules) {
       for (const path of r.followPaths) {
-        if (!(this.followers.get(path[0]!) ?? []).includes(r)) this.followers.set(path[0]!, [...(this.followers.get(path[0]!) ?? []), r])
+        if (/^[*^]/.test(path[0]!)) this.inverseFollowers.push({ rule: r, path: path.slice(0, 1) })
+        else if (!(this.followers.get(path[0]!) ?? []).includes(r)) this.followers.set(path[0]!, [...(this.followers.get(path[0]!) ?? []), r])
         for (let k = 2; k <= path.length; k++) {
           if (path[k - 1]!.startsWith('^')) {
             this.inverseFollowers.push({ rule: r, path: path.slice(0, k) })
