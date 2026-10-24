@@ -6,6 +6,7 @@ import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
 import { comboOf, navigate, normalizeShortcut, rove } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
+import { DragHost } from './drag.ts'
 import { type Clock, systemClock } from './clock.ts'
 
 const XSD_DATETIME = 'http://www.w3.org/2001/XMLSchema#dateTime'
@@ -38,6 +39,8 @@ export interface EventDetail {
   caret?: number
   /** The key combination of a key press, normalized as key:shortcut is ("tab", "mod+enter"; beh:key). */
   key?: string
+  /** Further statements about the event, by predicate (a drop carries the drag's: what, from, where). */
+  about?: [predicate: string, object: Term][]
 }
 
 export interface Handled {
@@ -227,6 +230,7 @@ export class EventBus {
     if (detail.checked !== undefined) quads.push(f.quad(event, nn(BEH.checked), f.literal(String(detail.checked), nn(XSD_BOOLEAN))))
     if (detail.caret !== undefined) quads.push(f.quad(event, nn(NS.beh + 'caret'), f.literal(String(detail.caret), nn(XSD_INTEGER))))
     if (detail.key !== undefined) quads.push(f.quad(event, nn(NS.beh + 'key'), f.literal(detail.key)))
+    for (const [p, o] of detail.about ?? []) quads.push(f.quad(event, nn(p), o as NamedNode))
     for (const [name, v] of Object.entries(detail.numbers ?? {})) quads.push(f.quad(event, nn(NS.beh + name), f.literal(String(Math.round(v)), nn(XSD_INTEGER))))
     // The event is readable by reactions before it is a member of the stream.
     for (const q of quads) this.runtime.store.add(f.quad(q.subject, q.predicate, q.object, this.graph))
@@ -404,6 +408,17 @@ export class EventBus {
         }
       }
     }
+    // Drag and drop (ontology/layers/dragdrop.ttl): the pointer gesture (below), and its keys before
+    // any other key handling - on the host for keys inside it, on the document for the rest.
+    const drags = new DragHost(this, renderer, onHandled)
+    const dragKeys = (e: Event) => {
+      if ((e.currentTarget === doc) === renderer.host.contains(e.target as Node)) return
+      if (drags.key(e as KeyboardEvent, apple)) e.preventDefault(), e.stopImmediatePropagation()
+    }
+    const native = (e: Event) => (e.target as Element).closest?.('[data-sem-gesture=drag]') && e.preventDefault()
+    renderer.host.addEventListener('keydown', dragKeys)
+    doc.addEventListener('keydown', dragKeys)
+    renderer.host.addEventListener('dragstart', native)
     for (const t of domTypes) renderer.host.addEventListener(t, listener)
     // A field marked data-sem-controlled shows what the graph says once its input is handled,
     // also when nothing changed (a code input drops characters its charset does not allow).
@@ -415,7 +430,7 @@ export class EventBus {
       if (field.value !== value) field.value = value
     }
     renderer.host.addEventListener('input', controlled)
-    const gestures = (e: Event) => this.gesture(e as PointerEvent, renderer)
+    const gestures = (e: Event) => this.gesture(e as PointerEvent, renderer, drags)
     renderer.host.addEventListener('pointerdown', gestures)
     // Keyboard layer: a key combination activates the element that declares it.
     const keys = (e: Event) => {
@@ -465,6 +480,10 @@ export class EventBus {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('input', controlled)
       renderer.host.removeEventListener('pointerdown', gestures)
+      renderer.host.removeEventListener('keydown', dragKeys)
+      doc.removeEventListener('keydown', dragKeys)
+      renderer.host.removeEventListener('dragstart', native)
+      drags.dispose()
       doc.removeEventListener('keydown', keys)
       doc.removeEventListener('pointermove', track)
       renderer.host.removeEventListener('focusin', entered)
@@ -496,12 +515,14 @@ export class EventBus {
   /**
    * Drag gestures on handles marked data-sem-gesture: the nearest component
    * root follows the pointer (a transient view change), and on release one
-   * sem-move / sem-resize DOM event carries the result into an RDF event.
+   * sem-move / sem-resize DOM event carries the result into an RDF event. A "drag" handle
+   * carries what it shows to drop targets (src/behaviour/drag.ts).
    */
-  private gesture(e: PointerEvent, renderer: DomRenderer) {
+  private gesture(e: PointerEvent, renderer: DomRenderer, drags: DragHost) {
     const handle = (e.target as Element).closest?.('[data-sem-gesture]') as HTMLElement | null
     if (!handle || e.button !== 0 || (e.target as Element).closest('button, input, select, textarea')) return
     if (handle.dataset.semGesture === 'size') return this.sizeGesture(e, handle, renderer)
+    if (handle.dataset.semGesture === 'drag') return drags.pointer(e, handle)
     let box: HTMLElement | null = handle
     while (box && !(renderer.keyOf(box) && renderer.index.focusOf(renderer.keyOf(box)!))) box = box.parentElement
     if (!box) return

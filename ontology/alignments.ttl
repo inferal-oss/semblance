@@ -8,6 +8,7 @@
 @prefix mot: <https://semblance.dev/ns/motion#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix st: <https://semblance.dev/ns/status#> .
@@ -58,6 +59,8 @@
     vann:preferredNamespacePrefix "val" ; vann:preferredNamespaceUri "https://semblance.dev/ns/validation#" .
 <https://semblance.dev/ns/keyboard> dcterms:title "Semblance keyboard layer"@en ;
     vann:preferredNamespacePrefix "key" ; vann:preferredNamespaceUri "https://semblance.dev/ns/keyboard#" .
+<https://semblance.dev/ns/dragdrop> dcterms:title "Semblance drag and drop layer"@en ;
+    vann:preferredNamespacePrefix "dnd" ; vann:preferredNamespaceUri "https://semblance.dev/ns/dragdrop#" .
 
 # --- labels and descriptions (RDFS, SKOS, DCMI) --------------------------------------------------
 
@@ -105,6 +108,20 @@ beh:Reaction skos:closeMatch prov:Plan .
 beh:ChangeLog skos:relatedMatch as:OrderedCollection .
 ann:announces rdfs:subPropertyOf as:summary .
 key:Command skos:relatedMatch schema:Action .
+
+# A drop is a move of something from one place to another (ActivityStreams' as:Move: its object,
+# origin and target); what is carried, from where and into what are those roles. The effects are
+# the kinds of action it may be.
+dnd:Drop skos:closeMatch as:Move , schema:MoveAction .
+dnd:Refusal skos:relatedMatch as:Reject .
+dnd:carrying rdfs:subPropertyOf as:object .
+dnd:from rdfs:subPropertyOf as:origin ; skos:closeMatch schema:fromLocation .
+dnd:into rdfs:subPropertyOf as:target ; skos:closeMatch schema:toLocation .
+dnd:Move skos:closeMatch as:Move , schema:MoveAction .
+dnd:Copy skos:relatedMatch schema:CreateAction .
+dnd:Link skos:relatedMatch schema:LinkRole .
+dnd:rank skos:closeMatch schema:position .
+dnd:accepts skos:relatedMatch sh:node .
 
 # --- design tokens and variant values are concepts (SKOS) ----------------------------------------
 
@@ -238,6 +255,7 @@ skos:relatedMatch sem:alignmentStrength sem:Related .
     [ sh:prefix "mot" ; sh:namespace "https://semblance.dev/ns/motion#"^^xsd:anyURI ],
     [ sh:prefix "val" ; sh:namespace "https://semblance.dev/ns/validation#"^^xsd:anyURI ],
     [ sh:prefix "key" ; sh:namespace "https://semblance.dev/ns/keyboard#"^^xsd:anyURI ],
+    [ sh:prefix "dnd" ; sh:namespace "https://semblance.dev/ns/dragdrop#"^^xsd:anyURI ],
     [ sh:prefix "l10n" ; sh:namespace "https://semblance.dev/ns/l10n#"^^xsd:anyURI ],
     [ sh:prefix "ann" ; sh:namespace "https://semblance.dev/ns/announce#"^^xsd:anyURI ],
     [ sh:prefix "st" ; sh:namespace "https://semblance.dev/ns/status#"^^xsd:anyURI ],

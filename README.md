@@ -125,6 +125,17 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   (`mot:preference`, `sty:contrast`) whose values re-value the motion and role
   tokens for the subtree.
 
+- **Drag and drop** (`dnd:`): `dnd:Draggable` components carry a resource,
+  `dnd:DropTarget`s receive it, and where it may go is SHACL - the carried
+  resource must conform to the target's `dnd:accepts` shapes, and the target
+  must still conform to its own (a `sh:maxCount` capacity) with one more member.
+  The drag is graph state (`dnd:Current`); every target derives its reception
+  (accepted, or refused with the shape's message), the theme shows it, and an
+  ordered target marks the insertion point and the order key a drop would take
+  (half way between the neighbours'). Over-events are unrecorded; a `dnd:Drop`
+  is recorded and handled by the target's own reactions; a refused drop is a
+  `dnd:Refusal` they never see, announced. Pointer (a long press on touch) and
+  keyboard (Space, arrows, Space/Enter, Escape) drive it alike.
 - **Announcements**: reactions say what they mean (`ann:announces`); a
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,

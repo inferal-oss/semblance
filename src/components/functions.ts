@@ -3,7 +3,7 @@
 // swapped per rule and compared head-to-head.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
@@ -14,6 +14,7 @@ import { statusFunctions } from '../layers/status.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
+import { dragdropFunctions } from '../layers/dragdrop.ts'
 import { functions as layoutFunctions } from './layout.ts'
 import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
@@ -160,12 +161,18 @@ const listMember: FnRule = (ctx, focus, item) => {
   o.t(inst, C.inList, focus)
   if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
   if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
+  // A sortable list's items can be picked up, carrying the data item (the drag and drop layer).
+  if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
+    o.t(inst, RDF_TYPE, ctx.nn(DND.Draggable)).t(inst, DND.carries, item)
+    const name = labelFrom && ctx.object(item, labelFrom)
+    if (name) o.t(inst, DND.name, name.value)
+  }
   // Missing keys sort last.
   o.t(inst, SEM.orderKey, key?.value ?? '\uffff')
   o.t(o.node('root'), H.hasChild, inst)
   return o.quads
 }
-listMember.watches = () => new Set([C.sortBy, C.itemLabel, C.itemChecked])
+listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked])
 
 function itemData(ctx: RuleContext, focus: NamedNode) {
   const item = ctx.object(focus, C.of)
@@ -721,6 +728,7 @@ export const functions: Record<string, FnRule> = {
   ...l10nFunctions,
   ...announceFunctions,
   ...shapeFunctions,
+  ...dragdropFunctions,
   ...layoutFunctions,
   ...typeFunctions,
   ...actionsFunctions,

@@ -15,7 +15,9 @@ const toasts: FnRule = (ctx, focus) => {
   let m = ctx.object(stream, BEH.latest)
   for (let seen = 0; named(m) && seen < WINDOW && found.length < limit; seen++, m = ctx.object(m, BEH.previous)) {
     for (const reaction of ctx.objects(m, BEH.handledBy)) {
-      const said = text(ctx, reaction, ANN.announces)
+      // An event may say it itself (ann:announcesFrom: e.g. a refusal's reason).
+      const from = ctx.object(reaction, ANN.announcesFrom)
+      const said = (named(from) ? text(ctx, m, from.value) : undefined) ?? text(ctx, reaction, ANN.announces)
       if (said === undefined) continue
       found.push({ seq: Number(str(ctx.object(m, BEH.sequence)) ?? 0), text: said, tone: ctx.object(reaction, ANN.tone)?.value })
       break

@@ -12,16 +12,18 @@
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
 
 # Gallery page: Layers - cross-cutting concerns that apply to every component
 # without the components knowing. Each can be switched off in the Playground's
 # layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ui:l-persistence ui:l-privacy ) .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-dragdrop ui:l-status ui:l-l10n ui:l-display ui:l-persistence ui:l-privacy ) .
 ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
 
 # --- validation: SHACL shapes on fields -------------------------------------------------------------
@@ -75,6 +77,64 @@ ui:ResetCounter ann:announces "Counter reset" , "Лічильник скинут
 ui:ResetCounter a beh:Reaction ; beh:when beh:Click ; beh:source ui:resetCounter ;
     beh:deletes """CONSTRUCT { ui:counter c:label ?old } WHERE { ui:counter c:label ?old }""" ;
     beh:inserts """CONSTRUCT { ui:counter c:label "0" } WHERE { }""" .
+
+# --- drag and drop: what may go where, as shapes ----------------------------------------------------
+
+ui:l-dragdrop a c:Flippable ; c:front ui:l-dragdrop-spec .
+ui:l-dragdrop-spec a c:Specimen ; c:label "Drag and drop" , "Перетягування"@uk , "Ziehen und Ablegen"@de , "السحب والإفلات"@ar ;
+    c:help "Three lists that are dnd:Sortable: their items can be picked up (drag one, or focus it and press Space; arrows move it, Space drops, Escape puts it back) and the lists take them in. Where a task may go is SHACL: Bugs accepts only what conforms to a shape (a bug), and Today has a capacity, sh:maxCount on its items. While a task is carried, every list says whether it would take it - refusing ones are dimmed and tell you why - and a line shows where it would land. Dropping is this page's own reaction: the task joins the list with a rank half way between its new neighbours'; nothing else is renumbered." ;
+    c:children ( ui:dndShelves ) .
+ui:dndShelves a c:Grid ; c:minWidth "180px" ; pos:gap tok:space-4 ; c:children ( ui:dndBacklogBox ui:dndTodayBox ui:dndBugsBox ) .
+ui:dndBacklogBox a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dndBacklogTitle ui:dndBacklog ) .
+ui:dndTodayBox a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dndTodayTitle ui:dndToday ) .
+ui:dndBugsBox a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; c:children ( ui:dndBugsTitle ui:dndBugs ) .
+ui:dndBacklogTitle a c:Heading ; c:level 3 ; c:label "Backlog" , "Беклог"@uk , "Rückstand"@de , "المهام المؤجلة"@ar .
+ui:dndTodayTitle a c:Heading ; c:level 3 ; c:label "Today (two at most)" , "Сьогодні (не більше двох)"@uk , "Heute (höchstens zwei)"@de , "اليوم (اثنتان على الأكثر)"@ar .
+ui:dndBugsTitle a c:Heading ; c:level 3 ; c:label "Bugs only" , "Лише вади"@uk , "Nur Fehler"@de , "الأخطاء فقط"@ar .
+
+# The lists: sortable (their items are draggables, ordered by ui:rank), holding their tasks as c:item.
+ui:Shelf a owl:Class ; rdfs:comment "The specimen's lists: a drop moves the task into the list, at its place."@en .
+ui:dndBacklog a c:List , dnd:Sortable , ui:Shelf ; c:label "Backlog" ; c:itemLabel rdfs:label ; c:sortBy ui:rank ;
+    dnd:members c:item ; dnd:orderBy ui:rank ;
+    c:item ui:task-notes , ui:task-dark , ui:task-search , ui:task-profile .
+ui:dndToday a c:List , dnd:Sortable , ui:Shelf ; c:label "Today" ; c:itemLabel rdfs:label ; c:sortBy ui:rank ;
+    dnd:members c:item ; dnd:orderBy ui:rank ;
+    c:item ui:task-login , ui:task-review .
+ui:dndBugs a c:List , dnd:Sortable , ui:Shelf ; c:label "Bugs" ; c:itemLabel rdfs:label ; c:sortBy ui:rank ;
+    dnd:members c:item ; dnd:orderBy ui:rank ; dnd:accepts ui:BugShape ;
+    c:item ui:task-crash .
+
+# Where a task may go. Today's capacity is a shape on the list (one more item must still conform);
+# Bugs takes only what conforms to ui:BugShape.
+ui:TodayLimit a sh:NodeShape ; sh:targetNode ui:dndToday ;
+    sh:property [ sh:path c:item ; sh:maxCount 2 ; sh:message "Today holds two tasks at most." ] .
+ui:BugShape a sh:NodeShape ;
+    sh:property [ sh:path ui:kind ; sh:hasValue ui:Bug ; sh:message "Only bugs go here." ] .
+
+ui:Bug a ui:Kind ; rdfs:label "bug" .
+ui:Feature a ui:Kind ; rdfs:label "feature" .
+ui:Chore a ui:Kind ; rdfs:label "chore" .
+ui:task-notes rdfs:label "Write the release notes" ; ui:kind ui:Chore ; ui:rank 1 .
+ui:task-dark rdfs:label "Dark mode for the editor" ; ui:kind ui:Feature ; ui:rank 2 .
+ui:task-search rdfs:label "Bug: search drops accents" ; ui:kind ui:Bug ; ui:rank 3 .
+ui:task-profile rdfs:label "Profile the board" ; ui:kind ui:Chore ; ui:rank 4 .
+ui:task-login rdfs:label "Bug: login loops on Safari" ; ui:kind ui:Bug ; ui:rank 1 .
+ui:task-review rdfs:label "Review the shapes guide" ; ui:kind ui:Chore ; ui:rank 2 .
+ui:task-crash rdfs:label "Bug: crash on an empty query" ; ui:kind ui:Bug ; ui:rank 1 .
+
+# A drop (one the list accepts: refused drops never get here) moves the task into the list: out
+# of the one it came from, unless that is this one, and to its new rank.
+ui:ShelfDrop a beh:Reaction ; beh:when dnd:Drop ; beh:sourceClass ui:Shelf ;
+    beh:deletes """
+CONSTRUCT { ?from c:item ?task . ?task ui:rank ?old }
+WHERE {
+  $event dnd:carrying ?task ; dnd:from ?from .
+  { ?from c:item ?task FILTER(?from != $this) } UNION { $event dnd:rank ?rank . ?task ui:rank ?old }
+}""" ;
+    beh:inserts """
+CONSTRUCT { $this c:item ?task . ?task ui:rank ?rank }
+WHERE { $event dnd:carrying ?task . OPTIONAL { $event dnd:rank ?rank } }""" ;
+    ann:announces "Task moved" , "Завдання переміщено"@uk , "Aufgabe verschoben"@de , "تم نقل المهمة"@ar .
 
 # --- status: busy ----------------------------------------------------------------------------------------
 

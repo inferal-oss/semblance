@@ -23,6 +23,7 @@ export const NS = {
   mot: 'https://semblance.dev/ns/motion#',
   val: 'https://semblance.dev/ns/validation#',
   key: 'https://semblance.dev/ns/keyboard#',
+  dnd: 'https://semblance.dev/ns/dragdrop#',
   l10n: 'https://semblance.dev/ns/l10n#',
   ann: 'https://semblance.dev/ns/announce#',
   st: 'https://semblance.dev/ns/status#',
@@ -336,6 +337,17 @@ export const VAL = {
   ShapesLayer: NS.val + 'ShapesLayer',
 } as const
 export const KEY = { Layer: NS.key + 'Layer', shortcut: NS.key + 'shortcut', Command: NS.key + 'Command', Press: NS.key + 'Press', whileTyping: NS.key + 'whileTyping' } as const
+/** The drag and drop layer (ontology/layers/dragdrop.ttl). */
+export const DND = {
+  Draggable: NS.dnd + 'Draggable', DropTarget: NS.dnd + 'DropTarget', Sortable: NS.dnd + 'Sortable', carries: NS.dnd + 'carries', name: NS.dnd + 'name',
+  allows: NS.dnd + 'allows', Move: NS.dnd + 'Move', Copy: NS.dnd + 'Copy', receptacle: NS.dnd + 'receptacle', zone: NS.dnd + 'zone', accepts: NS.dnd + 'accepts', memberOf: NS.dnd + 'memberOf',
+  members: NS.dnd + 'members', orderBy: NS.dnd + 'orderBy', Drag: NS.dnd + 'Drag', Current: NS.dnd + 'Current', source: NS.dnd + 'source', carrying: NS.dnd + 'carrying',
+  from: NS.dnd + 'from', dropTarget: NS.dnd + 'dropTarget', into: NS.dnd + 'into', after: NS.dnd + 'after', before: NS.dnd + 'before', rank: NS.dnd + 'rank',
+  effect: NS.dnd + 'effect', by: NS.dnd + 'by', Pointer: NS.dnd + 'Pointer', Keyboard: NS.dnd + 'Keyboard', reason: NS.dnd + 'reason', offered: NS.dnd + 'offered',
+  hovered: NS.dnd + 'hovered', lifted: NS.dnd + 'lifted', refusedBy: NS.dnd + 'refusedBy', Reception: NS.dnd + 'Reception', verdict: NS.dnd + 'verdict',
+  Accepted: NS.dnd + 'Accepted', Refused: NS.dnd + 'Refused', Start: NS.dnd + 'Start', Over: NS.dnd + 'Over', Drop: NS.dnd + 'Drop', Refusal: NS.dnd + 'Refusal',
+  Cancel: NS.dnd + 'Cancel', End: NS.dnd + 'End',
+} as const
 export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
-export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
+export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
 export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const

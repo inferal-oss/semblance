@@ -102,6 +102,7 @@ per projection. New ones:
 | **Motion** (`mot:`) | `mot:preference` Full / Reduced / None on a subtree | Re-values the duration and easing tokens every transition and animation uses (shared `sty:Keyframes` in the foundations). |
 | **Localization** (`l10n:`) | `l10n:language` on the app; language-tagged `rdfs:label` / `c:label` | Components read labels through the layer: the app language wins, then English, then untagged. Languages with `l10n:direction l10n:RTL` set `dir="rtl"` on the shell. |
 | **Announcements** (`ann:`) | `ann:announces "…"` (and `ann:tone`) on a reaction | A `c:ToastRegion` with `ann:from` a change log shows the newest announcing events as toasts, reading the log from its head. |
+| **Drag and drop** (`dnd:`) | `dnd:Draggable` (`dnd:carries`), `dnd:DropTarget` / `dnd:Sortable` (`dnd:accepts` shapes, `dnd:memberOf` / `dnd:members`, `dnd:orderBy`) | Draggables are handles (pointer, long press, Space); while one is carried every zone is marked accepting or refusing (with the violated shape's `sh:message`), the hovered position shows an insertion line, and a drop is a recorded `dnd:Drop` for the target's reactions, with a fractional `dnd:rank` between its neighbours. Refused drops are announced, never applied. |
 | **Status** (`st:`) | `st:busy true` on a component | `aria-busy`; the theme dims it under a shimmer. |
 | **Contrast** | `sty:contrast sty:HighContrast` on a subtree | Re-values the role tokens for stronger text and visible borders. |
 

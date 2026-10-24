@@ -5,6 +5,7 @@
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 
 # Announcements layer. A reaction may say what it means to the person who
 # triggered it (ann:announces "Todo added", optionally ann:tone). A
@@ -21,6 +22,8 @@ ann:Layer a sem:Layer ; rdfs:label "announcements"@en .
 
 ann:announces a owl:DatatypeProperty ; rdfs:domain beh:Reaction ;
     rdfs:comment "What the reaction's effect means, told to the person (language-tagged literals translate it)."@en .
+ann:announcesFrom a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range rdf:Property ;
+    rdfs:comment "What the reaction's effect means is said by the event itself: its value of this property (e.g. a refused drop's reason), else ann:announces."@en .
 ann:tone a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range sty:Tone .
 ann:from a owl:ObjectProperty ; rdfs:domain c:ToastRegion ; rdfs:comment "The change log whose announcing events the region shows."@en .
 
