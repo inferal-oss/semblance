@@ -53,6 +53,8 @@ The engines move in lockstep; each phase ends with both passing the same tests.
    and `npm run bench` gets `rust` and `wat` columns.
 3. **The SPARQL Semblance uses.** Parser, algebra, prepared queries with `bind`.
    Semblance's SPARQL rules switch from textual `$this` substitution to binding.
+   Semblance also restricts one query to several foci (`VALUES ?this { … }`,
+   spliced in as text), so the ABI gains binding a variable to a set of terms.
    Done when Semblance's test suite and `npm run bench` run on the engine.
 4. **All of SPARQL 1.2.** Query, then Update. Done when the sparql10/11/12
    suites pass, apart from tests that need what the ABI leaves out (`SERVICE`,
