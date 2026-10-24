@@ -103,7 +103,7 @@ ui:appBar a c:AppBar ;
     c:subtitle "one component graph · many projections" ;
     c:logo ui:logo ;
     c:actions ( ui:nav ui:toolsToggle ui:theme ) .
-ui:logo a c:GraphMark ; c:nodes 3 ; rdfs:label "Semblance" .
+ui:logo a c:GraphMark ; rdfs:label "Semblance" .
 ui:theme a c:ThemeSwitcher ; c:controls ui:app ; c:property sty:colorScheme .
 ui:nav a c:Segmented ; c:controls ui:app ; c:property ui:page .
 

@@ -1,3 +1,5 @@
+<img src="demo/favicon.svg" width="72" height="72" alt="Semblance">
+
 # Semblance
 
 A spike for an ontologically-defined web UI framework. A UI is a graph of

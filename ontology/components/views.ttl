@@ -186,9 +186,28 @@ WHERE {
 
 c:GraphMark a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "A logo drawn as what it stands for: a few nodes and edges (c:nodes) on a gradient tile."@en ;
-    sem:slug "graph-mark" .
-c:nodes a owl:DatatypeProperty ; rdfs:range xsd:integer .
+    rdfs:comment """Semblance's mark: an S drawn as a graph - three nodes on one curved edge - over the
+fainter echo of that edge (a graph and its semblance), on a gradient tile. Its geometry is data
+on the class (c:markPath, c:markEcho, c:markNode), so the app bar, the landing page, the favicon
+and the README draw the same thing from the same triples. Like a rule's query, the geometry is
+read when a projection is built. Sized by sty:size."""@en ;
+    sem:slug "graph-mark" ;
+    c:markPath "M22 9 C 9 8.5, 9 15.2, 16 16 S 23 23.5, 10 23" ;
+    c:markEcho 1.4 ;
+    c:markNode c:MarkStart , c:MarkMiddle , c:MarkEnd .
+c:markPath a owl:DatatypeProperty ; rdfs:domain owl:Class ;
+    rdfs:comment "The mark's edge, as SVG path data in a 32 × 32 box."@en .
+c:markEcho a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:decimal ;
+    rdfs:comment "How far (down and to the end) the edge's echo is offset."@en .
+c:markNode a owl:ObjectProperty ; rdfs:domain owl:Class ; rdfs:range c:MarkNode .
+c:MarkNode a owl:Class ; rdfs:comment "A node of the mark: c:cx, c:cy, c:r in the 32 × 32 box, drawn in sem:order."@en .
+c:cx a owl:DatatypeProperty ; rdfs:domain c:MarkNode ; rdfs:range xsd:decimal .
+c:cy a owl:DatatypeProperty ; rdfs:domain c:MarkNode ; rdfs:range xsd:decimal .
+c:r a owl:DatatypeProperty ; rdfs:domain c:MarkNode ; rdfs:range xsd:decimal .
+c:MarkStart a c:MarkNode ; sem:order 1 ; c:cx 22 ; c:cy 9 ; c:r 3.1 .
+c:MarkMiddle a c:MarkNode ; sem:order 2 ; c:cx 16 ; c:cy 16 ; c:r 2.5 .
+c:MarkEnd a c:MarkNode ; sem:order 3 ; c:cx 10 ; c:cy 23 ; c:r 3.1 .
+
 c:GraphMarkRendering a sem:Rendering ; sem:targets c:GraphMark ; sem:modality mod:Screen ; sem:stratum 0 .
 c:GraphMarkRendering-fn a sem:Rule ; sem:implements c:GraphMarkRendering ; sem:function "graphmark" .
 
@@ -196,7 +215,7 @@ c:GraphMarkRendering-sparql a sem:Rule ;
     sem:implements c:GraphMarkRendering ;
     sem:construct """
 CONSTRUCT {
-  ?root a svg:Svg ; sem:renders $this ; rdfhtml:hasChild ?defs, ?tile, ?edge, ?dot .
+  ?root a svg:Svg ; sem:renders $this ; rdfhtml:hasChild ?defs, ?tile, ?echo, ?edge, ?dot .
   ?root rdfhtml:attribute ?rootA0 . ?rootA0 a rdfhtml:Attribute ; rdfhtml:attributeName "viewBox" ; rdfhtml:attributeValue "0 0 32 32" .
   ?root rdfhtml:attribute ?rootA1 . ?rootA1 a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "img" .
   ?root rdfhtml:attribute ?rootA2 . ?rootA2 a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
@@ -213,33 +232,32 @@ CONSTRUCT {
   ?stopB a svg:Stop .
   ?stopB rdfhtml:attribute ?stopBA0 . ?stopBA0 a rdfhtml:Attribute ; rdfhtml:attributeName "offset" ; rdfhtml:attributeValue "1" .
   ?stopB rdfhtml:attribute ?stopBA1 . ?stopBA1 a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "sem-stop-b" .
-  ?tile a svg:Rect ; ord:immediatelyPrecedes ?firstEdge .
+  ?tile a svg:Rect ; ord:immediatelyPrecedes ?echo .
   ?tile rdfhtml:attribute ?tileA0 . ?tileA0 a rdfhtml:Attribute ; rdfhtml:attributeName "width" ; rdfhtml:attributeValue "32" .
   ?tile rdfhtml:attribute ?tileA1 . ?tileA1 a rdfhtml:Attribute ; rdfhtml:attributeName "height" ; rdfhtml:attributeValue "32" .
   ?tile rdfhtml:attribute ?tileA2 . ?tileA2 a rdfhtml:Attribute ; rdfhtml:attributeName "rx" ; rdfhtml:attributeValue "9" .
   ?tile rdfhtml:attribute ?tileA3 . ?tileA3 a rdfhtml:Attribute ; rdfhtml:attributeName "fill" ; rdfhtml:attributeValue ?fill .
-  ?edge a svg:Line ; ord:immediatelyPrecedes ?edgeNext .
-  ?edge rdfhtml:attribute ?edgeA0 . ?edgeA0 a rdfhtml:Attribute ; rdfhtml:attributeName "x1" ; rdfhtml:attributeValue ?x1 .
-  ?edge rdfhtml:attribute ?edgeA1 . ?edgeA1 a rdfhtml:Attribute ; rdfhtml:attributeName "y1" ; rdfhtml:attributeValue ?y1 .
-  ?edge rdfhtml:attribute ?edgeA2 . ?edgeA2 a rdfhtml:Attribute ; rdfhtml:attributeName "x2" ; rdfhtml:attributeValue ?x2 .
-  ?edge rdfhtml:attribute ?edgeA3 . ?edgeA3 a rdfhtml:Attribute ; rdfhtml:attributeName "y2" ; rdfhtml:attributeValue ?y2 .
-  ?edge rdfhtml:attribute ?edgeA4 . ?edgeA4 a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "sem-edge" .
+  ?echo a svg:Path ; ord:immediatelyPrecedes ?edge .
+  ?echo rdfhtml:attribute ?echoA0 . ?echoA0 a rdfhtml:Attribute ; rdfhtml:attributeName "d" ; rdfhtml:attributeValue ?d .
+  ?echo rdfhtml:attribute ?echoA1 . ?echoA1 a rdfhtml:Attribute ; rdfhtml:attributeName "transform" ; rdfhtml:attributeValue ?shift .
+  ?echo rdfhtml:attribute ?echoA2 . ?echoA2 a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "sem-echo" .
+  ?edge a svg:Path ; ord:immediatelyPrecedes ?firstDot .
+  ?edge rdfhtml:attribute ?edgeA0 . ?edgeA0 a rdfhtml:Attribute ; rdfhtml:attributeName "d" ; rdfhtml:attributeValue ?d .
+  ?edge rdfhtml:attribute ?edgeA1 . ?edgeA1 a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "sem-edge" .
   ?dot a svg:Circle ; ord:immediatelyPrecedes ?dotNext .
-  ?dot rdfhtml:attribute ?dotA0 . ?dotA0 a rdfhtml:Attribute ; rdfhtml:attributeName "cx" ; rdfhtml:attributeValue ?x1 .
-  ?dot rdfhtml:attribute ?dotA1 . ?dotA1 a rdfhtml:Attribute ; rdfhtml:attributeName "cy" ; rdfhtml:attributeValue ?y1 .
-  ?dot rdfhtml:attribute ?dotA2 . ?dotA2 a rdfhtml:Attribute ; rdfhtml:attributeName "r" ; rdfhtml:attributeValue "3" .
+  ?dot rdfhtml:attribute ?dotA0 . ?dotA0 a rdfhtml:Attribute ; rdfhtml:attributeName "cx" ; rdfhtml:attributeValue ?cx .
+  ?dot rdfhtml:attribute ?dotA1 . ?dotA1 a rdfhtml:Attribute ; rdfhtml:attributeName "cy" ; rdfhtml:attributeValue ?cy .
+  ?dot rdfhtml:attribute ?dotA2 . ?dotA2 a rdfhtml:Attribute ; rdfhtml:attributeName "r" ; rdfhtml:attributeValue ?r .
   ?dot rdfhtml:attribute ?dotA3 . ?dotA3 a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "sem-node" .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:GraphMark .
-  OPTIONAL { $this c:nodes ?nodes0 }
-  BIND(COALESCE(xsd:integer(?nodes0), 3) AS ?n0)
-  BIND(IF(?n0 < 2, 2, IF(?n0 > 6, 6, ?n0)) AS ?n)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   {
-    # The tile, its gradient and the root's attributes. (Each branch binds $this itself, for bulk evaluation.)
+    # The tile, its gradient, the edge and its echo, and the root's attributes. (Each branch binds $this itself, for bulk evaluation.)
     $this a/rdfs:subClassOf* c:GraphMark .
-    BIND($this AS ?self)
+    c:GraphMark c:markPath ?d ; c:markEcho ?offset .
+    BIND(CONCAT("translate(", STR(?offset), " ", STR(?offset), ")") AS ?shift)
     OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
     OPTIONAL { FILTER(!BOUND(?labelC_u)) $this c:label ?labelC_en FILTER(langMatches(lang(?labelC_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?labelC_u) && !BOUND(?labelC_en)) $this c:label ?labelC_any FILTER(isLiteral(?labelC_any)) }
@@ -257,7 +275,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~stop-a")) AS ?stopA)
     BIND(IRI(CONCAT(STR($this), "/~stop-b")) AS ?stopB)
     BIND(IRI(CONCAT(STR($this), "/~tile")) AS ?tile)
-    BIND(IRI(CONCAT(STR($this), "/~e0-1")) AS ?firstEdge)
+    BIND(IRI(CONCAT(STR($this), "/~echo")) AS ?echo)
+    BIND(IRI(CONCAT(STR($this), "/~edge")) AS ?edge)
+    BIND(IRI(CONCAT(STR($this), "/~n1")) AS ?firstDot)
     BIND(IRI(CONCAT(STR($this), "/~", "root", "-a-viewBox")) AS ?rootA0)
     BIND(IRI(CONCAT(STR($this), "/~", "root", "-a-role")) AS ?rootA1)
     BIND(IRI(CONCAT(STR($this), "/~", "root", "-a-aria-label")) AS ?rootA2)
@@ -274,27 +294,20 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~", "tile", "-a-height")) AS ?tileA1)
     BIND(IRI(CONCAT(STR($this), "/~", "tile", "-a-rx")) AS ?tileA2)
     BIND(IRI(CONCAT(STR($this), "/~", "tile", "-a-fill")) AS ?tileA3)
+    BIND(IRI(CONCAT(STR($this), "/~", "echo", "-a-d")) AS ?echoA0)
+    BIND(IRI(CONCAT(STR($this), "/~", "echo", "-a-transform")) AS ?echoA1)
+    BIND(IRI(CONCAT(STR($this), "/~", "echo", "-a-class")) AS ?echoA2)
+    BIND(IRI(CONCAT(STR($this), "/~", "edge", "-a-d")) AS ?edgeA0)
+    BIND(IRI(CONCAT(STR($this), "/~", "edge", "-a-class")) AS ?edgeA1)
   } UNION {
-    # Every pair of points on the ring (c:nodes of them) is an edge; precomputed coordinates
-    # (16 + 7.5 cos a, 17 + 7.5 sin a, a = -90° + i · 360° / n), as the function computes them.
+    # The nodes, in sem:order.
     $this a/rdfs:subClassOf* c:GraphMark .
-    VALUES (?n ?i ?x1 ?y1) { (2 0 "16.0" "9.5") (2 1 "16.0" "24.5") (3 0 "16.0" "9.5") (3 1 "22.5" "20.8") (3 2 "9.5" "20.8") (4 0 "16.0" "9.5") (4 1 "23.5" "17.0") (4 2 "16.0" "24.5") (4 3 "8.5" "17.0") (5 0 "16.0" "9.5") (5 1 "23.1" "14.7") (5 2 "20.4" "23.1") (5 3 "11.6" "23.1") (5 4 "8.9" "14.7") (6 0 "16.0" "9.5") (6 1 "22.5" "13.3") (6 2 "22.5" "20.8") (6 3 "16.0" "24.5") (6 4 "9.5" "20.8") (6 5 "9.5" "13.3") }
-    VALUES (?n ?j ?x2 ?y2) { (2 0 "16.0" "9.5") (2 1 "16.0" "24.5") (3 0 "16.0" "9.5") (3 1 "22.5" "20.8") (3 2 "9.5" "20.8") (4 0 "16.0" "9.5") (4 1 "23.5" "17.0") (4 2 "16.0" "24.5") (4 3 "8.5" "17.0") (5 0 "16.0" "9.5") (5 1 "23.1" "14.7") (5 2 "20.4" "23.1") (5 3 "11.6" "23.1") (5 4 "8.9" "14.7") (6 0 "16.0" "9.5") (6 1 "22.5" "13.3") (6 2 "22.5" "20.8") (6 3 "16.0" "24.5") (6 4 "9.5" "20.8") (6 5 "9.5" "13.3") }
-    FILTER(?i < ?j)
-    BIND(CONCAT("e", STR(?i), "-", STR(?j)) AS ?edgeLocal)
-    BIND(IRI(CONCAT(STR($this), "/~", ?edgeLocal)) AS ?edge)
-    BIND(IRI(CONCAT(STR($this), "/~", IF(?j + 1 < ?n, CONCAT("e", STR(?i), "-", STR(?j + 1)), IF(?i + 2 < ?n, CONCAT("e", STR(?i + 1), "-", STR(?i + 2)), "n0")))) AS ?edgeNext)
-    BIND(IRI(CONCAT(STR($this), "/~", ?edgeLocal, "-a-x1")) AS ?edgeA0)
-    BIND(IRI(CONCAT(STR($this), "/~", ?edgeLocal, "-a-y1")) AS ?edgeA1)
-    BIND(IRI(CONCAT(STR($this), "/~", ?edgeLocal, "-a-x2")) AS ?edgeA2)
-    BIND(IRI(CONCAT(STR($this), "/~", ?edgeLocal, "-a-y2")) AS ?edgeA3)
-    BIND(IRI(CONCAT(STR($this), "/~", ?edgeLocal, "-a-class")) AS ?edgeA4)
-  } UNION {
-    $this a/rdfs:subClassOf* c:GraphMark .
-    VALUES (?n ?i ?x1 ?y1) { (2 0 "16.0" "9.5") (2 1 "16.0" "24.5") (3 0 "16.0" "9.5") (3 1 "22.5" "20.8") (3 2 "9.5" "20.8") (4 0 "16.0" "9.5") (4 1 "23.5" "17.0") (4 2 "16.0" "24.5") (4 3 "8.5" "17.0") (5 0 "16.0" "9.5") (5 1 "23.1" "14.7") (5 2 "20.4" "23.1") (5 3 "11.6" "23.1") (5 4 "8.9" "14.7") (6 0 "16.0" "9.5") (6 1 "22.5" "13.3") (6 2 "22.5" "20.8") (6 3 "16.0" "24.5") (6 4 "9.5" "20.8") (6 5 "9.5" "13.3") }
-    BIND(CONCAT("n", STR(?i)) AS ?dotLocal)
+    c:GraphMark c:markNode ?node . ?node sem:order ?order ; c:cx ?x ; c:cy ?y ; c:r ?radius .
+    BIND(STR(?x) AS ?cx) BIND(STR(?y) AS ?cy) BIND(STR(?radius) AS ?r)
+    BIND(CONCAT("n", STR(?order)) AS ?dotLocal)
     BIND(IRI(CONCAT(STR($this), "/~", ?dotLocal)) AS ?dot)
-    BIND(IF(?i + 1 < ?n, IRI(CONCAT(STR($this), "/~n", STR(?i + 1))), ?none) AS ?dotNext)
+    OPTIONAL { c:GraphMark c:markNode ?after . ?after sem:order ?nextOrder FILTER(?nextOrder = ?order + 1) }
+    BIND(IF(BOUND(?after), IRI(CONCAT(STR($this), "/~n", STR(?order + 1))), ?none) AS ?dotNext)
     BIND(IRI(CONCAT(STR($this), "/~", ?dotLocal, "-a-cx")) AS ?dotA0)
     BIND(IRI(CONCAT(STR($this), "/~", ?dotLocal, "-a-cy")) AS ?dotA1)
     BIND(IRI(CONCAT(STR($this), "/~", ?dotLocal, "-a-r")) AS ?dotA2)

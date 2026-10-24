@@ -6,6 +6,14 @@ import { owningFocus } from '../rdf.ts'
 import { type TurtleSection, turtleTokens } from '../turtle.ts'
 import { labelOf as textLabelOf, text } from './util.ts'
 
+const C_GRAPH_MARK = NS.c + 'GraphMark'
+const C_MARK_PATH = NS.c + 'markPath'
+const C_MARK_ECHO = NS.c + 'markEcho'
+const C_MARK_NODE = NS.c + 'markNode'
+const C_CX = NS.c + 'cx'
+const C_CY = NS.c + 'cy'
+const C_R = NS.c + 'r'
+
 const RDFS_LABEL = NS.rdfs + 'label'
 const SH = 'http://www.w3.org/ns/shacl#'
 const str = (t: Term | undefined) => t?.value
@@ -68,20 +76,19 @@ const appbar: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** A logo drawn as a graph: c:nodes points on a ring, fully connected, on a gradient tile. */
+/** Semblance's mark: the edge, its echo and the nodes declared on c:GraphMark, on a gradient tile. */
 const graphmark: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const n = Math.max(2, Math.min(6, Number(str(ctx.object(focus, C.nodes)) ?? 3)))
+  const mark = ctx.nn(C_GRAPH_MARK)
+  const d = str(ctx.object(mark, C_MARK_PATH)) ?? ''
+  const offset = str(ctx.object(mark, C_MARK_ECHO)) ?? '0'
   const id = 'g' + focus.value.replace(/[^a-z0-9]/gi, '').slice(-12)
-  const pts = Array.from({ length: n }, (_, i) => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
-    return { x: 16 + Math.cos(a) * 7.5, y: 17 + Math.sin(a) * 7.5 }
-  })
-  const edges: NamedNode[] = []
-  for (let i = 0; i < n; i++)
-    for (let j = i + 1; j < n; j++)
-      edges.push(o.svg(`e${i}-${j}`, 'Line', { x1: pts[i]!.x.toFixed(1), y1: pts[i]!.y.toFixed(1), x2: pts[j]!.x.toFixed(1), y2: pts[j]!.y.toFixed(1), class: 'sem-edge' }))
-  const dots = pts.map((p, i) => o.svg(`n${i}`, 'Circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 3, class: 'sem-node' }))
+  const nodes = ctx
+    .match(mark, C_MARK_NODE, null)
+    .map((q) => q.object)
+    .filter(named)
+    .map((n) => ({ order: Number(str(ctx.object(n, SEM.order))), cx: str(ctx.object(n, C_CX)), cy: str(ctx.object(n, C_CY)), r: str(ctx.object(n, C_R)) }))
+    .sort((a, b) => a.order - b.order)
   const defs = o.svg('defs', 'Defs', {}, [
     o.svg('gradient', 'LinearGradient', { id, x1: 0, y1: 0, x2: 1, y2: 1 }, [
       o.svg('stop-a', 'Stop', { offset: 0, class: 'sem-stop-a' }),
@@ -89,8 +96,10 @@ const graphmark: FnRule = (ctx, focus) => {
     ]),
   ])
   const tile = o.svg('tile', 'Rect', { width: 32, height: 32, rx: 9, fill: `url(#${id})` })
-  const root = o.svg('root', 'Svg', { viewBox: '0 0 32 32', role: 'img', 'aria-label': textLabelOf(ctx, focus) }, [defs, tile, ...edges, ...dots])
-  o.renders(root)
+  const echo = o.svg('echo', 'Path', { d, transform: `translate(${offset} ${offset})`, class: 'sem-echo' })
+  const edge = o.svg('edge', 'Path', { d, class: 'sem-edge' })
+  const dots = nodes.map((n) => o.svg(`n${n.order}`, 'Circle', { cx: n.cx, cy: n.cy, r: n.r, class: 'sem-node' }))
+  o.renders(o.svg('root', 'Svg', { viewBox: '0 0 32 32', role: 'img', 'aria-label': textLabelOf(ctx, focus) }, [defs, tile, echo, edge, ...dots]))
   return o.quads
 }
 

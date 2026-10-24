@@ -6,6 +6,7 @@
   "description": "Spike: an ontologically-defined web UI framework",
   "scripts": {
     "gen:vocab": "tsx scripts/gen-rdfhtml-vocab.ts",
+    "gen:mark": "tsx scripts/gen-mark.ts",
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",

@@ -99,6 +99,32 @@ flush()
 
 // --- effects of graph state --------------------------------------------------------------
 
+// The favicon is the app bar's mark as it looks now (theme, color scheme), drawn with its
+// computed colors; demo/favicon.svg (npm run gen:mark) stands in until the page has rendered.
+let favicon = ''
+function syncFavicon() {
+  const look = [store.match(nn(UI + 'shell'), nn(NS.sty + 'theme'), null)[0]?.object.value, document.documentElement.getAttribute('data-sem-color-scheme'), matchMedia('(prefers-color-scheme: dark)').matches].join(' ')
+  if (look === favicon) return
+  favicon = look
+  requestAnimationFrame(() => {
+    const mark = document.querySelector('[data-sem-c=app-bar] [data-sem-c=graph-mark]')
+    if (!mark) return
+    const copy = mark.cloneNode(true) as SVGSVGElement
+    const live = [mark, ...mark.querySelectorAll('*')]
+    ;[copy, ...copy.querySelectorAll('*')].forEach((el, i) => {
+      const css = getComputedStyle(live[i]!)
+      for (const p of ['stop-color', 'fill', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linecap']) {
+        if (el.localName !== 'svg' && css.getPropertyValue(p)) el.setAttribute(p, css.getPropertyValue(p))
+      }
+      for (const a of [...el.attributes]) if (a.name.startsWith('data-') || a.name === 'class' || a.name === 'id' && el.localName === 'svg') el.removeAttribute(a.name)
+    })
+    copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    let link = document.querySelector<HTMLLinkElement>('link[rel=icon]')
+    if (!link) document.head.append((link = Object.assign(document.createElement('link'), { rel: 'icon', type: 'image/svg+xml' })))
+    link.href = 'data:image/svg+xml,' + encodeURIComponent(copy.outerHTML)
+  })
+}
+
 function syncSettings() {
   const slug = (t: { value: string } | undefined) => t && store.match(nn(t.value), nn(SEM.slug), null)[0]?.object.value
   const scheme = slug(appValues(STY.colorScheme)[0])
@@ -127,6 +153,8 @@ function syncSettings() {
     const v = appValues(p)[0]
     return v && store.match(nn(v.value), nn(UI + 'key'), null)[0]?.object.value
   }
+  syncFavicon()
+
   const page = key(UI + 'page') ?? 'home'
   if (location.hash.slice(1) !== page) history.replaceState(null, '', '#' + page)
   const nextStore = key(UI + 'store') ?? kind

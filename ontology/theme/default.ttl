@@ -707,8 +707,17 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "height" ; sty:raw "28px" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "filter" ; sty:raw "drop-shadow(0 4px 10px rgb(91 76 240 / 0.35))" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ".sem-edge" ;
-    sty:declares [ sty:property "stroke" ; sty:raw "white" ] , [ sty:property "stroke-width" ; sty:raw "1.6" ] , [ sty:property "opacity" ; sty:raw "0.6" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:when sty:Small ;
+    sty:declares [ sty:property "width" ; sty:raw "20px" ] , [ sty:property "height" ; sty:raw "20px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:when sty:Large ;
+    sty:declares [ sty:property "width" ; sty:raw "72px" ] , [ sty:property "height" ; sty:raw "72px" ] ,
+                 [ sty:property "filter" ; sty:raw "drop-shadow(0 10px 24px rgb(91 76 240 / 0.35))" ] .
+# The edge and its echo: one curve, drawn twice.
+[] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ":is(.sem-edge, .sem-echo)" ;
+    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke" ; sty:raw "white" ] ,
+                 [ sty:property "stroke-width" ; sty:raw "2" ] , [ sty:property "stroke-linecap" ; sty:raw "round" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ".sem-echo" ;
+    sty:declares [ sty:property "stroke-opacity" ; sty:raw "0.35" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ".sem-node" ;
     sty:declares [ sty:property "fill" ; sty:raw "white" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GraphMark ; sty:part ".sem-stop-a" ;
