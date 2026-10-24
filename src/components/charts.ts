@@ -8,7 +8,9 @@ import { text } from './util.ts'
 const str = (t: Term | undefined) => t?.value
 type Row = Map<string, Term>
 
-const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : '<0.01')
+const fmt = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : '<0.01')
+/** Counts (a chart without a unit) are whole: "5", not "5.00". */
+const fmtIn = (unit: string) => (v: number) => (!unit && Number.isInteger(v) ? String(v) : fmt(v))
 const num = (t: Term | undefined) => (t ? Number(t.value) : undefined)
 const key = (s: string) => encodeURIComponent(s).replace(/%/g, '')
 
@@ -92,13 +94,13 @@ const barchart: FnRule = (ctx, focus) => {
             const v = num(cs.find((r) => (e.series ? str(r.get(e.series)) === s.key : true))?.get(e.value))
             if (v === undefined || v <= 0) return []
             const seg = o.el(`${id}-s${si}`, 'Span', { class: 'sem-seg', style: `width: ${((v / max) * 100).toFixed(2)}%; background: var(--sem-series-${(si % 6) + 1})` })
-            o.tip(seg, `${category} · ${s.label}: ${fmt(v)} ${e.unit}`.trim())
+            o.tip(seg, `${category} · ${s.label}: ${fmtIn(e.unit)(v)} ${e.unit}`.trim())
             return [seg]
           })
         : []
       const track = o.el(`${id}-track`, 'Span', { class: 'sem-track' }, segments)
       const value = o.el(`${id}-total`, 'Span', { class: measured ? 'sem-total' : 'sem-total sem-pending' }, [
-        o.text(`${id}-total-text`, measured ? `${fmt(total)} ${e.unit}`.trim() : 'running…'),
+        o.text(`${id}-total-text`, measured ? `${fmtIn(e.unit)(total)} ${e.unit}`.trim() : 'running…'),
       ])
       return o.el(id, 'Div', { class: 'sem-bar' }, [o.el(`${id}-label`, 'Span', { class: 'sem-category' }, [o.text(`${id}-label-text`, category)]), track, value])
     })
