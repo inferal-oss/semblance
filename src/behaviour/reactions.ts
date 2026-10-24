@@ -11,6 +11,7 @@ import { reactions as dataReactions } from '../components/data.ts'
 import { reactions as navigationReactions } from '../components/navigation.ts'
 import { reactions as overlaysReactions } from '../components/overlays.ts'
 import { reactions as workbenchReactions } from '../components/workbench.ts'
+import { reactions as referenceReactions } from '../components/reference.ts'
 import { docsReactions } from '../layers/docs.ts'
 import { persistenceReactions } from '../persistence.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
@@ -133,6 +134,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...navigationReactions,
   ...overlaysReactions,
   ...workbenchReactions,
+  ...referenceReactions,
   ...docsReactions,
   ...persistenceReactions,
   ...disclosureReactions,

@@ -1,9 +1,125 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
-@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
-# The Reference: every component class and layer, from the ontology itself. (Being built.)
-ui:reference a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-5 ;
-    c:children ( ui:referenceTitle ) .
-ui:referenceTitle a c:Heading ; c:level 1 ; c:label "Reference" .
+# The Reference: every component, layer and vocabulary term, read from the ontology that runs
+# this site. A tree (c:TermTree) derives its sections from the graph: the component groups
+# (sem:group), the layers and what they render (sem:layer), and every owl:Ontology with its
+# classes and properties. The selected term is one property of the app (ui:referenceSubject);
+# every view of it is bound to that property: what the ontology says (c:TermOverview), its
+# alignment with other vocabularies (c:TermAlignment), its neighbourhood as a graph (a
+# c:ResultGraph of a CONSTRUCT with $term bound) and its triples as Turtle (the docs layer's
+# c:ClassDoc). Only the visible tab is evaluated; a selection re-runs it and the tree's own rule.
+
+ui:referenceSubject rdfs:label "Term" , "Термін"@uk , "Begriff"@de , "المصطلح"@ar .
+ui:app ui:referenceSubject c:Window .
+
+ui:reference a c:Stack ; pos:layout ui:ReferenceLayout ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
+    c:children ( ui:referenceTree ui:referenceMain ) .
+
+# The tree beside the term, the tree on top when narrow (an app's own layout, as data).
+ui:ReferenceLayout a pos:Layout ; sem:slug "reference" ;
+    rdfs:comment "A navigation column of about 16rem beside the main column; they stack when the two do not fit."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] .
+[] a sty:StyleRule ; sty:when ui:ReferenceLayout ; sty:part "> :first-child" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 15rem" ] .
+[] a sty:StyleRule ; sty:when ui:ReferenceLayout ; sty:part "> :last-child" ;
+    sty:declares [ sty:property "flex" ; sty:raw "999 1 28rem" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+
+ui:referenceTree a c:TermTree ; c:controls ui:app ; c:property ui:referenceSubject ;
+    c:label "Vocabulary"@en , "Словник"@uk , "Vokabular"@de , "المفردات"@ar ;
+    c:sections ( ui:refComponents ui:refLayers ui:refVocabularies ) .
+ui:refComponents a c:TermSection ; c:branchClass sem:ComponentGroup ; c:membersVia sem:group ;
+    rdfs:label "Components"@en , "Компоненти"@uk , "Komponenten"@de , "المكونات"@ar .
+ui:refLayers a c:TermSection ; c:branchClass sem:Layer ; c:membersVia sem:layer ;
+    rdfs:label "Layers"@en , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
+ui:refVocabularies a c:TermSection ; c:branchClass owl:Ontology ; c:exceptProperty sem:group ;
+    rdfs:label "Vocabularies"@en , "Словники"@uk , "Vokabulare"@de , "المفردات"@ar .
+
+ui:referenceMain a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:referenceTitle ui:referenceLead ui:referenceTabs ) .
+ui:referenceTitle a c:Heading ; c:level 1 ; c:label "Reference" , "Довідник"@uk , "Referenz"@de , "المرجع"@ar .
+ui:referenceLead a c:Text ; sty:textStyle sty:Caption ;
+    c:label "Every term of the framework, read from the ontology that renders this page: pick one in the tree, or a linked term, or a node of its graph." ,
+            "Кожен термін фреймворку, прочитаний з онтології, що рендерить цю сторінку: виберіть його в дереві, серед повʼязаних термінів або у графі."@uk ,
+            "Jeder Begriff des Frameworks, gelesen aus der Ontologie, die diese Seite darstellt: wählen Sie einen im Baum, einen verknüpften Begriff oder einen Knoten seines Graphen."@de ,
+            "كل مصطلح في الإطار، مقروء من الأنطولوجيا التي تعرض هذه الصفحة: اختر واحدًا من الشجرة أو مصطلحًا مرتبطًا أو عقدة من رسمه البياني."@ar .
+
+ui:referenceTabs a c:Tabs ; c:tabs ( ui:refOverviewTab ui:refAlignmentTab ui:refGraphTab ui:refTurtleTab ) ;
+    c:selected ui:refOverviewTab .
+ui:refOverviewTab a c:Tab ; c:label "Overview" , "Огляд"@uk , "Überblick"@de , "نظرة عامة"@ar ; c:content ui:referenceOverview .
+ui:refAlignmentTab a c:Tab ; c:label "Alignment" , "Узгодження"@uk , "Abgleich"@de , "المواءمة"@ar ; c:content ui:referenceAlignment .
+ui:refGraphTab a c:Tab ; c:label "Graph" , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ; c:content ui:referenceGraph .
+ui:refTurtleTab a c:Tab ; c:label "Turtle" ; c:content ui:referenceTurtle .
+
+ui:referenceOverview a c:TermOverview ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject ;
+    c:controls ui:app ; c:property ui:referenceSubject ;
+    c:emptyText "Pick a term in the tree." , "Виберіть термін у дереві."@uk , "Wählen Sie einen Begriff im Baum."@de , "اختر مصطلحًا من الشجرة."@ar .
+ui:referenceAlignment a c:TermAlignment ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
+ui:referenceTurtle a c:ClassDoc ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
+
+# The neighbourhood: what the term points at, what points at it through the ontology's own links,
+# the ranges of its properties and the rules of its renderings. $term is the selection.
+ui:referenceGraph a c:ResultGraph ; c:of ui:qReferenceNeighbourhood ; c:limit 40 ;
+    c:bindVariable "term" ; c:bindFrom ui:app ; c:bindProperty ui:referenceSubject .
+ui:qReferenceNeighbourhood a sem:Query ; rdfs:label "The term's neighbourhood" ;
+    sem:construct """
+CONSTRUCT { $term ?p ?o . ?s ?q $term . ?property rdfs:range ?range . ?rule sem:implements ?rendering . ?instance a $term }
+WHERE {
+  { $term ?p ?o FILTER(isIRI(?o) && !STRSTARTS(STR(?p), STR(rdfhtml:))) }
+  UNION { VALUES ?q { rdfs:subClassOf rdfs:subPropertyOf rdfs:domain rdfs:range sem:targets sem:implements sem:layer sem:group beh:sourceClass sh:targetClass }
+          ?s ?q $term FILTER(isIRI(?s)) }
+  UNION { ?property rdfs:domain $term ; rdfs:range ?range FILTER(isIRI(?range)) }
+  UNION { ?rendering sem:targets $term . ?rule sem:implements ?rendering }
+  UNION { ?instance a $term FILTER(STRSTARTS(STR(?instance), "https://semblance.dev/ns/")) }
+}""" .
+
+# A node of the graph that is one of our terms is followed: it becomes the selection (and, being
+# the node clicked, stays selected in the graph that is drawn around it).
+ui:FollowReferenceGraph a beh:Reaction ; beh:when beh:Click ; beh:source ui:referenceGraph ;
+    beh:deletes """CONSTRUCT { ui:app ui:referenceSubject ?old }
+WHERE {
+  $event beh:node ?hit . ?node rdfhtml:hasChild* ?hit . ?node c:term ?term FILTER(isIRI(?term))
+  FILTER EXISTS { ?ontology a owl:Ontology FILTER(STRSTARTS(STR(?term), CONCAT(STR(?ontology), "#"))) }
+  ui:app ui:referenceSubject ?old FILTER(?old != ?term)
+}""" ;
+    beh:inserts """CONSTRUCT { ui:app ui:referenceSubject ?term }
+WHERE {
+  $event beh:node ?hit . ?node rdfhtml:hasChild* ?hit . ?node c:term ?term FILTER(isIRI(?term))
+  FILTER EXISTS { ?ontology a owl:Ontology FILTER(STRSTARTS(STR(?term), CONCAT(STR(?ontology), "#"))) }
+}""" .
+
+# Picking a term in the tree or the overview also selects it in the graph, so the graph drawn
+# around it shows it focused.
+ui:FocusPickedInGraph a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:TermBranch ;
+    beh:deletes """CONSTRUCT { ui:referenceGraph c:selectedTerm ?old }
+WHERE { $this c:branchOf ui:referenceTree . $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . ui:referenceGraph c:selectedTerm ?old }""" ;
+    beh:inserts """CONSTRUCT { ui:referenceGraph c:selectedTerm ?term }
+WHERE { $this c:branchOf ui:referenceTree . $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term }""" .
+ui:FocusLinkedInGraph a beh:Reaction ; beh:when beh:Click ; beh:source ui:referenceOverview ;
+    beh:deletes """CONSTRUCT { ui:referenceGraph c:selectedTerm ?old }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . ui:referenceGraph c:selectedTerm ?old }""" ;
+    beh:inserts """CONSTRUCT { ui:referenceGraph c:selectedTerm ?term }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term }""" .
+
+# The selected term, the tab and the branches opened or closed by hand, for this tab.
+ui:rememberReference a per:Policy ; per:scope per:Session ;
+    rdfs:label "The reference: term, tab and open branches" , "Довідник: термін, вкладка і відкриті гілки"@uk ,
+               "Die Referenz: Begriff, Tab und geöffnete Zweige"@de , "المرجع: المصطلح وعلامة التبويب والفروع المفتوحة"@ar ;
+    per:construct """
+CONSTRUCT { ui:app ui:referenceSubject ?term . ui:referenceTabs c:selected ?tab . ?branch c:expanded ?open }
+WHERE {
+  { ui:app ui:referenceSubject ?term }
+  UNION { ui:referenceTabs c:selected ?tab }
+  UNION { ?branch c:expanded ?open FILTER(STRSTARTS(STR(?branch), CONCAT(STR(ui:referenceTree), "/~b-"))) }
+}""" .

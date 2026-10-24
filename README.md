@@ -187,6 +187,13 @@ neighbourhood and dims the rest: a rule derives each mark's `c:Salience` from th
 rendered links, so a selection re-runs that rule only, not the query. Like
 any tab it can be detached into a window, and its state is remembered.
 
+The site's **Reference** is built the same way (`ontology/components/reference.ttl`):
+a `c:TermTree` derived from the ontology itself (component groups by `sem:group`,
+layers by what they render, every `owl:Ontology` by namespace), and views bound to
+the selected term (`ui:referenceSubject`): what the ontology says about it and what
+points at it, its alignments with the strength of each link (`sem:alignmentStrength`),
+its neighbourhood as a graph, and its Turtle.
+
 ### Performance as data
 Benchmark cells become `sosa:Observation`s. Every chart and table on the
 Performance page is a `perf:View` (a SPARQL SELECT), and every insight is a

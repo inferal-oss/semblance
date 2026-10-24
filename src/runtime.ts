@@ -8,6 +8,7 @@ import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { privacyFunctions } from './layers/privacy.ts'
 import { functions as workbenchFunctions } from './components/workbench.ts'
+import { functions as referenceFunctions } from './components/reference.ts'
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -44,7 +45,7 @@ export class Runtime {
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH],
       ...opts,
-      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...workbenchFunctions, ...privacyFunctions, ...opts.functions },
+      functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError)
     engine.onChange((d) => index.apply(d))
