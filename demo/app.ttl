@@ -175,11 +175,11 @@ ui:logTab a c:Tab ; c:label "Change log" ; c:content ui:logCard .
 ui:inspectorCard a c:Flippable ; c:front ui:inspectorPanel .
 ui:inspectorPanel a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:inspectorBar ui:inspectorMarkup ui:inspector ui:highlight ) .
 ui:inspectorBar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inspectorModes ui:pauseHint ui:inspectingChip ui:inspectorStrip ) .
-# The hovered element as the HTML it becomes, its RDF/HTML encoding taken off; while it is shown,
-# the RDF/HTML section of the inspector steps aside (ui:qElement).
+# Without the RDF/HTML: the component that rendered the hovered element, as Turtle, and the HTML
+# the element becomes (c:ElementMarkup); the RDF/HTML section steps aside (ui:qElement).
 ui:inspectorStrip a c:Checkbox ; c:controls ui:inspectorMarkup ; c:property c:active ;
-    c:label "Show as HTML" , "Показати як HTML"@uk , "Als HTML zeigen"@de , "عرض كـ HTML"@ar .
-ui:inspectorMarkup a c:ElementMarkup ; c:active false ; c:bindFrom ui:app ; c:bindProperty ui:inspecting ;
+    c:label "Without RDF/HTML" , "Без RDF/HTML"@uk , "Ohne RDF/HTML"@de , "بدون RDF/HTML"@ar .
+ui:inspectorMarkup a c:ElementMarkup ; c:active false ; c:bindFrom ui:app ; c:bindProperty ui:inspecting ; c:baseIri "https://example.org/todo" ;
     c:emptyText "Hover any element on the page to see the HTML it becomes." .
 ui:pauseHint a c:Text ; c:inline true ; sty:textStyle sty:Caption ;
     c:children ( ui:hereKey ui:hereKeyZ " here · " ui:pauseKey " pauses · " ui:offKey ui:offKeyZ " turns off" ) .

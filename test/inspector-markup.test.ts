@@ -13,13 +13,19 @@ describe('the inspector, as HTML', () => {
     expect(view()).toContain('# rendered element (RDF/HTML)')
     expect(markup().hasAttribute('hidden')).toBe(true)
 
-    const box = [...document.querySelectorAll('[data-sem-c=checkbox]')].find((c) => c.textContent!.includes('Show as HTML'))!.querySelector('input')!
+    const box = [...document.querySelectorAll('[data-sem-c=checkbox]')].find((c) => c.textContent!.includes('Without RDF/HTML'))!.querySelector('input')!
     box.checked = true
     fire(box, 'change')
     const f = store.factory
     expect(store.match(f.namedNode(UI + 'inspectorMarkup'), f.namedNode(NS.c + 'active'), null)[0]!.object.value).toBe('true')
     const html = markup().textContent!
+    // Straight to the component that rendered it (the list), as Turtle...
+    expect(html).toContain('# the component')
+    expect(html).toMatch(/ex:todos\s+a c:List/)
+    // ...and the element as the HTML it becomes, colored like Turtle.
     expect(html).toContain('# the element as HTML')
+    expect([...markup().querySelectorAll('.ttl-keyword')].map((s) => s.textContent)).toContain('label')
+    expect([...markup().querySelectorAll('.ttl-pname')].map((s) => s.textContent)).toContain('for')
     expect(html).toMatch(/<label [^>]*for="[^"]+"/)
     expect(html).not.toContain('data-sem-highlighted') // the inspector's own mark is not part of it
     expect(html).not.toContain('rdfhtml:')
@@ -29,7 +35,7 @@ describe('the inspector, as HTML', () => {
 
     // It follows the hover: a component's root shows its whole subtree, nested components resolved.
     fire(document.querySelector('[data-sem-c=list-item]')!, 'mouseover')
-    expect(markup().textContent!.split('\n').length).toBeGreaterThan(3)
+    expect(markup().textContent!.split('\n').length).toBeGreaterThan(6)
     expect(markup().textContent!).toContain('<input')
 
     box.checked = false
@@ -41,7 +47,7 @@ describe('the inspector, as HTML', () => {
   it('a check box can drive a property of another node: the box follows the graph', () => {
     const { document, store, runtime, shell } = mountShell()
     const f = store.factory
-    const box = () => [...document.querySelectorAll('[data-sem-c=checkbox]')].find((c) => c.textContent!.includes('Show as HTML'))!.querySelector('input')!
+    const box = () => [...document.querySelectorAll('[data-sem-c=checkbox]')].find((c) => c.textContent!.includes('Without RDF/HTML'))!.querySelector('input')!
     expect(box().hasAttribute('checked')).toBe(false)
     const node = f.namedNode(UI + 'inspectorMarkup')
     const active = f.namedNode(NS.c + 'active')

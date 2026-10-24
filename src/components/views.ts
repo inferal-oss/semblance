@@ -2,10 +2,10 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
-import { owningFocus } from '../rdf.ts'
+import { MINT_SEPARATOR, owningFocus } from '../rdf.ts'
 import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
-import { type TurtleSection, turtleTokens } from '../turtle.ts'
+import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
 import { labelOf as textLabelOf, text } from './util.ts'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
@@ -300,7 +300,48 @@ function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
   return out
 }
 
-/** The bound element as HTML, while c:active. */
+/** HTML as tokens of the Turtle highlighter's kinds: tag names, attribute names, values; text plain. */
+function htmlTokens(markup: string): Token[] {
+  const out: Token[] = []
+  const t = (kind: Token['kind'], text: string) => text && out.push({ kind, text })
+  let i = 0
+  while (i < markup.length) {
+    if (markup[i] === '\n') {
+      const m = /^\n */.exec(markup.slice(i))![0]
+      t('space', m)
+      i += m.length
+    } else if (markup[i] === '<') {
+      const open = /^<\/?([A-Za-z][\w-]*)/.exec(markup.slice(i))
+      if (!open) {
+        t('punct', '<')
+        i++
+        continue
+      }
+      t('punct', open[0].slice(0, open[0].length - open[1]!.length))
+      t('keyword', open[1]!)
+      i += open[0].length
+      // Attributes up to the end of the tag.
+      for (let m; (m = /^(\s+)([^\s=>/]+)(?:(=)("[^"]*"))?/.exec(markup.slice(i))); i += m[0].length) {
+        t('punct', m[1]!)
+        t('pname', m[2]!)
+        if (m[3]) t('punct', m[3]), t('literal', m[4]!)
+      }
+      const close = /^\s*\/?>/.exec(markup.slice(i))?.[0] ?? ''
+      t('punct', close)
+      i += close.length || 1
+    } else {
+      const text = /^[^<\n]+/.exec(markup.slice(i))![0]
+      t('punct', text)
+      i += text.length
+    }
+  }
+  return out
+}
+
+/**
+ * The bound element without its RDF/HTML encoding, while c:active: the component that rendered it
+ * (the IRI before the node's first /~), as Turtle, and the HTML the element becomes.
+ */
 const elementMarkup: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   if (str(ctx.object(focus, C_ACTIVE)) !== 'true') {
@@ -310,18 +351,30 @@ const elementMarkup: FnRule = (ctx, focus) => {
   const from = ctx.object(focus, C.bindFrom)
   const property = ctx.object(focus, C.bindProperty)
   const node = from && property ? ctx.object(from, property) : undefined
-  const index = new HtmlIndex(() => {})
-  // Without the mark the inspector itself puts on what it inspects (c:Highlight).
-  const quads = named(node) ? renderedSubtree(ctx, node) : []
-  const marks = new Set(quads.filter((q) => q.predicate.value === H.attributeName && q.object.value === 'data-sem-highlighted').map((q) => q.subject.value))
-  index.apply({ add: quads.filter((q) => !marks.has(q.subject.value) && !marks.has(q.object.value)), remove: [] })
-  const markup = named(node) ? toIndentedHTML(index, node.value) : ''
-  if (!markup) {
+  if (!named(node)) {
     o.renders(o.el('root', 'Div', { class: 'sem-empty' }, [o.text('empty', text(ctx, focus, C.emptyText) ?? 'Nothing selected.')]))
     return o.quads
   }
-  const title = o.el('title', 'Span', { class: 'ttl-comment' }, [o.text('title-text', '# the element as HTML\n')])
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }, [title, o.text('markup', markup)]))
+  const at = node.value.indexOf(MINT_SEPARATOR)
+  const component = ctx.nn(at < 0 ? node.value : node.value.slice(0, at))
+  const seen = new Set<string>()
+  const own = ctx.match(component, null, null).filter((q) => {
+    const key = q.predicate.value + ' ' + q.object.value + ' ' + (q.object.termType === 'Literal' ? q.object.language + q.object.datatype.value : '')
+    if (q.predicate.value.startsWith(NS.prov) || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  // Without the mark the inspector itself puts on what it inspects (c:Highlight).
+  const index = new HtmlIndex(() => {})
+  const quads = renderedSubtree(ctx, node)
+  const marks = new Set(quads.filter((q) => q.predicate.value === H.attributeName && q.object.value === 'data-sem-highlighted').map((q) => q.subject.value))
+  index.apply({ add: quads.filter((q) => !marks.has(q.subject.value) && !marks.has(q.object.value)), remove: [] })
+  const markup = toIndentedHTML(index, node.value)
+  const tokens: Token[] = [
+    ...(own.length ? turtleTokens([{ title: 'the component', quads: own }], prefixes(ctx), str(ctx.object(focus, C.baseIri))) : []),
+    ...(markup ? [...(own.length ? [{ kind: 'space' as const, text: '\n\n' }] : []), { kind: 'comment' as const, text: '# the element as HTML' }, { kind: 'space' as const, text: '\n' }, ...htmlTokens(markup)] : []),
+  ]
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }, turtleNodes(o, tokens)))
   return o.quads
 }
 

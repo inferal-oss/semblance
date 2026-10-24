@@ -477,10 +477,11 @@ c:dataQuery a owl:ObjectProperty ; rdfs:comment "Links a component to a query or
 
 c:ElementMarkup a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """The rendered element held in c:bindProperty of c:bindFrom, as the HTML it becomes: its
-subtree with the RDF/HTML encoding taken off - no attribute nodes, no ordering triples, nested
-components resolved - one element per line. Shown while c:active is true (a check box can drive it:
-c:controls it, c:property c:active); otherwise it renders an empty, hidden root."""@en ;
+    rdfs:comment """The rendered element held in c:bindProperty of c:bindFrom without its RDF/HTML encoding:
+the component that rendered it (the IRI before the node's first /~), as Turtle, and the HTML the
+element becomes - its subtree with attribute nodes and ordering triples taken off and nested
+components resolved, one element per line - both syntax-colored. Shown while c:active is true (a
+check box can drive it: c:controls it, c:property c:active); otherwise it renders an empty, hidden root."""@en ;
     sem:slug "element-markup" .
 c:active a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a component that can be switched on (c:ElementMarkup) is."@en .
