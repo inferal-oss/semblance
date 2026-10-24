@@ -11,6 +11,12 @@ provenance, source) are **layers**: vocabularies plus rules that run after the
 components and decorate their output. Interaction is recorded as RDF events in
 a Linked Data Event Stream, and declarative reactions turn events into state.
 
+**Demo:** <https://oss.inferal.org/semblance/> - the docs, the component reference,
+the examples and the benchmark matrix, running in your browser. It is served by
+GitHub Pages, which cannot send COOP/COEP headers, so the page is not cross-origin
+isolated: timings are coarser (~100 µs) and the heap meter may read n/a. For precise
+numbers run `npm run dev`.
+
 ```bash
 npm install
 npm run dev            # demo: Playground + Performance (http://localhost:5173)
