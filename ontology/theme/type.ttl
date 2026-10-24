@@ -180,7 +180,12 @@ sty:Mono sty:declares
                  [ sty:property "background" ; sty:raw "var(--sem-gray-3)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-gray-12)" ] ,
-                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
+# Code reads left to right in a right-to-left page too (Turtle and SPARQL views wherever they are).
+[] a sty:StyleRule ; sty:part ".sem-turtle" ;
+    sty:declares [ sty:property "direction" ; sty:raw "ltr" ] , [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Code ; sty:state ":is(pre)" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "display" ; sty:raw "block" ] ,

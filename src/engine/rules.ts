@@ -1,5 +1,6 @@
 import type { Term } from '@rdfjs/types'
-import { RDFS_SUBCLASS, RDF_TYPE, SEM, SPARQL_PREFIXES } from '../ns.ts'
+import { RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
+import { prefixesFor } from '../prefixes.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Rule {
@@ -61,6 +62,8 @@ export function loadRules(store: GraphStore): Rule[] {
   const one = (s: Term, p: string): Term | undefined => store.match(s, namedNode(p), null)[0]?.object
   const all = (s: Term, p: string): string[] => store.match(s, namedNode(p), null).map((q) => q.object.value)
 
+  // Semblance's prefixes, and those the graph declares (sh:prefix / sh:namespace), as reactions have.
+  const prefixes = prefixesFor(store)
   const rules: Rule[] = []
   for (const q of store.match(null, namedNode(RDF_TYPE), namedNode(SEM.Rule))) {
     const r = q.subject
@@ -85,7 +88,7 @@ export function loadRules(store: GraphStore): Rule[] {
       layer: get(SEM.layer)?.value,
       slot: slot?.value ?? r.value,
       kind: query ? 'sparql' : 'function',
-      queryParts: query ? (SPARQL_PREFIXES + '\n' + query).split('$this') : undefined,
+      queryParts: query ? (prefixes + '\n' + query).split('$this') : undefined,
       fn,
       follows: getAll(SEM.follows),
       watches: watches.length ? new Set(watches) : undefined,

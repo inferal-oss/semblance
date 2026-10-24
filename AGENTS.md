@@ -110,6 +110,7 @@ npx tsc --noEmit       # typecheck
 | `src/view/` | maintained views (IVM, `docs/IVM.md`) |
 | `src/components/`, `src/layers/` | function twins and reaction functions |
 | `src/web/`, `src/node/` | store loading per platform; `mount` |
+| `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |
 | `examples/hello/` | the Getting started example |

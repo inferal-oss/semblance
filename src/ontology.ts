@@ -59,6 +59,7 @@ export const ONTOLOGY_FILES = [
   'components/board.ttl',
   'components/walkthrough.ttl',
   'components/typeahead.ttl',
+  'components/live.ttl',
   'perf/perf.ttl',
   'domain/network.ttl',
   'shapes/components.ttl',
@@ -103,4 +104,5 @@ export const ONTOLOGY_FILES = [
   'theme/board.ttl',
   'theme/walkthrough.ttl',
   'theme/typeahead.ttl',
+  'theme/live.ttl',
 ] as const

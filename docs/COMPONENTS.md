@@ -6,7 +6,8 @@ do, and style rules say how it looks in every theme. All of it is Turtle, loaded
 store as the app that uses it, and all of it can be queried — the site's Reference and Tools are
 built that way.
 
-Start with [Getting started](GETTING-STARTED.md) for the smallest complete example.
+Start with [Getting started](GETTING-STARTED.md) for the smallest complete example. On the site (<https://semblance.dev>, Docs → Building components) a component of this
+shape, `ex:Avatar`, is live: edit its rule, shape or style rules and it renders again as you type.
 
 ## SPARQL first; functions are the escape hatch
 
@@ -84,6 +85,9 @@ A rendering rule runs once per instance (`$this`) and constructs RDF/HTML
   `c:children`). The renderer substitutes the child's own root. The child renders itself.
 - **Text modality.** A projection has a modality, `mod:Screen` or `mod:Text`. A rule that only
   applies to one says so with `sem:modality`; write one per modality the component makes sense in.
+- **Prefixes.** Semblance's prefixes are declared for every query. Declare your own in the query, or
+  once for every rule and reaction in the graph: `ex:prefixes sh:declare [ sh:prefix "ex" ;
+  sh:namespace "https://example.org/x#"^^xsd:anyURI ]`.
 
 Correlated sub-patterns are cheaper as `EXISTS { … }` inside `BIND(IF(…))` than as
 `OPTIONAL` (some stores plan correlated `OPTIONAL`s as scans).
@@ -221,6 +225,11 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   attach `Navigation` and links can point at resources (`c:to`) instead of addresses.
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
   shown; `sem:warm sem:Eager | sem:OnIntent` says which.
+- **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
+  "turtle"`) beside what it renders, each in a sandbox of its own: attach `Sandboxes`
+  (`src/sandbox.ts`) with a store loader and call `sync()` after each flush. It mounts a sandbox in an
+  example's slot when it is shown, rebuilds it when typing pauses, and writes back
+  `c:sandboxState`, `c:problem` and `c:renderTime`; the site's Docs are built with it.
 
 ## Where things are
 

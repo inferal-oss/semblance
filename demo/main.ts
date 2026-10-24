@@ -6,6 +6,7 @@ import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persist
 import { Navigation, rendererReveal } from '../src/navigation.ts'
 import { attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
+import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
@@ -77,7 +78,8 @@ const text = runtime.project({ modality: MOD.Text, prefer, provenance: true, nam
 if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
 
 const sheet = new CSSStyleSheet()
-sheet.replaceSync(compileStyles(store))
+const css = compileStyles(store)
+sheet.replaceSync(css)
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
 
 const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
@@ -104,13 +106,26 @@ function focusModal() {
   }
 }
 
+// Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
+let sandboxes: Sandboxes | undefined
 const flush = () => {
   shell.flush()
+  sandboxes?.sync()
   focusModal()
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
   textDom?.flush()
 }
+sandboxes = new Sandboxes(runtime, screen, {
+  renderer: shell,
+  shown: (c) => screen.index.isShown(c, new Set([UI + 'shell'])),
+  flush: () => flush(),
+  load: (...turtle) => loadStore(kind, ...turtle),
+  prefer,
+  languages: () => [...screen.engine.languages],
+  siteCss: css,
+})
+sandboxes.attach()
 flush()
 // Views that follow their queries (sem:refresh sem:NextFrame) re-run at the next frame.
 runtime.onRefresh(flush)
@@ -308,4 +323,4 @@ void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation } })
+if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes } })

@@ -71,7 +71,7 @@ Thin vocabularies. Every component
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Window · Palette · Taskbar · Tooltip (layer) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
-| **Inspection** | DataGrid (GridColumn, filters) · TimeAxis · SplitView · DockPanel · JsonTree · HexView · BodyViewer · Toolbar · SearchField · Legend · LiveIndicator · CountBadge (+ Unsetter mixin) |
+| **Inspection** | DataGrid (GridColumn, filters) · TimeAxis · SplitView · DockPanel · JsonTree · HexView · BodyViewer · Toolbar · SearchField · Legend · LiveIndicator · CountBadge (+ Unsetter mixin) · CodeEditor (QueryEditor) · LiveExample |
 
 Any component that shows a `c:value` may take it from a query instead: `c:valueQuery` names a
 `sem:View` whose first row's `?value` (and `?tone`) it shows, re-run when its `c:dataset` changes

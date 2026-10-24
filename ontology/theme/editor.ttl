@@ -17,6 +17,13 @@ tok:editor-pad a sty:Token ; sem:slug "editor-pad" ; sty:value "10px" .
 
 # --- a transparent text area over its highlighted text, line numbers beside ---------------------------
 
+# Code reads left to right, also in a right-to-left page: the text, its lines and its suggestions
+# (placed by column from the left). The hint is prose: it takes the direction of its own words.
+[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ;
+    sty:declares [ sty:property "direction" ; sty:raw "ltr" ] , [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
+[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".sem-hint" ;
+    sty:declares [ sty:property "unicode-bidi" ; sty:raw "plaintext" ] , [ sty:property "text-align" ; sty:raw "start" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:CodeEditor ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "position" ; sty:raw "relative" ] ,

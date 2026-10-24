@@ -117,7 +117,7 @@ c:WindowState sem:group c:WindowsGroup . c:Edge sem:group c:WindowsGroup . c:Poi
 # --- Inspection ---
 c:QueryWorkbench sem:group c:InspectionGroup . c:RunQueryButton sem:group c:InspectionGroup .
 c:QueryEditor sem:group c:InspectionGroup . c:QueryResultView sem:group c:InspectionGroup .
-c:CodeEditor sem:group c:InspectionGroup .
+c:LiveExample sem:group c:InspectionGroup . c:CodeEditor sem:group c:InspectionGroup .
 c:ResultTable sem:group c:InspectionGroup . c:ResultGraph sem:group c:InspectionGroup .
 c:ResultTurtle sem:group c:InspectionGroup . c:QueryView sem:group c:InspectionGroup .
 c:ElementMarkup sem:group c:InspectionGroup . c:Highlight sem:group c:InspectionGroup .

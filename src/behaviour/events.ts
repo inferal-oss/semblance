@@ -371,14 +371,28 @@ export class EventBus {
   /**
    * Record DOM interactions inside a rendered projection. For each DOM event,
    * the innermost component with a matching reaction receives the RDF event.
+   * Content mounted in the projection's host-owned slots (another projection, a
+   * sandbox) is left to whoever mounted it. With `onError`, a reaction or rule that
+   * throws while an event is handled is reported there instead of thrown (a sandbox
+   * keeps its failures to itself).
    */
-  attach(renderer: DomRenderer, onHandled: (h: Handled) => void = () => {}): () => void {
+  attach(renderer: DomRenderer, onHandled: (h: Handled) => void = () => {}, onError?: (e: Error) => void): () => void {
     const domTypes = new Set(this.runtime.store.match(null, this.f.namedNode(BEH.domEvent), null).map((q) => q.object.value))
     const doc = renderer.host.ownerDocument
     const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
     // Key presses a reaction handled are not also the keyboard layer's (nor the browser's).
     const consumed = new WeakSet<Event>()
-    const listener = (e: Event) => {
+    const guarded =
+      <E extends Event>(handle: (e: E) => void) =>
+      (e: E) => {
+        if (!onError) return handle(e)
+        try {
+          handle(e)
+        } catch (err) {
+          onError(err as Error)
+        }
+      }
+    const listener = guarded((e: Event) => {
       if (renderer.inSlot(e.target as Node)) return
       // Key events carry their combination; an event class may name the keys it is for (beh:key).
       const combo = e.type.startsWith('key') && (e as KeyboardEvent).key ? comboOf(e as KeyboardEvent, apple) : undefined
@@ -411,7 +425,7 @@ export class EventBus {
           return
         }
       }
-    }
+    })
     // Drag and drop (ontology/layers/dragdrop.ttl): the pointer gesture (below), and its keys before
     // any other key handling - on the host for keys inside it, on the document for the rest.
     const drags = new DragHost(this, renderer, onHandled)
@@ -438,13 +452,14 @@ export class EventBus {
       if (field.value !== value) field.value = value
     }
     renderer.host.addEventListener('input', controlled)
-    const gestures = (e: Event) => this.gesture(e as PointerEvent, renderer, drags)
+    const gestures = (e: Event) => renderer.inSlot(e.target as Node) || this.gesture(e as PointerEvent, renderer, drags)
     renderer.host.addEventListener('pointerdown', gestures)
     // Keyboard layer: a key combination activates the element that declares it.
-    const keys = (e: Event) => {
+    const keys = guarded((e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
-      if (renderer.host.contains(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      // Keys in slot content are the mounted projection's own (its bus navigates it).
+      if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
@@ -457,10 +472,10 @@ export class EventBus {
         if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
         return
       }
-      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo) as HTMLElement | undefined
+      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo && !renderer.inSlot(x)) as HTMLElement | undefined
       if (!el && combo === 'escape') {
         // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
-        const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]')).at(-1) as HTMLElement | undefined
+        const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined
         if (dismiss) k.preventDefault(), dismiss.click()
         return
       }
@@ -470,7 +485,7 @@ export class EventBus {
       if (field) return field.focus()
       const control = el.matches('button, a, [role=button], input') ? el : (el.querySelector('button, a, [role=button], input') as HTMLElement | null)
       ;(control ?? el).click()
-    }
+    })
     doc.addEventListener('keydown', keys)
     const track = (e: Event) => {
       const p = e as PointerEvent
@@ -480,6 +495,7 @@ export class EventBus {
     // Entering a navigable component by Tab puts the rest of its parts out of the tab order.
     const entered = (e: Event) => {
       const part = e.target as HTMLElement
+      if (renderer.inSlot(part)) return
       const root = part.closest?.('[data-sem-nav-items]')
       if (root && part.matches(root.getAttribute('data-sem-nav-items')!)) rove(root, part)
     }

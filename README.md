@@ -219,6 +219,16 @@ A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 page, so it survives navigation. Dock and close follow the provenance back.
 Dialogs, drawers and toast regions are hosted there too.
 
+**Live examples** (`c:LiveExample`, `ontology/components/live.ttl`) put the Turtle of a small app
+in a code editor beside what it renders. Each runs in a sandbox of its own - its own store, rules,
+projection and event bus, mounted in a host-owned slot - so an edit that does not parse, or a rule
+that throws, only shows where it went wrong, beside the last rendering that worked. A host effect
+(`src/sandbox.ts`) builds a sandbox when its example is shown and again when typing pauses, and
+writes what happened back as data (`c:sandboxState`, `c:problem`, `c:renderTime`); Reset and Copy are
+reactions. The Docs show their Turtle this way, running. The editor is `c:CodeEditor`
+(`ontology/components/editor.ttl`): highlighting and completion by language (`c:language`: SPARQL,
+Turtle), from the graph's prefixes, terms and the language's own words (`c:CodeWord`).
+
 The Playground's **Query** tab is a SPARQL workbench made of components
 (`ontology/components/workbench.ttl`): an editor whose highlighting and
 completions come from the graph (keywords, functions and every prefixed term the
@@ -291,7 +301,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n and announcement layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

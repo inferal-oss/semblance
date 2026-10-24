@@ -4,6 +4,10 @@
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
 # The docs: a navigation list of sections and one page per section. Each page is
@@ -13,25 +17,27 @@
 ui:docSection rdfs:label "Docs" ; rdfs:range ui:DocSection .
 ui:DocOverview a ui:DocSection ; rdfs:label "Overview" ; sem:order 1 ; ui:key "overview" .
 ui:DocStart a ui:DocSection ; rdfs:label "Getting started" ; sem:order 2 ; ui:key "start" .
-ui:DocComponents a ui:DocSection ; rdfs:label "Building components" ; sem:order 3 ; ui:key "components" .
-ui:DocIntegrate a ui:DocSection ; rdfs:label "Integrating" ; sem:order 4 ; ui:key "integrate" .
-ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" ; sem:order 5 ; ui:key "rules" .
-ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 6 ; ui:key "layers" .
-ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 7 ; ui:key "behaviour" .
-ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 8 ; ui:key "styling" .
-ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 9 ; ui:key "persistence" .
-ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 10 ; ui:key "navigation" .
-ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" ; sem:order 11 ; ui:key "views" .
-ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 12 ; ui:key "tools" .
-ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 13 ; ui:key "performance" .
+ui:DocRecipes a ui:DocSection ; rdfs:label "Recipes" ; sem:order 3 ; ui:key "recipes" .
+ui:DocComponents a ui:DocSection ; rdfs:label "Building components" ; sem:order 4 ; ui:key "components" .
+ui:DocIntegrate a ui:DocSection ; rdfs:label "Integrating" ; sem:order 5 ; ui:key "integrate" .
+ui:DocRules a ui:DocSection ; rdfs:label "Rules and the engine" ; sem:order 6 ; ui:key "rules" .
+ui:DocLayers a ui:DocSection ; rdfs:label "Layers" ; sem:order 7 ; ui:key "layers" .
+ui:DocBehaviour a ui:DocSection ; rdfs:label "Behaviour and events" ; sem:order 8 ; ui:key "behaviour" .
+ui:DocStyling a ui:DocSection ; rdfs:label "Styling and themes" ; sem:order 9 ; ui:key "styling" .
+ui:DocPersistence a ui:DocSection ; rdfs:label "Persistence" ; sem:order 10 ; ui:key "persistence" .
+ui:DocNavigation a ui:DocSection ; rdfs:label "Navigation" ; sem:order 11 ; ui:key "navigation" .
+ui:DocViews a ui:DocSection ; rdfs:label "Maintained views" ; sem:order 12 ; ui:key "views" .
+ui:DocTools a ui:DocSection ; rdfs:label "Tools" ; sem:order 13 ; ui:key "tools" .
+ui:DocPerformance a ui:DocSection ; rdfs:label "Performance" ; sem:order 14 ; ui:key "performance" .
 
 ui:docs a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:docsNav ui:docPages ) .
 ui:docsNav a c:NavList ; c:controls ui:app ; c:property ui:docSection ; c:label "Docs" ; c:compactAs c:Picker .
 ui:docPages a c:Switch ; c:controls ui:app ; c:property ui:docSection ;
-    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-components ui:dcs-integrate ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-views ui:dcs-tools ui:dcs-performance ) .
+    c:cases ( ui:dcs-overview ui:dcs-start ui:dcs-recipes ui:dcs-components ui:dcs-integrate ui:dcs-rules ui:dcs-layers ui:dcs-behaviour ui:dcs-styling ui:dcs-persistence ui:dcs-navigation ui:dcs-views ui:dcs-tools ui:dcs-performance ) .
 ui:dcs-overview c:when ui:DocOverview ; c:content ui:doc-overview .
 ui:dcs-start c:when ui:DocStart ; c:content ui:doc-start .
+ui:dcs-recipes c:when ui:DocRecipes ; c:content ui:doc-recipes .
 ui:dcs-components c:when ui:DocComponents ; c:content ui:doc-components .
 ui:dcs-integrate c:when ui:DocIntegrate ; c:content ui:doc-integrate .
 ui:dcs-rules c:when ui:DocRules ; c:content ui:doc-rules .
@@ -66,8 +72,11 @@ ui:doc-ov-examples a c:Link , c:Setter ; c:label "examples" ; c:href "#examples"
 ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "#components" ; c:controls ui:app ; c:property ui:page ; c:value ui:Components .
 
 # --- Getting started ---
+# Every step that shows Turtle shows it live (c:LiveExample, ontology/components/live.ttl): the
+# source in an editor beside its rendering, in a sandbox of its own. The last step's sources are
+# examples/hello, less the prefixes Semblance declares (test/live-example.test.ts checks it).
 ui:doc-start a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-gs-h ui:doc-gs-1 ui:doc-gs-install ui:doc-gs-2 ui:doc-gs-vite ui:doc-gs-3 ui:doc-gs-app ui:doc-gs-4 ui:doc-gs-mount ui:doc-gs-5 ui:doc-gs-react ui:doc-gs-6 ) .
+    c:children ( ui:doc-gs-h ui:doc-gs-1 ui:doc-gs-install ui:doc-gs-2 ui:doc-gs-vite ui:doc-gs-3 ui:gs-page ui:doc-gs-3b ui:doc-gs-4 ui:doc-gs-mount ui:doc-gs-5 ui:gs-tally ui:doc-gs-5b ui:doc-gs-6 ui:gs-react ui:doc-gs-7 ) .
 ui:doc-gs-h a c:Heading ; c:level 1 ; c:label "Getting started" .
 ui:doc-gs-1 a c:Text ; c:label "Semblance is the npm package @inferal-oss/semblance (not published yet: until it is, use a checkout of the repository, or npm pack it). It ships TypeScript, its ontologies and its WebAssembly engines, built by your bundler - today Vite." .
 ui:doc-gs-install a c:Code ; c:block true ; c:label """npm install @inferal-oss/semblance
@@ -80,24 +89,341 @@ export default defineConfig({
     include: ['@inferal-oss/semblance > n3'],
   },
 })""" .
-ui:doc-gs-3 a c:Text ; c:label "The interface is data. A page in Turtle:" .
-ui:doc-gs-app a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ex:title ex:cups ex:drink ) .
-ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
-ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
-ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .""" .
-ui:doc-gs-4 a c:Text ; c:label "Mount it. mount loads a store with Semblance's ontologies and your graphs, compiles the theme, projects the root, patches it into the element and routes its events to reactions:" .
+ui:doc-gs-3 a c:Text ; c:label "The interface is data. A page in Turtle, beside what it renders: edit it, and the rendering follows as you type." .
+ui:doc-gs-3b a c:Text ; c:label "Each example here runs in a sandbox of its own: its own graph, rules and events, so an edit that does not parse only shows where it went wrong, beside the last rendering that worked. Semblance's prefixes (c:, sty:, pos:, tok:, beh: and the rest) are declared for the examples; Copy puts them in front of the source, so what you paste is a complete file." .
+ui:doc-gs-4 a c:Text ; c:label "In your app the page is a file, app.ttl, and mount shows it. mount loads a store with Semblance's ontologies and your graphs, compiles the theme, projects the root, patches it into the element and routes its events to reactions:" .
 ui:doc-gs-mount a c:Code ; c:block true ; c:label """import { mount } from '@inferal-oss/semblance/web'
 import app from './app.ttl?raw'
 import tally from './tally.ttl?raw'
 
 await mount(document.getElementById('app')!, { root: 'https://example.org/hello#page', graphs: [tally, app] })""" .
-ui:doc-gs-5 a c:Text ; c:label "ex:Tally is a component of our own (Building components shows it). A click on the button adds a cup: a reaction deletes the old value and inserts the new one." .
-ui:doc-gs-react a c:Code ; c:block true ; c:language "turtle" ; c:label """ex:Drink a beh:Reaction ;
+ui:doc-gs-5 a c:Text ; c:label "A component of your own is an OWL class under sem:Component, a rendering slot that targets it, and a SPARQL rule that builds RDF/HTML for each instance ($this), minting every node from it. Here ex:Tally (tally.ttl) is used by the page (app.ttl): change the rule or the style rules and the page renders with them." .
+ui:doc-gs-5b a c:Text ; c:label "Its shape says what an instance must say: take the label off ex:cups and the shapes layer outlines it and says why. Building components goes further: containers, lists, text output, layers, and when (rarely) to write a rule as a function." .
+ui:doc-gs-6 a c:Text ; c:label "State is triples too, and events change it through reactions: a reaction names the event and its source and says what to delete and what to insert, as CONSTRUCTs over $this and $event. Click Have another: the reaction runs in the example's graph, and only what depends on the change is rendered again." .
+ui:doc-gs-7 a c:Text ; c:children ( "The complete example is examples/hello in the repository, and docs/GETTING-STARTED.md walks through it, including rendering on the server. " ui:doc-gs-recipes " has more small examples, each live." ) .
+ui:doc-gs-recipes a c:Link , c:Setter ; c:label "Recipes" ; c:href "#docs/recipes" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
+
+ui:gs-page a c:LiveExample ; c:label "A page" ; c:exampleRoot <https://example.org/hello#page> ; c:sources ( ui:gs-page-app ) .
+ui:gs-page-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
+    c:children ( ex:title ex:drink ) .
+ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .''' .
+
+ui:gs-tally a c:LiveExample ; c:label "A component of your own" ; c:exampleRoot <https://example.org/hello#page> ;
+    c:sources ( ui:gs-tally-def ui:gs-tally-app ) ; c:selectedSource ui:gs-tally-def .
+ui:gs-tally-def a c:CodeEditor ; c:language "turtle" ; c:label "tally.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
+
+# A component of our own: a figure with its label and unit. One class, one rendering slot, one
+# SPARQL rule for it, a shape for what an instance must say, and how it looks.
+
+ex:Tally a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A figure (c:value) with its label (c:label) and an optional unit (ex:unit)."@en ;
+    sem:slug "ex-tally" .
+ex:unit a owl:DatatypeProperty ; rdfs:domain ex:Tally .
+
+ex:TallyRendering a sem:Rendering ; sem:targets ex:Tally ; sem:stratum 0 .
+ex:TallyRendering-sparql a sem:Rule ;
+    sem:implements ex:TallyRendering ;
+    sem:construct """
+PREFIX ex: <https://example.org/hello#>
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?name, ?figure .
+  ?name a rdfhtml:Span ; rdfhtml:class "ex-tally-label" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?figure .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?figure a rdfhtml:Strong ; rdfhtml:hasChild ?figureText .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+}
+WHERE {
+  $this a ex:Tally ; c:label ?label .
+  OPTIONAL { $this c:value ?value }
+  OPTIONAL { $this ex:unit ?unit }
+  BIND(CONCAT(STR(COALESCE(?value, 0)), IF(BOUND(?unit), CONCAT(" ", ?unit), "")) AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+  BIND(IRI(CONCAT(STR($this), "/~figure")) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~figure-text")) AS ?figureText)
+}""" .
+
+ex:TallyShape a sh:NodeShape ; sh:targetClass ex:Tally ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A tally needs a label (c:label): say what the figure is." ] ,
+                [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:integer ] .
+
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ; sty:part "> strong" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:text-2xl ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ; sty:part ".ex-tally-label" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .''' .
+ui:gs-tally-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
+    c:children ( ex:title ex:cups ex:drink ) .
+ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
+ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .''' .
+
+ui:gs-react a c:LiveExample ; c:label "State and reactions" ; c:exampleRoot <https://example.org/hello#page> ;
+    c:sources ( ui:gs-react-def ui:gs-react-app ) ; c:selectedSource ui:gs-react-app .
+ui:gs-react-def a c:CodeEditor ; c:language "turtle" ; c:label "tally.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
+
+# A component of our own: a figure with its label and unit. One class, one rendering slot, one
+# SPARQL rule for it, a shape for what an instance must say, and how it looks.
+
+ex:Tally a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "A figure (c:value) with its label (c:label) and an optional unit (ex:unit)."@en ;
+    sem:slug "ex-tally" .
+ex:unit a owl:DatatypeProperty ; rdfs:domain ex:Tally .
+
+ex:TallyRendering a sem:Rendering ; sem:targets ex:Tally ; sem:stratum 0 .
+ex:TallyRendering-sparql a sem:Rule ;
+    sem:implements ex:TallyRendering ;
+    sem:construct """
+PREFIX ex: <https://example.org/hello#>
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?name, ?figure .
+  ?name a rdfhtml:Span ; rdfhtml:class "ex-tally-label" ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?figure .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?figure a rdfhtml:Strong ; rdfhtml:hasChild ?figureText .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+}
+WHERE {
+  $this a ex:Tally ; c:label ?label .
+  OPTIONAL { $this c:value ?value }
+  OPTIONAL { $this ex:unit ?unit }
+  BIND(CONCAT(STR(COALESCE(?value, 0)), IF(BOUND(?unit), CONCAT(" ", ?unit), "")) AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+  BIND(IRI(CONCAT(STR($this), "/~figure")) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~figure-text")) AS ?figureText)
+}""" .
+
+ex:TallyShape a sh:NodeShape ; sh:targetClass ex:Tally ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A tally needs a label (c:label): say what the figure is." ] ,
+                [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:integer ] .
+
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ; sty:part "> strong" ;
+    sty:declares [ sty:property "font-size" ; sty:token tok:text-2xl ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Tally ; sty:part ".ex-tally-label" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .''' .
+ui:gs-react-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
+
+# The app: built-in components and ours, in one graph.
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ;
+    c:children ( ex:title ex:cups ex:drink ) .
+ex:title a c:Heading ; c:level 1 ; c:label "Hello, Semblance" .
+ex:cups a ex:Tally ; c:label "Coffee today" ; c:value 0 ; ex:unit "cups" .
+ex:drink a c:Button ; c:label "Have another" ; sty:intent sty:Primary .
+
+# What a click on the button means: one more cup. Delete the old value, insert the new one.
+ex:Drink a beh:Reaction ;
     beh:when beh:Click ; beh:source ex:drink ;
-    beh:deletes \"\"\"CONSTRUCT { ex:cups c:value ?n } WHERE { ex:cups c:value ?n }\"\"\" ;
-    beh:inserts \"\"\"CONSTRUCT { ex:cups c:value ?next } WHERE { ex:cups c:value ?n BIND(?n + 1 AS ?next) }\"\"\" .""" .
-ui:doc-gs-6 a c:Text ; c:label "The complete example is examples/hello in the repository, and docs/GETTING-STARTED.md walks through it, including rendering on the server." .
+    beh:deletes """PREFIX ex: <https://example.org/hello#>
+CONSTRUCT { ex:cups c:value ?n } WHERE { ex:cups c:value ?n }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/hello#>
+CONSTRUCT { ex:cups c:value ?next } WHERE { ex:cups c:value ?n BIND(?n + 1 AS ?next) }""" .''' .
+
+# --- Recipes ---
+# Small examples, each live (c:LiveExample) and each a sentence or two. Their queries name the
+# example's own prefix through sh:declare (sh:prefix, sh:namespace), which every rule and reaction
+# of the graph then knows.
+ui:doc-recipes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:doc-rc-h ui:doc-rc-1
+                 ui:doc-rc-mirror-h ui:doc-rc-mirror ui:rc-mirror
+                 ui:doc-rc-valid-h ui:doc-rc-valid ui:rc-valid
+                 ui:doc-rc-list-h ui:doc-rc-list ui:rc-list
+                 ui:doc-rc-theme-h ui:doc-rc-theme ui:rc-theme
+                 ui:doc-rc-text-h ui:doc-rc-text ui:rc-text
+                 ui:doc-rc-l10n-h ui:doc-rc-l10n ui:doc-rc-language ui:rc-l10n ) .
+ui:doc-rc-h a c:Heading ; c:level 1 ; c:label "Recipes" .
+ui:doc-rc-1 a c:Text ; c:label "Small things, each a few lines of Turtle you can edit beside what they render. Their queries use the example's own prefix, declared once for every rule and reaction in the graph the SHACL way (sh:declare, with sh:prefix and sh:namespace); Semblance's own are known already." .
+
+ui:doc-rc-mirror-h a c:Heading ; c:level 2 ; c:label "A field mirrored into a heading" .
+ui:doc-rc-mirror a c:Text ; c:label "Typing is an event too (beh:Input), and $event beh:value is what the field holds now. Beside the field's own reaction, which keeps its c:value, ours rewrites the heading's label." .
+ui:rc-mirror a c:LiveExample ; c:label "A field mirrored into a heading" ; c:exampleRoot <https://example.org/mirror#page> ; c:sources ( ui:rc-mirror-app ) .
+ui:rc-mirror-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/mirror#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/mirror#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:greeting ex:name ) .
+ex:greeting a c:Heading ; c:level 2 ; c:label "Hello, stranger" .
+ex:name a c:TextField ; c:label "Your name" ; c:placeholder "Ada" .
+
+ex:Mirror a beh:Reaction ;
+    beh:when beh:Input ; beh:source ex:name ;
+    beh:deletes """CONSTRUCT { ex:greeting c:label ?old } WHERE { ex:greeting c:label ?old }""" ;
+    beh:inserts """CONSTRUCT { ex:greeting c:label ?greeting } WHERE {
+  $event beh:value ?typed .
+  BIND(CONCAT("Hello, ", IF(STRLEN(?typed) > 0, ?typed, "stranger")) AS ?greeting)
+}""" .''' .
+
+ui:doc-rc-valid-h a c:Heading ; c:level 2 ; c:label "Save only what is valid" .
+ui:doc-rc-valid a c:Text ; c:label "A field points at a SHACL property shape (val:validates); the validation layer derives its error from the shape and its message. A button that val:requires the field stays disabled until it conforms, so the Save reaction only ever sees a valid address." .
+ui:rc-valid a c:LiveExample ; c:label "Save only what is valid" ; c:exampleRoot <https://example.org/signup#page> ; c:sources ( ui:rc-valid-app ) .
+ui:rc-valid-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/signup#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/signup#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:email ex:save ex:saved ) .
+ex:email a c:TextField ; c:label "Email" ; c:placeholder "you@example.org" ;
+    val:validates ex:EmailShape .
+ex:save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; val:requires ( ex:email ) .
+ex:saved a c:Text ; c:label "Nothing saved yet." .
+
+ex:EmailShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ;
+    sh:pattern "^[^@ ]+@[^@ ]+[.][^@ ]+$" ;
+    sh:message "Enter an address like you@example.org." .
+
+ex:Save a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:save ;
+    beh:deletes """CONSTRUCT { ex:saved c:label ?old } WHERE { ex:saved c:label ?old }""" ;
+    beh:inserts """CONSTRUCT { ex:saved c:label ?done } WHERE {
+  ex:email c:value ?email BIND(CONCAT("Saved ", ?email, ".") AS ?done)
+}""" .''' .
+
+ui:doc-rc-list-h a c:Heading ; c:level 2 ; c:label "A list bound to data" .
+ui:doc-rc-list a c:Text ; c:label "A c:List shows data items (c:item), sorted by one of their properties, with a checkbox for another. Adding mints a new item from the event, so each is its own resource; removing deletes the items and their triples. Each item renders on its own, so a change touches only it." .
+ui:rc-list a c:LiveExample ; c:label "A list bound to data" ; c:exampleRoot <https://example.org/groceries#page> ; c:sources ( ui:rc-list-app ) .
+ui:rc-list-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/groceries#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/groceries#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:list ex:new ex:actions ) .
+ex:list a c:List ; c:label "Groceries" ; c:sortBy ex:added ;
+    c:itemLabel rdfs:label ; c:itemChecked ex:got ;
+    c:item ex:bread , ex:milk .
+ex:bread rdfs:label "Bread" ; ex:added 1 ; ex:got false .
+ex:milk rdfs:label "Milk" ; ex:added 2 ; ex:got true .
+ex:new a c:TextField ; c:label "Something else" ; c:placeholder "Apples" .
+ex:actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ex:add ex:clear ) .
+ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .
+ex:clear a c:Button ; c:label "Remove what we got" .
+
+ex:Add a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:add ;
+    beh:deletes """CONSTRUCT { ex:new c:value ?v } WHERE { ex:new c:value ?v }""" ;
+    beh:inserts """CONSTRUCT { ex:list c:item ?item . ?item rdfs:label ?v ; ex:added ?next ; ex:got false }
+WHERE {
+  ex:new c:value ?v FILTER(STRLEN(?v) > 0)
+  BIND(IRI(CONCAT(STR(ex:), "item-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?item)
+  { SELECT (COALESCE(MAX(?n), 0) + 1 AS ?next) WHERE { ?any ex:added ?n } }
+}""" .
+ex:Clear a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:clear ;
+    beh:deletes """CONSTRUCT { ex:list c:item ?item . ?item ?p ?o }
+WHERE { ex:list c:item ?item . ?item ex:got true ; ?p ?o }""" .''' .
+
+ui:doc-rc-theme-h a c:Heading ; c:level 2 ; c:label "A theme for part of a page" .
+ui:doc-rc-theme a c:Text ; c:label "sty:theme on any component re-values every token under it, so the nearest theme wins, even inside another. The segmented control writes that one triple; tones (sty:tone) keep their meaning in every theme. Doodle and Classic rebuild the controls, not only their colours." .
+ui:rc-theme a c:LiveExample ; c:label "A theme for part of a page" ; c:exampleRoot <https://example.org/themes#page> ; c:sources ( ui:rc-theme-app ) .
+ui:rc-theme-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/themes#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:pick ex:card ) .
+ex:pick a c:Segmented ; c:label "Theme" ; c:controls ex:card ; c:property sty:theme ;
+    c:options ( sty:Semblance sty:Terminal sty:Doodle sty:Classic ) .
+ex:card a c:Surface ; sty:theme sty:Terminal ; sty:elevation sty:Raised ;
+    pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ex:title ex:state ex:go ) .
+ex:title a c:Heading ; c:level 3 ; c:label "Release 1.4" .
+ex:state a c:Badge ; c:label "Checks passed" ; sty:tone sty:Success .
+ex:go a c:Button ; c:label "Ship it" ; sty:intent sty:Primary .''' .
+
+ui:doc-rc-text-h a c:Heading ; c:level 2 ; c:label "A component that renders as text too" .
+ui:doc-rc-text a c:Text ; c:label "A projection has a modality. A rule that applies to one says so (sem:modality); write one per modality the component makes sense in. This meter is a bar on screen and a row of blocks in the Text modality, shown under the screen here: the same graph, the same click, two renderings." .
+ui:rc-text a c:LiveExample ; c:label "A component that renders as text too" ; c:exampleRoot <https://example.org/meter#page> ; c:textPreview true ;
+    c:sources ( ui:rc-text-def ui:rc-text-app ) ; c:selectedSource ui:rc-text-def .
+ui:rc-text-def a c:CodeEditor ; c:language "turtle" ; c:label "meter.ttl" ; c:original '''@prefix ex: <https://example.org/meter#> .
+
+ex:Meter a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "ex-meter" .
+ex:MeterRendering a sem:Rendering ; sem:targets ex:Meter ; sem:stratum 0 .
+
+# On screen: the label, and a bar as long as the value (out of 10).
+ex:MeterRendering-screen a sem:Rule ; sem:implements ex:MeterRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?name, ?bar .
+  ?name a rdfhtml:Span ; rdfhtml:hasChild ?nameText ; ord:immediatelyPrecedes ?bar .
+  ?nameText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?bar a rdfhtml:Span ; rdfhtml:class "ex-meter-bar" ; rdfhtml:style ?width .
+}
+WHERE {
+  $this a ex:Meter ; c:label ?label ; c:value ?n .
+  BIND(CONCAT("--level: ", STR(?n * 10), "%") AS ?width)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~name")) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~name-text")) AS ?nameText)
+  BIND(IRI(CONCAT(STR($this), "/~bar")) AS ?bar)
+}""" .
+
+# In text: one line of blocks.
+ex:MeterRendering-text a sem:Rule ; sem:implements ex:MeterRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line . ?line a rdfhtml:Text ; rdfhtml:data ?shown . }
+WHERE {
+  $this a ex:Meter ; c:label ?label ; c:value ?n .
+  BIND(CONCAT(?label, "  ", SUBSTR("##########", 1, ?n), SUBSTR("..........", 1, 10 - ?n), "  ", STR(?n), "/10") AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
+
+[] a sty:StyleRule ; sty:appliesTo ex:Meter ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "gap" ; sty:token tok:space-1 ] .
+[] a sty:StyleRule ; sty:appliesTo ex:Meter ; sty:part ".ex-meter-bar" ;
+    sty:declares [ sty:property "height" ; sty:raw "8px" ] ,
+                 [ sty:property "width" ; sty:raw "var(--level)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:accent ] ,
+                 [ sty:property "transition" ; sty:raw "width var(--sem-duration) var(--sem-ease)" ] .''' .
+ui:rc-text-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/meter#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/meter#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:volume ex:louder ) .
+ex:volume a ex:Meter ; c:label "Volume" ; c:value 3 .
+ex:louder a c:Button ; c:label "Louder" .
+
+ex:Louder a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:louder ;
+    beh:deletes """CONSTRUCT { ex:volume c:value ?n } WHERE { ex:volume c:value ?n }""" ;
+    beh:inserts """CONSTRUCT { ex:volume c:value ?next } WHERE { ex:volume c:value ?n BIND((?n + 1) - 11 * FLOOR((?n + 1) / 11) AS ?next) }""" .''' .
+
+ui:doc-rc-l10n-h a c:Heading ; c:level 2 ; c:label "Labels in the viewer's language" .
+ui:doc-rc-l10n a c:Text ; c:label "A label is the untagged source text plus its translations, as language-tagged literals; the localization layer picks the one in the viewer's language, else the source. The examples render in this site's language: choose another here (it is the site's own setting, also among the display settings of the Components page) and the labels follow; Arabic turns the page right to left." .
+ui:doc-rc-language a c:Segmented ; c:label "Language" ; c:controls ui:app ; c:property l10n:language .
+ui:rc-l10n a c:LiveExample ; c:label "Labels in the viewer's language" ; c:exampleRoot <https://example.org/greeting#page> ; c:sources ( ui:rc-l10n-app ) .
+ui:rc-l10n-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/greeting#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ex:title ex:name ex:save ) .
+ex:title a c:Heading ; c:level 2 ;
+    c:label "Good morning" , "Доброго ранку"@uk , "Guten Morgen"@de , "صباح الخير"@ar .
+ex:name a c:TextField ;
+    c:label "Name" , "Ім’я"@uk , "Name"@de , "الاسم"@ar ;
+    c:placeholder "Ada" .
+ex:save a c:Button ; sty:intent sty:Primary ;
+    c:label "Save" , "Зберегти"@uk , "Speichern"@de , "حفظ"@ar .''' .
+
+# Edits of the examples are remembered for this tab, with the source each shows.
+ui:rememberLiveExamples a per:Policy ; per:scope per:Session ;
+    rdfs:label "The live examples' edits" , "Зміни в живих прикладах"@uk , "Änderungen an den Live-Beispielen"@de , "تعديلات الأمثلة الحية"@ar ;
+    per:construct """
+CONSTRUCT { ?editor c:value ?text . ?example c:selectedSource ?shown }
+WHERE {
+  ?example a c:LiveExample .
+  { ?example c:sources/rdf:rest*/rdf:first ?editor . ?editor c:value ?text }
+  UNION { ?example c:selectedSource ?shown }
+}""" .
 
 # --- Building components ---
 ui:doc-components a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

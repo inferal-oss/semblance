@@ -7,7 +7,10 @@ and reactions (more `CONSTRUCT`s) turn events into changes of the graph.
 
 This guide builds a small app with one component of its own. The finished code is in
 [`examples/hello`](../examples/hello); `npx vite --config examples/hello/vite.config.ts` runs it
-from a checkout of this repository.
+from a checkout of this repository. On the site (<https://semblance.dev>, Docs → Getting started)
+every step that shows Turtle is live: the source in an editor beside what it renders, re-rendered as
+you type, with its reactions running. Docs → Recipes has more small examples; a few are
+[below](#recipes).
 
 ## Install
 
@@ -121,7 +124,13 @@ WHERE {
 The rule builds [RDF/HTML](https://ia2.dev/spec/rdf-html): elements and text nodes as resources.
 Every node it makes is an IRI minted from the component (`<component>/~local`), never a blank
 node, so a node keeps its identity across re-evaluation and its DOM element is reused. The
-prefixes Semblance knows (`sem:`, `c:`, `rdfhtml:`, `ord:`, …) are declared for you.
+prefixes Semblance knows (`sem:`, `c:`, `rdfhtml:`, `ord:`, …) are declared for every query. Declare
+your own in the query (`PREFIX ex: …`, as here), or once for every rule and reaction of the graph,
+the SHACL way:
+
+```turtle
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/hello#"^^xsd:anyURI ] .
+```
 
 Use it like any other component, and load its file before the app:
 
@@ -174,6 +183,56 @@ Every matching reaction sees the graph as it was before the event; their deletio
 insertions are applied together as one change, and only what depends on that change is
 re-evaluated and patched. Each event is also recorded, with the size of its change, in the change
 log (`beh:ChangeLog`), which the site's Tools show.
+
+## Recipes
+
+Each of these is live on the site (Docs → Recipes). They declare `ex:` with `sh:declare` (above),
+so their queries can use it.
+
+**A field mirrored into a heading.** Typing is an event too (`beh:Input`); `$event beh:value` is what
+the field holds now. The field's own reaction keeps its `c:value`; this one rewrites the heading:
+
+```turtle
+ex:greeting a c:Heading ; c:level 2 ; c:label "Hello, stranger" .
+ex:name a c:TextField ; c:label "Your name" ; c:placeholder "Ada" .
+
+ex:Mirror a beh:Reaction ;
+    beh:when beh:Input ; beh:source ex:name ;
+    beh:deletes """CONSTRUCT { ex:greeting c:label ?old } WHERE { ex:greeting c:label ?old }""" ;
+    beh:inserts """CONSTRUCT { ex:greeting c:label ?greeting } WHERE {
+  $event beh:value ?typed .
+  BIND(CONCAT("Hello, ", IF(STRLEN(?typed) > 0, ?typed, "stranger")) AS ?greeting)
+}""" .
+```
+
+**Save only what is valid.** A field points at a SHACL property shape (`val:validates`); a button
+that `val:requires` it stays disabled until it conforms:
+
+```turtle
+ex:email a c:TextField ; c:label "Email" ; val:validates ex:EmailShape .
+ex:save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; val:requires ( ex:email ) .
+ex:EmailShape a sh:PropertyShape ; sh:path c:value ; sh:minCount 1 ;
+    sh:pattern "^[^@ ]+@[^@ ]+[.][^@ ]+$" ; sh:message "Enter an address like you@example.org." .
+```
+
+**A list bound to data.** `c:List` shows data items (`c:item`), sorted by one property, with a
+checkbox for another. Adding mints a new item from the event; removing deletes the items and their
+triples:
+
+```turtle
+ex:list a c:List ; c:label "Groceries" ; c:sortBy ex:added ;
+    c:itemLabel rdfs:label ; c:itemChecked ex:got ; c:item ex:bread , ex:milk .
+ex:bread rdfs:label "Bread" ; ex:added 1 ; ex:got false .
+ex:milk rdfs:label "Milk" ; ex:added 2 ; ex:got true .
+
+ex:Clear a beh:Reaction ; beh:when beh:Click ; beh:source ex:clear ;
+    beh:deletes """CONSTRUCT { ex:list c:item ?item . ?item ?p ?o }
+WHERE { ex:list c:item ?item . ?item ex:got true ; ?p ?o }""" .
+```
+
+The others: a theme for part of a page (`sty:theme` on any component, written by a `c:Segmented`), a
+component with a rendering per modality (`sem:modality mod:Screen` and `mod:Text`), and labels in the
+viewer's language (an untagged source label plus `@uk`, `@de`, `@ar` translations).
 
 ## Rendering on the server
 
