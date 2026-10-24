@@ -105,12 +105,17 @@ function colored(o: Out, key: string, source: string, language: string | undefin
   )
 }
 
-/** Inline code, or with c:block a <pre><code> block; c:language colors its tokens. */
-const code: FnRule = (ctx, focus) => {
+/**
+ * Inline code, or with c:block a <pre><code> block; c:language colors its tokens. Two
+ * renderings share this: c:CodeRendering (`coloredSample` false) renders every sample except SPARQL
+ * and Turtle on screen, which c:CodeColoredRendering (`coloredSample` true) renders token by token.
+ */
+const codeRun = (coloredSample: boolean): FnRule => (ctx, focus) => {
   const source = text(ctx, focus, C.label) ?? str(ctx.object(focus, C.value))
   if (source === undefined) return []
   const block = isTrue(ctx.object(focus, C_BLOCK))
   const language = str(ctx.object(focus, C_LANGUAGE))?.toLowerCase()
+  if ((ctx.modality !== MOD.Text && tokens("", language) !== undefined) !== coloredSample) return []
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
     const body = block ? source.replace(/\s+$/, '').split('\n').map((l) => '    ' + l).join('\n') : '`' + source + '`'
@@ -147,6 +152,6 @@ const blockquote: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { text: textRun, link, kbd, code, blockquote }
+export const functions: Record<string, FnRule> = { text: textRun, link, kbd, code: codeRun(false), 'code:colored': codeRun(true), blockquote }
 
 export const reactions: Record<string, ReactionFn> = {}

@@ -72,8 +72,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~targets-title")) AS ?targetsTitle)
   BIND(IRI(CONCAT(STR($this), "/~targets-title-text")) AS ?targetsTitleText)
   BIND(IRI(CONCAT(STR($this), "/~targets")) AS ?targets)
+  # Each branch binds $this itself, so the minted IRIs are right in bulk evaluation too
+  # (where a union branch sees no outer bindings).
   {
     # Headline metrics.
+    $this c:of ?stream .
     OPTIONAL {
       SELECT ?stream (COUNT(?m) AS ?n) (SUM(?a) AS ?added) (SUM(?r) AS ?removed) (COUNT(DISTINCT ?t) AS ?c)
       WHERE { ?stream tree:member ?m . ?m beh:added ?a ; beh:removed ?r ; beh:target ?t }
@@ -99,6 +102,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~m-components-dd-text")) AS ?mComponentsDdText)
   } UNION {
     # One row per event kind / per component, with its share of the busiest.
+    $this c:of ?stream .
     {
       SELECT ?stream ?dim ?key (COUNT(?m) AS ?count)
       WHERE { ?stream tree:member ?m . { ?m a ?key BIND("kind" AS ?dim) } UNION { ?m beh:target ?key BIND("component" AS ?dim) } }
@@ -113,8 +117,20 @@ WHERE {
       }
       GROUP BY ?stream ?dim
     }
-    OPTIONAL { ?key c:label ?componentLabel }
-    OPTIONAL { ?key c:of ?item ; c:labelFrom ?labelProp . ?item ?labelProp ?itemLabel }
+    # The component's c:label (untagged, else English, else any), else its item's label.
+    LATERAL {
+      OPTIONAL { ?key c:label ?componentLabel0 FILTER(isLiteral(?componentLabel0) && lang(?componentLabel0) = "") }
+      OPTIONAL { FILTER(!BOUND(?componentLabel0)) ?key c:label ?componentLabel1 FILTER(langMatches(lang(?componentLabel1), "en")) }
+      OPTIONAL { FILTER(!BOUND(?componentLabel0) && !BOUND(?componentLabel1)) ?key c:label ?componentLabel2 FILTER(isLiteral(?componentLabel2)) }
+      BIND(COALESCE(?componentLabel0, ?componentLabel1, ?componentLabel2) AS ?componentLabel)
+      OPTIONAL {
+        ?key c:of ?item ; c:labelFrom ?labelProp .
+        LATERAL { OPTIONAL { ?item ?labelProp ?itemLabel0 FILTER(isLiteral(?itemLabel0) && lang(?itemLabel0) = "") }
+        OPTIONAL { FILTER(!BOUND(?itemLabel0)) ?item ?labelProp ?itemLabel1 FILTER(langMatches(lang(?itemLabel1), "en")) }
+        OPTIONAL { FILTER(!BOUND(?itemLabel0) && !BOUND(?itemLabel1)) ?item ?labelProp ?itemLabel2 FILTER(isLiteral(?itemLabel2)) }
+        BIND(COALESCE(?itemLabel0, ?itemLabel1, ?itemLabel2) AS ?itemLabel) }
+      }
+    }
     BIND(COALESCE(?componentLabel, ?itemLabel, REPLACE(STR(?key), "^.*[#/]", "")) AS ?name)
     BIND(STR(?count) AS ?countText)
     BIND(CONCAT("--sem-share: ", STR(xsd:integer(ROUND(100 * ?count / ?max))), "%") AS ?share)
@@ -127,6 +143,7 @@ WHERE {
     BIND(IF(?dim = "component", ?row, ?none) AS ?targetRow)
   } UNION {
     # Rank order: busier rows first, ties broken by IRI.
+    $this c:of ?stream .
     {
       SELECT ?stream ?dim ?keyA (COUNT(?m) AS ?countA)
       WHERE { ?stream tree:member ?m . { ?m a ?keyA BIND("kind" AS ?dim) } UNION { ?m beh:target ?keyA BIND("component" AS ?dim) } }
@@ -149,6 +166,10 @@ c:StreamStatsAsText a sem:Rendering ;
     sem:stratum 0 ;
     sem:follows c:of .
 
+c:StreamStatsOnScreen-fn a sem:Rule ;
+    sem:implements c:StreamStatsOnScreen ;
+    sem:function "stream-stats:screen" .
+
 c:StreamStatsAsText-sparql a sem:Rule ;
     sem:implements c:StreamStatsAsText ;
     sem:construct """
@@ -170,3 +191,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .
+
+c:StreamStatsAsText-fn a sem:Rule ;
+    sem:implements c:StreamStatsAsText ;
+    sem:function "stream-stats:text" .

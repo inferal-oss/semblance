@@ -32,6 +32,7 @@ val:invalid a owl:DatatypeProperty ;
     rdfs:comment "Derived: the field's value violates its shape (or a required field is empty)."@en .
 
 val:Check a sem:Rendering ;
+    sem:requires val:validates , val:requires ;
     rdfs:comment "Checks fields against their shapes and gates buttons on them."@en ;
     sem:targets sem:Component ;
     sem:layer val:Layer ;

@@ -43,10 +43,30 @@ c:ListRendering-fn a sem:Rule ;
     sem:implements c:ListRendering ;
     sem:function "list" .
 
+# The element depends on the modality only, so there is one SPARQL rule per modality.
+# Like the function (whose watches are empty), it ignores the list's other triples:
+# adding an item (c:item) re-runs only that item's member-wise evaluation.
+c:ListRendering-sparql-screen a sem:Rule ;
+    sem:implements c:ListRendering ;
+    sem:modality mod:Screen ;
+    sem:watches rdf:type ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Ul ; sem:renders $this . }
+WHERE { $this a c:List . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
+
+c:ListRendering-sparql-text a sem:Rule ;
+    sem:implements c:ListRendering ;
+    sem:modality mod:Text ;
+    sem:watches rdf:type ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this . }
+WHERE { $this a c:List . BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
+
 c:ListMembers a sem:Rendering ;
     sem:targets c:List ;
     sem:stratum 0 ;
-    sem:forEach c:item .
+    sem:forEach c:item ;
+    sem:functionOnly "Member-wise (sem:forEach): the engine evaluates it once per (list, item) and hands the item to the rule as an argument, which it does for function rules only (a SPARQL rule would need the member bound like $this)." .
 
 c:ListMembers-fn a sem:Rule ;
     sem:implements c:ListMembers ;

@@ -110,6 +110,7 @@ WHERE {
 
 # After the components (and before tooltips, stratum 30): outline and explain.
 val:ShapeMarks a sem:Rendering ;
+    sem:requires val:violation ;
     sem:targets sem:Component ;
     sem:modality mod:Screen ;
     sem:layer val:ShapesLayer ;

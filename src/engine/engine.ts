@@ -23,7 +23,7 @@ export interface EngineOptions {
 }
 
 export interface EngineStats {
-  /** Time and evaluations per rule IRI (bulk evaluations count once). */
+  /** Time and (rule, focus) evaluations per rule IRI. */
   byRule: Map<string, { runs: number; ms: number }>
   ruleRuns: number
   queries: number
@@ -124,7 +124,7 @@ export class Engine {
     this.graphs = [f.defaultGraph(), ...(opts.inputGraphs ?? []).map((g) => f.namedNode(g)), this.graph]
     this.functions = opts.functions ?? {}
     this.provenance = opts.provenance ?? false
-    this.bulkThreshold = opts.bulkThreshold ?? 16
+    this.bulkThreshold = opts.bulkThreshold ?? 2
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
     this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
@@ -510,7 +510,8 @@ export class Engine {
       this.evaluateAll(rule, foci)
     } finally {
       const entry = this.stats.byRule.get(rule.iri) ?? { runs: 0, ms: 0 }
-      entry.runs += rule.kind === 'sparql' && rule.bulk && foci.size >= this.bulkThreshold ? 1 : foci.size
+      // (rule, focus) evaluations, whether one query answered several of them or not.
+      entry.runs += foci.size
       entry.ms += performance.now() - t
       this.stats.byRule.set(rule.iri, entry)
     }
@@ -530,8 +531,21 @@ export class Engine {
       if (!foci.size) return
       for (const focus of foci) parked?.delete(focus)
     }
+    // A rule that requires a property its focus doesn't have has nothing to say about it.
+    if (rule.requires.length) {
+      for (const focus of [...foci]) {
+        if (!this.hasAny(focusOf(focus), rule.requires)) {
+          this.commit(rule, focus, [])
+          foci.delete(focus)
+        }
+      }
+      if (!foci.size) return
+    }
+    // Several foci of an attributable SPARQL rule: one query, restricted to them (VALUES).
     if (rule.kind === 'sparql' && rule.bulk && foci.size >= this.bulkThreshold) {
-      const groups = this.bulk(rule)
+      const live = [...foci].filter((focus) => this.isInstance(focus, rule))
+      this.stats.ruleRuns += live.length
+      const groups = live.length ? this.bulk(rule, live) : new Map<string, Quad[]>()
       for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) ? (groups.get(focus) ?? []) : [])
       return
     }
@@ -588,10 +602,23 @@ export class Engine {
     }
   }
 
-  private bulk(rule: Rule): Map<string, Quad[]> {
+  /** Whether a node has at least one of the properties (in any graph the rules read). */
+  private hasAny(focus: string, properties: string[]): boolean {
+    const f = this.store.factory
+    const s = f.namedNode(focus)
+    return properties.some((p) => this.graphs.some((g) => this.store.match(s, f.namedNode(p), null, g).length > 0))
+  }
+
+  private bulk(rule: Rule, foci: string[]): Map<string, Quad[]> {
     this.stats.bulkQueries++
     const groups = new Map<string, Quad[]>()
-    for (const q of this.construct(rule, rule.queryParts!.join('?this'))) {
+    // Restrict ?this to the dirty foci, at the start of the WHERE clause.
+    const query = rule.queryParts!.join('?this')
+    const template = query.search(/CONSTRUCT\s*\{/i)
+    const where = query.slice(template).search(/WHERE\s*\{/i)
+    const at = where < 0 ? -1 : template + where + query.slice(template + where).indexOf('{') + 1
+    const restricted = at < 0 ? query : `${query.slice(0, at)} VALUES ?this { ${foci.map((x) => `<${x}>`).join(' ')} } ${query.slice(at)}`
+    for (const q of this.construct(rule, restricted)) {
       const focus = owningFocus(q.subject.value)
       let g = groups.get(focus)
       if (!g) groups.set(focus, (g = []))

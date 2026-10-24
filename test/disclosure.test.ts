@@ -29,7 +29,8 @@ function showPage(kind: StoreKind = 'oxigraph', prefer?: 'sparql' | 'function') 
   const header = (id: string) => item(id).querySelector('.sem-trigger') as HTMLButtonElement
   const click = (el: Element) => el.dispatchEvent(new window.Event('click', { bubbles: true }))
   const expanded = (id: string) => header(id).getAttribute('aria-expanded') === 'true'
-  const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+  // Runs of every implementation of a rendering (SPARQL or function, whichever is preferred).
+    const runs = (rendering: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(NS.c + rendering.replace(/-(fn|sparql)$/, '') + '-')).reduce((n, [, s]) => n + s.runs, 0)
   return { document, store, runtime, screen, dom, bus, item, header, click, expanded, runs }
 }
 

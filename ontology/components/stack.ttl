@@ -12,7 +12,7 @@ c:Stack a owl:Class ;
 c:children a owl:ObjectProperty ; rdfs:domain c:Stack ; rdfs:range rdf:List ;
     rdfs:comment "Ordered child components."@en .
 
-# Function-only: walking an rdf:List in order is awkward in SPARQL.
+# The children in list order: consecutive list cells are ord:immediatelyPrecedes edges.
 c:StackRendering a sem:Rendering ;
     sem:targets c:Stack ;
     sem:stratum 0 .
@@ -20,3 +20,16 @@ c:StackRendering a sem:Rendering ;
 c:StackRendering-fn a sem:Rule ;
     sem:implements c:StackRendering ;
     sem:function "stack" .
+
+c:StackRendering-sparql a sem:Rule ;
+    sem:implements c:StackRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?child .
+  ?a ord:immediatelyPrecedes ?b .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Stack .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {} UNION { $this c:children/rdf:rest*/rdf:first ?child FILTER(isIRI(?child)) } UNION { $this c:children/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
+}""" .

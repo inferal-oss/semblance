@@ -3,7 +3,7 @@
 // swapped per rule and compared head-to-head.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, H, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
@@ -27,6 +27,8 @@ import { tokenizeSparql } from '../sparql-tokens.ts'
 import { labelOf, RDFS_LABEL, text } from './util.ts'
 
 const str = (t: Term | undefined) => t?.value
+/** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
+export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
 const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
 
 function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
@@ -269,7 +271,7 @@ const segmented: FnRule = (ctx, focus) => {
     return o.quads
   }
   const buttons = options(ctx, focus, property).map((opt) => {
-    const key = encodeURIComponent(opt.value)
+    const key = encodeForUri(opt.value)
     const symbol = str(ctx.object(opt, SEM.symbol))
     const parts = [
       ...(symbol ? [o.el('opt-' + key + '-symbol', 'Span', {}, [o.text('opt-' + key + '-symbol-text', symbol)])] : []),
@@ -501,7 +503,7 @@ const choice: FnRule = (ctx, focus) => {
   }
   const selectId = mint(focus.value, 'select')
   const select = o.el('select', 'Select', { id: selectId }, opts.map((opt) => {
-    const key = encodeURIComponent(opt.value)
+    const key = encodeForUri(opt.value)
     return o.el('opt-' + key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text('opt-' + key + '-text', label(ctx, opt))])
   }))
   o.renders(o.el('root', 'Label', { for: selectId }, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), select]))
@@ -522,7 +524,7 @@ const chips: FnRule = (ctx, focus) => {
     return o.quads
   }
   const pills = opts.map((opt) => {
-    const key = encodeURIComponent(opt.value)
+    const key = encodeForUri(opt.value)
     const b = o.el('chip-' + key, 'Button', { type: 'button' }, [o.text('chip-' + key + '-text', label(ctx, opt))])
     o.attr(b, 'aria-pressed', String(on.has(opt.value)))
     o.t(b, C.selects, opt)
@@ -535,6 +537,124 @@ const chips: FnRule = (ctx, focus) => {
 }
 chips.watches = watchControlled
 segmented.watches = watchControlled
+
+// --- localization for SPARQL rules ----------------------------------------------------------
+// The viewer's language is an engine setting, not graph data, so SPARQL rules cannot choose by
+// it. Like l10n:Labels for c:label, these put a component's other texts, in that language, under
+// the component (<focus>/~l10n-...), where its SPARQL rules prefer them. Without a language
+// preference they write nothing (the SPARQL rules' own choice, untagged then English, is util.text's).
+
+/** A property editor's caption (the property's label) and option labels. */
+const optionLabels: FnRule = (ctx, focus) => {
+  const property = ctx.object(focus, C.property)
+  if (!ctx.languages.length || !property) return []
+  const o = ctx.out(focus)
+  o.t(o.node('l10n-caption'), L10N.label, label(ctx, property))
+  for (const opt of options(ctx, focus, property)) o.t(o.node('l10n-' + encodeForUri(opt.value)), L10N.label, label(ctx, opt))
+  return o.quads
+}
+
+/** A link's external hint (c:externalHint on c:Link). */
+const linkHint: FnRule = (ctx, focus) => {
+  if (!ctx.languages.length) return []
+  const hint = text(ctx, ctx.nn(NS.c + 'Link'), NS.c + 'externalHint')
+  if (hint === undefined) return []
+  const o = ctx.out(focus)
+  o.t(o.node('l10n-hint'), L10N.label, hint)
+  return o.quads
+}
+
+// --- stream statistics (c:StreamStats) -------------------------------------------------------
+// Function twins of the SPARQL rules in ontology/components/stream-stats.ttl: the same
+// aggregates over the members of the stream (c:of), counted the way the SPARQL joins count.
+
+const TREE_MEMBER = NS.tree + 'member'
+const asNumber = (t: Term) => Number(t.value) || 0
+
+/** The stream's members with their beh:added / beh:removed (one row per pair, as a join yields). */
+function changeRows(ctx: RuleContext, stream: Term) {
+  const rows: { m: Term; added: number; removed: number }[] = []
+  for (const m of ctx.objects(stream, TREE_MEMBER)) {
+    for (const a of ctx.objects(m, BEH.added)) for (const r of ctx.objects(m, BEH.removed)) rows.push({ m, added: asNumber(a), removed: asNumber(r) })
+  }
+  return rows
+}
+
+const streamStatsScreen: FnRule = (ctx, focus) => {
+  const stream = ctx.object(focus, C.of)
+  const label = text(ctx, focus, C.label)
+  if (!stream || label === undefined) return []
+  const o = ctx.out(focus)
+  // Headline metrics: one row per (member, added, removed, target).
+  let events = 0
+  let added = 0
+  let removed = 0
+  const targets = new Set<string>()
+  for (const row of changeRows(ctx, stream)) {
+    for (const t of ctx.objects(row.m, BEH.target)) {
+      events++
+      added += row.added
+      removed += row.removed
+      targets.add(t.value)
+    }
+  }
+  const metric = (key: string, name: string, value: string) =>
+    o.el(`m-${key}`, 'Div', {}, [o.el(`m-${key}-dt`, 'Dt', {}, [o.text(`m-${key}-dt-text`, name)]), o.el(`m-${key}-dd`, 'Dd', {}, [o.text(`m-${key}-dd-text`, value)])])
+  const metrics = o.el('metrics', 'Dl', {}, [
+    metric('events', 'events', String(events)),
+    metric('changes', 'triples changed', `+${added} / −${removed}`),
+    metric('components', 'components', String(targets.size)),
+  ])
+  // One row per event kind / per component, busiest first (ties by IRI), with its share of the busiest.
+  const rowsOf = (dim: 'kind' | 'component', keysOf: (m: Term) => Term[]) => {
+    const counts = new Map<string, { key: Term; count: number }>()
+    for (const m of ctx.objects(stream, TREE_MEMBER)) {
+      for (const key of keysOf(m)) {
+        const c = counts.get(key.value) ?? { key, count: 0 }
+        c.count++
+        counts.set(key.value, c)
+      }
+    }
+    const max = Math.max(...[...counts.values()].map((c) => c.count))
+    return [...counts.values()]
+      .sort((a, b) => b.count - a.count || (a.key.value < b.key.value ? -1 : 1))
+      .map(({ key, count }) => {
+        const local = `${dim}-${encodeForUri(key.value)}`
+        const item = ctx.object(key, C.of)
+        const labelProp = ctx.object(key, C.labelFrom)
+        const name = text(ctx, key, C.label) ?? (item && labelProp ? text(ctx, item, labelProp.value) : undefined) ?? key.value.replace(/^.*[#/]/, '')
+        return o.el(local, 'Li', { style: `--sem-share: ${Math.round((100 * count) / max)}%` }, [
+          o.el(`${local}-name`, 'Span', {}, [o.text(`${local}-name-text`, name)]),
+          o.el(`${local}-count`, 'Span', {}, [o.text(`${local}-count-text`, String(count))]),
+        ])
+      })
+  }
+  const kinds = rowsOf('kind', (m) => ctx.objects(m, RDF_TYPE))
+  const components = rowsOf('component', (m) => ctx.objects(m, BEH.target))
+  o.renders(
+    o.el('root', 'Section', {}, [
+      o.el('title', 'H2', {}, [o.text('title-text', label)]),
+      metrics,
+      o.el('kinds-title', 'H3', {}, [o.text('kinds-title-text', 'by kind')]),
+      o.el('kinds', 'Ul', {}, kinds),
+      o.el('targets-title', 'H3', {}, [o.text('targets-title-text', 'by component')]),
+      o.el('targets', 'Ul', {}, components),
+    ]),
+  )
+  return o.quads
+}
+
+const streamStatsText: FnRule = (ctx, focus) => {
+  const stream = ctx.object(focus, C.of)
+  const label = text(ctx, focus, C.label)
+  if (!stream || label === undefined) return []
+  const rows = changeRows(ctx, stream)
+  const added = rows.reduce((n, r) => n + r.added, 0)
+  const removed = rows.reduce((n, r) => n + r.removed, 0)
+  const o = ctx.out(focus)
+  o.renders(o.el('root', 'Div', {}, [o.text('text', `# ${label.toUpperCase()}: ${rows.length} events, +${added}/-${removed} triples`)]))
+  return o.quads
+}
 
 // --- layers ------------------------------------------------------------------------
 
@@ -620,4 +740,8 @@ export const functions: Record<string, FnRule> = {
   'style:hooks': styleHooks,
   'a11y:textfield': a11yTextField,
   'a11y:list': a11yList,
+  'stream-stats:screen': streamStatsScreen,
+  'stream-stats:text': streamStatsText,
+  'l10n:option-labels': optionLabels,
+  'l10n:link-hint': linkHint,
 }

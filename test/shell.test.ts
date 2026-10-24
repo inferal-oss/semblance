@@ -62,7 +62,8 @@ describe('the demo shell is a component graph', () => {
 
   it('evaluates only what is shown, and catches up when it is shown', () => {
     const { document, screen, showPage, fire } = mountShell()
-    const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+    // Runs of every implementation of a rendering (SPARQL or function, whichever is preferred).
+    const runs = (rendering: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(NS.c + rendering.replace(/-(fn|sparql)$/, '') + '-')).reduce((n, [, s]) => n + s.runs, 0)
     // The Performance page and the hidden Activity / Change log tabs were never evaluated.
     expect(runs('BarChartRendering-fn')).toBe(0)
     expect(runs('StreamStatsOnScreen-sparql')).toBe(0)
@@ -128,7 +129,8 @@ describe('the demo shell is a component graph', () => {
 
   it('warms only what declares sem:warm sem:Eager in idle time', () => {
     const { document, runtime, screen } = mountShell()
-    const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+    // Runs of every implementation of a rendering (SPARQL or function, whichever is preferred).
+    const runs = (rendering: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(NS.c + rendering.replace(/-(fn|sparql)$/, '') + '-')).reduce((n, [, s]) => n + s.runs, 0)
     while (runtime.warm(50)) {}
     // The Performance page (eager) is ready before it is shown...
     expect(runs('BarChartRendering-fn')).toBeGreaterThan(0)
@@ -184,12 +186,13 @@ describe('intent preloading (sem:OnIntent)', () => {
     const { document, fire, runtime, screen, shell, showPage } = mountShell()
     attachIntent(runtime, shell, { idle: (run) => run(1_000), flush: () => shell.flush() })
     showPage('Components')
-    const runs = (rule: string) => screen.engine.stats.byRule.get(NS.c + rule)?.runs ?? 0
+    // Runs of every implementation of a rendering (SPARQL or function, whichever is preferred).
+    const runs = (rendering: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(NS.c + rendering.replace(/-(fn|sparql)$/, '') + '-')).reduce((n, [, s]) => n + s.runs, 0)
     const nav = (name: string) => [...document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name)!
-    expect(runs('TableRendering-fn') + runs('TableRendering-sparql')).toBe(0)
+    expect(runs('TableRendering')).toBe(0)
     fire(nav('Data'), 'pointerover')
     // Evaluated and built (hidden) ahead of the click; nothing else was.
-    expect(runs('TableRendering-fn') + runs('TableRendering-sparql')).toBeGreaterThan(0)
+    expect(runs('TableRendering')).toBeGreaterThan(0)
     expect(document.querySelector('[data-sem-c=table]')!.closest('[hidden]')).not.toBeNull()
     expect(runs('TreeRendering-fn') + runs('TreeRendering-sparql')).toBeGreaterThan(0)
     expect(runs('AccordionRendering-fn') + runs('AccordionRendering-sparql')).toBe(0)

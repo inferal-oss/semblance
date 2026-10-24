@@ -34,6 +34,8 @@ export interface Rule {
    * can be grouped back by focus (see attributable()); sem:bulk false opts out.
    */
   bulk: boolean
+  /** The focus must have at least one of these properties, or the rule is not run (sem:requires). */
+  requires: string[]
 }
 
 export interface Selection {
@@ -85,6 +87,7 @@ export function loadRules(store: GraphStore): Rule[] {
       forEach: get(SEM.forEach)?.value,
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       bulk: get(SEM.bulk)?.value !== 'false' && (!query || attributable(query)),
+      requires: getAll(SEM.requires),
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || a.iri.localeCompare(b.iri))

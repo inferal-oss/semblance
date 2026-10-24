@@ -42,6 +42,7 @@ prv:Private a prv:Mode ; sem:slug "private" ; sem:order 3 ; sem:symbol "●" ;
 
 # Before the components: a concealed text field is a password field.
 prv:Mask a sem:Rendering ;
+    sem:requires prv:concealed ;
     sem:targets c:TextField ;
     sem:layer prv:Layer ;
     sem:stratum -8 ;
@@ -54,6 +55,7 @@ prv:Mask-fn a sem:Rule ; sem:implements prv:Mask ; sem:function "privacy:mask" .
 
 # After the components: mark the root, for the theme.
 prv:Marks a sem:Rendering ;
+    sem:requires prv:concealed , prv:sensitive ;
     sem:targets sem:Component ;
     sem:modality mod:Screen ;
     sem:layer prv:Layer ;

@@ -117,6 +117,11 @@ sem:TabPreview a sem:IntentPreview ;
     rdfs:label "a tab's content"@en ;
     sem:select """SELECT DISTINCT ?content WHERE { $option a c:Tab ; c:content ?content }""" .
 
+sem:requires a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment """On a rendering or rule: the focus must have at least one of these properties for the
+rule to run at all (checked with a pattern match before any query). Layer rules that target
+every component but concern few (shortcuts, busy, concealed) say so here."""@en .
+
 sem:bulk a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment """On a SPARQL rule: false keeps it from being evaluated once for many foci. The engine
 already decides this from the template (bulk output is grouped by the focus each subject was

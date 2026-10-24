@@ -106,6 +106,7 @@ export const SEM = {
   forEach: sem + 'forEach',
   inputOnly: sem + 'inputOnly',
   bulk: sem + 'bulk',
+  requires: sem + 'requires',
   TooltipLayer: sem + 'TooltipLayer',
   Layer: sem + 'Layer',
   DocsLayer: sem + 'DocsLayer',

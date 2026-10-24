@@ -17,6 +17,7 @@ st:Layer a sem:Layer ; rdfs:label "status"@en .
 st:busy a owl:DatatypeProperty ; rdfs:comment "The component's content is being updated."@en .
 
 st:Busy a sem:Rendering ;
+    sem:requires st:busy ;
     sem:targets sem:Component ;
     sem:modality mod:Screen ;
     sem:layer st:Layer ;

@@ -27,6 +27,19 @@ c:exclusive a owl:DatatypeProperty ; rdfs:domain c:Accordion ; rdfs:range xsd:bo
 c:AccordionRendering a sem:Rendering ; sem:targets c:Accordion ; sem:stratum 0 .
 c:AccordionRendering-fn a sem:Rule ; sem:implements c:AccordionRendering ; sem:function "accordion" .
 
+c:AccordionRendering-sparql a sem:Rule ;
+    sem:implements c:AccordionRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?child .
+  ?a ord:immediatelyPrecedes ?b .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Accordion .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {} UNION { $this c:items/rdf:rest*/rdf:first ?child FILTER(isIRI(?child)) } UNION { $this c:items/rdf:rest* ?pairCell . ?pairCell rdf:first ?a ; rdf:rest/rdf:first ?b FILTER(isIRI(?a) && isIRI(?b)) }
+}""" .
+
 c:AccordionItem a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A section of a c:Accordion: a header button (c:label, optional c:help beneath it) that
@@ -39,6 +52,106 @@ c:toggles a owl:ObjectProperty ;
     rdfs:comment "On a rendered element: the disclosure (an item) that activating it opens or closes."@en .
 c:AccordionItemRendering a sem:Rendering ; sem:targets c:AccordionItem ; sem:stratum 0 .
 c:AccordionItemRendering-fn a sem:Rule ; sem:implements c:AccordionItemRendering ; sem:function "accordion-item" .
+
+c:AccordionItemRendering-sparql-screen a sem:Rule ;
+    sem:implements c:AccordionItemRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?heading, ?panel .
+  ?root rdfhtml:attribute ?expandedAttr . ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-expanded" ; rdfhtml:attributeValue ?expandedText .
+  ?heading a rdfhtml:H3 ; rdfhtml:class "sem-heading" ; rdfhtml:hasChild ?button ; ord:immediatelyPrecedes ?panel .
+  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?buttonId ; rdfhtml:class "sem-trigger" ;
+          rdfhtml:hasChild ?title, ?chevron ; c:toggles $this .
+  ?button rdfhtml:attribute ?ariaExpanded . ?ariaExpanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?expandedText .
+  ?button rdfhtml:attribute ?ariaControls . ?ariaControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?panelId .
+  ?title a rdfhtml:Span ; rdfhtml:class "sem-title" ; rdfhtml:hasChild ?labelEl, ?help ; ord:immediatelyPrecedes ?chevron .
+  ?labelEl a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?help .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?help a rdfhtml:Span ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
+  ?chevron a rdfhtml:Span ; rdfhtml:class "sem-chevron" .
+  ?chevron rdfhtml:attribute ?chevronHidden . ?chevronHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?panel a rdfhtml:Div ; rdfhtml:id ?panelId ; rdfhtml:class "sem-panel" ; rdfhtml:inert ?inert ; rdfhtml:hasChild ?clip .
+  ?panel rdfhtml:attribute ?panelRole . ?panelRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "region" .
+  ?panel rdfhtml:attribute ?panelLabelled . ?panelLabelled a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?buttonId .
+  ?clip a rdfhtml:Div ; rdfhtml:class "sem-panel-clip" ; rdfhtml:hasChild ?body .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-panel-body" ; rdfhtml:hasChild ?content .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:AccordionItem .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?labelOwn)
+  OPTIONAL { $this rdfs:label ?labelRdfs_u FILTER(isLiteral(?labelRdfs_u) && lang(?labelRdfs_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?labelRdfs_u)) $this rdfs:label ?labelRdfs_en FILTER(langMatches(lang(?labelRdfs_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?labelRdfs_u) && !BOUND(?labelRdfs_en)) $this rdfs:label ?labelRdfs_any FILTER(isLiteral(?labelRdfs_any)) }
+  BIND(STR(COALESCE(?labelRdfs_u, ?labelRdfs_en, ?labelRdfs_any)) AS ?labelRdfs)
+  BIND(COALESCE(?labelOwn, ?labelRdfs, REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  BIND(EXISTS { $this c:expanded ?expanded0 FILTER(STR(?expanded0) = "true") } AS ?expanded)
+  OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL { $this c:help ?help0_u FILTER(isLiteral(?help0_u) && lang(?help0_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?help0_u)) $this c:help ?help0_en FILTER(langMatches(lang(?help0_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?help0_u) && !BOUND(?help0_en)) $this c:help ?help0_any FILTER(isLiteral(?help0_any)) }
+  BIND(STR(COALESCE(?help0_u, ?help0_en, ?help0_any)) AS ?help0)
+  BIND(IF(?help0 != "", ?help0, ?none) AS ?helpData)
+  BIND(STR(?expanded) AS ?expandedText)
+  BIND(IF(?expanded, ?none, "") AS ?inert)
+  BIND(IRI(CONCAT(STR($this), "/~heading")) AS ?heading)
+  BIND(IRI(CONCAT(STR($this), "/~button")) AS ?button)
+  BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
+  BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelEl)
+  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IRI(CONCAT(STR($this), "/~chevron")) AS ?chevron)
+  BIND(IRI(CONCAT(STR($this), "/~clip")) AS ?clip)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-expanded")) AS ?expandedAttr)
+  BIND(IRI(CONCAT(STR($this), "/~button-aria-expanded")) AS ?ariaExpanded)
+  BIND(IRI(CONCAT(STR($this), "/~button-aria-controls")) AS ?ariaControls)
+  BIND(IRI(CONCAT(STR($this), "/~chevron-aria-hidden")) AS ?chevronHidden)
+  BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?panelRole)
+  BIND(IRI(CONCAT(STR($this), "/~panel-aria-labelledby")) AS ?panelLabelled)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?help)
+  BIND(IF(BOUND(?helpData), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(STR(?button) AS ?buttonId)
+  BIND(STR(?panel) AS ?panelId)
+}""" .
+
+c:AccordionItemRendering-sparql-text a sem:Rule ;
+    sem:implements c:AccordionItemRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?header, ?shown .
+  ?header a rdfhtml:Div ; rdfhtml:hasChild ?headerText ; ord:immediatelyPrecedes ?shown .
+  ?headerText a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:AccordionItem .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?labelOwn)
+  OPTIONAL { $this rdfs:label ?labelRdfs_u FILTER(isLiteral(?labelRdfs_u) && lang(?labelRdfs_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?labelRdfs_u)) $this rdfs:label ?labelRdfs_en FILTER(langMatches(lang(?labelRdfs_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?labelRdfs_u) && !BOUND(?labelRdfs_en)) $this rdfs:label ?labelRdfs_any FILTER(isLiteral(?labelRdfs_any)) }
+  BIND(STR(COALESCE(?labelRdfs_u, ?labelRdfs_en, ?labelRdfs_any)) AS ?labelRdfs)
+  BIND(COALESCE(?labelOwn, ?labelRdfs, REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  BIND(EXISTS { $this c:expanded ?expanded0 FILTER(STR(?expanded0) = "true") } AS ?expanded)
+  OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(CONCAT(IF(?expanded, "▾", "▸"), " ", ?label) AS ?line)
+  BIND(IF(?expanded, ?content, ?none) AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~header")) AS ?header)
+  BIND(IRI(CONCAT(STR($this), "/~header-text")) AS ?headerText)
+}""" .
 
 # Clicking an item's header flips its c:expanded. In an exclusive accordion (the one
 # whose c:items list holds the item), opening it also closes every other open item.

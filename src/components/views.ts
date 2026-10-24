@@ -4,7 +4,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
 import { owningFocus } from '../rdf.ts'
 import { type TurtleSection, turtleTokens } from '../turtle.ts'
-import { text } from './util.ts'
+import { labelOf as textLabelOf, text } from './util.ts'
 
 const RDFS_LABEL = NS.rdfs + 'label'
 const SH = 'http://www.w3.org/ns/shacl#'
@@ -89,7 +89,7 @@ const graphmark: FnRule = (ctx, focus) => {
     ]),
   ])
   const tile = o.svg('tile', 'Rect', { width: 32, height: 32, rx: 9, fill: `url(#${id})` })
-  const root = o.svg('root', 'Svg', { viewBox: '0 0 32 32', role: 'img', 'aria-label': labelOf(ctx, focus) }, [defs, tile, ...edges, ...dots])
+  const root = o.svg('root', 'Svg', { viewBox: '0 0 32 32', role: 'img', 'aria-label': textLabelOf(ctx, focus) }, [defs, tile, ...edges, ...dots])
   o.renders(root)
   return o.quads
 }
@@ -138,7 +138,7 @@ const toggle: FnRule = (ctx, focus) => {
   if (!target || !property) return []
   const o = ctx.out(focus)
   const on = ctx.object(target, property)?.value === 'true'
-  const label = text(ctx, focus, C.label) ?? labelOf(ctx, property)
+  const label = text(ctx, focus, C.label) ?? textLabelOf(ctx, property)
   const b = o.el('root', 'Button', { type: 'button' }, [o.text('label', label)])
   o.attr(b, 'aria-pressed', String(on))
   const note = text(ctx, focus, C.note)

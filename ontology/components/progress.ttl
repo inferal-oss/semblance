@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -21,6 +22,79 @@ c:ProgressRendering a sem:Rendering ;
 c:ProgressRendering-fn a sem:Rule ;
     sem:implements c:ProgressRendering ;
     sem:function "progress" .
+
+c:ProgressRendering-sparql-screen a sem:Rule ;
+    sem:implements c:ProgressRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ; rdfhtml:hasChild ?track, ?status .
+  ?root rdfhtml:attribute ?roleAttr . ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "progressbar" .
+  ?root rdfhtml:attribute ?minAttr . ?minAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemin" ; rdfhtml:attributeValue "0" .
+  ?root rdfhtml:attribute ?maxAttr . ?maxAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuemax" ; rdfhtml:attributeValue ?maxText .
+  ?root rdfhtml:attribute ?nowAttr . ?nowAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuenow" ; rdfhtml:attributeValue ?valueText .
+  ?root rdfhtml:attribute ?textAttr . ?textAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-valuetext" ; rdfhtml:attributeValue ?label .
+  ?track a rdfhtml:Span ; rdfhtml:class "sem-track" ; rdfhtml:hasChild ?fill ; ord:immediatelyPrecedes ?status .
+  ?fill a rdfhtml:I ; rdfhtml:class "sem-fill" .
+  ?status a rdfhtml:Span ; rdfhtml:class "sem-status" ; rdfhtml:hasChild ?statusText .
+  ?statusText a rdfhtml:Text ; rdfhtml:data ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Progress .
+  OPTIONAL { $this c:value ?value0 } OPTIONAL { $this c:max ?max0 }
+  BIND(COALESCE(xsd:double(?value0), 0) AS ?value)
+  BIND(COALESCE(xsd:double(?max0), 1) AS ?max1) BIND(IF(?max1 = 0, 1, ?max1) AS ?max)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  BIND(COALESCE(?label0, "") AS ?label)
+  BIND(?value / ?max AS ?ratio) BIND(IF(?ratio < 0, 0, IF(?ratio > 1, 1, ?ratio)) AS ?share)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { $this c:active ?active FILTER(STR(?active) = "true") }, ?none, "") AS ?hidden)
+  # (share * 100).toFixed(1): tenths of a percent, written with one decimal.
+  BIND(ROUND(?share * 1000) AS ?tenths)
+  BIND(CONCAT("--sem-progress: ", STR(xsd:integer(FLOOR(?tenths / 10))), ".", STR(xsd:integer(?tenths - 10 * FLOOR(?tenths / 10))), "%") AS ?style)
+  BIND(STR(?max) AS ?maxText) BIND(STR(?value) AS ?valueText)
+  BIND(IRI(CONCAT(STR($this), "/~track")) AS ?track)
+  BIND(IRI(CONCAT(STR($this), "/~fill")) AS ?fill)
+  BIND(IRI(CONCAT(STR($this), "/~status")) AS ?status)
+  BIND(IRI(CONCAT(STR($this), "/~status-text")) AS ?statusText)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-valuemin")) AS ?minAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-valuemax")) AS ?maxAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-valuenow")) AS ?nowAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-valuetext")) AS ?textAttr)
+}""" .
+
+c:ProgressRendering-sparql-text a sem:Rule ;
+    sem:implements c:ProgressRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Progress .
+  OPTIONAL { $this c:value ?value0 } OPTIONAL { $this c:max ?max0 }
+  BIND(COALESCE(xsd:double(?value0), 0) AS ?value)
+  BIND(COALESCE(xsd:double(?max0), 1) AS ?max1) BIND(IF(?max1 = 0, 1, ?max1) AS ?max)
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
+  BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  BIND(COALESCE(?label0, "") AS ?label)
+  BIND(?value / ?max AS ?ratio) BIND(IF(?ratio < 0, 0, IF(?ratio > 1, 1, ?ratio)) AS ?share)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(xsd:integer(ROUND(?share * 20)) AS ?done)
+  BIND(CONCAT("[", SUBSTR("####################", 1, ?done), SUBSTR("--------------------", 1, 20 - ?done), "] ", ?label) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
+}""" .
 
 [] a sty:StyleRule ; sty:appliesTo c:Progress ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,

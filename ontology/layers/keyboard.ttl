@@ -25,6 +25,7 @@ key:shortcut a owl:DatatypeProperty ;
     rdfs:comment "A key combination that activates the component: modifiers (mod, ctrl, alt, shift, meta) and a key, joined by +."@en .
 
 key:Shortcuts a sem:Rendering ;
+    sem:requires key:shortcut ;
     sem:targets sem:Component ;
     sem:modality mod:Screen ;
     sem:layer key:Layer ;
