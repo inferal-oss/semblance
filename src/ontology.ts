@@ -50,6 +50,7 @@ export const ONTOLOGY_FILES = [
   'theme/default.ttl',
   'theme/variants.ttl',
   'theme/themes.ttl',
+  'theme/themes-structural.ttl',
   'theme/windows.ttl',
   'theme/layers.ttl',
   'theme/layout.ttl',

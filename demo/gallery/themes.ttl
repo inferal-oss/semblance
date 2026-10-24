@@ -11,10 +11,11 @@
 
 # Gallery page: Themes. A theme (sty:theme, ontology/theme/themes.ttl) is a value of a
 # hookable axis whose declarations re-value the tokens of a subtree. On the shell it
-# re-themes the interface; on any component, only that subtree.
+# re-themes the interface; on any component, only that subtree. The structural themes
+# (ontology/theme/themes-structural.ttl) add style rules narrowed to themselves.
 
 ui:gallery-themes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-themes-intro ui:th-switch ui:th-side ui:th-schemes ui:th-contrast ui:th-ramps ) .
+    c:children ( ui:gallery-themes-intro ui:th-switch ui:th-side ui:th-structure ui:th-frames ui:th-how ui:th-schemes ui:th-contrast ui:th-ramps ) .
 ui:gallery-themes-intro a c:Heading ; c:label "Themes" .
 
 # --- switching the whole interface ---------------------------------------------------------
@@ -22,7 +23,7 @@ ui:gallery-themes-intro a c:Heading ; c:label "Themes" .
 ui:th-switch a c:Flippable ; c:front ui:th-switch-spec .
 ui:th-switch-spec a c:Specimen ;
     c:label "Switch the whole interface" , "Перемкнути весь інтерфейс"@uk , "Die ganze Oberfläche umschalten"@de , "تبديل الواجهة بأكملها"@ar ;
-    c:help "The shell carries sty:theme as it carries sty:contrast and mot:preference. Picking a theme writes one triple, ui:shell sty:theme …; the style layer exposes it as data-sem-theme and the theme's declarations re-value every token below it. The options are the sty:Theme individuals, ordered by sem:order. Theme, scheme and contrast are independent axes: every theme has a day and a night side, and high contrast strengthens any of them." ;
+    c:help "The shell carries sty:theme as it carries sty:contrast and mot:preference. Picking a theme writes one triple, ui:shell sty:theme …; the style layer exposes it as data-sem-theme and the theme's declarations re-value every token below it. The options are the sty:Theme individuals, ordered by sem:order: five that re-colour (Semblance to Sunset) and four that rebuild (Cupertino, Tracker, Classic, Doodle: title bars, bevels, tabs, strokes). Theme, scheme and contrast are independent axes: every theme has a day and a night side, and high contrast strengthens any of them." ;
     c:children ( ui:th-switch-col ) .
 ui:th-switch-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:th-switch-theme-row ui:th-switch-scheme-row ui:th-switch-contrast-row ) .
@@ -40,7 +41,7 @@ ui:th-contrastSwitch a c:Segmented ; c:controls ui:shell ; c:property sty:contra
 
 ui:th-side a c:Flippable ; c:front ui:th-side-spec .
 ui:th-side-spec a c:Specimen ;
-    c:label "One composition, five themes" , "Одна композиція, п’ять тем"@uk , "Eine Komposition, fünf Designs"@de , "تكوين واحد، خمس سمات"@ar ;
+    c:label "One composition, five colour themes" , "Одна композиція, п’ять колірних тем"@uk , "Eine Komposition, fünf Farbdesigns"@de , "تكوين واحد، خمس سمات لونية"@ar ;
     c:help "Five c:Surface instances with the same children, each with a different sty:theme. A theme is a sty:Theme individual whose sty:declares restate the ramps, the role colors, type, radii, shadows and easing, and a few theme-level tokens: the heading's font, case and mark, the progress fill, the backdrop. No component names a theme; components read tokens, custom properties inherit, so the nearest theme wins - even inside another theme." ;
     c:children ( ui:th-side-grid ) .
 
@@ -150,7 +151,7 @@ ui:th-side-grid a c:Grid ; c:minWidth "300px" ; pos:gap tok:space-4 ; c:children
 ui:th-schemes a c:Flippable ; c:front ui:th-schemes-spec .
 ui:th-schemes-spec a c:Specimen ;
     c:label "Day and night, at once" , "День і ніч водночас"@uk , "Tag und Nacht zugleich"@de , "النهار والليل معًا"@ar ;
-    c:help "sty:colorScheme on each tile forces Day or Night under its theme. Every theme color is a light-dark() pair, so the color scheme stays an axis of its own: five themes, two schemes, from one set of declarations per theme." ;
+    c:help "sty:colorScheme on each tile forces Day or Night under its theme. Every theme color is a light-dark() pair, so the color scheme stays an axis of its own: nine themes, two schemes, from one set of declarations per theme. The platform-flavoured themes have a night side too (a dark glass desktop, charcoal panels under yellow tabs, a slate desktop) and Doodle turns from ruled paper to a blackboard." ;
     c:children ( ui:th-schemes-grid ) .
 ui:th-semblance-light a c:Surface ; sty:theme sty:Semblance ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
     c:children ( ui:th-semblance-light-name ui:th-semblance-light-text ui:th-semblance-light-row ) .
@@ -232,14 +233,14 @@ ui:th-sunset-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; 
 ui:th-sunset-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
 ui:th-sunset-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
 ui:th-sunset-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
-ui:th-schemes-grid a c:Grid ; c:columns 2 ; c:minWidth "220px" ; pos:gap tok:space-3 ; c:children ( ui:th-semblance-light ui:th-semblance-dark ui:th-paper-light ui:th-paper-dark ui:th-terminal-light ui:th-terminal-dark ui:th-blueprint-light ui:th-blueprint-dark ui:th-sunset-light ui:th-sunset-dark ) .
+ui:th-schemes-grid a c:Grid ; c:columns 2 ; c:minWidth "220px" ; pos:gap tok:space-3 ; c:children ( ui:th-semblance-light ui:th-semblance-dark ui:th-paper-light ui:th-paper-dark ui:th-terminal-light ui:th-terminal-dark ui:th-blueprint-light ui:th-blueprint-dark ui:th-sunset-light ui:th-sunset-dark ui:th-cupertino-light ui:th-cupertino-dark ui:th-tracker-light ui:th-tracker-dark ui:th-classic-light ui:th-classic-dark ui:th-doodle-light ui:th-doodle-dark ) .
 
 # --- contrast composes with every theme -----------------------------------------------------
 
 ui:th-contrast a c:Flippable ; c:front ui:th-contrast-spec .
 ui:th-contrast-spec a c:Specimen ;
     c:label "Contrast composes" , "Контраст поєднується з темою"@uk , "Kontrast lässt sich kombinieren"@de , "التباين يتكامل مع السمة"@ar ;
-    c:help "With the interface at standard contrast, the right-hand tiles add sty:contrast sty:HighContrast (set High above and every tile gets it). Under a theme it is restated in terms of that theme's own ramps - text pushed toward black or white, borders at step 10, the accent at steps 11-12 - so high contrast keeps each theme's hue instead of falling back to the default's violet. Where both meet on one element, sty:contrast sty:overrides sty:theme orders them." ;
+    c:help "With the interface at standard contrast, the right-hand tiles add sty:contrast sty:HighContrast (set High above and every tile gets it). Under a theme it is restated in terms of that theme's own ramps - text pushed toward black or white, borders at step 10, the accent at steps 11-12 - so high contrast keeps each theme's hue instead of falling back to the default's violet. The structural themes also draw their focus outline heavier (3px, black or white) and outside the control. Where both meet on one element, sty:contrast sty:overrides sty:theme orders them." ;
     c:children ( ui:th-contrast-grid ) .
 ui:th-paper-standard a c:Surface ; sty:theme sty:Paper ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
     c:children ( ui:th-paper-standard-name ui:th-paper-standard-text ui:th-paper-standard-muted ui:th-paper-standard-row ) .
@@ -305,7 +306,7 @@ ui:th-sunset-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted ca
 ui:th-sunset-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-sunset-high-btn ui:th-sunset-high-tag ) .
 ui:th-sunset-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
 ui:th-sunset-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
-ui:th-contrast-grid a c:Grid ; c:columns 2 ; c:minWidth "220px" ; pos:gap tok:space-3 ; c:children ( ui:th-paper-standard ui:th-paper-high ui:th-terminal-standard ui:th-terminal-high ui:th-blueprint-standard ui:th-blueprint-high ui:th-sunset-standard ui:th-sunset-high ) .
+ui:th-contrast-grid a c:Grid ; c:columns 2 ; c:minWidth "220px" ; pos:gap tok:space-3 ; c:children ( ui:th-paper-standard ui:th-paper-high ui:th-terminal-standard ui:th-terminal-high ui:th-blueprint-standard ui:th-blueprint-high ui:th-sunset-standard ui:th-sunset-high ui:th-cupertino-standard ui:th-cupertino-high ui:th-tracker-standard ui:th-tracker-high ui:th-classic-standard ui:th-classic-high ui:th-doodle-standard ui:th-doodle-high ) .
 
 # --- each theme's ramps -----------------------------------------------------------------
 
@@ -339,4 +340,422 @@ ui:th-sunset-ramps a c:Surface ; sty:theme sty:Sunset ; pos:direction pos:Column
 ui:th-sunset-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Sunset" .
 ui:th-sunset-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
 ui:th-sunset-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
-ui:th-ramps-grid a c:Grid ; c:minWidth "520px" ; pos:gap tok:space-3 ; c:children ( ui:th-semblance-ramps ui:th-paper-ramps ui:th-terminal-ramps ui:th-blueprint-ramps ui:th-sunset-ramps ) .
+ui:th-ramps-grid a c:Grid ; c:minWidth "520px" ; pos:gap tok:space-3 ; c:children ( ui:th-semblance-ramps ui:th-paper-ramps ui:th-terminal-ramps ui:th-blueprint-ramps ui:th-sunset-ramps ui:th-cupertino-ramps ui:th-tracker-ramps ui:th-classic-ramps ui:th-doodle-ramps ) .
+
+# --- structure, not just colour ---------------------------------------------------------------
+# The four structural themes (ontology/theme/themes-structural.ttl) next to the default, with the same
+# children: controls in one specimen, frames in the next. The segmented controls and radios all edit
+# one triple (ui:inputsDemo ui:inp-plan, from the Inputs page), so choosing in one theme moves all.
+
+ui:th-structure a c:Flippable ; c:front ui:th-structure-spec .
+ui:th-structure-spec a c:Specimen ;
+    c:label "Structure, not just colour" , "Будова, а не лише колір"@uk , "Aufbau, nicht nur Farbe"@de , "البنية، لا اللون فقط"@ar ;
+    c:help "The same controls under the default and the four structural themes. Cupertino, Tracker, Classic and Doodle restate the tokens as every theme does, then add sty:StyleRules narrowed by sty:when to themselves: bevels instead of borders, a recessed track under segmented keys, folder tabs, list boxes, inked strokes on wobbly corners. Nothing here names a theme; each tile only carries sty:theme." ;
+    c:children ( ui:th-structure-grid ) .
+ui:th-structure-grid a c:Grid ; c:minWidth "300px" ; pos:gap tok:space-4 ;
+    c:children ( ui:ths-semblance ui:ths-cupertino ui:ths-tracker ui:ths-classic ui:ths-doodle ) .
+
+ui:ths-semblance a c:Surface ; sty:theme sty:Semblance ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:ths-semblance-name ui:ths-semblance-title ui:ths-semblance-tabs ui:ths-semblance-plan ui:ths-semblance-field ui:ths-semblance-checks ui:ths-semblance-volume ui:ths-semblance-actions ) .
+ui:ths-semblance-name a c:Text ; sty:textStyle sty:Overline ; c:label "Semblance" .
+ui:ths-semblance-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:ths-semblance-tabs a c:Tabs ; c:label "Notes" ; c:tabs ( ui:ths-semblance-tab-today ui:ths-semblance-tab-later ) ; c:selected ui:ths-semblance-tab-today .
+ui:ths-semblance-tab-today a c:Tab ; c:label "Today" , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar ; c:content ui:ths-semblance-tab-today-text .
+ui:ths-semblance-tab-later a c:Tab ; c:label "Later" , "Пізніше"@uk , "Später"@de , "لاحقًا"@ar ; c:content ui:ths-semblance-tab-later-text .
+ui:ths-semblance-tab-today-text a c:Text ; sty:textStyle sty:Caption ; c:label "Bevels, tracks, tabs and strokes, from one triple on this surface." .
+ui:ths-semblance-tab-later-text a c:Text ; sty:textStyle sty:Caption ; c:label "A tab panel is the tab's sheet: raised, boxed, or inked." .
+ui:ths-semblance-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:ths-semblance-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:ths-semblance-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:ths-semblance-autosave ui:ths-semblance-spell ) .
+ui:ths-semblance-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:ths-semblance-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:ths-semblance-volume a c:Slider ; c:label "Volume" ; c:value 60 ; c:unit "%" .
+ui:ths-semblance-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:ths-semblance-publish ui:ths-semblance-share ui:ths-semblance-later ) .
+ui:ths-semblance-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:ths-semblance-share a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ths-semblance-later a c:Button ; c:label "Later" ; sty:emphasis sty:Ghost .
+
+ui:ths-cupertino a c:Surface ; sty:theme sty:Cupertino ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:ths-cupertino-name ui:ths-cupertino-title ui:ths-cupertino-tabs ui:ths-cupertino-plan ui:ths-cupertino-field ui:ths-cupertino-checks ui:ths-cupertino-volume ui:ths-cupertino-actions ) .
+ui:ths-cupertino-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino" .
+ui:ths-cupertino-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:ths-cupertino-tabs a c:Tabs ; c:label "Notes" ; c:tabs ( ui:ths-cupertino-tab-today ui:ths-cupertino-tab-later ) ; c:selected ui:ths-cupertino-tab-today .
+ui:ths-cupertino-tab-today a c:Tab ; c:label "Today" , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar ; c:content ui:ths-cupertino-tab-today-text .
+ui:ths-cupertino-tab-later a c:Tab ; c:label "Later" , "Пізніше"@uk , "Später"@de , "لاحقًا"@ar ; c:content ui:ths-cupertino-tab-later-text .
+ui:ths-cupertino-tab-today-text a c:Text ; sty:textStyle sty:Caption ; c:label "Bevels, tracks, tabs and strokes, from one triple on this surface." .
+ui:ths-cupertino-tab-later-text a c:Text ; sty:textStyle sty:Caption ; c:label "A tab panel is the tab's sheet: raised, boxed, or inked." .
+ui:ths-cupertino-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:ths-cupertino-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:ths-cupertino-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:ths-cupertino-autosave ui:ths-cupertino-spell ) .
+ui:ths-cupertino-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:ths-cupertino-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:ths-cupertino-volume a c:Slider ; c:label "Volume" ; c:value 60 ; c:unit "%" .
+ui:ths-cupertino-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:ths-cupertino-publish ui:ths-cupertino-share ui:ths-cupertino-later ) .
+ui:ths-cupertino-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:ths-cupertino-share a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ths-cupertino-later a c:Button ; c:label "Later" ; sty:emphasis sty:Ghost .
+
+ui:ths-tracker a c:Surface ; sty:theme sty:Tracker ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:ths-tracker-name ui:ths-tracker-title ui:ths-tracker-tabs ui:ths-tracker-plan ui:ths-tracker-field ui:ths-tracker-checks ui:ths-tracker-volume ui:ths-tracker-actions ) .
+ui:ths-tracker-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker" .
+ui:ths-tracker-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:ths-tracker-tabs a c:Tabs ; c:label "Notes" ; c:tabs ( ui:ths-tracker-tab-today ui:ths-tracker-tab-later ) ; c:selected ui:ths-tracker-tab-today .
+ui:ths-tracker-tab-today a c:Tab ; c:label "Today" , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar ; c:content ui:ths-tracker-tab-today-text .
+ui:ths-tracker-tab-later a c:Tab ; c:label "Later" , "Пізніше"@uk , "Später"@de , "لاحقًا"@ar ; c:content ui:ths-tracker-tab-later-text .
+ui:ths-tracker-tab-today-text a c:Text ; sty:textStyle sty:Caption ; c:label "Bevels, tracks, tabs and strokes, from one triple on this surface." .
+ui:ths-tracker-tab-later-text a c:Text ; sty:textStyle sty:Caption ; c:label "A tab panel is the tab's sheet: raised, boxed, or inked." .
+ui:ths-tracker-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:ths-tracker-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:ths-tracker-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:ths-tracker-autosave ui:ths-tracker-spell ) .
+ui:ths-tracker-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:ths-tracker-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:ths-tracker-volume a c:Slider ; c:label "Volume" ; c:value 60 ; c:unit "%" .
+ui:ths-tracker-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:ths-tracker-publish ui:ths-tracker-share ui:ths-tracker-later ) .
+ui:ths-tracker-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:ths-tracker-share a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ths-tracker-later a c:Button ; c:label "Later" ; sty:emphasis sty:Ghost .
+
+ui:ths-classic a c:Surface ; sty:theme sty:Classic ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:ths-classic-name ui:ths-classic-title ui:ths-classic-tabs ui:ths-classic-plan ui:ths-classic-field ui:ths-classic-checks ui:ths-classic-volume ui:ths-classic-actions ) .
+ui:ths-classic-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic" .
+ui:ths-classic-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:ths-classic-tabs a c:Tabs ; c:label "Notes" ; c:tabs ( ui:ths-classic-tab-today ui:ths-classic-tab-later ) ; c:selected ui:ths-classic-tab-today .
+ui:ths-classic-tab-today a c:Tab ; c:label "Today" , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar ; c:content ui:ths-classic-tab-today-text .
+ui:ths-classic-tab-later a c:Tab ; c:label "Later" , "Пізніше"@uk , "Später"@de , "لاحقًا"@ar ; c:content ui:ths-classic-tab-later-text .
+ui:ths-classic-tab-today-text a c:Text ; sty:textStyle sty:Caption ; c:label "Bevels, tracks, tabs and strokes, from one triple on this surface." .
+ui:ths-classic-tab-later-text a c:Text ; sty:textStyle sty:Caption ; c:label "A tab panel is the tab's sheet: raised, boxed, or inked." .
+ui:ths-classic-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:ths-classic-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:ths-classic-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:ths-classic-autosave ui:ths-classic-spell ) .
+ui:ths-classic-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:ths-classic-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:ths-classic-volume a c:Slider ; c:label "Volume" ; c:value 60 ; c:unit "%" .
+ui:ths-classic-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:ths-classic-publish ui:ths-classic-share ui:ths-classic-later ) .
+ui:ths-classic-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:ths-classic-share a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ths-classic-later a c:Button ; c:label "Later" ; sty:emphasis sty:Ghost .
+
+ui:ths-doodle a c:Surface ; sty:theme sty:Doodle ; sty:elevation sty:Raised ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:ths-doodle-name ui:ths-doodle-title ui:ths-doodle-tabs ui:ths-doodle-plan ui:ths-doodle-field ui:ths-doodle-checks ui:ths-doodle-volume ui:ths-doodle-actions ) .
+ui:ths-doodle-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle" .
+ui:ths-doodle-title a c:Heading ; c:level 3 ; c:label "Field notes" , "Польові нотатки"@uk , "Feldnotizen"@de , "ملاحظات ميدانية"@ar .
+ui:ths-doodle-tabs a c:Tabs ; c:label "Notes" ; c:tabs ( ui:ths-doodle-tab-today ui:ths-doodle-tab-later ) ; c:selected ui:ths-doodle-tab-today .
+ui:ths-doodle-tab-today a c:Tab ; c:label "Today" , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar ; c:content ui:ths-doodle-tab-today-text .
+ui:ths-doodle-tab-later a c:Tab ; c:label "Later" , "Пізніше"@uk , "Später"@de , "لاحقًا"@ar ; c:content ui:ths-doodle-tab-later-text .
+ui:ths-doodle-tab-today-text a c:Text ; sty:textStyle sty:Caption ; c:label "Bevels, tracks, tabs and strokes, from one triple on this surface." .
+ui:ths-doodle-tab-later-text a c:Text ; sty:textStyle sty:Caption ; c:label "A tab panel is the tab's sheet: raised, boxed, or inked." .
+ui:ths-doodle-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:ths-doodle-field a c:TextField ; c:label "Title" ; c:value "Notes from the field" .
+ui:ths-doodle-checks a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:ths-doodle-autosave ui:ths-doodle-spell ) .
+ui:ths-doodle-autosave a c:ToggleSwitch ; c:label "Auto-save" ; c:checked true .
+ui:ths-doodle-spell a c:Checkbox ; c:label "Spelling" ; c:checked true .
+ui:ths-doodle-volume a c:Slider ; c:label "Volume" ; c:value 60 ; c:unit "%" .
+ui:ths-doodle-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:ths-doodle-publish ui:ths-doodle-share ui:ths-doodle-later ) .
+ui:ths-doodle-publish a c:Button ; c:label "Publish" ; sty:intent sty:Primary .
+ui:ths-doodle-share a c:Button ; c:label "Share" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ths-doodle-later a c:Button ; c:label "Later" ; sty:emphasis sty:Ghost .
+
+ui:th-frames a c:Flippable ; c:front ui:th-frames-spec .
+ui:th-frames-spec a c:Specimen ;
+    c:label "Frames and menus" , "Рамки й меню"@uk , "Rahmen und Menüs"@de , "الإطارات والقوائم"@ar ;
+    c:help "A c:Window holding a dialog's parts, a c:Palette and a c:Menu (open it), laid out in place (a frame outside a c:Desktop is shown where it stands, by a rule of this page) under each theme. The title bar is the same rendering everywhere - a title and the controls of the frame's capabilities, in a fixed order - and each theme rebuilds it: traffic lights on the left with the title centred, a yellow tab as wide as its title with a close box and a zoom box, a navy caption with square buttons on the right, a ruled-off heading with doodled circles. Drag, maximize and minimize them; the button brings them all back." ;
+    c:children ( ui:thf-reopen ui:th-frames-grid ) .
+ui:thf-reopen a c:Button ; c:label "Bring the frames back" , "Повернути рамки"@uk , "Rahmen zurückholen"@de , "إعادة الإطارات"@ar ; c:icon "↺" ; sty:emphasis sty:Outline ; sty:size sty:Small ;
+    c:opens ui:thf-semblance-window , ui:thf-semblance-palette , ui:thf-cupertino-window , ui:thf-cupertino-palette , ui:thf-tracker-window , ui:thf-tracker-palette , ui:thf-classic-window , ui:thf-classic-palette , ui:thf-doodle-window , ui:thf-doodle-palette .
+ui:th-frames-grid a c:Grid ; c:minWidth "300px" ; pos:gap tok:space-4 ;
+    c:children ( ui:thf-semblance ui:thf-cupertino ui:thf-tracker ui:thf-classic ui:thf-doodle ) .
+
+ui:thf-semblance a c:Surface ; sty:theme sty:Semblance ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-semblance-name ui:thf-semblance-window ui:thf-semblance-palette ui:thf-semblance-menu ) .
+ui:thf-semblance-name a c:Text ; sty:textStyle sty:Overline ; c:label "Semblance" .
+ui:thf-semblance-window a c:Window ; c:title "Rename graph" , "Перейменувати граф"@uk , "Graph umbenennen"@de , "إعادة تسمية الرسم البياني"@ar ; c:open true ;
+    c:x 0 ; c:y 0 ; c:width 300 ; c:height 258 ; c:windowState c:Normal ; c:attachedTo c:NoEdge ;
+    c:body ui:thf-semblance-dialog .
+ui:thf-semblance-dialog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-semblance-desc ui:thf-semblance-field ui:thf-semblance-buttons ) .
+ui:thf-semblance-desc a c:Text ; sty:textStyle sty:Caption ; c:label "The new name is written to the graph when you save." .
+ui:thf-semblance-field a c:TextField ; c:label "Name" ; c:value "Todo graph" .
+ui:thf-semblance-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:thf-semblance-cancel ui:thf-semblance-save ) .
+ui:thf-semblance-cancel a c:Button ; c:label "Cancel" ; sty:emphasis sty:Outline ; c:closes ui:thf-semblance-window .
+ui:thf-semblance-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; c:closes ui:thf-semblance-window .
+ui:thf-semblance-palette a c:Palette ; c:title "Plan" , "План"@uk , "Tarif"@de , "الخطة"@ar ; c:open true ; c:x 0 ; c:y 0 ; c:width 260 ;
+    c:body ui:thf-semblance-palette-body .
+ui:thf-semblance-palette-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:thf-semblance-palette-plan ui:thf-semblance-palette-notify ui:thf-semblance-palette-progress ) .
+ui:thf-semblance-palette-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:thf-semblance-menu a c:Menu ; c:label "More" ; c:open false ; c:items ( ui:thf-semblance-mi-copy ui:thf-semblance-mi-pin ui:thf-semblance-mi-delete ) .
+ui:thf-semblance-mi-copy a c:MenuItem ; c:label "Duplicate" ; c:icon "⧉" .
+ui:thf-semblance-mi-pin a c:MenuItem ; c:label "Pin" ; c:icon "★" .
+ui:thf-semblance-mi-delete a c:MenuItem ; c:label "Delete" ; c:icon "✕" ; sty:tone sty:Danger .
+ui:thf-semblance-palette-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:thf-semblance-palette-notify a c:ToggleSwitch ; c:label "Notify me" ; c:controls ui:inputsDemo ; c:property ui:inp-notify .
+
+ui:thf-cupertino a c:Surface ; sty:theme sty:Cupertino ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-cupertino-name ui:thf-cupertino-window ui:thf-cupertino-palette ui:thf-cupertino-menu ) .
+ui:thf-cupertino-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino" .
+ui:thf-cupertino-window a c:Window ; c:title "Rename graph" , "Перейменувати граф"@uk , "Graph umbenennen"@de , "إعادة تسمية الرسم البياني"@ar ; c:open true ;
+    c:x 0 ; c:y 0 ; c:width 300 ; c:height 258 ; c:windowState c:Normal ; c:attachedTo c:NoEdge ;
+    c:body ui:thf-cupertino-dialog .
+ui:thf-cupertino-dialog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-cupertino-desc ui:thf-cupertino-field ui:thf-cupertino-buttons ) .
+ui:thf-cupertino-desc a c:Text ; sty:textStyle sty:Caption ; c:label "The new name is written to the graph when you save." .
+ui:thf-cupertino-field a c:TextField ; c:label "Name" ; c:value "Todo graph" .
+ui:thf-cupertino-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:thf-cupertino-cancel ui:thf-cupertino-save ) .
+ui:thf-cupertino-cancel a c:Button ; c:label "Cancel" ; sty:emphasis sty:Outline ; c:closes ui:thf-cupertino-window .
+ui:thf-cupertino-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; c:closes ui:thf-cupertino-window .
+ui:thf-cupertino-palette a c:Palette ; c:title "Plan" , "План"@uk , "Tarif"@de , "الخطة"@ar ; c:open true ; c:x 0 ; c:y 0 ; c:width 260 ;
+    c:body ui:thf-cupertino-palette-body .
+ui:thf-cupertino-palette-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:thf-cupertino-palette-plan ui:thf-cupertino-palette-notify ui:thf-cupertino-palette-progress ) .
+ui:thf-cupertino-palette-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:thf-cupertino-menu a c:Menu ; c:label "More" ; c:open false ; c:items ( ui:thf-cupertino-mi-copy ui:thf-cupertino-mi-pin ui:thf-cupertino-mi-delete ) .
+ui:thf-cupertino-mi-copy a c:MenuItem ; c:label "Duplicate" ; c:icon "⧉" .
+ui:thf-cupertino-mi-pin a c:MenuItem ; c:label "Pin" ; c:icon "★" .
+ui:thf-cupertino-mi-delete a c:MenuItem ; c:label "Delete" ; c:icon "✕" ; sty:tone sty:Danger .
+ui:thf-cupertino-palette-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:thf-cupertino-palette-notify a c:ToggleSwitch ; c:label "Notify me" ; c:controls ui:inputsDemo ; c:property ui:inp-notify .
+
+ui:thf-tracker a c:Surface ; sty:theme sty:Tracker ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-tracker-name ui:thf-tracker-window ui:thf-tracker-palette ui:thf-tracker-menu ) .
+ui:thf-tracker-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker" .
+ui:thf-tracker-window a c:Window ; c:title "Rename graph" , "Перейменувати граф"@uk , "Graph umbenennen"@de , "إعادة تسمية الرسم البياني"@ar ; c:open true ;
+    c:x 0 ; c:y 0 ; c:width 300 ; c:height 258 ; c:windowState c:Normal ; c:attachedTo c:NoEdge ;
+    c:body ui:thf-tracker-dialog .
+ui:thf-tracker-dialog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-tracker-desc ui:thf-tracker-field ui:thf-tracker-buttons ) .
+ui:thf-tracker-desc a c:Text ; sty:textStyle sty:Caption ; c:label "The new name is written to the graph when you save." .
+ui:thf-tracker-field a c:TextField ; c:label "Name" ; c:value "Todo graph" .
+ui:thf-tracker-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:thf-tracker-cancel ui:thf-tracker-save ) .
+ui:thf-tracker-cancel a c:Button ; c:label "Cancel" ; sty:emphasis sty:Outline ; c:closes ui:thf-tracker-window .
+ui:thf-tracker-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; c:closes ui:thf-tracker-window .
+ui:thf-tracker-palette a c:Palette ; c:title "Plan" , "План"@uk , "Tarif"@de , "الخطة"@ar ; c:open true ; c:x 0 ; c:y 0 ; c:width 260 ;
+    c:body ui:thf-tracker-palette-body .
+ui:thf-tracker-palette-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:thf-tracker-palette-plan ui:thf-tracker-palette-notify ui:thf-tracker-palette-progress ) .
+ui:thf-tracker-palette-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:thf-tracker-menu a c:Menu ; c:label "More" ; c:open false ; c:items ( ui:thf-tracker-mi-copy ui:thf-tracker-mi-pin ui:thf-tracker-mi-delete ) .
+ui:thf-tracker-mi-copy a c:MenuItem ; c:label "Duplicate" ; c:icon "⧉" .
+ui:thf-tracker-mi-pin a c:MenuItem ; c:label "Pin" ; c:icon "★" .
+ui:thf-tracker-mi-delete a c:MenuItem ; c:label "Delete" ; c:icon "✕" ; sty:tone sty:Danger .
+ui:thf-tracker-palette-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:thf-tracker-palette-notify a c:ToggleSwitch ; c:label "Notify me" ; c:controls ui:inputsDemo ; c:property ui:inp-notify .
+
+ui:thf-classic a c:Surface ; sty:theme sty:Classic ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-classic-name ui:thf-classic-window ui:thf-classic-palette ui:thf-classic-menu ) .
+ui:thf-classic-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic" .
+ui:thf-classic-window a c:Window ; c:title "Rename graph" , "Перейменувати граф"@uk , "Graph umbenennen"@de , "إعادة تسمية الرسم البياني"@ar ; c:open true ;
+    c:x 0 ; c:y 0 ; c:width 300 ; c:height 258 ; c:windowState c:Normal ; c:attachedTo c:NoEdge ;
+    c:body ui:thf-classic-dialog .
+ui:thf-classic-dialog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-classic-desc ui:thf-classic-field ui:thf-classic-buttons ) .
+ui:thf-classic-desc a c:Text ; sty:textStyle sty:Caption ; c:label "The new name is written to the graph when you save." .
+ui:thf-classic-field a c:TextField ; c:label "Name" ; c:value "Todo graph" .
+ui:thf-classic-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:thf-classic-cancel ui:thf-classic-save ) .
+ui:thf-classic-cancel a c:Button ; c:label "Cancel" ; sty:emphasis sty:Outline ; c:closes ui:thf-classic-window .
+ui:thf-classic-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; c:closes ui:thf-classic-window .
+ui:thf-classic-palette a c:Palette ; c:title "Plan" , "План"@uk , "Tarif"@de , "الخطة"@ar ; c:open true ; c:x 0 ; c:y 0 ; c:width 260 ;
+    c:body ui:thf-classic-palette-body .
+ui:thf-classic-palette-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:thf-classic-palette-plan ui:thf-classic-palette-notify ui:thf-classic-palette-progress ) .
+ui:thf-classic-palette-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:thf-classic-menu a c:Menu ; c:label "More" ; c:open false ; c:items ( ui:thf-classic-mi-copy ui:thf-classic-mi-pin ui:thf-classic-mi-delete ) .
+ui:thf-classic-mi-copy a c:MenuItem ; c:label "Duplicate" ; c:icon "⧉" .
+ui:thf-classic-mi-pin a c:MenuItem ; c:label "Pin" ; c:icon "★" .
+ui:thf-classic-mi-delete a c:MenuItem ; c:label "Delete" ; c:icon "✕" ; sty:tone sty:Danger .
+ui:thf-classic-palette-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:thf-classic-palette-notify a c:ToggleSwitch ; c:label "Notify me" ; c:controls ui:inputsDemo ; c:property ui:inp-notify .
+
+ui:thf-doodle a c:Surface ; sty:theme sty:Doodle ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-doodle-name ui:thf-doodle-window ui:thf-doodle-palette ui:thf-doodle-menu ) .
+ui:thf-doodle-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle" .
+ui:thf-doodle-window a c:Window ; c:title "Rename graph" , "Перейменувати граф"@uk , "Graph umbenennen"@de , "إعادة تسمية الرسم البياني"@ar ; c:open true ;
+    c:x 0 ; c:y 0 ; c:width 300 ; c:height 258 ; c:windowState c:Normal ; c:attachedTo c:NoEdge ;
+    c:body ui:thf-doodle-dialog .
+ui:thf-doodle-dialog a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:thf-doodle-desc ui:thf-doodle-field ui:thf-doodle-buttons ) .
+ui:thf-doodle-desc a c:Text ; sty:textStyle sty:Caption ; c:label "The new name is written to the graph when you save." .
+ui:thf-doodle-field a c:TextField ; c:label "Name" ; c:value "Todo graph" .
+ui:thf-doodle-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:thf-doodle-cancel ui:thf-doodle-save ) .
+ui:thf-doodle-cancel a c:Button ; c:label "Cancel" ; sty:emphasis sty:Outline ; c:closes ui:thf-doodle-window .
+ui:thf-doodle-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; c:closes ui:thf-doodle-window .
+ui:thf-doodle-palette a c:Palette ; c:title "Plan" , "План"@uk , "Tarif"@de , "الخطة"@ar ; c:open true ; c:x 0 ; c:y 0 ; c:width 260 ;
+    c:body ui:thf-doodle-palette-body .
+ui:thf-doodle-palette-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:thf-doodle-palette-plan ui:thf-doodle-palette-notify ui:thf-doodle-palette-progress ) .
+ui:thf-doodle-palette-progress a c:Progress ; c:label "Uploading 64%" ; c:value 64 ; c:max 100 ; c:active true .
+ui:thf-doodle-menu a c:Menu ; c:label "More" ; c:open false ; c:items ( ui:thf-doodle-mi-copy ui:thf-doodle-mi-pin ui:thf-doodle-mi-delete ) .
+ui:thf-doodle-mi-copy a c:MenuItem ; c:label "Duplicate" ; c:icon "⧉" .
+ui:thf-doodle-mi-pin a c:MenuItem ; c:label "Pin" ; c:icon "★" .
+ui:thf-doodle-mi-delete a c:MenuItem ; c:label "Delete" ; c:icon "✕" ; sty:tone sty:Danger .
+ui:thf-doodle-palette-plan a c:Segmented ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:thf-doodle-palette-notify a c:ToggleSwitch ; c:label "Notify me" ; c:controls ui:inputsDemo ; c:property ui:inp-notify .
+
+# Frames are fixed to the viewport, for a desktop. On this page they stand in the flow of their tile.
+[] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:state ":not([data-sem-c=desktop] *)" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "z-index" ; sty:raw "auto" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
+
+ui:th-how a c:Flippable ; c:front ui:th-how-spec .
+ui:th-how-spec a c:Specimen ;
+    c:label "How structure is themed" , "Як тематизується будова"@uk , "Wie der Aufbau gestaltet wird"@de , "كيف تُنسَّق البنية"@ar ;
+    c:help "A theme is set on an ancestor (the shell or a surface), so a rule for what is inside it has no sty:appliesTo: its sty:part begins with the component, and sty:when names the theme. The compiler prefixes the theme's hook, [data-sem-theme=…], and puts the rule in the variants layer, after every component's own rules. The part ends with a guard - not inside, nor itself, another theme below this one - so a Paper card on a Classic desktop stays Paper. Values come from the theme's tokens or from custom properties the theme sets on its own element (here --bv-title, the caption gradient of Classic's bevel kit). Rules that must beat an intent (the default button) name the class and the intent and scope themselves with a state instead." ;
+    c:children ( ui:th-how-code ) .
+ui:th-how-code a c:Code ; c:block true ; c:language "turtle" ; c:label """# ontology/theme/themes-structural.ttl
+sty:Classic a sty:Theme ; sem:slug "classic" ;
+    sty:declares [ sty:property "--sem-surface" ; sty:raw "light-dark(#c0c0c0, #3c3c44)" ] , … .
+
+[] a sty:StyleRule ; sty:when sty:Classic ;              # on the themed element itself
+    sty:declares [ sty:property "--bv-title" ;
+                   sty:raw "linear-gradient(90deg, light-dark(#000080, #1c1c64), …)" ] , … .
+
+[] a sty:StyleRule ; sty:when sty:Classic ;              # inside it
+    sty:part "[data-sem-c=window] .sem-window-bar:not(:where(…guard…))" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--bv-title)" ] , … .
+
+# compiles to, in @layer sem.variants:
+#   [data-sem-theme=\"classic\"] [data-sem-c=window] .sem-window-bar:not(:where(…)) { background: var(--bv-title); … }""" .
+
+ui:th-cupertino-light a c:Surface ; sty:theme sty:Cupertino ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-cupertino-light-name ui:th-cupertino-light-text ui:th-cupertino-light-row ) .
+ui:th-cupertino-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino · Day" .
+ui:th-cupertino-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-cupertino-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-cupertino-light-save ui:th-cupertino-light-new ui:th-cupertino-light-info ) .
+ui:th-cupertino-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-cupertino-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-cupertino-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-cupertino-dark a c:Surface ; sty:theme sty:Cupertino ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-cupertino-dark-name ui:th-cupertino-dark-text ui:th-cupertino-dark-row ) .
+ui:th-cupertino-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino · Night" .
+ui:th-cupertino-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-cupertino-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-cupertino-dark-save ui:th-cupertino-dark-new ui:th-cupertino-dark-info ) .
+ui:th-cupertino-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-cupertino-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-cupertino-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-cupertino-standard a c:Surface ; sty:theme sty:Cupertino ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-cupertino-standard-name ui:th-cupertino-standard-text ui:th-cupertino-standard-muted ui:th-cupertino-standard-row ) .
+ui:th-cupertino-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino · Standard" .
+ui:th-cupertino-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-cupertino-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-cupertino-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-cupertino-standard-btn ui:th-cupertino-standard-tag ) .
+ui:th-cupertino-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-cupertino-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-cupertino-high a c:Surface ; sty:theme sty:Cupertino ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-cupertino-high-name ui:th-cupertino-high-text ui:th-cupertino-high-muted ui:th-cupertino-high-row ) .
+ui:th-cupertino-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino · High" .
+ui:th-cupertino-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-cupertino-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-cupertino-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-cupertino-high-btn ui:th-cupertino-high-tag ) .
+ui:th-cupertino-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-cupertino-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-cupertino-ramps a c:Surface ; sty:theme sty:Cupertino ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-cupertino-ramps-name ui:th-cupertino-ramps-gray ui:th-cupertino-ramps-accent ) .
+ui:th-cupertino-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Cupertino" .
+ui:th-cupertino-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-cupertino-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-tracker-light a c:Surface ; sty:theme sty:Tracker ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-tracker-light-name ui:th-tracker-light-text ui:th-tracker-light-row ) .
+ui:th-tracker-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker · Day" .
+ui:th-tracker-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-tracker-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-tracker-light-save ui:th-tracker-light-new ui:th-tracker-light-info ) .
+ui:th-tracker-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-tracker-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-tracker-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-tracker-dark a c:Surface ; sty:theme sty:Tracker ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-tracker-dark-name ui:th-tracker-dark-text ui:th-tracker-dark-row ) .
+ui:th-tracker-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker · Night" .
+ui:th-tracker-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-tracker-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-tracker-dark-save ui:th-tracker-dark-new ui:th-tracker-dark-info ) .
+ui:th-tracker-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-tracker-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-tracker-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-tracker-standard a c:Surface ; sty:theme sty:Tracker ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-tracker-standard-name ui:th-tracker-standard-text ui:th-tracker-standard-muted ui:th-tracker-standard-row ) .
+ui:th-tracker-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker · Standard" .
+ui:th-tracker-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-tracker-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-tracker-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-tracker-standard-btn ui:th-tracker-standard-tag ) .
+ui:th-tracker-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-tracker-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-tracker-high a c:Surface ; sty:theme sty:Tracker ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-tracker-high-name ui:th-tracker-high-text ui:th-tracker-high-muted ui:th-tracker-high-row ) .
+ui:th-tracker-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker · High" .
+ui:th-tracker-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-tracker-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-tracker-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-tracker-high-btn ui:th-tracker-high-tag ) .
+ui:th-tracker-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-tracker-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-tracker-ramps a c:Surface ; sty:theme sty:Tracker ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-tracker-ramps-name ui:th-tracker-ramps-gray ui:th-tracker-ramps-accent ) .
+ui:th-tracker-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Tracker" .
+ui:th-tracker-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-tracker-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-classic-light a c:Surface ; sty:theme sty:Classic ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-classic-light-name ui:th-classic-light-text ui:th-classic-light-row ) .
+ui:th-classic-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic · Day" .
+ui:th-classic-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-classic-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-classic-light-save ui:th-classic-light-new ui:th-classic-light-info ) .
+ui:th-classic-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-classic-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-classic-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-classic-dark a c:Surface ; sty:theme sty:Classic ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-classic-dark-name ui:th-classic-dark-text ui:th-classic-dark-row ) .
+ui:th-classic-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic · Night" .
+ui:th-classic-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-classic-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-classic-dark-save ui:th-classic-dark-new ui:th-classic-dark-info ) .
+ui:th-classic-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-classic-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-classic-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-classic-standard a c:Surface ; sty:theme sty:Classic ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-classic-standard-name ui:th-classic-standard-text ui:th-classic-standard-muted ui:th-classic-standard-row ) .
+ui:th-classic-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic · Standard" .
+ui:th-classic-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-classic-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-classic-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-classic-standard-btn ui:th-classic-standard-tag ) .
+ui:th-classic-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-classic-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-classic-high a c:Surface ; sty:theme sty:Classic ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-classic-high-name ui:th-classic-high-text ui:th-classic-high-muted ui:th-classic-high-row ) .
+ui:th-classic-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic · High" .
+ui:th-classic-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-classic-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-classic-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-classic-high-btn ui:th-classic-high-tag ) .
+ui:th-classic-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-classic-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-classic-ramps a c:Surface ; sty:theme sty:Classic ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-classic-ramps-name ui:th-classic-ramps-gray ui:th-classic-ramps-accent ) .
+ui:th-classic-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Classic" .
+ui:th-classic-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-classic-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .
+ui:th-doodle-light a c:Surface ; sty:theme sty:Doodle ; sty:colorScheme sty:Light ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-doodle-light-name ui:th-doodle-light-text ui:th-doodle-light-row ) .
+ui:th-doodle-light-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle · Day" .
+ui:th-doodle-light-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-doodle-light-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-doodle-light-save ui:th-doodle-light-new ui:th-doodle-light-info ) .
+ui:th-doodle-light-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-doodle-light-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-doodle-light-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-doodle-dark a c:Surface ; sty:theme sty:Doodle ; sty:colorScheme sty:Dark ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-doodle-dark-name ui:th-doodle-dark-text ui:th-doodle-dark-row ) .
+ui:th-doodle-dark-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle · Night" .
+ui:th-doodle-dark-text a c:Text ; sty:textStyle sty:Title ; c:label "Aa 0123" .
+ui:th-doodle-dark-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-doodle-dark-save ui:th-doodle-dark-new ui:th-doodle-dark-info ) .
+ui:th-doodle-dark-save a c:Button ; c:label "Save" ; sty:intent sty:Primary ; sty:size sty:Small .
+ui:th-doodle-dark-new a c:Badge ; c:label "New" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:th-doodle-dark-info a c:Badge ; c:label "Info" ; sty:tone sty:Info ; sty:emphasis sty:Soft .
+ui:th-doodle-standard a c:Surface ; sty:theme sty:Doodle ; sty:contrast sty:StandardContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-doodle-standard-name ui:th-doodle-standard-text ui:th-doodle-standard-muted ui:th-doodle-standard-row ) .
+ui:th-doodle-standard-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle · Standard" .
+ui:th-doodle-standard-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-doodle-standard-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-doodle-standard-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-doodle-standard-btn ui:th-doodle-standard-tag ) .
+ui:th-doodle-standard-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-doodle-standard-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-doodle-high a c:Surface ; sty:theme sty:Doodle ; sty:contrast sty:HighContrast ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-doodle-high-name ui:th-doodle-high-text ui:th-doodle-high-muted ui:th-doodle-high-row ) .
+ui:th-doodle-high-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle · High" .
+ui:th-doodle-high-text a c:Text ; c:label "Body text on the theme's surface." .
+ui:th-doodle-high-muted a c:Text ; sty:textStyle sty:Caption ; c:label "Muted caption, borders below." .
+ui:th-doodle-high-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:th-doodle-high-btn ui:th-doodle-high-tag ) .
+ui:th-doodle-high-btn a c:Button ; c:label "Outline" ; sty:emphasis sty:Outline ; sty:size sty:Small .
+ui:th-doodle-high-tag a c:Badge ; c:label "Accent" ; sty:tone sty:Accent ; sty:emphasis sty:Outline .
+ui:th-doodle-ramps a c:Surface ; sty:theme sty:Doodle ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:th-doodle-ramps-name ui:th-doodle-ramps-gray ui:th-doodle-ramps-accent ) .
+ui:th-doodle-ramps-name a c:Text ; sty:textStyle sty:Overline ; c:label "Doodle" .
+ui:th-doodle-ramps-gray a c:Swatches ; c:label "gray" ; c:of sty:Ramp ; c:prefix "gray-" .
+ui:th-doodle-ramps-accent a c:Swatches ; c:label "accent" ; c:of sty:Ramp ; c:prefix "accent-" .

@@ -5,6 +5,7 @@ import { compileStyles } from '../src/style/compile.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
+const STRUCTURAL = ['cupertino', 'tracker', 'classic', 'doodle']
 const store = loadStore('n3')
 const css = compileStyles(store)
 const f = store.factory
@@ -83,7 +84,7 @@ const solidRoles: [string, string, number][] = [
 describe('themes are values of a hookable axis', () => {
   it('declares sty:theme as a hooked property over sty:Theme individuals', () => {
     expect(store.match(f.namedNode(NS.sty + 'theme'), f.namedNode(STY.hookAttribute), null)[0]?.object.value).toBe('data-sem-theme')
-    expect(themes.map((t) => t.slug)).toEqual(['blueprint', 'paper', 'semblance', 'sunset', 'terminal'])
+    expect(themes.map((t) => t.slug)).toEqual(['blueprint', 'classic', 'cupertino', 'doodle', 'paper', 'semblance', 'sunset', 'terminal', 'tracker'])
     for (const t of themes) {
       const labels = store.match(f.namedNode(t.iri), f.namedNode(NS.rdfs + 'label'), null).map((q) => q.object)
       expect(labels.some((l) => l.termType === 'Literal' && l.language === 'en'), t.slug).toBe(true)
@@ -159,8 +160,10 @@ describe('themes are values of a hookable axis', () => {
       expect(layerOf(sel), sel).toBe('sem.components')
       for (const v of block(sel).values()) expect(v, sel).toMatch(/var\(--sem-/)
     }
-    // no per-theme descendant rules (they would leak into a differently themed subtree)
-    expect(css).not.toMatch(/\[data-sem-theme="[a-z]+"\] [^{\s][^{]*\{/)
+    // per-theme descendant rules exist only for the structural themes, and each is guarded
+    // against leaking into a differently themed subtree below it (see the next block)
+    const descendant = [...css.matchAll(/^ {2}\[data-sem-theme="([a-z]+)"\] [^{\s][^{\n]*\{/gm)].map((m) => m[1])
+    expect(new Set(descendant)).toEqual(new Set(STRUCTURAL))
   })
 })
 
@@ -184,8 +187,10 @@ describe('switching themes', () => {
     const themed = [...document.querySelectorAll('[data-sem-theme]')]
     const count = (slug: string) => themed.filter((e) => e.getAttribute('data-sem-theme') === slug).length
     // the shell, plus one composition, two schemes and the ramps per theme; two contrast tiles per non-default theme
-    expect(count('semblance')).toBe(5)
+    expect(count('semblance')).toBe(7)
     for (const slug of ['paper', 'terminal', 'blueprint', 'sunset']) expect(count(slug), slug).toBe(6)
+    // structural themes: two composition tiles (controls, frames), two schemes, two contrasts, ramps
+    for (const slug of STRUCTURAL) expect(count(slug), slug).toBe(7)
     const paper = root('th-paper')!
     expect(paper.getAttribute('data-sem-theme')).toBe('paper')
     expect(paper.querySelector('[data-sem-c=heading]')).not.toBeNull()
@@ -200,7 +205,7 @@ describe('switching themes', () => {
     const option = (label: string) =>
       [...root('themeSwitch')!.querySelectorAll('button')].find((b) => b.textContent!.includes(label))!
     expect([...root('themeSwitch')!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
-      '◇Semblance', '¶Paper', '▮Terminal', '⌗Blueprint', '◓Sunset',
+      '◇Semblance', '¶Paper', '▮Terminal', '⌗Blueprint', '◓Sunset', '⌘Cupertino', '▀Tracker', '⊞Classic', '✎Doodle',
     ])
     fire(option('Paper'), 'click')
     expect(shellRoot().getAttribute('data-sem-theme')).toBe('paper')
@@ -211,5 +216,115 @@ describe('switching themes', () => {
     expect(values).toEqual([NS.sty + 'Terminal'])
     // a scoped theme is unaffected by the shell's
     expect(root('th-paper')!.getAttribute('data-sem-theme')).toBe('paper')
+  })
+})
+
+describe('structural themes', () => {
+  /** Every compiled rule as [layer, selector, body]. */
+  const rules = (() => {
+    const out: [string, string, string][] = []
+    let layer = ''
+    for (const line of css.split('\n')) {
+      const l = /^@layer (sem\.\w+) \{$/.exec(line)
+      if (l) layer = l[1]!
+      const r = /^ {2}(.+?) \{ (.*) \}$/.exec(line)
+      if (r) out.push([layer, r[1]!, r[2]!])
+    }
+    return out
+  })()
+  const guard = (slug: string) =>
+    `:not(:where([data-sem-theme=${slug}] [data-sem-theme]:not([data-sem-theme=${slug}]), [data-sem-theme=${slug}] [data-sem-theme]:not([data-sem-theme=${slug}]) *))`
+  const inside = (slug: string) => rules.filter(([, sel]) => sel.startsWith(`[data-sem-theme="${slug}"] `))
+  const find = (slug: string, part: string) => {
+    const r = inside(slug).find(([, sel]) => sel === `[data-sem-theme="${slug}"] ${part}${guard(slug)}`)
+    if (!r) throw new Error(`${slug}: no rule for ${part}`)
+    return r[2]
+  }
+  const FRAME = ':is([data-sem-c=window], [data-sem-c=palette])'
+
+  it('style what is inside the themed element, in the variants layer, each rule guarded against nested themes', () => {
+    for (const slug of STRUCTURAL) {
+      const own = inside(slug)
+      expect(own.length, slug).toBeGreaterThan(40)
+      for (const [layer, sel] of own) {
+        expect(layer, sel).toBe('sem.variants')
+        expect(sel, sel).toContain(guard(slug))
+      }
+      // the theme's own custom properties sit on the themed element, after its token block
+      expect(rules.filter(([, sel]) => sel === `[data-sem-theme="${slug}"]`).map(([layer]) => layer)).toEqual(['sem.hooks', 'sem.variants'])
+    }
+    // rules that must beat an intent rule scope themselves with a state, in the intents layer
+    for (const slug of STRUCTURAL) {
+      const primary = rules.filter(([layer, sel]) => layer === 'sem.intents' && sel.includes('[data-sem-intent="primary"]') && sel.includes(`:where([data-sem-theme=${slug}] *)${guard(slug)}`))
+      expect(primary.length, slug).toBeGreaterThan(0)
+    }
+  })
+
+  it('rebuild the title bar of every frame', () => {
+    // Cupertino: traffic lights on the left (close is the last control, ordered first), the title centred over the bar
+    expect(find('cupertino', `${FRAME} .sem-window-control:last-child`)).toMatch(/(?=.*order: -3;)(?=.*#ff5f57)/)
+    expect(find('cupertino', `${FRAME} .sem-window-bar strong`)).toMatch(/position: absolute;.*text-align: center/)
+    // Tracker: a yellow tab only as wide as its title, close box first
+    expect(find('tracker', `${FRAME} .sem-window-bar`)).toContain('justify-self: start')
+    expect(find('tracker', `${FRAME} .sem-window-control:last-child`)).toContain('order: -1')
+    expect(rules.find(([, sel]) => sel === '[data-sem-theme="tracker"]' )).toBeDefined()
+    // Classic: a navy caption gradient from the bevel kit, square raised controls
+    expect(find('classic', `${FRAME} .sem-window-bar`)).toContain('background: var(--bv-title)')
+    expect(find('classic', `${FRAME} .sem-window-control`)).toContain('box-shadow: var(--bv-raised)')
+    const classicVars = rules.filter(([, sel]) => sel === '[data-sem-theme="classic"]')[1]![2]
+    expect(classicVars).toMatch(/--bv-title: linear-gradient\(90deg, light-dark\(#000080/)
+    // Doodle: inked strokes on wobbly corners
+    expect(find('doodle', `${FRAME}`)).toContain('border-radius: var(--wob-c)')
+  })
+
+  it('restyle controls, not only colours', () => {
+    expect(find('cupertino', ':is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button[aria-pressed=true]')).toContain('var(--mac-thumb-shadow)')
+    expect(find('classic', '[data-sem-c=tabs] [role=tab][aria-selected=true]')).toContain('margin-bottom: -2px')
+    expect(find('tracker', '[data-sem-c=tabs] [role=tab]')).toContain('clip-path: polygon(')
+    expect(find('classic', '[data-sem-c=checkbox] > .sem-row > input:checked')).toContain('linear-gradient(45deg')
+    expect(find('doodle', '[data-sem-c=text-field] input')).toContain('border-bottom: 2px solid var(--ink)')
+    for (const slug of ['classic', 'tracker']) expect(find(slug, '*'), slug).toContain('border-radius: 0')
+  })
+
+  it('compose with contrast and motion', () => {
+    for (const slug of STRUCTURAL) {
+      const same = block(`[data-sem-contrast="high"][data-sem-theme="${slug}"]`)
+      expect(layerOf(`[data-sem-contrast="high"][data-sem-theme="${slug}"]`)).toBe('sem.variants')
+      expect(same.get('--sem-border')).toBe('var(--sem-gray-10)')
+      expect(same.get('--s-focus')).toBe('3px solid light-dark(#000000, #ffffff)')
+    }
+    expect(block(`[data-sem-contrast="high"] :is(${STRUCTURAL.map((s) => `[data-sem-theme=${s}]`).join(', ')})`).get('--s-focus')).toContain('3px solid')
+    // every transition and animation a structural rule declares runs on the duration tokens, which motion preference zeroes
+    for (const slug of STRUCTURAL) {
+      for (const [, sel, body] of inside(slug)) {
+        for (const m of body.matchAll(/(?:^|; )(transition|animation)[\w-]*: ([^;]+)/g)) expect(m[2], sel).not.toMatch(/\d(ms|s)\b/)
+      }
+    }
+  })
+
+  it('keep frames in their tile on the Themes page, with the controls in rendering order', () => {
+    const m = mountShell()
+    const sf = m.store.factory
+    const app = sf.namedNode(UI + 'app')
+    m.runtime.apply({
+      remove: m.store.match(app, sf.namedNode(UI + 'galleryGroup'), null),
+      add: [sf.quad(app, sf.namedNode(UI + 'galleryGroup'), sf.namedNode(UI + 'GroupThemes'))],
+    })
+    m.showPage('Components')
+    const root = (local: string) => [...m.document.querySelectorAll('*')].find((el) => m.shell.keyOf(el) === `${UI}${local}/~root`) ?? null
+    for (const slug of ['semblance', ...STRUCTURAL]) {
+      const tile = root(`thf-${slug}`)!
+      expect(tile.getAttribute('data-sem-theme')).toBe(slug)
+      const bar = tile.querySelector('[data-sem-c=window] .sem-window-bar')!
+      const controls = [...bar.children].map((c) => c.getAttribute('aria-label') ?? c.tagName)
+      // the CSS finds close as the last child and counts the others from the end
+      expect(controls).toEqual(['STRONG', expect.stringMatching(/^Minimize/), expect.stringMatching(/^Maximize/), expect.stringMatching(/^Close/)])
+      expect([...tile.querySelector('[data-sem-c=palette] .sem-window-bar')!.children].at(-1)!.getAttribute('aria-label')).toMatch(/^Close/)
+    }
+    // switching the shell to a structural theme is still one triple
+    const option = (label: string) => [...root('themeSwitch')!.querySelectorAll('button')].find((b) => b.textContent!.includes(label))!
+    m.fire(option('Classic'), 'click')
+    expect(root('shell')!.getAttribute('data-sem-theme')).toBe('classic')
+    expect(root('thf-cupertino')!.getAttribute('data-sem-theme')).toBe('cupertino')
   })
 })
