@@ -74,10 +74,6 @@ fn fail_at(e: lex::Error) -> i32 {
     -1
 }
 
-fn not_implemented() -> i32 {
-    fail(b"not implemented")
-}
-
 /// The input buffer split into consecutive strings of the given lengths.
 fn args<const N: usize>(input: &[u8], lens: [u32; N]) -> [&[u8]; N] {
     let mut at = 0;
@@ -452,11 +448,25 @@ pub extern "C" fn release(h: u32) -> i32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn parse_update(_text_len: u32, _base_len: u32) -> i32 {
-    not_implemented()
+pub extern "C" fn parse_update(text_len: u32, base_len: u32) -> i32 {
+    let s = st();
+    let [text, base] = args(&s.input, [text_len, base_len]);
+    match sparql::parse::parse_update(text, base, &mut s.dict) {
+        Ok(_) => 0,
+        Err(e) => fail_at(e),
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn update(_text_len: u32, _base_len: u32) -> i32 {
-    not_implemented()
+pub extern "C" fn update(text_len: u32, base_len: u32) -> i32 {
+    let s = st();
+    let [text, base] = args(&s.input, [text_len, base_len]);
+    let u = match sparql::parse::parse_update(text, base, &mut s.dict) {
+        Ok(u) => u,
+        Err(e) => return fail_at(e),
+    };
+    match sparql::update::execute(&u, &mut s.dict, &mut s.store) {
+        Ok(()) => 0,
+        Err(msg) => fail(msg.as_bytes()),
+    }
 }

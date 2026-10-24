@@ -9,6 +9,7 @@ pub mod num;
 pub mod parse;
 pub mod regex;
 pub mod sha;
+pub mod update;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -186,7 +187,7 @@ pub enum Output {
 /// Run a query over `graphs` (their union is the default graph; empty: the
 /// store's default graph), with variables bound to terms.
 pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::Store, graphs: &[u32], binds: &[(Var, u32)]) -> Output {
-    use crate::dict::{BNODE, DEFAULT_GRAPH_ID, IRI, Key, TRIPLE};
+    use crate::dict::{BNODE, DEFAULT_GRAPH_ID, IRI, TRIPLE};
     use eval::{Active, Ctx};
     let (default, named) = if !q.from.is_empty() || !q.from_named.is_empty() {
         (q.from.clone(), Some(q.from_named.clone()))
@@ -228,23 +229,7 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
                     }
                 }
             }
-            return Output::Triples(out);
-
-            fn inst(t: &Tt, r: &[u32], bnodes: &[u32], dict: &mut crate::dict::Dict) -> Option<u32> {
-                match t {
-                    Tt::Term(i) => Some(*i),
-                    Tt::Var(v) => Some(r[*v as usize]).filter(|&x| x != 0),
-                    Tt::Bnode(k) => Some(bnodes[*k as usize]),
-                    Tt::Triple(b) => {
-                        let (s, p, o) = (inst(&b[0], r, bnodes, dict)?, inst(&b[1], r, bnodes, dict)?, inst(&b[2], r, bnodes, dict)?);
-                        let ks = dict.term(s)?.kind;
-                        if !matches!(ks, IRI | BNODE) || dict.term(p)?.kind != IRI {
-                            return None;
-                        }
-                        Some(dict.intern(Key::triple(s, p, o)))
-                    }
-                }
-            }
+            Output::Triples(out)
         }
         Form::Describe => {
             let mut targets = alloc::collections::BTreeSet::new();
@@ -289,4 +274,54 @@ pub fn execute(q: &Query, dict: &mut crate::dict::Dict, store: &crate::store::St
             Output::Triples(out)
         }
     }
+}
+
+/// A template position's term under a solution (None when unbound or invalid).
+pub fn inst(t: &Tt, r: &[u32], bnodes: &[u32], dict: &mut crate::dict::Dict) -> Option<u32> {
+    use crate::dict::{BNODE, IRI, Key};
+    match t {
+        Tt::Term(i) => Some(*i),
+        Tt::Var(v) => Some(r[*v as usize]).filter(|&x| x != 0),
+        Tt::Bnode(k) => Some(bnodes[*k as usize]),
+        Tt::Triple(b) => {
+            let (s, p, o) = (inst(&b[0], r, bnodes, dict)?, inst(&b[1], r, bnodes, dict)?, inst(&b[2], r, bnodes, dict)?);
+            if !matches!(dict.term(s)?.kind, IRI | BNODE) || dict.term(p)?.kind != IRI {
+                return None;
+            }
+            Some(dict.intern(Key::triple(s, p, o)))
+        }
+    }
+}
+
+/// Graphs an update operation acts on.
+#[derive(Clone, Copy)]
+pub enum Target {
+    Graph(u32),
+    Default,
+    Named,
+    All,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Transfer {
+    Add,
+    Move,
+    Copy,
+}
+
+/// A quad template; graph `Tt::Term(0)` means the operation's default graph.
+pub type QuadTemplate = [Tt; 4];
+
+pub enum UpdateOp {
+    Data { insert: bool, quads: Vec<QuadTemplate>, bnodes: u32 },
+    Modify { delete: Vec<QuadTemplate>, insert: Vec<QuadTemplate>, bnodes: u32, with: Option<u32>, using: Option<(Vec<u32>, Vec<u32>)>, select: Select, nvars: usize },
+    Load { silent: bool },
+    Clear { target: Target },
+    Create { silent: bool, graph: u32 },
+    Transfer { op: Transfer, from: u32, to: u32 },
+}
+
+pub struct Update {
+    pub ops: Vec<UpdateOp>,
+    pub base: Vec<u8>,
 }

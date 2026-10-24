@@ -3,14 +3,14 @@
   "rdfTests": "bfefa770267ec0e5b6e45764bbca4ee43789ba72",
   "summary": {
     "sparql12": {
-      "pass": 247,
+      "pass": 270,
       "fail": 1,
-      "skip": 23
+      "skip": 0
     },
     "sparql11": {
-      "pass": 351,
+      "pass": 500,
       "fail": 10,
-      "skip": 149
+      "skip": 0
     },
     "sparql10": {
       "pass": 479,

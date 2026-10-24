@@ -1,6 +1,7 @@
 //! The SPARQL 1.2 query parser, straight to the algebra (SPARQL 1.1, 18.2).
 
 use super::*;
+use super::{QuadTemplate, Target, Transfer, Update, UpdateOp};
 use crate::dict::{Dict, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING};
 use crate::iri;
 use crate::lex::{Cur, Res, has_scheme, pn_chars, pn_chars_base, pn_chars_u};
@@ -46,7 +47,15 @@ enum Elt {
 }
 
 pub fn parse_query(text: &[u8], base: &[u8], dict: &mut Dict) -> Res<Query> {
-    let mut p = P {
+    new_parser(text, base, dict).query()
+}
+
+pub fn parse_update(text: &[u8], base: &[u8], dict: &mut Dict) -> Res<Update> {
+    new_parser(text, base, dict).update()
+}
+
+fn new_parser<'a, 'd>(text: &'a [u8], base: &[u8], dict: &'d mut Dict) -> P<'a, 'd> {
+    P {
         c: Cur::new(text),
         dict,
         prefixes: BTreeMap::new(),
@@ -61,8 +70,7 @@ pub fn parse_query(text: &[u8], base: &[u8], dict: &mut Dict) -> Res<Query> {
         template_bnodes: BTreeMap::new(),
         in_template: false,
         top_star: false,
-    };
-    p.query()
+    }
 }
 
 fn concat(a: &[u8], b: &[u8]) -> Vec<u8> {
@@ -1935,5 +1943,266 @@ fn expr_vars_within(e: &Expr, allowed: &[Var]) -> bool {
         Expr::In(a, l, _) => expr_vars_within(a, allowed) && l.iter().all(|x| expr_vars_within(x, allowed)),
         Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().all(|x| expr_vars_within(x, allowed)),
         Expr::If(a, b, c) => expr_vars_within(a, allowed) && expr_vars_within(b, allowed) && expr_vars_within(c, allowed),
+    }
+}
+
+// --- SPARQL Update ---------------------------------------------------------------
+
+impl P<'_, '_> {
+    fn update(&mut self) -> Res<Update> {
+        let mut ops = Vec::new();
+        // Blank node labels in DATA may not be shared between the operations of a request.
+        let mut labels: alloc::collections::BTreeSet<Vec<u8>> = alloc::collections::BTreeSet::new();
+        loop {
+            self.prologue()?;
+            self.ws();
+            if self.c.eof() {
+                break;
+            }
+            let op = self.update_op()?;
+            let data = matches!(op, UpdateOp::Data { .. });
+            ops.push(op);
+            for l in self.tbnodes.keys().filter(|_| data) {
+                if !labels.insert(l.clone()) {
+                    return self.c.err("a blank node label is used in two operations");
+                }
+            }
+            if !self.eat(b";") {
+                break;
+            }
+        }
+        self.ws();
+        if !self.c.eof() {
+            return self.c.err("unexpected text after the update");
+        }
+        Ok(Update { ops, base: core::mem::take(&mut self.base) })
+    }
+
+    fn update_op(&mut self) -> Res<UpdateOp> {
+        self.vars.clear();
+        self.bnodes.clear();
+        self.tbnodes.clear();
+        self.template_bnodes.clear();
+        self.hidden = 0;
+        if self.kw(b"LOAD") {
+            let silent = self.kw(b"SILENT");
+            self.iri()?;
+            if self.kw(b"INTO") {
+                self.expect_kw(b"GRAPH", "expected GRAPH")?;
+                self.iri()?;
+            }
+            return Ok(UpdateOp::Load { silent });
+        }
+        for (word, drop) in [(&b"CLEAR"[..], false), (b"DROP", true)] {
+            if self.kw(word) {
+                let _ = (self.kw(b"SILENT"), drop);
+                let target = self.target(true)?;
+                return Ok(UpdateOp::Clear { target });
+            }
+        }
+        if self.kw(b"CREATE") {
+            let silent = self.kw(b"SILENT");
+            self.expect_kw(b"GRAPH", "expected GRAPH")?;
+            let graph = self.iri()?;
+            return Ok(UpdateOp::Create { silent, graph });
+        }
+        for (word, op) in [(&b"ADD"[..], Transfer::Add), (b"MOVE", Transfer::Move), (b"COPY", Transfer::Copy)] {
+            if self.kw(word) {
+                self.kw(b"SILENT");
+                let from = self.graph_or_default()?;
+                self.expect_kw(b"TO", "expected TO")?;
+                let to = self.graph_or_default()?;
+                return Ok(UpdateOp::Transfer { op, from, to });
+            }
+        }
+        if self.kw(b"INSERT") {
+            if self.kw(b"DATA") {
+                return self.data(true);
+            }
+            return self.modify(None, Vec::new(), true);
+        }
+        if self.kw(b"DELETE") {
+            if self.kw(b"DATA") {
+                return self.data(false);
+            }
+            if self.kw(b"WHERE") {
+                let quads = self.quad_pattern(false)?;
+                self.no_bnodes(&quads)?;
+                let mut select = empty_select();
+                select.pattern = self.quads_to_pattern(&quads);
+                select.project = (0..self.vars.len() as Var).collect();
+                return Ok(UpdateOp::Modify { delete: quads, insert: Vec::new(), bnodes: 0, with: None, using: None, select, nvars: self.vars.len() });
+            }
+            let delete = self.quad_pattern(true)?;
+            self.no_bnodes(&delete)?;
+            let insert = self.kw(b"INSERT");
+            return self.modify(None, delete, insert);
+        }
+        if self.kw(b"WITH") {
+            let with = self.iri()?;
+            if self.kw(b"DELETE") {
+                let delete = self.quad_pattern(true)?;
+                self.no_bnodes(&delete)?;
+                let insert = self.kw(b"INSERT");
+                return self.modify(Some(with), delete, insert);
+            }
+            self.expect_kw(b"INSERT", "expected DELETE or INSERT")?;
+            return self.modify(Some(with), Vec::new(), true);
+        }
+        self.c.err("expected an update operation")
+    }
+
+    fn target(&mut self, all: bool) -> Res<Target> {
+        if self.kw(b"GRAPH") {
+            return Ok(Target::Graph(self.iri()?));
+        }
+        if self.kw(b"DEFAULT") {
+            return Ok(Target::Default);
+        }
+        if all && self.kw(b"NAMED") {
+            return Ok(Target::Named);
+        }
+        if all && self.kw(b"ALL") {
+            return Ok(Target::All);
+        }
+        self.c.err("expected GRAPH, DEFAULT, NAMED or ALL")
+    }
+
+    /// `DEFAULT` (0) or a graph IRI.
+    fn graph_or_default(&mut self) -> Res<u32> {
+        if self.kw(b"DEFAULT") {
+            return Ok(NONE);
+        }
+        self.kw(b"GRAPH");
+        self.iri()
+    }
+
+    fn data(&mut self, insert: bool) -> Res<UpdateOp> {
+        let quads = self.quad_pattern(true)?;
+        let has_var = |t: &Tt| -> bool {
+            fn any(t: &Tt) -> bool {
+                match t {
+                    Tt::Var(_) => true,
+                    Tt::Triple(b) => b.iter().any(any),
+                    _ => false,
+                }
+            }
+            any(t)
+        };
+        if quads.iter().flatten().any(has_var) {
+            return self.c.err("variables are not allowed in DATA");
+        }
+        if !insert {
+            self.no_bnodes(&quads)?;
+        }
+        Ok(UpdateOp::Data { insert, quads, bnodes: self.template_bnodes.len() as u32 })
+    }
+
+    fn no_bnodes(&self, quads: &[QuadTemplate]) -> Res<()> {
+        fn any(t: &Tt, hidden: &dyn Fn(Var) -> bool) -> bool {
+            match t {
+                Tt::Bnode(_) => true,
+                Tt::Var(v) => hidden(*v),
+                Tt::Triple(b) => b.iter().any(|x| any(x, hidden)),
+                Tt::Term(_) => false,
+            }
+        }
+        let hidden = |v: Var| self.vars[v as usize].first() == Some(&b'_');
+        if quads.iter().flatten().any(|t| any(t, &hidden)) {
+            return self.c.err("blank nodes are not allowed when deleting");
+        }
+        Ok(())
+    }
+
+    fn modify(&mut self, with: Option<u32>, delete: Vec<QuadTemplate>, has_insert: bool) -> Res<UpdateOp> {
+        let insert = if has_insert { self.quad_pattern(true)? } else { Vec::new() };
+        let mut using: Option<(Vec<u32>, Vec<u32>)> = None;
+        while self.kw(b"USING") {
+            let u = using.get_or_insert_with(|| (Vec::new(), Vec::new()));
+            if self.kw(b"NAMED") {
+                let i = self.iri()?;
+                u.1.push(i);
+            } else {
+                let i = self.iri()?;
+                u.0.push(i);
+            }
+        }
+        self.expect_kw(b"WHERE", "expected WHERE")?;
+        let mut select = empty_select();
+        select.pattern = self.group_pattern()?;
+        select.project = (0..self.vars.len() as Var).collect();
+        Ok(UpdateOp::Modify { delete, insert, bnodes: self.template_bnodes.len() as u32, with, using, select, nvars: self.vars.len() })
+    }
+
+    /// `{ triples GRAPH g { triples } ... }` as quad templates (graph 0: the default).
+    fn quad_pattern(&mut self, template: bool) -> Res<Vec<QuadTemplate>> {
+        self.expect(b"{", "expected {")?;
+        let mut out = Vec::new();
+        loop {
+            self.ws();
+            if self.eat(b"}") {
+                break;
+            }
+            if self.c.eof() {
+                return self.c.err("unterminated quad pattern");
+            }
+            let (graph, close) = if self.kw(b"GRAPH") {
+                let g = self.var_or_iri()?;
+                self.expect(b"{", "expected {")?;
+                (self.to_template(g), true)
+            } else {
+                (Tt::Term(NONE), false)
+            };
+            loop {
+                self.ws();
+                if close && self.at(b"}") || !close && (self.at(b"}") || self.at_kw(b"GRAPH")) {
+                    break;
+                }
+                self.in_template = template;
+                let mut elts = Vec::new();
+                let r = self.triples_block(&mut elts);
+                self.in_template = false;
+                r?;
+                for e in elts {
+                    match e {
+                        Elt::T(t) => out.push([self.to_template(t.s), self.to_template(t.p), self.to_template(t.o), graph.clone()]),
+                        Elt::P(..) => return self.c.err("a property path is not allowed here"),
+                    }
+                }
+                if !self.eat(b".") {
+                    break;
+                }
+            }
+            if close {
+                self.expect(b"}", "expected }")?;
+                self.eat(b".");
+            }
+        }
+        Ok(out)
+    }
+
+    /// DELETE WHERE: the quads as a pattern.
+    fn quads_to_pattern(&self, quads: &[QuadTemplate]) -> Pattern {
+        let back = |t: &Tt| -> Tv {
+            fn f(t: &Tt) -> Tv {
+                match t {
+                    Tt::Term(i) => Tv::Term(*i),
+                    Tt::Var(v) => Tv::Var(*v),
+                    Tt::Bnode(_) => Tv::Term(NONE),
+                    Tt::Triple(b) => Tv::Triple(Box::new([f(&b[0]), f(&b[1]), f(&b[2])])),
+                }
+            }
+            f(t)
+        };
+        let mut default = Vec::new();
+        let mut p = Pattern::Unit;
+        for q in quads {
+            let t = Triple { s: back(&q[0]), p: back(&q[1]), o: back(&q[2]) };
+            match &q[3] {
+                Tt::Term(NONE) => default.push(t),
+                g => p = join(p, Pattern::Graph(back(g), Box::new(Pattern::Bgp(alloc::vec![t])))),
+            }
+        }
+        join(Pattern::Bgp(default), p)
     }
 }
