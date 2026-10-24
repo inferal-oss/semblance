@@ -171,3 +171,27 @@ describe('keyboard layer: commands', () => {
     expect(handled).toEqual([[UI + 'ResumeInspector'], [UI + 'PauseInspector']])
   })
 })
+
+describe('component shapes layer', () => {
+  it('validates components against their classes’ SHACL shapes and reports the results', () => {
+    const h = showLayers()
+    const f = h.store.factory
+    const SH = 'http://www.w3.org/ns/shacl#'
+    const results = h.store.match(null, f.namedNode(SH + 'focusNode'), null).map((q) => q.object.value.replace(UI, ''))
+    expect(new Set(results)).toEqual(new Set(['badLink', 'badProgress', 'badBadge']))
+    // Standard SHACL results, in the derived graph.
+    const link = h.store.match(null, f.namedNode(SH + 'focusNode'), f.namedNode(UI + 'badLink'))[0]!.subject
+    expect(h.store.match(link, f.namedNode(SH + 'resultPath'), null)[0]!.object.value).toBe('https://semblance.dev/ns/component#href')
+    expect(h.store.match(link, f.namedNode(SH + 'resultMessage'), null)[0]!.object.value).toContain('no javascript:')
+    // Offenders are outlined and explained; the report lists every result.
+    const progress = h.byId(`${UI}badProgress/~root`)
+    expect(progress.getAttribute('data-sem-shape-invalid')).toBe('1')
+    expect(progress.getAttribute('data-sem-tooltip')).toContain('exceed')
+    expect(h.byId(`${UI}badBadge/~root`).getAttribute('data-sem-tooltip')).toContain('expected a Tone')
+    expect(h.$('[data-sem-c=shape-report]').querySelectorAll('li')).toHaveLength(3)
+    // Fixing the data fixes the report.
+    h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'badBadge'), f.namedNode('https://semblance.dev/ns/style#tone'), null), add: [] })
+    h.shell.flush()
+    expect(h.$('[data-sem-c=shape-report]').querySelectorAll('li')).toHaveLength(2)
+  })
+})

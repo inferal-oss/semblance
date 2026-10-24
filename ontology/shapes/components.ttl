@@ -1,0 +1,77 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# What well-formed component instances look like (validated by the component
+# shapes layer, ontology/layers/shapes.ttl). A shape on a class applies to the
+# instances of its subclasses too, so the shape of sem:Component covers every
+# component's shared properties: the variant axes, positioning, flags.
+
+sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
+    sh:property [ sh:path sty:tone ; sh:maxCount 1 ; sh:class sty:Tone ] ,
+                [ sh:path sty:emphasis ; sh:maxCount 1 ; sh:class sty:Emphasis ] ,
+                [ sh:path sty:size ; sh:maxCount 1 ; sh:class sty:ControlSize ] ,
+                [ sh:path sty:textStyle ; sh:maxCount 1 ; sh:class sty:TextStyle ] ,
+                [ sh:path sty:intent ; sh:maxCount 1 ; sh:class sty:Intent ] ,
+                [ sh:path pos:direction ; sh:maxCount 1 ; sh:class pos:Direction ] ,
+                [ sh:path pos:layout ; sh:maxCount 1 ; sh:class pos:Layout ] ,
+                [ sh:path pos:align ; sh:maxCount 1 ; sh:class pos:Alignment ] ,
+                [ sh:path c:label ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:help ; sh:nodeKind sh:Literal ] ,
+                [ sh:path c:disabled ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+
+c:ButtonShape a sh:NodeShape ; sh:targetClass c:Button ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A button needs a label (c:label) to say what it does." ] .
+c:HeadingShape a sh:NodeShape ; sh:targetClass c:Heading ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] ,
+                [ sh:path c:level ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 1 ; sh:maxInclusive 6 ] .
+c:TextFieldShape a sh:NodeShape ; sh:targetClass c:TextField ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A text field needs a label (c:label): placeholders are not labels." ] ,
+                [ sh:path c:value ; sh:maxCount 1 ] .
+c:BadgeShape a sh:NodeShape ; sh:targetClass c:Badge ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxLength 32 ] .
+c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
+    sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+                  sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .
+c:ProgressShape a sh:NodeShape ; sh:targetClass c:Progress ;
+    sh:property [ sh:path c:value ; sh:minInclusive 0 ; sh:lessThanOrEquals c:max ;
+                  sh:message "Progress can't exceed its c:max or go below zero." ] .
+c:SliderShape a sh:NodeShape ; sh:targetClass c:Slider ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] ,
+                [ sh:path c:value ; sh:maxCount 1 ; sh:lessThanOrEquals c:max ] ,
+                [ sh:path c:min ; sh:maxCount 1 ; sh:lessThanOrEquals c:max ] .
+c:PaginationShape a sh:NodeShape ; sh:targetClass c:Pagination ;
+    sh:property [ sh:path c:page ; sh:minCount 1 ; sh:minInclusive 1 ; sh:lessThanOrEquals c:pages ] ,
+                [ sh:path c:pages ; sh:minCount 1 ; sh:minInclusive 1 ] .
+c:AvatarShape a sh:NodeShape ; sh:targetClass c:Avatar ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An avatar needs a name (c:label) for its initials and its accessible name." ] .
+c:IconButtonShape a sh:NodeShape ; sh:targetClass c:IconButton ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An icon-only button needs a c:label: it is its accessible name." ] ,
+                [ sh:path c:icon ; sh:minCount 1 ] .
+c:DialogShape a sh:NodeShape ; sh:targetClass c:Dialog ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A dialog needs a title (c:label): it labels the dialog." ] ,
+                [ sh:path c:open ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+c:ChoiceShape a sh:NodeShape ; sh:targetClass c:Choice ;
+    sh:property [ sh:path c:controls ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path c:property ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+c:SegmentedShape a sh:NodeShape ; sh:targetClass c:Segmented ;
+    sh:property [ sh:path c:controls ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path c:property ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+c:TabsShape a sh:NodeShape ; sh:targetClass c:Tabs ;
+    sh:property [ sh:path c:tabs ; sh:minCount 1 ; sh:maxCount 1 ] ,
+                [ sh:path c:selected ; sh:maxCount 1 ; sh:class c:Tab ] .
+c:TabShape a sh:NodeShape ; sh:targetClass c:Tab ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] , [ sh:path c:content ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+c:WindowShape a sh:NodeShape ; sh:targetClass c:Window ;
+    sh:property [ sh:path c:width ; sh:maxCount 1 ; sh:minInclusive 160 ] , [ sh:path c:height ; sh:maxCount 1 ; sh:minInclusive 100 ] .
+c:TableShape a sh:NodeShape ; sh:targetClass c:Table ;
+    sh:property [ sh:path c:query ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "A table shows the rows of a query (c:query)." ] .
+c:FlippableShape a sh:NodeShape ; sh:targetClass c:Flippable ;
+    sh:property [ sh:path c:front ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+c:SpecimenShape a sh:NodeShape ; sh:targetClass c:Specimen ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ] .

@@ -307,6 +307,8 @@ export const VAL = {
   validates: NS.val + 'validates',
   requires: NS.val + 'requires',
   invalid: NS.val + 'invalid',
+  violation: NS.val + 'violation',
+  ShapesLayer: NS.val + 'ShapesLayer',
 } as const
 export const KEY = { Layer: NS.key + 'Layer', shortcut: NS.key + 'shortcut', Command: NS.key + 'Command', Press: NS.key + 'Press' } as const
 export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const

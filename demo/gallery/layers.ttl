@@ -20,7 +20,7 @@
 # layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ) .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-status ui:l-l10n ui:l-display ) .
 ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
 
 # --- validation: SHACL shapes on fields -------------------------------------------------------------
@@ -107,3 +107,14 @@ ui:l-display-spec a c:Specimen ; c:label "Motion, contrast and density" , "Ру�
 ui:motionSwitch a c:Segmented ; c:controls ui:shell ; c:property mot:preference .
 ui:contrastSwitch a c:Segmented ; c:controls ui:shell ; c:property sty:contrast .
 ui:densitySwitch a c:Segmented ; c:controls ui:shell ; c:property sty:density .
+
+# --- component shapes: SHACL on the components themselves ---------------------------------------
+
+ui:l-shapes a c:Flippable ; c:front ui:l-shapes-spec .
+ui:l-shapes-spec a c:Specimen ; c:label "Component shapes" , "Форми компонентів"@uk , "Komponentenformen"@de , "أشكال المكونات"@ar ;
+    c:help "Every component class carries a SHACL node shape (ontology/shapes/components.ttl): a link's c:href must be a safe address, progress can't exceed its c:max, a tone must be a sty:Tone. The shapes layer validates every component in the graph before it renders, records standard sh:ValidationResult triples, outlines offenders (hover for the message) and the report lists them all. The three below are wrong on purpose." ;
+    c:children ( ui:badLink ui:badProgress ui:badBadge ui:shapeReport ) .
+ui:badLink a c:Link ; c:label "A link that runs script" ; c:href "javascript:alert(1)" .
+ui:badProgress a c:Progress ; c:label "Over budget" ; c:value 140 ; c:max 100 ; c:active true .
+ui:badBadge a c:Badge ; c:label "Solid?" ; sty:tone sty:Solid .
+ui:shapeReport a c:ShapeReport ; c:label "Shape violations" .

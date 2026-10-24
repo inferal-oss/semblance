@@ -326,8 +326,9 @@ export class Engine {
   }
 
   private markDirty(rule: Rule, focus: string) {
-    // Input-only rules never hear about instances other rules mint.
-    if (rule.inputOnly && (this.derivedTrigger || !this.typedInInput(focusOf(focus)))) return
+    // Input-only rules never hear about instances other rules mint, nor about what
+    // higher strata derive (they judge the input, which is settled before them).
+    if (rule.inputOnly && (this.derivedTrigger || rule.stratum < this.current || !this.typedInInput(focusOf(focus)))) return
     if (rule.stratum < this.current) {
       throw new Error(`Stratification violation: stratum ${this.current} invalidated <${rule.iri}> (stratum ${rule.stratum}) for <${focus}>`)
     }

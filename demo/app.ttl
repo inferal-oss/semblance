@@ -28,7 +28,7 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, key:Layer, st:Layer, ann:Layer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer ;
     l10n:language l10n:English ;
     ui:store ui:Hybrid ;
     ui:rules ui:PreferSparql ;
@@ -115,7 +115,7 @@ ui:toolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
-    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer key:Layer st:Layer ann:Layer ) .
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ) .
 
 ui:workspace a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;

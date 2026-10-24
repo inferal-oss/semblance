@@ -17,7 +17,7 @@ export function mountShell(todos = 5, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxig
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const store = loadStore(kind, todoApp(todos), appGraph, ...gallery)
   const runtime = new Runtime(store)
-  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, KEY.Layer, ST.Layer, ANN.Layer]
+  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer]
   const screen = runtime.project({ modality: MOD.Screen, layers, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
     throw e
   })

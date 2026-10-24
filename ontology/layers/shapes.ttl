@@ -1,0 +1,47 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Component shapes layer. Every component class can carry a SHACL node shape
+# (sh:targetClass) saying what a well-formed instance looks like (ontology/
+# shapes/components.ttl). The layer validates each component declared in the
+# graph against the shapes of its classes and their superclasses, before
+# anything renders, and records standard SHACL results in the derived graph:
+#   <result> a sh:ValidationResult ; sh:focusNode <component> ; sh:resultPath <p> ;
+#            sh:resultMessage "…" ; sh:sourceShape <shape> ; sh:resultSeverity sh:Violation .
+# A component with violations is outlined, with the messages as its tooltip,
+# and c:ShapeReport lists every result. Supported constraints: sh:minCount,
+# sh:maxCount, sh:datatype, sh:class, sh:nodeKind, sh:in, sh:minInclusive,
+# sh:maxInclusive, sh:minLength, sh:maxLength, sh:pattern, sh:lessThanOrEquals.
+
+val:ShapesLayer a sem:Layer ; rdfs:label "shapes"@en , "форми"@uk , "Formen"@de , "الأشكال"@ar ;
+    rdfs:comment "Validates component instances against the SHACL shapes of their classes."@en .
+val:violation a owl:ObjectProperty ; rdfs:range sh:ValidationResult ;
+    rdfs:comment "Derived: a SHACL result about this component."@en .
+
+val:Shapes a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:layer val:ShapesLayer ;
+    sem:stratum -9 ;
+    sem:inputOnly true .
+val:Shapes-fn a sem:Rule ; sem:implements val:Shapes ; sem:function "shapes:validate" .
+
+# After the components (and before tooltips, stratum 30): outline and explain.
+val:ShapeMarks a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:modality mod:Screen ;
+    sem:layer val:ShapesLayer ;
+    sem:stratum 12 ;
+    sem:watches val:violation .
+val:ShapeMarks-fn a sem:Rule ; sem:implements val:ShapeMarks ; sem:function "shapes:mark" .
+
+c:ShapeReport a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Every SHACL result the shapes layer recorded, by component."@en ;
+    sem:slug "shape-report" .
+c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 .
+c:ShapeReportRendering-fn a sem:Rule ; sem:implements c:ShapeReportRendering ; sem:function "shape-report" .

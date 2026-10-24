@@ -66,3 +66,31 @@
                  [ sty:property "border-radius" ; sty:raw "inherit" ] ,
                  [ sty:property "background" ; sty:raw "linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--sem-accent) 14%, transparent) 50%, transparent 70%) 0 0 / 220% 100%" ] ,
                  [ sty:property "animation" ; sty:raw "sem-shimmer calc(var(--sem-duration-slow) * 4) linear infinite" ] .
+
+# --- component shapes: offenders are outlined; the report lists them ---
+[] a sty:StyleRule ; sty:part "[data-sem-shape-invalid]" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px dashed var(--sem-danger-9)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "3px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeReport ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeReport ; sty:part "> li" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(140px, auto) minmax(80px, auto) 1fr" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-danger-3)" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeReport ; sty:part "> li > code" ;
+    sty:declares [ sty:property "font" ; sty:raw "500 12px/1.4 var(--sem-font-mono)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeReport ; sty:part "> li > span" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
