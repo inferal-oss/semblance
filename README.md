@@ -62,6 +62,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   ready and an interaction never pays for them.
 - **Member-wise rules** (`sem:forEach <property>`) evaluate once per
   (focus, member), so adding or re-sorting one list item touches only it.
+- **Warmth.** In idle time the host evaluates hidden parts ahead of time, but
+  only under a component that declares `sem:warm sem:Eager` (inherited down the
+  rendered tree); everything else is lazy, evaluated when first shown.
 - **Ordering** uses RDF/HTML flat ordering (`hasChild` plus `ord:precedes` /
   `ord:immediatelyPrecedes`), which CONSTRUCT can emit. Ambiguity is an error.
   Siblings placed member-wise carry `sem:orderKey` and are sorted instead.
@@ -78,13 +81,25 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `prov:wasInfluencedBy` → activity → `prov:hadPlan` → the rule.
 - **Source**: `c:Flippable` turns any component over to show the rules that
   made it (found through its PROV-O trail, syntax-colored).
-- **Tooltip**: ontological tooltips from `rdfs:comment` / `c:tip`.
+- **Tooltip**: ontological tooltips from `sem:tooltip` annotations.
 - **Validation**: fields point at SHACL property shapes (`val:validates`); the
   layer derives `c:error`, which fields already render, and disables buttons
   whose `val:requires` fields are invalid.
 - **Keyboard**: `key:shortcut "mod+k"` on any component gives
   `aria-keyshortcuts`, a hint, and activation by key press (through the
-  component's own click reactions). `c:ShortcutList` lists them all.
+  component's own click reactions). `key:Command` is a shortcut that belongs to
+  no component: its press is an event its reactions handle (Z pauses the
+  inspector). Component classes declare arrow-key navigation patterns
+  (`key:navigation`: roving focus for menus, tabs, trees, accordions).
+  `c:ShortcutList` lists every shortcut.
+- **Component shapes**: SHACL node shapes on component classes
+  (`ontology/shapes/components.ttl`); the shapes layer validates every
+  component, records `sh:ValidationResult`s, outlines offenders and
+  `c:ShapeReport` lists them.
+- **Privacy**: `prv:concealed` hides any component (masked if a text field,
+  blurred otherwise); `prv:sensitive` ones only in private mode (⌘⇧H).
+- **Docs**: under each gallery specimen, the ontology of the classes it uses,
+  as Turtle read from the graph that renders them.
 - **Status**: `st:busy` marks any component `aria-busy`; the theme shimmers it.
 - **Localization**: labels are language-tagged literals; the viewer's language
   (`l10n:language`) is a projection setting; RTL languages flip the page.
@@ -94,6 +109,16 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 
 - **Announcements**: reactions say what they mean (`ann:announces`); a
   `c:ToastRegion` reading the change log shows them as toasts.
+- **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
+  Paper, Terminal, Blueprint, Sunset; contrast and motion compose with them.
+- **Persistence**: `per:Policy` nodes say what to remember, where (this tab,
+  this device, the browser database) and whether; a host effect restores them
+  before the first render and writes them back; `per:StateLog` records every
+  write and restore. See [PERSISTENCE.md](PERSISTENCE.md).
+
+Our vocabularies are aligned with DCMI, SKOS, schema.org, ActivityStreams,
+PROV-O and others in `ontology/alignments.ttl`, with the strength of each link
+stated (equivalence, sub-class / sub-property, or SKOS match).
 
 See [DESIGN.md](DESIGN.md) for the design system: foundations, the shared
 variant axes (`sty:tone` × `sty:emphasis` × `sty:size`, `sty:textStyle`), and

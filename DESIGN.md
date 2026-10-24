@@ -61,11 +61,18 @@ Thin vocabularies. Every component
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState |
 | **Data** | List · Table · DescriptionList · Stat · Metrics · Avatar · AvatarGroup · Timeline · Tree · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
-| **Overlays** | Dialog · Drawer · Popover · Window · Tooltip (layer) |
+| **Overlays** | Dialog · Drawer · Popover · Window · Palette · Taskbar · Tooltip (layer) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
 
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)
+
+Floating frames get their abilities from capability classes an instance opts
+into: `c:Draggable`, `c:Resizable`, `c:Raisable`, `c:Minimizable`,
+`c:Maximizable`, `c:Dockable`. A `c:Window` has them all; a `c:Palette` docks.
+Their state is two hookable axes, `c:windowState` (normal, minimized,
+maximized) and `c:attachedTo` (floating or a viewport edge), plus stacking
+order (`c:z`) as graph state.
 
 ## 4. Layers
 
@@ -81,6 +88,12 @@ per projection. New ones:
 | **Announcements** (`ann:`) | `ann:announces "…"` (and `ann:tone`) on a reaction | A `c:ToastRegion` with `ann:from` a change log shows the newest announcing events as toasts, reading the log from its head. |
 | **Status** (`st:`) | `st:busy true` on a component | `aria-busy`; the theme dims it under a shimmer. |
 | **Contrast** | `sty:contrast sty:HighContrast` on a subtree | Re-values the role tokens for stronger text and visible borders. |
+
+Also built: **component shapes** (SHACL on the components themselves),
+**privacy** (`prv:concealed` / `prv:sensitive`, masked or blurred), **docs**
+(each specimen's ontology as Turtle), **themes** (`sty:theme`: Semblance, Paper,
+Terminal, Blueprint, Sunset), **persistence** (`per:Policy`, PERSISTENCE.md)
+and **warmth** (`sem:warm`: what idle time may evaluate).
 
 Existing: modality, style, position, a11y, behaviour, provenance, tooltip,
 source, debug.
