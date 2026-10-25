@@ -131,9 +131,13 @@
                  [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "tbody tr[role=row]:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:gray-2 ] .
-[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "tbody tr[aria-selected=true]" ;
+# A selected row stays selected under the pointer, one step stronger (the hover rule is more
+# specific than a bare [aria-selected], so the selected rules name the row's role too).
+[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "tbody tr[role=row][aria-selected=true]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-3 ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "tbody tr[role=row][aria-selected=true]:hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-4 ] .
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "tbody tr[role=row]:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-accent)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "-2px" ] .

@@ -379,6 +379,9 @@
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tree ; sty:part "[aria-selected=true] > .sem-row" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] .
+# Under the pointer the selected row is one step stronger, as a selected grid row is.
+[] a sty:StyleRule ; sty:appliesTo c:Tree ; sty:part "[aria-selected=true] > .sem-row:hover" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-accent-soft), var(--sem-accent) 14%)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Tree ; sty:part "[aria-selected=true] > .sem-row > .sem-label" ;
     sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
