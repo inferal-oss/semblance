@@ -16,7 +16,7 @@
 # Gallery page: Inputs.
 
 ui:gallery-inputs a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-codes ui:inp-checkboxes ui:inp-radios ui:inp-switches
+    c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-search ui:inp-codes ui:inp-editor ui:inp-checkboxes ui:inp-radios ui:inp-switches
                  ui:inp-sliders ui:inp-fields ui:inp-selection ui:inp-typeahead ui:inp-tags ) .
 ui:gallery-inputs-intro a c:Heading ; c:label "Inputs" .
 
@@ -53,9 +53,20 @@ ui:inp-ta-sm a c:TextArea ; c:label "Small" ; c:rows 1 ; sty:size sty:Small ; c:
 ui:inp-text-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:inp-tf-name ui:inp-ta-about ui:inp-ta-error ui:inp-ta-off ui:inp-ta-sm ) .
 ui:inp-text a c:Flippable ; c:front ui:inp-text-spec .
-ui:inp-text-spec a c:Specimen ; c:label "Text field and text area" ;
+ui:inp-text-spec a c:Specimen ; c:demonstrates c:TextField , c:TextArea ; c:label "Text field and text area" ;
     c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value." ;
     c:children ( ui:inp-text-col ) .
+
+# --- Search field: what is typed, as a property of a node ------------------------------------------
+
+ui:inp-search-text a owl:DatatypeProperty ; rdfs:label "search"@en .
+ui:inp-search-field a c:SearchField ; c:label "Search the components" ; c:placeholder "Name, slug or group…" ;
+    c:controls ui:inp-search-query ; c:property ui:inp-search-text .
+ui:inp-search-state a c:Metrics ; c:of ui:inp-search-query ; c:fields ( ui:inp-search-text ) .
+ui:inp-search a c:Flippable ; c:front ui:inp-search-spec .
+ui:inp-search-spec a c:Specimen ; c:demonstrates c:SearchField ; c:label "Search field" ;
+    c:help "A search box (type=search) bound to a property of a node (c:controls / c:property): typing writes what is typed, and emptying it, its ✕ or Escape removes the triple. The chip below reads the node back. A toolbar's filters are fields like this one." ;
+    c:children ( ui:inp-search-field ui:inp-search-state ) .
 
 # --- Code input: one-time codes of any length and alphabet ----------------------------------------
 # What a code may contain is a c:Charset; this one is defined here, not in the framework: no
@@ -77,7 +88,7 @@ ui:inp-code-off a c:CodeInput ; c:label "Waiting for a code" ; c:length 6 ; c:di
 ui:inp-code-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:inp-code-signin ui:inp-code-recovery ui:inp-code-pair ui:inp-code-pin ui:inp-code-key ui:inp-code-expired ui:inp-code-off ) .
 ui:inp-codes a c:Flippable ; c:front ui:inp-codes-spec .
-ui:inp-codes-spec a c:Specimen ; c:label "Code input" ;
+ui:inp-codes-spec a c:Specimen ; c:demonstrates c:CodeInput , c:Charset , c:Case , c:CellStyle ; c:label "Code input" ;
     c:help "A c:CodeInput is one real field (so paste and SMS autofill work) over a row of cells. Its c:Charset says what it accepts - digits, letters, hexadecimal, or your own character class - and typing keeps only that, in its c:case, up to c:length. Groups, masking, sizes and four c:cellStyle values are variations; a complete code turns green." ;
     c:children ( ui:inp-code-col ) .
 
@@ -95,7 +106,7 @@ ui:inp-cb-sizes a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ; c:chil
 ui:inp-cb-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:inp-cb-updates ui:inp-cb-usage ui:inp-cb-success ui:inp-cb-terms ui:inp-cb-off ui:inp-cb-sizes ) .
 ui:inp-checkboxes a c:Flippable ; c:front ui:inp-checkboxes-spec .
-ui:inp-checkboxes-spec a c:Specimen ; c:label "Checkbox" ;
+ui:inp-checkboxes-spec a c:Specimen ; c:demonstrates c:Checkbox ; c:label "Checkbox" ;
     c:help "A labelled check box whose state is c:checked on the instance; the change event carries beh:checked and the reaction writes it back. The checked color is the sty:tone (accent by default)." ;
     c:children ( ui:inp-cb-col ) .
 
@@ -109,7 +120,7 @@ ui:inp-rg-choice a c:Choice ; c:controls ui:inputsDemo ; c:property ui:inp-plan 
 ui:inp-rg-others a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:inp-rg-seg ui:inp-rg-choice ) .
 ui:inp-rg-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-rg-plan ui:inp-rg-row ui:inp-rg-others ) .
 ui:inp-radios a c:Flippable ; c:front ui:inp-radios-spec .
-ui:inp-radios-spec a c:Specimen ; c:label "Radio group" ;
+ui:inp-radios-spec a c:Specimen ; c:demonstrates c:RadioGroup ; c:label "Radio group" ;
     c:help "Edits c:property of c:controls, like c:Segmented and c:Choice: here all four edit the same triple (ui:inputsDemo ui:inp-plan), so choosing in one updates the others. pos:direction pos:Row lays the options out in a row; rdfs:comment describes each option." ;
     c:children ( ui:inp-rg-col ) .
 
@@ -129,7 +140,7 @@ ui:inp-sw-tones a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ; c:chil
 ui:inp-sw-sizes a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ; c:children ( ui:inp-sw-sm ui:inp-sw-lg ) .
 ui:inp-sw-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-sw-shared ui:inp-sw-tones ui:inp-sw-sizes ) .
 ui:inp-switches a c:Flippable ; c:front ui:inp-switches-spec .
-ui:inp-switches-spec a c:Specimen ; c:label "Switch" ;
+ui:inp-switches-spec a c:Specimen ; c:demonstrates c:ToggleSwitch ; c:label "Switch" ;
     c:help "c:ToggleSwitch (role=switch, aria-checked): its own c:checked, or a boolean property of another node - the design-system version of c:Toggle, which edits the same triple here. Colored by sty:tone, scaled by sty:size." ;
     c:children ( ui:inp-sw-col ) .
 
@@ -144,7 +155,7 @@ ui:inp-sl-off a c:Slider ; c:label "Disabled" ; c:value 25 ; c:disabled true .
 ui:inp-sl-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:inp-sl-volume ui:inp-sl-opacity ui:inp-sl-temp ui:inp-sl-sm ui:inp-sl-off ) .
 ui:inp-sliders a c:Flippable ; c:front ui:inp-sliders-spec .
-ui:inp-sliders-spec a c:Specimen ; c:label "Slider" ;
+ui:inp-sliders-spec a c:Specimen ; c:demonstrates c:Slider ; c:label "Slider" ;
     c:help "A range input over c:min, c:max and c:step. Each input event writes c:value (xsd:decimal); the rule shows it beside the label and paints the filled track from it." ;
     c:children ( ui:inp-sl-col ) .
 
@@ -160,7 +171,7 @@ ui:inp-f-terms-input a c:Checkbox ; c:label "I have read the data policy" ; c:ch
 ui:inp-f-terms a c:Field ; c:label "Consent" ; c:content ui:inp-f-terms-input ; c:error "Consent is required before you continue." .
 ui:inp-f-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-f-bio ui:inp-f-level ui:inp-f-plan ui:inp-f-terms ) .
 ui:inp-fields a c:Flippable ; c:front ui:inp-fields-spec .
-ui:inp-fields-spec a c:Specimen ; c:label "Field" ;
+ui:inp-fields-spec a c:Specimen ; c:demonstrates c:Field ; c:label "Field" ;
     c:help "Gives any control (c:content) a label, help and an error line. The label points at the element the control's class names as its c:labelPart (label for); help and error describe it (aria-describedby, aria-invalid)." ;
     c:children ( ui:inp-f-col ) .
 
@@ -170,7 +181,7 @@ ui:inp-sel-choice a c:Choice ; c:label "Plan" ; c:controls ui:inputsDemo ; c:pro
 ui:inp-sel-chips a c:Chips ; c:controls ui:inputsDemo ; c:property ui:inp-topic .
 ui:inp-sel-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-sel-choice ui:inp-sel-chips ) .
 ui:inp-selection a c:Flippable ; c:front ui:inp-selection-spec .
-ui:inp-selection-spec a c:Specimen ; c:label "Select and chips" ;
+ui:inp-selection-spec a c:Specimen ; c:demonstrates c:Choice , c:Chips ; c:label "Select and chips" ;
     c:help "c:Choice is a native select for a single-valued property; c:Chips toggle the values of a multi-valued one (ui:inp-topic). Both draw their options from the property's rdfs:range." ;
     c:children ( ui:inp-sel-col ) .
 
@@ -214,7 +225,7 @@ ui:inp-combo-off a c:Combobox ; c:label "Region (locked)" ; c:controls ui:inputs
 ui:inp-combo-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:inp-combo-country ui:inp-combo-team ui:inp-combo-plan ui:inp-combo-off ) .
 ui:inp-typeahead a c:Flippable ; c:front ui:inp-typeahead-spec .
-ui:inp-typeahead-spec a c:Specimen ; c:label "Combobox" ;
+ui:inp-typeahead-spec a c:Specimen ; c:demonstrates c:Combobox ; c:label "Combobox" ;
     c:help "A c:Combobox is a field you type into to find one value of a property (c:controls, c:property), like a c:Choice that searches: role=combobox over a role=listbox, the active option by aria-activedescendant. Its options are the instances of the property's range (or c:optionClass, or a c:options list); ↓ ↑ move, Enter picks, Escape gives your text back. With c:allowsCustom true, a name that matches nothing can be created, checked by a SHACL shape (val:validates). The small one edits the same plan as the radio group." ;
     c:children ( ui:inp-combo-col ) .
 
@@ -238,6 +249,22 @@ ui:inp-tags-off a c:TagInput ; c:label "Topics (locked)" ; c:controls ui:inputsD
 ui:inp-tags-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:inp-tags-topics ui:inp-tags-labels ui:inp-tags-off ) .
 ui:inp-tags a c:Flippable ; c:front ui:inp-tags-spec .
-ui:inp-tags-spec a c:Specimen ; c:label "Tag input" ;
+ui:inp-tags-spec a c:Specimen ; c:demonstrates c:TagInput ; c:label "Tag input" ;
     c:help "A c:TagInput edits a multi-valued property: its values are c:Tag pills (✕ removes one), and the field finds more to add with the same typeahead. A value is never added twice. With c:allowsCustom, Enter or a comma adds what you typed; c:optionsInUse offers every value the property already has. The shape's sh:maxCount caps the count, and its message is shown at the cap." ;
     c:children ( ui:inp-tags-col ) .
+
+# --- Code editor: Turtle and SPARQL ----------------------------------------------------------------
+
+ui:inp-editor a c:Flippable ; c:front ui:inp-editor-spec .
+ui:inp-editor-spec a c:Specimen ; c:demonstrates c:CodeEditor , c:QueryEditor ; c:label "Code editor" ;
+    c:help "The text is graph state (c:value; c:original until it is edited), highlighted by its language (c:language: sparql, turtle) under a transparent text area, with line numbers. Typing suggests the prefixes and terms the graph knows and the language's own words (c:CodeWord): Up and Down move, Tab or Enter accepts, Escape closes. The second is a c:QueryEditor, the same editor in SPARQL (the workbench's): it also suggests SPARQL's own words (c:SparqlWord) and the query's variables after ? or $." ;
+    c:children ( ui:inp-editor-turtle ui:inp-editor-sparql ) .
+ui:inp-editor-turtle a c:CodeEditor ; c:language "turtle" ; c:label "shapes.ttl" ; c:original '''@prefix ex: <https://example.org/people#> .
+
+# Try typing sh: or c:La - the suggestions come from the graph.
+ex:PersonShape a sh:NodeShape ; sh:targetClass ex:Person ;
+    sh:property [ sh:path ex:name ; sh:minCount 1 ; sh:datatype xsd:string ] .''' .
+ui:inp-editor-sparql a c:QueryEditor ; c:label "groups.rq" ; c:original """# Each component group and how many classes it holds. Try typing ?gr or COU.
+SELECT ?group (COUNT(?class) AS ?classes)
+WHERE { ?class sem:group ?group }
+GROUP BY ?group""" .

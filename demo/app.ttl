@@ -23,6 +23,7 @@
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
 
 # =================================================================================================
 # The demo's entire interface as a component graph. The host page is a mount
@@ -493,20 +494,25 @@ ui:observations a c:QueryView ; c:of perf:run ; c:queries ( perf:ObservationsQue
 # inside a c:Flippable, so its back shows the rules that made it.
 
 ui:galleryGroup rdfs:label "Components" ; rdfs:range ui:GalleryGroup .
+# A page of a component group (ui:componentGroup) shows the specimens of that group's classes:
+# each specimen says what it demonstrates (c:demonstrates), and test/gallery.test.ts keeps every
+# specimen on the page of its classes' group (sem:group). Foundations, Layers and Themes show
+# tokens, layers and themes rather than components.
+ui:componentGroup a owl:ObjectProperty ; rdfs:domain ui:GalleryGroup ; rdfs:range sem:ComponentGroup .
 ui:GroupFoundations a ui:GalleryGroup ; rdfs:label "Foundations" ; sem:order 1 ; ui:key "foundations" .
-ui:GroupLayout a ui:GalleryGroup ; rdfs:label "Layout" ; sem:order 2 ; ui:key "layout" .
-ui:GroupType a ui:GalleryGroup ; rdfs:label "Type" ; sem:order 3 ; ui:key "type" .
-ui:GroupActions a ui:GalleryGroup ; rdfs:label "Actions" ; sem:order 4 ; ui:key "actions" .
-ui:GroupInputs a ui:GalleryGroup ; rdfs:label "Inputs" ; sem:order 5 ; ui:key "inputs" .
-ui:GroupFeedback a ui:GalleryGroup ; rdfs:label "Feedback" ; sem:order 6 ; ui:key "feedback" .
-ui:GroupData a ui:GalleryGroup ; rdfs:label "Data" ; sem:order 7 ; ui:key "data" .
-ui:GroupNavigation a ui:GalleryGroup ; rdfs:label "Navigation" ; sem:order 8 ; ui:key "navigation" .
-ui:GroupOverlays a ui:GalleryGroup ; rdfs:label "Overlays" ; sem:order 9 ; ui:key "overlays" .
-ui:GroupDisclosure a ui:GalleryGroup ; rdfs:label "Disclosure" ; sem:order 10 ; ui:key "disclosure" .
+ui:GroupLayout a ui:GalleryGroup ; rdfs:label "Layout" ; sem:order 2 ; ui:key "layout" ; ui:componentGroup c:LayoutGroup .
+ui:GroupType a ui:GalleryGroup ; rdfs:label "Type" ; sem:order 3 ; ui:key "type" ; ui:componentGroup c:TypeGroup .
+ui:GroupActions a ui:GalleryGroup ; rdfs:label "Actions" ; sem:order 4 ; ui:key "actions" ; ui:componentGroup c:ActionsGroup .
+ui:GroupInputs a ui:GalleryGroup ; rdfs:label "Inputs" ; sem:order 5 ; ui:key "inputs" ; ui:componentGroup c:InputsGroup .
+ui:GroupFeedback a ui:GalleryGroup ; rdfs:label "Feedback" ; sem:order 6 ; ui:key "feedback" ; ui:componentGroup c:FeedbackGroup .
+ui:GroupData a ui:GalleryGroup ; rdfs:label "Data" ; sem:order 7 ; ui:key "data" ; ui:componentGroup c:DataGroup .
+ui:GroupNavigation a ui:GalleryGroup ; rdfs:label "Navigation" ; sem:order 8 ; ui:key "navigation" ; ui:componentGroup c:NavigationGroup .
+ui:GroupOverlays a ui:GalleryGroup ; rdfs:label "Overlays" ; sem:order 9 ; ui:key "overlays" ; ui:componentGroup c:OverlaysGroup .
+ui:GroupDisclosure a ui:GalleryGroup ; rdfs:label "Disclosure" ; sem:order 10 ; ui:key "disclosure" ; ui:componentGroup c:DisclosureGroup .
 ui:GroupLayers a ui:GalleryGroup ; rdfs:label "Layers" ; sem:order 11 ; ui:key "layers" .
-ui:GroupWindows a ui:GalleryGroup ; rdfs:label "Windows" ; sem:order 12 ; ui:key "windows" .
+ui:GroupWindows a ui:GalleryGroup ; rdfs:label "Windows" ; sem:order 12 ; ui:key "windows" ; ui:componentGroup c:WindowsGroup .
 ui:GroupThemes a ui:GalleryGroup ; rdfs:label "Themes" ; sem:order 13 ; ui:key "themes" .
-ui:GroupInspection a ui:GalleryGroup ; rdfs:label "Inspection" ; sem:order 14 ; ui:key "inspection" .
+ui:GroupInspection a ui:GalleryGroup ; rdfs:label "Inspection" ; sem:order 14 ; ui:key "inspection" ; ui:componentGroup c:InspectionGroup .
 
 ui:gallery a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:galleryAside ui:galleryPages ) .

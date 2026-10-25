@@ -40,7 +40,7 @@ ui:ov-confirm-delete a c:Button ; c:label "Delete" ; sty:tone sty:Danger ; sty:e
 ui:ov-open-dialog a c:Button ; c:label "Open dialog" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-dialog .
 ui:ov-open-confirm a c:Button ; c:label "Delete todos…" ; sty:tone sty:Danger ; sty:emphasis sty:Soft ; c:opens ui:ov-confirm .
 ui:ov-dialogs a c:Flippable ; c:front ui:ov-dialogs-spec .
-ui:ov-dialogs-spec a c:Specimen ; c:label "Dialog" ;
+ui:ov-dialogs-spec a c:Specimen ; c:demonstrates c:Dialog ; c:label "Dialog" ;
     c:help "A modal panel over a scrim (role=dialog, aria-modal, labelled by its title). Its state is one fact, c:open: buttons that c:opens or c:closes it set it, and so do its ✕ and a click on the scrim. Closed, its content is not evaluated." ;
     c:children ( ui:ov-open-dialog ui:ov-open-confirm ) .
 
@@ -64,7 +64,7 @@ ui:ov-drawer-start a c:Drawer ; c:side "start" ; c:label "Outline" ;
 ui:ov-open-drawer-end a c:Button ; c:label "Open end drawer" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-drawer-end .
 ui:ov-open-drawer-start a c:Button ; c:label "Open start drawer" ; sty:emphasis sty:Outline ; c:opens ui:ov-drawer-start .
 ui:ov-drawers a c:Flippable ; c:front ui:ov-drawers-spec .
-ui:ov-drawers-spec a c:Specimen ; c:label "Drawer" ;
+ui:ov-drawers-spec a c:Specimen ; c:demonstrates c:Drawer ; c:label "Drawer" ;
     c:help "A dialog attached to an edge (c:side start or end) that slides in on the motion tokens. Same contract as the dialog: c:open, c:opens / c:closes, ✕ and scrim." ;
     c:children ( ui:ov-open-drawer-end ui:ov-open-drawer-start ) .
 
@@ -80,6 +80,6 @@ ui:ov-pop-b2 a c:Badge ; c:label "style" ; sty:tone sty:Accent .
 ui:ov-pop-b3 a c:Badge ; c:label "source" ; sty:tone sty:Info .
 ui:ov-pop-small a c:Popover ; c:trigger "Small" ; sty:size sty:Small ; c:help "The trigger is sized by sty:size, like every control." .
 ui:ov-popovers a c:Flippable ; c:front ui:ov-popovers-spec .
-ui:ov-popovers-spec a c:Specimen ; c:label "Popover" ;
+ui:ov-popovers-spec a c:Specimen ; c:demonstrates c:Popover ; c:label "Popover" ;
     c:help "Non-modal and anchored, so it can live inside the page (and inside this card). It shows c:help and c:content while c:open." ;
     c:children ( ui:ov-pop-info ui:ov-pop-status ui:ov-pop-small ) .

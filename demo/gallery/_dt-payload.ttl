@@ -17,15 +17,15 @@
 @prefix tree: <https://w3id.org/tree#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 
-# Inspection gallery: payloads. A message body as a JSON tree, as hex, and in a viewer that
+# Data gallery: payloads. A message body as a JSON tree, as hex, and in a viewer that
 # switches between text, hex and JSON - one over a fixed sample, one following a choice.
 
-ui:in-payload a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:in-json ui:in-hex ui:in-body ) .
+ui:dt-payload a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:dt-json ui:dt-hex ui:dt-body ) .
 
 # --- JsonTree ------------------------------------------------------------------------------------
 
-ui:in-json-order a c:JsonTree ; c:label "order" ; c:expandDepth 2 ; c:value """{
+ui:dt-json-order a c:JsonTree ; c:label "order" ; c:expandDepth 2 ; c:value """{
   "id": "ord_1042",
   "status": "paid",
   "total": 129.5,
@@ -37,19 +37,19 @@ ui:in-json-order a c:JsonTree ; c:label "order" ; c:expandDepth 2 ; c:value """{
     { "sku": "DESK-07", "qty": 1, "price": 50 }
   ]
 }""" .
-ui:in-json a c:Flippable ; c:front ui:in-json-spec .
-ui:in-json-spec a c:Specimen ; c:label "JSON tree" ;
+ui:dt-json a c:Flippable ; c:front ui:dt-json-spec .
+ui:dt-json-spec a c:Specimen ; c:demonstrates c:JsonTree ; c:label "JSON tree" ;
     c:help "A JSON payload as a tree: keys in source order, containers with their sizes, values colored by type. Which containers are open is graph state on the tree (JSON Pointers in c:expandedPath and c:collapsedPath, over c:expandDepth); only open containers' members are minted. Arrow keys move through it; Right opens, Left closes." ;
-    c:children ( ui:in-json-order ) .
+    c:children ( ui:dt-json-order ) .
 
 # --- HexView -------------------------------------------------------------------------------------
 
-ui:in-hex-greeting a c:HexView ; c:limit 64 ;
+ui:dt-hex-greeting a c:HexView ; c:limit 64 ;
     c:value "Hello, Semblance — ünïcödé ✓\nGET /api/orders?limit=20 HTTP/1.1\r\nAccept: application/json\r\n" .
-ui:in-hex a c:Flippable ; c:front ui:in-hex-spec .
-ui:in-hex-spec a c:Specimen ; c:label "Hex view" ;
+ui:dt-hex a c:Flippable ; c:front ui:dt-hex-spec .
+ui:dt-hex-spec a c:Specimen ; c:demonstrates c:HexView ; c:label "Hex view" ;
     c:help "The UTF-8 bytes of a payload, sixteen to a row: offset, hex and printable ASCII. Multi-byte characters take several bytes; c:limit bounds what is shown." ;
-    c:children ( ui:in-hex-greeting ) .
+    c:children ( ui:dt-hex-greeting ) .
 
 # --- BodyViewer ----------------------------------------------------------------------------------
 # Samples are plain data: a body and its media type. The second viewer follows a choice
@@ -72,13 +72,13 @@ ui:sample-csv a ui:PayloadSample ; rdfs:label "Export (CSV)"@en ; sem:order 3 ;
 LAMP-01,2,39.75
 DESK-07,1,50.00""" .
 ui:pickedSample a owl:ObjectProperty ; rdfs:label "Sample"@en ; rdfs:range ui:PayloadSample .
-ui:in-body-pick ui:pickedSample ui:sample-log .
+ui:dt-body-pick ui:pickedSample ui:sample-log .
 
-ui:in-body-fixed a c:BodyViewer ; c:of ui:sample-order ; c:payloadProperty ui:payloadBody ; c:typeProperty ui:payloadType .
-ui:in-body-picker a c:Segmented ; c:controls ui:in-body-pick ; c:property ui:pickedSample .
-ui:in-body-bound a c:BodyViewer ; c:bindFrom ui:in-body-pick ; c:bindProperty ui:pickedSample ;
+ui:dt-body-fixed a c:BodyViewer ; c:of ui:sample-order ; c:payloadProperty ui:payloadBody ; c:typeProperty ui:payloadType .
+ui:dt-body-picker a c:Segmented ; c:controls ui:dt-body-pick ; c:property ui:pickedSample .
+ui:dt-body-bound a c:BodyViewer ; c:bindFrom ui:dt-body-pick ; c:bindProperty ui:pickedSample ;
     c:payloadProperty ui:payloadBody ; c:typeProperty ui:payloadType ; c:emptyText "Pick a sample." .
-ui:in-body a c:Flippable ; c:front ui:in-body-spec .
-ui:in-body-spec a c:Specimen ; c:label "Body viewer" ;
+ui:dt-body a c:Flippable ; c:front ui:dt-body-spec .
+ui:dt-body-spec a c:Specimen ; c:demonstrates c:BodyViewer ; c:label "Body viewer" ;
     c:help "One payload as text, hex or a JSON tree; the representation is graph state on the viewer (c:representation), and JSON is offered only for a payload that looks like JSON. The header shows the media type and the size in bytes. The second viewer follows a choice (c:bindFrom / c:bindProperty), as an inspector's follows the selected entry." ;
-    c:children ( ui:in-body-fixed ui:in-body-picker ui:in-body-bound ) .
+    c:children ( ui:dt-body-fixed ui:dt-body-picker ui:dt-body-bound ) .

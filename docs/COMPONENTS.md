@@ -237,8 +237,9 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers |
 | `ontology/components/<group>.ttl` | component vocabularies, renderings and reactions |
+| `ontology/components/groups.ttl` | the component groups, and each class's group (`sem:group`; parts with their component) |
 | `ontology/shapes/components.ttl` | component shapes |
 | `ontology/theme/*.ttl` | tokens, styles, themes |
 | `ontology/layers/*.ttl` | the layers |
 | `src/components/<group>.ts` | function twins and reaction functions |
-| `demo/gallery/<group>.ttl` | the Components page's specimens |
+| `demo/gallery/<group>.ttl` | the Components page's specimens; each says which classes it demonstrates (`c:demonstrates`) and sits on their group's page (`test/gallery.test.ts`) |

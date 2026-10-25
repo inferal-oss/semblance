@@ -17,14 +17,14 @@
 @prefix tree: <https://w3id.org/tree#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 
-# Inspection gallery: the data grid and its time axis. Two small collections stand in for real
+# Data gallery: the data grid and its time axis. Two small collections stand in for real
 # ones: a build log (an LDES stream of log lines) and a trace (spans with start and end). Their
 # grids are general: rows are a collection's members, columns say what each cell shows, and
 # everything a person changes (sort, selection, column widths and visibility, filters, paging)
 # is graph state on the grid, its columns and its filter nodes.
 
-ui:in-grid a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:in-grid-log ui:in-grid-trace ui:in-grid-axis ) .
+ui:dt-grid a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:dt-grid-log ui:dt-grid-trace ui:dt-grid-axis ) .
 
 # --- a log viewer -----------------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ ui:buildLog a ldes:EventStream ; rdfs:label "Build log"@en ; ldes:sequencePath u
 ui:log-1 ui:line 1 ; ui:level ui:LevelInfo ; ui:source "vite" ; ui:message "dev server starting" .
 ui:log-2 ui:line 2 ; ui:level ui:LevelDebug ; ui:source "vite" ; ui:message "resolved 61 ontology files" .
 ui:log-3 ui:line 3 ; ui:level ui:LevelInfo ; ui:source "oxigraph" ; ui:message "wasm ready in 38 ms" .
-ui:log-4 ui:line 4 ; ui:level ui:LevelWarning ; ui:source "shapes" ; ui:message "ui:in-grid-axis has no c:label" .
+ui:log-4 ui:line 4 ; ui:level ui:LevelWarning ; ui:source "shapes" ; ui:message "ui:dt-grid-axis has no c:label" .
 ui:log-5 ui:line 5 ; ui:level ui:LevelInfo ; ui:source "engine" ; ui:message "initial render: 1,184 rule runs" .
 ui:log-6 ui:line 6 ; ui:level ui:LevelDebug ; ui:source "engine" ; ui:message "bulk query for 48 foci" .
 ui:log-7 ui:line 7 ; ui:level ui:LevelError ; ui:source "fetch" ; ui:message "GET /api/todos failed: 503" .
@@ -53,38 +53,38 @@ ui:log-10 ui:line 10 ; ui:level ui:LevelWarning ; ui:source "persistence" ; ui:m
 ui:log-11 ui:line 11 ; ui:level ui:LevelDebug ; ui:source "dom" ; ui:message "patched 12 nodes" .
 ui:log-12 ui:line 12 ; ui:level ui:LevelInfo ; ui:source "vite" ; ui:message "hmr update ontology/theme/grid.ttl" .
 
-ui:in-grid-col-line a c:GridColumn ; c:label "#" ; c:cellProperty ui:line ; c:align "end" ; c:width 56 .
-ui:in-grid-col-level a c:GridColumn ; c:label "Level" ; c:cellProperty ui:level ; c:cellAs c:BadgeCell ; c:width 104 .
-ui:in-grid-col-source a c:GridColumn ; c:label "Source" ; c:cellProperty ui:source ; c:cellAs c:CodeCell ; c:width 120 .
-ui:in-grid-col-message a c:GridColumn ; c:label "Message" ; c:cellProperty ui:message .
+ui:dt-grid-col-line a c:GridColumn ; c:label "#" ; c:cellProperty ui:line ; c:align "end" ; c:width 56 .
+ui:dt-grid-col-level a c:GridColumn ; c:label "Level" ; c:cellProperty ui:level ; c:cellAs c:BadgeCell ; c:width 104 .
+ui:dt-grid-col-source a c:GridColumn ; c:label "Source" ; c:cellProperty ui:source ; c:cellAs c:CodeCell ; c:width 120 .
+ui:dt-grid-col-message a c:GridColumn ; c:label "Message" ; c:cellProperty ui:message .
 
-ui:in-grid-search a c:TextFilter ; c:searches ui:message , ui:source .
-ui:in-grid-level a c:ValueFilter ; c:filterProperty ui:level ; c:filterValue c:AnyValue .
-ui:in-grid-debug a c:FlagFilter ; c:filterProperty ui:level ; c:filterValue ui:LevelDebug ; c:included true .
+ui:dt-grid-search a c:TextFilter ; c:searches ui:message , ui:source .
+ui:dt-grid-level a c:ValueFilter ; c:filterProperty ui:level ; c:filterValue c:AnyValue .
+ui:dt-grid-debug a c:FlagFilter ; c:filterProperty ui:level ; c:filterValue ui:LevelDebug ; c:included true .
 
-ui:in-grid-logGrid a c:DataGrid ; c:label "Build log" ;
+ui:dt-grid-logGrid a c:DataGrid ; c:label "Build log" ;
     c:collection ui:buildLog ; c:pageSize 8 ;
-    c:gridColumns ( ui:in-grid-col-line ui:in-grid-col-level ui:in-grid-col-source ui:in-grid-col-message ) ;
-    c:shows ui:in-grid-col-line , ui:in-grid-col-level , ui:in-grid-col-source , ui:in-grid-col-message ;
-    c:filteredBy ui:in-grid-search , ui:in-grid-level , ui:in-grid-debug ;
+    c:gridColumns ( ui:dt-grid-col-line ui:dt-grid-col-level ui:dt-grid-col-source ui:dt-grid-col-message ) ;
+    c:shows ui:dt-grid-col-line , ui:dt-grid-col-level , ui:dt-grid-col-source , ui:dt-grid-col-message ;
+    c:filteredBy ui:dt-grid-search , ui:dt-grid-level , ui:dt-grid-debug ;
     c:emptyText "No log lines match the filters." .
 
-ui:in-grid-filterText a c:SearchField ; c:label "Filter log lines" ; c:placeholder "Filter messages and sources…" ;
-    c:controls ui:in-grid-search ; c:property c:filterText .
-ui:in-grid-filterLevel a c:Choice ; c:label "Level" ; c:controls ui:in-grid-level ; c:property c:filterValue ;
+ui:dt-grid-filterText a c:SearchField ; c:label "Filter log lines" ; c:placeholder "Filter messages and sources…" ;
+    c:controls ui:dt-grid-search ; c:property c:filterText .
+ui:dt-grid-filterLevel a c:Choice ; c:label "Level" ; c:controls ui:dt-grid-level ; c:property c:filterValue ;
     c:options ( c:AnyValue ui:LevelDebug ui:LevelInfo ui:LevelWarning ui:LevelError ) .
-ui:in-grid-filterDebug a c:ToggleSwitch ; c:label "Debug lines" ; sty:size sty:Small ;
-    c:controls ui:in-grid-debug ; c:property c:included .
-ui:in-grid-logBar a c:Toolbar ; c:label "Log filters" ;
-    c:children ( ui:in-grid-filterText ui:in-grid-filterLevel ui:in-grid-filterDebug ) .
-ui:in-grid-columns a c:Chips ; c:label "Columns" ; c:controls ui:in-grid-logGrid ; c:property c:shows ;
-    c:options ( ui:in-grid-col-line ui:in-grid-col-level ui:in-grid-col-source ui:in-grid-col-message ) .
-ui:in-grid-selected a c:Metrics ; c:of ui:in-grid-logGrid ; c:fields ( c:selectedRow ) .
+ui:dt-grid-filterDebug a c:ToggleSwitch ; c:label "Debug lines" ; sty:size sty:Small ;
+    c:controls ui:dt-grid-debug ; c:property c:included .
+ui:dt-grid-logBar a c:Toolbar ; c:label "Log filters" ;
+    c:children ( ui:dt-grid-filterText ui:dt-grid-filterLevel ui:dt-grid-filterDebug ) .
+ui:dt-grid-columns a c:Chips ; c:label "Columns" ; c:controls ui:dt-grid-logGrid ; c:property c:shows ;
+    c:options ( ui:dt-grid-col-line ui:dt-grid-col-level ui:dt-grid-col-source ui:dt-grid-col-message ) .
+ui:dt-grid-selected a c:Metrics ; c:of ui:dt-grid-logGrid ; c:fields ( c:selectedRow ) .
 
-ui:in-grid-log a c:Flippable ; c:front ui:in-grid-log-spec .
-ui:in-grid-log-spec a c:Specimen ; c:label "Data grid" ;
+ui:dt-grid-log a c:Flippable ; c:front ui:dt-grid-log-spec .
+ui:dt-grid-log-spec a c:Specimen ; c:demonstrates c:DataGrid , c:GridColumn , c:TextFilter , c:ValueFilter , c:FlagFilter ; c:label "Data grid" ;
     c:help "A build log's lines as rows (role=grid): the members of an LDES stream in capture order, eight to a page with the newest followed. Headers sort (again to reverse); dragging a header's edge (or arrow keys on it) sets that column's c:width; the chips choose the c:shows columns. The filters are nodes the grid is c:filteredBy, edited by ordinary controls. Clicking a row (or Up / Down) selects its line and pins the window; the footer pages and jumps back to the latest." ;
-    c:children ( ui:in-grid-logBar ui:in-grid-columns ui:in-grid-logGrid ui:in-grid-selected ) .
+    c:children ( ui:dt-grid-logBar ui:dt-grid-columns ui:dt-grid-logGrid ui:dt-grid-selected ) .
 
 # --- a trace viewer: a waterfall ----------------------------------------------------------------------
 
@@ -109,24 +109,24 @@ ui:span-5 ui:order 5 ; ui:service ui:svc-db ; ui:operation "INSERT order" ; ui:b
 ui:span-6 ui:order 6 ; ui:service ui:svc-queue ; ui:operation "enqueue receipt" ; ui:begin 400 ; ui:finish 407 .
 ui:span-7 ui:order 7 ; ui:service ui:svc-queue ; ui:operation "send receipt" ; ui:begin 408 .
 
-ui:in-grid-col-op a c:GridColumn ; c:label "Operation" ; c:cellProperty ui:operation ; c:detailProperty ui:service ; c:width 180 .
-ui:in-grid-col-took a c:GridColumn ; c:label "Took" ; c:cellAs c:DurationCell ; c:startProperty ui:begin ; c:endProperty ui:finish ; c:align "end" ; c:width 80 .
-ui:in-grid-col-bars a c:GridColumn ; c:label "Waterfall" ; c:cellAs c:TimeBarCell ;
+ui:dt-grid-col-op a c:GridColumn ; c:label "Operation" ; c:cellProperty ui:operation ; c:detailProperty ui:service ; c:width 180 .
+ui:dt-grid-col-took a c:GridColumn ; c:label "Took" ; c:cellAs c:DurationCell ; c:startProperty ui:begin ; c:endProperty ui:finish ; c:align "end" ; c:width 80 .
+ui:dt-grid-col-bars a c:GridColumn ; c:label "Waterfall" ; c:cellAs c:TimeBarCell ;
     c:startProperty ui:begin ; c:endProperty ui:finish ; c:colorProperty ui:service .
 
-ui:in-grid-traceGrid a c:DataGrid ; c:label "Checkout trace" ; c:collection ui:trace ;
-    c:gridColumns ( ui:in-grid-col-op ui:in-grid-col-took ui:in-grid-col-bars ) .
-ui:in-grid-services a c:Legend ; c:label "Services" ; c:of ui:Service .
-ui:in-grid-trace a c:Flippable ; c:front ui:in-grid-trace-spec .
-ui:in-grid-trace-spec a c:Specimen ; c:label "Waterfall" ;
+ui:dt-grid-traceGrid a c:DataGrid ; c:label "Checkout trace" ; c:collection ui:trace ;
+    c:gridColumns ( ui:dt-grid-col-op ui:dt-grid-col-took ui:dt-grid-col-bars ) .
+ui:dt-grid-services a c:Legend ; c:label "Services" ; c:of ui:Service .
+ui:dt-grid-trace a c:Flippable ; c:front ui:dt-grid-trace-spec .
+ui:dt-grid-trace-spec a c:Specimen ; c:demonstrates c:DataGrid ; c:label "Waterfall" ;
     c:help "A trace's spans on one time scale: a c:TimeBarCell column places each span's bar by its start and end, colored by its service's c:swatch; the header's time axis is on the same scale (the grid's window computes it from the rows it shows). A span without an end is still running: its bar runs to the end of the scale." ;
-    c:children ( ui:in-grid-services ui:in-grid-traceGrid ) .
+    c:children ( ui:dt-grid-services ui:dt-grid-traceGrid ) .
 
 # --- a time axis on its own -------------------------------------------------------------------------
 
-ui:in-grid-axis-short a c:TimeAxis ; c:start 0 ; c:end 180 .
-ui:in-grid-axis-long a c:TimeAxis ; c:start 1200 ; c:end 9800 .
-ui:in-grid-axis a c:Flippable ; c:front ui:in-grid-axis-spec .
-ui:in-grid-axis-spec a c:Specimen ; c:label "Time axis" ;
+ui:dt-grid-axis-short a c:TimeAxis ; c:start 0 ; c:end 180 .
+ui:dt-grid-axis-long a c:TimeAxis ; c:start 1200 ; c:end 9800 .
+ui:dt-grid-axis a c:Flippable ; c:front ui:dt-grid-axis-spec .
+ui:dt-grid-axis-spec a c:Specimen ; c:demonstrates c:TimeAxis ; c:label "Time axis" ;
     c:help "Ticks across a time range at the smallest 1, 2, 5 × 10ⁿ ms interval that needs at most five steps, in ms or s. Offsets are custom properties, so bars drawn on the same scale line up with the ticks." ;
-    c:children ( ui:in-grid-axis-short ui:in-grid-axis-long ) .
+    c:children ( ui:dt-grid-axis-short ui:dt-grid-axis-long ) .

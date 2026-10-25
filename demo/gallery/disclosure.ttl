@@ -35,7 +35,7 @@ ui:dc-layer-source-text a c:Text ; c:label "c:Flippable shows, on its back, the 
 ui:dc-layers-accordion a c:Accordion ; c:exclusive true ;
     c:items ( ui:dc-layer-modality ui:dc-layer-style ui:dc-layer-position ui:dc-layer-a11y ui:dc-layer-behaviour ui:dc-layer-provenance ui:dc-layer-source ) .
 ui:dc-layers a c:Flippable ; c:front ui:dc-layers-spec .
-ui:dc-layers-spec a c:Specimen ; c:label "Accordion" ;
+ui:dc-layers-spec a c:Specimen ; c:demonstrates c:Accordion , c:AccordionItem ; c:label "Accordion" ;
     c:help "Sections that open under their headers. Each item is its own component, so opening one re-renders only it (and, with c:exclusive true, the one it closes). The header is a button in a heading with aria-expanded and aria-controls; the panel is a labelled region, inert while closed." ;
     c:children ( ui:dc-layers-accordion ) .
 
@@ -52,7 +52,7 @@ ui:dc-faq-3-kbd-space a c:Kbd ; c:label "Space" .
 ui:dc-faq-3-text a c:Text ; c:children ( "Headers are buttons: " ui:dc-faq-3-kbd-tab " to reach one, " ui:dc-faq-3-kbd-enter " or " ui:dc-faq-3-kbd-space " to toggle it." ) .
 ui:dc-faq-accordion a c:Accordion ; c:items ( ui:dc-faq-1 ui:dc-faq-2 ui:dc-faq-3 ) .
 ui:dc-faq a c:Flippable ; c:front ui:dc-faq-spec .
-ui:dc-faq-spec a c:Specimen ; c:label "Accordion, several open" ;
+ui:dc-faq-spec a c:Specimen ; c:demonstrates c:Accordion ; c:label "Accordion, several open" ;
     c:help "Without c:exclusive each item opens and closes on its own." ;
     c:children ( ui:dc-faq-accordion ) .
 
@@ -63,6 +63,6 @@ ui:dc-flip-over a c:Text ; sty:textStyle sty:Overline ; c:label "c:Flippable" .
 ui:dc-flip-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Turn me over" .
 ui:dc-flip-text a c:Text ; sty:textStyle sty:Caption ; c:label "Any component can be the front of a card; its back lists the rules that rendered it. Its state is c:flipped, toggled by a reaction." .
 ui:dc-flip a c:Flippable ; c:front ui:dc-flip-spec .
-ui:dc-flip-spec a c:Specimen ; c:label "Flippable" ;
+ui:dc-flip-spec a c:Specimen ; c:demonstrates c:Flippable ; c:label "Flippable" ;
     c:help "A two-sided card around any component (c:front): the back shows how it is made, from its PROV-O trail. Every specimen on these pages is one." ;
     c:children ( ui:dc-flip-card ) .

@@ -63,16 +63,22 @@ Thin vocabularies. Every component
 
 | group | components |
 |---|---|
-| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches |
-| **Type** | Heading · Text · Link · Kbd · Code · Blockquote · Walkthrough (WalkthroughStep, Mention) |
-| **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem (+ Pressable, Setter mixins) |
-| **Inputs** | TextField · TextArea · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput |
-| **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState |
-| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · MessageList · Timeline · Tree · Board · charts |
+| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel |
+| **Type** | Heading · Text · Link · Kbd · Code · Blockquote · GraphMark · Emblem · SourceView · Walkthrough (WalkthroughStep, Mention) · LiveExample |
+| **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
+| **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
+| **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
+| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
-| **Overlays** | Dialog · Drawer · Popover · Window · Palette · Taskbar · Tooltip (layer) |
+| **Overlays** | Dialog · Drawer · Popover · Tooltip (layer) |
+| **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
-| **Inspection** | DataGrid (GridColumn, filters) · TimeAxis · SplitView · DockPanel · JsonTree · HexView · BodyViewer · Toolbar · SearchField · Legend · LiveIndicator · CountBadge (+ Unsetter mixin) · CodeEditor (QueryEditor) · LiveExample |
+| **Inspection** | QueryWorkbench (RunQueryButton) · ResultTable · ResultGraph · ResultTurtle · QueryView · TriplesView · StreamMembers · StreamStats · ElementMarkup · Highlight · ProjectionView · ShapeReport · ClassDoc · the Reference's TermTree, TermOverview, TermAlignment, TermMembers |
+
+A class's group is its `sem:group` (`ontology/components/groups.ttl`), and its parts - the events
+it handles, the kinds and words it uses, the nodes it mints - are in the same group. The
+Components page has a page per group, and each specimen says which classes it demonstrates
+(`c:demonstrates`): a test keeps it on their group's page (`test/gallery.test.ts`).
 
 Any component that shows a `c:value` may take it from a query instead: `c:valueQuery` names a
 `sem:View` whose first row's `?value` (and `?tone`) it shows, re-run when its `c:dataset` changes
@@ -101,16 +107,22 @@ new labelled resource (`c:customAs`, `c:mintBase`), if the `val:validates` shape
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)
 
-The **Inspection** group is what in-app inspectors, log viewers, event browsers and trace
-viewers are made of. A `c:DataGrid` shows a collection's members (an LDES stream by default)
-under declared columns; its sort, selection, column widths and visibility, and its window
-(following the newest member, or pinned; older / newer) are graph state, and filters are nodes
-it is `c:filteredBy` (`c:TextFilter`, `c:ValueFilter`, `c:FlagFilter`) that ordinary controls
-edit. A waterfall column draws spans on the window's time scale, which a `c:TimeAxis` ticks. Detail
-views follow a selection through `c:bindFrom` / `c:bindProperty`. Separators (a split's divider,
-a column's edge, a dock panel's free edge) are one-axis size handles: dragged, or moved with the
-arrow keys, they commit one `beh:Size` event. The Examples page's network inspector
+In-app inspectors, log viewers, event browsers and trace viewers are made of general
+components, each in its own group. A `c:DataGrid` (Data) shows a collection's members (an LDES
+stream by default) under declared columns; its sort, selection, column widths and visibility, and
+its window (following the newest member, or pinned; older / newer) are graph state, and filters are
+nodes it is `c:filteredBy` (`c:TextFilter`, `c:ValueFilter`, `c:FlagFilter`) that ordinary
+controls edit, in a `c:Toolbar` (Actions) with a `c:SearchField` (Inputs). A waterfall column
+draws spans on the window's time scale, which a `c:TimeAxis` ticks. Detail views follow a selection
+through `c:bindFrom` / `c:bindProperty`. Separators (a `c:SplitView`'s divider, a column's edge, a
+`c:DockPanel`'s free edge; Layout) are one-axis size handles: dragged, or moved with the arrow
+keys, they commit one `beh:Size` event. The Examples page's network inspector
 (`demo/gallery/_network.ttl`) is composed only of these parts.
+
+The **Inspection** group is the graph looking at itself: the SPARQL workbench and its result
+views, named queries bound to a selection (`c:QueryView`), the triples about a node, the change
+log's members and statistics, the HTML a rendered element becomes (`c:ElementMarkup`), the shapes
+layer's report, a class's ontology (`c:ClassDoc`) and the Reference's term tree and views.
 
 Floating frames get their abilities from capability classes an instance opts
 into: `c:Draggable`, `c:Resizable`, `c:Raisable`, `c:Minimizable`,
@@ -152,8 +164,10 @@ source, debug.
 
 A third page, **Components**: a navigation list of the groups (Foundations,
 Layout, Type, Actions, Inputs, Feedback, Data, Navigation, Overlays, Disclosure,
-Layers) and a page per group (`demo/gallery/<group>.ttl`). Each specimen is a
-flippable card whose back shows the rules that made it. Beside the navigation,
+Layers, Windows, Themes, Inspection) and a page per group (`demo/gallery/<group>.ttl`,
+longer sections in `demo/gallery/_<prefix>-*.ttl`). Each specimen is a
+flippable card whose back shows the rules that made it; a component group's page
+shows the specimens that demonstrate its classes (`c:demonstrates`). Beside the navigation,
 display settings — language, contrast, motion, density — are controls over
 the shell's properties. The Layers page demonstrates each layer working:
 a SHACL-validated form, shortcuts with their list, a busy state, the

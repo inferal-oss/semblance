@@ -1,16 +1,99 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
-# Gallery page: Inspection. The parts in-app inspectors, log viewers, event browsers and
-# trace viewers are built from: a data grid with a time scale, filters, split and docked
-# panes, payload views (text, hex, JSON) and the small toolbar pieces around them. Each
-# section is its own graph (demo/gallery/_in-*.ttl).
+# Gallery page: Inspection. The graph looking at itself (c:InspectionGroup): a query's results,
+# named queries bound to a selection, the triples about a node, the change log, the HTML a
+# rendered element becomes, and a class's ontology. The tools' Query tab (the SPARQL workbench)
+# and the Reference are built from these. The general parts an inspector of an app's own data is
+# made of - a data grid, panes, payload views, a toolbar - are on their groups' pages; the
+# network inspector example composes them.
 
 ui:gallery-inspection a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-inspection-intro ui:gallery-inspection-lede ui:in-grid ui:in-toolbar ui:in-panes ui:in-payload ui:in-editors ) .
+    c:children ( ui:gallery-inspection-intro ui:gallery-inspection-lede ui:in-results ui:in-queries ui:in-triples ui:in-log ui:in-markup ui:in-class ) .
 ui:gallery-inspection-intro a c:Heading ; c:label "Inspection" .
 ui:gallery-inspection-lede a c:Text ;
-    c:label "The parts of an in-app inspector, each on its own and general: a data grid whose rows, sort, selection, column widths and paging are graph state; a time scale for spans; filters as data the grid honours; split and docked panes; payloads as text, hex or a JSON tree. The Network page composes them over captured traffic." .
+    c:children ( "The graph looking at itself: a query's results as a table, a graph or Turtle; named queries bound to a selection; the triples about a node; the change log; the HTML a rendered element becomes; a class's ontology. "
+                 ui:in-to-workbench " and " ui:in-to-reference " are made of them. An inspector of an app's own data is made of general components - a data grid, panes, payload views, a toolbar - as "
+                 ui:in-to-network " is." ) .
+ui:in-to-workbench a c:Link ; c:label "The SPARQL workbench" ; c:to ui:workbench .
+ui:in-to-reference a c:Link ; c:label "the Reference" ; c:to ui:reference .
+ui:in-to-network a c:Link ; c:label "the network inspector" ; c:to ui:networkExample .
+
+# --- query results: one query, three views ----------------------------------------------------------
+
+ui:in-q-classes a sem:Query ; rdfs:label "The Inspection group's classes"@en ;
+    sem:construct """CONSTRUCT { ?class rdfs:subClassOf ?super }
+WHERE { ?class sem:group c:InspectionGroup ; rdfs:subClassOf ?super FILTER(isIRI(?super)) }""" .
+ui:in-results-table a c:ResultTable ; c:of ui:in-q-classes .
+ui:in-results-graph a c:ResultGraph ; c:of ui:in-q-classes .
+ui:in-results-turtle a c:ResultTurtle ; c:of ui:in-q-classes .
+ui:in-results-table-tab a c:Tab ; c:label "Table" ; c:content ui:in-results-table .
+ui:in-results-graph-tab a c:Tab ; c:label "Graph" ; c:content ui:in-results-graph .
+ui:in-results-turtle-tab a c:Tab ; c:label "Turtle" ; c:content ui:in-results-turtle .
+ui:in-results-tabs a c:Tabs ; c:label "Results" ;
+    c:tabs ( ui:in-results-table-tab ui:in-results-graph-tab ui:in-results-turtle-tab ) ; c:selected ui:in-results-table-tab .
+ui:in-results a c:Flippable ; c:front ui:in-results-spec .
+ui:in-results-spec a c:Specimen ; c:demonstrates c:ResultTable , c:ResultGraph , c:ResultTurtle ; c:label "Query results" ;
+    c:help "The results of a query (c:of a sem:Query, here a CONSTRUCT of this group's classes and what they specialize) as a table, a node-link graph or Turtle. A view runs its query when shown and when its text or c:runCount changes; with c:followUpdates, also when a triple the query reads changes. Select a node of the graph (a click, or Enter) to light up its neighbourhood." ;
+    c:children ( ui:in-results-tabs ) .
+
+# --- query view: named CONSTRUCTs bound to a selection --------------------------------------------------
+
+ui:in-qv-group a owl:ObjectProperty ; rdfs:label "Group"@en ; rdfs:range sem:ComponentGroup .
+ui:in-qv-pick ui:in-qv-group c:FeedbackGroup .
+ui:in-qv-choice a c:Choice ; c:controls ui:in-qv-pick ; c:property ui:in-qv-group .
+ui:in-qv-q-group a sem:Query ; rdfs:label "the group" ;
+    sem:construct """CONSTRUCT { $group ?p ?o } WHERE { $group ?p ?o FILTER(!isLiteral(?o) || lang(?o) = "" || langMatches(lang(?o), "en")) }""" .
+ui:in-qv-q-members a sem:Query ; rdfs:label "its components" ;
+    sem:construct """CONSTRUCT { ?class sem:group $group ; sem:slug ?slug } WHERE { ?class sem:group $group ; sem:slug ?slug }""" .
+ui:in-qv-view a c:QueryView ; c:queries ( ui:in-qv-q-group ui:in-qv-q-members ) ;
+    c:bindVariable "group" ; c:bindFrom ui:in-qv-pick ; c:bindProperty ui:in-qv-group ; c:emptyText "Pick a group." .
+ui:in-queries a c:Flippable ; c:front ui:in-queries-spec .
+ui:in-queries-spec a c:Specimen ; c:demonstrates c:QueryView ; c:label "Query view" ;
+    c:help "Named CONSTRUCTs (c:queries), one section of Turtle each, with a variable ($group, c:bindVariable) bound to what a property of a node holds (c:bindFrom / c:bindProperty): here the choice above. Choosing another group runs them again. The inspector in the tools is one, bound to the element under the pointer." ;
+    c:children ( ui:in-qv-choice ui:in-qv-view ) .
+
+# --- triples view: the triples about one node -----------------------------------------------------------
+
+ui:in-tv-view a c:TriplesView ; c:of c:InspectionGroup .
+ui:in-triples a c:Flippable ; c:front ui:in-triples-spec .
+ui:in-triples-spec a c:Specimen ; c:demonstrates c:TriplesView ; c:label "Triples view" ;
+    c:help "The triples about one node (c:of) as Turtle: here, this page's component group as ontology/components/groups.ttl declares it. Every specimen on the page names the classes it demonstrates (c:demonstrates), and those classes are in this group (sem:group)." ;
+    c:children ( ui:in-tv-view ) .
+
+# --- the change log: its newest members, and what they add up to ---------------------------------------
+
+ui:in-log-members a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 3 ;
+    c:emptyText "Click, type or tick something anywhere on the page: each interaction becomes a member of the change log." .
+ui:in-log-stats a c:StreamStats ; c:label "This session" ; c:of beh:ChangeLog .
+ui:in-log a c:Flippable ; c:front ui:in-log-spec .
+ui:in-log-spec a c:Specimen ; c:demonstrates c:StreamMembers , c:StreamStats ; c:label "Change log" ;
+    c:help "Every interaction is an immutable member of the beh:ChangeLog event stream, with the size of the change it caused. c:StreamMembers shows the newest (c:limit), read from the stream's head; c:StreamStats what they add up to, kept by maintained views. Click anything on this page to add one." ;
+    c:children ( ui:in-log-stats ui:in-log-members ) .
+
+# --- element markup: what a rendered element becomes, and its highlight ----------------------------------
+
+ui:in-em-element a owl:ObjectProperty ; rdfs:label "element"@en .
+ui:in-em-badge a c:Badge ; c:label "Ready" ; sty:tone sty:Success .
+ui:in-em-pick ui:in-em-element <https://semblance.dev/demo#in-em-badge/~root> .
+ui:in-em-markup a c:ElementMarkup ; c:active true ; c:bindFrom ui:in-em-pick ; c:bindProperty ui:in-em-element .
+ui:in-em-highlight a c:Highlight ; c:bindFrom ui:in-em-pick ; c:bindProperty ui:in-em-element .
+ui:in-markup a c:Flippable ; c:front ui:in-markup-spec .
+ui:in-markup-spec a c:Specimen ; c:demonstrates c:ElementMarkup , c:Highlight ; c:label "Element markup" ;
+    c:help "A rendered element (the RDF/HTML node a property holds: here the badge's root) without its RDF/HTML encoding: the component that rendered it, as Turtle, and the HTML it becomes. A c:Highlight bound to the same node marks it. The inspector in the tools shows the element under the pointer this way." ;
+    c:children ( ui:in-em-badge ui:in-em-markup ui:in-em-highlight ) .
+
+# --- a class's ontology --------------------------------------------------------------------------------
+
+ui:in-class-doc a c:ClassDoc ; c:of c:CountBadge .
+ui:in-class a c:Flippable ; c:front ui:in-class-spec .
+ui:in-class-spec a c:Specimen ; c:demonstrates c:ClassDoc ; c:label "Class ontology" ;
+    c:help "What a class is, read from the graph that renders it: the class, the properties whose domain it is, its renderings and their rules, its reactions and its shape, as Turtle (c:of a class; here c:CountBadge). The ontology section under every specimen, and the Reference's Turtle tab, are made of these." ;
+    c:children ( ui:in-class-doc ) .

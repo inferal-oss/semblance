@@ -112,4 +112,5 @@ c:TableShape a sh:NodeShape ; sh:targetClass c:Table ;
 c:FlippableShape a sh:NodeShape ; sh:targetClass c:Flippable ;
     sh:property [ sh:path c:front ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
 c:SpecimenShape a sh:NodeShape ; sh:targetClass c:Specimen ;
-    sh:property [ sh:path c:label ; sh:minCount 1 ] .
+    sh:property [ sh:path c:label ; sh:minCount 1 ] ,
+                [ sh:path c:demonstrates ; sh:nodeKind sh:IRI ; sh:message "A specimen demonstrates classes (c:demonstrates): IRIs." ] .

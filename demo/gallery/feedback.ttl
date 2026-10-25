@@ -5,12 +5,16 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix net: <https://semblance.dev/ns/network#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
 
 
 # Gallery page: Feedback.
 
 ui:gallery-feedback a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-feedback-intro ui:fb-badges ui:fb-alerts ui:fb-tags ui:fb-spinners ui:fb-skeletons ui:fb-empty ui:fb-toasts ) .
+    c:children ( ui:gallery-feedback-intro ui:fb-badges ui:fb-alerts ui:fb-tags ui:fb-spinners ui:fb-skeletons ui:fb-empty ui:fb-toasts ui:fb-live ui:fb-count ) .
 ui:gallery-feedback-intro a c:Heading ; c:label "Feedback" .
 
 ui:fb-badge-neutral a c:Badge ; c:label "Neutral" ; c:icon "•" ; sty:tone sty:Neutral .
@@ -20,7 +24,7 @@ ui:fb-badge-success a c:Badge ; c:label "Success" ; c:icon "✓" ; sty:tone sty:
 ui:fb-badge-warning a c:Badge ; c:label "Warning" ; c:icon "!" ; sty:tone sty:Warning .
 ui:fb-badge-danger a c:Badge ; c:label "Danger" ; c:icon "✕" ; sty:tone sty:Danger .
 ui:fb-badges a c:Flippable ; c:front ui:fb-badges-spec .
-ui:fb-badges-spec a c:Specimen ; c:label "Badge" ;
+ui:fb-badges-spec a c:Specimen ; c:demonstrates c:Badge ; c:label "Badge" ;
     c:help "A short status label with an optional glyph. Soft by default; any sty:emphasis applies." ;
     c:children ( ui:fb-badge-neutral ui:fb-badge-accent ui:fb-badge-info ui:fb-badge-success ui:fb-badge-warning ui:fb-badge-danger ) .
 
@@ -29,7 +33,7 @@ ui:fb-alert-success a c:Alert ; c:label "Saved" ; c:help "Your change was record
 ui:fb-alert-warning a c:Alert ; c:label "Large graph" ; c:help "Rendering 10,000 items takes about a second on first paint." ; sty:tone sty:Warning .
 ui:fb-alert-danger a c:Alert ; c:label "Rule failed" ; c:help "The SPARQL rule did not parse; the previous output is kept." ; sty:tone sty:Danger .
 ui:fb-alerts a c:Flippable ; c:front ui:fb-alerts-spec .
-ui:fb-alerts-spec a c:Specimen ; c:label "Alert" ;
+ui:fb-alerts-spec a c:Specimen ; c:demonstrates c:Alert ; c:label "Alert" ;
     c:help "Title, body, a tone glyph and optional actions. Danger alerts are announced (role=alert), others are polite (role=status)." ;
     c:children ( ui:fb-alerts-col ) .
 ui:fb-alerts-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:fb-alert-info ui:fb-alert-success ui:fb-alert-warning ui:fb-alert-danger ) .
@@ -64,7 +68,7 @@ ui:fb-tag-sel-4 a c:Tag ; c:label "Starred" ; c:icon "★" ; c:selectable true ;
 ui:fb-tags-selectable a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
     c:children ( ui:fb-tag-sel-1 ui:fb-tag-sel-2 ui:fb-tag-sel-3 ui:fb-tag-sel-4 ) .
 ui:fb-tags a c:Flippable ; c:front ui:fb-tags-spec .
-ui:fb-tags-spec a c:Specimen ; c:label "Tag" ;
+ui:fb-tags-spec a c:Specimen ; c:demonstrates c:Tag ; c:label "Tag" ;
     c:help "A label chip: toned and sized like every control. c:removable adds a ✕ that marks the tag c:removed; c:selectable makes it a toggle button (aria-pressed) over c:checked. Click them: each is one RDF event." ;
     c:children ( ui:fb-tags-col ) .
 ui:fb-tags-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
@@ -79,7 +83,7 @@ ui:fb-spin-success a c:Spinner ; c:label "Saving" ; sty:tone sty:Success .
 ui:fb-spin-warning a c:Spinner ; c:label "Retrying" ; sty:tone sty:Warning .
 ui:fb-spin-danger a c:Spinner ; c:label "Rolling back" ; sty:tone sty:Danger .
 ui:fb-spinners a c:Flippable ; c:front ui:fb-spinners-spec .
-ui:fb-spinners-spec a c:Specimen ; c:label "Spinner" ;
+ui:fb-spinners-spec a c:Specimen ; c:demonstrates c:Spinner ; c:label "Spinner" ;
     c:help "An indeterminate indicator (role=status, named by c:label). Pure CSS on the motion tokens: Motion → None stops it. Sized by sty:size, colored by sty:tone." ;
     c:children ( ui:fb-spin-sm ui:fb-spin-md ui:fb-spin-lg ui:fb-spin-neutral ui:fb-spin-success ui:fb-spin-warning ui:fb-spin-danger ) .
 
@@ -91,7 +95,7 @@ ui:fb-skel-block a c:Skeleton ; c:shape "block" ; c:height 88 .
 ui:fb-skel-para a c:Skeleton ; c:lines 5 .
 ui:fb-skel-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:fb-skel-row ui:fb-skel-block ui:fb-skel-para ) .
 ui:fb-skeletons a c:Flippable ; c:front ui:fb-skeletons-spec .
-ui:fb-skeletons-spec a c:Specimen ; c:label "Skeleton" ;
+ui:fb-skeletons-spec a c:Specimen ; c:demonstrates c:Skeleton ; c:label "Skeleton" ;
     c:help "A shimmering stand-in while content loads: c:lines of text (the last one shorter), a circle or a block (c:shape, sized by c:width / c:height). Hidden from assistive technology." ;
     c:children ( ui:fb-skel-col ) .
 
@@ -102,7 +106,7 @@ ui:fb-empty-state a c:EmptyState ; c:icon "∅" ; c:label "No triples match" ;
     c:help "Nothing in the graph matches this view yet. Add something, or load a Turtle file to start from." ;
     c:children ( ui:fb-empty-add ui:fb-empty-import ) .
 ui:fb-empty a c:Flippable ; c:front ui:fb-empty-spec .
-ui:fb-empty-spec a c:Specimen ; c:label "Empty state" ;
+ui:fb-empty-spec a c:Specimen ; c:demonstrates c:EmptyState ; c:label "Empty state" ;
     c:help "What a view shows when it has nothing to show: a glyph, a title (c:label), a hint (c:help) and actions (c:children)." ;
     c:children ( ui:fb-empty-state ) .
 
@@ -129,7 +133,37 @@ ui:fb-show-failed a c:Button ; c:label "Danger toast" ; sty:tone sty:Danger ; st
 ui:fb-toasts-buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
     c:children ( ui:fb-show-saved ui:fb-show-warning ui:fb-show-failed ui:fb-toasts-reset ) .
 ui:fb-toasts a c:Flippable ; c:front ui:fb-toasts-spec .
-ui:fb-toasts-spec a c:Specimen ; c:label "Toast" ;
+ui:fb-toasts-spec a c:Specimen ; c:demonstrates c:Toast , c:ToastRegion ; c:label "Toast" ;
     c:help "A transient message with a dismiss ✕, shown in a c:ToastRegion: an aria-live=polite stack in the corner of the viewport. The buttons open toasts in the region; danger toasts are assertive (role=alert)." ;
     c:children ( ui:fb-toasts-col ) .
 ui:fb-toasts-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:fb-toasts-buttons ui:fb-toasts-inline ) .
+
+# --- live indicator: a boolean, shown and flipped -------------------------------------------------------
+
+ui:fb-live-recorder ui:fb-live-recording true .
+ui:fb-live-recording a owl:DatatypeProperty ; rdfs:label "recording"@en .
+ui:fb-live-capture a c:LiveIndicator ; c:controls ui:fb-live-recorder ; c:property ui:fb-live-recording .
+ui:fb-live-own a c:LiveIndicator ; c:label "Live" ; c:pausedLabel "Frozen" .
+ui:fb-live-state a c:Metrics ; c:of ui:fb-live-recorder ; c:fields ( ui:fb-live-recording ) .
+ui:fb-live a c:Flippable ; c:front ui:fb-live-spec .
+ui:fb-live-spec a c:Specimen ; c:demonstrates c:LiveIndicator ; c:label "Live indicator" ;
+    c:help "Whether something is live: a boolean on a node (absent counts as live), shown as a breathing dot and a word. It is a toggle button: pressing it flips the boolean. The second keeps its state on itself (c:checked) and names both states." ;
+    c:children ( ui:fb-live-capture ui:fb-live-own ui:fb-live-state ) .
+
+# --- count badge: members of a collection -----------------------------------------------------------
+
+ui:fb-count-stream tree:member ui:fb-count-e1 , ui:fb-count-e2 , ui:fb-count-e3 .
+ui:fb-count-e1 a net:Exchange . ui:fb-count-e2 a net:Exchange . ui:fb-count-e3 a net:Event .
+ui:fb-count-all a c:CountBadge ; c:label "entries" ; c:collection ui:fb-count-stream .
+ui:fb-count-http a c:CountBadge ; c:label "exchanges" ; c:collection ui:fb-count-stream ; c:memberClass net:Exchange ; sty:tone sty:Info .
+ui:fb-count-capture a c:CountBadge ; c:label "captured" ; c:collection net:Capture ; sty:tone sty:Accent .
+ui:fb-count-add a c:Button ; c:label "Add an event" ; sty:size sty:Small .
+ui:FbCountAdd a beh:Reaction ; beh:when beh:Click ; beh:source ui:fb-count-add ;
+    beh:inserts """CONSTRUCT { ui:fb-count-stream tree:member ?new . ?new a net:Event }
+WHERE { { SELECT (COUNT(?m) AS ?n) WHERE { ui:fb-count-stream tree:member ?m } } BIND(IRI(CONCAT(STR(ui:fb-count-e), STR(?n + 1))) AS ?new) }""" .
+ui:fb-count-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
+    c:children ( ui:fb-count-all ui:fb-count-http ui:fb-count-capture ui:fb-count-add ) .
+ui:fb-count a c:Flippable ; c:front ui:fb-count-spec .
+ui:fb-count-spec a c:Specimen ; c:demonstrates c:CountBadge ; c:label "Count badge" ;
+    c:help "The number of members of a collection (tree:member by default), or only those of a class; the last counts what the network capture holds (net:Capture). Adding a member updates the count." ;
+    c:children ( ui:fb-count-row ) .

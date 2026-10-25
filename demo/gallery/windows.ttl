@@ -73,26 +73,26 @@ ui:wn-open-checklist a c:Button ; c:label "Checklist" ; c:icon "☑" ; sty:tone 
 ui:wn-open-log a c:Button ; c:label "Change log" ; c:icon "≡" ; sty:emphasis sty:Outline ; c:opens ui:win-log .
 ui:wn-open-activity a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:emphasis sty:Outline ; c:opens ui:win-activity .
 ui:wn-windows a c:Flippable ; c:front ui:wn-windows-spec .
-ui:wn-windows-spec a c:Specimen ; c:label "Window" ;
+ui:wn-windows-spec a c:Specimen ; c:demonstrates c:Window ; c:label "Window" ;
     c:help "Three windows on the desktop, closed until a button c:opens them (c:Window is a c:Overlay: c:open, c:opens, c:closes). Opening one also restores it if it was minimized and brings it to the front. The title bar shows minimize, maximize and close because a c:Window is c:Minimizable and c:Maximizable; a window detached from a tab adds a control that returns it there." ;
     c:children ( ui:wn-open-checklist ui:wn-open-log ui:wn-open-activity ) .
 
 ui:wn-state-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:windowState .
 ui:wn-state a c:Flippable ; c:front ui:wn-state-spec .
-ui:wn-state-spec a c:Specimen ; c:label "Window state" ;
+ui:wn-state-spec a c:Specimen ; c:demonstrates c:Window , c:WindowState ; c:label "Window state" ;
     c:help "c:windowState is one fact on the window: c:Normal, c:Minimized or c:Maximized. The title bar's controls set it (c:minimizes, c:maximizes, c:restores), and so does this segmented control, whose options are the individuals of the property's range. It is hooked (data-sem-window-state), so the theme styles each state once for every frame. A minimized window keeps its parts under a hidden root: its content is parked, not dropped, and the taskbar brings it back." ;
     c:children ( ui:wn-open-checklist-2 ui:wn-state-control ) .
 ui:wn-open-checklist-2 a c:Button ; c:label "Open the checklist" ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-checklist .
 
 ui:wn-dock-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:attachedTo .
 ui:wn-dock a c:Flippable ; c:front ui:wn-dock-spec .
-ui:wn-dock-spec a c:Specimen ; c:label "Attached to an edge" ;
+ui:wn-dock-spec a c:Specimen ; c:demonstrates c:Dockable , c:Edge ; c:label "Attached to an edge" ;
     c:help "A c:Dockable frame c:attachedTo an edge fills it: a side panel at the start or end, a bar at the top or bottom. Drag a window and release the pointer within 24px of an edge (c:Dockable c:snapDistance 24) to snap it there; drag it away, or press ◳, to float it again where it was. Edges are logical, so start and end follow the writing direction. The axis is orthogonal to the window state: maximize a docked window and restore it, and it is docked again." ;
     c:children ( ui:wn-open-checklist-3 ui:wn-dock-control ) .
 ui:wn-open-checklist-3 a c:Button ; c:label "Open the checklist" ; sty:emphasis sty:Soft ; sty:tone sty:Accent ; c:opens ui:win-checklist .
 
 ui:wn-stack a c:Flippable ; c:front ui:wn-stack-spec .
-ui:wn-stack-spec a c:Specimen ; c:label "Stacking" ;
+ui:wn-stack-spec a c:Specimen ; c:demonstrates c:Raisable , c:PointerDown ; c:label "Stacking" ;
     c:help "Which window is in front is graph state too. Pressing anywhere in a c:Raisable frame (a c:PointerDown event) makes it its desktop's c:topmost and gives it a c:z one higher than any other there; the desktop puts its frames in one stacking layer ordered by c:z, below its dialogs and toasts. Open two windows and click the one behind." ;
     c:children ( ui:wn-open-log-2 ui:wn-open-activity-2 ) .
 ui:wn-open-log-2 a c:Button ; c:label "Change log" ; c:icon "≡" ; sty:emphasis sty:Outline ; c:opens ui:win-log .
@@ -100,12 +100,12 @@ ui:wn-open-activity-2 a c:Button ; c:label "Activity" ; c:icon "▤" ; sty:empha
 
 ui:wn-taskbar-inline a c:Taskbar ; c:of ui:desktop ; c:label "Windows on the desktop" .
 ui:wn-taskbar a c:Flippable ; c:front ui:wn-taskbar-spec .
-ui:wn-taskbar-spec a c:Specimen ; c:label "Taskbar" ;
+ui:wn-taskbar-spec a c:Specimen ; c:demonstrates c:Taskbar ; c:label "Taskbar" ;
     c:help "A c:Taskbar lists the open frames of a desktop (c:of), each with its state's symbol. Activating an entry restores a minimized frame, brings another to the front, or minimizes the one already in front: three reactions that all see the state before the click. The desktop hosts one, so minimized windows (including those detached from the Playground's tabs) can always be found; that one is also c:Draggable and c:Dockable, so its grip (or the arrow keys) moves it, and thrown at an edge it docks there and the page keeps that edge clear. This is a second instance of the same component, neither, so it stays in the page." ;
     c:children ( ui:wn-taskbar-inline ) .
 
 ui:wn-open-display a c:Button ; c:label "Display palette" ; c:icon "◐" ; sty:emphasis sty:Outline ; c:opens ui:win-display .
 ui:wn-palette a c:Flippable ; c:front ui:wn-palette-spec .
-ui:wn-palette-spec a c:Specimen ; c:label "Palette" ;
+ui:wn-palette-spec a c:Specimen ; c:demonstrates c:Palette , c:Resizable ; c:label "Palette" ;
     c:help "A c:Palette is a c:Frame that is c:Dockable but not c:Minimizable or c:Maximizable: a slim strip with only a close control. This one is also c:Resizable (`a c:Palette, c:Resizable`), so it has a grip. The same rendering serves both frames; capabilities are classes, so an instance adds one by saying so." ;
     c:children ( ui:wn-open-display ) .

@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-panes ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -32,7 +32,7 @@ ui:ly-overlay-title a c:Text ; sty:textStyle sty:Subtitle ; c:label "Overlay" .
 ui:ly-overlay-text a c:Text ; sty:textStyle sty:Caption ; c:label "Floats above everything: menus, popovers, dialogs." .
 ui:ly-surfaces-grid a c:Grid ; c:minWidth "200px" ; pos:gap tok:space-5 ; c:children ( ui:ly-flat ui:ly-raised ui:ly-overlay ) .
 ui:ly-surfaces a c:Flippable ; c:front ui:ly-surfaces-spec .
-ui:ly-surfaces-spec a c:Specimen ; c:label "Surface" ;
+ui:ly-surfaces-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Surface" ;
     c:help "A padded container for c:children. sty:elevation says how far it stands off the page (flat, raised, overlay); pos:inset and pos:gap override its padding and spacing." ;
     c:children ( ui:ly-surfaces-grid ) .
 
@@ -55,7 +55,7 @@ ui:ly-tint-danger-c a c:Text ; sty:textStyle sty:Caption ; c:label "Cannot be un
 ui:ly-tinted-grid a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-3 ;
     c:children ( ui:ly-tint-accent ui:ly-tint-info ui:ly-tint-success ui:ly-tint-warning ui:ly-tint-danger ) .
 ui:ly-tinted a c:Flippable ; c:front ui:ly-tinted-spec .
-ui:ly-tinted-spec a c:Specimen ; c:label "Tinted surface" ;
+ui:ly-tinted-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Tinted surface" ;
     c:help "sty:tone on a surface tints its background with the tone's soft fill and its border with the tone's border color." ;
     c:children ( ui:ly-tinted-grid ) .
 
@@ -74,7 +74,7 @@ ui:ly-div-below a c:Text ; sty:textStyle sty:Caption ; c:label "Below the rule" 
 ui:ly-div-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ly-div-above ui:ly-div-plain ui:ly-div-below ui:ly-div-label ui:ly-div-row ) .
 ui:ly-dividers a c:Flippable ; c:front ui:ly-dividers-spec .
-ui:ly-dividers-spec a c:Specimen ; c:label "Divider" ;
+ui:ly-dividers-spec a c:Specimen ; c:demonstrates c:Divider ; c:label "Divider" ;
     c:help "An <hr>, or with a c:label a separator whose label sits in the line. pos:direction pos:Column stands it upright between the items of a row." ;
     c:children ( ui:ly-div-col ) .
 
@@ -108,7 +108,7 @@ ui:ly-grid-three a c:Grid ; c:columns 3 ; c:children ( ui:ly-tile-a ui:ly-tile-b
 ui:ly-grids-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ly-grid-auto-cap ui:ly-grid-auto ui:ly-grid-three-cap ui:ly-grid-three ) .
 ui:ly-grids a c:Flippable ; c:front ui:ly-grids-spec .
-ui:ly-grids-spec a c:Specimen ; c:label "Grid" ;
+ui:ly-grids-spec a c:Specimen ; c:demonstrates c:Grid ; c:label "Grid" ;
     c:help "c:children as equal tiles. c:minWidth is the narrowest a tile may get; c:columns caps the column count. Both reach the theme as custom properties on the grid's root; pos:gap spaces the tiles." ;
     c:children ( ui:ly-grids-col ) .
 
@@ -158,7 +158,7 @@ ui:ly-columns-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; 
 ui:ly-columns-guides a c:Segmented ; c:controls ui:ly-columns-body ; c:property pos:guides ; c:label "Guides" .
 ui:ly-columns-stage a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ly-columns-guides ui:ly-columns-body ) .
 ui:ly-columns a c:Flippable ; c:front ui:ly-columns-spec .
-ui:ly-columns-spec a c:Specimen ;
+ui:ly-columns-spec a c:Specimen ; c:demonstrates c:Grid ;
     c:label "Columns whose parts line up" , "Стовпці, чиї частини вирівняні"@uk , "Spalten, deren Teile fluchten"@de , "أعمدة تتحاذى أجزاؤها"@ar ;
     c:help "The same three plans, twice; the dashed boxes are the parts. On the left each column stacks its own parts, so a name that wraps pushes the rest of its column down. On the right the grid is pos:AlignedColumns: every column takes its rows from it and spans as many as it has parts (derived from its children; a c:Card is a header and a body), so part N of each column is in row N. Where the columns wrap, as on a phone, each line has rows of its own, and a column alone on its line is a stack again." ;
     c:children ( ui:ly-columns-stage ) .
@@ -172,7 +172,7 @@ ui:ly-sp-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
     c:children ( ui:ly-sp-title ui:ly-sp-spacer ui:ly-sp-kbd ui:ly-sp-button ) .
 ui:ly-sp-bar a c:Surface ; pos:direction pos:Column ; pos:inset tok:space-3 ; c:children ( ui:ly-sp-row ) .
 ui:ly-spacer a c:Flippable ; c:front ui:ly-spacer-spec .
-ui:ly-spacer-spec a c:Specimen ; c:label "Spacer" ;
+ui:ly-spacer-spec a c:Specimen ; c:demonstrates c:Spacer ; c:label "Spacer" ;
     c:help "Space that grows: in a row it pushes what follows it to the far end." ;
     c:children ( ui:ly-sp-bar ) .
 
@@ -244,6 +244,6 @@ ui:ly-rows-body a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; pos:g
 ui:ly-rows-guides a c:Segmented ; c:controls ui:ly-rows-body ; c:property pos:guides ; c:label "Guides" .
 ui:ly-rows-stage a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ly-rows-guides ui:ly-rows-body ) .
 ui:ly-rows a c:Flippable ; c:front ui:ly-rows-spec .
-ui:ly-rows-spec a c:Specimen ; c:label "Rows that line up" ;
+ui:ly-rows-spec a c:Specimen ; c:demonstrates c:Stack ; c:label "Rows that line up" ;
     c:help "The same three rows, twice; the dashed boxes are the cells. A stack lays out only its own children, so on the left each row places its cells from its own content. On the right the list declares its column tracks once (a pos:Layout with grid-template-columns) and each row is pos:Subgrid, sharing them - also the last row, inside a c:Switch, which takes no part in layout. A badge stays as wide as its label in its column." ;
     c:children ( ui:ly-rows-stage ) .

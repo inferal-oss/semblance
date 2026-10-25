@@ -10,11 +10,13 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix net: <https://semblance.dev/ns/network#> .
+@prefix tree: <https://w3id.org/tree#> .
 
 # Gallery page: Actions.
 
 ui:gallery-actions a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-actions-intro ui:act-buttons ui:act-button-states ui:act-icon-buttons ui:act-button-groups ui:act-menus ) .
+    c:children ( ui:gallery-actions-intro ui:act-buttons ui:act-button-states ui:act-icon-buttons ui:act-button-groups ui:act-menus ui:act-tb-toolbar ) .
 ui:gallery-actions-intro a c:Heading ; c:label "Actions" .
 # --- Button: tone x emphasis ---
 ui:act-b-solid-neutral a c:Button ; c:label "Neutral" ; sty:tone sty:Neutral ; sty:emphasis sty:Solid .
@@ -47,7 +49,7 @@ ui:act-b-ghost-danger a c:Button ; c:label "Danger" ; sty:tone sty:Danger ; sty:
 ui:act-b-row-ghost a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-ghost-neutral ui:act-b-ghost-accent ui:act-b-ghost-info ui:act-b-ghost-success ui:act-b-ghost-warning ui:act-b-ghost-danger ) .
 ui:act-b-grid a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-b-row-solid ui:act-b-row-soft ui:act-b-row-outline ui:act-b-row-ghost ) .
 ui:act-buttons a c:Flippable ; c:front ui:act-buttons-spec .
-ui:act-buttons-spec a c:Specimen ; c:label "Button" ;
+ui:act-buttons-spec a c:Specimen ; c:demonstrates c:Button ; c:label "Button" ;
     c:help "Six tones by four emphases (rows: solid, soft, outline, ghost) - 24 looks from ten theme rules. Tone and emphasis are object properties with style hooks, so the button rule knows nothing about them." ;
     c:children ( ui:act-b-grid ) .
 
@@ -66,7 +68,7 @@ ui:act-b-disabled-plain a c:Button ; c:label "Disabled" ; c:disabled true .
 ui:act-b-disabled a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ui:act-b-disabled-solid ui:act-b-disabled-outline ui:act-b-disabled-plain ) .
 ui:act-b-states-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-b-sizes ui:act-b-intents ui:act-b-disabled ) .
 ui:act-button-states a c:Flippable ; c:front ui:act-button-states-spec .
-ui:act-button-states-spec a c:Specimen ; c:label "Button sizes and states" ;
+ui:act-button-states-spec a c:Specimen ; c:demonstrates c:Button ; c:label "Button sizes and states" ;
     c:help "sty:size sets the control height, padding, font and radius custom properties; sty:intent is the older shorthand (Primary = accent solid); c:disabled true renders a disabled button." ;
     c:children ( ui:act-b-states-col ) .
 
@@ -96,7 +98,7 @@ ui:act-ib-states a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
     c:children ( ui:act-ib-sm ui:act-ib-md ui:act-ib-lg ui:act-ib-star ui:act-ib-pin ui:act-ib-off ) .
 ui:act-ib-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:act-ib-emphases ui:act-ib-tones ui:act-ib-states ) .
 ui:act-icon-buttons a c:Flippable ; c:front ui:act-icon-buttons-spec .
-ui:act-icon-buttons-spec a c:Specimen ; c:label "Icon button" ;
+ui:act-icon-buttons-spec a c:Specimen ; c:demonstrates c:IconButton , c:Pressable ; c:label "Icon button" ;
     c:help "Square and icon-only: c:icon is the glyph, c:label its accessible name and tooltip. Toned and sized like a button. The star and the pin are also c:Pressable, a behaviour mixin whose reaction flips c:pressed (aria-pressed); the graph holds the state." ;
     c:children ( ui:act-ib-col ) .
 
@@ -118,7 +120,7 @@ ui:act-bg-next a c:Button ; c:label "Next ›" .
 ui:act-bg-small a c:ButtonGroup ; c:label "Pages" ; sty:size sty:Small ; c:children ( ui:act-bg-prev ui:act-bg-page ui:act-bg-next ) .
 ui:act-bg-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; c:children ( ui:act-bg-edit ui:act-bg-format ui:act-bg-split ui:act-bg-small ) .
 ui:act-button-groups a c:Flippable ; c:front ui:act-button-groups-spec .
-ui:act-button-groups-spec a c:Specimen ; c:label "Button group" ;
+ui:act-button-groups-spec a c:Specimen ; c:demonstrates c:ButtonGroup ; c:label "Button group" ;
     c:help "An attached row of buttons (c:children) with shared inner borders and role=group. Icon buttons and toned buttons mix freely; a sty:size on the group sizes every button in it (the last group is small)." ;
     c:children ( ui:act-bg-row ) .
 
@@ -146,6 +148,30 @@ ui:act-mi-none a c:MenuItem ; c:label "Nothing" .
 ui:act-menu-off a c:Menu ; c:label "Disabled" ; c:disabled true ; c:items ( ui:act-mi-none ) .
 ui:act-menu-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-menu-actions ui:act-menu-new ui:act-menu-sort ui:act-menu-off ui:act-menu-log ) .
 ui:act-menus a c:Flippable ; c:front ui:act-menus-spec .
-ui:act-menus-spec a c:Specimen ; c:label "Menu" ;
+ui:act-menus-spec a c:Specimen ; c:demonstrates c:Menu , c:MenuItem , c:Setter ; c:label "Menu" ;
     c:help "A menu button: c:open is graph state that the trigger's reaction flips (Escape closes it too). Items are c:MenuItem instances, built only while the menu is open; choosing one closes the menu, and these are also c:Setter, so they write their c:value into the badge." ;
     c:children ( ui:act-menu-row ) .
+
+# --- Toolbar: a filter bar of a search, a choice, a switch and buttons, all bound to one node -------------------------
+
+ui:act-tb-text a owl:DatatypeProperty ; rdfs:label "search text"@en .
+ui:act-tb-kind a owl:ObjectProperty ; rdfs:label "Activity"@en .
+ui:act-tb-older a owl:DatatypeProperty ; rdfs:label "Previous page loads"@en .
+ui:act-tb-filter ui:act-tb-kind ui:act-tb-all ; ui:act-tb-older true .
+ui:act-tb-all rdfs:label "All activity"@en .
+
+ui:act-tb-search a c:SearchField ; c:label "Filter entries" ; c:placeholder "Filter URL, event or correlation…" ;
+    c:controls ui:act-tb-filter ; c:property ui:act-tb-text .
+ui:act-tb-choice a c:Choice ; c:controls ui:act-tb-filter ; c:property ui:act-tb-kind ;
+    c:options ( ui:act-tb-all net:HttpKind net:SocketKind net:FrameKind net:EventKind ) .
+ui:act-tb-switch a c:ToggleSwitch ; c:label "Previous page loads" ; sty:size sty:Small ;
+    c:controls ui:act-tb-filter ; c:property ui:act-tb-older .
+ui:act-tb-spacer a c:Spacer .
+ui:act-tb-clear a c:Button ; c:label "Clear" ; sty:size sty:Small ; sty:intent sty:Secondary .
+ui:act-tb-bar a c:Toolbar ; c:label "Filters" ;
+    c:children ( ui:act-tb-search ui:act-tb-choice ui:act-tb-switch ui:act-tb-spacer ui:act-tb-clear ) .
+ui:act-tb-state a c:Metrics ; c:of ui:act-tb-filter ; c:fields ( ui:act-tb-text ui:act-tb-kind ui:act-tb-older ) .
+ui:act-tb-toolbar a c:Flippable ; c:front ui:act-tb-toolbar-spec .
+ui:act-tb-toolbar-spec a c:Specimen ; c:demonstrates c:Toolbar ; c:label "Toolbar" ;
+    c:help "A filter bar: a c:Toolbar (role=toolbar, named by c:label) of controls that each edit one property of the same node - a search field, a choice and a switch - and a button, a c:Spacer pushing it to the end. The chips below read the node back." ;
+    c:children ( ui:act-tb-bar ui:act-tb-state ) .

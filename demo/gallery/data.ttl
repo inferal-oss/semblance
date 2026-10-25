@@ -12,11 +12,13 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix net: <https://semblance.dev/ns/network#> .
+@prefix tree: <https://w3id.org/tree#> .
 
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-messages ui:dt-timeline ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -44,7 +46,7 @@ ui:dt-table-component a c:Table ; c:label "Component classes" ; c:query ui:q-com
     c:sortColumn ui:dt-col-renderings ; c:sortDescending true ;
     c:emptyText "No component classes found." .
 ui:dt-table a c:Flippable ; c:front ui:dt-table-spec .
-ui:dt-table-spec a c:Specimen ; c:label "Table" ;
+ui:dt-table-spec a c:Specimen ; c:demonstrates c:Table ; c:label "Table" ;
     c:help "Rows from a SPARQL SELECT over this project's ontology: every component class, what it extends, and how many renderings and reactions it has. Click a header to sort (again to reverse); the sort is graph state on the table." ;
     c:children ( ui:dt-table-component ) .
 
@@ -59,7 +61,7 @@ ui:dt-stat-runs a c:Stat ; c:label "Rule runs per toggle" ; c:value 3 ; c:delta 
 ui:dt-stat-bundle a c:Stat ; c:label "Single-file build" ; c:value 6.1 ; c:unit "MB" ;
     c:delta 4.2 ; c:deltaUnit "%" ; c:lowerIsBetter true ; c:help "dist-single/semblance.html" .
 ui:dt-stats a c:Flippable ; c:front ui:dt-stats-spec .
-ui:dt-stats-spec a c:Specimen ; c:label "Stat" ;
+ui:dt-stats-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Stat" ;
     c:help "A key figure with its unit and a signed change. The trend is toned good or bad; c:lowerIsBetter flips which, for costs like latency or size." ;
     c:children ( ui:dt-stat-toggle ui:dt-stat-members ui:dt-stat-runs ui:dt-stat-bundle ) .
 
@@ -77,7 +79,7 @@ SELECT ?value ?tone WHERE {
 ui:dt-formula-classes a c:Stat ; c:label "Component classes" ; c:valueQuery ui:q-component-count ; c:help "COUNT over the ontology." .
 ui:dt-formula-quiet a c:Stat ; c:label "Without reactions" ; c:valueQuery ui:q-reactionless ; c:help "Toned by the query (?tone)." .
 ui:dt-formula a c:Flippable ; c:front ui:dt-formula-spec .
-ui:dt-formula-spec a c:Specimen ; c:label "Formula (c:valueQuery)" ;
+ui:dt-formula-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Formula (c:valueQuery)" ;
     c:help "Any component's value may be a SELECT: the first row's ?value becomes its c:value, and ?tone its tone. It re-runs when its c:dataset changes; these count this project's own component classes." ;
     c:children ( ui:dt-formula-classes ui:dt-formula-quiet ) .
 
@@ -88,7 +90,7 @@ ui:dt-money-uah a c:Money ; c:value 52990 ; c:currency "UAH" .
 ui:dt-money-usd a c:Money ; c:value 19.99 ; c:currency "USD" .
 ui:dt-money-jpy a c:Money ; c:value 4800 ; c:currency "JPY" .
 ui:dt-money a c:Flippable ; c:front ui:dt-money-spec .
-ui:dt-money-spec a c:Specimen ; c:label "Money" ;
+ui:dt-money-spec a c:Specimen ; c:demonstrates c:Money ; c:label "Money" ;
     c:help "An amount and an ISO 4217 currency, formatted for the viewer's locale: switch the language in the display settings and the grouping, decimals and symbol follow. The <data> element keeps the machine-readable amount." ;
     c:children ( ui:dt-money-eur ui:dt-money-uah ui:dt-money-usd ui:dt-money-jpy ) .
 
@@ -108,7 +110,7 @@ ui:dt-board-pipeline a c:Board ; c:label "Release pipeline" ;
     c:property ui:stage ; c:cardTitle rdfs:label ; c:cardPerson ui:by ; c:cardOrder ui:order ;
     c:card ui:dt-change-1 , ui:dt-change-2 , ui:dt-change-3 , ui:dt-change-4 .
 ui:dt-board a c:Flippable ; c:front ui:dt-board-spec .
-ui:dt-board-spec a c:Specimen ; c:label "Board" ;
+ui:dt-board-spec a c:Specimen ; c:demonstrates c:Board , c:BoardCard ; c:label "Board" ;
     c:help "Items in lanes: the lanes are the range of c:property (here ui:stage), each item goes where its value points. Move a card with its arrows, or focus it and use ← →. Review is limited to two by a SHACL shape (sh:maxCount on the inverse path), so a third is refused." ;
     c:children ( ui:dt-board-pipeline ) .
 
@@ -126,7 +128,7 @@ ui:dt-tree-classes a c:Tree ; c:label "Component classes" ;
 ui:dt-tree-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:dt-tree-crumbs ui:dt-tree-classes ) .
 ui:dt-tree a c:Flippable ; c:front ui:dt-tree-spec .
-ui:dt-tree-spec a c:Specimen ; c:label "Tree" ;
+ui:dt-tree-spec a c:Specimen ; c:demonstrates c:Tree ; c:label "Tree" ;
     c:help "Every component class in the project, under sem:Component: a node's children are the classes that are rdfs:subClassOf it. The twisty opens a node (c:expandedNode on the tree); a label selects it, and the breadcrumbs above follow the selection and navigate back up." ;
     c:children ( ui:dt-tree-col ) .
 
@@ -139,7 +141,7 @@ ui:dt-dl-item-log c:label "Change log" ; c:value "LDES, latest 200 members" .
 ui:dt-dl-item-ids c:label "Identity" ; c:value "<focus>/~<local>, never blank nodes" .
 ui:dt-dl-explicit a c:DescriptionList ; c:items ( ui:dt-dl-item-store ui:dt-dl-item-strata ui:dt-dl-item-log ui:dt-dl-item-ids ) .
 ui:dt-dl a c:Flippable ; c:front ui:dt-dl-spec .
-ui:dt-dl-spec a c:Specimen ; c:label "Description list" ;
+ui:dt-dl-spec a c:Specimen ; c:demonstrates c:DescriptionList ; c:label "Description list" ;
     c:help "Key / value pairs: the values of chosen properties on a node (here the class c:Table itself), or explicit items." ;
     c:children ( ui:dt-dl-class ui:dt-dl-explicit ) .
 
@@ -160,7 +162,7 @@ ui:dt-av-7 a c:Avatar ; c:label "Barbara Liskov" .
 ui:dt-av-group a c:AvatarGroup ; c:label "Reviewers" ; c:max 4 ;
     c:children ( ui:dt-av-1 ui:dt-av-2 ui:dt-av-3 ui:dt-av-4 ui:dt-av-5 ui:dt-av-6 ui:dt-av-7 ) .
 ui:dt-avatars a c:Flippable ; c:front ui:dt-avatars-spec .
-ui:dt-avatars-spec a c:Specimen ; c:label "Avatar" ;
+ui:dt-avatars-spec a c:Specimen ; c:demonstrates c:Avatar , c:AvatarGroup ; c:label "Avatar" ;
     c:help "Initials on a hue derived from the label (the same name always gets the same color), or an image; sized by sty:size. A group overlaps them and counts the rest past c:max." ;
     c:children ( ui:dt-av-ada ui:dt-av-tim ui:dt-av-grace ui:dt-av-image ui:dt-av-group ) .
 
@@ -177,7 +179,7 @@ ui:dt-msg-3 a as:Note ; as:attributedTo ui:dt-msg-alan ; as:published "2024-05-1
 ui:dt-messages-thread a c:MessageList ; c:label "A thread" ; c:viewer ui:dt-msg-ada ;
     c:item ui:dt-msg-1 , ui:dt-msg-2 , ui:dt-msg-3 .
 ui:dt-messages a c:Flippable ; c:front ui:dt-messages-spec .
-ui:dt-messages-spec a c:Specimen ; c:label "Message list" ;
+ui:dt-messages-spec a c:Specimen ; c:demonstrates c:MessageList , c:Message ; c:label "Message list" ;
     c:help "Messages as data: as:Note nodes with as:attributedTo, as:content and as:published, the thread's c:item. Each becomes a minted c:Message - the author's avatar, name and time - in order of publication; c:viewer's own are at the end. The list is a log (role=log), and a prv:sensitive note is hidden in private mode. The Chat example is built on it." ;
     c:children ( ui:dt-messages-thread ) .
 
@@ -186,6 +188,15 @@ ui:dt-messages-spec a c:Specimen ; c:label "Message list" ;
 ui:dt-timeline-log a c:Timeline ; c:label "Recent events" ; c:of beh:ChangeLog ; c:limit 6 ;
     c:emptyText "No events yet: sort the table or open the tree, and they appear here." .
 ui:dt-timeline a c:Flippable ; c:front ui:dt-timeline-spec .
-ui:dt-timeline-spec a c:Specimen ; c:label "Timeline" ;
+ui:dt-timeline-spec a c:Specimen ; c:demonstrates c:Timeline , c:TimelineItem ; c:label "Timeline" ;
     c:help "The newest members of the change-log LDES, read from its head (beh:latest, then beh:previous): what happened, to which component, when, and the size of the change. Members are immutable, so each is rendered once." ;
     c:children ( ui:dt-timeline-log ) .
+
+# --- legend: categories drawn in their colors ----------------------------------------------------------
+
+ui:dt-legend-kinds a c:Legend ; c:label "Activity kinds" ; c:of net:Kind .
+ui:dt-legend-statuses a c:Legend ; c:label "Statuses" ; c:items ( net:Pending net:Complete net:Failed net:Open net:Closed ) .
+ui:dt-legend a c:Flippable ; c:front ui:dt-legend-spec .
+ui:dt-legend-spec a c:Specimen ; c:demonstrates c:Legend ; c:label "Legend" ;
+    c:help "Swatches and labels for categories: the instances of a class by sem:order (network activity kinds, each drawn in its c:swatch series color), or an explicit list (statuses, which are states and so carry a sty:tone instead)." ;
+    c:children ( ui:dt-legend-kinds ui:dt-legend-statuses ) .

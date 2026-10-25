@@ -34,7 +34,7 @@ ui:networkExample a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:net-intro ui:net-stage ) .
 ui:networkExample sem:warm sem:OnIntent .
 ui:net-intro a c:Text ;
-    c:label "An in-app network inspector, built from the Inspection components. It lists what this page does on the network - fetches, sockets and their messages, application events and spans - as the capture records it, beside sample entries from an earlier visit. Filter, sort, select a row to see its headers and bodies, drag the column edges, the divider and the panel's top edge; all of it is graph state." .
+    c:label "An in-app network inspector, built from general components: a dock panel, a toolbar of filters, a split view, a data grid with a waterfall, description lists and body viewers. It lists what this page does on the network - fetches, sockets and their messages, application events and spans - as the capture records it, beside sample entries from an earlier visit. Filter, sort, select a row to see its headers and bodies, drag the column edges, the divider and the panel's top edge; all of it is graph state." .
 
 ui:net-stage a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:net-page ui:net-inspector ) .
 ui:net-page a c:Text ; sty:textStyle sty:Caption ;

@@ -201,16 +201,23 @@ the component set. The demo's **Components** page shows all of it.
   rule aggregates that stream.
 
 ### Components
-Eighty-one component classes in nine groups (layout, type, actions, inputs,
-feedback, data, navigation, overlays, disclosure), plus the views and charts
-the demo is built from, and the inspection parts (a data grid with a time axis
-and filters, split and docked panes, payload views, toolbar pieces; files
-`grid`, `panes`, `payload`, `toolbar`, gallery page Inspection) that the
-network inspector example is composed of; [DESIGN.md](DESIGN.md) lists them. Each group is one
+About 140 component classes in eleven groups (layout, type, actions, inputs,
+feedback, data, navigation, overlays, disclosure, windows, inspection), each
+class with its mixins and parts in one group (`sem:group`,
+`ontology/components/groups.ttl`). The parts an in-app inspector is made of are
+general and live in their groups - a data grid with a time axis and filters, a
+legend and payload views (data), split and docked panes (layout), a toolbar
+(actions), a search field and a code editor (inputs), a live indicator and a
+count badge (feedback) - and the network inspector example is composed of them;
+the inspection group is the graph looking at itself (the SPARQL workbench and
+its results, query, triples and stream views, element markup, the reference).
+[DESIGN.md](DESIGN.md) lists them. Each group is one
 file of each kind: `ontology/components/<group>.ttl` (the vocabulary,
 renderings and reactions), `ontology/theme/<group>.ttl` (its styles),
 `src/components/<group>.ts` (function rules and reactions) and
-`demo/gallery/<group>.ttl` (its gallery page). The whole demo
+`demo/gallery/<group>.ttl` (its gallery page). Each specimen says which classes
+it demonstrates (`c:demonstrates`), and `test/gallery.test.ts` keeps it on the
+page of their group. The whole demo
 (`demo/app.ttl`) is built from these; the host only mounts it and performs
 effects of graph state.
 

@@ -18,6 +18,11 @@ c:Specimen a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "A titled example: heading (c:label), description (c:help) and a stage of components (c:children)."@en ;
     sem:slug "specimen" .
+c:demonstrates a owl:ObjectProperty ; rdfs:domain c:Specimen ; rdfs:range owl:Class ;
+    rdfs:label "demonstrates"@en , "демонструє"@uk , "zeigt"@de , "يعرض"@ar ;
+    rdfs:comment """The classes a specimen is a specimen of (components, their mixins or parts): what it is
+about, not every class it uses (a toolbar's specimen uses a search field, and demonstrates the
+toolbar). A gallery shows a specimen with its classes' group (sem:group); a test keeps it there."""@en .
 c:stage a owl:ObjectProperty ; rdfs:domain c:Specimen ; rdfs:range pos:Layout ;
     rdfs:comment "How the stage lays its children out (a pos:Layout)."@en .
 c:SpecimenRendering a sem:Rendering ; sem:targets c:Specimen ; sem:stratum 0 .

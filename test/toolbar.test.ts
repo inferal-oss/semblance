@@ -6,15 +6,15 @@ import { expectSameRendering, implementationGaps } from './implementations.ts'
 const UI = 'https://semblance.dev/demo#'
 const NET = NS.net
 
-/** The demo shell on the Components page, showing the Inspection group. */
-function inspection(kind: 'oxigraph' | 'n3' | 'wat' | 'rust', prefer: 'sparql' | 'function') {
+/** The demo shell on the Components page, showing a gallery group (the toolbar is on Actions, the legend on Data, the live indicator and the count badge on Feedback). */
+function gallery(page: string, kind: 'oxigraph' | 'n3' | 'wat' | 'rust', prefer: 'sparql' | 'function') {
   const shell = mountShell(5, kind, prefer)
   shell.showPage('Components')
   const { store, runtime } = shell
   const f = store.factory
   const app = f.namedNode(UI + 'app')
   const group = f.namedNode(UI + 'galleryGroup')
-  runtime.apply({ remove: store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupInspection'))] })
+  runtime.apply({ remove: store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + page))] })
   shell.shell.flush()
   const root = (id: string) => {
     const el = shell.shell.nodeOf(`${UI}${id}/~root`) as HTMLElement | undefined
@@ -35,7 +35,7 @@ describe('toolbar components: implementations', () => {
     expect(implementationGaps(['components/toolbar.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
   it('renders the same with SPARQL and with function rules', () => {
-    expectSameRendering(['GroupInspection'])
+    expectSameRendering(['GroupActions', 'GroupData', 'GroupFeedback'])
   })
 })
 
@@ -48,8 +48,8 @@ describe.each([
   ['rust', 'sparql'],
 ] as const)('toolbar components (%s, %s)', (kind, prefer) => {
   it('a toolbar is a named row of its children', () => {
-    const { root } = inspection(kind, prefer)
-    const bar = root('in-tb-bar')!
+    const { root } = gallery('GroupActions', kind, prefer)
+    const bar = root('act-tb-bar')!
     expect(bar.getAttribute('data-sem-c')).toBe('toolbar')
     expect(bar.getAttribute('role')).toBe('toolbar')
     expect(bar.getAttribute('aria-label')).toBe('Filters')
@@ -59,91 +59,91 @@ describe.each([
   })
 
   it('a search field writes what is typed to the bound property, and removes it when emptied, cleared or escaped', () => {
-    const { root, fire, values, press } = inspection(kind, prefer)
-    const field = () => root('in-tb-search')!
+    const { root, fire, values, press } = gallery('GroupActions', kind, prefer)
+    const field = () => root('act-tb-search')!
     const input = () => field().querySelector('input')!
     expect(input().getAttribute('aria-label')).toBe('Filter entries')
     expect(input().getAttribute('placeholder')).toBe('Filter URL, event or correlation…')
     expect(field().querySelector('.sem-clear')).toBeNull()
     input().value = 'todos'
     fire(input(), 'input')
-    expect(values('in-tb-filter', UI + 'in-tb-text')).toEqual(['todos'])
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual(['todos'])
     expect(input().getAttribute('value')).toBe('todos')
     expect(field().querySelector('.sem-clear')!.getAttribute('aria-label')).toBe('Clear search')
     input().value = ''
     fire(input(), 'input')
-    expect(values('in-tb-filter', UI + 'in-tb-text')).toEqual([])
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual([])
     expect(field().querySelector('.sem-clear')).toBeNull()
     input().value = 'api'
     fire(input(), 'input')
     fire(field().querySelector('.sem-clear span')!, 'click')
-    expect(values('in-tb-filter', UI + 'in-tb-text')).toEqual([])
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual([])
     input().value = 'socket'
     fire(input(), 'input')
     expect(press(input(), 'Escape')).toBe(true)
-    expect(values('in-tb-filter', UI + 'in-tb-text')).toEqual([])
+    expect(values('act-tb-filter', UI + 'act-tb-text')).toEqual([])
     // With nothing to clear, Escape is left alone.
     expect(press(input(), 'Escape')).toBe(false)
   })
 
   it('a legend lists categories in order, each in its swatch color or tone', () => {
-    const { root } = inspection(kind, prefer)
-    const kinds = root('in-tb-kinds')!
+    const { root } = gallery('GroupData', kind, prefer)
+    const kinds = root('dt-legend-kinds')!
     expect(kinds.getAttribute('role')).toBe('list')
     expect(kinds.getAttribute('aria-label')).toBe('Activity kinds')
     const items = [...kinds.querySelectorAll('li')]
     expect(items.map((li) => li.textContent)).toEqual(['HTTP', 'Socket lifetime', 'Sent / received', 'Event'])
     expect(items[0]!.querySelector('.sem-swatch')!.getAttribute('style')).toBe('--swatch: var(--sem-series-1)')
     expect(items[0]!.querySelector('.sem-swatch')!.getAttribute('aria-hidden')).toBe('true')
-    const statuses = [...root('in-tb-statuses')!.querySelectorAll('li')]
+    const statuses = [...root('dt-legend-statuses')!.querySelectorAll('li')]
     expect(statuses.map((li) => li.textContent)).toEqual(['Pending', 'Complete', 'Failed', 'Open', 'Closed'])
     expect(statuses.map((li) => li.querySelector('.sem-swatch')!.getAttribute('data-sem-tone'))).toEqual(['warning', 'success', 'danger', 'info', 'neutral'])
   })
 
   it('a live indicator shows a boolean and flips it', () => {
-    const { root, fire, values } = inspection(kind, prefer)
-    const live = () => root('in-tb-live-capture')!
+    const { root, fire, values } = gallery('GroupFeedback', kind, prefer)
+    const live = () => root('fb-live-capture')!
     expect(live().tagName).toBe('BUTTON')
     expect(live().getAttribute('aria-pressed')).toBe('true')
     expect(live().getAttribute('aria-label')).toBe('Recording')
     expect(live().textContent).toBe('Recording')
     fire(live().querySelector('.sem-state')!, 'click')
-    expect(values('in-tb-recorder', UI + 'in-tb-recording')).toEqual(['false'])
+    expect(values('fb-live-recorder', UI + 'fb-live-recording')).toEqual(['false'])
     expect(live().getAttribute('aria-pressed')).toBe('false')
     expect(live().textContent).toBe('Paused')
     fire(live(), 'click')
-    expect(values('in-tb-recorder', UI + 'in-tb-recording')).toEqual(['true'])
+    expect(values('fb-live-recorder', UI + 'fb-live-recording')).toEqual(['true'])
     // Its own state, with its own words.
-    const own = () => root('in-tb-live-own')!
+    const own = () => root('fb-live-own')!
     expect(own().textContent).toBe('Live')
     fire(own(), 'click')
-    expect(values('in-tb-live-own', NS.c + 'checked')).toEqual(['false'])
+    expect(values('fb-live-own', NS.c + 'checked')).toEqual(['false'])
     expect(own().textContent).toBe('Frozen')
     expect(own().getAttribute('aria-label')).toBe('Live')
   })
 
   it('a count badge counts members, of a class too, and follows the collection', () => {
-    const { root, fire, runtime, f, shell } = inspection(kind, prefer)
-    expect(root('in-tb-count-all')!.textContent).toBe('3')
-    expect(root('in-tb-count-all')!.getAttribute('aria-label')).toBe('3 entries')
-    expect(root('in-tb-count-all')!.getAttribute('role')).toBe('img')
-    expect(root('in-tb-count-http')!.textContent).toBe('2')
+    const { root, fire, runtime, f, shell } = gallery('GroupFeedback', kind, prefer)
+    expect(root('fb-count-all')!.textContent).toBe('3')
+    expect(root('fb-count-all')!.getAttribute('aria-label')).toBe('3 entries')
+    expect(root('fb-count-all')!.getAttribute('role')).toBe('img')
+    expect(root('fb-count-http')!.textContent).toBe('2')
     // net:Capture holds the network example's sample entries (demo/gallery/_network.ttl).
-    expect(root('in-tb-count-capture')!.textContent).toBe('18')
+    expect(root('fb-count-capture')!.textContent).toBe('18')
     // The demo's add button is a SPARQL-only reaction; N3 has no SPARQL, so add the member directly.
     if (kind === 'n3') {
-      const m = f.namedNode(UI + 'in-tb-e4')
-      runtime.apply({ remove: [], add: [f.quad(f.namedNode(UI + 'in-tb-stream'), f.namedNode(NS.tree + 'member'), m), f.quad(m, f.namedNode(NS.rdf + 'type'), f.namedNode(NET + 'Event'))] })
+      const m = f.namedNode(UI + 'fb-count-e4')
+      runtime.apply({ remove: [], add: [f.quad(f.namedNode(UI + 'fb-count-stream'), f.namedNode(NS.tree + 'member'), m), f.quad(m, f.namedNode(NS.rdf + 'type'), f.namedNode(NET + 'Event'))] })
       shell.flush()
-    } else fire(root('in-tb-add')!, 'click')
-    expect(root('in-tb-count-all')!.textContent).toBe('4')
-    expect(root('in-tb-count-http')!.textContent).toBe('2')
+    } else fire(root('fb-count-add')!, 'click')
+    expect(root('fb-count-all')!.textContent).toBe('4')
+    expect(root('fb-count-http')!.textContent).toBe('2')
     const e = f.namedNode('urn:test:exchange')
     runtime.apply({
       remove: [],
       add: [f.quad(f.namedNode(NET + 'Capture'), f.namedNode(NS.tree + 'member'), e), f.quad(e, f.namedNode(NS.rdf + 'type'), f.namedNode(NET + 'Exchange'))],
     })
     shell.flush()
-    expect(root('in-tb-count-capture')!.textContent).toBe('19')
+    expect(root('fb-count-capture')!.textContent).toBe('19')
   })
 })

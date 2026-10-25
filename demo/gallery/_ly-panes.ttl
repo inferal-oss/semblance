@@ -1,0 +1,90 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# Layout gallery: panes. A split view (side by side and stacked) whose divider position is
+# graph state, and dock panels attached to an edge of their container.
+
+ui:ly-panes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ly-split ui:ly-split-stacked ui:ly-dock ui:ly-dock-end ) .
+
+# --- SplitView: a list beside its details ---------------------------------------------------------
+
+ui:ly-split-view a c:SplitView ; c:label "the request list" ; c:ratio 0.4 ; c:minSize 140 ;
+    c:primary ui:ly-split-list ; c:secondary ui:ly-split-detail .
+ui:ly-split-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ;
+    c:children ( ui:ly-split-l1 ui:ly-split-l2 ui:ly-split-l3 ui:ly-split-l4 ) .
+ui:ly-split-l1 a c:Text ; sty:textStyle sty:Mono ; c:label "#1  GET /api/todos" .
+ui:ly-split-l2 a c:Text ; sty:textStyle sty:Mono ; c:label "#2  POST /api/todos" .
+ui:ly-split-l3 a c:Text ; sty:textStyle sty:Mono ; c:label "#3  GET /api/user" .
+ui:ly-split-l4 a c:Text ; sty:textStyle sty:Mono ; c:label "#4  WS  /live" .
+ui:ly-split-item-method c:label "Method" ; c:value "POST" .
+ui:ly-split-item-url c:label "URL" ; c:value "/api/todos" .
+ui:ly-split-item-status c:label "Status" ; c:value "201 Created" .
+ui:ly-split-item-time c:label "Duration" ; c:value "84 ms" .
+ui:ly-split-detail a c:DescriptionList ;
+    c:items ( ui:ly-split-item-method ui:ly-split-item-url ui:ly-split-item-status ui:ly-split-item-time ) .
+ui:ly-split-collapse a c:ToggleSwitch ; sty:size sty:Small ; c:label "Hide the details" ;
+    c:controls ui:ly-split-view ; c:property c:collapsed .
+ui:ly-split-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ly-split-collapse ui:ly-split-view ) .
+ui:ly-split a c:Flippable ; c:front ui:ly-split-spec .
+ui:ly-split-spec a c:Specimen ; c:demonstrates c:SplitView ; c:label "Split view" ;
+    c:help "Two panes and a divider (role=separator). Drag the divider, or focus it and use the arrow keys, Home and End: one beh:Size event sets the first pane's share, c:ratio, as graph state (within c:minSize of either end). c:collapsed hides the second pane; here a switch sets it." ;
+    c:children ( ui:ly-split-col ) .
+
+# --- SplitView, stacked ---------------------------------------------------------------------------
+
+ui:ly-split-stacked-view a c:SplitView ; pos:direction pos:Column ; c:label "the request and its response" ; c:ratio 0.5 ;
+    c:primary ui:ly-split-request ; c:secondary ui:ly-split-response .
+ui:ly-split-request a c:Text ; sty:textStyle sty:Mono ; c:label "POST /api/todos  {\"title\": \"Write the report\"}" .
+ui:ly-split-response a c:Text ; sty:textStyle sty:Mono ; c:label "201 Created  {\"id\": 42, \"title\": \"Write the report\", \"done\": false}" .
+ui:ly-split-stacked a c:Flippable ; c:front ui:ly-split-stacked-spec .
+ui:ly-split-stacked-spec a c:Specimen ; c:demonstrates c:SplitView ; c:label "Split view, stacked" ;
+    c:help "pos:direction pos:Column stacks the panes; the divider then sizes the first pane's height (the up and down arrow keys move it)." ;
+    c:children ( ui:ly-split-stacked-view ) .
+
+# --- DockPanel at the bottom ----------------------------------------------------------------------
+
+ui:ly-dock-panel a c:DockPanel ; c:label "Activity" ; c:badge "3 events" ; c:height 220 ;
+    c:actions ( ui:ly-dock-clear ) ;
+    c:toolbar ui:ly-dock-tools ; c:content ui:ly-dock-body ; c:footer ui:ly-dock-foot .
+ui:ly-dock-clear a c:Button ; c:label "Clear" ; sty:size sty:Small ; sty:emphasis sty:Ghost .
+ui:ly-dock-tools a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:ly-dock-live ui:ly-dock-http ui:ly-dock-socket ) .
+ui:ly-dock-live a c:Badge ; c:label "Recording" ; sty:tone sty:Success .
+ui:ly-dock-http a c:Badge ; c:label "HTTP" ; sty:tone sty:Info .
+ui:ly-dock-socket a c:Badge ; c:label "Socket" ; sty:tone sty:Accent .
+ui:ly-dock-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:ly-dock-e1 ui:ly-dock-e2 ui:ly-dock-e3 ) .
+ui:ly-dock-e1 a c:Text ; sty:textStyle sty:Mono ; c:label "12:00:01  Saved a draft" .
+ui:ly-dock-e2 a c:Text ; sty:textStyle sty:Mono ; c:label "12:00:03  GET /api/todos  200" .
+ui:ly-dock-e3 a c:Text ; sty:textStyle sty:Mono ; c:label "12:00:04  Socket opened" .
+ui:ly-dock-foot a c:Text ; sty:textStyle sty:Caption ; c:label "3 entries · newest last" .
+ui:ly-dock-page a c:Text ; c:label "The panel is docked to the bottom of this surface: it stays at that edge while the page scrolls past it. Its title folds it to its header; its top edge resizes it." .
+ui:ly-dock-stage a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:ly-dock-page ui:ly-dock-panel ) .
+ui:ly-dock a c:Flippable ; c:front ui:ly-dock-spec .
+ui:ly-dock-spec a c:Specimen ; c:demonstrates c:DockPanel ; c:label "Dock panel" ;
+    c:help "A c:Dockable panel: c:attachedTo an edge of its container (the bottom by default), with a header (title, badge, actions), a toolbar, a body and a footer. Its free edge is a size handle (drag it, or focus it and use the arrow keys) that sets c:height; its title folds it (c:expanded). Both are graph state." ;
+    c:children ( ui:ly-dock-stage ) .
+
+# --- DockPanel at the end ---------------------------------------------------------------------------
+
+ui:ly-dock-end-panel a c:DockPanel ; c:label "Details" ; c:attachedTo c:EndEdge ; c:width 240 ; c:minSize 160 ;
+    c:content ui:ly-dock-end-body .
+ui:ly-dock-end-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:inset tok:space-4 ;
+    c:children ( ui:ly-dock-end-t1 ui:ly-dock-end-t2 ) .
+ui:ly-dock-end-t1 a c:Text ; sty:textStyle sty:Subtitle ; c:label "GET /api/todos" .
+ui:ly-dock-end-t2 a c:Text ; sty:textStyle sty:Caption ; c:label "200 · 1.2 KiB · 84 ms" .
+ui:ly-dock-end-page a c:Text ; c:label "Attached to the end edge, the panel's size is its c:width, and its start edge is the handle." .
+ui:ly-dock-end-stage a c:Surface ; sty:elevation sty:Flat ; pos:direction pos:Row ;
+    c:children ( ui:ly-dock-end-page ui:ly-dock-end-panel ) .
+ui:ly-dock-end a c:Flippable ; c:front ui:ly-dock-end-spec .
+ui:ly-dock-end-spec a c:Specimen ; c:demonstrates c:DockPanel ; c:label "Dock panel, at the end" ;
+    c:help "c:attachedTo c:EndEdge: the same panel, sized by c:width." ;
+    c:children ( ui:ly-dock-end-stage ) .
