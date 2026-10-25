@@ -67,6 +67,7 @@
   ;; the walk: j counts the nodes expanded (the start, then the stack's)
   (call $em1 (local.get $f) (@str "k0va") (local.get $j))
   (call $em2 (local.get $f) (@str "{[gagbKf1") (local.get $j) (local.get $len))
+  (call $cx_step (local.get $f))
   (call $em (local.get $f) (@str "gaE?gb:C5gcgajk/jk4ljm0}vd") (local.get $j) (local.get $n) (local.get $at) (local.get $cur))
   (call $em1 (local.get $f) (@str "gak1jva") (local.get $j))
 ;; the edges from cur: the store's list of cur (or of p), read in line (cscan.wat);
@@ -81,6 +82,7 @@
   (call $em (local.get $f) (@str "gagbjgcjCLvd") (local.get $at) (local.get $len) (local.get $cnt) (local.get $base))
   (call $em1 (local.get $f) (@str "k0va") (local.get $hits))
   (call $em2 (local.get $f) (@str "k0va{[gagbOf1") (local.get $i) (local.get $cnt))
+  (call $cx_step (local.get $f))
   (call $scan_row (local.get $f) (local.get $el) (local.get $st) (local.get $lst) (local.get $i) (local.get $r))
   ;; node = the quad's object (or subject)
   (call $em2 (local.get $f) (@str "gak1jva") (local.get $hits) (i32.const 0))

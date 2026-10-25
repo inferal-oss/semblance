@@ -618,10 +618,18 @@ pub extern "C" fn cq_begin(h: u32, shape_id: u32, graphs: u32) -> i32 {
     let n = combos.len() as i32;
     let ctx = sparql::eval::Ctx::new(&mut s.dict, &s.store, default, named, &q.base, q.vars.len());
     s.result.clear();
+    // The run's budget: the module steps in line (budget::cd_addr), cq_end says -2 once it is spent.
+    crate::budget::start();
     unsafe {
         *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new(), keep: Vec::new() });
     }
     n
+}
+
+/// A compiled module's budget step reached the end of its countdown: whether the budget is spent.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_bu_event() -> i32 {
+    crate::budget::event() as i32
 }
 
 #[unsafe(no_mangle)]
@@ -792,6 +800,11 @@ pub extern "C" fn cq_triple(sub: u32, p: u32, o: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_end() -> i32 {
     let Some(r) = (unsafe { (*RUN.0.get()).take() }) else { return fail(b"no compiled run") };
+    if crate::budget::finish() {
+        st().result.clear();
+        fail(b"interrupted");
+        return -2;
+    }
     if r.p.query.form == sparql::Form::Ask {
         return (r.count > 0) as i32;
     }

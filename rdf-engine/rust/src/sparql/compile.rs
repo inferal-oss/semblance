@@ -50,7 +50,8 @@ const LANG_LEN: u32 = 14;
 const SUB: u32 = 15;
 const KEEP: u32 = 16;
 const GROUP: u32 = 17;
-const IMPORTS: [(&[u8], u32); 18] = [
+const BU_EVENT: u32 = 18;
+const IMPORTS: [(&[u8], u32); 19] = [
     (b"cq_begin", T_III_I),
     (b"cq_combo", T_I_V),
     (b"cq_scan", T_IIII_I),
@@ -69,6 +70,7 @@ const IMPORTS: [(&[u8], u32); 18] = [
     (b"cq_sub", T_V_V),
     (b"cq_keep", T_V_V),
     (b"cq_group", T_II_I),
+    (b"cq_bu_event", T_V_I),
 ];
 const NIMPORTS: u32 = IMPORTS.len() as u32;
 
@@ -383,6 +385,19 @@ impl<'q> Gen<'q> {
         self.f(f).i32(0).load(a);
     }
 
+    /// A budget step at a loop's head (right after its exit test, in its block
+    /// and loop): the engine's countdown (budget::cd_addr) less one; at 0,
+    /// cq_bu_event says whether the budget is spent, and if so the loop ends.
+    /// Once spent, every step ends its loop, so the run unwinds to cq_end,
+    /// which returns -2.
+    fn step(&mut self, f: usize) {
+        let cd = crate::budget::cd_addr();
+        let b = self.f(f);
+        let t = b.local();
+        b.i32(0).i32(0).load(cd).i32(-1).op(ADD).tee(t).store(cd);
+        b.get(t).op(EQZ).open(IF).call(BU_EVENT).br(BR_IF, 2).op(END);
+    }
+
     /// Store the local `l` into variable v.
     fn store_var(&mut self, f: usize, v: Var, l: u32) {
         let a = self.frame + 4 * v;
@@ -610,6 +625,7 @@ impl<'q> Gen<'q> {
         let w = self.width as i32 * 4;
         let vars = vars_of(p);
         self.f(f).i32(0).set(i).open(BLOCK).open(LOOP).get(i).global_get(g + 1).op(GE_U).br(BR_IF, 1);
+        self.step(f);
         self.f(f).call(STACK).global_get(g).i32(4).op(MUL).op(ADD).get(i).i32(w).op(MUL).op(ADD).set(r);
         self.f(f).get(i).i32(1).op(ADD).set(i).open(BLOCK);
         // Every check before any merge: a mismatch leaves the block without restoring.
@@ -886,6 +902,7 @@ impl<'q> Gen<'q> {
             binds.push((c, v, save));
         }
         self.f(f).open(BLOCK).open(LOOP).get(i).get(n).op(GE_U).br(BR_IF, 1);
+        self.step(f);
         self.f(f).call(STACK).get(at).i32(4).op(MUL).op(ADD).get(i).i32(12).op(MUL).op(ADD).set(r);
         self.f(f).get(i).i32(1).op(ADD).set(i);
         self.f(f).open(BLOCK);

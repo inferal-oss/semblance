@@ -18,7 +18,8 @@
 ;; Steps are counted down to the next event, the first of: the fuel running
 ;; out, or a multiple of 4096 steps (a look at the clock). $step then does one
 ;; decrement; $bu_event does the rest.
-(global $bu_cd (mut i32) (i32.const 0))        ;; steps to the next event
+;; Steps to the next event: the word at $bases + 60 (compiled modules count it
+;; down in line, calling cq_bu_event when it reaches 0).
 (global $bu_chunk (mut i32) (i32.const 0))     ;; steps from the last event to the next
 
 ;; At the start of a run: the whole budget again.
@@ -34,16 +35,17 @@
   (local.set $n (i32.sub (i32.const 4096) (i32.and (global.get $bu_ticks) (i32.const 4095))))
   (if (i64.lt_u (global.get $bu_left) (i64.extend_i32_u (local.get $n))) (then (local.set $n (i32.wrap_i64 (global.get $bu_left)))))
   (global.set $bu_chunk (local.get $n))
-  (global.set $bu_cd (local.get $n)))
+  (i32.store offset=60 (global.get $bases) (local.get $n)))
 
 ;; One step; whether the budget is spent.
 (func $step (result i32)
+  (local $cd i32)
   (if (i32.eqz (global.get $bu_active)) (then (return (i32.const 0))))
-  (global.set $bu_cd (i32.sub (global.get $bu_cd) (i32.const 1)))
-  (if (result i32) (global.get $bu_cd) (then (i32.const 0)) (else (call $bu_event))))
+  (i32.store offset=60 (global.get $bases) (local.tee $cd (i32.sub (i32.load offset=60 (global.get $bases)) (i32.const 1))))
+  (if (result i32) (local.get $cd) (then (i32.const 0)) (else (call $bu_event))))
 
 ;; The step that ends a chunk: the fuel used, the clock read on every 4096th step.
-(func $bu_event (result i32)
+(func $bu_event (export "cq_bu_event") (result i32)
   (if (i32.eqz (global.get $bu_stop)) (then
     (global.set $bu_ticks (i32.add (global.get $bu_ticks) (global.get $bu_chunk)))
     (global.set $bu_left (i64.sub (global.get $bu_left) (i64.extend_i32_u (global.get $bu_chunk))))
@@ -54,5 +56,5 @@
           (global.set $bu_stop (f64.ge (call $now_ms) (global.get $bu_deadline)))))))
     (if (i32.eqz (global.get $bu_stop)) (then (call $bu_next) (return (i32.const 0))))))
   ;; spent: every later step ends here too
-  (global.set $bu_cd (i32.const 1))
+  (i32.store offset=60 (global.get $bases) (i32.const 1))
   (i32.const 1))

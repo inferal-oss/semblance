@@ -337,7 +337,11 @@ export class Engine {
   instantiateCompiled(module: WebAssembly.Module): CompiledExports {
     return new WebAssembly.Instance(module, { engine: this.x as unknown as WebAssembly.ModuleImports }).exports as unknown as CompiledExports
   }
-  /** @internal Run a compiled query; negative: its error (the caller falls back). */
+  /** @internal A compiled run stopped by the budget (-2): its error. */
+  interrupted(): never {
+    throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || 'interrupted', true)
+  }
+  /** @internal Run a compiled query; negative: its error (the caller falls back, except -2: interrupted). */
   runCompiled(c: CompiledExports, graphs: ArrayLike<number>): number {
     this.putIds(graphs)
     return c.run(graphs.length)
@@ -427,6 +431,8 @@ export class Query {
     if (typeof c === 'object') {
       n = this.engine.runCompiled(c, graphs)
       if (n >= 0) this.engine.stats.compiledRuns++
+      // Stopped by the budget: the interpreter would be too, so no fallback.
+      else if (n === -2) this.engine.interrupted()
     }
     if (n < 0) {
       n = this.engine.runQuery(this.handle, graphs)

@@ -163,6 +163,14 @@
 (@define S_FINAL 11)  ;; a solution
 (@define S_SEL 12)
 (@define S_LATEND 13) ;; a, b: the LATERAL context (row, visible slots) of the rest    ;; S_BIND of a SELECT expression after another: BNODE(s) of the same solution
+;; A budget step at a loop's head (right after its exit test, in its block and
+;; loop): the countdown at $bases + 60 (budget.wat) less one; at 0, cq_bu_event
+;; says whether the budget is spent, and if so the loop ends. Once spent, every
+;; step ends its loop, so the run unwinds to cq_end, which returns -2.
+(func $cx_step (param $f i32)
+  (call $em (local.get $f) (@str "k0k0makdjtbMagbE(Ccf2}") (i32.add (global.get $bases) (i32.const 60)) (call $local (local.get $f))
+    (i32.const CX_BU_EVENT) (i32.const -1)))
+
 ;; What is known about a variable (a byte per slot in a state, after +0 the
 ;; local holding the stack top): 0 unbound, maybe bound, certainly bound.
 (@define MAYBE 1) (@define CERTAIN 2)
@@ -840,8 +848,12 @@
   (if (local.get $lst)
     (then
       (call $em2 (local.get $f) (@str "{[gagbOf1") (local.get $i) (local.get $n))
+      (call $cx_step (local.get $f))
       (call $scan_row (local.get $f) (local.get $el) (local.get $st) (local.get $lst) (local.get $i) (local.get $r)))
-    (else (call $em (local.get $f) (@str "{[gagbOf1C5gck4ljgak<ljvdgak1jva{") (local.get $i) (local.get $n) (local.get $at) (local.get $r))))
+    (else
+      (call $em2 (local.get $f) (@str "{[gagbOf1") (local.get $i) (local.get $n))
+      (call $cx_step (local.get $f))
+      (call $em (local.get $f) (@str "C5gck4ljgak<ljvdgak1jva{") (local.get $i) (local.get $n) (local.get $at) (local.get $r))))
   (call $bind_recs (local.get $f) (local.get $recs) (local.get $nr) (local.get $r) (i32.const 1))
   (call $bind_recs (local.get $f) (local.get $recs) (local.get $nr) (local.get $r) (i32.const 0))
   (call $cx_emit (local.get $f) (local.get $rest) (local.get $next))
@@ -896,7 +908,9 @@
         (call $em (local.get $f) (@str "k0mavb") (call $addr (local.get $s)) (i32.load (i32.add (local.get $saves) (i32.shl (local.get $s) (i32.const 2)))) (i32.const 0) (i32.const 0))))
       (local.set $s (i32.add (local.get $s) (i32.const 1)))
       (br $slots))))
-  (call $em (local.get $f) (@str "{[gagbOf1C5gck4lj") (local.get $i) (local.get $n) (local.get $at) (i32.const 0))
+  (call $em2 (local.get $f) (@str "{[gagbOf1") (local.get $i) (local.get $n))
+  (call $cx_step (local.get $f))
+  (call $em (local.get $f) (@str "C5gck4lj") (local.get $i) (local.get $n) (local.get $at) (i32.const 0))
   (call $em (local.get $f) (@str "gakbljvcgak1jva") (local.get $i) (call $width) (local.get $r) (i32.const 0))
   (call $copy_saved (local.get $f) (local.get $saves) (local.get $r))
   ;; what is certain after it: a group's certain variables, a triple's or path's
@@ -1221,13 +1235,14 @@
 
 ;; The module's bytes: header (types, imports: cx-header.ts writes it), functions,
 ;; globals, exports, code.
-(@define CX_HEADER 619)
-(@define CX_IMPORTS 30)
+(@define CX_HEADER 640)
+(@define CX_IMPORTS 31)
+(@define CX_BU_EVENT 30)
 (func $module (result i32)
   (local $out i32) (local $t i32) (local $i i32) (local $f i32) (local $body i32) (local $n i32)
   (local.set $out (call $bb_new))
   (call $bputs (local.get $out)
-    (@words32 0x6d736100 0x00000001 0x60093501 0x60007f01 0x7f017f01 0x7f7f0360 0x607f017f 0x7f7f7f04 0x607f017f 0x607f0100 0x03600000 0x007f7f7f 0x7f7f0260 0x05607f01 0x7f7f7f7f 0x027f017f 0x061f04a9 0x69676e65 0x6d06656e 0x726f6d65 0x00000279 0x676e6506 0x08656e69 0x625f7163 0x6e696765 0x65060200 0x6e69676e 0x71630865 0x6d6f635f 0x00006f62 0x676e6506 0x07656e69 0x735f7163 0x006e6163 0x6e650603 0x656e6967 0x5f716307 0x68746170 0x65060300 0x6e69676e 0x71630765 0x6176655f 0x0607006c 0x69676e65 0x6308656e 0x74735f71 0x006b6361 0x6e650604 0x656e6967 0x5f716307 0x74736574 0x65060100 0x6e69676e 0x71630865 0x6c61765f 0x01006575 0x676e6506 0x0b656e69 0x735f7163 0x74756c6f 0x006e6f69 0x6e650605 0x656e6967 0x5f716309 0x70697274 0x0600656c 0x676e6506 0x06656e69 0x655f7163 0x0400646e 0x676e6506 0x0b656e69 0x73657266 0x6e625f68 0x0065646f 0x6e650604 0x656e6967 0x72657409 0x696b5f6d 0x0100646e 0x676e6506 0x0d656e69 0x6d726574 0x7461645f 0x70797461 0x06010065 0x69676e65 0x740d656e 0x5f6d7265 0x676e616c 0x6e656c5f 0x65060100 0x6e69676e 0x61680365 0x06030073 0x69676e65 0x6306656e 0x75735f71 0x06050062 0x69676e65 0x6307656e 0x656b5f71 0x05007065 0x676e6506 0x08656e69 0x675f7163 0x70756f72 0x65060700 0x6e69676e 0x71630665 0x7274735f 0x65060700 0x6e69676e 0x71630665 0x6972695f 0x65060700 0x6e69676e 0x71630665 0x6d756e5f 0x65060100 0x6e69676e 0x71630865 0x6e6f745f 0x03006d75 0x676e6506 0x07656e69 0x745f7163 0x006d7265 0x6e650601 0x656e6967 0x5f716308 0x656c7063 0x0607006e 0x69676e65 0x6308656e 0x70635f71 0x0066666f 0x6e650602 0x656e6967 0x5f716308 0x66727473 0x0608006e 0x69676e65 0x6306656e 0x62655f71 0x06010076 0x69676e65 0x6307656e 0x6f725f71 0x01006d6f 0x676e6506 0x09656e69 0x635f7163 0x65686361 0x00010064)
+    (@words32 0x6d736100 0x00000001 0x60093501 0x60007f01 0x7f017f01 0x7f7f0360 0x607f017f 0x7f7f7f04 0x607f017f 0x607f0100 0x03600000 0x007f7f7f 0x7f7f0260 0x05607f01 0x7f7f7f7f 0x027f017f 0x062004be 0x69676e65 0x6d06656e 0x726f6d65 0x00000279 0x676e6506 0x08656e69 0x625f7163 0x6e696765 0x65060200 0x6e69676e 0x71630865 0x6d6f635f 0x00006f62 0x676e6506 0x07656e69 0x735f7163 0x006e6163 0x6e650603 0x656e6967 0x5f716307 0x68746170 0x65060300 0x6e69676e 0x71630765 0x6176655f 0x0607006c 0x69676e65 0x6308656e 0x74735f71 0x006b6361 0x6e650604 0x656e6967 0x5f716307 0x74736574 0x65060100 0x6e69676e 0x71630865 0x6c61765f 0x01006575 0x676e6506 0x0b656e69 0x735f7163 0x74756c6f 0x006e6f69 0x6e650605 0x656e6967 0x5f716309 0x70697274 0x0600656c 0x676e6506 0x06656e69 0x655f7163 0x0400646e 0x676e6506 0x0b656e69 0x73657266 0x6e625f68 0x0065646f 0x6e650604 0x656e6967 0x72657409 0x696b5f6d 0x0100646e 0x676e6506 0x0d656e69 0x6d726574 0x7461645f 0x70797461 0x06010065 0x69676e65 0x740d656e 0x5f6d7265 0x676e616c 0x6e656c5f 0x65060100 0x6e69676e 0x61680365 0x06030073 0x69676e65 0x6306656e 0x75735f71 0x06050062 0x69676e65 0x6307656e 0x656b5f71 0x05007065 0x676e6506 0x08656e69 0x675f7163 0x70756f72 0x65060700 0x6e69676e 0x71630665 0x7274735f 0x65060700 0x6e69676e 0x71630665 0x6972695f 0x65060700 0x6e69676e 0x71630665 0x6d756e5f 0x65060100 0x6e69676e 0x71630865 0x6e6f745f 0x03006d75 0x676e6506 0x07656e69 0x745f7163 0x006d7265 0x6e650601 0x656e6967 0x5f716308 0x656c7063 0x0607006e 0x69676e65 0x6308656e 0x70635f71 0x0066666f 0x6e650602 0x656e6967 0x5f716308 0x66727473 0x0608006e 0x69676e65 0x6306656e 0x62655f71 0x06010076 0x69676e65 0x6307656e 0x6f725f71 0x01006d6f 0x676e6506 0x09656e69 0x635f7163 0x65686361 0x06010064 0x69676e65 0x630b656e 0x75625f71 0x6576655f 0x0400746e)
     (i32.const CX_HEADER))
   (local.set $n (i32.load offset=4 (global.get $cx_funcs)))
   ;; functions: run (i32) -> i32, the rest (i32) -> ()
@@ -1430,6 +1445,8 @@
   (local.set $ok (call $memeq (local.get $b) (i32.add (local.get $shape) (i32.const 4)) (global.get $cx_bw)))
   (call $free (local.get $b) (global.get $cx_bw))
   (if (i32.eqz (local.get $ok)) (then (return (call $fail (@str "bound variables changed since compile")))))
+  ;; the run's budget (budget.wat): the module steps in line, cq_end says -2 once it is spent
+  (call $bu_start)
   (call $run_begin (local.get $q) (local.get $graphs))
   (call $cx_sbuf)
   (i32.store offset=8 (global.get $bases) (global.get $dg))
@@ -1653,11 +1670,17 @@
     (then (call $emit_triple (local.get $s) (local.get $p) (local.get $o)))))
 
 (func (export "cq_end") (result i32)
+  (local $n i32)
   (if (global.get $cx_dset) (then (call $set_free (global.get $cx_dset)) (global.set $cx_dset (i32.const 0))))
   (call $free (global.get $cs) (i32.shl (global.get $cs_cap) (i32.const 2)))
   (global.set $cs (i32.const 0))
   (global.set $cs_cap (i32.const 0))
-  (call $run_end (global.get $q) (i32.ne (global.get $cx_count) (i32.const 0))))
+  (local.set $n (call $run_end (global.get $q) (i32.ne (global.get $cx_count) (i32.const 0))))
+  (global.set $bu_active (i32.const 0))
+  (if (global.get $bu_stop) (then
+    (drop (call $fail (@str "interrupted")))
+    (return (i32.const -2))))
+  (local.get $n))
 
 ;; --- LATERAL in line ---------------------------------------------------------------
 ;; The interpreter evaluates LATERAL's group once per row with the row substituted

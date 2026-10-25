@@ -28,6 +28,8 @@ const IMPORTS: [string, number][] = [
   ['cq_room', 1],
   // a subquery solved already in this run (compile.wat)
   ['cq_cached', 1],
+  // the query budget: a step's countdown reached 0 (compile.wat, $cx_step)
+  ['cq_bu_event', 4],
 ]
 const uleb = (out: number[], v: number) => {
   do {
