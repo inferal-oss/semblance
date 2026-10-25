@@ -7,6 +7,7 @@
 @prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
 # The Reference: every component, layer and vocabulary term, read from the ontology that runs
@@ -17,12 +18,23 @@
 # alignment with other vocabularies (c:TermAlignment), its neighbourhood as a graph (a
 # c:ResultGraph of a CONSTRUCT with $term bound) and its triples as Turtle (the docs layer's
 # c:ClassDoc). Only the visible tab is evaluated; a selection re-runs it and the tree's own rule.
+# Above the tree, a combobox finds any term the tree lists (c:optionsFrom), by prefixed name or
+# label, the 20 best matches as you type; "/" goes to it from anywhere on the page, and picking
+# one selects it, so the address follows (#reference/c:List).
 
 ui:referenceSubject rdfs:label "Term" , "Термін"@uk , "Begriff"@de , "المصطلح"@ar .
 ui:app ui:referenceSubject c:Window .
 
 ui:reference a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
-    c:children ( ui:referenceTree ui:referenceMain ) .
+    c:children ( ui:referenceSide ui:referenceMain ) .
+ui:referenceSide a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:fill pos:FillLine ;
+    c:children ( ui:referenceSearch ui:referenceTree ) .
+
+ui:referenceSearch a c:Combobox ; c:controls ui:app ; c:property ui:referenceSubject ;
+    c:optionsFrom ui:referenceTree ; c:optionNames c:PrefixedNames ; c:optionLimit 20 ; c:picksFirstMatch true ;
+    key:shortcut "/" ;
+    c:label "Find a term"@en , "Знайти термін"@uk , "Begriff suchen"@de , "ابحث عن مصطلح"@ar ;
+    c:placeholder "c:List, keyboard…" .
 
 ui:referenceTree a c:TermTree ; c:controls ui:app ; c:property ui:referenceSubject ; pos:fill pos:FillLine ;
     c:label "Vocabulary"@en , "Словник"@uk , "Vokabular"@de , "المفردات"@ar ;

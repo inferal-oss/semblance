@@ -304,8 +304,11 @@ describe('the reference, as components', () => {
     const which = [...stats.byRule].filter(([k, v]) => v.runs !== (before.get(k) ?? 0)).map(([k, v]) => `${k.replace(/^.*#/, '')} ×${v.runs - (before.get(k) ?? 0)}`)
     expect(which.some((w) => w.startsWith('TermBranchRendering')), which.join(', ')).toBe(false)
     // The overview, the tree's own rule, the page switch (it follows ui:app), and what the overview
-    // mints anew (its gallery links) with the layers that decorate them.
-    expect(ran, which.join(', ')).toBeLessThanOrEqual(24)
+    // mints anew (its gallery links) with the layers that decorate them; and the search field, which
+    // shows the term: its values' texts, its own rule and its (closed, empty) list of matches - not
+    // the texts of the thousand terms it searches.
+    expect(which.some((w) => w.startsWith('TypeaheadTexts')), which.join(', ')).toBe(false)
+    expect(ran, which.join(', ')).toBeLessThanOrEqual(27)
     // Logged for the report: rule runs and wall time of one selection (Node, linkedom, oxigraph).
     console.log(`reference selection: ${ran} rule runs, ${ms.toFixed(1)} ms`)
   })

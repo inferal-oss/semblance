@@ -36,6 +36,7 @@ const R = {
   ShapeFacet: c + 'ShapeFacet',
   GalleryFacet: c + 'GalleryFacet',
   membersOf: c + 'membersOf',
+  lists: c + 'lists',
   TermCard: c + 'TermCard',
   role: c + 'role',
   RenderingKind: c + 'RenderingKind',
@@ -229,6 +230,26 @@ const tree: FnRule = (ctx, focus) => {
   o.renders(root)
   return o.quads
 }
+
+/**
+ * What the tree lists (c:lists): every branch of its sections and every term the branches hold,
+ * whether open or not. A typeahead offers them (c:optionsFrom); a selection does not re-run this.
+ */
+const listing: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const listed = new Set<string>()
+  const list = (t: NamedNode) => listed.has(t.value) || (listed.add(t.value), o.t(focus, R.lists, t))
+  for (const section of nodes(ctx, ctx.object(focus, R.sections))) {
+    const cls = ctx.object(section, R.branchClass)
+    if (!named(cls)) continue
+    for (const b of ctx.match(null, RDF_TYPE, cls).map((q) => q.subject).filter(named)) {
+      list(b)
+      for (const t of membersOf(ctx, b, section)) list(t)
+    }
+  }
+  return o.quads
+}
+listing.watches = () => new Set([RDF_TYPE, R.sections])
 
 /**
  * One branch: its row (twisty, its own name, how many terms it has) and, while open, its terms,
@@ -749,6 +770,7 @@ export const functions: Record<string, FnRule> = {
   'reference:members': members,
   'reference:card': termCard,
   'reference:tree': tree,
+  'reference:listing': listing,
   'reference:branch': branch,
   'reference:overview': overview,
   'reference:alignment': alignment,

@@ -89,6 +89,11 @@
     sty:declares [ sty:property "transform" ; sty:raw "rotate(180deg)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part "> .sem-ta-field:has(> input:disabled) > .sem-ta-chevron" ;
     sty:declares [ sty:property "pointer-events" ; sty:raw "none" ] .
+# A shortcut's hint (the keyboard layer's, on the field box: key:hintPart) sits before the chevron.
+[] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part "> .sem-ta-field > .sem-ta-chevron" ;
+    sty:declares [ sty:property "order" ; sty:raw "2" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part "> .sem-ta-field[data-sem-key-hint]::after" ;
+    sty:declares [ sty:property "order" ; sty:raw "1" ] .
 
 # A tag input's pills: a list without bullets, wrapping with the input.
 [] a sty:StyleRule ; sty:appliesTo c:TagInput ; sty:part "> .sem-ta-field" ;
@@ -168,7 +173,14 @@
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part ".sem-ta-list > li > .sem-ta-label > mark" ;
+# A detail (another name the option is found by) follows the name, quieter.
+[] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part ".sem-ta-list > li > .sem-ta-detail" ;
+    sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font-size" ; sty:token tok:font-size-small ] .
+[] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part ".sem-ta-list > li > :is(.sem-ta-label, .sem-ta-detail) > mark" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "font-weight" ; sty:raw "650" ] ,

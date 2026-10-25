@@ -19,7 +19,10 @@ export function comboOf(e: KeyboardEvent, apple: boolean): string {
   if (apple ? e.metaKey : e.ctrlKey) parts.push('mod')
   if (apple && e.ctrlKey) parts.push('ctrl')
   if (e.altKey) parts.push('alt')
-  if (e.shiftKey) parts.push('shift')
+  // Shift is part of the combination unless it only spells the key: a character with no case
+  // ("/" is Shift+7 on a German keyboard, "?" is Shift+/ on most).
+  const spelled = e.key.length === 1 && e.key !== ' ' && e.key.toLowerCase() === e.key.toUpperCase()
+  if (e.shiftKey && !spelled) parts.push('shift')
   if (!apple && e.metaKey) parts.push('meta')
   // The space bar is "space" (its key, " ", would be trimmed away).
   parts.push(e.key === ' ' ? 'space' : e.key.toLowerCase())
@@ -52,7 +55,27 @@ const shortcut: FnRule = (ctx, focus) => {
     .attr(root, 'data-sem-shortcut', normalizeShortcut(combo))
     .attr(root, 'data-sem-shortcut-apple', apple)
     .attr(root, 'data-sem-shortcut-other', other)
+  const part = hintPartOf(ctx, focus)
+  if (part !== undefined) {
+    const hint = ctx.nn(mint(focus.value, part))
+    o.attr(hint, 'data-sem-key-hint', other).attr(hint, 'data-sem-key-hint-apple', apple)
+  }
   return o.quads
+}
+
+/** The part a component's class names to show its shortcut hint (key:hintPart), on the class or a superclass. */
+function hintPartOf(ctx: Parameters<FnRule>[0], focus: Parameters<FnRule>[1]): string | undefined {
+  const seen = new Set<string>()
+  const todo = ctx.objects(focus, RDF_TYPE).map((t) => t.value)
+  while (todo.length) {
+    const cls = todo.shift()!
+    if (seen.has(cls)) continue
+    seen.add(cls)
+    const part = str(ctx.object(ctx.nn(cls), NS.key + 'hintPart'))
+    if (part !== undefined) return part
+    todo.push(...ctx.objects(ctx.nn(cls), RDFS_SUBCLASS).map((t) => t.value))
+  }
+  return undefined
 }
 
 const shortcutList: FnRule = (ctx, focus) => {

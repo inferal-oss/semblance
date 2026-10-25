@@ -10,10 +10,15 @@
 
 # Keyboard layer. Any component may carry a shortcut (key:shortcut
 # "mod+shift+k"; "mod" is ⌘ on Apple platforms and Ctrl elsewhere). The layer
-# exposes it as aria-keyshortcuts and a visible hint on the component's root;
-# the event bus turns the key press into activating that root (a click on it,
-# or on its first control; focus for text inputs), so the component's own
-# click reactions run and the change log records an ordinary event.
+# exposes it as aria-keyshortcuts and a visible hint on the component's root
+# (or on the part its class names, key:hintPart); the event bus turns the key
+# press into activating that root (a click on it, or on its first control), so
+# the component's own click reactions run and the change log records an
+# ordinary event. A component whose first control is a text field is focused
+# instead, its text selected, so typing replaces it ("/" to search); an Escape
+# nothing else uses there gives the focus back to where it was. A key that
+# Shift only spells ("/", "?" on another layout) is matched without Shift.
+# Shortcuts without a modifier do not apply while a text field has the focus.
 # c:ShortcutList shows every shortcut in the graph.
 
 <https://semblance.dev/ns/keyboard> a owl:Ontology ;
@@ -22,7 +27,11 @@
 key:Layer a sem:Layer ; rdfs:label "keyboard"@en .
 
 key:shortcut a owl:DatatypeProperty ;
-    rdfs:comment "A key combination that activates the component: modifiers (mod, ctrl, alt, shift, meta) and a key, joined by +."@en .
+    rdfs:comment "A key combination that activates the component: modifiers (mod, ctrl, alt, shift, meta) and a key, joined by +. A text field is focused (its text selected), not clicked."@en .
+key:hintPart a owl:DatatypeProperty ; rdfs:domain owl:Class ;
+    rdfs:comment """On a component class: the part (the local name after "/~") that shows its instances' shortcut hint
+(data-sem-key-hint, data-sem-key-hint-apple), when the root cannot: a typeahead's field box, whose input cannot hold one."""@en .
+c:Typeahead key:hintPart "field" .
 
 key:Shortcuts a sem:Rendering ;
     sem:requires key:shortcut ;
@@ -43,6 +52,9 @@ CONSTRUCT {
   ?combo a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shortcut" ; rdfhtml:attributeValue ?normalized .
   ?apple a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shortcut-apple" ; rdfhtml:attributeValue ?appleValue .
   ?other a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shortcut-other" ; rdfhtml:attributeValue ?otherValue .
+  ?hint rdfhtml:attribute ?hintOther, ?hintApple .
+  ?hintOther a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-key-hint" ; rdfhtml:attributeValue ?otherValue .
+  ?hintApple a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-key-hint-apple" ; rdfhtml:attributeValue ?appleValue .
 }
 WHERE {
   $this key:shortcut ?shortcut .
@@ -67,6 +79,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-shortcut")) AS ?combo)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-shortcut-apple")) AS ?apple)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-shortcut-other")) AS ?other)
+  # The part of the class that shows the hint, if it names one.
+  OPTIONAL { $this a/rdfs:subClassOf* ?hinted . ?hinted key:hintPart ?part }
+  BIND(IF(BOUND(?part), IRI(CONCAT(STR($this), "/~", STR(?part))), ?none) AS ?hint)
+  BIND(IF(BOUND(?part), IRI(CONCAT(STR($this), "/~", STR(?part), "-data-sem-key-hint")), ?none) AS ?hintOther)
+  BIND(IF(BOUND(?part), IRI(CONCAT(STR($this), "/~", STR(?part), "-data-sem-key-hint-apple")), ?none) AS ?hintApple)
 }""" .
 
 c:ShortcutList a owl:Class ;

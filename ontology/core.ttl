@@ -134,6 +134,11 @@ sem:requires a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment """On a rendering or rule: the focus must have at least one of these properties for the
 rule to run at all (checked with a pattern match before any query). Layer rules that target
 every component but concern few (shortcuts, busy, concealed) say so here."""@en .
+sem:unless a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment """On a rendering or rule: the opposite of sem:requires. A focus that has any of these
+properties is not run at all (its output, if any, is retracted), checked the same way before any
+query. Two renderings of one target that take turns (a typeahead's whole option list, or only its
+best matches under c:optionLimit) say which is whose."""@en .
 
 sem:bulk a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment """On a SPARQL rule: false keeps it from being evaluated once for many foci. The engine

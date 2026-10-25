@@ -115,6 +115,7 @@ export const SEM = {
   inputOnly: sem + 'inputOnly',
   bulk: sem + 'bulk',
   requires: sem + 'requires',
+  unless: sem + 'unless',
   refresh: sem + 'refresh',
   NextFrame: sem + 'NextFrame',
   TooltipLayer: sem + 'TooltipLayer',

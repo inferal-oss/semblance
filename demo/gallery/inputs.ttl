@@ -226,7 +226,7 @@ ui:inp-combo-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:inp-combo-country ui:inp-combo-team ui:inp-combo-plan ui:inp-combo-off ) .
 ui:inp-typeahead a c:Flippable ; c:front ui:inp-typeahead-spec .
 ui:inp-typeahead-spec a c:Specimen ; c:demonstrates c:Combobox ; c:label "Combobox" ;
-    c:help "A c:Combobox is a field you type into to find one value of a property (c:controls, c:property), like a c:Choice that searches: role=combobox over a role=listbox, the active option by aria-activedescendant. Its options are the instances of the property's range (or c:optionClass, or a c:options list); ↓ ↑ move, Enter picks, Escape gives your text back. With c:allowsCustom true, a name that matches nothing can be created, checked by a SHACL shape (val:validates). The small one edits the same plan as the radio group." ;
+    c:help "A c:Combobox is a field you type into to find one value of a property (c:controls, c:property), like a c:Choice that searches: role=combobox over a role=listbox, the active option by aria-activedescendant. Its options are the instances of the property's range (or c:optionClass, or a c:options list); ↓ ↑ move, Enter picks, Escape gives your text back. With c:allowsCustom true, a name that matches nothing can be created, checked by a SHACL shape (val:validates). The small one edits the same plan as the radio group. Over thousands of options (the Reference page's search: c:optionsFrom its tree, by prefixed name), c:optionLimit lists only the best matches, built while the list is open." ;
     c:children ( ui:inp-combo-col ) .
 
 # --- Typeahead: TagInput -----------------------------------------------------------------------------
