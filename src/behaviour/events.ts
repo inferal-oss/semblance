@@ -591,7 +591,7 @@ export class EventBus {
     const target = box
     // A box placed in a container (a canvas's item), not on the screen: its left and top are in the
     // container's padding box, and one in flow comes out of it while dragged.
-    const position = kind === 'move' ? target.ownerDocument.defaultView?.getComputedStyle(target).position : undefined
+    const position = kind === 'move' ? target.ownerDocument.defaultView?.getComputedStyle?.(target)?.position : undefined
     const inFlow = position === 'static' || position === 'relative'
     const parent = kind === 'move' && position !== 'fixed' ? (target.offsetParent as HTMLElement | null) : null
     const origin = parent ? parent.getBoundingClientRect() : undefined

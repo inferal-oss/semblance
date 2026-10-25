@@ -161,9 +161,11 @@ describe('the dashboard costs the same at a thousand orders as at two thousand',
     // The filter changes no view.
     expect(one.filter.viewRows).toBe(0)
     // A batch: the cube's work is the batch's (its fifty orders, the cells they touch), not the stream's.
+    // How many cells a random batch touches varies, so the bound is per order: at most a dozen view
+    // rows each (the order's member rows, its cells and the totals they feed).
     for (const m of [one, two]) {
       expect(m.batch.viewRows).toBeGreaterThan(0)
-      expect(m.batch.viewRows).toBeLessThan(400)
+      expect(m.batch.viewRows).toBeLessThan(50 * 12)
     }
     expect(two.batch.ruleRuns).toBe(one.batch.ruleRuns)
   }, 300_000)
