@@ -57,9 +57,11 @@ describe('judgements as maintained findings', () => {
       }
       // Every judgement found something.
       for (const j of JUDGEMENTS) expect(runtime.views.view(PERF + j)!.quads().length, j).toBeGreaterThan(0)
-      // Only the first observation of a kind reaches every partition (an aggregate's value appearing).
+      // Only the first observation of a kind reaches every partition (an aggregate's value appearing);
+      // a step re-evaluates the findings of the configurations and sizes it measures - a few dozen
+      // partitions over all eight judgements - not the run's 1,600 triples.
       expect(t.rebuilds).toBeLessThanOrEqual(4)
-      expect((t.partitions - before) / steps).toBeLessThan(25)
+      expect((t.partitions - before) / steps).toBeLessThan(80)
     }, 300_000)
   }
 })

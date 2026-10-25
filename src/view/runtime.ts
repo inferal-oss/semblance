@@ -848,6 +848,8 @@ class PartState {
     })
     if (all) return 'all'
     const touched = new Map<string, (Term | undefined)[]>()
+    // An expression over the rows changed (a parameter in an aggregate's argument): every partition.
+    if (old.head !== next.head) return 'all'
     if (old.algebra.local === next.algebra.local) return touched
     if (!old.deps || !next.deps || old.patternless !== next.patternless || old.deps.patterns.length !== next.deps.patterns.length) return 'all'
     const lookup = this.rt.lookup(removed, this.view.readsViews)

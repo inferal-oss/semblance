@@ -78,6 +78,8 @@ export interface Part {
   derived?: Derived[]
   /** The body without its triple patterns: when only patterns' constants change (a parameter), their matches say which partitions to evaluate again. */
   patternless?: string
+  /** What a partition row computes besides the body (expressions over it: an aggregate's argument). */
+  head?: string
   algebra: { local: string; op: string; post?: string }
 }
 

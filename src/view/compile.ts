@@ -330,6 +330,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     post: post.binds.length || post.filters.length ? post : undefined,
     derived: derived.length ? derived : undefined,
     patternless: withoutTriples(sel.where, text),
+    head: head.slice(prologue.length),
     algebra: {
       local: keys.length ? `LATERAL(VALUES ${keyText}, {${flat(body)}})` : `{${flat(body)}}`,
       op:

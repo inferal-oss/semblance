@@ -73,6 +73,8 @@ v:kinded a iv:View ; iv:parameter [ iv:variable "kind" ; iv:from v:cfg ; iv:prop
     sem:select """SELECT ?m ?t WHERE { v:s tree:member ?m . ?m v:kind $kind OPTIONAL { ?m v:target ?t } }""" .
 v:atLeast a iv:View ; iv:parameter [ iv:variable "min" ; iv:from v:cfg ; iv:property v:min ; iv:default 3 ] , [ iv:variable "k" ; iv:from v:cfg ; iv:property v:limit ; iv:default 2 ] ;
     sem:select """SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x FILTER(?x >= $min) } ORDER BY ?x ?m LIMIT $k""" .
+v:upTo a iv:View ; iv:parameter [ iv:variable "min" ; iv:from v:cfg ; iv:property v:min ; iv:default 3 ] ;
+    sem:select """SELECT (SUM(IF(?x <= $min, 1, 0)) AS ?below) (COUNT(*) AS ?all) WHERE { v:s tree:member ?m . ?m v:x ?x }""" .
 v:perTarget a iv:View ; iv:targets v:Target ; iv:materialize iv:Graph ;
     sem:select """SELECT (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:target $this }""" .
 `
