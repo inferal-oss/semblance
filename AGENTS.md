@@ -93,6 +93,11 @@ npx tsc --noEmit       # typecheck
   (#8) for the framework, site and examples; the engine tracker (#9) for `rdf-engine/`. Tick its
   boxes as the work lands on `main`, and close it when it is pushed. Work in progress that has no
   issue is invisible to the next person - or agent - who picks it up.
+- **Finish an issue by shipping it.** A small issue done in the shared checkout: commit, run the
+  affected tests, push `main`, tick and close the issue. A larger one (a subagent's branch, several
+  commits, anything a reviewer should see as a whole): push its branch and open a pull request
+  against `main` that says `Closes #<issue>`, with what changed, the design and the test results;
+  merge it once the affected tests (and, before a release-sized merge, the full suite) pass.
 - Several agents often work at once. Do non-trivial work in your own git worktree
   (`git worktree add <dir> HEAD`, symlink `node_modules`, copy `rdf-engine/build/*.wasm`), and
   rebase onto `main` before committing.
