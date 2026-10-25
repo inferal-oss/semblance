@@ -1,0 +1,385 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix ldes: <https://w3id.org/ldes#> .
+@prefix tree: <https://w3id.org/tree#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix wh: <https://semblance.dev/demo/warehouse#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Warehouse: the stockroom of a small bike shop.
+#
+# Eight items, each with a supplier and a minimum to keep on the shelf. Everything that happens
+# to them - a sale, a delivery, a return - is a movement, a member of one stream (wh:movements,
+# an LDES), and nothing else is stored: there is no stock figure to keep in step. What the page
+# shows is three questions asked of the movements:
+#   - how many of each item are on the shelf (a SUM of its movements, with its name and supplier);
+#   - which items are below their minimum (the same, with HAVING);
+#   - what sold most in the last hour (a sliding window, then the top five).
+# They are maintained views (iv:View, docs/IVM.md): plain SPARQL, kept up to date from each
+# movement as it arrives instead of being counted again over the whole history, so a sale costs
+# the same with fifteen movements behind it or fifteen thousand. Each tile says, in one line,
+# what the last change took and what counting again would read.
+# =================================================================================================
+
+ui:ex-warehouse-prefixes sh:declare [ sh:prefix "wh" ; sh:namespace "https://semblance.dev/demo/warehouse#"^^xsd:anyURI ] .
+
+# --- the vocabulary ---------------------------------------------------------------------------------
+
+wh:Item a owl:Class ; rdfs:label "Item" ; rdfs:comment "Something the shop keeps in stock."@en .
+wh:Supplier a owl:Class ; rdfs:label "Supplier" .
+wh:supplier a owl:ObjectProperty ; rdfs:domain wh:Item ; rdfs:range wh:Supplier ; rdfs:label "Supplier" .
+wh:minimum a owl:DatatypeProperty ; rdfs:domain wh:Item ; rdfs:range xsd:integer ; rdfs:label "Minimum" ;
+    rdfs:comment "Below this many on the shelf, the item is on the reorder list."@en .
+wh:caseSize a owl:DatatypeProperty ; rdfs:domain wh:Item ; rdfs:range xsd:integer ;
+    rdfs:comment "How many a delivery from the supplier brings (one case)."@en .
+wh:rushDigits a owl:DatatypeProperty ; rdfs:domain wh:Item ;
+    rdfs:comment "How often the item sells in a rush: the hex digits that pick it (four of sixteen is a quarter of the orders)."@en .
+
+wh:Movement a owl:Class ; rdfs:comment "Something that happened to an item's stock: a member of wh:movements."@en .
+wh:Sale a owl:Class ; rdfs:subClassOf wh:Movement ; rdfs:label "Sale" .
+wh:Restock a owl:Class ; rdfs:subClassOf wh:Movement ; rdfs:label "Delivery" .
+wh:Return a owl:Class ; rdfs:subClassOf wh:Movement ; rdfs:label "Return" .
+wh:item a owl:ObjectProperty ; rdfs:range wh:Item ; rdfs:label "Item" ;
+    rdfs:comment "The item a movement moves - and, on the counter, the item its buttons act on."@en .
+wh:change a owl:DatatypeProperty ; rdfs:domain wh:Movement ; rdfs:range xsd:integer ;
+    rdfs:comment "How the stock changes: negative for a sale, positive for a delivery or a return."@en .
+wh:at a owl:DatatypeProperty ; rdfs:domain wh:Movement ; rdfs:range xsd:dateTime .
+
+# --- the items and their suppliers ---------------------------------------------------------------------
+
+wh:velo a wh:Supplier ; rdfs:label "Velo Parts" .
+wh:stopwell a wh:Supplier ; rdfs:label "Stopwell" .
+wh:northwind a wh:Supplier ; rdfs:label "Northwind Oils" .
+wh:lumen a wh:Supplier ; rdfs:label "Lumen & Co" .
+wh:saferide a wh:Supplier ; rdfs:label "SafeRide" .
+
+wh:tube a wh:Item ; rdfs:label "Inner tube 700c" ; sem:order 1 ; wh:supplier wh:velo ; wh:minimum 20 ; wh:caseSize 25 ; wh:rushDigits "0123" .
+wh:patch a wh:Item ; rdfs:label "Puncture kit" ; sem:order 2 ; wh:supplier wh:velo ; wh:minimum 15 ; wh:caseSize 20 ; wh:rushDigits "456" .
+wh:levers a wh:Item ; rdfs:label "Tyre levers" ; sem:order 3 ; wh:supplier wh:velo ; wh:minimum 10 ; wh:caseSize 20 ; wh:rushDigits "7" .
+wh:pads a wh:Item ; rdfs:label "Brake pads" ; sem:order 4 ; wh:supplier wh:stopwell ; wh:minimum 12 ; wh:caseSize 12 ; wh:rushDigits "89" .
+wh:lube a wh:Item ; rdfs:label "Chain lube" ; sem:order 5 ; wh:supplier wh:northwind ; wh:minimum 10 ; wh:caseSize 12 ; wh:rushDigits "ab" .
+wh:lights a wh:Item ; rdfs:label "Light set" ; sem:order 6 ; wh:supplier wh:lumen ; wh:minimum 6 ; wh:caseSize 6 ; wh:rushDigits "c" .
+wh:bottle a wh:Item ; rdfs:label "Water bottle" ; sem:order 7 ; wh:supplier wh:lumen ; wh:minimum 12 ; wh:caseSize 24 ; wh:rushDigits "de" .
+wh:helmet a wh:Item ; rdfs:label "Helmet" ; sem:order 8 ; wh:supplier wh:saferide ; wh:minimum 4 ; wh:caseSize 4 ; wh:rushDigits "f" .
+
+# --- the movements: a stream -----------------------------------------------------------------------
+# What came before today: a delivery of each item, then a few sales and a return. It is the
+# ledger, so it keeps every movement (no retention policy: a retired movement would change the
+# stock); the Reset button takes away what you added. Movements you add are wh:m-<hash>.
+
+wh:movements a ldes:EventStream ; ldes:timestampPath wh:at ;
+    tree:member wh:h1 , wh:h2 , wh:h3 , wh:h4 , wh:h5 , wh:h6 , wh:h7 , wh:h8 ,
+                wh:h9 , wh:h10 , wh:h11 , wh:h12 , wh:h13 , wh:h14 .
+wh:h1 a wh:Restock ; wh:item wh:tube ; wh:change 60 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h2 a wh:Restock ; wh:item wh:patch ; wh:change 40 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h3 a wh:Restock ; wh:item wh:levers ; wh:change 22 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h4 a wh:Restock ; wh:item wh:pads ; wh:change 14 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h5 a wh:Restock ; wh:item wh:lube ; wh:change 24 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h6 a wh:Restock ; wh:item wh:lights ; wh:change 9 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h7 a wh:Restock ; wh:item wh:bottle ; wh:change 30 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h8 a wh:Restock ; wh:item wh:helmet ; wh:change 8 ; wh:at "2025-12-01T08:00:00Z"^^xsd:dateTime .
+wh:h9 a wh:Sale ; wh:item wh:tube ; wh:change -3 ; wh:at "2025-12-02T10:15:00Z"^^xsd:dateTime .
+wh:h10 a wh:Sale ; wh:item wh:lights ; wh:change -2 ; wh:at "2025-12-02T11:40:00Z"^^xsd:dateTime .
+wh:h11 a wh:Return ; wh:item wh:lights ; wh:change 1 ; wh:at "2025-12-03T09:05:00Z"^^xsd:dateTime .
+wh:h12 a wh:Sale ; wh:item wh:helmet ; wh:change -1 ; wh:at "2025-12-03T16:20:00Z"^^xsd:dateTime .
+wh:h13 a wh:Sale ; wh:item wh:pads ; wh:change -4 ; wh:at "2025-12-04T12:30:00Z"^^xsd:dateTime .
+wh:h14 a wh:Sale ; wh:item wh:lube ; wh:change -5 ; wh:at "2025-12-04T17:45:00Z"^^xsd:dateTime .
+
+# --- the questions: maintained views ------------------------------------------------------------------
+# Each is a SELECT over the movements, and an iv:View: the runtime keeps its result, a movement
+# adding to its item's group once, when it arrives (and the window taking a sale away once, when
+# it is an hour old). Their rows live in the views graph (iv:materialize iv:Graph), where the
+# tables, the chart and the figures read them. iv:measured writes each one's work in idle time,
+# for the cost lines; iv:whileShown keeps them only while the warehouse is on screen.
+
+# Stock per item: the sum of its movements, with its name, supplier and minimum (joins outside
+# the movement: a supplier's new name would re-evaluate just that supplier's items' movements).
+wh:Stock a sem:View , iv:View ; rdfs:label "stock per item" ;
+    iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    sem:select """
+SELECT ?item ?supplier (SUM(?change) AS ?onHand) ?minimum WHERE {
+  wh:movements tree:member ?m . ?m wh:item ?i ; wh:change ?change .
+  ?i rdfs:label ?item ; wh:minimum ?minimum ; wh:supplier ?s . ?s rdfs:label ?supplier .
+}
+GROUP BY ?item ?supplier ?minimum
+ORDER BY ?item""" .
+
+# The reorder list: the same groups, kept only while they are below their minimum (HAVING), and
+# how many short. A delivery that lifts an item over its minimum takes its row away.
+wh:Reorder a sem:View , iv:View ; rdfs:label "the reorder list" ;
+    iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    sem:select """
+SELECT ?item ?supplier (SUM(?change) AS ?onHand) ?minimum (?minimum - SUM(?change) AS ?short) WHERE {
+  wh:movements tree:member ?m . ?m wh:item ?i ; wh:change ?change .
+  ?i rdfs:label ?item ; wh:minimum ?minimum ; wh:supplier ?s . ?s rdfs:label ?supplier .
+}
+GROUP BY ?item ?supplier ?minimum
+HAVING (SUM(?change) < ?minimum)
+ORDER BY DESC(?short) ?item""" .
+
+# Best sellers: sales of the last hour (a sliding window on wh:at), per item, the five with most.
+wh:lastHour a iv:SlidingWindow ; iv:range "PT1H"^^xsd:dayTimeDuration ; iv:timeBy wh:at .
+wh:BestSellers a sem:View , iv:View ; rdfs:label "best sellers, last hour" ;
+    iv:window wh:lastHour ; iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    sem:select """
+SELECT ?item (SUM(?sold) AS ?units) WHERE {
+  wh:movements tree:member ?m . ?m a wh:Sale ; wh:item ?i ; wh:change ?change .
+  ?i rdfs:label ?item .
+  BIND(-?change AS ?sold)
+}
+GROUP BY ?item
+ORDER BY DESC(?units) ?item
+LIMIT 5""" .
+
+# The figures: units on the shelf, units sold in the last hour, movements recorded.
+wh:OnHand a sem:View , iv:View ; rdfs:label "units on hand" ;
+    iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    sem:select """SELECT (SUM(?change) AS ?value) WHERE { wh:movements tree:member ?m . ?m wh:change ?change }""" .
+wh:SoldLastHour a sem:View , iv:View ; rdfs:label "units sold, last hour" ;
+    iv:window wh:lastHour ; iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    sem:select """
+SELECT (COALESCE(SUM(?sold), 0) AS ?value) WHERE {
+  wh:movements tree:member ?m . ?m a wh:Sale ; wh:change ?change .
+  BIND(-?change AS ?sold)
+}""" .
+wh:Recorded a sem:View , iv:View ; rdfs:label "movements recorded" ;
+    iv:materialize iv:Graph ; iv:measured true ; iv:whileShown ui:ex-warehouse ;
+    sem:select """SELECT (COUNT(?m) AS ?value) WHERE { wh:movements tree:member ?m }""" .
+
+# The reorder alert reads the reorder list's rows (at most one per item), never the movements.
+wh:qReorderAlert a sem:View ; sem:select """
+SELECT ?label ?tone WHERE {
+  { SELECT (COUNT(?row) AS ?n) WHERE { wh:Reorder <http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution> ?row } }
+  BIND(IF(?n = 0, "Every item is at or above its minimum.",
+       IF(?n = 1, "1 item is below its minimum.", CONCAT(STR(?n), " items are below their minimum."))) AS ?label)
+  BIND(IF(?n = 0, sty:Success, sty:Warning) AS ?tone)
+}""" .
+
+# Each tile's quiet line: the last change's work against what counting again would read (the
+# views' own figures, iv:lastRows and iv:inputRows; $this is the line, c:of its views).
+wh:qCost a sem:View ; sem:select """
+SELECT ?label WHERE {
+  { SELECT (SUM(?l) AS ?last) (SUM(?r) AS ?reads) (COUNT(?v) AS ?n)
+    WHERE { $this c:of ?v . ?v iv:lastRows ?l ; iv:inputRows ?r } }
+  BIND(IF(?n > 0, CONCAT("Last change: ", STR(?last), " rows of work; a recount would read ", STR(?reads), "."), "Measuring…") AS ?label)
+}""" .
+
+# --- the page ---------------------------------------------------------------------------------------
+
+ui:ex-warehouse a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-warehouse-intro ui:ex-warehouse-counter ui:ex-warehouse-glance ui:ex-warehouse-panels ui:ex-warehouse-best-card ) .
+ui:ex-warehouse-intro a c:Text ;
+    c:label "The stockroom of a small bike shop. Sell something, take a delivery, or start a rush hour: the stock, the reorder list and the last hour's best sellers stay right as each movement happens, without counting the history again." .
+
+# The counter: which item, how many, and what happened.
+wh:Amount a owl:Class .
+wh:amount a owl:ObjectProperty ; rdfs:range wh:Amount ; rdfs:label "How many" .
+wh:units a owl:DatatypeProperty ; rdfs:domain wh:Amount ; rdfs:range xsd:integer .
+wh:one a wh:Amount ; rdfs:label "1" ; sem:order 1 ; wh:units 1 .
+wh:two a wh:Amount ; rdfs:label "2" ; sem:order 2 ; wh:units 2 .
+wh:five a wh:Amount ; rdfs:label "5" ; sem:order 3 ; wh:units 5 .
+wh:desk wh:item wh:tube ; wh:amount wh:one .
+
+ui:ex-warehouse-counter a c:Card ; c:label "At the counter" ;
+    c:note "Sell takes the amount off the shelf; Restock receives one case from the item's supplier." ;
+    c:content ui:ex-warehouse-controls .
+ui:ex-warehouse-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; pos:align pos:End ;
+    c:children ( ui:ex-warehouse-item ui:ex-warehouse-amount ui:ex-warehouse-actions ) .
+ui:ex-warehouse-item a c:Choice ; c:label "Item" ; c:controls wh:desk ; c:property wh:item .
+ui:ex-warehouse-amount a c:Segmented ; c:label "How many" ; c:controls wh:desk ; c:property wh:amount .
+ui:ex-warehouse-actions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ;
+    c:children ( ui:ex-warehouse-sell ui:ex-warehouse-restock ui:ex-warehouse-rush ui:ex-warehouse-reset ) .
+ui:ex-warehouse-sell a c:Button ; c:label "Sell" ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
+ui:ex-warehouse-restock a c:Button ; c:label "Restock" .
+ui:ex-warehouse-rush a c:Button ; c:label "Rush hour" ; sty:emphasis sty:Outline ; c:help "Thirty orders in three seconds." .
+ui:ex-warehouse-reset a c:Button ; c:label "Reset" ; sty:emphasis sty:Ghost ; c:help "Take away every movement added here." .
+
+# At a glance: three figures, and what they cost.
+ui:ex-warehouse-glance a c:Card ; c:label "At a glance" ; c:content ui:ex-warehouse-glance-body .
+ui:ex-warehouse-glance-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-warehouse-figures ui:ex-warehouse-glance-cost ) .
+ui:ex-warehouse-figures a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-warehouse-onhand ui:ex-warehouse-sold ui:ex-warehouse-recorded ) .
+ui:ex-warehouse-onhand a c:Stat ; c:label "Units on hand" ; c:valueQuery wh:OnHand ; c:dataset wh:OnHand .
+ui:ex-warehouse-sold a c:Stat ; c:label "Sold in the last hour" ; c:unit "units" ; c:valueQuery wh:SoldLastHour ; c:dataset wh:SoldLastHour .
+ui:ex-warehouse-recorded a c:Stat ; c:label "Movements recorded" ; c:help "Sales, deliveries and returns since the shop opened." ;
+    c:valueQuery wh:Recorded ; c:dataset wh:Recorded .
+ui:ex-warehouse-glance-cost a c:Text ; sty:textStyle sty:Caption ;
+    c:of wh:OnHand , wh:SoldLastHour , wh:Recorded ; c:valueQuery wh:qCost ; c:dataset wh:OnHand , wh:SoldLastHour , wh:Recorded .
+
+ui:ex-warehouse-panels a c:Grid ; c:minWidth "420px" ; pos:layout pos:AlignedColumns ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-warehouse-stock-card ui:ex-warehouse-reorder-card ) .
+
+# Stock per item.
+ui:ex-warehouse-stock-card a c:Card ; c:label "Stock" ; c:content ui:ex-warehouse-stock-body .
+ui:ex-warehouse-stock-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-warehouse-stock ui:ex-warehouse-stock-cost ) .
+ui:ex-warehouse-col-item a c:Column ; c:variable "item" ; c:label "Item" .
+ui:ex-warehouse-col-supplier a c:Column ; c:variable "supplier" ; c:label "Supplier" .
+ui:ex-warehouse-col-onhand a c:Column ; c:variable "onHand" ; c:label "On hand" ; c:align "end" ; c:format "number" .
+ui:ex-warehouse-col-minimum a c:Column ; c:variable "minimum" ; c:label "Minimum" ; c:align "end" ; c:format "number" .
+ui:ex-warehouse-stock a c:Table ; c:label "Stock per item" ; c:query wh:Stock ; c:dataset wh:Stock ;
+    c:tableColumns ( ui:ex-warehouse-col-item ui:ex-warehouse-col-supplier ui:ex-warehouse-col-onhand ui:ex-warehouse-col-minimum ) .
+ui:ex-warehouse-stock-cost a c:Text ; sty:textStyle sty:Caption ; c:of wh:Stock ; c:valueQuery wh:qCost ; c:dataset wh:Stock .
+
+# The reorder list, and an alert saying how long it is.
+ui:ex-warehouse-reorder-card a c:Card ; c:label "Reorder list" ; c:content ui:ex-warehouse-reorder-body .
+ui:ex-warehouse-reorder-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-warehouse-reorder-alert ui:ex-warehouse-reorder ui:ex-warehouse-reorder-cost ) .
+ui:ex-warehouse-reorder-alert a c:Alert ; c:help "Restock an item to take it off the list." ;
+    c:valueQuery wh:qReorderAlert ; c:dataset wh:Reorder .
+ui:ex-warehouse-rcol-item a c:Column ; c:variable "item" ; c:label "Item" .
+ui:ex-warehouse-rcol-supplier a c:Column ; c:variable "supplier" ; c:label "Supplier" .
+ui:ex-warehouse-rcol-onhand a c:Column ; c:variable "onHand" ; c:label "On hand" ; c:align "end" ; c:format "number" .
+ui:ex-warehouse-rcol-short a c:Column ; c:variable "short" ; c:label "Short by" ; c:align "end" ; c:format "number" .
+ui:ex-warehouse-reorder a c:Table ; c:label "Items below their minimum" ; c:query wh:Reorder ; c:dataset wh:Reorder ;
+    c:tableColumns ( ui:ex-warehouse-rcol-item ui:ex-warehouse-rcol-supplier ui:ex-warehouse-rcol-onhand ui:ex-warehouse-rcol-short ) ;
+    c:emptyText "Nothing to reorder." .
+ui:ex-warehouse-reorder-cost a c:Text ; sty:textStyle sty:Caption ; c:of wh:Reorder ; c:valueQuery wh:qCost ; c:dataset wh:Reorder .
+
+# Best sellers in the last hour.
+ui:ex-warehouse-best-card a c:Card ; c:label "Best sellers, last hour" ; c:content ui:ex-warehouse-best-body .
+ui:ex-warehouse-best-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-warehouse-best ui:ex-warehouse-best-cost ) .
+ui:ex-warehouse-best a c:BarChart ; rdfs:label "Units sold per item, last hour" ;
+    c:view wh:BestSellers ; c:dataset wh:BestSellers ;
+    c:categoryVariable "item" ; c:valueVariable "units" ;
+    c:emptyText "Nothing sold in the last hour. Sell something, or start a rush hour." .
+ui:ex-warehouse-best-cost a c:Text ; sty:textStyle sty:Caption ; c:of wh:BestSellers ; c:valueQuery wh:qCost ; c:dataset wh:BestSellers .
+
+# --- what the buttons do -------------------------------------------------------------------------------
+# Each adds one movement to the stream, named from the event that made it. Nothing else changes:
+# the views see the new member and update the groups it falls in.
+
+wh:Sell a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-sell ;
+    beh:inserts """
+CONSTRUCT { wh:movements tree:member ?m . ?m a wh:Sale ; wh:item ?item ; wh:change ?change ; wh:at ?at }
+WHERE {
+  wh:desk wh:item ?item ; wh:amount ?amount . ?amount wh:units ?n .
+  $event beh:at ?at .
+  BIND(-?n AS ?change)
+  BIND(IRI(CONCAT(STR(wh:), "m-", SUBSTR(MD5(STR($event)), 1, 16))) AS ?m)
+}""" ;
+    ann:announces "Sold" .
+
+wh:Receive a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-restock ;
+    beh:inserts """
+CONSTRUCT { wh:movements tree:member ?m . ?m a wh:Restock ; wh:item ?item ; wh:change ?case ; wh:at ?at }
+WHERE {
+  wh:desk wh:item ?item . ?item wh:caseSize ?case .
+  $event beh:at ?at .
+  BIND(IRI(CONCAT(STR(wh:), "m-", SUBSTR(MD5(STR($event)), 1, 16))) AS ?m)
+}""" ;
+    ann:announces "Delivery received" .
+
+# Rush hour: thirty orders, one every 100 ms, on the scheduler. The button sets how many are left
+# and makes wh:rush due now (beh:dueAt); the host turns a due time into a beh:Due event, and
+# wh:RushOrder sells one order - its item picked by a hex digit of the event's hash, as often as
+# the item's wh:rushDigits say; 1 to 3 of it; now and then a return of one instead - and makes the
+# next one due.
+wh:rush wh:left 0 .
+wh:left a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Orders left in the rush."@en .
+
+wh:StartRush a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-rush ;
+    beh:deletes """CONSTRUCT { wh:rush wh:left ?n ; beh:dueAt ?due } WHERE { { wh:rush wh:left ?n } UNION { wh:rush beh:dueAt ?due } }""" ;
+    beh:inserts """CONSTRUCT { wh:rush wh:left 30 ; beh:dueAt ?at } WHERE { $event beh:at ?at }""" ;
+    ann:announces "Rush hour" .
+
+wh:RushOrder a beh:Reaction ; beh:when beh:Due ; beh:source wh:rush ;
+    beh:deletes """
+CONSTRUCT { wh:rush wh:left ?n ; beh:dueAt ?due }
+WHERE { wh:rush wh:left ?n FILTER(?n > 0) OPTIONAL { wh:rush beh:dueAt ?due } }""" ;
+    beh:inserts """
+CONSTRUCT {
+  wh:rush wh:left ?next ; beh:dueAt ?then .
+  wh:movements tree:member ?m . ?m a ?kind ; wh:item ?item ; wh:change ?change ; wh:at ?at .
+}
+WHERE {
+  wh:rush wh:left ?n FILTER(?n > 0)
+  $event beh:at ?at .
+  BIND(?n - 1 AS ?next)
+  BIND(IF(?next > 0, xsd:dateTime(?at) + xsd:dayTimeDuration("PT0.1S"), ?none) AS ?then)
+  BIND(MD5(STR($event)) AS ?h)
+  ?item wh:rushDigits ?digits FILTER(CONTAINS(?digits, SUBSTR(?h, 1, 1)))
+  BIND(SUBSTR(?h, 3, 1) = "f" AS ?returned)
+  BIND(IF(?returned, wh:Return, wh:Sale) AS ?kind)
+  BIND(IF(?returned, 1, -1 - xsd:integer(FLOOR(STRLEN(STRBEFORE("0123456789abcdef", SUBSTR(?h, 2, 1))) / 6))) AS ?change)
+  BIND(IRI(CONCAT(STR(wh:), "m-", SUBSTR(?h, 1, 16))) AS ?m)
+}""" .
+
+# Reset: the movements added here go (the history stays), and a rush stops.
+wh:Reset a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-warehouse-reset ;
+    beh:deletes """
+CONSTRUCT { wh:movements tree:member ?m . ?m ?p ?o . wh:rush wh:left ?n ; beh:dueAt ?due }
+WHERE {
+  { wh:movements tree:member ?m FILTER(STRSTARTS(STR(?m), CONCAT(STR(wh:), "m-"))) ?m ?p ?o }
+  UNION { wh:rush wh:left ?n FILTER(?n > 0) }
+  UNION { wh:rush beh:dueAt ?due }
+}""" ;
+    beh:inserts """CONSTRUCT { wh:rush wh:left 0 } WHERE { wh:rush wh:left ?n FILTER(?n > 0) }""" ;
+    ann:announces "Back to the opening stock" .
+
+# --- how it works -----------------------------------------------------------------------------------
+
+ui:ex-warehouse-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-warehouse-w1 ui:ex-warehouse-w2 ui:ex-warehouse-w3 ui:ex-warehouse-w4 ui:ex-warehouse-w5 ui:ex-warehouse-w6 ui:ex-warehouse-w7 ) .
+
+ui:ex-warehouse-w1 a c:WalkthroughStep ; rdfs:label "Items, and what happens to them" ;
+    c:children ( "The shop keeps eight items. Each, like " ui:ex-warehouse-m-tube ", has a " ui:ex-warehouse-m-supplier ", a " ui:ex-warehouse-m-minimum " to keep on the shelf, and a case size. Everything that happens to them is a movement in " ui:ex-warehouse-m-movements ", an " ui:ex-warehouse-m-EventStream ": " ui:ex-warehouse-m-h1 " delivered sixty inner tubes, " ui:ex-warehouse-m-h9 " sold three. A movement says only how the stock changed (" ui:ex-warehouse-m-change "); no stock figure is stored anywhere." ) .
+ui:ex-warehouse-w2 a c:WalkthroughStep ; rdfs:label "Selling is one more movement" ;
+    c:children ( ui:ex-warehouse-m-sellButton " runs " ui:ex-warehouse-m-sell ": it adds one member to the stream - a sale of the item and the amount chosen on " ui:ex-warehouse-m-desk ", named from the click's own event - and does nothing else. " ui:ex-warehouse-m-receive " does the same for a delivery of one case. There is no stock to update: the rest of the page follows from the movements." ) .
+ui:ex-warehouse-w3 a c:WalkthroughStep ; rdfs:label "Stock is a sum that is kept, not recounted" ;
+    c:children ( ui:ex-warehouse-m-stock " asks how many of each item there are: the SUM of its movements, joined to its name and its supplier's. It is an " ui:ex-warehouse-m-View ", so the runtime keeps the answer and adds each new movement to its item's row as it arrives: one group changes, by the movement's amount. " ui:ex-warehouse-m-stockTable " reads the rows from the views graph." ) .
+ui:ex-warehouse-w4 a c:WalkthroughStep ; rdfs:label "The reorder list: the same sum, filtered" ;
+    c:children ( ui:ex-warehouse-m-reorder " is the same question with HAVING: only items whose sum is below their minimum, and by how many. A sale that takes the brake pads under twelve adds their row; a delivery that lifts them over takes it away. " ui:ex-warehouse-m-alert " counts the list's rows (" ui:ex-warehouse-m-qAlert "), never the movements." ) .
+ui:ex-warehouse-w5 a c:WalkthroughStep ; rdfs:label "Best sellers in the last hour" ;
+    c:children ( ui:ex-warehouse-m-best " sums the sales of " ui:ex-warehouse-m-lastHour ", an " ui:ex-warehouse-m-SlidingWindow " of an hour on each movement's time, and keeps the five items with most (ORDER BY with LIMIT: a top five). A sale enters the window once; an hour later it leaves it once, on a timer, with nothing else happening - and " ui:ex-warehouse-m-chart " shrinks." ) .
+ui:ex-warehouse-w6 a c:WalkthroughStep ; rdfs:label "Rush hour, on the scheduler" ;
+    c:children ( ui:ex-warehouse-m-rushButton " runs " ui:ex-warehouse-m-startRush ", which makes " ui:ex-warehouse-m-rush " due now (" ui:ex-warehouse-m-dueAt "). The host turns a due time into a " ui:ex-warehouse-m-Due " event, and " ui:ex-warehouse-m-rushOrder " sells one order - the item picked from a hash of the event, as often as its " ui:ex-warehouse-m-rushDigits " say - and makes the next one due a tenth of a second later. Thirty orders, thirty movements; every figure follows each one." ) .
+ui:ex-warehouse-w7 a c:WalkthroughStep ; rdfs:label "What a change costs" ;
+    c:children ( "Each view is " ui:ex-warehouse-m-measured ": in idle time the runtime writes the work of its last change and the rows a recount would read, and each tile's quiet line shows them (" ui:ex-warehouse-m-qCost ", " ui:ex-warehouse-m-stockCost " for the stock). A sale is a handful of rows of work whatever the history holds, while a recount reads every movement. Elsewhere on the site these views do nothing at all (" ui:ex-warehouse-m-whileShown ")." ) .
+
+ui:ex-warehouse-m-tube a c:Mention ; c:label "the inner tube" ; c:mentions wh:tube .
+ui:ex-warehouse-m-supplier a c:Mention ; c:label "supplier" ; c:mentions wh:supplier .
+ui:ex-warehouse-m-minimum a c:Mention ; c:label "minimum" ; c:mentions wh:minimum .
+ui:ex-warehouse-m-movements a c:Mention ; c:label "wh:movements" ; c:mentions wh:movements .
+ui:ex-warehouse-m-EventStream a c:Mention ; c:label "LDES event stream" ; c:mentions ldes:EventStream ; c:to ldes:EventStream .
+ui:ex-warehouse-m-h1 a c:Mention ; c:label "wh:h1" ; c:mentions wh:h1 .
+ui:ex-warehouse-m-h9 a c:Mention ; c:label "wh:h9" ; c:mentions wh:h9 .
+ui:ex-warehouse-m-change a c:Mention ; c:label "wh:change" ; c:mentions wh:change .
+ui:ex-warehouse-m-sellButton a c:Mention ; c:label "Sell" ; c:mentions ui:ex-warehouse-sell .
+ui:ex-warehouse-m-sell a c:Mention ; c:label "wh:Sell" ; c:mentions wh:Sell .
+ui:ex-warehouse-m-desk a c:Mention ; c:label "the counter" ; c:mentions wh:desk .
+ui:ex-warehouse-m-receive a c:Mention ; c:label "Restock" ; c:mentions wh:Receive .
+ui:ex-warehouse-m-stock a c:Mention ; c:label "wh:Stock" ; c:mentions wh:Stock .
+ui:ex-warehouse-m-View a c:Mention ; c:label "iv:View" ; c:mentions iv:View ; c:to iv:View .
+ui:ex-warehouse-m-stockTable a c:Mention ; c:label "The stock table" ; c:mentions ui:ex-warehouse-stock .
+ui:ex-warehouse-m-reorder a c:Mention ; c:label "wh:Reorder" ; c:mentions wh:Reorder .
+ui:ex-warehouse-m-alert a c:Mention ; c:label "The alert above it" ; c:mentions ui:ex-warehouse-reorder-alert .
+ui:ex-warehouse-m-qAlert a c:Mention ; c:label "wh:qReorderAlert" ; c:mentions wh:qReorderAlert .
+ui:ex-warehouse-m-best a c:Mention ; c:label "wh:BestSellers" ; c:mentions wh:BestSellers .
+ui:ex-warehouse-m-lastHour a c:Mention ; c:label "wh:lastHour" ; c:mentions wh:lastHour .
+ui:ex-warehouse-m-SlidingWindow a c:Mention ; c:label "iv:SlidingWindow" ; c:mentions iv:SlidingWindow ; c:to iv:SlidingWindow .
+ui:ex-warehouse-m-chart a c:Mention ; c:label "the chart" ; c:mentions ui:ex-warehouse-best .
+ui:ex-warehouse-m-rushButton a c:Mention ; c:label "Rush hour" ; c:mentions ui:ex-warehouse-rush .
+ui:ex-warehouse-m-startRush a c:Mention ; c:label "wh:StartRush" ; c:mentions wh:StartRush .
+ui:ex-warehouse-m-rush a c:Mention ; c:label "wh:rush" ; c:mentions wh:rush .
+ui:ex-warehouse-m-dueAt a c:Mention ; c:label "beh:dueAt" ; c:mentions beh:dueAt ; c:to beh:dueAt .
+ui:ex-warehouse-m-Due a c:Mention ; c:label "beh:Due" ; c:mentions beh:Due ; c:to beh:Due .
+ui:ex-warehouse-m-rushOrder a c:Mention ; c:label "wh:RushOrder" ; c:mentions wh:RushOrder .
+ui:ex-warehouse-m-rushDigits a c:Mention ; c:label "wh:rushDigits" ; c:mentions wh:rushDigits .
+ui:ex-warehouse-m-measured a c:Mention ; c:label "iv:measured" ; c:mentions iv:measured ; c:to iv:measured .
+ui:ex-warehouse-m-qCost a c:Mention ; c:label "wh:qCost" ; c:mentions wh:qCost .
+ui:ex-warehouse-m-stockCost a c:Mention ; c:label "this line" ; c:mentions ui:ex-warehouse-stock-cost .
+ui:ex-warehouse-m-whileShown a c:Mention ; c:label "iv:whileShown" ; c:mentions iv:whileShown ; c:to iv:whileShown .

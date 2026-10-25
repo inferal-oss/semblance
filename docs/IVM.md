@@ -18,10 +18,11 @@ built, and where it differs from the design, is §20 (phases 0 and 1) and §21 (
 | **Sliding windows** (ahead of phase 4, because the example needs one): `iv:SlidingWindow` with `iv:range` and `iv:timeBy`, one timer for the next expiry, on an injectable clock shared with the event bus. | `src/view/runtime.ts` | e32a8bf |
 | **Demand.** `iv:whileShown` (a component or a class): a hidden view does nothing per tick and is rebuilt when shown. | `src/runtime.ts` (`views.shown`) | e32a8bf |
 | **Observability.** Each view's plan as data (`iv:operator`, `iv:kind`, `iv:algebra`), with PROV-O; figures (`iv:stateRows`, `iv:lastRows`, `iv:lastMs`, …) for `iv:measured` views; a per-tick log of each view (`iv:deltaLog`, members `iv:Delta`: what came in, which groups changed, rows of work); a correctness check against a from-scratch run (`iv:matches`, `iv:resultRows`, `iv:checkedTick`); view rows in the status bar. | `src/view/runtime.ts`, `ontology/layers/view.ttl` | e32a8bf, a050a46 |
-| **The "Maintained views" example**: a dashboard of three measured views (two windowed), with each step, a ✓ check per view, work against a re-run's work, the window draining on the clock, and stream / one-event / keep-50 controls. | `demo/gallery/_ex-views.ttl`, `test/ex-views.test.ts` | d59e856, a050a46 |
+| **The "Maintained views" example** (since replaced by the Warehouse example, below): a dashboard of three measured views (two windowed), with each step, a ✓ check per view, work against a re-run's work, the window draining on the clock. Its machinery - `iv:deltaLog`, `iv:matches`, `iv:measured` figures - stays, documented on the Docs page and readable in the workbench. | (removed) | d59e856, a050a46 |
 | **Phase 2, the operators** (§21): a SPARQL parser in place of the recognizer; partitions by any key (an LDES member, the subjects of the body) evaluated on the store with the key bound; exact dependencies from the body's patterns - delta queries over the store's indexes, so **joins outside the member**, **OPTIONAL**, **EXISTS / NOT EXISTS**, **MINUS**, **UNION** and **VALUES** inside a partition are maintained, and a change reaches exactly the partitions (or the slice of a cross product) it can affect; **DISTINCT** with counts; GROUP BY with arithmetic over aggregates and **HAVING**; UNION of subqueries; **top-k** over an ordered multiset (`ORDER BY … LIMIT / OFFSET`); **parameters** (`iv:parameter`; a LIMIT-only change retunes in place); a view per instance (`iv:targets`); views over views (`iv:reads`); SELECT rows materialized as a W3C result set (`iv:materialize iv:Graph`, `rs:index` for ORDER BY); tuple order keys in `compareKeys`. Strict operator laws per shape, on Oxigraph and WAT. | `src/view/sparql.ts`, `deps.ts`, `compile.ts`, `runtime.ts`, `ordered.ts`, `rows.ts`, `src/render/order-key.ts`, `test/view-laws.test.ts` | 42d77a1 |
 | **The data grid's window as views**: three views per grid (`c:GridWindowOlder`, `c:GridWindowNewer`, `c:GridWindowCounts`) keep its members in capture order with their order keys; the window rule (SPARQL and function) reads at most three pages. A response for an old entry re-sorts its row in the same tick, at identical cost over 200 or 2,000 entries. | `ontology/components/grid.ttl`, `src/components/grid.ts`, `test/grid-cost.test.ts` | c734148 |
 | **Charts, tables, stats and facet counts over views**: they read a maintained SELECT's rows from the views graph; the dashboard's queries are views over its cube, the activity example's over the change log, the performance page's over observations. | `src/view/rows.ts`, `src/components/charts.ts`, `data.ts`, `formula.ts`, `demo/gallery/_ex-dashboard.ttl`, `_ex-activity.ttl`, `demo/app.ttl`, `test/view-charts.test.ts` | 8d25274 |
+| **The Warehouse example**, in place of "Maintained views": a bike shop's stockroom, every figure a maintained view over one stream of movements - stock per item (SUM joined to names and suppliers), a reorder list (HAVING), best sellers of the last hour (a sliding window and a top five) - with Sell, Restock and a Rush hour on the scheduler; each tile's one quiet line is its views' last change against what a recount reads. A sale costs the same counters over 200 or 2,000 earlier movements. | `demo/gallery/_ex-warehouse.ttl`, `test/ex-warehouse.test.ts` | |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
 query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
@@ -29,7 +30,6 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 
 ### In progress
 
-- **The example's walkthrough** ("How it works" beside a diagram, like the other examples).
 - **SPARQL for every rendering** (outside IVM, but related to phase 3): engine support for
   member-wise SPARQL rules and other building blocks, so no rendering is function-only.
 
@@ -1377,8 +1377,8 @@ What exists (`src/view/`, `ontology/layers/view.ttl`):
 
 What uses it: `c:StreamStats` (the Activity tool) reads `c:StreamTotals` and
 `c:StreamKeyCounts`; `c:CountBadge` reads `c:MemberCounts` and `c:MemberClassCounts`; the
-"Maintained views" example (`demo/gallery/_ex-views.ttl`) is a dashboard of three measured
-views, two of them windowed.
+"Maintained views" example (`demo/gallery/_ex-views.ttl`, since replaced by the Warehouse
+example, §21) was a dashboard of three measured views, two of them windowed.
 
 Measured (Node, hybrid store, `test/view-cost.test.ts`: a todo toggle with the Activity view
 shown, median of 20, after the log is full):
@@ -1490,6 +1490,15 @@ What uses it:
   value - descending when the grid is -, capture order). The window rule's SPARQL reads those rows
   (bindings by IRI, `LATERAL`) and ranks only the shown page for the tab stop; the function twin
   reads the same rows (and, without SPARQL, computes the window from the members as before).
+- **The Warehouse example** (`demo/gallery/_ex-warehouse.ttl`): six views over one stream of movements
+  (no retention: it is a ledger), all incremental - `wh:Stock` (SUM per item, joined outside the member to
+  the item's name, minimum and supplier), `wh:Reorder` (the same with HAVING and `?minimum - SUM(…)`),
+  `wh:BestSellers` (a one-hour sliding window, GROUP BY, top five), and three figures. Its tables, chart,
+  stats and alert read their rows; each tile's cost line reads `iv:lastRows` and `iv:inputRows`.
+  `test/ex-warehouse.test.ts` drives it on WAT, strict, and measures a sale over 200 and 2,000 earlier
+  movements: 22 view rows, 6 partitions, 31 rule runs, 16 SPARQL rows, 52 DOM operations, no rebuild,
+  identical at both sizes (the stock tile: "4 rows of work; a recount would read 217" / "… 2017"). The
+  window's edge is checked strictly on Oxigraph: WAT compares `xsd:dateTime` coarsely (#21).
 - **Charts, tables, stats, facet counts**: `c:BarChart`, `c:LineChart`, `c:Heatmap`, `c:Table`,
   `c:Stat` (`c:valueQuery` without `$this`), chips' `c:countQuery` read a maintained SELECT's rows
   when its `sem:View` is a materialized `iv:View`. The dashboard's ten queries are views over its

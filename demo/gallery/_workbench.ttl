@@ -23,7 +23,7 @@ ui:workbench a c:QueryWorkbench ;
     c:runs ui:currentQuery ;
     c:results ui:queryResults ;
     c:samples ( ui:sampleRenderings ui:sampleReactions ui:sampleLayers ui:sampleChangeLog
-                ui:sampleViolations ui:sampleUndocumented ui:sampleRuleSides ui:sampleTabsGraph ui:sampleTodos ) .
+                ui:sampleViolations ui:sampleUndocumented ui:sampleRuleSides ui:sampleViews ui:sampleTabsGraph ui:sampleTodos ) .
 
 ui:queryEditor a c:QueryEditor ;
     c:label "SPARQL query" , "Запит SPARQL"@uk , "SPARQL-Abfrage"@de , "استعلام SPARQL"@ar ;
@@ -190,6 +190,23 @@ WHERE {
   BIND(IF(!?hasSparql, "SPARQL", IF(!?hasFunction, "function", CONCAT("SPARQL for ", STRAFTER(STR(?modality), "#")))) AS ?missing)
 }
 ORDER BY ?missing ?rendering""" .
+
+ui:sampleViews a sem:Query ;
+    rdfs:label "Maintained views: their work, and a check" , "Підтримувані подання: їхня робота і перевірка"@uk , "Gepflegte Sichten: ihre Arbeit und eine Prüfung"@de , "العروض المُحدَّثة: عملها وفحصها"@ar ;
+    rdfs:comment "Each maintained view (iv:View) the runtime holds: how it is kept, the work of its last step against the rows a from-scratch run reads, and whether it matched that run when last checked (figures of iv:measured views, written in idle time)."@en ;
+    c:resultTab ui:queryTableTab ;
+    sem:select """# What the runtime writes about each view in the views graph (urn:semblance:views).
+SELECT ?view ?strategy ?state ?lastRows ?reads ?matches ?fallback
+WHERE {
+  ?view a iv:View .
+  OPTIONAL { ?view iv:strategy ?strategy }
+  OPTIONAL { ?view iv:stateRows ?state }
+  OPTIONAL { ?view iv:lastRows ?lastRows }
+  OPTIONAL { ?view iv:inputRows ?reads }
+  OPTIONAL { ?view iv:matches ?matches }
+  OPTIONAL { ?view iv:fallback ?fallback }
+}
+ORDER BY ?view""" .
 
 ui:sampleTabsGraph a sem:Query ;
     rdfs:label "How c:Tabs is made" , "Як зроблено c:Tabs"@uk , "Wie c:Tabs gemacht ist"@de , "كيف صُنع c:Tabs"@ar ;

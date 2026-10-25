@@ -50,7 +50,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     const h = workbench()
     const d = h.document
     expect(d.querySelector('[data-sem-c=query-workbench]')!.getAttribute('aria-label')).toBe('SPARQL workbench')
-    expect(d.querySelectorAll('.sem-sample').length).toBe(9)
+    expect(d.querySelectorAll('.sem-sample').length).toBe(10)
     expect(d.querySelector('.sem-sample[aria-pressed=true] .sem-sample-label')!.textContent).toBe('Components and their renderings')
     expect(area(h).getAttribute('aria-label')).toBe('SPARQL query')
     expect(area(h).value).toBe(editorValue(h))
