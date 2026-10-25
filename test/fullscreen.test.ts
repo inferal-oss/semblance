@@ -161,7 +161,8 @@ describe('full screen (fs:fullscreen)', () => {
     // F presses the toggle again: the fact goes, and so does the host's full screen.
     h.key('f')
     await h.settle()
-    expect(h.fact(card)).toEqual(['false'])
+    // Back in its place, the effect's fs:Exited clears what is left of the fact.
+    expect(h.fact(card)).toEqual([])
     expect(h.fullscreen.element).toBeNull()
     // W fills the window with it instead, and W again puts it back.
     h.key('w')
