@@ -163,7 +163,8 @@ describe('the coffee tasting example', () => {
     expect(h.rating()).toBe(element)
     expect(h.rating()!.label).toBe('Nyeri')
     expect(h.rating()!.value).toBe(5)
-    expect(h.islands.counts.mounts).toBe(2)
+    // Each island (chart, map, rating, date) was mounted once: choosing re-pointed them.
+    expect(h.islands.counts.mounts).toBe(4)
     expect(h.loaded).toEqual(['shoelace/rating'])
     h.rate(3)
     expect(h.ratingOf('ken')).toBe('3')
