@@ -11,11 +11,16 @@
 #
 #   scripts/test-queue.sh npx vitest run --maxWorkers=4 test/foo.test.ts
 #
+# A run holds its slot for at most SEMBLANCE_RUN_LIMIT seconds (default 1800, enough for the full
+# suite with both slots busy): past that it and every process it started are stopped (exit 124), so
+# a stuck run cannot hold a slot for the others. Each test also has its own limit (vite.config.ts).
+#
 # SEMBLANCE_QUEUE / SEMBLANCE_LOCK override the queue directory and lock path (tests of this script).
 
 Q="${SEMBLANCE_QUEUE:-/tmp/semblance-vitest.queue}"
 LOCK="${SEMBLANCE_LOCK:-/tmp/semblance-vitest.lock}"
 SLOTS="${SEMBLANCE_SLOTS:-2}"
+LIMIT="${SEMBLANCE_RUN_LIMIT:-1800}"
 mkdir -p "$Q"
 TICKET="$(python3 -c 'import time; print(time.time_ns())')-$$"
 touch "$Q/$TICKET"
@@ -39,7 +44,16 @@ while :; do
       # -t 0: take the slot only if it is free. lockf exits 75 (EX_TEMPFAIL) when it is not; the
       # marker tells that apart from a command that itself exits 75.
       rm -f "$STARTED"
-      lockf -s -t 0 "$lock" sh -c ': > "$0"; exec "$@"' "$STARTED" "$@"
+      # The command runs in a process group of its own, so the limit stops all of it.
+      lockf -s -t 0 "$lock" sh -c ': > "$0"; limit="$1"; shift
+        exec perl -e '"'"'
+          my $limit = shift; setpgrp(0, 0);
+          my $pid = fork() // die; if (!$pid) { exec @ARGV or die "$ARGV[0]: $!\n" }
+          local $SIG{ALRM} = sub {
+            print STDERR "[test-queue] stopped: the run took more than $limit s\n";
+            $SIG{TERM} = "IGNORE"; kill "TERM", -$$; sleep 5; kill "KILL", $pid; exit 124 };
+          alarm $limit; waitpid($pid, 0); exit($? & 127 ? 128 + ($? & 127) : $? >> 8)
+        '"'"' "$limit" "$@"' "$STARTED" "$LIMIT" "$@"
       status=$?
       if [ "$status" -ne 75 ] || [ -e "$STARTED" ]; then rm -f "$STARTED"; exit "$status"; fi
       i=$((i + 1))

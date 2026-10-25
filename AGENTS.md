@@ -72,7 +72,9 @@ npx tsc --noEmit       # typecheck
   and a plain lock starves older waiters. Always run tests as
   `scripts/test-queue.sh npx vitest run --maxWorkers=4 <files>` (`npm test` does this), in the
   foreground; from a worktree whose checkout predates the script, use the main checkout's copy by
-  its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. Run the files
+  its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. A run that
+  holds its slot longer than 30 minutes is stopped (`SEMBLANCE_RUN_LIMIT`), so keep runs to the
+  affected files. Run the files
   your change affects; the full suite runs before a push.
 - A test that times out under a full run is re-run alone before it counts as a failure.
 - The default store is Semblance's WASM engine (`wat`) with SPARQL rules preferred. A new query
