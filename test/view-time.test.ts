@@ -6,7 +6,7 @@
 // their timestamp and their values. And the work: an event, and an expiry, cost the same over 200
 // members as over 2,000.
 //
-// On Oxigraph: Semblance's own engine compares xsd:dateTime coarsely for now (#21).
+// On Oxigraph, and one seed on Semblance's own engine (wat).
 import type { Quad } from '@rdfjs/types'
 import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
@@ -62,8 +62,8 @@ t:evTumble a iv:View ; iv:window t:ev2s ;
     sem:select """SELECT ?b ?k (COUNT(?m) AS ?n) WHERE { t:e tree:member ?m . ?m t:kind ?k } GROUP BY ?b ?k""" .
 `
 
-function timeRuntime() {
-  const store = loadStore('oxigraph', VIEWS)
+function timeRuntime(kind: 'oxigraph' | 'wat' = 'oxigraph') {
+  const store = loadStore(kind, VIEWS)
   const runtime = new Runtime(store)
   const clock = new ManualClock()
   runtime.views.clock = clock
@@ -87,9 +87,9 @@ function timeRuntime() {
 }
 
 describe('maintained views: windows on an injected clock', () => {
-  for (const seed of [11, 12, 13]) {
-    it(`every window equals a from-scratch run after every tick and every clock move (seed ${seed})`, () => {
-      const { store, runtime, clock, f, nn, member, int, date, dbl, check } = timeRuntime()
+  for (const [seed, kind] of [[11, 'oxigraph'], [12, 'oxigraph'], [13, 'oxigraph'], [14, 'wat']] as const) {
+    it(`every window equals a from-scratch run after every tick and every clock move (seed ${seed}, ${kind})`, () => {
+      const { store, runtime, clock, f, nn, member, int, date, dbl, check } = timeRuntime(kind)
       const r = rng(seed)
       const pick = <X>(xs: X[]) => xs[Math.floor(r() * xs.length)]!
       const K = ['K1', 'K2', 'K3']
