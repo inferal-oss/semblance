@@ -167,7 +167,7 @@
 ;; local holding the stack top): 0 unbound, maybe bound, certainly bound.
 (@define MAYBE 1) (@define CERTAIN 2)
 
-(func $step (param $k i32) (param $a i32) (param $b i32) (param $next i32) (result i32)
+(func $cstep (param $k i32) (param $a i32) (param $b i32) (param $next i32) (result i32)
   (local $s i32)
   (i32.store (local.tee $s (call $anew (i32.const 16))) (local.get $k))
   (i32.store offset=4 (local.get $s) (local.get $a))
@@ -349,10 +349,10 @@
         (local.set $e (i32.load offset=28 (local.get $e)))
         (br $count))))))
   (local.set $after (local.get $e))
-  (local.set $rest (call $step (i32.const S_LIST) (local.get $e) (local.get $h) (local.get $rest)))
+  (local.set $rest (call $cstep (i32.const S_LIST) (local.get $e) (local.get $h) (local.get $rest)))
   (local.set $picked (call $anew (local.get $n)))
   (local.set $b (call $st_copy (local.get $st)))
-  (local.set $last (local.tee $head (call $step (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
+  (local.set $last (local.tee $head (call $cstep (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
   (local.set $left (local.get $n))
   (loop $picks
     (if (local.get $left) (then
@@ -393,7 +393,7 @@
             (else (local.set $w (i32.const 0))))))
         (br_if $positions (i32.ne (local.tee $c (i32.add (local.get $c) (i32.const 1))) (i32.const 3))))
       (i32.store offset=12 (local.get $last)
-        (local.tee $last (call $step (select (select (i32.const S_TRIPLE) (i32.const S_PATH) (i32.eq (i32.load (local.get $be)) (i32.const P_TRIPLE))) (i32.const S_EVAL) (local.get $w)) (local.get $be) (i32.const 0) (i32.const 0))))
+        (local.tee $last (call $cstep (select (select (i32.const S_TRIPLE) (i32.const S_PATH) (i32.eq (i32.load (local.get $be)) (i32.const P_TRIPLE))) (i32.const S_EVAL) (local.get $w)) (local.get $be) (i32.const 0) (i32.const 0))))
       (local.set $left (i32.sub (local.get $left) (i32.const 1)))
       ;; filters that are ready now: what the triples left and the elements after mention
       (if (i32.and (i32.ne (local.get $h) (i32.const 0)) (i32.ne (local.get $left) (i32.const 0))) (then
@@ -406,7 +406,7 @@
             (local.set $x (i32.load offset=28 (local.get $x)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $unpicked))))
-        (i32.store offset=12 (local.get $last) (local.tee $last (call $step (i32.const S_PF) (local.get $h) (local.get $later) (i32.const 0))))))
+        (i32.store offset=12 (local.get $last) (local.tee $last (call $cstep (i32.const S_PF) (local.get $h) (local.get $later) (i32.const 0))))))
       (br $picks))))
   (i32.store offset=12 (local.get $last) (local.get $rest))
   (i32.load offset=12 (local.get $head)))
@@ -439,7 +439,7 @@
     (if (i32.le_u (i32.sub (i32.load (local.get $a)) (i32.const P_TRIPLE)) (select (i32.const 0) (i32.const 1) (call $cx_off (i32.const 32))))
       (then (call $cx_emit (local.get $f) (call $order (local.get $a) (local.get $st) (local.get $rest) (local.get $x)) (local.get $st)))
       (else (call $cx_emit (local.get $f)
-        (call $step (i32.const S_EL) (local.get $a) (i32.const 0) (call $step (i32.const S_LIST) (i32.load offset=28 (local.get $a)) (local.get $x) (local.get $rest)))
+        (call $cstep (i32.const S_EL) (local.get $a) (i32.const 0) (call $cstep (i32.const S_LIST) (i32.load offset=28 (local.get $a)) (local.get $x) (local.get $rest)))
         (local.get $st))))
     (return (call $close (local.get $f) (local.get $n)))))
   (if (i32.eq (local.get $k) (i32.const S_PF)) (then
@@ -498,8 +498,8 @@
     (call $em1 (local.get $f) (@str "k0Wa") (local.get $x))
     (call $cx_emit (local.get $f)
       (call $grp (i32.load offset=4 (local.get $a)) (i32.load offset=8 (local.get $a))
-        (call $step (i32.const S_FOUND) (local.get $x) (i32.const 0)
-          (call $step (i32.const S_CALL) (local.get $l) (i32.const 0) (i32.const 0))))
+        (call $cstep (i32.const S_FOUND) (local.get $x) (i32.const 0)
+          (call $cstep (i32.const S_CALL) (local.get $l) (i32.const 0) (i32.const 0))))
       (local.get $st))
     (call $em (local.get $f) (@str "RaE(gbCc}") (local.get $x) (i32.load (local.get $st)) (local.get $l) (i32.const 0))
     (return)))
@@ -533,8 +533,8 @@
   (loop $fill (if (local.get $l) (then
     (i32.store (i32.add (local.get $h) (i32.shl (local.tee $n (i32.add (local.get $n) (i32.const 1))) (i32.const 2))) (local.get $l))
     (local.set $l (i32.load offset=28 (local.get $l))) (br $fill))))
-  (call $step (i32.const S_LIST) (local.get $els) (select (local.get $h) (i32.const 0) (local.get $n))
-    (call $step (i32.const S_FILT) (local.get $h) (i32.const 0) (local.get $rest))))
+  (call $cstep (i32.const S_LIST) (local.get $els) (select (local.get $h) (i32.const 0) (local.get $n))
+    (call $cstep (i32.const S_FILT) (local.get $h) (i32.const 0) (local.get $rest))))
 
 ;; Test the holder's filters that are ready (later: the slots later elements
 ;; mention; 0: all of them), each opening a block the row leaves when it fails:
@@ -625,16 +625,16 @@
   (if (i32.eq (local.get $k) (i32.const P_UNION)) (then
     ;; both branches, then the same rest
     (call $deep (local.tee $b (call $cx_bits)) (local.get $el))
-    (local.set $call (call $step (i32.const S_CALL) (call $cont (local.get $rest) (call $st_mark (local.get $st) (local.get $b) (i32.const MAYBE))) (i32.const 0) (i32.const 0)))
-    (call $cx_emit (local.get $f) (call $step (i32.const S_EL) (i32.load offset=4 (local.get $el)) (i32.const 0) (local.get $call)) (local.get $st))
-    (call $cx_emit (local.get $f) (call $step (i32.const S_EL) (i32.load offset=8 (local.get $el)) (i32.const 0) (local.get $call)) (local.get $st))
+    (local.set $call (call $cstep (i32.const S_CALL) (call $cont (local.get $rest) (call $st_mark (local.get $st) (local.get $b) (i32.const MAYBE))) (i32.const 0) (i32.const 0)))
+    (call $cx_emit (local.get $f) (call $cstep (i32.const S_EL) (i32.load offset=4 (local.get $el)) (i32.const 0) (local.get $call)) (local.get $st))
+    (call $cx_emit (local.get $f) (call $cstep (i32.const S_EL) (i32.load offset=8 (local.get $el)) (i32.const 0) (local.get $call)) (local.get $st))
     (return)))
   (if (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (then
     (if (call $inline_ok (i32.load offset=4 (local.get $el)) (local.get $st) (i32.const 1))
-      (then (return (call $cx_emit (local.get $f) (call $step (i32.const S_OPT) (i32.load offset=4 (local.get $el)) (i32.const 0) (local.get $rest)) (local.get $st)))))))
+      (then (return (call $cx_emit (local.get $f) (call $cstep (i32.const S_OPT) (i32.load offset=4 (local.get $el)) (i32.const 0) (local.get $rest)) (local.get $st)))))))
   (if (i32.eq (local.get $k) (i32.const P_LATERAL)) (then (return (call $lateral (local.get $f) (local.get $el) (local.get $rest) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const P_BIND)) (then
-    (return (call $cx_emit (local.get $f) (call $step (i32.const S_BIND) (i32.load offset=4 (local.get $el)) (i32.load offset=8 (local.get $el)) (local.get $rest)) (local.get $st)))))
+    (return (call $cx_emit (local.get $f) (call $cstep (i32.const S_BIND) (i32.load offset=4 (local.get $el)) (i32.load offset=8 (local.get $el)) (local.get $rest)) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then (return (call $values (local.get $f) (local.get $el) (local.get $rest) (local.get $st)))))
   (if (i32.eq (local.get $k) (i32.const P_PATH)) (then
     (if (call $closure_loop (local.get $f) (local.get $el) (local.get $rest) (local.get $st)) (then (return)))
@@ -687,7 +687,7 @@
       (br $slots))))
   (i32.store (local.get $rec) (local.get $n))
   (call $cx_emit (local.get $f)
-    (call $grp (i32.load offset=4 (local.get $g)) (i32.load offset=8 (local.get $g)) (call $step (i32.const S_UNMASK) (local.get $rec) (i32.const 0) (local.get $rest)))
+    (call $grp (i32.load offset=4 (local.get $g)) (i32.load offset=8 (local.get $g)) (call $cstep (i32.const S_UNMASK) (local.get $rec) (i32.const 0) (local.get $rest)))
     (local.get $inner))
   ;; restored
   (local.set $s (i32.const 0))
@@ -965,7 +965,7 @@
   (call $em0 (local.get $f) (@str "C@"))
   (call $cx_emit (local.get $f)
     (call $grp (i32.load offset=4 (i32.load offset=12 (local.get $sq))) (i32.load offset=8 (i32.load offset=12 (local.get $sq)))
-      (call $step (i32.const S_KEEP) (i32.const 0) (i32.const 0) (i32.const 0)))
+      (call $cstep (i32.const S_KEEP) (i32.const 0) (i32.const 0) (i32.const 0)))
     (local.get $inner))
   (if (i32.eqz (global.get $cx_lat)) (then (call $em0 (local.get $f) (@str "}"))))
   (global.set $cx_lat (local.get $sl))
@@ -1366,21 +1366,21 @@
   (i32.store offset=16 (local.get $run) (i32.const 3))
   (call $em (local.get $run) (@str "kakbg0C0tck0H(gc^}{[gdgcOf1gdC1") (local.get $q) (local.get $shape) (i32.const 1) (i32.const 2))
   ;; the plan: WHERE, its filters, the trailing VALUES, SELECT expressions, a solution
-  (local.set $last (local.tee $steps (call $step (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
+  (local.set $last (local.tee $steps (call $cstep (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))
   (local.set $item (i32.load offset=8 (local.get $q)))
   (local.set $c (i32.const 0))
   (loop $items
     (if (local.get $item) (then
       (if (i32.load offset=8 (local.get $item)) (then
         (i32.store offset=12 (local.get $last)
-          (local.tee $last (call $step (select (i32.const S_SEL) (i32.const S_BIND) (local.get $c)) (i32.load offset=8 (local.get $item)) (i32.load offset=4 (local.get $item)) (i32.const 0))))
+          (local.tee $last (call $cstep (select (i32.const S_SEL) (i32.const S_BIND) (local.get $c)) (i32.load offset=8 (local.get $item)) (i32.load offset=4 (local.get $item)) (i32.const 0))))
         ;; evaluated unless a parameter
         (local.set $c (i32.or (local.get $c) (i32.eqz (call $bit (global.get $cx_shape) (i32.load offset=4 (local.get $item))))))))
       (local.set $item (i32.load offset=28 (local.get $item)))
       (br $items))))
-  (i32.store offset=12 (local.get $last) (call $step (i32.const S_FINAL) (i32.const 0) (i32.const 0) (i32.const 0)))
+  (i32.store offset=12 (local.get $last) (call $cstep (i32.const S_FINAL) (i32.const 0) (i32.const 0) (i32.const 0)))
   (local.set $steps (i32.load offset=12 (local.get $steps)))
-  (if (i32.load offset=40 (local.get $q)) (then (local.set $steps (call $step (i32.const S_EL) (i32.load offset=40 (local.get $q)) (i32.const 0) (local.get $steps)))))
+  (if (i32.load offset=40 (local.get $q)) (then (local.set $steps (call $cstep (i32.const S_EL) (i32.load offset=40 (local.get $q)) (i32.const 0) (local.get $steps)))))
   (local.set $steps
     (call $grp (i32.load offset=4 (i32.load offset=12 (local.get $q))) (i32.load offset=8 (i32.load offset=12 (local.get $q))) (local.get $steps)))
   ;; parameters are certain; the stack top is local 3
@@ -1704,7 +1704,7 @@
   (global.set $cx_latbits (local.get $bits))
   (call $cx_emit (local.get $f)
     (call $grp (i32.load offset=4 (local.get $g)) (i32.load offset=8 (local.get $g))
-      (call $step (i32.const S_LATEND) (local.get $sl) (local.get $sb) (local.get $rest)))
+      (call $cstep (i32.const S_LATEND) (local.get $sl) (local.get $sb) (local.get $rest)))
     (local.get $st))
   (global.set $cx_lat (local.get $sl))
   (global.set $cx_latbits (local.get $sb)))

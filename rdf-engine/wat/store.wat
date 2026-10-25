@@ -63,6 +63,7 @@
     (loop $double (if (i32.gt_u (local.get $n) (local.get $cap)) (then (local.set $cap (i32.shl (local.get $cap) (i32.const 1))) (br $double))))
     (global.set $quads (call $realloc (global.get $quads) (i32.shl (global.get $qcap) (i32.const 5))
       (i32.shl (local.get $cap) (i32.const 5)) (i32.shl (global.get $qn) (i32.const 5))))
+    (i32.store offset=4 (global.get $bases) (global.get $quads))
     (global.set $qcap (local.get $cap))))
   (local.set $cap (global.get $qscap))
   (loop $double (if (i32.gt_u (i32.shl (local.get $n) (i32.const 1)) (local.get $cap)) (then (local.set $cap (i32.shl (local.get $cap) (i32.const 1))) (br $double))))

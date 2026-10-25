@@ -971,7 +971,7 @@
   (local.set $flag (global.get $cx_ng))
   (global.set $cx_ng (i32.add (local.get $flag) (i32.const 1)))
   (local.set $fn (call $cont
-    (call $grp (i32.load offset=4 (local.get $g)) (i32.load offset=8 (local.get $g)) (call $step (i32.const S_EXIT) (local.get $flag) (i32.const 0) (i32.const 0)))
+    (call $grp (i32.load offset=4 (local.get $g)) (i32.load offset=8 (local.get $g)) (call $cstep (i32.const S_EXIT) (local.get $flag) (i32.const 0) (i32.const 0)))
     (local.get $st)))
   ;; save what it may bind
   (call $deep (local.tee $b (call $cx_bits)) (local.get $g))
