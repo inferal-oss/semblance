@@ -6,7 +6,7 @@
 // from-scratch run of its own query after every tick; any difference throws.
 import type { Quad } from '@rdfjs/types'
 import { loadStore } from '../src/node/load.ts'
-import { LDES, NS } from '../src/ns.ts'
+import { LDES, NETWORK_GRAPH, NS, PERF_GRAPH } from '../src/ns.ts'
 import { Runtime } from '../src/runtime.ts'
 import { ManualClock } from '../src/view/runtime.ts'
 
@@ -59,6 +59,11 @@ export const LAW_VIEWS: Record<string, string> = {
   lateralLabel: `SELECT ?m ?l WHERE { v:s tree:member ?m . ?m v:target ?t . LATERAL { OPTIONAL { ?t rdfs:label ?l } } }`,
   bestPerTarget: `SELECT ?t ?m WHERE { ?t a v:Target . LATERAL { SELECT ?t ?m WHERE { v:s tree:member ?m . ?m v:target ?t ; v:x ?x } ORDER BY DESC(?x) ?m LIMIT 1 } }`,
   countPerTarget: `SELECT ?t ?n WHERE { ?t a v:Target . LATERAL { SELECT ?t (COUNT(?m) AS ?n) WHERE { ?m v:target ?t } GROUP BY ?t } }`,
+  // GRAPH: a graph variable (over the views' input graphs), a named graph, and the union default graph.
+  noted: `SELECT ?g ?t ?n ?l WHERE { GRAPH ?g { ?t v:note ?n } ?t rdfs:label ?l }`,
+  perfNotes: `SELECT ?t (COUNT(?n) AS ?c) WHERE { GRAPH <${PERF_GRAPH}> { ?t v:note ?n } } GROUP BY ?t`,
+  bothGraphs: `SELECT ?t WHERE { GRAPH <${PERF_GRAPH}> { ?t v:note ?a } GRAPH <${NETWORK_GRAPH}> { ?t v:note ?b } FILTER NOT EXISTS { GRAPH ?any { ?t v:hidden true } } }`,
+  anyNote: `SELECT DISTINCT ?t ?n WHERE { ?t v:note ?n }`,
   // A cross product: partitions by (item, kind); a new kind reaches every item's slice.
   cross: `SELECT ?i ?k ?s WHERE { ?i a v:Item . v:cfg v:showKind ?k OPTIONAL { ?i v:score ?s } }`,
 }
@@ -152,7 +157,14 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     const old = store.match(nn(s), p(pred), null)
     return [old, o ? [f.quad(nn(s), p(pred), o)] : []]
   }
-  const apply = ([remove, add]: Quad[][]) => runtime.apply({ remove: remove!, add: add! })
+  // Quads with a named graph go to that graph (an input graph of the views).
+  const apply = ([remove, add]: Quad[][]) => {
+    const named = (q: Quad) => q.graph.termType === 'NamedNode'
+    runtime.transaction(() => {
+      runtime.apply({ remove: remove!.filter((q) => !named(q)), add: add!.filter((q) => !named(q)) })
+      for (const g of new Set([...remove!, ...add!].filter(named).map((q) => q.graph.value))) runtime.write(g, { remove: remove!.filter((q) => q.graph.value === g), add: add!.filter((q) => q.graph.value === g) })
+    })
+  }
   // Targets with labels and groups to begin with.
   if (!on) runtime.transaction(() => {
     for (const t of T) {
@@ -201,6 +213,13 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     }],
     ['item score', 0.8, () => (items.length ? set(pick(items), 'score', r() < 0.2 ? undefined : int(Math.floor(r() * 7))) : [[], []])],
     ['item owner', 0.5, () => (items.length ? set(pick(items), 'owner', nn(pick(T))) : [[], []])],
+    ['graph note', 0.8, () => {
+      // A note on a target in one of two named graphs (the views' input graphs), or gone.
+      const g = f.namedNode(pick([PERF_GRAPH, NETWORK_GRAPH]))
+      const t = nn(pick(T))
+      const old = store.match(t, p('note'), null, g)
+      return r() < 0.35 && old.length ? [old.slice(0, 1), []] : [[], [f.quad(t, p('note'), f.literal('note ' + Math.floor(r() * 4)), g)]]
+    }],
     ['target type', 0.4, () => set(pick(T), NS.rdf + 'type', r() < 0.5 ? nn('Target') : undefined)],
     ['list insert', 0.6, () => {
       // A new cell after a random one (or at the head).

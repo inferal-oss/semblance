@@ -171,6 +171,8 @@ export interface ViewSource {
   /** iv:partitionBy */
   partitionBy?: string[]
   window?: WindowSource
+  /** The named graphs it reads (its input graphs): what GRAPH ?g ranges over. */
+  graphs?: string[]
 }
 
 export interface ViewCompiler {

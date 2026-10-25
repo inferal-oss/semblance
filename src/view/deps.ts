@@ -34,6 +34,8 @@ export interface Pat {
   /** A plain predicate (or a variable), or a path. */
   p: Pos | { path: Path }
   o: Pos
+  /** Inside GRAPH: the graph (a variable or a named graph); else the union default graph. */
+  g?: Pos
   scope: Scope
 }
 
@@ -46,8 +48,11 @@ interface Alias {
   scope: Scope
 }
 
-/** A triple lookup over the view's dataset (and the tick's removed triples). */
-export type Lookup = (s: Term | null, p: Term | null, o: Term | null) => Quad[]
+/**
+ * A triple lookup over the view's dataset (and the tick's removed triples): the union default
+ * graph, or with `g` the view's named graphs (`g` one, null any), quads with their graph.
+ */
+export type Lookup = (s: Term | null, p: Term | null, o: Term | null, g?: Term | null) => Quad[]
 
 export class Dependencies {
   readonly patterns: Pat[] = []
@@ -57,6 +62,8 @@ export class Dependencies {
   private readonly nn = (iri: string) => this.f.namedNode(iri)
   /** What could not be analysed (the view is then recomputed). */
   problem?: string
+  /** While collecting: the graph of the GRAPH pattern being read. */
+  private graph?: Pos
   /** Derived subqueries, in the order given: the scope they sit in, and their variables as named there. */
   private derivedAt: { scope: Scope; vars: Map<string, string> }[] = []
 
@@ -81,7 +88,7 @@ export class Dependencies {
 
   /** Root patterns over the key alone (and constants): a new key must match them to have rows. */
   anchors(): Pat[] {
-    return this.patterns.filter((p) => !p.scope.parent && !('path' in p.p) && [p.s, p.p as Pos, p.o].every((x) => 't' in x || this.keys.includes(x.v)))
+    return this.patterns.filter((p) => !p.scope.parent && !p.g && !('path' in p.p) && [p.s, p.p as Pos, p.o].every((x) => 't' in x || this.keys.includes(x.v)))
   }
 
   /** Patterns a changed triple matches (by their constant positions). */
@@ -95,6 +102,7 @@ export class Dependencies {
         if (!('path' in p.p)) continue
       }
       if ('path' in p.p && p.p.path.k === 'nps' && p.p.path.iris.some((x) => x.iri === q.predicate.value)) continue
+      if (p.g && (q.graph.termType !== 'NamedNode' || ('t' in p.g && !p.g.t.equals(q.graph)))) continue
       out.push(p)
     }
     return out
@@ -155,8 +163,11 @@ export class Dependencies {
       row.set(pos.v, t)
       return true
     }
+    if (p.g && !put(p.g, q.graph)) return []
     if (!('path' in p.p)) return put(p.s, q.subject) && put(p.p, q.predicate) && put(p.o, q.object) ? [row] : []
     const path = p.p.path
+    // A path inside GRAPH walks that graph.
+    if (p.g) lookup = inGraph(lookup, q.graph)
     // A link, an alternative of links, a negated set: the triple is one step.
     const direct = linkSteps(path)
     if (direct) {
@@ -164,6 +175,7 @@ export class Dependencies {
       for (const { iri, inv } of direct) {
         if (iri !== undefined && iri !== q.predicate.value) continue
         row.clear()
+        if (p.g) put(p.g, q.graph)
         if (inv ? put(p.s, q.object) && put(p.o, q.subject) : put(p.s, q.subject) && put(p.o, q.object)) out.push(new Map(row))
       }
       return out
@@ -208,6 +220,7 @@ export class Dependencies {
           if ('t' in p.s && 't' in p.o) out.push(new Map())
         }
       }
+      if (p.g && 'v' in p.g) for (const r of out) r.set(p.g.v, q.graph)
       return out
     }
     return 'global'
@@ -243,7 +256,7 @@ export class Dependencies {
     const via = new Map<string, Edge>()
     const queue = [...bound]
     const reached = new Set(bound)
-    const varsOf = (x: Pat) => [x.s, 'path' in x.p ? undefined : x.p, x.o].filter((y): y is { v: string } => !!y && 'v' in y).map((y) => y.v)
+    const varsOf = (x: Pat) => [x.s, 'path' in x.p ? undefined : x.p, x.o, x.g].filter((y): y is { v: string } => !!y && 'v' in y).map((y) => y.v)
     while (queue.length && !this.keys.every((k) => reached.has(k))) {
       const v = queue.shift()!
       for (const x of pats) {
@@ -278,7 +291,9 @@ export class Dependencies {
         const s = val(x.s)
         const pp = val(x.p as Pos)
         const o = val(x.o)
-        return !s || !pp || !o || lookup(s, pp, o).length > 0
+        if (!s || !pp || !o) return true
+        if (!x.g) return lookup(s, pp, o).length > 0
+        return lookup(s, pp, o, val(x.g) ?? null).length > 0
       })
     let rows = [start].filter(holds)
     const done = new Set<Pat | Alias>()
@@ -325,6 +340,12 @@ export class Dependencies {
       row.set(pos.v, t)
       return true
     }
+    if (x.g) {
+      // Inside GRAPH: a graph that is known, or each of the view's graphs the lookup finds.
+      const g = val(x.g)
+      if (!g && 'path' in x.p) return []
+      if (g) lookup = inGraph(lookup, g)
+    }
     if ('path' in x.p) {
       // Walk the path from a bound end.
       const path = x.p.path
@@ -340,9 +361,9 @@ export class Dependencies {
     }
     const p = val(x.p)
     if (!s && !o && !p) return []
-    for (const q of lookup(s ?? null, (p as NamedNode) ?? null, o ?? null)) {
+    for (const q of x.g ? lookup(s ?? null, (p as NamedNode) ?? null, o ?? null, val(x.g) ?? null) : lookup(s ?? null, (p as NamedNode) ?? null, o ?? null)) {
       const row = new Map(r)
-      if (set(row, x.s, q.subject) && set(row, x.p as Pos, q.predicate) && set(row, x.o, q.object)) out.push(row)
+      if ((!x.g || set(row, x.g, q.graph)) && set(row, x.s, q.subject) && set(row, x.p as Pos, q.predicate) && set(row, x.o, q.object)) out.push(row)
     }
     return out
   }
@@ -363,7 +384,8 @@ export class Dependencies {
   }
 
   private add(scope: Scope, s: Pos, p: Pos | { path: Path }, o: Pos) {
-    const pat: Pat = { id: this.patterns.length, s, p, o, scope }
+    if (this.graph && 'v' in this.graph && 'path' in p) throw new Error('a property path inside GRAPH ?var')
+    const pat: Pat = { id: this.patterns.length, s, p, o, g: this.graph, scope }
     this.patterns.push(pat)
     scope.pats.push(pat)
   }
@@ -403,9 +425,15 @@ export class Dependencies {
           break
         }
         case 'group':
-        case 'graph':
           this.group(it.g, scope, rename, left)
           break
+        case 'graph': {
+          const outer = this.graph
+          this.graph = this.pos(it.name, rename)
+          this.group(it.g, scope, rename, left)
+          this.graph = outer
+          break
+        }
         case 'optional':
         case 'minus':
           this.group(it.g, this.child(scope), rename, left)
@@ -475,6 +503,9 @@ export class Dependencies {
     }
   }
 }
+
+/** A lookup confined to one named graph (paths inside GRAPH). */
+const inGraph = (lookup: Lookup, g: Term): Lookup => (s, p, o) => lookup(s, p, o, g)
 
 function dedupe(rows: Map<string, Term>[]): Map<string, Term>[] {
   const seen = new Map<string, Map<string, Term>>()

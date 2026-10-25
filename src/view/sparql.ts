@@ -42,7 +42,7 @@ export type Item =
   | { k: 'union'; gs: Group[] }
   | { k: 'minus'; g: Group }
   | { k: 'lateral'; g: Group }
-  | { k: 'graph'; name: Node; g: Group }
+  | { k: 'graph'; name: Node; g: Group; at: number }
   | { k: 'service'; g: Group }
   | { k: 'filter'; e: Expr; at: number; end: number }
   | { k: 'bind'; e: Expr; as: string; at: number; end: number }
@@ -470,9 +470,11 @@ class Parser {
       } else if (this.eat('OPTIONAL')) items.push({ k: 'optional', g: this.group() })
       else if (this.eat('MINUS')) items.push({ k: 'minus', g: this.group() })
       else if (this.eat('LATERAL')) items.push({ k: 'lateral', g: this.group() })
-      else if (this.eat('GRAPH')) {
+      else if (this.is('GRAPH')) {
+        const gAt = t.at
+        this.i++
         const name = this.node()
-        items.push({ k: 'graph', name, g: this.group() })
+        items.push({ k: 'graph', name, g: this.group(), at: gAt })
       } else if (this.eat('SERVICE')) {
         this.eat('SILENT')
         this.node()

@@ -66,7 +66,7 @@ export const compiler: ViewCompiler = {
 const flat = (s: string) => s.trim().replace(/\s+/g, ' ')
 
 function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
-  const q = parseQuery(source.query, prefixMap(source.prefixes))
+  const q = withGraphs(parseQuery(source.query, prefixMap(source.prefixes)), source)
   if (q.form === 'ask') throw new Unsupported('ASK')
   if (q.form !== source.form) throw new Unsupported(`${q.form.toUpperCase()} text in sem:${source.form}`)
   const text = q.text
@@ -136,6 +136,34 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
       output: q.templateText !== undefined ? `Construct({${flat(q.templateText)}})` : undefined,
     },
   }
+}
+
+/**
+ * GRAPH patterns read the view's own graphs: GRAPH <g> one of them (a change elsewhere would not
+ * reach the view), GRAPH ?g ranging over them - written into the query (VALUES before each), so
+ * the oracle means the same.
+ */
+function withGraphs(q: Query, source: ViewSource): Query {
+  const graphs = source.graphs ?? []
+  const inserts: { at: number; text: string }[] = []
+  const visit = (g: Group) => {
+    for (const it of g.items) {
+      if (it.k === 'graph') {
+        if (it.name.k === 'iri' && !graphs.includes(it.name.v)) throw new Unsupported(`GRAPH <${it.name.v}>: not one of the view's graphs`)
+        if (it.name.k === 'var') inserts.push({ at: it.at, text: `VALUES ?${it.name.v} { ${graphs.map((x) => `<${x}>`).join(' ')} } ` })
+        else if (it.name.k !== 'iri') throw new Unsupported('GRAPH with a blank node or literal')
+      }
+      if (it.k === 'select') visit(it.q.where)
+      else if (it.k === 'union') it.gs.forEach(visit)
+      else if ('g' in it) visit(it.g)
+      else if (it.k === 'filter' || it.k === 'bind') for (const x of it.e.exists) visit(x.g)
+    }
+  }
+  visit(q.select.where)
+  if (!inserts.length) return q
+  let text = q.text
+  for (const { at, text: t } of inserts.sort((a, b) => b.at - a.at)) text = text.slice(0, at) + t + text.slice(at)
+  return parseQuery(text, q.prefixes)
 }
 
 /** The expressions (among the slot expressions' texts) that have EXISTS in them, parsed from the SELECT. */
@@ -547,7 +575,6 @@ function rootTriples(g: Group) {
 function checkGroup(g: Group) {
   for (const it of g.items) {
     if (it.k === 'service') throw new Unsupported('SERVICE')
-    if (it.k === 'graph') throw new Unsupported('GRAPH (views read the union of their graphs)')
     if (it.k === 'select') {
       checkGroup(it.q.where)
       }

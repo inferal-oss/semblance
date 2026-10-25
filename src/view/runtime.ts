@@ -527,6 +527,7 @@ export class ViewRuntime {
       over: this.one(s, IV + 'over')?.value,
       partitionBy: partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
+      graphs: this.datasetFor(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0).filter((g) => g.termType === 'NamedNode').map((g) => g.value),
     }
     if (!source.query) return undefined
     return (this.opts.compiler ?? compiler).compile(source, this.runner(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0))
@@ -699,14 +700,18 @@ export class ViewRuntime {
       index('p' + q.predicate.value, q)
       index('o' + termKey(q.object), q)
     }
-    return (s, p, o) => {
+    // Without `g`: the union default graph (a triple once). With it: quads of the named graphs
+    // (`g` one of them, or null: any), each with its graph.
+    return (s, p, o, g) => {
       const seen = new Set<string>()
       const out: Quad[] = []
+      const named = g !== undefined
       const put = (q: Quad) => {
-        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object)
+        if (named && (q.graph.termType !== 'NamedNode' || (g && !q.graph.equals(g)))) return
+        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object) + (named ? ' ' + q.graph.value : '')
         if (!seen.has(k)) seen.add(k), out.push(q)
       }
-      for (const g of graphs) for (const q of this.store.match(s as never, p as never, o as never, g as never)) put(q)
+      for (const x of graphs) if (!named || (x.termType === 'NamedNode' && (!g || x.equals(g)))) for (const q of this.store.match(s as never, p as never, o as never, x as never)) put(q)
       if (removed.length) {
         const pool = s ? by.get('s' + termKey(s)) : o ? by.get('o' + termKey(o)) : p ? by.get('p' + p.value) : removed
         for (const q of pool ?? []) if ((!s || q.subject.equals(s)) && (!p || q.predicate.equals(p)) && (!o || q.object.equals(o))) put(q)
