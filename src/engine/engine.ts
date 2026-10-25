@@ -46,9 +46,12 @@ interface Follower {
 
 const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
 
+/** Whether an error is a query the store's deadline stopped (QueryInterrupted, or an engine error with `interrupted`). */
+const interruption = (e: unknown): boolean => e instanceof QueryInterrupted || (e as { interrupted?: boolean } | undefined)?.interrupted === true
+
 /** A store's error, about a rule; an interruption (the store's deadline) stays one. */
 function ruleError(rule: Rule, e: unknown): Error {
-  if ((e as { interrupted?: boolean })?.interrupted) return e instanceof QueryInterrupted ? e : new QueryInterrupted(`SPARQL rule <${rule.iri}> was interrupted: ${(e as Error).message}`)
+  if (interruption(e)) return e instanceof QueryInterrupted ? e : new QueryInterrupted(`SPARQL rule <${rule.iri}> was interrupted: ${(e as Error).message}`)
   return new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
 }
 
@@ -846,7 +849,7 @@ export class Engine {
         groups = live.length ? this.bulk(rule, live) : new Map<string, Quad[]>()
       } catch (e) {
         // The store's deadline interrupted the query: the whole batch waits, uncommitted.
-        if (e instanceof QueryInterrupted && wd) return { foci: new Set(foci), interrupted: true }
+        if (wd && interruption(e)) return { foci: new Set(foci), interrupted: true }
         throw e
       }
       this.stats.ruleRuns += live.length
@@ -870,7 +873,8 @@ export class Engine {
       try {
         quads = this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : []
       } catch (e) {
-        if (!(e instanceof QueryInterrupted)) throw e
+        // A query the store's deadline stopped (in a SPARQL rule, or one a function rule ran).
+        if (!interruption(e)) throw e
         left = { foci: new Set([focus]), interrupted: true }
         continue
       }

@@ -178,6 +178,37 @@ describe('watchdog', () => {
     expect(toHTML(screen.index, page)).toBe(toHTML(fresh.index, page))
   })
 
+  it("stops a long query at the end of the budget with the WASM engine's deadline, and runs it to the end when continued", () => {
+    const P = '<http://example/p>'
+    const turtle = `@prefix sem: <${NS.sem}> . @prefix rdfs: <${NS.rdfs}> . @prefix ex: <http://example/> .
+ex:Heavy rdfs:subClassOf sem:Component .
+ex:HeavyRendering a sem:Rendering ; sem:targets ex:Heavy ; sem:stratum 0 .
+ex:HeavyRendering-sparql a sem:Rule ; sem:implements ex:HeavyRendering ; sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?t . ?t a rdfhtml:Text ; rdfhtml:data ?n }
+WHERE {
+  { SELECT (COUNT(*) AS ?c) WHERE { ?a ${P} ?x . ?b ${P} ?y } }
+  BIND(STR(?c) AS ?n) BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) BIND(IRI(CONCAT(STR($this), "/~t")) AS ?t)
+}""" .
+ex:heavy a ex:Heavy .
+${Array.from({ length: 100 }, (_, i) => `<http://example/s${i}> ${P} "${i}" .`).join('\n')}`
+    const store = loadStore('wat', turtle)
+    expect(store.setDeadline).toBeTypeOf('function')
+    const runtime = new Runtime(store)
+    // A turn whose budget is spent the moment it starts, but never seen to be over between
+    // evaluations: only the store's deadline (now) can stop it.
+    runtime.watchdog.clock = () => 0
+    runtime.watchdog.budgetMs = 0
+    const stalls: Stall[] = []
+    runtime.watchdog.onStall((s) => stalls.push({ ...s }))
+    const screen = runtime.project({ modality: MOD.Screen, prefer: 'sparql' })
+    expect(stalls).toHaveLength(1)
+    expect(stalls[0]!.interrupted).toBe(true)
+    expect(screen.engine.heldFoci()).toContain('http://example/heavy')
+    while (runtime.continueStall(50));
+    expect(runtime.held).toBe(0)
+    expect(toHTML(screen.index, 'http://example/heavy')).toBe('<div>10000</div>')
+  })
+
   it('reads the clock only every few evaluations', () => {
     const wd = new Watchdog()
     let reads = 0
