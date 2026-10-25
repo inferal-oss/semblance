@@ -5,13 +5,14 @@ import type { Clock } from '../src/behaviour/clock.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard, type ClipboardLike } from '../src/clipboard.ts'
 import { type FileLike, Files, type PickOptions, type UploadContext } from '../src/files.ts'
+import { Fullscreen, type FullscreenHost } from '../src/fullscreen.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
 import { isExampleSource, recordSources } from '../src/sources.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
-import { A11Y, ANN, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
+import { A11Y, ANN, FS, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 
@@ -85,7 +86,7 @@ export async function mountNavigating(opts: NavigationOptions, backends?: Record
 function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const runtime = new Runtime(store)
-  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer']
+  const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer', FS.Layer]
   const screen = runtime.project({ modality: MOD.Screen, layers, prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] }, (e) => {
     throw e
   })
@@ -122,6 +123,46 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     onHandled: () => shell.flush(),
   })
   files.attach(shell)
+  // Full screen goes to a stand-in host the test can read (fullscreen.element) and drive: one
+  // that refuses (allowed = false), and the person leaving on their own (leave(), as Esc does).
+  const listeners = new Set<() => void>()
+  const fullscreen: FullscreenHost & { allowed: boolean; element: Element | null; requests: Element[]; leave(): void } = {
+    allowed: true,
+    element: null as Element | null,
+    requests: [] as Element[],
+    enabled: () => true,
+    request(el: Element) {
+      fullscreen.requests.push(el)
+      if (!fullscreen.allowed) return Promise.reject(new Error('Refused'))
+      fullscreen.element = el
+      for (const l of listeners) l()
+      return Promise.resolve()
+    },
+    exit(_el?: Element) {
+      fullscreen.element = null
+      for (const l of listeners) l()
+      return Promise.resolve()
+    },
+    current: () => fullscreen.element,
+    watch(changed: () => void) {
+      listeners.add(changed)
+      return () => void listeners.delete(changed)
+    },
+    leave() {
+      fullscreen.element = null
+      for (const l of listeners) l()
+    },
+  }
+  const screens = new Fullscreen(bus, {
+    element: (iri) => {
+      const n = shell.nodeOf(iri)
+      return n?.nodeType === 1 ? (n as Element) : undefined
+    },
+    document: document as unknown as Document,
+    host: fullscreen,
+    onHandled: () => shell.flush(),
+  })
+  screens.attach()
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
@@ -142,6 +183,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, fire, value, showPage }
 }
 

@@ -41,6 +41,8 @@ export const NS = {
   vann: 'http://purl.org/vocab/vann/',
   iv: 'https://semblance.dev/ns/view#',
   clip: 'https://semblance.dev/ns/clipboard#',
+  fs: 'https://semblance.dev/ns/fullscreen#',
+  ext: 'https://semblance.dev/ns/foreign#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
 } as const
@@ -396,6 +398,21 @@ export const FILE = {
   DragIn: NS.file + 'DragIn', Arrive: NS.file + 'Arrive', Added: NS.file + 'Added', Refusal: NS.file + 'Refusal', PickCancelled: NS.file + 'PickCancelled',
   Progress: NS.file + 'Progress', Done: NS.file + 'Done', Failure: NS.file + 'Failure',
 } as const
+/** Full screen as a fact (ontology/layers/fullscreen.ttl, src/fullscreen.ts). */
+export const FS = {
+  Layer: NS.fs + 'Layer', fullscreen: NS.fs + 'fullscreen', fullViewport: NS.fs + 'fullViewport', Fullscreenable: NS.fs + 'Fullscreenable',
+  toggles: NS.fs + 'toggles', property: NS.fs + 'property', part: NS.fs + 'part', presentation: NS.fs + 'presentation', says: NS.fs + 'says',
+  Native: NS.fs + 'Native', Maximized: NS.fs + 'Maximized', Viewport: NS.fs + 'Viewport', Entered: NS.fs + 'Entered', Exited: NS.fs + 'Exited',
+  ToggleCommand: NS.fs + 'ToggleCommand', ViewportCommand: NS.fs + 'ViewportCommand',
+} as const
+/** Foreign components (ontology/layers/foreign.ttl, src/foreign.ts). */
+export const EXT = {
+  Island: NS.ext + 'Island', island: NS.ext + 'island', tag: NS.ext + 'tag', widget: NS.ext + 'widget', adapter: NS.ext + 'adapter',
+  input: NS.ext + 'input', output: NS.ext + 'output', name: NS.ext + 'name', from: NS.ext + 'from', value: NS.ext + 'value',
+  as: NS.ext + 'as', Property: NS.ext + 'Property', Attribute: NS.ext + 'Attribute', on: NS.ext + 'on', emits: NS.ext + 'emits',
+  path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module', outlines: NS.ext + 'outlines',
+  CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
+} as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',
@@ -409,4 +426,4 @@ export const DEP = {
 } as const
 
 /** The layers an app gets unless it names its own: what every page needs, none of the tools'. */
-export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer]
+export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer, FS.Layer]

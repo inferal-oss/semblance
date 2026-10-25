@@ -1,5 +1,5 @@
-import type { Quad } from '@rdfjs/types'
-import { H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
+import type { Quad, Term } from '@rdfjs/types'
+import { EXT, H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
 import type { Delta } from '../rdf.ts'
 import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.generated.ts'
 import { linearize } from './ordering.ts'
@@ -19,6 +19,27 @@ export interface HNode {
   slot?: string
   /** sem:orderKey: position among siblings that have no ord: precedence. */
   orderKey?: string
+  /** ext:island: the foreign component mounted in this (slot) element. */
+  island?: string
+  /** ext:tag: the custom element's tag, for the HTML serializer. */
+  tag?: string
+  /** ext:input: the input nodes stating the island's current inputs. */
+  inputs?: Set<string>
+}
+
+/** The current value of one input of an island (ext:input on its slot). */
+export interface IslandInput {
+  name: string
+  value: Term
+  /** ext:Property or ext:Attribute. */
+  as: string
+}
+
+interface InputNode {
+  name?: string
+  value?: Term
+  as?: string
+  owners: Set<string>
 }
 
 interface AttrNode {
@@ -33,9 +54,11 @@ export interface Dirty {
   children: Set<string>
   recreate: Set<string>
   roots: Set<string>
+  /** Slots whose island, tag or inputs changed (for the islands effect). */
+  islands: Set<string>
 }
 
-const newDirty = (): Dirty => ({ attrs: new Set(), data: new Set(), children: new Set(), recreate: new Set(), roots: new Set() })
+const newDirty = (): Dirty => ({ attrs: new Set(), data: new Set(), children: new Set(), recreate: new Set(), roots: new Set(), islands: new Set() })
 
 const inc = <K, V>(m: Map<K, Set<V>>, k: K, v: V, sign: number) => {
   let s = m.get(k)
@@ -56,6 +79,9 @@ const inc = <K, V>(m: Map<K, Set<V>>, k: K, v: V, sign: number) => {
 export class HtmlIndex {
   readonly nodes = new Map<string, HNode>()
   private attrs = new Map<string, AttrNode>()
+  private inputNodes = new Map<string, InputNode>()
+  /** Slots that have an island mounted in them. */
+  readonly islandSlots = new Set<string>()
   private immediate = new Map<string, Set<string>>()
   private strict = new Map<string, Set<string>>()
   private rootByFocus = new Map<string, string>()
@@ -87,12 +113,14 @@ export class HtmlIndex {
 
   private collect(key: string) {
     const n = this.nodes.get(key)
-    if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined) {
+    if (n && !n.cls && n.data === undefined && !n.props.size && !n.attrNodes.size && !n.children.size && !n.parents.size && n.slot === undefined && n.orderKey === undefined && n.island === undefined && n.tag === undefined && !n.inputs?.size) {
       this.nodes.delete(key)
       this.chainParent.delete(key)
     }
     const a = this.attrs.get(key)
     if (a && !a.owners.size && a.name === undefined && a.value === undefined) this.attrs.delete(key)
+    const i = this.inputNodes.get(key)
+    if (i && !i.owners.size && i.name === undefined && i.value === undefined && i.as === undefined) this.inputNodes.delete(key)
   }
 
   /** Register a consumer of changes; call the result to take what changed since the last call. */
@@ -231,6 +259,25 @@ export class HtmlIndex {
     return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   }
 
+  /** An island slot's current inputs, by name (an input stated twice: the least value by code point). */
+  islandInputs(key: string): Map<string, IslandInput> {
+    const out = new Map<string, IslandInput>()
+    for (const i of this.nodes.get(key)?.inputs ?? []) {
+      const rec = this.inputNodes.get(i)
+      if (rec?.name === undefined || rec.value === undefined) continue
+      const had = out.get(rec.name)
+      if (had && had.value.value <= rec.value.value) continue
+      out.set(rec.name, { name: rec.name, value: rec.value, as: rec.as ?? EXT.Property })
+    }
+    return out
+  }
+
+  private inputNode(key: string): InputNode {
+    let i = this.inputNodes.get(key)
+    if (!i) this.inputNodes.set(key, (i = { owners: new Set() }))
+    return i
+  }
+
   private mark(field: keyof Dirty, key: string) {
     for (const c of this.consumers) c[field].add(key)
   }
@@ -322,6 +369,38 @@ export class HtmlIndex {
         this.node(s).slot = sign > 0 ? o : undefined
         this.mark('children', s)
         return
+      case EXT.island: {
+        const n = this.node(s)
+        n.island = sign > 0 ? o : n.island === o ? undefined : n.island
+        if (n.island !== undefined) this.islandSlots.add(s)
+        else this.islandSlots.delete(s)
+        this.mark('islands', s)
+        return
+      }
+      case EXT.tag: {
+        const n = this.node(s)
+        n.tag = sign > 0 ? o : n.tag === o ? undefined : n.tag
+        this.mark('islands', s)
+        return
+      }
+      case EXT.input: {
+        const n = this.node(s)
+        const i = this.inputNode(o)
+        if (sign > 0) (n.inputs ??= new Set()).add(o), i.owners.add(s)
+        else n.inputs?.delete(o), i.owners.delete(s)
+        this.mark('islands', s)
+        return
+      }
+      case EXT.name:
+      case EXT.value:
+      case EXT.as: {
+        const i = this.inputNode(s)
+        if (p === EXT.value) i.value = sign > 0 ? q.object : i.value?.equals(q.object) ? undefined : i.value
+        else if (p === EXT.name) i.name = sign > 0 ? o : i.name === o ? undefined : i.name
+        else i.as = sign > 0 ? o : i.as === o ? undefined : i.as
+        for (const owner of i.owners) this.mark('islands', owner)
+        return
+      }
       case SEM.renders:
         this.visibility++
         if (sign > 0) this.rootByFocus.set(o, s), this.focusByRoot.set(s, o)

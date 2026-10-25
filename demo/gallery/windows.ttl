@@ -1,5 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
@@ -20,7 +22,7 @@
 # is, is remembered for the tab like the tools window.
 
 ui:gallery-windows a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ) .
+    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ui:wn-fullscreen ) .
 ui:gallery-windows-intro a c:Heading ; c:label "Windows" .
 ui:gallery-windows-lede a c:Text ;
     c:label "A window is not one behaviour but several. Each capability is a mixin class with its own reactions (c:Draggable, c:Resizable, c:Raisable, c:Minimizable, c:Maximizable, c:Dockable); c:Window has them all, c:Palette only some, and a frame's title bar shows the controls of the capabilities its instance has. Window state is two hookable axes, so the theme styles each value once and any control that sets a property can drive it." .
@@ -109,3 +111,28 @@ ui:wn-palette a c:Flippable ; c:front ui:wn-palette-spec .
 ui:wn-palette-spec a c:Specimen ; c:demonstrates c:Palette , c:Resizable ; c:label "Palette" ;
     c:help "A c:Palette is a c:Frame that is c:Dockable but not c:Minimizable or c:Maximizable: a slim strip with only a close control. This one is also c:Resizable (`a c:Palette, c:Resizable`), so it has a grip. The same rendering serves both frames; capabilities are classes, so an instance adds one by saying so." ;
     c:children ( ui:wn-open-display ) .
+
+# --- full screen: a fact on any component ---------------------------------------------------------------
+# Beside maximizing a frame: fs:fullscreen shows any component full screen (the fullscreen layer).
+
+ui:wn-fullscreen a c:Flippable ; c:front ui:wn-fullscreen-spec .
+ui:wn-fullscreen-spec a c:Specimen ; c:demonstrates fs:Fullscreenable ;
+    c:label "Full screen" , "Повний екран"@uk , "Vollbild"@de , "ملء الشاشة"@ar ;
+    c:help "Two facts on any component: fs:fullViewport true fills the browser window with it, fs:fullscreen true shows it on the whole screen; retracting them puts it back. Here two c:Toggles, in the card's own header (so they are still there), assert them - press them, or ⇧W and ⇧F. Full screen is the browser's, so it needs the person's click or key; where the browser will not, the window is filled instead. Esc leaves either, and the facts go with it. Source views, walkthrough diagrams and live examples draw both toggles of their own (fs:Fullscreenable)." ,
+        "Два факти на будь-якому компоненті: fs:fullViewport true розгортає його на все вікно браузера, fs:fullscreen true — на весь екран; відкликані факти повертають його на місце. Тут два c:Toggle у заголовку картки (тож вони лишаються на місці) стверджують їх — натисніть їх або ⇧W і ⇧F. Повний екран — браузерний, тож потребує вашого клацання чи клавіші; де браузер не дозволяє, натомість заповнюється вікно. Esc виходить з обох, і факти зникають разом із ним. Перегляди коду, діаграми покрокових пояснень і живі приклади мають обидва власні перемикачі (fs:Fullscreenable)."@uk ,
+        "Zwei Aussagen an einer beliebigen Komponente: fs:fullViewport true füllt das Browserfenster mit ihr, fs:fullscreen true zeigt sie auf dem ganzen Bildschirm; sie zurückzunehmen, bringt sie zurück. Hier setzen zwei c:Toggle im Kopf der Karte (so sind sie auch dann da) sie - drücken Sie sie oder ⇧W und ⇧F. Das Vollbild ist das des Browsers und braucht Ihren Klick oder Ihre Taste; wo der Browser es nicht erlaubt, wird stattdessen das Fenster gefüllt. Esc beendet beides, und die Aussagen gehen mit. Quellansichten, Diagramme von Rundgängen und Live-Beispiele haben beide Schalter selbst (fs:Fullscreenable)."@de ,
+        "حقيقتان على أي مكوّن: fs:fullViewport true يملأ نافذة المتصفح به، وfs:fullscreen true يعرضه على الشاشة كلها؛ وسحبهما يعيده إلى مكانه. هنا يثبتهما زرّا c:Toggle في رأس البطاقة (فيبقيان ظاهرين) - اضغطهما أو ⇧W و⇧F. ملء الشاشة من المتصفح، فيحتاج نقرتك أو مفتاحك؛ وحيث لا يسمح المتصفح تُملأ النافذة بدلًا منه. Esc يخرج من كليهما، وتذهب الحقيقتان معه. لعروض المصدر ومخططات الشروح والأمثلة الحية الزرّان كلاهما (fs:Fullscreenable)."@ar ;
+    c:children ( ui:wn-fullscreen-card ui:wn-fullscreen-source ) .
+ui:wn-fullscreen-card a c:Card ; c:label "This quarter" , "Цей квартал"@uk , "Dieses Quartal"@de , "هذا الربع"@ar ;
+    c:actions ( ui:wn-fullscreen-window ui:wn-fullscreen-toggle ) ; c:content ui:wn-fullscreen-figures .
+ui:wn-fullscreen-window a c:Toggle ; c:controls ui:wn-fullscreen-card ; c:property fs:fullViewport ; key:shortcut "shift+w" ;
+    c:label "Fill the window" , "На все вікно"@uk , "Fensterfüllend"@de , "ملء النافذة"@ar .
+ui:wn-fullscreen-toggle a c:Toggle ; c:controls ui:wn-fullscreen-card ; c:property fs:fullscreen ; key:shortcut "shift+f" ;
+    c:label "Full screen" , "На весь екран"@uk , "Vollbild"@de , "ملء الشاشة"@ar .
+ui:wn-fullscreen-figures a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-4 ;
+    c:children ( ui:wn-fullscreen-orders ui:wn-fullscreen-revenue ui:wn-fullscreen-returns ) .
+ui:wn-fullscreen-orders a c:Stat ; c:label "Orders" , "Замовлення"@uk , "Bestellungen"@de , "الطلبات"@ar ; c:value "1 284" ; c:delta 8.1 ; c:deltaUnit "%" .
+ui:wn-fullscreen-revenue a c:Stat ; c:label "Revenue" , "Дохід"@uk , "Umsatz"@de , "الإيرادات"@ar ; c:value "38 950" ; c:unit "€" ; c:delta 5.4 ; c:deltaUnit "%" .
+ui:wn-fullscreen-returns a c:Stat ; c:label "Returns" , "Повернення"@uk , "Rücksendungen"@de , "المرتجعات"@ar ; c:value "41" ; c:delta -2.0 ; c:deltaUnit "%" .
+ui:wn-fullscreen-source a c:SourceView ; c:label "Source" , "Джерело"@uk , "Quelle"@de , "المصدر"@ar ;
+    c:of <urn:semblance:source:demo/gallery/_ex-todo.ttl> .

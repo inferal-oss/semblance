@@ -68,9 +68,9 @@ Thin vocabularies. Every component
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
-| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
+| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
-| **Overlays** | Dialog · Drawer · Popover · Tooltip (layer) |
+| **Overlays** | Dialog · Drawer · Popover · Lightbox · Tooltip (layer) |
 | **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
 | **Inspection** | QueryWorkbench (RunQueryButton) · ResultTable · ResultGraph · ResultTurtle · QueryView · TriplesView · StreamMembers · StreamStats · ElementMarkup · Highlight · ProjectionView · ShapeReport · ClassDoc · the Reference's TermTree, TermOverview, TermAlignment, TermMembers |
@@ -86,7 +86,10 @@ Any component that shows a `c:value` may take it from a query instead: `c:valueQ
 cells that do this: a cell may say its formula as people write it (`c:formulaText "=SUM(B2:B5)"`,
 `"=B2*C2"`), which `c:SheetFormula` reads into the `c:SheetFunction` it names and the cells it reads;
 typing one into a cell makes it a formula cell (`c:EnterSheetFormula`), and its controls add a row
-or a column.
+or a column. Shift with a click or an arrow key selects a range from the selected cell
+(`c:selectionEnd`; `c:SheetSelection` derives its cells, `c:selects`), whose edges are marked and
+whose sum, average and count the line under the grid says. Events record the modifier keys held
+during a click, or the press that moved the focus (`beh:modifiers`).
 
 A **walkthrough** (`ontology/components/walkthrough.ttl`) is an explanation in steps whose phrases
 are `c:Mention`s of resources (`c:mentions`): beside the steps it draws a diagram of what they

@@ -21,6 +21,7 @@
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
@@ -35,10 +36,11 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer, fs:Layer ;
     l10n:language l10n:English ;
     ui:store ui:SemblanceWasm ;
     ui:rules ui:PreferSparql ;
+    ui:compile ui:CompileOff ;
     ui:page ui:Home ;
     ui:docSection ui:DocOverview ;
     ui:example ui:ExTodo ;
@@ -54,6 +56,14 @@ ui:N3 a ui:StoreKind ; rdfs:label "N3.js · functions only" ; sem:order 5 ; ui:k
 ui:rules rdfs:label "Rules" ; rdfs:range ui:RuleKind .
 ui:PreferSparql a ui:RuleKind ; rdfs:label "Prefer SPARQL" ; sem:order 1 ; ui:key "sparql" .
 ui:PreferFunction a ui:RuleKind ; rdfs:label "Prefer functions" ; sem:order 2 ; ui:key "function" .
+# Semblance's engines (WASM and Rust) can run prepared queries compiled to WebAssembly
+# (rdf-engine/results/compiled.md): never, from a query's second run, or in idle time for the
+# queries whose measured runs say it pays. Other stores ignore it. The host sets the store's
+# default before projecting: in idle time on Rust, off on WAT.
+ui:compile rdfs:label "Compiled queries" ; rdfs:range ui:CompileMode .
+ui:CompileOff a ui:CompileMode ; rdfs:label "Off" ; sem:order 1 ; ui:key "off" .
+ui:CompileOnRun a ui:CompileMode ; rdfs:label "On second run" ; sem:order 2 ; ui:key "run" .
+ui:CompileIdle a ui:CompileMode ; rdfs:label "In idle time" ; sem:order 3 ; ui:key "idle" .
 ui:page rdfs:label "Page" ; rdfs:range ui:Page .
 ui:Home a ui:Page ; rdfs:label "Home" ; sem:order 1 ; ui:key "home" .
 ui:Docs a ui:Page ; rdfs:label "Docs" ; sem:order 2 ; ui:key "docs" .
@@ -188,7 +198,7 @@ ui:toolsToggle a c:Toggle ; c:controls ui:tools ; c:property c:open ;
 # The engine: which store, which rule implementations, which layers.
 ui:engineTab a c:Tab ; c:label "Engine" , "Рушій"@uk , "Engine"@de , "المحرك"@ar ; c:content ui:toolbar .
 ui:toolbar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
-    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ui:stallsHeading ui:stallReport ui:stallRetry ui:stallTable ui:locationAddress ui:locationTable ) .
+    c:children ( ui:storeChoice ui:rulesChoice ui:compileChoice ui:layerChips ui:stallsHeading ui:stallReport ui:stallRetry ui:stallTable ui:locationAddress ui:locationTable ) .
 # Where we are, as the navigation effect reports it (urn:semblance:navigation): the address, and
 # each dimension of ui:location with its value, how the address spells it and where it is carried.
 ui:locationAddress a c:Metrics ; c:of ui:location ; c:fields ( nav:address ) .
@@ -216,6 +226,7 @@ SELECT ?dimension ?value ?spelled ?carriers ?history WHERE {
 ORDER BY ?i""" .
 ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
+ui:compileChoice a c:Choice ; c:controls ui:app ; c:property ui:compile .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
     c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ui:viewRows ) .

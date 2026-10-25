@@ -49,8 +49,11 @@ export async function initWeb(kind: StoreKind): Promise<void> {
 
 /** Store options (benchmark configurations choose them; the defaults are the site's). */
 export interface StoreOptions {
-  /** Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md). */
-  compiled?: boolean
+  /**
+   * Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md):
+   * true compiles a query on its second run, 'idle' the most-run ones in idle time.
+   */
+  compiled?: boolean | 'idle'
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -60,7 +63,7 @@ export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphS
   if (kind === 'rust' || kind === 'wat') {
     const module = engines[kind]
     if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind, { compile: options.compiled ? COMPILE_ON_RUN : 0 })
+    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0 })
   }
   if (kind === 'n3') return n3Store()
   if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)

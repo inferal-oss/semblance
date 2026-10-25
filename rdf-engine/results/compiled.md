@@ -6,6 +6,105 @@ them with the engine's exports and calls the module's `run` instead of the
 interpreter. This page measures whether that is worth it. Node 26, darwin/arm64,
 2026-10-24.
 
+## Whole pages: idle-time compilation (2026-10-25)
+
+The goal was to make compiling pay on whole pages, not per call. Three modes,
+on the Engine tools window's "Compiled queries" choice (`?compile=`):
+**Off**; **On second run** (a query compiled on its second run with the same
+variables bound, as before); **In idle time** (`Engine.compileIdle`, from the
+store's `maintain`): runs are timed per (query, bound variables); in idle time
+the ones whose runs so far, times the saving (measured, 0.4 until measured),
+beat a module's cost (measured, 0.25 ms until measured) are compiled, most time
+first, at most 16 a slice and 512 in all; each new module runs once there on
+the bindings it last had, so the WebAssembly engine compiles its functions in
+idle time and not on the next interaction (V8 compiles a module's functions at
+their first call); after that a module that runs slower than the interpreter
+did, per binding combination, is dropped (at once if twice as slow, else after
+four runs).
+
+`compiled-pages.ts <engine> <scenario>`, best of three runs, ms; after the
+mount and after every step the host is idle (the store's `maintain` gets 8 ms
+slices, at most 6), which the timings leave out; "queries" is the time in the
+store's SPARQL calls of the measured steps:
+
+| pages | mount | 5 pages, first visit | best revisit | of it, queries | modules (compile ms) |
+|---|---:|---:|---:|---:|---:|
+| WAT off | 212 | 107.7 | 21.8 | 6.9 | 0 |
+| WAT on second run | 236 | 116.2 | 21.6 | 6.0 | 66 (11.9) |
+| WAT in idle time | 211 | 105.3 | 21.9 | 6.2 | 8 (4.0) |
+| Rust off | 244 | 161.4 | 36.7 | 20.7 | 0 |
+| Rust on second run | 249 | 129.9 | 29.7 | 13.5 | 66 (9.5) |
+| Rust in idle time | 238 | 141.3 | 29.8 | 13.6 | 9 (3.7) |
+
+| interactions | warehouse: last 20 movements | of it, queries | grid: last 30 responses | of it, queries |
+|---|---:|---:|---:|---:|
+| WAT off | 183.5 | 14.3 | 82.3 | 19.4 |
+| WAT on second run | 188.2 | 18.1 | 83.6 | 19.0 |
+| WAT in idle time | 186.5 | 14.0 | 87.5 | 20.6 |
+| Rust off | 222.7 | 46.7 | 104.3 | 39.1 |
+| Rust on second run | 219.0 | 32.3 | 102.4 | 36.5 |
+| Rust in idle time | 201.8 | 28.0 | 105.7 | 38.4 |
+
+(The warehouse: the site, Examples › Warehouse, then 30 sells and restocks;
+the grid: the network inspector over 500 captured requests sorted by duration,
+then 40 responses. Idle time spent compiling and warming: 14–31 ms over a whole
+scenario, in slices of at most 8 ms.)
+
+What this says:
+
+- **Rust: in idle time pays, on whole pages.** Revisits 36.7 → 29.8 ms (−19%),
+  the warehouse's movements 223 → 202 ms (−9%; queries 47 → 28), with 9–12
+  modules instead of 66–115 and nothing added to the mount. On second run gets
+  the same revisits but compiles everything that runs twice.
+- **WAT: neither mode moves a page.** Its interpreter is fast enough that
+  queries are a third of a revisit (7 of 22 ms) and under a tenth of an
+  interaction (14 of 184 ms on the warehouse); compiling them saves about 1 ms
+  a revisit, inside the run-to-run spread, and costs mount time when it happens
+  on second run. What remains of a WAT page is the rule engine, the index and
+  the DOM, not SPARQL.
+- **The grid** gains nothing either way: its queries are many one-off
+  substitutions.
+
+Found on the way:
+
+- Idle-compiled modules first ran *slower* than the interpreter on the grid
+  (two queries: 0.8 → 6.3 ms and 12.3 → 16.5 ms over their calls): V8 compiles a
+  module's functions lazily at their first call and starts them on its baseline
+  tier, so a module compiled late paid that on the interaction. Warming each
+  module once in idle time fixed it (the same queries now run as fast as their
+  on-second-run modules).
+- A compiled run that fails used to fall back to the interpreter on every run;
+  the module is now dropped after the first failure (`fallbacks` counts them).
+- `Runtime.warm` gave the store's upkeep only the time warming left, and
+  warming overruns its slices while the tools are open, so idle compilation
+  never ran in the browser; the store now gets at least 1 ms a slice.
+
+**The swatch scale** (compiled WAT 1.75 ms against 1.03 interpreted): its two
+grouped subqueries rank each token by counting the tokens before it, a cross
+product of two chains with BINDs (`xsd:double(SUBSTR(...))` of each slug). The
+interpreter evaluates a pure BIND once per distinct input (n per scale); the
+module, with the subquery's WHERE in line, once per pair (n²). WAT now leaves
+such a subquery (its WHERE's triple, path, OPTIONAL and BIND elements fall into
+two or more sets that share no variable but the parameters and what a pattern
+from a bound subject reaches) to the interpreter (`$cross` in compile.wat):
+0.97 ms compiled against 0.95 interpreted over the 6 calls (26 swatches, in a
+loop: 8.2 → 5.3 ms, interpreted 5.3). Rust keeps it in line: its interpreter
+has no per-input BINDs, and compiled is 2.3 ms against 24.5.
+
+The list-position and rank-by-COUNT patterns as single linear walks (the
+optional item) are not worth it now: the swatch scale is under 1 ms on WAT and
+no other call site of the profile is one of them.
+
+**The site's default since then:** in idle time on the Rust engine, off on WAT
+(`demo/main.ts`; `?compile=` overrides it). The engine store itself still
+compiles nothing unless asked (`compile` option).
+
+Correctness with these changes: W3C with `RDF_ENGINE_COMPILE=1` 0 differences
+on both engines (503 of 594 compiled), `conformance/results/*.json` unchanged;
+replay 0 mismatches on both; `test/rdf-engine-budget.test.ts` (and numbers,
+temporal, compiled) pass with `RDF_ENGINE_COMPILE=1`; `engine:check` 10/10 and
+`parse-check` 747/747 on both.
+
 ## Where it stands (2026-10-25, after the interpreters' speed work)
 
 Both interpreters got much faster on `main` (WAT's `eval.wat` / `query.wat`,

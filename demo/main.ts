@@ -3,6 +3,8 @@ import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard } from '../src/clipboard.ts'
 import { Files, type Uploader } from '../src/files.ts'
+import { Fullscreen } from '../src/fullscreen.ts'
+import { Islands } from '../src/foreign.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -17,11 +19,14 @@ import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
-import { hasStore, initWeb, loadStore, type StoreKind } from '../src/web/load.ts'
+import { hasStore, initWeb, loadStoreWith, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
+import { attachSnaps } from '../src/web/snap.ts'
+import { attachLightboxes } from '../src/web/lightbox.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
+import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
 // engine layers, store choice, URL, benchmark runs) and nothing else. The
@@ -35,6 +40,15 @@ const kind = (params.get('store') ?? (hasStore('wat') ? 'wat' : 'hybrid')) as St
 // SPARQL by default: the rules are queries, inspectable and portable. Function twins render the same
 // HTML, faster in the browser (Rules menu, ?prefer=function); a store without SPARQL (N3) needs them.
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
+// Compiled queries (Semblance's engines only; rdf-engine/results/compiled.md): off, on a query's
+// second run, or in idle time (?compile=off|run|idle; Tools › Engine). By default in idle time on
+// the Rust engine, where it pays on whole pages, and off on WAT, where queries are too small a part
+// of a page for it to.
+type CompileMode = 'off' | 'run' | 'idle'
+const defaultCompile = (store: string): CompileMode => (store === 'rust' ? 'idle' : 'off')
+const compileParam = ['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? (params.get('compile') as CompileMode) : undefined
+const compile = compileParam ?? defaultCompile(kind)
+const COMPILES = { off: 'CompileOff', run: 'CompileOnRun', idle: 'CompileIdle' } as const
 const STORES: Record<StoreKind, string> = { wat: 'SemblanceWasm', rust: 'SemblanceRust', hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 
@@ -43,7 +57,8 @@ await initWeb(kind)
 // The Components page: one graph per component group (demo/gallery/*.ttl).
 const galleryFiles = import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const gallery = Object.values(galleryFiles)
-const store = loadStore(kind, todoApp(5), appGraph, ...gallery)
+const storeOptions = { compiled: compile === 'idle' ? ('idle' as const) : compile === 'run' }
+const store = loadStoreWith(kind, storeOptions, todoApp(5), appGraph, ...gallery)
 // The examples show their own source, recorded as data (c:SourceText).
 recordSources(store, {
   'src/examples/todo.ts': todoApp(5),
@@ -72,6 +87,7 @@ const setApp = (p: string, value: string) => {
 // Settings that arrive through the URL become graph state before projecting.
 setApp(UI + 'store', UI + STORES[kind])
 setApp(UI + 'rules', UI + RULES[prefer])
+setApp(UI + 'compile', UI + COMPILES[compile])
 
 const runtime = new Runtime(store)
 const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
@@ -128,7 +144,7 @@ sandboxes = new Sandboxes(runtime, screen, {
   renderer: shell,
   shown: (c) => screen.index.isShown(c, new Set([UI + 'shell'])),
   flush: () => flush(),
-  load: (...turtle) => loadStore(kind, ...turtle),
+  load: (...turtle) => loadStoreWith(kind, storeOptions, ...turtle),
   prefer,
   languages: () => [...screen.engine.languages],
   siteCss: css,
@@ -198,8 +214,13 @@ function syncSettings() {
 
   const nextStore = key(UI + 'store') ?? kind
   const nextRules = key(UI + 'rules') ?? prefer
-  if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3')) {
-    location.search = new URLSearchParams({ store: nextStore, prefer: nextRules }).toString()
+  const chosenCompile = (key(UI + 'compile') ?? compile) as CompileMode
+  // Another store keeps a mode chosen here (in the menu or the address), else takes its own default.
+  const nextCompile = chosenCompile !== compile || compileParam ? chosenCompile : defaultCompile(nextStore)
+  if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3') || chosenCompile !== compile) {
+    const search = new URLSearchParams({ store: nextStore, prefer: nextRules })
+    if (nextCompile !== defaultCompile(nextStore)) search.set('compile', nextCompile)
+    location.search = search.toString()
   }
   checkPerf()
 }
@@ -265,6 +286,10 @@ attachIntent(runtime, shell, { flush: () => flush() })
 attachWalkthroughs(document.getElementById('app')!)
 // Connectors (a sheet's dependencies, a walkthrough's arrows, a canvas's): drawn where their ends are.
 const connectors = attachConnectors(document.getElementById('app')!)
+// Swiped tracks (a gallery's carousel, a lightbox): where they come to rest, and the current item in view.
+attachSnaps(document.getElementById('app')!)
+// Lightboxes: grown from their image and given back to it, sliding, zooming and panning.
+attachLightboxes(document.getElementById('app')!)
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
@@ -317,6 +342,28 @@ const scheduler = new Scheduler(bus, {
 scheduler.attach()
 // Copies (clip:Request) go to the page's clipboard; how it went comes back as an event (a toast).
 new Clipboard(bus, {
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach()
+// What is asserted full screen (fs:fullscreen) is shown so, or over the page where the browser
+// will not; leaving it, by Esc or the browser's own control, comes back as an event.
+new Fullscreen(bus, {
+  element: (iri) => {
+    const n = shell.nodeOf(iri)
+    return n?.nodeType === 1 ? (n as Element) : undefined
+  },
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach()
+// Foreign components (ext:Island): Shoelace, Chart.js, Leaflet and flatpickr from a CDN, loaded when an island first shows,
+// mounted in their slots after each patch; what they report comes back as events.
+new Islands(bus, shell, {
+  modules,
+  widgets: { 'chart.js': chartJs, leaflet, flatpickr },
   onHandled: () => {
     syncSettings()
     flush()

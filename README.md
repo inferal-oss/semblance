@@ -162,6 +162,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
   Paper, Terminal, Blueprint, Sunset; contrast and motion compose with them.
+- **Foreign components** (`ext:`): web components, framework components and vanilla widgets are
+  islands - a host-owned slot whose inputs are derived from the graph by a rule and whose outputs come
+  back as events. A host effect (`src/foreign.ts`) mounts each through the adapter of its kind (custom
+  element, widget, or one an app registers), loads its code on demand, pushes only changed inputs and
+  suppresses echoes. See [docs/FOREIGN.md](docs/FOREIGN.md).
 - **Network capture**: a host effect (`src/network.ts`) records the page's own
   fetches, WebSockets and the events and spans it reports as members of
   `net:Capture`, a bounded LDES in the network graph
@@ -238,7 +243,7 @@ off: dragged out of its list past `c:tearDistance` (a touch after a long press),
 window follows the pointer, and letting go is one `beh:TearOff` event that detaches it and places
 the window there; dragged back over the list it stays a tab. A window let go over the tab list it
 came from (`c:gathers`) is a `beh:Move` onto it, which docks it. Shift+Enter on a tab detaches it.
-Dialogs, drawers and toast regions are hosted there too.
+Dialogs, drawers, lightboxes and toast regions are hosted there too.
 
 **Live examples** (`c:LiveExample`, `ontology/components/live.ttl`) put the Turtle of a small app
 in a code editor beside what it renders. Each runs in a sandbox of its own - its own store, rules,
@@ -310,7 +315,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -320,9 +325,9 @@ unpurged deletions and how the hybrid store works around them.
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
 | `src/components/` | function rules and reactions, one module per group |
-| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement and clipboard layers |
+| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard and fullscreen layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, drawing connectors where their ends are |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

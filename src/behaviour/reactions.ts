@@ -17,6 +17,7 @@ import { dragdropReactions } from '../layers/dragdrop.ts'
 import { dependencyReactions } from '../layers/dependency.ts'
 import { clipboardReactions } from '../layers/clipboard.ts'
 import { filesReactions, uploadReactions } from '../components/upload.ts'
+import { fullscreenReactions } from '../layers/fullscreen.ts'
 import { persistenceReactions } from '../persistence.ts'
 import { locationReactions } from '../navigation.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
@@ -33,6 +34,7 @@ import { reactions as liveReactions } from '../components/live.ts'
 import { reactions as formsReactions } from '../components/forms.ts'
 import { reactions as sheetReactions } from '../components/sheet.ts'
 import { reactions as stallReactions } from '../components/stall.ts'
+import { reactions as galleryReactions } from '../components/gallery.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
@@ -145,6 +147,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...dataReactions,
   ...navigationReactions,
   ...overlaysReactions,
+  ...galleryReactions,
   ...workbenchReactions,
   ...referenceReactions,
   ...docsReactions,
@@ -153,6 +156,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...clipboardReactions,
   ...filesReactions,
   ...uploadReactions,
+  ...fullscreenReactions,
   ...persistenceReactions,
   ...locationReactions,
   ...disclosureReactions,

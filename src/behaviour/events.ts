@@ -4,7 +4,7 @@ import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.t
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
-import { comboOf, navigate, normalizeShortcut, rove } from '../layers/keyboard.ts'
+import { comboOf, mirrored, modifiersOf, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
@@ -40,6 +40,8 @@ export interface EventDetail {
   caret?: number
   /** The key combination of a key press, normalized as key:shortcut is ("tab", "mod+enter"; beh:key). */
   key?: string
+  /** The modifier keys held during a pointer interaction, or the press that moved the focus ("shift", "mod+shift"; beh:modifiers). */
+  modifiers?: string
   /** Further statements about the event, by predicate (a drop carries the drag's: what, from, where). */
   about?: [predicate: string, object: Term][]
 }
@@ -238,6 +240,7 @@ export class EventBus {
     if (detail.checked !== undefined) quads.push(f.quad(event, nn(BEH.checked), f.literal(String(detail.checked), nn(XSD_BOOLEAN))))
     if (detail.caret !== undefined) quads.push(f.quad(event, nn(NS.beh + 'caret'), f.literal(String(detail.caret), nn(XSD_INTEGER))))
     if (detail.key !== undefined) quads.push(f.quad(event, nn(NS.beh + 'key'), f.literal(detail.key)))
+    if (detail.modifiers) quads.push(f.quad(event, nn(NS.beh + 'modifiers'), f.literal(detail.modifiers)))
     for (const [p, o] of detail.about ?? []) quads.push(f.quad(event, nn(p), o as NamedNode))
     for (const [name, v] of Object.entries(detail.numbers ?? {})) quads.push(f.quad(event, nn(NS.beh + name), f.literal(String(Math.round(v)), nn(XSD_INTEGER))))
     // The event is readable by reactions before it is a member of the stream.
@@ -393,6 +396,9 @@ export class EventBus {
     const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
     // Key presses a reaction handled are not also the keyboard layer's (nor the browser's).
     const consumed = new WeakSet<Event>()
+    // The modifiers of the press under way: a focus it moves carries them (Shift+click extends).
+    let pressed: string | undefined
+    const press = (e: Event) => void (pressed = e.type === 'pointerdown' ? modifiersOf(e as PointerEvent, apple) : undefined)
     const guarded =
       <E extends Event>(handle: (e: E) => void) =>
       (e: E) => {
@@ -424,6 +430,8 @@ export class EventBus {
           if (control.type === 'checkbox') detail.checked = control.checked
           if (detail.value !== undefined && typeof control.selectionStart === 'number') detail.caret = control.selectionStart
           if (combo !== undefined) detail.key = combo
+          if (e.type === 'focusin') detail.modifiers = pressed
+          else if (combo === undefined && 'shiftKey' in e) detail.modifiers = modifiersOf(e as MouseEvent, apple)
           const custom = (e as CustomEvent).detail
           if (custom && typeof custom === 'object') {
             // Numbers are beh:* integers (a measure the host could not take is left out); a string names a
@@ -475,12 +483,16 @@ export class EventBus {
     renderer.host.addEventListener('input', controlled)
     const gestures = (e: Event) => renderer.inSlot(e.target as Node) || this.gesture(e as PointerEvent, renderer, drags)
     renderer.host.addEventListener('pointerdown', gestures)
+    renderer.host.addEventListener('pointerdown', press, true)
+    renderer.host.addEventListener('pointerup', press, true)
     // Keyboard layer: a key combination activates the element that declares it. A field it focuses
     // remembers where the focus was, to give it back on an Escape nothing else uses.
     const cameFrom = new WeakMap<Element, HTMLElement | null>()
     const keys = guarded((e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
+      // An open modal dialog keeps the focus: Tab goes round inside it.
+      if (trapTab(k, renderer.host)) return k.preventDefault()
       // Keys in slot content are the mounted projection's own (its bus navigates it).
       if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
       const combo = comboOf(k, apple)
@@ -504,7 +516,12 @@ export class EventBus {
         if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
         return
       }
-      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo && !renderer.inSlot(x)) as HTMLElement | undefined
+      // Horizontal arrows follow the reading direction: in a right-to-left page, ArrowLeft is "next".
+      const flipped = mirrored(combo)
+      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => {
+        const own = x.getAttribute('data-sem-shortcut')
+        return (own === combo ? flipped === combo || !rightToLeft(x) : flipped !== combo && own === flipped && rightToLeft(x)) && !renderer.inSlot(x)
+      }) as HTMLElement | undefined
       if (!el && combo === 'escape') {
         // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
         const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined
@@ -562,6 +579,8 @@ export class EventBus {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('input', controlled)
       renderer.host.removeEventListener('pointerdown', gestures)
+      renderer.host.removeEventListener('pointerdown', press, true)
+      renderer.host.removeEventListener('pointerup', press, true)
       renderer.host.removeEventListener('keydown', dragKeys)
       doc.removeEventListener('keydown', dragKeys)
       renderer.host.removeEventListener('dragstart', native)

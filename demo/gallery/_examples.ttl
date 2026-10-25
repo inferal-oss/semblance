@@ -31,12 +31,14 @@ ui:ExCalendar a ui:Example ; rdfs:label "Room bookings" ; sem:order 14 ; ui:key 
 ui:ExDashboard a ui:Example ; rdfs:label "Sales dashboard" ; sem:order 15 ; ui:key "dashboard" .
 ui:ExCollab a ui:Example ; rdfs:label "Shared agenda" ; sem:order 16 ; ui:key "collab" .
 ui:ExFiles a ui:Example ; rdfs:label "File explorer" ; sem:order 17 ; ui:key "files" .
+ui:ExPhotos a ui:Example ; rdfs:label "Photo post" ; sem:order 18 ; ui:key "photos" .
+ui:ExForeign a ui:Example ; rdfs:label "Coffee tasting" ; sem:order 19 ; ui:key "foreign" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:examplesNav ui:examplePages ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" ; c:compactAs c:Picker .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
-    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ) .
+    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ui:exc-photos ui:exc-foreign ) .
 ui:exc-todo c:when ui:ExTodo ; c:content ui:exp-todo .
 ui:exc-signin c:when ui:ExSignin ; c:content ui:exp-signin .
 ui:exc-network c:when ui:ExNetwork ; c:content ui:exp-network .
@@ -54,6 +56,8 @@ ui:exc-calendar c:when ui:ExCalendar ; c:content ui:exp-calendar .
 ui:exc-dashboard c:when ui:ExDashboard ; c:content ui:exp-dashboard .
 ui:exc-collab c:when ui:ExCollab ; c:content ui:exp-collab .
 ui:exc-files c:when ui:ExFiles ; c:content ui:exp-files .
+ui:exc-photos c:when ui:ExPhotos ; c:content ui:exp-photos .
+ui:exc-foreign c:when ui:ExForeign ; c:content ui:exp-foreign .
 
 # --- Each example: the app, how it works, and its source ---------------------------------------------
 # An example is its own graph, in its own file (demo/gallery/_ex-<key>.ttl; the network inspector in
@@ -112,3 +116,9 @@ ui:exs-collab a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:dem
 ui:exp-files a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-files ui:ex-files-how ) .
 ui:ex-files-how c:sourceView ui:exs-files .
 ui:exs-files a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-files.ttl> .
+ui:exp-photos a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-photos ui:ex-photos-how ) .
+ui:ex-photos-how c:sourceView ui:exs-photos .
+ui:exs-photos a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-photos.ttl> .
+ui:exp-foreign a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-foreign ui:ex-foreign-how ) .
+ui:ex-foreign-how c:sourceView ui:exs-foreign .
+ui:exs-foreign a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-foreign.ttl> .

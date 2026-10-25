@@ -408,16 +408,19 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 # --- segmented controls (and the theme switcher) -----------------------------------------
 
 # A segmented control never widens the page: on a phone, narrower than its options, it scrolls
-# them. Elsewhere it does not clip: a scroll container cuts off what themes draw at its edges (an
-# inked border, a raised option).
+# them. Elsewhere it does not clip (a scroll container cuts off what themes draw at its edges: an
+# inked border, a raised option): in a container narrower than its options (a card in an aside) it
+# wraps them onto another row, its pill becoming a rounded box.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:atWidth sty:CompactWidth ;
-    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "scrollbar-width" ; sty:raw "none" ] .
+    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:raw "3px" ] ,
-                 [ sty:property "border-radius" ; sty:raw "999px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "18px" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow ] ,
@@ -1044,6 +1047,11 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "align-items" ; sty:raw "baseline" ] ,
                  [ sty:property "gap" ; sty:token tok:space-3 ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] .
+# Full screen (its header's toggle): the header over the code, which takes the rest and scrolls.
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ;
+    sty:declares [ sty:property "grid-template-rows" ; sty:raw "auto minmax(0, 1fr)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ; sty:part "> .sem-source" ;
+    sty:declares [ sty:property "max-height" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part ".sem-source-name" ;
     sty:declares [ sty:property "font-weight" ; sty:raw "650" ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,

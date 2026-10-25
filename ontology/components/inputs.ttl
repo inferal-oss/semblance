@@ -389,8 +389,9 @@ WHERE {
   OPTIONAL { ?opt rdfs:label ?optL1 FILTER(lang(?optL1) = "") }
   OPTIONAL { ?opt rdfs:label ?optL2 FILTER(langMatches(lang(?optL2), "en")) }
   BIND(STR(COALESCE(?optL0, ?optL1, ?optL2, REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?optLabelData)
-  OPTIONAL { ?opt rdfs:comment ?comment }
-  BIND(STR(?comment) AS ?optNoteData)
+  OPTIONAL { ?opt rdfs:comment ?comment0 FILTER(lang(?comment0) = "") }
+  OPTIONAL { ?opt rdfs:comment ?comment1 FILTER(langMatches(lang(?comment1), "en")) }
+  BIND(STR(COALESCE(?comment0, ?comment1)) AS ?optNoteData)
   BIND(CONCAT(STR($this), "/~opt-", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(?opt)), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?radioBase)
   BIND(IRI(?radioBase) AS ?radio)
   BIND(IRI(CONCAT(STR($this), "/~opt-", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(?prev)), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*"))) AS ?prevRadio)

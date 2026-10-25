@@ -29,6 +29,17 @@ export function comboOf(e: KeyboardEvent, apple: boolean): string {
   return normalizeShortcut(parts.join('+'))
 }
 
+/** The modifier keys held during a pointer interaction, ordered as in a combination ("mod+shift"; "" for none). */
+export function modifiersOf(e: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean }, apple: boolean): string {
+  const parts: string[] = []
+  if (apple ? e.metaKey : e.ctrlKey) parts.push('mod')
+  if (apple && e.ctrlKey) parts.push('ctrl')
+  if (e.altKey) parts.push('alt')
+  if (e.shiftKey) parts.push('shift')
+  if (!apple && e.metaKey) parts.push('meta')
+  return parts.join('+')
+}
+
 const GLYPHS: Record<string, [string, string]> = { mod: ['⌘', 'Ctrl+'], ctrl: ['⌃', 'Ctrl+'], alt: ['⌥', 'Alt+'], shift: ['⇧', 'Shift+'], meta: ['◆', 'Win+'] }
 /** Display labels: [Apple, others]. */
 export function shortcutLabels(combo: string): [string, string] {
@@ -37,6 +48,37 @@ export function shortcutLabels(combo: string): [string, string] {
   const k = key.length === 1 ? key.toUpperCase() : key[0]!.toUpperCase() + key.slice(1)
   return [parts.map((p) => GLYPHS[p]![0]).join('') + k, parts.map((p) => GLYPHS[p]![1]).join('') + k]
 }
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Tab and Shift+Tab stay inside the topmost open modal dialog ([aria-modal=true] under `host`): past
+ * its last control to its first, and back. A focus outside it is brought in. Returns whether it moved
+ * the focus (the caller then prevents the browser's own move).
+ */
+export function trapTab(e: KeyboardEvent, host: Element): boolean {
+  if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return false
+  const modal = [...host.querySelectorAll('[aria-modal=true]')].filter((m) => !m.closest('[hidden], [inert]')).at(-1)
+  if (!modal) return false
+  const parts = ([...modal.querySelectorAll(FOCUSABLE)] as HTMLElement[]).filter((el) => !el.closest('[hidden], [inert]') && (el.getClientRects?.().length ?? 1) > 0)
+  const active = modal.ownerDocument.activeElement
+  const first = parts[0] ?? (modal as HTMLElement)
+  const last = parts.at(-1) ?? (modal as HTMLElement)
+  const to = !modal.contains(active) ? first : e.shiftKey && (active === first || active === modal) ? last : !e.shiftKey && active === last ? first : undefined
+  if (!to) return false
+  to.focus()
+  return true
+}
+
+/** Whether an element reads right to left (its computed direction, else the nearest dir attribute). */
+export function rightToLeft(el: Element): boolean {
+  const direction = el.ownerDocument.defaultView?.getComputedStyle?.(el)?.direction
+  return direction ? direction === 'rtl' : el.closest('[dir]')?.getAttribute('dir') === 'rtl'
+}
+
+/** A combination with its horizontal arrows swapped: what it means in a right-to-left page. */
+export const mirrored = (combo: string) =>
+  combo.replace(/arrow(left|right)$/, (_, side: string) => (side === 'left' ? 'arrowright' : 'arrowleft'))
 
 /** aria-keyshortcuts uses platform key names. */
 const aria = (combo: string) =>
