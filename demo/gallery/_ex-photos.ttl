@@ -49,7 +49,7 @@ ui:ex-photos-layout a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-4 ;
 
 ui:ex-photos-compose a c:Card ; c:label "Your post" ; c:content ui:ex-photos-form .
 ui:ex-photos-form a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:ph-headline ui:ph-order-title ui:ph-order ui:ph-thumbs ui:ph-loop ) .
+    c:children ( ui:ph-headline ui:ph-order-title ui:ph-order ui:ph-loop ui:ph-viewer-title ui:ph-thumbs ) .
 ui:ph-headline a c:TextField ; c:label "Headline" ; c:value "A weekend by the sea" ; c:placeholder "Your headline" .
 # The gallery's layout, offered as the ontology lists the layouts.
 ui:ph-layout a c:Segmented ; c:controls ui:ph-gallery ; c:property c:galleryLayout .
@@ -58,8 +58,11 @@ ui:ph-order-title a c:Text ; c:label "Order: drag a photo" ; sty:textStyle sty:O
 ui:ph-order a c:List , dnd:Sortable ; c:label "Order" ; c:itemLabel c:caption ; c:itemImage c:image ; c:sortBy ph:rank ;
     dnd:members c:item ; dnd:orderBy ph:rank ;
     c:item ph:harbour , ph:lighthouse , ph:dunes , ph:forest .
-ui:ph-thumbs a c:ToggleSwitch ; c:label "Thumbnails in the viewer" ; c:controls ui:ph-viewer ; c:property c:thumbnails ; sty:size sty:Small .
-ui:ph-loop a c:ToggleSwitch ; c:label "Loop around in the viewer" ; c:controls ui:ph-viewer ; c:property c:loops ; sty:size sty:Small .
+# How the photos are moved through: around the ends (the carousel's arrows, and the viewer's).
+ui:ph-loop a c:ToggleSwitch ; c:label "Loop around the ends" ; c:controls ui:ph-gallery ; c:property c:loops ; sty:size sty:Small .
+# The viewer's own option: it shows once a photo is open.
+ui:ph-viewer-title a c:Text ; c:label "When a photo is open" ; sty:textStyle sty:Overline .
+ui:ph-thumbs a c:ToggleSwitch ; c:label "Thumbnails under it" ; c:controls ui:ph-viewer ; c:property c:thumbnails ; sty:size sty:Small .
 
 # --- the preview ---------------------------------------------------------------------------------
 
@@ -134,7 +137,7 @@ ui:ex-photos-w3 a c:WalkthroughStep ; rdfs:label "A picker from the ontology" ;
 ui:ex-photos-w6 a c:WalkthroughStep ; rdfs:label "Reordering by drag" ;
     c:children ( ui:ex-photos-m-order " is a " ui:ex-photos-m-List " of the photos by their rank, and a " ui:ex-photos-m-Sortable ": drag a photo, or lift it with Space and carry it with the arrow keys. The drop says the rank it takes, half way between its new neighbours; " ui:ex-photos-m-reorder " writes it and gives the gallery a new list in rank order. The gallery numbers its images again, once, and the preview follows." ) .
 ui:ex-photos-w4 a c:WalkthroughStep ; rdfs:label "A viewer of the same graph" ;
-    c:children ( ui:ex-photos-m-viewer " is a " ui:ex-photos-m-Lightbox " of the gallery: activating a photo makes it current and opens the viewer, a modal dialog that grows from the photo and shrinks back to it, showing the current photo and its neighbours. Its arrows carry their keys, mirrored in a right-to-left page; a swipe comes to rest on a photo and makes it current; a double-click zooms where it points, and a drag pans. All of it moves as the motion preference says. " ui:ex-photos-m-thumbs " and " ui:ex-photos-m-loop " switch its options, c:thumbnails and c:loops." ) .
+    c:children ( ui:ex-photos-m-viewer " is a " ui:ex-photos-m-Lightbox " of the gallery: activating a photo makes it current and opens the viewer, a modal dialog that grows from the photo and shrinks back to it, showing the current photo and its neighbours. Its arrows carry their keys, mirrored in a right-to-left page; a swipe comes to rest on a photo and makes it current; a double-click zooms where it points, and a drag pans. All of it moves as the motion preference says. " ui:ex-photos-m-thumbs " switches its strip of thumbnails (c:thumbnails); " ui:ex-photos-m-loop " makes the gallery loop around its ends (c:loops), the carousel's arrows and the viewer's alike." ) .
 ui:ex-photos-w5 a c:WalkthroughStep ; rdfs:label "The headline" ;
     c:children ( "Typing in " ui:ex-photos-m-headline " runs " ui:ex-photos-m-retitle ": the heading and the gallery take the new title, so the viewer's title follows too. Everything else on the page stays as it was." ) .
 
@@ -151,7 +154,7 @@ ui:ex-photos-m-Sortable a c:Mention ; c:label "dnd:Sortable" ; c:mentions dnd:So
 ui:ex-photos-m-reorder a c:Mention ; c:label "ph:Reorder" ; c:mentions ph:Reorder .
 ui:ex-photos-m-viewer a c:Mention ; c:label "The viewer" ; c:mentions ui:ph-viewer .
 ui:ex-photos-m-Lightbox a c:Mention ; c:label "c:Lightbox" ; c:mentions c:Lightbox ; c:to c:Lightbox .
-ui:ex-photos-m-thumbs a c:Mention ; c:label "Two switches" ; c:mentions ui:ph-thumbs .
-ui:ex-photos-m-loop a c:Mention ; c:label "the loop" ; c:mentions ui:ph-loop .
+ui:ex-photos-m-thumbs a c:Mention ; c:label "A switch" ; c:mentions ui:ph-thumbs .
+ui:ex-photos-m-loop a c:Mention ; c:label "another" ; c:mentions ui:ph-loop .
 ui:ex-photos-m-headline a c:Mention ; c:label "the headline" ; c:mentions ui:ph-headline .
 ui:ex-photos-m-retitle a c:Mention ; c:label "ph:Retitle" ; c:mentions ph:Retitle .

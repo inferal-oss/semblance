@@ -44,10 +44,10 @@ describe('the photo post example', () => {
       expect(s.document.getElementById(s.part('ph-viewer', 'panel').getAttribute('aria-labelledby')!)!.textContent).toBe('Sea, sand and pines')
       expect(s.part('ph-viewer', 'caption').textContent).toBe('Walking the dunes')
       expect(s.part('ph-viewer', 'strip').querySelectorAll('.sem-thumb')).toHaveLength(4)
-      // The loop switch: past the last photo is the first.
+      // The loop switch is the gallery's: past the last photo is the first, in the viewer too.
       s.click(s.part('ph-viewer', 'close'))
       s.click(s.root('ph-loop').querySelector('[role=switch]')!)
-      expect(s.fact('ph-viewer', 'loops')).toEqual(['true'])
+      expect(s.fact('ph-gallery', 'loops')).toEqual(['true'])
       s.click(s.part('ph-gallery', 'photo-4'))
       s.click(s.part('ph-viewer', 'next'))
       expect(s.fact('ph-gallery', 'current')).toEqual([UI.replace('#', '/photos#') + 'harbour'])
