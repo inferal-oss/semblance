@@ -1,0 +1,449 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix ext: <https://semblance.dev/ns/foreign#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix dep: <https://semblance.dev/ns/dependency#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix cf: <https://semblance.dev/demo/coffee#> .
+
+# --- Coffee tasting: open-source components from a CDN -----------------------------------------------
+# Four well-known libraries, none of which knows Semblance: Shoelace's <sl-rating> web component, a
+# Chart.js bar chart, a Leaflet map and a flatpickr date field, each loaded from jsDelivr the first time
+# it is shown. They are islands
+# (ontology/layers/foreign.ttl): their inputs come from the tasting's own data, what they report comes
+# back as events, and reactions decide what changes. The host (demo/foreign.ts) only says which code a
+# module name is.
+
+cf:prefixes sh:declare [ sh:prefix "cf" ; sh:namespace "https://semblance.dev/demo/coffee#"^^xsd:anyURI ] .
+
+# The tasting: the app's own vocabulary.
+cf:Coffee a owl:Class ; rdfs:label "Coffee" , "Кава"@uk , "Kaffee"@de , "قهوة"@ar .
+cf:rating a owl:DatatypeProperty ; rdfs:domain cf:Coffee ; rdfs:range xsd:integer ;
+    rdfs:label "rating" , "оцінка"@uk , "Bewertung"@de , "التقييم"@ar .
+cf:notes a owl:DatatypeProperty ; rdfs:domain cf:Coffee ; rdfs:label "tasting notes" , "смакові ноти"@uk , "Geschmacksnoten"@de , "ملاحظات التذوق"@ar .
+cf:chosen a owl:ObjectProperty ; rdfs:range cf:Coffee ; rdfs:label "chosen" , "вибрана"@uk , "ausgewählt"@de , "المختارة"@ar .
+cf:compares a owl:ObjectProperty ; rdfs:range cf:Coffee ;
+    rdfs:comment "The coffees a chart compares (it follows them: a new rating redraws it)."@en .
+cf:lat a owl:DatatypeProperty ; rdfs:domain cf:Coffee ; rdfs:range xsd:decimal ; rdfs:label "latitude" , "широта"@uk , "Breite"@de , "خط العرض"@ar .
+cf:long a owl:DatatypeProperty ; rdfs:domain cf:Coffee ; rdfs:range xsd:decimal ; rdfs:label "longitude" , "довгота"@uk , "Länge"@de , "خط الطول"@ar .
+cf:tasted a owl:DatatypeProperty ; rdfs:domain cf:Coffee ; rdfs:range xsd:date ; rdfs:label "tasted on" , "скуштовано"@uk , "verkostet am"@de , "تاريخ التذوق"@ar .
+cf:places a owl:DatatypeProperty ; rdfs:range rdf:JSON ; rdfs:comment "Derived: a map's coffees that have an origin, as Leaflet places."@en .
+cf:bars a owl:DatatypeProperty ; rdfs:range rdf:JSON ; rdfs:comment "Derived: a chart's coffees and their ratings, as Chart.js bars."@en .
+
+cf:eth a cf:Coffee ; rdfs:label "Yirgacheffe" ; sem:order 1 ; cf:rating 4 ; cf:lat 6.16 ; cf:long 38.2 ; cf:tasted "2026-10-18"^^xsd:date ;
+    cf:notes "Ethiopia. Jasmine, bergamot and lemon; tea-like." .
+cf:col a cf:Coffee ; rdfs:label "Huila" ; sem:order 2 ; cf:rating 3 ; cf:lat 2.53 ; cf:long -75.53 ; cf:tasted "2026-10-19"^^xsd:date ;
+    cf:notes "Colombia. Red apple, caramel and cocoa." .
+cf:ken a cf:Coffee ; rdfs:label "Nyeri" ; sem:order 3 ; cf:rating 5 ; cf:lat -0.42 ; cf:long 36.95 ; cf:tasted "2026-10-21"^^xsd:date ;
+    cf:notes "Kenya. Blackcurrant and grapefruit; bright and juicy." .
+cf:sum a cf:Coffee ; rdfs:label "Mandheling" ; sem:order 4 ; cf:rating 2 ; cf:lat 2.6 ; cf:long 98.9 ; cf:tasted "2026-10-24"^^xsd:date ;
+    cf:notes "Sumatra. Cedar, earth and dark chocolate; heavy body." .
+cf:tasting cf:chosen cf:eth .
+
+# Both the chart and the map choose a coffee: one event class, one reaction, for whatever chooses.
+ui:FxChooser a owl:Class ; rdfs:comment "Mixin: an island whose ui:FxChose chooses the coffee of the tasting it is c:of."@en .
+
+# --- The islands -------------------------------------------------------------------------------------
+# Shoelace's rating: a custom element, defined by the module the host registered as "shoelace/rating".
+# Its value is the coffee's rating and its accessible name the coffee's name, both read through c:of.
+ui:FxRating a owl:Class ;
+    rdfs:subClassOf ext:Island ;
+    rdfs:label "Coffee rating"@en , "Оцінка кави"@uk , "Kaffeebewertung"@de , "تقييم القهوة"@ar ;
+    rdfs:comment "Shoelace's <sl-rating>, showing and setting the cf:rating of the coffee it is c:of."@en ;
+    sem:slug "ex-fx-rating" ;
+    ext:adapter ext:CustomElement ;
+    ext:tag "sl-rating" ;
+    ext:module "shoelace/rating" ;
+    ext:input [ ext:name "value" ; ext:from cf:rating ; ext:through c:of ] ,
+              [ ext:name "label" ; ext:from rdfs:label ; ext:through c:of ] ;
+    ext:output [ ext:on "sl-change" ; ext:emits ui:FxRated ; ext:path "target.value" ] .
+ui:FxRated a owl:Class ; rdfs:subClassOf ext:Output ;
+    rdfs:label "Rated"@en , "Оцінено"@uk , "Bewertet"@de , "تم التقييم"@ar .
+
+# Chart.js: a widget the host registered as "chart.js" (its library loaded on first use). Its bars are
+# derived below; the bar shown as chosen is the tasting's cf:chosen (read through c:of).
+ui:FxChart a owl:Class ;
+    rdfs:subClassOf ext:Island , ui:FxChooser ;
+    rdfs:label "Ratings chart"@en , "Діаграма оцінок"@uk , "Bewertungsdiagramm"@de , "مخطط التقييمات"@ar ;
+    rdfs:comment "A Chart.js bar chart of the coffees it cf:compares; choosing a bar chooses the coffee."@en ;
+    sem:slug "ex-fx-chart" ;
+    ext:adapter ext:Widget ;
+    ext:widget "chart.js" ;
+    ext:input [ ext:name "bars" ; ext:from cf:bars ] ,
+              [ ext:name "selected" ; ext:from cf:chosen ; ext:through c:of ] ,
+              [ ext:name "label" ; ext:from l10n:label ] ;
+    ext:output [ ext:on "select" ; ext:emits ui:FxChose ; ext:path "id" ] .
+# Leaflet: a widget the host registered as "leaflet". Its places are derived below from the coffees that
+# have an origin; clicking a marker chooses that coffee, clicking elsewhere places the chosen one there.
+ui:FxMap a owl:Class ;
+    rdfs:subClassOf ext:Island , ui:FxChooser ;
+    rdfs:label "Origins map"@en , "Карта походження"@uk , "Herkunftskarte"@de , "خريطة المنشأ"@ar ;
+    rdfs:comment "A Leaflet map of the coffees it cf:compares that have an origin (cf:lat, cf:long)."@en ;
+    sem:slug "ex-fx-map" ;
+    ext:adapter ext:Widget ;
+    ext:widget "leaflet" ;
+    ext:input [ ext:name "places" ; ext:from cf:places ] ,
+              [ ext:name "selected" ; ext:from cf:chosen ; ext:through c:of ] ,
+              [ ext:name "label" ; ext:from l10n:label ] ;
+    ext:output [ ext:on "select" ; ext:emits ui:FxChose ; ext:path "id" ] ,
+               [ ext:on "place" ; ext:emits ui:FxPlaced ;
+                 ext:field [ ext:path "lat" ; ext:predicate cf:lat ] , [ ext:path "lng" ; ext:predicate cf:long ] ] .
+ui:FxPlaced a owl:Class ; rdfs:subClassOf ext:Output ;
+    rdfs:label "Placed on the map"@en , "Позначено на мапі"@uk , "Auf der Karte gesetzt"@de , "وُضعت على الخريطة"@ar .
+
+# flatpickr: a widget the host registered as "flatpickr", for the coffee's cf:tasted (read through c:of).
+ui:FxDate a owl:Class ;
+    rdfs:subClassOf ext:Island ;
+    rdfs:label "Tasting date"@en , "Дата дегустації"@uk , "Verkostungsdatum"@de , "تاريخ التذوق"@ar ;
+    rdfs:comment "A flatpickr date field showing and setting the cf:tasted of the coffee it is c:of."@en ;
+    sem:slug "ex-fx-date" ;
+    ext:adapter ext:Widget ;
+    ext:widget "flatpickr" ;
+    ext:input [ ext:name "value" ; ext:from cf:tasted ; ext:through c:of ] ,
+              [ ext:name "label" ; ext:from l10n:label ] ;
+    ext:output [ ext:on "change" ; ext:emits ui:FxDated ; ext:path "date" ] .
+ui:FxDated a owl:Class ; rdfs:subClassOf ext:Output ;
+    rdfs:label "Dated"@en , "Датовано"@uk , "Datiert"@de , "تم التأريخ"@ar .
+
+ui:FxChose a owl:Class ; rdfs:subClassOf ext:Output ;
+    rdfs:label "Chose a coffee"@en , "Вибрано каву"@uk , "Kaffee gewählt"@de , "تم اختيار قهوة"@ar .
+
+# The chart's bars, in order, as one rdf:JSON value (GROUP_CONCAT over an ordered sub-select).
+ui:FxBars a sem:Rendering ; sem:targets ui:FxChart ; sem:stratum -5 ; sem:follows cf:compares .
+ui:FxBars-sparql a sem:Rule ;
+    sem:implements ui:FxBars ;
+    sem:construct """
+CONSTRUCT { $this cf:bars ?json }
+WHERE {
+  $this a ui:FxChart .
+  BIND($this AS ?self)
+  LATERAL { OPTIONAL { SELECT ?self (GROUP_CONCAT(?item; separator=",") AS ?items) WHERE {
+    { SELECT ?self ?item WHERE {
+        ?self cf:compares ?coffee . ?coffee rdfs:label ?name ; cf:rating ?rating ; sem:order ?order .
+        BIND(CONCAT('{"id":"', STR(?coffee), '","label":"', STR(?name), '","order":', STR(?order), ',"value":', STR(?rating), '}') AS ?item)
+      } ORDER BY ?order }
+  } GROUP BY ?self } }
+  BIND(STRDT(CONCAT("[", COALESCE(?items, ""), "]"), rdf:JSON) AS ?json)
+}""" .
+
+# The map's places: the coffees with an origin, in order, as one rdf:JSON value.
+ui:FxPlaces a sem:Rendering ; sem:targets ui:FxMap ; sem:stratum -5 ; sem:follows cf:compares .
+ui:FxPlaces-sparql a sem:Rule ;
+    sem:implements ui:FxPlaces ;
+    sem:construct """
+CONSTRUCT { $this cf:places ?json }
+WHERE {
+  $this a ui:FxMap .
+  BIND($this AS ?self)
+  LATERAL { OPTIONAL { SELECT ?self (GROUP_CONCAT(?item; separator=",") AS ?items) WHERE {
+    { SELECT ?self ?item WHERE {
+        ?self cf:compares ?coffee . ?coffee rdfs:label ?name ; cf:lat ?lat ; cf:long ?long ; sem:order ?order .
+        BIND(CONCAT('{"id":"', STR(?coffee), '","label":"', STR(?name), '","lat":', STR(?lat), ',"lng":', STR(?long), '}') AS ?item)
+      } ORDER BY ?order }
+  } GROUP BY ?self } }
+  BIND(STRDT(CONCAT("[", COALESCE(?items, ""), "]"), rdf:JSON) AS ?json)
+}""" .
+
+# --- What they report, and what it means -------------------------------------------------------------
+# A rating is the coffee's new cf:rating (whole stars, 0 to 5). Choosing a bar chooses its coffee.
+ui:FxRate a beh:Reaction ;
+    rdfs:label "Rate the coffee"@en ;
+    beh:when ui:FxRated ; beh:sourceClass ui:FxRating ;
+    beh:deletes """CONSTRUCT { ?coffee cf:rating ?old } WHERE { $this c:of ?coffee . ?coffee cf:rating ?old }""" ;
+    beh:inserts """
+CONSTRUCT { ?coffee cf:rating ?stars }
+WHERE {
+  $this c:of ?coffee . $event beh:value ?raw .
+  BIND(xsd:integer(ROUND(xsd:decimal(?raw))) AS ?n)
+  BIND(IF(?n < 0, 0, IF(?n > 5, 5, ?n)) AS ?stars)
+}""" ;
+    ann:announces "Rating saved" , "Оцінку збережено"@uk , "Bewertung gespeichert"@de , "تم حفظ التقييم"@ar .
+ui:FxChoose a beh:Reaction ;
+    rdfs:label "Choose a coffee"@en ;
+    beh:when ui:FxChose ; beh:sourceClass ui:FxChooser ;
+    beh:deletes """CONSTRUCT { ?tasting cf:chosen ?old } WHERE { $this c:of ?tasting . ?tasting cf:chosen ?old }""" ;
+    beh:inserts """
+CONSTRUCT { ?tasting cf:chosen ?coffee }
+WHERE { $this c:of ?tasting . $event beh:value ?id . BIND(IRI(?id) AS ?coffee) FILTER EXISTS { ?coffee a cf:Coffee } }""" .
+
+# A place on the map is the chosen coffee's origin; a date is when it was tasted.
+ui:FxPlace a beh:Reaction ;
+    rdfs:label "Place the coffee"@en ;
+    beh:when ui:FxPlaced ; beh:sourceClass ui:FxMap ;
+    beh:deletes """
+CONSTRUCT { ?coffee cf:lat ?lat ; cf:long ?long }
+WHERE { $this c:of ?tasting . ?tasting cf:chosen ?coffee . $event cf:lat ?any . { ?coffee cf:lat ?lat } UNION { ?coffee cf:long ?long } }""" ;
+    beh:inserts """
+CONSTRUCT { ?coffee cf:lat ?lat ; cf:long ?long }
+WHERE { $this c:of ?tasting . ?tasting cf:chosen ?coffee . $event cf:lat ?lat ; cf:long ?long }""" ;
+    ann:announces "Origin placed" , "Походження позначено"@uk , "Herkunft gesetzt"@de , "تم تحديد المنشأ"@ar .
+ui:FxDate-set a beh:Reaction ;
+    rdfs:label "Date the tasting"@en ;
+    beh:when ui:FxDated ; beh:sourceClass ui:FxDate ;
+    beh:deletes """CONSTRUCT { ?coffee cf:tasted ?old } WHERE { $this c:of ?coffee . ?coffee cf:tasted ?old }""" ;
+    beh:inserts """
+CONSTRUCT { ?coffee cf:tasted ?date }
+WHERE { $this c:of ?coffee . $event beh:value ?v . FILTER(REGEX(?v, "^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) BIND(STRDT(?v, xsd:date) AS ?date) }""" .
+
+# --- The page ---------------------------------------------------------------------------------------
+
+ui:ex-foreign a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; ext:outlines true ;
+    c:children ( ui:ex-foreign-intro ui:ex-foreign-outlines ui:ex-foreign-views ui:ex-foreign-card ui:ex-foreign-add-row ui:ex-foreign-graph ) .
+# Which parts are islands: each is outlined and named by what it mounts while the switch is on.
+ui:ex-foreign-outlines a c:ToggleSwitch ; c:controls ui:ex-foreign ; c:property ext:outlines ;
+    c:label "Outline the islands" , "Обвести острівці"@uk , "Inseln umranden"@de , "حدّد الجزر"@ar .
+ui:ex-foreign-views a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-foreign-chart ui:ex-foreign-map ) .
+ui:ex-foreign-intro a c:Text ;
+    c:label "Rate the coffees you tasted. Four open-source libraries, loaded from a CDN, share one graph: Shoelace's star rating, a Chart.js chart, a Leaflet map and a flatpickr date field. Choose a coffee by its bar or its marker, add one of your own, and click the map to place it." ,
+            "Оцініть каву, яку ви скуштували. Чотири бібліотеки з відкритим кодом, завантажені з CDN, мають один граф: зірковий рейтинг Shoelace, діаграма Chart.js, мапа Leaflet і поле дати flatpickr. Виберіть каву стовпчиком або позначкою, додайте свою й клацніть на мапі, щоб позначити, звідки вона."@uk ,
+            "Bewerten Sie die probierten Kaffees. Vier Open-Source-Bibliotheken, von einem CDN geladen, teilen einen Graphen: Shoelaces Sternebewertung, ein Chart.js-Diagramm, eine Leaflet-Karte und ein flatpickr-Datumsfeld. Wählen Sie einen Kaffee über seinen Balken oder seine Markierung, fügen Sie einen eigenen hinzu und klicken Sie auf die Karte, um ihn zu verorten."@de ,
+            "قيّم أنواع القهوة التي تذوقتها. أربع مكتبات مفتوحة المصدر، محمّلة من شبكة CDN، تتشارك رسمًا بيانيًا واحدًا: تقييم النجوم من Shoelace، ومخطط Chart.js، وخريطة Leaflet، وحقل تاريخ flatpickr. اختر قهوة بعمودها أو علامتها، وأضف قهوتك، وانقر على الخريطة لتحديد منشئها."@ar .
+ui:ex-foreign-views a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-foreign-chart ui:ex-foreign-map ) .
+ui:ex-foreign-intro a c:Text ;
+    c:label "Rate the coffees you tasted. The stars are Shoelace's rating and the chart is Chart.js, both loaded from a CDN; their state is the graph's. Choose a bar to see that coffee, or add one of your own." ,
+            "Оцініть каву, яку ви скуштували. Зірки — рейтинг Shoelace, діаграма — Chart.js, обидва завантажено з CDN; їхній стан — у графі. Виберіть стовпчик, щоб побачити ту каву, або додайте свою."@uk ,
+            "Bewerten Sie die probierten Kaffees. Die Sterne sind Shoelaces Bewertung, das Diagramm ist Chart.js, beide von einem CDN geladen; ihr Zustand ist der des Graphen. Wählen Sie einen Balken, um diesen Kaffee zu sehen, oder fügen Sie einen eigenen hinzu."@de ,
+            "قيّم أنواع القهوة التي تذوقتها. النجوم هي تقييم Shoelace والمخطط هو Chart.js، وكلاهما محمّل من شبكة CDN؛ وحالتهما في الرسم البياني. اختر عمودًا لترى تلك القهوة، أو أضف قهوتك."@ar .
+ui:ex-foreign-chart a ui:FxChart ; c:of cf:tasting ; cf:compares cf:eth , cf:col , cf:ken , cf:sum ;
+    c:label "Ratings" , "Оцінки"@uk , "Bewertungen"@de , "التقييمات"@ar .
+ui:ex-foreign-map a ui:FxMap ; c:of cf:tasting ; cf:compares cf:eth , cf:col , cf:ken , cf:sum ;
+    c:label "Where they grow" , "Де вони ростуть"@uk , "Wo sie wachsen"@de , "أين تُزرع"@ar .
+
+# --- One card for the chosen coffee -------------------------------------------------------------------
+# What each part of the card shows is the chosen coffee: the app's rule below derives each part's
+# c:of (or, for the alerts, dep:follows) from cf:tasting cf:chosen. Choosing another coffee - a bar of
+# the chart, or one just added - points the same parts, the Shoelace element among them, at it: the
+# element is kept, and only its changed inputs (its value, its name) are pushed.
+ui:FxOnChosen a owl:Class ;
+    rdfs:comment "Mixin: the component's ui:fxAs (c:of, dep:follows) is the coffee its ui:fxTasting has chosen."@en .
+ui:fxTasting a owl:ObjectProperty ; rdfs:domain ui:FxOnChosen .
+ui:fxAs a owl:ObjectProperty ; rdfs:domain ui:FxOnChosen ; rdfs:range rdf:Property .
+ui:FxPointAtChosen a sem:Rendering ; sem:targets ui:FxOnChosen ; sem:stratum -15 ; sem:follows ui:fxTasting ;
+    sem:inputOnly true ; sem:watches rdf:type , ui:fxTasting , ui:fxAs , cf:chosen .
+ui:FxPointAtChosen-sparql a sem:Rule ;
+    sem:implements ui:FxPointAtChosen ;
+    sem:construct """
+CONSTRUCT { $this ?as ?coffee }
+WHERE { $this a ui:FxOnChosen ; ui:fxTasting ?tasting ; ui:fxAs ?as . ?tasting cf:chosen ?coffee }""" .
+# The "no origin yet" hint is hidden once the coffee it is c:of has a latitude. It follows c:of, which
+# the rule above derives, and watches the latitude there (sem:watches filters followed changes too).
+ui:FxNeedsOrigin a owl:Class ; rdfs:comment "Mixin: c:hidden while the coffee it is c:of has an origin (cf:lat)."@en .
+ui:FxUnplaced a sem:Rendering ; sem:targets ui:FxNeedsOrigin ; sem:stratum -14 ; sem:follows c:of ;
+    sem:watches rdf:type , c:of , cf:lat .
+ui:FxUnplaced-sparql a sem:Rule ;
+    sem:implements ui:FxUnplaced ;
+    sem:construct """
+CONSTRUCT { $this c:hidden ?placed }
+WHERE { $this a ui:FxNeedsOrigin ; c:of ?coffee . BIND(EXISTS { ?coffee cf:lat ?lat } AS ?placed) }""" .
+# The card's title is the chosen coffee's name.
+ui:FxTitled a owl:Class ; rdfs:comment "Mixin: c:label is the name of the coffee its ui:fxTasting has chosen."@en .
+ui:FxTitle a sem:Rendering ; sem:targets ui:FxTitled ; sem:stratum -15 ; sem:follows ui:fxTasting ;
+    sem:inputOnly true ; sem:watches rdf:type , ui:fxTasting , cf:chosen .
+ui:FxTitle-sparql a sem:Rule ;
+    sem:implements ui:FxTitle ;
+    sem:construct """
+CONSTRUCT { $this c:label ?name }
+WHERE { $this a ui:FxTitled ; ui:fxTasting ?tasting . ?tasting cf:chosen ?coffee . ?coffee rdfs:label ?name }""" .
+
+ui:ex-foreign-card a c:Card , ui:FxTitled ; ui:fxTasting cf:tasting ; c:content ui:ex-foreign-body .
+ui:ex-foreign-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-foreign-notes ui:ex-foreign-rate ui:ex-foreign-date ui:ex-foreign-unrated ui:ex-foreign-top ui:ex-foreign-unplaced ui:ex-foreign-triples ) .
+ui:ex-foreign-notes a c:DescriptionList , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of ; c:fields ( cf:notes ) .
+ui:ex-foreign-rate a ui:FxRating , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of .
+ui:ex-foreign-date a ui:FxDate , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of ;
+    c:label "Tasted on" , "Скуштовано"@uk , "Verkostet am"@de , "تاريخ التذوق"@ar .
+ui:ex-foreign-unrated a c:Alert , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs dep:follows ; sty:tone sty:Info ;
+    c:label "Not rated yet" ; c:help "Pick some stars: the chart and the average follow." ;
+    dep:property cf:rating ; dep:case ui:fx-at-0 ; dep:otherwise ui:fx-hidden .
+ui:ex-foreign-top a c:Alert , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs dep:follows ; sty:tone sty:Success ;
+    c:label "Top marks" ; c:help "Five stars: the best of the tasting." ;
+    dep:property cf:rating ; dep:case ui:fx-at-5 ; dep:otherwise ui:fx-hidden .
+ui:ex-foreign-unplaced a c:Alert , ui:FxOnChosen , ui:FxNeedsOrigin ; ui:fxTasting cf:tasting ; ui:fxAs c:of ; sty:tone sty:Info ;
+    c:label "No origin yet" ; c:help "Click the map where it grows. Drag its marker, or focus it and use the arrow keys, to move it." .
+ui:ex-foreign-triples a c:TriplesView , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of .
+
+# --- Adding a coffee: native components feeding the foreign ones --------------------------------------
+# A text field and a button. The reaction mints a coffee from the event's IRI, unrated, last in order,
+# adds it to every view that compares coffees (the chart, the map, the average), and chooses it: the chart grows a bar, the
+# average counts it, and the card - Shoelace's stars too - turns to it, "Not rated yet".
+ui:ex-foreign-add-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+    c:children ( ui:ex-foreign-new ui:ex-foreign-add ) .
+ui:ex-foreign-new a c:TextField ;
+    c:label "Another coffee" , "Ще одна кава"@uk , "Ein weiterer Kaffee"@de , "قهوة أخرى"@ar ;
+    c:placeholder "Guji, Antigua, …" .
+ui:ex-foreign-add a c:Button ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; key:shortcut "mod+enter" ;
+    c:label "Add to the tasting" , "Додати до дегустації"@uk , "Zur Verkostung hinzufügen"@de , "أضف إلى التذوق"@ar .
+ui:FxAdd a beh:Reaction ;
+    rdfs:label "Add a coffee"@en ;
+    beh:when beh:Click ; beh:source ui:ex-foreign-add ;
+    beh:deletes """
+CONSTRUCT { ui:ex-foreign-new c:value ?v . cf:tasting cf:chosen ?old }
+WHERE { ui:ex-foreign-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 40) OPTIONAL { cf:tasting cf:chosen ?old } }""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?coffee a cf:Coffee ; rdfs:label ?name ; sem:order ?next ; cf:rating 0 ; cf:notes "Added during the tasting." .
+  ?view cf:compares ?coffee .
+  cf:tasting cf:chosen ?coffee .
+}
+WHERE {
+  ui:ex-foreign-new c:value ?v FILTER(STRLEN(STR(?v)) > 0 && STRLEN(STR(?v)) <= 40)
+  BIND(STR(?v) AS ?name)
+  BIND(IRI(CONCAT(STR(cf:), "coffee-", STRAFTER(STR($event), "urn:semblance:event:"))) AS ?coffee)
+  { SELECT (COALESCE(MAX(?o) + 1, 1) AS ?next) WHERE { ?any a cf:Coffee ; sem:order ?o } }
+  { SELECT DISTINCT ?view WHERE { ?view cf:compares ?compared } }
+}""" ;
+    ann:announces "Added to the tasting" , "Додано до дегустації"@uk , "Zur Verkostung hinzugefügt"@de , "أضيفت إلى التذوق"@ar .
+
+# Native components that depend on what the foreign ones report (the dependency layer): an alert
+# shown only while the coffee has no stars, another only at five; the rest of the time hidden (and
+# not evaluated). The cases are shared nodes: one for each rating that shows something.
+ui:fx-at-0 dep:when 0 ; dep:gives ui:fx-shown .
+ui:fx-at-5 dep:when 5 ; dep:gives ui:fx-shown .
+ui:fx-shown c:hidden false .
+ui:fx-hidden c:hidden true .
+
+# --- In the graph: what the islands changed, as the graph has it --------------------------------------
+# The average is derived by the app's own rule from the ratings, before the stat renders it; the
+# tasting's triples and the newest members of the change log are views of the graph itself.
+ui:FxAverage a owl:Class ;
+    rdfs:comment "Mixin: c:value is the average cf:rating of the coffees it cf:compares, to one decimal."@en .
+ui:FxAverageValue a sem:Rendering ; sem:targets ui:FxAverage ; sem:stratum -5 ; sem:follows cf:compares .
+ui:FxAverageValue-sparql a sem:Rule ;
+    sem:implements ui:FxAverageValue ;
+    sem:construct """
+CONSTRUCT { $this c:value ?average }
+WHERE {
+  $this a ui:FxAverage .
+  BIND($this AS ?self)
+  LATERAL { OPTIONAL { SELECT ?self (AVG(?rating) AS ?mean) WHERE { ?self cf:compares ?coffee . ?coffee cf:rating ?rating } GROUP BY ?self } }
+  BIND(ROUND(COALESCE(?mean, 0) * 10) / 10 AS ?average)
+}""" .
+
+ui:ex-foreign-graph a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-foreign-state ui:ex-foreign-events ) .
+ui:ex-foreign-state a c:Card ; c:label "In the graph" , "У графі"@uk , "Im Graphen"@de , "في الرسم البياني"@ar ;
+    c:note "Rate or choose a coffee and watch these change." ;
+    c:content ui:ex-foreign-state-body .
+ui:ex-foreign-state-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:ex-foreign-average ui:ex-foreign-tasting ) .
+ui:ex-foreign-average a c:Stat , ui:FxAverage ; cf:compares cf:eth , cf:col , cf:ken , cf:sum ;
+    c:label "Average rating" , "Середня оцінка"@uk , "Durchschnittliche Bewertung"@de , "متوسط التقييم"@ar ; c:unit "★" .
+ui:ex-foreign-tasting a c:TriplesView ; c:of cf:tasting .
+ui:ex-foreign-events a c:Card ; c:label "The newest events" , "Найновіші події"@uk , "Die neuesten Ereignisse"@de , "أحدث الأحداث"@ar ;
+    c:note "Each rating and choice is a member of the change log." ;
+    c:content ui:ex-foreign-log .
+ui:ex-foreign-log a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 3 .
+
+# --- Theming: the site's tokens onto the libraries' own custom properties -----------------------------
+# No Shoelace theme stylesheet is loaded: the rating's documented properties, and the few Shoelace
+# tokens its styles read, come from the site's tokens, so it follows every theme, contrast and scheme.
+# On the element itself: its own :host rule sets its properties there, and the page's rule wins over it.
+[] a sty:StyleRule ; sty:appliesTo ui:FxRating ; sty:part "sl-rating" ;
+    sty:declares [ sty:property "--symbol-color" ; sty:token tok:border ] ,
+                 [ sty:property "--symbol-color-active" ; sty:token tok:accent ] ,
+                 [ sty:property "--symbol-size" ; sty:raw "1.75rem" ] ,
+                 [ sty:property "--symbol-spacing" ; sty:raw "0.15em" ] ,
+                 [ sty:property "--sl-focus-ring" ; sty:raw "solid 2px var(--sem-accent)" ] ,
+                 [ sty:property "--sl-focus-ring-offset" ; sty:raw "2px" ] ,
+                 [ sty:property "--sl-border-radius-medium" ; sty:token tok:radius ] ,
+                 [ sty:property "--sl-spacing-3x-small" ; sty:raw "0.125rem" ] ,
+                 [ sty:property "--sl-transition-fast" ; sty:raw "150ms" ] .
+# The map's markers, and the date field's calendar (it opens beside the field, inside the island).
+[] a sty:StyleRule ; sty:appliesTo ui:FxMap ;
+    sty:declares [ sty:property "--map-marker" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "--map-marker-selected" ; sty:token tok:accent ] ,
+                 [ sty:property "--map-surface" ; sty:token tok:surface ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxMap ; sty:part ".sem-island-widget" ;
+    sty:declares [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "isolation" ; sty:raw "isolate" ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxDate ; sty:part "input" ;
+    sty:declares [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxDate ; sty:part ".flatpickr-calendar" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxDate ; sty:part ":is(.flatpickr-day, .flatpickr-weekday, .flatpickr-current-month, .flatpickr-monthDropdown-months, .cur-year, .flatpickr-prev-month, .flatpickr-next-month)" ;
+    sty:declares [ sty:property "color" ; sty:raw "inherit" ] , [ sty:property "fill" ; sty:raw "currentColor" ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxDate ; sty:part ".flatpickr-day:is(.selected, .selected:hover)" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent ] ,
+                 [ sty:property "border-color" ; sty:token tok:accent ] ,
+                 [ sty:property "color" ; sty:token tok:on-accent ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxDate ; sty:part ".flatpickr-day:is(:hover, :focus)" ;
+    sty:declares [ sty:property "background" ; sty:token tok:surface-hover ] , [ sty:property "border-color" ; sty:raw "transparent" ] .
+# The chart reads these and resolves them to colours (canvas cannot read CSS).
+[] a sty:StyleRule ; sty:appliesTo ui:FxChart ;
+    sty:declares [ sty:property "--chart-bar" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "--chart-bar-hover" ; sty:raw "color-mix(in srgb, var(--sem-accent) 40%, var(--sem-surface))" ] ,
+                 [ sty:property "--chart-bar-selected" ; sty:token tok:accent ] ,
+                 [ sty:property "--chart-text" ; sty:token tok:muted ] ,
+                 [ sty:property "--chart-grid" ; sty:token tok:border ] .
+
+# --- How it works: a walkthrough beside a diagram of what it mentions (ontology/components/walkthrough.ttl)
+
+ui:ex-foreign-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-foreign-w1 ui:ex-foreign-w2 ui:ex-foreign-w3 ui:ex-foreign-w4 ui:ex-foreign-w5 ui:ex-foreign-w6 ui:ex-foreign-w7 ) .
+
+ui:ex-foreign-w1 a c:WalkthroughStep ; rdfs:label "Four libraries that do not know Semblance" ;
+    c:children ( "The stars are Shoelace's <sl-rating>, a web component; the chart is Chart.js, the map Leaflet and the date field flatpickr, three vanilla libraries. Each is wrapped as a class of its own - " ui:ex-foreign-m-FxRating ", " ui:ex-foreign-m-FxChart ", " ui:ex-foreign-m-FxMap ", " ui:ex-foreign-m-FxDate " - subclasses of " ui:ex-foreign-m-Island ". An island renders a wrapper with a host-owned slot that the renderer never manages; the islands effect mounts the library there, through the adapter its class names: " ui:ex-foreign-m-CustomElement " for the rating, " ui:ex-foreign-m-Widget " for the others." ) .
+ui:ex-foreign-w2 a c:WalkthroughStep ; rdfs:label "Loaded from a CDN when first shown" ;
+    c:children ( "The rating names " ui:ex-foreign-m-module " \"shoelace/rating\", and the chart its widget. Neither is a URL: the host maps each name to a dynamic import from jsDelivr, so what code runs is the host's choice, never the graph's. Nothing is fetched until an island is on the screen; open another example and come back, and the mounted components are still there, with their state." ) .
+ui:ex-foreign-w3 a c:WalkthroughStep ; rdfs:label "Inputs are the app's own data" ;
+    c:children ( "The coffees are the app's own vocabulary: " ui:ex-foreign-m-eth " has a " ui:ex-foreign-m-rating ". The rating's " ui:ex-foreign-m-input " \"value\" reads it " ui:ex-foreign-m-through " the coffee the island is c:of. The chart's bars are one rdf:JSON value that " ui:ex-foreign-m-bars " derives from the coffees it " ui:ex-foreign-m-compares ", in order. An input changes only when the triples it comes from change, and only that input is pushed." ) .
+ui:ex-foreign-w4 a c:WalkthroughStep ; rdfs:label "What they report becomes events" ;
+    c:children ( "Each class declares its " ui:ex-foreign-m-output ": Shoelace's sl-change becomes " ui:ex-foreign-m-FxRated ", the chart's select becomes " ui:ex-foreign-m-FxChose ". Reactions decide what they mean: " ui:ex-foreign-m-rate " writes the coffee's new rating and says so, " ui:ex-foreign-m-choose " moves " ui:ex-foreign-m-tasting " on to the chosen coffee. Both are members of the change log: the newest are listed under the card." ) .
+ui:ex-foreign-w5 a c:WalkthroughStep ; rdfs:label "One card follows the choice" ;
+    c:children ( "The card shows whichever coffee is chosen: " ui:ex-foreign-m-onchosen ", the app's own rule, points " ui:ex-foreign-m-rate-island " and the parts beside it at it, deriving their c:of (and the alerts' " ui:ex-foreign-m-depfollows ") from the choice. The Shoelace element stays; only its changed inputs are pushed. When the new rating comes back as an input, the element already has it, so nothing is written twice; if a reaction changed it, the element would be told." ) .
+ui:ex-foreign-w6 a c:WalkthroughStep ; rdfs:label "Native components follow the foreign ones" ;
+    c:children ( "Native components read what the islands wrote. " ui:ex-foreign-m-unrated " is shown only while the coffee has no stars and " ui:ex-foreign-m-top " only at five: the dependency layer gives them c:hidden from the rating, so a hidden one is not evaluated. " ui:ex-foreign-m-average " is derived from every rating by " ui:ex-foreign-m-averagerule ", and the card's " ui:ex-foreign-m-TriplesView " prints the coffee as the graph has it." ) .
+ui:ex-foreign-w7 a c:WalkthroughStep ; rdfs:label "And the other way: native components feed them" ;
+    c:children ( "Type a name into " ui:ex-foreign-m-new ", a " ui:ex-foreign-m-TextField ", and press Add. " ui:ex-foreign-m-add " mints a coffee from the event, unrated and last in order, adds it to every view that compares coffees, and chooses it. Chart.js grows a bar, the average counts it, and Shoelace's stars turn to it, empty, with \"Not rated yet\" beside them. It has no origin yet, so the map has no marker and the card says so: click where it grows, and " ui:ex-foreign-m-place " gives it one, from the map's own click; drag the marker (or nudge it with the arrow keys) to move it. The switch at the top, " ui:ex-foreign-m-outlines ", outlines every island and names what it mounts. Themed by the site's tokens throughout: switch the theme, the scheme or the language (Arabic turns the chart and the keys around)." ) .
+
+ui:ex-foreign-m-FxRating a c:Mention ; c:label "ui:FxRating" ; c:mentions ui:FxRating .
+ui:ex-foreign-m-FxChart a c:Mention ; c:label "ui:FxChart" ; c:mentions ui:FxChart .
+ui:ex-foreign-m-FxMap a c:Mention ; c:label "ui:FxMap" ; c:mentions ui:FxMap .
+ui:ex-foreign-m-FxDate a c:Mention ; c:label "ui:FxDate" ; c:mentions ui:FxDate .
+ui:ex-foreign-m-place a c:Mention ; c:label "ui:FxPlace" ; c:mentions ui:FxPlace .
+ui:ex-foreign-m-outlines a c:Mention ; c:label "ext:outlines" ; c:mentions ext:outlines ; c:to ext:outlines .
+ui:ex-foreign-m-Island a c:Mention ; c:label "ext:Island" ; c:mentions ext:Island ; c:to ext:Island .
+ui:ex-foreign-m-CustomElement a c:Mention ; c:label "ext:CustomElement" ; c:mentions ext:CustomElement ; c:to ext:CustomElement .
+ui:ex-foreign-m-Widget a c:Mention ; c:label "ext:Widget" ; c:mentions ext:Widget ; c:to ext:Widget .
+ui:ex-foreign-m-module a c:Mention ; c:label "ext:module" ; c:mentions ext:module ; c:to ext:module .
+ui:ex-foreign-m-eth a c:Mention ; c:label "cf:eth" ; c:mentions cf:eth .
+ui:ex-foreign-m-rating a c:Mention ; c:label "cf:rating" ; c:mentions cf:rating .
+ui:ex-foreign-m-input a c:Mention ; c:label "ext:input" ; c:mentions ext:input ; c:to ext:input .
+ui:ex-foreign-m-through a c:Mention ; c:label "ext:through" ; c:mentions ext:through ; c:to ext:through .
+ui:ex-foreign-m-bars a c:Mention ; c:label "ui:FxBars" ; c:mentions ui:FxBars .
+ui:ex-foreign-m-compares a c:Mention ; c:label "cf:compares" ; c:mentions cf:compares .
+ui:ex-foreign-m-output a c:Mention ; c:label "ext:output" ; c:mentions ext:output ; c:to ext:output .
+ui:ex-foreign-m-FxRated a c:Mention ; c:label "ui:FxRated" ; c:mentions ui:FxRated .
+ui:ex-foreign-m-FxChose a c:Mention ; c:label "ui:FxChose" ; c:mentions ui:FxChose .
+ui:ex-foreign-m-rate a c:Mention ; c:label "ui:FxRate" ; c:mentions ui:FxRate .
+ui:ex-foreign-m-choose a c:Mention ; c:label "ui:FxChoose" ; c:mentions ui:FxChoose .
+ui:ex-foreign-m-tasting a c:Mention ; c:label "the tasting" ; c:mentions cf:tasting .
+ui:ex-foreign-m-onchosen a c:Mention ; c:label "ui:FxPointAtChosen" ; c:mentions ui:FxPointAtChosen .
+ui:ex-foreign-m-rate-island a c:Mention ; c:label "the rating" ; c:mentions ui:ex-foreign-rate .
+ui:ex-foreign-m-depfollows a c:Mention ; c:label "dep:follows" ; c:mentions dep:follows ; c:to dep:follows .
+ui:ex-foreign-m-unrated a c:Mention ; c:label "\"Not rated yet\"" ; c:mentions ui:ex-foreign-unrated .
+ui:ex-foreign-m-top a c:Mention ; c:label "\"Top marks\"" ; c:mentions ui:ex-foreign-top .
+ui:ex-foreign-m-average a c:Mention ; c:label "The average" ; c:mentions ui:ex-foreign-average .
+ui:ex-foreign-m-averagerule a c:Mention ; c:label "ui:FxAverageValue" ; c:mentions ui:FxAverageValue .
+ui:ex-foreign-m-TriplesView a c:Mention ; c:label "c:TriplesView" ; c:mentions c:TriplesView ; c:to c:TriplesView .
+ui:ex-foreign-m-new a c:Mention ; c:label "the field" ; c:mentions ui:ex-foreign-new .
+ui:ex-foreign-m-TextField a c:Mention ; c:label "c:TextField" ; c:mentions c:TextField ; c:to c:TextField .
+ui:ex-foreign-m-add a c:Mention ; c:label "ui:FxAdd" ; c:mentions ui:FxAdd .

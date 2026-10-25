@@ -1,0 +1,50 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://example.org/foreign#> .
+@prefix ext: <https://semblance.dev/ns/foreign#> .
+
+# Two foreign components in one graph with built-in ones, outlined (ext:outlines) to show which they are. The slider and the rating show one value:
+# moving the slider rates, and picking stars moves the slider. Adding a cup changes the chart's data.
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ; ext:outlines true ;
+    c:children ( ex:title ex:intro ex:rating ex:slider ex:week ex:add ) .
+ex:title a c:Heading ; c:level 1 ;
+    c:label "Foreign components" , "Зовнішні компоненти"@uk , "Fremdkomponenten"@de , "مكوّنات خارجية"@ar .
+ex:intro a c:Text ;
+    c:label "A web component and a vanilla chart, with their state in the graph." ,
+            "Вебкомпонент і звичайна діаграма, їхній стан у графі."@uk ,
+            "Eine Web-Komponente und ein einfaches Diagramm, ihr Zustand im Graphen."@de ,
+            "مكوّن ويب ومخطط بسيط، وحالتهما في الرسم البياني."@ar .
+
+ex:rating a ex:Rating ; c:value 3 ; ex:max 5 ;
+    c:label "Coffee" , "Кава"@uk , "Kaffee"@de , "القهوة"@ar .
+ex:slider a c:Slider ; c:value 3 ; c:min 0 ; c:max 5 ; c:step 1 ;
+    c:label "The same rating" , "Той самий рейтинг"@uk , "Dieselbe Bewertung"@de , "التقييم نفسه"@ar .
+
+ex:week a ex:Spark ; c:value "Wed" ; ex:point ex:mon , ex:tue , ex:wed , ex:thu , ex:fri ;
+    c:label "Cups this week" , "Чашок цього тижня"@uk , "Tassen diese Woche"@de , "أكواب هذا الأسبوع"@ar .
+ex:mon c:label "Mon" ; ex:order 1 ; ex:amount 2 .
+ex:tue c:label "Tue" ; ex:order 2 ; ex:amount 3 .
+ex:wed c:label "Wed" ; ex:order 3 ; ex:amount 1 .
+ex:thu c:label "Thu" ; ex:order 4 ; ex:amount 4 .
+ex:fri c:label "Fri" ; ex:order 5 ; ex:amount 2 .
+ex:add a c:Button ; sty:intent sty:Primary ;
+    c:label "Another cup on Friday" , "Ще одна чашка в пʼятницю"@uk , "Noch eine Tasse am Freitag"@de , "كوب آخر يوم الجمعة"@ar .
+
+# The two views of one rating stay together: each one's event also sets the other.
+ex:RateFromSlider a beh:Reaction ;
+    beh:when beh:Input ; beh:source ex:slider ;
+    beh:deletes """CONSTRUCT { ex:rating c:value ?old } WHERE { ex:rating c:value ?old }""" ;
+    beh:inserts """CONSTRUCT { ex:rating c:value ?n } WHERE { $event beh:value ?v BIND(xsd:integer(ROUND(xsd:decimal(?v))) AS ?n) }""" .
+ex:SlideFromRating a beh:Reaction ;
+    beh:when ex:Rated ; beh:source ex:rating ;
+    beh:deletes """CONSTRUCT { ex:slider c:value ?old } WHERE { ex:slider c:value ?old }""" ;
+    beh:inserts """CONSTRUCT { ex:slider c:value ?n } WHERE { $event beh:value ?v BIND(xsd:decimal(?v) AS ?n) }""" .
+ex:AddCup a beh:Reaction ;
+    beh:when beh:Click ; beh:source ex:add ;
+    beh:deletes """CONSTRUCT { ex:fri ex:amount ?n } WHERE { ex:fri ex:amount ?n }""" ;
+    beh:inserts """CONSTRUCT { ex:fri ex:amount ?next } WHERE { ex:fri ex:amount ?n BIND(?n + 1 AS ?next) }""" .

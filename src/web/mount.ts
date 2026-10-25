@@ -1,6 +1,7 @@
 import { EventBus, type Handled, type ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { DEFAULT_LAYERS, MOD } from '../ns.ts'
+import { Islands, type IslandAdapter, type WidgetLike } from '../foreign.ts'
 import { DomRenderer } from '../render/dom.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
@@ -37,6 +38,12 @@ export interface MountOptions {
   files?: Omit<FilesOptions, 'onHandled'> | false
   /** The fullscreen effect (fs:fullscreen, fs:fullViewport): its host, or how long it may take; false leaves it off. */
   fullscreen?: Omit<FullscreenOptions, 'element' | 'onHandled'> | false
+  /** Foreign components (ext:Island, docs/FOREIGN.md): widgets by their ext:widget name. */
+  widgets?: Record<string, WidgetLike>
+  /** Loaders by the name ext:module gives (a dynamic import: a custom element's definition, a library). */
+  modules?: Record<string, () => Promise<unknown>>
+  /** Adapters for kinds of foreign component beyond the built-in ones, by their ext:Adapter IRI. */
+  adapters?: Record<string, IslandAdapter>
 }
 
 export interface MountedApp {
@@ -47,6 +54,8 @@ export interface MountedApp {
   bus: EventBus
   /** The files effect, unless it was left off: the contents of picked and dropped files (fileOf). */
   files?: Files
+  /** The islands effect: foreign components mounted in the slots islands render. */
+  islands: Islands
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
   /** Detach events and idle work, and remove the styles. The DOM is left as it is. */
@@ -58,7 +67,7 @@ export interface MountedApp {
  * root on screen, patch it into `element` and route the element's events to reactions.
  * Hidden parts are evaluated in idle time; connectors (c:Connector) are drawn where their ends
  * are; picked, dropped and uploaded files go through the files effect (opts.files), and what is
- * asserted full screen or filling the window through the fullscreen effect (opts.fullscreen). Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
+ * asserted full screen or filling the window through the fullscreen effect (opts.fullscreen); foreign components (ext:Island) are mounted in their slots. Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
  */
 export async function mount(element: HTMLElement, opts: MountOptions): Promise<MountedApp> {
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
@@ -147,6 +156,18 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const snaps = attachSnaps(element)
   // Lightboxes grow from their image and give it back, slide between images, zoom and pan.
   const lightboxes = attachLightboxes(element)
+  // Foreign components are mounted in their islands' slots after each patch (nothing to do while there is none).
+  const islands = new Islands(bus, renderer, {
+    widgets: opts.widgets,
+    modules: opts.modules,
+    adapters: opts.adapters,
+    onHandled: (h) => {
+      flush()
+      scheduleWarmup()
+      opts.onHandled?.(h)
+    },
+  })
+  const detachIslands = islands.attach()
 
   return {
     store,
@@ -155,12 +176,14 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     renderer,
     bus,
     files,
+    islands,
     flush,
     unmount() {
       stopped = true
       detach()
       detachFiles?.()
       detachFullscreen?.()
+      detachIslands()
       connectors.dispose()
       snaps.dispose()
       lightboxes.dispose()

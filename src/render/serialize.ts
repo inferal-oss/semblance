@@ -1,3 +1,4 @@
+import { EXT } from '../ns.ts'
 import type { HtmlIndex } from './html-index.ts'
 
 const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -16,6 +17,7 @@ function node(index: HtmlIndex, k: string): string {
   const attrs = index.attributes(k).map(([name, v]) => (v === '' ? ` ${name}` : ` ${name}="${escapeAttr(v)}"`))
   const open = `<${tag}${attrs.join('')}>`
   if (index.isVoid(k)) return open
+  if (n.slot !== undefined) return `${open}${island(index, k)}</${tag}>`
   const inner = index
     .childrenOf(k)
     .map((slot) => index.resolve(slot))
@@ -23,6 +25,20 @@ function node(index: HtmlIndex, k: string): string {
     .map((r) => node(index, r))
     .join('')
   return `${open}${inner}</${tag}>`
+}
+
+/**
+ * What a host-owned slot shows on the server: a custom element island's tag with its attribute
+ * inputs (ext:Attribute), which upgrades in place when its definition loads; anything else is empty.
+ */
+function island(index: HtmlIndex, k: string): string {
+  const tag = index.nodes.get(k)?.tag
+  if (!tag || !/^[a-z][a-z0-9._]*-[a-z0-9._-]*$/.test(tag)) return ''
+  const attrs = [...index.islandInputs(k).values()]
+    .filter((i) => i.as === EXT.Attribute)
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map((i) => ` ${i.name}="${escapeAttr(i.value.value)}"`)
+  return `<${tag}${attrs.join('')}></${tag}>`
 }
 
 /**

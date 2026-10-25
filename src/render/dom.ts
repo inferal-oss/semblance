@@ -23,6 +23,7 @@ export class DomRenderer {
   private readonly takeDirty: () => ReturnType<ReturnType<HtmlIndex['consumer']>>
   /** DOM operations performed, for benchmarks. */
   ops = 0
+  private readonly patched = new Set<() => void>()
 
   constructor(
     readonly index: HtmlIndex,
@@ -52,6 +53,12 @@ export class DomRenderer {
     return false
   }
 
+  /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
+  onPatched(listener: () => void): () => void {
+    this.patched.add(listener)
+    return () => this.patched.delete(listener)
+  }
+
   flush(): void {
     // A focused node that moves to another parent (a card to another lane) is detached on the
     // way, which blurs it: it gets its focus back once it is in place.
@@ -66,6 +73,7 @@ export class DomRenderer {
     this.patch()
     if (focused && focused !== this.doc.activeElement && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
     else if (focused && !focused.isConnected && ancestors.length) this.refocus(ancestors)
+    for (const l of this.patched) l()
   }
 
   /**
