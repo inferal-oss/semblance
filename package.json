@@ -59,6 +59,8 @@
     "engine:build": "tsx rdf-engine/build.ts",
     "engine:check": "tsx rdf-engine/host/abi-check.ts",
     "engine:compare": "tsx rdf-engine/compare.ts",
+    "engine:sizes": "tsx rdf-engine/sizes.ts",
+    "engine:speed": "tsx rdf-engine/host/speed-check.ts",
     "predev": "npm run engine:build",
     "prebuild": "npm run engine:build",
     "pretest": "npm run engine:build",
