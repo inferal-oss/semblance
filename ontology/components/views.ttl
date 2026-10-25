@@ -700,10 +700,83 @@ c:StreamMembers a owl:Class ;
 ordered by the stream's own ldes:sequencePath; one c:TriplesView per member. LDES members are
 immutable, so a member's view is rendered once and never again."""@en ;
     sem:slug "stream-members" .
-c:limit a owl:DatatypeProperty ; rdfs:range xsd:integer .
-c:StreamMembersRendering a sem:Rendering ; sem:targets c:StreamMembers ; sem:stratum 0 ;
-    sem:functionOnly """It walks the stream from its head (beh:latest, beh:previous) a data-driven number of steps (c:limit), which a property path cannot bound, and keys each member's view by a hash (FNV-1a) of its IRI.""" .
+c:limit a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "How many members a c:StreamMembers shows (at most 16)."@en .
+c:StreamMembersRendering a sem:Rendering ; sem:targets c:StreamMembers ; sem:stratum 0 .
 c:StreamMembersRendering-fn a sem:Rule ; sem:implements c:StreamMembersRendering ; sem:function "streammembers" .
+# The newest c:limit members, newest first: from the head, beh:previous at most 16 steps (the
+# walk is unrolled; c:limit is capped at 16, as the function caps it), stopping at a member
+# that has retired. A stream without a head is ranked by its sequence path instead. Each
+# member's view is keyed by an MD5 of its IRI.
+c:StreamMembersRendering-sparql a sem:Rule ;
+    sem:implements c:StreamMembersRendering ;
+    sem:follows c:of ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?emptyClass ; rdfhtml:hasChild ?view , ?emptyText .
+  ?view a c:TriplesView ; c:of ?member ; sem:orderKey ?rank .
+  ?emptyText a rdfhtml:Text ; rdfhtml:data ?empty .
+}
+WHERE {
+  $this c:of ?stream . FILTER(isIRI(?stream))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    {
+      $this c:of ?stream .
+      OPTIONAL { $this c:limit ?limitRawA }
+      BIND(COALESCE(xsd:double(?limitRawA), 8) AS ?wantedA)
+      BIND(IF(?wantedA > 16, 16, ?wantedA) AS ?limitA)
+      ?stream beh:latest ?m1 . FILTER(isIRI(?m1) && EXISTS { ?m1 a ?t1 })
+      LATERAL { OPTIONAL { ?m1 beh:previous ?m2 . FILTER EXISTS { ?m2 a ?t2 } LATERAL { OPTIONAL { ?m2 beh:previous ?m3 . FILTER EXISTS { ?m3 a ?t3 } LATERAL { OPTIONAL { ?m3 beh:previous ?m4 . FILTER EXISTS { ?m4 a ?t4 } LATERAL { OPTIONAL { ?m4 beh:previous ?m5 . FILTER EXISTS { ?m5 a ?t5 } LATERAL { OPTIONAL { ?m5 beh:previous ?m6 . FILTER EXISTS { ?m6 a ?t6 } LATERAL { OPTIONAL { ?m6 beh:previous ?m7 . FILTER EXISTS { ?m7 a ?t7 } LATERAL { OPTIONAL { ?m7 beh:previous ?m8 . FILTER EXISTS { ?m8 a ?t8 } LATERAL { OPTIONAL { ?m8 beh:previous ?m9 . FILTER EXISTS { ?m9 a ?t9 } LATERAL { OPTIONAL { ?m9 beh:previous ?m10 . FILTER EXISTS { ?m10 a ?t10 } LATERAL { OPTIONAL { ?m10 beh:previous ?m11 . FILTER EXISTS { ?m11 a ?t11 } LATERAL { OPTIONAL { ?m11 beh:previous ?m12 . FILTER EXISTS { ?m12 a ?t12 } LATERAL { OPTIONAL { ?m12 beh:previous ?m13 . FILTER EXISTS { ?m13 a ?t13 } LATERAL { OPTIONAL { ?m13 beh:previous ?m14 . FILTER EXISTS { ?m14 a ?t14 } LATERAL { OPTIONAL { ?m14 beh:previous ?m15 . FILTER EXISTS { ?m15 a ?t15 } LATERAL { OPTIONAL { ?m15 beh:previous ?m16 . FILTER EXISTS { ?m16 a ?t16 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } 
+      VALUES ?i { 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 }
+      BIND(COALESCE(IF(?i = 1, ?m1, ?none), IF(?i = 2, ?m2, ?none), IF(?i = 3, ?m3, ?none), IF(?i = 4, ?m4, ?none), IF(?i = 5, ?m5, ?none), IF(?i = 6, ?m6, ?none), IF(?i = 7, ?m7, ?none), IF(?i = 8, ?m8, ?none), IF(?i = 9, ?m9, ?none), IF(?i = 10, ?m10, ?none), IF(?i = 11, ?m11, ?none), IF(?i = 12, ?m12, ?none), IF(?i = 13, ?m13, ?none), IF(?i = 14, ?m14, ?none), IF(?i = 15, ?m15, ?none), IF(?i = 16, ?m16, ?none)) AS ?headMember)
+      FILTER(BOUND(?headMember) && ?i <= ?limitA)
+      BIND(?headMember AS ?member)
+      BIND(?i AS ?rank)
+    } UNION {
+      $this c:of ?stream .
+      OPTIONAL { $this c:limit ?limitRawB }
+      BIND(COALESCE(xsd:double(?limitRawB), 8) AS ?wantedB)
+      BIND(IF(?wantedB > 16, 16, ?wantedB) AS ?limitB)
+      FILTER NOT EXISTS { ?stream beh:latest ?head FILTER(isIRI(?head)) }
+      ?stream tree:member ?member . FILTER(isIRI(?member))
+      OPTIONAL { ?stream ldes:sequencePath ?seqPath . ?member ?seqPath ?seqRaw }
+      BIND(COALESCE(xsd:double(?seqRaw), 0) AS ?seq)
+      { SELECT ?stream ?member (COUNT(?newer) AS ?ahead) WHERE {
+        $this c:of ?stream . FILTER NOT EXISTS { ?stream beh:latest ?latest FILTER(isIRI(?latest)) }
+        ?stream tree:member ?member . FILTER(isIRI(?member))
+        OPTIONAL { ?stream ldes:sequencePath ?sp . ?member ?sp ?ms0 }
+        OPTIONAL { ?stream tree:member ?newer . FILTER(isIRI(?newer) && ?newer != ?member)
+          OPTIONAL { ?stream ldes:sequencePath ?sp2 . ?newer ?sp2 ?ns0 }
+          FILTER(COALESCE(xsd:double(?ns0), 0) > COALESCE(xsd:double(?ms0), 0)) }
+      } GROUP BY ?stream ?member }
+      FILTER(?ahead < ?limitB)
+      BIND(?ahead + 1 AS ?rank)
+    }
+    BIND(IRI(CONCAT(STR($this), "/~m-", SUBSTR(MD5(STR(?member)), 1, 8))) AS ?view)
+  }
+  BIND(IF(BOUND(?view), ?none, "sem-empty") AS ?emptyClass)
+  OPTIONAL {
+    $this c:emptyText ?picke . FILTER(isLiteral(?picke))
+    ?viewere l10n:prefers ?prefe . ?prefe l10n:code ?codee ; sem:order ?ranke .
+    BIND(LCASE(LANG(?picke)) AS ?tage)
+    FILTER(?tage = ?codee || STRSTARTS(?tage, CONCAT(?codee, "-")))
+    FILTER NOT EXISTS {
+      ?viewere l10n:prefers ?bettere . ?bettere l10n:code ?code2e ; sem:order ?rank2e .
+      $this c:emptyText ?othere . FILTER(isLiteral(?othere))
+      BIND(LCASE(LANG(?othere)) AS ?tag2e)
+      FILTER(?tag2e = ?code2e || STRSTARTS(?tag2e, CONCAT(?code2e, "-")))
+      FILTER(?rank2e < ?ranke || (?rank2e = ?ranke && ?tag2e = ?code2e && ?tage != ?codee))
+    }
+  }
+  OPTIONAL { $this c:emptyText ?plaine FILTER(isLiteral(?plaine) && LANG(?plaine) = "") }
+  OPTIONAL { $this c:emptyText ?ene FILTER(LCASE(LANG(?ene)) = "en") }
+  OPTIONAL { $this c:emptyText ?enxe FILTER(STRSTARTS(LCASE(LANG(?enxe)), "en-")) }
+  OPTIONAL { $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
+  BIND(STR(COALESCE(?picke, ?plaine, ?ene, ?enxe, ?anye)) AS ?ownEmpty)
+  BIND(IF(BOUND(?view), ?none, COALESCE(?ownEmpty, "No members yet.")) AS ?empty)
+  BIND(IF(BOUND(?view), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?emptyText)
+}""" .
 
 c:TriplesView a owl:Class ;
     rdfs:subClassOf sem:Component ;
