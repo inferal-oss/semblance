@@ -49,11 +49,12 @@ ui:ex-photos-layout a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-4 ;
 
 ui:ex-photos-compose a c:Card ; c:label "Your post" ; c:content ui:ex-photos-form .
 ui:ex-photos-form a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:ph-headline ui:ph-layout ui:ph-order ui:ph-thumbs ui:ph-loop ) .
+    c:children ( ui:ph-headline ui:ph-order-title ui:ph-order ui:ph-thumbs ui:ph-loop ) .
 ui:ph-headline a c:TextField ; c:label "Headline" ; c:value "A weekend by the sea" ; c:placeholder "Your headline" .
 # The gallery's layout, offered as the ontology lists the layouts.
 ui:ph-layout a c:Segmented ; c:controls ui:ph-gallery ; c:property c:galleryLayout .
 # The order: the photos by rank, which a drag (or Space and the arrow keys) changes.
+ui:ph-order-title a c:Text ; c:label "Order: drag a photo" ; sty:textStyle sty:Overline .
 ui:ph-order a c:List , dnd:Sortable ; c:label "Order" ; c:itemLabel c:caption ; c:itemImage c:image ; c:sortBy ph:rank ;
     dnd:members c:item ; dnd:orderBy ph:rank ;
     c:item ph:harbour , ph:lighthouse , ph:dunes , ph:forest .
@@ -62,7 +63,8 @@ ui:ph-loop a c:ToggleSwitch ; c:label "Loop around in the viewer" ; c:controls u
 
 # --- the preview ---------------------------------------------------------------------------------
 
-ui:ex-photos-preview a c:Card ; c:label "Live preview" ; c:content ui:ph-post .
+# The layout switch sits in the preview's header: it changes how the preview lays the photos out.
+ui:ex-photos-preview a c:Card ; c:label "Live preview" ; c:actions ( ui:ph-layout ) ; c:content ui:ph-post .
 ui:ph-post a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:ph-title ui:ph-gallery ) .
 ui:ph-title a c:Heading ; c:label "A weekend by the sea" ; c:level 3 .
 ui:ph-gallery a c:Gallery ; c:label "A weekend by the sea" ; c:galleryLayout c:CarouselLayout ; c:lightbox ui:ph-viewer ;
