@@ -76,6 +76,13 @@ The Rust engine writes computed numbers the way XPath casts them to strings
 W3C tests expect XSD 1.0 canonical forms (`"2.0"`, `"2.5E0"`) and fail on
 both engines for that reason.
 
+Known differences from Oxigraph, where our engines follow the spec:
+`REPLACE("a|b", "\\|", "\\\\|")` gives `a\|b` (XPath fn:replace reads `\\` in
+the replacement as one backslash; Oxigraph keeps both), `PT1H < P1M` is an
+error (XPath orders only durations of one kind; Oxigraph says true), and a
+duration times a number, a date plus a dayTimeDuration and a time plus a
+duration have values (Oxigraph gives none).
+
 ## Rules for a fair comparison
 
 - Same ABI, same host, same tests. No code is shared between the engines.
