@@ -2,6 +2,7 @@ import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard } from '../src/clipboard.ts'
+import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
 import { Navigation, rendererReveal } from '../src/navigation.ts'
@@ -111,7 +112,10 @@ function focusModal() {
 
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
 let sandboxes: Sandboxes | undefined
-const flush = () => {
+// DOM patches are timed: a hang outside every turn of the engine is blamed on them (the stall log).
+let stalls: StallMonitor | undefined
+const flush = () => (stalls ? stalls.rendering(patch) : patch())
+const patch = () => {
   shell.flush()
   sandboxes?.sync()
   focusModal()
@@ -272,6 +276,20 @@ runtime.onTimer(() => {
   flush()
   scheduleWarmup()
 })
+// The watchdog (ui:watchdog in app.ttl): a turn over budget is suspended and the stall dialog asks
+// whether to continue or stop; hangs nothing could interrupt are logged (a heartbeat worker, long tasks).
+stalls = new StallMonitor(runtime, {
+  watchdog: UI + 'watchdog',
+  bus,
+  flush: () => flush(),
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+  worker: () => new Worker(new URL('../src/behaviour/heartbeat.worker.ts', import.meta.url), { type: 'module' }),
+})
+stalls.attach()
+stalls.observe()
 // Sheets that trace recalculation are told which formulas each change re-ran.
 const recalculation = new RecalculationTrace(runtime, screen)
 bus.attach(shell, (h: Handled) => {
@@ -338,4 +356,4 @@ void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors } })
+if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls } })

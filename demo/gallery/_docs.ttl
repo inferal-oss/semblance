@@ -516,7 +516,7 @@ ui:doc-cp-6 a c:Text ; c:label "Components come in groups - layout, type, action
 
 # --- Integrating ---
 ui:doc-integrate a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-in-h ui:doc-in-1 ui:doc-in-code ui:doc-in-list ) .
+    c:children ( ui:doc-in-h ui:doc-in-1 ui:doc-in-code ui:doc-in-list ui:doc-in-stall-h ui:doc-in-stall-1 ui:doc-in-stall-code ui:doc-in-stall-list ) .
 ui:doc-in-h a c:Heading ; c:level 1 ; c:label "Integrating" .
 ui:doc-in-1 a c:Text ; c:label "mount is the short way. The pieces it wires, for when you need them yourself:" .
 ui:doc-in-code a c:Code ; c:block true ; c:label """await initWeb('wat')
@@ -535,6 +535,28 @@ ui:doc-in-items ui:in-data "Change the graph with runtime.apply({ add, remove })
     ui:in-nav "nav:Location says which state lives in the address; attach Navigation, and links can point at resources (c:to)." .
 ui:in-data rdfs:label "Your data" . ui:in-proj rdfs:label "Projections" . ui:in-embed rdfs:label "Embedding" .
 ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav rdfs:label "The address" .
+ui:doc-in-stall-h a c:Heading ; c:level 2 ; c:label "When the page is busy" .
+ui:doc-in-stall-1 a c:Text ;
+    c:children ( "A turn - an event, its reactions, the maintained views and every projection's rules - has a budget. The engine checks it between evaluations; over it, the turn is suspended at a consistent point and what is left is held, not lost. The stall effect records a " ui:doc-in-m-Stall ", raises an event on your " ui:doc-in-m-Watchdog " and its reaction opens your dialog, a " ui:doc-in-m-Report " in an ordinary c:Dialog. Hangs nothing could interrupt are noticed by a heartbeat worker and the browser's long-task observers, and logged to " ui:doc-in-m-Log " (Tools › Engine)." ) .
+ui:doc-in-m-Stall a c:Link ; c:label "sem:Stall" ; c:to sem:Stall ; c:href "#reference/sem:Stall" .
+ui:doc-in-m-Watchdog a c:Link ; c:label "sem:Watchdog" ; c:to sem:Watchdog ; c:href "#reference/sem:Watchdog" .
+ui:doc-in-m-Report a c:Link ; c:label "c:StallReport" ; c:to c:StallReport ; c:href "#reference/c:StallReport" .
+ui:doc-in-m-Log a c:Link ; c:label "sem:StallLog" ; c:to sem:StallLog ; c:href "#reference/sem:StallLog" .
+ui:doc-in-stall-code a c:Code ; c:block true ; c:label """ui:watchdog a sem:Watchdog ; sem:budget "PT1.5S"^^xsd:duration ; sem:stallDialog ui:busy .
+ui:busy a c:Dialog ; c:label "The page is busy" ; c:content ui:busyReport ; c:actions ( ui:stop ui:continue ) .
+ui:busyReport a c:StallReport ; c:of ui:watchdog .
+ui:continue a c:Button ; c:label "Continue" ; sem:decides ui:watchdog ; sem:stallChoice sem:Continue .
+ui:stop a c:Button ; c:label "Stop" ; sem:decides ui:watchdog ; sem:stallChoice sem:Stop .
+
+// the host: new StallMonitor(runtime, { watchdog: ui + 'watchdog', bus, flush }).attach()""" .
+ui:doc-in-stall-list a c:DescriptionList ; c:of ui:doc-in-stall-items ; c:fields ( ui:in-continue ui:in-stop ui:in-query ui:in-hang ui:in-sandbox ) .
+ui:doc-in-stall-items ui:in-continue "The held work runs in slices (sem:slice) with a yield between them, so the page answers and shows progress. Continued to the end, the result is the same as a turn that was never suspended. Closing the dialog continues too." ;
+    ui:in-stop "The held work is dropped. Renderings whose component is gone are retracted; the others keep what they showed before and are counted out of date (sem:outOfDate) until their input changes or sem:Retry runs them. The input, the views and the change log are not rolled back." ;
+    ui:in-query "A single query cannot be interrupted from outside. Semblance's WASM engines take a deadline (the end of the budget) and stop a query at it, which is a stall like any other; Oxigraph has no such hook, and its long query runs to the end." ;
+    ui:in-hang "What the engine could not interrupt - a long query, DOM patching, layout - is noticed when the page answers again, blamed on the work it overlapped, logged, and announced when it lasted longer than sem:hangAfter." ;
+    ui:in-sandbox "Live examples have a budget of their own: a sandbox over it stops itself and shows the problem inline, and the site never waits on it." .
+ui:in-continue rdfs:label "Continue" . ui:in-stop rdfs:label "Stop" . ui:in-query rdfs:label "One long query" .
+ui:in-hang rdfs:label "Hangs" . ui:in-sandbox rdfs:label "Sandboxes" .
 
 # --- Rules and the engine ---
 ui:doc-rules a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
