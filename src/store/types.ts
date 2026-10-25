@@ -36,4 +36,10 @@ export interface GraphStore {
    * Returns whether more remains. Optional; stores without upkeep omit it.
    */
   maintain?(budgetMs: number): boolean
+  /**
+   * Release what the store holds outside the JavaScript heap (WebAssembly memory), which garbage
+   * collection does not see: every Oxigraph store shares one capped WebAssembly memory. The store
+   * must not be used afterwards. Optional; stores that hold nothing outside the heap omit it.
+   */
+  dispose?(): void
 }

@@ -25,9 +25,21 @@ function engine(kind: 'rust' | 'wat'): GraphStore {
   return engineStore(module, kind)
 }
 
+let created: ((store: GraphStore) => void) | undefined
+
+/**
+ * Hear about every store created from now on (undefined: stop). The test setup uses it to dispose
+ * each test's stores after it: Oxigraph's share one capped WebAssembly memory that garbage
+ * collection does not see.
+ */
+export function watchStores(listener: ((store: GraphStore) => void) | undefined): void {
+  created = listener
+}
+
 export function createStore(kind: StoreKind): GraphStore {
-  if (kind === 'rust' || kind === 'wat') return engine(kind)
-  return kind === 'oxigraph' ? oxigraphStore(ox) : kind === 'hybrid' ? hybridStore(ox) : n3Store()
+  const store = kind === 'rust' || kind === 'wat' ? engine(kind) : kind === 'oxigraph' ? oxigraphStore(ox) : kind === 'hybrid' ? hybridStore(ox) : n3Store()
+  created?.(store)
+  return store
 }
 
 export function ontologySources(): string[] {

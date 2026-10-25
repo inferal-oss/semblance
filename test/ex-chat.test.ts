@@ -40,7 +40,7 @@ function chatOn(h: Mounted) {
   const unread = (ch: string) => h.store.match(h.store.factory.namedNode(CH + ch), h.store.factory.namedNode(CH + 'unread'), null)[0]?.object.value
   return { ...h, visible, button, click, root, channels, channel, thread, messages, published, bodies, typing, composer, type, press, unread }
 }
-const chat = (kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: ManualClock) => chatOn(mountSite(kind, prefer, clock))
+const chat = (kind: 'oxigraph' | 'hybrid' | 'n3' | 'wat' | 'rust' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: ManualClock) => chatOn(mountSite(kind, prefer, clock))
 
 describe('the chat example', () => {
   it('lists the channels with their unread counts and shows the open thread', () => {
@@ -115,9 +115,16 @@ describe('the chat example', () => {
     expect(h.bodies().at(-1)).toBe('Accent works for me.')
   })
 
-  it('plays the others’ script over time: typing, then the message in its place', () => {
+  // On every store with SPARQL: each step of a script sets the next one due with dateTime + duration
+  // arithmetic, which Semblance's WASM engine (the site's default) left unbound, so the scripts
+  // stopped after their first step there while Oxigraph's tests passed. The engines now add
+  // durations, but not yet cast to xsd:duration (the reactions do): until they do, the wat case
+  // is expected to fail, and this test.fails turns red the day it passes - drop it then.
+  it('plays the others’ script over time: typing, then the message in its place (oxigraph)', () => plays('oxigraph'))
+  it.fails('plays the others’ script over time on the WASM engine (awaits the engines\' xsd:duration cast)', () => plays('wat'))
+  function plays(kind: 'oxigraph' | 'wat') {
     const clock = new ManualClock()
-    const h = chat('oxigraph', 'sparql', clock)
+    const h = chat(kind, 'sparql', clock)
     expect(h.typing()).toEqual([]) // nothing has happened yet: time has not moved
     clock.advance(0) // the scripts' first steps are long due: they start as soon as the chat is shown
     expect(h.typing()).toEqual(['Grace Hopper'])
@@ -143,7 +150,7 @@ describe('the chat example', () => {
     expect(h.bodies().at(-1)).toBe('Perfect, thanks Katherine.')
     expect(h.unread('Design')).toBe('5')
     expect(h.channel('design').textContent).toBe('#design5, 5 unread')
-  })
+  }
 
   it('answers when you write, after a pause, and holds while the chat is not shown', () => {
     const clock = new ManualClock()

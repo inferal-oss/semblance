@@ -29,5 +29,5 @@ export default defineConfig(({ command, mode }) => ({
   // Integration tests mount the whole demo; with two runs sharing the machine (scripts/test-queue.sh)
   // the largest (the chat and network examples, from-scratch engine checks) take over a minute.
   // Speed is guarded by the cost tests' work counters, not by this limit.
-  test: { root: here, include: ['test/**/*.test.ts'], testTimeout: 180_000 },
+  test: { root: here, include: ['test/**/*.test.ts'], setupFiles: ['test/setup.ts'], testTimeout: 180_000 },
 }))

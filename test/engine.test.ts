@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EX, todoApp } from '../src/examples/todo.ts'
-import { loadStore, type StoreKind } from '../src/node/load.ts'
+import { createStore, loadStore, type StoreKind } from '../src/node/load.ts'
 import { A11Y, C, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
@@ -10,13 +10,16 @@ import { ALL_LAYERS, inputQuads, SCREEN_LAYERS, setup, todo } from './helpers.ts
 const page = EX + 'page'
 
 /** Rebuild the same input in a fresh store and project it from scratch. */
+/** A projection of exactly `input` (ontology included), from scratch, in a store of its own. */
 function fresh(kind: StoreKind, input: ReturnType<typeof inputQuads>, opts: Parameters<Runtime['project']>[0]) {
-  const store = loadStore(kind)
-  for (const q of store.match(null, null, null, store.factory.defaultGraph())) store.delete(q)
+  const store = createStore(kind)
   for (const q of input) store.add(store.factory.quad(q.subject, q.predicate, q.object))
-  return new Runtime(store).project(opts, (e) => {
-    throw e
-  })
+  return Object.assign(
+    new Runtime(store).project(opts, (e) => {
+      throw e
+    }),
+    { dispose: () => store.dispose?.() },
+  )
 }
 
 describe('implementations', () => {
@@ -115,6 +118,8 @@ describe('incremental updates', () => {
         const expectedText = fresh(kind, inputQuads(store), { modality: MOD.Text, prefer, name: 'text' })
         expect(toHTML(screen.index, page), name).toBe(toHTML(expected.index, page))
         expect(toText(text.index, page), name).toBe(toText(expectedText.index, page))
+        expected.dispose()
+        expectedText.dispose()
       }
     }, 120_000)
   }

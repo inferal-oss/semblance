@@ -32,6 +32,7 @@ export function hybridStore(ox: typeof Ox): GraphStore {
   let rebuild: { fresh: Ox.Store; todo: Quad[]; next: number } | undefined
   const due = () => deletes > Math.max(REBUILD_MIN, live / 2)
 
+  let disposed = false
   return {
     kind: 'hybrid',
     // Mirror terms are plain JS objects and Oxigraph accepts any RDF/JS term,
@@ -56,6 +57,14 @@ export function hybridStore(ox: typeof Ox): GraphStore {
     loadTurtle(text) {
       sparql.load(text, { format: 'text/turtle' })
       mirror.loadTurtle(text)
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      const free = (st: Ox.Store | undefined) => (st as unknown as { free?: () => void } | undefined)?.free?.()
+      free(sparql)
+      free(rebuild?.fresh)
+      rebuild = undefined
     },
     maintain(budgetMs) {
       const until = performance.now() + budgetMs

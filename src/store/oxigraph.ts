@@ -17,6 +17,7 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
   // deletions since the last rebuild reach half of them: amortized O(1) per write.
   // (The hybrid store rebuilds in idle slices instead; see hybrid.ts.)
   let deletes = 0
+  let disposed = false
   let threshold = COMPACT_MIN
   const compact = () => {
     const live = store.match(null, null, null, null)
@@ -44,6 +45,12 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
       return store.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Quad[]
     },
     loadTurtle: (text) => store.load(text, { format: 'text/turtle' }),
+    dispose() {
+      // Once only: freeing twice would hand Oxigraph a dangling pointer.
+      if (disposed) return
+      disposed = true
+      ;(store as unknown as { free?: () => void }).free?.()
+    },
   }
 }
 
