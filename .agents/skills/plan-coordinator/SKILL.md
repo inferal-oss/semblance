@@ -97,11 +97,30 @@ per piece with the same brief.
    list too.
 4. Start a worker for it (section 4), unless the user only wanted the issue.
 
+## 5a. Record ownership and waits in the tracker
+
+Other coordinators (another session, another agent tool, a person) see only GitHub, so everything
+that decides what may start must be written there, not just held in your briefs:
+
+- **The Coordination table in #8** (above "In progress"): one row per piece in flight, with the
+  issue/PR, the worker's branch (`claude/<name>-*`), its state, and what it waits on. Update it
+  whenever you start a worker, a worker reports, something lands, or a wait clears; remove rows
+  for work that landed. Read it first when you take over, and don't start anything a row owns.
+- **A `Coordination:` comment on each issue that waits**, naming what it waits on and who owns
+  it: another PR or issue landing ("starts after PR #31 merges"), the user's approval ("stays
+  uncommitted until the user approves"; "the design needs approval before implementation"), or
+  the user's go-ahead for costly work. Post it when the wait is decided, and comment again when it
+  clears.
+- **Gates the user sets are recorded verbatim in spirit** (approve each refactor first, don't
+  commit until approved): they bind every coordinator and worker, not just the session that heard
+  them.
+
 ## 6. When a worker reports
 
 - A report is not proof. Check the result: the branch or `main` (`git log origin/main`), the PR's
   state, the issue's boxes. Only then tell the user it landed.
 - A worker waiting on tests needs nothing from you. A worker that is blocked gets an answer, or
   the question goes to the user.
-- Keep #8 and #9 current as things land; when a PR merges, offer to archive its worker.
+- Keep #8 (its Coordination table too) and #9 current as things land; when a PR merges, offer to
+  archive its worker.
 - Report to the user in a line or two per worker: what landed (with links), what is left.
