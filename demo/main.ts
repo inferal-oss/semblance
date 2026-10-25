@@ -127,6 +127,20 @@ function focusModal() {
   }
 }
 
+// The Layout page's c:HostSlot specimen: content the host owns (a native slider), mounted once.
+function hostSlotDemo(slot: Element | undefined) {
+  if (!slot || slot.firstChild) return
+  const input = Object.assign(document.createElement('input'), { type: 'range', min: '0', max: '100', value: '40' })
+  input.setAttribute('aria-label', 'A slider the host owns')
+  const output = document.createElement('output')
+  output.textContent = input.value
+  input.addEventListener('input', () => (output.textContent = input.value))
+  const row = document.createElement('div')
+  row.style.cssText = 'display: flex; gap: 0.75em; align-items: center'
+  row.append(input, output)
+  slot.append(row)
+}
+
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
 let sandboxes: Sandboxes | undefined
 // DOM patches are timed: a hang outside every turn of the engine is blamed on them (the stall log).
@@ -136,6 +150,7 @@ const patch = () => {
   shell.flush()
   sandboxes?.sync()
   focusModal()
+  hostSlotDemo(shell.slot('gallery-host'))
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
   textDom?.flush()

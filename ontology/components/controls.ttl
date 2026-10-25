@@ -27,7 +27,7 @@ c:Tab a owl:Class ; rdfs:comment "A panel of a c:Tabs: a label plus either a com
 c:tabs a owl:ObjectProperty ; rdfs:domain c:Tabs ; rdfs:range rdf:List .
 c:selected a owl:ObjectProperty ; rdfs:domain c:Tabs ; rdfs:range c:Tab .
 c:content a owl:ObjectProperty ; rdfs:domain c:Tab ; rdfs:range sem:Component .
-c:slot a owl:DatatypeProperty ; rdfs:domain c:Tab ; rdfs:comment "Name of a host-owned slot rendered as the panel's content."@en .
+c:slot a owl:DatatypeProperty ; rdfs:comment "Name of a host-owned slot (a tab's panel, a c:HostSlot): the host mounts its own content into renderer.slot(name)."@en .
 
 c:TabsRendering a sem:Rendering ;
     sem:targets c:Tabs ;

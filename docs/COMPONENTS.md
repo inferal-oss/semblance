@@ -251,8 +251,9 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   it (`c:of`, `c:controls` / `c:property`, `c:item`), so the same data can be shown many ways.
 - **Several projections.** `runtime.project` again with another root or modality (a Text
   projection for a terminal or an accessibility summary); every change reaches all of them once.
-- **Embedding.** Mount several roots into several elements of an existing page; or give a
-  component a host-owned slot (`c:slot`) and mount anything you like into `renderer.slot(name)`.
+- **Embedding.** Mount several roots into several elements of an existing page; or place an
+  unstyled `c:HostSlot` inside a layout, name it with `c:slot`, and mount existing application
+  content into `renderer.slot(name)`. Use `c:ProjectionView` for a styled inspection surface.
 - **Server-side.** `loadStore` from `@inferal-oss/semblance/node`, project, `toHTML` / `toText`.
 - **Remembering state.** `per:Policy` nodes say what to keep where; attach `Persistence` with
   storage backends before the first projection ([PERSISTENCE.md](../PERSISTENCE.md)).
