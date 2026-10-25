@@ -41,6 +41,26 @@ const sketch = (ttl: string, focus: string) => {
   return toText(new Runtime(store).project({ modality: MOD.Text, name: 'text' }).index, 'https://example.org/' + focus)
 }
 
+describe('c:NavLink', () => {
+  it('renders a page link, optional logo, current page, and named count', () => {
+    const { root } = gallery()
+    const home = root('nv-link-home')
+    expect(home.localName).toBe('a')
+    expect(home.getAttribute('href')).toBe('/')
+    expect(home.getAttribute('aria-current')).toBe('page')
+    expect(home.querySelector('[data-sem-c=emblem]')).not.toBeNull()
+    const inbox = root('nv-link-inbox')
+    expect(inbox.getAttribute('aria-current')).toBeNull()
+    expect(inbox.querySelector('.sem-nav-count')?.getAttribute('aria-label')).toBe('3 unread items')
+    expect(inbox.textContent).toBe('Inbox3')
+    expect(root('nv-link-about').querySelector('.sem-nav-count')).toBeNull()
+  })
+
+  it('sketches the link and count as text', () => {
+    expect(sketch('ex:n a c:NavLink ; c:href "/inbox" ; c:label "Inbox" ; c:count 3 .', 'n')).toBe('Inbox (3) </inbox>')
+  })
+})
+
 describe('c:Breadcrumbs', () => {
   it('renders a labelled nav with an ordered trail, the last crumb current', () => {
     const { root } = gallery()

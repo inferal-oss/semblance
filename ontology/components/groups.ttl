@@ -127,7 +127,7 @@ c:BoardKey sem:group c:DataGroup .
 c:ShortcutList sem:group c:DataGroup . c:PolicyList sem:group c:DataGroup .
 
 # --- Navigation ---
-c:Tabs sem:group c:NavigationGroup . c:Tab sem:group c:NavigationGroup . c:NavList sem:group c:NavigationGroup .
+c:Tabs sem:group c:NavigationGroup . c:Tab sem:group c:NavigationGroup . c:NavList sem:group c:NavigationGroup . c:NavLink sem:group c:NavigationGroup .
 c:Breadcrumbs sem:group c:NavigationGroup . c:Pagination sem:group c:NavigationGroup . c:Stepper sem:group c:NavigationGroup .
 c:AppBar sem:group c:NavigationGroup . c:TabsDetachKey sem:group c:NavigationGroup .
 

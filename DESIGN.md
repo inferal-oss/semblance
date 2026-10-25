@@ -69,7 +69,7 @@ Thin vocabularies. Every component
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
 | **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
-| **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
+| **Navigation** | Tabs · NavLink · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Lightbox · Tooltip (layer) |
 | **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
