@@ -119,6 +119,8 @@ export const SEM = {
   memberWatches: sem + 'memberWatches',
   zeroOrMore: sem + 'zeroOrMore',
   always: sem + 'always',
+  prefixName: sem + 'prefixName',
+  namespace: sem + 'namespace',
   inverse: sem + 'inverse',
   memberWatchesVia: sem + 'memberWatchesVia',
   inputOnly: sem + 'inputOnly',

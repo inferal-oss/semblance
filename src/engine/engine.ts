@@ -445,6 +445,12 @@ export class Engine {
       put(f.quad(pref, nn(L10N.code), f.literal(code), g))
       put(f.quad(pref, nn(SEM.order), f.literal(String(i + 1), nn(NS.xsd + 'integer')), g))
     })
+    // The prefixes the engine knows (the framework's), as data: SPARQL rules spell IRIs with them.
+    for (const [prefix, ns] of Object.entries(NS)) {
+      const node = nn(mint(this.agent.value, 'prefix-' + prefix))
+      put(f.quad(node, nn(SEM.prefixName), f.literal(prefix), g))
+      put(f.quad(node, nn(SEM.namespace), f.literal(ns), g))
+    }
     for (const [k, q] of this.viewer) if (!next.has(k)) this.release(k, q)
     for (const [k, q] of next) if (!this.viewer.has(k)) this.retain(k, q)
     this.viewer = next

@@ -152,6 +152,12 @@ sem:TabPreview a sem:IntentPreview ;
     rdfs:label "a tab's content"@en ;
     sem:select """SELECT DISTINCT ?content WHERE { $option a c:Tab ; c:content ?content }""" .
 
+sem:prefixName a owl:DatatypeProperty ;
+    rdfs:comment """A prefix the engine knows (the framework's; the graph's own are sh:declare): each engine states
+them in its derived graph, <agent>/~prefix-<p> sem:prefixName "p" ; sem:namespace "…", so SPARQL rules
+can spell an IRI as a prefixed name."""@en .
+sem:namespace a owl:DatatypeProperty ; rdfs:comment "The namespace a sem:prefixName stands for."@en .
+
 sem:always a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment """On a rendering or building block: evaluated whether or not its focus is shown (demand does
 not park it). For building blocks over nodes that are never shown themselves, such as phrases."""@en .
