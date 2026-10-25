@@ -617,10 +617,11 @@
       (call $tx_operand (local.get $f) (call $tx (local.get $f) (local.get $a)))
       (call $tx_operand (local.get $f) (call $tx (local.get $f) (local.get $b)))))))
   (if (i32.and (i32.le_u (i32.sub (local.get $fn) (i32.const F_ADD)) (i32.const 1)) (i32.eq (call $tk (local.get $e)) (i32.const TK_NUM))) (then
-    ;; + and - (two arguments)
+    ;; + and - (two arguments); a term that is not a number (a date, a
+    ;; duration) leaves for the engine
     (return (call $tx_arith (local.get $f) (local.get $fn)
-      (call $to_num (local.get $f) (call $tx (local.get $f) (local.get $a)))
-      (call $to_num (local.get $f) (call $tx (local.get $f) (local.get $b)))))))
+      (call $num_operand (local.get $f) (call $tx (local.get $f) (local.get $a)))
+      (call $num_operand (local.get $f) (call $tx (local.get $f) (local.get $b)))))))
   (if (i32.eq (local.get $fn) (i32.const F_IF)) (then
     (local.set $k (call $tk (local.get $e)))
     (local.set $x (call $local (local.get $f)))
@@ -988,4 +989,15 @@
   (call $em1 (local.get $f) (@str "Ra") (local.get $flag))
   (if (i32.load offset=8 (local.get $e)) (then (call $em0 (local.get $f) (@str "k1s"))))
   (call $lset (local.get $f) (call $tva (local.get $r)))
+  (local.get $r))
+
+;; An arithmetic operand: a number, an error when unbound or computed as one;
+;; a bound term that is not a number leaves for the bail block (dates and
+;; durations have arithmetic of their own in the engine).
+(func $num_operand (param $f i32) (param $v i32) (result i32)
+  (local $r i32)
+  (local.set $r (call $to_num (local.get $f) (local.get $v)))
+  (if (i32.eq (i32.load (local.get $v)) (i32.const TK_ID)) (then
+    (call $em2 (local.get $f) (@str "gaEgbk0Gq") (call $tva (local.get $r)) (call $tva (local.get $v)))
+    (call $bail_if (local.get $f))))
   (local.get $r))

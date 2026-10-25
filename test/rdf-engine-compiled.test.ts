@@ -35,6 +35,7 @@ const QUERIES = [
   'SELECT ?a ?x WHERE { ?a a :R OPTIONAL { ?a :order ?x0 } BIND(?a IN (:a, :b) AS ?x) FILTER(?a NOT IN (:e)) }',
   'SELECT ?a WHERE { ?a a :R { BIND(?a AS ?self) } UNION { ?a :next ?n BIND(?n AS ?self) } }',
   'SELECT ?a ?l WHERE { ?a a :R LATERAL { SELECT ?a (MAX(?s) AS ?l) WHERE { ?a :slug ?s } GROUP BY ?a } }',
+  'SELECT ?a ?d ?e WHERE { ?a :order ?o BIND(xsd:date("2020-01-01") AS ?x) BIND(?x + xsd:dayTimeDuration("P1D") AS ?d) BIND(?d - ?x AS ?e) FILTER(?d > ?x) }',
 ]
 
 describe.skipIf(!built.length).each(built)('%s compiled queries', (kind) => {
