@@ -7,8 +7,10 @@
 //   - brings the first highlighted line of a source view into view inside its scroll box,
 //   - says how much a sticky app bar covers (--sem-sticky-top), so the diagram sticks below it.
 // The arrows from mentions to nodes are connectors (c:WalkthroughArrows), drawn by the connector
-// effect (src/web/connectors.ts) like any other. Motion follows mot:preference (data-sem-motion)
-// and the system's reduced-motion setting.
+// effect (src/web/connectors.ts) like any other. Motion follows mot:preference (data-sem-motion;
+// System and no preference follow the system's reduced-motion setting, src/layers/motion.ts).
+import { motionCalmedAt } from '../layers/motion.ts'
+
 /** Where the reader's eye is: the step whose top has passed this fraction of the viewport is being read. */
 const READING_LINE = 0.4
 
@@ -25,10 +27,7 @@ export function attachWalkthroughs(host: HTMLElement): WalkthroughHost {
   let scrolled = false
   const reported = new WeakMap<Element, Element>()
 
-  const reduced = (el: Element) => {
-    const pref = el.closest('[data-sem-motion]')?.getAttribute('data-sem-motion')
-    return pref === 'reduced' || pref === 'none' || !!win.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  }
+  const reduced = motionCalmedAt
   const shown = (el: Element) => !el.closest('[hidden]') && el.getClientRects().length > 0
 
   const schedule = () => {

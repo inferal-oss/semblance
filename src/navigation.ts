@@ -14,6 +14,7 @@ import { NAV_GRAPH, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_BOOLEAN
 import type { Delta } from './rdf.ts'
 import type { Runtime } from './runtime.ts'
 import type { Factory, GraphStore } from './store/types.ts'
+import { motionCalmed } from './layers/motion.ts'
 
 const NAV = NS.nav
 const C = NS.c
@@ -703,12 +704,12 @@ export class Navigation {
     attempt(tries)
   }
 
-  /** Smooth unless the location's root asks for less motion (mot:preference) or the system does. */
+  /** Smooth unless the location's root asks for less motion (mot:preference), or follows the system and it does. */
   private smooth(): boolean {
     const root = this.location()?.root
-    const pref = root && this.store.match(this.store.factory.namedNode(root), this.store.factory.namedNode(NS.mot + 'preference'), null)[0]?.object.value
-    if (pref && pref !== NS.mot + 'Full') return false
-    return !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const f = this.store.factory
+    const pref = root && this.store.match(f.namedNode(root), f.namedNode(NS.mot + 'preference'), null)[0]?.object
+    return !motionCalmed(pref ? this.store.match(pref as NamedNode, f.namedNode(SEM.slug), null)[0]?.object.value : undefined)
   }
 }
 
