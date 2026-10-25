@@ -2,6 +2,7 @@
 import type { FnRule } from '../engine/context.ts'
 import { NS, SEM, STY } from '../ns.ts'
 import { str } from './util.ts'
+import { viewRows } from '../view/rows.ts'
 
 const VALUE_QUERY = NS.c + 'valueQuery'
 
@@ -12,7 +13,7 @@ const formulaValue: FnRule = (ctx, focus) => {
   if (!query || !ctx.sparql) return []
   let row
   try {
-    row = ctx.select(query.replaceAll('$this', `<${focus.value}>`))[0]
+    row = (query.includes('$this') ? ctx.select(query.replaceAll('$this', `<${focus.value}>`)) : viewRows(ctx, view, query))[0]
   } catch {
     return []
   }

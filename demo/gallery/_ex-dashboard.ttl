@@ -104,9 +104,14 @@ CONSTRUCT { dx:totals dx:orders ?n ; dx:revenue ?sum }
 WHERE { { SELECT (COUNT(?o) AS ?n) (SUM(?amount) AS ?sum) WHERE { dx:orders tree:member ?o . ?o dx:amount ?amount } } }""" .
 
 # --- the queries: all over the cube ----------------------------------------------------------------
-# A cell passes a dimension's filter when nothing is chosen in it, or its value is.
+# A cell passes a dimension's filter when nothing is chosen in it, or its value is. Each query is
+# a maintained view too, over the cube's output (iv:reads): its rows live in the views graph
+# (iv:materialize iv:Graph, a result set), where the charts, the table, the figures and the chips
+# read them. A new order changes one cell, and each query re-evaluates that cell's partition; a
+# filter re-evaluates the cells it gates (at most 48), never the orders.
 
-dx:qByRegion a sem:View ; sem:select """
+dx:qByRegion a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT ?region ?channel (SUM(?revenue) AS ?value) WHERE {
   ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:revenue ?revenue .
   FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
@@ -116,7 +121,8 @@ SELECT ?region ?channel (SUM(?revenue) AS ?value) WHERE {
 }
 GROUP BY ?ro ?region ?channel ORDER BY ?ro""" .
 
-dx:qByProduct a sem:View ; sem:select """
+dx:qByProduct a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT ?product (SUM(?n) AS ?value) WHERE {
   ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:orders ?n .
   FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
@@ -126,7 +132,8 @@ SELECT ?product (SUM(?n) AS ?value) WHERE {
 }
 GROUP BY ?po ?product ORDER BY ?po""" .
 
-dx:qBreakdown a sem:View ; sem:select """
+dx:qBreakdown a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT ?region ?product (SUM(?n) AS ?orders) (SUM(?revenue) AS ?sales) (SUM(?revenue) / SUM(?n) AS ?average) WHERE {
   ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:orders ?n ; dx:revenue ?revenue .
   FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
@@ -136,25 +143,30 @@ SELECT ?region ?product (SUM(?n) AS ?orders) (SUM(?revenue) AS ?sales) (SUM(?rev
 }
 GROUP BY ?region ?product ORDER BY DESC(?sales) ?region ?product""" .
 
-dx:qShownOrders a sem:View ; sem:select """
+dx:qShownOrders a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT (COALESCE(SUM(?n), 0) AS ?value) WHERE {
   ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:orders ?n .
   FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
   FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
   FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
 }""" .
-dx:qShownSales a sem:View ; sem:select """
+dx:qShownSales a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT (COALESCE(SUM(?revenue), 0) AS ?value) WHERE {
   ?cell a dx:Cell ; dx:region ?r ; dx:product ?p ; dx:channel ?c ; dx:revenue ?revenue .
   FILTER(NOT EXISTS { dx:filters dx:region ?anyR } || EXISTS { dx:filters dx:region ?r })
   FILTER(NOT EXISTS { dx:filters dx:product ?anyP } || EXISTS { dx:filters dx:product ?p })
   FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
 }""" .
-dx:qAllOrders a sem:View ; sem:select """SELECT ?value WHERE { dx:totals dx:orders ?value }""" .
-dx:qCells a sem:View ; sem:select """SELECT (COUNT(?cell) AS ?value) WHERE { ?cell a dx:Cell }""" .
+dx:qAllOrders a sem:View , iv:View ; iv:reads dx:Totals ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """SELECT ?value WHERE { dx:totals dx:orders ?value }""" .
+dx:qCells a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """SELECT (COUNT(?cell) AS ?value) WHERE { ?cell a dx:Cell }""" .
 
 # Each facet's counts: every filter but its own, so a value's count is what choosing it would add.
-dx:qRegionCounts a sem:View ; sem:select """
+dx:qRegionCounts a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
   ?option a dx:Region .
   OPTIONAL {
@@ -163,7 +175,8 @@ SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
     FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
   }
 } GROUP BY ?option""" .
-dx:qProductCounts a sem:View ; sem:select """
+dx:qProductCounts a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
   ?option a dx:Product .
   OPTIONAL {
@@ -172,7 +185,8 @@ SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
     FILTER(NOT EXISTS { dx:filters dx:channel ?anyC } || EXISTS { dx:filters dx:channel ?c })
   }
 } GROUP BY ?option""" .
-dx:qChannelCounts a sem:View ; sem:select """
+dx:qChannelCounts a sem:View , iv:View ; iv:reads dx:Cube ; iv:materialize iv:Graph ; iv:whileShown ui:ex-dashboard ;
+    sem:select """
 SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
   ?option a dx:Channel .
   OPTIONAL {

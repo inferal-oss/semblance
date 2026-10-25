@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
@@ -39,9 +40,12 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ui:ExAct
 
 # --- the views: SELECTs over the stream -------------------------------------------------------------
 # Each reads the stream's members once (tree:member, then the member's own triples); the log is
-# bounded, so none of them grows with the session.
+# bounded, so none of them grows with the session. All but the per-minute one (it reads NOW()) are
+# maintained views too (iv:View, docs/IVM.md): an event is one partition, evaluated once - the
+# component classes reach outside it, to the event's target - and its rows are a result set in the
+# views graph, which the figures, the charts and the list read.
 
-act:SinceOpened a sem:View ; rdfs:label "events since you opened this page" ;
+act:SinceOpened a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "events since you opened this page" ;
     sem:select """
 SELECT (COUNT(?m) AS ?value) WHERE {
   OPTIONAL { act:visit act:since ?since }
@@ -49,17 +53,17 @@ SELECT (COUNT(?m) AS ?value) WHERE {
   FILTER(!BOUND(?since) || ?seq > ?since)
 }""" .
 
-act:InTheLog a sem:View ; rdfs:label "events in the log" ;
+act:InTheLog a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "events in the log" ;
     sem:select """SELECT (COUNT(?m) AS ?value) WHERE { beh:ChangeLog tree:member ?m }""" .
 
-act:Touched a sem:View ; rdfs:label "components that got events" ;
+act:Touched a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "components that got events" ;
     sem:select """SELECT (COUNT(DISTINCT ?target) AS ?value) WHERE { beh:ChangeLog tree:member ?m . ?m beh:target ?target }""" .
 
-act:Changed a sem:View ; rdfs:label "triples the events changed" ;
+act:Changed a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "triples the events changed" ;
     sem:select """SELECT (SUM(?added + ?removed) AS ?value) WHERE { beh:ChangeLog tree:member ?m . ?m beh:added ?added ; beh:removed ?removed }""" .
 
 # Events per type: the event's class, by its local name (beh:Click is "Click").
-act:PerType a sem:View ; rdfs:label "events per type" ;
+act:PerType a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "events per type" ;
     sem:select """
 SELECT ?type (COUNT(?m) AS ?value) WHERE {
   beh:ChangeLog tree:member ?m . ?m a ?class .
@@ -83,7 +87,7 @@ SELECT ?minute ?series (COUNT(?m) AS ?value) WHERE {
 GROUP BY ?minute ?series""" .
 
 # Most-used components: which component classes the events were addressed to (beh:target).
-act:PerComponent a sem:View ; rdfs:label "events per component class" ;
+act:PerComponent a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "events per component class" ;
     sem:select """
 SELECT ?component (COUNT(?m) AS ?events) (COUNT(DISTINCT ?target) AS ?instances) WHERE {
   beh:ChangeLog tree:member ?m . ?m beh:target ?target .

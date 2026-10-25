@@ -4,6 +4,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { labelOf, rdfList } from './views.ts'
 import { text } from './util.ts'
+import { viewRows } from '../view/rows.ts'
 
 const str = (t: Term | undefined) => t?.value
 type Row = Map<string, Term>
@@ -38,7 +39,7 @@ function rows(ctx: RuleContext, focus: NamedNode): Row[] | string {
   const query = view && str(ctx.object(view, SEM.select))
   if (!query) return 'No view.'
   try {
-    return ctx.select(query)
+    return viewRows(ctx, view!, query)
   } catch (e) {
     return `View ${labelOf(ctx, view!)} failed: ${(e as Error).message}`
   }

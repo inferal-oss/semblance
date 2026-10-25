@@ -59,6 +59,13 @@ describe('the sales dashboard example', () => {
     // The cube is a maintained view, incremental (not a fallback), and holds a row per cell.
     const cube = h.runtime.views.view(DX + 'Cube')!
     expect(cube.fallback).toBeUndefined()
+    // So are the queries over it: their rows are a result set in the views graph, which the charts, the table, the figures and the chips read.
+    for (const q of ['qByRegion', 'qByProduct', 'qBreakdown', 'qShownOrders', 'qShownSales', 'qRegionCounts', 'qProductCounts', 'qChannelCounts', 'qCells', 'qAllOrders']) {
+      expect(h.runtime.views.view(DX + q)?.strategy, q).toBe('incremental')
+    }
+    const f = h.store.factory
+    expect(h.store.match(f.namedNode(DX + 'qByRegion'), f.namedNode('http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution'), null, f.namedNode('urn:semblance:views'))).toHaveLength(h.runtime.views.view(DX + 'qByRegion')!.rows().length)
+    expect(h.runtime.views.view(DX + 'qByRegion')!.rows().length).toBeGreaterThan(3)
   })
 
   it('filters by the facets: everything follows, and each facet counts with the others applied', () => {
@@ -158,15 +165,16 @@ describe('the dashboard costs the same at a thousand orders as at two thousand',
     expect(one.cells).toBe('48')
     expect(two.cells).toBe('48')
     expect(two.filter).toEqual(one.filter)
-    // The filter changes no view.
-    expect(one.filter.viewRows).toBe(0)
-    // A batch: the cube's work is the batch's (its fifty orders, the cells they touch), not the stream's.
-    // How many cells a random batch touches varies, so the bound is per order: at most a dozen view
-    // rows each (the order's member rows, its cells and the totals they feed).
+    // The filter re-evaluates, in each query over the cube, the cells it gates (at most 48 a query), never the orders.
+    expect(one.filter.viewRows).toBeGreaterThan(0)
+    expect(one.filter.viewRows).toBeLessThan(48 * 12)
+    // A batch: the cube's work is the batch's (its fifty orders, the cells they touch), and each
+    // query's is those cells' - not the stream's.
     for (const m of [one, two]) {
       expect(m.batch.viewRows).toBeGreaterThan(0)
-      expect(m.batch.viewRows).toBeLessThan(50 * 12)
+      expect(m.batch.viewRows).toBeLessThan(2500)
     }
+    // (A batch's orders are random: how many cells it touches varies, but never past the 48 there are.)
     expect(two.batch.ruleRuns).toBe(one.batch.ruleRuns)
   }, 300_000)
 })
