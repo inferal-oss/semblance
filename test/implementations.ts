@@ -9,7 +9,7 @@ const UI = 'https://semblance.dev/demo#'
 
 /**
  * The renderings declared in the given ontology files (relative to ontology/)
- * that lack a SPARQL rule (and are not sem:functionOnly) or lack a function rule.
+ * that lack a SPARQL rule (and await no SPARQL extension: sem:needsExtension) or lack a function rule.
  */
 export function implementationGaps(files: string[]): { noSparql: string[]; noFunction: string[] } {
   const store = new Store()
@@ -21,7 +21,7 @@ export function implementationGaps(files: string[]): { noSparql: string[]; noFun
     const rules = store.getQuads(null, SEM + 'implements', rendering, null).map((r) => r.subject)
     const has = (p: string) => rules.some((r) => store.getQuads(r, SEM + p, null, null).length > 0)
     const name = rendering.value.replace(/^.*[#/]/, '')
-    if (!has('construct') && !store.getQuads(rendering, SEM + 'functionOnly', null, null).length) noSparql.push(name)
+    if (!has('construct') && !store.getQuads(rendering, SEM + 'needsExtension', null, null).length) noSparql.push(name)
     if (!has('function')) noFunction.push(name)
   }
   return { noSparql: noSparql.sort(), noFunction: noFunction.sort() }

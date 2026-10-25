@@ -37,6 +37,7 @@ export const NS = {
   skos: 'http://www.w3.org/2004/02/skos/core#',
   schema: 'https://schema.org/',
   as: 'https://www.w3.org/ns/activitystreams#',
+  sx: 'https://semblance.dev/ns/sparql#',
   foaf: 'http://xmlns.com/foaf/0.1/',
   vann: 'http://purl.org/vocab/vann/',
   iv: 'https://semblance.dev/ns/view#',
