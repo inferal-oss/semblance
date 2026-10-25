@@ -42,18 +42,54 @@ const sketch = (ttl: string, focus: string) => {
 }
 
 describe('c:NavLink', () => {
-  it('renders a page link, optional logo, current page, and named count', () => {
-    const { root } = gallery()
-    const home = root('nv-link-home')
-    expect(home.localName).toBe('a')
-    expect(home.getAttribute('href')).toBe('/')
-    expect(home.getAttribute('aria-current')).toBe('page')
-    expect(home.querySelector('[data-sem-c=emblem]')).not.toBeNull()
-    const inbox = root('nv-link-inbox')
-    expect(inbox.getAttribute('aria-current')).toBeNull()
-    expect(inbox.querySelector('.sem-nav-count')?.getAttribute('aria-label')).toBe('3 unread items')
-    expect(inbox.textContent).toBe('Inbox3')
-    expect(root('nv-link-about').querySelector('.sem-nav-count')).toBeNull()
+  it('is a c:Link: logo, current page and a spoken count, the same from SPARQL and the function', () => {
+    const html: string[] = []
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { root } = gallery('oxigraph', prefer)
+      const home = root('nv-link-home')
+      expect(home.localName).toBe('a')
+      expect(home.getAttribute('data-sem-c')).toBe('nav-link')
+      expect(home.getAttribute('href')).toBe('#home')
+      expect(home.getAttribute('aria-current')).toBeNull()
+      expect(home.querySelector('[data-sem-c=emblem]')).not.toBeNull()
+      expect(root('nv-link-navigation').getAttribute('aria-current')).toBe('page')
+      const components = root('nv-link-components')
+      // The figure is hidden from assistive technology; the number and what it counts are said.
+      expect(components.querySelector('.sem-count > [aria-hidden=true]')?.textContent).toBe('3')
+      expect(components.querySelector('.sem-count > .sem-visually-hidden')?.textContent).toBe(', 3 new')
+      expect(components.textContent).toBe('Components3, 3 new')
+      expect(root('nv-link-home').querySelector('.sem-count')).toBeNull()
+      html.push(root('nv-links-list').outerHTML)
+    }
+    expect(html[1]).toBe(html[0])
+  })
+
+  it('says the count in the viewer\'s language', () => {
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { root, screen, dom } = gallery('oxigraph', prefer)
+      screen.engine.reconfigure({ languages: ['uk'] })
+      dom.flush()
+      const components = root('nv-link-components')
+      expect(components.querySelector('.sem-visually-hidden')?.textContent).toBe(', 3 нові')
+    }
+  })
+
+  it('shows 99+ past 99 and nothing for zero, on any c:Link', () => {
+    const root = 'https://example.org/list'
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+      const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix ex: <https://example.org/> .
+        ex:many a c:Link ; c:href "/a" ; c:label "A" ; c:count 120 ; c:currentPage true .
+        ex:none a c:Link ; c:href "/b" ; c:label "B" ; c:count 0 .
+        <${root}> a c:Stack ; c:children ( ex:many ex:none ) .`)
+      const screen = new Runtime(store).project({ modality: MOD.Screen, prefer, roots: [root], name: 'links' })
+      new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+      const [many, none] = [...document.querySelectorAll('a')]
+      expect(many.getAttribute('aria-current')).toBe('page')
+      expect(many.querySelector('[aria-hidden=true]')?.textContent).toBe('99+')
+      expect(many.querySelector('.sem-visually-hidden')?.textContent).toBe(', 120')
+      expect(none.querySelector('.sem-count')).toBeNull()
+    }
   })
 
   it('sketches the link and count as text', () => {

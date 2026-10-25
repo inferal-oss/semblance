@@ -129,7 +129,7 @@ c:moreLabel a owl:DatatypeProperty ; rdfs:domain c:AppBar ;
 c:byline a owl:ObjectProperty ; rdfs:domain c:AppBar ;
     rdfs:comment "A component after an app bar's name and subtitle: who makes or sponsors it."@en .
 c:logo a owl:ObjectProperty ;
-    rdfs:comment "A component drawn before a name: the app bar's logo, a link's logo (c:AppBar, c:Link, c:NavLink)."@en .
+    rdfs:comment "A component drawn before a name: the app bar's logo, a link's logo (c:AppBar, c:Link)."@en .
 c:AppBarRendering a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 .
 c:AppBarRendering-fn a sem:Rule ; sem:implements c:AppBarRendering ; sem:function "appbar" .
 

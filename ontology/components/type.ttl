@@ -148,7 +148,9 @@ c:Link a owl:Class ;
 location that shows it, nav:href) or c:href (an address, also the fallback), after an optional c:logo (a component,
 e.g. a c:Emblem). Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
-technology (c:externalHint). Accent by default; sty:tone recolors it."""@en ;
+technology (c:externalHint). c:currentPage true marks the current destination (aria-current=page).
+c:count (above zero) follows the label as a number, spelled out with c:countLabel for assistive
+technology (", 3 unread"). Accent by default; sty:tone recolors it."""@en ;
     sem:slug "link" ;
     c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de .
 c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
@@ -156,6 +158,9 @@ c:to a owl:ObjectProperty ;
     rdfs:comment "The resource a link goes to (e.g. a gallery specimen): its address is the location that shows it (navigation layer)."@en .
 c:external a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a link leaves the application (default: absolute http(s) addresses do)."@en .
+c:currentPage a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Current page"@en , "Поточна сторінка"@uk , "Aktuelle Seite"@de , "الصفحة الحالية"@ar ;
+    rdfs:comment "Whether a link goes to the page being shown (aria-current=page)."@en .
 c:externalHint a owl:AnnotationProperty ;
     rdfs:comment "On a component class: what is said, after the label, about an external link (language-tagged)."@en .
 c:LinkRendering a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 .
@@ -167,9 +172,16 @@ c:LinkRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:A ; sem:renders $this ; rdfhtml:href ?href ; rdfhtml:target ?target ; rdfhtml:rel ?rel ;
-        rdfhtml:hasChild ?logo, ?labelText, ?mark, ?hint .
+        rdfhtml:hasChild ?logo, ?labelText, ?count, ?mark, ?hint ; rdfhtml:attribute ?currentAttr .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
   ?logo ord:immediatelyPrecedes ?labelText .
-  ?labelText a rdfhtml:Text ; rdfhtml:data ?label ; ord:immediatelyPrecedes ?mark .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label ; ord:immediatelyPrecedes ?afterLabel .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:hasChild ?figure, ?spoken ; ord:immediatelyPrecedes ?mark .
+  ?figure a rdfhtml:Span ; rdfhtml:attribute ?figureHidden ; rdfhtml:hasChild ?figureText ; ord:immediatelyPrecedes ?spoken .
+  ?figureHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?spoken a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?spokenText .
+  ?spokenText a rdfhtml:Text ; rdfhtml:data ?said .
   ?mark a rdfhtml:Span ; rdfhtml:class "sem-external" ; rdfhtml:hasChild ?markText ; ord:immediatelyPrecedes ?hint .
   ?mark rdfhtml:attribute ?markHidden . ?markHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?markText a rdfhtml:Text ; rdfhtml:data "↗" .
@@ -193,6 +205,24 @@ WHERE {
   BIND(IF(BOUND(?external0), STR(?external0) = "true", REGEX(?href, "^https?://", "i")) AS ?external)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelText)
+  BIND(IF(EXISTS { $this c:currentPage true }, IRI(CONCAT(STR($this), "/~aria-current")), ?none) AS ?currentAttr)
+  # A count above zero: the figure (99+ past 99) shown, the number and c:countLabel (in the viewer's
+  # language when c:LinkTexts put it here) said.
+  OPTIONAL { $this c:count ?n FILTER(?n > 0) }
+  OPTIONAL { $this c:countLabel ?countLabel_u FILTER(isLiteral(?countLabel_u) && lang(?countLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?countLabel_u)) $this c:countLabel ?countLabel_en FILTER(langMatches(lang(?countLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?countLabel_u) && !BOUND(?countLabel_en)) $this c:countLabel ?countLabel_any FILTER(isLiteral(?countLabel_any)) }
+  BIND(IRI(CONCAT(STR($this), "/~l10n-count")) AS ?countLabelNode)
+  LATERAL { OPTIONAL { ?countLabelNode l10n:label ?localCountLabel } }
+  BIND(STR(COALESCE(?localCountLabel, ?countLabel_u, ?countLabel_en, ?countLabel_any)) AS ?countLabel)
+  BIND(IF(?n > 99, "99+", STR(?n)) AS ?shown)
+  BIND(CONCAT(", ", STR(?n), IF(BOUND(?countLabel), CONCAT(" ", ?countLabel), "")) AS ?said)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count")), ?none) AS ?count)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-figure")), ?none) AS ?figure)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-figure-aria-hidden")), ?none) AS ?figureHidden)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-text")), ?none) AS ?figureText)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-spoken")), ?none) AS ?spoken)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-spoken-text")), ?none) AS ?spokenText)
   BIND(IF(?external, "_blank", ?none) AS ?target)
   BIND(IF(?external, "noopener noreferrer", ?none) AS ?rel)
   # The hint is the class's (c:externalHint on c:Link), in the viewer's language when c:LinkTexts put it here.
@@ -208,6 +238,7 @@ WHERE {
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external-aria-hidden")), ?none) AS ?markHidden)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~hint")), ?none) AS ?hint)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~hint-text")), ?none) AS ?hintText)
+  BIND(COALESCE(?count, ?mark) AS ?afterLabel)
 }""" .
 
 c:LinkRendering-sparql-text a sem:Rule ;
@@ -233,7 +264,10 @@ WHERE {
   OPTIONAL { $this c:external ?external0 }
   BIND(IF(BOUND(?external0), STR(?external0) = "true", REGEX(?href, "^https?://", "i")) AS ?external)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IF(?label = ?href, CONCAT("<", ?href, ">"), CONCAT(?label, " <", ?href, ">", IF(?external, " ↗", ""))) AS ?line)
+  # A count above zero follows the label in parentheses.
+  OPTIONAL { $this c:count ?n FILTER(?n > 0) }
+  BIND(IF(BOUND(?n), CONCAT(" (", STR(?n), ")"), "") AS ?countPart)
+  BIND(IF(?label = ?href, CONCAT("<", ?href, ">", ?countPart), CONCAT(?label, ?countPart, " <", ?href, ">", IF(?external, " ↗", ""))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
 

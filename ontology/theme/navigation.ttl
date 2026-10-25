@@ -12,28 +12,40 @@
 # Default theme for the navigation components.
 
 # --- nav link ---
+# A nav list's row (its button rule below), as a link: full width, the label wrapping, the count at
+# the end, the current page marked as the nav list marks its choice. It undoes c:Link's running-text
+# look (accent colour, underline, the brand-mark layout a logo gives a link).
 [] a sty:StyleRule ; sty:appliesTo c:NavLink ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
-                 [ sty:property "text-decoration" ; sty:raw "none" ] .
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state ":has(> [data-sem-c=emblem], > [data-sem-c=graph-mark])" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:part "> [data-sem-c=emblem]" ;
+    sty:declares [ sty:property "height" ; sty:raw "1em" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "align-self" ; sty:raw "center" ] .
 [] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state ":hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state "[aria-current=page]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
-                 [ sty:property "font-weight" ; sty:raw "600" ] .
-[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state ":focus-visible" ;
-    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
-                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
-[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:part ".sem-nav-count" ;
-    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
-                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
-                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] ,
-                 [ sty:property "color" ; sty:token tok:muted ] .
+                 [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state "[aria-current=page]:dir(rtl)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-accent)" ] .
 
 # --- nav list ---
 [] a sty:StyleRule ; sty:appliesTo c:NavList ;
@@ -63,6 +75,8 @@
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavList ; sty:part "button[aria-pressed=true]:dir(rtl)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-accent)" ] .
 
 # A nav list presenting itself as a picker on a compact screen (c:compactAs c:Picker; the picker's
 # own look is c:Segmented's) sheds its card.

@@ -11,71 +11,16 @@
 
 # Navigation components (DESIGN.md §3): NavLink, NavList, Breadcrumbs, Pagination and Stepper.
 
-# --- NavLink: an ordinary page link with place and count -----------------------------------------
+# --- NavLink: a link as a row of a site's navigation -------------------------------------------
+# A c:Link (one rule and its twin: c:href or c:to, c:label, c:logo, c:currentPage, c:count with
+# c:countLabel, external links) under its own slug, so every theme draws it as a nav list's row:
+# full width, the count at the end, the current page marked as a nav list marks its choice.
 
 c:NavLink a owl:Class ;
-    rdfs:subClassOf sem:Component ;
-    rdfs:comment "A page link with an optional logo component and count. c:currentPage marks the page being shown."@en ;
+    rdfs:subClassOf c:Link ;
+    rdfs:label "Navigation link"@en , "Навігаційне посилання"@uk , "Navigationslink"@de , "رابط تنقل"@ar ;
+    rdfs:comment "A link in a site's navigation, drawn as a nav list's row: a c:Link with c:currentPage for the page being shown and c:count for what waits there."@en ;
     sem:slug "nav-link" .
-c:currentPage a owl:DatatypeProperty ; rdfs:domain c:NavLink ; rdfs:range xsd:boolean ;
-    rdfs:comment "Whether this link names the page now shown."@en .
-c:NavLinkScreen a sem:Rendering ; sem:targets c:NavLink ; sem:modality mod:Screen ; sem:stratum 0 .
-c:NavLinkScreen-sparql a sem:Rule ; sem:implements c:NavLinkScreen ;
-    sem:construct """
-CONSTRUCT {
-  ?root a rdfhtml:A ; sem:renders $this ; rdfhtml:href ?href ; rdfhtml:attribute ?current ;
-        rdfhtml:hasChild ?logo, ?label, ?countNode .
-  ?current a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
-  ?logo ord:immediatelyPrecedes ?label .
-  ?label a rdfhtml:Span ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?countNode .
-  ?labelText a rdfhtml:Text ; rdfhtml:data ?name .
-  ?countNode a rdfhtml:Span ; rdfhtml:class "sem-nav-count" ; rdfhtml:attribute ?countName ;
-             rdfhtml:hasChild ?countText .
-  ?countName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?countAccessible .
-  ?countText a rdfhtml:Text ; rdfhtml:data ?countValue .
-}
-WHERE {
-  $this a c:NavLink ; c:href ?href0 .
-  BIND(STR(?href0) AS ?href)
-  OPTIONAL { $this c:logo ?logo FILTER(isIRI(?logo)) }
-  OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
-  BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?href0)) AS ?name)
-  OPTIONAL { $this c:currentPage ?current0 }
-  OPTIONAL { $this c:count ?count0 }
-  OPTIONAL { $this c:countLabel ?countLabel0 }
-  BIND(BOUND(?current0) && STR(?current0) = "true" AS ?isCurrent)
-  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IF(?isCurrent, IRI(CONCAT(STR($this), "/~current")), ?none) AS ?current)
-  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
-  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
-  BIND(IF(BOUND(?count0), IRI(CONCAT(STR($this), "/~count")), ?none) AS ?countNode)
-  BIND(IF(BOUND(?count0), IRI(CONCAT(STR($this), "/~count-text")), ?none) AS ?countText)
-  BIND(STR(?count0) AS ?countValue)
-  BIND(IF(BOUND(?count0) && BOUND(?countLabel0), IRI(CONCAT(STR($this), "/~count-name")), ?none) AS ?countName)
-  BIND(CONCAT(STR(?count0), " ", STR(?countLabel0)) AS ?countAccessible)
-}""" .
-c:NavLinkText a sem:Rendering ; sem:targets c:NavLink ; sem:modality mod:Text ; sem:stratum 0 .
-c:NavLinkText-sparql a sem:Rule ; sem:implements c:NavLinkText ;
-    sem:construct """
-CONSTRUCT {
-  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?text .
-  ?text a rdfhtml:Text ; rdfhtml:data ?line .
-}
-WHERE {
-  $this a c:NavLink ; c:href ?href .
-  OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
-  BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?href)) AS ?name)
-  OPTIONAL { $this c:count ?count }
-  BIND(CONCAT(?name, IF(BOUND(?count), CONCAT(" (", STR(?count), ")"), ""), " <", STR(?href), ">") AS ?line)
-  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
-}""" .
 
 # --- NavList: vertical navigation over one property's values -----------------------------------
 # A c:Segmented laid out as a list: the same graph contract (c:controls,
@@ -93,7 +38,7 @@ c:NavList a owl:Class ;
 c:countProperty a owl:ObjectProperty ; rdfs:domain c:Segmented ; rdfs:range rdf:Property ;
     rdfs:comment "A numeric property of each option, shown as a count after its label when above zero."@en .
 c:countLabel a owl:DatatypeProperty ;
-    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\"): on a c:NavLink, c:Segmented with c:countProperty, or c:Chips with c:countQuery."@en .
+    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\"): on a c:Link (c:count), c:Segmented with c:countProperty, or c:Chips with c:countQuery."@en .
 c:SegmentedCounts a sem:Rendering ;
     sem:targets c:Segmented ;
     sem:requires c:countProperty ;

@@ -59,11 +59,12 @@ Reuse the shared properties where they fit — `c:label`, `c:value`, `c:help`, `
 property of another node) — and the shared variant axes (`sty:tone`, `sty:emphasis`, `sty:size`),
 which the style layer already turns into `data-sem-*` hooks for every component that has them.
 
-For a link in a site navigation, use `c:NavLink` with `c:href` and `c:label`.
-`c:currentPage true` marks the page with `aria-current="page"`; `c:logo` puts a
-non-interactive component before the label. `c:count` adds a number, and
-`c:countLabel` says what it counts to screen readers. Use `c:NavList` to
-choose a graph value.
+A link (`c:Link`) goes to `c:href`, or to `c:to` (a resource; the navigation layer finds its
+address). `c:currentPage true` marks the page being shown (`aria-current="page"`), and `c:count`
+puts a number after the label, which `c:countLabel` spells out for screen readers. `c:NavLink` is
+the same link drawn as a row of a site's navigation, like a `c:NavList` option; `c:NavList` itself
+chooses a graph value rather than a page.
+
 Capabilities are mixin classes: an instance that is also `c:Draggable`, `c:Flippable` or
 `dnd:Draggable` gets that behaviour without its component knowing.
 

@@ -19,15 +19,20 @@ ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" .
 
 # --- NavLink --------------------------------------------------------------------------------------
 
-ui:nv-link-home a c:NavLink ; c:href "/" ; c:label "Home" ; c:logo ui:nv-link-mark ; c:currentPage true .
+# A site's navigation as links to the gallery's own pages: this page is the current one.
+ui:nv-link-home a c:NavLink ; c:href "#home" ; c:logo ui:nv-link-mark ;
+    c:label "Home" , "Головна"@uk , "Startseite"@de , "الرئيسية"@ar .
 ui:nv-link-mark a c:Emblem ; c:viewBox "0 0 16 16" ; c:pathData "M2 7L8 2L14 7V14H2Z" ; c:decorative true .
-ui:nv-link-inbox a c:NavLink ; c:href "/inbox" ; c:label "Inbox" ; c:count 3 ; c:countLabel "unread items" .
-ui:nv-link-about a c:NavLink ; c:href "/about" ; c:label "About" .
+ui:nv-link-navigation a c:NavLink ; c:href "#components/navigation" ; c:currentPage true ;
+    c:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقّل"@ar .
+ui:nv-link-components a c:NavLink ; c:href "#components" ; c:count 3 ;
+    c:label "Components" , "Компоненти"@uk , "Komponenten"@de , "المكوّنات"@ar ;
+    c:countLabel "new" , "нові"@uk , "neu"@de , "جديدة"@ar .
 ui:nv-links-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ;
-    c:children ( ui:nv-link-home ui:nv-link-inbox ui:nv-link-about ) .
+    c:children ( ui:nv-link-home ui:nv-link-navigation ui:nv-link-components ) .
 ui:nv-links a c:Flippable ; c:front ui:nv-links-spec .
 ui:nv-links-spec a c:Specimen ; c:demonstrates c:NavLink ; c:label "Navigation links" ;
-    c:help "Ordinary page links with an optional logo, count and aria-current=page. c:countLabel explains a count to screen readers." ;
+    c:help "A c:Link drawn as a nav list's row: c:href or c:to, an optional c:logo, c:currentPage (aria-current=page) for the page being shown, and c:count, spelled out with c:countLabel for screen readers. Any c:Link takes c:currentPage and c:count." ;
     c:children ( ui:nv-links-list ) .
 
 # --- Breadcrumbs ----------------------------------------------------------------------------------

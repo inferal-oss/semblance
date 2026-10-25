@@ -4,12 +4,15 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out } from '../engine/context.ts'
 import { C, MOD, NS } from '../ns.ts'
 import { tokenizeCode } from '../sparql-tokens.ts'
-import { isTrue, labelOf, named, rdfList, str, text } from './util.ts'
+import { isTrue, labelOf, named, num, rdfList, str, text } from './util.ts'
 
 const C_LINK = NS.c + 'Link'
 const C_INLINE = NS.c + 'inline'
 const C_HREF = NS.c + 'href'
 const C_EXTERNAL = NS.c + 'external'
+const C_CURRENT_PAGE = NS.c + 'currentPage'
+const C_COUNT = NS.c + 'count'
+const C_COUNT_LABEL = NS.c + 'countLabel'
 const C_EXTERNAL_HINT = NS.c + 'externalHint'
 const C_KEYS = NS.c + 'keys'
 const C_BLOCK = NS.c + 'block'
@@ -46,14 +49,25 @@ const link: FnRule = (ctx, focus) => {
   if (href === undefined) return []
   const label = text(ctx, focus, C.label) ?? href
   const external = isExternal(href, str(ctx.object(focus, C_EXTERNAL)))
+  // A count above zero (c:count) follows the label.
+  const n = num(ctx, focus, C_COUNT, 0)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>` : `${label} <${href}>${external ? ' ↗' : ''}`)]))
+    const count = n > 0 ? ` (${n})` : ''
+    o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>${count}` : `${label}${count} <${href}>${external ? ' ↗' : ''}`)]))
     return o.quads
   }
   // A logo (c:logo, a component) comes before the label.
   const logo = ctx.object(focus, C.logo)
   const parts = [...(named(logo) ? [logo] : []), o.text('label', label)]
+  if (n > 0) {
+    // The figure (99+ past 99) is shown; the number and c:countLabel, in the viewer's language, are said.
+    const spoken = text(ctx, focus, C_COUNT_LABEL)
+    const figure = o.el('count-figure', 'Span', {}, [o.text('count-text', n > 99 ? '99+' : String(n))])
+    o.attr(figure, 'aria-hidden', 'true')
+    const said = o.el('count-spoken', 'Span', { class: 'sem-visually-hidden' }, [o.text('count-spoken-text', `, ${n}${spoken !== undefined ? ' ' + spoken : ''}`)])
+    parts.push(o.el('count', 'Span', { class: 'sem-count' }, [figure, said]))
+  }
   if (external) {
     // The hint is the class's, in the viewer's language (c:externalHint on c:Link).
     const hint = ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'
@@ -61,7 +75,12 @@ const link: FnRule = (ctx, focus) => {
     o.attr(o.node('external'), 'aria-hidden', 'true')
     parts.push(o.el('hint', 'Span', { class: 'sem-sr' }, [o.text('hint-text', ` (${hint})`)]))
   }
-  o.renders(o.el('root', 'A', { href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined }, parts))
+  o.renders(o.el('root', 'A', {
+    href,
+    target: external ? '_blank' : undefined,
+    rel: external ? 'noopener noreferrer' : undefined,
+    'aria-current': isTrue(ctx.object(focus, C_CURRENT_PAGE)) ? 'page' : undefined,
+  }, parts))
   return o.quads
 }
 
