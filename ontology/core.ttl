@@ -180,9 +180,14 @@ always evaluated per focus); this states it explicitly."""@en .
 
 sem:functionOnly a owl:DatatypeProperty ;
     rdfs:comment """On a rendering: it has no SPARQL implementation (or none for a modality) yet, and this says
-which SPARQL extension it awaits ("awaits sx:Locale (sx:formatNumber)"). It is allowed only with
-sem:needsExtension: every other rendering has a SPARQL implementation for every modality it renders
-in, and a function twin (test/sparql-coverage.test.ts checks)."""@en .
+which SPARQL extension it awaits ("awaits sx:Locale (sx:formatNumber)"), or which tracked work
+(sem:awaitsWork: "awaits #1: ..."). It is allowed only with sem:needsExtension or sem:awaitsWork:
+every other rendering has a SPARQL implementation for every modality it renders in, and a function
+twin (test/sparql-coverage.test.ts checks)."""@en .
+sem:awaitsWork a owl:ObjectProperty ;
+    rdfs:comment """On a rendering missing one side for a reason other than an extension: the issue whose work
+brings it (a building block not built yet, another branch's component). Temporary by design:
+test/sparql-coverage.test.ts lists every such rendering, so the list only shrinks on purpose."""@en .
 sem:needsExtension a owl:ObjectProperty ;
     rdfs:comment """On a rule (or a rendering whose SPARQL rule cannot be written yet): a group of SPARQL
 extension functions it needs (sx:Math, sx:Text, sx:Locale, sx:Matches, sx:Json; see the engine's

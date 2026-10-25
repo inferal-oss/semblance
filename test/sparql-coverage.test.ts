@@ -4,8 +4,8 @@ import { SPARQL_PREFIXES } from '../src/ns.ts'
 
 // SPARQL is the primary implementation: every rendering has a SPARQL rule for every modality
 // it renders in, and a function twin (the oracle and the faster path). The only way out is a
-// SPARQL extension the engines do not have yet: sem:needsExtension, with a sem:functionOnly
-// reason saying what it awaits.
+// SPARQL extension the engines do not have yet (sem:needsExtension), or tracked work
+// (sem:awaitsWork, an issue), with a sem:functionOnly reason saying what it awaits.
 const store = loadStore('oxigraph')
 const rows = (query: string) =>
   store.select(SPARQL_PREFIXES + query, [store.factory.defaultGraph()]).map((r) => Object.fromEntries([...r].map(([k, v]) => [k, v.value.replace(/^.*[#/]/, '')])))
@@ -15,6 +15,7 @@ describe('SPARQL coverage', () => {
     const gaps = rows(`SELECT ?rendering ?missing WHERE {
   ?rendering a sem:Rendering .
   FILTER NOT EXISTS { ?rendering sem:needsExtension ?extension }
+  FILTER NOT EXISTS { ?rendering sem:awaitsWork ?issue }
   BIND(EXISTS { ?fn sem:implements ?rendering ; sem:function ?name } AS ?hasFunction)
   BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct ?text } AS ?hasSparql)
   OPTIONAL {
@@ -32,12 +33,23 @@ describe('SPARQL coverage', () => {
     expect(gaps).toEqual([])
   })
 
-  it('sem:functionOnly only says which extension a rendering awaits', () => {
+  it('sem:functionOnly only says which extension or tracked work a rendering awaits', () => {
     const loose = rows(`SELECT ?rendering ?why WHERE {
   ?rendering sem:functionOnly ?why .
-  FILTER(NOT EXISTS { ?rendering sem:needsExtension ?extension } || !STRSTARTS(?why, "awaits sx:"))
+  FILTER(!(EXISTS { ?rendering sem:needsExtension ?extension } && STRSTARTS(?why, "awaits sx:"))
+    && !(EXISTS { ?rendering sem:awaitsWork ?issue } && STRSTARTS(?why, "awaits #")))
 } ORDER BY ?rendering`)
     expect(loose).toEqual([])
+  })
+
+  it('what awaits tracked work (sem:awaitsWork) is this list, which only shrinks', () => {
+    const awaiting = rows(`SELECT ?rendering ?issue WHERE { ?rendering sem:awaitsWork ?issue } ORDER BY ?issue ?rendering`)
+    expect(awaiting).toEqual([
+      // Query results as graph rows (#1): a query held in data, read as rows SPARQL can join.
+      ...['BarChartRendering', 'ChipsCounts', 'FindingListRendering', 'Formula', 'ResultTableRendering'].map((rendering) => ({ rendering, issue: '1' })),
+      // The combobox work (#14) brings the typeahead's function twins.
+      ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
+    ])
   })
 
   it('every reaction has SPARQL (beh:deletes / beh:inserts), unless it awaits an extension', () => {

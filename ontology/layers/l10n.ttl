@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -154,8 +155,10 @@ l10n:CalendarTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> , l10n:locale ;
-    sem:functionOnly "The locale's calendar comes from the host's Intl (names, the order of a date's fields, the hour cycle, the first day of the week), and the locale is the viewer's language, a projection setting; no query can see either." .
+    sem:functionOnly "awaits sx:Locale (sx:formatDateTime): the locale's calendar comes from the host's Intl (names, the order of a date's fields, the hour cycle, the first day of the week)." ;
+    sem:needsExtension sx:Locale .
 l10n:CalendarTexts-fn a sem:Rule ; sem:implements l10n:CalendarTexts ; sem:function "l10n:calendar" .
+
 # --- texts in the viewer's language, for SPARQL rules -------------------------------------
 # A text property whose values are translations has an l10n: twin (l10n:pickedAs). l10n:Terms
 # derives, in each engine's derived graph, every node's twin value when it has two values or

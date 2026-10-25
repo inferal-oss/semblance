@@ -216,7 +216,8 @@ c:TypeaheadValueTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:follows c:controls ;
-    sem:functionOnly "It folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed), in the viewer's language, which SPARQL cannot." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed, lower-cased)." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadValueTexts-fn a sem:Rule ; sem:implements c:TypeaheadValueTexts ; sem:function "typeahead:values" .
 
 c:TypeaheadQuery a sem:Rendering ;
@@ -234,6 +235,7 @@ c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function 
 # foot (help, a note, the error).
 
 c:TypeaheadRendering a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:requires c:controls ;
     sem:stratum 0 ;
@@ -499,6 +501,7 @@ WHERE {
 # it is not run: c:TypeaheadMatches mints the best few instead.
 
 c:TypeaheadOptions a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:requires c:controls ;
     sem:stratum 0 ;
@@ -566,6 +569,7 @@ WHERE {
 # writes only the rows that came, went or moved. Closed, it lists nothing.
 
 c:TypeaheadMatches a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:stratum 0 ;
     sem:readsMinted true ;
@@ -644,6 +648,7 @@ WHERE {
 # (key:hint: shown in Apple or other glyphs, as the keyboard layer's hints are, and announced with
 # aria-keyshortcuts) - a command palette's options do.
 c:TypeaheadOptionRendering a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TypeaheadOption ;
     sem:stratum 0 ;
     sem:follows c:of ;
@@ -758,6 +763,7 @@ WHERE {
 # options, it re-runs when the texts layer's nodes change (which it does when the values do).
 
 c:TagInputPills a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TagInput ;
     sem:stratum 0 ;
     sem:readsMinted true ;

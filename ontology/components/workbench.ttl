@@ -299,7 +299,8 @@ c:ResultTable a owl:Class ;
     sem:slug "result-table" .
 c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "It runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." .
+    sem:functionOnly "awaits #1 (query results as graph rows): it runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
 
 # --- the table as Markdown ----------------------------------------------------------------------------

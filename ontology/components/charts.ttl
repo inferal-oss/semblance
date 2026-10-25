@@ -42,7 +42,8 @@ c:BarChart a owl:Class ;
     rdfs:comment "Horizontal stacked bars: one bar per category, one segment per series, totals at the end. With no rows, its c:emptyText (when it has one)."@en ;
     sem:slug "bar-chart" .
 c:BarChartRendering a sem:Rendering ; sem:targets c:BarChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query." .
+    sem:functionOnly "awaits #1 (query results as graph rows): it runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
 c:BarChartRendering-fn a sem:Rule ; sem:implements c:BarChartRendering ; sem:function "barchart" .
 
 c:Heatmap a owl:Class ;
@@ -70,7 +71,8 @@ the findings they write, grouped by judgement, each with its verdict (label and 
     sem:slug "finding-list" .
 c:judgementClass a owl:ObjectProperty .
 c:FindingListRendering a sem:Rendering ; sem:targets c:FindingList ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "It runs the CONSTRUCT of every judgement of a class (sem:construct in the data), which SPARQL 1.1 cannot do from inside a query." .
+    sem:functionOnly "awaits #1 (query results as graph rows): it runs the CONSTRUCT of every judgement of a class (sem:construct in the data), which SPARQL 1.1 cannot do from inside a query." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
 c:FindingListRendering-fn a sem:Rule ; sem:implements c:FindingListRendering ; sem:function "findings" .
 
 # --- encodings (theme tokens) ------------------------------------------------------------------
