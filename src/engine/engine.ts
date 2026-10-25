@@ -140,8 +140,9 @@ export class Engine {
   /** The (rule, focus) whose output is being committed: its own writes never re-dirty it. */
   private committing?: { rule: Rule; focus: string }
   /**
-   * typedInInput's answers until the end of the run: rules write only the derived graph, so
-   * the input graphs do not change while one runs (a new input change clears it, in process).
+   * typedInInput's answers until the end of the run (or of stopHeld's retractions): rules write
+   * only the derived graph, so the input graphs do not change meanwhile (a new input change
+   * clears it, in process).
    */
   private typedIn = new Map<string, boolean>()
   /** Evaluations per (rule, focus) in the current run, to catch rules that never settle. */
@@ -730,6 +731,7 @@ export class Engine {
     } finally {
       this.current = -Infinity
       this.evaluations.clear()
+      this.typedIn.clear()
       if (ms !== undefined) this.store.setDeadline?.(undefined)
     }
     if (suspended) {
@@ -833,6 +835,8 @@ export class Engine {
 
   /** Report the run's net change to listeners. */
   private emit() {
+    // Also the end of a stopped stall's retractions, which run outside a run.
+    this.typedIn.clear()
     const { add, remove } = this.pending
     if (!add.size && !remove.size) return
     this.pending = { add: new Map(), remove: new Map() }
