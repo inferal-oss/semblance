@@ -6,6 +6,82 @@ them with the engine's exports and calls the module's `run` instead of the
 interpreter. This page measures whether that is worth it. Node 26, darwin/arm64,
 2026-10-24.
 
+## Where it stands (2026-10-25, after the interpreters' speed work)
+
+Both interpreters got much faster on `main` (WAT's `eval.wat` / `query.wat`,
+Rust's evaluator and WAT's store layout), so the compiled gain is now measured
+against a far stronger baseline. `compiled-bench.ts <engine> --profile`, the
+shell and site rendered, every distinct call replayed interpreted and compiled
+(673 distinct of 1035 recorded calls; 659/712 corpus queries compile):
+
+| 673 calls | WAT interpreted | WAT compiled | Rust interpreted | Rust compiled |
+|---|---:|---:|---:|---:|
+| all calls, total | 11.6 ms | 6.6 ms (**1.8×**) | 60.5 ms | 15.7 ms (**3.9×**) |
+| median per call | 4.6 µs | 2.2 µs (2.2×; p10 1.2×, p90 4.0×) | 54.6 µs | 8.2 µs (3.1×; p10 1.3×, p90 6.9×) |
+| p90 per call | 33.9 µs | 10.9 µs | 71.0 µs | 24.0 µs |
+| SHACL shapes (194 calls) | 6.0 ms | 1.75 ms | 12.2 ms | 4.0 ms |
+| swatch scale (6) | 1.03 ms | 1.75 ms | 25.1 ms | 2.0 ms |
+| tooltip layer (205) | 0.96 ms | 0.45 ms | 11.4 ms | 1.7 ms |
+| emit + compile a query (median / p90) | | 0.17 / 0.36 ms | | 0.13 / 0.29 ms |
+| break-even runs (median) | | 58 | | 7 |
+
+For history: before the speed work WAT took 44.8 ms per render interpreted
+(47.1 ms over the then 603 calls) against 6.4 ms compiled (7.0×), and Rust
+470.9 ms against 66.5 ms. WAT's interpreter is now 4× faster and compiled WAT
+gains 1.8× over it; WAT stays the faster engine both ways (compiled 2.2 µs a
+call against Rust's 8.2 µs). The one place compiled WAT loses is the swatch
+scale (1.75 vs 1.03 ms): its grouped subqueries now cost the interpreter less
+than the module's in-line WHERE plus the engine's finishing.
+
+Shell pages (`compiled-pages.ts`; ms; first visits are dominated by rule
+evaluation that compiles at most once, so they move with machine load):
+
+| | mount | 5 pages, first visit | 5 pages, best revisit | modules compiled |
+|---|---:|---:|---:|---:|
+| Rust interpreted | 292 | 182 | 39.0 | 0 |
+| Rust compiled on 2nd run | 305 | 194 | 42.6 | 34 (10.9 ms) |
+| Rust compiled on 1st run | 353 | 175 | 40.8 | 50 (15.4 ms) |
+| WAT interpreted | 265 | 156 | 33.8 | 0 |
+| WAT compiled on 2nd run | 336 | 194 | 30.1 | 34 (16.0 ms) |
+| WAT compiled on 1st run | 344 | 181 | 31.1 | 50 (19.9 ms) |
+
+Pages show what the bench predicts: query time is a small part of a page, so
+compiling saves ~3 ms a revisit on WAT and nothing measurable on Rust, while
+compiling the 34–50 modules costs 11–20 ms once. Compilation stays off by default.
+
+What this round added:
+
+- **Budget in compiled code** (both engines): a step per scanned quad, path
+  node and joined row, at each loop's head, counting down the engine's own
+  countdown word in line and calling `cq_bu_event` at 0; `cq_end` returns -2
+  `interrupted` and the host throws instead of retrying interpreted.
+  `test/rdf-engine-budget.test.ts` passes with `RDF_ENGINE_COMPILE=1`.
+- **Rust typed expressions** (`rust/src/sparql/ctyped.rs`, after
+  `wat/ctyped.wat`): the same functions in locals; term bytes are copied into an
+  engine buffer, since Rust's dictionary arena moves on interning.
+- **Rust right sides per left row.** Since Rust's speed work the interpreter
+  passes a join's or OPTIONAL's left row bindings into a right side that is not
+  pure (`join_one`); compiled code computed such a right side once, unbound,
+  before the left side. The SourceView rule took 386 ms compiled (4.7 M scans)
+  against microseconds interpreted. It now runs in line per left row with the
+  bindings the interpreter would not pass hidden (saved, cleared, checked at
+  its rows), as WAT's masked groups do.
+- **Paths ordered with triples** held in Rust already: its parser puts paths in
+  the basic graph pattern, and the compiler orders them as the interpreter does.
+- Parity with the rebased interpreters: REDUCED keeps duplicates, BNODE(str) per
+  solution, a BIND onto a variable the joined row binds keeps the row only when
+  the values agree; WAT's `$quads_reserve` now keeps `$bases` current (compiled
+  scans had read a moved quad table).
+
+Correctness: 673/673 calls and 120/120 unbound queries replay equal on both
+engines; W3C with `RDF_ENGINE_COMPILE=1` 0 differences on both (503 compiled),
+`conformance/results/*.json` unchanged (failing empty, spelling 8);
+`engine:check` 10/10 and `parse-check` 714/714 on both; the budget, temporal,
+numbers, compiled and engine tests pass with compilation on. Size: Rust 334 KiB
+raw / 129 KiB gzip, WAT 99 KiB / 45 KiB.
+
+The sections below are the earlier phases, measured before the speed work.
+
 ## What compiles
 
 The compiler emits BGPs as nested loops over index scans (most bound first),
