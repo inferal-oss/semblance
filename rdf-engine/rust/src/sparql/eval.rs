@@ -302,11 +302,22 @@ impl<'a> Ctx<'a> {
             }
             Pattern::Extend(a, v, e) => {
                 let mut rows = self.eval(a, sub, active);
-                for r in rows.iter_mut() {
-                    if let Ok(val) = self.expr(e, r) {
-                        r[*v as usize] = self.to_id(&val);
+                // A BIND cannot name a variable of its own group, so a value already in the
+                // row came from the row it is joined with: the row stays only if they agree.
+                let mut keep = 0;
+                for i in 0..rows.len() {
+                    if let Ok(val) = self.expr(e, &rows[i]) {
+                        let id = self.to_id(&val);
+                        let at = &mut rows[i][*v as usize];
+                        if *at != NONE && *at != id {
+                            continue;
+                        }
+                        *at = id;
                     }
+                    rows.swap(keep, i);
+                    keep += 1;
                 }
+                rows.truncate(keep);
                 rows
             }
             Pattern::Values(vars, data) => {
