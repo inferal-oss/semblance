@@ -77,6 +77,9 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     return n
   }
   const term = (t: Term | string | null) => (typeof t === 'string' ? nn(t) : t)
+  /** A graph's position in the view, by value ('' = the default graph). */
+  const graphIndex = new Map(graphs.map((g, i) => [g.value, i]))
+  const probe = graphs.length <= 31 && graphIndex.size === graphs.length
   const memo = new Map<string, unknown>()
   // Graph-declared prefixes (sh:declare) are read once per context.
   let declared: string | undefined
@@ -91,9 +94,22 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
         preds.add(p === null ? '*' : typeof p === 'string' ? p : p.value)
       }
     }
+    const [ts, tp, to] = [term(s), term(p), term(o)]
+    // With a subject, one lookup across all graphs finds which of the view's graphs hold
+    // matches (usually none or one); only those are asked, in order, for the same result.
+    let holding = -1
+    if (ts && probe) {
+      const all = store.match(ts, tp, to)
+      holding = 0
+      for (const q of all) holding |= 1 << (graphIndex.get(q.graph.value) ?? 31)
+      holding &= ~(1 << 31)
+      if (!holding) return []
+      if (all.length === 1) return all
+    }
     let out: Quad[] = []
-    for (const g of graphs) {
-      const found = store.match(term(s), term(p), term(o), g)
+    for (let i = 0; i < graphs.length; i++) {
+      if (!(holding & (1 << i))) continue
+      const found = store.match(ts, tp, to, graphs[i])
       if (found.length) out = out.length ? out.concat(found) : found
     }
     return out

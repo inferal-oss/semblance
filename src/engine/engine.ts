@@ -1,4 +1,4 @@
-import type { NamedNode, Quad, Quad_Graph } from '@rdfjs/types'
+import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
@@ -101,6 +101,9 @@ export class Engine {
   private readonly provenance: boolean
   private readonly bulkThreshold: number
   private readonly graphs: Quad_Graph[]
+  /** The graphs rules read, and the input graphs among them, by value ('' = the default graph). */
+  private readonly graphKeys: ReadonlySet<string>
+  private readonly inputGraphKeys: ReadonlySet<string>
   private readonly supers: (cls: string) => Set<string>
   private ctx: RuleContext
 
@@ -177,6 +180,8 @@ export class Engine {
     this.graph = f.namedNode('urn:semblance:derived:' + (opts.name ?? 'main'))
     this.agent = f.namedNode('urn:semblance:projection:' + (opts.name ?? 'main'))
     this.graphs = [f.defaultGraph(), ...(opts.inputGraphs ?? []).map((g) => f.namedNode(g)), this.graph]
+    this.graphKeys = new Set(this.graphs.map((g) => g.value))
+    this.inputGraphKeys = new Set(this.graphs.slice(0, -1).map((g) => g.value))
     this.functions = opts.functions ?? {}
     this.provenance = opts.provenance ?? false
     this.bulkThreshold = opts.bulkThreshold ?? 2
@@ -459,9 +464,16 @@ export class Engine {
   /** Whether a node is typed in one of the input graphs (not only by a rule's output). */
   private typedInInput(focus: string): boolean {
     const f = this.store.factory
-    const s = f.namedNode(focus)
-    const p = f.namedNode(RDF_TYPE)
-    return this.graphs.slice(0, -1).some((g) => this.store.match(s, p, null, g).length > 0)
+    return this.holds(f.namedNode(focus), f.namedNode(RDF_TYPE), null, this.inputGraphKeys)
+  }
+
+  /**
+   * Whether a pattern matches in one of the graphs `keys` names (by value, '' for the default
+   * graph): one lookup across all graphs rather than one per graph.
+   */
+  private holds(s: Term, p: Term, o: Term | null, keys: ReadonlySet<string>): boolean {
+    for (const q of this.store.match(s, p, o)) if (keys.has(q.graph.value)) return true
+    return false
   }
 
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
@@ -481,8 +493,7 @@ export class Engine {
     const member = memberOf(key)
     if (!rule.forEach || member === undefined) return true
     const f = this.store.factory
-    const [s, p, o] = [f.namedNode(focusOf(key)), f.namedNode(rule.forEach), f.namedNode(member)]
-    return this.graphs.some((g) => this.store.match(s, p, o, g).length > 0)
+    return this.holds(f.namedNode(focusOf(key)), f.namedNode(rule.forEach), f.namedNode(member), this.graphKeys)
   }
 
   // --- change propagation ----------------------------------------------------
@@ -963,7 +974,7 @@ export class Engine {
   private hasAny(focus: string, properties: string[]): boolean {
     const f = this.store.factory
     const s = f.namedNode(focus)
-    return properties.some((p) => this.graphs.some((g) => this.store.match(s, f.namedNode(p), null, g).length > 0))
+    return properties.some((p) => this.holds(s, f.namedNode(p), null, this.graphKeys))
   }
 
   private bulk(rule: Rule, foci: string[]): Map<string, Quad[]> {
