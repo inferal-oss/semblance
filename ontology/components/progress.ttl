@@ -122,7 +122,7 @@ WHERE {
                  [ sty:property "width" ; sty:raw "var(--sem-progress, 0%)" ] ,
                  [ sty:property "border-radius" ; sty:raw "6px" ] ,
                  [ sty:property "background" ; sty:raw "linear-gradient(90deg, var(--sem-accent), #ff7ac6)" ] ,
-                 [ sty:property "transition" ; sty:raw "width 300ms" ] .
+                 [ sty:property "transition" ; sty:raw "width var(--sem-duration-slow) var(--sem-ease)" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Progress ; sty:part ".sem-status" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] ,

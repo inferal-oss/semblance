@@ -122,6 +122,14 @@ tok:scrim a sty:Token ; sty:scale sty:Color ; sem:slug "scrim" ; sty:value "ligh
 tok:duration-fast a sty:Token ; sty:scale sty:Motion ; sem:slug "duration-fast" ; sty:value "120ms" .
 tok:duration a sty:Token ; sty:scale sty:Motion ; sem:slug "duration" ; sty:value "180ms" .
 tok:duration-slow a sty:Token ; sty:scale sty:Motion ; sem:slug "duration-slow" ; sty:value "320ms" .
+# A long movement through space (a card's 3D turn): reduced or no motion makes it instant, and
+# move-fade (none here) is what replaces it, a short fade-in of what it brings into view.
+tok:duration-move a sty:Token ; sty:scale sty:Motion ; sem:slug "duration-move" ; sty:value "700ms" .
+tok:ease-move a sty:Token ; sty:scale sty:Motion ; sem:slug "ease-move" ; sty:value "cubic-bezier(0.3, 0.7, 0.1, 1)" .
+tok:move-fade a sty:Token ; sty:scale sty:Motion ; sem:slug "move-fade" ; sty:value "none" .
+# The beat of a repeating animation (a spinner, a shimmer, a blinking caret): reduced motion slows
+# it rather than speeding it up with the shorter durations, no motion stills it.
+tok:duration-loop a sty:Token ; sty:scale sty:Motion ; sem:slug "duration-loop" ; sty:value "320ms" .
 tok:ease a sty:Token ; sty:scale sty:Motion ; sem:slug "ease" ; sty:value "cubic-bezier(0.2, 0, 0, 1)" .
 tok:ease-out a sty:Token ; sty:scale sty:Motion ; sem:slug "ease-out" ; sty:value "cubic-bezier(0, 0, 0.2, 1)" .
 tok:spring a sty:Token ; sty:scale sty:Motion ; sem:slug "spring" ; sty:value "cubic-bezier(0.34, 1.4, 0.64, 1)" .

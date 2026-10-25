@@ -499,7 +499,6 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 
 # --- flippable: the view on the front, how it is made on the back ---------------------------
 
-tok:flip-motion a sty:Token ; sem:slug "flip-motion" ; sty:value "700ms cubic-bezier(0.3, 0.7, 0.1, 1)" .
 tok:code-bg a sty:Token ; sty:scale sty:Color ; sem:slug "code-bg" ; sty:value "light-dark(#f7f7fb, #0f0f15)" .
 tok:code-keyword a sty:Token ; sty:scale sty:Color ; sem:slug "code-keyword" ; sty:value "light-dark(#7c3aed, #c4b5fd)" .
 tok:code-var a sty:Token ; sty:scale sty:Color ; sem:slug "code-var" ; sty:value "light-dark(#be185d, #f9a8d4)" .
@@ -517,7 +516,7 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part "> .sem-faces" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "transform-style" ; sty:raw "preserve-3d" ] ,
-                 [ sty:property "transition" ; sty:raw "transform var(--sem-flip-motion)" ] .
+                 [ sty:property "transition" ; sty:raw "transform var(--sem-duration-move) var(--sem-ease-move)" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:state "[data-flipped=true]" ; sty:part "> .sem-faces" ;
     sty:declares [ sty:property "transform" ; sty:raw "rotateY(180deg)" ] .
@@ -1440,13 +1439,18 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # Each face is only rendered while it faces the viewer: visibility flips at the
 # midpoint of the turn, so nothing mirrored can show through (compositors may
-# ignore backface-visibility for separately layered children).
+# ignore backface-visibility for separately layered children). With the turn made
+# instant (reduced or no motion) the swap is instant too, and the face coming into
+# view fades in by move-fade.
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part "> .sem-faces > .sem-front" ;
-    sty:declares [ sty:property "transition" ; sty:raw "visibility 0s linear 350ms" ] .
+    sty:declares [ sty:property "transition" ; sty:raw "visibility 0s linear calc(var(--sem-duration-move) / 2)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:state "[data-flipped=true]" ; sty:part "> .sem-faces > .sem-front" ;
     sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part "> .sem-faces > .sem-back" ;
     sty:declares [ sty:property "visibility" ; sty:raw "hidden" ] ,
-                 [ sty:property "transition" ; sty:raw "visibility 0s linear 350ms" ] .
+                 [ sty:property "transition" ; sty:raw "visibility 0s linear calc(var(--sem-duration-move) / 2)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:state "[data-flipped=true]" ; sty:part "> .sem-faces > .sem-back" ;
-    sty:declares [ sty:property "visibility" ; sty:raw "visible" ] .
+    sty:declares [ sty:property "visibility" ; sty:raw "visible" ] ,
+                 [ sty:property "animation" ; sty:raw "var(--sem-move-fade)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:state ":not([data-flipped=true])" ; sty:part "> .sem-faces > .sem-front" ;
+    sty:declares [ sty:property "animation" ; sty:raw "var(--sem-move-fade)" ] .

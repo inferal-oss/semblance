@@ -149,7 +149,7 @@
                  [ sty:property "border" ; sty:raw "max(2px, calc(var(--control-h, 36px) * 0.07)) solid color-mix(in oklab, currentColor 20%, transparent)" ] ,
                  [ sty:property "border-top-color" ; sty:raw "currentColor" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
-                 [ sty:property "animation" ; sty:raw "sem-spin calc(var(--sem-duration-slow) * 2.5) linear infinite" ] .
+                 [ sty:property "animation" ; sty:raw "sem-spin calc(var(--sem-duration-loop) * 2.5) linear infinite" ] .
 
 # Visually hidden, still read: a component's accessible text.
 [] a sty:StyleRule ; sty:part ".sem-sr" ;
@@ -164,7 +164,7 @@
 # --- skeleton ---
 [] a sty:StyleRule ; sty:appliesTo c:Skeleton ;
     sty:declares [ sty:property "--bone" ; sty:raw "linear-gradient(100deg, var(--sem-gray-3) 30%, var(--sem-gray-5) 50%, var(--sem-gray-3) 70%) 0 0 / 250% 100%" ] ,
-                 [ sty:property "--bone-motion" ; sty:raw "sem-shimmer calc(var(--sem-duration-slow) * 5) var(--sem-ease) infinite" ] .
+                 [ sty:property "--bone-motion" ; sty:raw "sem-shimmer calc(var(--sem-duration-loop) * 5) var(--sem-ease) infinite" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Skeleton ; sty:state "[data-shape=text]" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "10px" ] ,

@@ -202,7 +202,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-bar.sem-open" ;
     sty:declares [ sty:property "background-image" ; sty:raw "repeating-linear-gradient(-45deg, transparent 0 4px, color-mix(in oklab, var(--sem-canvas) 45%, transparent) 4px 8px)" ] ,
                  [ sty:property "background-size" ; sty:raw "200% 100%" ] ,
-                 [ sty:property "animation" ; sty:raw "sem-shimmer calc(var(--sem-duration-slow) * 8) linear infinite" ] .
+                 [ sty:property "animation" ; sty:raw "sem-shimmer calc(var(--sem-duration-loop) * 8) linear infinite" ] .
 
 # --- the footer: counts, follow, jump to latest, older / newer ---
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-grid-footer" ;

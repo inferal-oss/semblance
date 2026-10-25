@@ -97,9 +97,9 @@
     sty:step [ sty:at "0%" ; sty:declares [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-warning-9, #f59f00) 45%, transparent)" ] ] ,
              [ sty:at "100%" ; sty:declares [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-accent-soft) 35%, transparent)" ] ] .
 [] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-recalculated=odd]" ;
-    sty:declares [ sty:property "animation" ; sty:raw "sem-recalc-a var(--sem-duration-slow, 320ms) var(--sem-ease-out, ease-out) 3" ] .
+    sty:declares [ sty:property "animation" ; sty:raw "sem-recalc-a var(--sem-duration-slow) var(--sem-ease-out) 3" ] .
 [] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-recalculated=even]" ;
-    sty:declares [ sty:property "animation" ; sty:raw "sem-recalc-b var(--sem-duration-slow, 320ms) var(--sem-ease-out, ease-out) 3" ] .
+    sty:declares [ sty:property "animation" ; sty:raw "sem-recalc-b var(--sem-duration-slow) var(--sem-ease-out) 3" ] .
 [] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-kind=formula]::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\"ƒ\"" ] ,
                  [ sty:property "padding-inline-start" ; sty:raw "6px" ] ,

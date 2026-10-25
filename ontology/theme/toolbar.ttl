@@ -138,7 +138,7 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
                  [ sty:property "background" ; sty:raw "var(--live-color)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveIndicator ; sty:state "[data-live=true]" ; sty:part ".sem-dot" ;
-    sty:declares [ sty:property "animation" ; sty:raw "sem-pulse calc(var(--sem-duration-slow) * 6) var(--sem-ease-out) infinite" ] .
+    sty:declares [ sty:property "animation" ; sty:raw "sem-pulse calc(var(--sem-duration-loop) * 6) var(--sem-ease-out) infinite" ] .
 
 # --- count badge: a pill, toned like a badge (soft by default) ---
 [] a sty:StyleRule ; sty:appliesTo c:CountBadge ;

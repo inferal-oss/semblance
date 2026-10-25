@@ -84,7 +84,7 @@
                  [ sty:property "z-index" ; sty:raw "1" ] ,
                  [ sty:property "border-radius" ; sty:raw "inherit" ] ,
                  [ sty:property "background" ; sty:raw "linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--sem-accent) 14%, transparent) 50%, transparent 70%) 0 0 / 220% 100%" ] ,
-                 [ sty:property "animation" ; sty:raw "sem-shimmer calc(var(--sem-duration-slow) * 4) linear infinite" ] .
+                 [ sty:property "animation" ; sty:raw "sem-shimmer calc(var(--sem-duration-loop) * 4) linear infinite" ] .
 
 # --- component shapes: offenders are outlined; the report lists them ---
 [] a sty:StyleRule ; sty:part "[data-sem-shape-invalid]" ;

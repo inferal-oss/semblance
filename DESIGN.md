@@ -19,7 +19,7 @@ Every value is a `sty:Token` on a named scale, emitted as `--sem-<slug>`.
 | **Radius** | `radius-sm` 6 · `radius-md` 10 · `radius-lg` 14 · `radius-xl` 20 · `radius-full` | |
 | **Size** | `control-sm` 28 · `control-md` 36 · `control-lg` 44 | Height of every control at each size. |
 | **Elevation** | `shadow-1` … `shadow-4` | Flat, raised, overlay, floating. |
-| **Motion** | `duration-fast` 120ms · `duration` 180ms · `duration-slow` 320ms · `ease` / `ease-out` / `spring` | The motion layer can zero these. |
+| **Motion** | `duration-fast` 120ms · `duration` 180ms · `duration-slow` 320ms · `ease` / `ease-out` / `spring`; `duration-move` 700ms · `ease-move` for long movements (a 3D turn), `move-fade` for what replaces them; `duration-loop` 320ms, the beat of repeating animations | Every transition and animation is timed by these (a test checks no literal time is left). The motion layer re-values them: Reduced shortens, makes long movements instant with a fade instead, and slows loops; None makes all of it instant. |
 
 ## 2. Variation axes (style layer)
 

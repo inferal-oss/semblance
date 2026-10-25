@@ -40,7 +40,7 @@
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] .
 [] a sty:StyleRule ; sty:appliesTo c:OutlineItem ; sty:part ".sem-who.sem-typing" ;
-    sty:declares [ sty:property "animation" ; sty:raw "sem-typing-pulse 1.2s var(--sem-ease) infinite" ] .
+    sty:declares [ sty:property "animation" ; sty:raw "sem-typing-pulse calc(var(--sem-duration-loop) * 4) var(--sem-ease) infinite" ] .
 [] a sty:StyleRule ; sty:part ":is([data-sem-motion=reduced], [data-sem-motion=none]) [data-sem-c=outline-item] .sem-who.sem-typing" ;
     sty:declares [ sty:property "animation" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:raw "0 0 0 2px var(--sem-accent-7)" ] .

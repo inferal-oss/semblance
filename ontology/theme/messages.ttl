@@ -84,11 +84,11 @@ tok:own-side a sty:Token ; sem:slug "own-side" ; sty:value "flex-end" ;
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
                  [ sty:property "background" ; sty:token tok:muted ] ,
                  [ sty:property "opacity" ; sty:raw "0.35" ] ,
-                 [ sty:property "animation" ; sty:raw "sem-typing-dot calc(var(--sem-duration-slow) * 4) var(--sem-ease) infinite" ] .
+                 [ sty:property "animation" ; sty:raw "sem-typing-dot calc(var(--sem-duration-loop) * 4) var(--sem-ease) infinite" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Message ; sty:part ".sem-dots > span:nth-child(2)" ;
-    sty:declares [ sty:property "animation-delay" ; sty:raw "calc(var(--sem-duration-slow) * 0.5)" ] .
+    sty:declares [ sty:property "animation-delay" ; sty:raw "calc(var(--sem-duration-loop) * 0.5)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Message ; sty:part ".sem-dots > span:nth-child(3)" ;
-    sty:declares [ sty:property "animation-delay" ; sty:raw "var(--sem-duration-slow)" ] .
+    sty:declares [ sty:property "animation-delay" ; sty:raw "var(--sem-duration-loop)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Message ; sty:part ".sem-visually-hidden" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "width" ; sty:raw "1px" ] ,

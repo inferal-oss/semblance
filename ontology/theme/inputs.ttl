@@ -400,7 +400,7 @@
                  [ sty:property "height" ; sty:raw "45%" ] ,
                  [ sty:property "border-radius" ; sty:raw "1px" ] ,
                  [ sty:property "background" ; sty:token tok:accent ] ,
-                 [ sty:property "animation" ; sty:raw "sem-caret-blink calc(var(--sem-duration-slow, 320ms) * 3.5) steps(1, end) infinite" ] .
+                 [ sty:property "animation" ; sty:raw "sem-caret-blink calc(var(--sem-duration-loop) * 3.5) steps(1, end) infinite" ] .
 [] a sty:Keyframes ; sty:name "sem-caret-blink" ;
     sty:step [ sty:at "50%" ; sty:declares [ sty:property "opacity" ; sty:raw "0" ] ] .
 # A complete code: every cell takes the success color for a moment's reassurance.
