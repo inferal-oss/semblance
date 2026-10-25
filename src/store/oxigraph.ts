@@ -1,5 +1,6 @@
 import type { Quad, Quad_Graph, Term } from '@rdfjs/types'
 import type * as Ox from 'oxigraph'
+import { DataFactory } from 'n3'
 import type { Factory, GraphStore } from './types.ts'
 
 const COMPACT_MIN = 5_000
@@ -10,7 +11,11 @@ const COMPACT_MIN = 5_000
  */
 export function oxigraphStore(ox: typeof Ox): GraphStore {
   let store = new ox.Store()
-  const factory = ox as unknown as Factory
+  // Terms the engine makes are plain RDF/JS objects (N3's), which Oxigraph accepts: each of its
+  // own terms is a WASM object registered with a FinalizationRegistry, and making millions of them
+  // (every namedNode() of every rule) left V8 a backlog of weak cells that made every collection,
+  // and so every turn, slower the longer a page or a test process ran.
+  const factory = DataFactory as unknown as Factory
   // Oxigraph's in-memory store keeps deleted quads as dead versions that every
   // later lookup of the same pattern walks, so a sliding window (a bounded log,
   // replaced metrics) gets slower forever. Rebuild from the live quads once the
