@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -446,7 +447,11 @@ c:detailProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "
 c:expands a owl:ObjectProperty ; rdfs:comment "On a rendered twisty: the tree node that activating it opens or closes."@en .
 
 c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 ;
-    sem:functionOnly "A node's children are the subjects of c:parentProperty, a predicate named in the data, to any depth: SPARQL 1.1 property paths need a fixed predicate. Siblings sort in the viewer's collation (localeCompare)." .
+    sem:needsExtension sx:Locale ;
+    sem:functionOnly """awaits sx:Locale (sx:collated, or sx:sortKey for sem:orderKey): siblings sort in the viewer's collation
+(localeCompare), which no SPARQL (1.1 or 1.2) function gives. The walk itself needs no extension: per-tree step edges
+along c:parentProperty, as c:BreadcrumbSteps mints them, and items keyed by their path, which a building block can mint
+level by level for the open nodes.""" .
 c:TreeRendering-fn a sem:Rule ; sem:implements c:TreeRendering ; sem:function "data:tree" .
 
 c:TreeToggle a beh:Reaction ;
