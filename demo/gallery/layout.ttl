@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-linked ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -35,6 +35,23 @@ ui:ly-surfaces a c:Flippable ; c:front ui:ly-surfaces-spec .
 ui:ly-surfaces-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Surface" ;
     c:help "A padded container for c:children. sty:elevation says how far it stands off the page (flat, raised, overlay); pos:inset and pos:gap override its padding and spacing." ;
     c:children ( ui:ly-surfaces-grid ) .
+
+# --- linked cards ---
+ui:ly-linked-here a c:LinkedCard ; c:to ui:ly-linked-spec ; c:href "#components/layout" ; c:currentPage true ; c:content ui:ly-linked-here-card .
+ui:ly-linked-here-card a c:Card ; c:label "Layout" , "Розкладка"@uk , "Layout"@de , "التخطيط"@ar ; c:badge "12" ;
+    c:note "This page: aria-current=page." , "Ця сторінка: aria-current=page."@uk , "Diese Seite: aria-current=page."@de , "هذه الصفحة: aria-current=page."@ar .
+ui:ly-linked-to a c:LinkedCard ; c:to ui:ty-links-spec ; c:href "#type" ; c:content ui:ly-linked-to-card .
+ui:ly-linked-to-card a c:Card ; c:label "Links" , "Посилання"@uk , "Links"@de , "الروابط"@ar ;
+    c:note "c:to a specimen: goes where it is shown." , "c:to на зразок: веде туди, де його видно."@uk , "c:to auf ein Muster: führt dorthin, wo es zu sehen ist."@de , "c:to إلى نموذج: يذهب حيث يُعرض."@ar .
+ui:ly-linked-out a c:LinkedCard ; c:href "https://ia2.dev/spec/rdf-html" ;
+    c:label "RDF/HTML specification" , "Специфікація RDF/HTML"@uk , "RDF/HTML-Spezifikation"@de , "مواصفة RDF/HTML"@ar ; c:content ui:ly-linked-out-card .
+ui:ly-linked-out-card a c:Card ; c:label "RDF/HTML" ;
+    c:note "Leaves the site: a new tab, an ↗ mark, a spoken hint." , "Виходить із сайту: нова вкладка, позначка ↗, озвучена підказка."@uk , "Verlässt die Seite: neuer Tab, ein ↗, ein gesprochener Hinweis."@de , "يغادر الموقع: علامة تبويب جديدة وعلامة ↗ وتلميح منطوق."@ar .
+ui:ly-linked-grid a c:Grid ; c:minWidth "200px" ; pos:gap tok:space-4 ; c:children ( ui:ly-linked-here ui:ly-linked-to ui:ly-linked-out ) .
+ui:ly-linked a c:Flippable ; c:front ui:ly-linked-spec .
+ui:ly-linked-spec a c:Specimen ; c:demonstrates c:LinkedCard ; c:label "Linked card" ;
+    c:help "A c:Link around one non-interactive component (c:content), here a c:Card, so every theme styles it as a card. c:label, if any, names the link; c:to, c:external and c:currentPage work as on any link. Keep buttons and other links out of it." ;
+    c:children ( ui:ly-linked-grid ) .
 
 # --- tinted surfaces ---
 ui:ly-tint-accent a c:Surface ; sty:tone sty:Accent ; pos:inset tok:space-4 ; c:children ( ui:ly-tint-accent-t ui:ly-tint-accent-c ) .

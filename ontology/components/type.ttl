@@ -146,16 +146,21 @@ c:Link a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A hyperlink: c:label (else the address) to c:to (a resource: the link goes to the
 location that shows it, nav:href) or c:href (an address, also the fallback), after an optional c:logo (a component,
-e.g. a c:Emblem). Absolute http(s) addresses, or
+e.g. a c:Emblem). With c:content (a component) the link's body is that component instead of the label, and
+c:label, if any, is its accessible name. Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
-technology (c:externalHint). Accent by default; sty:tone recolors it."""@en ;
+technology (c:externalHint). c:currentPage true marks the current destination (aria-current=page).
+Accent by default; sty:tone recolors it."""@en ;
     sem:slug "link" ;
-    c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de .
+    c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de , "يفتح في علامة تبويب جديدة"@ar .
 c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
 c:to a owl:ObjectProperty ;
     rdfs:comment "The resource a link goes to (e.g. a gallery specimen): its address is the location that shows it (navigation layer)."@en .
 c:external a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a link leaves the application (default: absolute http(s) addresses do)."@en .
+c:currentPage a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Current page"@en , "Поточна сторінка"@uk , "Aktuelle Seite"@de , "الصفحة الحالية"@ar ;
+    rdfs:comment "Whether a link goes to the page being shown (aria-current=page)."@en .
 c:externalHint a owl:AnnotationProperty ;
     rdfs:comment "On a component class: what is said, after the label, about an external link (language-tagged)."@en .
 c:LinkRendering a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 .
@@ -167,9 +172,12 @@ c:LinkRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:A ; sem:renders $this ; rdfhtml:href ?href ; rdfhtml:target ?target ; rdfhtml:rel ?rel ;
-        rdfhtml:hasChild ?logo, ?labelText, ?mark, ?hint .
-  ?logo ord:immediatelyPrecedes ?labelText .
-  ?labelText a rdfhtml:Text ; rdfhtml:data ?label ; ord:immediatelyPrecedes ?mark .
+        rdfhtml:hasChild ?logo, ?body, ?mark, ?hint ; rdfhtml:attribute ?nameAttr, ?currentAttr .
+  ?logo ord:immediatelyPrecedes ?body .
+  ?body ord:immediatelyPrecedes ?mark .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?name .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
   ?mark a rdfhtml:Span ; rdfhtml:class "sem-external" ; rdfhtml:hasChild ?markText ; ord:immediatelyPrecedes ?hint .
   ?mark rdfhtml:attribute ?markHidden . ?markHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?markText a rdfhtml:Text ; rdfhtml:data "↗" .
@@ -181,6 +189,8 @@ WHERE {
   { $this nav:href ?href0 } UNION { FILTER NOT EXISTS { $this nav:href ?any } $this c:href ?href0 }
   BIND(STR(?href0) AS ?href)
   OPTIONAL { $this c:logo ?logo FILTER(isIRI(?logo)) }
+  # A component as the link's body (c:content) takes the label's place.
+  OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
@@ -192,7 +202,9 @@ WHERE {
   OPTIONAL { $this c:external ?external0 }
   BIND(IF(BOUND(?external0), STR(?external0) = "true", REGEX(?href, "^https?://", "i")) AS ?external)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelText)
+  BIND(IF(BOUND(?content), ?none, IRI(CONCAT(STR($this), "/~label"))) AS ?labelText)
+  BIND(COALESCE(?content, ?labelText) AS ?body)
+  BIND(IF(EXISTS { $this c:currentPage true }, IRI(CONCAT(STR($this), "/~aria-current")), ?none) AS ?currentAttr)
   BIND(IF(?external, "_blank", ?none) AS ?target)
   BIND(IF(?external, "noopener noreferrer", ?none) AS ?rel)
   # The hint is the class's (c:externalHint on c:Link), in the viewer's language when c:LinkTexts put it here.
@@ -203,6 +215,9 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-hint")) AS ?hintNode)
   LATERAL { OPTIONAL { ?hintNode l10n:label ?localHint } }
   BIND(CONCAT(" (", COALESCE(?localHint, ?hint0, "opens in a new tab"), ")") AS ?hintData)
+  # Around a component, a label names the link (with the hint, which the name would otherwise hide).
+  BIND(IF(BOUND(?content) && BOUND(?label0), CONCAT(?label0, IF(?external, ?hintData, "")), ?none) AS ?name)
+  BIND(IF(BOUND(?name), IRI(CONCAT(STR($this), "/~aria-label")), ?none) AS ?nameAttr)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external")), ?none) AS ?mark)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external-text")), ?none) AS ?markText)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external-aria-hidden")), ?none) AS ?markHidden)
@@ -215,13 +230,17 @@ c:LinkRendering-sparql-text a sem:Rule ;
     sem:modality mod:Text ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?root a ?element ; sem:renders $this ; rdfhtml:hasChild ?content, ?text .
+  ?content ord:immediatelyPrecedes ?text .
   ?text a rdfhtml:Text ; rdfhtml:data ?line .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Link .
   { $this nav:href ?href0 } UNION { FILTER NOT EXISTS { $this nav:href ?any } $this c:href ?href0 }
   BIND(STR(?href0) AS ?href)
+  # Around a component (c:content): the component, then the address.
+  OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
+  BIND(IF(BOUND(?content), rdfhtml:Div, rdfhtml:Span) AS ?element)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
@@ -233,10 +252,20 @@ WHERE {
   OPTIONAL { $this c:external ?external0 }
   BIND(IF(BOUND(?external0), STR(?external0) = "true", REGEX(?href, "^https?://", "i")) AS ?external)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IF(?label = ?href, CONCAT("<", ?href, ">"), CONCAT(?label, " <", ?href, ">", IF(?external, " ↗", ""))) AS ?line)
+  BIND(IF(BOUND(?content), CONCAT(" <", ?href, ">", IF(?external, " ↗", "")),
+          IF(?label = ?href, CONCAT("<", ?href, ">"), CONCAT(?label, " <", ?href, ">", IF(?external, " ↗", "")))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
 
+
+# A whole card (or any other non-interactive component) as one link: c:Link's rendering with
+# c:content, under its own slug, so it is styled as a surface rather than as running text.
+c:LinkedCard a owl:Class ;
+    rdfs:subClassOf c:Link ;
+    rdfs:label "Linked card"@en , "Картка-посилання"@uk , "Verlinkte Karte"@de , "بطاقة مرتبطة"@ar ;
+    rdfs:comment """A link around one non-interactive component (c:content), commonly a c:Card: c:to or c:href,
+c:label as the link's name (else the content's text), c:external, c:currentPage, as any c:Link."""@en ;
+    sem:slug "linked-card" .
 
 # The localization layer for links: the external hint in the viewer's language, at <focus>/~l10n-hint.
 c:LinkTexts a sem:Rendering ;
