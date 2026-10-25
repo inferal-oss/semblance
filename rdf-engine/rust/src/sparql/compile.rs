@@ -92,6 +92,15 @@ pub struct Tables {
 
 pub type Res<T> = Result<T, &'static str>;
 
+/// Debugging switches (`cq_debug`), for bisecting a difference: compile without
+/// (1) OPTIONAL right sides computed in the module, (2) join right sides
+/// computed in the module, (4) filters pushed down, (8) EXISTS as functions,
+/// (16) subqueries in the module.
+pub static DEBUG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+fn off(bit: u32) -> bool {
+    DEBUG.load(core::sync::atomic::Ordering::Relaxed) & bit != 0
+}
+
 /// What is known about a variable at a point of the plan (0: unbound).
 const MAYBE: u8 = 1;
 const CERTAIN: u8 = 2;
@@ -264,16 +273,43 @@ fn expr_reads(e: &Expr, out: &mut Vec<Var>) -> bool {
             true
         }
         Expr::Const(_) | Expr::Unknown => true,
-        Expr::Exists(p, _) => {
-            super::parse::pattern_vars(p, out);
-            true
-        }
+        Expr::Exists(p, _) => pattern_reads(p, out),
         Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => expr_reads(a, out) & expr_reads(b, out),
         Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => expr_reads(a, out),
         Expr::In(a, l, _) => expr_reads(a, out) & l.iter().fold(true, |ok, x| expr_reads(x, out) & ok),
         Expr::Call(func, l) => !matches!(func, Func::Bnode | Func::Rand | Func::Uuid | Func::StrUuid) & l.iter().fold(true, |ok, x| expr_reads(x, out) & ok),
         Expr::Coalesce(l) => l.iter().fold(true, |ok, x| expr_reads(x, out) & ok),
         Expr::If(a, b, c) => expr_reads(a, out) & expr_reads(b, out) & expr_reads(c, out),
+    }
+}
+
+/// Every variable a pattern mentions, its expressions' included; false if one is impure.
+fn pattern_reads(p: &Pattern, out: &mut Vec<Var>) -> bool {
+    match p {
+        Pattern::Unit | Pattern::Service(_) => true,
+        Pattern::Bgp(ts) => {
+            ts.iter().for_each(|t| [&t.s, &t.p, &t.o].iter().for_each(|x| tv_vars(x, out)));
+            true
+        }
+        Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Lateral(a, b) | Pattern::Minus(a, b) => pattern_reads(a, out) & pattern_reads(b, out),
+        Pattern::LeftJoin(a, b, c) => pattern_reads(a, out) & pattern_reads(b, out) & c.as_ref().is_none_or(|c| expr_reads(c, out)),
+        Pattern::Filter(e, a) => expr_reads(e, out) & pattern_reads(a, out),
+        Pattern::Extend(a, v, e) => {
+            out.push(*v);
+            pattern_reads(a, out) & expr_reads(e, out)
+        }
+        Pattern::Graph(g, a) => {
+            tv_vars(g, out);
+            pattern_reads(a, out)
+        }
+        Pattern::Values(vs, _) => {
+            out.extend_from_slice(vs);
+            true
+        }
+        Pattern::Sub(s) => {
+            out.extend_from_slice(&s.project);
+            pattern_reads(&s.pattern, out)
+        }
     }
 }
 
@@ -393,7 +429,7 @@ impl<'q> Gen<'q> {
     fn emit(&mut self, f: usize, steps: &[Step<'q>], st: &St) -> Res<()> {
         // A filter further on whose variables nothing before it can change:
         // tested now (pushed down).
-        if let Some(j) = ready_filter(steps, &st.bound) {
+        if let Some(j) = ready_filter(steps, &st.bound).filter(|_| !off(4)) {
             let Step::Filter(e) = steps[j] else { unreachable!() };
             let mut rest = steps.to_vec();
             rest.remove(j);
@@ -429,7 +465,7 @@ impl<'q> Gen<'q> {
                 }
                 Pattern::LeftJoin(a, b, c) if pure(b) => self.emit(f, &then(&[Step::Pat(a), Step::Optional(b, c.as_ref())]), st),
                 Pattern::LeftJoin(a, b, c) => {
-                    let (g, top) = self.table(f, b, st)?;
+                    let (g, top) = self.table_as(f, b, st, 1)?;
                     let next = St { bound: st.bound.clone(), top };
                     self.emit(f, &then(&[Step::Pat(a), Step::OptRows(g, b, c.as_ref())]), &next)
                 }
@@ -532,11 +568,16 @@ impl<'q> Gen<'q> {
     /// Evaluate `p` with the interpreter now, onto the stack: the rows start at
     /// the word in global g, g + 1 holds their count. Returns g and the new top's local.
     fn table(&mut self, f: usize, p: &'q Pattern, st: &St) -> Res<(u32, u32)> {
+        self.table_as(f, p, st, 2)
+    }
+
+    /// `opt`: the switch bit for where it is computed (1 OPTIONAL, 2 a join).
+    fn table_as(&mut self, f: usize, p: &'q Pattern, st: &St, opt: u32) -> Res<(u32, u32)> {
         let g = self.global();
         self.global();
         let top = self.f(f).local();
         let (w, cur) = (self.width as i32, st.top);
-        if let Pattern::Sub(s) = p {
+        if let (Pattern::Sub(s), false) = (p, off(16)) {
             // A subquery: its WHERE here, against the frame (the interpreter's
             // substitution row); its solutions collected and finished by the engine.
             self.t.subs.push(&**s);
@@ -544,10 +585,16 @@ impl<'q> Gen<'q> {
             self.f(f).call(SUB);
             self.emit(f, &[Step::Pat(&s.pattern), Step::Keep], st)?;
             self.f(f).get(cur).global_set(g).i32(k as i32).get(cur).call(GROUP).global_set(g + 1);
-        } else {
+        } else if !native(p) || matches!(p, Pattern::Sub(_)) || off(opt) {
             self.t.patterns.push(p);
             let k = self.base[2] + self.t.patterns.len() as u32 - 1;
             self.f(f).get(cur).global_set(g).i32(k as i32).get(cur).call(EVAL).global_set(g + 1);
+        } else {
+            // Any other pattern's rows: computed here too, collected as a
+            // subquery's are, and kept as they are (cq_group(-1)).
+            self.f(f).call(SUB);
+            self.emit(f, &[Step::Pat(p), Step::Keep], st)?;
+            self.f(f).get(cur).global_set(g).i32(-1).get(cur).call(GROUP).global_set(g + 1);
         }
         self.f(f).get(cur).global_get(g + 1).i32(w).op(MUL).op(ADD).set(top);
         Ok((g, top))
@@ -648,7 +695,7 @@ impl<'q> Gen<'q> {
         match e {
             // EXISTS over triples and filters: a function of its own that returns
             // at the first solution; what it binds is restored around the call.
-            Expr::Exists(p, neg) if self.here.is_some() && exists_inline(p) => {
+            Expr::Exists(p, neg) if self.here.is_some() && exists_inline(p) && !off(8) => {
                 let st = self.here.clone().unwrap();
                 let flag = self.global();
                 let p: &'q Pattern = unsafe { &*(&**p as *const Pattern) };

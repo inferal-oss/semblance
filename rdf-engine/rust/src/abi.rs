@@ -699,6 +699,11 @@ pub extern "C" fn cq_eval(k: u32, at: u32) -> u32 {
 /// frame at each `cq_keep`); `cq_group` finishes them as the interpreter does
 /// (grouping, aggregates, modifiers, projection): rows as `cq_eval` gives them.
 #[unsafe(no_mangle)]
+pub extern "C" fn cq_debug(bits: u32) {
+    sparql::compile::DEBUG.store(bits, core::sync::atomic::Ordering::Relaxed);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn cq_sub() {
     run_state().keep.push(Vec::new());
 }
@@ -716,9 +721,14 @@ pub extern "C" fn cq_keep() {
 pub extern "C" fn cq_group(k: u32, at: u32) -> u32 {
     let r = run_state();
     r.stack.truncate(at as usize);
-    let s = unsafe { &*cq(r).tables.subs[k as usize] };
     let rows = r.keep.pop().unwrap_or_default();
-    let rows = r.ctx.select_rows(s, rows, sparql::eval::Active::Default);
+    // k = -1: a pattern's rows, as they are
+    let rows = if k == u32::MAX {
+        rows
+    } else {
+        let s = unsafe { &*cq(r).tables.subs[k as usize] };
+        r.ctx.select_rows(s, rows, sparql::eval::Active::Default)
+    };
     for row in &rows {
         r.stack.extend_from_slice(row);
     }
