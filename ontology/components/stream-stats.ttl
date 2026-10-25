@@ -102,7 +102,9 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:StreamStats ; c:of ?stream .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -201,7 +203,9 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:StreamStats ; c:of ?stream .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { ?stream c:eventCount ?n ; c:addedTotal ?added ; c:removedTotal ?removed }

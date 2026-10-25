@@ -30,7 +30,9 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Heading .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:level ?l }
@@ -59,7 +61,9 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Heading .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(CONCAT("# ", UCASE(STR(?label))) AS ?line)
