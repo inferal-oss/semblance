@@ -24,7 +24,7 @@ ui:app ui:referenceSubject c:Window .
 ui:reference a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:referenceTree ui:referenceMain ) .
 
-ui:referenceTree a c:TermTree ; c:controls ui:app ; c:property ui:referenceSubject ;
+ui:referenceTree a c:TermTree ; c:controls ui:app ; c:property ui:referenceSubject ; pos:fill pos:FillLine ;
     c:label "Vocabulary"@en , "Словник"@uk , "Vokabular"@de , "المفردات"@ar ;
     c:sections ( ui:refComponents ui:refLayers ui:refVocabularies ) .
 ui:refComponents a c:TermSection ; c:branchClass sem:ComponentGroup ; c:membersVia sem:group ;

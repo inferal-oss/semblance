@@ -51,4 +51,10 @@ describe('rows that line up', () => {
     expect(css).toMatch(/\[data-sem-guides="cells"\] \[data-sem-layout=subgrid\] > \*[^{]*\{[^}]*outline:\s*1px dashed/)
     expect(css).toMatch(/\[data-sem-guides="cells"\] \[data-sem-direction=row\] > \*[^{]*\{[^}]*outline:\s*1px dashed/)
   })
+
+  it("a column runs its line's full extent only when it says so (pos:fill)", () => {
+    expect(css).toMatch(/\[data-sem-fill="line"\][^{]*\{[^}]*align-self:\s*stretch/)
+    const aside = css.match(/\[data-sem-layout="aside"\]\s*\{([^}]*)\}/)
+    expect(aside![1]).toMatch(/align-items:\s*flex-start/)
+  })
 })

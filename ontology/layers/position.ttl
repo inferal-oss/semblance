@@ -57,10 +57,10 @@ pos:Sidebar a pos:Layout ; sem:slug "sidebar" ;
 # and whose main column grows but is never narrower than 55% - so when both do not fit, the
 # navigation wraps above the main column. The children's share is in the theme (theme/layout.ttl).
 pos:Aside a pos:Layout ; sem:slug "aside" ;
-    rdfs:comment "A narrow navigation column beside the main column, running its full height; the navigation goes on top when narrow."@en ;
+    rdfs:comment "A narrow navigation column beside the main column; the navigation goes on top when narrow. Each column is as tall as its content, unless it says otherwise (pos:fill)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
-                 [ sty:property "align-items" ; sty:raw "stretch" ] .
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] .
 pos:Grid a pos:Layout ; sem:slug "grid" ;
     rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -265,6 +265,16 @@ pos:TextAlignment a owl:Class .
 pos:TextStart a pos:TextAlignment ; sem:slug "start" ; sty:declares [ sty:property "text-align" ; sty:raw "start" ] .
 pos:TextCenter a pos:TextAlignment ; sem:slug "center" ; sty:declares [ sty:property "text-align" ; sty:raw "center" ] .
 pos:TextEnd a pos:TextAlignment ; sem:slug "end" ; sty:declares [ sty:property "text-align" ; sty:raw "end" ] .
+
+pos:fill a owl:ObjectProperty ;
+    rdfs:range pos:Fill ;
+    rdfs:label "Fill"@en , "Заповнення"@uk , "Füllen"@de , "ملء"@ar ;
+    rdfs:comment "How far a component extends across its container's line beyond its own content: pos:FillLine runs the line's full extent (beside a long main column, a navigation tree as tall as it). By default a component is as large as its content."@en ;
+    sty:hookAttribute "data-sem-fill" .
+pos:Fill a owl:Class .
+pos:FillLine a pos:Fill ; sem:slug "line" ; sem:order 1 ;
+    rdfs:label "Fill the line"@en , "На всю лінію"@uk , "Ganze Zeile"@de , "ملء السطر"@ar ;
+    sty:declares [ sty:property "align-self" ; sty:raw "stretch" ] .
 
 pos:guides a owl:ObjectProperty ;
     rdfs:range pos:Guides ;

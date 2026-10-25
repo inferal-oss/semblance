@@ -18,7 +18,8 @@
                  [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "font-size" ; sty:token tok:text-sm ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-# Beside the term, the tree is as long as it needs and runs the side's full height (pos:Aside);
+# Beside the term, the tree is as long as it needs (and as tall as the term's column, where the
+# app says pos:fill pos:FillLine);
 # stacked above the term on a phone, it keeps to under half the screen and scrolls.
 [] a sty:StyleRule ; sty:appliesTo c:TermTree ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "max-height" ; sty:raw "45dvh" ] , [ sty:property "overflow" ; sty:raw "auto" ] .
