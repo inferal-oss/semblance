@@ -35,6 +35,11 @@ export const LAW_VIEWS: Record<string, string> = {
   concatErr: `SELECT ?t (GROUP_CONCAT(?x) AS ?xs) WHERE { ?i a v:Item ; v:owner ?t OPTIONAL { ?i v:score ?x } } GROUP BY ?t`,
   byExpr: `SELECT ?big (COUNT(?m) AS ?n) (SUM(?x) AS ?sum) WHERE { v:s tree:member ?m . ?m v:x ?x } GROUP BY (?x >= 5 AS ?big)`,
   byExprAnon: `SELECT (COUNT(*) AS ?n) WHERE { v:s tree:member ?m . ?m v:target ?t } GROUP BY (STR(?t))`,
+  // Expressions: EXISTS in a projection and in ORDER BY, an aggregate in ORDER BY.
+  flagged: `SELECT ?m (EXISTS { ?m v:target ?t . ?t v:hidden true } AS ?hidden) WHERE { v:s tree:member ?m . ?m v:x ?x }`,
+  hiddenLast: `SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY (EXISTS { ?m v:target/v:hidden true }) DESC(?x) ?m LIMIT 4`,
+  byCount: `SELECT ?t WHERE { ?i a v:Item ; v:owner ?t } GROUP BY ?t ORDER BY DESC(COUNT(?i)) ?t LIMIT 2`,
+  hiddenShare: `SELECT ?t (SUM(IF(EXISTS { ?m v:kind v:K1 }, 1, 0)) AS ?k1) WHERE { v:s tree:member ?m . ?m v:target ?t } GROUP BY ?t`,
   minMax: `SELECT ?t (MIN(?s) AS ?lo) (MAX(?s) AS ?hi) (MAX(?label) AS ?last) WHERE { ?i a v:Item ; v:owner ?t ; v:score ?s . ?t rdfs:label ?label } GROUP BY ?t`,
   topGroups: `SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?t } GROUP BY ?t ORDER BY DESC(?n) ?t LIMIT 2`,
   orderedExpr: `SELECT ?i ?s WHERE { ?i a v:Item ; v:score ?s } ORDER BY DESC(?s * 2 - 1) ?i LIMIT 3`,
@@ -61,6 +66,7 @@ export const LAW_VIEWS: Record<string, string> = {
 const CONSTRUCTS: Record<string, string> = {
   labelled: `CONSTRUCT { ?m v:labelled ?label } WHERE { v:s tree:member ?m . ?m v:target ?t . ?t rdfs:label ?label }`,
   unionParts: `CONSTRUCT { ?row v:n ?n } WHERE { { SELECT ?row (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:kind ?row } GROUP BY ?row } UNION { SELECT ?row (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?row } GROUP BY ?row } }`,
+  firstTwo: `CONSTRUCT { ?m v:early ?x } WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT 2`,
   labelsOf: `CONSTRUCT { ?t v:labels ?labels ; v:kinds ?kinds } WHERE { { SELECT ?t (GROUP_CONCAT(?l) AS ?labels) (GROUP_CONCAT(DISTINCT STR(?k); SEPARATOR = ",") AS ?kinds) WHERE { v:s tree:member ?m . ?m v:target ?t ; v:kind ?k . ?t rdfs:label ?l } GROUP BY ?t } }`,
   busiest: `CONSTRUCT { ?t v:busiest ?label } WHERE { { SELECT (MAX(?n) AS ?max) WHERE { { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } } } { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } FILTER(?n = ?max) ?t rdfs:label ?label }`,
   topRows: `CONSTRUCT { ?node v:top ?m ; v:x ?x } WHERE { { SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT 2 } BIND(IRI(CONCAT(STR(?m), "/~top")) AS ?node) }`,

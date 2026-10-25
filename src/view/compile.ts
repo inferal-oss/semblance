@@ -77,12 +77,12 @@ function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
       if (t.p.k !== 'var' && t.p.k !== 'link') throw new Unsupported('a path in the template')
     }
     const sel = q.select
-    if (sel.orderBy.length || sel.limit !== undefined || sel.offset !== undefined) throw new Unsupported('solution modifiers on a CONSTRUCT')
+    const modified = sel.orderBy.length > 0 || sel.limit !== undefined || sel.offset !== undefined
     // CONSTRUCT { … } WHERE { { SELECT … } (UNION { SELECT … })* BIND/FILTER… }: the subqueries are the parts.
     const [first, ...rest] = sel.where.items
     const sub0 = asSelect(first)
     const subqueries = sub0 ? [sub0] : first?.k === 'union' && first.gs.every((g) => g.items.length === 1 && g.items[0]!.k === 'select') ? first.gs.map((g) => (g.items[0] as { q: Select }).q) : undefined
-    if (subqueries && rest.every((it) => it.k === 'bind' || it.k === 'filter')) {
+    if (subqueries && !modified && rest.every((it) => it.k === 'bind' || it.k === 'filter')) {
       const parts = subqueries.map((s) => part(s, source, run, text, prologue))
       const post = postOf(rest, [...new Set(parts.flatMap((p) => [...p.vars, ...(p.post?.binds.map((b) => b.as) ?? [])]))], text, prologue)
       // A subquery with LIMIT inside a CONSTRUCT: one part, its top-k at the plan level.
@@ -91,9 +91,9 @@ function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
       if (!topk && subqueries.some((s) => s.limit !== undefined || s.offset !== undefined)) throw new Unsupported('LIMIT in one branch of a UNION')
       return plan(source, q, parts, topk, post, run)
     }
-    // CONSTRUCT { … } WHERE { body }: the template over the body's solutions.
+    // CONSTRUCT { … } WHERE { body } [ORDER BY …] [LIMIT …]: the template over the body's solutions (the first ones).
     const p = part({ ...sel, star: true, projection: [] }, source, run, text, prologue)
-    return plan(source, q, [p], undefined, undefined, run)
+    return plan(source, q, [p], modified ? topkOf(sel, p, text) : undefined, undefined, run)
   }
   const sel = q.select
   const p = part(sel, source, run, text, prologue)
@@ -136,6 +136,22 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
       output: q.templateText !== undefined ? `Construct({${flat(q.templateText)}})` : undefined,
     },
   }
+}
+
+/** The expressions (among the slot expressions' texts) that have EXISTS in them, parsed from the SELECT. */
+function slotExists(sel: Select, texts: string[], text: string): Expr[] {
+  const want = new Set(texts)
+  const out: Expr[] = []
+  const consider = (e: Expr) => {
+    if (want.has(text.slice(e.at, e.end)) || want.has(e.text)) {
+      if (e.exists.length) out.push(e)
+    }
+    for (const a of e.aggregates) if (a.arg !== '*') consider(a.arg)
+  }
+  for (const p of sel.projection) if (p.e) consider(p.e)
+  for (const o of sel.orderBy) consider(o.e)
+  for (const g of sel.groupBy) consider(g)
+  return out
 }
 
 /** Every aggregate call in a SELECT, its subqueries and EXISTS groups. */
@@ -256,9 +272,6 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     return `VALUES (${vars.map((v) => '?' + name(v)).join(' ')}) { ${values} }${joins.join('')}`
   }
   const body = pieces.reduce((acc, piece, i) => acc + (i ? inline(i - 1, new Set(), '…') : '') + piece, '')
-  const deps = new Dependencies(run.factory, sel.where, keys, subs)
-  if (deps.problem) throw new Unsupported(deps.problem)
-
   // What the partition rows hold, and what the part does with them.
   const slots = new Map<string, string | undefined>() // slot -> expression (undefined: a variable of the body)
   for (const k of keys) slots.set(k, undefined)
@@ -333,12 +346,29 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     op = sel.distinct || sel.reduced ? { k: 'distinct' } : { k: 'bag' }
     vars = projected
   }
-  // ORDER BY over variables of the body that a bag keeps (a DISTINCT or a GROUP BY orders by its own output).
-  for (const o of sel.orderBy) {
+  // ORDER BY: over a bag, the body's variables and expressions are slots of its rows (an
+  // expression's EXISTS reads the store, so it is evaluated with the partition); over groups,
+  // an expression of aggregates is computed with the groups' other expressions.
+  sel.orderBy.forEach((o, i) => {
     const v = /^[?$](\w+)$/.exec(o.e.text.trim())?.[1]
-    if (v && op.k === 'bag' && !vars.includes(v)) slots.set(v, undefined), vars.push(v)
-  }
+    if (op.k === 'bag') {
+      if (v && !vars.includes(v)) slots.set(v, undefined), vars.push(v)
+      else if (!v && !o.e.aggregates.length) {
+        if (NONDETERMINISTIC.test(o.e.text)) throw new Unsupported('ORDER BY NOW(), RAND() or similar')
+        slots.set(`__ob${i}`, o.e.text), vars.push(`__ob${i}`)
+      }
+    } else if (op.k === 'group' && o.e.aggregates.length) {
+      if (o.e.exists.length) throw new Unsupported('ORDER BY an aggregate expression with EXISTS')
+      post.binds.push({ expr: overAggregates(o.e), as: `__ob${i}` })
+      vars = [...op.groupBy, ...op.aggregates.map((a) => a.as)]
+    }
+  })
   post.inputs = [...vars]
+  // Exact dependencies: the body's patterns, and those of EXISTS in the expressions evaluated with it.
+  const evaluated = [...slots.values()].filter((e): e is string => e !== undefined)
+  const withSlots: Group = { ...sel.where, items: [...sel.where.items, ...slotExists(sel, evaluated, text).map((e) => ({ k: 'filter' as const, e, at: e.at, end: e.end }))] }
+  const deps = new Dependencies(run.factory, withSlots, keys, subs)
+  if (deps.problem) throw new Unsupported(deps.problem)
   if (NONDETERMINISTIC.test(body)) throw new Unsupported('NOW(), RAND() or similar in the body')
   const slotNames = [...slots.keys()]
   const head = `${prologue}SELECT ${slotNames.map((s) => (slots.get(s) === undefined ? '?' + s : `(${slots.get(s)} AS ?${s})`)).join(' ')} WHERE {`
@@ -433,8 +463,10 @@ function topkOf(sel: Select, p: Part, text: string): { topk: MaintainedPlan['top
   sel.orderBy.forEach((o, i) => {
     const v = /^[?$](\w+)$/.exec(o.e.text.trim())?.[1]
     if (v && available.has(v)) return void order.push({ slot: v, desc: o.desc })
-    if (o.e.aggregates.length) throw new Unsupported('ORDER BY an aggregate expression (project it, and order by its variable)')
-    if (o.e.exists.length) throw new Unsupported('ORDER BY with EXISTS')
+    // Computed by the part (a bag's slot, or with its groups).
+    if (available.has(`__ob${i}`)) return void order.push({ slot: `__ob${i}`, desc: o.desc })
+    if (o.e.aggregates.length) throw new Unsupported('ORDER BY an aggregate expression here')
+    if (o.e.exists.length) throw new Unsupported('ORDER BY with EXISTS here')
     for (const x of o.e.vars) if (!available.has(x)) throw new Unsupported(`ORDER BY reads ?${x}, which the rows do not keep`)
     const slot = `__o${i}`
     binds.push({ expr: text.slice(o.e.at, o.e.end), as: slot })
