@@ -254,7 +254,7 @@ clip:Copier of its c:markdown) are shown beside the summary line of its results.
 
 c:ResultTable a owl:Class ;
     rdfs:subClassOf c:QueryResultView ;
-    rdfs:label "Table"@en , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ;
+    rdfs:label "Result table"@en , "Таблиця результатів"@uk , "Ergebnistabelle"@de , "جدول النتائج"@ar ;
     rdfs:comment "The results as a table: one column per variable the query selects, or subject, predicate and object for a graph."@en ;
     sem:slug "result-table" .
 c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
@@ -353,7 +353,7 @@ WHERE {
 
 c:ResultGraph a owl:Class ;
     rdfs:subClassOf c:QueryResultView ;
-    rdfs:label "Graph"@en , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ;
+    rdfs:label "Result graph"@en , "Граф результатів"@uk , "Ergebnisgraph"@de , "رسم النتائج"@ar ;
     rdfs:comment """The results as a node-link diagram: the triples of a CONSTRUCT, or of SELECT rows (?s ?p ?o,
 or each row's first value linked to the others by variable name). The best-connected nodes are
 shown (at most c:limit, default 40), laid out in layers when the graph is acyclic and narrow
@@ -537,7 +537,7 @@ c:ClearGraphSelection a beh:Reaction ;
 
 c:ResultTurtle a owl:Class ;
     rdfs:subClassOf c:QueryResultView ;
-    rdfs:label "Turtle"@en , "Turtle"@uk , "Turtle"@de , "Turtle"@ar ;
+    rdfs:label "Result Turtle"@en , "Результати в Turtle"@uk , "Ergebnis als Turtle"@de , "النتائج بصيغة Turtle"@ar ;
     rdfs:comment """The results as syntax-colored Turtle: the graph of a CONSTRUCT, or the bindings of a SELECT
 as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
     sem:slug "result-turtle" .
