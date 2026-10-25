@@ -9,6 +9,7 @@
 import { Parser } from 'n3'
 import type { Quad, Term } from '@rdfjs/types'
 import { EventBus } from './behaviour/events.ts'
+import { Fullscreen, type FullscreenHost } from './fullscreen.ts'
 import type { FnRule } from './engine/context.ts'
 import { DEFAULT_LAYERS, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
 import { compactIri } from './prefixes.ts'
@@ -229,6 +230,11 @@ export interface SandboxesOptions extends SandboxOptions {
   copy?: (text: string) => Promise<void> | void
   /** How long a copy request stays (the button says "Copied"), in ms (1500). */
   copiedMs?: number
+  /**
+   * The full screen an example's own fs:fullscreen may take (none by default: a sandbox does not
+   * take the person's screen; what it asserts is shown over the page instead, and Esc leaves it).
+   */
+  fullscreen?: FullscreenHost | null
   /**
    * How many sandboxes stay built (8). Each holds a store with the whole ontology (about 12 MB of
    * engine memory); past this, those hidden longest are let go, and built again when shown.
@@ -480,6 +486,16 @@ export class Sandboxes {
     const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
     const failed = (e: Error) => this.write(m.iri, { problems: [{ message: e.message, severity: 'error' }] })
     const detachBus = bus.attach(renderer, () => flush(), failed)
+    // What the example asserts full screen is shown over the page (or full screen, if allowed).
+    const detachFullscreen = new Fullscreen(bus, {
+      element: (iri) => {
+        const n = renderer.nodeOf(iri)
+        return n?.nodeType === 1 ? (n as Element) : undefined
+      },
+      document: doc,
+      host: this.opts.fullscreen ?? null,
+      onHandled: () => flush(),
+    }).attach()
     // An interaction over budget: the sandbox stops itself (what it left undone keeps its last
     // rendering) and the problem shows inline.
     const detachStall = sandbox.runtime.watchdog.onStall(() =>
@@ -505,6 +521,7 @@ export class Sandboxes {
     m.detach = () => {
       detachStall()
       detachBus()
+      detachFullscreen()
       detachRefresh()
       detachTimer()
     }

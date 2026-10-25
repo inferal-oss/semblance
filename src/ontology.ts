@@ -26,6 +26,7 @@ export const ONTOLOGY_FILES = [
   'layers/dependency.ttl',
   'layers/clipboard.ttl',
   'layers/files.ttl',
+  'layers/fullscreen.ttl',
   'layers/watchdog.ttl',
   'components/common.ttl',
   'components/stack.ttl',

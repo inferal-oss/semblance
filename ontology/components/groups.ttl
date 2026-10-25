@@ -1,6 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 # The component groups (DESIGN.md §3), and which group each component class is in,
@@ -138,7 +139,7 @@ c:Frame sem:group c:WindowsGroup . c:Window sem:group c:WindowsGroup . c:Palette
 c:Desktop sem:group c:WindowsGroup . c:Taskbar sem:group c:WindowsGroup .
 c:Draggable sem:group c:WindowsGroup . c:Resizable sem:group c:WindowsGroup . c:Raisable sem:group c:WindowsGroup .
 c:Restorable sem:group c:WindowsGroup . c:Minimizable sem:group c:WindowsGroup . c:Maximizable sem:group c:WindowsGroup .
-c:Dockable sem:group c:WindowsGroup .
+c:Dockable sem:group c:WindowsGroup . fs:Fullscreenable sem:group c:WindowsGroup .
 c:WindowState sem:group c:WindowsGroup . c:Edge sem:group c:WindowsGroup . c:PointerDown sem:group c:WindowsGroup .
 
 # --- Inspection ---

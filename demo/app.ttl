@@ -21,6 +21,7 @@
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
@@ -35,7 +36,7 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer, fs:Layer ;
     l10n:language l10n:English ;
     ui:store ui:SemblanceWasm ;
     ui:rules ui:PreferSparql ;

@@ -4,6 +4,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
+import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { mint } from '../rdf.ts'
 import { RDFS_LABEL, named, nodes, str, text } from './util.ts'
 import { compact, fnv } from './workbench.ts'
@@ -319,7 +320,7 @@ const walkthrough: FnRule = (ctx, focus) => {
   const caption = [...edges.map(sentence), ...(lonely.length ? [lonely.join(', ') + '.'] : [])].join(' ')
   const captionId = mint(focus.value, 'diagram-text')
   const plot = o.svg('plot', 'Svg', { viewBox: `0 0 ${VIEW_W} ${Math.max(120, height)}`, role: 'img', 'aria-label': say(ctx, P.diagram, 'A diagram of the graph this explains: what the steps mention, and how it is linked'), 'aria-describedby': captionId, class: 'sem-plot' }, marks)
-  const figure = o.el('diagram', 'Figure', { class: 'sem-walk-diagram' }, [plot, o.el('diagram-text', 'Figcaption', { id: captionId, class: 'sem-sr' }, [o.text('diagram-caption', caption)])])
+  const figure = o.el('diagram', 'Figure', { class: 'sem-walk-diagram' }, [o.el('fullscreen-toggles', 'Div', { class: 'sem-fullscreen-toggles' }, fullscreenToggles(ctx, o, focus)), plot, o.el('diagram-text', 'Figcaption', { id: captionId, class: 'sem-sr' }, [o.text('diagram-caption', caption)])])
 
   const wrappers = steps.map((step, i) => {
     const name = text(ctx, step, RDFS_LABEL)

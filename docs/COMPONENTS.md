@@ -151,6 +151,26 @@ it and reports back as an event (`clip:Copied`, `clip:CopyFailed`), so the butto
 a moment and a toast says what was copied. When the browser must act, the graph says what and a
 host effect does it, the same way `beh:dueAt` becomes a timer.
 
+Full screen is a fact, of two kinds: `ex:chart fs:fullscreen true` shows the component on the whole
+screen (the browser's full screen), `ex:chart fs:fullViewport true` fills the browser window with it
+(the page's top layer); retracting the fact puts it back. So a `c:Toggle` over the property, a
+reaction, a `key:Command` or a rule can do it:
+
+```turtle
+ex:chartCard a c:Card ; c:label "Sales" ; c:content ex:chart ; c:actions ( ex:window ex:full ) .
+ex:window a c:Toggle ; c:controls ex:chartCard ; c:property fs:fullViewport ; key:shortcut "w" .
+ex:full a c:Toggle ; c:controls ex:chartCard ; c:property fs:fullscreen ; key:shortcut "f" .
+```
+
+Put the toggles inside what they show, so they are still there. The fullscreen effect
+(`Fullscreen`, below) asks the browser for full screen in the same task as the click or key press
+(browsers want the person's activation); where it cannot (a sandbox, a refusal, no activation), it
+fills the window instead (`fs:Maximized`). Either way the outcome comes back as an event
+(`fs:Entered`), and when the browser leaves on its own, or Esc is pressed, `fs:Exited` retracts the
+facts. With both facts, full screen wins. A class that is `fs:Fullscreenable` draws both toggles of
+its own (source views, walkthrough diagrams, live examples); `fs:part` names the part it shows when
+that is not its root.
+
 ## Validation and shapes
 
 Two kinds of SHACL, both data:
@@ -260,6 +280,11 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
     } } },
   })
   ```
+- **Full screen.** `mount` attaches the fullscreen effect (option `fullscreen`, or `false`); wiring
+  by hand, attach `Fullscreen` with how to find a rendered element (`renderer.nodeOf`):
+  `fs:fullscreen true` is shown with the document's Fullscreen API (the window filled where it is
+  refused), `fs:fullViewport true` fills the window; pass `host` (a stand-in in tests, `null` for
+  no Fullscreen API at all).
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
   `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no

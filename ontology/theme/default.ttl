@@ -1044,6 +1044,11 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "align-items" ; sty:raw "baseline" ] ,
                  [ sty:property "gap" ; sty:token tok:space-3 ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] .
+# Full screen (its header's toggle): the header over the code, which takes the rest and scrolls.
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ;
+    sty:declares [ sty:property "grid-template-rows" ; sty:raw "auto minmax(0, 1fr)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ; sty:part "> .sem-source" ;
+    sty:declares [ sty:property "max-height" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part ".sem-source-name" ;
     sty:declares [ sty:property "font-weight" ; sty:raw "650" ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
