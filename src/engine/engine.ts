@@ -465,7 +465,7 @@ export class Engine {
     // higher strata derive (they judge the input, which is settled before them).
     if (rule.inputOnly && (this.derivedTrigger || rule.stratum < this.current || !this.typedInInput(focusOf(focus)))) return
     if (rule.stratum < this.current) {
-      throw new Error(`Stratification violation: stratum ${this.current} invalidated <${rule.iri}> (stratum ${rule.stratum}) for <${focus}>`)
+      throw new Error(`Stratification violation: stratum ${this.current} invalidated <${rule.iri}> (stratum ${rule.stratum}) for <${focus}>. If that rule judges only the input, mark its rendering sem:inputOnly true; otherwise move it above stratum ${this.current} (docs/COMPONENTS.md, "Strata and layers")`)
     }
     let byRule = this.dirty.get(rule.stratum)
     if (!byRule) this.dirty.set(rule.stratum, (byRule = new Map()))
