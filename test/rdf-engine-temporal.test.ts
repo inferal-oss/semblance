@@ -2,7 +2,8 @@
 // (op:add-dayTimeDuration-to-dateTime, op:subtract-dateTimes, ...). Where
 // Oxigraph computes a value it is the same; where it gives none (duration
 // times or by a number, a date plus a dayTimeDuration, a time plus a duration)
-// the value is XPath's. A value without a timezone is in UTC (the implicit timezone).
+// the value is XPath's. A value without a timezone is in UTC (the implicit timezone);
+// seconds are kept to the microsecond.
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { wasmTarget } from '../rdf-engine/conformance/targets/wasm.ts'
@@ -63,6 +64,13 @@ const CASES: [string, string | undefined][] = [
   [`${ymd('P1Y')} / 5`, 'P2M^^yearMonthDuration'],
   [`${ymd('P1Y')} / ${ymd('P3M')}`, '4^^decimal'],
   [`${dt('2026-01-01T00:00:00Z')} + ${dt('2026-01-01T00:00:00Z')}`, undefined],
+  // seconds are kept to the microsecond, the same in both engines
+  [`${dt('2026-01-01T00:00:00.1234567Z')} + ${dtd('PT0S')}`, '2026-01-01T00:00:00.123456Z^^dateTime'],
+  [`${dtd('PT0.0000015S')} + ${dtd('PT0S')}`, 'PT0.000001S^^dayTimeDuration'],
+  [`${dtd('PT1S')} * 0.0000005`, 'PT0S^^dayTimeDuration'],
+  [`${dtd('PT3S')} / 2000000`, 'PT0.000002S^^dayTimeDuration'],
+  [`${ymd('P1M')} * 0.5`, 'P1M^^yearMonthDuration'],
+  [`${ymd('P3M')} / 2`, 'P2M^^yearMonthDuration'],
   // comparisons
   [`${dtd('PT1H')} < ${dtd('PT2H')}`, 'true^^boolean'],
   [`${dtd('PT24H')} = ${dtd('P1D')}`, 'true^^boolean'],

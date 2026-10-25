@@ -13,6 +13,13 @@ use core::cmp::Ordering;
 
 const XSD: &[u8] = b"http://www.w3.org/2001/XMLSchema#";
 const DAY: i128 = 86400 * SCALE;
+/// Seconds are kept to the microsecond, as in the WAT build.
+const MICRO: i128 = SCALE / 1_000_000;
+
+/// Scaled seconds truncated to the microsecond.
+fn micro(secs: i128) -> i128 {
+    secs - secs % MICRO
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum K {
@@ -90,7 +97,7 @@ fn moment(k: K, s: &[u8]) -> Option<Moment> {
         }
     };
     let d = datetime(&text)?;
-    let sec = num::parse_dec(d.seconds)?;
+    let sec = micro(num::parse_dec(d.seconds)?);
     if d.day > days_in(d.year, d.month) || !(0..60 * SCALE).contains(&sec) {
         return None;
     }
@@ -141,7 +148,7 @@ fn duration(k: K, s: &[u8]) -> Option<Dur> {
             3 => secs += whole()? * DAY,
             4 => secs += whole()? * 3600 * SCALE,
             5 => secs += whole()? * 60 * SCALE,
-            _ => secs += num::parse_dec(digits)?,
+            _ => secs += micro(num::parse_dec(digits)?),
         }
     }
     if !any || (k == K::YearMonth && secs != 0) || (k == K::DayTime && months != 0) {
@@ -272,34 +279,29 @@ fn combine(x: Dur, y: Dur, sub: bool) -> Option<Dur> {
     Some(Dur { k, months, secs })
 }
 
-/// A number as a scaled decimal (or None for NaN and the infinities).
-fn scaled(n: Num) -> Option<i128> {
-    match n {
-        Num::Int(i) => i.checked_mul(SCALE),
-        Num::Dec(d) => Some(d),
-        Num::Float(f) => scaled(Num::Double(f as f64)),
-        Num::Double(f) if f.is_finite() && f.abs() < 1e19 => Some((f * SCALE as f64) as i128),
-        Num::Double(_) => None,
-    }
+/// Round half to even, for finite values.
+fn round_even(x: f64) -> f64 {
+    let t = x as i64 as f64;
+    let f = if t > x { t - 1.0 } else { t };
+    let d = x - f;
+    if d > 0.5 || (d == 0.5 && f % 2.0 != 0.0) { f + 1.0 } else { f }
 }
 
-/// A duration multiplied or divided by a number; a yearMonthDuration rounds to
-/// whole months (half up, as fn:round).
+/// A duration multiplied or divided by a number, in doubles on microseconds as
+/// the WAT build does: a dayTimeDuration rounds half to even, a
+/// yearMonthDuration half up (as fn:round).
 fn scale(d: Dur, n: Num, div: bool) -> Option<Dur> {
-    let n = Num::Dec(scaled(n)?);
-    let op = if div { Op::Div } else { Op::Mul };
-    if div && n.is_zero() {
+    let x = n.as_f64();
+    if !x.is_finite() || (div && x == 0.0) || d.k == K::Duration {
         return None;
     }
-    match d.k {
-        K::DayTime => Some(Dur { k: d.k, months: 0, secs: scaled(num::arith(op, Num::Dec(d.secs), n)?)? }),
-        K::YearMonth => {
-            let m = scaled(num::arith(op, Num::Int(d.months as i128), n)?)?;
-            let months = (m + SCALE / 2).div_euclid(SCALE);
-            Some(Dur { k: d.k, months: i64::try_from(months).ok()?, secs: 0 })
-        }
-        _ => None,
+    let base = if d.k == K::DayTime { (d.secs / MICRO) as f64 } else { d.months as f64 };
+    let r = if div { base / x } else { base * x };
+    let r = if d.k == K::DayTime { round_even(r) } else { let h = r + 0.5; let t = h as i64 as f64; if t > h { t - 1.0 } else { t } };
+    if !(r.abs() < 9e18) {
+        return None;
     }
+    Some(if d.k == K::DayTime { Dur { k: d.k, months: 0, secs: r as i64 as i128 * MICRO } } else { Dur { k: d.k, months: r as i64, secs: 0 } })
 }
 
 /// Order or equality of two durations, or of two times.
