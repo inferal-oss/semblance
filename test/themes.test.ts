@@ -293,7 +293,7 @@ describe('structural themes', () => {
     // Fluent: the accent underline on a focused field, the accent pill on the selected tab and nav item, a growing knob
     expect(find('fluent', ':is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):focus')).toMatch(/(?=.*border-bottom-color: var\(--sem-accent-9\))(?=.*inset 0 -1px 0 var\(--sem-accent-9\))/)
     expect(rules.some(([, sel, body]) => sel === `[data-sem-theme="fluent"] [data-sem-c=tabs] [role=tab][aria-selected=true]${guard('fluent')}::after` && body.includes('background: var(--sem-accent-9)'))).toBe(true)
-    expect(rules.some(([, sel, body]) => sel === `[data-sem-theme="fluent"] [data-sem-c=nav-list] button[aria-pressed=true]${guard('fluent')}::before` && body.includes('height: 16px'))).toBe(true)
+    expect(rules.some(([, sel, body]) => sel === `[data-sem-theme="fluent"] :is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page])${guard('fluent')}::before` && body.includes('height: 16px'))).toBe(true)
     expect(find('fluent', '[data-sem-c=toggle-switch] > button:not(:disabled):hover .sem-thumb')).toContain('width: 14px')
   })
 
