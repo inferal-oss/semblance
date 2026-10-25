@@ -12,6 +12,14 @@ and app gets it once. This skill finds those, decides where they go, and - when 
 
 Read `AGENTS.md` (ground rules, test queue) before changing anything.
 
+**How it relates to `component-overlap`.** This skill is vertical: a component (or example) versus
+the layers and shared vocabularies. `component-overlap` is horizontal: components duplicating each
+other (same-job components, rules and function twins copied wholly or in part, style blocks copied
+across components and themes). When two components share something that *is* about components (a
+part, a capability, a rendering), the fix is a merge, subclass, shared part or building block:
+hand it to `component-overlap`. When what they share is not about either of them, it is a
+generalization and stays here.
+
 ## Modes
 
 - **Report** (default; when the request says review, audit, find, check): produce the report below.

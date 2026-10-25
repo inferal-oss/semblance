@@ -56,6 +56,12 @@ Code and `.codex/skills/` for Codex; read the file directly if your tool does no
   that are not specific to them, report where each belongs, or move them into a shared vocabulary or
   layer across ontology, rules, theme, examples, walkthroughs, docs and tests. Its finder:
   `npx tsx .agents/skills/generalize-review/scripts/candidates.ts --demo [focus …]`.
+- **component-overlap** - find overlap and duplication between components (same-job components,
+  SPARQL rules and function twins copied wholly or in part, style blocks copied across components
+  and themes, repeated reactions, shapes and tests), report it, or refactor it (merge, subclass,
+  compose, building block, mixin, shared style) with SPARQL/function parity and every theme. The
+  horizontal sibling of generalize-review. Its finder:
+  `npx tsx .agents/skills/component-overlap/scripts/overlap.ts --demo [focus …]`.
 - **plan-coordinator** - be the plan coordinator: read the plan issues (#8, #9) and open issues,
   survey the worktrees, branches and PRs earlier agents left, and hand each piece (partially done
   first) to a worker in its own worktree (a session in Claude Code, a task in Codex); file new
