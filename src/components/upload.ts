@@ -28,11 +28,12 @@ const plain = (ctx: RuleContext, s: Term, p: string) => picked(ctx, s, p) ?? ctx
 /** A component's label as the SPARQL rules read it: l10n:label, else the untagged c:label. */
 const labelOf = (ctx: RuleContext, focus: Term) => str(ctx.object(focus, L10N.label)) ?? plain(ctx, focus, C.label) ?? ''
 
-/** The files a drop lists: those it took in or refused (file:file), and the values of its property, without repeats. */
+/** The files a drop lists: those it took in or refused (file:file), and (unless file:listsHeld is false) the values of its property, without repeats. */
 export function listed(ctx: { objects(s: Term, p: string): Term[] }, focus: Term): NamedNode[] {
   const property = ctx.objects(focus, C.property)[0]
   const node = ctx.objects(focus, C.controls)[0] ?? focus
-  const all = [...ctx.objects(focus, FILE.file), ...(property ? ctx.objects(node, property.value) : [])].filter(named)
+  const held = property && !ctx.objects(focus, FILE.listsHeld).some((t) => t.value === 'false')
+  const all = [...ctx.objects(focus, FILE.file), ...(held ? ctx.objects(node, property.value) : [])].filter(named)
   return [...new Map(all.map((t) => [t.value, t])).values()]
 }
 
@@ -284,10 +285,10 @@ const arrival = (ctx: Ctx) => {
   return [...ctx.match(a, null, null), ...ctx.match(ctx.target, DND.offered, a)]
 }
 
-/** Everything a removed file takes with it: its place in the lists and the property, and what is said about it. */
+/** Everything a removed file takes with it: its place in the lists and the property (wherever it was put), and what is said about it. */
 function removal(ctx: Ctx, file: Term): Quad[] {
-  const { node, property } = holder(ctx)
-  return [...ctx.match(null, FILE.file, file), ...(property ? ctx.match(node, property.value, file) : []), ...ctx.match(file, null, null)]
+  const { property } = holder(ctx)
+  return [...ctx.match(null, FILE.file, file), ...(property ? ctx.match(null, property.value, file) : []), ...ctx.match(file, null, null)]
 }
 
 /** Whether the drop lists the file: it took it in or refused it, or it is a value of its property. */
@@ -325,37 +326,6 @@ const pick: ReactionFn = (ctx) => {
 
 const cancelPick: ReactionFn = (ctx) => ({ remove: picks(ctx), add: [] })
 
-const offer: ReactionFn = (ctx) => {
-  const name = ctx.object(ctx.event, FILE.name)
-  const sequence = ctx.object(ctx.event, BEH.sequence)
-  if (!name || !sequence) return none()
-  const file = nn(ctx, mint(ctx.target.value, 'file-' + sequence.value))
-  const a = nn(ctx, arrivalOf(ctx.target.value))
-  const add = [q(ctx, file, RDF_TYPE, nn(ctx, FILE.File)), q(ctx, file, FILE.name, name), q(ctx, file, SEM.order, sequence)]
-  for (const p of [FILE.mediaType, FILE.size, FILE.modified, FILE.handle]) for (const v of ctx.match(ctx.event, p, null)) add.push(q(ctx, file, p, v.object))
-  add.push(q(ctx, ctx.target, DND.offered, a), q(ctx, a, RDF_TYPE, nn(ctx, DND.Drag)), q(ctx, a, DND.carrying, file))
-  return { remove: [...arrival(ctx), ...picks(ctx)], add }
-}
-
-const addFile: ReactionFn = (ctx) => {
-  const file = ctx.object(ctx.event, FILE.file)
-  const { node, property } = holder(ctx)
-  if (!file || !property) return none()
-  const uploads = !!(ctx.object(ctx.target, FILE.uploadTo) || ctx.object(ctx.target, FILE.handler))
-  return {
-    remove: arrival(ctx),
-    add: [q(ctx, node, property.value, file), q(ctx, ctx.target, FILE.file, file), q(ctx, file, FILE.state, nn(ctx, uploads ? FILE.Uploading : FILE.Ready))],
-  }
-}
-
-const refuse: ReactionFn = (ctx) => {
-  const file = ctx.object(ctx.event, FILE.file)
-  if (!file) return none()
-  const add = [q(ctx, ctx.target, FILE.file, file), q(ctx, file, FILE.state, nn(ctx, FILE.Refused))]
-  for (const r of ctx.match(ctx.event, FILE.reason, null)) add.push(q(ctx, file, FILE.reason, r.object))
-  return { remove: arrival(ctx), add }
-}
-
 /** The remove button (c:RemoveFile, or c:CancelUpload while it is uploaded). */
 const removeWhile =
   (uploading: boolean): ReactionFn =>
@@ -374,50 +344,34 @@ const retry: ReactionFn = (ctx) => {
   return { remove: [...failed, ...ctx.match(file, FILE.reason, null), ...ctx.match(file, FILE.loaded, null)], add: [q(ctx, file, FILE.state, nn(ctx, FILE.Uploading))] }
 }
 
-/** The file an upload event is about, while it is (still) being uploaded by this drop. */
-function uploading(ctx: Ctx): Term | undefined {
-  const file = ctx.object(ctx.event, FILE.file)
-  if (!file || !ctx.match(ctx.target, FILE.file, file).length || !ctx.match(file, FILE.state, nn(ctx, FILE.Uploading)).length) return undefined
-  return file
-}
-
-const progress: ReactionFn = (ctx) => {
-  const file = uploading(ctx)
-  const loaded = ctx.object(ctx.event, FILE.loaded)
-  if (!file || !loaded) return none()
-  return { remove: ctx.match(file, FILE.loaded, null), add: [q(ctx, file, FILE.loaded, loaded)] }
-}
-
-const settle =
-  (state: string, about: string): ReactionFn =>
-  (ctx) => {
-    const file = uploading(ctx)
-    if (!file) return none()
-    const add = [q(ctx, file, FILE.state, nn(ctx, state)), ...ctx.match(ctx.event, about, null).map((x) => q(ctx, file, about, x.object))]
-    return { remove: [...ctx.match(file, FILE.state, nn(ctx, FILE.Uploading)), ...ctx.match(file, FILE.loaded, null)], add }
-  }
-
 export const uploadReactions: Record<string, ReactionFn> = {
   'upload:pick': pick,
   'upload:cancel-pick': cancelPick,
-  'upload:offer': offer,
-  'upload:add': addFile,
-  'upload:refuse': refuse,
   'upload:remove': removeWhile(false),
   'upload:cancel': removeWhile(true),
   'upload:retry': retry,
-  'upload:progress': progress,
-  'upload:done': settle(FILE.Uploaded, FILE.location),
-  'upload:fail': settle(FILE.Failed, FILE.reason),
 }
 
 // --- the drag of files from outside (ontology/layers/files.ttl) ---------------------------------------
 
-/** Every instance of c:FileDrop or a subclass of it. */
-function fileDrops(ctx: Ctx): Term[] {
-  const classes = new Set([FILE_DROP])
-  for (const todo = [FILE_DROP]; todo.length; ) for (const s of ctx.match(null, RDFS_SUBCLASS, nn(ctx, todo.pop()!))) if (!classes.has(s.subject.value)) classes.add(s.subject.value), todo.push(s.subject.value)
-  return [...classes].flatMap((cls) => ctx.match(null, RDF_TYPE, nn(ctx, cls)).map((x) => x.subject))
+/** Every class that is `root` or a subclass of it. */
+function subclasses(ctx: Ctx, root: string): Set<string> {
+  const classes = new Set([root])
+  for (const todo = [root]; todo.length; ) for (const s of ctx.match(null, RDFS_SUBCLASS, nn(ctx, todo.pop()!))) if (!classes.has(s.subject.value)) classes.add(s.subject.value), todo.push(s.subject.value)
+  return classes
+}
+
+/** Every file:Receiver (a c:FileDrop, a tree of folders that takes files). */
+function receivers(ctx: Ctx): Term[] {
+  return [...subclasses(ctx, FILE.Receiver)].flatMap((cls) => ctx.match(null, RDF_TYPE, nn(ctx, cls)).map((x) => x.subject))
+}
+
+/** Whether the receiver's class lists the files it refuses (file:keepsRefusals: a file drop). */
+function keepsRefusals(ctx: Ctx): boolean {
+  const types = new Set(ctx.match(ctx.target, RDF_TYPE, null).map((x) => x.object.value))
+  const up = (cls: string, seen: Set<string>): boolean =>
+    isTrue(ctx.object(nn(ctx, cls), FILE.keepsRefusals)) || ctx.match(nn(ctx, cls), RDFS_SUBCLASS, null).some((x) => !seen.has(x.object.value) && (seen.add(x.object.value), up(x.object.value, seen)))
+  return [...types].some((t) => up(t, new Set([t])))
 }
 
 const DRAG_STATE = [DND.source, DND.carrying, DND.from, DND.by, DND.effect, DND.dropTarget, DND.into, DND.after, DND.before, DND.rank, DND.count]
@@ -442,7 +396,7 @@ const lift: ReactionFn = (ctx) => {
     q(ctx, dragged, DND.lifted, current),
     ...ctx.match(ctx.event, DND.count, null).map((x) => q(ctx, current, DND.count, x.object)),
     ...ctx.match(ctx.event, FILE.mediaType, null).map((x) => q(ctx, dragged, FILE.mediaType, x.object)),
-    ...fileDrops(ctx)
+    ...receivers(ctx)
       .filter((t) => !isTrue(ctx.object(t, C.disabled)))
       .map((t) => q(ctx, t, DND.offered, current)),
   ]
@@ -454,4 +408,150 @@ const forget: ReactionFn = (ctx) => ({
   add: [],
 })
 
-export const filesReactions: Record<string, ReactionFn> = { 'files:lift': lift, 'files:forget': forget }
+// --- files arriving at a receiver (ontology/layers/files.ttl) ------------------------------------------
+
+const offer: ReactionFn = (ctx) => {
+  const name = ctx.object(ctx.event, FILE.name)
+  const sequence = ctx.object(ctx.event, BEH.sequence)
+  if (!name || !sequence) return none()
+  // Named by its handle, unique across page loads (a kept file outlives the event's sequence number).
+  const handle = ctx.object(ctx.event, FILE.handle)
+  const file = nn(ctx, mint(ctx.target.value, 'file-' + (handle ? encodeURIComponent(handle.value) : sequence.value)))
+  const a = nn(ctx, arrivalOf(ctx.target.value))
+  const add = [q(ctx, file, RDF_TYPE, nn(ctx, FILE.File)), q(ctx, file, FILE.name, name), q(ctx, file, SEM.order, sequence)]
+  for (const p of [FILE.mediaType, FILE.size, FILE.modified, FILE.handle]) for (const v of ctx.match(ctx.event, p, null)) add.push(q(ctx, file, p, v.object))
+  add.push(q(ctx, ctx.target, DND.offered, a), q(ctx, a, RDF_TYPE, nn(ctx, DND.Drag)), q(ctx, a, DND.carrying, file))
+  return { remove: [...arrival(ctx), ...picks(ctx)], add }
+}
+
+const addFile: ReactionFn = (ctx) => {
+  const file = ctx.object(ctx.event, FILE.file)
+  if (!file) return none()
+  // Into where it was dropped, else the node the receiver controls, else the receiver.
+  const into = ctx.object(ctx.event, DND.into) ?? ctx.object(ctx.target, C.controls) ?? ctx.target
+  const declared = ctx.match(ctx.target, DND.members, null).map((x) => x.object)
+  const property = ctx.object(ctx.target, C.property)
+  const members = declared.length ? declared : property ? [property] : []
+  const store = ctx.object(ctx.target, FILE.keepIn)
+  const uploads = !!(ctx.object(ctx.target, FILE.uploadTo) || ctx.object(ctx.target, FILE.handler))
+  const add = [q(ctx, ctx.target, FILE.file, file), q(ctx, file, FILE.state, nn(ctx, uploads ? FILE.Uploading : store ? FILE.Saving : FILE.Ready))]
+  for (const m of members) add.push(q(ctx, into, m.value, file))
+  for (const m of ctx.match(ctx.target, DND.memberOf, null)) add.push(q(ctx, file, m.object.value, into))
+  for (const s of ctx.match(ctx.target, FILE.keepIn, null)) add.push(q(ctx, file, FILE.keptIn, s.object))
+  return { remove: arrival(ctx), add }
+}
+
+const refuse: ReactionFn = (ctx) => {
+  const file = ctx.object(ctx.event, FILE.file)
+  if (!file) return none()
+  if (!keepsRefusals(ctx)) return { remove: [...arrival(ctx), ...ctx.match(file, null, null)], add: [] }
+  const add = [q(ctx, ctx.target, FILE.file, file), q(ctx, file, FILE.state, nn(ctx, FILE.Refused))]
+  for (const r of ctx.match(ctx.event, FILE.reason, null)) add.push(q(ctx, file, FILE.reason, r.object))
+  return { remove: arrival(ctx), add }
+}
+
+/** The file an upload event is about, while it is (still) being uploaded by this receiver. */
+function uploading(ctx: Ctx): Term | undefined {
+  const file = ctx.object(ctx.event, FILE.file)
+  if (!file || !ctx.match(ctx.target, FILE.file, file).length || !ctx.match(file, FILE.state, nn(ctx, FILE.Uploading)).length) return undefined
+  return file
+}
+
+const progress: ReactionFn = (ctx) => {
+  const file = uploading(ctx)
+  const loaded = ctx.object(ctx.event, FILE.loaded)
+  if (!file || !loaded) return none()
+  return { remove: ctx.match(file, FILE.loaded, null), add: [q(ctx, file, FILE.loaded, loaded)] }
+}
+
+const settle =
+  (state: string, about: string): ReactionFn =>
+  (ctx) => {
+    const file = uploading(ctx)
+    if (!file) return none()
+    const add = [q(ctx, file, FILE.state, nn(ctx, state)), ...ctx.match(ctx.event, about, null).map((x) => q(ctx, file, about, x.object))]
+    return { remove: [...ctx.match(file, FILE.state, nn(ctx, FILE.Uploading)), ...ctx.match(file, FILE.loaded, null)], add }
+  }
+
+/** The file a keeping event is about, while this receiver lists it. */
+const kept = (ctx: Ctx) => {
+  const file = ctx.object(ctx.event, FILE.file)
+  return file && ctx.match(ctx.target, FILE.file, file).length ? file : undefined
+}
+
+const keep: ReactionFn = (ctx) => {
+  const file = kept(ctx)
+  const saving = file ? ctx.match(file, FILE.state, nn(ctx, FILE.Saving)) : []
+  return saving.length ? { remove: saving, add: [q(ctx, file!, FILE.state, nn(ctx, FILE.Saved))] } : none()
+}
+
+const keepFailed: ReactionFn = (ctx) => {
+  const file = kept(ctx)
+  if (!file) return none()
+  const lists = keepsRefusals(ctx)
+  const remove = [
+    ...ctx.match(null, null, file).filter((x) => !lists || x.predicate.value !== FILE.file),
+    ...ctx.match(file, null, null).filter((x) => !lists || [FILE.state, FILE.keptIn, FILE.loaded].includes(x.predicate.value)),
+  ]
+  const add = lists ? [q(ctx, file, FILE.state, nn(ctx, FILE.Refused)), ...ctx.match(ctx.event, FILE.reason, null).map((x) => q(ctx, file, FILE.reason, x.object))] : []
+  return { remove, add }
+}
+
+export const filesReactions: Record<string, ReactionFn> = {
+  'files:lift': lift,
+  'files:forget': forget,
+  'files:offer': offer,
+  'files:add': addFile,
+  'files:refuse': refuse,
+  'files:progress': progress,
+  'files:done': settle(FILE.Uploaded, FILE.location),
+  'files:fail': settle(FILE.Failed, FILE.reason),
+  'files:keep': keep,
+  'files:keep-failed': keepFailed,
+}
+
+// --- a store's cap (file:StoreRoom) -----------------------------------------------------------------------
+
+const integer = (t: Term | undefined) => (t?.termType === 'Literal' && /^[+-]?\d+$/.test(t.value.trim()) ? Number(t.value) : undefined)
+
+/** While files are carried to a receiver that keeps them: an objection to each of its receptacles where the store would pass its cap. */
+const storeRoom: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  for (const drag of ctx.objects(focus, DND.offered)) {
+    const x = ctx.object(drag, DND.carrying)
+    if (!x) continue
+    for (const store of ctx.objects(focus, FILE.keepIn)) {
+      if (ctx.objects(x, FILE.keptIn).some((s) => s.equals(store))) continue
+      const size = integer(ctx.object(x, FILE.size))
+      const count = integer(ctx.object(drag, DND.count)) ?? 1
+      let reason: string | undefined
+      for (const shape of ctx.match(null, SH + 'targetNode', store).map((t) => t.subject)) {
+        for (const ps of ctx.objects(shape, SH + 'property')) {
+          const path = ctx.object(ps, SH + 'path')?.value
+          if (path !== FILE.usedBytes && path !== FILE.usedFiles) continue
+          const used = integer(ctx.object(store, path)) ?? 0
+          const after = path === FILE.usedBytes ? (size === undefined ? undefined : used + size) : used + count
+          if (after === undefined) continue
+          for (const [bound, over] of [[SH + 'maxInclusive', (l: number) => after > l], [SH + 'maxExclusive', (l: number) => after >= l]] as const) {
+            for (const limit of ctx.objects(ps, bound)) {
+              const l = Number(limit.value)
+              if (!Number.isFinite(l) || !over(l)) continue
+              const said = plain(ctx, ps, SH + 'message') ?? plain(ctx, shape, SH + 'message') ?? 'There is no room left to keep it.'
+              if (reason === undefined || said < reason) reason = said
+            }
+          }
+        }
+      }
+      if (reason === undefined) continue
+      const zones = ctx.objects(focus, DND.zone)
+      const receptacles = zones.length ? zones.flatMap((z) => ctx.objects(z, DND.receptacle)) : [ctx.object(focus, DND.receptacle) ?? focus]
+      for (const r of receptacles) {
+        const objection = ctx.nn(mint(focus.value, 'room-' + encodeURIComponent(r.value)))
+        o.t(objection, RDF_TYPE, ctx.nn(NS.dnd + 'Objection')).t(objection, DND.receptacle, r).t(objection, NS.dnd + 'against', drag).t(objection, DND.reason, ctx.f.literal(reason))
+      }
+    }
+  }
+  return o.quads
+}
+
+export const filesFunctions: Record<string, FnRule> = { 'files:store-room': storeRoom }

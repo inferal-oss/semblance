@@ -16,7 +16,8 @@ function explorer(prefer: 'sparql' | 'function' = 'sparql') {
   click([...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === 'File explorer' && visible(b))!)
   const root = () => h.shell.nodeOf(UI + 'ex-files/~root') as HTMLElement
   const folder = (name: string) => [...root().querySelectorAll('[role=treeitem] .sem-label')].find((x) => x.textContent === name) as HTMLElement
-  const rows = () => [...root().querySelectorAll('[data-sem-c=grid-row]')].map((r) => r.querySelector('td')!.textContent)
+  // The name column (the first is the preview).
+  const rows = () => [...root().querySelectorAll('[data-sem-c=grid-row]')].map((r) => r.querySelectorAll('td')[1]!.textContent)
   const crumbs = () => [...root().querySelectorAll('[data-sem-c=breadcrumbs] li')].map((li) => li.textContent!.replace(/\/$/, ''))
   const contains = (f: string) => h.store.match(h.store.factory.namedNode(FX + f), h.store.factory.namedNode(FX + 'contains'), null).map((q) => q.object.value.slice(FX.length)).sort()
   const toasts = () => [...h.document.querySelectorAll('[data-sem-c=toast]')].map((t) => t.textContent).join(' | ')
@@ -74,7 +75,9 @@ describe('the file explorer example', () => {
     const details = h.shell.nodeOf(UI + 'fx-summary/~root') as HTMLElement
     expect(details.textContent).toContain('Meeting notes.txt')
     expect(details.textContent).toContain('Ada')
-    expect((h.shell.nodeOf(UI + 'fx-preview/~root') as HTMLElement).textContent).toContain('ship the walkthroughs first')
+    expect((h.shell.nodeOf(UI + 'fx-excerpt/~root') as HTMLElement).textContent).toContain('ship the walkthroughs first')
+    // Nothing is kept of it in this browser: no picture.
+    expect((h.shell.nodeOf(UI + 'fx-thumb/~root') as HTMLElement).hasAttribute('hidden')).toBe(true)
   })
 
   it.each(['sparql', 'function'] as const)('moves files by dragging rows onto folders, which accept by their shapes (%s)', (prefer) => {

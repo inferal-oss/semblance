@@ -5,6 +5,7 @@ import { Clipboard } from '../src/clipboard.ts'
 import { Files, type Uploader } from '../src/files.ts'
 import { Fullscreen } from '../src/fullscreen.ts'
 import { Islands } from '../src/foreign.ts'
+import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -423,8 +424,11 @@ const demoUpload: Uploader = (file, ctx) =>
     }, 160)
     ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true })
   })
+// Files kept in the browser (file:keepIn: the file explorer) go to IndexedDB; their previews are
+// made in a worker, so decoding a large photo never holds up the page.
 new Files(bus, {
   handlers: { demo: demoUpload },
+  thumbnail: workerThumbnails(() => new Worker(new URL('../src/thumbnail.worker.ts', import.meta.url), { type: 'module' })),
   onHandled: () => {
     syncSettings()
     flush()

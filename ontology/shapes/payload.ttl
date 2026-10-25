@@ -7,7 +7,7 @@
 # from one place: its own c:value, or c:payloadProperty of one subject (c:of, or c:bindFrom with
 # c:bindProperty) after at most one c:via hop.
 
-c:PayloadSourceShape a sh:NodeShape ; sh:targetClass c:JsonTree , c:HexView , c:BodyViewer ;
+c:PayloadSourceShape a sh:NodeShape ; sh:targetClass c:JsonTree , c:HexView , c:BodyViewer , c:ImageView ;
     sh:property [ sh:path c:value ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
                 [ sh:path c:of ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
                 [ sh:path c:bindFrom ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
@@ -26,3 +26,6 @@ c:HexViewShape a sh:NodeShape ; sh:targetClass c:HexView ;
 c:BodyViewerShape a sh:NodeShape ; sh:targetClass c:BodyViewer ;
     sh:property [ sh:path c:representation ; sh:maxCount 1 ; sh:class c:Representation ] ,
                 [ sh:path c:typeProperty ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
+c:ImageViewShape a sh:NodeShape ; sh:targetClass c:ImageView ;
+    sh:property [ sh:path c:altProperty ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                  sh:message "An image view reads its alt text from one property (c:altProperty)." ] .
