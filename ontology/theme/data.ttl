@@ -58,6 +58,9 @@
                  [ sty:property "text-align" ; sty:raw "inherit" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
                  [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease), color var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Table ; sty:part ".sem-head-label" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] .
 [] a sty:StyleRule ; sty:appliesTo c:Table ; sty:part ".sem-sort:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
