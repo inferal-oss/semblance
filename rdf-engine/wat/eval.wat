@@ -438,7 +438,7 @@
     (global.set $zero_check (i32.const 0))
     (local.set $snap (call $undo_plan (local.get $pt) (local.get $row) (local.get $s) (local.get $p) (local.get $o) (local.get $snap)))
     (loop $pairs
-      (if (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $l))) (then
+      (if (if (result i32) (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $l))) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
         (if (i32.and (call $unify (i32.load offset=4 (local.get $pt)) (call $v_at (local.get $l) (local.get $j)) (local.get $row))
                      (call $unify (i32.load offset=12 (local.get $pt)) (call $v_at (local.get $l) (i32.add (local.get $j) (i32.const 1))) (local.get $row)))
           (then (call $bgp_dfs (local.get $row) (i32.sub (local.get $left) (i32.const 1)))))
@@ -535,6 +535,7 @@
     (loop $elements
       (br_if $done (i32.eqz (local.get $el)))
       (br_if $done (i32.eqz (i32.load offset=4 (local.get $cur))))
+      (br_if $done (global.get $bu_stop))
       (if (call $is_tp (local.get $el))
         (then
           ;; a basic graph pattern: the run of triple and path patterns
@@ -600,7 +601,7 @@
 (func $filter_one (param $t i32) (param $e i32)
   (local $i i32) (local $k i32) (local $row i32)
   (loop $rows
-    (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
+    (if (i32.and (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (i32.eqz (global.get $bu_stop))) (then
       (local.set $row (call $t_row (local.get $t) (local.get $i)))
       (if (i32.eq (call $ebv (call $ev (local.get $e) (local.get $row))) (i32.const 1)) (then
         (if (i32.ne (local.get $i) (local.get $k)) (then (memory.copy (call $t_row (local.get $t) (local.get $k)) (local.get $row) (global.get $W))))
@@ -709,7 +710,7 @@
   (i32.store (local.get $key) (i32.const 0))
   (local.set $full (call $row_get))
   (loop $rows
-    (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
+    (if (i32.and (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (i32.eqz (global.get $bu_stop))) (then
       (local.set $mu (call $t_row (local.get $t) (local.get $i)))
       (local.set $j (i32.const 0))
       (loop $keys
@@ -879,7 +880,7 @@
     (local.set $key (call $rs_alloc (i32.shl (i32.add (local.get $k) (i32.const 1)) (i32.const 2))))
     (i32.store (local.get $key) (i32.const 0))))
   (loop $rows
-    (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
+    (if (i32.and (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (i32.eqz (global.get $bu_stop))) (then
       (local.set $row (call $t_row (local.get $t) (local.get $i)))
       (local.set $at (i32.add (local.get $row) (local.get $v)))
       (block $kept
