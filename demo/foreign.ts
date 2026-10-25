@@ -110,7 +110,7 @@ type ChartLike = {
  * Chart.js as a widget: a bar chart of `bars` ({ id, label, value, order }), `selected` (an id)
  * highlighted, `label` its accessible name. Choosing a bar - a click, or the arrow keys on the focused
  * chart (swapped in RTL) - calls emit('select', { id, label, index }). Colours are the theme's: the
- * island's style rules set --chart-bar, --chart-bar-selected, --chart-text and --chart-grid.
+ * island's style rules set --chart-bar, --chart-bar-hover, --chart-bar-selected, --chart-text and --chart-grid.
  */
 export const chartJs: { load(): Promise<Widget> } = {
   async load() {
@@ -162,9 +162,11 @@ function chartWidget(m: ChartModule): Widget {
         const strong = colour('--chart-bar-selected', 'navy')
         const text = colour('--chart-text', '#666')
         const grid = colour('--chart-grid', '#ddd')
+        const hover = colour('--chart-bar-hover', 'cornflowerblue')
         const ds = chart.data.datasets[0]!
         ds.backgroundColor = bars.map((b) => (b.id === selected ? strong : bar))
-        ds.hoverBackgroundColor = bars.map(() => strong)
+        // Pointing at a bar must not look like choosing it: the chosen one keeps its colour.
+        ds.hoverBackgroundColor = bars.map((b) => (b.id === selected ? strong : hover))
         const o = chart.options
         const rtl = rtlAt(element)
         o.color = text

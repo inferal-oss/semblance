@@ -388,6 +388,7 @@ ui:ex-foreign-log a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 3 .
 # The chart reads these and resolves them to colours (canvas cannot read CSS).
 [] a sty:StyleRule ; sty:appliesTo ui:FxChart ;
     sty:declares [ sty:property "--chart-bar" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "--chart-bar-hover" ; sty:raw "color-mix(in srgb, var(--sem-accent) 40%, var(--sem-surface))" ] ,
                  [ sty:property "--chart-bar-selected" ; sty:token tok:accent ] ,
                  [ sty:property "--chart-text" ; sty:token tok:muted ] ,
                  [ sty:property "--chart-grid" ; sty:token tok:border ] .
