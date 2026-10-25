@@ -64,6 +64,9 @@ export interface Selection {
 }
 
 /** Read every sem:Rule from the ontology graph(s) loaded in the store. */
+/** localeCompare's order, without setting up a comparison per call. */
+const collator = new Intl.Collator()
+
 export function loadRules(store: GraphStore): Rule[] {
   const { namedNode } = store.factory
   const one = (s: Term, p: string): Term | undefined => store.match(s, namedNode(p), null)[0]?.object
@@ -109,7 +112,7 @@ export function loadRules(store: GraphStore): Rule[] {
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
     })
   }
-  return rules.sort((a, b) => a.stratum - b.stratum || a.iri.localeCompare(b.iri))
+  return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
 }
 
 /** Pick the active rules: matching modality, enabled layer, one runnable implementation per slot. */

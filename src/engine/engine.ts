@@ -108,6 +108,8 @@ export class Engine {
   private ctx: RuleContext
 
   private rulesByClass = new Map<string, Rule[]>()
+  /** class -> those of its rules that read what is minted under their focus (sem:readsMinted). */
+  private mintReadersByClass = new Map<string, Rule[]>()
   private followers = new Map<string, Rule[]>()
   /** focus -> classes that have rules */
   private types = new Map<string, Set<string>>()
@@ -146,7 +148,7 @@ export class Engine {
    */
   private typedIn = new Map<string, boolean>()
   /** Evaluations per (rule, focus) in the current run, to catch rules that never settle. */
-  private evaluations = new Map<string, number>()
+  private evaluations = new Map<Rule, Map<string, number>>()
   private pending = { add: new Map<string, Quad>(), remove: new Map<string, Quad>() }
   private listeners: Listener[] = []
   /**
@@ -401,6 +403,7 @@ export class Engine {
     this.rules = rules
     this.strata = [...new Set(rules.map((r) => r.stratum))].sort((a, b) => a - b)
     this.rulesByClass.clear()
+    this.mintReadersByClass.clear()
     this.followers.clear()
     for (const r of rules) for (const p of r.follows) this.followers.set(p, [...(this.followers.get(p) ?? []), r])
     for (const r of rules) {
@@ -429,6 +432,12 @@ export class Engine {
       const supers = this.supers(cls)
       this.rulesByClass.set(cls, (rs = this.rules.filter((r) => supers.has(r.target))))
     }
+    return rs
+  }
+
+  private mintReadersFor(cls: string): Rule[] {
+    let rs = this.mintReadersByClass.get(cls)
+    if (!rs) this.mintReadersByClass.set(cls, (rs = this.rulesFor(cls).filter((r) => r.readsMinted)))
     return rs
   }
 
@@ -604,7 +613,7 @@ export class Engine {
     if (owner !== s) {
       const ownerClasses = this.types.get(owner)
       if (ownerClasses) {
-        for (const c of ownerClasses) for (const r of this.rulesFor(c)) if (r.readsMinted && r.stratum > this.current) this.markFocus(r, owner)
+        for (const c of ownerClasses) for (const r of this.mintReadersFor(c)) if (r.stratum > this.current) this.markFocus(r, owner)
       }
     }
     if (sign > 0) this.index(q, sign)
@@ -870,18 +879,18 @@ export class Engine {
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
     if (this.demand && !this.warming && !rule.always) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
-      for (const focus of [...foci]) {
+      // (Deleting the entry being visited from a Set does not disturb the iteration.)
+      for (const focus of foci) {
         if (this.isInstance(focus, rule) && !this.demand(focusOf(focus))) {
           this.deferred.add(rule, focus)
           foci.delete(focus)
-        }
+        } else this.deferred.delete(rule, focus)
       }
       if (!foci.size) return
-      for (const focus of foci) this.deferred.delete(rule, focus)
     }
     // A rule that requires a property its focus doesn't have (or is not for one it has) has nothing to say about it.
     if (rule.requires.length || rule.unless.length) {
-      for (const focus of [...foci]) {
+      for (const focus of foci) {
         const node = focusOf(focus)
         if ((rule.requires.length && !this.hasAny(node, rule.requires)) || (rule.unless.length && this.hasAny(node, rule.unless))) {
           this.commit(rule, focus, [])
@@ -1040,9 +1049,10 @@ export class Engine {
 
   private commit(rule: Rule, focus: string, quads: Quad[]) {
     for (const l of this.evaluationListeners) l(rule.slot, focus)
-    const pair = rule.iri + ' ' + focus
-    const n = (this.evaluations.get(pair) ?? 0) + 1
-    this.evaluations.set(pair, n)
+    let counts = this.evaluations.get(rule)
+    if (!counts) this.evaluations.set(rule, (counts = new Map()))
+    const n = (counts.get(focus) ?? 0) + 1
+    counts.set(focus, n)
     if (n > 100) throw new Error(`Rule <${rule.iri}> does not settle for <${focus}>: its output keeps invalidating itself`)
     let byFocus = this.outputs.get(rule)
     if (!byFocus) this.outputs.set(rule, (byFocus = new Map()))
