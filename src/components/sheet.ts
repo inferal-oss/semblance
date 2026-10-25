@@ -13,6 +13,8 @@ const S = {
   columns: NS.c + 'columns',
   formulaText: NS.c + 'formulaText',
   selectedCell: NS.c + 'selectedCell',
+  selectionEnd: NS.c + 'selectionEnd',
+  selects: NS.c + 'selects',
   recalculated: NS.c + 'recalculated',
   tick: NS.c + 'recalculationTick',
   valueQuery: NS.c + 'valueQuery',
@@ -97,6 +99,46 @@ const cell: FnRule = (ctx, focus) => {
 
 // --- the selection, the arrows, the last recalculation ----------------------------------------------
 
+/** c:SheetSelection: the cells between the selected cell and the selection's far corner (c:selects). */
+const selection: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const cells = ctx.objects(focus, S.cell).filter(named)
+  const inSheet = new Set(cells.map((t) => t.value))
+  const a = ctx.objects(focus, S.selectedCell).find((t) => named(t) && inSheet.has(t.value))
+  if (!a) return o.quads
+  const b = ctx.objects(focus, S.selectionEnd).find((t) => named(t) && inSheet.has(t.value)) ?? a
+  const [ra, ca, rb, cb] = [int(ctx, a, S.row), int(ctx, a, S.column), int(ctx, b, S.row), int(ctx, b, S.column)]
+  for (const cell of cells) {
+    const r = int(ctx, cell, S.row)
+    const c = int(ctx, cell, S.column)
+    if (r >= Math.min(ra, rb) && r <= Math.max(ra, rb) && c >= Math.min(ca, cb) && c <= Math.max(ca, cb)) o.t(focus, S.selects, cell)
+  }
+  return o.quads
+}
+
+/** Exact decimal arithmetic for what a range sums up, printed as the engine prints an xsd:decimal ("4237.5", "-50"). */
+const SCALE = 12
+const decimal = (text: string): bigint => {
+  const [whole, fraction = ''] = text.replace('-', '').split('.') as [string, string?]
+  const n = BigInt(whole + fraction!.padEnd(SCALE, '0').slice(0, SCALE))
+  return text.startsWith('-') ? -n : n
+}
+const printed = (n: bigint): string => {
+  const sign = n < 0n ? '-' : ''
+  const digits = (n < 0n ? -n : n).toString().padStart(SCALE + 1, '0')
+  const fraction = digits.slice(-SCALE).replace(/0+$/, '')
+  return sign + digits.slice(0, -SCALE) + (fraction ? '.' + fraction : '')
+}
+/** ROUND(x / count * 100) / 100: halves round up, as SPARQL's ROUND does. */
+const hundredths = (sum: bigint, count: bigint): bigint => {
+  const unit = 10n ** BigInt(SCALE - 2)
+  const twice = 2n * sum * 100n
+  const den = 2n * count * 10n ** BigInt(SCALE)
+  const num = twice + count * 10n ** BigInt(SCALE)
+  const q = num / den - (num % den < 0n ? 1n : 0n)
+  return q * unit
+}
+
 const focusRule: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const links = o.node('links')
@@ -116,7 +158,23 @@ const focusRule: FnRule = (ctx, focus) => {
   const formulas = [...cells].filter((x) => ctx.object(ctx.nn(x), S.formulaText) || ctx.object(ctx.nn(x), S.valueQuery)).length
   const recalculated = ctx.objects(focus, S.recalculated).filter(named)
   const tick = str(ctx.object(focus, S.tick))
-  const status = tick !== undefined ? `The last change recalculated ${new Set(recalculated.map((t) => t.value)).size} of ${formulas} formulas.` : `${formulas} formulas. Change a number: only the formulas that read it recalculate.`
+  let status = tick !== undefined ? `The last change recalculated ${new Set(recalculated.map((t) => t.value)).size} of ${formulas} formulas.` : `${formulas} formulas. Change a number: only the formulas that read it recalculate.`
+  // A range of more than one cell: its edges on its cells, and it summed up under the sheet.
+  const range = [...new Map(ctx.objects(focus, S.selects).filter(named).map((x) => [x.value, { x, r: int(ctx, x, S.row), c: int(ctx, x, S.column) }])).values()]
+  if (range.length > 1) {
+    const rs = range.map((p) => p.r)
+    const cs = range.map((p) => p.c)
+    const [r0, r1, c0, c1] = [Math.min(...rs), Math.max(...rs), Math.min(...cs), Math.max(...cs)]
+    const values = range.flatMap(({ x }) => ctx.objects(x, C.value).map((v) => v.value))
+    const numbers = values.filter((v) => NUMBER.test(v)).map(decimal)
+    const sum = numbers.reduce((a, b) => a + b, 0n)
+    const stats = numbers.length ? `  ·  Sum ${printed(sum)}  ·  Average ${printed(hundredths(sum, BigInt(numbers.length)))}` : ''
+    status = `${nameOf(r0, c0)}:${nameOf(r1, c1)}${stats}  ·  Count ${values.length}`
+    for (const { x, r, c } of range) {
+      const sides = [r === r0 && 'top', r === r1 && 'bottom', c === c0 && 'start', c === c1 && 'end'].filter(Boolean).join(' ')
+      o.attr(ctx.nn(x.value + '/~root'), 'data-sem-range', sides || 'inside', `range-${localName(x.value)}`)
+    }
+  }
   o.t(o.node('status'), H.hasChild, o.text('status-text', status))
   if (sel) o.attr(ctx.nn(sel.value + '/~root'), 'data-sem-selected', 'true', `sel-${localName(sel.value)}`)
   if (tick !== undefined) {
@@ -217,7 +275,7 @@ const formula: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { 'sheet:grid': grid, 'sheet:cell': cell, 'sheet:focus': focusRule, 'sheet:connectors': connectors, 'sheet:formula': formula }
+export const functions: Record<string, FnRule> = { 'sheet:grid': grid, 'sheet:cell': cell, 'sheet:selection': selection, 'sheet:focus': focusRule, 'sheet:connectors': connectors, 'sheet:formula': formula }
 
 // --- reactions ------------------------------------------------------------------------------------------
 
@@ -232,15 +290,66 @@ const edit: ReactionFn = (ctx) => {
   return { remove: own(ctx, ctx.target, C.value), add }
 }
 
+/** Whether Shift was held (beh:modifiers). */
+const shifted = (ctx: RCtx) => ctx.match(ctx.event, NS.beh + 'modifiers', null).some((q) => `+${q.object.value}+`.includes('+shift+'))
+/** The sheets the cell is in, with the cells each places. */
+const sheetsOf = (ctx: RCtx) => ctx.match(null, S.cell, ctx.target).map((q) => ({ sheet: q.subject as NamedNode, cells: new Set(ctx.match(q.subject, S.cell, null).map((c) => c.object.value)) }))
+
 const select: ReactionFn = (ctx) => {
   const f = ctx.runtime.store.factory
   const out = { add: [] as Quad[], remove: [] as Quad[] }
+  if (shifted(ctx)) return out
   for (const q of ctx.match(null, S.cell, ctx.target)) {
     const sheet = q.subject
+    out.remove.push(...own(ctx, sheet, S.selectionEnd))
     const old = own(ctx, sheet, S.selectedCell)
-    if (old.some((x) => x.object.equals(ctx.target))) continue
+    if (old.some((x) => x.object.equals(ctx.target))) {
+      out.remove.push(...old.filter((x) => !x.object.equals(ctx.target)))
+      continue
+    }
     out.remove.push(...old)
     out.add.push(f.quad(sheet as NamedNode, f.namedNode(S.selectedCell), ctx.target))
+  }
+  return out
+}
+
+/** Shift+click: the range runs from the selected cell to this one. */
+const extend: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const out = { add: [] as Quad[], remove: [] as Quad[] }
+  if (!shifted(ctx)) return out
+  for (const { sheet, cells } of sheetsOf(ctx)) {
+    const ends = own(ctx, sheet, S.selectionEnd)
+    out.remove.push(...ends.filter((q) => !q.object.equals(ctx.target)))
+    if (ends.some((q) => q.object.equals(ctx.target))) continue
+    const a = ctx.match(sheet, S.selectedCell, null).find((q) => cells.has(q.object.value))?.object
+    if (!a) out.add.push(f.quad(sheet, f.namedNode(S.selectedCell), ctx.target))
+    else if (!a.equals(ctx.target)) out.add.push(f.quad(sheet, f.namedNode(S.selectionEnd), ctx.target))
+  }
+  return out
+}
+
+const STEPS: Record<string, [number, number]> = { 'shift+arrowup': [-1, 0], 'shift+arrowdown': [1, 0], 'shift+arrowleft': [0, -1], 'shift+arrowright': [0, 1] }
+
+/** Shift with an arrow key: the range's far corner moves a cell (left and right swap right to left). */
+const extendByKey: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const out = { add: [] as Quad[], remove: [] as Quad[] }
+  const step = STEPS[ctx.object(ctx.event, NS.beh + 'key')?.value ?? '']
+  if (!step) return out
+  const rtl = ctx.match(null, NS.l10n + 'language', null).some((q) => ctx.match(q.object, NS.l10n + 'direction', f.namedNode(NS.l10n + 'RTL')).length > 0)
+  const place = (t: Term) => [Number(ctx.object(t, S.row)?.value), Number(ctx.object(t, S.column)?.value)] as const
+  for (const { sheet, cells } of sheetsOf(ctx)) {
+    const a0 = ctx.match(sheet, S.selectedCell, null).find((q) => cells.has(q.object.value))?.object
+    const a = a0 ?? ctx.target
+    const e0 = ctx.match(sheet, S.selectionEnd, null).find((q) => cells.has(q.object.value))?.object
+    const [fr, fc] = place(e0 ?? a)
+    const [tr, tc] = [fr + step[0], rtl ? fc - step[1] : fc + step[1]]
+    const to = [...cells].map((c) => f.namedNode(c)).find((c) => place(c)[0] === tr && place(c)[1] === tc)
+    if (!to) continue
+    if (e0) out.remove.push(...own(ctx, sheet, S.selectionEnd).filter((q) => q.object.equals(e0)))
+    if (!to.equals(a)) out.add.push(f.quad(sheet, f.namedNode(S.selectionEnd), to))
+    if (!a0) out.add.push(f.quad(sheet, f.namedNode(S.selectedCell), a))
   }
   return out
 }
@@ -305,4 +414,4 @@ const addColumn: ReactionFn = (ctx) => {
   return { add, remove: had }
 }
 
-export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:select': select, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }
+export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:select': select, 'sheet:extend': extend, 'sheet:extend-by-key': extendByKey, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }

@@ -86,7 +86,10 @@ Any component that shows a `c:value` may take it from a query instead: `c:valueQ
 cells that do this: a cell may say its formula as people write it (`c:formulaText "=SUM(B2:B5)"`,
 `"=B2*C2"`), which `c:SheetFormula` reads into the `c:SheetFunction` it names and the cells it reads;
 typing one into a cell makes it a formula cell (`c:EnterSheetFormula`), and its controls add a row
-or a column.
+or a column. Shift with a click or an arrow key selects a range from the selected cell
+(`c:selectionEnd`; `c:SheetSelection` derives its cells, `c:selects`), whose edges are marked and
+whose sum, average and count the line under the grid says. Events record the modifier keys held
+during a click, or the press that moved the focus (`beh:modifiers`).
 
 A **walkthrough** (`ontology/components/walkthrough.ttl`) is an explanation in steps whose phrases
 are `c:Mention`s of resources (`c:mentions`): beside the steps it draws a diagram of what they
