@@ -42,7 +42,7 @@ describe('maintained views: operator laws', () => {
     expect(rows()).toEqual(['1 b', '2 e', '3 d'])
   })
 
-  it('a parameter on LIMIT moves the window in place; a parameter elsewhere builds the view again', () => {
+  it('a parameter on LIMIT moves the window in place', () => {
     const { store, runtime } = lawRuntime()
     const f = store.factory
     const nn = (s: string) => f.namedNode(V + s)
@@ -58,6 +58,28 @@ describe('maintained views: operator laws', () => {
     // No partition was evaluated again: the top-k holds every candidate.
     expect(runtime.views.totals.partitions).toBe(partitions)
     expect(runtime.views.view(V + 'paged')).toBe(paged)
+  })
+
+  it('a parameter in the body retunes in place: a pattern’s constant re-evaluates what it matches, a FILTER’s every partition', () => {
+    const { store, runtime } = lawRuntime()
+    const f = store.factory
+    const nn = (s: string) => f.namedNode(V + s)
+    const int = (n: number) => f.literal(String(n), f.namedNode(NS.xsd + 'integer'))
+    runtime.transaction(() => {
+      for (let i = 0; i < 40; i++) runtime.apply({ remove: [], add: [f.quad(nn('s'), f.namedNode(LDES.member), nn('m' + i)), f.quad(nn('m' + i), nn('x'), int(i % 10)), f.quad(nn('m' + i), nn('kind'), nn('K' + (1 + (i % 4))))] })
+    })
+    const kinded = runtime.views.view(V + 'kinded')!
+    const atLeast = runtime.views.view(V + 'atLeast')!
+    expect(kinded.rows()).toHaveLength(10)
+    const before = kinded.figures.partitions
+    runtime.apply({ remove: [], add: [f.quad(nn('cfg'), nn('kind'), nn('K2'))] })
+    // The same view, its K1 and K2 members evaluated again (and the strict check passed).
+    expect(runtime.views.view(V + 'kinded')).toBe(kinded)
+    expect(kinded.rows().map((r) => r.get('m')!.value.replace(V, '')).sort()).toEqual(['m1', 'm13', 'm17', 'm21', 'm25', 'm29', 'm33', 'm37', 'm5', 'm9'])
+    expect(kinded.figures.partitions - before).toBeLessThanOrEqual(21)
+    runtime.apply({ remove: [], add: [f.quad(nn('cfg'), nn('min'), int(7))] })
+    expect(runtime.views.view(V + 'atLeast')).toBe(atLeast)
+    expect(atLeast.rows().map((r) => r.get('x')!.value)).toEqual(['7', '7'])
   })
 
   it('a view per instance (iv:targets) comes and goes with its instance', () => {

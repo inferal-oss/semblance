@@ -102,7 +102,7 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
     const at = windowAt(q)
     return q.text.slice(0, at) + `\n  ?${windowed.stream!.memberVar} <${windowed.window.timeBy}> ?__t . FILTER(?__t >= "${cutoff}"^^<${XSD}dateTime>)\n` + q.text.slice(at)
   }
-  const signature = JSON.stringify([parts.map((p) => [p.algebra, p.post]), topk?.topk?.order, topk?.orderPost, post, q.templateText])
+  const signature = JSON.stringify([parts.map(shape), topk?.topk?.order, topk?.orderPost, post, q.templateText])
   return {
     kind: 'maintained',
     form: q.form as 'select' | 'construct',
@@ -122,6 +122,11 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
   }
 }
 
+/** A part's structure, without its body's text. */
+function shape(p: Part): unknown {
+  return [p.keys, p.slots, p.op, p.vars, p.post, p.stream, p.window, p.algebra.op, (p.derived ?? []).map((d) => [d.vars, shape(d.part)])]
+}
+
 /** Where the window's filter goes in the oracle: the start of the (first) member-local body. */
 function windowAt(q: Query): number {
   const g = asSelect(q.select.where.items[0])?.where ?? q.select.where
@@ -130,10 +135,15 @@ function windowAt(q: Query): number {
 
 /** A part: the partitions of a SELECT's body and what it does with their rows. */
 function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, prologue: string): Part {
-  const body = text.slice(sel.where.at + 1, sel.where.end - 1)
-  if (sel.where.items.length === 1 && asSelect(sel.where.items[0])) throw new Unsupported('a subquery as the whole body (nest it as a part)')
   checkGroup(sel.where)
+  const isRoot = (q: Select) => sel.where.items.some((it) => asSelect(it) === q)
+  // Aggregate subqueries (candidates; see below which are maintained as parts of their own).
+  const candidates = derivedSubqueries(sel.where)
   const certain = certainVars(sel.where)
+  // Bound only by a derived subquery at the root: its group variables (an aggregate of aggregates).
+  const fromSub = new Set<string>()
+  for (const q of candidates) if (isRoot(q)) for (const e of q.groupBy) if (/^[?$]\w+$/.test(e.text.trim()) && certainVars(q.where).has(e.text.trim().slice(1)) && !certain.has(e.text.trim().slice(1))) fromSub.add(e.text.trim().slice(1))
+  for (const v of fromSub) certain.add(v)
   // The partition key.
   const members = rootTriples(sel.where).filter((t) => t.p.k === 'link' && t.p.iri === TREE_MEMBER && t.o.k === 'var')
   if (members.length > 1 && !source.partitionBy) throw new Unsupported('more than one tree:member pattern (say iv:partitionBy)')
@@ -151,12 +161,30 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   } else {
     // The subjects of the body's own triple patterns: a partition per combination (a cell; a
     // configuration, a scenario and a size of a cross product), so a change to one reaches its slice.
-    // A constant subject's values are a dimension too (the sizes a run plans).
+    // A constant subject's values are a dimension too (the sizes a run plans). With no triples of
+    // its own, the groups of a derived subquery (an aggregate of aggregates: a partition per row).
     const dims = rootTriples(sel.where).flatMap((t) => (t.s.k === 'var' ? [t.s.v] : t.o.k === 'var' && t.p.k !== 'var' ? [t.o.v] : []))
+    if (!dims.length) dims.push(...fromSub)
     keys = [...new Set(dims.filter((v) => certain.has(v) && !v.startsWith('__')))]
   }
   for (const k of keys) if (!certain.has(k)) throw new Unsupported(`the partition key ?${k} is not bound in every solution`)
-  const deps = new Dependencies(run.factory, sel.where, keys)
+  // Derived subqueries: those at the root, and those elsewhere that project no key (a nested one
+  // projecting a key stays the store's: its rows could not be joined to the key there).
+  const subs = candidates.filter((q) => isRoot(q) || !projectedVars(q).some((v) => keys.includes(v)))
+  const derived = subs.map((q) => ({ part: part(q, { ...source, partitionBy: undefined, window: undefined }, run, text, prologue), vars: projectedVars(q) }))
+  // Keys a derived subquery alone binds are not correlated (VALUES in LATERAL cannot bind what the
+  // left side binds): its rows are filtered to the batch instead. Keys the body binds too are
+  // renamed in its rows and joined by a FILTER.
+  const leftKeys = keys.filter((k) => !fromSub.has(k))
+  const renamed = derived.map((d, i) => new Map(isRoot(subs[i]!) ? d.vars.filter((v) => leftKeys.includes(v)).map((v) => [v, `__d${i}_${v}`] as const) : []))
+  const pieces: string[] = []
+  let at = sel.where.at + 1
+  for (const q of subs) pieces.push(text.slice(at, q.at)), (at = q.end)
+  pieces.push(text.slice(at, sel.where.end - 1))
+  const joins = renamed.flatMap((m) => [...m].map(([v, r]) => `FILTER(sameTerm(?${r}, ?${v}))`)).join(' ')
+  const columns = (i: number) => derived[i]!.vars.map((v) => '?' + (renamed[i]!.get(v) ?? v)).join(' ')
+  const body = pieces.reduce((acc, piece, i) => acc + (i ? `VALUES (${columns(i - 1)}) { … }` : '') + piece, '') + (joins ? ' ' + joins : '')
+  const deps = new Dependencies(run.factory, sel.where, keys, subs)
   if (deps.problem) throw new Unsupported(deps.problem)
 
   // What the partition rows hold, and what the part does with them.
@@ -238,17 +266,40 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   // Slices (keys with UNDEF parts) may overlap in one batch: each VALUES row is numbered (?__k), and
   // a partition takes its rows from the first row that covers it - all of its solutions, once.
   const headK = head.replace(/ WHERE \{$/, ' ?__k WHERE {')
-  const local = (batch: readonly Term[][] | undefined) => {
+  // The body with each derived subquery's current rows in its place (those the batch's keys allow).
+  const bodyWith = (batch: readonly (Term | undefined)[][] | undefined, rows: readonly Map<string, Term>[][] | undefined) => {
+    if (!subs.length) return body
+    return (
+      pieces.reduce((acc, piece, i) => {
+        if (!i) return piece
+        const d = derived[i - 1]!
+        const allowed = new Map<string, Set<string>>()
+        for (const v of d.vars) {
+          const k = keys.indexOf(v)
+          if (k >= 0 && batch && batch.every((b) => b[k])) allowed.set(v, new Set(batch.map((b) => termKey(b[k]!))))
+        }
+        const fits = (r: Map<string, Term>) => [...allowed].every(([v, set]) => r.has(v) && set.has(termKey(r.get(v)!)))
+        const values = (rows?.[i - 1] ?? []).filter(fits).map((r) => `(${d.vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`)
+        return acc + `VALUES (${columns(i - 1)}) { ${values.join(' ')} }` + piece
+      }, '') + (joins ? '\n  ' + joins : '')
+    )
+  }
+  const local = (batch0: readonly (Term | undefined)[][] | undefined, rows?: readonly Map<string, Term>[][]) => {
     const out = new Map<string, Map<string, Term>[]>()
-    if (batch && !batch.length) return out
-    const sliced = !!batch && keys.length > 0 && batch.some((b) => b.some((t) => !t))
-    const query = !batch || !keys.length
+    if (batch0 && !batch0.length) return out
+    const body = bodyWith(batch0, rows)
+    // The batch on the keys the body correlates (others filtered the derived rows above).
+    const at = leftKeys.map((k) => keys.indexOf(k))
+    const batch = batch0 && [...new Map(batch0.map((b) => at.map((i) => b[i])).map((b) => [keyString(b), b])).values()]
+    const sliced = !!batch && leftKeys.length > 0 && batch.some((b) => b.some((t) => !t))
+    const query = !batch || !leftKeys.length
       ? `${head}\n${body}\n}`
       : sliced
-        ? `${headK}\n  VALUES (?__k ${keys.map((k) => '?' + k).join(' ')}) { ${batch.map((b, i) => `(${i} ${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n  LATERAL {\n${body}\n  }\n}`
-        : `${head}\n  VALUES (${keys.map((k) => '?' + k).join(' ')}) { ${batch.map((b) => `(${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n  LATERAL {\n${body}\n  }\n}`
+        ? `${headK}\n  VALUES (?__k ${leftKeys.map((k) => '?' + k).join(' ')}) { ${batch.map((b, i) => `(${i} ${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n  LATERAL {\n${body}\n  }\n}`
+        : `${head}\n  VALUES (${leftKeys.map((k) => '?' + k).join(' ')}) { ${batch.map((b) => `(${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n  LATERAL {\n${body}\n  }\n}`
     const from = new Map<string, string>()
-    for (const row of run.select(query)) {
+    const result = run.select(query)
+    for (const row of result) {
       const key = keyString(keys.map((k) => row.get(k)))
       if (sliced) {
         const k = row.get('__k')!.value
@@ -277,6 +328,8 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     op,
     vars,
     post: post.binds.length || post.filters.length ? post : undefined,
+    derived: derived.length ? derived : undefined,
+    patternless: withoutTriples(sel.where, text),
     algebra: {
       local: keys.length ? `LATERAL(VALUES ${keyText}, {${flat(body)}})` : `{${flat(body)}}`,
       op:
@@ -330,6 +383,42 @@ function asSelect(it: Item | undefined): Select | undefined {
   if (it?.k === 'select') return it.q
   if (it?.k === 'group' && it.g.items.length === 1 && it.g.items[0]!.k === 'select') return it.g.items[0]!.q
   return undefined
+}
+
+/**
+ * Aggregate subqueries (GROUP BY, aggregates, HAVING; no LIMIT / OFFSET) in a group, outside
+ * explicit LATERALs (there the store keeps them correlated) and outside each other.
+ */
+function derivedSubqueries(g: Group, out: Select[] = []): Select[] {
+  for (const it of g.items) {
+    if (it.k === 'select') {
+      const q = it.q
+      if ((q.groupBy.length || q.having.length || q.projection.some((p) => p.e?.aggregates.length)) && q.limit === undefined && q.offset === undefined) out.push(q)
+    } else if (it.k === 'union') it.gs.forEach((b) => derivedSubqueries(b, out))
+    else if (it.k === 'group' || it.k === 'optional' || it.k === 'minus') derivedSubqueries(it.g, out)
+    else if (it.k === 'filter' || it.k === 'bind') for (const x of it.e.exists) derivedSubqueries(x.g, out)
+  }
+  return out.sort((a, b) => a.at - b.at)
+}
+
+/** A group's text with every triples block (at any depth) left out. */
+function withoutTriples(g: Group, text: string): string {
+  const spans: [number, number][] = []
+  const visit = (g: Group) => {
+    for (const it of g.items) {
+      if (it.k === 'triples') spans.push([it.at, it.end])
+      else if (it.k === 'select') visit(it.q.where)
+      else if (it.k === 'union') it.gs.forEach(visit)
+      else if ('g' in it) visit(it.g)
+      else if (it.k === 'filter' || it.k === 'bind') for (const x of it.e.exists) visit(x.g)
+    }
+  }
+  visit(g)
+  spans.sort((a, b) => a[0] - b[0])
+  let out = ''
+  let at = g.at
+  for (const [from, to] of spans) if (from >= at) (out += text.slice(at, from) + '…'), (at = to)
+  return out + text.slice(at, g.end)
 }
 
 function rootTriples(g: Group) {
