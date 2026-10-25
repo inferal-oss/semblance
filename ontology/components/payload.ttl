@@ -266,7 +266,8 @@ WHERE {
       BIND(rdfhtml:P AS ?rootTag)
       BIND("sem-empty" AS ?rootClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
       BIND(STR(COALESCE(?rawEmpty, "No payload.")) AS ?emptyText)
     } UNION {
       # The header and the chosen view.
@@ -308,7 +309,8 @@ WHERE {
       BIND(IF(?opt = ?chosen, "true", "false") AS ?pressed)
       BIND(IRI(CONCAT(STR($this), "/~l10n-", ?optSlug)) AS ?optLabelNode)
       OPTIONAL { ?optLabelNode l10n:label ?optLabelLocal }
-      OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") }
+      OPTIONAL { ?optLabel_uAt l10n:of ?opt ; l10n:name ?optLabel_u }
+  OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") }
       OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) }
       OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) }
       BIND(STR(COALESCE(?optLabelLocal, ?optLabel_u, ?optLabel_en, ?optLabel_any, ?optSlug)) AS ?optLabel)

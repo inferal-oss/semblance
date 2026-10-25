@@ -350,7 +350,8 @@ WHERE {
       # The nav, and the previous / next steps.
       BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
       OPTIONAL { $this l10n:label ?localLabel }
-      OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+      OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
       BIND(STR(COALESCE(?localLabel, ?rawLabel, "Pagination")) AS ?label)
       VALUES (?step ?glyph ?buttonLabel ?delta) { ("prev" "‹" "Previous page" -1) ("next" "›" "Next page" 1) }
       BIND(?page + ?delta AS ?target)
@@ -514,6 +515,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, "Progress")) AS ?label)
   LATERAL {

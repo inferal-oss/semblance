@@ -166,23 +166,30 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   {
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+    OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
     OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
     BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
     OPTIONAL { $this c:sandboxState ?state0 . ?state0 sem:slug ?stateSlug0 }
     BIND(COALESCE(STR(?stateSlug0), "pending") AS ?stateSlug)
     OPTIONAL { ?sourcesPhrase0At l10n:of c:LiveSourcesPhrase ; l10n:name ?sourcesPhrase0 }
+  OPTIONAL { ?sourcesPhrase0At l10n:of c:LiveSourcesPhrase ; l10n:name ?sourcesPhrase0 }
   OPTIONAL { c:LiveSourcesPhrase rdfs:label ?sourcesPhrase0 FILTER(langMatches(lang(?sourcesPhrase0), "en")) }
     OPTIONAL { ?resetPhrase0At l10n:of c:LiveResetPhrase ; l10n:name ?resetPhrase0 }
+  OPTIONAL { ?resetPhrase0At l10n:of c:LiveResetPhrase ; l10n:name ?resetPhrase0 }
   OPTIONAL { c:LiveResetPhrase rdfs:label ?resetPhrase0 FILTER(langMatches(lang(?resetPhrase0), "en")) }
     OPTIONAL { ?copyPhrase0At l10n:of c:LiveCopyPhrase ; l10n:name ?copyPhrase0 }
+  OPTIONAL { ?copyPhrase0At l10n:of c:LiveCopyPhrase ; l10n:name ?copyPhrase0 }
   OPTIONAL { c:LiveCopyPhrase rdfs:label ?copyPhrase0 FILTER(langMatches(lang(?copyPhrase0), "en")) }
     OPTIONAL { ?copiedPhrase0At l10n:of c:LiveCopiedPhrase ; l10n:name ?copiedPhrase0 }
+  OPTIONAL { ?copiedPhrase0At l10n:of c:LiveCopiedPhrase ; l10n:name ?copiedPhrase0 }
   OPTIONAL { c:LiveCopiedPhrase rdfs:label ?copiedPhrase0 FILTER(langMatches(lang(?copiedPhrase0), "en")) }
     OPTIONAL { ?renderingPhrase0At l10n:of c:LiveRenderingPhrase ; l10n:name ?renderingPhrase0 }
+  OPTIONAL { ?renderingPhrase0At l10n:of c:LiveRenderingPhrase ; l10n:name ?renderingPhrase0 }
   OPTIONAL { c:LiveRenderingPhrase rdfs:label ?renderingPhrase0 FILTER(langMatches(lang(?renderingPhrase0), "en")) }
     OPTIONAL { ?timePhrase0At l10n:of c:LiveTimePhrase ; l10n:name ?timePhrase0 }
+  OPTIONAL { ?timePhrase0At l10n:of c:LiveTimePhrase ; l10n:name ?timePhrase0 }
   OPTIONAL { c:LiveTimePhrase rdfs:label ?timePhrase0 FILTER(langMatches(lang(?timePhrase0), "en")) }
     BIND(STR(?sourcesPhrase0) AS ?sourcesPhrase)
     BIND(STR(?resetPhrase0) AS ?resetPhrase)
@@ -233,6 +240,7 @@ WHERE {
     BIND(IF(?hasProblems, IRI(CONCAT(STR($this), "/~problems")), ?none) AS ?problems)
     # The Text modality, when asked for.
     BIND(EXISTS { $this c:textPreview ?tp FILTER(STR(?tp) = "true") } AS ?withText)
+    OPTIONAL { FILTER(?withText) ?textPhrase0At l10n:of c:LiveTextPhrase ; l10n:name ?textPhrase0 }
     OPTIONAL { FILTER(?withText) c:LiveTextPhrase rdfs:label ?textPhrase0 FILTER(langMatches(lang(?textPhrase0), "en")) }
     BIND(STR(?textPhrase0) AS ?textPhrase)
     BIND(IF(?withText, IRI(CONCAT(STR($this), "/~text-head")), ?none) AS ?textHead)
@@ -247,7 +255,8 @@ WHERE {
       OPTIONAL { $this c:selectedSource ?chosen }
       OPTIONAL { $this c:sources/rdf:first ?first }
       OPTIONAL { ?cell rdf:rest ?nextCell FILTER(?nextCell != rdf:nil) }
-      OPTIONAL { ?editor c:label ?name_u FILTER(isLiteral(?name_u) && lang(?name_u) = "") }
+      OPTIONAL { ?name_uAt l10n:of ?editor ; l10n:label ?name_u }
+  OPTIONAL { ?editor c:label ?name_u FILTER(isLiteral(?name_u) && lang(?name_u) = "") }
       OPTIONAL { FILTER(!BOUND(?name_u)) ?editor c:label ?name_any FILTER(isLiteral(?name_any)) }
     }
     BIND(STR(COALESCE(?name_u, ?name_any, REPLACE(STR(?editor), "^.*[#/]", ""))) AS ?sourceName)
@@ -277,6 +286,7 @@ WHERE {
       OPTIONAL { ?problem sty:tone/sem:slug ?tone0 }
       OPTIONAL { $this c:problem ?nextProblem . ?nextProblem sem:order ?nextOrder FILTER(?nextOrder = ?i + 1) }
       OPTIONAL { ?linePhraseAt l10n:of c:LiveLinePhrase ; l10n:name ?linePhrase }
+  OPTIONAL { ?linePhraseAt l10n:of c:LiveLinePhrase ; l10n:name ?linePhrase }
   OPTIONAL { c:LiveLinePhrase rdfs:label ?linePhrase FILTER(langMatches(lang(?linePhrase), "en")) }
     }
     BIND(STR(?message0) AS ?message)
@@ -311,10 +321,12 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   {
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+    OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
     OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
-    OPTIONAL { c:LiveExample rdfs:label ?kind FILTER(langMatches(lang(?kind), "en")) }
+    OPTIONAL { ?kindAt l10n:of c:LiveExample ; l10n:name ?kind }
+  OPTIONAL { c:LiveExample rdfs:label ?kind FILTER(langMatches(lang(?kind), "en")) }
     BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
     BIND(CONCAT("[", STR(?kind), IF(BOUND(?caption) && ?caption != "", CONCAT(": ", ?caption), ""), "]") AS ?line)
     BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)

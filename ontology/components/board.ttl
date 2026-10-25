@@ -99,7 +99,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   {
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+    OPTIONAL { ?ownLabelAt l10n:of $this ; l10n:label ?ownLabel }
+  OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
     OPTIONAL { $this c:cardOrder ?cardOrder }
     BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label)
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
@@ -108,7 +109,8 @@ WHERE {
     ?p rdfs:range ?range . ?laneNode a ?range FILTER(isIRI(?laneNode))
     OPTIONAL { ?laneNode sem:order ?declaredOrder }
     BIND(COALESCE(xsd:double(?declaredOrder), 0) AS ?order)
-    OPTIONAL { ?laneNode rdfs:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+    OPTIONAL { ?plainLabelAt l10n:of ?laneNode ; l10n:name ?plainLabel }
+  OPTIONAL { ?laneNode rdfs:label ?plainLabel FILTER(lang(?plainLabel) = "") }
     BIND(STR(COALESCE(?plainLabel, REPLACE(STR(?laneNode), "^.*[#/]", ""))) AS ?laneLabel)
     LATERAL { OPTIONAL { SELECT ?this ?p ?laneNode (COUNT(?card) AS ?held) WHERE { $this c:card ?card . ?card ?p ?laneNode } GROUP BY ?this ?p ?laneNode } }
     LATERAL { OPTIONAL { SELECT ?laneNode ?p (MIN(?bound) AS ?max) WHERE { ?shape sh:targetNode ?laneNode ; sh:property ?ps . ?ps sh:path/sh:inversePath ?p ; sh:maxCount ?bound } GROUP BY ?laneNode ?p } }
@@ -145,7 +147,8 @@ WHERE {
     ?p rdfs:range ?range . ?laneNode a ?range FILTER(isIRI(?laneNode))
     OPTIONAL { ?laneNode sem:order ?declaredOrder }
     BIND(COALESCE(xsd:double(?declaredOrder), 0) AS ?order)
-    OPTIONAL { ?laneNode rdfs:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+    OPTIONAL { ?plainLabelAt l10n:of ?laneNode ; l10n:name ?plainLabel }
+  OPTIONAL { ?laneNode rdfs:label ?plainLabel FILTER(lang(?plainLabel) = "") }
     BIND(STR(COALESCE(?plainLabel, REPLACE(STR(?laneNode), "^.*[#/]", ""))) AS ?laneLabel)
     LATERAL { OPTIONAL { SELECT ?this ?p ?laneNode (COUNT(?card) AS ?held) WHERE { $this c:card ?card . ?card ?p ?laneNode } GROUP BY ?this ?p ?laneNode } }
     LATERAL { OPTIONAL { SELECT ?laneNode ?p (MIN(?bound) AS ?max) WHERE { ?shape sh:targetNode ?laneNode ; sh:property ?ps . ?ps sh:path/sh:inversePath ?p ; sh:maxCount ?bound } GROUP BY ?laneNode ?p } }
@@ -249,19 +252,25 @@ WHERE {
   # its own, so it cannot see $this when the rule runs for many cards at once).
   OPTIONAL {
     ?board c:cardTag ?tagProperty . ?item ?tagProperty ?tagValue .
-    OPTIONAL { ?tagValue rdfs:label ?tagPlain FILTER(lang(?tagPlain) = "") }
+    OPTIONAL { ?tagPlainAt l10n:of ?tagValue ; l10n:name ?tagPlain }
+  OPTIONAL { ?tagValue rdfs:label ?tagPlain FILTER(lang(?tagPlain) = "") }
     OPTIONAL { ?tagValue sty:tone ?tagTone }
   }
   OPTIONAL {
     ?board c:cardPerson ?personProperty . ?item ?personProperty ?personValue .
-    OPTIONAL { ?personValue rdfs:label ?personPlain FILTER(lang(?personPlain) = "") }
+    OPTIONAL { ?personPlainAt l10n:of ?personValue ; l10n:name ?personPlain }
+  OPTIONAL { ?personValue rdfs:label ?personPlain FILTER(lang(?personPlain) = "") }
   }
+  OPTIONAL { ?movePhraseAt l10n:of c:MoveCommand ; l10n:name ?movePhrase }
   OPTIONAL { ?movePhraseAt l10n:of c:MoveCommand ; l10n:name ?movePhrase }
   OPTIONAL { c:MoveCommand rdfs:label ?movePhrase FILTER(langMatches(lang(?movePhrase), "en")) }
   OPTIONAL { ?removePhraseAt l10n:of c:RemoveCommand ; l10n:name ?removePhrase }
+  OPTIONAL { ?removePhraseAt l10n:of c:RemoveCommand ; l10n:name ?removePhrase }
   OPTIONAL { c:RemoveCommand rdfs:label ?removePhrase FILTER(langMatches(lang(?removePhrase), "en")) }
-  OPTIONAL { $this c:previousLane ?prevLane . OPTIONAL { ?prevLane rdfs:label ?prevPlain FILTER(lang(?prevPlain) = "") } }
-  OPTIONAL { $this c:nextLane ?nextLane . OPTIONAL { ?nextLane rdfs:label ?nextPlain FILTER(lang(?nextPlain) = "") } }
+  OPTIONAL { $this c:previousLane ?prevLane . OPTIONAL { ?prevPlainAt l10n:of ?prevLane ; l10n:name ?prevPlain }
+  OPTIONAL { ?prevLane rdfs:label ?prevPlain FILTER(lang(?prevPlain) = "") } }
+  OPTIONAL { $this c:nextLane ?nextLane . OPTIONAL { ?nextPlainAt l10n:of ?nextLane ; l10n:name ?nextPlain }
+  OPTIONAL { ?nextLane rdfs:label ?nextPlain FILTER(lang(?nextPlain) = "") } }
   BIND(EXISTS { ?board c:removable ?removable FILTER(STR(?removable) = "true") } AS ?canRemove)
   BIND(IF(isLiteral(?tagValue), STR(?tagValue), STR(COALESCE(?tagPlain, REPLACE(STR(?tagValue), "^.*[#/]", "")))) AS ?tagLabel)
   BIND(IF(BOUND(?tagValue), IRI(CONCAT(STR($this), "/~tag")), ?none) AS ?tag)
@@ -300,11 +309,13 @@ WHERE {
   ?board c:cardTitle ?titleProperty . ?item ?titleProperty ?titleValue .
   OPTIONAL {
     ?board c:cardPerson ?personProperty . ?item ?personProperty ?personValue .
-    OPTIONAL { ?personValue rdfs:label ?personPlain FILTER(lang(?personPlain) = "") }
+    OPTIONAL { ?personPlainAt l10n:of ?personValue ; l10n:name ?personPlain }
+  OPTIONAL { ?personValue rdfs:label ?personPlain FILTER(lang(?personPlain) = "") }
   }
   OPTIONAL {
     ?board c:cardTag ?tagProperty . ?item ?tagProperty ?tagValue .
-    OPTIONAL { ?tagValue rdfs:label ?tagPlain FILTER(lang(?tagPlain) = "") }
+    OPTIONAL { ?tagPlainAt l10n:of ?tagValue ; l10n:name ?tagPlain }
+  OPTIONAL { ?tagValue rdfs:label ?tagPlain FILTER(lang(?tagPlain) = "") }
   }
   BIND(IF(isLiteral(?personValue), STR(?personValue), STR(COALESCE(?personPlain, REPLACE(STR(?personValue), "^.*[#/]", "")))) AS ?personName)
   BIND(IF(isLiteral(?tagValue), STR(?tagValue), STR(COALESCE(?tagPlain, REPLACE(STR(?tagValue), "^.*[#/]", "")))) AS ?tagLabel)

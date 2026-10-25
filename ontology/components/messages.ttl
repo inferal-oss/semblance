@@ -59,6 +59,7 @@ CONSTRUCT {
 WHERE {
   $this a c:MessageList .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, "Messages")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -161,8 +162,10 @@ WHERE {
   BIND(STR(?published) AS ?at)
   BIND(SUBSTR(STR(?published), 12, 5) AS ?clock)
   OPTIONAL { ?message as:attributedTo ?person
-    OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
-    OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") }
+    OPTIONAL { ?personCAt l10n:of ?person ; l10n:label ?personC }
+  OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
+    OPTIONAL { ?personRAt l10n:of ?person ; l10n:name ?personR }
+  OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") }
     OPTIONAL { ?person c:image ?img } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(STR(?img) AS ?image)
@@ -207,8 +210,10 @@ WHERE {
   BIND(!BOUND(?published) && BOUND(?started) AS ?pending)
   FILTER(?pending || BOUND(?content))
   OPTIONAL { ?message as:attributedTo ?person
-    OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
-    OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
+    OPTIONAL { ?personCAt l10n:of ?person ; l10n:label ?personC }
+  OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
+    OPTIONAL { ?personRAt l10n:of ?person ; l10n:name ?personR }
+  OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(IF(?pending, CONCAT("  ", ?author, " is typing…"),
           CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ": ", STR(?content))) AS ?line)

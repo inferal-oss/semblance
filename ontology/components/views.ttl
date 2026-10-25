@@ -59,15 +59,18 @@ WHERE {
   $this a/rdfs:subClassOf* c:Card .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { ?badge0_uAt l10n:of $this ; l10n:badge ?badge0_u }
   OPTIONAL { $this c:badge ?badge0_u FILTER(isLiteral(?badge0_u) && lang(?badge0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?badge0_u)) $this c:badge ?badge0_en FILTER(langMatches(lang(?badge0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?badge0_u) && !BOUND(?badge0_en)) $this c:badge ?badge0_any FILTER(isLiteral(?badge0_any)) }
   BIND(STR(COALESCE(?badge0_u, ?badge0_en, ?badge0_any)) AS ?badge0)
+  OPTIONAL { ?note0_uAt l10n:of $this ; l10n:note ?note0_u }
   OPTIONAL { $this c:note ?note0_u FILTER(isLiteral(?note0_u) && lang(?note0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?note0_u)) $this c:note ?note0_en FILTER(langMatches(lang(?note0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?note0_u) && !BOUND(?note0_en)) $this c:note ?note0_any FILTER(isLiteral(?note0_any)) }
@@ -101,6 +104,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:Card .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -170,12 +174,14 @@ WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
   BIND(COALESCE(?label0, "") AS ?label)
+  OPTIONAL { ?subtitle0_uAt l10n:of $this ; l10n:subtitle ?subtitle0_u }
   OPTIONAL { $this c:subtitle ?subtitle0_u FILTER(isLiteral(?subtitle0_u) && lang(?subtitle0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u)) $this c:subtitle ?subtitle0_en FILTER(langMatches(lang(?subtitle0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u) && !BOUND(?subtitle0_en)) $this c:subtitle ?subtitle0_any FILTER(isLiteral(?subtitle0_any)) }
@@ -208,6 +214,7 @@ WHERE {
   OPTIONAL { FILTER(BOUND(?firstMore)) $this c:actions/rdf:rest* ?lastCell . ?lastCell rdf:first ?lastAction0 ; rdf:rest rdf:nil FILTER(isIRI(?lastAction0)) }
   BIND(IF(BOUND(?firstMore), ?lastAction0, ?none) AS ?lastAction)
   BIND(STR(EXISTS { $this c:expanded ?expanded FILTER(STR(?expanded) = "true") }) AS ?openText0)
+  OPTIONAL { ?moreLabel_uAt l10n:of $this ; l10n:moreLabel ?moreLabel_u }
   OPTIONAL { $this c:moreLabel ?moreLabel_u FILTER(isLiteral(?moreLabel_u) && lang(?moreLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?moreLabel_u)) $this c:moreLabel ?moreLabel_en FILTER(langMatches(lang(?moreLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?moreLabel_u) && !BOUND(?moreLabel_en)) $this c:moreLabel ?moreLabel_any FILTER(isLiteral(?moreLabel_any)) }
@@ -252,11 +259,13 @@ WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { ?subtitle0_uAt l10n:of $this ; l10n:subtitle ?subtitle0_u }
   OPTIONAL { $this c:subtitle ?subtitle0_u FILTER(isLiteral(?subtitle0_u) && lang(?subtitle0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u)) $this c:subtitle ?subtitle0_en FILTER(langMatches(lang(?subtitle0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u) && !BOUND(?subtitle0_en)) $this c:subtitle ?subtitle0_any FILTER(isLiteral(?subtitle0_any)) }
@@ -341,11 +350,13 @@ WHERE {
     $this a/rdfs:subClassOf* c:GraphMark .
     c:GraphMark c:markPath ?d ; c:markEcho ?offset .
     BIND(CONCAT("translate(", STR(?offset), " ", STR(?offset), ")") AS ?shift)
-    OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
+    OPTIONAL { ?labelC_uAt l10n:of $this ; l10n:label ?labelC_u }
+  OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
     OPTIONAL { FILTER(!BOUND(?labelC_u)) $this c:label ?labelC_en FILTER(langMatches(lang(?labelC_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?labelC_u) && !BOUND(?labelC_en)) $this c:label ?labelC_any FILTER(isLiteral(?labelC_any)) }
     BIND(STR(COALESCE(?labelC_u, ?labelC_en, ?labelC_any)) AS ?labelC)
-    OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
+    OPTIONAL { ?labelR_uAt l10n:of $this ; l10n:name ?labelR_u }
+  OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
     OPTIONAL { FILTER(!BOUND(?labelR_u)) $this rdfs:label ?labelR_en FILTER(langMatches(lang(?labelR_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?labelR_u) && !BOUND(?labelR_en)) $this rdfs:label ?labelR_any FILTER(isLiteral(?labelR_any)) }
     BIND(STR(COALESCE(?labelR_u, ?labelR_en, ?labelR_any)) AS ?labelR)
@@ -457,10 +468,12 @@ WHERE {
   OPTIONAL { $this c:color ?color0 } BIND(COALESCE(STR(?color0), "currentColor") AS ?fill)
   OPTIONAL { $this c:fillRule ?rule0 } BIND(COALESCE(STR(?rule0), "nonzero") AS ?rule)
   BIND(EXISTS { $this c:decorative ?dec FILTER(STR(?dec) = "true") } AS ?decorative)
+  OPTIONAL { ?labelC_uAt l10n:of $this ; l10n:label ?labelC_u }
   OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
   OPTIONAL { FILTER(!BOUND(?labelC_u)) $this c:label ?labelC_en FILTER(langMatches(lang(?labelC_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?labelC_u) && !BOUND(?labelC_en)) $this c:label ?labelC_any FILTER(isLiteral(?labelC_any)) }
   BIND(STR(COALESCE(?labelC_u, ?labelC_en, ?labelC_any)) AS ?labelC)
+  OPTIONAL { ?labelR_uAt l10n:of $this ; l10n:name ?labelR_u }
   OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
   OPTIONAL { FILTER(!BOUND(?labelR_u)) $this rdfs:label ?labelR_en FILTER(langMatches(lang(?labelR_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?labelR_u) && !BOUND(?labelR_en)) $this rdfs:label ?labelR_any FILTER(isLiteral(?labelR_any)) }
@@ -510,6 +523,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Toggle ; c:controls ?target ; c:property ?property .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -519,12 +533,14 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?propertyLabelC_u)) ?property c:label ?propertyLabelC_en FILTER(langMatches(lang(?propertyLabelC_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?propertyLabelC_u) && !BOUND(?propertyLabelC_en)) ?property c:label ?propertyLabelC_any FILTER(isLiteral(?propertyLabelC_any)) }
   BIND(STR(COALESCE(?propertyLabelC_u, ?propertyLabelC_en, ?propertyLabelC_any)) AS ?propertyLabelC)
+  OPTIONAL { ?propertyLabelR_uAt l10n:of ?property ; l10n:name ?propertyLabelR_u }
   OPTIONAL { ?property rdfs:label ?propertyLabelR_u FILTER(isLiteral(?propertyLabelR_u) && lang(?propertyLabelR_u) = "") }
   OPTIONAL { FILTER(!BOUND(?propertyLabelR_u)) ?property rdfs:label ?propertyLabelR_en FILTER(langMatches(lang(?propertyLabelR_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?propertyLabelR_u) && !BOUND(?propertyLabelR_en)) ?property rdfs:label ?propertyLabelR_any FILTER(isLiteral(?propertyLabelR_any)) }
   BIND(STR(COALESCE(?propertyLabelR_u, ?propertyLabelR_en, ?propertyLabelR_any)) AS ?propertyLabelR)
   BIND(COALESCE(?propertyLabelC, ?propertyLabelR, REPLACE(STR(?property), "^.*[#/]", "")) AS ?propertyLabel) }
   BIND(COALESCE(?ownLabel2, ?propertyLabel) AS ?label)
+  OPTIONAL { ?note0_uAt l10n:of $this ; l10n:note ?note0_u }
   OPTIONAL { $this c:note ?note0_u FILTER(isLiteral(?note0_u) && lang(?note0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?note0_u)) $this c:note ?note0_en FILTER(langMatches(lang(?note0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?note0_u) && !BOUND(?note0_en)) $this c:note ?note0_any FILTER(isLiteral(?note0_any)) }

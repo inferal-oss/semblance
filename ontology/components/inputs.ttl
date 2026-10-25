@@ -60,6 +60,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextArea .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -114,6 +115,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextArea .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -186,6 +188,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Checkbox .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -235,6 +238,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Checkbox .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -332,10 +336,13 @@ WHERE {
   BIND(STR($this) AS ?groupName)
   {
   $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { ?propL0At l10n:of ?prop ; l10n:label ?propL0 }
   OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+  OPTIONAL { ?propL1At l10n:of ?prop ; l10n:name ?propL1 }
   OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
   OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
   BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel0)
@@ -385,7 +392,9 @@ WHERE {
       }
     }
   }
+  OPTIONAL { ?optL0At l10n:of ?opt ; l10n:label ?optL0 }
   OPTIONAL { ?opt c:label ?optL0 FILTER(lang(?optL0) = "") }
+  OPTIONAL { ?optL1At l10n:of ?opt ; l10n:name ?optL1 }
   OPTIONAL { ?opt rdfs:label ?optL1 FILTER(lang(?optL1) = "") }
   OPTIONAL { ?opt rdfs:label ?optL2 FILTER(langMatches(lang(?optL2), "en")) }
   BIND(STR(COALESCE(?optL0, ?optL1, ?optL2, REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?optLabelData)
@@ -423,10 +432,13 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   {
   $this a c:RadioGroup ; c:controls ?target ; c:property ?prop .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
+  OPTIONAL { ?propL0At l10n:of ?prop ; l10n:label ?propL0 }
   OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+  OPTIONAL { ?propL1At l10n:of ?prop ; l10n:name ?propL1 }
   OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
   OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
   BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel)
@@ -454,7 +466,9 @@ WHERE {
       }
     }
   }
+  OPTIONAL { ?optL0At l10n:of ?opt ; l10n:label ?optL0 }
   OPTIONAL { ?opt c:label ?optL0 FILTER(lang(?optL0) = "") }
+  OPTIONAL { ?optL1At l10n:of ?opt ; l10n:name ?optL1 }
   OPTIONAL { ?opt rdfs:label ?optL1 FILTER(lang(?optL1) = "") }
   OPTIONAL { ?opt rdfs:label ?optL2 FILTER(langMatches(lang(?optL2), "en")) }
   BIND(STR(COALESCE(?optL0, ?optL1, ?optL2, REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?optLabel)
@@ -511,13 +525,16 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:ToggleSwitch .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData0)
   OPTIONAL {
     $this c:controls ?target ; c:property ?prop .
-    OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
-    OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
+    OPTIONAL { ?propL0At l10n:of ?prop ; l10n:label ?propL0 }
+  OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+    OPTIONAL { ?propL1At l10n:of ?prop ; l10n:name ?propL1 }
+  OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
     OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
     BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel)
   }
@@ -570,13 +587,16 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:ToggleSwitch .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData0)
   OPTIONAL {
     $this c:controls ?target ; c:property ?prop .
-    OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
-    OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
+    OPTIONAL { ?propL0At l10n:of ?prop ; l10n:label ?propL0 }
+  OPTIONAL { ?prop c:label ?propL0 FILTER(lang(?propL0) = "") }
+    OPTIONAL { ?propL1At l10n:of ?prop ; l10n:name ?propL1 }
+  OPTIONAL { ?prop rdfs:label ?propL1 FILTER(lang(?propL1) = "") }
     OPTIONAL { ?prop rdfs:label ?propL2 FILTER(langMatches(lang(?propL2), "en")) }
     BIND(STR(COALESCE(?propL0, ?propL1, ?propL2, REPLACE(STR(?prop), "^.*[#/]", ""))) AS ?propLabel)
   }
@@ -655,6 +675,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Slider .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -729,6 +750,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Slider .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -811,6 +833,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Field .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -865,6 +888,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Field .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -973,6 +997,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:CodeInput .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)
@@ -1042,6 +1067,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:CodeInput .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?labelData)

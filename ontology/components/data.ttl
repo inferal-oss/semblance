@@ -125,7 +125,9 @@ CONSTRUCT {
 WHERE {
   $this a c:Avatar .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:image ?img }
@@ -159,7 +161,9 @@ CONSTRUCT {
 WHERE {
   $this a c:Avatar .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   BIND(REPLACE(?label, "[\\\\s_.·-]+", " ") AS ?spaced)
@@ -209,6 +213,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~more")) AS ?moreNode)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, CONCAT(STR(?count), IF(?count = 1, " member", " members")))) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
@@ -255,8 +260,10 @@ WHERE {
         } GROUP BY ?list ?cell ?member }
               FILTER(?pos >= ?max)
               OPTIONAL { ?member l10n:label ?memberLocal }
-              OPTIONAL { ?member c:label ?memberRaw FILTER(lang(?memberRaw) = "") }
-              OPTIONAL { ?member rdfs:label ?memberRdfs FILTER(lang(?memberRdfs) = "") }
+              OPTIONAL { ?memberRawAt l10n:of ?member ; l10n:label ?memberRaw }
+  OPTIONAL { ?member c:label ?memberRaw FILTER(lang(?memberRaw) = "") }
+              OPTIONAL { ?memberRdfsAt l10n:of ?member ; l10n:name ?memberRdfs }
+  OPTIONAL { ?member rdfs:label ?memberRdfs FILTER(lang(?memberRdfs) = "") }
               BIND(STR(COALESCE(?memberLocal, ?memberRaw, ?memberRdfs, REPLACE(STR(?member), "^.*[#/]", ""))) AS ?memberLabel)
             } ORDER BY ?pos }
         } GROUP BY ?list ?max }
@@ -358,16 +365,20 @@ WHERE {
       BIND("sem-empty" AS ?emptyClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       BIND(?empty AS ?child)
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
       BIND(STR(COALESCE(?rawEmpty, "No events yet.")) AS ?emptyText)
     } UNION {
       FILTER(?any)
       BIND(rdfhtml:Ol AS ?tag)
       BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
       OPTIONAL { $this l10n:label ?localLabel }
-      OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
-      OPTIONAL { ?stream c:label ?streamLabel FILTER(lang(?streamLabel) = "") }
-      OPTIONAL { ?stream rdfs:label ?streamRdfs FILTER(lang(?streamRdfs) = "") }
+      OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+      OPTIONAL { ?streamLabelAt l10n:of ?stream ; l10n:label ?streamLabel }
+  OPTIONAL { ?stream c:label ?streamLabel FILTER(lang(?streamLabel) = "") }
+      OPTIONAL { ?streamRdfsAt l10n:of ?stream ; l10n:name ?streamRdfs }
+  OPTIONAL { ?stream rdfs:label ?streamRdfs FILTER(lang(?streamRdfs) = "") }
       BIND(STR(COALESCE(?localLabel, ?rawLabel, ?streamLabel, ?streamRdfs, REPLACE(STR(?stream), "^.*[#/]", ""))) AS ?label)
     } UNION {
       FILTER(?any)
@@ -408,7 +419,8 @@ WHERE {
       BIND("sem-empty" AS ?emptyClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       BIND(?empty AS ?child)
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
       BIND(STR(COALESCE(?rawEmpty, "No events yet.")) AS ?emptyText)
     } UNION {
       FILTER(?any)

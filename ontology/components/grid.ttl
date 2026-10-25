@@ -191,6 +191,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:DataGrid .
   BIND(STR($this) AS ?g)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?caption)
   LATERAL {
@@ -217,8 +218,10 @@ WHERE {
       LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
       FILTER(isIRI(?col))
       FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
-      OPTIONAL { ?col c:label ?colLabel0 FILTER(lang(?colLabel0) = "") }
-      OPTIONAL { ?col rdfs:label ?colLabel1 FILTER(lang(?colLabel1) = "") }
+      OPTIONAL { ?colLabel0At l10n:of ?col ; l10n:label ?colLabel0 }
+  OPTIONAL { ?col c:label ?colLabel0 FILTER(lang(?colLabel0) = "") }
+      OPTIONAL { ?colLabel1At l10n:of ?col ; l10n:name ?colLabel1 }
+  OPTIONAL { ?col rdfs:label ?colLabel1 FILTER(lang(?colLabel1) = "") }
       BIND(STR(COALESCE(?colLabel0, ?colLabel1, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?label)
       BIND(SUBSTR(MD5(STR(?col)), 1, 8) AS ?key)
       BIND(CONCAT(?g, "/~h-", ?key) AS ?id)
@@ -593,7 +596,8 @@ WHERE {
           $this c:gridColumns ?cl . ?cl rdf:rest*/rdf:first ?col . FILTER(isIRI(?col))
           FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
       } }
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
       VALUES (?local ?tag ?parentLocal) { ("empty-row" rdfhtml:Tr "body") ("empty-cell" rdfhtml:Td "empty-row") }
       BIND(IRI(CONCAT(?g, "/~", ?local)) AS ?el)
       BIND(IRI(CONCAT(?g, "/~", ?parentLocal)) AS ?parent)
@@ -783,8 +787,10 @@ WHERE {
               BIND(COALESCE(?sval0, c:none) AS ?sval)
               LATERAL { OPTIONAL { ?sval sem:order ?sord FILTER(isNumeric(?sord)) } }
               LATERAL {
-                OPTIONAL { ?sval c:label ?svl0 FILTER(lang(?svl0) = "") } OPTIONAL { ?sval c:label ?svl1 FILTER(langMatches(lang(?svl1), "en")) }
-                OPTIONAL { ?sval rdfs:label ?svl2 FILTER(lang(?svl2) = "") } OPTIONAL { ?sval rdfs:label ?svl3 FILTER(langMatches(lang(?svl3), "en")) }
+                OPTIONAL { ?svl0At l10n:of ?sval ; l10n:label ?svl0 }
+  OPTIONAL { ?sval c:label ?svl0 FILTER(lang(?svl0) = "") } OPTIONAL { ?sval c:label ?svl1 FILTER(langMatches(lang(?svl1), "en")) }
+                OPTIONAL { ?svl2At l10n:of ?sval ; l10n:name ?svl2 }
+  OPTIONAL { ?sval rdfs:label ?svl2 FILTER(lang(?svl2) = "") } OPTIONAL { ?sval rdfs:label ?svl3 FILTER(langMatches(lang(?svl3), "en")) }
               }
               BIND(IF(?sc = c:none, ?unset, IF(?sk = c:TimeBarCell, xsd:double(?sa), IF(?sk = c:DurationCell, xsd:double(?sb) - xsd:double(?sa),
                    IF(?sval = c:none, ?unset, IF(isIRI(?sval), xsd:double(?sord), IF(isNumeric(?sval), xsd:double(?sval), ?unset)))))) AS ?vnum)
@@ -939,12 +945,16 @@ WHERE {
       LATERAL { OPTIONAL { ?k sty:tone/sem:slug ?barTone } }
       LATERAL { OPTIONAL { ?v sty:tone/sem:slug ?valueTone } }
       LATERAL {
-        OPTIONAL { ?v c:label ?vl0 FILTER(lang(?vl0) = "") } OPTIONAL { ?v c:label ?vl1 FILTER(langMatches(lang(?vl1), "en")) }
-        OPTIONAL { ?v rdfs:label ?vl2 FILTER(lang(?vl2) = "") } OPTIONAL { ?v rdfs:label ?vl3 FILTER(langMatches(lang(?vl3), "en")) }
+        OPTIONAL { ?vl0At l10n:of ?v ; l10n:label ?vl0 }
+  OPTIONAL { ?v c:label ?vl0 FILTER(lang(?vl0) = "") } OPTIONAL { ?v c:label ?vl1 FILTER(langMatches(lang(?vl1), "en")) }
+        OPTIONAL { ?vl2At l10n:of ?v ; l10n:name ?vl2 }
+  OPTIONAL { ?v rdfs:label ?vl2 FILTER(lang(?vl2) = "") } OPTIONAL { ?v rdfs:label ?vl3 FILTER(langMatches(lang(?vl3), "en")) }
       }
       LATERAL {
-        OPTIONAL { ?d c:label ?dl0 FILTER(lang(?dl0) = "") } OPTIONAL { ?d c:label ?dl1 FILTER(langMatches(lang(?dl1), "en")) }
-        OPTIONAL { ?d rdfs:label ?dl2 FILTER(lang(?dl2) = "") } OPTIONAL { ?d rdfs:label ?dl3 FILTER(langMatches(lang(?dl3), "en")) }
+        OPTIONAL { ?dl0At l10n:of ?d ; l10n:label ?dl0 }
+  OPTIONAL { ?d c:label ?dl0 FILTER(lang(?dl0) = "") } OPTIONAL { ?d c:label ?dl1 FILTER(langMatches(lang(?dl1), "en")) }
+        OPTIONAL { ?dl2At l10n:of ?d ; l10n:name ?dl2 }
+  OPTIONAL { ?d rdfs:label ?dl2 FILTER(lang(?dl2) = "") } OPTIONAL { ?d rdfs:label ?dl3 FILTER(langMatches(lang(?dl3), "en")) }
       }
       BIND(?v != c:none AS ?hasValue)
       BIND(?d != c:none AS ?hasDetail)

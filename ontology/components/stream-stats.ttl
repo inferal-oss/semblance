@@ -104,6 +104,7 @@ WHERE {
   $this a c:StreamStats ; c:of ?stream .
   # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
   FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
@@ -150,7 +151,8 @@ WHERE {
     { SELECT ?stream ?dim (MAX(?n) AS ?max) WHERE { ?stream c:keyCount ?r . ?r c:dimension ?dim ; c:count ?n } GROUP BY ?stream ?dim }
     # The component's c:label (untagged, else English, else any), else its item's label.
     LATERAL {
-      OPTIONAL { ?key c:label ?componentLabel0 FILTER(isLiteral(?componentLabel0) && lang(?componentLabel0) = "") }
+      OPTIONAL { ?componentLabel0At l10n:of ?key ; l10n:label ?componentLabel0 }
+  OPTIONAL { ?key c:label ?componentLabel0 FILTER(isLiteral(?componentLabel0) && lang(?componentLabel0) = "") }
       OPTIONAL { FILTER(!BOUND(?componentLabel0)) ?key c:label ?componentLabel1 FILTER(langMatches(lang(?componentLabel1), "en")) }
       OPTIONAL { FILTER(!BOUND(?componentLabel0) && !BOUND(?componentLabel1)) ?key c:label ?componentLabel2 FILTER(isLiteral(?componentLabel2)) }
       BIND(COALESCE(?componentLabel0, ?componentLabel1, ?componentLabel2) AS ?componentLabel)
@@ -205,6 +207,7 @@ WHERE {
   $this a c:StreamStats ; c:of ?stream .
   # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
   FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)

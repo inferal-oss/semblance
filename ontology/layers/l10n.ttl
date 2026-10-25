@@ -179,6 +179,12 @@ ann:announces l10n:pickedAs l10n:announcement .
 c:emptyText l10n:pickedAs l10n:emptyText .
 c:countLabel l10n:pickedAs l10n:countLabel .
 c:pausedLabel l10n:pickedAs l10n:pausedLabel .
+c:moreLabel l10n:pickedAs l10n:moreLabel .
+c:badge l10n:pickedAs l10n:badge .
+c:note l10n:pickedAs l10n:note .
+c:subtitle l10n:pickedAs l10n:subtitle .
+c:help l10n:pickedAs l10n:help .
+c:placeholder l10n:pickedAs l10n:placeholder .
 l10n:name a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the rdfs:label in the viewer's language."@en .
 l10n:message a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the sh:message in the viewer's language."@en .
 l10n:title a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:title in the viewer's language."@en .
@@ -186,6 +192,12 @@ l10n:hint a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:ext
 l10n:announcement a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the ann:announces in the viewer's language."@en .
 l10n:emptyText a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:emptyText in the viewer's language."@en .
 l10n:countLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:countLabel in the viewer's language."@en .
+l10n:badge a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:badge in the viewer's language."@en .
+l10n:note a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:note in the viewer's language."@en .
+l10n:subtitle a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:subtitle in the viewer's language."@en .
+l10n:help a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:help in the viewer's language."@en .
+l10n:placeholder a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:placeholder in the viewer's language."@en .
+l10n:moreLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:moreLabel in the viewer's language."@en .
 l10n:pausedLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:pausedLabel in the viewer's language."@en .
 
 l10n:Terms a sem:BuildingBlock ;

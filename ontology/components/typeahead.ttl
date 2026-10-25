@@ -310,6 +310,7 @@ WHERE {
   # The caption: the texts layer's (c:label, else the property's label, in the viewer's language).
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
+  OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
   OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   # A combobox shows its chosen option's label until something is typed.
@@ -328,9 +329,12 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-already-added")) AS ?addedNode)
   LATERAL { OPTIONAL { ?noMatchesNode l10n:label ?noMatches0 } OPTIONAL { ?createNode l10n:label ?createPhrase0 } OPTIONAL { ?addedNode l10n:label ?addedPhrase0 } }
   OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
+  OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
   OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) }
   OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
+  OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
   OPTIONAL { c:CreatePhrase rdfs:label ?createPhrase1 FILTER(langMatches(lang(?createPhrase1), "en")) }
+  OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
   OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
   OPTIONAL { c:AlreadyAdded rdfs:label ?addedPhrase1 FILTER(langMatches(lang(?addedPhrase1), "en")) }
   BIND(STR(COALESCE(?noMatches0, ?noMatches1)) AS ?noMatchesPhrase)
@@ -463,6 +467,7 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:TagInput } AS ?multi)
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
+  OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
   OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   OPTIONAL { $this c:value ?typed0 }

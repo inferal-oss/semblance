@@ -81,7 +81,8 @@ WHERE {
     OPTIONAL { ?group sh:order ?groupOrder0 }
     BIND(IF(BOUND(?group), COALESCE(xsd:decimal(?groupOrder0), 0), -1) AS ?sectionOrder)
     BIND(IF(BOUND(?group), rdfhtml:Fieldset, rdfhtml:Div) AS ?sectionElement)
-    OPTIONAL { ?group rdfs:label ?groupLabel0 FILTER(lang(?groupLabel0) = "" || langMatches(lang(?groupLabel0), "en")) }
+    OPTIONAL { ?groupLabel0At l10n:of ?group ; l10n:name ?groupLabel0 }
+  OPTIONAL { ?group rdfs:label ?groupLabel0 FILTER(lang(?groupLabel0) = "" || langMatches(lang(?groupLabel0), "en")) }
     BIND(IF(BOUND(?group), STR(COALESCE(?groupLabel0, ?groupKey)), ?none) AS ?groupLabel)
     BIND(IF(BOUND(?group), IRI(CONCAT(STR($this), "/~s-", ENCODE_FOR_URI(?groupKey), "-legend")), ?none) AS ?legend)
     BIND(IF(BOUND(?group), IRI(CONCAT(STR($this), "/~s-", ENCODE_FOR_URI(?groupKey), "-legend-text")), ?none) AS ?legendText)
@@ -125,6 +126,7 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?name_u)) ?ps sh:name ?name_en FILTER(langMatches(lang(?name_en), "en")) }
   OPTIONAL { ?ps sh:description ?desc_u FILTER(lang(?desc_u) = "") }
   OPTIONAL { FILTER(!BOUND(?desc_u)) ?ps sh:description ?desc_en FILTER(langMatches(lang(?desc_en), "en")) }
+  OPTIONAL { ?msg_uAt l10n:of ?ps ; l10n:message ?msg_u }
   OPTIONAL { ?ps sh:message ?msg_u FILTER(lang(?msg_u) = "") }
   OPTIONAL { FILTER(!BOUND(?msg_u)) ?ps sh:message ?msg_en FILTER(langMatches(lang(?msg_en), "en")) }
   OPTIONAL { ?ps sh:datatype ?datatype }
@@ -185,7 +187,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(?optValue))) AS ?option)
     BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(?optValue), "-text")) AS ?optText)
     BIND(IF(?optValue = ?lex, "", ?none) AS ?selected)
-    OPTIONAL { ?choice rdfs:label ?choiceLabel_u FILTER(lang(?choiceLabel_u) = "") }
+    OPTIONAL { ?choiceLabel_uAt l10n:of ?choice ; l10n:name ?choiceLabel_u }
+  OPTIONAL { ?choice rdfs:label ?choiceLabel_u FILTER(lang(?choiceLabel_u) = "") }
     OPTIONAL { FILTER(!BOUND(?choiceLabel_u)) ?choice rdfs:label ?choiceLabel_en FILTER(langMatches(lang(?choiceLabel_en), "en")) }
     BIND(STR(COALESCE(?choiceLabel_u, ?choiceLabel_en, IF(isIRI(?choice), REPLACE(STR(?choice), "^.*[#/]", ""), STR(?choice)))) AS ?optLabel)
   } }
