@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { Parser, Store } from 'n3'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { loadStore } from '../src/node/load.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
@@ -19,6 +19,13 @@ const UI = 'https://semblance.dev/demo#'
 const C = NS.c
 const docs = readFileSync(new URL('../demo/gallery/_docs.ttl', import.meta.url), 'utf8')
 const HELLO = 'https://example.org/hello#'
+
+// A host's sandboxes stop with its test: a rebuild still waiting for typing to pause must not run
+// against a site store test/setup.ts has already released.
+const hosts: Sandboxes[] = []
+afterEach(() => {
+  for (const s of hosts.splice(0)) s.dispose()
+})
 
 function host(opts: { root?: string; prefer?: 'sparql' | 'function'; section?: string; store?: GraphStore; maxMounted?: number } = {}) {
   const store = opts.store ?? loadStore('wat', docs)
@@ -49,6 +56,7 @@ function host(opts: { root?: string; prefer?: 'sparql' | 'function'; section?: s
   }
   new EventBus(runtime, screen, { prefer: opts.prefer }).attach(renderer, () => flush())
   sandboxes.attach()
+  hosts.push(sandboxes)
   flush()
   const fire = (el: Element, type: string) => el.dispatchEvent(new window.Event(type, { bubbles: true }))
   const example = (name: string) => document.getElementById(`${UI}${name}/~tab-0`)!.closest('[data-sem-c=live-example]')!
