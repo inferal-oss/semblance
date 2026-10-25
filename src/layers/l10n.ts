@@ -1,16 +1,24 @@
 // The localization layer (ontology/layers/l10n.ttl): labels in the viewer's language.
 import type { FnRule } from '../engine/context.ts'
-import { C, L10N } from '../ns.ts'
+import { L10N } from '../ns.ts'
 import { text } from '../components/util.ts'
 
-/** For components with translations: their label in the viewer's language (for SPARQL rules). */
+/**
+ * For components with translations: each translated property (c:label, and every other property
+ * that is l10n:localizedAs one) in the viewer's language, as that property, for SPARQL rules.
+ */
 const localLabel: FnRule = (ctx, focus) => {
-  const labels = ctx.objects(focus, C.label)
-  if (labels.length < 2 && !labels.some((t) => t.termType === 'Literal' && t.language)) return []
-  const label = text(ctx, focus, C.label)
-  if (label === undefined) return []
+  // The ontology says which properties are translated; it does not change during a run.
+  const localized = ctx.memo('l10n:localizedAs', () =>
+    ctx.untraced(() => ctx.match(null, L10N.localizedAs, null).flatMap((q) => (q.object.termType === 'NamedNode' ? [[q.subject.value, q.object.value] as const] : []))),
+  )
   const o = ctx.out(focus)
-  o.t(focus, L10N.label, label)
+  for (const [property, local] of localized) {
+    const labels = ctx.objects(focus, property)
+    if (labels.length < 2 && !labels.some((t) => t.termType === 'Literal' && t.language)) continue
+    const label = text(ctx, focus, property)
+    if (label !== undefined) o.t(focus, local, label)
+  }
   return o.quads
 }
 

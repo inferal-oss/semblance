@@ -1,0 +1,145 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ol: <https://semblance.dev/ns/outline#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Outlines layer: showing which parts a page is made of. Any component may have a name for its
+# outline (ol:label); a component whose ol:shows is true outlines every named component inside it,
+# dashed, with the name in a tag on its top edge. Use it to point out the parts of an example or a
+# demo, to explain how a page is built, or to tag regions while designing one. Nothing about it is
+# specific to a component: a switch turns it on and off like any other property (a c:ToggleSwitch
+# that c:controls the container, c:property ol:shows), and so can a reaction.
+#
+#   ui:page a c:Stack ; ol:shows true ; c:children ( ui:header ui:chart ) .
+#   ui:header a c:AppBar ; ol:label "header" , "шапка"@uk , "Kopfzeile"@de , "الترويسة"@ar .
+#
+# The name is in the viewer's language: ol:label is l10n:localizedAs ol:localLabel, so the
+# localization layer derives the name in that language before anything renders (as it does for
+# c:label), and the SPARQL rule prefers it; the function twin reads the label through util.text.
+#
+# Outlines are overlays: the outline is a CSS outline and the tag the root's ::before, absolutely
+# positioned, so showing them never moves anything. A component whose root is a replaced element
+# (an <input>, an <img>) has no ::before, so it is outlined without a tag; give the name to a
+# component around it. Like the dependency layer, it is not switched on per projection: what a
+# component says about its outline holds in every projection, and the text modality shows nothing.
+
+<https://semblance.dev/ns/outline> a owl:Ontology ;
+    rdfs:label "Semblance outlines layer"@en .
+
+ol:label a owl:DatatypeProperty ;
+    rdfs:label "Outline name"@en , "Назва обведення"@uk , "Umrissname"@de , "اسم الإطار"@ar ;
+    rdfs:comment "On any component: the name its outline shows, short, language-tagged like c:label. Shown on its root as data-sem-outline."@en ;
+    l10n:localizedAs ol:localLabel .
+ol:localLabel a owl:DatatypeProperty ;
+    rdfs:comment "Derived by the localization layer: a component's ol:label in the viewer's language."@en .
+ol:shows a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Show outlines"@en , "Показати обведення"@uk , "Umrisse zeigen"@de , "إظهار الإطارات"@ar ;
+    rdfs:comment "On any component: true outlines every named component (ol:label) inside it, dashed and named. Marks its root data-sem-outlines=\"shown\"."@en .
+
+# The localization layer hears a changed name too.
+l10n:Labels sem:watches ol:label .
+
+# --- renderings: the name on the root, and the switch on the container --------------------------
+
+ol:Named a sem:Rendering ;
+    rdfs:comment "A component's outline name, in the viewer's language, on its root (data-sem-outline)."@en ;
+    sem:targets sem:Component ;
+    sem:requires ol:label ;
+    sem:stratum 20 ;
+    sem:watches ol:label , ol:localLabel .
+ol:Named-fn a sem:Rule ; sem:implements ol:Named ; sem:function "ol:named" .
+ol:Named-sparql a sem:Rule ;
+    sem:implements ol:Named ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?mark .
+  ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-outline" ; rdfhtml:attributeValue ?name .
+}
+WHERE {
+  # One name: the localization layer's pick when there are several (or a translated one), else the only one.
+  $this ol:label ?any FILTER(isLiteral(?any))
+  OPTIONAL { $this ol:localLabel ?local }
+  BIND(COALESCE(STR(?local), STR(?any)) AS ?name)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-outline")) AS ?mark)
+}""" .
+
+ol:Shown a sem:Rendering ;
+    rdfs:comment "A component whose ol:shows is true marks its root (data-sem-outlines=\"shown\"); the style outlines the named components inside it by that mark."@en ;
+    sem:targets sem:Component ;
+    sem:requires ol:shows ;
+    sem:stratum 20 ;
+    sem:watches ol:shows .
+ol:Shown-fn a sem:Rule ; sem:implements ol:Shown ; sem:function "ol:shown" .
+ol:Shown-sparql a sem:Rule ;
+    sem:implements ol:Shown ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?mark .
+  ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-outlines" ; rdfhtml:attributeValue "shown" .
+}
+WHERE {
+  $this ol:shows ?on FILTER(isLiteral(?on) && STR(?on) = "true")
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-outlines")) AS ?mark)
+}""" .
+
+# --- style: a dashed outline in the accent, the name in a tag on its top edge --------------------
+# Overlays only: an outline and an absolutely positioned ::before, never a border, padding or margin.
+# The outlined root is made a containing block (position: relative) only where nothing else
+# positions it: :where() keeps that declaration weakest, so a popover's or a window's own position
+# wins. The tag sits on the outline's top edge at the inline start (inset-inline-start, so it
+# mirrors right to left), in the accent with a ring of the surface around it, so it reads over any
+# background and on top of the outline it interrupts, like a fieldset's legend. Its text is
+# decoration (alt text ""): the name is not added to the component's accessible name.
+
+tok:outline-offset a sty:Token ; sty:scale sty:Space ; sem:slug "outline-offset" ; sty:value "3px" .
+
+[] a sty:StyleRule ; sty:part ":where([data-sem-outlines=shown] [data-sem-outline])" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] .
+
+[] a sty:StyleRule ; sty:part "[data-sem-outlines=shown] [data-sem-outline]" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent)" ] ,
+                 [ sty:property "outline-offset" ; sty:token tok:outline-offset ] .
+
+[] a sty:StyleRule ; sty:part "[data-sem-outlines=shown] [data-sem-outline]::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-outline) / \"\"" ] ,
+                 [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] ,
+                 [ sty:property "inset-block-start" ; sty:raw "calc(-1 * var(--sem-outline-offset) - 1px)" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0.5em" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "auto" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "auto" ] ,
+                 [ sty:property "transform" ; sty:raw "translateY(-50%)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "max-content" ] ,
+                 [ sty:property "block-size" ; sty:raw "auto" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "calc(100% - 1em)" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0 0.5em" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "background" ; sty:token tok:accent ] ,
+                 [ sty:property "color" ; sty:token tok:on-accent ] ,
+                 [ sty:property "box-shadow" ; sty:raw "0 0 0 2px var(--sem-surface)" ] ,
+                 [ sty:property "opacity" ; sty:raw "1" ] ,
+                 [ sty:property "font" ; sty:raw "500 11px/16px var(--sem-font-mono)" ] ,
+                 [ sty:property "letter-spacing" ; sty:raw "0" ] ,
+                 [ sty:property "text-transform" ; sty:raw "none" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+
+# A named component inside a named one often starts where it does, so its tag would cover the outer
+# one's: tags alternate ends with depth (inline end inside a named component, start again inside two).
+[] a sty:StyleRule ; sty:part "[data-sem-outlines=shown] [data-sem-outline] [data-sem-outline]::before" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "auto" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "0.5em" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-outlines=shown] [data-sem-outline] [data-sem-outline] [data-sem-outline]::before" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "0.5em" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "auto" ] .

@@ -12,7 +12,9 @@
 # the viewer's language, then English, then the source. For SPARQL rules this
 # layer derives l10n:label - the label in the viewer's language - for every
 # component that has translations, before anything renders (stratum -20);
-# their queries prefer it over the source label. A language with
+# their queries prefer it over the source label. Any other translated property
+# says which property carries its value in the viewer's language
+# (l10n:localizedAs), and gets the same: ol:label l10n:localizedAs ol:localLabel. A language with
 # l10n:direction l10n:RTL lays the page out right to left.
 
 <https://semblance.dev/ns/l10n> a owl:Ontology ;
@@ -27,6 +29,9 @@ l10n:code a owl:DatatypeProperty ; rdfs:domain l10n:Language ; rdfs:comment "BCP
 l10n:direction a owl:ObjectProperty ; rdfs:domain l10n:Language .
 l10n:RTL a owl:NamedIndividual ; rdfs:label "right to left"@en .
 l10n:label a owl:DatatypeProperty ; rdfs:comment "Derived: a component's c:label in the viewer's language."@en .
+l10n:localizedAs a owl:AnnotationProperty ; rdfs:domain owl:DatatypeProperty ; rdfs:range owl:DatatypeProperty ;
+    rdfs:comment "On a property whose values are translated (language-tagged): the property the localization layer derives with its value in the viewer's language, for SPARQL rules. Its l10n:Labels rendering watches the property too (sem:watches)."@en .
+c:label l10n:localizedAs l10n:label .
 
 l10n:English a l10n:Language ; l10n:code "en" ; sem:order 1 ; sem:symbol "EN" ;
     rdfs:label "English" , "Англійська"@uk , "Englisch"@de , "الإنجليزية"@ar .

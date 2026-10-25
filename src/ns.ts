@@ -45,6 +45,7 @@ export const NS = {
   ext: 'https://semblance.dev/ns/foreign#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
+  ol: 'https://semblance.dev/ns/outline#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -378,7 +379,7 @@ export const DND = {
   Accepted: NS.dnd + 'Accepted', Refused: NS.dnd + 'Refused', Start: NS.dnd + 'Start', Over: NS.dnd + 'Over', Drop: NS.dnd + 'Drop', Refusal: NS.dnd + 'Refusal',
   Cancel: NS.dnd + 'Cancel', End: NS.dnd + 'End', count: NS.dnd + 'count',
 } as const
-export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
+export const L10N = { label: NS.l10n + 'label', localizedAs: NS.l10n + 'localizedAs', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
 export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
 export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const
 /** Copying to the clipboard (ontology/layers/clipboard.ttl, src/clipboard.ts). */
@@ -414,6 +415,8 @@ export const EXT = {
   path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module', outlines: NS.ext + 'outlines',
   CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
 } as const
+/** The outlines layer (ontology/layers/outline.ttl). */
+export const OL = { label: NS.ol + 'label', localLabel: NS.ol + 'localLabel', shows: NS.ol + 'shows' } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',

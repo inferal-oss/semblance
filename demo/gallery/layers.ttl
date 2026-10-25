@@ -13,6 +13,7 @@
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix ol: <https://semblance.dev/ns/outline#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -23,7 +24,7 @@
 # layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-dragdrop ui:l-status ui:l-l10n ui:l-display ui:l-persistence ui:l-privacy ) .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-dragdrop ui:l-status ui:l-l10n ui:l-display ui:l-outlines ui:l-persistence ui:l-privacy ) .
 ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
 
 # --- validation: SHACL shapes on fields -------------------------------------------------------------
@@ -168,6 +169,30 @@ ui:l-display-spec a c:Specimen ; c:label "Motion, contrast and density" , "Ру�
 ui:motionSwitch a c:Segmented ; c:controls ui:shell ; c:property mot:preference .
 ui:contrastSwitch a c:Segmented ; c:controls ui:shell ; c:property sty:contrast .
 ui:densitySwitch a c:Segmented ; c:controls ui:shell ; c:property sty:density .
+
+# --- outlines: which parts a page is made of ------------------------------------------------------
+
+ui:l-outlines a c:Flippable ; c:front ui:l-outlines-spec .
+ui:l-outlines-spec a c:Specimen ; c:label "Outlines" , "Обведення"@uk , "Umrisse"@de , "الإطارات"@ar ;
+    c:help "ol:label on any component names it; a component whose ol:shows is true outlines every named component inside it, dashed, with the name on its top edge, in the viewer's language. The switch sets ol:shows on the report below; nothing moves when it turns on." ;
+    c:children ( ui:outlineSwitch ui:outlineReport ) .
+ui:outlineSwitch a c:ToggleSwitch ; c:label "Show outlines" , "Показати обведення"@uk , "Umrisse zeigen"@de , "إظهار الإطارات"@ar ;
+    c:controls ui:outlineReport ; c:property ol:shows .
+ui:outlineReport a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; ol:shows true ;
+    c:children ( ui:outlineTitle ui:outlineFigures ui:outlineActions ) .
+ui:outlineTitle a c:Heading ; c:label "Weekly report" , "Тижневий звіт"@uk , "Wochenbericht"@de , "التقرير الأسبوعي"@ar ;
+    ol:label "title" , "заголовок"@uk , "Titel"@de , "العنوان"@ar .
+ui:outlineFigures a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ;
+    ol:label "figures" , "показники"@uk , "Kennzahlen"@de , "الأرقام"@ar ;
+    c:children ( ui:outlineOrders ui:outlineReturns ) .
+ui:outlineOrders a c:Stat ; c:label "Orders" , "Замовлення"@uk , "Bestellungen"@de , "الطلبات"@ar ; c:value 1284 ; c:delta 6.1 ; c:deltaUnit "%" ;
+    ol:label "stat" , "показник"@uk , "Kennzahl"@de , "رقم"@ar .
+ui:outlineReturns a c:Stat ; c:label "Returns" , "Повернення"@uk , "Rücksendungen"@de , "المرتجعات"@ar ; c:value 37 ; c:delta -2.4 ; c:deltaUnit "%" .
+ui:outlineActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    ol:label "actions" , "дії"@uk , "Aktionen"@de , "الإجراءات"@ar ;
+    c:children ( ui:outlineExport ui:outlineShare ) .
+ui:outlineExport a c:Button ; c:label "Export" , "Експорт"@uk , "Exportieren"@de , "تصدير"@ar .
+ui:outlineShare a c:Button ; c:label "Share" , "Поділитися"@uk , "Teilen"@de , "مشاركة"@ar ; sty:tone sty:Accent ; sty:emphasis sty:Solid .
 
 # --- component shapes: SHACL on the components themselves ---------------------------------------
 
