@@ -147,7 +147,9 @@ const engineX = (store.engine as unknown as { x: Record<string, unknown> & { mem
 function nodeName(k: number, expr: boolean): string {
   if (kind !== 'wat') return ''
   const m = new Int32Array(engineX.memory.buffer)
-  const at = (k & ~1) >> 2
+  // cq_eval's k | 1 (inside a LATERAL compiled in line): a record whose +4 is
+  // the node; cq_value's and cq_test's k | 1 is a flag
+  const at = k & 1 && !expr ? m[((k & ~1) >> 2) + 1]! >> 2 : (k & ~1) >> 2
   const kindNo = m[at]!
   if (!expr) return defines.get(3000 + kindNo) ?? defines.get(4000 + kindNo) ?? `node ${kindNo}`
   if (kindNo === 32) {
@@ -159,7 +161,7 @@ function nodeName(k: number, expr: boolean): string {
 function profileRun(module: WebAssembly.Module, graphs: number[]): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {}
   const wrapped: Record<string, unknown> = { ...engineX }
-  for (const name of ['cq_eval', 'cq_path', 'cq_test', 'cq_value', 'cq_scan', 'cq_triple', 'cq_solution']) {
+  for (const name of ['cq_eval', 'cq_path', 'cq_test', 'cq_value', 'cq_scan', 'cq_triple', 'cq_solution', 'cq_group', 'cq_keep', 'cq_iri']) {
     const f = engineX[name] as (...a: number[]) => number
     wrapped[name] = (...a: number[]) => {
       const what = name === 'cq_eval' || name === 'cq_path' ? nodeName(a[0]!, false) : name === 'cq_test' || name === 'cq_value' ? nodeName(a[0]!, true) : ''

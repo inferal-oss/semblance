@@ -175,16 +175,27 @@ compiled module may import:
 | `cq_end() -> n` | End the run: the value `run` returns. |
 | `fresh_bnode`, `term_kind`, `term_datatype`, `term_lang_len`, `has` | As above. |
 
+Beyond these, an engine may export more `cq_*` functions for its own modules
+to import; what they do is between the engine and the code it generates (the
+host passes every export through). The WAT engine's: `cq_sub`, `cq_keep`,
+`cq_group` (a subquery whose WHERE runs in the module, finished by the
+engine), `cq_room` (stack room a module writes itself), and helpers for typed
+expressions (`cq_str`, `cq_iri`, `cq_num`, `cq_tonum`, `cq_term`, `cq_cplen`,
+`cq_cpoff`, `cq_strfn`, `cq_ebv`); `rdf-engine/wat/cx-header.ts` lists them.
+
 A module may also read the engine's own structures in its memory directly
-(the WAT engine's compiled triple patterns walk its store's lists in line):
-that is between an engine and the code it generates, and stays valid only
-within one run.
+(the WAT engine's compiled triple patterns and path walks read its store's
+lists in line, and its typed expressions read term records and write a string
+buffer): that is between an engine and the code it generates, and stays valid
+only within one run.
 
 What `k` and `shape` mean is the engine's business: it records them when it
 compiles. The two engines compile the same queries (BGPs, OPTIONAL, UNION,
 VALUES, LATERAL, FILTER, BIND, property paths through `cq_path`, the rest of a
 group's patterns through `cq_eval`); they decline DESCRIBE, aggregates,
 ORDER BY / LIMIT / OFFSET of the query itself, and triple terms in templates.
+The WAT engine also compiles subqueries (any modifiers; the engine finishes
+them) and typed expressions in the module; the Rust engine follows.
 
 ## Changing the ABI
 

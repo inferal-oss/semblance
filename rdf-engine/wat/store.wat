@@ -16,8 +16,10 @@
 
 (global $post (mut i32) (i32.const 0))
 ;; Where compiled queries find the store (see cscan.wat): +0 $post, +4 $quads,
-;; +8 the default graphs, +12 their count (set when a compiled run begins).
-(global $bases i32 (@words32 0 0 0 0))
+;; +8 the default graphs, +12 their count (set when a compiled run begins),
+;; +16 $terms; for typed expressions (ctyped.wat): +20 a string buffer, +24 its
+;; size, +32 a number (i64 ni, +40 f64 nf, +48 i32 scale, +52 its type).
+(global $bases i32 (@words32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
 (global $quads (mut i32) (i32.const 0))
 (global $qcap (mut i32) (i32.const 0))   ;; in quads
 (global $qn (mut i32) (i32.const 0))     ;; quads in the store

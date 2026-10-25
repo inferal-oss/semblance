@@ -165,8 +165,70 @@ Done so far, WAT only:
 Size: 74.3 → 77.2 KiB. Correctness: 603/603 calls replay equal; W3C with
 compilation shows 0 differences.
 
-Still to do for the 2× target, in measured order:
-1. Subqueries with GROUP BY / COUNT compiled, including the single linear walk
-   for list positions and ranks.
-2. Typed string and number expressions: IRI, CONCAT, CAST, IF, COALESCE,
-   CONTAINS, plus EXISTS as an inline loop.
+## Phase 3 (WAT): plans, subqueries, typed expressions
+
+Same bench (`compiled-bench.ts wat --profile`), same 603 calls; the
+interpreted column moves ±15% with machine load, so compare within a row.
+
+| WAT, 603 calls | interpreted | compiled | |
+|---|---:|---:|---:|
+| median per call | 27.4 µs | 2.4 µs | 10.7× (p10 1.9×, p90 15.2×) |
+| p90 per call | 105.3 µs | 13.6 µs | |
+| total | 47.1 ms | 6.7 ms | 7.0× |
+| swatch scale (6 calls) | 16.8 ms | 2.1 ms | 8.1× |
+| SHACL shapes (191) | 19.6 ms | 1.8 ms | 10.6× |
+| tooltip layer (196) | 5.5 ms | 0.43 ms | 12.9× |
+| Picker / Segmented / Choice | 1.5 / 1.3 / 1.0 ms | 0.63 / 0.46 / 0.41 ms | 2.3–2.8× |
+
+What changed, in the order it paid:
+
+1. **Filters pushed down.** A group's FILTER is tested as soon as no later
+   element can change a variable it reads (each is certainly bound, or never
+   mentioned again), between the triples of a run too; one with EXISTS waits
+   for the end of the run. The tooltip layer's focus test now runs right after
+   `?node sem:tooltip ?value` instead of after every BIND.
+2. **Paths ordered with triples.** A run of triple and path patterns is one
+   join, ordered most bound first: the SHACL rule starts from `$this a ?type`,
+   walks up `rdfs:subClassOf*`, then finds the shapes of those classes (it
+   used to walk down from every shape's class: 347 scans per call).
+3. **Subqueries in the module.** A subquery's WHERE is compiled in line; its
+   solutions are collected (`cq_keep`) and the engine finishes them with the
+   interpreter's own code (`cq_group`: GROUP BY, aggregates, HAVING, SELECT
+   expressions, ORDER BY, DISTINCT, LIMIT/OFFSET), caching the result per run as
+   the interpreter does (`cq_cached`). Inside a LATERAL the substitution row is
+   built as the interpreter builds it. The aggregation itself costs 0.1 ms of
+   the swatch scale's 2.1 ms, so accumulators in the module were not worth it.
+4. **Masked groups in line.** A group that would see outer bindings it does
+   not bind certainly (the interpreter evaluates it on a masked row) is
+   compiled in line with those slots cleared, then joined back (`S_UNMASK`);
+   left to the interpreter only when a cleared slot sits in a triple pattern
+   (the interpreter shares one evaluation between rows there).
+5. **Typed expressions** (`wat/ctyped.wat`). Strings are (ptr, len) into
+   dictionary bytes or a module-owned buffer, numbers are type + i64 + f64 as
+   num.wat keeps them, conditions 0/1/2; STR, CONCAT, IRI, STRSTARTS, STRENDS,
+   CONTAINS, SUBSTR, STRLEN, casts to xsd:integer / xsd:double, + and -, the
+   comparisons, IF, COALESCE, BOUND, isIRI/isBlank/isLiteral, sameTerm and the
+   connectives run in the module; a term is interned only when a value is bound
+   or output. `IRI(CONCAT(STR($this), "/~…"))` copies the bytes once and calls
+   the engine's IRI resolution on them. What the code does not handle at run
+   time (a language tag, a decimal sum) leaves for a bail block that evaluates
+   the whole expression in the engine.
+6. **EXISTS as a function** that returns at the first solution (triples, paths
+   and filters); `x IN (IRIs)` as id comparisons.
+7. **Path walks read the store's lists in line**, writing reached nodes to the
+   stack themselves (`cq_room`).
+
+Not done, and why: the list-position and rank patterns (`rdf:rest*` pairs
+counted per cell, COUNT of smaller) still run quadratically, but over the
+corpus's lists (2–10 cells) the whole site costs under 0.1 ms; the swatch
+scale's pairwise ordering is 64 pairs a call once filters are pushed down.
+
+Cost: compiling is slower (emit median 91 µs, p90 236 µs; modules 7.4 KB
+median, p90 18 KB), but break-even comes after a median of 8 runs (was 77).
+Size: 77.2 → 90.7 KiB raw, 35.8 → 41.3 KiB gzip.
+
+Correctness: 603/603 calls and 103/103 unbound queries replay equal; W3C with
+compilation 0 differences (503 compiled), `conformance/results/wat.json`
+unchanged; `test/rdf-engine-compiled.test.ts` runs typed corner cases both ways.
+`compile.wat`'s debugging switches (`cq_debug`) turn each of these off, for
+bisecting a difference.

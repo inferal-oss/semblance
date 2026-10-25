@@ -324,10 +324,16 @@
 
 ;; The solutions of (sub)query q after its modifiers, as full rows.
 (func $solve (param $q i32) (result i32)
-  (local $one i32) (local $t i32) (local $t2 i32) (local $item i32) (local $i i32) (local $row i32) (local $at i32)
+  (local $one i32) (local $t i32)
   (local.set $one (call $t_one (global.get $params)))
   (local.set $t (call $eval_group (i32.load offset=12 (local.get $q)) (local.get $one) (i32.const 0)))
   (call $t_free (local.get $one))
+  (call $solve_tail (local.get $q) (local.get $t)))
+
+;; What follows a query's WHERE, on its solutions t (a compiled subquery's too):
+;; grouping, the trailing VALUES, SELECT expressions, ORDER BY, DISTINCT, slice.
+(func $solve_tail (param $q i32) (param $t i32) (result i32)
+  (local $t2 i32) (local $item i32) (local $i i32) (local $row i32) (local $at i32)
   (if (i32.and (i32.load offset=4 (local.get $q)) (i32.const Q_GROUPED)) (then
     (local.set $t2 (call $group (local.get $q) (local.get $t)))
     (call $t_free (local.get $t))

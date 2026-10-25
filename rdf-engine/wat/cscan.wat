@@ -28,6 +28,19 @@
     (i32.store offset=4 (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3))) (local.get $ref))
     (br_if $positions (i32.ne (local.tee $k (i32.add (local.get $k) (i32.const 1))) (i32.const 3))))
   (if (i32.eqz (local.get $any)) (then (return (i32.const 0))))
+  ;; the variables' values, in locals
+  (local.set $k (i32.const 0))
+  (loop $vars
+    (if (i32.ge_u (i32.load (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3)))) (i32.const 2)) (then
+      (local.set $v (call $local (local.get $f)))
+      (call $em2 (local.get $f) (@str "k0mavb") (call $ref_addr (i32.load offset=4 (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3))))) (local.get $v))
+      (i32.store offset=4 (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3))) (local.get $v))))
+    (br_if $vars (i32.ne (local.tee $k (i32.add (local.get $k) (i32.const 1))) (i32.const 3))))
+  (call $scan_list_m (local.get $f) (local.get $m) (local.get $n)))
+
+;; The same, for modes m (+0 mode, +4 the constant or the local holding the value, per position).
+(func $scan_list_m (param $f i32) (param $m i32) (param $n i32) (result i32)
+  (local $k i32) (local $ref i32) (local $mode i32) (local $v i32) (local $lst i32) (local $e i32) (local $tmp i32)
   (global.set $sc_modes (local.get $m))
   (local.set $lst (call $local (local.get $f)))
   (local.set $e (call $local (local.get $f)))
@@ -37,11 +50,7 @@
   (loop $lists
     (local.set $mode (i32.load (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3)))))
     (local.set $ref (i32.load offset=4 (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3)))))
-    (if (i32.ge_u (local.get $mode) (i32.const 2)) (then
-      ;; the variable's value, in a local
-      (local.set $v (call $local (local.get $f)))
-      (call $em2 (local.get $f) (@str "k0mavb") (call $ref_addr (local.get $ref)) (local.get $v))
-      (i32.store offset=4 (i32.add (local.get $m) (i32.shl (local.get $k) (i32.const 3))) (local.get $v))))
+    (local.set $v (local.get $ref))
     (if (local.get $mode) (then
       (if (i32.eq (local.get $mode) (i32.const 3)) (then (call $em1 (local.get $f) (@str "ga(") (local.get $v))))
       ;; tmp = the list at position k: $post + 16 id + 4 k

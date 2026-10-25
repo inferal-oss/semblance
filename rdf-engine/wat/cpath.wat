@@ -28,6 +28,7 @@
   (local $ks i32) (local $ko i32) (local $kt i32) (local $node_check i32) (local $col i32) (local $next i32)
   (local $at i32) (local $n i32) (local $len i32) (local $len0 i32) (local $j i32) (local $cur i32) (local $cnt i32) (local $i i32)
   (local $node i32) (local $m i32) (local $base i32) (local $ok i32) (local $idx i32) (local $val i32) (local $first i32) (local $top i32)
+  (local $m4 i32) (local $lst i32) (local $r i32) (local $hits i32)
   (if (i32.eqz (local.tee $step (call $cp_step (i32.load offset=8 (local.get $el))))) (then (return (i32.const 0))))
   (local.set $sref (i32.load offset=4 (local.get $el)))
   (local.set $oref (i32.load offset=12 (local.get $el)))
@@ -57,6 +58,7 @@
   (local.set $i (call $local (local.get $f))) (local.set $node (call $local (local.get $f))) (local.set $m (call $local (local.get $f)))
   (local.set $base (call $local (local.get $f))) (local.set $ok (call $local (local.get $f))) (local.set $idx (call $local (local.get $f)))
   (local.set $val (call $local (local.get $f))) (local.set $first (call $local (local.get $f))) (local.set $top (call $local (local.get $f)))
+  (local.set $hits (call $local (local.get $f)))
   (call $push_ref (local.get $f) (local.get $from))
   (call $em2 (local.get $f) (@str "vak0vb") (local.get $n) (local.get $len))
   ;; is the start a solution of a zero-length path
@@ -67,22 +69,24 @@
   (call $em2 (local.get $f) (@str "{[gagbKf1") (local.get $j) (local.get $len))
   (call $em (local.get $f) (@str "gaE?gb:C5gcgajk/jk4ljm0}vd") (local.get $j) (local.get $n) (local.get $at) (local.get $cur))
   (call $em1 (local.get $f) (@str "gak1jva") (local.get $j))
-  (if (local.get $out)
-    (then (call $em2 (local.get $f) (@str "gakbk0") (local.get $cur) (local.get $p)))
-    (else (call $em2 (local.get $f) (@str "k0kbga") (local.get $cur) (local.get $p))))
-  (call $em (local.get $f) (@str "gagbjC2vc") (local.get $at) (local.get $len) (local.get $cnt) (i32.const 0))
-  ;; the first step found edges at the start: a node; else ask the graph
-  (if (local.get $node_check) (then
-    (call $em (local.get $f) (@str "gak1F(gbvc") (local.get $j) (local.get $cnt) (local.get $ok) (i32.const 0))
-    (call $em (local.get $f) (@str "gaE(gbk0k0gcC2k0Gk0k0gbgcC2k0Grva}}") (local.get $ok) (local.get $n) (local.get $at) (i32.const 0))))
-  (call $em (local.get $f) (@str "gavbC5vc") (local.get $len) (local.get $len0) (local.get $base) (i32.const 0))
+;; the edges from cur: the store's list of cur (or of p), read in line (cscan.wat);
+  ;; room on the stack for as many nodes more (cq_room)
+  (local.set $m4 (call $anew (i32.const 24)))
+  (i32.store (i32.add (local.get $m4) (select (i32.const 0) (i32.const 16) (local.get $out))) (i32.const 2))
+  (i32.store offset=4 (i32.add (local.get $m4) (select (i32.const 0) (i32.const 16) (local.get $out))) (local.get $cur))
+  (i32.store offset=8 (local.get $m4) (i32.const 1))
+  (i32.store offset=12 (local.get $m4) (local.get $p))
+  (local.set $lst (call $scan_list_m (local.get $f) (local.get $m4) (local.get $cnt)))
+  (local.set $r (call $local (local.get $f)))
+  (call $em (local.get $f) (@str "gagbjgcjCLvd") (local.get $at) (local.get $len) (local.get $cnt) (local.get $base))
+  (call $em1 (local.get $f) (@str "k0va") (local.get $hits))
   (call $em2 (local.get $f) (@str "k0va{[gagbOf1") (local.get $i) (local.get $cnt))
-  ;; node = base + 4 (at + len0 + 3 i) + col
-  (call $em (local.get $f) (@str "gagbjgck3ljk4l") (local.get $at) (local.get $len0) (local.get $i) (i32.const 0))
+  (call $scan_row (local.get $f) (local.get $el) (local.get $st) (local.get $lst) (local.get $i) (local.get $r))
+  ;; node = the quad's object (or subject)
+  (call $em2 (local.get $f) (@str "gak1jva") (local.get $hits) (i32.const 0))
   (if (local.get $col)
-    (then (call $em2 (local.get $f) (@str "gajm8vb") (local.get $base) (local.get $node)))
-    (else (call $em2 (local.get $f) (@str "gajm0vb") (local.get $base) (local.get $node))))
-  (call $em1 (local.get $f) (@str "gak1jva") (local.get $i))
+    (then (call $em2 (local.get $f) (@str "gam8vb") (local.get $r) (local.get $node)))
+    (else (call $em2 (local.get $f) (@str "gam0vb") (local.get $r) (local.get $node))))
   (call $em0 (local.get $f) (@str "{"))
   ;; the start again: a solution of p+
   (call $em (local.get $f) (@str "gagbF(kcvdb1}") (local.get $node) (local.get $n) (i32.const 1) (local.get $ok))
@@ -91,7 +95,12 @@
   (call $em (local.get $f) (@str "gagbjk4lgcjm0gdFf2") (local.get $at) (local.get $m) (local.get $base) (local.get $node))
   (call $em1 (local.get $f) (@str "gak1jvab0}}") (local.get $m))
   (call $em (local.get $f) (@str "gagbjk4lgcjgdM0") (local.get $at) (local.get $len) (local.get $base) (local.get $node))
-  (call $em1 (local.get $f) (@str "gak1jva}b0}}b0}}") (local.get $len))
+  (call $em1 (local.get $f) (@str "gak1jva}}b0}}") (local.get $len))
+  ;; the first step found edges at the start: a node; else ask the graph
+  (if (local.get $node_check) (then
+    (call $em (local.get $f) (@str "gak1F(gbvc") (local.get $j) (local.get $hits) (local.get $ok) (i32.const 0))
+    (call $em (local.get $f) (@str "gaE(gbk0k0gcC2k0Gk0k0gbgcC2k0Grva}}") (local.get $ok) (local.get $n) (local.get $at) (i32.const 0))))
+  (call $em0 (local.get $f) (@str "b0}}"))
   ;; the solutions: the start (when ok), then the stack's nodes
   (call $em (local.get $f) (@str "gagbjvck0vd") (local.get $at) (local.get $len) (local.get $top) (local.get $idx))
   (call $em2 (local.get $f) (@str "{[gagbKf1") (local.get $idx) (local.get $len))
