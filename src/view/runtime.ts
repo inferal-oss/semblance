@@ -245,6 +245,13 @@ export class ViewRuntime {
     return (instances.length ? instances.map((q) => q.subject.value) : [v.whileShown]).some((c) => this.shown!(c))
   }
 
+  /** Stop: no window expiry fires any more (the store is being let go). */
+  dispose(): void {
+    this.timer?.cancel()
+    this.timer = undefined
+    this.onTimer = undefined
+  }
+
   /** What every view holds (soak tests). */
   footprint(): Record<string, number> {
     const out: Record<string, number> = { views: this.views.size, refs: this.refs.size, terms: this.terms.size }

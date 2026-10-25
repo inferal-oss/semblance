@@ -96,6 +96,19 @@ export class Runtime {
     }
   }
 
+  private disposed = false
+
+  /**
+   * Let the runtime and its store go: no timer or queued refresh touches the store afterwards,
+   * and the store releases what it holds outside the JavaScript heap (GraphStore.dispose).
+   */
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.views.dispose()
+    this.store.dispose?.()
+  }
+
   /** A tick with no input change: time passed (windows of maintained views expire). */
   advance(): void {
     this.tick(new Map(), { add: [], remove: [] })
@@ -135,6 +148,7 @@ export class Runtime {
   }
 
   private tickWatched(byGraph: Map<string | undefined, Delta>, input: Delta) {
+    if (this.disposed) return
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
@@ -165,6 +179,7 @@ export class Runtime {
   }
 
   private refreshWatched(): boolean {
+    if (this.disposed) return false
     const t = performance.now()
     let any = false
     for (const p of this.projections) if (p.engine.refresh()) settle(p), (any = true)

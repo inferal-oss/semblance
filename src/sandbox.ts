@@ -142,14 +142,17 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
     problems.push({ message: (e as Error).message, severity: 'error' })
     return done()
   }
+  // A build that fails lets go of its store at once: Oxigraph's share one WebAssembly memory.
+  let runtime: Runtime | undefined
+  const failed = () => (runtime ? runtime.dispose() : store.dispose?.(), done())
   const f = store.factory
   if (!store.match(f.namedNode(root), null, null).length) {
     problems.push({ message: `Nothing to show: ${short(root, sources)} is not described in the source.`, severity: 'error' })
-    return done()
+    return failed()
   }
   const warnings: string[] = []
   try {
-    const runtime = new Runtime(store)
+    runtime = new Runtime(store)
     const budgetMs = opts.budgetMs ?? 1500
     runtime.watchdog.budgetMs = budgetMs
     const base = { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [root] }
@@ -159,16 +162,16 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
     if (runtime.held) {
       problems.push(stallProblem(runtime, sources, budgetMs))
       runtime.stopStall()
-      return done()
+      return failed()
     }
     if (!screen.index.resolve(root)) problems.push({ message: `${short(root, sources)} renders nothing: is it an instance of a component class with a rendering?`, severity: 'error' })
     for (const w of new Set(warnings)) problems.push({ message: w, severity: 'warning' })
     problems.push(...violations(store, sources))
-    if (problems.some((p) => p.severity === 'error')) return done()
+    if (problems.some((p) => p.severity === 'error')) return failed()
     return done({ root, store, runtime, screen, text, styled })
   } catch (e) {
     problems.push({ message: (e as Error).message, severity: 'error' })
-    return done()
+    return failed()
   }
 }
 
@@ -499,6 +502,8 @@ export class Sandboxes {
 
   private unmountSandbox(m: Mounted) {
     m.detach?.()
+    // The sandbox's runtime and store are its own: release them (Oxigraph's share one WebAssembly memory).
+    m.sandbox?.runtime.dispose()
     if (m.sheet) m.slot.ownerDocument.adoptedStyleSheets = m.slot.ownerDocument.adoptedStyleSheets.filter((s) => s !== m.sheet)
     m.detach = m.sheet = m.sandbox = m.renderer = m.textRenderer = undefined
   }

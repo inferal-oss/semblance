@@ -259,15 +259,18 @@ ${items}`
       while (performance.now() - t < 20);
       return functionsOf('listitem:screen')(ctx, focus, member)
     }
+    let disposed = 0
     const b = buildSandbox([{ name: 'list.ttl', text: source }], 'https://example.org/s#list', {
-      load: (...t) => loadStore('wat', ...t),
+      load: (...t) => Object.assign(loadStore('wat', ...t), { dispose: () => void disposed++ }),
       prefer: 'function',
       functions: { 'listitem:screen': burn },
       budgetMs: 100,
     })
     expect(b.sandbox).toBeUndefined()
     expect(b.problems[0]!.severity).toBe('error')
-    expect(b.problems[0]!.message).toMatch(/^Stopped: rendering took longer than 100 ms, and \d+ renderings were left undone\. The slowest work was c:ListItemOnScreen-fn/)
+    // The broken build let go of its store (Oxigraph's share one WebAssembly memory).
+    expect(disposed).toBe(1)
+    expect(b.problems[0]!.message).toMatch(/^Stopped: rendering took longer than 100 ms, and \d+ renderings were left undone\./)
   })
 })
 
