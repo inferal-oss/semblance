@@ -5,6 +5,7 @@ import { DomRenderer } from '../render/dom.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { attachConnectors } from './connectors.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
 export { DEFAULT_LAYERS }
@@ -45,8 +46,8 @@ export interface MountedApp {
 /**
  * Mount a component graph into an element: load the store, compile the theme, project the
  * root on screen, patch it into `element` and route the element's events to reactions.
- * Hidden parts are evaluated in idle time. Persistence, navigation and the other host
- * effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
+ * Hidden parts are evaluated in idle time; connectors (c:Connector) are drawn where their ends
+ * are. Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
  */
 export async function mount(element: HTMLElement, opts: MountOptions): Promise<MountedApp> {
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
@@ -97,6 +98,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   })
   flush()
   scheduleWarmup()
+  // Connectors are drawn where their ends are (nothing to do while there is none).
+  const connectors = attachConnectors(element)
 
   return {
     store,
@@ -108,6 +111,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     unmount() {
       stopped = true
       detach()
+      connectors.dispose()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },
   }

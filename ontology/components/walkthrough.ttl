@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
@@ -24,9 +25,11 @@
 # how salient each mark of the diagram is - the current step's mentioned nodes focused, their
 # neighbours, the rest dimmed - like a c:ResultGraph's selection. Pointing at a mention (hover,
 # focus: c:pointedTerm) or clicking a node (c:selectedTerm) focuses that one term instead, and
-# lights the mentions of it. Curved arrows from the current step's mentions to their nodes are a
-# view effect of DOM positions (src/web/walkthrough.ts): the graph says what is mentioned and
-# what is current, the host only where things are.
+# lights the mentions of it. An arrow joins each of the current step's mentions (and each lit
+# one) to its node: a c:Connector a rule derives (c:WalkthroughArrows), which leaves its phrase
+# between the lines (c:leader, the step) and stops at the node's ring; the connector effect
+# (src/web/connectors.ts) draws it where things are, and hides it while its phrase is out of view
+# or under the diagram (on a phone the diagram stays on top).
 #
 # A walkthrough may show the source it explains (c:sourceView, a c:SourceView): clicking a
 # mention shows the statement that describes its resource there (c:highlightsSubject on the
@@ -43,7 +46,7 @@ c:steps (an rdf:List of c:WalkthroughStep), and optionally c:sourceView, the sou
 diagram shows every resource a step's c:Mention mentions, plus c:diagramIncludes, minus
 c:diagramExcludes, and the links among them; it stays beside the steps while they scroll (they stack
 when narrow). The step being read (c:current, by default the first) focuses its mentions in the
-diagram, and arrows join each of its mentions to its node."""@en ;
+diagram, and arrows (c:Connector s) join each of its mentions to its node."""@en ;
     sem:slug "walkthrough" .
 c:WalkthroughStep a owl:Class ;
     rdfs:subClassOf c:Text ;
@@ -205,6 +208,42 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~lit-", REPLACE(STR(?mention), "^.*[#/]", ""))) AS ?lit)
     }
   }
+}""" .
+
+# --- the arrows: a connector from each mention being read to its node ------------------------------
+# The current step's mentions, and every mention of the pointed or selected term (heavier: a solid
+# emphasis), each to its node's dot (<walkthrough>/~node-<term>-dot), leaving its step between the
+# lines; a term the diagram leaves out (c:diagramExcludes) has no node, so no arrow. In stratum 0,
+# placed in the walkthrough's arrow layer (/~arrows).
+c:WalkthroughArrows a sem:Rendering ; sem:targets c:Walkthrough ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:watches rdf:type , c:steps , c:current , c:pointedTerm , c:selectedTerm , c:diagramExcludes .
+c:WalkthroughArrows-fn a sem:Rule ; sem:implements c:WalkthroughArrows ; sem:function "walkthrough:arrows" .
+c:WalkthroughArrows-sparql a sem:Rule ;
+    sem:implements c:WalkthroughArrows ;
+    sem:construct """
+CONSTRUCT {
+  ?arrows rdfhtml:hasChild ?arrow .
+  ?arrow a c:Connector ; c:from ?mention ; c:to ?dot ; c:leader ?step ; sty:tone sty:Accent ; sty:emphasis ?emphasis ; sem:orderKey ?key .
+}
+WHERE {
+  $this a c:Walkthrough .
+  BIND(IRI(CONCAT(STR($this), "/~arrows")) AS ?arrows)
+  OPTIONAL { $this c:current ?chosen FILTER EXISTS { $this c:steps/rdf:rest*/rdf:first ?chosen } }
+  OPTIONAL { $this c:steps/rdf:first ?first }
+  BIND(COALESCE(?chosen, ?first) AS ?current)
+  {
+    ?current c:children/rdf:rest*/rdf:first ?mention .
+    BIND(?current AS ?step)
+  } UNION {
+    $this c:pointedTerm|c:selectedTerm ?picked .
+    $this c:steps/rdf:rest*/rdf:first ?step . ?step c:children/rdf:rest*/rdf:first ?mention . ?mention c:mentions ?picked .
+  }
+  ?mention a c:Mention ; c:mentions ?term FILTER(isIRI(?term))
+  FILTER NOT EXISTS { $this c:diagramExcludes ?term }
+  BIND(IF(EXISTS { $this c:pointedTerm|c:selectedTerm ?term }, sty:Solid, ?none) AS ?emphasis)
+  BIND(IRI(CONCAT(STR($this), "/~node-", ENCODE_FOR_URI(STR(?term)), "-dot")) AS ?dot)
+  BIND(IRI(CONCAT(STR($this), "/~arrow-", ENCODE_FOR_URI(STR(?mention)))) AS ?arrow)
+  BIND(STR(?mention) AS ?key)
 }""" .
 
 # --- a source view's highlighted statements ----------------------------------------------------------

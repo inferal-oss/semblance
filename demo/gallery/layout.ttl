@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-panes ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-panes ui:ly-connect ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -247,3 +247,15 @@ ui:ly-rows a c:Flippable ; c:front ui:ly-rows-spec .
 ui:ly-rows-spec a c:Specimen ; c:demonstrates c:Stack ; c:label "Rows that line up" ;
     c:help "The same three rows, twice; the dashed boxes are the cells. A stack lays out only its own children, so on the left each row places its cells from its own content. On the right the list declares its column tracks once (a pos:Layout with grid-template-columns) and each row is pos:Subgrid, sharing them - also the last row, inside a c:Switch, which takes no part in layout. A badge stays as wide as its label in its column." ;
     c:children ( ui:ly-rows-stage ) .
+
+# --- connectors: two cards, an arrow kept attached ---
+ui:ly-connect-order a c:Card ; c:label "Order" ; c:note "ss:order, a c:Sheet" .
+ui:ly-connect-invoice a c:Card ; c:label "Invoice" ; c:note "Drag me" .
+ui:ly-connect-arrow a c:Connector ; c:from ui:ly-connect-order ; c:to ui:ly-connect-invoice ;
+    c:label "is billed as" ; sty:tone sty:Accent .
+ui:ly-connect-canvas a c:Canvas , c:Resizable ; c:label "Two cards and a connector" ; c:height 240 ;
+    c:children ( ui:ly-connect-order ui:ly-connect-invoice ui:ly-connect-arrow ) .
+ui:ly-connect a c:Flippable ; c:front ui:ly-connect-spec .
+ui:ly-connect-spec a c:Specimen ; c:demonstrates c:Connector , c:Canvas ; c:label "Connector" ;
+    c:help "A c:Connector is an arrow c:from one component c:to another, as data: c:route (curved, straight, elbow, an arc to the side), c:arrowheads, c:line, sty:tone and a c:label, which with the ends' names is its text alternative (\"Order → Invoice: is billed as\"). The host measures the ends and draws it, once a frame at most and only when something moved, so it stays attached: drag a card (each sits in a c:CanvasItem, which is c:Draggable), or resize the c:Canvas from its corner. An end that is hidden or out of view hides it. A sheet's dependency arrows and a walkthrough's are connectors too, derived by rules." ;
+    c:children ( ui:ly-connect-canvas ) .

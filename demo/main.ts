@@ -17,6 +17,7 @@ import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
+import { attachConnectors } from '../src/web/connectors.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 
@@ -257,6 +258,8 @@ const bus = new EventBus(runtime, screen, { functions: todoReactions, prefer })
 attachIntent(runtime, shell, { flush: () => flush() })
 // Walkthroughs: the step in view is reported to the graph; arrows follow what it mentions.
 attachWalkthroughs(document.getElementById('app')!)
+// Connectors (a sheet's dependencies, a walkthrough's arrows, a canvas's): drawn where their ends are.
+const connectors = attachConnectors(document.getElementById('app')!)
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
@@ -335,4 +338,4 @@ void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes } })
+if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors } })

@@ -63,7 +63,7 @@ Thin vocabularies. Every component
 
 | group | components |
 |---|---|
-| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel |
+| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
 | **Type** | Heading · Text · Link · Kbd · Code · Blockquote · GraphMark · Emblem · SourceView · Walkthrough (WalkthroughStep, Mention) · LiveExample |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
@@ -89,11 +89,21 @@ are `c:Mention`s of resources (`c:mentions`): beside the steps it draws a diagra
 mention and the graph's links among it, in bands by the step that first mentions each, and stays
 in view while the steps scroll. The step being read is graph state (`c:current`, reported by the
 host as an unrecorded `c:StepInView` as the page scrolls, or by focus); a rule above the rendering
-derives each mark's `c:Salience` from it, and the host draws curved arrows from the current step's
-mentions to their nodes (`src/web/walkthrough.ts`: the graph says what, the host only where).
+derives each mark's `c:Salience` from it, and another derives a `c:Connector` from each of the
+current step's mentions to its node (the graph says what, the host only where).
 Activating a mention shows its statement in the walkthrough's `c:sourceView` (`c:highlightsSubject`;
 the host records each statement's lines as a `c:SourceSpan`), or, with `c:to`, goes to the term's
 page. Every example on the Examples page explains itself with one.
+
+A **connector** (`ontology/components/connector.ttl`) is an arrow `c:from` one component (or
+rendered node) `c:to` another, as data: `c:route` (curved, straight, elbow, an arc to the inline end
+side), `c:arrowheads`, `c:line`, `sty:tone`, `sty:emphasis`, `c:label`, and routing hints
+(`c:leader`: leave running text between the lines; `c:shownWhile`). Its rendering is an empty SVG
+canvas over its positioned container that names its ends by id and says what it joins ("B3 → D3");
+a host effect (`src/web/connectors.ts`) measures the ends and writes the paths, at most once a frame
+and only when something moved, and hides it while an end cannot be seen. Rules derive them: a
+sheet's dependency arrows (`c:SheetConnectors`), a walkthrough's (`c:WalkthroughArrows`). A
+`c:Canvas` holds components in draggable `c:CanvasItem`s and the connectors between them.
 
 A **typeahead** (`ontology/components/typeahead.ttl`) is a text field that finds values among
 options from the graph: a `c:Combobox` sets a single-valued property, a `c:TagInput` edits a

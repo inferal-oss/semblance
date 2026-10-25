@@ -219,44 +219,13 @@
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-plot" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "max-height" ; sty:raw "calc(35dvh - 28px)" ] .
 
-# --- the arrows (drawn by the host into the slot, over the walkthrough) ---
+# --- the arrows: connectors (c:WalkthroughArrows) in a layer over the walkthrough ---
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part "> .sem-walk-arrows" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "pointer-events" ; sty:raw "none" ] ,
                  [ sty:property "z-index" ; sty:raw "2" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part "> .sem-walk-arrows > svg" ;
-    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
-                 [ sty:property "inset" ; sty:raw "0" ] ,
-                 [ sty:property "width" ; sty:raw "100%" ] ,
-                 [ sty:property "height" ; sty:raw "100%" ] ,
-                 [ sty:property "overflow" ; sty:raw "hidden" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-arrow" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] ,
-                 [ sty:property "stroke" ; sty:token tok:accent ] ,
-                 [ sty:property "stroke-width" ; sty:raw "1.6" ] ,
-                 [ sty:property "stroke-linecap" ; sty:raw "round" ] ,
-                 [ sty:property "opacity" ; sty:raw "0.78" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-arrow[data-lit]" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:accent-strong ] ,
-                 [ sty:property "stroke-width" ; sty:raw "2.4" ] ,
-                 [ sty:property "opacity" ; sty:raw "1" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-leader" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] ,
-                 [ sty:property "stroke" ; sty:token tok:accent ] ,
-                 [ sty:property "stroke-width" ; sty:raw "1.2" ] ,
-                 [ sty:property "stroke-dasharray" ; sty:raw "1.5 3" ] ,
-                 [ sty:property "stroke-linecap" ; sty:raw "round" ] ,
-                 [ sty:property "opacity" ; sty:raw "0.55" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-leader[data-lit]" ;
-    sty:declares [ sty:property "opacity" ; sty:raw "0.9" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-arrow-head[data-lit]" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:accent-strong ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-arrow-head" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:accent ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-arrow-start" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:accent ] ,
-                 [ sty:property "opacity" ; sty:raw "0.78" ] .
 
 # --- the source view's lines: numbered, a statement highlighted ---
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part "> .sem-source" ;

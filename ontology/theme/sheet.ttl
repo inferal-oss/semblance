@@ -2,8 +2,8 @@
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
 
-# Default theme for sheets (ontology/components/sheet.ttl). The grid's tracks are the rules'
-# geometry (a 44px row header, 104 × 36 cells), so the arrows drawn over it meet the cells. A wide
+# Default theme for sheets (ontology/components/sheet.ttl): a 44px row header, 104 × 36 cells, and
+# a connector layer over the grid for the dependency arrows (drawn where the cells are). A wide
 # sheet scrolls in place.
 
 [] a sty:StyleRule ; sty:appliesTo c:Sheet ;
@@ -47,24 +47,11 @@
 [] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-sheet-corner" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "1" ] ,
                  [ sty:property "grid-column" ; sty:raw "1" ] .
+# The connector layer over the grid: the dependency arrows (c:Connector s) fill it.
 [] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-sheet-links" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
-                 [ sty:property "inset" ; sty:raw "0 auto auto 0" ] ,
-                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
-                 [ sty:property "overflow" ; sty:raw "visible" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-link" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] ,
-                 [ sty:property "stroke-width" ; sty:raw "1.8" ] ,
-                 [ sty:property "stroke-linecap" ; sty:raw "round" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-link.sem-in" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:accent ] .
-[] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-head.sem-in" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:accent ] .
-[] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-link.sem-out" ;
-    sty:declares [ sty:property "stroke" ; sty:raw "var(--sem-success-9, #2f9e44)" ] ,
-                 [ sty:property "stroke-dasharray" ; sty:raw "4 3" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-head.sem-out" ;
-    sty:declares [ sty:property "fill" ; sty:raw "var(--sem-success-9, #2f9e44)" ] .
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:SheetCell ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,

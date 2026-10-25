@@ -37,8 +37,6 @@ const grid: FnRule = (ctx, focus) => {
   const cells = ctx.objects(focus, S.cell).filter(named)
   const placed = cells.map((cell) => ({ cell, r: int(ctx, cell, S.row), c: int(ctx, cell, S.column) })).filter((x) => Number.isFinite(x.r) && Number.isFinite(x.c))
   const rows = [...new Set(placed.map((x) => x.r))]
-  const height = 30 + Math.max(...placed.map((x) => x.r)) * 36
-  const width = 44 + columns * 104
   const children: NamedNode[] = []
   const keyed = (n: NamedNode, key: string) => (o.t(n, SEM.orderKey, key), children.push(n))
   keyed(o.el('corner', 'Div', { class: 'sem-sheet-corner' }), '000.000')
@@ -48,9 +46,8 @@ const grid: FnRule = (ctx, focus) => {
   }
   for (const r of rows) keyed(o.el(`row-${r}`, 'Div', { class: 'sem-sheet-head', style: `grid-row: ${r + 1}; grid-column: 1` }, [o.text(`row-${r}-text`, String(r))]), `${pad3(r)}.000`)
   for (const { cell, r, c } of placed) keyed(cell, `${pad3(r)}.${pad3(c)}`)
-  const links = o.svg('links', 'Svg', { viewBox: `0 0 ${width} ${height}`, width, height, 'aria-hidden': 'true' })
-  o.t(links, H.ns + 'class', 'sem-sheet-links')
-  keyed(links, '999.999')
+  // The connector layer: the dependency arrows (c:SheetConnectors) are placed in it.
+  keyed(o.el('links', 'Div', { class: 'sem-sheet-links' }), '999.999')
   const gridEl = o.el('grid', 'Div', { class: 'sem-sheet-grid', style: `grid-template-columns: 44px repeat(${columns}, 104px)`, 'aria-label': label })
   for (const ch of children) o.t(gridEl, H.hasChild, ch)
   const status = o.el('status', 'P', { class: 'sem-sheet-status', 'aria-live': 'polite' })
@@ -79,27 +76,10 @@ const cell: FnRule = (ctx, focus) => {
 
 // --- the selection, the arrows, the last recalculation ----------------------------------------------
 
-/** An arrow between two cells' edges (the SPARQL rule's geometry, in integers). */
-function arrow(from: { r: number; c: number }, to: { r: number; c: number }) {
-  const y0 = 30 + (from.r - 1) * 36 + 18
-  const y1 = 30 + (to.r - 1) * 36 + 18
-  const dir = from.c === to.c ? 0 : to.c > from.c ? 1 : -1
-  const x0 = dir === 0 ? 44 + from.c * 104 - 8 : dir === 1 ? 44 + from.c * 104 - 6 : 44 + (from.c - 1) * 104 + 6
-  const x1 = dir === 0 ? x0 : dir === 1 ? 44 + (to.c - 1) * 104 + 6 : 44 + to.c * 104 - 6
-  const k = dir === 0 ? 14 + 6 * Math.abs(to.r - from.r) : 32 + 8 * Math.abs(to.c - from.c)
-  const cx0 = dir === 0 ? x0 + k : x0 + dir * k
-  const cx1 = dir === 0 ? x1 + k : x1 - dir * k
-  const back = dir === 1 ? -7 : 7
-  return {
-    d: `M${x0},${y0} C${cx0},${y0} ${cx1},${y1} ${x1},${y1}`,
-    head: `M${x1},${y1} L${x1 + back},${y1 - 4} L${x1 + back},${y1 + 4} Z`,
-  }
-}
-
 const focusRule: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const links = o.node('links')
-  if (!ctx.match(links, NS.rdf + 'type', NS.svg + 'Svg').length) return o.quads
+  if (!ctx.match(links, NS.rdf + 'type', H.ns + 'Div').length) return o.quads
   const cells = new Set(ctx.objects(focus, S.cell).map((t) => t.value))
   const chosen = ctx.object(focus, S.selectedCell)
   const sel = named(chosen) && cells.has(chosen.value) ? chosen : undefined
@@ -122,26 +102,38 @@ const focusRule: FnRule = (ctx, focus) => {
     const parity = Number(tick) % 2 === 0 ? 'even' : 'odd'
     for (const rc of recalculated) o.attr(ctx.nn(rc.value + '/~root'), 'data-sem-recalculated', parity, `rec-${localName(rc.value)}`)
   }
-  if (sel) {
-    const at = (x: Term) => ({ r: int(ctx, x, S.row), c: int(ctx, x, S.column) })
-    const pairs: [Term, Term, string][] = [
-      ...ctx.objects(sel, S.dataset).map((from) => [from, sel, 'in'] as [Term, Term, string]),
-      ...ctx.match(null, S.dataset, sel).map((q) => [q.subject, sel, 'out'] as [Term, Term, string]).map(([to, s, w]) => [s, to, w] as [Term, Term, string]),
-    ]
-    for (const [from, to, way] of pairs) {
-      if (!cells.has(from.value) || !cells.has(to.value)) continue
-      const a = arrow(at(from), at(to))
-      const key = `${way}-${localName(from.value)}-${localName(to.value)}`
-      const arc = o.svg(`link-${key}`, 'Path', { d: a.d, class: `sem-link sem-${way}` })
-      const head = o.svg(`link-${key}-head`, 'Path', { d: a.head, class: `sem-head sem-${way}` })
-      o.t(arc, SEM.orderKey, `${key}-a`).t(head, SEM.orderKey, `${key}-b`)
-      o.t(links, H.hasChild, arc).t(links, H.hasChild, head)
-    }
+  return o.quads
+}
+
+/** c:SheetConnectors: a connector per dependency of the selected cell, in the grid's connector layer. */
+const connectors: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const cells = new Set(ctx.objects(focus, S.cell).map((t) => t.value))
+  const sel = ctx.objects(focus, S.selectedCell).find((t) => named(t) && cells.has(t.value))
+  if (!named(sel)) return o.quads
+  const pairs: [Term, Term, 'in' | 'out'][] = [
+    ...ctx.objects(sel, S.dataset).map((from) => [from, sel, 'in'] as [Term, Term, 'in']),
+    ...ctx.match(null, S.dataset, sel).map((q) => [sel, q.subject, 'out'] as [Term, Term, 'out']),
+  ]
+  const links = o.node('links')
+  for (const [from, to, way] of pairs) {
+    if (!cells.has(from.value) || !cells.has(to.value)) continue
+    const key = `${way}-${localName(from.value)}-${localName(to.value)}`
+    const link = o.node(`link-${key}`)
+    const sameColumn = str(ctx.object(from, S.column)) === str(ctx.object(to, S.column))
+    o.t(links, H.hasChild, link)
+      .t(link, NS.rdf + 'type', ctx.nn(NS.c + 'Connector'))
+      .t(link, NS.c + 'from', from)
+      .t(link, NS.c + 'to', to)
+      .t(link, NS.c + 'route', ctx.nn(NS.c + (sameColumn ? 'Arc' : 'Curved')))
+      .t(link, NS.c + 'line', ctx.nn(NS.c + (way === 'in' ? 'SolidLine' : 'DashedLine')))
+      .t(link, NS.sty + 'tone', ctx.nn(NS.sty + (way === 'in' ? 'Accent' : 'Success')))
+      .t(link, SEM.orderKey, key)
   }
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { 'sheet:grid': grid, 'sheet:cell': cell, 'sheet:focus': focusRule }
+export const functions: Record<string, FnRule> = { 'sheet:grid': grid, 'sheet:cell': cell, 'sheet:focus': focusRule, 'sheet:connectors': connectors }
 
 // --- reactions ------------------------------------------------------------------------------------------
 

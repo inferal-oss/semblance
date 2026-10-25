@@ -588,8 +588,15 @@ export class EventBus {
     const kind = handle.dataset.semGesture
     // Where the box is on screen (a theme may centre it with a translate, which the drag drops).
     const rect = box.getBoundingClientRect()
-    const start = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, width: box.offsetWidth, height: box.offsetHeight }
     const target = box
+    // A box placed in a container (a canvas's item), not on the screen: its left and top are in the
+    // container's padding box, and one in flow comes out of it while dragged.
+    const position = kind === 'move' ? target.ownerDocument.defaultView?.getComputedStyle(target).position : undefined
+    const inFlow = position === 'static' || position === 'relative'
+    const parent = kind === 'move' && position !== 'fixed' ? (target.offsetParent as HTMLElement | null) : null
+    const origin = parent ? parent.getBoundingClientRect() : undefined
+    const off = origin && parent ? { x: origin.left + parent.clientLeft - parent.scrollLeft, y: origin.top + parent.clientTop - parent.scrollTop } : { x: 0, y: 0 }
+    const start = { x: e.clientX, y: e.clientY, left: rect.left - off.x, top: rect.top - off.y, width: box.offsetWidth, height: box.offsetHeight }
     const natural = kind === 'move' && handle.dataset.semMoveSize === 'content'
     // What the graph says (the renderer's last write); the drag only changes the view until release.
     const original = target.getAttribute('style')
@@ -614,9 +621,9 @@ export class EventBus {
         // Grabbed docked, it comes away at its own size under the pointer, as far into it as it was.
         const width = natural ? target.offsetWidth : start.width
         const height = natural ? target.offsetHeight : start.height
-        const left = natural ? m.clientX - Math.min(start.x - start.left, width / 2) : start.left + dx
-        const top = natural ? m.clientY - Math.min(start.y - start.top, height / 2) : start.top + dy
-        Object.assign(target.style, { left: `${left}px`, top: `${Math.max(0, top)}px`, right: 'auto', bottom: 'auto', translate: 'none', ...size })
+        const left = natural ? m.clientX - off.x - Math.min(start.x - off.x - start.left, width / 2) : start.left + dx
+        const top = natural ? m.clientY - off.y - Math.min(start.y - off.y - start.top, height / 2) : start.top + dy
+        Object.assign(target.style, { left: `${left}px`, top: `${Math.max(0, top)}px`, right: 'auto', bottom: 'auto', translate: 'none', ...size, ...(inFlow ? { position: 'absolute', margin: '0' } : {}) })
         home?.mark(home.at(m.clientX, m.clientY)?.el)
       } else Object.assign(target.style, { width: `${Math.max(280, start.width + dx)}px`, height: `${Math.max(180, start.height + dy)}px` })
     }

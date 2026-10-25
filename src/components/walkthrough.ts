@@ -8,6 +8,9 @@ import { mint } from '../rdf.ts'
 import { RDFS_LABEL, named, nodes, str, text } from './util.ts'
 import { compact, fnv } from './workbench.ts'
 
+/** SPARQL's ENCODE_FOR_URI, so minted keys match the SPARQL rules'. */
+const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
+
 const c = NS.c
 const W = {
   Walkthrough: c + 'Walkthrough',
@@ -283,7 +286,8 @@ const walkthrough: FnRule = (ctx, focus) => {
   }
 
   const { height, bands } = layout(dnodes, edges)
-  const ids = new Map(dnodes.map((n) => [n.term.value, 'n' + fnv(n.term.value)]))
+  // A node's IRI is its term's, so a rule can name it (c:WalkthroughArrows points at its dot).
+  const ids = new Map(dnodes.map((n) => [n.term.value, 'node-' + encodeForUri(n.term.value)]))
   const marks: NamedNode[] = []
   // Band numbers down the left edge: which step a row of nodes belongs to.
   for (const b of bands) marks.push(o.svg(`band-${b.band}`, 'Text', { x: 14, y: b.y + 4, 'text-anchor': 'middle', class: 'sem-band' }, [o.text(`band-${b.band}-text`, String(b.band + 1))]))
@@ -307,7 +311,7 @@ const walkthrough: FnRule = (ctx, focus) => {
       o.svg(`${id}-label`, 'Text', { x: n.x, y: n.y + 20, 'text-anchor': 'middle', class: 'sem-node-label' }, [o.text(`${id}-label-text`, n.label)]),
     ])
     o.tip(o.node(`${id}-dot`), n.term.value)
-    o.t(mark, W.term, n.term)
+    o.t(mark, W.term, n.term).t(o.node(`${id}-dot`), W.term, n.term)
     marks.push(mark)
   }
   // The diagram's text alternative: one sentence per link, and the terms no link reaches.
@@ -342,9 +346,8 @@ const walkthrough: FnRule = (ctx, focus) => {
   const head: NamedNode[] = []
   if (title) head.push(o.el('title', 'H2', {}, [o.text('title-text', title)]))
   if (lead) head.push(o.el('lead', 'P', { class: 'sem-walk-lead' }, [o.text('lead-text', lead)]))
-  // The arrows are the host's (src/web/walkthrough.ts): it draws into this slot.
+  // The arrows' layer: c:WalkthroughArrows places a connector in it for each mention being read.
   const arrows = o.el('arrows', 'Div', { class: 'sem-walk-arrows' })
-  o.attr(arrows, 'aria-hidden', 'true').t(arrows, SEM.slot, 'walkthrough-arrows')
   const parts = [
     ...(head.length ? [o.el('head', 'Header', { class: 'sem-walk-head' }, head)] : []),
     o.el('body', 'Div', { class: 'sem-walk-body' }, [o.el('steps', 'Ol', { class: 'sem-walk-steps' }, wrappers), aside]),
@@ -416,6 +419,34 @@ const walkFocus: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/**
+ * c:WalkthroughArrows: a connector from each mention of the current step, and each mention of the
+ * pointed or selected term (heavier), to its node's dot, leaving its step between the lines.
+ */
+const walkArrows: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  if (!ctx.match(focus, RDF_TYPE, W.Walkthrough).length) return o.quads
+  const { steps, current, picked } = reading(ctx, focus)
+  const excluded = new Set(ctx.objects(focus, W.excludes).map((t) => t.value))
+  const arrows = o.node('arrows')
+  const refs = mentionsOf(ctx, steps)
+  for (const r of refs) {
+    const lit = picked.has(r.term.value)
+    if (!lit && !steps[r.step]!.equals(current)) continue
+    if (excluded.has(r.term.value)) continue
+    const arrow = o.node('arrow-' + encodeForUri(r.mention.value))
+    o.t(arrows, H.hasChild, arrow)
+      .t(arrow, RDF_TYPE, ctx.nn(c + 'Connector'))
+      .t(arrow, c + 'from', r.mention)
+      .t(arrow, c + 'to', o.node(`node-${encodeForUri(r.term.value)}-dot`))
+      .t(arrow, c + 'leader', steps[r.step]!)
+      .t(arrow, NS.sty + 'tone', ctx.nn(NS.sty + 'Accent'))
+      .t(arrow, SEM.orderKey, r.mention.value)
+    if (lit) o.t(arrow, NS.sty + 'emphasis', ctx.nn(NS.sty + 'Solid'))
+  }
+  return o.quads
+}
+
 /** c:SourceHighlight: the lines of the highlighted subject's statements, and a note naming them. */
 const sourceHighlight: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -447,6 +478,7 @@ export const functions: Record<string, FnRule> = {
   walkthrough,
   mention,
   'walkthrough:focus': walkFocus,
+  'walkthrough:arrows': walkArrows,
   'source-view:highlight': sourceHighlight,
 }
 

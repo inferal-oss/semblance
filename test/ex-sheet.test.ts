@@ -32,7 +32,8 @@ function open(prefer: 'sparql' | 'function' = 'function') {
   const status = () => sheet().querySelector('.sem-sheet-status')!.textContent
   const bar = () => sheet().querySelector('.sem-sheet-bar')!.textContent
   const flashing = () => [...sheet().querySelectorAll('[data-sem-recalculated]')].map((c) => c.querySelector('output, input')!.getAttribute('aria-label')).sort()
-  const arrows = (way: string) => sheet().querySelectorAll(`.sem-link.sem-${way}`).length
+  // The dependency arrows are connectors: what the cell reads in the accent, what reads it in success.
+  const arrows = (way: string) => sheet().querySelectorAll(`[data-sem-c=connector][data-sem-tone=${way === 'in' ? 'accent' : 'success'}]`).length
   return { ...h, trace, fire, sheet, cell, value, type, status, bar, flashing, arrows }
 }
 

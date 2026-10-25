@@ -105,9 +105,9 @@ describe('the reference tree', () => {
     h.press(layout, 'ArrowRight') // opens Layout
     expect(h.branch('Layout').getAttribute('aria-expanded')).toBe('true')
     h.press(h.branch('Layout').querySelector(':scope > .sem-row > .sem-label')!, 'ArrowRight') // enters it
-    const card = h.item(h.branch('Layout'), 'Card')
-    expect(card.getAttribute('tabindex')).toBe('0')
-    h.press(card, 'ArrowLeft') // back to the branch
+    const member = h.branch('Layout').querySelector('[aria-level="3"] .sem-label')! // its first member
+    expect(member.getAttribute('tabindex')).toBe('0')
+    h.press(member, 'ArrowLeft') // back to the branch
     expect(h.branch('Layout').querySelector(':scope > .sem-row > .sem-label')!.getAttribute('tabindex')).toBe('0')
     h.press(h.branch('Layout').querySelector(':scope > .sem-row > .sem-label')!, 'ArrowLeft') // closes it
     expect(h.branch('Layout').getAttribute('aria-expanded')).toBe('false')

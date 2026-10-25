@@ -538,7 +538,7 @@ ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav r
 
 # --- Rules and the engine ---
 ui:doc-rules a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:doc-ru-h ui:doc-ru-0 ui:doc-ru-walk ui:doc-ru-1 ui:doc-ru-2 ui:doc-ru-3 ui:doc-ru-4 ui:doc-ru-5 ) .
+    c:children ( ui:doc-ru-h ui:doc-ru-0 ui:doc-ru-walk ui:doc-ru-arrows ui:doc-ru-canvas ui:doc-ru-1 ui:doc-ru-2 ui:doc-ru-3 ui:doc-ru-4 ui:doc-ru-5 ) .
 ui:doc-ru-h a c:Heading ; c:level 1 ; c:label "Rules and the engine" .
 ui:doc-ru-0 a c:Text ; c:label "One component, a text field, from its triples to the page and back, through the framework's own graph: the diagram beside the steps is drawn from the terms they mention and the links among them." .
 ui:doc-ru-walk a c:Walkthrough ; c:label "A field, from data to the page and back" ;
@@ -564,6 +564,14 @@ ui:doc-ru-m-Check a c:Mention ; c:label "val:Check" ; c:mentions val:Check ; c:t
 ui:doc-ru-m-Input a c:Mention ; c:label "beh:Input" ; c:mentions beh:Input ; c:to beh:Input .
 ui:doc-ru-m-TextFieldInput a c:Mention ; c:label "c:TextFieldInput" ; c:mentions c:TextFieldInput ; c:to c:TextFieldInput .
 ui:doc-ru-m-ChangeLog a c:Mention ; c:label "beh:ChangeLog" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
+ui:doc-ru-arrows a c:Text ; c:label "The arrows from the phrases to the diagram are connectors (c:Connector): a rule derives one from each mention being read to its node, and the host draws it where both are, hiding it while its phrase is out of view. Any two components can be joined the same way; a sheet's dependency arrows are too. Here the walk of a field is three cards and two connectors: drag a card, or resize the canvas from its corner, and the arrows stay attached." .
+ui:doc-ru-canvas a c:Canvas , c:Resizable ; c:label "A field, its rule and what it builds" ; c:height 220 ;
+    c:children ( ui:doc-ru-c-field ui:doc-ru-c-rule ui:doc-ru-c-html ui:doc-ru-c-focus ui:doc-ru-c-builds ) .
+ui:doc-ru-c-field a c:Card ; c:label "ex:name" ; c:note "a c:TextField" .
+ui:doc-ru-c-rule a c:Card ; c:label "c:TextFieldOnScreen-sparql" ; c:note "a CONSTRUCT" .
+ui:doc-ru-c-html a c:Card ; c:label "RDF/HTML" ; c:note "<label> <input>" .
+ui:doc-ru-c-focus a c:Connector ; c:from ui:doc-ru-c-field ; c:to ui:doc-ru-c-rule ; c:label "is the focus of" ; sty:tone sty:Accent .
+ui:doc-ru-c-builds a c:Connector ; c:from ui:doc-ru-c-rule ; c:to ui:doc-ru-c-html ; c:label "builds" ; sty:tone sty:Success ; c:line c:DashedLine .
 ui:doc-ru-1 a c:Text ; c:label "Identity. Rules mint IRIs as <focus>/~<local>, never blank nodes, so a node keeps its identity across re-evaluation, its DOM element is reused, and its IRI doubles as an id that labels and descriptions point at." .
 ui:doc-ru-2 a c:Text ; c:label "Incrementality. Each (rule, focus) pair owns its output. A change marks pairs dirty through the focus's own triples, sem:follows links and the triples a function read; outputs are diffed and reference-counted. Member-wise rules (sem:forEach) evaluate once per member, so adding a list item touches only that item." .
 ui:doc-ru-3 a c:Text ; c:label "Demand. Only what is shown under a projection's roots is evaluated; hidden pages and tabs are parked. sem:warm says what to prepare ahead: sem:Eager in idle time, sem:OnIntent when a choice that would show it is pointed at." .

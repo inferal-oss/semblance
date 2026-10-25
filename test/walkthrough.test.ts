@@ -209,27 +209,32 @@ describe('reading a walkthrough costs only the walkthrough', () => {
         t.shell.flush()
       }
       const snap = () => ({ ruleRuns: t.screen.engine.stats.ruleRuns, written: t.screen.engine.stats.derivedAdded + t.screen.engine.stats.derivedRemoved, domOps: t.shell.ops })
-      const runs: ReturnType<typeof snap>[] = []
+      const runs: (ReturnType<typeof snap> & { arrows: number })[] = []
+      const arrows = () => t.walk().querySelectorAll('.sem-walk-arrows > [data-sem-c=connector]').length
       for (const i of [1, 2, 3, 1]) {
         const a = snap()
+        const before = arrows()
         t.step(t.steps()[i]!)
         const b = snap()
-        runs.push({ ruleRuns: b.ruleRuns - a.ruleRuns, written: b.written - a.written, domOps: b.domOps - a.domOps })
+        runs.push({ ruleRuns: b.ruleRuns - a.ruleRuns, written: b.written - a.written, domOps: b.domOps - a.domOps, arrows: before + arrows() })
       }
       const a = snap()
+      const before = arrows()
       t.fire(t.mention('ex:AddTodo'), 'click')
       const b = snap()
-      return { steps: runs, click: { ruleRuns: b.ruleRuns - a.ruleRuns, written: b.written - a.written, domOps: b.domOps - a.domOps } }
+      return { steps: runs, click: { ruleRuns: b.ruleRuns - a.ruleRuns, written: b.written - a.written, domOps: b.domOps - a.domOps, arrows: before + arrows() } }
     }
     const small = measure(0)
     const large = measure(300)
     expect(large).toEqual(small)
     // A step: the walkthrough's focus rule, and the layers that decorate the walkthrough (its
-    // style hooks, its shape, its tooltips) - never the rendering, the steps or the source.
-    for (const s of small.steps) expect(s.ruleRuns).toBeLessThanOrEqual(4)
+    // style hooks, its shape, its tooltips), and its arrows' rule - never the rendering, the steps
+    // or the source - and each arrow it takes down or puts up (a connector: its rendering and its layers).
+    for (const s of small.steps) expect(s.ruleRuns).toBeLessThanOrEqual(5 + 5 * s.arrows)
     // A mention: the same for the walkthrough and the source view, its highlight rule, and the
     // toasts that read the change log's head - not the source view's rendering.
-    expect(small.click.ruleRuns).toBeLessThanOrEqual(10)
+    // (and the arrows of the mentions it lights, heavier).
+    expect(small.click.ruleRuns).toBeLessThanOrEqual(10 + 5 * small.click.arrows)
     console.info('[walkthrough cost]', JSON.stringify(small))
   })
 })

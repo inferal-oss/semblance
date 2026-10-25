@@ -312,7 +312,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement and clipboard layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 
