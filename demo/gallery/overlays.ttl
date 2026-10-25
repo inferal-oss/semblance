@@ -33,6 +33,7 @@ ui:ov-dialog-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphas
 
 ui:ov-confirm a c:Dialog ; c:label "Delete 5 todos?" ;
     c:help "Their triples are removed from the input graph. The change log keeps the event, not the data." ;
+    c:dismissible false ;
     c:actions ( ui:ov-confirm-cancel ui:ov-confirm-delete ) .
 ui:ov-confirm-cancel a c:Button ; c:label "Keep them" ; sty:emphasis sty:Outline ; c:closes ui:ov-confirm .
 ui:ov-confirm-delete a c:Button ; c:label "Delete" ; sty:tone sty:Danger ; sty:emphasis sty:Solid ; c:closes ui:ov-confirm .
@@ -41,7 +42,7 @@ ui:ov-open-dialog a c:Button ; c:label "Open dialog" ; sty:tone sty:Accent ; sty
 ui:ov-open-confirm a c:Button ; c:label "Delete todos…" ; sty:tone sty:Danger ; sty:emphasis sty:Soft ; c:opens ui:ov-confirm .
 ui:ov-dialogs a c:Flippable ; c:front ui:ov-dialogs-spec .
 ui:ov-dialogs-spec a c:Specimen ; c:demonstrates c:Dialog ; c:label "Dialog" ;
-    c:help "A modal panel over a scrim (role=dialog, aria-modal, labelled by its title). Its state is one fact, c:open: buttons that c:opens or c:closes it set it, and so do its ✕ and a click on the scrim. Closed, its content is not evaluated." ;
+    c:help "A modal panel over a scrim (role=dialog, aria-modal, labelled by its title). Its state is one fact, c:open. Buttons can open and close it. A dismissible dialog also closes by its ✕, scrim or Escape key. The confirmation example waits for an explicit choice with c:dismissible false. Closed, its content is not evaluated." ;
     c:children ( ui:ov-open-dialog ui:ov-open-confirm ) .
 
 # --- drawers ---

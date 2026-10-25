@@ -61,6 +61,22 @@ which the style layer already turns into `data-sem-*` hooks for every component 
 Capabilities are mixin classes: an instance that is also `c:Draggable`, `c:Flippable` or
 `dnd:Draggable` gets that behaviour without its component knowing.
 
+### Keeping a modal overlay open
+
+`c:Dialog` and `c:Drawer` are dismissible by default: their close button, scrim and Escape key
+set `c:open false`. Set `c:dismissible false` when an explicit action must finish before the
+panel can close. The built-in close button is omitted and the scrim and Escape key do not close
+the overlay. An action button with `c:closes` can still close it:
+
+```turtle
+ui:result a c:Dialog ; c:label "Save this value" ; c:open true ;
+  c:dismissible false ; c:content ui:value ; c:actions ( ui:done ) .
+ui:done a c:Button ; c:label "Done" ; c:closes ui:result .
+```
+
+The host may also set `c:open false` after it completes the required step. Keep the explicit
+action visible so the person has a clear way to finish.
+
 ## Writing a rendering rule
 
 A rendering rule runs once per instance (`$this`) and constructs RDF/HTML

@@ -15,6 +15,7 @@ const OV = {
   Lightbox: c + 'Lightbox',
   opens: c + 'opens',
   side: c + 'side',
+  dismissible: c + 'dismissible',
   trigger: c + 'trigger',
 } as const
 
@@ -37,6 +38,7 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
     }
     const title = text(ctx, focus, C.label)
     const body = text(ctx, focus, C.help)
+    const dismissible = str(ctx.object(focus, OV.dismissible)) !== 'false'
     const content = ctx.object(focus, C.content)
     const actions = nodes(ctx, ctx.object(focus, C.actions))
     if (ctx.modality === MOD.Text) {
@@ -49,16 +51,19 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
       )
       return o.quads
     }
-    const closeLabel = phrase(ctx, FB.Close, 'Close')
-    const close = o.el('close', 'Button', { type: 'button', class: 'sem-close' }, [o.text('close-text', '✕')])
-    // Escape activates the close control of the topmost open overlay (keyboard layer).
-    o.attr(close, 'aria-label', closeLabel).attr(close, 'data-sem-escape', '')
-    o.t(close, FB.closes, focus)
+    const close = dismissible
+      ? o.el('close', 'Button', { type: 'button', class: 'sem-close' }, [o.text('close-text', '✕')])
+      : undefined
+    if (close) {
+      // Escape activates the close control of the topmost open overlay (keyboard layer).
+      o.attr(close, 'aria-label', phrase(ctx, FB.Close, 'Close')).attr(close, 'data-sem-escape', '')
+      o.t(close, FB.closes, focus)
+    }
     const titleNode = o.node('title')
     const bodyNode = o.node('desc')
     const head = o.el('head', 'Header', { class: 'sem-head' }, [
       ...(title ? [o.el('title', 'H2', { id: titleNode.value }, [o.text('title-text', title)])] : []),
-      close,
+      ...(close ? [close] : []),
     ])
     const parts: NamedNode[] = [head]
     if (body) parts.push(o.el('desc', 'P', { id: bodyNode.value, class: 'sem-desc' }, [o.text('desc-text', body)]))
@@ -71,7 +76,7 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
     if (body) o.attr(panel, 'aria-describedby', bodyNode.value)
     const scrim = o.el('scrim', 'Div', { class: 'sem-scrim' })
     o.attr(scrim, 'aria-hidden', 'true')
-    o.t(scrim, FB.closes, focus)
+    if (dismissible) o.t(scrim, FB.closes, focus)
     const root = o.el('root', 'Div', { id }, [scrim, panel])
     if (kind === 'drawer') o.attr(root, 'data-side', str(ctx.object(focus, OV.side)) === 'start' ? 'start' : 'end')
     o.renders(root)
