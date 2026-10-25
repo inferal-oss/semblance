@@ -255,7 +255,7 @@
 # (a diagram's position, a card's height) may pull it out of the screen. The fallback is in the
 # top layer (a manual popover the effect shows). Colors are tokens, so every theme, light and dark,
 # styles it; components that look different full screen say so in their own theme, after this.
-[] a sty:StyleRule ; sty:part ":is([data-sem-fullscreen]:fullscreen, [data-sem-fullscreen=maximized])" ;
+[] a sty:StyleRule ; sty:part ":is([data-sem-fullscreen]:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ;
     sty:declares [ sty:property "box-sizing" ; sty:raw "border-box !important" ] ,
                  [ sty:property "position" ; sty:raw "fixed !important" ] ,
                  [ sty:property "inset" ; sty:raw "0 !important" ] ,
@@ -270,13 +270,15 @@
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "background-color" ; sty:token tok:canvas ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:part "[data-sem-fullscreen=maximized]" ;
+[] a sty:StyleRule ; sty:part ":is([data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ;
     sty:declares [ sty:property "z-index" ; sty:raw "2147483000" ] .
 [] a sty:StyleRule ; sty:part "[data-sem-fullscreen]::backdrop" ;
     sty:declares [ sty:property "background" ; sty:token tok:canvas ] .
 
-# The toggle a full-screenable component draws: a small square button whose glyph says what
-# pressing it does (⤢ fills the screen, ⤡ puts it back).
+# The toggles a full-screenable component draws: small square buttons whose icon says what
+# pressing them does - a window's frame for filling the window, the screen's corners for full
+# screen, pointing out, or in while pressed. The icon is a mask over currentColor, so every theme's
+# colors draw it.
 [] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,
@@ -284,17 +286,29 @@
                  [ sty:property "inline-size" ; sty:raw "28px" ] ,
                  [ sty:property "block-size" ; sty:raw "28px" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,
-                 [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
-                 [ sty:property "font" ; sty:raw "600 15px/1 var(--sem-font)" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
+# The first of a component's toggles keeps them at the end of a row it shares.
+[] a sty:StyleRule ; sty:part ":not(.sem-fullscreen-toggle) + .sem-fullscreen-toggle, .sem-fullscreen-toggle:first-child" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle::before" ;
-    sty:declares [ sty:property "content" ; sty:raw "\"⤢\"" ] .
-[] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle[aria-pressed=true]::before" ;
-    sty:declares [ sty:property "content" ; sty:raw "\"⤡\"" ] .
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "inline-size" ; sty:raw "16px" ] ,
+                 [ sty:property "block-size" ; sty:raw "16px" ] ,
+                 [ sty:property "background-color" ; sty:raw "currentColor" ] ,
+                 [ sty:property "mask" ; sty:raw "var(--sem-fullscreen-icon) center / 16px 16px no-repeat" ] ,
+                 [ sty:property "-webkit-mask" ; sty:raw "var(--sem-fullscreen-icon) center / 16px 16px no-repeat" ] .
+[] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle[data-sem-kind=viewport]" ;
+    sty:declares [ sty:property "--sem-fullscreen-icon" ; sty:raw "url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 fill=%27none%27 stroke=%27black%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M2.5 3.5h11v9h-11z M5 8h6 M5 8l1.6-1.6 M5 8l1.6 1.6 M11 8l-1.6-1.6 M11 8l-1.6 1.6%27/%3E%3C/svg%3E\")" ] .
+[] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle[data-sem-kind=viewport][aria-pressed=true]" ;
+    sty:declares [ sty:property "--sem-fullscreen-icon" ; sty:raw "url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 fill=%27none%27 stroke=%27black%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M2.5 3.5h11v9h-11z M5.5 8h1.8 M7.3 8l-1.4-1.4 M7.3 8l-1.4 1.4 M10.5 8h-1.8 M8.7 8l1.4-1.4 M8.7 8l1.4 1.4%27/%3E%3C/svg%3E\")" ] .
+[] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle[data-sem-kind=screen]" ;
+    sty:declares [ sty:property "--sem-fullscreen-icon" ; sty:raw "url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 fill=%27none%27 stroke=%27black%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M2 6V2h4 M10 2h4v4 M14 10v4h-4 M6 14H2v-4%27/%3E%3C/svg%3E\")" ] .
+[] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle[data-sem-kind=screen][aria-pressed=true]" ;
+    sty:declares [ sty:property "--sem-fullscreen-icon" ; sty:raw "url(\"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 fill=%27none%27 stroke=%27black%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M6 2v4H2 M14 6h-4V2 M10 14v-4h4 M2 10h4v4%27/%3E%3C/svg%3E\")" ] .
 [] a sty:StyleRule ; sty:part ".sem-fullscreen-toggle:hover" ;
     sty:declares [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "background" ; sty:token tok:surface-hover ] .
@@ -310,6 +324,6 @@
     sty:declares [ sty:property "left" ; sty:raw "auto" ] ,
                  [ sty:property "inset-inline-end" ; sty:raw "0" ] ,
                  [ sty:property "transform" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:part ":is(:fullscreen, [data-sem-fullscreen=maximized]) .sem-fullscreen-toggle[data-sem-tooltip]::after" ;
+[] a sty:StyleRule ; sty:part ":is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport]) .sem-fullscreen-toggle[data-sem-tooltip]::after" ;
     sty:declares [ sty:property "bottom" ; sty:raw "auto" ] ,
                  [ sty:property "top" ; sty:raw "calc(100% + 8px)" ] .

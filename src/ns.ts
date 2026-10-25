@@ -399,9 +399,10 @@ export const FILE = {
 } as const
 /** Full screen as a fact (ontology/layers/fullscreen.ttl, src/fullscreen.ts). */
 export const FS = {
-  Layer: NS.fs + 'Layer', fullscreen: NS.fs + 'fullscreen', Fullscreenable: NS.fs + 'Fullscreenable', toggles: NS.fs + 'toggles', part: NS.fs + 'part',
-  presentation: NS.fs + 'presentation', Native: NS.fs + 'Native', Maximized: NS.fs + 'Maximized', Entered: NS.fs + 'Entered', Exited: NS.fs + 'Exited',
-  ToggleCommand: NS.fs + 'ToggleCommand',
+  Layer: NS.fs + 'Layer', fullscreen: NS.fs + 'fullscreen', fullViewport: NS.fs + 'fullViewport', Fullscreenable: NS.fs + 'Fullscreenable',
+  toggles: NS.fs + 'toggles', property: NS.fs + 'property', part: NS.fs + 'part', presentation: NS.fs + 'presentation', says: NS.fs + 'says',
+  Native: NS.fs + 'Native', Maximized: NS.fs + 'Maximized', Viewport: NS.fs + 'Viewport', Entered: NS.fs + 'Entered', Exited: NS.fs + 'Exited',
+  ToggleCommand: NS.fs + 'ToggleCommand', ViewportCommand: NS.fs + 'ViewportCommand',
 } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {

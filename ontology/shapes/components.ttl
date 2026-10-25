@@ -27,7 +27,8 @@ sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
                 [ sh:path c:label ; sh:nodeKind sh:Literal ] ,
                 [ sh:path c:help ; sh:nodeKind sh:Literal ] ,
                 [ sh:path c:disabled ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
-                [ sh:path fs:fullscreen ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+                [ sh:path fs:fullscreen ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path fs:fullViewport ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 
 # An accessible name, for a control a c:Field can wrap (one with a c:labelPart): its own c:label, or
 # the label of the c:Field whose c:content it is (that label points at the control's labelPart). Only

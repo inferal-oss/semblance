@@ -1,7 +1,8 @@
-// Full screen as a fact (ontology/layers/fullscreen.ttl, src/fullscreen.ts): fs:fullscreen on a
-// component, asserted by a full-screenable component's own toggle, a c:Toggle over the property
-// (and its key), or a reaction; performed by the fullscreen effect over a stand-in host; and
-// retracted when the host leaves on its own. Driven through events on the site, DOM and graph.
+// Full screen as a fact (ontology/layers/fullscreen.ttl, src/fullscreen.ts): fs:fullscreen (the
+// host's full screen) and fs:fullViewport (the window filled) on a component, asserted by a
+// full-screenable component's own toggles, a c:Toggle over the property (and its key), or a
+// reaction; performed by the fullscreen effect over a stand-in host; and retracted when the host
+// leaves on its own or Esc is pressed. Driven through events on the site, DOM and graph.
 import { describe, expect, it } from 'vitest'
 import type { StoreKind } from '../src/node/load.ts'
 import { FS, NS } from '../src/ns.ts'
@@ -18,7 +19,7 @@ function site(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'spa
   click(button('Examples'))
   click(navItem(example))
   const f = h.store.factory
-  const fact = (c: string) => h.store.match(f.namedNode(c), f.namedNode(FS.fullscreen), null).map((q) => q.object.value)
+  const fact = (c: string, p: string = FS.fullscreen) => h.store.match(f.namedNode(c), f.namedNode(p), null).map((q) => q.object.value)
   const presentation = (c: string) => h.store.match(f.namedNode(c), f.namedNode(FS.presentation), null).map((q) => q.object.value)
   const toasts = () => [...h.document.querySelectorAll('[data-sem-c=toast]')].map((t) => t.textContent).join(' | ')
   const settle = async () => {
@@ -36,7 +37,7 @@ function site(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'spa
 
 const WALK = UI + 'ex-kanban-how'
 const diagram = (h: ReturnType<typeof site>) => h.shell.nodeOf(WALK + '/~diagram') as Element
-const diagramToggle = (h: ReturnType<typeof site>) => diagram(h).querySelector('.sem-fullscreen-toggle') as Element
+const diagramToggle = (h: ReturnType<typeof site>, kind = 'screen') => diagram(h).querySelector(`.sem-fullscreen-toggle[data-sem-kind=${kind}]`) as Element
 
 describe('full screen (fs:fullscreen)', () => {
   for (const [kind, prefer] of [
@@ -67,7 +68,7 @@ describe('full screen (fs:fullscreen)', () => {
       expect(h.presentation(WALK)).toEqual([])
       expect(diagram(h).hasAttribute('data-sem-fullscreen')).toBe(false)
       expect(diagramToggle(h).getAttribute('aria-pressed')).toBe('false')
-      expect(h.toasts()).toContain('Left full screen')
+      expect(h.toasts()).toContain('Back in its place')
     })
 
   it('pressing the toggle again retracts the fact, and the host leaves full screen', async () => {
@@ -83,7 +84,7 @@ describe('full screen (fs:fullscreen)', () => {
     expect(diagram(h).hasAttribute('data-sem-fullscreen')).toBe(false)
   })
 
-  it('where the host refuses, it is shown over the page (fs:Maximized), and Esc leaves that too', async () => {
+  it('where the host refuses, the window is filled instead (fs:Maximized), and Esc leaves that too', async () => {
     const h = site()
     h.fullscreen.allowed = false
     h.click(diagramToggle(h))
@@ -91,17 +92,52 @@ describe('full screen (fs:fullscreen)', () => {
     expect(h.fullscreen.element).toBeNull()
     expect(h.presentation(WALK)).toEqual([FS.Maximized])
     expect(diagram(h).getAttribute('data-sem-fullscreen')).toBe('maximized')
-    expect(h.toasts()).toContain('Shown over the page')
+    expect(h.toasts()).toContain('Full screen is not available here: filling the window instead')
     h.key('Escape')
     await h.settle()
     expect(h.fact(WALK)).toEqual([])
     expect(diagram(h).hasAttribute('data-sem-fullscreen')).toBe(false)
   })
 
+  it('filling the window (fs:fullViewport) asks nothing of the host; full screen over it, and back to it', async () => {
+    const h = site()
+    const window = diagramToggle(h, 'viewport')
+    expect(window.getAttribute('aria-label')).toBe('Fill the window')
+    h.click(window)
+    await h.settle()
+    expect(h.fact(WALK, FS.fullViewport)).toEqual(['true'])
+    expect(h.fullscreen.requests).toEqual([])
+    expect(h.presentation(WALK)).toEqual([FS.Viewport])
+    expect(diagram(h).getAttribute('data-sem-fullscreen')).toBe('viewport')
+    expect(diagramToggle(h, 'viewport').getAttribute('aria-pressed')).toBe('true')
+    expect(diagramToggle(h).getAttribute('aria-pressed')).toBe('false')
+    expect(h.toasts()).toContain('Filling the window. Esc leaves it')
+    // Full screen over it: the host is asked (full screen wins).
+    h.click(diagramToggle(h))
+    await h.settle()
+    expect(h.fullscreen.element).toBe(diagram(h))
+    expect(h.presentation(WALK)).toEqual([FS.Native])
+    expect(diagram(h).getAttribute('data-sem-fullscreen')).toBe('native')
+    // Full screen off: the window is still filled.
+    h.click(diagramToggle(h))
+    await h.settle()
+    expect(h.fullscreen.element).toBeNull()
+    expect(h.fact(WALK, FS.fullViewport)).toEqual(['true'])
+    expect(h.presentation(WALK)).toEqual([FS.Viewport])
+    expect(diagram(h).getAttribute('data-sem-fullscreen')).toBe('viewport')
+    // Esc leaves it, and both facts go.
+    h.key('Escape')
+    await h.settle()
+    expect(h.fact(WALK, FS.fullViewport)).toEqual([])
+    expect(h.fact(WALK)).toEqual([])
+    expect(diagram(h).hasAttribute('data-sem-fullscreen')).toBe(false)
+    expect(h.toasts()).toContain('Back in its place')
+  })
+
   it("a source view's toggle shows the whole source view (its root)", async () => {
     const h = site()
     const view = h.shell.nodeOf(UI + 'exs-kanban/~root') as Element
-    const toggle = view.querySelector('.sem-source-head .sem-fullscreen-toggle')!
+    const toggle = view.querySelector('.sem-source-head .sem-fullscreen-toggle[data-sem-kind=screen]')!
     h.click(toggle)
     await h.settle()
     expect(h.fact(UI + 'exs-kanban')).toEqual(['true'])
@@ -115,7 +151,7 @@ describe('full screen (fs:fullscreen)', () => {
     const h = site('oxigraph', 'sparql', 'Sales dashboard')
     const card = UI + 'ex-dashboard-region-card'
     const cardEl = () => h.shell.nodeOf(card + '/~root') as Element
-    const toggle = () => cardEl().querySelector('[data-sem-c=toggle]') as Element
+    const toggle = () => [...cardEl().querySelectorAll('[data-sem-c=toggle]')].find((t) => t.textContent === 'Full screen') as Element
     expect(toggle().textContent).toBe('Full screen')
     h.click(toggle())
     await h.settle()
@@ -127,6 +163,15 @@ describe('full screen (fs:fullscreen)', () => {
     await h.settle()
     expect(h.fact(card)).toEqual(['false'])
     expect(h.fullscreen.element).toBeNull()
+    // W fills the window with it instead, and W again puts it back.
+    h.key('w')
+    await h.settle()
+    expect(h.fact(card, FS.fullViewport)).toEqual(['true'])
+    expect(cardEl().getAttribute('data-sem-fullscreen')).toBe('viewport')
+    expect(h.fullscreen.requests).toHaveLength(1)
+    h.key('w')
+    await h.settle()
+    expect(cardEl().hasAttribute('data-sem-fullscreen')).toBe(false)
     // A reaction of the example's own asserts the same fact for the other chart.
     const product = UI + 'ex-dashboard-product-card'
     h.click(h.button('Present'))
@@ -156,7 +201,11 @@ describe('full screen (fs:fullscreen)', () => {
     expect(html(fn)).toBe(html(s))
     for (const h of [s, fn]) await h.settle()
     expect(html(fn)).toBe(html(s))
+    for (const h of [s, fn]) h.click(diagramToggle(h, 'viewport'))
+    for (const h of [s, fn]) await h.settle()
+    expect(html(fn)).toBe(html(s))
     for (const h of [s, fn]) (h.fullscreen.leave(), h.shell.flush())
+    for (const h of [s, fn]) await h.settle()
     expect(html(fn)).toBe(html(s))
   })
 })

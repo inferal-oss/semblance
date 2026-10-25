@@ -140,11 +140,11 @@
 
 # Full screen (its toggle, at the end of the bar): the card fills the screen edge to edge, and the
 # body takes what the bar leaves.
-[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized])" ;
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ;
     sty:declares [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] .
-[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized])" ; sty:part "> .sem-live-body" ;
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ; sty:part "> .sem-live-body" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] .

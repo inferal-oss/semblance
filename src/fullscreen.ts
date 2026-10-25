@@ -1,13 +1,14 @@
-// The fullscreen effect (ontology/layers/fullscreen.ttl): `<component> fs:fullscreen true` in the
-// input graph is shown full screen, and its retraction leaves it; how the host shows it, and that it
-// left on its own, come back as events addressed to the component (fs:Entered, fs:Exited), handled
-// by ordinary reactions. The request starts in the same task as the change that asserted the fact -
-// the click's or the key press's, while the page still has the person's activation, which browsers
-// require. Where the host cannot show it full screen (no activation, a frame without
-// allowfullscreen, a refusal, no Fullscreen API), it shows the element over the page instead: in the
-// top layer as a manual popover, filling the viewport by the theme's rule (fs:Maximized), and Esc
-// leaves it as Esc leaves the host's full screen. Facts already in the graph when it attaches (a
-// restored session) are retracted: the page is not full screen.
+// The fullscreen effect (ontology/layers/fullscreen.ttl). Two facts on a component, performed here:
+// `fs:fullscreen true` is shown with the host's full screen, `fs:fullViewport true` fills the window
+// (the page's top layer: a manual popover the theme sizes), and retracting them puts it back; with
+// both, full screen wins. How it is shown, and that it is back in its place, come back as events
+// addressed to the component (fs:Entered, fs:Exited), handled by ordinary reactions. The host's full
+// screen is asked for in the same task as the change - the click's or the key press's, while the
+// page still has the person's activation, which browsers require. Where the host cannot (no
+// activation, a frame without allowfullscreen, a refusal, no Fullscreen API, no answer), it fills
+// the window instead (fs:Maximized). Esc leaves a filled window as it leaves the host's full screen.
+// Facts already in the graph when it attaches (a restored session) are retracted: the page is not
+// shown so.
 import type { NamedNode } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
 import { fullscreenPart } from './layers/fullscreen.ts'
@@ -59,14 +60,16 @@ export interface FullscreenOptions {
 }
 
 type Popover = Element & { showPopover?: () => void; hidePopover?: () => void }
+type How = 'pending' | 'native' | 'maximized' | 'viewport'
+/** A component the effect shows: the element, and how (pending: the host was asked). */
+interface Shown {
+  el: Element
+  how: How
+}
+const PRESENTATION: Record<Exclude<How, 'pending'>, string> = { native: FS.Native, maximized: FS.Maximized, viewport: FS.Viewport }
 
 export class Fullscreen {
-  /** Components the host shows full screen, or is asked to: their elements. */
-  private native = new Map<string, Element>()
-  /** Components shown over the page instead. */
-  private maximized = new Map<string, Popover>()
-  /** Of those asked for, the ones the host has shown. */
-  private entered = new Set<string>()
+  private shown = new Map<string, Shown>()
   private pending = new Set<Promise<void>>()
   private detach?: () => void
   private readonly host: FullscreenHost | null
@@ -91,11 +94,13 @@ export class Fullscreen {
       doc?.removeEventListener('keydown', key)
       this.detach = undefined
     }
-    // A restored fact: the page is not full screen, so the graph must not say it is.
+    // A restored fact: the page does not show it so, so the graph must not say it does.
     const store = this.bus.runtime.store
     const f = store.factory
-    for (const q of store.match(null, f.namedNode(FS.fullscreen), null, f.defaultGraph()))
-      if (q.object.value === 'true' && q.subject.termType === 'NamedNode') this.later(() => this.report(FS.Exited, q.subject as NamedNode))
+    const restored = new Set<string>()
+    for (const p of [FS.fullscreen, FS.fullViewport])
+      for (const q of store.match(null, f.namedNode(p), null, f.defaultGraph())) if (q.object.value === 'true' && q.subject.termType === 'NamedNode') restored.add(q.subject.value)
+    for (const c of restored) this.later(() => this.report(FS.Exited, c))
     return this.detach
   }
 
@@ -106,27 +111,58 @@ export class Fullscreen {
 
   private changed(graph: string | undefined, delta: Delta) {
     if (graph !== undefined) return
-    const on = new Set<string>()
-    for (const q of delta.add) if (q.predicate.value === FS.fullscreen && q.object.value === 'true') on.add(q.subject.value)
-    for (const q of delta.remove) if (q.predicate.value === FS.fullscreen && q.object.value === 'true' && !on.has(q.subject.value)) this.leave(q.subject.value)
-    for (const q of delta.add) if (q.predicate.value === FS.fullscreen && q.object.value !== 'true') this.leave(q.subject.value)
-    for (const c of on) this.enter(c)
+    const touched = new Set<string>()
+    for (const q of [...delta.add, ...delta.remove]) if (q.predicate.value === FS.fullscreen || q.predicate.value === FS.fullViewport) touched.add(q.subject.value)
+    for (const c of touched) this.sync(c)
   }
 
-  private enter(component: string) {
-    if (this.native.has(component) || this.maximized.has(component)) return
+  private holds(component: string, fact: string): boolean {
     const store = this.bus.runtime.store
     const f = store.factory
-    const focus = f.namedNode(component)
-    const read = {
-      object: (s: string | { value: string }, p: string | { value: string }) =>
-        store.match(f.namedNode(typeof s === 'string' ? s : s.value), f.namedNode(typeof p === 'string' ? p : p.value), null, f.defaultGraph())[0]?.object,
-      objects: (s: string | { value: string }, p: string | { value: string }) =>
-        store.match(f.namedNode(typeof s === 'string' ? s : s.value), f.namedNode(typeof p === 'string' ? p : p.value), null, f.defaultGraph()).map((q) => q.object),
+    return store.match(f.namedNode(component), f.namedNode(fact), null, f.defaultGraph()).some((q) => q.object.value === 'true')
+  }
+
+  /** Show the component as its facts say now: full screen, filling the window, or in its place. */
+  private sync(component: string) {
+    const wants = this.holds(component, FS.fullscreen) ? 'screen' : this.holds(component, FS.fullViewport) ? 'viewport' : undefined
+    const cur = this.shown.get(component)
+    if (!wants) {
+      if (!cur) return
+      this.release(component, cur)
+      return this.later(() => this.report(FS.Exited, component))
     }
-    const el = this.opts.element(`${component}/~${fullscreenPart(read, focus)}`)
-    // Not shown: there is nothing to show full screen.
-    if (!el) return this.later(() => this.report(FS.Exited, focus))
+    const el = cur?.el ?? this.element(component)
+    // Not shown: there is nothing to show so.
+    if (!el) return this.later(() => this.report(FS.Exited, component))
+    if (wants === 'viewport') {
+      if (cur?.how === 'viewport') return
+      // The window is already filled (full screen's fallback): only what it means changes.
+      if (cur?.how === 'maximized') {
+        cur.how = 'viewport'
+        return this.later(() => this.report(FS.Entered, component, cur))
+      }
+      if (cur) this.release(component, cur)
+      return this.fill(component, el, 'viewport')
+    }
+    if (cur && cur.how !== 'viewport') return
+    if (cur) this.release(component, cur)
+    this.request(component, el)
+  }
+
+  /** The element a component shows: its root, or the part its class names (fs:part). */
+  private element(component: string): Element | undefined {
+    const store = this.bus.runtime.store
+    const f = store.factory
+    const term = (t: string | { value: string }) => f.namedNode(typeof t === 'string' ? t : t.value)
+    const read = {
+      object: (s: string | { value: string }, p: string | { value: string }) => store.match(term(s), term(p), null, f.defaultGraph())[0]?.object,
+      objects: (s: string | { value: string }, p: string | { value: string }) => store.match(term(s), term(p), null, f.defaultGraph()).map((q) => q.object),
+    }
+    return this.opts.element(`${component}/~${fullscreenPart(read, f.namedNode(component))}`)
+  }
+
+  /** Ask the host for its full screen; where it cannot, fill the window instead. */
+  private request(component: string, el: Element) {
     const host = this.host
     let requested: Promise<void> | undefined
     try {
@@ -134,39 +170,42 @@ export class Fullscreen {
     } catch {
       requested = undefined
     }
-    if (!requested) return this.maximize(component, el)
-    this.native.set(component, el)
+    if (!host || !requested) return this.fill(component, el, 'maximized')
+    const entry: Shown = { el, how: 'pending' }
+    this.shown.set(component, entry)
     let timer: ReturnType<typeof setTimeout> | undefined
     const unanswered = new Promise<void>((_, reject) => {
       timer = setTimeout(() => reject(new Error('The host did not answer.')), this.opts.settleMs ?? 2000)
     })
-    // An answer after the fallback was chosen: the host shows it after all, so leave again.
+    // An answer after the fallback was chosen, or after the fact went: leave the host's full screen.
     requested.then(
       () => {
-        if (this.native.get(component) !== el) void host!.exit(el).catch(() => undefined)
+        if ((this.shown.get(component) !== entry || entry.how !== 'pending') && host.current(el) === el) void host.exit(el).catch(() => undefined)
       },
       () => undefined,
     )
     this.track(
-      Promise.race([requested, unanswered]).finally(() => clearTimeout(timer)).then(
-        () => {
-          // The fact went before the host had shown it (the answer above leaves again).
-          if (this.native.get(component) !== el) return
-          this.entered.add(component)
-          this.report(FS.Entered, focus, FS.Native)
-        },
-        () => {
-          if (this.native.get(component) !== el) return
-          this.native.delete(component)
-          this.maximize(component, el)
-        },
-      ),
+      Promise.race([requested, unanswered])
+        .finally(() => clearTimeout(timer))
+        .then(
+          () => {
+            if (this.shown.get(component) !== entry || entry.how !== 'pending') return
+            entry.how = 'native'
+            this.report(FS.Entered, component, entry)
+          },
+          () => {
+            if (this.shown.get(component) !== entry || entry.how !== 'pending') return
+            this.shown.delete(component)
+            this.fill(component, el, 'maximized')
+          },
+        ),
     )
   }
 
-  /** Over the page: the top layer, so no ancestor's overflow or stacking clips it. */
-  private maximize(component: string, el: Popover) {
-    this.maximized.set(component, el)
+  /** Fill the window: the top layer, so no ancestor's overflow or stacking clips it. */
+  private fill(component: string, el: Popover, how: 'maximized' | 'viewport') {
+    const entry: Shown = { el, how }
+    this.shown.set(component, entry)
     if (typeof el.showPopover === 'function') {
       el.setAttribute('popover', 'manual')
       try {
@@ -175,14 +214,16 @@ export class Fullscreen {
         // Not connected, or already open: the theme's fixed position still fills the viewport.
       }
     }
-    this.later(() => this.report(FS.Entered, this.bus.runtime.store.factory.namedNode(component), FS.Maximized))
+    this.later(() => this.report(FS.Entered, component, entry))
   }
 
-  private unmaximize(component: string) {
-    const el = this.maximized.get(component)
-    if (!el) return
-    this.maximized.delete(component)
-    if (el.hasAttribute('popover')) {
+  /** Put it back in its place, whatever showed it (no report: the caller says why). */
+  private release(component: string, entry: Shown) {
+    this.shown.delete(component)
+    const el = entry.el as Popover
+    if (entry.how === 'native' || entry.how === 'pending') {
+      if (this.host?.current(el) === el) void this.host.exit(el).catch(() => undefined)
+    } else if (el.hasAttribute('popover')) {
       try {
         el.hidePopover?.()
       } catch {
@@ -192,42 +233,25 @@ export class Fullscreen {
     }
   }
 
-  private leave(component: string) {
-    const focus = this.bus.runtime.store.factory.namedNode(component)
-    if (this.maximized.has(component)) {
-      this.unmaximize(component)
-      return this.later(() => this.report(FS.Exited, focus))
-    }
-    const el = this.native.get(component)
-    if (!el) return
-    this.native.delete(component)
-    this.entered.delete(component)
-    // The host's change would not name it once it is gone from the map: say it here.
-    const host = this.host
-    if (host?.current(el) === el) void host.exit(el).catch(() => undefined)
-    this.later(() => this.report(FS.Exited, focus))
-  }
-
-  /** The host left full screen on its own (Esc, its control, another element): the fact goes. */
+  /** The host left full screen on its own (Esc, its control, another element): the facts go. */
   private hostChanged() {
-    for (const [component, el] of [...this.native]) {
-      // Asked for, not yet shown: its promise says how it went.
-      if (!this.entered.has(component)) continue
-      const shown = this.host?.current(el) ?? null
-      if (shown && (shown === el || el.contains(shown))) continue
-      this.native.delete(component)
-      this.entered.delete(component)
-      this.report(FS.Exited, this.bus.runtime.store.factory.namedNode(component))
+    for (const [component, entry] of [...this.shown]) {
+      if (entry.how !== 'native') continue
+      const now = this.host?.current(entry.el) ?? null
+      if (now && (now === entry.el || entry.el.contains(now))) continue
+      this.shown.delete(component)
+      this.report(FS.Exited, component)
     }
   }
 
-  /** Esc over the page's fallback leaves it, as it leaves the host's full screen. */
+  /** Esc over a filled window leaves it, as it leaves the host's full screen. */
   private key(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || e.defaultPrevented || !this.maximized.size) return
-    const component = [...this.maximized.keys()].at(-1)!
+    if (e.key !== 'Escape' || e.defaultPrevented) return
+    const last = [...this.shown].filter(([, s]) => s.how === 'maximized' || s.how === 'viewport').at(-1)
+    if (!last) return
     e.preventDefault()
-    this.unmaximize(component)
-    this.report(FS.Exited, this.bus.runtime.store.factory.namedNode(component))
+    this.release(last[0], last[1])
+    this.report(FS.Exited, last[0])
   }
 
   /** After the change that asked (reactions do not run inside another's transaction). */
@@ -240,10 +264,19 @@ export class Fullscreen {
     void p.finally(() => this.pending.delete(p))
   }
 
-  private report(type: string, component: NamedNode, presentation?: string) {
+  private report(type: string, component: string, entry?: Shown) {
     if (!this.detach) return
-    const f = this.bus.runtime.store.factory
-    const handled = this.bus.emit(type, component.value, presentation ? { about: [[FS.presentation, f.namedNode(presentation)]] } : {})
+    // Shown otherwise since this was due (a newer change): only the latest is said.
+    if (entry && (this.shown.get(component) !== entry || entry.how === 'pending')) return
+    const store = this.bus.runtime.store
+    const f = store.factory
+    const about: [string, NamedNode | ReturnType<typeof f.literal>][] = []
+    if (entry) {
+      const how = f.namedNode(PRESENTATION[entry.how as Exclude<How, 'pending'>])
+      about.push([FS.presentation, how])
+      for (const q of store.match(how, f.namedNode(FS.says), null, f.defaultGraph())) if (q.object.termType === 'Literal') about.push([FS.says, q.object])
+    }
+    const handled = this.bus.emit(type, component, { about })
     if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) this.opts.onHandled?.(handled)
   }
 }

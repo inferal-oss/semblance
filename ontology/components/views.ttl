@@ -407,8 +407,8 @@ c:text a owl:DatatypeProperty ; rdfs:domain c:SourceText ; rdfs:comment "The tex
 c:SourceView a owl:Class ;
     rdfs:subClassOf sem:Component , fs:Fullscreenable ;
     rdfs:comment """A source text (c:of, a c:SourceText) shown verbatim and syntax-colored, under its c:path, with
-line numbers. c:label names it (default: the path). The toggle in its header shows it full screen
-(fs:Fullscreenable): a long file read at the width of the screen."""@en ;
+line numbers. c:label names it (default: the path). The toggles in its header fill the window with it,
+or the screen (fs:Fullscreenable): a long file read at the width of the screen."""@en ;
     sem:slug "source-view" .
 # Not what it highlights (c:SourceHighlight's): showing another statement must not render the text again.
 c:SourceViewRendering a sem:Rendering ;

@@ -47,8 +47,8 @@ c:steps (an rdf:List of c:WalkthroughStep), and optionally c:sourceView, the sou
 diagram shows every resource a step's c:Mention mentions, plus c:diagramIncludes, minus
 c:diagramExcludes, and the links among them; it stays beside the steps while they scroll (they stack
 when narrow). The step being read (c:current, by default the first) focuses its mentions in the
-diagram, and arrows (c:Connector s) join each of its mentions to its node. The toggle on the
-diagram shows the diagram full screen (fs:Fullscreenable, fs:part): a large graph at a size it
+diagram, and arrows (c:Connector s) join each of its mentions to its node. The toggles on the
+diagram fill the window, or the screen, with the diagram (fs:Fullscreenable, fs:part): a large graph at a size it
 can be read at."""@en ;
     sem:slug "walkthrough" ;
     fs:part "diagram" .

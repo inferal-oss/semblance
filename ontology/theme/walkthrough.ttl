@@ -219,27 +219,29 @@
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-plot" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "max-height" ; sty:raw "calc(35dvh - 28px)" ] .
 
-# --- the diagram full screen (fs:part "diagram"): its toggle in its corner; full screen, the plot
+# --- the diagram full screen (fs:part "diagram"): its toggles in its corner; full screen, the plot
 # takes all the room it can at its own proportions ---
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram > .sem-fullscreen-toggle" ;
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram > .sem-fullscreen-toggles" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "inset-block-start" ; sty:token tok:space-2 ] ,
                  [ sty:property "inset-inline-end" ; sty:token tok:space-2 ] ,
-                 [ sty:property "z-index" ; sty:raw "1" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized])" ;
+                 [ sty:property "z-index" ; sty:raw "1" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport])" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template" ; sty:raw "minmax(0, 1fr) / minmax(0, 1fr)" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,
                  [ sty:property "padding" ; sty:token tok:space-5 ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized]) > .sem-plot" ;
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport]) > .sem-plot" ;
     sty:declares [ sty:property "width" ; sty:raw "100%" ] ,
                  [ sty:property "height" ; sty:raw "100%" ] ,
                  [ sty:property "max-height" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized]) > .sem-fullscreen-toggle" ;
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized], [data-sem-fullscreen=viewport]) > .sem-fullscreen-toggles" ;
     sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
                  [ sty:property "inset-block-start" ; sty:raw "max(var(--sem-space-3), env(safe-area-inset-top))" ] ,
                  [ sty:property "inset-inline-end" ; sty:raw "max(var(--sem-space-3), env(safe-area-inset-right))" ] .

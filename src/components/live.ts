@@ -5,7 +5,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
-import { fullscreenToggle } from '../layers/fullscreen.ts'
+import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { isTrue, nodes, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
@@ -101,7 +101,7 @@ const liveExample: FnRule = (ctx, focus) => {
   const reset = button('reset', phrase(ctx, P.reset), L.resets)
   if (!isTrue(ctx.object(focus, L.edited))) o.t(reset, L.disabled, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
   const copy = button('copy', phrase(ctx, ctx.object(focus, L.copied) ? P.copied : P.copy), L.copies)
-  actions.push(reset, copy, fullscreenToggle(ctx, o, focus))
+  actions.push(reset, copy, ...fullscreenToggles(ctx, o, focus))
 
   // The preview: what went wrong (if anything), the slot of the rendering, the Text slot.
   const problems = ctx

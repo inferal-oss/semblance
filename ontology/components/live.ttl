@@ -32,8 +32,8 @@ graph), re-rendered as it is edited. With several sources, tabs choose the one s
 (c:selectedSource). A source that does not parse, or a rule that fails, is reported inline
 (c:problem) and the last rendering that worked stays. Reset brings back the sources as written;
 Copy copies the one shown, with the prefixes it uses. With c:textPreview true the example is
-also shown in the Text modality. c:label names the example. Its own toggle shows it full screen
-(fs:Fullscreenable): the sources beside the rendering, with room for both."""@en ;
+also shown in the Text modality. c:label names the example. Its own toggles fill the window with
+it, or the screen (fs:Fullscreenable): the sources beside the rendering, with room for both."""@en ;
     sem:slug "live-example" ;
     key:navigation key:TabNavigation .
 
@@ -115,12 +115,18 @@ CONSTRUCT {
   ?tabs a rdfhtml:Div ; rdfhtml:class "sem-live-tabs" ; rdfhtml:attribute ?tabsRole, ?tabsLabel ; ord:immediatelyPrecedes ?actions .
   ?tabsRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tablist" .
   ?tabsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?sourcesPhrase .
-  ?actions a rdfhtml:Div ; rdfhtml:class "sem-live-actions" ; rdfhtml:hasChild ?time, ?reset, ?copy, ?fsToggle .
+  ?actions a rdfhtml:Div ; rdfhtml:class "sem-live-actions" ; rdfhtml:hasChild ?time, ?reset, ?copy, ?vpToggle, ?fsToggle .
   ?time a rdfhtml:Span ; rdfhtml:class "sem-live-time" ; rdfhtml:hasChild ?timeText ; ord:immediatelyPrecedes ?reset .
   ?timeText a rdfhtml:Text ; rdfhtml:data ?timeData .
   ?reset a c:Button ; c:label ?resetPhrase ; c:resets $this ; c:disabled ?pristine ; sty:size sty:Small ; sty:emphasis sty:Ghost ; ord:immediatelyPrecedes ?copy .
-  ?copy a c:Button ; c:label ?copyLabel ; c:copies $this ; sty:size sty:Small ; sty:emphasis sty:Ghost ; ord:immediatelyPrecedes ?fsToggle .
-  ?fsToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; sem:tooltip ?fsPhrase ; rdfhtml:attribute ?fsLabel .
+  ?copy a c:Button ; c:label ?copyLabel ; c:copies $this ; sty:size sty:Small ; sty:emphasis sty:Ghost ; ord:immediatelyPrecedes ?vpToggle .
+  ?vpToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullViewport ; sem:tooltip ?vpPhrase ;
+            rdfhtml:attribute ?vpKind, ?vpLabel ; ord:immediatelyPrecedes ?fsToggle .
+  ?vpKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "viewport" .
+  ?vpLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?vpPhrase .
+  ?fsToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullscreen ; sem:tooltip ?fsPhrase ;
+            rdfhtml:attribute ?fsKind, ?fsLabel .
+  ?fsKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "screen" .
   ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
   ?body a rdfhtml:Div ; rdfhtml:class "sem-live-body" ; rdfhtml:hasChild ?sources, ?preview .
   ?sources a rdfhtml:Div ; rdfhtml:class "sem-live-sources" ; ord:immediatelyPrecedes ?preview .
@@ -191,10 +197,16 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~actions")) AS ?actions)
     BIND(IRI(CONCAT(STR($this), "/~reset")) AS ?reset)
     BIND(IRI(CONCAT(STR($this), "/~copy")) AS ?copy)
-    # Its own full-screen toggle (fs:Fullscreenable); the layer says whether it is pressed.
+    # Its own toggles (fs:Fullscreenable): fill the window, full screen; the layer says which is pressed.
+    OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) }
     OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) }
+    BIND(STR(?vpPhrase0) AS ?vpPhrase)
     BIND(STR(?fsPhrase0) AS ?fsPhrase)
+    BIND(IRI(CONCAT(STR($this), "/~viewport-toggle")) AS ?vpToggle)
+    BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-data-sem-kind")) AS ?vpKind)
+    BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-aria-label")) AS ?vpLabel)
     BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle")) AS ?fsToggle)
+    BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-data-sem-kind")) AS ?fsKind)
     BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-aria-label")) AS ?fsLabel)
     BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
     BIND(IRI(CONCAT(STR($this), "/~sources")) AS ?sources)

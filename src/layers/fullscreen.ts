@@ -27,22 +27,33 @@ export function fullscreenPart(ctx: Pick<RuleContext, 'object' | 'objects'>, foc
   return 'root'
 }
 
+/** The facts, the local names of the toggles for them, and what the toggles say and draw. */
+const KINDS = [
+  { fact: FS.fullViewport, local: 'viewport-toggle', phrase: FS.ViewportCommand, fallback: 'Fill the window', kind: 'viewport' },
+  { fact: FS.fullscreen, local: 'fullscreen-toggle', phrase: FS.ToggleCommand, fallback: 'Full screen', kind: 'screen' },
+] as const
+
+const isOn = (ctx: Pick<RuleContext, 'objects'>, focus: NamedNode) => KINDS.some((k) => ctx.objects(focus, k.fact).some(isTrue))
+
 /**
- * The toggle a full-screenable component draws, where its rendering places it: a button marked
- * fs:toggles the component (fs:Flip flips its fact), named in the viewer's language. Its
- * aria-pressed is the layer's (fs:Pressed), so showing it full screen does not render it again.
+ * The toggles a full-screenable component draws, where its rendering places them: fill the window,
+ * then full screen - buttons marked fs:toggles the component and fs:property the fact (fs:Flip
+ * flips it), named in the viewer's language. Their aria-pressed is the layer's (fs:Pressed), so
+ * showing it does not render the component again.
  */
-export function fullscreenToggle(ctx: RuleContext, o: Out, focus: NamedNode): NamedNode {
-  const label = text(ctx, ctx.nn(FS.ToggleCommand), NS.rdfs + 'label') ?? 'Full screen'
-  const button = o.el('fullscreen-toggle', 'Button', { type: 'button', class: 'sem-fullscreen-toggle', 'aria-label': label })
-  o.t(button, FS.toggles, focus)
-  o.tip(button, label)
-  return button
+export function fullscreenToggles(ctx: RuleContext, o: Out, focus: NamedNode): NamedNode[] {
+  return KINDS.map((k) => {
+    const label = text(ctx, ctx.nn(k.phrase), NS.rdfs + 'label') ?? k.fallback
+    const button = o.el(k.local, 'Button', { type: 'button', class: 'sem-fullscreen-toggle', 'data-sem-kind': k.kind, 'aria-label': label })
+    o.t(button, FS.toggles, focus).t(button, FS.property, ctx.nn(k.fact))
+    o.tip(button, label)
+    return button
+  })
 }
 
 /** Marks the shown element data-sem-fullscreen, with how the host shows it (fs:Marks). */
 const marks: FnRule = (ctx, focus) => {
-  if (!isTrue(ctx.object(focus, FS.fullscreen))) return []
+  if (!isOn(ctx, focus)) return []
   const o = ctx.out(focus)
   const part = fullscreenPart(ctx, focus)
   const presentation = ctx.object(focus, FS.presentation)
@@ -51,10 +62,10 @@ const marks: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** A full-screenable component's own toggle is pressed while it is full screen (fs:Pressed). */
+/** A full-screenable component's own toggles are pressed while their fact holds (fs:Pressed). */
 const pressed: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  o.attr(ctx.nn(`${focus.value}/~fullscreen-toggle`), 'aria-pressed', isTrue(ctx.object(focus, FS.fullscreen)) ? 'true' : 'false')
+  for (const k of KINDS) o.attr(ctx.nn(`${focus.value}/~${k.local}`), 'aria-pressed', ctx.objects(focus, k.fact).some(isTrue) ? 'true' : 'false')
   return o.quads
 }
 
@@ -65,47 +76,48 @@ export const fullscreenFunctions: Record<string, FnRule> = {
 
 // --- reactions ---------------------------------------------------------------------------------
 
-/** Whether the event's node is (inside) an element marked fs:toggles the target. */
-function onToggle(ctx: ReactionContext): boolean {
+/** The fact flipped by the element the event hit, if it (or an ancestor) fs:toggles the target. */
+function toggled(ctx: ReactionContext): string | undefined {
   const hit = ctx.object(ctx.event, NS.beh + 'node')
   for (let n = hit; named(n); n = ctx.match(null, H.hasChild, n)[0]?.subject) {
-    if (ctx.match(n, FS.toggles, ctx.target).length) return true
+    if (!ctx.match(n, FS.toggles, ctx.target).length) continue
+    const fact = ctx.object(n, FS.property)?.value
+    return KINDS.some((k) => k.fact === fact) ? fact : undefined
   }
-  return false
+  return undefined
 }
 
 /** Activating a full-screenable component's own toggle flips its fact (fs:Flip). */
 const flip: ReactionFn = (ctx) => {
-  if (!onToggle(ctx)) return none()
+  const fact = toggled(ctx)
+  if (!fact) return none()
   const f = ctx.runtime.store.factory
-  const old = ctx.match(ctx.target, FS.fullscreen, null)
+  const old = ctx.match(ctx.target, fact, null)
   const on = old.some((q) => isTrue(q.object))
-  return { remove: old, add: [f.quad(ctx.target, f.namedNode(FS.fullscreen), f.literal(String(!on), f.namedNode(NS.xsd + 'boolean')))] }
+  return { remove: old, add: [f.quad(ctx.target, f.namedNode(fact), f.literal(String(!on), f.namedNode(NS.xsd + 'boolean')))] }
 }
 
-/** The host shows it as the event says: recorded while the fact holds (fs:EnterNative, fs:EnterMaximized). */
-const enter =
-  (presentation: string): ReactionFn =>
-  (ctx) => {
-    if (ctx.object(ctx.event, FS.presentation)?.value !== presentation) return none()
-    const f = ctx.runtime.store.factory
-    const old = ctx.match(ctx.target, FS.presentation, null)
-    const remove = old.filter((q) => q.object.value !== presentation)
-    const add: Quad[] = []
-    if (isTrue(ctx.object(ctx.target, FS.fullscreen)) && !old.some((q) => q.object.value === presentation))
-      add.push(f.quad(ctx.target, f.namedNode(FS.presentation), f.namedNode(presentation)))
-    return { remove, add }
-  }
+/** The host shows it as the event says: recorded while a fact asks for it (fs:Enter). */
+const enter: ReactionFn = (ctx) => {
+  const how = ctx.object(ctx.event, FS.presentation)
+  if (!named(how)) return none()
+  const f = ctx.runtime.store.factory
+  const old = ctx.match(ctx.target, FS.presentation, null)
+  const remove = old.filter((q) => !q.object.equals(how))
+  const add: Quad[] = []
+  if (KINDS.some((k) => ctx.match(ctx.target, k.fact, null).some((q) => isTrue(q.object))) && !old.some((q) => q.object.equals(how)))
+    add.push(f.quad(ctx.target, f.namedNode(FS.presentation), how))
+  return { remove, add }
+}
 
-/** The host no longer shows it: the fact and how go (fs:Exit). */
+/** Back in its place: the facts and how go (fs:Exit). */
 const exit: ReactionFn = (ctx) => ({
-  remove: [...ctx.match(ctx.target, FS.fullscreen, null), ...ctx.match(ctx.target, FS.presentation, null)],
+  remove: [FS.fullscreen, FS.fullViewport, FS.presentation].flatMap((p) => ctx.match(ctx.target, p, null)),
   add: [],
 })
 
 export const fullscreenReactions: Record<string, ReactionFn> = {
   'fullscreen:flip': flip,
-  'fullscreen:enter-native': enter(FS.Native),
-  'fullscreen:enter-maximized': enter(FS.Maximized),
+  'fullscreen:enter': enter,
   'fullscreen:exit': exit,
 }
