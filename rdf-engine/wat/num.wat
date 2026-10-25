@@ -95,6 +95,8 @@
     (global.set $ni (local.get $m))
     (local.set $f (call $scale10 (f64.convert_i64_s (local.get $m)) (i32.sub (i32.add (local.get $exp) (local.get $drop)) (global.get $nsc))))
     (if (i32.eq (local.get $t) (i32.const 3)) (then (local.set $f (f64.promote_f32 (f32.demote_f64 (local.get $f))))))
+    ;; the integer mantissa has no -0: "-0", "-0.0e0" keep their sign
+    (if (i32.and (local.get $neg) (f64.eq (local.get $f) (f64.const 0))) (then (local.set $f (f64.const -0))))
     (global.set $nf (local.get $f))
     (return (i32.const 1)))
   (i32.const 0))
@@ -247,7 +249,8 @@
   (if (f64.ne (local.get $v) (local.get $v)) (then (return (call $typed (@str "NaN") (local.get $dt)))))
   (if (f64.eq (local.get $v) (f64.const inf)) (then (return (call $typed (@str "INF") (local.get $dt)))))
   (if (f64.eq (local.get $v) (f64.const -inf)) (then (return (call $typed (@str "-INF") (local.get $dt)))))
-  (if (f64.lt (local.get $v) (f64.const 0)) (then
+  ;; the sign bit, so -0 is "-0"
+  (if (i64.lt_s (i64.reinterpret_f64 (local.get $v)) (i64.const 0)) (then
     (i32.store8 (local.get $w) (i32.const '-'))
     (local.set $w (i32.add (local.get $w) (i32.const 1)))
     (local.set $v (f64.neg (local.get $v)))))
@@ -442,6 +445,16 @@
   (if (i32.eq (local.get $tc) (i32.const C_STRING)) (then
     (if (i32.gt_u (i32.sub (local.get $k) (i32.const 1)) (i32.const 2)) (then (return (i32.const 0))))
     (if (i32.eq (local.get $k) (i32.const 2)) (then (return (i32.const 0))))
+    ;; a number, boolean, date, time or duration is written in its canonical form:
+    ;; the value cast to its own datatype ("1.0"^^xsd:decimal -> "1", "0"^^xsd:boolean -> "false")
+    (if (i32.eq (local.get $k) (i32.const 3)) (then
+      (local.set $t (call $tdt (local.get $v)))
+      ;; an ill-formed number ("abc"^^xsd:integer) cannot be cast
+      (if (i32.and (i32.le_u (i32.sub (call $dtc (local.get $t)) (i32.const C_INTEGER)) (i32.const 3)) (i32.eqz (call $num (local.get $v))))
+        (then (return (i32.const 0))))
+      (if (i32.or (i32.or (call $tkind (local.get $t)) (i32.eq (call $dtc (local.get $t)) (i32.const C_BOOLEAN))) (call $num (local.get $v))) (then
+        ;; an ill-formed one ("maybe"^^xsd:boolean) cannot be cast
+        (if (i32.eqz (local.tee $v (call $cast (local.get $v) (local.get $t)))) (then (return (i32.const 0))))))))
     (return (call $simple (call $tval (local.get $v)) (call $tlen (local.get $v))))))
   (if (i32.ne (local.get $k) (i32.const 3)) (then (return (i32.const 0))))
   (local.set $p (call $tval (local.get $v)))

@@ -537,11 +537,20 @@ impl Ctx<'_> {
             return r;
         }
         match classify(&local) {
+            // A number, boolean, date, time or duration is written in its canonical form.
             Dt::String => {
                 let mut out = Vec::new();
                 match (src, n) {
                     (Dt::Integer | Dt::Decimal | Dt::Float | Dt::Double, Some(n)) => num::write_num(&mut out, n),
-                    _ => out = l.value,
+                    (Dt::Boolean, _) => out.extend_from_slice(if self.boolean(v).ok_or(())? { b"true" } else { b"false" }),
+                    _ => {
+                        let own = self.dict.value(l.dt).strip_prefix(XSD).map(<[u8]>::to_vec);
+                        match own.and_then(|own| self.temporal_cast(&own, &l, false)) {
+                            Some(Ok(t)) => out = self.lit(&t).ok_or(())?.value,
+                            Some(Err(())) => return Err(()),
+                            None => out = l.value,
+                        }
+                    }
                 }
                 Ok(Val::Str(out, None))
             }

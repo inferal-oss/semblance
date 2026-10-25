@@ -8,8 +8,8 @@
       "skip": 0
     },
     "sparql11": {
-      "pass": 501,
-      "fail": 9,
+      "pass": 502,
+      "fail": 8,
       "skip": 0
     },
     "sparql10": {
@@ -30,7 +30,6 @@
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-decimal": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-double": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-float": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-string": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#coalesce01": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected": "wrong result"
   }

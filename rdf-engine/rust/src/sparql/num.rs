@@ -268,9 +268,10 @@ impl Write for Buf<'_> {
     }
 }
 
-/// xsd:double / xsd:float as XPath casts them to strings: plain decimal
-/// notation from 1e-6 to 1e6 ("2.5", "0"), else scientific ("1.5E7").
-/// (Oxigraph writes computed numbers the same way; Semblance relies on it.)
+/// xsd:double / xsd:float as Oxigraph writes them, and as the WAT build does:
+/// the shortest digits that read back, in plain notation ("2.5", "0",
+/// "10000000", "0.0000001", "-0"), or INF, -INF, NaN. (XPath would write
+/// "1.0E7"; Semblance's output follows Oxigraph.)
 pub fn write_double(out: &mut Vec<u8>, d: f64, float: bool) {
     if d.is_nan() {
         out.extend_from_slice(b"NaN");
@@ -280,29 +281,11 @@ pub fn write_double(out: &mut Vec<u8>, d: f64, float: bool) {
         out.extend_from_slice(if d > 0.0 { b"INF" } else { b"-INF" });
         return;
     }
-    let a = if d < 0.0 { -d } else { d };
-    if a == 0.0 || (1e-6..1e6).contains(&a) {
-        if float {
-            let _ = write!(Buf(out), "{}", d as f32);
-        } else {
-            let _ = write!(Buf(out), "{}", d);
-        }
-        return;
-    }
-    let mut s = Vec::new();
     if float {
-        let _ = write!(Buf(&mut s), "{:e}", d as f32);
+        let _ = write!(Buf(out), "{}", d as f32);
     } else {
-        let _ = write!(Buf(&mut s), "{:e}", d);
+        let _ = write!(Buf(out), "{}", d);
     }
-    let e = s.iter().position(|&c| c == b'e').unwrap_or(s.len());
-    let (mant, exp) = (&s[..e], &s[(e + 1).min(s.len())..]);
-    out.extend_from_slice(mant);
-    if !mant.contains(&b'.') {
-        out.extend_from_slice(b".0");
-    }
-    out.push(b'E');
-    out.extend_from_slice(if exp.is_empty() { b"0" } else { exp });
 }
 
 pub fn write_num(out: &mut Vec<u8>, n: Num) {
