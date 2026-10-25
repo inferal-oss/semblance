@@ -364,11 +364,16 @@ const sourceView: FnRule = (ctx, focus) => {
     return o.quads
   }
   const path = str(ctx.object(source!, NS.c + 'path')) ?? ''
+  const pathEl = o.el('path', 'Code', { class: 'sem-source-path' }, [o.text('path-text', path)])
   const head = o.el('head', 'Div', { class: 'sem-source-head' }, [
     o.el('name', 'Span', { class: 'sem-source-name' }, [o.text('name-text', text(ctx, focus, C.label) ?? 'Source')]),
-    o.el('path', 'Code', { class: 'sem-source-path' }, [o.text('path-text', path)]),
-    ...(ctx.modality === MOD.Screen ? fullscreenToggles(ctx, o, focus) : []),
+    pathEl,
   ])
+  // Its toggles last, after the path but not right after it: a highlighted statement's note goes there.
+  if (ctx.modality === MOD.Screen) {
+    const toggles = o.el('fullscreen-toggles', 'Span', { class: 'sem-fullscreen-toggles' }, fullscreenToggles(ctx, o, focus))
+    o.t(head, H.hasChild, toggles).t(pathEl, NS.ord + 'precedes', toggles)
+  }
   const lines = sourceLines(body.replace(/\s+$/, ''))
   const number = (n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
   const rows = lines.map((tokens, i) => {
