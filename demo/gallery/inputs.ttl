@@ -12,12 +12,13 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix file: <https://semblance.dev/ns/file#> .
 
 # Gallery page: Inputs.
 
 ui:gallery-inputs a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-search ui:inp-codes ui:inp-editor ui:inp-checkboxes ui:inp-radios ui:inp-switches
-                 ui:inp-sliders ui:inp-fields ui:inp-selection ui:inp-typeahead ui:inp-tags ui:inp-dates ui:inp-month ) .
+                 ui:inp-sliders ui:inp-fields ui:inp-selection ui:inp-typeahead ui:inp-tags ui:inp-dates ui:inp-month ui:inp-files ) .
 ui:gallery-inputs-intro a c:Heading ; c:label "Inputs" .
 
 # --- The node the shared controls edit ------------------------------------------------------------
@@ -300,6 +301,45 @@ ui:inp-month a c:Flippable ; c:front ui:inp-month-spec .
 ui:inp-month-spec a c:Specimen ; c:demonstrates c:MonthGrid ; c:label "Month grid" ;
     c:help "A c:MonthGrid is the month a date field's popup shows, on its own: a WAI-ARIA grid of day buttons under the month and its arrows, the weeks from the locale's first day (or c:firstDayOfWeek), today marked (aria-current), the picked day selected (aria-selected), days out of the shape's bounds disabled. Only the active day is in the tab order; the keys move it, and the month with it. It sets the same departure as the field above; with c:endProperty it picks a range." ;
     c:children ( ui:inp-month-grid ) .
+
+# --- File drop ----------------------------------------------------------------------------------------
+# Attachments: images and PDFs up to 2 MB, at most three, uploaded at once by the site's stand-in
+# server (the "demo" handler the host gives the files effect: it takes a moment, and fails the first
+# try of every third file, so progress, failure and retry can be seen). A profile picture: one PNG or
+# JPEG, kept in the page (no upload). The locked one shows the attachments, read-only.
+
+ui:inp-attachment a rdf:Property ; rdfs:label "Attachments" ; rdfs:range file:File .
+ui:inp-picture a rdf:Property ; rdfs:label "Profile picture" ; rdfs:range file:File .
+ui:AttachmentsShape a sh:PropertyShape ; sh:path ui:inp-attachment ; sh:maxCount 3 ; sh:node ui:Attachable ;
+    sh:message "At most three files." , "Не більше трьох файлів."@uk , "Höchstens drei Dateien."@de , "ثلاثة ملفات على الأكثر."@ar .
+ui:Attachable a sh:NodeShape ;
+    sh:property [ sh:path file:mediaType ; sh:pattern "^(image/|application/pdf$)" ;
+                  sh:message "Only images and PDFs." , "Лише зображення та PDF."@uk , "Nur Bilder und PDFs."@de , "الصور وملفات PDF فقط."@ar ] ,
+                [ sh:path file:size ; sh:maxInclusive 2000000 ;
+                  sh:message "At most 2 MB per file." , "Не більше 2 МБ на файл."@uk , "Höchstens 2 MB pro Datei."@de , "2 ميغابايت على الأكثر لكل ملف."@ar ] .
+ui:PictureShape a sh:PropertyShape ; sh:path ui:inp-picture ; sh:maxCount 1 ;
+    sh:message "One picture." , "Одне зображення."@uk , "Ein Bild."@de , "صورة واحدة."@ar ;
+    sh:node [ a sh:NodeShape ; sh:property [ sh:path file:mediaType ; sh:in ( "image/png" "image/jpeg" ) ;
+              sh:message "A PNG or JPEG picture." , "Зображення PNG або JPEG."@uk , "Ein PNG- oder JPEG-Bild."@de , "صورة PNG أو JPEG."@ar ] ] .
+
+ui:inp-files-attach a c:FileDrop ; c:controls ui:inputsDemo ; c:property ui:inp-attachment ;
+    val:validates ui:AttachmentsShape ; file:accept "image/*,application/pdf" ; file:handler "demo" ;
+    c:label "Attachments" , "Вкладення"@uk , "Anhänge"@de , "المرفقات"@ar ;
+    c:help "Images or PDFs, up to 2 MB each; at most three." , "Зображення або PDF, до 2 МБ кожен; не більше трьох."@uk ,
+           "Bilder oder PDFs, bis 2 MB je Datei; höchstens drei."@de , "صور أو ملفات PDF، حتى 2 ميغابايت لكل منها؛ ثلاثة على الأكثر."@ar .
+ui:inp-files-picture a c:FileDrop ; c:controls ui:inputsDemo ; c:property ui:inp-picture ; c:icon "◐" ;
+    val:validates ui:PictureShape ;
+    c:label "Profile picture" , "Фото профілю"@uk , "Profilbild"@de , "صورة الملف الشخصي"@ar ;
+    c:help "One PNG or JPEG, kept in this page." , "Один PNG або JPEG, залишається на цій сторінці."@uk ,
+           "Ein PNG oder JPEG, bleibt auf dieser Seite."@de , "ملف PNG أو JPEG واحد، يبقى في هذه الصفحة."@ar .
+ui:inp-files-off a c:FileDrop ; c:controls ui:inputsDemo ; c:property ui:inp-attachment ; c:disabled true ;
+    c:label "Attachments (locked)" , "Вкладення (заблоковано)"@uk , "Anhänge (gesperrt)"@de , "المرفقات (مقفلة)"@ar .
+ui:inp-files-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:inp-files-attach ui:inp-files-picture ui:inp-files-off ) .
+ui:inp-files a c:Flippable ; c:front ui:inp-files-spec .
+ui:inp-files-spec a c:Specimen ; c:demonstrates c:FileDrop , c:FileItem ; c:label "File drop" ;
+    c:help "A c:FileDrop picks or takes dropped files into a property (c:controls, c:property); its zone is a button, so a click, Enter or Space opens the system picker. What it accepts is the SHACL shape it validates: each file must conform to its sh:node shape (here a media type sh:pattern and a sh:maxInclusive file:size), and its sh:maxCount says how many - with sh:maxCount 1 the picker takes one. Files dragged over the page show each zone's reception, accepted or refused with the shape's message; a refused file is listed with the reason. A file is a node with its name, media type and size, never its contents: the files effect keeps those, and uploads each accepted file at once when the drop says where (file:uploadTo, or a handler: file:handler), with a progress bar and a button that cancels it. Here uploads go to a stand-in server that fails the first try of every third file, so you can try again." ;
+    c:children ( ui:inp-files-col ) .
 
 # --- Code editor: Turtle and SPARQL ----------------------------------------------------------------
 

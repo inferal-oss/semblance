@@ -77,6 +77,7 @@ c:SearchField sem:group c:InputsGroup .
 c:Typeahead sem:group c:InputsGroup . c:Combobox sem:group c:InputsGroup . c:TagInput sem:group c:InputsGroup .
 c:TypeaheadOption sem:group c:InputsGroup . c:CustomValueKind sem:group c:InputsGroup . c:OptionNaming sem:group c:InputsGroup .
 c:TypeaheadKey sem:group c:InputsGroup . c:TypeaheadLeave sem:group c:InputsGroup .
+c:FileDrop sem:group c:InputsGroup . c:FileItem sem:group c:InputsGroup .
 c:Charset sem:group c:InputsGroup . c:Case sem:group c:InputsGroup . c:CellStyle sem:group c:InputsGroup .
 c:SearchKey sem:group c:InputsGroup .
 c:ShapeForm sem:group c:InputsGroup . c:ShapeField sem:group c:InputsGroup .

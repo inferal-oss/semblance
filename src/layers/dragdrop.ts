@@ -4,7 +4,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { mint } from '../rdf.ts'
-import { C, DND, NS, RDF_TYPE, RDFS_SUBCLASS, XSD_INTEGER } from '../ns.ts'
+import { C, DND, NS, RDF_TYPE, RDFS_SUBCLASS, VAL, XSD_INTEGER } from '../ns.ts'
 import { named, RDFS_LABEL, rdfList, text } from '../components/util.ts'
 
 const SH = NS.sh
@@ -65,11 +65,24 @@ function objected(ctx: RuleContext, drag: Term, receptacle: Term): string | unde
     .sort()[0]
 }
 
-/** The least message of the target's dnd:accepts shapes that `x` violates, if any. */
+/**
+ * The property shapes a target validates (val:validates) whose path is its membership path: a target
+ * that is also a field over the property it fills honours that shape.
+ */
+function fieldShapes(ctx: RuleContext, focus: NamedNode): Term[] {
+  const members = ctx.objects(focus, DND.members)
+  const memberOf = ctx.objects(focus, DND.memberOf)
+  return ctx.objects(focus, VAL.validates).filter((field) =>
+    ctx.objects(field, SH + 'path').some((path) => members.some((m) => m.equals(path)) || ctx.objects(path, SH + 'inversePath').some((p) => memberOf.some((m) => m.equals(p)))),
+  )
+}
+
+/** The least message of the target's dnd:accepts shapes (and its field shape's sh:node) that `x` violates, if any. */
 function unfit(ctx: RuleContext, focus: NamedNode, x: Term, receptacle?: Term): string | undefined {
   const said: string[] = []
-  // The target's shapes, and the receptacle's own (a folder says what it takes).
-  for (const shape of [...ctx.objects(focus, DND.accepts), ...(receptacle ? ctx.objects(receptacle, DND.accepts) : [])]) {
+  // The target's shapes, the receptacle's own (a folder says what it takes), and what its field shape says of each member.
+  const shapes = [...ctx.objects(focus, DND.accepts), ...(receptacle ? ctx.objects(receptacle, DND.accepts) : []), ...fieldShapes(ctx, focus).flatMap((f) => ctx.objects(f, SH + 'node'))]
+  for (const shape of shapes) {
     const fail = (violated: Term) => said.push(plain(ctx, violated, SH + 'message')[0] ?? plain(ctx, shape, SH + 'message')[0] ?? 'It does not belong here.')
     for (const cls of ctx.objects(shape, SH + 'class')) if (!instanceOf(ctx, x, cls.value)) fail(shape)
     for (const ps of ctx.objects(shape, SH + 'property')) {
@@ -80,6 +93,16 @@ function unfit(ctx: RuleContext, focus: NamedNode, x: Term, receptacle?: Term): 
           for (const v of ctx.objects(x, p)) if (!list.some((a) => a.equals(v))) fail(ps)
         }
         for (const cls of ctx.objects(ps, SH + 'class')) for (const v of ctx.objects(x, p)) if (!instanceOf(ctx, v, cls.value)) fail(ps)
+        for (const pattern of ctx.objects(ps, SH + 'pattern')) {
+          const flags = ctx.objects(ps, SH + 'flags')[0]?.value ?? ''
+          let re: RegExp | undefined
+          try {
+            re = new RegExp(pattern.value, flags)
+          } catch {
+            re = undefined
+          }
+          for (const v of ctx.objects(x, p)) if (!re?.test(v.value)) fail(ps)
+        }
         // Ranges, as SPARQL compares numbers: a value that is not a number fails them.
         for (const [bound, ok] of RANGES) {
           for (const limit of ctx.objects(ps, SH + bound)) {
@@ -115,6 +138,13 @@ function capacityOf(ctx: RuleContext, focus: NamedNode, receptacle: Term): { max
       }
     }
   }
+  // A target that is a field over its membership property: that shape's sh:maxCount too.
+  for (const field of fieldShapes(ctx, focus)) {
+    for (const bound of ctx.objects(field, SH + 'maxCount')) {
+      bounds.push(Number(bound.value))
+      said.push(plain(ctx, field, SH + 'message')[0] ?? 'There is no room for it here.')
+    }
+  }
   return bounds.length ? { max: Math.min(...bounds), said: said.sort()[0]! } : undefined
 }
 
@@ -144,7 +174,9 @@ const receive: FnRule = (ctx, focus) => {
     const pointing = memberOf.reduce((n, m) => n + ctx.match(null, m.value, r).length, 0)
     const holding = members.reduce((n, m) => n + ctx.match(r, m.value, null).length, 0)
     const capacity = capacityOf(ctx, focus, r)
-    const overfull = !origin && !inside && capacity !== undefined && (pointing || holding || 0) + 1 > capacity.max
+    // How many it carries at once (dnd:count, default 1).
+    const adding = Number(ctx.object(drag, DND.count)?.value ?? 1) || 1
+    const overfull = !origin && !inside && capacity !== undefined && (pointing || holding || 0) + adding > capacity.max
     const misfit = unfit(ctx, focus, x, r)
     const objection = origin || inside ? undefined : objected(ctx, drag, r)
     const reasons = [origin ? undefined : misfit, overfull ? capacity!.said : undefined, objection].filter((s): s is string => s !== undefined).sort()
@@ -231,7 +263,7 @@ export const dragdropFunctions: Record<string, FnRule> = { 'dnd:zones': zones, '
 // --- reactions ------------------------------------------------------------------------------------
 
 /** What the drag in progress says about itself (its rdf:type is the ontology's). */
-const STATE = [DND.source, DND.carrying, DND.from, DND.by, DND.effect, DND.dropTarget, DND.into, DND.after, DND.before, DND.rank]
+const STATE = [DND.source, DND.carrying, DND.from, DND.by, DND.effect, DND.dropTarget, DND.into, DND.after, DND.before, DND.rank, DND.count]
 
 /** Everything that says there is a drag (the drag itself, and who is offered, hovered, lifted). */
 function dragState(ctx: ReactionContext): Quad[] {

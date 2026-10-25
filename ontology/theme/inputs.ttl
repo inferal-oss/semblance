@@ -17,11 +17,11 @@
 # Every control scales with sty:size through --control-h / --control-font.
 
 # --- help and error lines (every input here, and the field wrapper) ---
-[] a sty:StyleRule ; sty:part ":is([data-sem-c=text-area], [data-sem-c=checkbox], [data-sem-c=radio-group], [data-sem-c=toggle-switch], [data-sem-c=slider], [data-sem-c=field]) > .sem-help" ;
+[] a sty:StyleRule ; sty:part ":is([data-sem-c=text-area], [data-sem-c=checkbox], [data-sem-c=radio-group], [data-sem-c=toggle-switch], [data-sem-c=slider], [data-sem-c=field], [data-sem-c=file-drop]) > .sem-help" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
                  [ sty:property "line-height" ; sty:token tok:leading-normal ] .
-[] a sty:StyleRule ; sty:part ":is([data-sem-c=text-area], [data-sem-c=checkbox], [data-sem-c=radio-group], [data-sem-c=toggle-switch], [data-sem-c=slider], [data-sem-c=field]) > .sem-error" ;
+[] a sty:StyleRule ; sty:part ":is([data-sem-c=text-area], [data-sem-c=checkbox], [data-sem-c=radio-group], [data-sem-c=toggle-switch], [data-sem-c=slider], [data-sem-c=field], [data-sem-c=file-drop]) > .sem-error" ;
     sty:declares [ sty:property "color" ; sty:token tok:danger ] ,
                  [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
                  [ sty:property "font-weight" ; sty:raw "550" ] ,
