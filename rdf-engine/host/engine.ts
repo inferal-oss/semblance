@@ -97,12 +97,17 @@ export async function compile(bytes: BufferSource): Promise<WebAssembly.Module> 
 export class EngineError extends Error {}
 
 export class Engine {
-  private readonly x: Exports
+  private x: Exports
 
   constructor(module: WebAssembly.Module) {
     this.x = new WebAssembly.Instance(module, imports).exports as unknown as Exports
     const v = this.x.abi_version()
     if (v !== ABI_VERSION) throw new Error(`engine ABI ${v}, host expects ${ABI_VERSION}`)
+  }
+
+  /** Drop the instance, so its memory can be collected while this object is still referenced; the engine must not be used afterwards. */
+  dispose(): void {
+    this.x = undefined as unknown as Exports
   }
 
   // --- memory ---------------------------------------------------------------

@@ -337,6 +337,15 @@ export function engineStore(module: WebAssembly.Module, kind: string): EngineSto
       e.load(Format.Turtle, text)
     },
     termCount: () => e.termCount(),
+    dispose() {
+      // Each store has its own instance and memory; drop them and the term caches,
+      // so they go as soon as the engine object does, not when the store's last holder does.
+      prepared.clear()
+      byId.length = 0
+      iris.clear()
+      literals.clear()
+      e.dispose()
+    },
     maintain() {
       // Collect once the dictionary has grown by half since the last collection.
       if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
