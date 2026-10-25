@@ -21,7 +21,25 @@ npm run engine:check -- rust                  # term and store checks against AB
 npm run conformance -- --target rust          # or wat, oxigraph; --suite rdf12 --only <iri part> -v --show
 npm run engine:compare                        # size and speed matrix -> results/compare.md
 npx tsx rdf-engine/host/compiled-bench.ts rust  # compiled vs interpreted queries -> results/compiled.md
+npm run engine:sizes                          # where each build's bytes go, side by side ([file.wasm] [top])
+npm run engine:speed                          # WAT at least as fast as Rust (--rounds 3 --margin 0.15)
 ```
+
+## Parity guard
+
+The two builds match one to one, and WAT is at least as fast. The **Engines** workflow
+(`.github/workflows/engines.yml`) enforces this on every pull request and push that touches an
+engine:
+
+- `test/rdf-engine-parity.test.ts` checks that `results/rust.json` and `wat.json` list the same
+  failing tests and the same counts. It also renders the shell on WAT and replays every query it
+  ran (with its foci) on a fresh engine of each build holding the same graph, interpreted and
+  compiled, and runs every corpus query (`semblanceQueries()`) on its own. Results are compared
+  by term.
+- Conformance runs on both builds, and the results must equal the committed ones.
+- `engine:speed` alternates `compiled-bench.ts` (median and total per call, interpreted and
+  compiled) and `compiled-pages.ts` (best page revisits) between the builds and fails when WAT
+  is slower than Rust by more than the margin on any of them.
 
 ## Benchmarks
 
