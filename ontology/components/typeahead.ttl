@@ -181,7 +181,8 @@ c:TypeaheadOption a owl:Class ;
     rdfs:comment """One option of a typeahead's list (minted by c:TypeaheadOptions under it): c:of the typeahead,
 c:option the value, with its c:label, c:searchKey and c:rank. It renders a role=option row, hidden
 while it does not match the typed text, the matched part in a <mark>."""@en ;
-    sem:slug "typeahead-option" .
+    sem:slug "typeahead-option" ;
+    key:rendersHint true .
 
 # Phrases, translated like the other c:Phrase individuals. "{}" stands for the typed text.
 c:NoMatches a c:Phrase ; rdfs:label "No matches"@en , "Нічого не знайдено"@uk , "Keine Treffer"@de , "لا توجد نتائج"@ar .

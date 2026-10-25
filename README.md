@@ -118,7 +118,8 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 - **Keyboard**: `key:shortcut "mod+k"` on any component gives
   `aria-keyshortcuts`, a hint (on the root, or the part its class names:
   `key:hintPart`), and activation by key press (through the component's own
-  click reactions). A component whose control is a text field is focused
+  click reactions); `key:hint` shows and announces a key the same way without
+  binding it (a button that opens what a command opens). A component whose control is a text field is focused
   instead, its text selected, and an Escape nothing else uses gives the focus
   back ("/" goes to the Reference page's search). `key:Command` is a shortcut that belongs to
   no component: its press is an event its reactions handle (Z pauses the

@@ -245,8 +245,8 @@ describe.each(['oxigraph', 'wat'] as const)('command palette (%s)', (kind) => {
     const p = drive(mountShell(5, kind))
     const button = p.shell.nodeOf(UI + 'paletteButton/~root') as HTMLElement
     expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K')
-    expect(button.getAttribute('data-sem-key-hint')).toBe('mod+k')
-    expect(button.getAttribute('data-sem-shortcut-apple')).toBe('⌘K')
+    expect(button.getAttribute('data-sem-key-hint')).toBe('Ctrl+K')
+    expect(button.getAttribute('data-sem-key-hint-apple')).toBe('⌘K')
     expect(button.hasAttribute('data-sem-shortcut')).toBe(false)
     expect(button.getAttribute('aria-haspopup')).toBe('dialog')
     expect(button.getAttribute('aria-expanded')).toBe('false')

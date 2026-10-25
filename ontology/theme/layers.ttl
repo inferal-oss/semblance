@@ -5,21 +5,27 @@
 
 # Theme for what the layers add: shortcut hints, busy state, shortcut lists.
 
-# --- keyboard: a hint after any element that declares a shortcut or a key hint (Apple or other glyphs) ---
+# --- keyboard: a hint after any element that declares a shortcut or a key hint (Apple or other glyphs),
+# left to right in a right-to-left page too (⌘K, not K⌘) ---
+# A key hint (key:hint) takes its glyphs from the part rules below; a button lays it out as a shortcut.
 [] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch]):is([data-sem-shortcut], [data-sem-key-hint])::after" ;
-    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other)" ] ,
-                 [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
                  [ sty:property "padding" ; sty:raw "2px 5px" ] ,
                  [ sty:property "border-radius" ; sty:raw "5px" ] ,
                  [ sty:property "border" ; sty:raw "1px solid color-mix(in oklab, currentColor 28%, transparent)" ] ,
                  [ sty:property "font" ; sty:raw "600 10px/1 var(--sem-font-mono)" ] ,
                  [ sty:property "opacity" ; sty:raw "0.75" ] ,
-                 [ sty:property "vertical-align" ; sty:raw "1px" ] .
-[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch]):is([data-sem-shortcut], [data-sem-key-hint])::after" ;
+                 [ sty:property "vertical-align" ; sty:raw "1px" ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
+[] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other)" ] .
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple)" ] .
 
-# A hint on the part a component's class names (key:hintPart): a key cap at the end of a field box,
-# gone while the field has the focus (typing there is not the shortcut).
+# A hint on the part a component's class names (key:hintPart), or on a component's root (key:hint):
+# a key cap after it; at the end of a field box, gone while the field has the focus (typing there is
+# not the shortcut).
 [] a sty:StyleRule ; sty:part "[data-sem-key-hint]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint)" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
@@ -31,10 +37,12 @@
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font" ; sty:raw "600 11px/1.2 var(--sem-font-mono)" ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,
-                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-key-hint]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint-apple)" ] .
-[] a sty:StyleRule ; sty:part "[data-sem-key-hint]:focus-within::after" ;
+[] a sty:StyleRule ; sty:part "[data-sem-key-hint]:not(button, a, [role=button], [role=switch]):focus-within::after" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
 # --- shortcut list ---
@@ -62,7 +70,9 @@
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-bottom-width" ; sty:raw "2px" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
-                 [ sty:property "font" ; sty:raw "600 11px/1 var(--sem-font-mono)" ] .
+                 [ sty:property "font" ; sty:raw "600 11px/1 var(--sem-font-mono)" ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ; sty:part ".sem-apple" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-c=shortcut-list] .sem-apple" ;

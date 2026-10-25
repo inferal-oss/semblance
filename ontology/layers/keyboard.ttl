@@ -94,9 +94,14 @@ WHERE {
   BIND(IF(BOUND(?part), IRI(CONCAT(STR($this), "/~", STR(?part), "-data-sem-key-hint-apple")), ?none) AS ?hintApple)
 }""" .
 
-# A key hint on a component (key:hint): shown and announced like a shortcut - aria-keyshortcuts and
-# the same Apple / other glyphs - but not bound: the key stays what it is elsewhere (a button that
-# opens the command palette shows ⌘K, which a key:Command handles).
+# A key hint on a component (key:hint): shown and announced like a shortcut - aria-keyshortcuts on
+# the root, and the same Apple / other glyphs as a shortcut's hint on a part (data-sem-key-hint,
+# data-sem-key-hint-apple; on the part its class names with key:hintPart, or the root) - but not
+# bound: the key stays what it is elsewhere (a button that opens the command palette shows ⌘K, which
+# a key:Command handles). A class whose rendering shows its instances' hints itself says
+# key:rendersHint true (a typeahead option).
+key:rendersHint a owl:DatatypeProperty ; rdfs:domain owl:Class ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a component class: its rendering shows and announces its instances' key:hint itself, so the keyboard layer adds nothing."@en .
 key:Hints a sem:Rendering ;
     sem:requires key:hint ;
     sem:targets sem:Component ;
@@ -109,15 +114,16 @@ key:Hints-sparql a sem:Rule ;
     sem:implements key:Hints ;
     sem:construct """
 CONSTRUCT {
-  ?root rdfhtml:attribute ?aria, ?marker, ?apple, ?other .
+  ?root rdfhtml:attribute ?aria .
   ?aria a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue ?ariaValue .
-  ?marker a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-key-hint" ; rdfhtml:attributeValue ?normalized .
-  ?apple a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shortcut-apple" ; rdfhtml:attributeValue ?appleValue .
-  ?other a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shortcut-other" ; rdfhtml:attributeValue ?otherValue .
+  ?shown rdfhtml:attribute ?hintOther, ?hintApple .
+  ?hintOther a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-key-hint" ; rdfhtml:attributeValue ?otherValue .
+  ?hintApple a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-key-hint-apple" ; rdfhtml:attributeValue ?appleValue .
 }
 WHERE {
   $this key:hint ?hint .
   FILTER NOT EXISTS { $this key:shortcut ?bound }
+  FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?self . ?self key:rendersHint true }
   VALUES (?pluses ?ends ?modifiers) { ("(\\\\s*\\\\+\\\\s*)+" "^[\\\\s+]+|[\\\\s+]+$" "\\\\+(?:(?:mod|ctrl|alt|shift|meta)\\\\+)+") }
   BIND(CONCAT("+", REPLACE(REPLACE(LCASE(STR(?hint)), ?pluses, "+"), ?ends, ""), "+") AS ?parts)
   BIND(CONTAINS(?parts, "+mod+") AS ?mod)
@@ -127,7 +133,6 @@ WHERE {
   BIND(CONTAINS(?parts, "+meta+") AS ?meta)
   BIND(REPLACE(?parts, ?modifiers, "+") AS ?keyParts)
   BIND(SUBSTR(?keyParts, 2, STRLEN(?keyParts) - 2) AS ?key)
-  BIND(CONCAT(IF(?mod, "mod+", ""), IF(?ctrl, "ctrl+", ""), IF(?alt, "alt+", ""), IF(?shift, "shift+", ""), IF(?meta, "meta+", ""), ?key) AS ?normalized)
   BIND(IF(STRLEN(?key) = 1, UCASE(?key), CONCAT(UCASE(SUBSTR(?key, 1, 1)), SUBSTR(?key, 2))) AS ?k)
   BIND(CONCAT(IF(?mod, "⌘", ""), IF(?ctrl, "⌃", ""), IF(?alt, "⌥", ""), IF(?shift, "⇧", ""), IF(?meta, "◆", ""), ?k) AS ?appleValue)
   BIND(CONCAT(IF(?mod, "Ctrl+", ""), IF(?ctrl, "Ctrl+", ""), IF(?alt, "Alt+", ""), IF(?shift, "Shift+", ""), IF(?meta, "Win+", ""), ?k) AS ?otherValue)
@@ -135,9 +140,12 @@ WHERE {
               IF(STRLEN(?key) = 1, UCASE(?key), ?key)) AS ?ariaValue)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-keyshortcuts")) AS ?aria)
-  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-key-hint")) AS ?marker)
-  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-shortcut-apple")) AS ?apple)
-  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-shortcut-other")) AS ?other)
+  # The part of the class that shows the hint, if it names one; else the root.
+  OPTIONAL { $this a/rdfs:subClassOf* ?hinted . ?hinted key:hintPart ?part }
+  BIND(COALESCE(STR(?part), "root") AS ?at)
+  BIND(IRI(CONCAT(STR($this), "/~", ?at)) AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~", ?at, "-data-sem-key-hint")) AS ?hintOther)
+  BIND(IRI(CONCAT(STR($this), "/~", ?at, "-data-sem-key-hint-apple")) AS ?hintApple)
 }""" .
 
 c:ShortcutList a owl:Class ;
