@@ -47,6 +47,7 @@ import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
 import { labelOf, RDFS_LABEL, text } from './util.ts'
+import { viewRows } from '../view/rows.ts'
 
 const str = (t: Term | undefined) => t?.value
 /** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
@@ -589,7 +590,7 @@ const chipCounts: FnRule = (ctx, focus) => {
   if (!query || !ctx.sparql) return []
   let rows: Map<string, Term>[]
   try {
-    rows = ctx.select(query)
+    rows = viewRows(ctx, view, query)
   } catch {
     return []
   }

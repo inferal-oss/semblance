@@ -9,6 +9,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix a11y: <https://semblance.dev/ns/a11y#> .
 @prefix perf: <https://semblance.dev/ns/perf#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -434,6 +435,13 @@ ui:ClearMatrix a beh:Reaction ; beh:when beh:Click ; beh:source ui:clearButton ;
 
 ui:perfWorkspace a c:Stack ; pos:layout pos:Sidebar ; pos:gap tok:space-5 ;
     c:children ( ui:perfCharts ui:insightsCard ) .
+# The performance page's views are maintained (docs/IVM.md): a benchmark's observations arrive one
+# by one, each re-evaluating only the configuration it measures, and the charts read the rows.
+perf:InitialRenderView a iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:perfCharts .
+perf:UpdateMixView a iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:perfCharts .
+perf:UpdateMatrixView a iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:perfCharts .
+perf:ScalingView a iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:perfCharts .
+
 ui:perfCharts a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:initialCard ui:mixCard ui:matrixCard ui:scalingCard ) .
 

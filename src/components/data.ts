@@ -4,6 +4,7 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { viewRows } from '../view/rows.ts'
 
 const C_QUERY = NS.c + 'query'
 const C_COLUMNS = NS.c + 'tableColumns'
@@ -192,7 +193,7 @@ const table: FnRule = (ctx, focus) => {
   if (!ctx.sparql) return message(o, 'P', 'Tables run SPARQL; choose a store with SPARQL.')
   let rows: Row[]
   try {
-    rows = ctx.select(select)
+    rows = viewRows(ctx, query!, select)
   } catch (e) {
     return message(o, 'P', `Query ${labelOf(ctx, query!)} failed: ${(e as Error).message}`)
   }
