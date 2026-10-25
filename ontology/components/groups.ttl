@@ -3,6 +3,7 @@
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ext: <https://semblance.dev/ns/foreign#> .
 
 # The component groups (DESIGN.md §3), and which group each component class is in,
 # with its mixins and parts (sem:group). The reference (c:TermTree) lists components
@@ -49,6 +50,8 @@ c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:g
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
 c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup .
 c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Connector sem:group c:LayoutGroup .
+# A foreign component (web component, framework component, widget) is laid out like any other part.
+ext:Island sem:group c:LayoutGroup .
 c:Route sem:group c:LayoutGroup . c:Arrowheads sem:group c:LayoutGroup . c:LineStyle sem:group c:LayoutGroup . c:ConnectorCondition sem:group c:LayoutGroup .
 
 # --- Type ---
