@@ -37,7 +37,7 @@ const uleb = (out: number[], v: number) => {
     out.push(b)
   } while (v)
 }
-const name = (out: number[], s: string) => (uleb(out, s.length), out.push(...Buffer.from(s)))
+const putName = (out: number[], s: string) => (uleb(out, s.length), out.push(...Buffer.from(s)))
 const section = (out: number[], id: number, body: number[]) => (out.push(id), uleb(out, body.length), out.push(...body))
 const bytes = [0x00, 0x61, 0x73, 0x6d, 1, 0, 0, 0]
 const types: number[] = []
@@ -46,8 +46,8 @@ for (const [p, r] of TYPES) types.push(0x60, p.length, ...p, r.length, ...r)
 section(bytes, 1, types)
 const imports: number[] = []
 uleb(imports, IMPORTS.length + 1)
-name(imports, 'engine'), name(imports, 'memory'), imports.push(2, 0, 0)
-for (const [n, t] of IMPORTS) name(imports, 'engine'), name(imports, n), imports.push(0), uleb(imports, t)
+putName(imports, 'engine'), putName(imports, 'memory'), imports.push(2, 0, 0)
+for (const [n, t] of IMPORTS) putName(imports, 'engine'), putName(imports, n), imports.push(0), uleb(imports, t)
 section(bytes, 2, imports)
 const len = bytes.length
 while (bytes.length % 4) bytes.push(0)
