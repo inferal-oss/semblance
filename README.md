@@ -212,8 +212,14 @@ the component set. The demo's **Components** page shows all of it.
   the pre-event state, and their union is applied as one delta. A reaction may
   raise a further event on another node (`?node beh:raise key:Press`): the bus
   records it after this one (`beh:raisedBy`), for that node's own reactions.
-- A modal overlay (`aria-modal`) takes the focus when it opens (its `autofocus`
-  element), keeps Tab inside, and gives the focus back when it closes.
+- A modal overlay (`aria-modal`) takes the focus when it opens, keeps Tab inside,
+  and gives the focus back when it closes, however it opened (an event, the
+  address, a timer). Where the focus lands is the rendering's choice: the first
+  element it marks `autofocus` that is or holds a control (a dialog marks its
+  body, then its actions; the lightbox its next arrow; the palette its field),
+  else the panel. A menu or popover marks `data-sem-takes-focus` instead: its
+  popup while open (the first item), its trigger once closed. The host does
+  none of this.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member

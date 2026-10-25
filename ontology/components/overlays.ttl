@@ -39,6 +39,8 @@ c:Dialog a owl:Class ;
     rdfs:comment """A modal panel over a scrim: title (c:label), description (c:help), content
 (c:content) and actions (c:actions, typically buttons that c:closes it). role=dialog, aria-modal,
 labelled by its title and described by its description. The ✕ and a click on the scrim close it.
+Opened, it takes the focus to the first control of its content, else to its first action (a
+confirmation lists the safe one first); closed, it gives the focus back to what had it.
 Closed (the default) it renders an empty hidden root: its content is not evaluated."""@en ;
     sem:slug "dialog" .
 c:DialogRendering a sem:Rendering ; sem:targets c:Dialog ; sem:stratum 0 .
@@ -69,8 +71,8 @@ CONSTRUCT {
   ?escape a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-escape" ; rdfhtml:attributeValue "" .
   ?desc a rdfhtml:P ; rdfhtml:id ?descId ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?afterDesc .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
-  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:hasChild ?child .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
+  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?child .
   ?a ord:immediatelyPrecedes ?b .
 }
 WHERE {
@@ -213,8 +215,8 @@ CONSTRUCT {
   ?escape a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-escape" ; rdfhtml:attributeValue "" .
   ?desc a rdfhtml:P ; rdfhtml:id ?descId ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?afterDesc .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
-  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:hasChild ?child .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
+  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?child .
   ?a ord:immediatelyPrecedes ?b .
 }
 WHERE {
@@ -329,7 +331,8 @@ c:Popover a owl:Class ;
     rdfs:subClassOf c:Overlay ;
     rdfs:comment """A non-modal panel anchored below its trigger button (labelled by c:trigger, else
 c:label). The trigger toggles c:open and reports it (aria-expanded, aria-controls); the panel
-(role=dialog, labelled by the trigger) shows c:help and c:content while open."""@en ;
+(role=dialog, labelled by the trigger) shows c:help and c:content while open. Opened from the
+trigger, the focus goes to the panel's first control (if it has one); closed, back to the trigger."""@en ;
     sem:slug "popover" .
 c:trigger a owl:DatatypeProperty ; rdfs:domain c:Popover ; rdfs:comment "The trigger button's label."@en .
 c:PopoverRendering a sem:Rendering ; sem:targets c:Popover ; sem:stratum 0 .
@@ -342,7 +345,8 @@ CONSTRUCT {
   ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?trigger, ?panel .
   ?trigger a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-trigger" ; rdfhtml:id ?triggerId ;
            rdfhtml:hasChild ?triggerText, ?caret ; c:toggles $this ; ord:immediatelyPrecedes ?panel ;
-           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?escape .
+           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?escape, ?triggerFocus .
+  ?triggerFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?hasPopup a rdfhtml:Attribute ; rdfhtml:attributeName "aria-haspopup" ; rdfhtml:attributeValue "dialog" .
   ?expanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openValue .
   ?controls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?panelId .
@@ -351,9 +355,10 @@ CONSTRUCT {
   ?caret a rdfhtml:Span ; rdfhtml:class "sem-caret" ; rdfhtml:attribute ?caretHidden .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?panel a rdfhtml:Div ; rdfhtml:class "sem-panel" ; rdfhtml:id ?panelId ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?desc, ?content ;
-         rdfhtml:attribute ?role, ?labelledBy .
+         rdfhtml:attribute ?role, ?labelledBy, ?panelFocus .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
+  ?panelFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?desc a rdfhtml:P ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?content .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
 }
@@ -382,6 +387,9 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~trigger-aria-expanded")) AS ?expanded)
   BIND(IRI(CONCAT(STR($this), "/~trigger-aria-controls")) AS ?controls)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~trigger-data-sem-escape")), ?none) AS ?escape)
+  # Opened from the trigger, the focus goes to the first control in the panel; closed, back to the trigger.
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~panel-data-sem-takes-focus")), ?none) AS ?panelFocus)
+  BIND(IF(?open, ?none, IRI(CONCAT(STR($this), "/~trigger-data-sem-takes-focus"))) AS ?triggerFocus)
   BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
   BIND(STR(?panel) AS ?panelId)
   BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)

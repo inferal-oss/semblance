@@ -311,6 +311,9 @@ const lightbox: FnRule = (ctx, focus) => {
   const next = arrow(ctx, o, 'next')
   if (!loops && i <= 1) o.t(prev, H.ns + 'disabled', '')
   if (!loops && i >= n) o.t(next, H.ns + 'disabled', '')
+  // Opened, the focus goes to the next arrow, else (the last image) the previous one.
+  if (loops || i < n) o.t(next, H.ns + 'autofocus', '')
+  else if (i > 1) o.t(prev, H.ns + 'autofocus', '')
   o.attr(prev, 'data-sem-shortcut', 'arrowleft').attr(prev, 'aria-keyshortcuts', 'ArrowLeft')
   o.attr(next, 'data-sem-shortcut', 'arrowright').attr(next, 'aria-keyshortcuts', 'ArrowRight')
   const stage = o.el('stage', 'Div', { class: 'sem-stage' }, [strip, prev, next])

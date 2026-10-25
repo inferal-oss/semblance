@@ -428,8 +428,10 @@ export class EventBus {
   attach(renderer: DomRenderer, handledBy: (h: Handled) => void = () => {}, onError?: (e: Error) => void): () => void {
     const domTypes = new Set(this.runtime.store.match(null, this.f.namedNode(BEH.domEvent), null).map((q) => q.object.value))
     const doc = renderer.host.ownerDocument
-    // After every handled event (and the host's flush), the focus follows the modal overlays.
+    // After every handled event and every flush (an overlay the address, a timer or a command
+    // opened), the focus follows the modal overlays.
     const modals = new ModalFocus(renderer)
+    const unpatched = renderer.onPatched(() => modals.settle())
     const onHandled = (h: Handled) => {
       handledBy(h)
       modals.settle()
@@ -633,6 +635,7 @@ export class EventBus {
       doc.removeEventListener('pointerdown', outside, true)
       doc.removeEventListener('pointermove', track)
       renderer.host.removeEventListener('focusin', entered)
+      unpatched()
     }
   }
 
@@ -670,10 +673,11 @@ export class EventBus {
 
   /**
    * After an event a component handled, the element its rendering marks data-sem-takes-focus (a
-   * month grid's active day, a date field's button once its popup closed) gets the focus, if the
+   * month grid's active day, a date field's button once its popup closed; an element that is not a
+   * control stands for its first control: an open menu's popup, its first item) gets the focus, if the
    * focus was in the component when the event came: unless it is in a text field (typing keeps it).
-   * If the focused element went away or was hidden, the nearest marked element around where it was
-   * wins. An input whose aria-activedescendant names an option keeps that option in view.
+   * If the focused element went away or was hidden, and nothing else has placed the focus since, the
+   * nearest marked element around where it was wins. An input whose aria-activedescendant names an option keeps that option in view.
    */
   private placeFocus(renderer: DomRenderer, focus: string, at: ReturnType<EventBus['focusAt']>) {
     const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
@@ -684,8 +688,12 @@ export class EventBus {
     if (!active || !inside) return
     const shown = (el: Element) => el.isConnected && !el.closest('[hidden], [inert]')
     const lost = !shown(active)
+    // Gone, but already placed by something that knows better (a closed modal gave it back to its
+    // opener): not lost. Only the page, or the renderer's guess at a nearby control, is.
+    const now = active.ownerDocument.activeElement
+    if (lost && now && now !== now.ownerDocument.body && now !== renderer.refocused && shown(now)) return
     if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]')) return
-    const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].find(shown)
+    const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].filter(shown).map((el) => controlIn(el, shown)).find((el) => el)
     let target = root?.isConnected ? marked(root) : undefined
     if (!target && lost) for (const scope of around) if (scope.isConnected && (target = marked(scope))) break
     if (target && target !== target.ownerDocument.activeElement) target.focus?.()
@@ -841,11 +849,21 @@ export class EventBus {
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+/** The control an element stands for when it is to take the focus: itself (a control, or tabindex -1), else its first shown control. */
+function controlIn(el: HTMLElement, shown: (el: Element) => boolean): HTMLElement | undefined {
+  if (el.matches(FOCUSABLE) || el.getAttribute('tabindex') === '-1') return el
+  return [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].find(shown)
+}
+
 /**
  * The WAI-ARIA dialog pattern's focus, as view state: when a modal overlay (aria-modal="true")
- * opens, the focus moves into it (to its [autofocus] element, else the panel itself) and Tab keeps
+ * opens, the focus moves into it and Tab keeps
  * it there; when it closes, the focus goes back to where it was before it opened, unless something
  * else took it meanwhile (the renderer moving it off a removed panel does not count). Nested modals stack. Nothing here is graph state.
+ *
+ * Where it lands is the overlay rendering's choice: the first element it marks [autofocus] that is,
+ * or holds, a shown control (a dialog marks its body, then its actions: the content's first field,
+ * else the first action), else the panel itself.
  */
 class ModalFocus {
   private readonly open: { panel: HTMLElement; back: Element | null }[] = []
@@ -871,7 +889,7 @@ class ModalFocus {
     for (const panel of now) {
       if (this.open.some((m) => m.panel === panel)) continue
       this.open.push({ panel, back: doc.activeElement })
-      const first = panel.querySelector<HTMLElement>('[autofocus]') ?? panel
+      const first = [...panel.querySelectorAll<HTMLElement>('[autofocus]')].filter(this.shown).map((el) => controlIn(el, this.shown)).find((el) => el) ?? panel
       if (!panel.contains(doc.activeElement)) first.focus?.({ preventScroll: true })
     }
   }

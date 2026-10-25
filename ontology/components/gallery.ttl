@@ -516,7 +516,7 @@ CONSTRUCT {
             rdfhtml:attribute ?originAttr .
   ?originAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-origin" ; rdfhtml:attributeValue ?origin .
   ?frameBefore ord:immediatelyPrecedes ?frame .
-  ?prev a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-prev" ; c:advances -1 ; rdfhtml:disabled ?prevDisabled ; rdfhtml:hasChild ?prevGlyph ;
+  ?prev a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-prev" ; c:advances -1 ; rdfhtml:disabled ?prevDisabled ; rdfhtml:autofocus ?prevFocus ; rdfhtml:hasChild ?prevGlyph ;
         rdfhtml:attribute ?prevLabel, ?prevKey, ?prevAriaKey ; ord:immediatelyPrecedes ?next .
   ?prevGlyph a rdfhtml:Span ; rdfhtml:class "sem-glyph" ; rdfhtml:attribute ?prevGlyphHidden ; rdfhtml:hasChild ?prevGlyphText .
   ?prevGlyphHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
@@ -524,7 +524,7 @@ CONSTRUCT {
   ?prevLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?prevWord .
   ?prevKey a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shortcut" ; rdfhtml:attributeValue "arrowleft" .
   ?prevAriaKey a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue "ArrowLeft" .
-  ?next a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-next" ; c:advances 1 ; rdfhtml:disabled ?nextDisabled ; rdfhtml:hasChild ?nextGlyph ;
+  ?next a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-next" ; c:advances 1 ; rdfhtml:disabled ?nextDisabled ; rdfhtml:autofocus ?nextFocus ; rdfhtml:hasChild ?nextGlyph ;
         rdfhtml:attribute ?nextLabel, ?nextKey, ?nextAriaKey .
   ?nextGlyph a rdfhtml:Span ; rdfhtml:class "sem-glyph" ; rdfhtml:attribute ?nextGlyphHidden ; rdfhtml:hasChild ?nextGlyphText .
   ?nextGlyphHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
@@ -649,6 +649,9 @@ WHERE {
     OPTIONAL { c:NextImagePhrase rdfs:label ?nw1 FILTER(langMatches(lang(?nw1), "en")) }
     BIND(STR(COALESCE(?nw0, ?nw1, "Next image")) AS ?nextWord)
     BIND(IF(!?loops && ?i >= ?n, "", ?none) AS ?nextDisabled)
+    # Opened, the focus goes to the next arrow, else (the last image) the previous one.
+    BIND(IF(BOUND(?nextDisabled), ?none, "") AS ?nextFocus)
+    BIND(IF(BOUND(?nextDisabled) && !BOUND(?prevDisabled), "", ?none) AS ?prevFocus)
     BIND(IF(BOUND(?captionData), IRI(CONCAT(STR($this), "/~caption")), ?none) AS ?caption)
     BIND(IF(BOUND(?captionData), IRI(CONCAT(STR($this), "/~caption-text")), ?none) AS ?captionText)
     BIND(IF(?thumbs, IRI(CONCAT(STR($this), "/~strip")), ?none) AS ?strip)
