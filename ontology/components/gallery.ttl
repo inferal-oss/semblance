@@ -4,6 +4,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -99,14 +100,15 @@ c:PileLayout a c:GalleryLayout ; sem:slug "pile" ; sem:order 3 ; sem:symbol "❐
     rdfs:label "Pile"@en , "Стос"@uk , "Stapel"@de , "كومة"@ar .
 
 c:Lightbox a owl:Class ;
-    rdfs:subClassOf c:Overlay , c:ImageBrowser ;
+    rdfs:subClassOf c:Overlay , c:ImageBrowser , fs:Fullscreenable ;
     rdfs:label "Lightbox"@en , "Перегляд зображення"@uk , "Lightbox"@de , "عارض الصور"@ar ;
     rdfs:comment """A modal viewer of a gallery's images (c:of the gallery) over a scrim: the current
 image at full size with its caption and alt text, its place ("2 / 5"), previous and next (buttons,
 the arrow keys - mirrored in a right-to-left page - and a swipe), close (✕, Esc, the scrim). Its
 title is its own c:label, else the gallery's. Options: c:loops, c:thumbnails (a strip of
 thumbnails), c:offersOriginal (a link to the image itself), and zoom: the zoom button or a
-double-click toggles c:zoomed, the image at its own size in a box that scrolls. Like every
+double-click toggles c:zoomed, the image at its own size in a box that scrolls (dragged to pan). It
+is fs:Fullscreenable: its own toggles fill the window or the screen with its panel. Like every
 c:Overlay, its state is c:open; closed, it renders an empty hidden root. Put it on the shell's
 c:Desktop (c:hosts), as dialogs are."""@en ;
     sem:slug "lightbox" .
@@ -116,8 +118,8 @@ c:offersOriginal a owl:DatatypeProperty ; rdfs:domain c:Lightbox ; rdfs:range xs
     rdfs:comment "Offer a link that opens the image itself, in a new tab."@en .
 c:zoomed a owl:DatatypeProperty ; rdfs:domain c:Lightbox ; rdfs:range xsd:boolean ;
     rdfs:comment "The image is shown at its own size (it scrolls), not fitted to the viewer. Moving to another image fits it again."@en .
-# Full screen (fs:fullscreen, #40) is a follow-up: the lightbox's panel would be the element made
-# full screen, by a toggle like the zoom's.
+# Full screen (fs:, ontology/layers/fullscreen.ttl): the panel is what fills the window or the screen.
+c:Lightbox fs:part "panel" .
 
 # Derived, by c:GalleryIndex, on nodes minted under the gallery.
 c:indexedImage a owl:ObjectProperty ; rdfs:comment "Derived, on <gallery>/~at-<i>: the image at that place."@en .
@@ -478,7 +480,7 @@ CONSTRUCT {
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?modal a rdfhtml:Attribute ; rdfhtml:attributeName "aria-modal" ; rdfhtml:attributeValue "true" .
   ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?titleId .
-  ?head a rdfhtml:Header ; rdfhtml:class "sem-head" ; rdfhtml:hasChild ?titleEl, ?counter, ?zoom, ?original, ?close ; ord:immediatelyPrecedes ?stage .
+  ?head a rdfhtml:Header ; rdfhtml:class "sem-head" ; rdfhtml:hasChild ?titleEl, ?counter, ?zoom, ?original, ?vpToggle, ?fsToggle, ?close ; ord:immediatelyPrecedes ?stage .
   ?titleEl a rdfhtml:H2 ; rdfhtml:id ?titleId ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?counter .
   ?titleText a rdfhtml:Text ; rdfhtml:data ?title .
   ?counter a rdfhtml:Span ; rdfhtml:class "sem-counter" ; rdfhtml:attribute ?counterHidden ; rdfhtml:hasChild ?counterText ; ord:immediatelyPrecedes ?zoom .
@@ -489,7 +491,15 @@ CONSTRUCT {
   ?zoomPressed a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?zoomedValue .
   ?zoomText a rdfhtml:Text ; rdfhtml:data ?zoomWord .
   ?original a rdfhtml:A ; rdfhtml:class "sem-original" ; rdfhtml:href ?src ; rdfhtml:target "_blank" ; rdfhtml:rel "noopener" ;
-            rdfhtml:hasChild ?originalText ; ord:immediatelyPrecedes ?close .
+            rdfhtml:hasChild ?originalText ; ord:immediatelyPrecedes ?vpToggle .
+  ?vpToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullViewport ; sem:tooltip ?vpPhrase ;
+            rdfhtml:attribute ?vpKind, ?vpLabel ; ord:immediatelyPrecedes ?fsToggle .
+  ?vpKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "viewport" .
+  ?vpLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?vpPhrase .
+  ?fsToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; fs:property fs:fullscreen ; sem:tooltip ?fsPhrase ;
+            rdfhtml:attribute ?fsKind, ?fsLabel ; ord:immediatelyPrecedes ?close .
+  ?fsKind a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-kind" ; rdfhtml:attributeValue "screen" .
+  ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
   ?originalText a rdfhtml:Text ; rdfhtml:data ?originalWord .
   ?close a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-close" ; rdfhtml:hasChild ?closeText ;
          rdfhtml:attribute ?closeLabel, ?escape ; c:closes $this .
@@ -595,7 +605,18 @@ WHERE {
     OPTIONAL { c:OpenOriginalPhrase rdfs:label ?ow1 FILTER(langMatches(lang(?ow1), "en")) }
     BIND(STR(COALESCE(?ow0, ?ow1, "Open original")) AS ?originalWord)
     BIND(IRI(CONCAT(STR($this), "/~close")) AS ?close)
-    BIND(COALESCE(?original, ?close) AS ?afterZoom)
+    # Its own full-screen toggles (fs:Fullscreenable): fill the window, full screen.
+    OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) }
+    OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) }
+    BIND(STR(COALESCE(?vpPhrase0, "Fill the window")) AS ?vpPhrase)
+    BIND(STR(COALESCE(?fsPhrase0, "Full screen")) AS ?fsPhrase)
+    BIND(IRI(CONCAT(STR($this), "/~viewport-toggle")) AS ?vpToggle)
+    BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-data-sem-kind")) AS ?vpKind)
+    BIND(IRI(CONCAT(STR($this), "/~viewport-toggle-aria-label")) AS ?vpLabel)
+    BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle")) AS ?fsToggle)
+    BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-data-sem-kind")) AS ?fsKind)
+    BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-aria-label")) AS ?fsLabel)
+    BIND(COALESCE(?original, ?vpToggle) AS ?afterZoom)
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)

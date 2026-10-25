@@ -245,6 +245,9 @@ tok:print-lift a sty:Token ; sty:scale sty:Shadow ; sem:slug "print-lift" ;
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part "> .sem-panel > .sem-head > .sem-zoom" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
+# Its full-screen toggles sit with the zoom, before the close.
+[] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part "> .sem-panel > .sem-head > .sem-fullscreen-toggle[data-sem-kind]" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part "> .sem-panel > .sem-head > .sem-close" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "margin-inline-end" ; sty:raw "-6px" ] .

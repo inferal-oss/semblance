@@ -233,6 +233,20 @@ describe('gallery and lightbox', () => {
     expect(s.part('dt-lightbox', 'frames').children).toHaveLength(3)
   })
 
+  it('fills the window, or the screen, with its panel by its own toggles (fs:)', () => {
+    const s = photos()
+    s.click(s.part('dt-photos', 'photo-3'))
+    const toggle = s.part('dt-lightbox', 'viewport-toggle')
+    expect([toggle.getAttribute('aria-label'), toggle.getAttribute('aria-pressed')]).toEqual(['Fill the window', 'false'])
+    s.click(toggle)
+    expect(s.store.match(s.store.factory.namedNode(UI + 'dt-lightbox'), s.store.factory.namedNode(NS.fs + 'fullViewport'), null).map((q) => q.object.value)).toEqual(['true'])
+    expect(s.part('dt-lightbox', 'panel').hasAttribute('data-sem-fullscreen')).toBe(true)
+    expect(s.part('dt-lightbox', 'viewport-toggle').getAttribute('aria-pressed')).toBe('true')
+    // Full screen asks the host for the panel.
+    s.click(s.part('dt-lightbox', 'fullscreen-toggle'))
+    expect(s.fullscreen.requests.at(-1)).toBe(s.part('dt-lightbox', 'panel'))
+  })
+
   it('loops, shows thumbnails and links to the original when the lightbox says so', () => {
     const s = photos('GroupOverlays')
     const cells = [...s.root('ov-photos').querySelectorAll('.sem-cell')]

@@ -5,6 +5,7 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, SEM, XSD_INTEGER } from '../ns.ts'
 import { type Delta, mint } from '../rdf.ts'
+import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { md5 } from './data.ts'
 import { decor, FB, phrase } from './feedback.ts'
 import { isTrue, named, nodes, RDFS_LABEL, str, text } from './util.ts'
@@ -283,6 +284,8 @@ const lightbox: FnRule = (ctx, focus) => {
     ...(isTrue(ctx.object(focus, G.offersOriginal)) && src !== undefined
       ? [o.el('original', 'A', { class: 'sem-original', href: src, target: '_blank', rel: 'noopener' }, [o.text('original-text', phrase(ctx, G.OpenOriginalPhrase, 'Open original'))])]
       : []),
+    // Its own full-screen toggles (fs:Fullscreenable): fill the window, full screen.
+    ...fullscreenToggles(ctx, o, focus),
     close,
   ])
   // The stage: the neighbours and the current image (each once), and the arrows over them.
