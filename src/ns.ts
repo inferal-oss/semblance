@@ -118,6 +118,7 @@ export const SEM = {
   forEach: sem + 'forEach',
   memberWatches: sem + 'memberWatches',
   zeroOrMore: sem + 'zeroOrMore',
+  always: sem + 'always',
   inverse: sem + 'inverse',
   memberWatchesVia: sem + 'memberWatchesVia',
   inputOnly: sem + 'inputOnly',

@@ -70,6 +70,8 @@ export interface Rule {
    * re-runs it for every focus.
    */
   readsLanguage: boolean
+  /** Evaluated whether or not its focus is shown (sem:always): building blocks over nodes never shown. */
+  always: boolean
 }
 
 export interface Selection {
@@ -159,6 +161,7 @@ export function loadRules(store: GraphStore): Rule[] {
       unless: getAll(SEM.unless),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
       readsLanguage: !!query && READS_LANGUAGE.test(query),
+      always: get(SEM.always)?.value === 'true',
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))

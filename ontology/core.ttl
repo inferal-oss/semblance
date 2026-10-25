@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -151,6 +152,10 @@ sem:TabPreview a sem:IntentPreview ;
     rdfs:label "a tab's content"@en ;
     sem:select """SELECT DISTINCT ?content WHERE { $option a c:Tab ; c:content ?content }""" .
 
+sem:always a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a rendering or building block: evaluated whether or not its focus is shown (demand does
+not park it). For building blocks over nodes that are never shown themselves, such as phrases."""@en .
+
 sem:requires a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment """On a rendering or rule: the focus must have at least one of these properties for the
 rule to run at all (checked with a pattern match before any query). Layer rules that target
@@ -176,6 +181,16 @@ sem:needsExtension a owl:ObjectProperty ;
     rdfs:comment """On a rule (or a rendering whose SPARQL rule cannot be written yet): a group of SPARQL
 extension functions it needs (sx:Math, sx:Text, sx:Locale, sx:Matches, sx:Json; see the engine's
 EXTENSIONS.md). Stores without the group run the function twin."""@en .
+
+# The groups of SPARQL extension functions Semblance's own engines will offer (the engine's
+# EXTENSIONS.md); none is implemented yet, so the renderings that need one stay function-only.
+sem:ExtensionGroup a owl:Class ;
+    rdfs:comment "A group of SPARQL extension functions a store may offer (sem:needsExtension)."@en .
+sx:Math a sem:ExtensionGroup ; rdfs:label "math"@en ; rdfs:comment "sx:log, sx:log10, sx:exp, sx:pow, sx:sqrt, trigonometry, sx:pi."@en .
+sx:Text a sem:ExtensionGroup ; rdfs:label "text"@en ; rdfs:comment "sx:codepoint, sx:char, sx:decodeURI."@en .
+sx:Locale a sem:ExtensionGroup ; rdfs:label "locale"@en ; rdfs:comment "sx:formatNumber, sx:formatDateTime, sx:collated, sx:sortKey (Intl)."@en .
+sx:Matches a sem:ExtensionGroup ; rdfs:label "matches"@en ; rdfs:comment "The sx:matches and sx:chars relations: regex matches and characters of a text as solutions (tokenizing)."@en .
+sx:Json a sem:ExtensionGroup ; rdfs:label "JSON"@en ; rdfs:comment "The sx:json relation: a JSON text's structure as solutions."@en .
 
 # --- Building blocks ------------------------------------------------------------
 # What SPARQL cannot compute from the graph, a building block puts in the graph as data, so
