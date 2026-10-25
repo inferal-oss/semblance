@@ -529,7 +529,7 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())""" .
 ui:doc-in-list a c:DescriptionList ; c:of ui:doc-in-items ; c:fields ( ui:in-data ui:in-proj ui:in-embed ui:in-ssr ui:in-per ui:in-nav ) .
 ui:doc-in-items ui:in-data "Change the graph with runtime.apply({ add, remove }) or runtime.transaction(…), then flush; read it with store.match or SPARQL. Keep your data in your own vocabulary and point components at it." ;
     ui:in-proj "runtime.project again for another root or the Text modality; every change reaches all projections once." ;
-    ui:in-embed "Mount several roots into an existing page, or mount anything into a component's host-owned slot (c:slot)." ;
+    ui:in-embed "Mount several roots into an existing page, or place an unstyled c:HostSlot inside a layout and mount existing content into renderer.slot(name)." ;
     ui:in-ssr "In Node, loadStore from @inferal-oss/semblance/node, project, and toHTML or toText." ;
     ui:in-per "per:Policy nodes say what to remember; attach Persistence before the first projection." ;
     ui:in-nav "nav:Location says which state lives in the address; attach Navigation, and links can point at resources (c:to)." .

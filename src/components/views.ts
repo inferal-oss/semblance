@@ -572,7 +572,7 @@ const switchCases: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-const projectionview: FnRule = (ctx, focus) => {
+const hostslot: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const slot = o.el('root', 'Div', {})
   o.t(slot, SEM.slot, str(ctx.object(focus, C.slot)) ?? 'projection')
@@ -593,7 +593,7 @@ export const viewFunctions: Record<string, FnRule> = {
   highlight,
   tooltips,
   switch: switchCases,
-  projectionview,
+  hostslot,
   streammembers,
   triplesview,
 }
