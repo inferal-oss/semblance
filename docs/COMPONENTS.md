@@ -92,6 +92,22 @@ still sort by `c:variable`, independent of its slot key. Set `c:sortable false` 
 action column; otherwise column headers sort by default.
 Text projection leaves host-owned cells empty because the host controls their content.
 
+### Keeping a modal overlay open
+
+`c:Dialog` and `c:Drawer` are dismissible by default: their close button, scrim and Escape key
+set `c:open false`. Set `c:dismissible false` when an explicit action must finish before the
+panel can close. The built-in close button is omitted and the scrim and Escape key do not close
+the overlay. An action button with `c:closes` can still close it:
+
+```turtle
+ui:result a c:Dialog ; c:label "Save this value" ; c:open true ;
+  c:dismissible false ; c:content ui:value ; c:actions ( ui:done ) .
+ui:done a c:Button ; c:label "Done" ; c:closes ui:result .
+```
+
+The host may also set `c:open false` after it completes the required step. Keep the explicit
+action visible so the person has a clear way to finish.
+
 ## Writing a rendering rule
 
 A rendering rule runs once per instance (`$this`) and constructs RDF/HTML
