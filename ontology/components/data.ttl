@@ -33,8 +33,12 @@ c:query a owl:ObjectProperty ; rdfs:subPropertyOf c:dataQuery ; rdfs:range sem:V
     rdfs:comment "The SELECT whose solutions are the rows (sem:select)."@en .
 c:tableColumns a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range rdf:List ;
     rdfs:comment "The columns, in order (c:Column nodes). Not c:columns, which is a c:Grid's column count."@en .
-c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format and c:unit."@en .
+c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format, c:unit, or a host-owned cell (c:slotPrefix)."@en .
 c:variable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:comment "Name of a SELECT variable, without the '?'."@en .
+c:slotPrefix a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:range xsd:string ;
+    rdfs:comment "For c:Table, make each cell a host-owned slot named by this prefix plus the bound c:slotVariable value (or c:variable if no slot variable is set). The value must be present and unique across rows."@en .
+c:slotVariable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:range xsd:string ;
+    rdfs:comment "Name of a SELECT variable, without the '?', that provides each host-owned cell's stable slot key. Defaults to c:variable."@en .
 c:align a owl:DatatypeProperty ; rdfs:domain c:Column ;
     rdfs:comment "\"end\" aligns the column's cells to the end (numbers); \"start\" (default) or \"center\"."@en .
 c:format a owl:DatatypeProperty ; rdfs:domain c:Column ;
