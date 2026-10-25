@@ -21,7 +21,8 @@ describe('c:HostSlot', () => {
     for (const prefer of ['sparql', 'function'] as const) {
       const { document } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
       const store = loadStore('oxigraph', graph)
-      const screen = new Runtime(store).project({ modality: MOD.Screen, layers: [STY.Layer], prefer, roots: [ROOT] })
+      const runtime = new Runtime(store)
+      const screen = runtime.project({ modality: MOD.Screen, layers: [STY.Layer], prefer, roots: [ROOT] })
       const renderer = new DomRenderer(screen.index, document.getElementById('app')!, ROOT)
       renderer.flush()
 
@@ -33,6 +34,11 @@ describe('c:HostSlot', () => {
       slot.append(button)
       renderer.flush()
       expect(renderer.slot('form')?.textContent).toBe('Save')
+      // A change to the graph around it re-renders the layout, never the host's content.
+      const f = store.factory
+      runtime.apply({ add: [f.quad(f.namedNode('https://example.org/ui#layout'), f.namedNode('https://semblance.dev/ns/component#label'), f.literal('Edited'))], remove: [] })
+      renderer.flush()
+      expect(renderer.slot('form')?.firstChild).toBe(button)
       html.push(document.getElementById('app')!.innerHTML)
     }
     expect(html[0]).toBe(html[1])
