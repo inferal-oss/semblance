@@ -14,9 +14,9 @@
 #
 # A c:Gallery shows its c:images (an rdf:List of c:Picture nodes: c:image, the URL; c:alt;
 # c:caption; c:width and c:height) in its c:galleryLayout: a carousel (one at a time, swiped or
-# scrolled, with arrows and a counter), a grid of thumbnails, or a pile of overlapping prints.
-# The layout is a plain property whose values are individuals with a label and a comment, so a
-# c:RadioGroup over it (pos:direction pos:Row) is a picker of described cards.
+# scrolled, with arrows and a dot per image), a grid of thumbnails, or a pile of overlapping prints.
+# The layout is a plain property whose values are individuals, so any picker over it (a
+# c:Segmented) switches it live.
 #
 # Which image is shown is graph state on the gallery (c:current; the first when it says none). A
 # c:Lightbox (c:of the gallery; the gallery names it with c:lightbox) is an overlay whose c:open
@@ -31,7 +31,7 @@
 #     Everything else finds an image's place, and the image at a place, by one lookup.
 #   - The gallery's rendering does not read c:current: it draws every image (keyed by position)
 #     and re-runs only when the list or the layout changes. c:GalleryCurrent, above it, marks
-#     the current slide, fills the counter and disables the arrows at the ends: one place.
+#     the current slide and its dot, and disables the arrows at the ends: one place.
 #   - The lightbox draws the current image and its two neighbours (so swiping has somewhere to
 #     go, and the neighbours are loaded before they are needed). Its optional thumbnail strip is a
 #     rendering of its own that does not read c:current; the lightbox marks the current thumbnail.
@@ -70,9 +70,12 @@ c:Gallery a owl:Class ;
     rdfs:comment """Images (c:images, an rdf:List of c:Picture) in a layout (c:galleryLayout:
 c:CarouselLayout, the default, c:GridLayout or c:PileLayout). c:label names it; c:current is the
 image shown (the carousel's slide, the lightbox's image); c:lightbox is the c:Lightbox that opens
-an image at full size - with one, every image is a button that opens it. The carousel follows the
-WAI-ARIA carousel pattern (a region whose slides are groups, "2 of 5"), with arrows that stop at the
-ends (unless c:loops) and mirror in a right-to-left page."""@en ;
+an image at full size - with one, every image is a button, named by its alt text, that opens it.
+The carousel follows the WAI-ARIA carousel pattern (a region whose slides are groups, "2 of 5"):
+arrows that stop at the ends (unless c:loops) and mirror in a right-to-left page, a dot per image
+that goes to it, and a polite live region that says which image is shown. A pile's prints lie
+tilted and offset, the same way every time (from the image's IRI); hovering or focusing one
+straightens and lifts it while the others fan out."""@en ;
     sem:slug "gallery" .
 c:images a owl:ObjectProperty ; rdfs:domain c:Gallery ; rdfs:range rdf:List ;
     rdfs:label "Images"@en , "Зображення"@uk , "Bilder"@de , "الصور"@ar ;
@@ -87,19 +90,13 @@ c:loops a owl:DatatypeProperty ; rdfs:domain c:ImageBrowser ; rdfs:range xsd:boo
 # c:current (the image shown) is the c:Stepper's property: the item being worked on (navigation.ttl).
 
 c:GalleryLayout a owl:Class ;
-    rdfs:comment "A way of laying out a gallery's images. Each has a label and a one-line description (rdfs:comment), so a radio group can offer them as cards."@en .
-c:CarouselLayout a c:GalleryLayout ; sem:slug "carousel" ; sem:order 1 ;
-    rdfs:label "Carousel"@en , "Карусель"@uk , "Karussell"@de , "عرض دوّار"@ar ;
-    rdfs:comment "Swipe or scroll horizontally through your images."@en , "Гортайте зображення горизонтально."@uk ,
-        "Wischen oder horizontal durch die Bilder scrollen."@de , "اسحب أو مرّر أفقيًا بين صورك."@ar .
-c:GridLayout a c:GalleryLayout ; sem:slug "grid" ; sem:order 2 ;
-    rdfs:label "Grid"@en , "Сітка"@uk , "Raster"@de , "شبكة"@ar ;
-    rdfs:comment "Show thumbnails together in rows."@en , "Мініатюри поруч, рядами."@uk ,
-        "Miniaturen nebeneinander in Reihen."@de , "اعرض الصور المصغّرة معًا في صفوف."@ar .
-c:PileLayout a c:GalleryLayout ; sem:slug "pile" ; sem:order 3 ;
-    rdfs:label "Pile"@en , "Стос"@uk , "Stapel"@de , "كومة"@ar ;
-    rdfs:comment "Overlapping photos. Hover to explore, click to open."@en , "Фото внахлест. Наведіть, щоб роздивитися, натисніть, щоб відкрити."@uk ,
-        "Überlappende Fotos. Zum Ansehen darüberfahren, zum Öffnen klicken."@de , "صور متداخلة. مرّر للاستكشاف وانقر للفتح."@ar .
+    rdfs:comment "A way of laying out a gallery's images. The layouts are individuals with a label and a symbol, so any picker over c:galleryLayout (a c:Segmented, a c:RadioGroup) offers them."@en .
+c:CarouselLayout a c:GalleryLayout ; sem:slug "carousel" ; sem:order 1 ; sem:symbol "⇆" ;
+    rdfs:label "Carousel"@en , "Карусель"@uk , "Karussell"@de , "عرض دوّار"@ar .
+c:GridLayout a c:GalleryLayout ; sem:slug "grid" ; sem:order 2 ; sem:symbol "▦" ;
+    rdfs:label "Grid"@en , "Сітка"@uk , "Raster"@de , "شبكة"@ar .
+c:PileLayout a c:GalleryLayout ; sem:slug "pile" ; sem:order 3 ; sem:symbol "❐" ;
+    rdfs:label "Pile"@en , "Стос"@uk , "Stapel"@de , "كومة"@ar .
 
 c:Lightbox a owl:Class ;
     rdfs:subClassOf c:Overlay , c:ImageBrowser ;
@@ -130,6 +127,7 @@ c:imageCount a owl:DatatypeProperty ; rdfs:domain c:Gallery ; rdfs:range xsd:int
 
 # Markers on rendered elements.
 c:viewsImage a owl:ObjectProperty ; rdfs:comment "On a rendered element: activating it shows this image (and opens the gallery's lightbox)."@en .
+c:selectsImage a owl:ObjectProperty ; rdfs:comment "On a rendered element (a carousel's dot): activating it shows this image, in place."@en .
 c:showsImage a owl:ObjectProperty ; rdfs:comment "On a rendered slide or frame: the image it shows (where a swipe came to rest)."@en .
 c:advances a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "On a rendered button: the step from the current image that activating it takes (-1, 1)."@en .
 c:zooms a owl:ObjectProperty ; rdfs:range c:Lightbox ; rdfs:comment "On a rendered element: the lightbox whose zoom it toggles (a button by a click; the image by a double-click)."@en .
@@ -143,18 +141,13 @@ c:CarouselPhrase a c:Phrase ; rdfs:label "carousel"@en , "карусель"@uk ,
 c:SlidePhrase a c:Phrase ; rdfs:label "slide"@en , "слайд"@uk , "Folie"@de , "شريحة"@ar .
 c:SlidePositionPhrase a c:Phrase ; rdfs:label "%i of %n"@en , "%i з %n"@uk , "%i von %n"@de , "%i من %n"@ar .
 c:ImagePositionPhrase a c:Phrase ; rdfs:label "Image %i of %n"@en , "Зображення %i з %n"@uk , "Bild %i von %n"@de , "الصورة %i من %n"@ar .
-c:ViewImagePhrase a c:Phrase ; rdfs:label "View image"@en , "Переглянути"@uk , "Bild ansehen"@de , "عرض الصورة"@ar .
 c:PreviousImagePhrase a c:Phrase ; rdfs:label "Previous image"@en , "Попереднє зображення"@uk , "Vorheriges Bild"@de , "الصورة السابقة"@ar .
 c:NextImagePhrase a c:Phrase ; rdfs:label "Next image"@en , "Наступне зображення"@uk , "Nächstes Bild"@de , "الصورة التالية"@ar .
-c:OnePhotoPhrase a c:Phrase ; rdfs:label "1 photo"@en , "1 фото"@uk , "1 Foto"@de , "صورة واحدة"@ar .
-c:PhotosPhrase a c:Phrase ; rdfs:label "%n photos"@en , "%n фото"@uk , "%n Fotos"@de , "عدد الصور: %n"@ar .
-c:PileHintPhrase a c:Phrase ; rdfs:label "Hover to explore, click or tap to open."@en , "Наведіть, щоб роздивитися; натисніть, щоб відкрити."@uk ,
-    "Zum Ansehen darüberfahren, zum Öffnen klicken oder tippen."@de , "مرّر للاستكشاف، وانقر أو المس للفتح."@ar .
 c:ZoomPhrase a c:Phrase ; rdfs:label "Zoom"@en , "Масштаб"@uk , "Zoom"@de , "تكبير"@ar .
 c:OpenOriginalPhrase a c:Phrase ; rdfs:label "Open original"@en , "Відкрити оригінал"@uk , "Original öffnen"@de , "فتح الأصل"@ar .
 c:ThumbnailsPhrase a c:Phrase ; rdfs:label "Thumbnails"@en , "Мініатюри"@uk , "Miniaturen"@de , "صور مصغّرة"@ar .
 
-# Arrow keys move the focus among a gallery's images (its cells, its prints, its slides' View
+# Arrow keys move the focus among a gallery's images (its cells, its prints, its slides'
 # buttons); focusing a slide's button scrolls it into view, and the snap makes it current.
 c:GalleryNavigation a key:Navigation ; key:items "[data-sem-item]" ; key:orientation key:Horizontal .
 c:Gallery key:navigation c:GalleryNavigation .
@@ -210,7 +203,7 @@ c:GalleryRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?track, ?controls, ?cells, ?pile, ?summary ;
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?track, ?controls, ?cells, ?pile ;
         rdfhtml:attribute ?dataLayout, ?role, ?roleDesc, ?ariaLabel .
   ?dataLayout a rdfhtml:Attribute ; rdfhtml:attributeName "data-layout" ; rdfhtml:attributeValue ?layout .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue ?roleValue .
@@ -218,18 +211,15 @@ CONSTRUCT {
   ?ariaLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
   ?track a rdfhtml:Div ; rdfhtml:class "sem-track" ; rdfhtml:id ?trackId ; rdfhtml:attribute ?snap ; rdfhtml:hasChild ?slide ; ord:immediatelyPrecedes ?controls .
   ?snap a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-snap" ; rdfhtml:attributeValue "" .
-  ?controls a rdfhtml:Div ; rdfhtml:class "sem-controls" ; rdfhtml:hasChild ?prev, ?counter, ?next, ?live .
+  ?controls a rdfhtml:Div ; rdfhtml:class "sem-controls" ; rdfhtml:hasChild ?prev, ?dots, ?next, ?live .
   ?prev a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-prev" ; c:advances -1 ; rdfhtml:hasChild ?prevGlyph ;
-        rdfhtml:attribute ?prevLabel, ?prevControls ; ord:immediatelyPrecedes ?counter .
+        rdfhtml:attribute ?prevLabel, ?prevControls ; ord:immediatelyPrecedes ?dots .
   ?prevGlyph a rdfhtml:Span ; rdfhtml:class "sem-glyph" ; rdfhtml:attribute ?prevGlyphHidden ; rdfhtml:hasChild ?prevGlyphText .
   ?prevGlyphHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?prevGlyphText a rdfhtml:Text ; rdfhtml:data "←" .
   ?prevLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?prevWord .
   ?prevControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?trackId .
-  ?counter a rdfhtml:Span ; rdfhtml:class "sem-counter" ; rdfhtml:attribute ?counterHidden ; rdfhtml:hasChild ?at, ?of ; ord:immediatelyPrecedes ?next .
-  ?counterHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
-  ?at a rdfhtml:Span ; rdfhtml:class "sem-at" ; ord:immediatelyPrecedes ?of .
-  ?of a rdfhtml:Text ; rdfhtml:data ?ofText .
+  ?dots a rdfhtml:Div ; rdfhtml:class "sem-dots" ; rdfhtml:hasChild ?dot ; ord:immediatelyPrecedes ?next .
   ?next a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-next" ; c:advances 1 ; rdfhtml:hasChild ?nextGlyph ;
         rdfhtml:attribute ?nextLabel, ?nextControls ; ord:immediatelyPrecedes ?live .
   ?nextGlyph a rdfhtml:Span ; rdfhtml:class "sem-glyph" ; rdfhtml:attribute ?nextGlyphHidden ; rdfhtml:hasChild ?nextGlyphText .
@@ -239,35 +229,23 @@ CONSTRUCT {
   ?nextControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?trackId .
   ?live a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:attribute ?liveRole .
   ?liveRole a rdfhtml:Attribute ; rdfhtml:attributeName "aria-live" ; rdfhtml:attributeValue "polite" .
-  ?cells a rdfhtml:Div ; rdfhtml:class "sem-cells" ; rdfhtml:hasChild ?cell .
-  ?pile a rdfhtml:Div ; rdfhtml:class "sem-pile" ; rdfhtml:style ?pileStyle ; rdfhtml:hasChild ?photo ; ord:immediatelyPrecedes ?summary .
-  ?summary a rdfhtml:P ; rdfhtml:class "sem-summary" ; rdfhtml:hasChild ?summaryText .
-  ?summaryText a rdfhtml:Text ; rdfhtml:data ?summaryData .
-  ?slide a rdfhtml:Div ; rdfhtml:class "sem-slide" ; c:showsImage ?img ; rdfhtml:hasChild ?slideImg, ?view ;
+  ?cells a rdfhtml:Div ; rdfhtml:class "sem-cells" ; rdfhtml:hasChild ?cellItem .
+  ?pile a rdfhtml:Div ; rdfhtml:class "sem-pile" ; rdfhtml:style ?pileStyle ; rdfhtml:hasChild ?pileItem .
+  ?slide a rdfhtml:Div ; rdfhtml:class "sem-slide" ; c:showsImage ?img ; rdfhtml:hasChild ?item ;
          rdfhtml:attribute ?slideRole, ?slideRoleDesc, ?slideLabel .
   ?slideRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?slideRoleDesc a rdfhtml:Attribute ; rdfhtml:attributeName "aria-roledescription" ; rdfhtml:attributeValue ?slideWord .
   ?slideLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?placeText .
-  ?slideImg a rdfhtml:Img ; rdfhtml:src ?src ; rdfhtml:alt ?name ; rdfhtml:loading "lazy" ; rdfhtml:width ?w ; rdfhtml:height ?h ;
-            rdfhtml:draggable "false" ; ord:immediatelyPrecedes ?view .
-  ?view a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-view" ; c:viewsImage ?img ; rdfhtml:hasChild ?viewText ;
-        rdfhtml:attribute ?viewItem, ?viewLabel .
-  ?viewItem a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-item" ; rdfhtml:attributeValue "" .
-  ?viewLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?viewName .
-  ?viewText a rdfhtml:Text ; rdfhtml:data ?viewWord .
-  ?cell a ?itemClass ; rdfhtml:type ?itemType ; rdfhtml:class "sem-cell" ; c:showsImage ?img ; c:viewsImage ?viewed ; rdfhtml:hasChild ?cellImg ;
-        rdfhtml:attribute ?cellItem .
-  ?cellItem a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-item" ; rdfhtml:attributeValue "" .
-  ?cellImg a rdfhtml:Img ; rdfhtml:src ?src ; rdfhtml:alt ?name ; rdfhtml:loading "lazy" ; rdfhtml:width ?w ; rdfhtml:height ?h ; rdfhtml:draggable "false" .
-  ?photo a ?itemClass ; rdfhtml:type ?itemType ; rdfhtml:class "sem-photo" ; rdfhtml:style ?photoStyle ; c:showsImage ?img ; c:viewsImage ?viewed ;
-         rdfhtml:hasChild ?photoImg, ?chip ; rdfhtml:attribute ?photoItem .
-  ?photoItem a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-item" ; rdfhtml:attributeValue "" .
-  ?photoImg a rdfhtml:Img ; rdfhtml:src ?src ; rdfhtml:alt ?name ; rdfhtml:loading "lazy" ; rdfhtml:width ?w ; rdfhtml:height ?h ;
-            rdfhtml:draggable "false" ; ord:immediatelyPrecedes ?chip .
-  ?chip a rdfhtml:Span ; rdfhtml:class "sem-chip" ; rdfhtml:attribute ?chipHidden ; rdfhtml:hasChild ?chipText .
-  ?chipHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
-  ?chipText a rdfhtml:Text ; rdfhtml:data ?viewWord .
-  ?before ord:immediatelyPrecedes ?item .
+  ?dot a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-dot" ; c:selectsImage ?img ; rdfhtml:attribute ?dotLabel, ?dotControls .
+  ?dotLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?placeText .
+  ?dotControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?slideId .
+  ?item a ?itemClass ; rdfhtml:type ?itemType ; rdfhtml:class ?itemCls ; rdfhtml:style ?itemStyle ; c:showsImage ?shown ; c:viewsImage ?viewed ;
+        rdfhtml:hasChild ?itemImg ; rdfhtml:attribute ?itemMark .
+  ?itemMark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-item" ; rdfhtml:attributeValue "" .
+  ?itemImg a rdfhtml:Img ; rdfhtml:id ?itemImgId ; rdfhtml:src ?src ; rdfhtml:alt ?name ; rdfhtml:loading "lazy" ; rdfhtml:width ?w ; rdfhtml:height ?h ;
+           rdfhtml:draggable "false" .
+  ?before ord:immediatelyPrecedes ?place .
+  ?dotBefore ord:immediatelyPrecedes ?dot .
 }
 WHERE {
   $this a c:Gallery .
@@ -278,12 +256,8 @@ WHERE {
     $this a c:Gallery .
     OPTIONAL { $this c:galleryLayout ?lay . ?lay sem:slug ?laySlug }
     BIND(IF(STR(?laySlug) IN ("grid", "pile"), STR(?laySlug), "carousel") AS ?layout)
-    BIND(EXISTS { $this c:lightbox ?lb FILTER(isIRI(?lb)) } AS ?hasLightbox)
     OPTIONAL { $this c:imageCount ?n0 }
     BIND(COALESCE(?n0, 0) AS ?n)
-    OPTIONAL { c:ViewImagePhrase rdfs:label ?vw0 FILTER(lang(?vw0) = "") }
-    OPTIONAL { c:ViewImagePhrase rdfs:label ?vw1 FILTER(langMatches(lang(?vw1), "en")) }
-    BIND(STR(COALESCE(?vw0, ?vw1, "View image")) AS ?viewWord0)
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
@@ -312,11 +286,7 @@ WHERE {
     OPTIONAL { c:PreviousImagePhrase rdfs:label ?pw0 FILTER(lang(?pw0) = "") }
     OPTIONAL { c:PreviousImagePhrase rdfs:label ?pw1 FILTER(langMatches(lang(?pw1), "en")) }
     BIND(STR(COALESCE(?pw0, ?pw1, "Previous image")) AS ?prevWord)
-    BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~counter")), ?none) AS ?counter)
-    BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~counter-aria-hidden")), ?none) AS ?counterHidden)
-    BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~counter-at")), ?none) AS ?at)
-    BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~counter-of")), ?none) AS ?of)
-    BIND(CONCAT(" / ", STR(?n)) AS ?ofText)
+    BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~dots")), ?none) AS ?dots)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~next")), ?none) AS ?next)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~next-glyph")), ?none) AS ?nextGlyph)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~next-glyph-aria-hidden")), ?none) AS ?nextGlyphHidden)
@@ -331,27 +301,15 @@ WHERE {
     BIND(IF(?layout = "grid", IRI(CONCAT(STR($this), "/~cells")), ?none) AS ?cells)
     BIND(IF(?layout = "pile", IRI(CONCAT(STR($this), "/~pile")), ?none) AS ?pile)
     BIND(CONCAT("--n: ", STR(?n)) AS ?pileStyle)
-    BIND(IF(?layout = "pile", IRI(CONCAT(STR($this), "/~summary")), ?none) AS ?summary)
-    BIND(IF(?layout = "pile", IRI(CONCAT(STR($this), "/~summary-text")), ?none) AS ?summaryText)
-    OPTIONAL { c:OnePhotoPhrase rdfs:label ?ow0 FILTER(lang(?ow0) = "") }
-    OPTIONAL { c:OnePhotoPhrase rdfs:label ?ow1 FILTER(langMatches(lang(?ow1), "en")) }
-    OPTIONAL { c:PhotosPhrase rdfs:label ?mw0 FILTER(lang(?mw0) = "") }
-    OPTIONAL { c:PhotosPhrase rdfs:label ?mw1 FILTER(langMatches(lang(?mw1), "en")) }
-    OPTIONAL { c:PileHintPhrase rdfs:label ?hw0 FILTER(lang(?hw0) = "") }
-    OPTIONAL { c:PileHintPhrase rdfs:label ?hw1 FILTER(langMatches(lang(?hw1), "en")) }
-    BIND(IF(?n = 1, STR(COALESCE(?ow0, ?ow1, "1 photo")), REPLACE(STR(COALESCE(?mw0, ?mw1, "%n photos")), "%n", STR(?n))) AS ?count)
-    BIND(IF(?hasLightbox, CONCAT(?count, " · ", STR(COALESCE(?hw0, ?hw1, "Hover to explore, click or tap to open."))), ?count) AS ?summaryData)
   } UNION {
-    # One image: its slide, cell or print, by place.
+    # One image: its slide (and dot), cell or print, by place; the image is a button that opens
+    # the lightbox (with one) or a plain tile.
     $this a c:Gallery .
     OPTIONAL { $this c:galleryLayout ?lay . ?lay sem:slug ?laySlug }
     BIND(IF(STR(?laySlug) IN ("grid", "pile"), STR(?laySlug), "carousel") AS ?layout)
     BIND(EXISTS { $this c:lightbox ?lb FILTER(isIRI(?lb)) } AS ?hasLightbox)
     OPTIONAL { $this c:imageCount ?n0 }
     BIND(COALESCE(?n0, 0) AS ?n)
-    OPTIONAL { c:ViewImagePhrase rdfs:label ?vw0 FILTER(lang(?vw0) = "") }
-    OPTIONAL { c:ViewImagePhrase rdfs:label ?vw1 FILTER(langMatches(lang(?vw1), "en")) }
-    BIND(STR(COALESCE(?vw0, ?vw1, "View image")) AS ?viewWord0)
     ?atNode c:indexedImage ?img ; c:position ?i ; c:imageName ?name FILTER(STRSTARTS(STR(?atNode), CONCAT(STR($this), "/~at-")))
     OPTIONAL { ?img c:image ?url }
     BIND(STR(?url) AS ?src)
@@ -363,35 +321,38 @@ WHERE {
     BIND(STR(?rawW) AS ?w)
     BIND(STR(?rawH) AS ?h)
     BIND(?i - 1 AS ?p)
+    BIND(CONCAT(STR($this), IF(?layout = "carousel", "/~slide-", IF(?layout = "grid", "/~cell-", "/~photo-"))) AS ?base)
+    BIND(IRI(CONCAT(?base, STR(?i))) AS ?place)
+    BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-item")), ?place) AS ?item)
     BIND(IF(?hasLightbox, rdfhtml:Button, rdfhtml:Div) AS ?itemClass)
     BIND(IF(?hasLightbox, "button", ?none) AS ?itemType)
     BIND(IF(?hasLightbox, ?img, ?none) AS ?viewed)
-    BIND(?viewWord0 AS ?viewWord)
-    BIND(IF(?layout = "carousel", IRI(CONCAT(STR($this), "/~track")), ?none) AS ?track)
-    BIND(IF(?layout = "grid", IRI(CONCAT(STR($this), "/~cells")), ?none) AS ?cells)
-    BIND(IF(?layout = "pile", IRI(CONCAT(STR($this), "/~pile")), ?none) AS ?pile)
-    BIND(CONCAT(STR($this), IF(?layout = "carousel", "/~slide-", IF(?layout = "grid", "/~cell-", "/~photo-"))) AS ?base)
-    BIND(IRI(CONCAT(?base, STR(?i))) AS ?item)
+    BIND(IF(?layout = "carousel", "sem-slide-item", IF(?layout = "grid", "sem-cell", "sem-photo")) AS ?itemCls)
+    BIND(IRI(CONCAT(STR(?item), "-data-sem-item")) AS ?itemMark)
+    BIND(IF(?layout = "carousel", ?none, ?img) AS ?shown)
+    BIND(IRI(CONCAT(?base, STR(?i), "-img")) AS ?itemImg)
+    BIND(STR(?itemImg) AS ?itemImgId)
+    # Places are ordered by arithmetic: each after the one before it.
     BIND(IF(?p > 0, IRI(CONCAT(?base, STR(?p))), ?none) AS ?before)
-    # carousel
-    BIND(IF(?layout = "carousel", ?item, ?none) AS ?slide)
+    # carousel: a slide (a group "2 of 5") holding the image, and a dot that goes to it
+    BIND(IF(?layout = "carousel", ?place, ?none) AS ?slide)
     BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-role")), ?none) AS ?slideRole)
     BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-aria-roledescription")), ?none) AS ?slideRoleDesc)
     BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-aria-label")), ?none) AS ?slideLabel)
     OPTIONAL { c:SlidePhrase rdfs:label ?sw0 FILTER(lang(?sw0) = "") }
     OPTIONAL { c:SlidePhrase rdfs:label ?sw1 FILTER(langMatches(lang(?sw1), "en")) }
     BIND(STR(COALESCE(?sw0, ?sw1, "slide")) AS ?slideWord)
-    BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-img")), ?none) AS ?slideImg)
-    BIND(IF(?layout = "carousel" && ?hasLightbox, IRI(CONCAT(?base, STR(?i), "-view")), ?none) AS ?view)
-    BIND(IF(BOUND(?view), IRI(CONCAT(?base, STR(?i), "-view-data-sem-item")), ?none) AS ?viewItem)
-    BIND(IF(BOUND(?view), IRI(CONCAT(?base, STR(?i), "-view-aria-label")), ?none) AS ?viewLabel)
-    BIND(IF(BOUND(?view), IRI(CONCAT(?base, STR(?i), "-view-text")), ?none) AS ?viewText)
-    BIND(CONCAT(?viewWord0, ": ", ?name) AS ?viewName)
+    BIND(IF(?layout = "carousel", IRI(CONCAT(STR($this), "/~track")), ?none) AS ?track)
+    BIND(IF(?layout = "carousel", IRI(CONCAT(STR($this), "/~dots")), ?none) AS ?dots)
+    BIND(IF(?layout = "carousel", IRI(CONCAT(STR($this), "/~dot-", STR(?i))), ?none) AS ?dot)
+    BIND(IF(?layout = "carousel", IRI(CONCAT(STR($this), "/~dot-", STR(?i), "-aria-label")), ?none) AS ?dotLabel)
+    BIND(IF(?layout = "carousel", IRI(CONCAT(STR($this), "/~dot-", STR(?i), "-aria-controls")), ?none) AS ?dotControls)
+    BIND(STR(?place) AS ?slideId)
+    BIND(IF(?layout = "carousel" && ?p > 0, IRI(CONCAT(STR($this), "/~dot-", STR(?p))), ?none) AS ?dotBefore)
     # grid
-    BIND(IF(?layout = "grid", ?item, ?none) AS ?cell)
-    BIND(IF(?layout = "grid", IRI(CONCAT(?base, STR(?i), "-data-sem-item")), ?none) AS ?cellItem)
-    BIND(IF(?layout = "grid", IRI(CONCAT(?base, STR(?i), "-img")), ?none) AS ?cellImg)
-    # pile
+    BIND(IF(?layout = "grid", IRI(CONCAT(STR($this), "/~cells")), ?none) AS ?cells)
+    BIND(IF(?layout = "grid", ?item, ?none) AS ?cellItem)
+    # pile: a print's lie, from the image's IRI
     BIND(MD5(STR(?img)) AS ?hash)
     BIND("0123456789abcdef" AS ?hex)
     BIND(STRLEN(STRBEFORE(?hex, SUBSTR(?hash, 1, 1))) * 16 + STRLEN(STRBEFORE(?hex, SUBSTR(?hash, 2, 1))) AS ?b0)
@@ -400,13 +361,9 @@ WHERE {
     BIND(?b0 - 9 * xsd:integer(FLOOR(?b0 / 9)) - 4 AS ?tilt)
     BIND(?b1 - 7 * xsd:integer(FLOOR(?b1 / 7)) - 3 AS ?dx)
     BIND(?b2 - 5 * xsd:integer(FLOOR(?b2 / 5)) - 2 AS ?dy)
-    BIND(CONCAT("--i: ", STR(?i), "; --tilt: ", STR(?tilt), "; --dx: ", STR(?dx), "; --dy: ", STR(?dy)) AS ?photoStyle)
-    BIND(IF(?layout = "pile", ?item, ?none) AS ?photo)
-    BIND(IF(?layout = "pile", IRI(CONCAT(?base, STR(?i), "-data-sem-item")), ?none) AS ?photoItem)
-    BIND(IF(?layout = "pile", IRI(CONCAT(?base, STR(?i), "-img")), ?none) AS ?photoImg)
-    BIND(IF(?layout = "pile" && ?hasLightbox, IRI(CONCAT(?base, STR(?i), "-chip")), ?none) AS ?chip)
-    BIND(IF(BOUND(?chip), IRI(CONCAT(?base, STR(?i), "-chip-aria-hidden")), ?none) AS ?chipHidden)
-    BIND(IF(BOUND(?chip), IRI(CONCAT(?base, STR(?i), "-chip-text")), ?none) AS ?chipText)
+    BIND(IF(?layout = "pile", CONCAT("--i: ", STR(?i), "; --tilt: ", STR(?tilt), "; --dx: ", STR(?dx), "; --dy: ", STR(?dy)), ?none) AS ?itemStyle)
+    BIND(IF(?layout = "pile", IRI(CONCAT(STR($this), "/~pile")), ?none) AS ?pile)
+    BIND(IF(?layout = "pile", ?item, ?none) AS ?pileItem)
   }
 }""" .
 c:GalleryRendering-sparql-text a sem:Rule ;
@@ -451,7 +408,7 @@ WHERE {
 # --- the gallery's current image: one place, whatever the size -----------------------------------
 
 c:GalleryCurrent a sem:Rendering ;
-    rdfs:comment "The carousel's current slide (data-sem-current, which the snap effect brings into view), its counter and spoken place, and its arrows disabled at the ends: written onto what c:GalleryRendering drew, at one place."@en ;
+    rdfs:comment "The carousel's current slide (data-sem-current, which the snap effect brings into view), its dot (aria-current) and spoken place, and its arrows disabled at the ends: written onto what c:GalleryRendering drew, at one place."@en ;
     sem:targets c:Gallery ;
     sem:modality mod:Screen ;
     sem:stratum 1 ;
@@ -464,8 +421,8 @@ c:GalleryCurrent-sparql a sem:Rule ;
 CONSTRUCT {
   ?slide rdfhtml:attribute ?mark .
   ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-current" ; rdfhtml:attributeValue "" .
-  ?at rdfhtml:hasChild ?atText .
-  ?atText a rdfhtml:Text ; rdfhtml:data ?iText .
+  ?dot rdfhtml:attribute ?dotCurrent .
+  ?dotCurrent a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "true" .
   ?live rdfhtml:hasChild ?liveText .
   ?liveText a rdfhtml:Text ; rdfhtml:data ?liveData .
   ?prev rdfhtml:disabled ?prevDisabled .
@@ -481,9 +438,8 @@ WHERE {
   BIND(EXISTS { $this c:loops ?l FILTER(STR(?l) = "true") } AS ?loops)
   BIND(IRI(CONCAT(STR($this), "/~slide-", STR(?i))) AS ?slide)
   BIND(IRI(CONCAT(STR($this), "/~slide-", STR(?i), "-data-sem-current")) AS ?mark)
-  BIND(IRI(CONCAT(STR($this), "/~counter-at")) AS ?at)
-  BIND(IRI(CONCAT(STR($this), "/~counter-at-text")) AS ?atText)
-  BIND(STR(?i) AS ?iText)
+  BIND(IRI(CONCAT(STR($this), "/~dot-", STR(?i))) AS ?dot)
+  BIND(IRI(CONCAT(STR($this), "/~dot-", STR(?i), "-aria-current")) AS ?dotCurrent)
   BIND(IRI(CONCAT(STR($this), "/~live")) AS ?live)
   BIND(IRI(CONCAT(STR($this), "/~live-text")) AS ?liveText)
   OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip0 FILTER(lang(?ip0) = "") }
@@ -501,10 +457,13 @@ WHERE {
 # caption below, and a polite live region that says "Image 2 of 5" and the image's alt text. The
 # arrows carry their keys (data-sem-shortcut): only an open lightbox renders them, and the keyboard
 # layer mirrors horizontal arrows in a right-to-left page. Zoomed, only the current frame is drawn.
+# Each image names the element it is in the gallery (data-sem-origin): the lightbox effect
+# (src/web/lightbox.ts) grows the viewer from it, returns it there when it closes, slides between
+# images and zooms where it was double-clicked, all timed by the motion tokens.
 
 c:LightboxRendering a sem:Rendering ; sem:targets c:Lightbox ; sem:stratum 1 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:open , c:of , c:current , c:images , c:imageCount , c:zoomed , c:loops , c:thumbnails , c:offersOriginal , c:label , l10n:label , rdfs:label .
+    sem:watches rdf:type , c:open , c:of , c:current , c:images , c:imageCount , c:galleryLayout , c:zoomed , c:loops , c:thumbnails , c:offersOriginal , c:label , l10n:label , rdfs:label .
 c:LightboxRendering-fn a sem:Rule ; sem:implements c:LightboxRendering ; sem:function "lightbox" .
 c:LightboxRendering-sparql a sem:Rule ;
     sem:implements c:LightboxRendering ;
@@ -543,7 +502,9 @@ CONSTRUCT {
   ?snap a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-snap" ; rdfhtml:attributeValue "" .
   ?frame a rdfhtml:Div ; rdfhtml:class "sem-frame" ; c:showsImage ?fImg ; rdfhtml:hasChild ?frameImg ; rdfhtml:attribute ?frameCurrent .
   ?frameCurrent a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-current" ; rdfhtml:attributeValue "" .
-  ?frameImg a rdfhtml:Img ; rdfhtml:src ?fSrc ; rdfhtml:alt ?fName ; rdfhtml:width ?fW ; rdfhtml:height ?fH ; rdfhtml:draggable "false" ; c:zooms $this .
+  ?frameImg a rdfhtml:Img ; rdfhtml:src ?fSrc ; rdfhtml:alt ?fName ; rdfhtml:width ?fW ; rdfhtml:height ?fH ; rdfhtml:draggable "false" ; c:zooms $this ;
+            rdfhtml:attribute ?originAttr .
+  ?originAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-origin" ; rdfhtml:attributeValue ?origin .
   ?frameBefore ord:immediatelyPrecedes ?frame .
   ?prev a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-prev" ; c:advances -1 ; rdfhtml:disabled ?prevDisabled ; rdfhtml:hasChild ?prevGlyph ;
         rdfhtml:attribute ?prevLabel, ?prevKey, ?prevAriaKey ; ord:immediatelyPrecedes ?next .
@@ -704,6 +665,11 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~frame-", STR(?j))) AS ?frame)
     BIND(IRI(CONCAT(STR($this), "/~frame-", STR(?j), "-img")) AS ?frameImg)
     BIND(IF(?k = 0, IRI(CONCAT(STR($this), "/~frame-", STR(?j), "-data-sem-current")), ?none) AS ?frameCurrent)
+    # Where the image is in the gallery (its element's id): the viewer grows from it and returns to it.
+    OPTIONAL { ?g c:galleryLayout ?gLay . ?gLay sem:slug ?gLaySlug }
+    BIND(COALESCE(STR(?gLaySlug), "") AS ?gLayout)
+    BIND(CONCAT(STR(?g), IF(?gLayout = "grid", "/~cell-", IF(?gLayout = "pile", "/~photo-", "/~slide-")), STR(?j), "-img") AS ?origin)
+    BIND(IRI(CONCAT(STR($this), "/~frame-", STR(?j), "-img-data-sem-origin")) AS ?originAttr)
     # Order: the previous frame, the current, the next.
     BIND(IF(?k = 0 && !?zoomed && ?pj > 0, IRI(CONCAT(STR($this), "/~frame-", STR(?pj))),
          IF(?k = 1, IRI(CONCAT(STR($this), "/~frame-", STR(?i))), ?none)) AS ?frameBefore)
@@ -885,6 +851,15 @@ WHERE {
   FILTER NOT EXISTS { ?g c:current ?img }
 }""" ;
     sem:function "gallery:snap" .
+
+# A dot shows its image in place (the snap effect slides the track to it).
+c:SelectImage a beh:Reaction ;
+    rdfs:label "Go to an image"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Gallery ;
+    beh:deletes """CONSTRUCT { $this c:current ?old } WHERE { $event beh:node ?hit . ?el rdfhtml:hasChild* ?hit . ?el c:selectsImage ?img . $this c:current ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:current ?img } WHERE { $event beh:node ?hit . ?el rdfhtml:hasChild* ?hit . ?el c:selectsImage ?img }""" ;
+    sem:function "gallery:select" .
 
 # The zoom button, or a double-click on the image, toggles the lightbox's zoom.
 c:LightboxZoom a beh:Reaction ;

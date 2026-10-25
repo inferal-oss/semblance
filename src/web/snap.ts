@@ -21,8 +21,10 @@ const SETTLE_MS = 120
 export function attachSnaps(host: HTMLElement): SnapHost {
   const doc = host.ownerDocument
   const win = doc.defaultView!
-  /** The item each track last brought into view: a different element is a jump, not a slide. */
-  const shown = new WeakMap<Element, Element>()
+  /** Items that were there at the last update: one that was not is jumped to, not slid to. */
+  let seen = new WeakSet<Element>()
+  /** Where each track was left: moved since by a re-render (not by the reader), it jumps. */
+  const left = new WeakMap<Element, number>()
   const settling = new WeakMap<Element, ReturnType<typeof setTimeout>>()
   let frame = 0
 
@@ -40,15 +42,18 @@ export function attachSnaps(host: HTMLElement): SnapHost {
 
   function update() {
     frame = 0
+    const now = new WeakSet<Element>()
     for (const track of host.querySelectorAll<HTMLElement>('[data-sem-snap]')) {
+      for (const item of track.children) now.add(item)
       const current = track.querySelector(':scope > [data-sem-current]')
-      if (!current || track.getClientRects().length === 0) continue
+      // A zoomed image's box is the person's to scroll.
+      if (!current || track.getClientRects().length === 0 || track.closest('[data-zoomed]')) continue
       const by = offset(track, current)
-      const jump = shown.get(track) !== current
-      shown.set(track, current)
-      if (Math.abs(by) < 1) continue
-      track.scrollBy({ left: by, behavior: jump || reduced(track) ? 'instant' : 'smooth' })
+      const jump = !seen.has(current) || left.get(track) !== track.scrollLeft
+      if (Math.abs(by) >= 1) track.scrollBy({ left: by, behavior: jump || reduced(track) ? 'instant' : 'smooth' })
+      left.set(track, jump || reduced(track) ? track.scrollLeft : track.scrollLeft + by)
     }
+    seen = now
   }
   const schedule = () => {
     if (!frame) frame = win.requestAnimationFrame(update)
@@ -57,6 +62,8 @@ export function attachSnaps(host: HTMLElement): SnapHost {
   /** The track came to rest: the item nearest its middle is where the reader is. */
   function settle(track: HTMLElement) {
     settling.delete(track)
+    if (track.closest('[data-zoomed]')) return
+    left.set(track, track.scrollLeft)
     let nearest: Element | undefined
     let best = Infinity
     for (const item of items(track)) {
@@ -64,8 +71,6 @@ export function attachSnaps(host: HTMLElement): SnapHost {
       if (d < best) (best = d), (nearest = item)
     }
     if (!nearest || nearest.hasAttribute('data-sem-current')) return
-    // What the graph will show next is this item: no slide back to it once it is current.
-    shown.set(track, nearest)
     nearest.dispatchEvent(new win.CustomEvent('sem-snap', { bubbles: true }))
   }
   // A browser that says when a scroll has ended (smooth or snapping, however long it takes) is

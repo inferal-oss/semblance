@@ -9,6 +9,7 @@ import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
 import { attachSnaps } from './snap.ts'
+import { attachLightboxes } from './lightbox.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
 export { DEFAULT_LAYERS }
@@ -144,6 +145,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
         }).attach()
   // Swiped tracks (a carousel, a lightbox) report where they came to rest and follow the graph.
   const snaps = attachSnaps(element)
+  // Lightboxes grow from their image and give it back, slide between images, zoom and pan.
+  const lightboxes = attachLightboxes(element)
 
   return {
     store,
@@ -160,6 +163,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachFullscreen?.()
       connectors.dispose()
       snaps.dispose()
+      lightboxes.dispose()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },
   }

@@ -15,8 +15,8 @@
 # will, with a viewer that opens any photo at full size.
 #
 # The photos are data (c:Picture: a URL, what it shows, a caption, a size). The preview is a
-# c:Gallery of them, and the layout is one triple on it: the radio cards are a c:RadioGroup over
-# that property, whose options - the layouts, each with a description - come from the ontology.
+# c:Gallery of them, and the layout is one triple on it: the picker is a c:Segmented over that
+# property, whose options - the layouts - come from the ontology.
 # The viewer is a c:Lightbox of the gallery; two switches set its options.
 # =================================================================================================
 
@@ -38,7 +38,7 @@ ph:forest a c:Picture ; c:image "photos/forest.jpg" ; c:width 1200 ; c:height 12
 ui:ex-photos a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-photos-intro ui:ex-photos-layout ) .
 ui:ex-photos-intro a c:Text ;
-    c:label "A post with four photos. Write its headline, pick a layout - the preview changes as you do - and open any photo: arrow keys, a swipe or the thumbnails move through them, Esc closes." .
+    c:label "A post with four photos. Write its headline, switch the layout - the preview changes as you do - and open any photo: arrow keys, a swipe or the thumbnails move through them, Esc closes." .
 ui:ex-photos-layout a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-4 ;
     c:children ( ui:ex-photos-compose ui:ex-photos-preview ) .
 
@@ -46,8 +46,8 @@ ui:ex-photos-compose a c:Card ; c:label "Your post" ; c:content ui:ex-photos-for
 ui:ex-photos-form a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ph-headline ui:ph-layout ui:ph-thumbs ui:ph-loop ) .
 ui:ph-headline a c:TextField ; c:label "Headline" ; c:value "A weekend by the sea" ; c:placeholder "Your headline" .
-# The radio cards: the gallery's layout, offered as the ontology describes the layouts.
-ui:ph-layout a c:RadioGroup ; c:label "Image layout" ; c:controls ui:ph-gallery ; c:property c:galleryLayout ; pos:direction pos:Row .
+# The gallery's layout, offered as the ontology lists the layouts.
+ui:ph-layout a c:Segmented ; c:controls ui:ph-gallery ; c:property c:galleryLayout .
 ui:ph-thumbs a c:ToggleSwitch ; c:label "Thumbnails in the viewer" ; c:controls ui:ph-viewer ; c:property c:thumbnails ; sty:size sty:Small .
 ui:ph-loop a c:ToggleSwitch ; c:label "Loop around in the viewer" ; c:controls ui:ph-viewer ; c:property c:loops ; sty:size sty:Small .
 
@@ -77,10 +77,10 @@ ui:ex-photos-w1 a c:WalkthroughStep ; rdfs:label "Photos are data" ;
     c:children ( "Each photo, such as " ui:ex-photos-m-harbour ", is a " ui:ex-photos-m-Picture ": a URL, its size, a caption and what it shows in words (c:alt). The words are the image's alt text and the name of every button that opens it, so the post reads the same to someone who cannot see it." ) .
 ui:ex-photos-w2 a c:WalkthroughStep ; rdfs:label "A gallery in a layout" ;
     c:children ( ui:ex-photos-m-gallery " is a " ui:ex-photos-m-Gallery " of the photos, laid out by one triple, c:galleryLayout: a carousel, a grid or a pile. Which photo is shown is another, c:current. Moving through them is a reaction that looks the next one up by its place, so it costs the same in a gallery of four or of four hundred." ) .
-ui:ex-photos-w3 a c:WalkthroughStep ; rdfs:label "Radio cards from the ontology" ;
-    c:children ( ui:ex-photos-m-layout " is a " ui:ex-photos-m-RadioGroup " over that property. Its options are not listed here: they are the individuals of the property's range, " ui:ex-photos-m-GalleryLayout ", each with a label and a description - the cards' title and line. Picking one writes the triple, and the preview follows." ) .
+ui:ex-photos-w3 a c:WalkthroughStep ; rdfs:label "A picker from the ontology" ;
+    c:children ( ui:ex-photos-m-layout " is a " ui:ex-photos-m-Segmented " over that property. Its options are not listed here: they are the individuals of the property's range, " ui:ex-photos-m-GalleryLayout ". Picking one writes the triple, and the preview follows." ) .
 ui:ex-photos-w4 a c:WalkthroughStep ; rdfs:label "A viewer of the same graph" ;
-    c:children ( ui:ex-photos-m-viewer " is a " ui:ex-photos-m-Lightbox " of the gallery: activating a photo makes it current and opens the viewer, a modal dialog that shows the current photo and its neighbours. Its arrows carry their keys, mirrored in a right-to-left page; a swipe comes to rest on a photo and makes it current. " ui:ex-photos-m-thumbs " and " ui:ex-photos-m-loop " switch its options, c:thumbnails and c:loops." ) .
+    c:children ( ui:ex-photos-m-viewer " is a " ui:ex-photos-m-Lightbox " of the gallery: activating a photo makes it current and opens the viewer, a modal dialog that grows from the photo and shrinks back to it, showing the current photo and its neighbours. Its arrows carry their keys, mirrored in a right-to-left page; a swipe comes to rest on a photo and makes it current; a double-click zooms where it points, and a drag pans. All of it moves as the motion preference says. " ui:ex-photos-m-thumbs " and " ui:ex-photos-m-loop " switch its options, c:thumbnails and c:loops." ) .
 ui:ex-photos-w5 a c:WalkthroughStep ; rdfs:label "The headline" ;
     c:children ( "Typing in " ui:ex-photos-m-headline " runs " ui:ex-photos-m-retitle ": the heading and the gallery take the new title, so the viewer's title follows too. Everything else on the page stays as it was." ) .
 
@@ -89,7 +89,7 @@ ui:ex-photos-m-Picture a c:Mention ; c:label "c:Picture" ; c:mentions c:Picture 
 ui:ex-photos-m-gallery a c:Mention ; c:label "The preview" ; c:mentions ui:ph-gallery .
 ui:ex-photos-m-Gallery a c:Mention ; c:label "c:Gallery" ; c:mentions c:Gallery ; c:to c:Gallery .
 ui:ex-photos-m-layout a c:Mention ; c:label "The layout picker" ; c:mentions ui:ph-layout .
-ui:ex-photos-m-RadioGroup a c:Mention ; c:label "c:RadioGroup" ; c:mentions c:RadioGroup ; c:to c:RadioGroup .
+ui:ex-photos-m-Segmented a c:Mention ; c:label "c:Segmented" ; c:mentions c:Segmented ; c:to c:Segmented .
 ui:ex-photos-m-GalleryLayout a c:Mention ; c:label "c:GalleryLayout" ; c:mentions c:GalleryLayout ; c:to c:GalleryLayout .
 ui:ex-photos-m-viewer a c:Mention ; c:label "The viewer" ; c:mentions ui:ph-viewer .
 ui:ex-photos-m-Lightbox a c:Mention ; c:label "c:Lightbox" ; c:mentions c:Lightbox ; c:to c:Lightbox .

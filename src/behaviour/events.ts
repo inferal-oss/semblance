@@ -4,7 +4,7 @@ import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.t
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
-import { comboOf, mirrored, navigate, normalizeShortcut, rightToLeft, rove } from '../layers/keyboard.ts'
+import { comboOf, mirrored, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
@@ -481,6 +481,8 @@ export class EventBus {
     const keys = guarded((e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
+      // An open modal dialog keeps the focus: Tab goes round inside it.
+      if (trapTab(k, renderer.host)) return k.preventDefault()
       // Keys in slot content are the mounted projection's own (its bus navigates it).
       if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
       const combo = comboOf(k, apple)

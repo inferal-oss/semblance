@@ -22,6 +22,7 @@ import { hasStore, initWeb, loadStoreWith, type StoreKind } from '../src/web/loa
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
+import { attachLightboxes } from '../src/web/lightbox.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 
@@ -278,6 +279,8 @@ attachWalkthroughs(document.getElementById('app')!)
 const connectors = attachConnectors(document.getElementById('app')!)
 // Swiped tracks (a gallery's carousel, a lightbox): where they come to rest, and the current item in view.
 attachSnaps(document.getElementById('app')!)
+// Lightboxes: grown from their image and given back to it, sliding, zooming and panning.
+attachLightboxes(document.getElementById('app')!)
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })

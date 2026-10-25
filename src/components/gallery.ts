@@ -29,6 +29,7 @@ export const G = {
   imageName: c + 'imageName',
   imageCount: c + 'imageCount',
   viewsImage: c + 'viewsImage',
+  selectsImage: c + 'selectsImage',
   showsImage: c + 'showsImage',
   advances: c + 'advances',
   zooms: c + 'zooms',
@@ -38,12 +39,8 @@ export const G = {
   SlidePhrase: c + 'SlidePhrase',
   SlidePositionPhrase: c + 'SlidePositionPhrase',
   ImagePositionPhrase: c + 'ImagePositionPhrase',
-  ViewImagePhrase: c + 'ViewImagePhrase',
   PreviousImagePhrase: c + 'PreviousImagePhrase',
   NextImagePhrase: c + 'NextImagePhrase',
-  OnePhotoPhrase: c + 'OnePhotoPhrase',
-  PhotosPhrase: c + 'PhotosPhrase',
-  PileHintPhrase: c + 'PileHintPhrase',
   ZoomPhrase: c + 'ZoomPhrase',
   OpenOriginalPhrase: c + 'OpenOriginalPhrase',
   ThumbnailsPhrase: c + 'ThumbnailsPhrase',
@@ -147,9 +144,10 @@ function lie(image: Term) {
 // --- the gallery ----------------------------------------------------------------------------------
 
 /**
- * Every image of a gallery in its layout, keyed by place: a carousel's slides (groups "2 of 5"
- * with a View button) and its arrows and counter; a grid's cells; a pile's prints with their tilt.
- * It does not read c:current (c:GalleryCurrent marks it), so moving through the images does not re-run it.
+ * Every image of a gallery in its layout, keyed by place: a carousel's slides (groups "2 of 5")
+ * with its arrows and a dot per image; a grid's cells; a pile's prints with their lie. Each image is
+ * a button named by its alt text that opens the lightbox (with one), else a plain tile. It does not
+ * read c:current (c:GalleryCurrent marks it), so moving through the images does not re-run it.
  */
 const gallery: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
@@ -165,70 +163,63 @@ const gallery: FnRule = (ctx, focus) => {
   }
   const layout = layoutOf(ctx, focus)
   const lightbox = named(ctx.object(focus, G.lightbox))
-  const viewWord = phrase(ctx, G.ViewImagePhrase, 'View image')
   const root = o.node('root')
   o.attr(root, 'data-layout', layout)
   o.attr(root, 'role', layout === 'carousel' ? 'region' : 'group')
   if (layout === 'carousel') o.attr(root, 'aria-roledescription', phrase(ctx, G.CarouselPhrase, 'carousel'))
   o.attr(root, 'aria-label', galleryLabel(ctx, focus))
-  // An image as a button that opens the lightbox (with one), else as a plain tile.
-  const item = (local: string, cls: string, image: Term, attrs: Record<string, string>, children: NamedNode[]) => {
-    const el = o.el(local, lightbox ? 'Button' : 'Div', { type: lightbox ? 'button' : undefined, class: cls, ...attrs }, children)
-    o.t(el, G.showsImage, image)
+  const place = (i: number) => fill(phrase(ctx, G.SlidePositionPhrase, '%i of %n'), i, n)
+  // An image as a button that opens the lightbox (with one), else as a plain tile; its image has
+  // an id, where the lightbox grows from.
+  const base = layout === 'carousel' ? 'slide' : layout === 'grid' ? 'cell' : 'photo'
+  const item = (i: number, image: Term, local: string, cls: string, style?: string) => {
+    const picture = img(ctx, o, `${base}-${i}-img`, image, names[i - 1]!)
+    o.t(picture, H.ns + 'id', picture.value)
+    const el = o.el(local, lightbox ? 'Button' : 'Div', { type: lightbox ? 'button' : undefined, class: cls, style }, [picture])
+    if (layout !== 'carousel') o.t(el, G.showsImage, image)
     if (lightbox) o.t(el, G.viewsImage, image)
     o.attr(el, 'data-sem-item', '')
     return el
   }
   const parts: NamedNode[] = []
+  const shown = images.flatMap((image, k) => (image ? [{ image, i: k + 1 }] : []))
   if (layout === 'carousel') {
     const trackId = o.node('track').value
-    const slides = images.flatMap((image, k) => {
-      if (!image) return []
-      const i = k + 1
-      const children = [img(ctx, o, `slide-${i}-img`, image, names[k]!)]
-      if (lightbox) {
-        const view = o.el(`slide-${i}-view`, 'Button', { type: 'button', class: 'sem-view' }, [o.text(`slide-${i}-view-text`, viewWord)])
-        o.t(view, G.viewsImage, image)
-        o.attr(view, 'data-sem-item', '').attr(view, 'aria-label', `${viewWord}: ${names[k]}`)
-        children.push(view)
-      }
-      const slide = o.el(`slide-${i}`, 'Div', { class: 'sem-slide' }, children)
+    const slides = shown.map(({ image, i }) => {
+      const slide = o.el(`slide-${i}`, 'Div', { class: 'sem-slide' }, [item(i, image, `slide-${i}-item`, 'sem-slide-item')])
       o.t(slide, G.showsImage, image)
-      o.attr(slide, 'role', 'group').attr(slide, 'aria-roledescription', phrase(ctx, G.SlidePhrase, 'slide'))
-      o.attr(slide, 'aria-label', fill(phrase(ctx, G.SlidePositionPhrase, '%i of %n'), i, n))
-      return [slide]
+      o.attr(slide, 'role', 'group').attr(slide, 'aria-roledescription', phrase(ctx, G.SlidePhrase, 'slide')).attr(slide, 'aria-label', place(i))
+      return slide
     })
     const track = o.el('track', 'Div', { class: 'sem-track', id: trackId }, slides)
     o.attr(track, 'data-sem-snap', '')
     const prev = arrow(ctx, o, 'prev')
     const next = arrow(ctx, o, 'next')
     for (const b of [prev, next]) o.attr(b, 'aria-controls', trackId)
-    const counter = decor(o, o.el('counter', 'Span', { class: 'sem-counter' }, [o.el('counter-at', 'Span', { class: 'sem-at' }), o.text('counter-of', ` / ${n}`)]))
+    const dots = shown.map(({ image, i }) => {
+      const dot = o.el(`dot-${i}`, 'Button', { type: 'button', class: 'sem-dot' })
+      o.t(dot, G.selectsImage, image)
+      o.attr(dot, 'aria-label', place(i)).attr(dot, 'aria-controls', o.node(`slide-${i}`).value)
+      return dot
+    })
     const live = o.el('live', 'Span', { class: 'sem-visually-hidden' })
     o.attr(live, 'aria-live', 'polite')
-    parts.push(track, o.el('controls', 'Div', { class: 'sem-controls' }, [prev, counter, next, live]))
+    parts.push(track, o.el('controls', 'Div', { class: 'sem-controls' }, [prev, o.el('dots', 'Div', { class: 'sem-dots' }, dots), next, live]))
   } else if (layout === 'grid') {
-    const cells = images.flatMap((image, k) => (image ? [item(`cell-${k + 1}`, 'sem-cell', image, {}, [img(ctx, o, `cell-${k + 1}-img`, image, names[k]!)])] : []))
-    parts.push(o.el('cells', 'Div', { class: 'sem-cells' }, cells))
+    parts.push(o.el('cells', 'Div', { class: 'sem-cells' }, shown.map(({ image, i }) => item(i, image, `cell-${i}`, 'sem-cell'))))
   } else {
-    const photos = images.flatMap((image, k) => {
-      if (!image) return []
-      const i = k + 1
+    const photos = shown.map(({ image, i }) => {
       const { tilt, dx, dy } = lie(image)
-      const children = [img(ctx, o, `photo-${i}-img`, image, names[k]!)]
-      if (lightbox) children.push(decor(o, o.el(`photo-${i}-chip`, 'Span', { class: 'sem-chip' }, [o.text(`photo-${i}-chip-text`, viewWord)])))
-      return [item(`photo-${i}`, 'sem-photo', image, { style: `--i: ${i}; --tilt: ${tilt}; --dx: ${dx}; --dy: ${dy}` }, children)]
+      return item(i, image, `photo-${i}`, 'sem-photo', `--i: ${i}; --tilt: ${tilt}; --dx: ${dx}; --dy: ${dy}`)
     })
-    const count = n === 1 ? phrase(ctx, G.OnePhotoPhrase, '1 photo') : phrase(ctx, G.PhotosPhrase, '%n photos').replace('%n', String(n))
-    const summary = lightbox ? `${count} · ${phrase(ctx, G.PileHintPhrase, 'Hover to explore, click or tap to open.')}` : count
-    parts.push(o.el('pile', 'Div', { class: 'sem-pile', style: `--n: ${n}` }, photos), o.el('summary', 'P', { class: 'sem-summary' }, [o.text('summary-text', summary)]))
+    parts.push(o.el('pile', 'Div', { class: 'sem-pile', style: `--n: ${n}` }, photos))
   }
   o.el('root', 'Div', {}, parts)
   o.renders(root)
   return o.quads
 }
 
-/** The carousel's current slide, its counter and spoken place, its arrows at the ends: one place. */
+/** The carousel's current slide, its dot and spoken place, its arrows at the ends: one place. */
 const galleryCurrent: FnRule = (ctx, focus) => {
   if (layoutOf(ctx, focus) !== 'carousel') return []
   const at = currentOf(ctx, focus)
@@ -237,7 +228,7 @@ const galleryCurrent: FnRule = (ctx, focus) => {
   const { i } = at
   const o = ctx.out(focus)
   o.attr(o.node(`slide-${i}`), 'data-sem-current', '')
-  o.t(o.node('counter-at'), H.hasChild, o.text('counter-at-text', String(i)))
+  o.attr(o.node(`dot-${i}`), 'aria-current', 'true')
   o.t(o.node('live'), H.hasChild, o.text('live-text', fill(phrase(ctx, G.ImagePositionPhrase, 'Image %i of %n'), i, n)))
   const loops = isTrue(ctx.object(focus, G.loops))
   if (!loops && i <= 1) o.t(o.node('prev'), H.ns + 'disabled', '')
@@ -303,6 +294,9 @@ const lightbox: FnRule = (ctx, focus) => {
     if (!image) return []
     const picture = img(ctx, o, `frame-${j}-img`, image, nameAt(ctx, g, j), false)
     o.t(picture, G.zooms, focus)
+    // Where the image is in the gallery: the viewer grows from it and returns to it.
+    const layout = layoutOf(ctx, g)
+    o.attr(picture, 'data-sem-origin', mint(g.value, `${layout === 'carousel' ? 'slide' : layout === 'grid' ? 'cell' : 'photo'}-${j}-img`))
     const frame = o.el(`frame-${j}`, 'Div', { class: 'sem-frame' }, [picture])
     o.t(frame, G.showsImage, image)
     if (j === i) o.attr(frame, 'data-sem-current', '')
@@ -416,6 +410,11 @@ const step: ReactionFn = (ctx) => {
   return out
 }
 
+const select: ReactionFn = (ctx) => {
+  const h = hit(ctx, G.selectsImage)
+  return h ? show(ctx, ctx.target, h.value) : none()
+}
+
 const snap: ReactionFn = (ctx) => {
   const h = hit(ctx, G.showsImage)
   if (!h) return none()
@@ -440,6 +439,7 @@ const zoom =
 export const reactions: Record<string, ReactionFn> = {
   'gallery:view': view,
   'gallery:step': step,
+  'gallery:select': select,
   'gallery:snap': snap,
   'lightbox:zoom': zoom('Button'),
   'lightbox:zoom-image': zoom('Img'),

@@ -1,5 +1,5 @@
-// The image components (ontology/components/gallery.ttl): a gallery in its three layouts, picked by
-// a radio group, and the lightbox, driven through events on the Data and Overlays pages as a
+// The image components (ontology/components/gallery.ttl): a gallery in its three layouts, switched
+// by a segmented control, and the lightbox, driven through events on the Data and Overlays pages as a
 // person would, with the DOM and the graph checked after each step, and the SPARQL rules and
 // their function twins compared after each step.
 import { describe, expect, it } from 'vitest'
@@ -36,12 +36,10 @@ function photos(group: 'GroupData' | 'GroupOverlays' = 'GroupData', prefer: 'spa
     at.dispatchEvent(e)
     h.shell.flush()
   }
-  /** Pick a layout as a person does: check its radio card. */
+  /** Pick a layout as a person does: press its segment. */
   const layout = (name: 'carousel' | 'grid' | 'pile', picker = 'dt-layout') => {
-    const input = [...root(picker).querySelectorAll('input[type=radio]')].find((i) => (i as HTMLInputElement).value === `${C}${name[0]!.toUpperCase()}${name.slice(1)}Layout`) as HTMLInputElement
-    input.checked = true
-    h.fire(input, 'change')
-    h.shell.flush()
+    const label = name[0]!.toUpperCase() + name.slice(1)
+    click([...root(picker).querySelectorAll('button')].find((b) => b.textContent!.includes(label))!)
   }
   const html = () => h.document.getElementById('app')!.innerHTML
   return { ...h, show, node, root, part, fact, click, key, layout, html }
@@ -54,14 +52,9 @@ describe('gallery and lightbox', () => {
     expect(implementationGaps(['components/gallery.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 
-  it('offers the layouts as described radio cards, and switches them live', () => {
+  it('switches the layout live: a picker over c:galleryLayout offers the layouts the ontology lists', () => {
     const s = photos()
-    const cards = [...s.root('dt-layout').querySelectorAll('.sem-radio')]
-    expect(cards.map((c) => [c.querySelector('.sem-option-label')!.textContent, c.querySelector('.sem-option-note')!.textContent])).toEqual([
-      ['Carousel', 'Swipe or scroll horizontally through your images.'],
-      ['Grid', 'Show thumbnails together in rows.'],
-      ['Pile', 'Overlapping photos. Hover to explore, click to open.'],
-    ])
+    expect([...s.root('dt-layout').querySelectorAll('button')].map((b) => b.lastElementChild!.textContent)).toEqual(['Carousel', 'Grid', 'Pile'])
     expect(s.root('dt-photos').getAttribute('data-layout')).toBe('pile')
     s.layout('grid')
     expect(s.fact('dt-photos', 'galleryLayout')).toEqual([C + 'GridLayout'])
@@ -77,7 +70,6 @@ describe('gallery and lightbox', () => {
     prints.forEach((p, k) => {
       expect(p.tagName).toBe('BUTTON')
       expect(p.querySelector('img')!.getAttribute('alt')).toContain(ALTS[k]!)
-      expect(p.querySelector('.sem-chip')!.getAttribute('aria-hidden')).toBe('true')
       expect(p.getAttribute('style')).toMatch(new RegExp(`^--i: ${k + 1}; --tilt: -?\\d; --dx: -?\\d; --dy: -?\\d$`))
     })
     // The lie of a print comes from its image, not from the render or its place.
@@ -86,11 +78,10 @@ describe('gallery and lightbox', () => {
     s.layout('grid')
     s.layout('pile')
     expect(([...s.root('dt-photos').querySelectorAll('.sem-photo')] as HTMLElement[]).map(lie)).toEqual(before)
-    expect(s.root('dt-photos').querySelector('.sem-summary')!.textContent).toBe('6 photos · Hover to explore, click or tap to open.')
     expect(s.root('dt-photos').getAttribute('data-sem-nav-items')).toBe('[data-sem-item]')
   })
 
-  it('moves a carousel with its arrows: a counter, slides as groups, ends that stop', () => {
+  it('moves a carousel with its arrows and dots: slides as groups, the current dot marked, ends that stop', () => {
     const s = photos()
     s.layout('carousel')
     const g = s.root('dt-photos')
@@ -103,14 +94,20 @@ describe('gallery and lightbox', () => {
     const prev = s.part('dt-photos', 'prev')
     const next = s.part('dt-photos', 'next')
     expect(prev.getAttribute('aria-controls')).toBe(`${UI}dt-photos/~track`)
-    const counter = () => s.part('dt-photos', 'counter').textContent
-    expect(counter()).toBe('1 / 6')
+    // A dot per image, named by its place; the current one is marked.
+    const dots = () => [...s.part('dt-photos', 'dots').querySelectorAll('.sem-dot')]
+    expect(dots().map((d) => d.getAttribute('aria-label'))).toEqual([1, 2, 3, 4, 5, 6].map((i) => `${i} of 6`))
+    const counter = () => `${dots().findIndex((d) => d.getAttribute('aria-current') === 'true') + 1}`
+    expect(counter()).toBe('1')
+    // Each slide holds its image as a button named by its alt text, which opens the lightbox.
+    const item = s.part('dt-photos', 'slide-1-item')
+    expect([item.tagName, item.querySelector('img')!.getAttribute('alt')]).toEqual(['BUTTON', expect.stringContaining(ALTS[0]!)])
     expect(s.part('dt-photos', 'live').textContent).toBe('Image 1 of 6')
     expect(prev.hasAttribute('disabled')).toBe(true)
     expect(s.part('dt-photos', 'slide-1').hasAttribute('data-sem-current')).toBe(true)
     s.click(next)
     expect(s.fact('dt-photos', 'current')).toEqual(['photo-lake'])
-    expect(counter()).toBe('2 / 6')
+    expect(counter()).toBe('2')
     expect(prev.hasAttribute('disabled')).toBe(false)
     expect(s.part('dt-photos', 'slide-1').hasAttribute('data-sem-current')).toBe(false)
     expect(s.part('dt-photos', 'slide-2').hasAttribute('data-sem-current')).toBe(true)
@@ -119,7 +116,11 @@ describe('gallery and lightbox', () => {
     expect(next.hasAttribute('disabled')).toBe(true)
     expect(s.part('dt-photos', 'live').textContent).toBe('Image 6 of 6')
     s.click(prev)
-    expect(counter()).toBe('5 / 6')
+    expect(counter()).toBe('5')
+    // A dot goes to its image, in place.
+    s.click(dots()[1]!)
+    expect(s.fact('dt-photos', 'current')).toEqual(['photo-lake'])
+    expect(s.fact('dt-lightbox', 'open')).toEqual([])
   })
 
   it('follows a swipe: where the track comes to rest is the current image, and that is not history', () => {
@@ -129,7 +130,7 @@ describe('gallery and lightbox', () => {
     s.fire(s.part('dt-photos', 'slide-4'), 'sem-snap')
     s.shell.flush()
     expect(s.fact('dt-photos', 'current')).toEqual(['photo-dunes'])
-    expect(s.part('dt-photos', 'counter').textContent).toBe('4 / 6')
+    expect(s.part('dt-photos', 'dot-4').getAttribute('aria-current')).toBe('true')
     expect(s.bus.recent(100).length).toBe(logged)
   })
 
@@ -154,6 +155,36 @@ describe('gallery and lightbox', () => {
     expect(frames.map((x) => x.querySelector('img')!.getAttribute('src'))).toEqual(['photos/lake.jpg', 'photos/lighthouse.jpg', 'photos/dunes.webp'])
     expect(frames.map((x) => x.hasAttribute('data-sem-current'))).toEqual([false, true, false])
     expect(s.part('dt-lightbox', 'frames').hasAttribute('data-sem-snap')).toBe(true)
+    // Each image names where it is in the gallery: the lightbox grows from there and returns there.
+    const origin = frames[1]!.querySelector('img')!.getAttribute('data-sem-origin')!
+    expect(s.document.getElementById(origin)).toBe(s.part('dt-photos', 'cell-3').querySelector('img'))
+  })
+
+  it('keeps the focus inside the open lightbox: Tab goes round', () => {
+    const s = photos()
+    s.layout('grid')
+    s.click(s.part('dt-photos', 'cell-2'))
+    const panel = s.part('dt-lightbox', 'panel')
+    const parts = [...panel.querySelectorAll('button:not([disabled]), a[href]')] as HTMLElement[]
+    // linkedom has no focus: a minimal one (focus() moves it, activeElement reads it).
+    let active: Element | null = null
+    Object.defineProperty(s.document, 'activeElement', { configurable: true, get: () => active ?? s.document.body })
+    for (const el of s.document.querySelectorAll('button, a, input')) (el as HTMLElement).focus = () => void (active = el)
+    parts.at(-1)!.focus()
+    const tab = (shift: boolean) => {
+      const e = new s.window.Event('keydown', { bubbles: true, cancelable: true })
+      Object.assign(e, { key: 'Tab', shiftKey: shift, ctrlKey: false, metaKey: false, altKey: false })
+      s.document.activeElement!.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    expect(tab(false)).toBe(true)
+    expect(s.document.activeElement).toBe(parts[0])
+    expect(tab(true)).toBe(true)
+    expect(s.document.activeElement).toBe(parts.at(-1))
+    // A focus left outside is brought in.
+    s.part('dt-photos', 'cell-1').focus()
+    expect(tab(false)).toBe(true)
+    expect(panel.contains(s.document.activeElement)).toBe(true)
   })
 
   it('moves through the images by arrow keys, mirrored in a right-to-left page, and closes with Escape', () => {
@@ -246,7 +277,8 @@ describe('gallery and lightbox', () => {
       ['the carousel', (s) => s.layout('carousel')],
       ['its next slide', (s) => s.click(s.part('dt-photos', 'next'))],
       ['a swipe', (s) => (s.fire(s.part('dt-photos', 'slide-5'), 'sem-snap'), s.shell.flush())],
-      ['a View button', (s) => s.click(s.part('dt-photos', 'slide-5-view'))],
+      ['a slide', (s) => s.click(s.part('dt-photos', 'slide-5-item'))],
+      ['a dot', (s) => s.click(s.part('dt-photos', 'dot-3'))],
       ['the grid', (s) => s.layout('grid')],
       ['the Overlays page', (s) => s.show('GroupOverlays')],
       ['a cell', (s) => s.click(s.part('ov-photos', 'cell-2'))],
@@ -332,7 +364,7 @@ describe('gallery and lightbox', () => {
         // The carousel's arrow, then the lightbox's (each once to warm up, then measured).
         s.click(s.part('dt-photos', 'next'))
         const carousel = measure(() => s.click(s.part('dt-photos', 'next')))
-        s.click(s.part('dt-photos', 'slide-2-view'))
+        s.click(s.part('dt-photos', 'slide-2-item'))
         s.click(s.part('dt-lightbox', 'next'))
         const lightbox = measure(() => s.click(s.part('dt-lightbox', 'next')))
         expect(s.fact('dt-photos', 'current')).toEqual(['many-3'])

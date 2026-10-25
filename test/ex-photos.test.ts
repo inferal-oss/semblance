@@ -1,4 +1,4 @@
-// The photo post example (demo/gallery/_ex-photos.ttl): a headline, a layout picked by radio cards,
+// The photo post example (demo/gallery/_ex-photos.ttl): a headline, a layout picked by a segmented control,
 // switches for the viewer's options, and a live preview that opens the viewer - through events only.
 import { describe, expect, it } from 'vitest'
 import { mountSite } from './harness.ts'
@@ -24,7 +24,7 @@ describe('the photo post example', () => {
       const s = post(prefer)
       const gallery = () => s.root('ph-gallery')
       expect(gallery().getAttribute('data-layout')).toBe('carousel')
-      expect(s.part('ph-gallery', 'counter').textContent).toBe('1 / 4')
+      expect(s.part('ph-gallery', 'dot-1').getAttribute('aria-current')).toBe('true')
       // The headline titles the preview and the gallery (the viewer's title).
       const field = s.root('ph-headline').querySelector('input')!
       field.value = 'Sea, sand and pines'
@@ -32,14 +32,12 @@ describe('the photo post example', () => {
       s.shell.flush()
       expect(s.root('ph-title').textContent).toBe('Sea, sand and pines')
       expect(gallery().getAttribute('aria-label')).toBe('Sea, sand and pines')
-      // The radio cards: the layouts with their descriptions; picking one is one triple.
-      const radios = [...s.root('ph-layout').querySelectorAll('input[type=radio]')] as HTMLInputElement[]
-      expect(radios.map((r) => r.value)).toEqual([C + 'CarouselLayout', C + 'GridLayout', C + 'PileLayout'])
-      radios[2]!.checked = true
-      s.fire(radios[2]!, 'change')
-      s.shell.flush()
+      // The picker: the layouts as the ontology lists them; picking one is one triple.
+      const segments = [...s.root('ph-layout').querySelectorAll('button')]
+      expect(segments).toHaveLength(3)
+      s.click(segments[2]!)
       expect(s.fact('ph-gallery', 'galleryLayout')).toEqual([C + 'PileLayout'])
-      expect(gallery().querySelector('.sem-summary')!.textContent).toBe('4 photos · Hover to explore, click or tap to open.')
+      expect(gallery().querySelectorAll('.sem-photo')).toHaveLength(4)
       // A print opens the viewer at its photo, with its thumbnails.
       s.click(s.part('ph-gallery', 'photo-3'))
       expect(s.fact('ph-viewer', 'open')).toEqual(['true'])

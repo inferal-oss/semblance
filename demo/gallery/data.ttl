@@ -187,10 +187,10 @@ ui:desktop c:hosts ui:dt-lightbox .
 ui:dt-photos a c:Gallery ; c:label "Places" ; c:galleryLayout c:PileLayout ; c:lightbox ui:dt-lightbox ;
     c:images ( ui:photo-harbour ui:photo-lake ui:photo-lighthouse ui:photo-dunes ui:photo-forest ui:photo-city ) .
 ui:dt-lightbox a c:Lightbox ; c:of ui:dt-photos .
-ui:dt-layout a c:RadioGroup ; c:label "Image layout" ; c:controls ui:dt-photos ; c:property c:galleryLayout ; pos:direction pos:Row .
+ui:dt-layout a c:Segmented ; c:controls ui:dt-photos ; c:property c:galleryLayout .
 ui:dt-gallery a c:Flippable ; c:front ui:dt-gallery-spec .
 ui:dt-gallery-spec a c:Specimen ; c:demonstrates c:Gallery ; c:label "Gallery" ;
-    c:help "Images in a layout (c:galleryLayout): a carousel, a grid or a pile, picked here by a radio group over the property, whose options are the layouts with their descriptions. With a c:lightbox, every image opens it." ;
+    c:help "Images in a layout (c:galleryLayout), switched live here by a segmented control over the property: a carousel (swipe, scroll, arrows or a dot per image), a grid that fits its columns to the width, or a pile of prints - hover or focus one and it straightens and lifts while the others fan out. With a c:lightbox, every image opens it." ;
     c:children ( ui:dt-layout ui:dt-photos ) .
 
 # --- MessageList: a thread of ActivityStreams notes -----------------------------------------------

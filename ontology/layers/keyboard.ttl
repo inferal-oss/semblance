@@ -20,6 +20,7 @@
 # Shift only spells ("/", "?" on another layout) is matched without Shift.
 # Shortcuts without a modifier do not apply while a text field has the focus. Horizontal arrows
 # follow the reading direction: in a right-to-left page, a part's ArrowLeft shortcut is ArrowRight.
+# An open modal dialog ([aria-modal=true]) keeps the focus: Tab and Shift+Tab go round inside it.
 # c:ShortcutList shows every shortcut in the graph.
 
 <https://semblance.dev/ns/keyboard> a owl:Ontology ;
