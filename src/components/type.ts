@@ -10,6 +10,7 @@ const C_LINK = NS.c + 'Link'
 const C_INLINE = NS.c + 'inline'
 const C_HREF = NS.c + 'href'
 const C_EXTERNAL = NS.c + 'external'
+const C_CURRENT_PAGE = NS.c + 'currentPage'
 const C_EXTERNAL_HINT = NS.c + 'externalHint'
 const C_KEYS = NS.c + 'keys'
 const C_BLOCK = NS.c + 'block'
@@ -61,7 +62,12 @@ const link: FnRule = (ctx, focus) => {
     o.attr(o.node('external'), 'aria-hidden', 'true')
     parts.push(o.el('hint', 'Span', { class: 'sem-sr' }, [o.text('hint-text', ` (${hint})`)]))
   }
-  o.renders(o.el('root', 'A', { href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined }, parts))
+  o.renders(o.el('root', 'A', {
+    href,
+    target: external ? '_blank' : undefined,
+    rel: external ? 'noopener noreferrer' : undefined,
+    'aria-current': isTrue(ctx.object(focus, C_CURRENT_PAGE)) ? 'page' : undefined,
+  }, parts))
   return o.quads
 }
 

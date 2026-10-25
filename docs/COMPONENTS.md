@@ -65,6 +65,8 @@ Use `c:LinkCard` when a navigable summary needs one link across its whole surfac
 `c:href`, `c:label`, an optional `c:note` and `c:badge`, and `c:currentPage true` when its
 destination is the current page. The screen rendering is one anchor, so keyboard and pointer
 users activate the same target; the text rendering keeps the summary and address together.
+`c:Link` also accepts `c:currentPage true` for the same accessible current-page state in a
+compact navigation list.
 
 ## Writing a rendering rule
 

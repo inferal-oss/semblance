@@ -148,7 +148,8 @@ c:Link a owl:Class ;
 location that shows it, nav:href) or c:href (an address, also the fallback), after an optional c:logo (a component,
 e.g. a c:Emblem). Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
-technology (c:externalHint). Accent by default; sty:tone recolors it."""@en ;
+technology (c:externalHint). c:currentPage true marks the current destination. Accent by default;
+sty:tone recolors it."""@en ;
     sem:slug "link" ;
     c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de .
 c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
@@ -167,7 +168,7 @@ c:LinkRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:A ; sem:renders $this ; rdfhtml:href ?href ; rdfhtml:target ?target ; rdfhtml:rel ?rel ;
-        rdfhtml:hasChild ?logo, ?labelText, ?mark, ?hint .
+        rdfhtml:hasChild ?logo, ?labelText, ?mark, ?hint ; rdfhtml:attribute ?currentAttr .
   ?logo ord:immediatelyPrecedes ?labelText .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?label ; ord:immediatelyPrecedes ?mark .
   ?mark a rdfhtml:Span ; rdfhtml:class "sem-external" ; rdfhtml:hasChild ?markText ; ord:immediatelyPrecedes ?hint .
@@ -175,6 +176,7 @@ CONSTRUCT {
   ?markText a rdfhtml:Text ; rdfhtml:data "↗" .
   ?hint a rdfhtml:Span ; rdfhtml:class "sem-sr" ; rdfhtml:hasChild ?hintText .
   ?hintText a rdfhtml:Text ; rdfhtml:data ?hintData .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Link .
@@ -195,6 +197,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelText)
   BIND(IF(?external, "_blank", ?none) AS ?target)
   BIND(IF(?external, "noopener noreferrer", ?none) AS ?rel)
+  BIND(IF(EXISTS { $this c:currentPage true }, IRI(CONCAT(STR($this), "/~current")), ?none) AS ?currentAttr)
   # The hint is the class's (c:externalHint on c:Link), in the viewer's language when c:LinkTexts put it here.
   OPTIONAL { c:Link c:externalHint ?hint0_u FILTER(isLiteral(?hint0_u) && lang(?hint0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?hint0_u)) c:Link c:externalHint ?hint0_en FILTER(langMatches(lang(?hint0_en), "en")) }

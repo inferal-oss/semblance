@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
+import { functions as typeFunctions } from '../src/components/type.ts'
 import { loadStore } from '../src/node/load.ts'
 import { A11Y, MOD, SEM, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -75,7 +76,21 @@ describe('the Type page', () => {
     const internal = root('ty-link-internal')
     expect(internal.hasAttribute('target')).toBe(false)
     expect(internal.querySelector('.sem-external')).toBeNull()
+    expect(internal.hasAttribute('aria-current')).toBe(false)
+    expect(root('ty-link-current').getAttribute('aria-current')).toBe('page')
     expect(root('ty-link-danger').getAttribute('data-sem-tone')).toBe('danger')
+  })
+
+  it('marks the current page in the function rendering of a link', () => {
+    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const root = 'https://example.org/current-link'
+    const store = loadStore('oxigraph',
+      `@prefix c: <https://semblance.dev/ns/component#> .
+       <${root}> a c:Link ; c:label "Current page" ; c:href "/docs/" ; c:currentPage true .`)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, prefer: 'function', functions: typeFunctions, name: 'current-link', roots: [root] })
+    new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+    expect(document.querySelector('a')?.getAttribute('aria-current')).toBe('page')
   })
 
   it('renders a linked card as one accessible link with summary and current state', () => {
