@@ -56,8 +56,38 @@ export class DomRenderer {
     // A focused node that moves to another parent (a card to another lane) is detached on the
     // way, which blurs it: it gets its focus back once it is in place.
     const focused = this.doc.activeElement as HTMLElement | null
+    // Where it was, in case the patch removes it (a list item's remove button).
+    const ancestors: { at: Element; next: Element | null; previous: Element | null }[] = []
+    if (focused && this.host.contains(focused)) {
+      for (let child: Element = focused, a = focused.parentElement; a && a !== this.host.parentElement; child = a, a = a.parentElement) {
+        ancestors.push({ at: a, next: child.nextElementSibling, previous: child.previousElementSibling })
+      }
+    }
     this.patch()
     if (focused && focused !== this.doc.activeElement && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
+    else if (focused && !focused.isConnected && ancestors.length) this.refocus(ancestors)
+  }
+
+  /**
+   * The focused element was removed (with what it belonged to): the focus goes to a control near
+   * where it was - in what followed it (the next item of a list), else what preceded it, in its
+   * nearest remaining ancestor, else in that ancestor (what the list belongs to) - rather than to the
+   * page, so a keyboard user carries on where they were.
+   */
+  private refocus(ancestors: { at: Element; next: Element | null; previous: Element | null }[]) {
+    const active = this.doc.activeElement
+    if (active && active !== this.doc.body && active !== this.doc.documentElement) return
+    const focusable = 'button:not([disabled]), a[href], input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    const first = (within: Element | null, last = false) => {
+      if (!within?.isConnected) return undefined
+      const all = [within, ...within.querySelectorAll(focusable)].filter((el) => el.matches(focusable) && !el.closest('[hidden], [inert]') && !this.inSlot(el)) as HTMLElement[]
+      return last ? all.at(-1) : all[0]
+    }
+    for (const { at, next, previous } of ancestors) {
+      if (!at.isConnected) continue
+      const target = first(next) ?? first(previous, true) ?? first(at)
+      if (target) return target.focus?.({ preventScroll: true })
+    }
   }
 
   private patch(): void {

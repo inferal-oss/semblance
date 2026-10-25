@@ -153,6 +153,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   is recorded and handled by the target's own reactions; a refused drop is a
   `dnd:Refusal` they never see, announced. Pointer (a long press on touch) and
   keyboard (Space, arrows, Space/Enter, Escape) drive it alike.
+- **Files** (`file:`): a file a person picks or drops is a node with its metadata, never its
+  contents. A host effect (`src/files.ts`) opens the system picker for a `file:Pick`, turns files
+  dragged in from outside the page into a drag of the dnd: layer (each zone shows its reception),
+  offers each arriving file to its target so its SHACL decides, and uploads accepted files with
+  progress, as events. `c:FileDrop` (Inputs) is built on it.
 - **Announcements**: reactions say what they mean (`ann:announces`); a
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
@@ -305,7 +310,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -317,7 +322,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement and clipboard layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, drawing connectors where their ends are |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

@@ -23,6 +23,7 @@
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix schema: <https://schema.org/> .
 @prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix file: <https://semblance.dev/ns/file#> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix vann: <http://purl.org/vocab/vann/> .
 @prefix odrl: <http://www.w3.org/ns/odrl/2/> .
@@ -87,6 +88,14 @@ c:Breadcrumbs rdfs:subClassOf schema:SiteNavigationElement ; skos:closeMatch sch
 c:Table rdfs:subClassOf schema:Table .
 c:Window rdfs:subClassOf schema:WPSideBar ; skos:relatedMatch schema:WPAdBlock .
 c:Link skos:closeMatch schema:LinkRole .
+# Files (ontology/layers/files.ttl): a file's metadata, as schema.org and Dublin Core say it.
+file:File skos:closeMatch schema:MediaObject .
+file:name rdfs:subPropertyOf schema:name .
+file:mediaType skos:closeMatch schema:encodingFormat , dcterms:format .
+file:size skos:closeMatch schema:contentSize .
+file:modified skos:closeMatch schema:dateModified , dcterms:modified .
+file:location skos:closeMatch schema:contentUrl .
+c:FileDrop skos:relatedMatch schema:UploadAction .
 c:href rdfs:subPropertyOf schema:url .
 c:image rdfs:subPropertyOf schema:image , foaf:depiction .
 c:Avatar skos:relatedMatch foaf:Image .
@@ -268,4 +277,5 @@ skos:relatedMatch sem:alignmentStrength sem:Related .
     [ sh:prefix "nav" ; sh:namespace "https://semblance.dev/ns/navigation#"^^xsd:anyURI ],
     [ sh:prefix "iv" ; sh:namespace "https://semblance.dev/ns/view#"^^xsd:anyURI ],
     [ sh:prefix "clip" ; sh:namespace "https://semblance.dev/ns/clipboard#"^^xsd:anyURI ],
+    [ sh:prefix "file" ; sh:namespace "https://semblance.dev/ns/file#"^^xsd:anyURI ],
     [ sh:prefix "perf" ; sh:namespace "https://semblance.dev/ns/perf#"^^xsd:anyURI ] .

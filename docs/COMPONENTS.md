@@ -241,6 +241,25 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 - **Things due later, the clipboard.** Attach a `Scheduler` (`beh:dueAt` becomes a `beh:Due`
   event) and a `Clipboard` (a `clip:Request` is written with `navigator.clipboard`, or a stand-in
   you pass, e.g. in tests); both report back as events on the bus.
+- **Files.** A `c:FileDrop` asks for the system picker (a `file:Pick`) and receives files dropped on
+  its zone; `Files` (`src/files.ts`) performs both and reports each file as events, offered to the
+  drop so its shape decides (`file:Added`, `file:Refusal`). It uploads each accepted file at once when
+  the drop says where: `file:uploadTo` (an HTTP POST of a form with the file; `send` replaces it) or
+  `file:handler`, the name of a handler you give it, which reports progress and is aborted when the
+  file is removed. File contents never enter the graph: read them with `files.fileOf(fileIri)`.
+  `mount` attaches it (options: `files: { handlers, send, picker }`, or `false`); wiring by hand,
+  `new Files(bus, { handlers, onHandled: () => renderer.flush() }).attach(renderer)`. Tests pass a
+  stand-in `picker` and handlers (`test/harness.ts`).
+
+  ```ts
+  const app = await mount(element, {
+    root, graphs: [myApp],
+    files: { handlers: { documents: async (file, { onProgress, signal }) => {
+      await myUpload(file as File, { onProgress, signal })   // resolve: uploaded; reject: why it failed
+      return { location: '/documents/' + file.name }
+    } } },
+  })
+  ```
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
   `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no

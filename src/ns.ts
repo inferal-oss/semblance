@@ -42,6 +42,7 @@ export const NS = {
   iv: 'https://semblance.dev/ns/view#',
   clip: 'https://semblance.dev/ns/clipboard#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
+  file: 'https://semblance.dev/ns/file#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -372,7 +373,7 @@ export const DND = {
   effect: NS.dnd + 'effect', by: NS.dnd + 'by', Pointer: NS.dnd + 'Pointer', Keyboard: NS.dnd + 'Keyboard', reason: NS.dnd + 'reason', offered: NS.dnd + 'offered',
   hovered: NS.dnd + 'hovered', lifted: NS.dnd + 'lifted', refusedBy: NS.dnd + 'refusedBy', Reception: NS.dnd + 'Reception', verdict: NS.dnd + 'verdict',
   Accepted: NS.dnd + 'Accepted', Refused: NS.dnd + 'Refused', Start: NS.dnd + 'Start', Over: NS.dnd + 'Over', Drop: NS.dnd + 'Drop', Refusal: NS.dnd + 'Refusal',
-  Cancel: NS.dnd + 'Cancel', End: NS.dnd + 'End',
+  Cancel: NS.dnd + 'Cancel', End: NS.dnd + 'End', count: NS.dnd + 'count',
 } as const
 export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
 export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
@@ -384,6 +385,16 @@ export const CLIP = {
   requestedBy: NS.clip + 'requestedBy', says: NS.clip + 'says', request: NS.clip + 'request', reason: NS.clip + 'reason',
   Copied: NS.clip + 'Copied', CopyFailed: NS.clip + 'CopyFailed', outcome: NS.clip + 'outcome', glyph: NS.clip + 'glyph',
   Success: NS.clip + 'Success', Failure: NS.clip + 'Failure', until: NS.clip + 'until', shownFor: NS.clip + 'shownFor',
+} as const
+/** Files picked or dropped, and their uploads (ontology/layers/files.ttl, src/files.ts). */
+export const FILE = {
+  File: NS.file + 'File', name: NS.file + 'name', mediaType: NS.file + 'mediaType', size: NS.file + 'size', modified: NS.file + 'modified',
+  handle: NS.file + 'handle', state: NS.file + 'state', loaded: NS.file + 'loaded', reason: NS.file + 'reason', location: NS.file + 'location',
+  Ready: NS.file + 'Ready', Uploading: NS.file + 'Uploading', Uploaded: NS.file + 'Uploaded', Failed: NS.file + 'Failed', Refused: NS.file + 'Refused',
+  Dragged: NS.file + 'Dragged', Pick: NS.file + 'Pick', requestedBy: NS.file + 'requestedBy', accept: NS.file + 'accept', multiple: NS.file + 'multiple',
+  uploadTo: NS.file + 'uploadTo', handler: NS.file + 'handler', file: NS.file + 'file', removes: NS.file + 'removes', retries: NS.file + 'retries',
+  DragIn: NS.file + 'DragIn', Arrive: NS.file + 'Arrive', Added: NS.file + 'Added', Refusal: NS.file + 'Refusal', PickCancelled: NS.file + 'PickCancelled',
+  Progress: NS.file + 'Progress', Done: NS.file + 'Done', Failure: NS.file + 'Failure',
 } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {

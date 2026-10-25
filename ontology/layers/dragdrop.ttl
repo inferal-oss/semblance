@@ -6,6 +6,7 @@
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix val: <https://semblance.dev/ns/validation#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -20,7 +21,11 @@
 # (dnd:zone). Whether a target takes what is carried is SHACL: the carried resource must conform
 # to the target's dnd:accepts node shapes, and the receptacle must still conform to the shapes
 # that target it once the drop has added one more member (sh:maxCount on the membership path,
-# dnd:memberOf or dnd:members: a capacity, a work-in-progress limit). What SHACL Core cannot say
+# dnd:memberOf or dnd:members: a capacity, a work-in-progress limit). A target that is also a field
+# validating its membership property (val:validates a property shape on that path) honours that
+# shape too: its sh:node shapes are what each member must conform to, its sh:maxCount how many there
+# may be. A drag may carry several things at once (dnd:count: files dragged in from outside the
+# page), and then needs room for all of them. What SHACL Core cannot say
 # about a place (that it would overlap a booking there) a rule can: any rule may derive a
 # dnd:Objection to the drag going into a receptacle, with its reason, and the target refuses it.
 #
@@ -91,10 +96,11 @@ dnd:zone a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ;
 dnd:accepts a owl:ObjectProperty ; rdfs:range sh:NodeShape ;
     rdfs:comment """A shape the carried resource must conform to - on a target (every receptacle of it), or on a
 receptacle itself (a folder saying what it takes). Supported: sh:class on the node, and on property
-shapes with a predicate path sh:hasValue, sh:in, sh:class, and the ranges sh:minInclusive,
-sh:maxInclusive, sh:minExclusive and sh:maxExclusive (a room's seats against a meeting's
-attendees). The violation's sh:message (the property shape's, else the node shape's) is the
-reason given."""@en .
+shapes with a predicate path sh:hasValue, sh:in, sh:class, sh:pattern (with sh:flags: a media type,
+a file's extension), and the ranges sh:minInclusive, sh:maxInclusive, sh:minExclusive and
+sh:maxExclusive (a room's seats against a meeting's attendees; a file's size). The violation's
+sh:message (the property shape's, else the node shape's) is the reason given. A target that
+val:validates a property shape on its membership path also takes that shape's sh:node shapes."""@en .
 dnd:memberOf a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range rdf:Property ;
     rdfs:comment "After a drop the carried resource has this property with the receptacle as its value (a card's column)."@en .
 dnd:members a owl:ObjectProperty ; rdfs:domain dnd:DropTarget ; rdfs:range rdf:Property ;
@@ -129,6 +135,8 @@ dnd:rank a owl:DatatypeProperty ;
 dnd:orderBy values, one past the last, one before the first, 1 in an empty target. Nothing else
 is renumbered (sem:orderKey sorts the fractions numerically)."""@en .
 dnd:effect a owl:ObjectProperty ; rdfs:range dnd:Effect .
+dnd:count a owl:DatatypeProperty ; rdfs:domain dnd:Drag ; rdfs:range xsd:integer ;
+    rdfs:comment "How many things the drag carries at once (default 1): a receptacle needs room for all of them (files dragged in from outside the page)."@en .
 dnd:by a owl:ObjectProperty ; rdfs:range dnd:Means ; rdfs:comment "How it is being carried."@en .
 dnd:Means a owl:Class .
 dnd:Pointer a dnd:Means ; rdfs:label "pointer"@en .
@@ -194,7 +202,7 @@ dnd:Lift a beh:Reaction ;
     beh:sourceClass dnd:Draggable ;
     beh:deletes """
 CONSTRUCT { dnd:Current ?p ?o . ?t dnd:offered dnd:Current . ?h dnd:hovered dnd:Current . ?l dnd:lifted dnd:Current . $this dnd:refusedBy ?refusal }
-WHERE { { VALUES ?p { dnd:source dnd:carrying dnd:from dnd:by dnd:effect dnd:dropTarget dnd:into dnd:after dnd:before dnd:rank } dnd:Current ?p ?o } UNION { ?t dnd:offered dnd:Current } UNION { ?h dnd:hovered dnd:Current } UNION { ?l dnd:lifted dnd:Current } UNION { $this dnd:refusedBy ?refusal } }""" ;
+WHERE { { VALUES ?p { dnd:source dnd:carrying dnd:from dnd:by dnd:effect dnd:dropTarget dnd:into dnd:after dnd:before dnd:rank dnd:count } dnd:Current ?p ?o } UNION { ?t dnd:offered dnd:Current } UNION { ?h dnd:hovered dnd:Current } UNION { ?l dnd:lifted dnd:Current } UNION { $this dnd:refusedBy ?refusal } }""" ;
     beh:inserts """
 CONSTRUCT {
   dnd:Current a dnd:Drag ; dnd:source $this ; dnd:carrying ?carried ; dnd:from ?from ; dnd:by ?by ; dnd:effect ?effect .
@@ -246,7 +254,7 @@ dnd:Settle a beh:Reaction ;
     beh:source dnd:Current ;
     beh:deletes """
 CONSTRUCT { dnd:Current ?p ?o . ?t dnd:offered dnd:Current . ?h dnd:hovered dnd:Current . ?l dnd:lifted dnd:Current }
-WHERE { { VALUES ?p { dnd:source dnd:carrying dnd:from dnd:by dnd:effect dnd:dropTarget dnd:into dnd:after dnd:before dnd:rank } dnd:Current ?p ?o } UNION { ?t dnd:offered dnd:Current } UNION { ?h dnd:hovered dnd:Current } UNION { ?l dnd:lifted dnd:Current } }""" ;
+WHERE { { VALUES ?p { dnd:source dnd:carrying dnd:from dnd:by dnd:effect dnd:dropTarget dnd:into dnd:after dnd:before dnd:rank dnd:count } dnd:Current ?p ?o } UNION { ?t dnd:offered dnd:Current } UNION { ?h dnd:hovered dnd:Current } UNION { ?l dnd:lifted dnd:Current } }""" ;
     sem:function "dnd:settle" .
 
 # A refused drop marks the draggable (it shakes) and says why: the shape's message, carried by
@@ -291,7 +299,8 @@ WHERE {
 }""" .
 
 # While there is a drag: each zone's reception of what is carried. Refused if it does not conform
-# to a dnd:accepts shape, or if one more member would exceed a sh:maxCount on the receptacle; the
+# to a dnd:accepts shape (or the sh:node of the target's val:validates shape), or if one more member
+# (dnd:count more) would exceed a sh:maxCount on the receptacle (or of that shape); the
 # reason is the (lexically first) violated shape's untagged sh:message - or an objection's reason
 # (dnd:Objection), whichever is first. The zone it came from accepts it back (a reorder adds no
 # member), and a receptacle already holding it is not objected to.
@@ -301,7 +310,7 @@ dnd:Receive a sem:Rendering ;
     sem:stratum 10 ;
     sem:requires dnd:offered ;
     sem:follows dnd:offered ;
-    sem:watches dnd:offered , dnd:carrying , dnd:from , dnd:zone , dnd:receptacle , dnd:accepts , dnd:memberOf , dnd:members .
+    sem:watches dnd:offered , dnd:carrying , dnd:count , dnd:from , dnd:zone , dnd:receptacle , dnd:accepts , dnd:memberOf , dnd:members , val:validates .
 dnd:Receive-fn a sem:Rule ; sem:implements dnd:Receive ; sem:function "dnd:receive" .
 dnd:Receive-sparql a sem:Rule ;
     sem:implements dnd:Receive ;
@@ -322,10 +331,16 @@ WHERE {
   # Does what is carried conform to the target's shapes? The first violation's message, if not.
   LATERAL { OPTIONAL { SELECT ?this ?x ?r (MIN(?said) AS ?unfit) WHERE {
     { $this dnd:accepts ?shape } UNION { ?r dnd:accepts ?shape }
+    UNION { $this val:validates ?field . ?field sh:node ?shape .
+            { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm } }
     { ?shape sh:class ?class FILTER NOT EXISTS { ?x a/rdfs:subClassOf* ?class } BIND(?shape AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:hasValue ?wanted FILTER(isIRI(?p)) FILTER NOT EXISTS { ?x ?p ?wanted } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:in ?allowed FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?allowed rdf:rest*/rdf:first ?v } BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:class ?valueClass FILTER(isIRI(?p)) ?x ?p ?v FILTER NOT EXISTS { ?v a/rdfs:subClassOf* ?valueClass } BIND(?ps AS ?violated) }
+    UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; sh:pattern ?pattern FILTER(isIRI(?p)) ?x ?p ?v
+            OPTIONAL { ?ps sh:flags ?flags }
+            FILTER(!REGEX(STR(?v), STR(?pattern), COALESCE(STR(?flags), "")))
+            BIND(?ps AS ?violated) }
     UNION { ?shape sh:property ?ps . ?ps sh:path ?p ; ?rangeBound ?limit FILTER(isIRI(?p) && ?rangeBound IN (sh:minInclusive, sh:maxInclusive, sh:minExclusive, sh:maxExclusive))
             ?x ?p ?v
             FILTER(!COALESCE(IF(?rangeBound = sh:minInclusive, ?v >= ?limit, IF(?rangeBound = sh:maxInclusive, ?v <= ?limit, IF(?rangeBound = sh:minExclusive, ?v > ?limit, ?v < ?limit))), false))
@@ -344,13 +359,25 @@ WHERE {
     OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
     BIND(STR(COALESCE(?own, ?general, "There is no room for it here.")) AS ?said)
   } GROUP BY ?this ?r } }
+  # A target that is a field over its membership property: that shape's sh:maxCount too.
+  LATERAL { OPTIONAL { SELECT ?this (MIN(?fieldBound) AS ?fieldMax) (MIN(?fieldSaid) AS ?fieldFull) WHERE {
+    $this val:validates ?field . ?field sh:maxCount ?fieldBound .
+    { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm }
+    OPTIONAL { ?field sh:message ?fieldOwn FILTER(lang(?fieldOwn) = "") }
+    BIND(STR(COALESCE(?fieldOwn, "There is no room for it here.")) AS ?fieldSaid)
+  } GROUP BY ?this } }
+  # How many it carries at once.
+  LATERAL { OPTIONAL { ?drag dnd:count ?declaredCount } }
+  BIND(COALESCE(xsd:integer(?declaredCount), 1) AS ?adding)
+  BIND(IF(BOUND(?max) && BOUND(?fieldMax), IF(?fieldMax < ?max, ?fieldMax, ?max), COALESCE(?max, ?fieldMax)) AS ?room)
+  BIND(IF(BOUND(?full) && BOUND(?fieldFull), IF(?fieldFull < ?full, ?fieldFull, ?full), COALESCE(?full, ?fieldFull)) AS ?noRoom)
   # What a rule objects to (dnd:Objection): the least reason given for this receptacle.
   LATERAL { OPTIONAL { SELECT ?r ?drag (MIN(?why) AS ?objected) WHERE { ?objection a dnd:Objection ; dnd:receptacle ?r ; dnd:against ?drag ; dnd:reason ?why } GROUP BY ?r ?drag } }
   BIND(EXISTS { ?drag dnd:from ?r } AS ?origin)
   BIND(EXISTS { $this dnd:memberOf ?m1 . ?x ?m1 ?r } || EXISTS { $this dnd:members ?m2 . ?r ?m2 ?x } AS ?inside)
-  BIND(!?origin && !?inside && BOUND(?max) && COALESCE(?pointing, ?holding, 0) + 1 > ?max AS ?overfull)
+  BIND(!?origin && !?inside && BOUND(?room) && COALESCE(?pointing, ?holding, 0) + ?adding > ?room AS ?overfull)
   BIND(IF(?origin, ?none, ?unfit) AS ?unfitHere)
-  BIND(IF(?overfull, ?full, ?none) AS ?fullHere)
+  BIND(IF(?overfull, ?noRoom, ?none) AS ?fullHere)
   BIND(IF(?origin || ?inside, ?none, STR(?objected)) AS ?objectedHere)
   BIND(IF(BOUND(?unfitHere) && BOUND(?fullHere), IF(?unfitHere < ?fullHere, ?unfitHere, ?fullHere), COALESCE(?unfitHere, ?fullHere)) AS ?shaped)
   BIND(IF(BOUND(?shaped) && BOUND(?objectedHere), IF(?shaped < ?objectedHere, ?shaped, ?objectedHere), COALESCE(?shaped, ?objectedHere)) AS ?reason)

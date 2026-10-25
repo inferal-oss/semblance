@@ -4,6 +4,7 @@ import { EventBus } from '../src/behaviour/events.ts'
 import type { Clock } from '../src/behaviour/clock.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard, type ClipboardLike } from '../src/clipboard.ts'
+import { type FileLike, Files, type PickOptions, type UploadContext } from '../src/files.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
@@ -104,6 +105,23 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     onHandled: () => shell.flush(),
   })
   copies.attach()
+  // Files: the picker hands over what the test put in picker.next (none: it was closed), and the
+  // "demo" upload handler waits for the test to say how each upload goes (uploads.get(file)).
+  const picker = { next: null as FileLike[] | null, asked: [] as PickOptions[] }
+  type Upload = { file: FileLike; ctx: UploadContext; resolve(r?: { location?: string }): void; reject(e: Error): void }
+  const uploads = new Map<string, Upload>()
+  const files = new Files(bus, {
+    picker: async (opts) => {
+      picker.asked.push(opts)
+      const chosen = picker.next
+      picker.next = null
+      return chosen
+    },
+    handlers: { demo: (file, ctx) => new Promise((resolve, reject) => void uploads.set(ctx.file, { file, ctx, resolve, reject })) },
+    progressEvery: 0,
+    onHandled: () => shell.flush(),
+  })
+  files.attach(shell)
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
@@ -124,6 +142,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fire, value, showPage }
 }
 

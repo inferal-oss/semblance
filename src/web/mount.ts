@@ -5,6 +5,7 @@ import { DomRenderer } from '../render/dom.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
+import { Files, type FilesOptions } from '../files.ts'
 import { attachConnectors } from './connectors.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
@@ -29,6 +30,8 @@ export interface MountOptions {
   languages?: string[]
   /** Called after each event is handled and the DOM patched. */
   onHandled?: (h: Handled) => void
+  /** The files effect (c:FileDrop: the picker, drops, uploads and their handlers); false leaves it off. */
+  files?: Omit<FilesOptions, 'onHandled'> | false
 }
 
 export interface MountedApp {
@@ -37,6 +40,8 @@ export interface MountedApp {
   projection: Projection
   renderer: DomRenderer
   bus: EventBus
+  /** The files effect, unless it was left off: the contents of picked and dropped files (fileOf). */
+  files?: Files
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
   /** Detach events and idle work, and remove the styles. The DOM is left as it is. */
@@ -47,7 +52,7 @@ export interface MountedApp {
  * Mount a component graph into an element: load the store, compile the theme, project the
  * root on screen, patch it into `element` and route the element's events to reactions.
  * Hidden parts are evaluated in idle time; connectors (c:Connector) are drawn where their ends
- * are. Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
+ * are; picked, dropped and uploaded files go through the files effect (opts.files). Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
  */
 export async function mount(element: HTMLElement, opts: MountOptions): Promise<MountedApp> {
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
@@ -100,6 +105,20 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   scheduleWarmup()
   // Connectors are drawn where their ends are (nothing to do while there is none).
   const connectors = attachConnectors(element)
+  // Files: a file:Pick opens the system picker, files dropped on a file drop's zone arrive, and
+  // accepted files are uploaded as their drop says; each reports back as events on the bus.
+  const files =
+    opts.files === false
+      ? undefined
+      : new Files(bus, {
+          ...opts.files,
+          onHandled: (h) => {
+            flush()
+            scheduleWarmup()
+            opts.onHandled?.(h)
+          },
+        })
+  const detachFiles = files?.attach(renderer)
 
   return {
     store,
@@ -107,10 +126,12 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     projection,
     renderer,
     bus,
+    files,
     flush,
     unmount() {
       stopped = true
       detach()
+      detachFiles?.()
       connectors.dispose()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },

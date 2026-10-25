@@ -2,6 +2,7 @@ import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard } from '../src/clipboard.ts'
+import { Files, type Uploader } from '../src/files.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -321,6 +322,32 @@ new Clipboard(bus, {
     flush()
   },
 }).attach()
+
+// Files: the picker and drops (file:Pick, files dragged over the page) come in as events; uploads
+// go to the site's stand-in server (the "demo" handler: a moment per file, and the first try of
+// every third file fails, so progress, failure and retry can be seen).
+let demoUploads = 0
+const demoUpload: Uploader = (file, ctx) =>
+  new Promise((resolve, reject) => {
+    const fails = ++demoUploads % 3 === 0
+    const total = Math.max(1, file.size)
+    const steps = 12
+    let step = 0
+    const timer = setInterval(() => {
+      step++
+      ctx.onProgress(Math.round((total * step) / steps))
+      if (fails && step === Math.round(steps / 2)) clearInterval(timer), reject(new Error('The connection to the server was lost.'))
+      else if (step >= steps) clearInterval(timer), resolve({})
+    }, 160)
+    ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true })
+  })
+new Files(bus, {
+  handlers: { demo: demoUpload },
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach(shell)
 
 // Changes of where we are go to the address; Back, Forward and typed or followed addresses
 // come back as nav:Navigate events, and a followed link's target is brought into view.

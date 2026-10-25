@@ -66,7 +66,7 @@ Thin vocabularies. Every component
 | **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
 | **Type** | Heading · Text · Link · Kbd · Code · Blockquote · GraphMark · Emblem · SourceView · Walkthrough (WalkthroughStep, Mention) · LiveExample |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
-| **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
+| **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
 | **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
@@ -133,6 +133,17 @@ A range is picked start first, its span highlighted and previewed under the poin
 is not a date stays and the validation layer says how to write one; bounds are the `val:validates`
 shapes' `sh:minInclusive` / `sh:maxInclusive` (and `sh:lessThanOrEquals` for a range), which the
 grid and the time list keep to. The month grid stands alone too.
+A **file drop** (`c:FileDrop`, `ontology/components/upload.ttl`) picks or takes dropped files into a
+property (`c:controls`, `c:property`). Its zone is a button (a click, Enter or Space opens the system
+picker) and a drop target of the drag and drop layer, so files dragged over the page show its
+reception, accepted or refused with the shape's message. What it accepts is the SHACL shape it
+validates: each file must conform to its `sh:node` shape (`sh:in` or `sh:pattern` on `file:mediaType`
+or `file:name`, `sh:maxInclusive` on `file:size`), and its `sh:maxCount` says how many. A file is a
+`file:File` node with its metadata, never its contents (`ontology/layers/files.ttl`); each arrives on
+its own and is offered to the zone, so the shape decides with its size known, and a refused one is
+listed (`c:FileItem`) with the reason. With `file:uploadTo` or `file:handler` each accepted file is
+uploaded at once, with a `c:Progress`, and its remove button cancels the upload. The picker, the
+drop's `DataTransfer` and the uploads are a host effect (`Files`, `src/files.ts`).
 
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)
@@ -177,7 +188,7 @@ per projection. New ones:
 | **Motion** (`mot:`) | `mot:preference` Full / Reduced / None on a subtree | Re-values the duration and easing tokens every transition and animation uses (shared `sty:Keyframes` in the foundations). |
 | **Localization** (`l10n:`) | `l10n:language` on the app; language-tagged `rdfs:label` / `c:label` | Components read labels through the layer: the app language wins, then English, then untagged. Languages with `l10n:direction l10n:RTL` set `dir="rtl"` on the shell. |
 | **Announcements** (`ann:`) | `ann:announces "…"` (and `ann:tone`) on a reaction | A `c:ToastRegion` with `ann:from` a change log shows the newest announcing events as toasts, reading the log from its head. |
-| **Drag and drop** (`dnd:`) | `dnd:Draggable` (`dnd:carries`), `dnd:DropTarget` / `dnd:Sortable` (`dnd:accepts` shapes, `dnd:memberOf` / `dnd:members`, `dnd:orderBy`) | Draggables are handles (pointer, long press, Space); while one is carried every zone is marked accepting or refusing (with the violated shape's `sh:message`), the hovered position shows an insertion line, and a drop is a recorded `dnd:Drop` for the target's reactions, with a fractional `dnd:rank` between its neighbours. Refused drops are announced, never applied. |
+| **Drag and drop** (`dnd:`) | `dnd:Draggable` (`dnd:carries`), `dnd:DropTarget` / `dnd:Sortable` (`dnd:accepts` shapes, `dnd:memberOf` / `dnd:members`, `dnd:orderBy`) | Draggables are handles (pointer, long press, Space); while one is carried every zone is marked accepting or refusing (with the violated shape's `sh:message`), the hovered position shows an insertion line, and a drop is a recorded `dnd:Drop` for the target's reactions, with a fractional `dnd:rank` between its neighbours. Refused drops are announced, never applied. A target that validates its membership property (`val:validates`) takes that shape's `sh:node` and `sh:maxCount` too; a drag may carry several things (`dnd:count`: files from outside the page, `file:Dragged`). |
 | **Status** (`st:`) | `st:busy true` on a component | `aria-busy`; the theme dims it under a shimmer. |
 | **Contrast** | `sty:contrast sty:HighContrast` on a subtree | Re-values the role tokens for stronger text and visible borders. |
 

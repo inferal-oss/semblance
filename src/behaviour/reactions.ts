@@ -16,6 +16,7 @@ import { docsReactions } from '../layers/docs.ts'
 import { dragdropReactions } from '../layers/dragdrop.ts'
 import { dependencyReactions } from '../layers/dependency.ts'
 import { clipboardReactions } from '../layers/clipboard.ts'
+import { filesReactions, uploadReactions } from '../components/upload.ts'
 import { persistenceReactions } from '../persistence.ts'
 import { locationReactions } from '../navigation.ts'
 import { reactions as disclosureReactions } from '../components/disclosure.ts'
@@ -150,6 +151,8 @@ export const reactions: Record<string, ReactionFn> = {
   ...dragdropReactions,
   ...dependencyReactions,
   ...clipboardReactions,
+  ...filesReactions,
+  ...uploadReactions,
   ...persistenceReactions,
   ...locationReactions,
   ...disclosureReactions,
