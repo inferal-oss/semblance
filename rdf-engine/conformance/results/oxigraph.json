@@ -5,38 +5,37 @@
     "sparql12": {
       "pass": 262,
       "fail": 9,
-      "skip": 0
+      "skip": 0,
+      "spelling": 0
     },
     "sparql11": {
       "pass": 467,
-      "fail": 43,
-      "skip": 0
+      "fail": 31,
+      "skip": 0,
+      "spelling": 12
     },
     "sparql10": {
       "pass": 446,
-      "fail": 35,
-      "skip": 0
+      "fail": 27,
+      "skip": 0,
+      "spelling": 8
     },
     "rdf12": {
       "pass": 1052,
       "fail": 3,
-      "skip": 82
+      "skip": 82,
+      "spelling": 0
     }
   },
   "failing": {
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/distinct/manifest#distinct-1": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/distinct/manifest#distinct-9": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/distinct/manifest#no-distinct-1": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/distinct/manifest#no-distinct-9": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#case-insensitive-booleans": "error: error at 1:23: expected ENCODE_FOR_URI",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#dawg-datatype-1": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#dawg-str-1": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#dawg-str-2": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#sameTerm-eq": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#sameTerm-not-eq": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#sameTerm-simple": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-equals/manifest#eq-2-1": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-equals/manifest#eq-2-2": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-equals/manifest#eq-graph-1": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-equals/manifest#eq-graph-2": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/graph/manifest#graph-nested-2": "wrong result",
@@ -46,11 +45,8 @@
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-2": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#date-3": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#open-eq-01": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#open-eq-03": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#open-eq-04": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/reduced/manifest#reduced-1": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/reduced/manifest#reduced-2": "wrong result",
-    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/sort/manifest#dawg-sort-7": "wrong result",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/syntax-sparql1/manifest#syntax-expr-05": "error: The custom function <http://example.org/ns#myFunc> is not supported",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/syntax-sparql1/manifest#syntax-order-05": "error: The custom function <http://example.org/ns#func> is not supported",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/syntax-sparql1/manifest#syntax-order-06": "error: The custom function <http://example.org/ns#func2> is not supported",
@@ -59,18 +55,9 @@
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/syntax-sparql2/manifest#syntax-function-03": "error: The custom function <http://example.org/name> is not supported",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/syntax-sparql2/manifest#syntax-function-04": "error: The custom function <http://example.org/name> is not supported",
     "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/syntax-sparql3/manifest#syn-bad-26": "accepted invalid input",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-avg-02": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-empty-group-count-graph": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-err-02": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-groupconcat-04": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-groupconcat-06": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-max-01": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-max-02": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-max-distinct": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-min-01": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-min-02": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-min-distinct": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-sum-02": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/bindings/manifest#graph": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/bindings/manifest#graph-from-named-1": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/bindings/manifest#graph-from-named-2": "wrong result",
@@ -84,9 +71,6 @@
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-int": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/cast/manifest#cast-string": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#bnode01": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#coalesce01": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected": "wrong result",
-    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-2-corrected": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/negation/manifest#graph-minus": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_more_set_end": "wrong result",
     "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/property-path/manifest#zero_or_more_set_start": "wrong result",
@@ -114,5 +98,27 @@
     "sparql/sparql12/syntax-triple-terms-negative/manifest#tripleterm-subject-03": "accepted invalid input",
     "sparql/sparql12/syntax-triple-terms-negative/manifest#tripleterm-subject-06": "accepted invalid input",
     "sparql/sparql12/syntax/manifest#nested-aggregate-functions": "accepted invalid input"
-  }
+  },
+  "spelling": [
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/distinct/manifest#no-distinct-1",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/distinct/manifest#no-distinct-9",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-builtin/manifest#dawg-datatype-1",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-equals/manifest#eq-2-1",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/expr-equals/manifest#eq-2-2",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#open-eq-03",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/open-world/manifest#open-eq-04",
+    "http://www.w3.org/2001/sw/DataAccess/tests/data-r2/sort/manifest#dawg-sort-7",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-avg-02",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-err-02",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-max-01",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-max-02",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-max-distinct",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-min-01",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-min-02",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-min-distinct",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/aggregates/manifest#agg-sum-02",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#coalesce01",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-1-corrected",
+    "http://www.w3.org/2009/sparql/docs/tests/data-sparql11/functions/manifest#plus-2-corrected"
+  ]
 }

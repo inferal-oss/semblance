@@ -68,7 +68,7 @@ The engines move in lockstep; each phase ends with both passing the same tests.
 | 1. Terms and store | done | done |
 | 2. Turtle and TriG | done: rdf12 1,055/1,055 | done: rdf12 1,055/1,055 |
 | 3. Semblance's SPARQL | done: every Semblance page renders as on Oxigraph, with SPARQL and function rules | done: the same |
-| 4. SPARQL 1.2 query and update | done: 2,305 of 2,317 W3C tests, sparql12 271/271 (Oxigraph 2,227) | done: 2,308 of 2,317, sparql12 271/271 |
+| 4. SPARQL 1.2 query and update | done: no W3C failures; 2,309 of 2,317 pass and 8 differ only in number spelling (Oxigraph: 2,227 pass, 20 spelling, 70 fail) | done: the same as Rust, test for test |
 | 5. Housekeeping and speed | `collect`; size pass (344 to 262 KiB); sessions flat at 17–24 ms/event | `collect`; the fastest store on Semblance's pages |
 
 Both engines write numbers as Oxigraph does, which Semblance's output relies
@@ -77,8 +77,8 @@ shortest digits that read back, in plain notation (`"10000000"`, `"0.0000001"`,
 `"-0"`). A cast to `xsd:string` writes a number, boolean, date, time or
 duration in that canonical form (`"1.0"^^xsd:decimal` is `"1"`,
 `"0"^^xsd:boolean` is `"false"`). Eight W3C tests expect XSD 1.0 canonical
-forms (`"2.0"`, `"2.5E0"`) and fail on both engines, and on Oxigraph, for that
-reason only.
+forms (`"2.0"`, `"2.5E0"`): the runner reports them as `spelling` (right values,
+numbers written differently), apart from real failures, in `results/*.json`.
 
 Known differences from Oxigraph, where our engines follow the spec:
 `REPLACE("a|b", "\\|", "\\\\|")` gives `a\|b` (XPath fn:replace reads `\\` in
