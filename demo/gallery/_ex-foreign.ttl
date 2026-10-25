@@ -202,6 +202,12 @@ ui:ex-foreign a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:ex-foreign-intro ui:ex-foreign-views ui:ex-foreign-card ui:ex-foreign-add-row ui:ex-foreign-graph ) .
 ui:ex-foreign-views a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-foreign-chart ui:ex-foreign-map ) .
 ui:ex-foreign-intro a c:Text ;
+    c:label "Rate the coffees you tasted. Four open-source libraries, loaded from a CDN, share one graph: Shoelace's star rating, a Chart.js chart, a Leaflet map and a flatpickr date field. Choose a coffee by its bar or its marker, add one of your own, and click the map to place it." ,
+            "Оцініть каву, яку ви скуштували. Чотири бібліотеки з відкритим кодом, завантажені з CDN, мають один граф: зірковий рейтинг Shoelace, діаграма Chart.js, мапа Leaflet і поле дати flatpickr. Виберіть каву стовпчиком або позначкою, додайте свою й клацніть на мапі, щоб позначити, звідки вона."@uk ,
+            "Bewerten Sie die probierten Kaffees. Vier Open-Source-Bibliotheken, von einem CDN geladen, teilen einen Graphen: Shoelaces Sternebewertung, ein Chart.js-Diagramm, eine Leaflet-Karte und ein flatpickr-Datumsfeld. Wählen Sie einen Kaffee über seinen Balken oder seine Markierung, fügen Sie einen eigenen hinzu und klicken Sie auf die Karte, um ihn zu verorten."@de ,
+            "قيّم أنواع القهوة التي تذوقتها. أربع مكتبات مفتوحة المصدر، محمّلة من شبكة CDN، تتشارك رسمًا بيانيًا واحدًا: تقييم النجوم من Shoelace، ومخطط Chart.js، وخريطة Leaflet، وحقل تاريخ flatpickr. اختر قهوة بعمودها أو علامتها، وأضف قهوتك، وانقر على الخريطة لتحديد منشئها."@ar .
+ui:ex-foreign-views a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-foreign-chart ui:ex-foreign-map ) .
+ui:ex-foreign-intro a c:Text ;
     c:label "Rate the coffees you tasted. The stars are Shoelace's rating and the chart is Chart.js, both loaded from a CDN; their state is the graph's. Choose a bar to see that coffee, or add one of your own." ,
             "Оцініть каву, яку ви скуштували. Зірки — рейтинг Shoelace, діаграма — Chart.js, обидва завантажено з CDN; їхній стан — у графі. Виберіть стовпчик, щоб побачити ту каву, або додайте свою."@uk ,
             "Bewerten Sie die probierten Kaffees. Die Sterne sind Shoelaces Bewertung, das Diagramm ist Chart.js, beide von einem CDN geladen; ihr Zustand ist der des Graphen. Wählen Sie einen Balken, um diesen Kaffee zu sehen, oder fügen Sie einen eigenen hinzu."@de ,
