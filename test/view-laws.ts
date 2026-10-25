@@ -102,8 +102,10 @@ export function lawRuntime(kind: 'oxigraph' | 'wat' = 'oxigraph') {
 }
 
 /** `steps` random changes (seeded); every tick is checked (strict). Returns what it did. */
-export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 'oxigraph') {
-  const { store, runtime } = lawRuntime(kind)
+export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 'oxigraph', on?: Runtime) {
+  const { store, runtime } = on ? { store: on.store, runtime: on } : lawRuntime(kind)
+  // On a runtime that already ran: names of this run's own.
+  const own = on ? `s${seed}-` : ''
   const f = store.factory
   const nn = (s: string) => f.namedNode(V + s)
   const p = (s: string) => f.namedNode(s.startsWith('http') ? s : V + s)
@@ -124,7 +126,7 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
   }
   const apply = ([remove, add]: Quad[][]) => runtime.apply({ remove: remove!, add: add! })
   // Targets with labels and groups to begin with.
-  runtime.transaction(() => {
+  if (!on) runtime.transaction(() => {
     for (const t of T) {
       apply([[], [f.quad(nn(t), p(RDFS + 'label'), f.literal('label ' + t)), f.quad(nn(t), p('group'), nn(pick(G)))]])
       if (r() < 0.6) apply([[], [f.quad(nn(t), p(NS.rdf + 'type'), nn('Target'))]])
@@ -132,7 +134,7 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     for (const g of G) apply([[], [f.quad(nn(g), p(RDFS + 'label'), f.literal('group ' + g))]])
   })
   const append = () => {
-    const m = `m${++n}`
+    const m = `${own}m${++n}`
     const quads = [f.quad(nn('s'), f.namedNode(LDES.member), nn(m)), f.quad(nn(m), p('kind'), nn(pick(K))), f.quad(nn(m), p('x'), int(Math.floor(r() * 10)))]
     if (r() < 0.85) quads.push(f.quad(nn(m), p('target'), nn(pick(T))))
     members.push(m)
@@ -159,7 +161,7 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     ['min parameter', 0.4, () => set('cfg', 'min', r() < 0.2 ? undefined : int(Math.floor(r() * 10)))],
     ['subclass', 0.3, () => (r() < 0.5 ? [[], [f.quad(nn(pick(K)), p(RDFS + 'subClassOf'), nn(pick(K)))]] : [store.match(null, p(RDFS + 'subClassOf'), null).slice(0, 1), []])],
     ['item', 1.2, () => {
-      const i = `i${++n}`
+      const i = `${own}i${++n}`
       items.push(i)
       const qs = [f.quad(nn(i), p(NS.rdf + 'type'), nn('Item')), f.quad(nn(i), p('owner'), nn(pick(T)))]
       if (r() < 0.8) qs.push(f.quad(nn(i), p('score'), int(Math.floor(r() * 7))))
