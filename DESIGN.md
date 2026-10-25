@@ -82,7 +82,11 @@ Components page has a page per group, and each specimen says which classes it de
 
 Any component that shows a `c:value` may take it from a query instead: `c:valueQuery` names a
 `sem:View` whose first row's `?value` (and `?tone`) it shows, re-run when its `c:dataset` changes
-(`ontology/components/formula.ttl`).
+(`ontology/components/formula.ttl`). A **sheet** (`c:Sheet`, `ontology/components/sheet.ttl`) is
+cells that do this: a cell may say its formula as people write it (`c:formulaText "=SUM(B2:B5)"`,
+`"=B2*C2"`), which `c:SheetFormula` reads into the `c:SheetFunction` it names and the cells it reads;
+typing one into a cell makes it a formula cell (`c:EnterSheetFormula`), and its controls add a row
+or a column.
 
 A **walkthrough** (`ontology/components/walkthrough.ttl`) is an explanation in steps whose phrases
 are `c:Mention`s of resources (`c:mentions`): beside the steps it draws a diagram of what they

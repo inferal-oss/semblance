@@ -11,6 +11,10 @@
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "font-family" ; sty:token tok:font ] .
+[] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part "> .sem-sheet-tools" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Sheet ; sty:part ".sem-sheet-bar" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "min-height" ; sty:raw "34px" ] ,

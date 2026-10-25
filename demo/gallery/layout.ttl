@@ -249,7 +249,7 @@ ui:ly-rows-spec a c:Specimen ; c:demonstrates c:Stack ; c:label "Rows that line 
     c:children ( ui:ly-rows-stage ) .
 
 # --- connectors: two cards, an arrow kept attached ---
-ui:ly-connect-order a c:Card ; c:label "Order" ; c:note "ss:order, a c:Sheet" .
+ui:ly-connect-order a c:Card ; c:label "Order" ; c:note "ss:sales, a c:Sheet" .
 ui:ly-connect-invoice a c:Card ; c:label "Invoice" ; c:note "Drag me" .
 ui:ly-connect-arrow a c:Connector ; c:from ui:ly-connect-order ; c:to ui:ly-connect-invoice ;
     c:label "is billed as" ; sty:tone sty:Accent .

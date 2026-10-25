@@ -3,8 +3,8 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, H, NS, SEM } from '../ns.ts'
-import { named, str } from './util.ts'
+import { C, H, MOD, NS, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
+import { RDFS_LABEL, named, str } from './util.ts'
 
 const S = {
   cell: NS.c + 'cell',
@@ -17,6 +17,13 @@ const S = {
   tick: NS.c + 'recalculationTick',
   valueQuery: NS.c + 'valueQuery',
   dataset: NS.c + 'dataset',
+  SheetFunction: NS.c + 'SheetFunction',
+  functionName: NS.c + 'functionName',
+  operator: NS.c + 'operator',
+  leftOperand: NS.c + 'leftOperand',
+  rightOperand: NS.c + 'rightOperand',
+  addsRowTo: NS.c + 'addsRowTo',
+  addsColumnTo: NS.c + 'addsColumnTo',
 }
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
@@ -51,7 +58,21 @@ const grid: FnRule = (ctx, focus) => {
   const gridEl = o.el('grid', 'Div', { class: 'sem-sheet-grid', style: `grid-template-columns: 44px repeat(${columns}, 104px)`, 'aria-label': label })
   for (const ch of children) o.t(gridEl, H.hasChild, ch)
   const status = o.el('status', 'P', { class: 'sem-sheet-status', 'aria-live': 'polite' })
-  o.renders(o.el('root', 'Div', {}, [o.el('bar', 'P', { class: 'sem-sheet-bar' }), o.el('scroll', 'Div', { class: 'sem-sheet-scroll' }, [gridEl]), status]))
+  const parts = [o.el('bar', 'P', { class: 'sem-sheet-bar' }), o.el('scroll', 'Div', { class: 'sem-sheet-scroll' }, [gridEl]), status]
+  if (ctx.modality === MOD.Screen) {
+    // The controls above the grid: a row, a column (up to Z).
+    const en = (phrase: string, fallback: string) => ctx.objects(ctx.nn(NS.c + phrase), RDFS_LABEL).find((t) => t.termType === 'Literal' && /^en\b/.test(t.language))?.value ?? fallback
+    const button = (local: string, label: string, p: string) => {
+      const b = o.node(local)
+      o.t(b, NS.rdf + 'type', ctx.nn(NS.c + 'Button')).t(b, C.label, label).t(b, p, focus).t(b, STY.size, ctx.nn(NS.sty + 'Small')).t(b, STY.emphasis, ctx.nn(NS.sty + 'Soft'))
+      return b
+    }
+    const addRow = button('add-row', en('AddRowPhrase', 'Add a row'), S.addsRowTo)
+    const addColumn = button('add-column', en('AddColumnPhrase', 'Add a column'), S.addsColumnTo)
+    if (columns >= 26) o.t(addColumn, NS.c + 'disabled', ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
+    parts.unshift(o.el('tools', 'Div', { class: 'sem-sheet-tools' }, [addRow, addColumn]))
+  }
+  o.renders(o.el('root', 'Div', {}, parts))
   return o.quads
 }
 
@@ -92,7 +113,7 @@ const focusRule: FnRule = (ctx, focus) => {
   }
   o.t(o.node('bar'), H.hasChild, o.text('bar-text', bar))
   // How much the last change re-ran.
-  const formulas = [...cells].filter((x) => ctx.object(ctx.nn(x), S.valueQuery)).length
+  const formulas = [...cells].filter((x) => ctx.object(ctx.nn(x), S.formulaText) || ctx.object(ctx.nn(x), S.valueQuery)).length
   const recalculated = ctx.objects(focus, S.recalculated).filter(named)
   const tick = str(ctx.object(focus, S.tick))
   const status = tick !== undefined ? `The last change recalculated ${new Set(recalculated.map((t) => t.value)).size} of ${formulas} formulas.` : `${formulas} formulas. Change a number: only the formulas that read it recalculate.`
@@ -133,7 +154,70 @@ const connectors: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { 'sheet:grid': grid, 'sheet:cell': cell, 'sheet:focus': focusRule, 'sheet:connectors': connectors }
+// --- formulas as people write them ----------------------------------------------------------------
+
+const RANGE_FORM = /^=[A-Z]+[(][A-Z][0-9]+(:[A-Z][0-9]+)?[)]$/
+const BINARY_FORM = /^=[A-Z][0-9]+[-+*/][A-Z][0-9]+$/
+/** As the SPARQL rule normalizes it: upper case, without spaces. */
+const normalize = (raw: string) => raw.replaceAll(' ', '').toUpperCase()
+const columnOf = (letter: string) => LETTERS.indexOf(letter) + 1
+
+/** The c:SheetFunction a formula's text names (by function name or operator), if any. */
+function functionFor(ctx: { match: RuleContext['match'] } & Pick<RuleContext, 'f'>, text: string): Term | undefined {
+  if (RANGE_FORM.test(text)) {
+    const name = text.slice(1, text.indexOf('('))
+    return ctx.match(null, S.functionName, ctx.f.literal(name)).map((q) => q.subject).find((v) => ctx.match(v, NS.rdf + 'type', ctx.f.namedNode(S.SheetFunction)).length)
+  }
+  if (BINARY_FORM.test(text)) {
+    const op = /^=[A-Z][0-9]+([-+*/])/.exec(text)![1]!
+    return ctx.match(null, S.operator, ctx.f.literal(op)).map((q) => q.subject).find((v) => ctx.match(v, NS.rdf + 'type', ctx.f.namedNode(S.SheetFunction)).length)
+  }
+  return undefined
+}
+
+/** c:SheetFormula: each cell's formula text read into its query, the cells it reads and its operands. */
+const formula: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const cells = ctx.objects(focus, S.cell).filter(named)
+  const place = new Map(cells.map((x) => [x.value, { r: int(ctx, x, S.row), c: int(ctx, x, S.column) }]))
+  for (const cell of cells) {
+    const raw = str(ctx.object(cell, S.formulaText))
+    if (raw === undefined) continue
+    // A query of the cell's own (not one a formula names) wins over its text.
+    if (ctx.objects(cell, S.valueQuery).some((q) => !ctx.match(q, NS.rdf + 'type', ctx.nn(S.SheetFunction)).length)) continue
+    const text = normalize(raw)
+    const view = functionFor(ctx, text)
+    if (!view) continue
+    const at = (ref: string) => ({ r: Number(ref.slice(1)), c: columnOf(ref[0]!) })
+    const others = cells.filter((x) => !x.equals(cell))
+    if (RANGE_FORM.test(text)) {
+      const range = text.slice(text.indexOf('(') + 1, -1)
+      const [a, b = a] = range.split(':') as [string, string?]
+      const p = at(a)
+      const q = at(b!)
+      const inputs = others.filter((x) => {
+        const { r, c } = place.get(x.value)!
+        return r >= Math.min(p.r, q.r) && r <= Math.max(p.r, q.r) && c >= Math.min(p.c, q.c) && c <= Math.max(p.c, q.c)
+      })
+      if (!inputs.length) continue
+      o.t(cell, S.valueQuery, view)
+      for (const x of inputs) o.t(cell, S.dataset, x)
+    } else {
+      const [, l, r] = /^=([A-Z][0-9]+)[-+*/]([A-Z][0-9]+)$/.exec(text)!
+      const cellAt = (ref: string) => {
+        const p = at(ref)
+        return others.find((x) => place.get(x.value)!.r === p.r && place.get(x.value)!.c === p.c)
+      }
+      const left = cellAt(l!)
+      const right = cellAt(r!)
+      if (!left || !right) continue
+      o.t(cell, S.valueQuery, view).t(cell, S.dataset, left).t(cell, S.dataset, right).t(cell, S.leftOperand, left).t(cell, S.rightOperand, right)
+    }
+  }
+  return o.quads
+}
+
+export const functions: Record<string, FnRule> = { 'sheet:grid': grid, 'sheet:cell': cell, 'sheet:focus': focusRule, 'sheet:connectors': connectors, 'sheet:formula': formula }
 
 // --- reactions ------------------------------------------------------------------------------------------
 
@@ -161,4 +245,64 @@ const select: ReactionFn = (ctx) => {
   return out
 }
 
-export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:select': select }
+/** Whether a committed text is a formula this sheet knows (as the SPARQL reaction's filter). */
+function knownFormula(ctx: RCtx, text: string): boolean {
+  if (BINARY_FORM.test(text)) return true
+  if (!RANGE_FORM.test(text)) return false
+  const name = text.slice(1, text.indexOf('('))
+  return ctx.match(null, S.functionName, null).some((q) => q.object.value === name && ctx.match(q.subject, NS.rdf + 'type', ctx.runtime.store.factory.namedNode(S.SheetFunction)).length > 0)
+}
+
+const enterFormula: ReactionFn = (ctx) => {
+  const none = { add: [], remove: [] }
+  if (ctx.object(ctx.target, S.valueQuery)) return none
+  const raw = ctx.object(ctx.event, NS.beh + 'value')?.value
+  if (raw === undefined) return none
+  const text = normalize(raw)
+  if (!knownFormula(ctx, text)) return none
+  const f = ctx.runtime.store.factory
+  return { remove: [...own(ctx, ctx.target, C.value), ...own(ctx, ctx.target, S.formulaText)], add: [f.quad(ctx.target, f.namedNode(S.formulaText), f.literal(text))] }
+}
+
+/** The sheet whose control (c:addsRowTo / c:addsColumnTo) the click was in. */
+function controlled(ctx: RCtx, p: string): boolean {
+  for (let n: Term | undefined = ctx.object(ctx.event, NS.beh + 'node'); n; n = ctx.match(null, H.hasChild, n)[0]?.subject) {
+    for (const r of ctx.match(n, SEM.renders, null)) if (ctx.match(r.object, p, ctx.target).length) return true
+  }
+  return false
+}
+
+const integer = (ctx: RCtx, n: number) => ctx.runtime.store.factory.literal(String(n), ctx.runtime.store.factory.namedNode(NS.xsd + 'integer'))
+
+const addRow: ReactionFn = (ctx) => {
+  if (!controlled(ctx, S.addsRowTo)) return { add: [], remove: [] }
+  const f = ctx.runtime.store.factory
+  const columns = Number(ctx.object(ctx.target, S.columns)?.value)
+  if (!Number.isFinite(columns)) return { add: [], remove: [] }
+  const rows = ctx.match(ctx.target, S.cell, null).map((q) => Number(ctx.object(q.object, S.row)?.value)).filter((n) => Number.isFinite(n))
+  const next = (rows.length ? Math.max(...rows) : 0) + 1
+  const add: Quad[] = []
+  for (let c = 1; c <= Math.min(columns, 26); c++) {
+    const cell = f.namedNode(`${ctx.target.value}-${LETTERS[c - 1]}${next}`)
+    add.push(f.quad(ctx.target as NamedNode, f.namedNode(S.cell), cell), f.quad(cell, f.namedNode(NS.rdf + 'type'), f.namedNode(NS.c + 'SheetCell')), f.quad(cell, f.namedNode(S.row), integer(ctx, next)), f.quad(cell, f.namedNode(S.column), integer(ctx, c)))
+  }
+  return { add, remove: [] }
+}
+
+const addColumn: ReactionFn = (ctx) => {
+  if (!controlled(ctx, S.addsColumnTo)) return { add: [], remove: [] }
+  const f = ctx.runtime.store.factory
+  const had = own(ctx, ctx.target, S.columns)
+  const columns = Number(had[0]?.object.value)
+  if (!Number.isFinite(columns) || columns >= 26) return { add: [], remove: [] }
+  const more = columns + 1
+  const add: Quad[] = [f.quad(ctx.target as NamedNode, f.namedNode(S.columns), integer(ctx, more))]
+  const rows = [...new Set(ctx.match(ctx.target, S.cell, null).map((q) => Number(ctx.object(q.object, S.row)?.value)).filter((n) => Number.isFinite(n)))]
+  for (const r of rows) {
+    const cell = f.namedNode(`${ctx.target.value}-${LETTERS[more - 1]}${r}`)
+    add.push(f.quad(ctx.target as NamedNode, f.namedNode(S.cell), cell), f.quad(cell, f.namedNode(NS.rdf + 'type'), f.namedNode(NS.c + 'SheetCell')), f.quad(cell, f.namedNode(S.row), integer(ctx, r)), f.quad(cell, f.namedNode(S.column), integer(ctx, more)))
+  }
+  return { add, remove: had }
+}
+
+export const reactions: Record<string, ReactionFn> = { 'sheet:edit': edit, 'sheet:select': select, 'sheet:enter-formula': enterFormula, 'sheet:add-row': addRow, 'sheet:add-column': addColumn }

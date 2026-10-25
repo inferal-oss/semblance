@@ -14,115 +14,306 @@
 # A spreadsheet whose cells are resources and whose formulas are queries.
 #
 # Each cell is a c:SheetCell at a row and a column. A number cell holds its c:value; a formula
-# cell names a SELECT (c:valueQuery) and the cells it reads (c:dataset). Nothing here recomputes
+# cell holds its formula as people write it (c:formulaText "=SUM(B4:E4)"), which the sheet reads
+# into a query (c:valueQuery) and the cells it reads (c:dataset). Nothing here recomputes
 # anything: the formula layer runs a cell's query when a cell it reads changes - and the cells
 # that read it follow, and so on - so the dependency graph is the data's own. Select a cell to
 # see its formula and arrows to and from the cells it depends on; change a number to see which
-# formulas re-ran (and only those), counted under the sheet.
+# formulas re-ran (and only those), counted under the sheet; type a formula into a cell, or add a
+# row or a column, with the buttons above the grid.
 # =================================================================================================
 
 ui:ex-sheet-prefixes sh:declare [ sh:prefix "ss" ; sh:namespace "https://semblance.dev/demo/sheet#"^^xsd:anyURI ] .
 
-# --- the formulas: two queries over a cell's inputs ---------------------------------------------------
-# $this is the cell asking; its inputs are its c:dataset, which is also what the layer follows.
-
-ss:Sum a sem:View ; rdfs:label "the sum of the inputs" ;
-    sem:select """SELECT (SUM(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-ss:Product a sem:View ; rdfs:label "the product of two inputs" ;
-    sem:select """
-SELECT ?value WHERE {
-  $this c:dataset ?x , ?y FILTER(STR(?x) < STR(?y))
-  ?x c:value ?a . ?y c:value ?b
-  BIND(xsd:decimal(?a) * xsd:decimal(?b) AS ?value)
-}""" .
-
-# --- the cells ---------------------------------------------------------------------------------------
-# A small order: items, their quantities and prices, line totals, a subtotal, tax and a total.
+# --- the cells -------------------------------------------------------------------------------------
+# A year of sales at a café: an item per row, its four quarters, then formulas - its year, its
+# quarterly average, its share of the year's total, its target and the gap to it. Under the items,
+# each column's total, best and average. A formula is written as people write it (c:formulaText);
+# c:SheetFormula reads it into the cell's query and the cells it reads.
 
 ss:A1 a c:SheetCell ; c:row 1 ; c:column 1 ; c:value "Item" .
-ss:B1 a c:SheetCell ; c:row 1 ; c:column 2 ; c:value "Qty" .
-ss:C1 a c:SheetCell ; c:row 1 ; c:column 3 ; c:value "Price" .
-ss:D1 a c:SheetCell ; c:row 1 ; c:column 4 ; c:value "Total" .
-ss:A2 a c:SheetCell ; c:row 2 ; c:column 1 ; c:value "Kettle" .
-ss:B2 a c:SheetCell ; c:row 2 ; c:column 2 ; c:value "1"^^xsd:decimal .
-ss:C2 a c:SheetCell ; c:row 2 ; c:column 3 ; c:value "34.00"^^xsd:decimal .
-ss:D2 a c:SheetCell ; c:row 2 ; c:column 4 ;
-    c:valueQuery ss:Product ; c:dataset ss:B2 , ss:C2 ; c:formulaText "=B2*C2" .
-ss:A3 a c:SheetCell ; c:row 3 ; c:column 1 ; c:value "Mugs" .
-ss:B3 a c:SheetCell ; c:row 3 ; c:column 2 ; c:value "4"^^xsd:decimal .
-ss:C3 a c:SheetCell ; c:row 3 ; c:column 3 ; c:value "12.50"^^xsd:decimal .
-ss:D3 a c:SheetCell ; c:row 3 ; c:column 4 ;
-    c:valueQuery ss:Product ; c:dataset ss:B3 , ss:C3 ; c:formulaText "=B3*C3" .
-ss:A4 a c:SheetCell ; c:row 4 ; c:column 1 ; c:value "Beans" .
-ss:B4 a c:SheetCell ; c:row 4 ; c:column 2 ; c:value "3"^^xsd:decimal .
-ss:C4 a c:SheetCell ; c:row 4 ; c:column 3 ; c:value "9.50"^^xsd:decimal .
-ss:D4 a c:SheetCell ; c:row 4 ; c:column 4 ;
-    c:valueQuery ss:Product ; c:dataset ss:B4 , ss:C4 ; c:formulaText "=B4*C4" .
-ss:A5 a c:SheetCell ; c:row 5 ; c:column 1 ; c:value "Filters" .
-ss:B5 a c:SheetCell ; c:row 5 ; c:column 2 ; c:value "2"^^xsd:decimal .
-ss:C5 a c:SheetCell ; c:row 5 ; c:column 3 ; c:value "4.00"^^xsd:decimal .
-ss:D5 a c:SheetCell ; c:row 5 ; c:column 4 ;
-    c:valueQuery ss:Product ; c:dataset ss:B5 , ss:C5 ; c:formulaText "=B5*C5" .
-ss:A6 a c:SheetCell ; c:row 6 ; c:column 1 ; c:value "Subtotal" .
-ss:B6 a c:SheetCell ; c:row 6 ; c:column 2 ;
-    c:valueQuery ss:Sum ; c:dataset ss:B2 , ss:B3 , ss:B4 , ss:B5 ; c:formulaText "=SUM(B2:B5)" .
-ss:D6 a c:SheetCell ; c:row 6 ; c:column 4 ;
-    c:valueQuery ss:Sum ; c:dataset ss:D2 , ss:D3 , ss:D4 , ss:D5 ; c:formulaText "=SUM(D2:D5)" .
-ss:A7 a c:SheetCell ; c:row 7 ; c:column 1 ; c:value "Tax rate" .
-ss:C7 a c:SheetCell ; c:row 7 ; c:column 3 ; c:value "0.08"^^xsd:decimal .
-ss:D7 a c:SheetCell ; c:row 7 ; c:column 4 ;
-    c:valueQuery ss:Product ; c:dataset ss:D6 , ss:C7 ; c:formulaText "=D6*C7" .
-ss:A8 a c:SheetCell ; c:row 8 ; c:column 1 ; c:value "Total" .
-ss:D8 a c:SheetCell ; c:row 8 ; c:column 4 ;
-    c:valueQuery ss:Sum ; c:dataset ss:D6 , ss:D7 ; c:formulaText "=D6+D7" .
+ss:B1 a c:SheetCell ; c:row 1 ; c:column 2 ; c:value "Q1" .
+ss:C1 a c:SheetCell ; c:row 1 ; c:column 3 ; c:value "Q2" .
+ss:D1 a c:SheetCell ; c:row 1 ; c:column 4 ; c:value "Q3" .
+ss:E1 a c:SheetCell ; c:row 1 ; c:column 5 ; c:value "Q4" .
+ss:F1 a c:SheetCell ; c:row 1 ; c:column 6 ; c:value "Year" .
+ss:G1 a c:SheetCell ; c:row 1 ; c:column 7 ; c:value "Average" .
+ss:H1 a c:SheetCell ; c:row 1 ; c:column 8 ; c:value "Share" .
+ss:I1 a c:SheetCell ; c:row 1 ; c:column 9 ; c:value "Target" .
+ss:J1 a c:SheetCell ; c:row 1 ; c:column 10 ; c:value "Gap" .
+# Espresso
+ss:A2 a c:SheetCell ; c:row 2 ; c:column 1 ; c:value "Espresso" .
+ss:B2 a c:SheetCell ; c:row 2 ; c:column 2 ; c:value 4100 .
+ss:C2 a c:SheetCell ; c:row 2 ; c:column 3 ; c:value 4350 .
+ss:D2 a c:SheetCell ; c:row 2 ; c:column 4 ; c:value 4020 .
+ss:E2 a c:SheetCell ; c:row 2 ; c:column 5 ; c:value 4480 .
+ss:F2 a c:SheetCell ; c:row 2 ; c:column 6 ; c:formulaText "=SUM(B2:E2)" .
+ss:G2 a c:SheetCell ; c:row 2 ; c:column 7 ; c:formulaText "=AVERAGE(B2:E2)" .
+ss:H2 a c:SheetCell ; c:row 2 ; c:column 8 ; c:formulaText "=F2/F18" .
+ss:I2 a c:SheetCell ; c:row 2 ; c:column 9 ; c:value 17000 .
+ss:J2 a c:SheetCell ; c:row 2 ; c:column 10 ; c:formulaText "=F2-I2" .
+# Latte
+ss:A3 a c:SheetCell ; c:row 3 ; c:column 1 ; c:value "Latte" .
+ss:B3 a c:SheetCell ; c:row 3 ; c:column 2 ; c:value 5200 .
+ss:C3 a c:SheetCell ; c:row 3 ; c:column 3 ; c:value 5480 .
+ss:D3 a c:SheetCell ; c:row 3 ; c:column 4 ; c:value 5130 .
+ss:E3 a c:SheetCell ; c:row 3 ; c:column 5 ; c:value 5900 .
+ss:F3 a c:SheetCell ; c:row 3 ; c:column 6 ; c:formulaText "=SUM(B3:E3)" .
+ss:G3 a c:SheetCell ; c:row 3 ; c:column 7 ; c:formulaText "=AVERAGE(B3:E3)" .
+ss:H3 a c:SheetCell ; c:row 3 ; c:column 8 ; c:formulaText "=F3/F18" .
+ss:I3 a c:SheetCell ; c:row 3 ; c:column 9 ; c:value 21000 .
+ss:J3 a c:SheetCell ; c:row 3 ; c:column 10 ; c:formulaText "=F3-I3" .
+# Cappuccino
+ss:A4 a c:SheetCell ; c:row 4 ; c:column 1 ; c:value "Cappuccino" .
+ss:B4 a c:SheetCell ; c:row 4 ; c:column 2 ; c:value 3900 .
+ss:C4 a c:SheetCell ; c:row 4 ; c:column 3 ; c:value 4120 .
+ss:D4 a c:SheetCell ; c:row 4 ; c:column 4 ; c:value 3880 .
+ss:E4 a c:SheetCell ; c:row 4 ; c:column 5 ; c:value 4300 .
+ss:F4 a c:SheetCell ; c:row 4 ; c:column 6 ; c:formulaText "=SUM(B4:E4)" .
+ss:G4 a c:SheetCell ; c:row 4 ; c:column 7 ; c:formulaText "=AVERAGE(B4:E4)" .
+ss:H4 a c:SheetCell ; c:row 4 ; c:column 8 ; c:formulaText "=F4/F18" .
+ss:I4 a c:SheetCell ; c:row 4 ; c:column 9 ; c:value 16000 .
+ss:J4 a c:SheetCell ; c:row 4 ; c:column 10 ; c:formulaText "=F4-I4" .
+# Flat white
+ss:A5 a c:SheetCell ; c:row 5 ; c:column 1 ; c:value "Flat white" .
+ss:B5 a c:SheetCell ; c:row 5 ; c:column 2 ; c:value 2800 .
+ss:C5 a c:SheetCell ; c:row 5 ; c:column 3 ; c:value 3050 .
+ss:D5 a c:SheetCell ; c:row 5 ; c:column 4 ; c:value 3190 .
+ss:E5 a c:SheetCell ; c:row 5 ; c:column 5 ; c:value 3420 .
+ss:F5 a c:SheetCell ; c:row 5 ; c:column 6 ; c:formulaText "=SUM(B5:E5)" .
+ss:G5 a c:SheetCell ; c:row 5 ; c:column 7 ; c:formulaText "=AVERAGE(B5:E5)" .
+ss:H5 a c:SheetCell ; c:row 5 ; c:column 8 ; c:formulaText "=F5/F18" .
+ss:I5 a c:SheetCell ; c:row 5 ; c:column 9 ; c:value 12000 .
+ss:J5 a c:SheetCell ; c:row 5 ; c:column 10 ; c:formulaText "=F5-I5" .
+# Mocha
+ss:A6 a c:SheetCell ; c:row 6 ; c:column 1 ; c:value "Mocha" .
+ss:B6 a c:SheetCell ; c:row 6 ; c:column 2 ; c:value 1500 .
+ss:C6 a c:SheetCell ; c:row 6 ; c:column 3 ; c:value 1380 .
+ss:D6 a c:SheetCell ; c:row 6 ; c:column 4 ; c:value 1240 .
+ss:E6 a c:SheetCell ; c:row 6 ; c:column 5 ; c:value 1820 .
+ss:F6 a c:SheetCell ; c:row 6 ; c:column 6 ; c:formulaText "=SUM(B6:E6)" .
+ss:G6 a c:SheetCell ; c:row 6 ; c:column 7 ; c:formulaText "=AVERAGE(B6:E6)" .
+ss:H6 a c:SheetCell ; c:row 6 ; c:column 8 ; c:formulaText "=F6/F18" .
+ss:I6 a c:SheetCell ; c:row 6 ; c:column 9 ; c:value 6000 .
+ss:J6 a c:SheetCell ; c:row 6 ; c:column 10 ; c:formulaText "=F6-I6" .
+# Tea
+ss:A7 a c:SheetCell ; c:row 7 ; c:column 1 ; c:value "Tea" .
+ss:B7 a c:SheetCell ; c:row 7 ; c:column 2 ; c:value 2100 .
+ss:C7 a c:SheetCell ; c:row 7 ; c:column 3 ; c:value 1980 .
+ss:D7 a c:SheetCell ; c:row 7 ; c:column 4 ; c:value 1850 .
+ss:E7 a c:SheetCell ; c:row 7 ; c:column 5 ; c:value 2300 .
+ss:F7 a c:SheetCell ; c:row 7 ; c:column 6 ; c:formulaText "=SUM(B7:E7)" .
+ss:G7 a c:SheetCell ; c:row 7 ; c:column 7 ; c:formulaText "=AVERAGE(B7:E7)" .
+ss:H7 a c:SheetCell ; c:row 7 ; c:column 8 ; c:formulaText "=F7/F18" .
+ss:I7 a c:SheetCell ; c:row 7 ; c:column 9 ; c:value 8500 .
+ss:J7 a c:SheetCell ; c:row 7 ; c:column 10 ; c:formulaText "=F7-I7" .
+# Chai
+ss:A8 a c:SheetCell ; c:row 8 ; c:column 1 ; c:value "Chai" .
+ss:B8 a c:SheetCell ; c:row 8 ; c:column 2 ; c:value 900 .
+ss:C8 a c:SheetCell ; c:row 8 ; c:column 3 ; c:value 960 .
+ss:D8 a c:SheetCell ; c:row 8 ; c:column 4 ; c:value 880 .
+ss:E8 a c:SheetCell ; c:row 8 ; c:column 5 ; c:value 1250 .
+ss:F8 a c:SheetCell ; c:row 8 ; c:column 6 ; c:formulaText "=SUM(B8:E8)" .
+ss:G8 a c:SheetCell ; c:row 8 ; c:column 7 ; c:formulaText "=AVERAGE(B8:E8)" .
+ss:H8 a c:SheetCell ; c:row 8 ; c:column 8 ; c:formulaText "=F8/F18" .
+ss:I8 a c:SheetCell ; c:row 8 ; c:column 9 ; c:value 4000 .
+ss:J8 a c:SheetCell ; c:row 8 ; c:column 10 ; c:formulaText "=F8-I8" .
+# Hot chocolate
+ss:A9 a c:SheetCell ; c:row 9 ; c:column 1 ; c:value "Hot chocolate" .
+ss:B9 a c:SheetCell ; c:row 9 ; c:column 2 ; c:value 1700 .
+ss:C9 a c:SheetCell ; c:row 9 ; c:column 3 ; c:value 820 .
+ss:D9 a c:SheetCell ; c:row 9 ; c:column 4 ; c:value 610 .
+ss:E9 a c:SheetCell ; c:row 9 ; c:column 5 ; c:value 2150 .
+ss:F9 a c:SheetCell ; c:row 9 ; c:column 6 ; c:formulaText "=SUM(B9:E9)" .
+ss:G9 a c:SheetCell ; c:row 9 ; c:column 7 ; c:formulaText "=AVERAGE(B9:E9)" .
+ss:H9 a c:SheetCell ; c:row 9 ; c:column 8 ; c:formulaText "=F9/F18" .
+ss:I9 a c:SheetCell ; c:row 9 ; c:column 9 ; c:value 5500 .
+ss:J9 a c:SheetCell ; c:row 9 ; c:column 10 ; c:formulaText "=F9-I9" .
+# Cold brew
+ss:A10 a c:SheetCell ; c:row 10 ; c:column 1 ; c:value "Cold brew" .
+ss:B10 a c:SheetCell ; c:row 10 ; c:column 2 ; c:value 600 .
+ss:C10 a c:SheetCell ; c:row 10 ; c:column 3 ; c:value 1900 .
+ss:D10 a c:SheetCell ; c:row 10 ; c:column 4 ; c:value 2600 .
+ss:E10 a c:SheetCell ; c:row 10 ; c:column 5 ; c:value 700 .
+ss:F10 a c:SheetCell ; c:row 10 ; c:column 6 ; c:formulaText "=SUM(B10:E10)" .
+ss:G10 a c:SheetCell ; c:row 10 ; c:column 7 ; c:formulaText "=AVERAGE(B10:E10)" .
+ss:H10 a c:SheetCell ; c:row 10 ; c:column 8 ; c:formulaText "=F10/F18" .
+ss:I10 a c:SheetCell ; c:row 10 ; c:column 9 ; c:value 5500 .
+ss:J10 a c:SheetCell ; c:row 10 ; c:column 10 ; c:formulaText "=F10-I10" .
+# Iced latte
+ss:A11 a c:SheetCell ; c:row 11 ; c:column 1 ; c:value "Iced latte" .
+ss:B11 a c:SheetCell ; c:row 11 ; c:column 2 ; c:value 800 .
+ss:C11 a c:SheetCell ; c:row 11 ; c:column 3 ; c:value 2300 .
+ss:D11 a c:SheetCell ; c:row 11 ; c:column 4 ; c:value 2900 .
+ss:E11 a c:SheetCell ; c:row 11 ; c:column 5 ; c:value 900 .
+ss:F11 a c:SheetCell ; c:row 11 ; c:column 6 ; c:formulaText "=SUM(B11:E11)" .
+ss:G11 a c:SheetCell ; c:row 11 ; c:column 7 ; c:formulaText "=AVERAGE(B11:E11)" .
+ss:H11 a c:SheetCell ; c:row 11 ; c:column 8 ; c:formulaText "=F11/F18" .
+ss:I11 a c:SheetCell ; c:row 11 ; c:column 9 ; c:value 6500 .
+ss:J11 a c:SheetCell ; c:row 11 ; c:column 10 ; c:formulaText "=F11-I11" .
+# Croissant
+ss:A12 a c:SheetCell ; c:row 12 ; c:column 1 ; c:value "Croissant" .
+ss:B12 a c:SheetCell ; c:row 12 ; c:column 2 ; c:value 3100 .
+ss:C12 a c:SheetCell ; c:row 12 ; c:column 3 ; c:value 3200 .
+ss:D12 a c:SheetCell ; c:row 12 ; c:column 4 ; c:value 3050 .
+ss:E12 a c:SheetCell ; c:row 12 ; c:column 5 ; c:value 3300 .
+ss:F12 a c:SheetCell ; c:row 12 ; c:column 6 ; c:formulaText "=SUM(B12:E12)" .
+ss:G12 a c:SheetCell ; c:row 12 ; c:column 7 ; c:formulaText "=AVERAGE(B12:E12)" .
+ss:H12 a c:SheetCell ; c:row 12 ; c:column 8 ; c:formulaText "=F12/F18" .
+ss:I12 a c:SheetCell ; c:row 12 ; c:column 9 ; c:value 12500 .
+ss:J12 a c:SheetCell ; c:row 12 ; c:column 10 ; c:formulaText "=F12-I12" .
+# Muffin
+ss:A13 a c:SheetCell ; c:row 13 ; c:column 1 ; c:value "Muffin" .
+ss:B13 a c:SheetCell ; c:row 13 ; c:column 2 ; c:value 1900 .
+ss:C13 a c:SheetCell ; c:row 13 ; c:column 3 ; c:value 1850 .
+ss:D13 a c:SheetCell ; c:row 13 ; c:column 4 ; c:value 1760 .
+ss:E13 a c:SheetCell ; c:row 13 ; c:column 5 ; c:value 2050 .
+ss:F13 a c:SheetCell ; c:row 13 ; c:column 6 ; c:formulaText "=SUM(B13:E13)" .
+ss:G13 a c:SheetCell ; c:row 13 ; c:column 7 ; c:formulaText "=AVERAGE(B13:E13)" .
+ss:H13 a c:SheetCell ; c:row 13 ; c:column 8 ; c:formulaText "=F13/F18" .
+ss:I13 a c:SheetCell ; c:row 13 ; c:column 9 ; c:value 7500 .
+ss:J13 a c:SheetCell ; c:row 13 ; c:column 10 ; c:formulaText "=F13-I13" .
+# Bagel
+ss:A14 a c:SheetCell ; c:row 14 ; c:column 1 ; c:value "Bagel" .
+ss:B14 a c:SheetCell ; c:row 14 ; c:column 2 ; c:value 1200 .
+ss:C14 a c:SheetCell ; c:row 14 ; c:column 3 ; c:value 1300 .
+ss:D14 a c:SheetCell ; c:row 14 ; c:column 4 ; c:value 1280 .
+ss:E14 a c:SheetCell ; c:row 14 ; c:column 5 ; c:value 1350 .
+ss:F14 a c:SheetCell ; c:row 14 ; c:column 6 ; c:formulaText "=SUM(B14:E14)" .
+ss:G14 a c:SheetCell ; c:row 14 ; c:column 7 ; c:formulaText "=AVERAGE(B14:E14)" .
+ss:H14 a c:SheetCell ; c:row 14 ; c:column 8 ; c:formulaText "=F14/F18" .
+ss:I14 a c:SheetCell ; c:row 14 ; c:column 9 ; c:value 5000 .
+ss:J14 a c:SheetCell ; c:row 14 ; c:column 10 ; c:formulaText "=F14-I14" .
+# Cookie
+ss:A15 a c:SheetCell ; c:row 15 ; c:column 1 ; c:value "Cookie" .
+ss:B15 a c:SheetCell ; c:row 15 ; c:column 2 ; c:value 2400 .
+ss:C15 a c:SheetCell ; c:row 15 ; c:column 3 ; c:value 2250 .
+ss:D15 a c:SheetCell ; c:row 15 ; c:column 4 ; c:value 2300 .
+ss:E15 a c:SheetCell ; c:row 15 ; c:column 5 ; c:value 2900 .
+ss:F15 a c:SheetCell ; c:row 15 ; c:column 6 ; c:formulaText "=SUM(B15:E15)" .
+ss:G15 a c:SheetCell ; c:row 15 ; c:column 7 ; c:formulaText "=AVERAGE(B15:E15)" .
+ss:H15 a c:SheetCell ; c:row 15 ; c:column 8 ; c:formulaText "=F15/F18" .
+ss:I15 a c:SheetCell ; c:row 15 ; c:column 9 ; c:value 9500 .
+ss:J15 a c:SheetCell ; c:row 15 ; c:column 10 ; c:formulaText "=F15-I15" .
+# Sandwich
+ss:A16 a c:SheetCell ; c:row 16 ; c:column 1 ; c:value "Sandwich" .
+ss:B16 a c:SheetCell ; c:row 16 ; c:column 2 ; c:value 2600 .
+ss:C16 a c:SheetCell ; c:row 16 ; c:column 3 ; c:value 2900 .
+ss:D16 a c:SheetCell ; c:row 16 ; c:column 4 ; c:value 3100 .
+ss:E16 a c:SheetCell ; c:row 16 ; c:column 5 ; c:value 2700 .
+ss:F16 a c:SheetCell ; c:row 16 ; c:column 6 ; c:formulaText "=SUM(B16:E16)" .
+ss:G16 a c:SheetCell ; c:row 16 ; c:column 7 ; c:formulaText "=AVERAGE(B16:E16)" .
+ss:H16 a c:SheetCell ; c:row 16 ; c:column 8 ; c:formulaText "=F16/F18" .
+ss:I16 a c:SheetCell ; c:row 16 ; c:column 9 ; c:value 11000 .
+ss:J16 a c:SheetCell ; c:row 16 ; c:column 10 ; c:formulaText "=F16-I16" .
+# Beans (bag)
+ss:A17 a c:SheetCell ; c:row 17 ; c:column 1 ; c:value "Beans (bag)" .
+ss:B17 a c:SheetCell ; c:row 17 ; c:column 2 ; c:value 450 .
+ss:C17 a c:SheetCell ; c:row 17 ; c:column 3 ; c:value 420 .
+ss:D17 a c:SheetCell ; c:row 17 ; c:column 4 ; c:value 400 .
+ss:E17 a c:SheetCell ; c:row 17 ; c:column 5 ; c:value 980 .
+ss:F17 a c:SheetCell ; c:row 17 ; c:column 6 ; c:formulaText "=SUM(B17:E17)" .
+ss:G17 a c:SheetCell ; c:row 17 ; c:column 7 ; c:formulaText "=AVERAGE(B17:E17)" .
+ss:H17 a c:SheetCell ; c:row 17 ; c:column 8 ; c:formulaText "=F17/F18" .
+ss:I17 a c:SheetCell ; c:row 17 ; c:column 9 ; c:value 2000 .
+ss:J17 a c:SheetCell ; c:row 17 ; c:column 10 ; c:formulaText "=F17-I17" .
+# Total, per column
+ss:A18 a c:SheetCell ; c:row 18 ; c:column 1 ; c:value "Total" .
+ss:B18 a c:SheetCell ; c:row 18 ; c:column 2 ; c:formulaText "=SUM(B2:B17)" .
+ss:C18 a c:SheetCell ; c:row 18 ; c:column 3 ; c:formulaText "=SUM(C2:C17)" .
+ss:D18 a c:SheetCell ; c:row 18 ; c:column 4 ; c:formulaText "=SUM(D2:D17)" .
+ss:E18 a c:SheetCell ; c:row 18 ; c:column 5 ; c:formulaText "=SUM(E2:E17)" .
+ss:F18 a c:SheetCell ; c:row 18 ; c:column 6 ; c:formulaText "=SUM(F2:F17)" .
+ss:I18 a c:SheetCell ; c:row 18 ; c:column 9 ; c:formulaText "=SUM(I2:I17)" .
+ss:J18 a c:SheetCell ; c:row 18 ; c:column 10 ; c:formulaText "=F18-I18" .
+# Best, per column
+ss:A19 a c:SheetCell ; c:row 19 ; c:column 1 ; c:value "Best" .
+ss:B19 a c:SheetCell ; c:row 19 ; c:column 2 ; c:formulaText "=MAX(B2:B17)" .
+ss:C19 a c:SheetCell ; c:row 19 ; c:column 3 ; c:formulaText "=MAX(C2:C17)" .
+ss:D19 a c:SheetCell ; c:row 19 ; c:column 4 ; c:formulaText "=MAX(D2:D17)" .
+ss:E19 a c:SheetCell ; c:row 19 ; c:column 5 ; c:formulaText "=MAX(E2:E17)" .
+ss:F19 a c:SheetCell ; c:row 19 ; c:column 6 ; c:formulaText "=MAX(F2:F17)" .
+# Average, per column
+ss:A20 a c:SheetCell ; c:row 20 ; c:column 1 ; c:value "Average" .
+ss:B20 a c:SheetCell ; c:row 20 ; c:column 2 ; c:formulaText "=AVERAGE(B2:B17)" .
+ss:C20 a c:SheetCell ; c:row 20 ; c:column 3 ; c:formulaText "=AVERAGE(C2:C17)" .
+ss:D20 a c:SheetCell ; c:row 20 ; c:column 4 ; c:formulaText "=AVERAGE(D2:D17)" .
+ss:E20 a c:SheetCell ; c:row 20 ; c:column 5 ; c:formulaText "=AVERAGE(E2:E17)" .
+ss:F20 a c:SheetCell ; c:row 20 ; c:column 6 ; c:formulaText "=AVERAGE(F2:F17)" .
 
 # --- the sheet ---------------------------------------------------------------------------------------
 
-ss:order a c:Sheet ; c:label "Order" ; c:columns 4 ; c:traceRecalculation true ; c:selectedCell ss:D6 ;
-    c:cell ss:A1 , ss:B1 , ss:C1 , ss:D1 , ss:A2 , ss:B2 , ss:C2 , ss:D2 , ss:A3 , ss:B3 , ss:C3 , ss:D3 , ss:A4 , ss:B4 , ss:C4 , ss:D4 , ss:A5 , ss:B5 , ss:C5 , ss:D5 , ss:A6 , ss:B6 , ss:D6 , ss:A7 , ss:C7 , ss:D7 , ss:A8 , ss:D8 .
+ss:sales a c:Sheet ; c:label "Café sales" ; c:columns 10 ; c:traceRecalculation true ; c:selectedCell ss:F4 .
+ss:sales c:cell ss:A1 , ss:B1 , ss:C1 , ss:D1 , ss:E1 , ss:F1 , ss:G1 , ss:H1 , ss:I1 , ss:J1 .
+ss:sales c:cell ss:A2 , ss:B2 , ss:C2 , ss:D2 , ss:E2 , ss:F2 , ss:G2 , ss:H2 , ss:I2 , ss:J2 .
+ss:sales c:cell ss:A3 , ss:B3 , ss:C3 , ss:D3 , ss:E3 , ss:F3 , ss:G3 , ss:H3 , ss:I3 , ss:J3 .
+ss:sales c:cell ss:A4 , ss:B4 , ss:C4 , ss:D4 , ss:E4 , ss:F4 , ss:G4 , ss:H4 , ss:I4 , ss:J4 .
+ss:sales c:cell ss:A5 , ss:B5 , ss:C5 , ss:D5 , ss:E5 , ss:F5 , ss:G5 , ss:H5 , ss:I5 , ss:J5 .
+ss:sales c:cell ss:A6 , ss:B6 , ss:C6 , ss:D6 , ss:E6 , ss:F6 , ss:G6 , ss:H6 , ss:I6 , ss:J6 .
+ss:sales c:cell ss:A7 , ss:B7 , ss:C7 , ss:D7 , ss:E7 , ss:F7 , ss:G7 , ss:H7 , ss:I7 , ss:J7 .
+ss:sales c:cell ss:A8 , ss:B8 , ss:C8 , ss:D8 , ss:E8 , ss:F8 , ss:G8 , ss:H8 , ss:I8 , ss:J8 .
+ss:sales c:cell ss:A9 , ss:B9 , ss:C9 , ss:D9 , ss:E9 , ss:F9 , ss:G9 , ss:H9 , ss:I9 , ss:J9 .
+ss:sales c:cell ss:A10 , ss:B10 , ss:C10 , ss:D10 , ss:E10 , ss:F10 , ss:G10 , ss:H10 , ss:I10 , ss:J10 .
+ss:sales c:cell ss:A11 , ss:B11 , ss:C11 , ss:D11 , ss:E11 , ss:F11 , ss:G11 , ss:H11 , ss:I11 , ss:J11 .
+ss:sales c:cell ss:A12 , ss:B12 , ss:C12 , ss:D12 , ss:E12 , ss:F12 , ss:G12 , ss:H12 , ss:I12 , ss:J12 .
+ss:sales c:cell ss:A13 , ss:B13 , ss:C13 , ss:D13 , ss:E13 , ss:F13 , ss:G13 , ss:H13 , ss:I13 , ss:J13 .
+ss:sales c:cell ss:A14 , ss:B14 , ss:C14 , ss:D14 , ss:E14 , ss:F14 , ss:G14 , ss:H14 , ss:I14 , ss:J14 .
+ss:sales c:cell ss:A15 , ss:B15 , ss:C15 , ss:D15 , ss:E15 , ss:F15 , ss:G15 , ss:H15 , ss:I15 , ss:J15 .
+ss:sales c:cell ss:A16 , ss:B16 , ss:C16 , ss:D16 , ss:E16 , ss:F16 , ss:G16 , ss:H16 , ss:I16 , ss:J16 .
+ss:sales c:cell ss:A17 , ss:B17 , ss:C17 , ss:D17 , ss:E17 , ss:F17 , ss:G17 , ss:H17 , ss:I17 , ss:J17 .
+ss:sales c:cell ss:A18 , ss:B18 , ss:C18 , ss:D18 , ss:E18 , ss:F18 , ss:I18 , ss:J18 .
+ss:sales c:cell ss:A19 , ss:B19 , ss:C19 , ss:D19 , ss:E19 , ss:F19 .
+ss:sales c:cell ss:A20 , ss:B20 , ss:C20 , ss:D20 , ss:E20 , ss:F20 .
+
 
 ui:ex-sheet a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-sheet-intro ui:ex-sheet-card ) .
 ui:ex-sheet-intro a c:Text ;
-    c:label "A spreadsheet in the graph: cells are resources, formulas are queries over the cells they read. Change a quantity or a price - the formulas that read it recalculate, and only those, as the line under the sheet counts. Click a cell to see what it reads and what reads it." .
-ui:ex-sheet-card a c:Card ; c:label "Order" ; c:badge "8 formulas" ; c:content ss:order .
+    c:label "A spreadsheet in the graph: cells are resources, formulas are queries over the cells they read. Change a quarter's sales - the formulas that read it recalculate, and only those, as the line under the sheet counts. Click a cell to see what it reads and what reads it; type a formula such as =AVERAGE(B2:B17) into an empty cell, or add a row." .
+ui:ex-sheet-card a c:Card ; c:label "Café sales" ; c:badge "81 formulas" ; c:content ss:sales .
 
 # --- how it works -----------------------------------------------------------------------------------
 
 ui:ex-sheet-how a c:Walkthrough ; c:label "How it works" ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
-    c:steps ( ui:ex-sheet-w1 ui:ex-sheet-w2 ui:ex-sheet-w3 ui:ex-sheet-w4 ui:ex-sheet-w5 ui:ex-sheet-w6 ) .
+    c:steps ( ui:ex-sheet-w1 ui:ex-sheet-w2 ui:ex-sheet-w3 ui:ex-sheet-w4 ui:ex-sheet-w5 ui:ex-sheet-w6 ui:ex-sheet-w7 ) .
 
 ui:ex-sheet-w1 a c:WalkthroughStep ; rdfs:label "Cells are resources" ;
-    c:children ( ui:ex-sheet-m-order " is a " ui:ex-sheet-m-Sheet " that places its cells: each is a " ui:ex-sheet-m-SheetCell " with a row and a column - " ui:ex-sheet-m-c3 ", the mugs' price, is row 3, column 3. A cell like it holds a number (c:value, an xsd:decimal), and editing it is " ui:ex-sheet-m-edit ": one triple, typed as a number when it reads as one." ) .
-ui:ex-sheet-w2 a c:WalkthroughStep ; rdfs:label "Formulas are queries" ;
-    c:children ( ui:ex-sheet-m-d3 ", the mugs' line total, holds no value of its own. It names a query, " ui:ex-sheet-m-product " (its " ui:ex-sheet-m-valueQuery "), and the cells it reads, " ui:ex-sheet-m-b3 " and " ui:ex-sheet-m-c3b " (its " ui:ex-sheet-m-dataset "). The query is a SELECT over those inputs - here their product; " ui:ex-sheet-m-sum " adds them up. \"=B3*C3\" is only how it reads for people." ) .
-ui:ex-sheet-w3 a c:WalkthroughStep ; rdfs:label "The graph recomputes, through the graph" ;
-    c:children ( "The formula layer, " ui:ex-sheet-m-Formula ", runs a cell's query and writes the result as its value, and it follows c:dataset: when " ui:ex-sheet-m-c3c " changes, D3 runs again; D3's new value is a change " ui:ex-sheet-m-d6 " follows, then " ui:ex-sheet-m-d7 " (the tax) and " ui:ex-sheet-m-d8 " (the total). No code orders them: the dependencies are triples, and the engine propagates along them." ) .
-ui:ex-sheet-w4 a c:WalkthroughStep ; rdfs:label "Only what depends on a change runs" ;
-    c:children ( "Change the mugs' price and four formulas run - D3, D6, D7, D8 - not the other four: the kettle's line, the other lines and the item count read nothing that changed. With " ui:ex-sheet-m-trace ", the host hears the engine evaluate formulas and writes them on the sheet (" ui:ex-sheet-m-recalculated "); the cells flash, and the line under the sheet counts them: \"recalculated 4 of 8\"." ) .
-ui:ex-sheet-w5 a c:WalkthroughStep ; rdfs:label "Dependencies, drawn from the data" ;
-    c:children ( "Click a cell: " ui:ex-sheet-m-focus " shows its formula above the grid and draws its dependencies - solid arrows from the cells it reads, dashed ones to the cells that read it - straight from the c:dataset triples. The grid's tracks and the arrows share one geometry, so the rule computes them in whole pixels; nothing is measured in the page." ) .
-ui:ex-sheet-w6 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
-    c:children ( "An edit is one triple. The formulas that read it run - each one query over its own inputs - and so do the ones that read them; a cell whose value did not change stops the wave. Each cell renders on its own, so only the cells whose value changed render again. Every rule here is SPARQL with a function twin that renders the same." ) .
+    c:children ( ui:ex-sheet-m-sales " is a " ui:ex-sheet-m-Sheet " that places its cells: each is a " ui:ex-sheet-m-SheetCell " with a row and a column - " ui:ex-sheet-m-b4 ", the cappuccinos sold in the first quarter, is row 4, column 2. A cell like it holds a number (c:value), and editing it is " ui:ex-sheet-m-edit ": one triple, typed as a number when it reads as one." ) .
+ui:ex-sheet-w2 a c:WalkthroughStep ; rdfs:label "Formulas are written as people write them" ;
+    c:children ( ui:ex-sheet-m-f4 ", the cappuccinos' year, says \"=SUM(B4:E4)\": its " ui:ex-sheet-m-formulaText ". " ui:ex-sheet-m-parse " reads it into a query - SUM names " ui:ex-sheet-m-sum ", a SELECT over the cell's inputs, its " ui:ex-sheet-m-valueQuery " - and the cells the range covers, B4 to E4, its " ui:ex-sheet-m-dataset ". " ui:ex-sheet-m-h4 ", the share of the year, is \"=F4/F18\": " ui:ex-sheet-m-divide " over a left and a right operand." ) .
+ui:ex-sheet-w3 a c:WalkthroughStep ; rdfs:label "Typing a formula, adding a row" ;
+    c:children ( "Type =AVERAGE(B2:B17) into a cell and press Enter: " ui:ex-sheet-m-enter " keeps the text as the cell's formula, and the same rule gives it its query and its inputs; nothing else is needed. The buttons above the grid add a row (" ui:ex-sheet-m-addRow ") or a column: new empty cells, ready for numbers or formulas." ) .
+ui:ex-sheet-w4 a c:WalkthroughStep ; rdfs:label "The graph recomputes, through the graph" ;
+    c:children ( "The formula layer, " ui:ex-sheet-m-Formula ", runs a cell's query and writes the result as its value, and it follows c:dataset: change " ui:ex-sheet-m-b4b " and its year " ui:ex-sheet-m-f4b " runs again, then " ui:ex-sheet-m-f18 ", the year's total - and with it every share in column H, and " ui:ex-sheet-m-j18 ", the gap to the target. No code orders them: the dependencies are triples, and the engine propagates along them." ) .
+ui:ex-sheet-w5 a c:WalkthroughStep ; rdfs:label "Only what depends on a change runs" ;
+    c:children ( "Change one quarter and 26 of 81 formulas run: its row's year, average, share and gap, its column's total, best and average, the year's total, best and average, and the sixteen shares that read the total - not the other rows' sums. With " ui:ex-sheet-m-trace ", the host hears the engine evaluate formulas and writes them on the sheet (" ui:ex-sheet-m-recalculated "); the cells flash, and the line under the sheet counts them." ) .
+ui:ex-sheet-w6 a c:WalkthroughStep ; rdfs:label "Dependencies, drawn as connectors" ;
+    c:children ( "Click a cell: " ui:ex-sheet-m-connectors " derives a " ui:ex-sheet-m-Connector " for each of its dependencies - solid ones from the cells it reads, dashed ones to the cells that read it, an arc to the side within a column - straight from the c:dataset triples. The host draws each where its cells are, and keeps it there as the grid scrolls." ) .
+ui:ex-sheet-w7 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "An edit is one triple. The formulas that read it run - each one query over its own inputs - and so do the ones that read them; a sheet twice as big costs the same edit the same. Each cell renders on its own, so only the cells whose value changed render again, and the arrows are redrawn only when a cell they join moves. Every rule here is SPARQL with a function twin that renders the same." ) .
 
-ui:ex-sheet-m-order a c:Mention ; c:label "ss:order" ; c:mentions ss:order .
+ui:ex-sheet-m-sales a c:Mention ; c:label "ss:sales" ; c:mentions ss:sales .
 ui:ex-sheet-m-Sheet a c:Mention ; c:label "c:Sheet" ; c:mentions c:Sheet ; c:to c:Sheet .
 ui:ex-sheet-m-SheetCell a c:Mention ; c:label "c:SheetCell" ; c:mentions c:SheetCell ; c:to c:SheetCell .
-ui:ex-sheet-m-c3 a c:Mention ; c:label "ss:C3" ; c:mentions ss:C3 .
-ui:ex-sheet-m-c3b a c:Mention ; c:label "ss:C3" ; c:mentions ss:C3 .
-ui:ex-sheet-m-c3c a c:Mention ; c:label "the price" ; c:mentions ss:C3 .
-ui:ex-sheet-m-b3 a c:Mention ; c:label "ss:B3" ; c:mentions ss:B3 .
+ui:ex-sheet-m-b4 a c:Mention ; c:label "ss:B4" ; c:mentions ss:B4 .
+ui:ex-sheet-m-b4b a c:Mention ; c:label "ss:B4" ; c:mentions ss:B4 .
 ui:ex-sheet-m-edit a c:Mention ; c:label "c:EditSheetCell" ; c:mentions c:EditSheetCell ; c:to c:EditSheetCell .
-ui:ex-sheet-m-d3 a c:Mention ; c:label "ss:D3" ; c:mentions ss:D3 .
-ui:ex-sheet-m-product a c:Mention ; c:label "ss:Product" ; c:mentions ss:Product .
-ui:ex-sheet-m-sum a c:Mention ; c:label "ss:Sum" ; c:mentions ss:Sum .
+ui:ex-sheet-m-f4 a c:Mention ; c:label "ss:F4" ; c:mentions ss:F4 .
+ui:ex-sheet-m-f4b a c:Mention ; c:label "ss:F4" ; c:mentions ss:F4 .
+ui:ex-sheet-m-h4 a c:Mention ; c:label "ss:H4" ; c:mentions ss:H4 .
+ui:ex-sheet-m-formulaText a c:Mention ; c:label "c:formulaText" ; c:mentions c:formulaText ; c:to c:formulaText .
+ui:ex-sheet-m-parse a c:Mention ; c:label "c:SheetFormula" ; c:mentions c:SheetFormula ; c:to c:SheetFormula .
+ui:ex-sheet-m-sum a c:Mention ; c:label "c:SumFormula" ; c:mentions c:SumFormula ; c:to c:SumFormula .
+ui:ex-sheet-m-divide a c:Mention ; c:label "c:DivideFormula" ; c:mentions c:DivideFormula ; c:to c:DivideFormula .
 ui:ex-sheet-m-valueQuery a c:Mention ; c:label "c:valueQuery" ; c:mentions c:valueQuery ; c:to c:valueQuery .
 ui:ex-sheet-m-dataset a c:Mention ; c:label "c:dataset" ; c:mentions c:dataset ; c:to c:dataset .
+ui:ex-sheet-m-enter a c:Mention ; c:label "c:EnterSheetFormula" ; c:mentions c:EnterSheetFormula ; c:to c:EnterSheetFormula .
+ui:ex-sheet-m-addRow a c:Mention ; c:label "c:AddSheetRow" ; c:mentions c:AddSheetRow ; c:to c:AddSheetRow .
 ui:ex-sheet-m-Formula a c:Mention ; c:label "c:Formula" ; c:mentions c:Formula ; c:to c:Formula .
-ui:ex-sheet-m-d6 a c:Mention ; c:label "the subtotal" ; c:mentions ss:D6 .
-ui:ex-sheet-m-d7 a c:Mention ; c:label "ss:D7" ; c:mentions ss:D7 .
-ui:ex-sheet-m-d8 a c:Mention ; c:label "ss:D8" ; c:mentions ss:D8 .
+ui:ex-sheet-m-f18 a c:Mention ; c:label "ss:F18" ; c:mentions ss:F18 .
+ui:ex-sheet-m-j18 a c:Mention ; c:label "ss:J18" ; c:mentions ss:J18 .
 ui:ex-sheet-m-trace a c:Mention ; c:label "c:traceRecalculation" ; c:mentions c:traceRecalculation ; c:to c:traceRecalculation .
 ui:ex-sheet-m-recalculated a c:Mention ; c:label "c:recalculated" ; c:mentions c:recalculated ; c:to c:recalculated .
-ui:ex-sheet-m-focus a c:Mention ; c:label "c:SheetFocus" ; c:mentions c:SheetFocus ; c:to c:SheetFocus .
+ui:ex-sheet-m-connectors a c:Mention ; c:label "c:SheetConnectors" ; c:mentions c:SheetConnectors ; c:to c:SheetConnectors .
+ui:ex-sheet-m-Connector a c:Mention ; c:label "c:Connector" ; c:mentions c:Connector ; c:to c:Connector .

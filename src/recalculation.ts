@@ -42,7 +42,8 @@ export class RecalculationTrace {
       const cells = store
         .match(sheet, nn(C + 'cell'), null, dg)
         .map((x) => x.object)
-        .filter((x) => ran.has(x.value) && store.match(x as NamedNode, nn(C + 'valueQuery'), null, dg).length > 0)
+        // (a cell's query may be derived from its formula text, c:SheetFormula: any graph)
+        .filter((x) => ran.has(x.value) && store.match(x as NamedNode, nn(C + 'valueQuery'), null).length > 0)
         .map((x) => x.value)
       if (!cells.length) continue
       const ticks = store.match(sheet, nn(C + 'recalculationTick'), null, dg)

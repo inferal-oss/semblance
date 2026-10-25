@@ -245,7 +245,7 @@ describe('derived connectors', () => {
   })
 
   it("are the sheet's dependency arrows, and a keystroke elsewhere redraws none", async () => {
-    const h = mountSite('oxigraph', 'function')
+    const h = mountSite('wat', 'function')
     const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
     const click = (label: string, scope = 'button') => {
       h.fire([...h.document.querySelectorAll(scope)].find((b) => b.textContent!.trim() === label && visible(b))!, 'click')
@@ -269,11 +269,11 @@ describe('derived connectors', () => {
       const effect = attachConnectors(h.document.getElementById('app') as HTMLElement, { frame: (cb) => (frames.push(cb), () => {}) })
       frames.splice(0).forEach((f) => f())
       const drawn = () => [...sheet.querySelectorAll('[data-sem-c=connector][data-sem-drawn]')]
-      // D6 reads D2..D5 (one column: arcs) and is read by D7 and D8.
-      expect(drawn()).toHaveLength(6)
-      const arc = drawn().find((c) => c.getAttribute('aria-label') === 'D2 → D6')!
+      // F4 reads B4..E4 and is read by H4, J4 and the year's total, best and average (F18..F20: one column, arcs).
+      expect(drawn()).toHaveLength(9)
+      const arc = drawn().find((c) => c.getAttribute('aria-label') === 'F4 → F18')!
       expect(arc.getAttribute('data-sem-route')).toBe('arc')
-      expect(ends(arc.querySelector('.sem-connector-line')!.getAttribute('d')!)).toEqual({ from: [44 + 3 * 104 + 96, 30 + 36 + 18], to: [44 + 3 * 104 + 96, 30 + 5 * 36 + 18] })
+      expect(ends(arc.querySelector('.sem-connector-line')!.getAttribute('d')!)).toEqual({ from: [44 + 5 * 104 + 96, 30 + 3 * 36 + 18], to: [44 + 5 * 104 + 96, 30 + 17 * 36 + 18] })
       // Typing in a cell no arrow touches (and in one whose value an arrow's end shows): nothing to redraw.
       const writes = effect.stats.writes
       const type = (name: string, text: string) => {
@@ -282,8 +282,8 @@ describe('derived connectors', () => {
         h.fire(input, 'input')
         h.shell.flush()
       }
-      type('A2', 'Pour-over kettle')
-      type('C3', '15')
+      type('A2', 'Ristretto')
+      type('C3', '5600')
       await new Promise((r) => setTimeout(r, 0))
       frames.splice(0).forEach((f) => f())
       expect(effect.stats.writes).toBe(writes)

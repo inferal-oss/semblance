@@ -13,17 +13,20 @@
 # A c:Sheet places its cells (c:cell, each a c:SheetCell with a c:row and a c:column, both
 # numbers; columns are lettered A, B, C…). A cell either holds a value (c:value, which the reader
 # edits) or computes one: c:valueQuery names a SELECT (a sem:View) whose ?value is the cell's, and
-# c:dataset names the cells it reads. The formula layer (ontology/components/formula.ttl) runs
+# c:dataset names the cells it reads - or says its formula as people write it (c:formulaText
+# "=SUM(B2:B5)"), which c:SheetFormula reads into both. The formula layer (ontology/components/formula.ttl) runs
 # the query and follows c:dataset, so a change re-runs exactly the cells that read it, and those
 # that read them - the dependency graph is the data's own. Selecting a cell shows its formula and
 # draws its dependencies: arrows from the cells it reads, and to the cells that read it. With
 # c:traceRecalculation, the host writes which formulas the last change re-ran (c:recalculated), and
-# the sheet marks them.
+# the sheet marks them. Typing a formula into a cell and committing it makes it a formula cell
+# (c:EnterSheetFormula); the controls above the grid add a row or a column.
 
 c:Sheet a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A grid of cells (c:cell, c:SheetCell s at c:row × c:column) with lettered columns (c:columns of
-them) and numbered rows. Formula cells (c:valueQuery, reading c:dataset) recompute through the graph.
+them) and numbered rows. Formula cells (c:valueQuery, reading c:dataset, or c:formulaText as people write it)
+recompute through the graph; a formula typed into a cell makes it one, and a row or a column can be added.
 The selected cell (c:selectedCell) shows its formula (c:formulaText) above the grid, and arrows draw
 what it reads and what reads it. With c:traceRecalculation true, the cells the last change re-ran
 (c:recalculated) are marked, and counted."""@en ;
@@ -38,7 +41,7 @@ c:cell a owl:ObjectProperty ; rdfs:domain c:Sheet ; rdfs:range c:SheetCell ;
 c:row a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "A cell's row, from 1."@en .
 c:column a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "A cell's column, from 1 (lettered A, B, C…)."@en .
 c:formulaText a owl:DatatypeProperty ; rdfs:domain c:SheetCell ;
-    rdfs:comment "How a formula cell's query reads, for people (\"=SUM(D2:D5)\")."@en .
+    rdfs:comment "A cell's formula as people write it (\"=SUM(D2:D5)\", \"=B2*C2\"): c:SheetFormula reads it into the cell's query and inputs; on a cell with a query of its own, only how it reads."@en .
 c:selectedCell a owl:ObjectProperty ; rdfs:domain c:Sheet ; rdfs:range c:SheetCell ;
     rdfs:comment "The cell whose formula and dependencies the sheet shows."@en .
 c:traceRecalculation a owl:DatatypeProperty ; rdfs:domain c:Sheet ; rdfs:range xsd:boolean ;
@@ -62,7 +65,10 @@ c:SheetRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?bar , ?scroll , ?status .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?tools , ?bar , ?scroll , ?status .
+  ?tools a rdfhtml:Div ; rdfhtml:class "sem-sheet-tools" ; ord:immediatelyPrecedes ?bar ; rdfhtml:hasChild ?addRow , ?addColumn .
+  ?addRow a c:Button ; c:label ?rowLabel ; c:addsRowTo $this ; sty:size sty:Small ; sty:emphasis sty:Soft ; ord:immediatelyPrecedes ?addColumn .
+  ?addColumn a c:Button ; c:label ?columnLabel ; c:addsColumnTo $this ; c:disabled ?full ; sty:size sty:Small ; sty:emphasis sty:Soft .
   ?bar a rdfhtml:P ; rdfhtml:class "sem-sheet-bar" ; ord:immediatelyPrecedes ?scroll .
   ?scroll a rdfhtml:Div ; rdfhtml:class "sem-sheet-scroll" ; rdfhtml:hasChild ?grid ; ord:immediatelyPrecedes ?status .
   ?status a rdfhtml:P ; rdfhtml:class "sem-sheet-status" ; rdfhtml:attribute ?live .
@@ -80,6 +86,15 @@ WHERE {
   $this a/rdfs:subClassOf* c:Sheet ; c:columns ?columns .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~bar")) AS ?bar)
+  # The controls above the grid: a row, a column (up to Z).
+  BIND(IRI(CONCAT(STR($this), "/~tools")) AS ?tools)
+  BIND(IRI(CONCAT(STR($this), "/~add-row")) AS ?addRow)
+  BIND(IRI(CONCAT(STR($this), "/~add-column")) AS ?addColumn)
+  OPTIONAL { c:AddRowPhrase rdfs:label ?rowPhrase FILTER(langMatches(lang(?rowPhrase), "en")) }
+  OPTIONAL { c:AddColumnPhrase rdfs:label ?columnPhrase FILTER(langMatches(lang(?columnPhrase), "en")) }
+  BIND(STR(COALESCE(?rowPhrase, "Add a row")) AS ?rowLabel)
+  BIND(STR(COALESCE(?columnPhrase, "Add a column")) AS ?columnLabel)
+  BIND(IF(?columns >= 26, true, ?none) AS ?full)
   BIND(IRI(CONCAT(STR($this), "/~scroll")) AS ?scroll)
   BIND(IRI(CONCAT(STR($this), "/~status")) AS ?status)
   BIND(IRI(CONCAT(STR($this), "/~status-aria-live")) AS ?live)
@@ -153,11 +168,105 @@ WHERE {
   BIND(IF(?formula, ?v, ?none) AS ?outData)
 }""" .
 
+# --- formulas as people write them ------------------------------------------------------------------
+# A cell may say its formula the way people write it (c:formulaText "=SUM(B2:B5)", "=B2*C2",
+# "=AVERAGE(B2:E2)"), and c:SheetFormula reads it into what the formula layer runs: the
+# c:SheetFunction it names (c:valueQuery), the cells it reads (c:dataset: the existing cells of the
+# range, or the two operands, c:leftOperand and c:rightOperand). Typing a formula into a cell and
+# committing it (Enter, or leaving the cell) writes only the text (c:EnterSheetFormula); the rest
+# follows. A query of the cell's own (a c:valueQuery that is not a c:SheetFunction) wins over its text.
+
+c:SheetFunction a owl:Class ; rdfs:subClassOf sem:View ;
+    rdfs:comment """A query a sheet's formula text names: a function over a range (c:functionName, "=SUM(B2:B5)") or an
+operator between two cells (c:operator, "=B2*C2"). $this is the cell; its inputs are its c:dataset."""@en .
+c:functionName a owl:DatatypeProperty ; rdfs:domain c:SheetFunction ;
+    rdfs:comment "How a formula names the function, in capitals (\"SUM\")."@en .
+c:operator a owl:DatatypeProperty ; rdfs:domain c:SheetFunction ;
+    rdfs:comment "The operator a formula writes between two cells (\"*\")."@en .
+c:leftOperand a owl:ObjectProperty ; rdfs:domain c:SheetCell ; rdfs:range c:SheetCell ;
+    rdfs:comment "Derived from a cell's formula: the cell before its operator."@en .
+c:rightOperand a owl:ObjectProperty ; rdfs:domain c:SheetCell ; rdfs:range c:SheetCell ;
+    rdfs:comment "Derived from a cell's formula: the cell after its operator."@en .
+c:addsRowTo a owl:ObjectProperty ; rdfs:range c:Sheet ;
+    rdfs:comment "On a sheet's control: the sheet activating it adds a row to (c:AddSheetRow)."@en .
+c:addsColumnTo a owl:ObjectProperty ; rdfs:range c:Sheet ;
+    rdfs:comment "On a sheet's control: the sheet activating it adds a column to (c:AddSheetColumn)."@en .
+
+c:SumFormula a c:SheetFunction , sem:View ; c:functionName "SUM" ; rdfs:label "the sum of a range"@en ;
+    sem:select """SELECT (SUM(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
+c:AverageFormula a c:SheetFunction , sem:View ; c:functionName "AVERAGE" ; rdfs:label "the average of a range (to hundredths)"@en ;
+    sem:select """SELECT ((ROUND(AVG(xsd:decimal(?v)) * 100) / 100) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
+c:MinFormula a c:SheetFunction , sem:View ; c:functionName "MIN" ; rdfs:label "the least of a range"@en ;
+    sem:select """SELECT (MIN(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
+c:MaxFormula a c:SheetFunction , sem:View ; c:functionName "MAX" ; rdfs:label "the greatest of a range"@en ;
+    sem:select """SELECT (MAX(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
+c:AddFormula a c:SheetFunction , sem:View ; c:operator "+" ; rdfs:label "one cell plus another"@en ;
+    sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) + xsd:decimal(?b) AS ?value) }""" .
+c:SubtractFormula a c:SheetFunction , sem:View ; c:operator "-" ; rdfs:label "one cell minus another"@en ;
+    sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) - xsd:decimal(?b) AS ?value) }""" .
+c:MultiplyFormula a c:SheetFunction , sem:View ; c:operator "*" ; rdfs:label "one cell times another"@en ;
+    sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) * xsd:decimal(?b) AS ?value) }""" .
+c:DivideFormula a c:SheetFunction , sem:View ; c:operator "/" ; rdfs:label "one cell over another (to four places)"@en ;
+    sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b FILTER(xsd:decimal(?b) != 0) BIND(ROUND(xsd:decimal(?a) / xsd:decimal(?b) * 10000) / 10000 AS ?value) }""" .
+
+# For the whole sheet at once, before anything that reads a cell's inputs (its grid, its arrows, its
+# focus): it re-runs when a cell's formula text changes or a cell comes or goes, never on a value.
+c:SheetFormula a sem:Rendering ; sem:targets c:Sheet ; sem:stratum -3 ;
+    sem:watches rdf:type , c:cell , c:formulaText ;
+    sem:follows c:cell .
+c:SheetFormula-fn a sem:Rule ; sem:implements c:SheetFormula ; sem:function "sheet:formula" .
+c:SheetFormula-sparql a sem:Rule ;
+    sem:implements c:SheetFormula ;
+    sem:construct """
+CONSTRUCT { ?cell c:valueQuery ?view ; c:dataset ?input ; c:leftOperand ?left ; c:rightOperand ?right }
+WHERE {
+  $this a/rdfs:subClassOf* c:Sheet .
+  # Each branch reads the formulas on its own and joins the cells by hash, not cell by cell.
+  {
+    # A function over a range: =SUM(B2:B5), =MAX(C7).
+    $this c:cell ?cell . ?cell c:formulaText ?raw .
+    BIND(UCASE(REPLACE(STR(?raw), " ", "")) AS ?text)
+    FILTER(REGEX(?text, "^=[A-Z]+[(][A-Z][0-9]+(:[A-Z][0-9]+)?[)]$"))
+    BIND(STRBEFORE(SUBSTR(?text, 2), "(") AS ?name)
+    ?view a c:SheetFunction ; c:functionName ?name .
+    BIND(STRBEFORE(STRAFTER(?text, "("), ")") AS ?range)
+    BIND(IF(CONTAINS(?range, ":"), STRBEFORE(?range, ":"), ?range) AS ?a)
+    BIND(IF(CONTAINS(?range, ":"), STRAFTER(?range, ":"), ?range) AS ?b)
+    BIND(STRLEN(STRBEFORE("ABCDEFGHIJKLMNOPQRSTUVWXYZ", SUBSTR(?a, 1, 1))) + 1 AS ?ca)
+    BIND(STRLEN(STRBEFORE("ABCDEFGHIJKLMNOPQRSTUVWXYZ", SUBSTR(?b, 1, 1))) + 1 AS ?cb)
+    BIND(xsd:integer(SUBSTR(?a, 2)) AS ?ra)
+    BIND(xsd:integer(SUBSTR(?b, 2)) AS ?rb)
+    $this c:cell ?input . ?input c:row ?r ; c:column ?c .
+    FILTER(?input != ?cell && ?r >= IF(?ra < ?rb, ?ra, ?rb) && ?r <= IF(?ra < ?rb, ?rb, ?ra) && ?c >= IF(?ca < ?cb, ?ca, ?cb) && ?c <= IF(?ca < ?cb, ?cb, ?ca))
+  } UNION {
+    # An operator between two cells: =B2*C2.
+    $this c:cell ?cell . ?cell c:formulaText ?raw .
+    BIND(UCASE(REPLACE(STR(?raw), " ", "")) AS ?text)
+    FILTER(REGEX(?text, "^=[A-Z][0-9]+[-+*/][A-Z][0-9]+$"))
+    BIND(REPLACE(?text, "^=[A-Z][0-9]+([-+*/]).*$", "$1") AS ?op)
+    ?view a c:SheetFunction ; c:operator ?op .
+    BIND(REPLACE(?text, "^=([A-Z][0-9]+)[-+*/].*$", "$1") AS ?l)
+    BIND(REPLACE(?text, "^=[A-Z][0-9]+[-+*/]", "") AS ?rr)
+    BIND(STRLEN(STRBEFORE("ABCDEFGHIJKLMNOPQRSTUVWXYZ", SUBSTR(?l, 1, 1))) + 1 AS ?lc)
+    BIND(xsd:integer(SUBSTR(?l, 2)) AS ?lr)
+    BIND(STRLEN(STRBEFORE("ABCDEFGHIJKLMNOPQRSTUVWXYZ", SUBSTR(?rr, 1, 1))) + 1 AS ?rc)
+    BIND(xsd:integer(SUBSTR(?rr, 2)) AS ?rrow)
+    $this c:cell ?left . ?left c:row ?lr ; c:column ?lc .
+    $this c:cell ?right . ?right c:row ?rrow ; c:column ?rc .
+    FILTER(?left != ?cell && ?right != ?cell)
+    VALUES ?side { "left" "right" }
+    BIND(IF(?side = "left", ?left, ?right) AS ?input)
+  }
+  # A query of the cell's own (not one a formula names) wins over its text.
+  FILTER NOT EXISTS { ?cell c:valueQuery ?own . FILTER NOT EXISTS { ?own a c:SheetFunction } }
+}""" .
+
 # --- what is selected, what the last change re-ran ---------------------------------------------------
-# Above the components (it decorates the grid's nodes and the cells').
+# Above the components (it decorates the grid's nodes and the cells'). It follows the selected cell
+# (its value, its formula); a formula is a cell with a formula's text or a query of its own.
 
 c:SheetFocus a sem:Rendering ; sem:targets c:Sheet ; sem:modality mod:Screen ; sem:stratum 40 ;
-    sem:readsMinted true ; sem:watches rdf:type , c:selectedCell , c:recalculated , c:recalculationTick , c:cell ;
+    sem:readsMinted true ; sem:watches rdf:type , c:selectedCell , c:recalculated , c:recalculationTick , c:cell , c:value , c:formulaText ;
     sem:follows c:selectedCell .
 c:SheetFocus-fn a sem:Rule ; sem:implements c:SheetFocus ; sem:function "sheet:focus" .
 c:SheetFocus-sparql a sem:Rule ;
@@ -190,7 +299,7 @@ WHERE {
   } UNION {
     # How much the last change re-ran.
     BIND(IRI(CONCAT(STR($this), "/~status-text")) AS ?statusText)
-    { SELECT (COUNT(DISTINCT ?f) AS ?formulas) WHERE { $this c:cell ?f . ?f c:valueQuery ?anyQuery } }
+    { SELECT (COUNT(DISTINCT ?f) AS ?formulas) WHERE { $this c:cell ?f . ?f c:formulaText|c:valueQuery ?anyQuery } }
     OPTIONAL { SELECT (COUNT(DISTINCT ?rc) AS ?ran) WHERE { $this c:recalculated ?rc } }
     OPTIONAL { $this c:recalculationTick ?tick }
     BIND(IF(BOUND(?tick), CONCAT("The last change recalculated ", STR(COALESCE(?ran, 0)), " of ", STR(?formulas), " formulas."),
@@ -269,3 +378,66 @@ c:FocusSheetCell a beh:Reaction ;
     beh:deletes """CONSTRUCT { ?sheet c:selectedCell ?old } WHERE { ?sheet c:cell $this ; c:selectedCell ?old FILTER(?old != $this) }""" ;
     beh:inserts """CONSTRUCT { ?sheet c:selectedCell $this } WHERE { ?sheet c:cell $this FILTER NOT EXISTS { ?sheet c:selectedCell $this } }""" ;
     sem:function "sheet:select" .
+
+# Committing a formula (Enter, or leaving the cell) in a value cell: its text becomes the cell's
+# formula (c:formulaText; c:SheetFormula does the rest) and its typed value goes. Text that is not
+# a formula this sheet knows stays a value.
+c:EnterSheetFormula a beh:Reaction ;
+    rdfs:label "Enter a formula"@en ;
+    beh:when beh:Change ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:formulaText ?was }
+WHERE {
+  FILTER NOT EXISTS { $this c:valueQuery ?q }
+  $event beh:value ?raw .
+  BIND(UCASE(REPLACE(STR(?raw), " ", "")) AS ?text)
+  FILTER((REGEX(?text, "^=[A-Z]+[(][A-Z][0-9]+(:[A-Z][0-9]+)?[)]$") && EXISTS { ?f a c:SheetFunction ; c:functionName ?name FILTER(?name = STRBEFORE(SUBSTR(?text, 2), "(")) })
+      || REGEX(?text, "^=[A-Z][0-9]+[-+*/][A-Z][0-9]+$"))
+  { $this c:value ?old } UNION { $this c:formulaText ?was }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:formulaText ?text }
+WHERE {
+  FILTER NOT EXISTS { $this c:valueQuery ?q }
+  $event beh:value ?raw .
+  BIND(UCASE(REPLACE(STR(?raw), " ", "")) AS ?text)
+  FILTER((REGEX(?text, "^=[A-Z]+[(][A-Z][0-9]+(:[A-Z][0-9]+)?[)]$") && EXISTS { ?f a c:SheetFunction ; c:functionName ?name FILTER(?name = STRBEFORE(SUBSTR(?text, 2), "(")) })
+      || REGEX(?text, "^=[A-Z][0-9]+[-+*/][A-Z][0-9]+$"))
+}""" ;
+    sem:function "sheet:enter-formula" .
+
+# The controls above the grid: a row under the last (a cell for each column), or a column after
+# the last (a cell for each row), up to Z. New cells are named after the sheet and their place
+# (<sheet>-K3) and start empty.
+c:AddSheetRow a beh:Reaction ;
+    rdfs:label "Add a row"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Sheet ;
+    beh:inserts """CONSTRUCT { $this c:cell ?new . ?new a c:SheetCell ; c:row ?next ; c:column ?c }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n sem:renders ?control . ?control c:addsRowTo $this .
+  $this c:columns ?columns .
+  { SELECT (MAX(?r0) AS ?last) WHERE { $this c:cell/c:row ?r0 } }
+  BIND(COALESCE(?last, 0) + 1 AS ?next)
+  VALUES ?c { 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 }
+  FILTER(?c <= ?columns)
+  BIND(IRI(CONCAT(STR($this), "-", SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c, 1), STR(?next))) AS ?new)
+}""" ;
+    sem:function "sheet:add-row" .
+c:AddSheetColumn a beh:Reaction ;
+    rdfs:label "Add a column"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:Sheet ;
+    beh:deletes """CONSTRUCT { $this c:columns ?columns }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n sem:renders ?control . ?control c:addsColumnTo $this . $this c:columns ?columns FILTER(?columns < 26) }""" ;
+    beh:inserts """CONSTRUCT { $this c:columns ?more ; c:cell ?new . ?new a c:SheetCell ; c:row ?r ; c:column ?more }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n sem:renders ?control . ?control c:addsColumnTo $this .
+  $this c:columns ?columns FILTER(?columns < 26)
+  BIND(?columns + 1 AS ?more)
+  OPTIONAL { SELECT DISTINCT ?r WHERE { $this c:cell/c:row ?r } }
+  BIND(IF(BOUND(?r), IRI(CONCAT(STR($this), "-", SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?more, 1), STR(?r))), ?none) AS ?new)
+}""" ;
+    sem:function "sheet:add-column" .
+
+c:AddRowPhrase a c:Phrase ; rdfs:label "Add a row"@en , "Додати рядок"@uk , "Zeile hinzufügen"@de , "إضافة صف"@ar .
+c:AddColumnPhrase a c:Phrase ; rdfs:label "Add a column"@en , "Додати стовпець"@uk , "Spalte hinzufügen"@de , "إضافة عمود"@ar .

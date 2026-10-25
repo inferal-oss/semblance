@@ -86,7 +86,7 @@ c:CodeEditor sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c
 c:CodeWord sem:group c:InputsGroup . c:CodeKeyword sem:group c:InputsGroup . c:CodeFunction sem:group c:InputsGroup .
 c:TurtleKeyword sem:group c:InputsGroup .
 c:SparqlWord sem:group c:InputsGroup . c:SparqlKeyword sem:group c:InputsGroup . c:SparqlFunction sem:group c:InputsGroup .
-c:Sheet sem:group c:DataGroup . c:SheetCell sem:group c:DataGroup .
+c:Sheet sem:group c:DataGroup . c:SheetCell sem:group c:DataGroup . c:SheetFunction sem:group c:DataGroup .
 
 # --- Feedback ---
 c:Alert sem:group c:FeedbackGroup . c:Badge sem:group c:FeedbackGroup . c:Tag sem:group c:FeedbackGroup .
