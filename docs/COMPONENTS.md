@@ -285,6 +285,18 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   `fs:fullscreen true` is shown with the document's Fullscreen API (the window filled where it is
   refused), `fs:fullViewport true` fills the window; pass `host` (a stand-in in tests, `null` for
   no Fullscreen API at all).
+- **Foreign components.** A web component, a framework component or a vanilla widget (a chart, a map,
+  an editor) is an island: a subclass of `ext:Island` that says what to mount (`ext:adapter`, with
+  `ext:tag` or `ext:widget`, and `ext:module` for a loader the host registered), which of an instance's
+  properties are its inputs (`ext:input`: a name, `ext:from`, optionally `ext:through c:of` and
+  `ext:as ext:Attribute`) and which of its events are outputs (`ext:output`: `ext:on`, `ext:emits` an
+  event class, `ext:path` into the payload). The island's rendering puts the inputs' current values on a
+  host-owned slot, so an input changes only when its triples do; `mount` attaches the islands effect,
+  which mounts the component there, pushes changed inputs (a value the component already has is not
+  written again) and emits its outputs as events for ordinary reactions. Register what the graph names:
+  `mount(el, { widgets: { chart }, modules: { 'shoelace/rating': () => import(url) } })`. Theme it by
+  mapping tokens onto its documented custom properties with a style rule. See [FOREIGN.md](FOREIGN.md)
+  and the site's Coffee tasting example (Shoelace, Chart.js, Leaflet and flatpickr from a CDN).
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
   `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no
@@ -364,6 +376,6 @@ slowest, for which focus, how much is done and waiting, the event that started t
 | `ontology/components/groups.ttl` | the component groups, and each class's group (`sem:group`; parts with their component) |
 | `ontology/shapes/components.ttl` | component shapes |
 | `ontology/theme/*.ttl` | tokens, styles, themes |
-| `ontology/layers/*.ttl` | the layers |
+| `ontology/layers/*.ttl` | the layers (`foreign.ttl`: islands for foreign components, mounted by `src/foreign.ts`) |
 | `src/components/<group>.ts` | function twins and reaction functions |
 | `demo/gallery/<group>.ttl` | the Components page's specimens; each says which classes it demonstrates (`c:demonstrates`) and sits on their group's page (`test/gallery.test.ts`) |

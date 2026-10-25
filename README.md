@@ -162,6 +162,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
   Paper, Terminal, Blueprint, Sunset; contrast and motion compose with them.
+- **Foreign components** (`ext:`): web components, framework components and vanilla widgets are
+  islands - a host-owned slot whose inputs are derived from the graph by a rule and whose outputs come
+  back as events. A host effect (`src/foreign.ts`) mounts each through the adapter of its kind (custom
+  element, widget, or one an app registers), loads its code on demand, pushes only changed inputs and
+  suppresses echoes. See [docs/FOREIGN.md](docs/FOREIGN.md).
 - **Network capture**: a host effect (`src/network.ts`) records the page's own
   fetches, WebSockets and the events and spans it reports as members of
   `net:Capture`, a bounded LDES in the network graph
@@ -322,7 +327,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard and fullscreen layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, drawing connectors where their ends are |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

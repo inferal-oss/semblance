@@ -4,6 +4,7 @@ import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard } from '../src/clipboard.ts'
 import { Files, type Uploader } from '../src/files.ts'
 import { Fullscreen } from '../src/fullscreen.ts'
+import { Islands } from '../src/foreign.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -25,6 +26,7 @@ import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
+import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
 // engine layers, store choice, URL, benchmark runs) and nothing else. The
@@ -345,6 +347,16 @@ new Fullscreen(bus, {
     const n = shell.nodeOf(iri)
     return n?.nodeType === 1 ? (n as Element) : undefined
   },
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach()
+// Foreign components (ext:Island): Shoelace, Chart.js, Leaflet and flatpickr from a CDN, loaded when an island first shows,
+// mounted in their slots after each patch; what they report comes back as events.
+new Islands(bus, shell, {
+  modules,
+  widgets: { 'chart.js': chartJs, leaflet, flatpickr },
   onHandled: () => {
     syncSettings()
     flush()
