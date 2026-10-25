@@ -203,22 +203,24 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     keys = [...new Set(dims.filter((v) => certain.has(v) && !v.startsWith('__')))]
   }
   for (const k of keys) if (!certain.has(k)) throw new Unsupported(`the partition key ?${k} is not bound in every solution`)
-  // Derived subqueries: those at the root, and those elsewhere that project no key (a nested one
-  // projecting a key stays the store's: its rows could not be joined to the key there).
-  const subs = candidates.filter((q) => isRoot(q) || !projectedVars(q).some((v) => keys.includes(v)))
+  const subs = candidates
   const derived = subs.map((q) => ({ part: part(q, { ...source, partitionBy: undefined, window: undefined }, run, text, prologue), vars: projectedVars(q) }))
-  // Keys a derived subquery alone binds are not correlated (VALUES in LATERAL cannot bind what the
-  // left side binds): its rows are filtered to the batch instead. Keys the body binds too are
-  // renamed in its rows and joined by a FILTER.
-  const leftKeys = keys.filter((k) => !fromSub.has(k))
-  const renamed = derived.map((d, i) => new Map(isRoot(subs[i]!) ? d.vars.filter((v) => leftKeys.includes(v)).map((v) => [v, `__d${i}_${v}`] as const) : []))
+  // Keys a derived subquery projects: VALUES inside the LATERAL cannot bind what its left side
+  // binds (SPARQL 1.2), so where the batch binds such a key the subquery's rows have it renamed and
+  // joined by a FILTER (in their own group, where the key is the left side's constant); where a
+  // slice leaves it open, it is left out of the correlation and the rows bind it.
+  const projectedKeys = new Set(keys.filter((k) => derived.some((d) => d.vars.includes(k))))
   const pieces: string[] = []
   let at = sel.where.at + 1
   for (const q of subs) pieces.push(text.slice(at, q.at)), (at = q.end)
   pieces.push(text.slice(at, sel.where.end - 1))
-  const joins = renamed.flatMap((m) => [...m].map(([v, r]) => `FILTER(sameTerm(?${r}, ?${v}))`)).join(' ')
-  const columns = (i: number) => derived[i]!.vars.map((v) => '?' + (renamed[i]!.get(v) ?? v)).join(' ')
-  const body = pieces.reduce((acc, piece, i) => acc + (i ? `VALUES (${columns(i - 1)}) { … }` : '') + piece, '') + (joins ? ' ' + joins : '')
+  const inline = (i: number, left: ReadonlySet<string>, values: string) => {
+    const vars = derived[i]!.vars
+    const name = (v: string) => (left.has(v) ? `__d${i}_${v}` : v)
+    const joins = vars.filter((v) => left.has(v)).map((v) => ` FILTER(sameTerm(?${name(v)}, ?${v}))`)
+    return `VALUES (${vars.map((v) => '?' + name(v)).join(' ')}) { ${values} }${joins.join('')}`
+  }
+  const body = pieces.reduce((acc, piece, i) => acc + (i ? inline(i - 1, new Set(), '…') : '') + piece, '')
   const deps = new Dependencies(run.factory, sel.where, keys, subs)
   if (deps.problem) throw new Unsupported(deps.problem)
 
@@ -302,28 +304,27 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   // a partition takes its rows from the first row that covers it - all of its solutions, once.
   const headK = head.replace(/ WHERE \{$/, ' ?__k WHERE {')
   // The body with each derived subquery's current rows in its place (those the batch's keys allow).
-  const bodyWith = (batch: readonly (Term | undefined)[][] | undefined, rows: readonly Map<string, Term>[][] | undefined) => {
+  const bodyWith = (batch: readonly (Term | undefined)[][] | undefined, rows: readonly Map<string, Term>[][] | undefined, left: ReadonlySet<string>) => {
     if (!subs.length) return body
-    return (
-      pieces.reduce((acc, piece, i) => {
-        if (!i) return piece
-        const d = derived[i - 1]!
-        const allowed = new Map<string, Set<string>>()
-        for (const v of d.vars) {
-          const k = keys.indexOf(v)
-          if (k >= 0 && batch && batch.every((b) => b[k])) allowed.set(v, new Set(batch.map((b) => termKey(b[k]!))))
-        }
-        const fits = (r: Map<string, Term>) => [...allowed].every(([v, set]) => r.has(v) && set.has(termKey(r.get(v)!)))
-        const values = (rows?.[i - 1] ?? []).filter(fits).map((r) => `(${d.vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`)
-        return acc + `VALUES (${columns(i - 1)}) { ${values.join(' ')} }` + piece
-      }, '') + (joins ? '\n  ' + joins : '')
-    )
+    return pieces.reduce((acc, piece, i) => {
+      if (!i) return piece
+      const d = derived[i - 1]!
+      const allowed = new Map<string, Set<string>>()
+      for (const v of d.vars) {
+        const k = keys.indexOf(v)
+        if (k >= 0 && batch && batch.every((b) => b[k])) allowed.set(v, new Set(batch.map((b) => termKey(b[k]!))))
+      }
+      const fits = (r: Map<string, Term>) => [...allowed].every(([v, set]) => r.has(v) && set.has(termKey(r.get(v)!)))
+      const values = (rows?.[i - 1] ?? []).filter(fits).map((r) => `(${d.vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`)
+      return acc + inline(i - 1, left, values.join(' ')) + piece
+    }, '')
   }
   const local = (batch0: readonly (Term | undefined)[][] | undefined, rows?: readonly Map<string, Term>[][]) => {
     const out = new Map<string, Map<string, Term>[]>()
     if (batch0 && !batch0.length) return out
-    const body = bodyWith(batch0, rows)
-    // The batch on the keys the body correlates (others filtered the derived rows above).
+    // The keys the batch correlates: all but those a derived subquery binds where the batch leaves them open.
+    const leftKeys = batch0 ? keys.filter((k, i) => !projectedKeys.has(k) || batch0.every((b) => b[i])) : []
+    const body = bodyWith(batch0, rows, new Set(leftKeys.filter((k) => projectedKeys.has(k))))
     const at = leftKeys.map((k) => keys.indexOf(k))
     const batch = batch0 && [...new Map(batch0.map((b) => at.map((i) => b[i])).map((b) => [keyString(b), b])).values()]
     const sliced = !!batch && leftKeys.length > 0 && batch.some((b) => b.some((t) => !t))

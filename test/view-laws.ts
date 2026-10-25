@@ -40,6 +40,16 @@ export const LAW_VIEWS: Record<string, string> = {
   bestOfGroup: `SELECT ?m ?t ?best WHERE { { SELECT ?t (MAX(?x) AS ?best) WHERE { v:s tree:member ?m . ?m v:target ?t ; v:x ?x } GROUP BY ?t } v:s tree:member ?m . ?m v:target ?t ; v:x ?best }`,
   topScore: `SELECT ?i WHERE { { SELECT (MAX(?s) AS ?top) WHERE { ?j a v:Item ; v:score ?s } } ?i a v:Item ; v:score ?top }`,
   busyTargets: `SELECT ?t ?n WHERE { ?t a v:Target OPTIONAL { { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t HAVING (COUNT(?i) > 1) } } }`,
+  // Paths: a list walk, an inverse closure, an alternative with an inverse, a closure of a sequence.
+  listed: `SELECT ?x ?l WHERE { v:list v:items/rdf:rest*/rdf:first ?x . OPTIONAL { ?x rdfs:label ?l } }`,
+  downward: `SELECT ?sub WHERE { v:K1 (^rdfs:subClassOf)+ ?sub }`,
+  either: `SELECT ?a ?b WHERE { ?a a v:Item ; (v:owner|^v:owner) ?b }`,
+  sameGroup: `SELECT ?z WHERE { v:T1 (v:group/^v:group)* ?z . ?z rdfs:label ?l }`,
+  hops: `SELECT ?m ?z WHERE { v:s tree:member ?m . ?m (v:target/v:group)? ?z }`,
+  // LATERAL: an OPTIONAL per row, a correlated top-1, a correlated aggregate.
+  lateralLabel: `SELECT ?m ?l WHERE { v:s tree:member ?m . ?m v:target ?t . LATERAL { OPTIONAL { ?t rdfs:label ?l } } }`,
+  bestPerTarget: `SELECT ?t ?m WHERE { ?t a v:Target . LATERAL { SELECT ?t ?m WHERE { v:s tree:member ?m . ?m v:target ?t ; v:x ?x } ORDER BY DESC(?x) ?m LIMIT 1 } }`,
+  countPerTarget: `SELECT ?t ?n WHERE { ?t a v:Target . LATERAL { SELECT ?t (COUNT(?m) AS ?n) WHERE { ?m v:target ?t } GROUP BY ?t } }`,
   // A cross product: partitions by (item, kind); a new kind reaches every item's slice.
   cross: `SELECT ?i ?k ?s WHERE { ?i a v:Item . v:cfg v:showKind ?k OPTIONAL { ?i v:score ?s } }`,
 }
@@ -63,6 +73,7 @@ export const lawTurtle = `
 v:prefixes sh:declare [ sh:prefix "v" ; sh:namespace "${V}"^^xsd:anyURI ] .
 v:s a ldes:EventStream .
 v:K3 rdfs:subClassOf v:K1 .
+v:list v:items ( v:T1 v:T2 ) .
 v:K4 rdfs:subClassOf v:K3 .
 ${Object.entries(LAW_VIEWS).map(([k, q]) => `v:${k} a iv:View ; sem:select """${q}""" .`).join('\n')}
 ${Object.entries(CONSTRUCTS).map(([k, q]) => `v:${k} a iv:View ; sem:construct """${q}""" .`).join('\n')}
@@ -174,7 +185,39 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     ['item score', 0.8, () => (items.length ? set(pick(items), 'score', r() < 0.2 ? undefined : int(Math.floor(r() * 7))) : [[], []])],
     ['item owner', 0.5, () => (items.length ? set(pick(items), 'owner', nn(pick(T))) : [[], []])],
     ['target type', 0.4, () => set(pick(T), NS.rdf + 'type', r() < 0.5 ? nn('Target') : undefined)],
+    ['list insert', 0.6, () => {
+      // A new cell after a random one (or at the head).
+      const cells = listCells()
+      const at = Math.floor(r() * (cells.length + 1))
+      const cell = nn(`cell${++n}`)
+      const rest = f.namedNode(NS.rdf + 'rest')
+      const first = f.namedNode(NS.rdf + 'first')
+      const value = nn(r() < 0.7 ? pick(T) : pick(G))
+      if (at === 0) {
+        const head = store.match(nn('list'), p('items'), null)
+        return [head, [f.quad(nn('list'), p('items'), cell), f.quad(cell, first, value), ...head.map((q) => f.quad(cell, rest, q.object))]]
+      }
+      const prev = cells[at - 1]!
+      const next = store.match(prev, rest, null)
+      return [next, [f.quad(prev, rest, cell), f.quad(cell, first, value), ...next.map((q) => f.quad(cell, rest, q.object))]]
+    }],
+    ['list remove', 0.4, () => {
+      const cells = listCells()
+      if (!cells.length) return [[], []]
+      const i = Math.floor(r() * cells.length)
+      const cell = cells[i]!
+      const rest = f.namedNode(NS.rdf + 'rest')
+      const into = i === 0 ? store.match(nn('list'), p('items'), cell) : store.match(cells[i - 1]!, rest, cell)
+      const after = store.match(cell, rest, null)
+      return [[...into, ...store.match(cell, null, null)], into.map((q) => f.quad(q.subject, q.predicate, after[0]?.object ?? f.namedNode(NS.rdf + 'nil')))]
+    }],
   ]
+  function listCells() {
+    const out: import('@rdfjs/types').Term[] = []
+    let c = store.match(nn('list'), p('items'), null)[0]?.object
+    while (c && c.value !== NS.rdf + 'nil' && out.length < 100) out.push(c), (c = store.match(c as never, f.namedNode(NS.rdf + 'rest'), null)[0]?.object)
+    return out
+  }
   const total = ops.reduce((a, [, w]) => a + w, 0)
   const choose = () => {
     let x = r() * total

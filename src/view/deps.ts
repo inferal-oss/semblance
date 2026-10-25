@@ -13,7 +13,7 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import { termKey } from '../rdf.ts'
 import type { Factory } from '../store/types.ts'
-import { type Expr, type Group, type Node, type Path, projectedVars, type Select } from './sparql.ts'
+import { certainVars, type Expr, type Group, type Node, type Path, projectedVars, type Select } from './sparql.ts'
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
 
@@ -171,13 +171,43 @@ export class Dependencies {
     // A closure (p*, p+, p?) of a link or an alternative of links: the triple is one step of a
     // walk; the walk's start reaches its subject backwards, its end is reached from its object.
     if (path.k === 'mod') {
-      const steps = linkSteps(path.p)
-      if (!steps || !steps.some((s) => s.iri === q.predicate.value || s.iri === undefined)) return []
+      // p*, p+, p? of a step or of a sequence of steps: the triple is one step, somewhere in it.
+      const segments = path.p.k === 'seq' ? path.p.ps : [path.p]
       const out: Map<string, Term>[] = []
-      const back = this.closure(path.p, q.subject, true, lookup)
-      const fwd = this.closure(path.p, q.object, false, lookup)
-      for (const n of back) if (!('t' in p.s) || p.s.t.equals(n)) out.push(new Map('v' in p.s ? [[p.s.v, n]] : []))
-      for (const n of fwd) if (!('t' in p.o) || p.o.t.equals(n)) out.push(new Map('v' in p.o ? [[p.o.v, n]] : []))
+      const many = (nodes: Term[], back: boolean) => {
+        if (path.mod === '?') return nodes
+        const all = new Map<string, Term>()
+        for (const n of nodes) for (const m of this.closure(path.p, n, back, lookup)) all.set(termKey(m), m)
+        return [...all.values()]
+      }
+      const through = (nodes: Term[], segs: Path[], back: boolean) => {
+        for (const seg of back ? [...segs].reverse() : segs) {
+          const next = new Map<string, Term>()
+          for (const n of nodes) for (const m of walkPath(this.nn, seg, n, back, lookup)) next.set(termKey(m), m)
+          nodes = [...next.values()]
+        }
+        return nodes
+      }
+      for (let i = 0; i < segments.length; i++) {
+        const steps = linkSteps(segments[i]!)
+        if (!steps) return 'global'
+        // The triple is a step from its subject to its object, or (an inverse step) back.
+        for (const inv of new Set(steps.filter((x) => x.iri === q.predicate.value || x.iri === undefined).map((x) => x.inv))) {
+          const [from, to] = inv ? [q.object, q.subject] : [q.subject, q.object]
+          const starts = many(through([from], segments.slice(0, i), true), true).filter((n) => !('t' in p.s) || p.s.t.equals(n))
+          const ends = many(through([to], segments.slice(i + 1), false), false).filter((n) => !('t' in p.o) || p.o.t.equals(n))
+          if (!starts.length || !ends.length) continue
+          // A solution through this step has its start among the starts and its end among the ends:
+          // both bound (while there are few pairs), else each end on its own.
+          if ('v' in p.s && 'v' in p.o && starts.length * ends.length <= 2000) {
+            for (const a of starts) for (const b of ends) out.push(new Map([[p.s.v, a], [p.o.v, b]]))
+            continue
+          }
+          if ('v' in p.s) for (const n of starts) out.push(new Map([[p.s.v, n]]))
+          if ('v' in p.o) for (const n of ends) out.push(new Map([[p.o.v, n]]))
+          if ('t' in p.s && 't' in p.o) out.push(new Map())
+        }
+      }
       return out
     }
     return 'global'
@@ -356,23 +386,32 @@ export class Dependencies {
     this.add(scope, s, { path: p }, o)
   }
 
-  private group(g: Group, scope: Scope, rename: (v: string) => string) {
-    for (const it of g.items) {
+  /**
+   * `left`: inside a LATERAL, the variables its left side certainly binds (as named here): a
+   * subquery with LIMIT that projects one of them is evaluated per binding of it (correlated), so a
+   * change reaches the bindings it joins to, not every partition.
+   */
+  private group(g: Group, scope: Scope, rename: (v: string) => string, left: ReadonlySet<string> = new Set()) {
+    g.items.forEach((it, i) => {
       switch (it.k) {
         case 'triples':
           for (const t of it.triples) this.triple(scope, this.pos(t.s, rename), t.p, this.pos(t.o, rename), rename)
           break
+        case 'lateral': {
+          const before = [...certainVars({ items: g.items.slice(0, i), at: g.at, end: g.end })].map(rename)
+          this.group(it.g, scope, rename, new Set([...left, ...before]))
+          break
+        }
         case 'group':
-        case 'lateral':
         case 'graph':
-          this.group(it.g, scope, rename)
+          this.group(it.g, scope, rename, left)
           break
         case 'optional':
         case 'minus':
-          this.group(it.g, this.child(scope), rename)
+          this.group(it.g, this.child(scope), rename, left)
           break
         case 'union':
-          for (const b of it.gs) this.group(b, this.child(scope), rename)
+          for (const b of it.gs) this.group(b, this.child(scope), rename, left)
           break
         case 'service':
           throw new Error('SERVICE')
@@ -386,9 +425,9 @@ export class Dependencies {
         case 'values':
           break
         case 'select':
-          this.select(it.q, scope, rename)
+          this.select(it.q, scope, rename, left)
       }
-    }
+    })
   }
 
   private child(parent: Scope, global = false): Scope {
@@ -412,7 +451,7 @@ export class Dependencies {
     if (vars.length) scope.aliases.push({ to, from: vars, first: !isIf && /^[?$]\w+$/.test(args[0]?.trim() ?? ''), scope })
   }
 
-  private select(q: Select, scope: Scope, rename: (v: string) => string) {
+  private select(q: Select, scope: Scope, rename: (v: string) => string, left: ReadonlySet<string> = new Set()) {
     // A subquery's own variables are its own: only what it projects joins the outside.
     const projected = new Set(projectedVars(q))
     const id = this.fresh++
@@ -423,10 +462,11 @@ export class Dependencies {
       this.derivedAt[at] = { scope, vars: new Map([...projected].map((v) => [v, rename(v)])) }
       return
     }
-    const s = this.child(scope, q.limit !== undefined || q.offset !== undefined)
+    const correlated = [...projected].some((v) => left.has(rename(v)))
+    const s = this.child(scope, (q.limit !== undefined || q.offset !== undefined) && !correlated)
     // Projected expressions alias their variables.
     for (const p of q.projection) if (p.e) this.alias(p.e, inner(p.v), s, inner)
-    this.group(q.where, s, inner)
+    this.group(q.where, s, inner, left)
     for (const p of q.projection) if (p.e) this.expr(p.e, s, inner)
     for (const h of q.having) this.expr(h, s, inner)
   }
