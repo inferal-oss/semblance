@@ -395,6 +395,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       byId.length = 0
       iris.clear()
       literals.clear()
+      unknown.clear()
       e.dispose()
     },
     setDeadline: (at) => e.setDeadline(at),
