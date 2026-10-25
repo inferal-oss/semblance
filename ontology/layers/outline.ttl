@@ -97,7 +97,7 @@ WHERE {
 # background and on top of the outline it interrupts, like a fieldset's legend. Its text is
 # decoration (alt text ""): the name is not added to the component's accessible name.
 
-tok:outline-offset a sty:Token ; sty:scale sty:Space ; sem:slug "outline-offset" ; sty:value "3px" .
+tok:outline-offset a sty:Token ; sty:scale sty:Space ; sem:slug "outline-offset" ; sty:value "6px" .
 
 [] a sty:StyleRule ; sty:part ":where([data-sem-outlines=shown] [data-sem-outline])" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] .
@@ -127,7 +127,10 @@ tok:outline-offset a sty:Token ; sty:scale sty:Space ; sem:slug "outline-offset"
                  [ sty:property "color" ; sty:token tok:on-accent ] ,
                  [ sty:property "box-shadow" ; sty:raw "0 0 0 2px var(--sem-surface)" ] ,
                  [ sty:property "opacity" ; sty:raw "1" ] ,
-                 [ sty:property "font" ; sty:raw "500 11px/16px var(--sem-font-mono)" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:raw "0.7rem" ] ,
+                 [ sty:property "font-weight" ; sty:raw "500" ] ,
+                 [ sty:property "line-height" ; sty:raw "1.5" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0" ] ,
                  [ sty:property "text-transform" ; sty:raw "none" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
