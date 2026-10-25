@@ -677,8 +677,13 @@ export class Engine {
       }
     }
     // Along a path whose last step is against a predicate: from this node itself.
-    for (const { rule: r, path } of this.inverseFollowers) {
-      for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+    // (Rendered output - RDF/HTML structure, placement, provenance - is never what a path follows,
+    // and a rule that watches predicates is not walked to for others: this runs for every triple.)
+    if (this.inverseFollowers.length && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
+      for (const { rule: r, path } of this.inverseFollowers) {
+        if (r.watches && !r.watches.has(p)) continue
+        for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+      }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
     const readers = this.readers.get(s)
