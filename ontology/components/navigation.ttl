@@ -117,7 +117,7 @@ CONSTRUCT {
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?name .
   ?list a rdfhtml:Ol ; rdfhtml:hasChild ?li .
   ?li a rdfhtml:Li ; sem:orderKey ?pos ; rdfhtml:hasChild ?content , ?sep .
-  ?content a ?contentClass ; rdfhtml:type ?buttonType ; rdfhtml:class ?contentStyle ; rdfhtml:attribute ?currentAttr ;
+  ?content a ?contentClass ; rdfhtml:type ?buttonType ; rdfhtml:href ?href ; rdfhtml:class ?contentStyle ; rdfhtml:attribute ?currentAttr ;
            c:selects ?selects ; rdfhtml:hasChild ?text ; ord:immediatelyPrecedes ?sep .
   ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
   ?text a rdfhtml:Text ; rdfhtml:data ?label .
@@ -174,8 +174,13 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?nameAttr)
   BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
   BIND(IRI(CONCAT(STR($this), "/~", ?id)) AS ?li)
-  BIND(IRI(CONCAT(STR($this), "/~", ?id, IF(?last, "-current", IF(?navigates, "-link", "-crumb")))) AS ?content)
-  BIND(IF(!?last && ?navigates, rdfhtml:Button, rdfhtml:Span) AS ?contentClass)
+  # A crumb that neither is the end nor selects: a link where the navigation layer resolved it
+  # (a c:Link with c:to: nav:href), else its c:href; a plain span without either.
+  OPTIONAL { FILTER(!?last && !?navigates) ?crumb nav:href ?navHref }
+  OPTIONAL { FILTER(!?last && !?navigates && !BOUND(?navHref)) ?crumb c:href ?ownHref }
+  BIND(STR(COALESCE(?navHref, ?ownHref)) AS ?href)
+  BIND(IRI(CONCAT(STR($this), "/~", ?id, IF(?last, "-current", IF(?navigates || BOUND(?href), "-link", "-crumb")))) AS ?content)
+  BIND(IF(!?last && ?navigates, rdfhtml:Button, IF(BOUND(?href), rdfhtml:A, rdfhtml:Span)) AS ?contentClass)
   BIND(IF(!?last && ?navigates, "button", ?none) AS ?buttonType)
   BIND(IF(?last, "sem-current", "sem-crumb") AS ?contentStyle)
   BIND(IF(?last, IRI(CONCAT(STR($this), "/~", ?id, "-current-aria-current")), ?none) AS ?currentAttr)
