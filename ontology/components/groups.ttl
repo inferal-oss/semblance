@@ -80,6 +80,9 @@ c:TypeaheadKey sem:group c:InputsGroup . c:TypeaheadLeave sem:group c:InputsGrou
 c:Charset sem:group c:InputsGroup . c:Case sem:group c:InputsGroup . c:CellStyle sem:group c:InputsGroup .
 c:SearchKey sem:group c:InputsGroup .
 c:ShapeForm sem:group c:InputsGroup . c:ShapeField sem:group c:InputsGroup .
+# Dates and times: the month grid is the part a date field's popup is made of, and stands alone.
+c:MonthGrid sem:group c:InputsGroup . c:DateField sem:group c:InputsGroup . c:DateRangeField sem:group c:InputsGroup .
+c:TimeField sem:group c:InputsGroup . c:MonthGridKey sem:group c:InputsGroup . c:TimeFieldKey sem:group c:InputsGroup .
 # A code editor's text is its value, like any field's; the SPARQL editor is one in SPARQL. The
 # words of the languages they know (c:CodeWord) and their key event are their parts.
 c:CodeEditor sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c:EditorKey sem:group c:InputsGroup .

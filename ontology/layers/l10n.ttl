@@ -44,3 +44,63 @@ l10n:Labels a sem:Rendering ;
     sem:watches c:label ;
     sem:functionOnly "It is how the viewer's language reaches SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
 l10n:Labels-fn a sem:Rule ; sem:implements l10n:Labels ; sem:function "l10n:label" .
+
+# --- Dates and times in the viewer's locale ---------------------------------------------------------
+# A component that shows or reads dates or times (a month grid, a date field, a time field) is an
+# l10n:Dated. Before it renders, this layer puts its locale's calendar into the graph, from the
+# host's Intl, so its SPARQL rules can write and read dates as the locale does: the month and
+# weekday names, the order and separators of a numeric date, a long date and a month heading as
+# patterns, the hour cycle, the day periods, the digits, the first day of the week and today. The
+# locale is the component's l10n:locale (a BCP 47 tag: "en-GB" writes 24/10/2026 and starts the
+# week on Monday) or the viewer's language.
+#
+# Patterns are the locale's own text with fields as %-codes, so a rule fills them with REPLACE:
+#   %d day (two digits)   %m month (two digits)   %y year (four digits)   %M month name
+#   %w weekday name       %h hour (as the hour cycle has it)   %H hour (two digits)
+#   %n minutes (two digits)   %a day period (AM / PM)
+# Numbers in a pattern are written with the locale's digits (l10n:digits, "0123456789" for Latin).
+#
+# Per instance (minted under it): <focus>/~l10n-month-1 … -12 (l10n:label, as in a month heading;
+# l10n:inDate, as in a long date: "жовтень" and "24 жовтня"), <focus>/~l10n-weekday-1 … -7 (ISO:
+# 1 is Monday; l10n:label long, l10n:abbr short), and <focus>/~l10n-<Phrase> for each c:Phrase its
+# class names with l10n:phrase. Labels of phrases in the viewer's language, as l10n:Labels does
+# for components.
+
+l10n:Dated a owl:Class ;
+    rdfs:label "Dated"@en , "З датами"@uk , "Mit Datum"@de , "مؤرَّخ"@ar ;
+    rdfs:comment """Mixin: a component that shows or reads dates or times in a locale. The localization layer
+derives its locale's calendar (l10n:CalendarTexts) before it renders: names, patterns, digits, the
+first day of the week (l10n:firstWeekday) and today (l10n:today)."""@en .
+l10n:locale a owl:DatatypeProperty ; rdfs:domain l10n:Dated ;
+    rdfs:label "Locale"@en , "Локаль"@uk , "Gebietsschema"@de , "الإعدادات المحلية"@ar ;
+    rdfs:comment "A BCP 47 tag whose formats a dated component uses (\"en-GB\", \"ar-EG\"); without one, the viewer's language."@en .
+l10n:phrase a owl:ObjectProperty ; rdfs:domain owl:Class ; rdfs:range c:Phrase ;
+    rdfs:comment "On a class of dated components: a phrase its rules show; each instance gets <focus>/~l10n-<phrase's local name> with its l10n:label in the viewer's language."@en .
+
+# Derived, on the component.
+l10n:localeTag a owl:DatatypeProperty ; rdfs:comment "Derived: the locale a dated component's texts are in (its l10n:locale or the viewer's language). It changes with the language, so rules that read the minted texts hear it."@en .
+l10n:rightToLeft a owl:DatatypeProperty ; rdfs:comment "Derived: the page reads right to left (the viewer's language has l10n:direction l10n:RTL), so the arrow keys swap their days."@en .
+l10n:firstWeekday a owl:DatatypeProperty ; rdfs:comment "Derived: the locale's first day of the week, 1 (Monday) … 7 (Sunday)."@en .
+l10n:datePattern a owl:DatatypeProperty ; rdfs:comment "Derived: a numeric date in the locale (\"%d.%m.%y\", \"%m/%d/%y\")."@en .
+l10n:dateHint a owl:DatatypeProperty ; rdfs:comment "Derived: the numeric date pattern as a person reads it (\"dd.mm.yyyy\"), for placeholders and messages."@en .
+l10n:longDatePattern a owl:DatatypeProperty ; rdfs:comment "Derived: a date with its weekday and month names (\"%w, %M %d, %y\"), for accessible names."@en .
+l10n:monthYearPattern a owl:DatatypeProperty ; rdfs:comment "Derived: a month heading (\"%M %y\")."@en .
+l10n:timePattern a owl:DatatypeProperty ; rdfs:comment "Derived: a time of day in the locale (\"%h:%n %a\", \"%H:%n\")."@en .
+l10n:timeHint a owl:DatatypeProperty ; rdfs:comment "Derived: the time pattern as a person reads it (\"hh:mm AM\")."@en .
+l10n:hourCycle a owl:DatatypeProperty ; rdfs:comment "Derived: \"h12\" (1-12 with a day period) or \"h23\" (0-23)."@en .
+l10n:am a owl:DatatypeProperty ; rdfs:comment "Derived: the day period before noon (\"AM\", \"дп\", \"ص\")."@en .
+l10n:pm a owl:DatatypeProperty ; rdfs:comment "Derived: the day period after noon."@en .
+l10n:digits a owl:DatatypeProperty ; rdfs:comment "Derived: the locale's ten digits, zero first (\"0123456789\", \"٠١٢٣٤٥٦٧٨٩\")."@en .
+l10n:today a owl:DatatypeProperty ; rdfs:range <http://www.w3.org/2001/XMLSchema#date> ;
+    rdfs:comment "Derived: the host's date when the texts were derived (its own time zone). A component's c:today wins."@en .
+# Derived, on the minted month and weekday nodes.
+l10n:inDate a owl:DatatypeProperty ; rdfs:comment "Derived, on a month node: its name as it stands in a date (\"24 жовтня\")."@en .
+l10n:abbr a owl:DatatypeProperty ; rdfs:comment "Derived, on a weekday node: its short name (\"Mon\", \"пн\")."@en .
+
+l10n:CalendarTexts a sem:Rendering ;
+    sem:targets l10n:Dated ;
+    sem:stratum -20 ;
+    sem:inputOnly true ;
+    sem:watches <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> , l10n:locale ;
+    sem:functionOnly "The locale's calendar comes from the host's Intl (names, the order of a date's fields, the hour cycle, the first day of the week), and the locale is the viewer's language, a projection setting; no query can see either." .
+l10n:CalendarTexts-fn a sem:Rule ; sem:implements l10n:CalendarTexts ; sem:function "l10n:calendar" .

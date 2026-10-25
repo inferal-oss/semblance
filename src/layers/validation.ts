@@ -5,6 +5,7 @@ import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, VAL, XSD_BOOLEAN } from '../ns.ts'
 import { isTrue, nodes, rdfList, str, text } from '../components/util.ts'
+import { LATIN, parseDate, parseTime } from '../components/dates.ts'
 
 const SH = NS.sh
 
@@ -84,16 +85,64 @@ function controlled(ctx: RuleContext, focus: Term, shapes: Term[], target: Term,
   return { invalid, error, full, entry }
 }
 
+/**
+ * A dated field (one the localization layer derived a date pattern for) over a date or time property
+ * (its shapes' sh:datatype, else the property's rdfs:range): the text typed into it (c:value, a
+ * range's end c:endValue) must read as one in the locale's format, and the values must keep within
+ * the shapes' sh:minInclusive / sh:maxInclusive (compared as text, as ISO dates and times are) and,
+ * for a shape with sh:lessThanOrEquals, not come after that property's value. A shape speaks for the
+ * property its sh:path names (none: the start).
+ */
+function dated(ctx: RuleContext, focus: Term, shapes: Term[], target: Term, property: Term) {
+  if (!ctx.object(focus, NS.l10n + 'datePattern')) return undefined
+  const datatype = shapes.map((s) => str(ctx.object(s, SH + 'datatype'))).find((d) => d) ?? str(ctx.object(property, NS.rdfs + 'range'))
+  const kind = datatype === NS.xsd + 'date' ? 'date' : datatype === NS.xsd + 'time' ? 'time' : undefined
+  if (!kind) return undefined
+  const l = (p: string) => str(ctx.object(focus, NS.l10n + p))
+  const digits = l('digits') ?? LATIN
+  const reads = (typed: string) => (kind === 'date' ? parseDate(typed, l('datePattern'), digits) : parseTime(typed, l('am'), l('pm'), digits)) !== undefined
+  const endProperty = ctx.object(focus, NS.c + 'endProperty')
+  for (const [typedP, p] of [[C.value, property], [NS.c + 'endValue', endProperty]] as const) {
+    const typed = str(ctx.object(focus, typedP))
+    if (p && typed !== undefined && typed.trim() !== '' && !reads(typed)) {
+      const phrase = text(ctx, ctx.nn(NS.c + (kind === 'date' ? 'InvalidDatePhrase' : 'InvalidTimePhrase')), NS.rdfs + 'label') ?? 'Not a valid {}.'
+      const hint = l(kind === 'date' ? 'dateHint' : 'timeHint') ?? ''
+      return { message: phrase.replace('{}', hint), entry: true }
+    }
+  }
+  for (const shape of shapes) {
+    const path = ctx.object(shape, SH + 'path')
+    const p = path ?? property
+    if (!p || p.termType !== 'NamedNode' || target.termType !== 'NamedNode') continue
+    const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
+    const min = str(ctx.object(shape, SH + 'minInclusive'))
+    const max = str(ctx.object(shape, SH + 'maxInclusive'))
+    const before = ctx.object(shape, SH + 'lessThanOrEquals')
+    for (const v of ctx.objects(target, p).map((t) => t.value)) {
+      if (min !== undefined && v < min) return { message: message(`At least ${min}.`), entry: false }
+      if (max !== undefined && v > max) return { message: message(`At most ${max}.`), entry: false }
+      if (before?.termType === 'NamedNode' && ctx.objects(target, before).some((w) => v > w.value)) return { message: message('Out of order.'), entry: false }
+    }
+  }
+  return undefined
+}
+
 const check: FnRule = (ctx, focus) => {
   const shapes = ctx.objects(focus, VAL.validates)
   const requires = ctx.object(focus, VAL.requires)
-  if (!shapes.length && !requires) return []
+  const datedField = !!ctx.object(focus, NS.l10n + 'datePattern')
+  if (!shapes.length && !requires && !datedField) return []
   const o = ctx.out(focus)
   const bool = ctx.nn(XSD_BOOLEAN)
   const target = ctx.object(focus, C.controls)
   const property = ctx.object(focus, C.property)
-  if (shapes.length && target && property) {
-    const { invalid, error, full, entry } = controlled(ctx, focus, shapes, target, property)
+  if ((shapes.length || datedField) && target && property) {
+    const counted = controlled(ctx, focus, shapes, target, property)
+    const problem = dated(ctx, focus, shapes, target, property)
+    const invalid = counted.invalid || !!problem
+    const error = problem?.message ?? counted.error
+    const { full } = counted
+    const entry = counted.entry ?? (problem?.entry ? problem.message : undefined)
     if (invalid) o.t(focus, VAL.invalid, ctx.f.literal('true', bool))
     if (error !== undefined) o.t(focus, C.error, error)
     if (full !== undefined) o.t(focus, NS.val + 'full', full)
@@ -118,7 +167,12 @@ const check: FnRule = (ctx, focus) => {
 // that node's property, which only the data names.
 check.watches = (ctx, focus) => {
   const property = ctx.object(focus, C.property)
-  return new Set([VAL.validates, VAL.requires, C.value, C.checked, C.controls, C.property, NS.c + 'allowsCustom', ...(property ? [property.value] : [])])
+  const end = ctx.object(focus, NS.c + 'endProperty')
+  return new Set([
+    VAL.validates, VAL.requires, C.value, C.checked, C.controls, C.property, NS.c + 'allowsCustom',
+    NS.c + 'endValue', NS.c + 'endProperty', NS.l10n + 'datePattern',
+    ...(property ? [property.value] : []), ...(end ? [end.value] : []),
+  ])
 }
 
 export const validationFunctions: Record<string, FnRule> = { 'validation:check': check }

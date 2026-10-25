@@ -66,7 +66,7 @@ Thin vocabularies. Every component
 | **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
 | **Type** | Heading · Text · Link · Kbd · Code · Blockquote · GraphMark · Emblem · SourceView · Walkthrough (WalkthroughStep, Mention) · LiveExample |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
-| **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
+| **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
 | **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
@@ -117,6 +117,22 @@ in use. Matching ignores case and diacritics and highlights the match; the arrow
 Escape follow the WAI-ARIA combobox pattern. With `c:allowsCustom`, new text becomes a literal or a
 new labelled resource (`c:customAs`, `c:mintBase`), if the `val:validates` shape allows it; its
 `sh:maxCount` caps a tag input.
+
+**Dates and times** (`ontology/components/dates.ttl`) are fields like any other: a `c:DateField`
+edits an `xsd:date` (`c:controls`, `c:property`), a `c:DateRangeField` a start and an end
+(`c:endProperty`), a `c:TimeField` an `xsd:time`. They show and read values in the viewer's locale:
+the localization layer puts the locale's calendar into the graph for every `l10n:Dated` component
+(month and weekday names, a numeric date, a long date and a month heading as patterns, the hour
+cycle, the digits, the first day of the week, today), so SPARQL rules format and parse dates the way
+the locale writes them, and `l10n:locale` ("en-GB") overrides the viewer's language. A date field's
+button opens a `c:MonthGrid` in a popup (the WAI-ARIA date picker dialog): a grid of day buttons
+whose active day is graph state (`c:activeDate`, `c:shownMonth`), moved by the arrows (swapped right
+to left), Home and End, Page Up and Down (Shift: a year); Enter picks and closes, Escape closes, and
+the focus goes back to the button (an element marked `data-sem-takes-focus` gets it after an event).
+A range is picked start first, its span highlighted and previewed under the pointer. Typed text that
+is not a date stays and the validation layer says how to write one; bounds are the `val:validates`
+shapes' `sh:minInclusive` / `sh:maxInclusive` (and `sh:lessThanOrEquals` for a range), which the
+grid and the time list keep to. The month grid stands alone too.
 
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)

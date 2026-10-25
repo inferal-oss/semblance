@@ -135,7 +135,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   as Turtle read from the graph that renders them.
 - **Status**: `st:busy` marks any component `aria-busy`; the theme shimmers it.
 - **Localization**: labels are language-tagged literals; the viewer's language
-  (`l10n:language`) is a projection setting; RTL languages flip the page.
+  (`l10n:language`) is a projection setting; RTL languages flip the page. Components that show
+  dates (`l10n:Dated`) get their locale's calendar in the graph (names, date and time patterns,
+  digits, the first day of the week), so SPARQL rules write and read dates as the locale does.
 - **Motion and contrast**: hookable properties of the shell
   (`mot:preference`, `sty:contrast`) whose values re-value the motion and role
   tokens for the subtree.

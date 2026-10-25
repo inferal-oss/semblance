@@ -434,6 +434,7 @@ export class EventBus {
               else if (typeof v === 'string') (detail.about ??= []).push([NS.beh + name, this.f.namedNode(v)])
             }
           }
+          const before = this.focusAt(renderer, focus, e.target as Node)
           const handled = this.emit(type, focus, detail, reactions)
           // Reactions that changed nothing let the event reach the enclosing components
           // (a generic reaction on c:Button must not swallow its container's click).
@@ -441,6 +442,7 @@ export class EventBus {
           if (combo !== undefined) e.preventDefault(), consumed.add(e)
           onHandled(handled)
           this.placeCaret(renderer, focus)
+          this.placeFocus(renderer, focus, before)
           return
         }
       }
@@ -592,6 +594,39 @@ export class EventBus {
     if (!field || !Number.isFinite(at) || typeof field.setSelectionRange !== 'function') return
     if (field.ownerDocument.activeElement !== field) field.focus?.()
     if (field.selectionStart !== at || field.selectionEnd !== at) field.setSelectionRange(at, at)
+  }
+
+  /** Where the focus is as an event reaches a component: in it or not, and the elements around it. */
+  private focusAt(renderer: DomRenderer, focus: string, target: Node) {
+    const doc = target.ownerDocument
+    const active = doc?.activeElement ?? null
+    const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
+    const around: Element[] = []
+    for (let el = active?.parentElement; el && el !== renderer.host; el = el.parentElement) around.push(el)
+    return { active, inside: !!active && active !== doc?.body && !!root?.contains(active), around }
+  }
+
+  /**
+   * After an event a component handled, the element its rendering marks data-sem-takes-focus (a
+   * month grid's active day, a date field's button once its popup closed) gets the focus, if the
+   * focus was in the component when the event came: unless it is in a text field (typing keeps it).
+   * If the focused element went away or was hidden, the nearest marked element around where it was
+   * wins. An input whose aria-activedescendant names an option keeps that option in view.
+   */
+  private placeFocus(renderer: DomRenderer, focus: string, at: ReturnType<EventBus['focusAt']>) {
+    const root = renderer.nodeOf(focus + MINT_SEPARATOR + 'root') as HTMLElement | undefined
+    for (const field of root?.querySelectorAll?.<HTMLElement>('[aria-activedescendant]') ?? []) {
+      field.ownerDocument.getElementById(field.getAttribute('aria-activedescendant')!)?.scrollIntoView?.({ block: 'nearest' })
+    }
+    const { active, inside, around } = at
+    if (!active || !inside) return
+    const shown = (el: Element) => el.isConnected && !el.closest('[hidden], [inert]')
+    const lost = !shown(active)
+    if (!lost && active.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, [contenteditable]')) return
+    const marked = (scope: Element) => [...scope.querySelectorAll<HTMLElement>('[data-sem-takes-focus]')].find(shown)
+    let target = root?.isConnected ? marked(root) : undefined
+    if (!target && lost) for (const scope of around) if (scope.isConnected && (target = marked(scope))) break
+    if (target && target !== target.ownerDocument.activeElement) target.focus?.()
   }
 
   /**
