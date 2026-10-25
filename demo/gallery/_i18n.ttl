@@ -47,6 +47,10 @@ sty:Comfortable rdfs:label "Comfortable" , "Простора"@uk , "Bequem"@de ,
 sty:Compact rdfs:label "Compact" , "Компактна"@uk , "Kompakt"@de , "مضغوطة"@ar .
 ui:store rdfs:label "Сховище"@uk , "Speicher"@de , "المخزن"@ar .
 ui:rules rdfs:label "Правила"@uk , "Regeln"@de , "القواعد"@ar .
+ui:compile rdfs:label "Скомпільовані запити"@uk , "Kompilierte Abfragen"@de , "الاستعلامات المترجمة"@ar .
+ui:CompileOff rdfs:label "Вимк."@uk , "Aus"@de , "إيقاف"@ar .
+ui:CompileOnRun rdfs:label "З другого запуску"@uk , "Ab dem zweiten Lauf"@de , "من التشغيل الثاني"@ar .
+ui:CompileIdle rdfs:label "У час простою"@uk , "In Leerlaufzeit"@de , "في وقت الخمول"@ar .
 ui:inspectorTab c:label "Інспектор"@uk , "Inspektor"@de , "المفتش"@ar .
 ui:activityTab c:label "Активність"@uk , "Aktivität"@de , "النشاط"@ar .
 ui:logTab c:label "Журнал змін"@uk , "Änderungsprotokoll"@de , "سجل التغييرات"@ar .

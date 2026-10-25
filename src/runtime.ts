@@ -300,6 +300,8 @@ export class Runtime {
     // What time is left goes to the store's own upkeep (e.g. compaction).
     const left = until - performance.now()
     if (left > 1) more = (this.store.maintain?.(left) ?? false) || more
+    // None left: the upkeep waits for the next slice, which is asked for (it says then whether more remains).
+    else if (this.store.maintain) more = true
     return more
   }
 

@@ -17,8 +17,11 @@ const engines = new Map<string, WebAssembly.Module>()
 
 /** Store options (benchmark configurations choose them; the defaults are the site's). */
 export interface StoreOptions {
-  /** Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md). */
-  compiled?: boolean
+  /**
+   * Semblance's engines: run prepared SPARQL queries compiled to WebAssembly (rdf-engine/ABI.md):
+   * true compiles a query on its second run, 'idle' the most-run ones in idle time.
+   */
+  compiled?: boolean | 'idle'
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -31,9 +34,10 @@ function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
     if (!existsSync(path)) throw new Error(`No ${kind} engine build at ${path}; run \`npm run engine:build\``)
     engines.set(kind, (module = new WebAssembly.Module(readFileSync(path))))
   }
-  // SEMBLANCE_ENGINE_COMPILE=n: compile each prepared query on its n-th run (rdf-engine/results/compiled.md).
-  const env = Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0
-  return engineStore(module, kind, { compile: options.compiled ? COMPILE_ON_RUN : env })
+  // SEMBLANCE_ENGINE_COMPILE=n: compile each prepared query on its n-th run; =idle: in idle time
+  // (rdf-engine/results/compiled.md).
+  const env = process.env.SEMBLANCE_ENGINE_COMPILE === 'idle' ? 'idle' : Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0
+  return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : env })
 }
 
 let created: ((store: GraphStore) => void) | undefined

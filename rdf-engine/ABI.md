@@ -137,6 +137,10 @@ only speed differs. Hosts check for the `compile` export and fall back to
 `run` whenever it is missing, declines, or a compiled run fails. The
 interpreter stays complete: correctness never depends on what compiles.
 (Experimental; measured in [results/compiled.md](results/compiled.md).)
+When to compile is the host's choice: `host/engine.ts` compiles a query on its
+n-th run with the same variables bound (`autoCompile`), or in idle time the
+ones whose timed runs say a module pays for itself (`idleCompile`,
+`compileIdle`), dropping a module that then runs slower than the interpreter did.
 
 | export | |
 |---|---|

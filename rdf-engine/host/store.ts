@@ -92,8 +92,10 @@ export interface EngineStoreOptions {
   /**
    * Compiled queries (ABI.md, "Optional: compiled queries"): compile a prepared
    * query, for the variables it has bound, on its n-th run with them. 0: never.
+   * 'idle': in idle time (`maintain`), the queries whose timed runs say it pays
+   * (Engine.compileIdle).
    */
-  compile?: number
+  compile?: number | 'idle'
 }
 
 /** Called with every engine store made (benchmarks use it to watch queries). */
@@ -101,7 +103,8 @@ export const engineStoreHooks: { created?: (store: EngineStore) => void } = {}
 
 export function engineStore(module: WebAssembly.Module, kind: string, options: EngineStoreOptions = {}): EngineStore {
   const e = new Engine(module)
-  e.autoCompile = options.compile ?? 0
+  e.autoCompile = typeof options.compile === 'number' ? options.compile : 0
+  e.idleCompile = options.compile === 'idle'
   // This store's tag: term objects of another store (another engine) carry ids that mean nothing here.
   const ID = Symbol('engine id')
   const defaultGraph = new Default()
@@ -371,10 +374,12 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     setFuel: (steps) => e.setFuel(steps),
     engine: e,
     idOf: (t) => idOf(t, false),
-    maintain() {
+    maintain(budgetMs) {
+      const t0 = performance.now()
       // Collect once the dictionary has grown by half since the last collection.
       if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()
-      return false
+      // What time is left compiles the queries that have run most (compiled: 'idle').
+      return e.compileIdle(budgetMs - (performance.now() - t0))
     },
   }
   engineStoreHooks.created?.(store)
