@@ -80,7 +80,27 @@ const CASES: [string, string | undefined][] = [
   [`${dtd('PT1H')} < ${ymd('P1M')}`, undefined],
   [`${t('10:00:00')} < ${t('11:00:00')}`, 'true^^boolean'],
   [`${t('10:00:00')} = ${t('10:00:00')}`, 'true^^boolean'],
+  // casts (XPath casting rules; canonical results)
+  ['xsd:duration("PT2.5S"^^xsd:duration)', 'PT2.5S^^duration'],
+  ['xsd:duration("PT2.5S")', 'PT2.5S^^duration'],
+  ['xsd:duration(" P1Y2M ")', 'P1Y2M^^duration'],
+  ['xsd:dayTimeDuration("PT90M")', 'PT1H30M^^dayTimeDuration'],
+  ['xsd:yearMonthDuration("P14M")', 'P1Y2M^^yearMonthDuration'],
+  [`xsd:dayTimeDuration(${dur('P1Y2DT3H')})`, 'P2DT3H^^dayTimeDuration'],
+  [`xsd:yearMonthDuration(${dur('P1Y2DT3H')})`, 'P1Y^^yearMonthDuration'],
+  [`xsd:duration(${dtd('PT1H')})`, 'PT1H^^duration'],
+  ['xsd:duration("bogus")', undefined],
+  ['xsd:dayTimeDuration("P1M")', undefined],
+  ['xsd:dateTime("2024-05-14T07:00:00.000Z")', '2024-05-14T07:00:00Z^^dateTime'],
+  ['xsd:dateTime("2024-05-14T07:00:00+00:00")', '2024-05-14T07:00:00Z^^dateTime'],
+  [`xsd:dateTime(${d('2024-05-14')})`, '2024-05-14T00:00:00^^dateTime'],
+  [`xsd:date(${dt('2024-05-14T07:00:00Z')})`, '2024-05-14Z^^date'],
+  [`xsd:time(${dt('2024-05-14T07:30:00Z')})`, '07:30:00Z^^time'],
+  ['xsd:date("2024-02-30")', undefined],
+  ['xsd:time("25:00:00")', undefined],
+  [`xsd:string(${dtd('PT1H')})`, 'PT1H^^string'],
   // what Semblance's reactions do with beh:dueAt
+  ['xsd:dateTime("2024-05-14T07:00:00Z") + xsd:duration("PT2.5S")', '2024-05-14T07:00:02.5Z^^dateTime'],
   [`NOW() + ${dtd('PT2S')} > NOW()`, 'true^^boolean'],
 ]
 

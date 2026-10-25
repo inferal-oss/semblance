@@ -360,6 +360,40 @@ impl Ctx<'_> {
         Ok(self.temporal_val(out))
     }
 
+    /// A cast to xsd:dateTime, date, time or a duration (None for other
+    /// targets), by XPath's casting rules: from a string by its lexical form,
+    /// a dateTime to its date or time, a date to its midnight, a duration to
+    /// another kind by dropping the part that kind lacks. The result is in
+    /// canonical form ("…00.000Z" is "…00Z").
+    pub fn temporal_cast(&mut self, target: &[u8], l: &Lit, from_string: bool) -> Option<R<Val>> {
+        let k = kind_of(target)?;
+        let moment_target = matches!(k, K::DateTime | K::Date | K::Time);
+        let t = if from_string {
+            let s = l.value.trim_ascii();
+            if moment_target { moment(k, s).map(T::M) } else { duration(k, s).map(T::D) }
+        } else {
+            match self.temporal_lit(l) {
+                Some(T::M(m)) if moment_target => match (m.k, k) {
+                    (a, b) if a == b => Some(T::M(m)),
+                    (K::DateTime, K::Date) => Some(T::M(Moment { k, secs: 0, ..m })),
+                    (K::DateTime, K::Time) => Some(T::M(Moment { k, ..m })),
+                    (K::Date, K::DateTime) => Some(T::M(Moment { k, ..m })),
+                    _ => None,
+                },
+                Some(T::D(d)) if !moment_target => match k {
+                    K::DayTime => Some(T::D(Dur { k, months: 0, secs: d.secs })),
+                    K::YearMonth => Some(T::D(Dur { k, months: d.months, secs: 0 })),
+                    _ => Some(T::D(Dur { k, ..d })),
+                },
+                _ => None,
+            }
+        };
+        Some(match t {
+            Some(t) => Ok(self.temporal_val(t)),
+            None => Err(()),
+        })
+    }
+
     /// Unary minus on a duration.
     pub fn temporal_neg(&mut self, v: &Val) -> R<Val> {
         match self.temporal(v) {

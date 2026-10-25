@@ -470,6 +470,9 @@ impl Ctx<'_> {
         if numeric_source && n.is_none() {
             return Err(());
         }
+        if let Some(r) = self.temporal_cast(&local, &l, src == Dt::String) {
+            return r;
+        }
         match classify(&local) {
             Dt::String => {
                 let mut out = Vec::new();

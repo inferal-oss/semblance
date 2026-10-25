@@ -14,6 +14,7 @@ const XSD: &[u8] = b"http://www.w3.org/2001/XMLSchema#";
 /// XSD datatypes that may be used as cast functions.
 const CASTS: &[&[u8]] = &[
     b"string", b"boolean", b"integer", b"decimal", b"float", b"double", b"dateTime", b"date", b"time",
+    b"duration", b"dayTimeDuration", b"yearMonthDuration",
     b"int", b"long", b"short", b"byte", b"nonNegativeInteger", b"positiveInteger", b"nonPositiveInteger",
     b"negativeInteger", b"unsignedInt", b"unsignedLong", b"unsignedShort", b"unsignedByte",
 ];
