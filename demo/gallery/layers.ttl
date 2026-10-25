@@ -13,7 +13,6 @@
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix prv: <https://semblance.dev/ns/privacy#> .
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
-@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -24,7 +23,7 @@
 # layer chips (sem:enables on ui:app).
 
 ui:gallery-layers a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-dragdrop ui:l-status ui:l-l10n ui:l-display ui:l-persistence ui:l-privacy ui:l-fullscreen ) .
+    c:children ( ui:gallery-layers-intro ui:l-validation ui:l-shapes ui:l-keyboard ui:l-dragdrop ui:l-status ui:l-l10n ui:l-display ui:l-persistence ui:l-privacy ) .
 ui:gallery-layers-intro a c:Heading ; c:label "Layers" , "Шари"@uk , "Schichten"@de , "الطبقات"@ar .
 
 # --- validation: SHACL shapes on fields -------------------------------------------------------------
@@ -206,23 +205,3 @@ ui:payee3 a c:Avatar ; c:label "Tim Berners-Lee" .
 ui:payee4 a c:Avatar ; c:label "Katherine Johnson" .
 ui:payee5 a c:Avatar ; c:label "Alan Kay" .
 ui:apiKey a c:TextField ; c:label "API key" , "Ключ API"@uk , "API-Schlüssel"@de , "مفتاح API"@ar ; c:value "sk-semblance-4f9a2c7e" ; prv:concealed true .
-
-# --- full screen: a fact on any component -------------------------------------------------------------
-
-ui:l-fullscreen a c:Flippable ; c:front ui:l-fullscreen-spec .
-ui:l-fullscreen-spec a c:Specimen ; c:demonstrates fs:Fullscreenable ;
-    c:label "Full screen" , "Повний екран"@uk , "Vollbild"@de , "ملء الشاشة"@ar ;
-    c:help "fs:fullscreen true on any component shows it full screen; retracting it puts it back. Here a c:Toggle over that property, in the card's own header (so it is still there full screen), asserts it - press it, or ⇧F. The host shows the card full screen, or over the page where the browser will not; Esc leaves, and the fact goes with it. Source views, walkthrough diagrams and live examples draw a toggle of their own (fs:Fullscreenable)." ,
-        "fs:fullscreen true на будь-якому компоненті показує його на весь екран; відкликаний факт повертає його на місце. Тут c:Toggle над цією властивістю в заголовку картки (тож він лишається на весь екран) стверджує її - натисніть його або ⇧F. Хост показує картку на весь екран або поверх сторінки, де браузер не дозволяє; Esc виходить, і факт зникає разом із ним. Перегляди коду, діаграми покрокових пояснень і живі приклади мають власний перемикач (fs:Fullscreenable)."@uk ,
-        "fs:fullscreen true an einer beliebigen Komponente zeigt sie im Vollbild; die Aussage zurückzunehmen, bringt sie zurück. Hier setzt ein c:Toggle über diese Eigenschaft im Kopf der Karte (so ist er auch im Vollbild da) sie - drücken Sie ihn oder ⇧F. Der Host zeigt die Karte im Vollbild oder, wo der Browser es nicht erlaubt, über der Seite; Esc beendet es, und die Aussage geht mit. Quellansichten, Diagramme von Rundgängen und Live-Beispiele haben einen eigenen Schalter (fs:Fullscreenable)."@de ,
-        "fs:fullscreen true على أي مكوّن يعرضه بملء الشاشة؛ وسحب الحقيقة يعيده إلى مكانه. هنا يثبتها c:Toggle على هذه الخاصية في رأس البطاقة (فيبقى ظاهرًا بملء الشاشة) - اضغطه أو ⇧F. يعرض المضيف البطاقة بملء الشاشة، أو فوق الصفحة حيث لا يسمح المتصفح؛ Esc يخرج، وتذهب الحقيقة معه. لعروض المصدر ومخططات الشروح والأمثلة الحية زر خاص بها (fs:Fullscreenable)."@ar ;
-    c:children ( ui:l-fullscreen-card ) .
-ui:l-fullscreen-card a c:Card ; c:label "This quarter" , "Цей квартал"@uk , "Dieses Quartal"@de , "هذا الربع"@ar ;
-    c:actions ( ui:l-fullscreen-toggle ) ; c:content ui:l-fullscreen-figures .
-ui:l-fullscreen-toggle a c:Toggle ; c:controls ui:l-fullscreen-card ; c:property fs:fullscreen ; key:shortcut "shift+f" ;
-    c:label "Full screen" , "На весь екран"@uk , "Vollbild"@de , "ملء الشاشة"@ar .
-ui:l-fullscreen-figures a c:Grid ; c:minWidth "150px" ; pos:gap tok:space-4 ;
-    c:children ( ui:l-fullscreen-orders ui:l-fullscreen-revenue ui:l-fullscreen-returns ) .
-ui:l-fullscreen-orders a c:Stat ; c:label "Orders" , "Замовлення"@uk , "Bestellungen"@de , "الطلبات"@ar ; c:value "1 284" ; c:delta 8.1 ; c:deltaUnit "%" .
-ui:l-fullscreen-revenue a c:Stat ; c:label "Revenue" , "Дохід"@uk , "Umsatz"@de , "الإيرادات"@ar ; c:value "38 950" ; c:unit "€" ; c:delta 5.4 ; c:deltaUnit "%" .
-ui:l-fullscreen-returns a c:Stat ; c:label "Returns" , "Повернення"@uk , "Rücksendungen"@de , "المرتجعات"@ar ; c:value "41" ; c:delta -2.0 ; c:deltaUnit "%" .
