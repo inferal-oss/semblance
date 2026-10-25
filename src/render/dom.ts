@@ -24,6 +24,11 @@ export class DomRenderer {
   /** DOM operations performed, for benchmarks. */
   ops = 0
   private readonly patched = new Set<() => void>()
+  /**
+   * The element the last flush gave the focus to because the focused one was removed (refocus):
+   * a guess, not a choice, so a modal overlay that closed may still give the focus back.
+   */
+  refocused: Element | null = null
 
   constructor(
     readonly index: HtmlIndex,
@@ -60,6 +65,7 @@ export class DomRenderer {
   }
 
   flush(): void {
+    this.refocused = null
     // A focused node that moves to another parent (a card to another lane) is detached on the
     // way, which blurs it: it gets its focus back once it is in place.
     const focused = this.doc.activeElement as HTMLElement | null
@@ -94,7 +100,7 @@ export class DomRenderer {
     for (const { at, next, previous } of ancestors) {
       if (!at.isConnected) continue
       const target = first(next) ?? first(previous, true) ?? first(at)
-      if (target) return target.focus?.({ preventScroll: true })
+      if (target) return (this.refocused = target), target.focus?.({ preventScroll: true })
     }
   }
 

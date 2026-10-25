@@ -2,7 +2,7 @@
 // by a segmented control, and the lightbox, driven through events on the Data and Overlays pages as a
 // person would, with the DOM and the graph checked after each step, and the SPARQL rules and
 // their function twins compared after each step.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { ManualClock } from '../src/behaviour/clock.ts'
@@ -185,6 +185,26 @@ describe('gallery and lightbox', () => {
     s.part('dt-photos', 'cell-1').focus()
     expect(tab(false)).toBe(true)
     expect(panel.contains(s.document.activeElement)).toBe(true)
+  })
+
+  it('gives the focus back to the image that opened it when it closes, though its panel goes away', () => {
+    const s = photos()
+    s.layout('grid')
+    // linkedom has no focus: a minimal one, which a removed element loses (as a browser's does).
+    let active: Element | null = null
+    Object.defineProperty(s.document, 'activeElement', { configurable: true, get: () => (active?.isConnected ? active : s.document.body) })
+    const proto = s.window.HTMLElement.prototype
+    const own = Object.getOwnPropertyDescriptor(proto, 'focus')
+    Object.defineProperty(proto, 'focus', { configurable: true, writable: true, value(this: Element) { active = this } })
+    onTestFinished(() => void (own ? Object.defineProperty(proto, 'focus', own) : delete (proto as { focus?: unknown }).focus))
+    const cell = s.part('dt-photos', 'cell-2')
+    cell.focus()
+    s.click(cell)
+    const panel = s.part('dt-lightbox', 'panel')
+    expect(panel.contains(s.document.activeElement)).toBe(true)
+    s.key('Escape', s.document.activeElement!)
+    expect(s.root('dt-lightbox').children).toHaveLength(0)
+    expect(s.document.activeElement).toBe(s.part('dt-photos', 'cell-2'))
   })
 
   it('moves through the images by arrow keys, mirrored in a right-to-left page, and closes with Escape', () => {

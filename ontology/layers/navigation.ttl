@@ -162,6 +162,15 @@ c:AccordionItem nav:reveal [ a nav:Reveal ; nav:via c:content ; nav:sets c:expan
 c:Flippable nav:reveal [ a nav:Reveal ; nav:via c:back ; nav:sets c:flipped ; nav:value true ] .
 c:Window nav:reveal [ a nav:Reveal ; nav:via c:body ; nav:sets c:open ; nav:value true ] .
 
+# Going somewhere from a reaction, as following a link to it would: the reaction inserts
+# `?anything nav:goTo ?resource`, and the navigation effect (src/navigation.ts) takes the request
+# out of the graph, spells the address of the location that shows the resource (as for a link's
+# c:to), makes it a step Back returns to, and follows it (a nav:Navigate event; the resource is
+# brought into view). A command palette's places are run this way.
+nav:goTo a owl:ObjectProperty ;
+    rdfs:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar ;
+    rdfs:comment "A request (in a reaction's inserts): go to the location that shows this resource, as a link to it (c:to) would. The navigation effect performs and removes it."@en .
+
 nav:href a owl:DatatypeProperty ;
     rdfs:comment "Derived, on a c:Link with c:to: the URL fragment of the location that shows its target."@en .
 # In the components' stratum, so links that other components mint (a reference's facets) get it too.

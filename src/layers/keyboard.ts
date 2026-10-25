@@ -81,7 +81,7 @@ export const mirrored = (combo: string) =>
   combo.replace(/arrow(left|right)$/, (_, side: string) => (side === 'left' ? 'arrowright' : 'arrowleft'))
 
 /** aria-keyshortcuts uses platform key names. */
-const aria = (combo: string) =>
+export const aria = (combo: string) =>
   normalizeShortcut(combo)
     .split('+')
     .map((p) => ({ mod: 'Control', ctrl: 'Control', alt: 'Alt', shift: 'Shift', meta: 'Meta' })[p] ?? (p.length === 1 ? p.toUpperCase() : p))
@@ -105,19 +105,39 @@ const shortcut: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** The part a component's class names to show its shortcut hint (key:hintPart), on the class or a superclass. */
-function hintPartOf(ctx: Parameters<FnRule>[0], focus: Parameters<FnRule>[1]): string | undefined {
+/** What a component's class, or a superclass, says with `property` (key:hintPart, key:rendersHint). */
+function classSays(ctx: Parameters<FnRule>[0], focus: Parameters<FnRule>[1], property: string): string | undefined {
   const seen = new Set<string>()
   const todo = ctx.objects(focus, RDF_TYPE).map((t) => t.value)
   while (todo.length) {
     const cls = todo.shift()!
     if (seen.has(cls)) continue
     seen.add(cls)
-    const part = str(ctx.object(ctx.nn(cls), NS.key + 'hintPart'))
-    if (part !== undefined) return part
+    const said = str(ctx.object(ctx.nn(cls), property))
+    if (said !== undefined) return said
     todo.push(...ctx.objects(ctx.nn(cls), RDFS_SUBCLASS).map((t) => t.value))
   }
   return undefined
+}
+
+/** The part a component's class names to show its shortcut hint (key:hintPart), on the class or a superclass. */
+const hintPartOf = (ctx: Parameters<FnRule>[0], focus: Parameters<FnRule>[1]) => classSays(ctx, focus, NS.key + 'hintPart')
+
+/**
+ * key:Hints: a key shown and announced with a component (key:hint) but not bound - the same
+ * data-sem-key-hint pair a shortcut's hint has, on the part its class names (key:hintPart) or the
+ * root, and aria-keyshortcuts on the root. A component with a key:shortcut shows that instead, and
+ * one whose class renders its hint itself (key:rendersHint) gets nothing.
+ */
+const hint: FnRule = (ctx, focus) => {
+  const combo = str(ctx.object(focus, NS.key + 'hint'))
+  if (!combo || ctx.object(focus, KEY.shortcut) || classSays(ctx, focus, NS.key + 'rendersHint') === 'true') return []
+  const o = ctx.out(focus)
+  const [apple, other] = shortcutLabels(combo)
+  o.attr(ctx.nn(mint(focus.value, 'root')), 'aria-keyshortcuts', aria(combo))
+  const shown = ctx.nn(mint(focus.value, hintPartOf(ctx, focus) ?? 'root'))
+  o.attr(shown, 'data-sem-key-hint', other).attr(shown, 'data-sem-key-hint-apple', apple)
+  return o.quads
 }
 
 const shortcutList: FnRule = (ctx, focus) => {
@@ -267,4 +287,4 @@ export function navigate(e: KeyboardEvent): boolean {
   return false
 }
 
-export const keyboardFunctions: Record<string, FnRule> = { 'keyboard:shortcut': shortcut, 'shortcut-list': shortcutList, 'keyboard:navigation': navigation }
+export const keyboardFunctions: Record<string, FnRule> = { 'keyboard:shortcut': shortcut, 'keyboard:hint': hint, 'shortcut-list': shortcutList, 'keyboard:navigation': navigation }

@@ -132,7 +132,7 @@ ui:inferalChevron a c:Emblem ; rdfs:label "Inferal" ; c:decorative true ;
     c:pathData "M2.44,399.9c-5.45,5.86-1.16,15.22,6.97,15.22h126.55c3.88,0,7.6-1.5,10.33-4.16l197.28-191.95c2.98-2.9,4.6-6.63,4.84-10.43.29-4.47-1.33-9.04-4.84-12.46L146.29,4.16C143.55,1.5,139.83,0,135.96,0H9.4C1.27,0-3.01,9.35,2.44,15.22l193.06,184.2c2.4,2.58,3.46,5.91,3.18,9.15-.22,2.57-1.28,5.08-3.18,7.13L2.44,399.9Z" .
 
 # Detached views live here, outside the pages, so they survive page changes.
-ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools , ui:stallDialog .
+ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools , ui:stallDialog , ui:palette .
 
 # What the last interaction cost and what memory holds, on every page: a bar
 # docked to the bottom of the shell. The host writes ui:stats; c:Metrics shows it.
@@ -146,6 +146,16 @@ ex:AddTodo ann:announces "Todo added" , "Завдання додано"@uk , "Au
 ui:RunMatrix ann:announces "Benchmark started" , "Бенчмарк запущено"@uk , "Benchmark gestartet"@de , "بدأ القياس"@ar ; ann:tone sty:Info .
 ui:ClearMatrix ann:announces "Results cleared" , "Результати очищено"@uk , "Ergebnisse gelöscht"@de , "تم مسح النتائج"@ar .
 
+# The command palette (ontology/components/palette.ttl): everything one can do or go to on the
+# site - its keyboard commands, the components with shortcuts, every page and section - filtered
+# as one types. ⌘K / Ctrl+K anywhere (a keyboard command that c:opens it), or the search button in
+# the app bar; what was run lately comes first, remembered on this device (ui:rememberPalette).
+ui:palette a c:CommandPalette .
+ui:openPalette a key:Command ; key:shortcut "mod+k" ; c:opens ui:palette ;
+    rdfs:label "Command palette" , "Палітра команд"@uk , "Befehlspalette"@de , "لوحة الأوامر"@ar .
+ui:paletteButton a c:Button ; c:opens ui:palette ; key:hint "mod+k" ; sty:emphasis sty:Ghost ;
+    c:label "Search" , "Пошук"@uk , "Suche"@de , "بحث"@ar .
+
 # The page switcher first; the tools and the display settings after it, folded behind a More
 # button on a phone (c:moreActions), so the bar is one row there.
 ui:appBar a c:AppBar ;
@@ -153,7 +163,7 @@ ui:appBar a c:AppBar ;
     c:to ui:home ;
     c:byline ui:sponsorLine ;
     c:logo ui:logo ;
-    c:actions ( ui:nav ) ;
+    c:actions ( ui:nav ui:paletteButton ) ;
     c:moreActions ( ui:toolsToggle ui:theme ui:themePicker ) ;
     c:moreLabel "Tools and display" , "Інструменти та вигляд"@uk , "Werkzeuge und Darstellung"@de , "الأدوات والعرض"@ar .
 # Which theme, beside the colour scheme: the shell's sty:theme, the same property the gallery's
@@ -606,6 +616,11 @@ ui:rememberDisplay a per:Policy ; per:scope per:Session ;
 ui:rememberSettings a per:Policy ; per:scope per:Session ;
     rdfs:label "Language and theme" , "Мова і тема"@uk , "Sprache und Design"@de , "اللغة والسمة"@ar ;
     per:subject ui:app ; per:properties ( l10n:language sty:colorScheme ) .
+
+# What the command palette ran lately: kept on this device.
+ui:rememberPalette a per:Policy ; per:scope per:Device ;
+    rdfs:label "Recent commands" , "Нещодавні команди"@uk , "Zuletzt verwendete Befehle"@de , "الأوامر الأخيرة"@ar ;
+    per:construct """CONSTRUCT { ?run ?p ?o } WHERE { ?run c:recentOf ui:palette ; ?p ?o }""" .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
 ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ;
