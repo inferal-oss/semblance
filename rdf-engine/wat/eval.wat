@@ -376,7 +376,7 @@
   (local.set $row (call $row_get))
   (local.set $i (i32.const 0))
   (loop $rows
-    (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
+    (if (i32.and (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (i32.eqz (global.get $bu_stop))) (then
       (memory.copy (local.get $row) (call $t_row (local.get $t) (local.get $i)) (global.get $W))
       (call $bgp_dfs (local.get $row) (local.get $n))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -436,7 +436,7 @@
       (local.set $ln (global.get $sc_n))
       (local.set $j (i32.const 0))
       (loop $quads
-        (if (i32.lt_u (local.get $j) (local.get $ln)) (then
+        (if (if (result i32) (i32.lt_u (local.get $j) (local.get $ln)) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
           (local.set $r (call $list_quad (local.get $l) (local.get $j)))
           (if (i32.and (call $quad_is (local.get $r) (local.get $s) (local.get $p) (local.get $o))
                        (i32.eq (i32.load offset=12 (local.get $r)) (call $graph_at (local.get $gi)))) (then
@@ -530,7 +530,7 @@
       (local.set $matched (i32.const 0))
       (local.set $j (i32.const 0))
       (loop $results
-        (if (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $r))) (then
+        (if (if (result i32) (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $r))) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
           (if (call $compatible (local.get $mu) (call $t_row (local.get $r) (local.get $j))) (then
             (call $push_merge (local.get $out) (local.get $mu) (call $t_row (local.get $r) (local.get $j)))
             (if (local.get $mode) (then
@@ -623,7 +623,7 @@
       (local.set $a (call $t_row (local.get $t) (local.get $i)))
       (local.set $j (i32.const 0))
       (loop $right
-        (if (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $r))) (then
+        (if (if (result i32) (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $r))) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
           (local.set $b (call $t_row (local.get $r) (local.get $j)))
           (if (call $compatible (local.get $a) (local.get $b)) (then (call $push_merge (local.get $out) (local.get $a) (local.get $b))))
           (local.set $j (i32.add (local.get $j) (i32.const 1)))
@@ -719,7 +719,7 @@
       (local.set $mu (call $t_row (local.get $t) (local.get $i)))
       (local.set $j (i32.const 0))
       (loop $data
-        (if (i32.lt_u (local.get $j) (i32.load offset=12 (local.get $el))) (then
+        (if (if (result i32) (i32.lt_u (local.get $j) (i32.load offset=12 (local.get $el))) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
           (memory.copy (local.get $row) (local.get $mu) (global.get $W))
           (local.set $d (i32.add (i32.load offset=16 (local.get $el)) (i32.shl (i32.mul (local.get $j) (local.get $nv)) (i32.const 2))))
           (local.set $ok (i32.const 1))
@@ -1067,6 +1067,7 @@
   (block $done
     (loop $frontier
       (br_if $done (i32.ge_u (local.get $i) (i32.load offset=4 (local.get $tmp))))
+      (br_if $done (call $step))
       (local.set $cur (call $v_at (local.get $tmp) (local.get $i)))
       (local.set $i (i32.add (local.get $i) (i32.const 2)))
       (local.set $next (call $v_new))

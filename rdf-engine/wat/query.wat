@@ -716,7 +716,7 @@
       (local.set $vals (i32.load offset=76 (local.get $q)))
       (local.set $i (i32.const 0))
       (loop $values
-        (if (i32.lt_u (local.get $i) (local.get $cnt)) (then
+        (if (i32.and (i32.lt_u (local.get $i) (local.get $cnt)) (i32.eqz (global.get $bu_stop))) (then
           (call $set_params (local.get $q) (i32.load offset=84 (local.get $q)) (i32.load offset=116 (local.get $q)) (i32.load (i32.add (local.get $vals) (i32.shl (local.get $i) (i32.const 2)))))
           ;; each value is its own run: subquery caches hold the previous params
           (global.set $epoch (i32.add (global.get $epoch) (i32.const 1)))
@@ -825,8 +825,16 @@
   (i32.store offset=80 (local.get $q) (local.get $count))
   (i32.const 0))
 
+;; A run within the budget (budget.wat): out of it, no results and -2.
 (func (export "run") (param $q i32) (param $graphs i32) (result i32)
-  (call $run (local.get $q) (local.get $graphs)))
+  (local $n i32)
+  (call $bu_start)
+  (local.set $n (call $run (local.get $q) (local.get $graphs)))
+  (global.set $bu_active (i32.const 0))
+  (if (global.get $bu_stop) (then
+    (drop (call $fail (@str "interrupted")))
+    (return (i32.const -2))))
+  (local.get $n))
 
 (global $queries (mut i32) (i32.const 0))   ;; live prepared queries (+240 next, +248 previous)
 
