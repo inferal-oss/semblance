@@ -29,6 +29,17 @@ export function comboOf(e: KeyboardEvent, apple: boolean): string {
   return normalizeShortcut(parts.join('+'))
 }
 
+/** The modifier keys held during a pointer interaction, ordered as in a combination ("mod+shift"; "" for none). */
+export function modifiersOf(e: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean }, apple: boolean): string {
+  const parts: string[] = []
+  if (apple ? e.metaKey : e.ctrlKey) parts.push('mod')
+  if (apple && e.ctrlKey) parts.push('ctrl')
+  if (e.altKey) parts.push('alt')
+  if (e.shiftKey) parts.push('shift')
+  if (!apple && e.metaKey) parts.push('meta')
+  return parts.join('+')
+}
+
 const GLYPHS: Record<string, [string, string]> = { mod: ['⌘', 'Ctrl+'], ctrl: ['⌃', 'Ctrl+'], alt: ['⌥', 'Alt+'], shift: ['⇧', 'Shift+'], meta: ['◆', 'Win+'] }
 /** Display labels: [Apple, others]. */
 export function shortcutLabels(combo: string): [string, string] {

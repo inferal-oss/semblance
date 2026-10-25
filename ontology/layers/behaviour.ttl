@@ -96,6 +96,8 @@ beh:target a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:comment "The comp
 beh:node a owl:ObjectProperty ; rdfs:domain beh:Event ;
     rdfs:comment "The RDF/HTML node the interaction hit (nearest rendered element), for reactions that care where inside a component it happened."@en .
 beh:value a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:comment "The control's value after the interaction."@en .
+beh:modifiers a owl:DatatypeProperty ; rdfs:domain beh:Event ;
+    rdfs:comment "The modifier keys held during a click, or during the press that moved the focus, ordered as in a key combination (\"shift\", \"mod+shift\"); absent when none was."@en .
 beh:checked a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:boolean .
 beh:sequence a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer .
 beh:at a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:dateTime .

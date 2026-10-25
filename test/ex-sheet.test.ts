@@ -42,7 +42,26 @@ function open(prefer: 'sparql' | 'function' = 'function', kind: StoreKind = 'wat
   // The dependency arrows are connectors: what the cell reads in the accent, what reads it in success.
   const arrows = (way: string) => sheet().querySelectorAll(`[data-sem-c=connector][data-sem-tone=${way === 'in' ? 'accent' : 'success'}]`).length
   const button = (label: string) => fire([...sheet().querySelectorAll('button')].find((b) => b.textContent!.trim() === label)!, 'click')
-  return { ...h, trace, fire, sheet, cell, value, write, type, status, bar, flashing, arrows, button }
+  /** A DOM event with modifier keys and a key, as the browser sends it. */
+  const send = (el: Element, type: string, init: { shiftKey?: boolean; key?: string } = {}) => {
+    const e = new h.window.Event(type, { bubbles: true })
+    for (const [k, v] of Object.entries({ shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, ...init })) Object.defineProperty(e, k, { value: v })
+    el.dispatchEvent(e)
+    trace.record()
+    h.shell.flush()
+  }
+  const control = (name: string) => cell(name).querySelector('input, output')!
+  /** A click as a pointer makes it: the press (which focuses the cell), the release, the click. */
+  const click = (name: string, shiftKey = false) => {
+    const el = control(name)
+    send(el, 'pointerdown', { shiftKey })
+    send(el, 'focusin')
+    send(el, 'pointerup', { shiftKey })
+    send(el, 'click', { shiftKey })
+  }
+  const key = (name: string, k: string) => send(control(name), 'keydown', { key: k, shiftKey: true })
+  const ranged = () => Object.fromEntries([...sheet().querySelectorAll('[data-sem-range]')].map((c) => [c.querySelector('input, output')!.getAttribute('aria-label'), c.getAttribute('data-sem-range')]))
+  return { ...h, trace, fire, sheet, cell, value, write, type, status, bar, flashing, arrows, button, send, click, key, ranged }
 }
 
 /** The cells a change to B4 (the cappuccinos' first quarter) re-runs. */
@@ -144,6 +163,61 @@ describe('a spreadsheet of resources and queries', () => {
     expect(s.cell('-K21')).toBeTruthy()
   })
 
+  it.each([
+    ['sparql', 'wat'],
+    ['function', 'wat'],
+    ['sparql', 'oxigraph'],
+  ] as const)('selects a range with Shift, marks its edges and sums it up (%s, %s)', (prefer, kind) => {
+    const s = open(prefer, kind)
+    s.click('B2')
+    expect(s.ranged()).toEqual({})
+    // Shift+click: from the selected cell to this one; the selected cell stays where it was.
+    s.click('C3', true)
+    expect(s.ranged()).toEqual({ B2: 'top start', C2: 'top end', B3: 'bottom start', C3: 'bottom end' })
+    expect(s.cell('B2').getAttribute('data-sem-selected')).toBe('true')
+    expect(s.status()).toBe('B2:C3  ·  Sum 19130  ·  Average 4782.5  ·  Count 4')
+    // Shift with the arrow keys moves the far corner, wherever the focus is.
+    s.key('C3', 'ArrowDown')
+    expect(s.status()).toBe('B2:C4  ·  Sum 27150  ·  Average 4525  ·  Count 6')
+    expect(s.ranged().C3).toBe('end')
+    expect(s.ranged().B3).toBe('start')
+    s.key('C3', 'ArrowRight')
+    expect(Object.keys(s.ranged()).length).toBe(9)
+    // A value in the range changes: the sum follows.
+    s.type('B3', '5300')
+    expect(s.status()).toBe('B2:D4  ·  Sum 40280  ·  Average 4475.56  ·  Count 9')
+    // Text counts, but is not summed; a range with no numbers only counts.
+    s.click('A2')
+    s.key('A2', 'ArrowDown')
+    expect(s.status()).toBe('A2:A3  ·  Count 2')
+    s.key('A2', 'ArrowRight')
+    expect(s.status()).toBe('A2:B3  ·  Sum 9400  ·  Average 4700  ·  Count 4')
+    // Back onto the selected cell: no range.
+    s.key('A2', 'ArrowUp')
+    s.key('A2', 'ArrowLeft')
+    expect(s.ranged()).toEqual({})
+    // A plain click selects one cell again.
+    s.click('C3', true)
+    expect(Object.keys(s.ranged()).length).toBe(6)
+    s.click('D5')
+    expect(s.ranged()).toEqual({})
+    expect(s.bar()).toBe('D5  3190')
+  })
+
+  it.each(['sparql', 'function'] as const)('swaps left and right in a right-to-left language (%s)', (prefer) => {
+    const s = open(prefer)
+    const f = s.store.factory
+    const app = s.store.match(null, f.namedNode('https://semblance.dev/ns/l10n#language'), null)[0]!
+    s.runtime.apply({ remove: [app], add: [f.quad(app.subject, app.predicate, f.namedNode('https://semblance.dev/ns/l10n#Arabic'))] })
+    s.shell.flush()
+    s.click('C3')
+    s.key('C3', 'ArrowLeft')
+    expect(Object.keys(s.ranged()).sort()).toEqual(['C3', 'D3'])
+    s.key('C3', 'ArrowRight')
+    s.key('C3', 'ArrowRight')
+    expect(Object.keys(s.ranged()).sort()).toEqual(['B3', 'C3'])
+  })
+
   it('renders the same with SPARQL rules and reactions as with functions', () => {
     expect(implementationGaps(['components/sheet.ttl'])).toEqual({ noSparql: [], noFunction: [] })
     const [a, b] = (['sparql', 'function'] as const).map((prefer) => {
@@ -151,6 +225,12 @@ describe('a spreadsheet of resources and queries', () => {
       const html = [s.sheet().outerHTML]
       s.type('B4', '4000')
       s.fire(s.cell('H4').querySelector('output')!, 'click')
+      html.push(s.sheet().outerHTML)
+      s.click('B2')
+      s.click('D5', true)
+      s.key('D5', 'ArrowRight')
+      html.push(s.sheet().outerHTML)
+      s.type('C3', '2500')
       html.push(s.sheet().outerHTML)
       s.type('A2', 'Ristretto')
       html.push(s.sheet().outerHTML)
