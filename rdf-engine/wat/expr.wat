@@ -66,9 +66,12 @@
 
 ;; Whether a cast to xsd:<local> is supported (parse time).
 (func $xsd_cast_type (param $p i32) (param $n i32) (result i32)
-  (local $c i32)
-  (local.set $c (call $xsd_class (local.get $p) (local.get $n)))
-  (i32.and (i32.ne (local.get $c) (i32.const C_OTHER)) (i32.ne (local.get $c) (i32.const C_DATE))))
+  (if (i32.ne (call $xsd_class (local.get $p) (local.get $n)) (i32.const C_OTHER)) (then (return (i32.const 1))))
+  ;; and the times and durations (temporal.wat)
+  (i32.or (i32.or (call $same (local.get $p) (local.get $n) (@str "time") (i32.const 0))
+                  (call $same (local.get $p) (local.get $n) (@str "duration") (i32.const 0)))
+          (i32.or (call $same (local.get $p) (local.get $n) (@str "dayTimeDuration") (i32.const 0))
+                  (call $same (local.get $p) (local.get $n) (@str "yearMonthDuration") (i32.const 0)))))
 
 ;; --- string building ------------------------------------------------------------
 

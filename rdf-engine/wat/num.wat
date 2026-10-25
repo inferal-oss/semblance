@@ -410,6 +410,8 @@
 (func $cast (param $v i32) (param $dt i32) (result i32)
   (local $tc i32) (local $k i32) (local $t i32) (local $p i32) (local $n i32) (local $b i32) (local $sc i32) (local $m i64)
   (local.set $tc (call $dtc (local.get $dt)))
+  ;; to a date, time or duration (temporal.wat)
+  (if (local.tee $k (call $tkind (local.get $dt))) (then (return (call $temporal_cast (local.get $k) (local.get $v)))))
   (local.set $k (call $kind (local.get $v)))
   (if (i32.eq (local.get $tc) (i32.const C_STRING)) (then
     (if (i32.gt_u (i32.sub (local.get $k) (i32.const 1)) (i32.const 2)) (then (return (i32.const 0))))

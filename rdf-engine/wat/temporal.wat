@@ -71,11 +71,14 @@
 ;; Read literal id as a date, time or duration into $tm_*: its kind, or 0 when
 ;; it is none (or ill-formed).
 (func $tparse (param $id i32) (result i32)
-  (local $k i32) (local $p i32) (local $n i32) (local $s i64)
+  (local $k i32)
   (if (i32.ne (call $kind (local.get $id)) (i32.const 3)) (then (return (i32.const 0))))
   (if (i32.eqz (local.tee $k (call $tkind (call $tdt (local.get $id))))) (then (return (i32.const 0))))
-  (local.set $p (call $tval (local.get $id)))
-  (local.set $n (call $tlen (local.get $id)))
+  (call $tparse_text (local.get $k) (call $tval (local.get $id)) (call $tlen (local.get $id))))
+
+;; Read [p, p+n) as a value of kind k into $tm_*: k, or 0 when it is not one.
+(func $tparse_text (param $k i32) (param $p i32) (param $n i32) (result i32)
+  (local $s i64)
   (if (i32.ge_u (local.get $k) (i32.const TK_DUR)) (then
     (return (select (local.get $k) (i32.const 0) (call $dur_parse (local.get $p) (local.get $n) (local.get $k))))))
   (if (i32.eq (local.get $k) (i32.const TK_TIME)) (then
@@ -411,3 +414,44 @@
   (if (i32.and (i32.eq (local.get $ka) (i32.const TK_TIME)) (i32.eq (local.get $kb) (i32.const TK_TIME))) (then
     (return (i32.sub (i64.gt_s (local.get $x) (local.get $y)) (i64.lt_s (local.get $x) (local.get $y))))))
   (i32.const 2))
+
+;; --- casts ---------------------------------------------------------------------
+
+;; v cast to kind k (XPath's casting rules), canonical; 0 when it cannot be. A
+;; string is read as a k (whitespace trimmed); a dateTime gives its date or its
+;; time (with the timezone), a date its midnight; a duration gives any other
+;; duration (a dayTimeDuration without months, a yearMonthDuration without
+;; seconds). Nothing else casts to a date, time or duration.
+(func $temporal_cast (param $k i32) (param $v i32) (result i32)
+  (local $p i32) (local $e i32) (local $ks i32)
+  (if (i32.ne (call $kind (local.get $v)) (i32.const 3)) (then (return (i32.const 0))))
+  (if (call $is_plain (local.get $v))
+    (then
+      (local.set $p (call $tval (local.get $v)))
+      (local.set $e (i32.add (local.get $p) (call $tlen (local.get $v))))
+      (loop $lead (if (i32.and (i32.lt_u (local.get $p) (local.get $e)) (call $is_space (i32.load8_u (local.get $p)))) (then
+        (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $lead))))
+      (loop $trail (if (i32.and (i32.lt_u (local.get $p) (local.get $e)) (call $is_space (i32.load8_u (i32.sub (local.get $e) (i32.const 1))))) (then
+        (local.set $e (i32.sub (local.get $e) (i32.const 1))) (br $trail))))
+      (if (i32.eqz (call $tparse_text (local.get $k) (local.get $p) (i32.sub (local.get $e) (local.get $p)))) (then (return (i32.const 0)))))
+    (else
+      (if (i32.eqz (local.tee $ks (call $tparse (local.get $v)))) (then (return (i32.const 0))))
+      (if (i32.lt_u (local.get $k) (i32.const TK_DUR))
+        (then
+          ;; moments: the same kind, dateTime to date or time, date to dateTime
+          (if (i32.eqz (i32.or (i32.eq (local.get $ks) (local.get $k))
+                               (i32.or (i32.eq (local.get $ks) (i32.const TK_DT)) (i32.and (i32.eq (local.get $ks) (i32.const TK_DATE)) (i32.eq (local.get $k) (i32.const TK_DT))))))
+            (then (return (i32.const 0))))
+          (if (i32.eq (local.get $k) (i32.const TK_DATE)) (then (global.set $tm_secs (i64.const 0)))))
+        (else
+          (if (i32.lt_u (local.get $ks) (i32.const TK_DUR)) (then (return (i32.const 0))))
+          (if (i32.eq (local.get $k) (i32.const TK_DTD)) (then (global.set $tm_months (i64.const 0))))
+          (if (i32.eq (local.get $k) (i32.const TK_YMD)) (then (global.set $tm_secs (i64.const 0))))))))
+  (if (result i32) (i32.lt_u (local.get $k) (i32.const TK_DUR))
+    (then (call $moment_term (local.get $k) (global.get $tm_days) (global.get $tm_secs) (global.get $tm_tz)))
+    (else (call $dur_term (local.get $k) (global.get $tm_months) (global.get $tm_secs)))))
+
+;; ASCII whitespace, as Rust's trim_ascii: space, \t, \n, \f, \r.
+(func $is_space (param $c i32) (result i32)
+  (i32.or (i32.eq (local.get $c) (i32.const 32))
+          (i32.and (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)) (i32.ne (local.get $c) (i32.const 11)))))
