@@ -3,6 +3,7 @@ import { H, NS, ORD, RDF_TYPE, SEM } from '../ns.ts'
 import type { Delta } from '../rdf.ts'
 import { ATTRIBUTE_NAMES, TAG_NAMES, VOID_ELEMENTS } from '../vocab/rdfhtml.generated.ts'
 import { linearize } from './ordering.ts'
+import { compareKeys } from './order-key.ts'
 import { SVG_TAG_NAMES } from '../vocab/svg.ts'
 
 export interface HNode {
@@ -342,12 +343,4 @@ export class HtmlIndex {
     this.mark('roots', focus)
     this.structureChanged(focus)
   }
-}
-
-/** Order keys: numerically when both are numbers, else as strings. */
-function compareKeys(a: string, b: string): number {
-  const na = Number(a)
-  const nb = Number(b)
-  if (a !== '' && b !== '' && !Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
-  return a < b ? -1 : a > b ? 1 : 0
 }

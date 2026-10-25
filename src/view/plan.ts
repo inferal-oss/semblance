@@ -1,9 +1,19 @@
-// The circuit IR for maintained views (docs/IVM.md §5, §20). A plan says what a view
-// computes, independently of how its parts are evaluated (SPARQL on the store, or
-// functions), so a compiler that reads a real algebra (the rdf-engine's Rust parser)
-// can replace phase 1's recognizer behind the same interface.
+// The circuit IR for maintained views (docs/IVM.md §5, §20, §21). A plan says what a view
+// computes, independently of how its parts are evaluated (SPARQL on the store, or functions),
+// so a compiler over another algebra (the rdf-engine's Rust parser) can replace this one behind
+// the same interface.
+//
+//   part:  partitions (a key per partition: an LDES member, a cell, a row of a grid's
+//          collection...), each evaluated against the store and cached, re-evaluated when a
+//          changed triple reaches it (exact dependencies, deps.ts)
+//          -> [window] -> bag | DISTINCT (counts) | GROUP BY (incremental aggregates)
+//          -> [expressions over the result: aggregate arithmetic, HAVING]
+//   plan:  parts summed (UNION) -> [ORDER BY with LIMIT / OFFSET: top-k over an ordered
+//          multiset] -> [expressions: a CONSTRUCT's BINDs] -> CONSTRUCT template | SELECT rows
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { RuleContext } from '../engine/context.ts'
+import type { Dependencies } from './deps.ts'
+import type { Triple } from './sparql.ts'
 
 export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX'
 
@@ -12,7 +22,7 @@ export interface Aggregate {
   as: string
   fn: AggregateFn
   distinct: boolean
-  /** The argument: '*' (COUNT(*)), or the member-local row slot holding its value. */
+  /** The argument: '*' (COUNT(*)), or the partition row slot holding its value. */
   slot: string
 }
 
@@ -23,33 +33,75 @@ export interface WindowSpec {
   timeBy: string
 }
 
-/** Rows (variable name -> term) one member contributes, evaluated for many members at once. */
-export type LocalEvaluator = (members: readonly { stream: NamedNode; member: NamedNode }[]) => Map<string, Map<string, Term>[]>
-/** The triples one aggregate row stands for (CONSTRUCT views). */
-export type OutputEvaluator = (row: Map<string, Term>) => Quad[]
+/** Partitions (by key string) and their rows (variable name -> term). */
+export type LocalEvaluator = (keys: readonly Term[][] | undefined) => Map<string, Map<string, Term>[]>
 
-/**
- * Aggregates over the members of LDES streams: a member-local part, evaluated once per
- * (stream, member) and cached until the member retires or changes (a partitioned
- * recompute leaf); a sliding window (optional); then GROUP BY with incremental
- * aggregates; then, for CONSTRUCT views, the triples of each group's row.
- */
-export interface StreamAggregatePlan {
-  kind: 'stream-aggregate'
-  form: 'select' | 'construct'
-  /** A fixed stream, or undefined for every subject of tree:member (then bound to `streamVar`). */
-  stream?: string
-  streamVar?: string
-  memberVar: string
-  groupBy: string[]
-  aggregates: Aggregate[]
-  window?: WindowSpec
+/** What a part does with its partitions' rows. */
+export type Op =
+  | { k: 'bag' }
+  | { k: 'distinct' }
+  | { k: 'group'; groupBy: string[]; aggregates: Aggregate[] }
+
+/** Expressions over rows (BIND, then FILTER), evaluated by the store for many rows at once. */
+export interface Post {
+  binds: { expr: string; as: string }[]
+  filters: string[]
+  /** The variables rows have going in (VALUES columns). */
+  inputs: string[]
+  /** The query's own PREFIX declarations. */
+  prologue?: string
+}
+
+export interface Part {
+  /** Partition key variables (none: one partition). */
+  keys: string[]
+  /** The variables a partition row keeps (keys first). */
+  slots: string[]
   local: LocalEvaluator
-  output?: OutputEvaluator
-  /** SPARQL algebra of each part, for the plan as data (iv:algebra). */
-  algebra: { local: string; group: string; output?: string }
+  /** Exact dependencies (SPARQL parts); absent: a stream part routed by membership and member closure. */
+  deps?: Dependencies
+  /** Partitions are the members of an LDES (keys are [streamVar?, memberVar]). */
+  stream?: { stream?: string; streamVar?: string; memberVar: string }
+  window?: WindowSpec
+  op: Op
+  /** The variables a part's output rows have (before `post`). */
+  vars: string[]
+  post?: Post
+  algebra: { local: string; op: string; post?: string }
+}
+
+export interface Order {
+  /** Row variable holding the key (computed by `post` when it is an expression). */
+  slot: string
+  desc: boolean
+}
+
+export interface TopK {
+  order: Order[]
+  limit?: number
+  offset: number
+}
+
+/** A view maintained from its inputs' changes. */
+export interface MaintainedPlan {
+  kind: 'maintained'
+  form: 'select' | 'construct'
+  parts: Part[]
+  /** ORDER BY (with LIMIT / OFFSET): an ordered multiset over the parts' rows. */
+  topk?: TopK
+  /** Expressions after the top-k (a CONSTRUCT's BINDs and FILTERs after its subquery; ORDER BY keys before it). */
+  orderPost?: Post
+  post?: Post
+  /** SELECT: the projected variables. */
+  vars: string[]
+  template?: Triple[]
+  /** CONSTRUCT views written as functions: the triples of one output row. */
+  output?: (row: Map<string, Term>) => Quad[]
   /** The from-scratch query this view must equal at clock time `now` (the test oracle). */
   reference?: (now: number) => string
+  algebra: { topk?: string; post?: string; output?: string }
+  /** What decides whether a parameter change can retune the plan in place (everything but LIMIT / OFFSET). */
+  signature: string
 }
 
 /** A view the compiler cannot maintain: re-run from scratch when its inputs change, and diffed. */
@@ -58,9 +110,11 @@ export interface RecomputePlan {
   form: 'select' | 'construct'
   query: string
   reason: string
+  /** When known: only changes these dependencies match re-run it. */
+  deps?: Dependencies
 }
 
-export type ViewPlan = StreamAggregatePlan | RecomputePlan
+export type ViewPlan = MaintainedPlan | RecomputePlan
 
 /** What a compiler gets: the view's query and its annotations. */
 export interface ViewSource {
@@ -70,6 +124,8 @@ export interface ViewSource {
   prefixes: string
   /** iv:over */
   over?: string
+  /** iv:partitionBy */
+  partitionBy?: string[]
   window?: { rangeMs: number; timeBy?: string }
 }
 
@@ -83,6 +139,7 @@ export interface SparqlRunner {
   construct(query: string): Quad[]
   /** The stream's timestamp property (ldes:timestampPath), if it has one. */
   timestampPath(stream: string): string | undefined
+  factory: import('../store/types.ts').Factory
 }
 
 /**

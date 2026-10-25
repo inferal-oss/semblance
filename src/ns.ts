@@ -41,6 +41,7 @@ export const NS = {
   vann: 'http://purl.org/vocab/vann/',
   iv: 'https://semblance.dev/ns/view#',
   clip: 'https://semblance.dev/ns/clipboard#',
+  rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
 } as const
 
 /** Prepended to every SPARQL rule body. */

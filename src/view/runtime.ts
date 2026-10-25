@@ -1,20 +1,29 @@
-// Maintained views (docs/IVM.md): queries whose results are kept up to date from the
-// changes to their inputs, one tick per transaction of the Runtime. Phase 1 maintains
-// aggregates over LDES members (stream-aggregate plans); any other view is recomputed
-// from scratch when its inputs change, and says so (iv:fallback).
+// Maintained views (docs/IVM.md): queries whose results are kept up to date from the changes
+// to their inputs, one tick per transaction of the Runtime. A view's partitions (LDES members,
+// rows of a collection, cells...) are evaluated on the store and cached; a changed triple
+// reaches the partitions it can affect through the query's own patterns (deps.ts); above them,
+// DISTINCT, GROUP BY and top-k are incremental (plan.ts). A view the compiler cannot maintain
+// is recomputed from scratch when its inputs change, and says so (iv:fallback).
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import { md5 } from '../components/data.ts'
 import { createContext, type RuleContext } from '../engine/context.ts'
 import { NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { type Delta, mint, owningFocus, parseDuration, quadKey, termKey } from '../rdf.ts'
 import type { GraphStore } from '../store/types.ts'
-import { accSize, accumulate, type Group, newGroup, result } from './aggregate.ts'
-import type { FnView, StreamAggregatePlan, ViewCompiler, ViewPlan, ViewSource } from './plan.ts'
-import { recognizer, TREE_MEMBER } from './recognize.ts'
+import { accSize, accumulate, compareTerms, type Group, newGroup, result } from './aggregate.ts'
+import { compiler, keyString, prefixMap, sparqlTerm, TREE_MEMBER } from './compile.ts'
+import { Dependencies, type Lookup } from './deps.ts'
+import { parseQuery } from './sparql.ts'
+import { OrderedMultiset } from './ordered.ts'
+import type { FnView, MaintainedPlan, Part, Post, ViewCompiler, ViewPlan, ViewSource } from './plan.ts'
+import type { Node, Triple } from './sparql.ts'
 import { Terms } from './terms.ts'
 import { ZSet } from './zset.ts'
 
 export const IV = 'https://semblance.dev/ns/view#'
+/** The W3C result-set vocabulary: how a materialized SELECT view writes its rows. */
+export const RS = 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#'
 /** Where materialized views keep their output, their plans and their figures. */
 export const VIEW_GRAPH = 'urn:semblance:views'
 
@@ -55,13 +64,16 @@ export class ManualClock implements ViewClock {
 
 export interface ViewFigures {
   ticks: number
-  /** Rows processed: member rows entering or leaving, groups updated, output rows. */
+  /** Rows processed: partition rows entering or leaving, groups updated, output rows. */
   rowsIn: number
   rowsOut: number
   ms: number
   /** The last tick that did work for this view. */
   lastRows: number
   lastMs: number
+  /** Partitions evaluated (in all), and ticks a change reached every partition (a rebuild). */
+  partitions: number
+  rebuilds: number
 }
 
 /** Totals over every view (the status bar and the cost tests read these). */
@@ -71,6 +83,9 @@ export interface ViewTotals {
   /** Rows of operator state now held. */
   state: number
   ms: number
+  /** Partitions evaluated, and rebuilds (a change reaching every partition). */
+  partitions: number
+  rebuilds: number
 }
 
 export interface ViewDelta {
@@ -88,6 +103,8 @@ export interface ViewHandle {
   /** The current result. */
   rows(): Map<string, Term>[]
   quads(): Quad[]
+  /** SELECT views with ORDER BY: each row's position (1-based), by its key (as rows() keys it). */
+  index(row: Map<string, Term>): number | undefined
   /** Net change per tick; `replay` first delivers the current result as one change. */
   subscribe(fn: (d: ViewDelta) => void, opts?: { replay?: boolean }): () => void
   footprint(): Record<string, number>
@@ -102,11 +119,29 @@ export interface ViewOptions {
 }
 
 const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
+const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
+
+/** A view's definition as read from the graph (a template of iv:targets is defined per instance). */
+interface Definition {
+  iri: string
+  /** The view node its triples are on (the template, for instances). */
+  node: string
+  /** For an instance of a template: the instance ($this). */
+  focus?: string
+}
+
+/** A parameter, resolved: what it reads, so a change to that re-resolves it. */
+interface Param {
+  name: string
+  value?: Term
+  /** Whether a changed triple can change the parameter's value. */
+  reads: (q: Quad) => boolean
+}
 
 export class ViewRuntime {
   readonly graph: NamedNode
   readonly terms = new Terms()
-  readonly totals: ViewTotals = { ticks: 0, rowsIn: 0, state: 0, ms: 0 }
+  readonly totals: ViewTotals = { ticks: 0, rowsIn: 0, state: 0, ms: 0, partitions: 0, rebuilds: 0 }
   /** Every tick the runtime has run, numbered (delta logs name ticks by it). */
   tickNo = 0
   /** Compare every view with a from-scratch evaluation after every tick, and refuse fallbacks (tests). */
@@ -123,13 +158,23 @@ export class ViewRuntime {
   /** Times each view's step (the watchdog blames the slowest work of a turn). */
   watchdog?: { clock(): number; note(kind: 'view', iri: string, focus: string | undefined, count: number, ms: number): void }
   private views = new Map<string, MaintainedView>()
+  /** Views in the order they step: a view after the views it reads (iv:reads). */
+  private order: MaintainedView[] = []
+  /** Templates (iv:targets): template IRI -> its class. */
+  private templates = new Map<string, string>()
   private refs = new Map<string, { q: Quad; n: number }>()
   private dataset: Set<string>
-  private graphs: Term[]
+  readonly graphs: Term[]
   private started = false
   private prefer: 'sparql' | 'function' = 'sparql'
   private timer?: { at: number; cancel: () => void }
   private ctx: RuleContext
+  private prefixText?: string
+
+  /** The store's SPARQL prefixes (the framework's and those declared in the graph), cached until a declaration changes. */
+  prefixes(): string {
+    return (this.prefixText ??= prefixesFor(this.store))
+  }
 
   constructor(
     readonly store: GraphStore,
@@ -155,6 +200,11 @@ export class ViewRuntime {
     return [...this.views.values()]
   }
 
+  /** The instance of a template view (iv:targets) for one focus. */
+  instanceOf(template: string, focus: string): string {
+    return mint(focus, 'view-' + localName(template))
+  }
+
   /** Compile every iv:View in the store and evaluate it; returns the change to the view graph (already applied). */
   start(prefer: 'sparql' | 'function' = 'sparql'): Delta {
     this.started = true
@@ -162,17 +212,41 @@ export class ViewRuntime {
     const out = new ZSet<Quad>()
     const f = this.store.factory
     for (const q of this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(IV + 'View'))) {
-      if (q.subject.termType === 'NamedNode') this.define(q.subject.value, out)
+      if (q.subject.termType === 'NamedNode') for (const d of this.definitions(q.subject.value)) this.define(d, out)
     }
+    this.sort()
     const now = this.clock.now()
-    for (const v of this.views.values()) {
+    const applied: Delta = { add: [], remove: [] }
+    const sinkNow = () => {
+      const d = this.sink(out)
+      applied.add.push(...d.add)
+      applied.remove.push(...d.remove)
+      out.clear()
+    }
+    sinkNow()
+    for (const v of this.order) {
       if (this.demanded(v)) out.plus(v.initial(now))
       else v.suspended = true
+      sinkNow()
     }
-    const delta = this.sink(out)
     this.check(now)
     this.reschedule()
-    return delta
+    return applied
+  }
+
+  /** The views a view node defines: itself, or (iv:targets) one per instance of the class. */
+  private definitions(iri: string): Definition[] {
+    const f = this.store.factory
+    const cls = this.store.match(f.namedNode(iri), f.namedNode(IV + 'targets'), null)[0]?.object
+    if (!cls) {
+      this.templates.delete(iri)
+      return [{ iri, node: iri }]
+    }
+    this.templates.set(iri, cls.value)
+    return this.store
+      .match(null, f.namedNode(RDF_TYPE), cls as NamedNode)
+      .filter((q) => q.subject.termType === 'NamedNode')
+      .map((q) => ({ iri: this.instanceOf(iri, q.subject.value), node: iri, focus: q.subject.value }))
   }
 
   /** One tick: the consolidated change of the input graphs. Returns the view graph's change (applied). */
@@ -181,61 +255,120 @@ export class ViewRuntime {
     this.tickNo++
     const t = performance.now()
     const now = this.clock.now()
-    const changes = { add: delta.add.filter((q) => this.dataset.has(q.graph.value)), remove: delta.remove.filter((q) => this.dataset.has(q.graph.value)) }
+    const inDataset = (q: Quad) => this.dataset.has(q.graph.value)
+    const changes = { add: delta.add.filter(inDataset), remove: delta.remove.filter(inDataset) }
+    if ([...changes.add, ...changes.remove].some((q) => q.predicate.value === NS.sh + 'prefix' || q.predicate.value === NS.sh + 'namespace')) this.prefixText = undefined
     const out = new ZSet<Quad>()
-    // A view's own triples (its query, its window) changed: compile it again.
+    // A view's own triples (its query, its window, its parameters) changed: compile it again.
     const redefine = new Set<string>()
+    const nodes = new Set<string>()
     for (const q of [...changes.add, ...changes.remove]) {
       if (q.subject.termType !== 'NamedNode') continue
-      if (q.predicate.value === RDF_TYPE && q.object.value === IV + 'View') redefine.add(q.subject.value)
-      else if (this.views.has(q.subject.value)) redefine.add(q.subject.value)
-      else for (const v of this.views.values()) if (v.window === q.subject.value) redefine.add(v.iri)
-    }
-    for (const iri of redefine) {
-      this.views.get(iri)?.drop(out)
-      this.views.delete(iri)
-      if (this.store.match(this.store.factory.namedNode(iri), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) {
-        this.define(iri, out)
-        out.plus(this.views.get(iri)!.initial(now))
+      const s = q.subject.value
+      if (q.predicate.value === RDF_TYPE && q.object.value === IV + 'View') nodes.add(s)
+      else if (this.views.has(s) || this.templates.has(s)) nodes.add(s)
+      // An instance of a template's class came or went.
+      if (q.predicate.value === RDF_TYPE) for (const [tpl, cls] of this.templates) if (q.object.value === cls) nodes.add(tpl)
+      for (const v of this.views.values()) {
+        if (v.window === s) redefine.add(v.iri)
+        if (v.def.node === s) redefine.add(v.iri)
       }
     }
-    let worked = false
+    for (const node of nodes) {
+      for (const v of this.views.values()) if (v.def.node === node) redefine.add(v.iri)
+      if (this.store.match(this.store.factory.namedNode(node), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) for (const d of this.definitions(node)) redefine.add(d.iri)
+    }
+    // A parameter changed: retune in place (LIMIT / OFFSET), else compile again.
+    const retuned = new Set<string>()
     for (const v of this.views.values()) {
-      if (redefine.has(v.iri) || v.suspended) continue
+      if (redefine.has(v.iri) || !v.params.length) continue
+      if (![...changes.add, ...changes.remove].some((q) => v.params.some((p) => p.reads(q)))) continue
+      const params = this.resolve(v.def, v.paramNodes)
+      if (params.every((p, i) => sameTerm(p.value, v.params[i]?.value))) continue
+      const next = this.compileFor(v.def, params)
+      if (next && v.retune(next, params, out, now)) retuned.add(v.iri)
+      else redefine.add(v.iri)
+    }
+    for (const iri of redefine) {
+      const old = this.views.get(iri)
+      old?.drop(out)
+      this.views.delete(iri)
+    }
+    if (redefine.size) {
+      const defs = new Map<string, Definition>()
+      for (const node of new Set([...nodes, ...[...redefine].map((i) => this.defNode(i)).filter((x): x is string => !!x)])) {
+        if (!this.store.match(this.store.factory.namedNode(node), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) continue
+        for (const d of this.definitions(node)) if (redefine.has(d.iri)) defs.set(d.iri, d)
+      }
+      for (const d of defs.values()) this.define(d, out)
+      this.sort()
+    }
+    let worked = false
+    const viewDelta: Delta = { add: [], remove: [] }
+    const applied: Delta = { add: [], remove: [] }
+    const flush = () => {
+      if (!out.size) return
+      const d = this.sink(out)
+      out.clear()
+      applied.add.push(...d.add)
+      applied.remove.push(...d.remove)
+      viewDelta.add.push(...d.add)
+      viewDelta.remove.push(...d.remove)
+    }
+    flush()
+    for (const v of this.order) {
+      if (v.suspended) continue
       if (v.whileShown && !this.demanded(v)) {
         v.suspended = true
         continue
       }
+      if (redefine.has(v.iri) && !retuned.has(v.iri)) {
+        out.plus(v.initial(now))
+        flush()
+        continue
+      }
+      // A view that reads other views' output sees what they wrote this tick.
+      const own = v.readsViews ? { add: [...changes.add, ...viewDelta.add], remove: [...changes.remove, ...viewDelta.remove] } : changes
       const w = this.watchdog
       const t0 = w ? w.clock() : 0
-      const d = v.step(changes, now)
+      const d = v.step(own, now)
       if (w) w.note('view', v.iri, undefined, d?.size ?? 0, w.clock() - t0)
       if (d) out.plus(d), (worked = true)
+      flush()
     }
-    const result = this.sink(out)
     if (worked || redefine.size) {
       this.totals.ticks++
       this.totals.ms += performance.now() - t
     }
     this.check(now)
     this.reschedule()
-    return result
+    return applied
+  }
+
+  private defNode(iri: string): string | undefined {
+    if (this.store.match(this.store.factory.namedNode(iri), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) return iri
+    for (const tpl of this.templates.keys()) if (iri.endsWith('/~view-' + localName(tpl))) return tpl
+    return undefined
   }
 
   /** Rebuild suspended views whose component is shown again; returns the view graph's change (applied). */
   resume(): Delta {
     const out = new ZSet<Quad>()
     const now = this.clock.now()
-    for (const v of this.views.values()) {
+    const applied: Delta = { add: [], remove: [] }
+    for (const v of this.order) {
       if (!v.suspended || !this.demanded(v)) continue
       v.suspended = false
       out.plus(v.rebuild(now))
+      const d = this.sink(out)
+      out.clear()
+      applied.add.push(...d.add)
+      applied.remove.push(...d.remove)
     }
-    if (!out.size) return { add: [], remove: [] }
-    const delta = this.sink(out)
+    if (!applied.add.length && !applied.remove.length) return applied
     this.check(now)
     this.reschedule()
-    return delta
+    return applied
   }
 
   private demanded(v: MaintainedView): boolean {
@@ -280,7 +413,7 @@ export class ViewRuntime {
     const dec = (n: number) => f.literal(n.toFixed(3), nn(NS.xsd + 'decimal'))
     for (const v of this.views.values()) {
       const s = nn(v.iri)
-      if (this.store.match(s, nn(IV + 'measured'), null).every((q) => q.object.value !== 'true')) continue
+      if (this.store.match(nn(v.def.node), nn(IV + 'measured'), null).every((q) => q.object.value !== 'true')) continue
       set(s, IV + 'stateRows', int(v.stateRows()))
       set(s, IV + 'ticks', int(v.figures.ticks))
       set(s, IV + 'lastRows', int(v.figures.lastRows))
@@ -302,92 +435,215 @@ export class ViewRuntime {
     return { add, remove }
   }
 
-  private define(iri: string, out: ZSet<Quad>) {
+  /** The view node's annotations. */
+  private one(node: Term, p: string): Term | undefined {
+    return this.store.match(node as NamedNode, this.store.factory.namedNode(p), null)[0]?.object
+  }
+
+  /** Parameters (iv:parameter) of a view, resolved for its focus. */
+  private resolve(def: Definition, nodes: Term[]): Param[] {
     const f = this.store.factory
-    const nn = (p: string) => f.namedNode(p)
-    const s = nn(iri)
-    const one = (node: Term, p: string) => this.store.match(node as NamedNode, nn(p), null)[0]?.object
-    const select = one(s, SEM.select)?.value
-    const construct = one(s, SEM.construct)?.value
-    const fn = one(s, SEM.function)?.value
-    const strategy = one(s, IV + 'strategy')?.value
-    const windowNode = one(s, IV + 'window')
+    return nodes.map((n) => {
+      const name = this.one(n, IV + 'variable')?.value ?? ''
+      const select = this.one(n, IV + 'select')?.value
+      const property = this.one(n, IV + 'property')
+      const from = this.one(n, IV + 'from') ?? (def.focus ? f.namedNode(def.focus) : undefined)
+      const fallback = this.one(n, IV + 'default')
+      let value: Term | undefined
+      let reads: Param['reads'] = () => false
+      if (select) {
+        const text = def.focus ? select.replaceAll('$this', `<${def.focus}>`) : select
+        // What it reads: the triple patterns of its query (anything, when they cannot be read).
+        try {
+          const deps = new Dependencies(f, parseQuery(text, prefixMap(this.prefixes())).select.where, [])
+          reads = deps.problem ? () => true : (q) => deps.route(q).length > 0
+        } catch {
+          reads = () => true
+        }
+        const row = this.store.sparql ? this.store.select(this.prefixes() + '\n' + text, this.datasetFor(true) as never)[0] : undefined
+        value = row?.get('value') ?? (row ? [...row.values()][0] : undefined)
+      } else if (property && from) {
+        reads = (q) => q.subject.equals(from) && q.predicate.equals(property)
+        value = this.store.match(from as NamedNode, property as NamedNode, null)[0]?.object
+      }
+      return { name, value: value ?? fallback, reads }
+    })
+  }
+
+  private compileFor(def: Definition, params: Param[]): ViewPlan | undefined {
+    const f = this.store.factory
+    const s = f.namedNode(def.node)
+    const select = this.one(s, SEM.select)?.value
+    const construct = this.one(s, SEM.construct)?.value
+    let query = construct ?? select ?? ''
+    if (def.focus) query = query.replaceAll('$this', `<${def.focus}>`)
+    for (const p of [...params].sort((a, b) => b.name.length - a.name.length)) {
+      if (!p.value) return { kind: 'recompute', form: construct ? 'construct' : 'select', query, reason: `the parameter $${p.name} has no value (and no iv:default)` }
+      query = query.replaceAll('$' + p.name, p.value.termType === 'Literal' && /integer$/.test(p.value.datatype.value) ? p.value.value : sparqlTerm(p.value))
+    }
+    const windowNode = this.one(s, IV + 'window')
     let window: ViewSource['window']
     if (windowNode) {
-      const range = one(windowNode, IV + 'range')?.value
+      const range = this.one(windowNode, IV + 'range')?.value
       const ms = range ? parseDuration(range) : undefined
-      if (ms === undefined) warn(`<${iri}>: iv:window needs an iv:range duration`)
-      else window = { rangeMs: ms, timeBy: one(windowNode, IV + 'timeBy')?.value }
+      if (ms === undefined) warn(`<${def.iri}>: iv:window needs an iv:range duration`)
+      else window = { rangeMs: ms, timeBy: this.one(windowNode, IV + 'timeBy')?.value }
     }
+    const partitionBy = this.one(s, IV + 'partitionBy')?.value
     const source: ViewSource = {
-      iri,
+      iri: def.iri,
       form: construct ? 'construct' : 'select',
-      query: construct ?? select ?? '',
-      prefixes: prefixesFor(this.store),
-      over: one(s, IV + 'over')?.value,
+      query,
+      prefixes: this.prefixes(),
+      over: this.one(s, IV + 'over')?.value,
+      partitionBy: partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
     }
+    if (!this.store.sparql || !source.query) return undefined
+    return (this.opts.compiler ?? compiler).compile(source, this.runner(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0))
+  }
+
+  private define(def: Definition, out: ZSet<Quad>) {
+    const f = this.store.factory
+    const s = f.namedNode(def.node)
+    const fn = this.one(s, SEM.function)?.value
+    const strategy = this.one(s, IV + 'strategy')?.value
+    const windowNode = this.one(s, IV + 'window')
+    const paramNodes = this.store.match(s, f.namedNode(IV + 'parameter'), null).map((q) => q.object)
+    const params = this.resolve(def, paramNodes)
     const fnView = fn ? this.opts.functions?.[fn] : undefined
-    if (fn && !fnView) throw new Error(`No view function registered for "${fn}" (<${iri}>)`)
+    if (fn && !fnView) throw new Error(`No view function registered for "${fn}" (<${def.iri}>)`)
+    const hasQuery = !!(this.one(s, SEM.construct) ?? this.one(s, SEM.select))
+    const sparqlPlan = this.compileFor(def, params)
+    const useFn = fnView && (!this.store.sparql || this.prefer === 'function' || !hasQuery)
     let plan: ViewPlan
-    const useFn = fnView && (!this.store.sparql || this.prefer === 'function' || !source.query)
-    const sparqlPlan = this.store.sparql && source.query ? (this.opts.compiler ?? recognizer).compile(source, this.runner()) : undefined
-    if (useFn) plan = this.fnPlan(fnView!, source, sparqlPlan)
+    if (useFn) plan = this.fnPlan(fnView!, def, sparqlPlan)
     else if (sparqlPlan) plan = sparqlPlan
     else {
-      warn(`<${iri}> has no implementation this store can run; skipped`)
+      warn(`<${def.iri}> has no implementation this store can run; skipped`)
       return
     }
     if (plan.kind === 'recompute') {
-      const note = `<${iri}> is recomputed from scratch: ${plan.reason}`
+      const note = `<${def.iri}> is recomputed from scratch: ${plan.reason}`
       if (this.strict || strategy === IV + 'Incremental') throw new Error(note)
       warn(note)
     }
-    const view = new MaintainedView(this, iri, plan, windowNode?.termType === 'NamedNode' ? windowNode.value : undefined)
-    view.whileShown = one(s, IV + 'whileShown')?.value
-    view.deltaLog = one(s, IV + 'deltaLog')?.value
-    this.views.set(iri, view)
+    const view = new MaintainedView(this, def, plan, windowNode?.termType === 'NamedNode' ? windowNode.value : undefined)
+    view.params = params
+    view.paramNodes = paramNodes
+    view.whileShown = this.one(s, IV + 'whileShown')?.value ?? def.focus
+    view.deltaLog = this.one(s, IV + 'deltaLog')?.value
+    view.materialize = this.one(s, IV + 'materialize')?.value === IV + 'Graph'
+    view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
+    view.readsViews = view.reads.length > 0
+    this.views.set(def.iri, view)
     out.plus(view.planQuads())
   }
 
+  /** Step order: views that read other views (iv:reads) after them. */
+  private sort() {
+    const done = new Set<MaintainedView>()
+    const order: MaintainedView[] = []
+    const visit = (v: MaintainedView, depth: number) => {
+      if (done.has(v) || depth > 32) return
+      done.add(v)
+      for (const r of v.reads) for (const w of this.views.values()) if (w !== v && (w.iri === r || w.def.node === r)) visit(w, depth + 1)
+      order.push(v)
+    }
+    for (const v of this.views.values()) visit(v, 0)
+    this.order = order
+  }
+
   /** A function view's plan: the function's evaluators, the SPARQL view's oracle if it has one. */
-  private fnPlan(fn: FnView, source: ViewSource, sparql: ViewPlan | undefined): StreamAggregatePlan {
+  private fnPlan(fn: FnView, def: Definition, sparql: ViewPlan | undefined): MaintainedPlan {
     const f = this.store.factory
-    const timeBy = source.window ? (source.window.timeBy ?? (fn.stream ? this.runner().timestampPath(fn.stream) : undefined)) : undefined
-    return {
-      kind: 'stream-aggregate',
-      form: source.form,
-      stream: fn.stream,
-      streamVar: fn.streamVar,
-      memberVar: fn.memberVar,
-      groupBy: fn.groupBy,
-      aggregates: fn.aggregates,
-      window: source.window && timeBy ? { rangeMs: source.window.rangeMs, timeBy } : undefined,
+    const windowNode = this.one(f.namedNode(def.node), IV + 'window')
+    const range = windowNode ? this.one(windowNode, IV + 'range')?.value : undefined
+    const rangeMs = range ? parseDuration(range) : undefined
+    const timeBy = rangeMs !== undefined ? ((windowNode && this.one(windowNode, IV + 'timeBy')?.value) ?? (fn.stream ? this.runner().timestampPath(fn.stream) : undefined)) : undefined
+    const keys = fn.streamVar ? [fn.streamVar, fn.memberVar] : [fn.memberVar]
+    const slots = [...keys, ...fn.groupBy.filter((g) => !keys.includes(g)), ...fn.aggregates.map((a) => a.slot).filter((s) => s !== '*' && !keys.includes(s) && !fn.groupBy.includes(s))]
+    const part: Part = {
+      keys,
+      slots: [...new Set(slots)],
+      stream: { stream: fn.stream, streamVar: fn.streamVar, memberVar: fn.memberVar },
+      window: rangeMs !== undefined && timeBy ? { rangeMs, timeBy } : undefined,
       local: (batch) => {
         const out = new Map<string, Map<string, Term>[]>()
-        for (const { stream, member } of batch) {
+        const members = batch ? batch.map((k) => ({ stream: (fn.streamVar ? k[0] : f.namedNode(fn.stream!)) as NamedNode, member: k[k.length - 1] as NamedNode })) : this.members(fn.stream)
+        for (const { stream, member } of members) {
           const rows = fn.local(this.ctx, stream, member)
           for (const r of rows) {
             r.set(fn.memberVar, member)
             if (fn.streamVar) r.set(fn.streamVar, stream)
           }
-          if (rows.length) out.set(stream.value + ' ' + member.value, rows)
+          if (rows.length) out.set(keyString(fn.streamVar ? [stream, member] : [member]), rows)
         }
         return out
       },
+      op: { k: 'group', groupBy: fn.groupBy, aggregates: fn.aggregates },
+      vars: [...fn.groupBy, ...fn.aggregates.map((a) => a.as)],
+      algebra: { local: `function ${fn.local.name || 'local'}`, op: `Group((${fn.groupBy.map((v) => '?' + v).join(' ')}), ${fn.aggregates.map((a) => `${a.fn} AS ?${a.as}`).join(', ')})` },
+    }
+    return {
+      kind: 'maintained',
+      form: this.one(f.namedNode(def.node), SEM.construct) ? 'construct' : 'select',
+      parts: [part],
+      vars: part.vars,
       output: fn.output ? (row) => fn.output!(this.ctx, row).map((q) => f.quad(q.subject, q.predicate, q.object, this.graph)) : undefined,
-      reference: sparql?.kind === 'stream-aggregate' ? sparql.reference : sparql?.kind === 'recompute' ? () => sparql.query : undefined,
-      algebra: { local: `function ${fn.local.name || 'local'}`, group: `Group((${fn.groupBy.map((v) => '?' + v).join(' ')}), ${fn.aggregates.map((a) => `${a.fn} AS ?${a.as}`).join(', ')})`, output: fn.output ? 'function' : undefined },
+      reference: sparql?.kind === 'maintained' ? sparql.reference : sparql?.kind === 'recompute' ? () => sparql.query : undefined,
+      algebra: { output: fn.output ? 'function' : undefined },
+      signature: 'function',
     }
   }
 
-  runner() {
-    const prefixes = prefixesFor(this.store)
+  /** The graphs a view reads: the input graphs, and the views graph for views that read other views. */
+  datasetFor(readsViews: boolean): Term[] {
+    return readsViews ? [...this.graphs, this.graph] : this.graphs
+  }
+
+  runner(readsViews = false) {
+    const prefixes = this.prefixes()
     const f = this.store.factory
+    const graphs = this.datasetFor(readsViews)
     return {
-      select: (q: string) => this.store.select(prefixes + '\n' + q, this.graphs as never),
-      construct: (q: string) => this.store.construct(prefixes + '\n' + q, this.graphs as never).map((x) => f.quad(x.subject, x.predicate, x.object, this.graph)),
+      factory: f,
+      select: (q: string) => this.store.select(prefixes + '\n' + q, graphs as never),
+      construct: (q: string) => this.store.construct(prefixes + '\n' + q, graphs as never).map((x) => f.quad(x.subject, x.predicate, x.object, this.graph)),
       timestampPath: (stream: string) => this.store.match(f.namedNode(stream), f.namedNode(NS.ldes + 'timestampPath'), null)[0]?.object.value,
+    }
+  }
+
+  /**
+   * Triple lookups over a view's graphs with this tick's removed triples put back: the old and
+   * the new state together, for dependency probes.
+   */
+  lookup(removed: readonly Quad[], readsViews: boolean): Lookup {
+    const graphs = this.datasetFor(readsViews)
+    const by = new Map<string, Quad[]>()
+    const index = (k: string, q: Quad) => {
+      let l = by.get(k)
+      if (!l) by.set(k, (l = []))
+      l.push(q)
+    }
+    for (const q of removed) {
+      index('s' + termKey(q.subject), q)
+      index('p' + q.predicate.value, q)
+      index('o' + termKey(q.object), q)
+    }
+    return (s, p, o) => {
+      const seen = new Set<string>()
+      const out: Quad[] = []
+      const put = (q: Quad) => {
+        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object)
+        if (!seen.has(k)) seen.add(k), out.push(q)
+      }
+      for (const g of graphs) for (const q of this.store.match(s as never, p as never, o as never, g as never)) put(q)
+      if (removed.length) {
+        const pool = s ? by.get('s' + termKey(s)) : o ? by.get('o' + termKey(o)) : p ? by.get('p' + p.value) : removed
+        for (const q of pool ?? []) if ((!s || q.subject.equals(s)) && (!p || q.predicate.equals(p)) && (!o || q.object.equals(o))) put(q)
+      }
+      return out
     }
   }
 
@@ -471,53 +727,542 @@ export class ViewRuntime {
     this.timer = undefined
     if (next === undefined) return
     const at = next
-    this.timer = { at, cancel: this.clock.schedule(at, () => {
-      if (this.timer?.at === at) this.timer = undefined
-      this.onTimer?.()
-    }) }
+    this.timer = {
+      at,
+      cancel: this.clock.schedule(at, () => {
+        if (this.timer?.at === at) this.timer = undefined
+        this.onTimer?.()
+      }),
+    }
+  }
+
+  /** The view runtime's context (function views read through it). */
+  get context(): RuleContext {
+    return this.ctx
   }
 }
 
-/** A member's cached contribution: its rows (as interned ids), its timestamp, whether it is in the window. */
-interface MemberState {
+const sameTerm = (a: Term | undefined, b: Term | undefined) => (!a && !b) || (!!a && !!b && a.equals(b))
+
+/** A partition's cached contribution: its rows (as interned ids), its timestamp, whether it is in the window. */
+interface PartitionState {
+  key: Term[]
   rows: number[][]
   t?: number
   inWindow: boolean
 }
 
+type Row = Map<string, Term>
+
 const rowKey = (ids: readonly number[]) => ids.join(',')
 
-class MaintainedView implements ViewHandle {
-  readonly figures: ViewFigures = { ticks: 0, rowsIn: 0, rowsOut: 0, ms: 0, lastRows: 0, lastMs: 0 }
+/** What happened in a tick, for the delta log. */
+interface Happened {
+  appended: number
+  retired: number
+  changed: number
+  expired: number
+  groups: { key: string; before?: Term; after?: Term }[]
+  rowsIn: number
+  rowsOut: number
+}
+
+/** One part's state: its partitions, and what its operator holds. */
+class PartState {
+  partitions = new Map<string, PartitionState>()
+  /** Stream parts without exact dependencies: member IRI -> its partition keys (for the member closure). */
+  byMember = new Map<string, Set<string>>()
+  partitionRows = 0
+  groups = new Map<string, Group>()
+  /** GROUP BY: each group's emitted row. */
+  emitted = new Map<string, Row>()
+  /** Bag / DISTINCT: output rows with their weight. */
+  counts = new Map<string, { row: Row; ids: number[]; n: number }>()
+  /** Window: (timestamp, partition key) in time order. */
+  order: { t: number; key: string }[] = []
+  post: PostCache
+  slotIndex: Map<string, number>
+
+  constructor(
+    readonly part: Part,
+    readonly view: MaintainedView,
+  ) {
+    this.slotIndex = new Map(part.slots.map((s, i) => [s, i]))
+    this.post = new PostCache(view, part.post)
+  }
+
+  get rt() {
+    return this.view.rt
+  }
+
+  /** Every partition anew (start, rebuild). */
+  all(now: number, happened: Happened): ZSet<Row> {
+    return this.update(undefined, now, happened)
+  }
+
+  /**
+   * The partitions this tick's change touches (by key string; a key with undefined parts is a
+   * slice: every partition that agrees with the rest); 'all' when it reaches every one.
+   */
+  touched(changes: Delta): Map<string, (Term | undefined)[]> | 'all' {
+    const p = this.part
+    const touched = new Map<string, (Term | undefined)[]>()
+    if (p.deps) {
+      const lookup = this.rt.lookup(changes.remove, this.view.readsViews)
+      const candidates = new Map<string, (Term | undefined)[]>()
+      for (const q of [...changes.remove, ...changes.add]) {
+        for (const pat of p.deps.route(q)) {
+          const keys = p.deps.probe(pat, q, lookup)
+          if (keys === 'global') return 'all'
+          for (const k of keys) candidates.set(keyString(k), k)
+        }
+      }
+      // A key that had no rows must now match the patterns over the key alone to have any.
+      const anchors = p.deps.anchors()
+      for (const [k, key] of candidates) {
+        if (this.partitions.has(k) || key.some((t) => !t) || anchors.every((a) => this.anchored(a, key as Term[]))) touched.set(k, key)
+      }
+      return touched
+    }
+    // A stream part written as functions: membership, or a triple of the member or of a node minted under it.
+    const s = p.stream!
+    for (const q of [...changes.remove, ...changes.add]) {
+      if (q.predicate.value === TREE_MEMBER && q.object.termType === 'NamedNode' && (!s.stream || q.subject.value === s.stream)) {
+        const key = s.streamVar ? [q.subject, q.object] : [q.object]
+        touched.set(keyString(key), key)
+        continue
+      }
+      if (q.subject.termType !== 'NamedNode') continue
+      for (let x = q.subject.value; ; ) {
+        for (const k of this.byMember.get(x) ?? []) touched.set(k, this.partitions.get(k)!.key)
+        const o = owningFocus(x)
+        if (o === x) break
+        x = o
+      }
+    }
+    return touched
+  }
+
+  private anchored(a: import('./deps.ts').Pat, key: Term[]): boolean {
+    const keys = this.part.keys
+    const val = (pos: { v: string } | { t: Term }) => ('t' in pos ? pos.t : key[keys.indexOf(pos.v)])
+    const s = val(a.s)
+    const pp = val(a.p as { v: string } | { t: Term })
+    const o = val(a.o)
+    for (const g of this.rt.datasetFor(this.view.readsViews)) if (this.rt.store.match((s ?? null) as never, (pp ?? null) as never, (o ?? null) as never, g as never).length) return true
+    return false
+  }
+
+  /** Partitions by one part of their key: position -> term key -> partition keys (keys of more than one variable). */
+  private byPosition: Map<string, Set<string>>[] = []
+
+  private index(key: string, terms: Term[], w: 1 | -1) {
+    if (terms.length < 2) return
+    terms.forEach((t, i) => {
+      const m = (this.byPosition[i] ??= new Map())
+      const k = termKey(t)
+      let set = m.get(k)
+      if (w > 0) {
+        if (!set) m.set(k, (set = new Set()))
+        set.add(key)
+      } else if (set) {
+        set.delete(key)
+        if (!set.size) m.delete(k)
+      }
+    })
+  }
+
+  /** The cached partitions a slice (a key with undefined parts) covers. */
+  private slice(key: (Term | undefined)[]): string[] {
+    const at = key.findIndex((t) => !!t)
+    if (at < 0) return [...this.partitions.keys()]
+    const candidates = this.byPosition[at]?.get(termKey(key[at]!)) ?? new Set<string>()
+    return [...candidates].filter((k) => {
+      const terms = this.partitions.get(k)!.key
+      return key.every((t, i) => !t || t.equals(terms[i]!))
+    })
+  }
+
+  /** Evaluate partitions (all, or those keyed, or slices of them) and push their change through the operator. */
+  update(keys: Map<string, (Term | undefined)[]> | undefined, now: number, happened: Happened): ZSet<Row> {
+    const p = this.part
+    const terms = this.rt.terms
+    const f = this.rt.store.factory
+    const out = new ZSet<Row>()
+    const dirty = new Set<string>()
+    const enter = (st: PartitionState, w: 1 | -1) => {
+      for (const r of st.rows) this.enter(r, w, dirty, out)
+      happened.rowsIn += st.rows.length
+    }
+    const release = (st: PartitionState) => {
+      for (const r of st.rows) for (const id of r) terms.release(id)
+    }
+    let evaluated: Map<string, Row[]>
+    let visit: Set<string>
+    if (keys === undefined) {
+      evaluated = p.local(undefined)
+      visit = new Set([...this.partitions.keys(), ...evaluated.keys()])
+    } else {
+      let batch = [...keys.values()]
+      // Function parts: only current members are evaluated (a retired member has no rows).
+      if (!p.deps && p.stream) batch = batch.filter((k) => this.rt.members(p.stream!.streamVar ? k[0]!.value : p.stream!.stream, k[k.length - 1]!.value).length)
+      evaluated = batch.length ? p.local(batch as Term[][]) : new Map()
+      visit = new Set()
+      for (const [k, key] of keys) {
+        if (key.every((t) => !!t)) visit.add(k)
+        else for (const c of this.slice(key)) visit.add(c)
+      }
+      for (const k of evaluated.keys()) visit.add(k)
+    }
+    this.view.rt.totals.partitions += keys === undefined ? evaluated.size : visit.size
+    this.view.figures.partitions += keys === undefined ? evaluated.size : visit.size
+    const cutoff = p.window ? now - p.window.rangeMs : -Infinity
+    for (const key of visit) {
+      const old = this.partitions.get(key)
+      const found = evaluated.get(key)
+      let next: PartitionState | undefined
+      if (found?.length) {
+        const ids = found.map((row) => p.slots.map((s) => terms.id(row.get(s))))
+        const keyTerms = old?.key ?? p.keys.map((k) => found[0]!.get(k)!)
+        const member = p.stream ? (keyTerms[keyTerms.length - 1] as NamedNode) : undefined
+        const t = p.window && member ? this.rt.timestamp(member, p.window.timeBy) : undefined
+        next = { key: keyTerms, rows: ids, t, inWindow: !p.window || (t !== undefined && t >= cutoff) }
+        if (old && old.inWindow === next.inWindow && old.t === next.t && sameRows(old.rows, ids)) continue
+        for (const r of ids) for (const id of r) terms.retain(id)
+      }
+      if (!old && !next) continue
+      happened[old && next ? 'changed' : next ? 'appended' : 'retired']++
+      if (old?.inWindow) enter(old, -1)
+      if (old) release(old), (this.partitionRows -= old.rows.length)
+      if (next) {
+        if (!old && !p.deps) {
+          const m = next.key[next.key.length - 1]!.value
+          let ks = this.byMember.get(m)
+          if (!ks) this.byMember.set(m, (ks = new Set()))
+          ks.add(key)
+        }
+        this.partitionRows += next.rows.length
+        if (!old) this.index(key, next.key, 1)
+        this.partitions.set(key, next)
+        if (next.inWindow) enter(next, 1)
+        if (p.window && next.inWindow && next.t !== undefined) insertOrdered(this.order, { t: next.t, key })
+      } else if (old) {
+        this.partitions.delete(key)
+        this.index(key, old.key, -1)
+        if (!p.deps) {
+          const m = old.key[old.key.length - 1]!.value
+          const ks = this.byMember.get(m)
+          ks?.delete(key)
+          if (!ks?.size) this.byMember.delete(m)
+        }
+      }
+    }
+    // Expiry: partitions whose timestamp left the window.
+    if (p.window) {
+      while (this.order.length && this.order[0]!.t < cutoff) {
+        const { key, t } = this.order.shift()!
+        const st = this.partitions.get(key)
+        if (st?.inWindow && st.t === t) {
+          enter(st, -1)
+          st.inWindow = false
+          happened.expired++
+        }
+      }
+    }
+    terms.sweep()
+    if (p.op.k === 'group') this.groupOutput(dirty, out, happened, f)
+    return this.post.map(out)
+  }
+
+  /** A partition row enters (w = 1) or leaves (-1) the operator. */
+  private enter(r: number[], w: 1 | -1, dirty: Set<string>, out: ZSet<Row>) {
+    const p = this.part
+    const terms = this.rt.terms
+    const op = p.op
+    if (op.k === 'group') {
+      const gIds = op.groupBy.map((v) => r[this.slotIndex.get(v)!]!)
+      const gk = rowKey(gIds)
+      let g = this.groups.get(gk)
+      if (!g) {
+        gIds.forEach((id) => terms.retain(id))
+        this.groups.set(gk, (g = newGroup(gIds, op.aggregates)))
+      }
+      g.rows += w
+      op.aggregates.forEach((a, i) => accumulate(terms, a, g!.accs[i]!, a.slot === '*' ? 0 : r[this.slotIndex.get(a.slot)!]!, w))
+      dirty.add(gk)
+      return
+    }
+    // Bag and DISTINCT: the row projected on the part's variables.
+    const ids = p.vars.map((v) => r[this.slotIndex.get(v)!]!)
+    const k = rowKey(ids)
+    let c = this.counts.get(k)
+    if (!c) {
+      const row: Row = new Map()
+      p.vars.forEach((v, i) => {
+        const t = terms.term(ids[i]!)
+        if (t) row.set(v, t)
+      })
+      ids.forEach((id) => terms.retain(id))
+      this.counts.set(k, (c = { row, ids, n: 0 }))
+    }
+    const before = c.n
+    c.n += w
+    if (op.k === 'bag') out.add(mapKey(c.row), c.row, w)
+    else if (before === 0 && c.n > 0) out.add(mapKey(c.row), c.row, 1)
+    else if (before > 0 && c.n === 0) out.add(mapKey(c.row), c.row, -1)
+    if (c.n === 0) {
+      c.ids.forEach((id) => terms.release(id))
+      this.counts.delete(k)
+    }
+  }
+
+  /** The groups that changed: their old rows out, their new rows in. */
+  private groupOutput(dirty: Set<string>, out: ZSet<Row>, happened: Happened, f: import('../store/types.ts').Factory) {
+    const op = this.part.op as Extract<Part['op'], { k: 'group' }>
+    const terms = this.rt.terms
+    // Every query with aggregates and no GROUP BY has its one group, even empty (COUNT 0).
+    if (!op.groupBy.length && !this.groups.has('')) {
+      this.groups.set('', newGroup([], op.aggregates))
+      dirty.add('')
+    }
+    for (const gk of dirty) {
+      const g = this.groups.get(gk)!
+      const before = this.emitted.get(gk)
+      let row: Row | undefined
+      if (g.rows > 0 || !op.groupBy.length) {
+        row = new Map()
+        op.groupBy.forEach((v, i) => {
+          const t = terms.term(g.ids[i]!)
+          if (t) row!.set(v, t)
+        })
+        op.aggregates.forEach((a, i) => {
+          const t = result(f, terms, a, g.accs[i]!)
+          if (t) row!.set(a.as, t)
+        })
+      } else {
+        g.ids.forEach((id) => terms.release(id))
+        this.groups.delete(gk)
+      }
+      const rk = row ? mapKey(row) : undefined
+      if ((before && rk === mapKey(before)) || (!before && !row)) continue
+      const first = op.aggregates.find((a) => !a.as.startsWith('__'))?.as ?? op.aggregates[0]?.as
+      happened.groups.push({ key: groupLabel(op.groupBy.map((v) => (row ?? before!).get(v))) || first || '', before: first ? before?.get(first) : undefined, after: first ? row?.get(first) : undefined })
+      if (before) out.add(mapKey(before), before, -1), this.emitted.delete(gk)
+      if (row) out.add(rk!, row, 1), this.emitted.set(gk, row)
+    }
+  }
+
+  /** The part's current output (its integral). */
+  current(): ZSet<Row> {
+    const z = new ZSet<Row>()
+    if (this.part.op.k === 'group') for (const r of this.emitted.values()) z.add(mapKey(r), r, 1)
+    else for (const c of this.counts.values()) z.add(mapKey(c.row), c.row, this.part.op.k === 'bag' ? c.n : 1)
+    return this.post.current(z)
+  }
+
+  reset() {
+    const terms = this.rt.terms
+    for (const st of this.partitions.values()) for (const r of st.rows) for (const id of r) terms.release(id)
+    for (const g of this.groups.values()) for (const id of g.ids) terms.release(id)
+    for (const c of this.counts.values()) for (const id of c.ids) terms.release(id)
+    this.partitions.clear()
+    this.byPosition = []
+    this.byMember.clear()
+    this.partitionRows = 0
+    this.groups.clear()
+    this.emitted.clear()
+    this.counts.clear()
+    this.order = []
+    this.post.clear()
+  }
+
+  stateRows(): number {
+    return this.partitionRows + this.groups.size + this.counts.size + this.order.length + this.post.size
+  }
+
+  footprint(): Record<string, number> {
+    let acc = 0
+    for (const g of this.groups.values()) for (const a of g.accs) acc += accSize(a)
+    return { members: this.partitions.size, byMember: this.byMember.size, memberRows: this.partitionRows, groups: this.groups.size, accumulators: acc, counts: this.counts.size, window: this.order.length, post: this.post.size }
+  }
+}
+
+/**
+ * Expressions over rows (BIND, FILTER), evaluated by the store for every new row of a tick in one
+ * query, and cached while the row is in (so its retraction is exact).
+ */
+class PostCache {
+  private cache = new Map<string, { out?: Row; n: number }>()
+
+  constructor(
+    private readonly view: MaintainedView,
+    private readonly post: Post | undefined,
+  ) {}
+
+  get size() {
+    return this.cache.size
+  }
+
+  clear() {
+    this.cache.clear()
+  }
+
+  map(delta: ZSet<Row>): ZSet<Row> {
+    if (!this.post) return delta
+    const fresh: [string, Row][] = []
+    for (const [k, r, w] of delta.entries()) if (w > 0 && !this.cache.has(k)) fresh.push([k, r])
+    if (fresh.length) {
+      const results = this.view.evaluate(this.post, fresh.map(([, r]) => r))
+      fresh.forEach(([k], i) => this.cache.set(k, { out: results[i], n: 0 }))
+    }
+    const out = new ZSet<Row>()
+    for (const [k, , w] of delta.entries()) {
+      const c = this.cache.get(k)
+      if (!c) throw new Error(`view <${this.view.iri}>: a row left that never came in`)
+      c.n += w
+      if (c.out) out.add(mapKey(c.out), c.out, w)
+      if (c.n <= 0) this.cache.delete(k)
+    }
+    return out
+  }
+
+  current(z: ZSet<Row>): ZSet<Row> {
+    if (!this.post) return z
+    const out = new ZSet<Row>()
+    for (const [k, , w] of z.entries()) {
+      const c = this.cache.get(k)
+      if (c?.out) out.add(mapKey(c.out), c.out, w)
+    }
+    return out
+  }
+}
+
+/** ORDER BY with LIMIT / OFFSET: every candidate row in an ordered multiset; the rows inside [offset, offset + limit) are the output. */
+class TopKState {
+  set: OrderedMultiset<{ row: Row; key: string }>
+  /** Rows now in the window, with how many of their copies. */
+  window = new Map<string, { row: Row; n: number }>()
+  /** Each window row's position (1-based, first copy). */
+  positions = new Map<string, number>()
+
+  constructor(
+    private spec: NonNullable<MaintainedPlan['topk']>,
+    terms: Terms,
+  ) {
+    const order = spec.order
+    this.set = new OrderedMultiset((a, b) => {
+      for (const o of order) {
+        const c = compareOrder(terms, a.row.get(o.slot), b.row.get(o.slot))
+        if (c) return o.desc ? -c : c
+      }
+      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
+    })
+  }
+
+  retune(spec: NonNullable<MaintainedPlan['topk']>) {
+    this.spec = { ...this.spec, limit: spec.limit, offset: spec.offset }
+  }
+
+  get bounds(): [number, number] {
+    const from = this.spec.offset
+    return [from, this.spec.limit === undefined ? Infinity : from + this.spec.limit]
+  }
+
+  /** Apply a change of candidates; returns the change of the window. */
+  apply(delta: ZSet<Row>, force = false): ZSet<Row> {
+    const [, to] = this.bounds
+    let reaches = force
+    for (const [key, row, w] of delta.entries()) {
+      const at = this.set.add({ row, key }, w)
+      if (at < to) reaches = true
+    }
+    if (!reaches) return new ZSet()
+    return this.refresh()
+  }
+
+  /** Read the window again; returns its change. */
+  refresh(): ZSet<Row> {
+    const [from, to] = this.bounds
+    const next = new Map<string, { row: Row; n: number }>()
+    const positions = new Map<string, number>()
+    let pos = from
+    for (const { value, n } of this.set.range(from, Math.min(to, this.set.size))) {
+      next.set(value.key, { row: value.row, n })
+      positions.set(value.key, pos - from + 1)
+      pos += n
+    }
+    const out = new ZSet<Row>()
+    for (const [k, e] of this.window) out.add(k, e.row, -e.n)
+    for (const [k, e] of next) out.add(k, e.row, e.n)
+    this.window = next
+    this.positions = positions
+    return out
+  }
+
+  clear() {
+    this.set.clear()
+    this.window.clear()
+    this.positions.clear()
+  }
+}
+
+/** SPARQL's ORDER BY order: unbound, blank nodes, IRIs, literals; numbers by value, dates by time, then text. */
+function compareOrder(terms: Terms, a: Term | undefined, b: Term | undefined): number {
+  if (!a || !b) return a ? 1 : b ? -1 : 0
+  return compareTerms(terms, terms.id(a), terms.id(b))
+}
+
+export class MaintainedView implements ViewHandle {
+  readonly figures: ViewFigures = { ticks: 0, rowsIn: 0, rowsOut: 0, ms: 0, lastRows: 0, lastMs: 0, partitions: 0, rebuilds: 0 }
   sampledAt?: number
   /** iv:deltaLog: the stream this view's ticks are recorded in, and the members it holds there. */
   deltaLog?: string
   private deltas: Quad[][] = []
   /** iv:whileShown: maintained only while this component (or an instance of this class) is shown. */
   whileShown?: string
+  /** iv:materialize iv:Graph: a SELECT view writes its rows to the views graph (rs:). */
+  materialize = false
+  /** iv:reads: the views whose output it reads (it steps after them, and sees the views graph). */
+  reads: string[] = []
+  readsViews = false
+  params: Param[] = []
+  paramNodes: Term[] = []
   suspended = false
-  private members = new Map<string, MemberState>()
-  /** Member IRI -> its (stream, member) keys, to find the partitions a changed triple belongs to. */
-  private byMember = new Map<string, Set<string>>()
-  private memberRows = 0
-  private groups = new Map<string, Group>()
-  /** Each group's emitted row and, for CONSTRUCT views, its triples. */
-  private emitted = new Map<string, { row: Map<string, Term>; quads: Quad[] }>()
-  /** Window: (timestamp, member key) in time order. */
-  private order: { t: number; key: string }[] = []
-  private recomputed?: Map<string, Quad> | Map<string, Map<string, Term>>
+  private parts: PartState[] = []
+  private topk?: TopKState
+  private orderPost?: PostCache
+  private post?: PostCache
+  /** Output rows (after everything) with weights; CONSTRUCT: each row's triples. */
+  private outRows = new Map<string, { row: Row; n: number; quads: Quad[] }>()
+  /** Materialized SELECT: each row's node and the index written for it. */
+  private written = new Map<string, { quads: Quad[]; index?: number; node: NamedNode }>()
+  /** Materialized SELECT: the result set's own triples (written once it is evaluated, even with no rows). */
+  private header?: Quad[]
+  private recomputed?: Map<string, Quad> | Map<string, Row>
   private listeners: ((d: ViewDelta) => void)[] = []
-  private slots: string[]
   private readonly activity: NamedNode
 
   constructor(
-    private readonly rt: ViewRuntime,
-    readonly iri: string,
-    readonly plan: ViewPlan,
+    readonly rt: ViewRuntime,
+    readonly def: Definition,
+    public plan: ViewPlan,
     readonly window?: string,
   ) {
-    this.slots = plan.kind === 'stream-aggregate' ? [...plan.groupBy, ...plan.aggregates.map((a) => a.slot).filter((s) => s !== '*')] : []
-    this.activity = rt.store.factory.namedNode(mint(iri, 'activity'))
+    this.activity = rt.store.factory.namedNode(mint(def.iri, 'activity'))
+    this.build()
+  }
+
+  get iri() {
+    return this.def.iri
+  }
+
+  private build() {
+    const plan = this.plan
+    if (plan.kind !== 'maintained') return
+    this.parts = plan.parts.map((p) => new PartState(p, this))
+    this.topk = plan.topk ? new TopKState(plan.topk, this.rt.terms) : undefined
+    this.orderPost = plan.orderPost ? new PostCache(this, plan.orderPost) : undefined
+    this.post = plan.post ? new PostCache(this, plan.post) : undefined
   }
 
   get strategy() {
@@ -526,6 +1271,19 @@ class MaintainedView implements ViewHandle {
 
   get fallback() {
     return this.plan.kind === 'recompute' ? this.plan.reason : undefined
+  }
+
+  /** A parameter changed only LIMIT / OFFSET: move the window; false when the plan must be built again. */
+  retune(next: ViewPlan, params: Param[], out: ZSet<Quad>, now: number): boolean {
+    const plan = this.plan
+    if (plan.kind !== 'maintained' || next.kind !== 'maintained' || next.signature !== plan.signature || !plan.topk || !next.topk || !this.topk) return false
+    this.params = params
+    this.plan = next
+    this.topk.retune(next.topk)
+    const happened = blank()
+    out.plus(this.output(this.topk.refresh(), happened, now, true))
+    out.plus(this.planQuads())
+    return true
   }
 
   /** The plan as data: the view's strategy, its operators, and its PROV-O activity. */
@@ -542,18 +1300,27 @@ class MaintainedView implements ViewHandle {
     t(v, IV + 'strategy', nn(IV + (this.plan.kind === 'recompute' ? 'Recompute' : 'Incremental')))
     t(this.activity, RDF_TYPE, nn(PROV.Activity))
     t(this.activity, PROV.used, v)
+    if (this.def.focus) {
+      t(v, IV + 'instanceOf', nn(this.def.node))
+      t(v, IV + 'focus', nn(this.def.focus))
+    }
     if (this.plan.kind === 'recompute') {
       t(v, IV + 'fallback', f.literal(this.plan.reason))
       return out
     }
     const p = this.plan
-    if (p.stream) t(this.activity, PROV.used, nn(p.stream))
-    const ops: [string, string, string?][] = [
-      ['Partition', p.algebra.local, '?' + p.memberVar],
-      ...(p.window ? ([['Expire', `Window(${p.window.rangeMs} ms on <${p.window.timeBy}>)`]] as [string, string][]) : []),
-      ['Group', p.algebra.group],
-      ...(p.algebra.output ? ([['Sink', p.algebra.output]] as [string, string][]) : []),
-    ]
+    const ops: [string, string, string?][] = []
+    for (const part of p.parts) {
+      if (part.stream?.stream) t(this.activity, PROV.used, nn(part.stream.stream))
+      ops.push(['Partition', part.algebra.local, part.keys.length ? part.keys.map((k) => '?' + k).join(' ') : '()'])
+      if (part.window) ops.push(['Expire', `Window(${part.window.rangeMs} ms on <${part.window.timeBy}>)`])
+      ops.push([part.op.k === 'group' ? 'Group' : part.op.k === 'distinct' ? 'Distinct' : 'Project', part.algebra.op])
+      if (part.algebra.post) ops.push(['Extend', part.algebra.post])
+    }
+    if (p.parts.length > 1) ops.push(['Union', `Union(${p.parts.length} parts)`])
+    if (p.algebra.topk) ops.push(['TopK', p.algebra.topk])
+    if (p.algebra.post) ops.push(['Extend', p.algebra.post])
+    ops.push(['Sink', p.algebra.output ?? (this.materialize ? 'Rows(rs:)' : 'Rows')])
     let prev: NamedNode | undefined
     ops.forEach(([kind, algebra, key], i) => {
       const op = nn(mint(this.iri, `op-${i + 1}`))
@@ -571,191 +1338,166 @@ class MaintainedView implements ViewHandle {
   /** Evaluate from the current inputs (start, or after a redefinition). */
   initial(now: number): ZSet<Quad> {
     if (this.plan.kind === 'recompute') return this.recompute(true) ?? new ZSet()
-    const touched = new Set(this.rt.members(this.plan.stream).map((m) => m.stream.value + ' ' + m.member.value))
-    return this.update(touched, now, true) ?? new ZSet()
+    const happened = blank()
+    const union = new ZSet<Row>()
+    for (const ps of this.parts) union.plus(ps.all(now, happened))
+    return this.output(this.ordered(union), happened, now, true)
   }
 
   /** One tick; undefined when the view had nothing to do. */
   step(changes: Delta, now: number): ZSet<Quad> | undefined {
     if (this.plan.kind === 'recompute') return changes.add.length || changes.remove.length ? this.recompute(false) : undefined
-    const p = this.plan
-    // Members whose partition changed: membership, or a triple of the member or of a node minted under it.
-    const touched = new Set<string>()
-    const byMember = this.byMember
-    for (const q of [...changes.remove, ...changes.add]) {
-      if (q.predicate.value === TREE_MEMBER && q.object.termType === 'NamedNode' && (!p.stream || q.subject.value === p.stream)) {
-        touched.add(q.subject.value + ' ' + q.object.value)
-        continue
-      }
-      if (q.subject.termType !== 'NamedNode') continue
-      for (let s = q.subject.value; ; ) {
-        for (const k of byMember.get(s) ?? []) touched.add(k)
-        const o = owningFocus(s)
-        if (o === s) break
-        s = o
-      }
+    const t0 = performance.now()
+    const happened = blank()
+    const union = new ZSet<Row>()
+    let any = false
+    for (const ps of this.parts) {
+      const touched = changes.add.length || changes.remove.length ? ps.touched(changes) : new Map<string, (Term | undefined)[]>()
+      const expiring = ps.part.window && ps.order.length && ps.order[0]!.t < now - ps.part.window.rangeMs
+      if (touched !== 'all' && !touched.size && !expiring) continue
+      any = true
+      if (touched === 'all') {
+        this.figures.rebuilds++
+        this.rt.totals.rebuilds++
+        union.plus(ps.update(undefined, now, happened))
+      } else union.plus(ps.update(touched, now, happened))
     }
-    const expiring = p.window && this.order.length && this.order[0]!.t < now - p.window.rangeMs
-    if (!touched.size && !expiring) return undefined
-    return this.update(touched, now, false)
+    if (!any) return undefined
+    const out = this.output(this.ordered(union), happened, now, false)
+    const ms = performance.now() - t0
+    const work = happened.rowsIn + happened.groups.length + happened.rowsOut
+    this.figures.ticks++
+    this.figures.rowsIn += happened.rowsIn + happened.groups.length
+    this.figures.rowsOut += happened.rowsOut
+    this.figures.ms += ms
+    this.figures.lastRows = work
+    this.figures.lastMs = ms
+    this.rt.totals.rowsIn += work
+    if (this.deltaLog && (happened.groups.length || happened.rowsIn || happened.rowsOut)) this.logDelta(out, now, happened, work)
+    return out
   }
 
-  private update(touched: Set<string>, now: number, initial: boolean): ZSet<Quad> | undefined {
-    const p = this.plan as StreamAggregatePlan
-    const t0 = performance.now()
-    const terms = this.rt.terms
-    const f = this.rt.store.factory
-    let rows = 0
-    const dirty = new Set<string>()
-    const enter = (st: MemberState, w: 1 | -1) => {
-      for (const r of st.rows) {
-        const gk = rowKey(r.slice(0, p.groupBy.length))
-        let g = this.groups.get(gk)
-        if (!g) {
-          const ids = r.slice(0, p.groupBy.length)
-          ids.forEach((id) => terms.retain(id))
-          this.groups.set(gk, (g = newGroup(ids, p.aggregates)))
-        }
-        g.rows += w
-        p.aggregates.forEach((a, i) => accumulate(terms, a, g!.accs[i]!, a.slot === '*' ? 0 : r[this.slots.indexOf(a.slot)]!, w))
-        dirty.add(gk)
-        rows++
-      }
-    }
-    const release = (st: MemberState) => {
-      for (const r of st.rows) for (const id of r) terms.release(id)
-    }
-    // Which touched members still belong, and what they contribute now.
-    const current = new Map<string, { stream: NamedNode; member: NamedNode }>()
-    for (const key of touched) {
-      const i = key.indexOf(' ')
-      const stream = key.slice(0, i)
-      const member = key.slice(i + 1)
-      if (this.rt.members(stream, member).length) current.set(key, { stream: f.namedNode(stream), member: f.namedNode(member) })
-    }
-    const evaluated = current.size ? p.local([...current.values()]) : new Map<string, Map<string, Term>[]>()
-    const cutoff = p.window ? now - p.window.rangeMs : -Infinity
-    /** What happened to members this tick, for the delta log. */
-    const happened = { appended: 0, retired: 0, changed: 0, expired: 0 }
-    for (const key of touched) {
-      const old = this.members.get(key)
-      const cur = current.get(key)
-      let next: MemberState | undefined
-      if (cur) {
-        const found = evaluated.get(key) ?? []
-        const ids = found.map((row) => this.slots.map((s) => terms.id(row.get(s))))
-        const t = p.window ? this.rt.timestamp(cur.member, p.window.timeBy) : undefined
-        next = { rows: ids, t, inWindow: !p.window || (t !== undefined && t >= cutoff) }
-        if (old && old.inWindow === next.inWindow && old.t === next.t && sameRows(old.rows, ids)) continue
-        for (const r of ids) for (const id of r) terms.retain(id)
-      }
-      happened[old && next ? 'changed' : next ? 'appended' : 'retired']++
-      if (old?.inWindow) enter(old, -1)
-      if (old) release(old), (this.memberRows -= old.rows.length)
-      if (next) {
-        if (!old) {
-          const m = key.slice(key.indexOf(' ') + 1)
-          let keys = this.byMember.get(m)
-          if (!keys) this.byMember.set(m, (keys = new Set()))
-          keys.add(key)
-        }
-        this.memberRows += next.rows.length
-        this.members.set(key, next)
-        if (next.inWindow) enter(next, 1)
-        if (p.window && next.inWindow && next.t !== undefined) insertOrdered(this.order, { t: next.t, key })
-      } else if (old) {
-        this.members.delete(key)
-        const m = key.slice(key.indexOf(' ') + 1)
-        const keys = this.byMember.get(m)
-        keys?.delete(key)
-        if (!keys?.size) this.byMember.delete(m)
-      }
-    }
-    // Expiry: members whose timestamp left the window.
-    if (p.window) {
-      while (this.order.length && this.order[0]!.t < cutoff) {
-        const { key, t } = this.order.shift()!
-        const st = this.members.get(key)
-        if (st?.inWindow && st.t === t) {
-          enter(st, -1)
-          st.inWindow = false
-          happened.expired++
-        }
-      }
-    }
-    terms.sweep()
-    // Every group with no GROUP BY exists even when empty (COUNT 0).
-    if (!p.groupBy.length && !this.groups.has('')) {
-      this.groups.set('', newGroup([], p.aggregates))
-      dirty.add('')
-    }
+  /** The union of the parts, through ORDER BY's keys and the top-k. */
+  private ordered(union: ZSet<Row>, force = false): ZSet<Row> {
+    if (!this.topk) return union
+    const keyed = this.orderPost ? this.orderPost.map(union) : union
+    return this.topk.apply(keyed, force)
+  }
+
+  /** Expressions after the top-k, then the output: CONSTRUCT triples, or SELECT rows. */
+  private output(delta: ZSet<Row>, happened: Happened, now: number, initial: boolean): ZSet<Quad> {
+    void now
+    void initial
+    const plan = this.plan as MaintainedPlan
+    const rows = this.post ? this.post.map(delta) : delta
     const out = new ZSet<Quad>()
-    const rowDelta = new ZSet<Map<string, Term>>()
-    let outRows = 0
-    const changes: { key: string; before?: Term; after?: Term }[] = []
-    for (const gk of dirty) {
-      const g = this.groups.get(gk)!
-      const before = this.emitted.get(gk)
-      let row: Map<string, Term> | undefined
-      if (g.rows > 0 || !p.groupBy.length) {
-        row = new Map()
-        p.groupBy.forEach((v, i) => {
-          const t = terms.term(g.ids[i]!)
-          if (t) row!.set(v, t)
-        })
-        p.aggregates.forEach((a, i) => {
-          const t = result(f, terms, a, g.accs[i]!)
-          if (t) row!.set(a.as, t)
-        })
-      } else {
-        g.ids.forEach((id) => terms.release(id))
-        this.groups.delete(gk)
+    const rowDelta = new ZSet<Row>()
+    const f = this.rt.store.factory
+    for (const [k0, r0, w] of rows.entries()) {
+      // SELECT: the projected variables; CONSTRUCT: the template over every variable.
+      const row = plan.form === 'select' ? project(r0, plan.vars) : r0
+      const k = plan.form === 'select' ? mapKey(row) : k0
+      let e = this.outRows.get(k)
+      if (!e) {
+        const quads = plan.form === 'construct' ? this.withProvenance(plan.output ? plan.output(row) : instantiate(f, plan.template ?? [], row, this.rt.graph)) : []
+        this.outRows.set(k, (e = { row, n: 0, quads }))
       }
-      const rk = row ? mapKey(row) : undefined
-      if ((before && rk === mapKey(before.row)) || (!before && !row)) continue
-      const first = p.aggregates[0]?.as
-      changes.push({ key: groupLabel(p.groupBy.map((v) => (row ?? before!.row).get(v))) || first || '', before: first ? before?.row.get(first) : undefined, after: first ? row?.get(first) : undefined })
-      if (before) {
-        rowDelta.add(mapKey(before.row), before.row, -1)
-        for (const q of before.quads) out.add(quadKey(q), q, -1)
-        this.emitted.delete(gk)
-        outRows++
-      }
-      if (row) {
-        rowDelta.add(rk!, row, 1)
-        const quads = p.output ? this.withProvenance(p.output(row)) : []
-        for (const q of quads) out.add(quadKey(q), q, 1)
-        this.emitted.set(gk, { row, quads })
-        outRows++
-      }
+      e.n += w
+      happened.rowsOut += Math.abs(w)
+      rowDelta.add(k, row, w)
+      for (const q of e.quads) out.add(quadKey(q), q, w)
+      if (e.n <= 0) this.outRows.delete(k)
     }
-    const ms = performance.now() - t0
-    if (!initial) {
-      this.figures.ticks++
-      this.figures.rowsIn += rows + dirty.size
-      this.figures.rowsOut += outRows
-      this.figures.ms += ms
-      this.figures.lastRows = rows + dirty.size + outRows
-      this.figures.lastMs = ms
-      this.rt.totals.rowsIn += rows + dirty.size + outRows
-      if (this.deltaLog && (changes.length || rows)) this.logDelta(out, now, happened, changes, this.figures.lastRows)
-    }
+    if (plan.form === 'select' && this.materialize) this.writeRows(out)
     this.notify(rowDelta, out)
     return out
   }
 
   /**
-   * iv:deltaLog: one member per tick that changed the view - what came in (members appended,
+   * A materialized SELECT's rows in the views graph, in the W3C result-set vocabulary:
+   *   <view> a rs:ResultSet ; rs:resultVariable "v"… ; rs:solution <row> .
+   *   <row> rs:binding <row>-v ; rs:index n (ORDER BY only) .   <row>-v rs:variable "v" ; rs:value ?value .
+   * A row's node is keyed by its values (stable while they are), minted under the view - or,
+   * for an instance of a template, under its focus, so rules on the focus can read it.
+   */
+  private writeRows(out: ZSet<Quad>) {
+    const plan = this.plan as MaintainedPlan
+    const f = this.rt.store.factory
+    const nn = (x: string) => f.namedNode(x)
+    const g = this.rt.graph
+    const base = nn(this.iri)
+    const int = (n: number) => f.literal(String(n), nn(NS.xsd + 'integer'))
+    if (!this.header) {
+      this.header = [f.quad(base, nn(RDF_TYPE), nn(RS + 'ResultSet'), g), ...plan.vars.map((v) => f.quad(base, nn(RS + 'resultVariable'), f.literal(v), g))]
+      for (const q of this.header) out.add(quadKey(q), q, 1)
+    }
+    const seen = new Set<string>()
+    for (const [k, e] of this.outRows) {
+      seen.add(k)
+      const index = this.topk ? this.topkIndex(e.row) : undefined
+      const had = this.written.get(k)
+      if (had && had.index === index) continue
+      if (had) {
+        if (had.index !== undefined) out.add(quadKey(f.quad(had.node, nn(RS + 'index'), int(had.index), g)), f.quad(had.node, nn(RS + 'index'), int(had.index), g), -1)
+        if (index !== undefined) out.add(quadKey(f.quad(had.node, nn(RS + 'index'), int(index), g)), f.quad(had.node, nn(RS + 'index'), int(index), g), 1)
+        had.index = index
+        continue
+      }
+      const node = nn(this.iri + (this.iri.includes('/~') ? '-' : '/~row-') + md5(k).slice(0, 12))
+      const quads = [f.quad(base, nn(RS + 'solution'), node, g)]
+      for (const [v, t] of e.row) {
+        const b = nn(node.value + '-' + v)
+        quads.push(f.quad(node, nn(RS + 'binding'), b, g), f.quad(b, nn(RS + 'variable'), f.literal(v), g), f.quad(b, nn(RS + 'value'), t, g))
+      }
+      if (e.n > 1) quads.push(f.quad(node, nn(IV + 'multiplicity'), int(e.n), g))
+      for (const q of quads) out.add(quadKey(q), q, 1)
+      if (index !== undefined) out.add(quadKey(f.quad(node, nn(RS + 'index'), int(index), g)), f.quad(node, nn(RS + 'index'), int(index), g), 1)
+      this.written.set(k, { quads, index, node })
+    }
+    for (const [k, w] of [...this.written]) {
+      if (seen.has(k)) continue
+      for (const q of w.quads) out.add(quadKey(q), q, -1)
+      if (w.index !== undefined) out.add(quadKey(f.quad(w.node, nn(RS + 'index'), int(w.index), g)), f.quad(w.node, nn(RS + 'index'), int(w.index), g), -1)
+      this.written.delete(k)
+    }
+  }
+
+  private topkIndex(row: Row): number | undefined {
+    if (!this.topk) return undefined
+    for (const [k, e] of this.topk.window) if (mapKey(project(e.row, (this.plan as MaintainedPlan).vars)) === mapKey(row)) return this.topk.positions.get(k)
+    return undefined
+  }
+
+  index(row: Row): number | undefined {
+    return this.topkIndex(row)
+  }
+
+  /** Evaluate expressions (BIND, FILTER) over rows with the store: one query for all of them. */
+  evaluate(post: Post, rows: Row[]): (Row | undefined)[] {
+    const vars = post.inputs
+    const values = rows.map((r, i) => `(${i} ${vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`).join(' ')
+    const query = `${post.prologue ?? ''}SELECT * WHERE {\n  VALUES (?__i ${vars.map((v) => '?' + v).join(' ')}) { ${values} }\n${post.binds.map((b) => `  BIND(${b.expr} AS ?${b.as})`).join('\n')}\n${post.filters.map((x) => `  FILTER(${x})`).join('\n')}\n}`
+    const out: (Row | undefined)[] = rows.map(() => undefined)
+    for (const r of this.rt.runner(this.readsViews).select(query)) {
+      const i = Number(r.get('__i')!.value)
+      r.delete('__i')
+      out[i] = r
+    }
+    return out
+  }
+
+  /**
+   * iv:deltaLog: one member per tick that changed the view - what came in (partitions appended,
    * retired, changed, aged out of the window), which groups changed and how, and the work it
    * took against what a re-run reads - so a page can show each step. Keeps the newest few
    * (the log's ldes:amount, default 12).
    */
-  private logDelta(out: ZSet<Quad>, now: number, happened: Record<'appended' | 'retired' | 'changed' | 'expired', number>, changes: { key: string; before?: Term; after?: Term }[], work: number) {
+  private logDelta(out: ZSet<Quad>, now: number, happened: Happened, work: number) {
     const f = this.rt.store.factory
     const nn = (x: string) => f.namedNode(x)
     const g = this.rt.graph
     const log = nn(this.deltaLog!)
-    const tick = nn(mint(this.deltaLog!, `${encodeURIComponent(this.iri.replace(/^.*[#/]/, ''))}-${this.rt.tickNo}`))
+    const tick = nn(mint(this.deltaLog!, `${encodeURIComponent(localName(this.iri))}-${this.rt.tickNo}`))
     const int = (n: number) => f.literal(String(n), nn(NS.xsd + 'integer'))
     const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`
     const came = [
@@ -764,8 +1506,10 @@ class MaintainedView implements ViewHandle {
       happened.expired && `−${plural(happened.expired, 'member')} aged out`,
       happened.changed && `${plural(happened.changed, 'member')} changed`,
     ].filter(Boolean)
+    const changes = happened.groups
     const shown = changes.slice(0, 3).map((c) => `${c.key}: ${c.before?.value ?? '–'} → ${c.after?.value ?? '–'}`)
     if (changes.length > 3) shown.push(`${changes.length - 3} more`)
+    if (!changes.length && happened.rowsOut) shown.push(`${plural(happened.rowsOut, 'row')} out`)
     const quads = [
       f.quad(log, nn(NS.tree + 'member'), tick, g),
       f.quad(tick, nn(RDF_TYPE), nn(IV + 'Delta'), g),
@@ -777,7 +1521,7 @@ class MaintainedView implements ViewHandle {
       f.quad(tick, nn(IV + 'entered'), int(happened.appended), g),
       f.quad(tick, nn(IV + 'left'), int(happened.retired + happened.expired), g),
       f.quad(tick, nn(IV + 'work'), int(work), g),
-      f.quad(tick, nn(IV + 'inputRows'), int(this.memberRows), g),
+      f.quad(tick, nn(IV + 'inputRows'), int(this.inputRows()), g),
     ]
     for (const q of quads) out.add(quadKey(q), q, 1)
     this.deltas.push(quads)
@@ -798,9 +1542,9 @@ class MaintainedView implements ViewHandle {
   private recompute(initial: boolean): ZSet<Quad> | undefined {
     const p = this.plan as Extract<ViewPlan, { kind: 'recompute' }>
     const t0 = performance.now()
-    const run = this.rt.runner()
+    const run = this.rt.runner(this.readsViews)
     const out = new ZSet<Quad>()
-    const rowDelta = new ZSet<Map<string, Term>>()
+    const rowDelta = new ZSet<Row>()
     if (p.form === 'construct') {
       const next = new Map(this.withProvenance(run.construct(p.query)).map((q) => [quadKey(q), q]))
       const prev = (this.recomputed as Map<string, Quad> | undefined) ?? new Map()
@@ -808,11 +1552,11 @@ class MaintainedView implements ViewHandle {
       for (const [k, q] of next) if (!prev.has(k)) out.add(k, q, 1)
       this.recomputed = next
     } else {
-      const next = new Map<string, Map<string, Term>>()
-      const counts = new ZSet<Map<string, Term>>()
+      const next = new Map<string, Row>()
+      const counts = new ZSet<Row>()
       for (const r of run.select(p.query)) counts.add(mapKey(r), r, 1)
-      const prev = (this.recomputed as Map<string, Map<string, Term>> | undefined) ?? new Map()
-      const prevCounts = new ZSet<Map<string, Term>>()
+      const prev = (this.recomputed as Map<string, Row> | undefined) ?? new Map()
+      const prevCounts = new ZSet<Row>()
       for (const [k, r] of prev) prevCounts.add(k.slice(k.indexOf('|') + 1), r, 1)
       rowDelta.plus(counts).plus(prevCounts, -1)
       for (const [k, r, w] of counts.entries()) for (let i = 0; i < w; i++) next.set(i + '|' + k, r)
@@ -828,7 +1572,7 @@ class MaintainedView implements ViewHandle {
     return out
   }
 
-  private notify(rows: ZSet<Map<string, Term>>, quads: ZSet<Quad>) {
+  private notify(rows: ZSet<Row>, quads: ZSet<Quad>) {
     if (!this.listeners.length || (!rows.size && !quads.size)) return
     for (const l of this.listeners) l(this.plan.form === 'select' ? { rows } : { quads })
   }
@@ -851,30 +1595,44 @@ class MaintainedView implements ViewHandle {
 
   private reset(out: ZSet<Quad>) {
     for (const q of this.quads()) out.add(quadKey(q), q, -1)
-    for (const st of this.members.values()) for (const r of st.rows) for (const id of r) this.rt.terms.release(id)
-    for (const g of this.groups.values()) for (const id of g.ids) this.rt.terms.release(id)
-    this.members.clear()
-    this.byMember.clear()
-    this.memberRows = 0
-    this.groups.clear()
-    this.emitted.clear()
-    this.order = []
+    if (this.plan.kind === 'maintained' && this.plan.form === 'select') {
+      const f = this.rt.store.factory
+      for (const w of this.written.values()) {
+        for (const q of w.quads) out.add(quadKey(q), q, -1)
+        if (w.index !== undefined) {
+          const q = f.quad(w.node, f.namedNode(RS + 'index'), f.literal(String(w.index), f.namedNode(NS.xsd + 'integer')), this.rt.graph)
+          out.add(quadKey(q), q, -1)
+        }
+      }
+      for (const q of this.header ?? []) out.add(quadKey(q), q, -1)
+      this.header = undefined
+    }
+    this.written.clear()
+    for (const ps of this.parts) ps.reset()
+    this.topk?.clear()
+    this.orderPost?.clear()
+    this.post?.clear()
+    this.outRows.clear()
   }
 
-  rows(): Map<string, Term>[] {
-    if (this.plan.kind === 'recompute') return this.plan.form === 'select' ? [...((this.recomputed as Map<string, Map<string, Term>>) ?? new Map()).values()] : []
-    return [...this.emitted.values()].map((e) => e.row)
+  rows(): Row[] {
+    if (this.plan.kind === 'recompute') return this.plan.form === 'select' ? [...((this.recomputed as Map<string, Row>) ?? new Map()).values()] : []
+    const out: Row[] = []
+    for (const e of this.outRows.values()) for (let i = 0; i < e.n; i++) out.push(e.row)
+    return out
   }
 
   quads(): Quad[] {
     if (this.plan.kind === 'recompute') return this.plan.form === 'construct' ? [...((this.recomputed as Map<string, Quad>) ?? new Map()).values()] : []
-    return [...this.emitted.values()].flatMap((e) => e.quads)
+    const seen = new Map<string, Quad>()
+    for (const e of this.outRows.values()) for (const q of e.quads) seen.set(quadKey(q), q)
+    return [...seen.values()]
   }
 
   subscribe(fn: (d: ViewDelta) => void, opts: { replay?: boolean } = {}): () => void {
     this.listeners.push(fn)
     if (opts.replay) {
-      const rows = new ZSet<Map<string, Term>>()
+      const rows = new ZSet<Row>()
       for (const r of this.rows()) rows.add(mapKey(r), r, 1)
       const quads = new ZSet<Quad>()
       for (const q of this.quads()) quads.add(quadKey(q), q, 1)
@@ -884,37 +1642,46 @@ class MaintainedView implements ViewHandle {
   }
 
   footprint(): Record<string, number> {
-    let rows = 0
-    for (const st of this.members.values()) rows += st.rows.length
-    let acc = 0
-    for (const g of this.groups.values()) for (const a of g.accs) acc += accSize(a)
-    return { members: this.members.size, byMember: this.byMember.size, memberRows: rows, groups: this.groups.size, accumulators: acc, window: this.order.length, recomputed: this.recomputed?.size ?? 0 }
+    const out: Record<string, number> = { recomputed: this.recomputed?.size ?? 0, topk: this.topk?.set.count ?? 0, out: this.outRows.size, written: this.written.size }
+    for (const ps of this.parts) for (const [k, n] of Object.entries(ps.footprint())) out[k] = (out[k] ?? 0) + n
+    return out
   }
 
-  /** Rows of state: cached member rows, groups, window entries (or a recomputed result). */
+  /** Rows of state: partition rows, groups, counts, window entries, cached expressions, top-k candidates (or a recomputed result). */
   stateRows(): number {
-    return this.memberRows + this.groups.size + this.order.length + (this.recomputed?.size ?? 0)
+    let n = (this.recomputed?.size ?? 0) + (this.topk?.set.count ?? 0) + (this.orderPost?.size ?? 0) + (this.post?.size ?? 0)
+    for (const ps of this.parts) n += ps.stateRows()
+    return n
   }
 
-  /** Rows a from-scratch evaluation reads: the stream's members' rows (for the figures). */
+  /** Rows a from-scratch evaluation reads: the partitions' rows (for the figures). */
   inputRows(): number {
-    return this.memberRows
+    let n = 0
+    for (const ps of this.parts) n += ps.partitionRows
+    return n
   }
 
   nextExpiry(): number | undefined {
-    const p = this.plan
-    if (p.kind !== 'stream-aggregate' || !p.window) return undefined
-    for (const { t, key } of this.order) {
-      const st = this.members.get(key)
-      // In the window while t >= now - range: it leaves one millisecond after t + range.
-      if (st?.inWindow && st.t === t) return t + p.window.rangeMs + 1
+    let next: number | undefined
+    for (const ps of this.parts) {
+      const w = ps.part.window
+      if (!w) continue
+      for (const { t, key } of ps.order) {
+        const st = ps.partitions.get(key)
+        // In the window while t >= now - range: it leaves one millisecond after t + range.
+        if (st?.inWindow && st.t === t) {
+          const at = t + w.rangeMs + 1
+          if (next === undefined || at < next) next = at
+          break
+        }
+      }
     }
-    return undefined
+    return next
   }
 
   /** Evaluate the view's query from scratch (the oracle). */
-  fromScratch(now: number): (Quad | Map<string, Term>)[] {
-    const run = this.rt.runner()
+  fromScratch(now: number): (Quad | Row)[] {
+    const run = this.rt.runner(this.readsViews)
     const query = this.plan.kind === 'recompute' ? this.plan.query : this.plan.reference?.(now)
     if (!query) return []
     return this.plan.form === 'construct' ? run.construct(query) : run.select(query)
@@ -932,8 +1699,21 @@ class MaintainedView implements ViewHandle {
       for (const k of new Set((this.fromScratch(now) as Quad[]).filter((q) => !isProv(q)).map(normQuad))) expected.add(k, '', 1)
       for (const k of new Set(this.quads().filter((q) => !isProv(q)).map(normQuad))) actual.add(k, '', 1)
     } else {
-      for (const r of this.fromScratch(now) as Map<string, Term>[]) expected.add(normRow(r), '', 1)
+      const scratch = this.fromScratch(now) as Row[]
+      for (const r of scratch) expected.add(normRow(r), '', 1)
       for (const r of this.rows()) actual.add(normRow(r), '', 1)
+      // Ordered views: positions too, where the order is total (no ties among the expected rows).
+      const plan = this.plan
+      if (plan.kind === 'maintained' && plan.topk && !plan.orderPost && plan.topk.order.every((o) => plan.vars.includes(o.slot))) {
+        const orderKey = (r: Row) => plan.topk!.order.map((o) => (r.get(o.slot) ? termKey(r.get(o.slot)!) : '')).join(' ')
+        const counts = new Map<string, number>()
+        for (const r of scratch) counts.set(orderKey(r), (counts.get(orderKey(r)) ?? 0) + 1)
+        for (let i = 0; i < scratch.length; i++) {
+          if (counts.get(orderKey(scratch[i]!))! > 1) continue
+          const at = this.index(project(scratch[i]!, plan.vars))
+          if (at !== undefined && at !== i + 1) return `row ${normRow(scratch[i]!)} is at ${at}, from scratch at ${i + 1}`
+        }
+      }
     }
     const diff = new ZSet<string>().plus(actual).plus(expected, -1)
     if (!diff.size) return undefined
@@ -941,9 +1721,48 @@ class MaintainedView implements ViewHandle {
   }
 }
 
+const blank = (): Happened => ({ appended: 0, retired: 0, changed: 0, expired: 0, groups: [], rowsIn: 0, rowsOut: 0 })
+
+/** A row with only the given variables. */
+function project(r: Row, vars: string[]): Row {
+  const out: Row = new Map()
+  for (const v of vars) {
+    const t = r.get(v)
+    if (t) out.set(v, t)
+  }
+  return out
+}
+
+/** A CONSTRUCT template over one row: triples with an unbound (or ill-placed) term are dropped. */
+function instantiate(f: import('../store/types.ts').Factory, template: Triple[], row: Row, g: Term): Quad[] {
+  const term = (n: Node | Triple['p']): Term | undefined => {
+    switch (n.k) {
+      case 'var':
+        return row.get(n.v)
+      case 'iri':
+        return f.namedNode(n.v)
+      case 'link':
+        return f.namedNode(n.iri)
+      case 'lit':
+        return n.lang ? f.literal(n.value, n.lang) : f.literal(n.value, n.dt ? f.namedNode(n.dt) : undefined)
+      default:
+        return undefined
+    }
+  }
+  const out: Quad[] = []
+  for (const t of template) {
+    const s = term(t.s)
+    const p = term(t.p)
+    const o = term(t.o)
+    if (!s || !p || !o || s.termType === 'Literal' || p.termType !== 'NamedNode') continue
+    out.push(f.quad(s as NamedNode, p, o, g as NamedNode))
+  }
+  return out
+}
+
 /** A group's key, readably: local names of IRIs, values of literals. */
 function groupLabel(terms: (Term | undefined)[]): string {
-  return terms.map((t) => (!t ? '–' : t.termType === 'NamedNode' ? t.value.replace(/^.*[#/]/, '') : t.value)).join(' · ')
+  return terms.map((t) => (!t ? '–' : t.termType === 'NamedNode' ? localName(t.value) : t.value)).join(' · ')
 }
 
 function sameRows(a: number[][], b: number[][]): boolean {
@@ -964,7 +1783,7 @@ function insertOrdered(order: { t: number; key: string }[], e: { t: number; key:
   order.splice(lo, 0, e)
 }
 
-const mapKey = (row: Map<string, Term>) =>
+export const mapKey = (row: Row) =>
   [...row.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([k, t]) => `${k}=${termKey(t)}`)
@@ -976,7 +1795,7 @@ function norm(t: Term): string {
   return termKey(t)
 }
 const normQuad = (q: Quad) => `${norm(q.subject)} ${q.predicate.value} ${norm(q.object)}`
-const normRow = (r: Map<string, Term>) =>
+const normRow = (r: Row) =>
   [...r.entries()]
     .filter(([k]) => !k.startsWith('__'))
     .sort(([a], [b]) => (a < b ? -1 : 1))
