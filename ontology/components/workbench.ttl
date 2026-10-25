@@ -262,28 +262,28 @@ c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
 
 # --- the table as Markdown ----------------------------------------------------------------------------
-# The results are graph data on the table's marks: each header cell its position (c:column), each
-# row its position (c:row), each cell its position and the term it shows (c:term; a blank node's
-# stand-in is the cell). From those a rule above the table derives its text as a Markdown table
-# (c:markdown, on its rendered root, as rules above a component say what they derive: a triple about
-# the component itself would invalidate the rules below that read it), which a clip:Copier of the
-# table copies: a header row of what the columns show, the separator
-# row, then the rows the table shows, in order. IRIs are prefixed names, with the prefixes the graph
-# declares (sh:declare; the longest namespace that leaves a valid local name), else <iri>, as code;
-# literals are their text, with @lang when tagged, untruncated. In a cell, | is &#124; and a line
-# break is <br>: a backslash would need REPLACE to agree on escapes, which engines do not.
+# What a table shows is graph data: its header cells and each row's cells are in order (ord:), each
+# row says where it is among the rows (c:row), a cell showing an IRI says which (c:term), and the
+# rest is the text the cells show. From those a rule above the table derives its text as a Markdown
+# table (c:markdown), on its rendered root (rules above a component put what they derive there: a
+# triple about the component itself would invalidate the rules below that read it), which a
+# clip:Copier of the table copies: a header row of what the columns show, the separator row, then
+# the rows the table shows, in order. IRIs are prefixed names, with the prefixes the graph declares
+# (sh:declare; the longest namespace that leaves a valid local name), else <iri>, as code; blank
+# nodes are their label, as code; literals are as the table shows them (cut at 240 characters), with
+# @lang when tagged. In a cell, | is &#124; and a line break is <br>: a backslash would need
+# REPLACE's escapes, which engines read differently.
 c:markdown a owl:DatatypeProperty ; rdfs:range xsd:string ;
     rdfs:label "Markdown"@en , "Markdown"@uk , "Markdown"@de , "Markdown"@ar ;
     rdfs:comment "Derived, on a component's rendered root: its content as Markdown text (a c:ResultTable's rows as a Markdown table)."@en .
 c:row a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "On a rendered row of a table view: its position among the rows shown (from 0)."@en .
-c:column a owl:DatatypeProperty ; rdfs:range xsd:integer ;
-    rdfs:comment "On a rendered header or data cell of a table view: its column's position (from 0)."@en .
 
 c:ResultTableMarkdown a sem:Rendering ; sem:targets c:ResultTable ; sem:modality mod:Screen ; sem:stratum 40 ; sem:readsMinted true .
 c:ResultTableMarkdown-fn a sem:Rule ; sem:implements c:ResultTableMarkdown ; sem:function "workbench:table-markdown" .
-# Per table (sem:bulk false), so every sub-select starts from $this. The cells of a row, then the
-# rows, are joined in order: GROUP_CONCAT over an ordered sub-select.
+# Per table (sem:bulk false), so every sub-select starts from $this. A cell's column is how many
+# cells precede it; the cells of a row, then the rows, are joined in order: GROUP_CONCAT over an
+# ordered sub-select. ?key is the IRI a cell shows, else the cell, so that the names join on it.
 c:ResultTableMarkdown-sparql a sem:Rule ;
     sem:implements c:ResultTableMarkdown ;
     sem:bulk false ;
@@ -294,11 +294,15 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~head-row")) AS ?head)
   ?head a rdfhtml:Tr .
-  FILTER EXISTS { ?head rdfhtml:hasChild ?anyHeader . ?anyHeader c:column ?anyColumn }
+  FILTER EXISTS { ?head rdfhtml:hasChild ?anyHeader }
   { SELECT (GROUP_CONCAT(?name; separator=" | ") AS ?names) (GROUP_CONCAT(?dash; separator=" | ") AS ?rule) WHERE {
       { SELECT ?name ?dash WHERE {
-          BIND(IRI(CONCAT(STR($this), "/~head-row")) AS ?row)
-          ?row rdfhtml:hasChild ?th . ?th c:column ?i ; rdfhtml:hasChild ?label . ?label rdfhtml:data ?raw .
+          { SELECT ?th (COUNT(?before) AS ?i) WHERE {
+              BIND(IRI(CONCAT(STR($this), "/~head-row")) AS ?row)
+              ?row rdfhtml:hasChild ?th .
+              OPTIONAL { ?before ord:immediatelyPrecedes+ ?th }
+            } GROUP BY ?th }
+          ?th rdfhtml:hasChild ?label . ?label rdfhtml:data ?raw .
           BIND(REPLACE(REPLACE(STR(?raw), "[|]", "&#124;"), "\\r?\\n", "<br>") AS ?name)
           BIND("---" AS ?dash)
         } ORDER BY ?i }
@@ -307,35 +311,38 @@ WHERE {
       { SELECT ?line WHERE {
           { SELECT ?row (GROUP_CONCAT(?cell; separator=" | ") AS ?cells) WHERE {
               { SELECT ?row ?cell WHERE {
-                  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
-                  ?body rdfhtml:hasChild ?tr . ?tr c:row ?row ; rdfhtml:hasChild ?td . ?td c:column ?column .
-                  OPTIONAL { ?td c:term ?shows }
-                  BIND(COALESCE(?shows, ?td) AS ?term)
+                  { SELECT ?td (COUNT(?before) AS ?column) WHERE {
+                      BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+                      ?body rdfhtml:hasChild/rdfhtml:hasChild ?td .
+                      OPTIONAL { ?before ord:immediatelyPrecedes+ ?td }
+                    } GROUP BY ?td }
+                  ?tr rdfhtml:hasChild ?td ; c:row ?row .
+                  OPTIONAL { ?td c:term ?iri }
+                  BIND(COALESCE(?iri, ?td) AS ?key)
                   # The prefixed name of each IRI the table shows.
-                  OPTIONAL { SELECT ?term (MIN(?pname) AS ?prefixed) WHERE {
+                  OPTIONAL { SELECT ?key (MIN(?pname) AS ?prefixed) WHERE {
                       BIND(IRI(CONCAT(STR($this), "/~body")) AS ?rows)
-                      ?rows rdfhtml:hasChild/rdfhtml:hasChild ?mark . ?mark c:term ?term .
-                      FILTER(isIRI(?term) && !sameTerm(?term, ?mark))
+                      ?rows rdfhtml:hasChild/rdfhtml:hasChild/c:term ?key .
                       ?declaration sh:prefix ?prefix ; sh:namespace ?ns .
-                      FILTER(STRSTARTS(STR(?term), STR(?ns)))
-                      BIND(SUBSTR(STR(?term), STRLEN(STR(?ns)) + 1) AS ?local)
+                      FILTER(STRSTARTS(STR(?key), STR(?ns)))
+                      BIND(SUBSTR(STR(?key), STRLEN(STR(?ns)) + 1) AS ?local)
                       FILTER(REGEX(?local, "^[A-Za-z_][A-Za-z0-9_-]*$"))
                       FILTER NOT EXISTS {
                         ?better sh:prefix ?betterPrefix ; sh:namespace ?betterNs .
-                        FILTER(STRSTARTS(STR(?term), STR(?betterNs))
-                          && REGEX(SUBSTR(STR(?term), STRLEN(STR(?betterNs)) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$")
+                        FILTER(STRSTARTS(STR(?key), STR(?betterNs))
+                          && REGEX(SUBSTR(STR(?key), STRLEN(STR(?betterNs)) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$")
                           && (STRLEN(STR(?betterNs)) > STRLEN(STR(?ns))
                               || (STRLEN(STR(?betterNs)) = STRLEN(STR(?ns)) && STR(?betterPrefix) < STR(?prefix))))
                       }
                       BIND(CONCAT(STR(?prefix), ":", ?local) AS ?pname)
-                    } GROUP BY ?term }
-                  # A blank node's stand-in (the cell itself) shows its label.
-                  OPTIONAL { ?td c:term ?td ; rdfhtml:hasChild ?code . ?code a rdfhtml:Code ; rdfhtml:hasChild ?codeText . ?codeText rdfhtml:data ?markText }
-                  BIND(IF(!BOUND(?shows), "",
-                       IF(sameTerm(?shows, ?td), CONCAT("`", STR(?markText), "`"),
-                       IF(isIRI(?shows), CONCAT("`", COALESCE(?prefixed, CONCAT("<", STR(?shows), ">")), "`"),
-                          CONCAT(REPLACE(REPLACE(STR(?shows), "[|]", "&#124;"), "\\r?\\n", "<br>"),
-                                 IF(LANG(?shows) = "", "", CONCAT("@", LANG(?shows))))))) AS ?cell)
+                    } GROUP BY ?key }
+                  # What the cell shows: a blank node's label (code), a literal's text, its language.
+                  OPTIONAL { ?td rdfhtml:hasChild ?code . ?code a rdfhtml:Code ; rdfhtml:hasChild ?codeText . ?codeText rdfhtml:data ?codeValue }
+                  OPTIONAL { ?td rdfhtml:hasChild ?text . ?text a rdfhtml:Text ; rdfhtml:data ?value }
+                  OPTIONAL { ?td rdfhtml:hasChild ?lang . ?lang rdfhtml:class "sem-lang" ; rdfhtml:hasChild ?langText . ?langText rdfhtml:data ?tag }
+                  BIND(IF(BOUND(?iri), CONCAT("`", COALESCE(?prefixed, CONCAT("<", STR(?iri), ">")), "`"),
+                       IF(BOUND(?codeValue), CONCAT("`", STR(?codeValue), "`"),
+                          CONCAT(REPLACE(REPLACE(STR(COALESCE(?value, "")), "[|]", "&#124;"), "\\r?\\n", "<br>"), STR(COALESCE(?tag, ""))))) AS ?cell)
                 } ORDER BY ?row ?column }
             } GROUP BY ?row }
           BIND(CONCAT("| ", ?cells, " |") AS ?line)
@@ -373,7 +380,7 @@ c:selectedTerm a rdf:Property ; rdfs:domain c:ResultGraph ;
 c:neighbourhood a owl:DatatypeProperty ; rdfs:domain c:ResultGraph ; rdfs:range xsd:integer ;
     rdfs:comment "How many links away from the selected node its neighbours are (1 to 3, default 1)."@en .
 c:term a rdf:Property ;
-    rdfs:comment "On a rendered mark of a result view (a c:ResultGraph's node, a c:ResultTable's cell): the term it shows. Rules mint no blank nodes, so a blank node's mark stands in for it."@en .
+    rdfs:comment "On a rendered mark of a result view (a c:ResultGraph's node, a c:ResultTable's cell showing an IRI): the term it shows. Rules mint no blank nodes, so a blank node's mark stands in for it in a graph."@en .
 c:edgeFrom a owl:ObjectProperty ; rdfs:comment "On a rendered link of a c:ResultGraph: the node mark it starts at."@en .
 c:edgeTo a owl:ObjectProperty ; rdfs:comment "On a rendered link of a c:ResultGraph: the node mark it points to."@en .
 c:salience a owl:ObjectProperty ; rdfs:range c:Salience ;

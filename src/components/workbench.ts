@@ -2,7 +2,7 @@
 import type { BlankNode, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, H, MOD, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { turtleTokens } from '../turtle.ts'
@@ -44,7 +44,6 @@ const W = {
   neighbourhood: c + 'neighbourhood',
   term: c + 'term',
   row: c + 'row',
-  column: c + 'column',
   markdown: c + 'markdown',
   edgeFrom: c + 'edgeFrom',
   edgeTo: c + 'edgeTo',
@@ -710,28 +709,22 @@ function liveIndicator(ctx: RuleContext, o: Out, focus: NamedNode, label: string
 const NUMERIC = /#(integer|decimal|double|float|long|int|short|nonNegativeInteger|positiveInteger)$/
 
 /**
- * A cell, which says what it shows (c:column, and c:term: the term, or itself for a blank node,
- * which rules may not mint), so rules above the table can read the results from it (c:markdown).
+ * A cell. One showing an IRI says which (c:term), so rules above the table can name it with the
+ * graph's prefixes (c:markdown); the rest they read as shown.
  */
-function cell(ctx: RuleContext, o: Out, id: string, column: number, t: Term | undefined): NamedNode {
-  if (!t) {
-    const td = o.el(id, 'Td', { class: 'sem-unbound' })
-    o.t(td, W.column, int(ctx, column))
-    return td
-  }
+function cell(ctx: RuleContext, o: Out, id: string, t: Term | undefined): NamedNode {
+  if (!t) return o.el(id, 'Td', { class: 'sem-unbound' })
   if (t.termType === 'NamedNode' || t.termType === 'BlankNode') {
     const code = o.el(`${id}-code`, 'Code', {}, [o.text(`${id}-text`, display(ctx, t))])
     const td = o.el(id, 'Td', {}, [code])
-    o.t(td, W.column, int(ctx, column)).t(td, W.term, t.termType === 'NamedNode' ? t : td)
+    if (t.termType === 'NamedNode') o.t(td, W.term, t)
     return td
   }
   const lit = t as Term & { language?: string; datatype?: NamedNode }
   const numeric = !lit.language && NUMERIC.test(lit.datatype?.value ?? '')
   const parts = [o.text(`${id}-text`, truncate(t.value, 240))]
   if (lit.language) parts.push(o.el(`${id}-lang`, 'Span', { class: 'sem-lang' }, [o.text(`${id}-lang-text`, '@' + lit.language)]))
-  const td = o.el(id, 'Td', { class: numeric ? 'sem-end' : undefined }, parts)
-  o.t(td, W.column, int(ctx, column)).t(td, W.term, t)
-  return td
+  return o.el(id, 'Td', { class: numeric ? 'sem-end' : undefined }, parts)
 }
 
 const table: FnRule = (ctx, focus) => {
@@ -766,12 +759,7 @@ const table: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [summary(o, count), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
-  const th = (h: string, i: number) => {
-    const n = o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)])
-    o.t(n, W.column, int(ctx, i))
-    return n
-  }
-  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map(th))])
+  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)])))])
   const seen = new Map<string, number>()
   const body = o.el(
     'body',
@@ -783,7 +771,7 @@ const table: FnRule = (ctx, focus) => {
       const n = seen.get(base) ?? 0
       seen.set(base, n + 1)
       const id = n ? `${base}-${n}` : base
-      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => cell(ctx, o, `${id}-c${ci}`, ci, t)))
+      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => cell(ctx, o, `${id}-c${ci}`, t)))
       o.t(tr, W.row, int(ctx, ri))
       return tr
     }),
@@ -796,8 +784,9 @@ const table: FnRule = (ctx, focus) => {
 
 // --- results: the table as Markdown ----------------------------------------------------------------
 // The function variant of c:ResultTableMarkdown-sparql (workbench.ttl): it reads what the table
-// rendered (its header cells and the terms its cells say they show), not the results, and names
-// IRIs with the prefixes the graph declares (sh:declare), as the SPARQL does.
+// rendered - its header cells, its rows (c:row), each row's cells in order (ord:), the IRIs cells
+// say they show (c:term), the rest as shown - and names IRIs with the prefixes the graph declares
+// (sh:declare), as the SPARQL does.
 
 /** Every (prefix, namespace) the graph declares, read once per engine. */
 const declarations = (ctx: RuleContext): [string, string][] =>
@@ -820,34 +809,43 @@ function declaredName(ctx: RuleContext, iri: string): string | undefined {
 /** Text in a Markdown table cell: a pipe would end the cell, a line break the row. */
 const markdownCell = (s: string) => s.replace(/[|]/g, '&#124;').replace(/\r?\n/g, '<br>')
 
-const position = (ctx: RuleContext, n: Term, p: string) => Number(ctx.object(n, p)?.value ?? NaN)
+const isA = (ctx: RuleContext, n: Term, cls: string) => ctx.match(n, RDF_TYPE, H.ns + cls).length > 0
+/** The data of a node's text children. */
 const dataOf = (ctx: RuleContext, n: Term) => ctx.objects(n, H.hasChild).flatMap((t) => ctx.objects(t, H.data)).map((d) => d.value)
+/** A node's children in their order: by how many siblings precede each (ord:immediatelyPrecedes). */
+function ordered(ctx: RuleContext, n: Term): Term[] {
+  const before = (c: Term) => {
+    let k = 0
+    for (let p = ctx.match(null, ORD.immediatelyPrecedes, c)[0]?.subject; p && k < 10_000; p = ctx.match(null, ORD.immediatelyPrecedes, p)[0]?.subject) k++
+    return k
+  }
+  return ctx.objects(n, H.hasChild).map((c): [number, Term] => [before(c), c]).sort((a, b) => a[0] - b[0]).map(([, c]) => c)
+}
 
 const tableMarkdown: FnRule = (ctx, focus) => {
   const head = ctx.nn(mint(focus.value, 'head-row'))
-  if (!ctx.match(head, RDF_TYPE, H.ns + 'Tr').length) return []
-  const byPosition = <T>(items: [number, T][]) => items.filter(([i]) => Number.isFinite(i)).sort((a, b) => a[0] - b[0]).map(([, v]) => v)
-  const names = byPosition(ctx.objects(head, H.hasChild).flatMap((th) => dataOf(ctx, th).map((d): [number, string] => [position(ctx, th, W.column), markdownCell(d)])))
+  if (!isA(ctx, head, 'Tr')) return []
+  const names = ordered(ctx, head).flatMap((th) => dataOf(ctx, th).map(markdownCell))
   if (!names.length) return []
   const shown = (td: Term): string => {
-    const t = ctx.object(td, W.term)
-    if (!t) return ''
-    // A blank node: the cell stands in for it, and shows its label.
-    if (t.equals(td)) {
-      const code = ctx.objects(td, H.hasChild).find((n) => ctx.match(n, RDF_TYPE, H.ns + 'Code').length)
-      return code ? dataOf(ctx, code).map((d) => '`' + d + '`').join('') : ''
-    }
-    if (t.termType === 'NamedNode') return '`' + (declaredName(ctx, t.value) ?? `<${t.value}>`) + '`'
-    const lang = t.termType === 'Literal' ? t.language : ''
-    return markdownCell(t.value) + (lang ? '@' + lang : '')
+    const iri = ctx.object(td, W.term)
+    if (iri?.termType === 'NamedNode') return '`' + (declaredName(ctx, iri.value) ?? `<${iri.value}>`) + '`'
+    const children = ctx.objects(td, H.hasChild)
+    // A blank node, shown as code.
+    const code = children.find((n) => isA(ctx, n, 'Code'))
+    if (code) return dataOf(ctx, code).map((d) => '`' + d + '`').join('')
+    // A literal: its text, and its language tag.
+    const text = children.filter((n) => isA(ctx, n, 'Text')).flatMap((n) => ctx.objects(n, H.data).map((d) => markdownCell(d.value)))
+    const tag = children.filter((n) => ctx.objects(n, H.ns + 'class').some((c) => c.value === 'sem-lang')).flatMap((n) => dataOf(ctx, n))
+    return text.join('') + tag.join('')
   }
   const body = ctx.nn(mint(focus.value, 'body'))
-  const rows = byPosition(
-    ctx.objects(body, H.hasChild).map((tr): [number, string] => [
-      position(ctx, tr, W.row),
-      `| ${byPosition(ctx.objects(tr, H.hasChild).map((td): [number, string] => [position(ctx, td, W.column), shown(td)])).join(' | ')} |`,
-    ]),
-  )
+  const rows = ctx
+    .objects(body, H.hasChild)
+    .map((tr): [number, string] => [Number(ctx.object(tr, W.row)?.value ?? NaN), `| ${ordered(ctx, tr).map(shown).join(' | ')} |`])
+    .filter(([i]) => Number.isFinite(i))
+    .sort((a, b) => a[0] - b[0])
+    .map(([, line]) => line)
   const lines = [`| ${names.join(' | ')} |`, `| ${names.map(() => '---').join(' | ')} |`, ...rows]
   const o = ctx.out(focus)
   o.t(o.node('root'), W.markdown, lines.join('\n'))
