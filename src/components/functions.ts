@@ -173,6 +173,7 @@ const listMember: FnRule = (ctx, focus, item) => {
   const sortBy = ctx.object(focus, C.sortBy)
   const labelFrom = ctx.object(focus, C.itemLabel)
   const checkedFrom = ctx.object(focus, C.itemChecked)
+  const imageFrom = ctx.object(focus, C.itemImage)
   const key = sortBy ? ctx.object(item, sortBy) : undefined
   const inst = o.node('i-' + encodeForUri(item.value))
   o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
@@ -180,6 +181,7 @@ const listMember: FnRule = (ctx, focus, item) => {
   o.t(inst, C.inList, focus)
   if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
   if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
+  if (imageFrom) o.t(inst, C.imageFrom, imageFrom)
   // A sortable list's items can be picked up, carrying the data item (the drag and drop layer).
   if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
     o.t(inst, RDF_TYPE, ctx.nn(DND.Draggable)).t(inst, DND.carries, item)
@@ -191,7 +193,7 @@ const listMember: FnRule = (ctx, focus, item) => {
   o.t(o.node('root'), H.hasChild, inst)
   return o.quads
 }
-listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked])
+listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked, C.itemImage])
 
 function itemData(ctx: RuleContext, focus: NamedNode) {
   const item = ctx.object(focus, C.of)
@@ -200,17 +202,27 @@ function itemData(ctx: RuleContext, focus: NamedNode) {
   const label = str(ctx.object(item, labelFrom))
   if (label === undefined) return undefined
   const checkedFrom = ctx.object(focus, C.checkedFrom)
-  return { label, checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false }
+  const imageFrom = ctx.object(focus, C.imageFrom)
+  return {
+    label,
+    // Only a list that says what checks its items (c:itemChecked) has checkboxes.
+    checkable: !!checkedFrom,
+    checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false,
+    image: imageFrom ? str(ctx.object(item, imageFrom)) : undefined,
+  }
 }
 
 const listItemScreen: FnRule = (ctx, focus) => {
   const d = itemData(ctx, focus)
   if (!d) return []
   const o = ctx.out(focus)
+  const parts: NamedNode[] = []
   const checkId = mint(focus.value, 'check')
-  const check = o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined })
-  const label = o.el('label', 'Label', { for: checkId }, [o.text('label-text', d.label)])
-  o.renders(o.el('root', 'Li', {}, [check, label]))
+  if (d.checkable) parts.push(o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined }))
+  // A thumbnail of the item (c:itemImage), beside its label: decoration, the label names it.
+  if (d.image !== undefined) parts.push(o.el('image', 'Img', { class: 'sem-thumb', src: d.image, alt: '', loading: 'lazy', draggable: 'false' }))
+  parts.push(o.el('label', 'Label', { for: d.checkable ? checkId : undefined }, [o.text('label-text', d.label)]))
+  o.renders(o.el('root', 'Li', {}, parts))
   return o.quads
 }
 
@@ -218,7 +230,7 @@ const listItemText: FnRule = (ctx, focus) => {
   const d = itemData(ctx, focus)
   if (!d) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checked ? '  [x] ' : '  [ ] '}${d.label}`)]))
+  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checkable ? (d.checked ? '  [x] ' : '  [ ] ') : '  - '}${d.label}`)]))
   return o.quads
 }
 
