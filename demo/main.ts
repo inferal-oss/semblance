@@ -3,6 +3,7 @@ import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard } from '../src/clipboard.ts'
 import { Files, type Uploader } from '../src/files.ts'
+import { Fullscreen } from '../src/fullscreen.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -317,6 +318,18 @@ const scheduler = new Scheduler(bus, {
 scheduler.attach()
 // Copies (clip:Request) go to the page's clipboard; how it went comes back as an event (a toast).
 new Clipboard(bus, {
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach()
+// What is asserted full screen (fs:fullscreen) is shown so, or over the page where the browser
+// will not; leaving it, by Esc or the browser's own control, comes back as an event.
+new Fullscreen(bus, {
+  element: (iri) => {
+    const n = shell.nodeOf(iri)
+    return n?.nodeType === 1 ? (n as Element) : undefined
+  },
   onHandled: () => {
     syncSettings()
     flush()

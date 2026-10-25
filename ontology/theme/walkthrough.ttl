@@ -141,7 +141,7 @@
                  [ sty:property "max-height" ; sty:raw "max(240px, calc(58vh - 60px))" ] ,
                  [ sty:property "margin-inline" ; sty:raw "auto" ] ,
                  [ sty:property "overflow" ; sty:raw "visible" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-aside [data-sem-c=source-view] > .sem-source" ;
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-aside [data-sem-c=source-view]:not([data-sem-fullscreen]) > .sem-source" ;
     sty:declares [ sty:property "max-height" ; sty:raw "max(160px, calc(42vh - 140px))" ] ,
                  [ sty:property "scroll-behavior" ; sty:raw "smooth" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-band" ;
@@ -218,6 +218,31 @@
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-plot" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "max-height" ; sty:raw "calc(35dvh - 28px)" ] .
+
+# --- the diagram full screen (fs:part "diagram"): its toggle in its corner; full screen, the plot
+# takes all the room it can at its own proportions ---
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram > .sem-fullscreen-toggle" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-block-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "inset-inline-end" ; sty:token tok:space-2 ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized])" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template" ; sty:raw "minmax(0, 1fr) / minmax(0, 1fr)" ] ,
+                 [ sty:property "place-items" ; sty:raw "center" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-5 ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized]) > .sem-plot" ;
+    sty:declares [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "height" ; sty:raw "100%" ] ,
+                 [ sty:property "max-height" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part ".sem-walk-diagram[data-sem-fullscreen]:is(:fullscreen, [data-sem-fullscreen=maximized]) > .sem-fullscreen-toggle" ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "inset-block-start" ; sty:raw "max(var(--sem-space-3), env(safe-area-inset-top))" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "max(var(--sem-space-3), env(safe-area-inset-right))" ] .
 
 # --- the arrows: connectors (c:WalkthroughArrows) in a layer over the walkthrough ---
 [] a sty:StyleRule ; sty:appliesTo c:Walkthrough ; sty:part "> .sem-walk-arrows" ;

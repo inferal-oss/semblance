@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
@@ -40,14 +41,17 @@
 # --- vocabulary ----------------------------------------------------------------------------------
 
 c:Walkthrough a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , fs:Fullscreenable ;
     rdfs:comment """An explanation in steps beside a diagram of what it mentions: c:label (a title), c:note (a lead),
 c:steps (an rdf:List of c:WalkthroughStep), and optionally c:sourceView, the source it explains. The
 diagram shows every resource a step's c:Mention mentions, plus c:diagramIncludes, minus
 c:diagramExcludes, and the links among them; it stays beside the steps while they scroll (they stack
 when narrow). The step being read (c:current, by default the first) focuses its mentions in the
-diagram, and arrows (c:Connector s) join each of its mentions to its node."""@en ;
-    sem:slug "walkthrough" .
+diagram, and arrows (c:Connector s) join each of its mentions to its node. The toggle on the
+diagram shows the diagram full screen (fs:Fullscreenable, fs:part): a large graph at a size it
+can be read at."""@en ;
+    sem:slug "walkthrough" ;
+    fs:part "diagram" .
 c:WalkthroughStep a owl:Class ;
     rdfs:subClassOf c:Text ;
     rdfs:comment """One step of a c:Walkthrough: running text (c:children: strings and inline components, among them

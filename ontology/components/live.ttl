@@ -5,6 +5,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -23,7 +24,7 @@
 # Reset and Copy are reactions; copying is a request (c:copied) the host carries out.
 
 c:LiveExample a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , fs:Fullscreenable ;
     rdfs:label "Live example"@en , "Живий приклад"@uk , "Live-Beispiel"@de , "مثال حي"@ar ;
     rdfs:comment """The Turtle of a small app (c:sources, editors in load order: component definitions before
 the app that uses them) beside its rendering (c:exampleRoot, a resource of the example's own
@@ -31,7 +32,8 @@ graph), re-rendered as it is edited. With several sources, tabs choose the one s
 (c:selectedSource). A source that does not parse, or a rule that fails, is reported inline
 (c:problem) and the last rendering that worked stays. Reset brings back the sources as written;
 Copy copies the one shown, with the prefixes it uses. With c:textPreview true the example is
-also shown in the Text modality. c:label names the example."""@en ;
+also shown in the Text modality. c:label names the example. Its own toggle shows it full screen
+(fs:Fullscreenable): the sources beside the rendering, with room for both."""@en ;
     sem:slug "live-example" ;
     key:navigation key:TabNavigation .
 
@@ -113,11 +115,13 @@ CONSTRUCT {
   ?tabs a rdfhtml:Div ; rdfhtml:class "sem-live-tabs" ; rdfhtml:attribute ?tabsRole, ?tabsLabel ; ord:immediatelyPrecedes ?actions .
   ?tabsRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tablist" .
   ?tabsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?sourcesPhrase .
-  ?actions a rdfhtml:Div ; rdfhtml:class "sem-live-actions" ; rdfhtml:hasChild ?time, ?reset, ?copy .
+  ?actions a rdfhtml:Div ; rdfhtml:class "sem-live-actions" ; rdfhtml:hasChild ?time, ?reset, ?copy, ?fsToggle .
   ?time a rdfhtml:Span ; rdfhtml:class "sem-live-time" ; rdfhtml:hasChild ?timeText ; ord:immediatelyPrecedes ?reset .
   ?timeText a rdfhtml:Text ; rdfhtml:data ?timeData .
   ?reset a c:Button ; c:label ?resetPhrase ; c:resets $this ; c:disabled ?pristine ; sty:size sty:Small ; sty:emphasis sty:Ghost ; ord:immediatelyPrecedes ?copy .
-  ?copy a c:Button ; c:label ?copyLabel ; c:copies $this ; sty:size sty:Small ; sty:emphasis sty:Ghost .
+  ?copy a c:Button ; c:label ?copyLabel ; c:copies $this ; sty:size sty:Small ; sty:emphasis sty:Ghost ; ord:immediatelyPrecedes ?fsToggle .
+  ?fsToggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-fullscreen-toggle" ; fs:toggles $this ; sem:tooltip ?fsPhrase ; rdfhtml:attribute ?fsLabel .
+  ?fsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?fsPhrase .
   ?body a rdfhtml:Div ; rdfhtml:class "sem-live-body" ; rdfhtml:hasChild ?sources, ?preview .
   ?sources a rdfhtml:Div ; rdfhtml:class "sem-live-sources" ; ord:immediatelyPrecedes ?preview .
   ?preview a rdfhtml:Div ; rdfhtml:class "sem-live-preview" ; rdfhtml:hasChild ?status, ?screen, ?textHead, ?textSlot ; rdfhtml:attribute ?previewRole, ?previewLabel .
@@ -187,6 +191,11 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~actions")) AS ?actions)
     BIND(IRI(CONCAT(STR($this), "/~reset")) AS ?reset)
     BIND(IRI(CONCAT(STR($this), "/~copy")) AS ?copy)
+    # Its own full-screen toggle (fs:Fullscreenable); the layer says whether it is pressed.
+    OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) }
+    BIND(STR(?fsPhrase0) AS ?fsPhrase)
+    BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle")) AS ?fsToggle)
+    BIND(IRI(CONCAT(STR($this), "/~fullscreen-toggle-aria-label")) AS ?fsLabel)
     BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
     BIND(IRI(CONCAT(STR($this), "/~sources")) AS ?sources)
     BIND(IRI(CONCAT(STR($this), "/~preview")) AS ?preview)

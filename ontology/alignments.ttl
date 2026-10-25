@@ -278,4 +278,5 @@ skos:relatedMatch sem:alignmentStrength sem:Related .
     [ sh:prefix "iv" ; sh:namespace "https://semblance.dev/ns/view#"^^xsd:anyURI ],
     [ sh:prefix "clip" ; sh:namespace "https://semblance.dev/ns/clipboard#"^^xsd:anyURI ],
     [ sh:prefix "file" ; sh:namespace "https://semblance.dev/ns/file#"^^xsd:anyURI ],
+    [ sh:prefix "fs" ; sh:namespace "https://semblance.dev/ns/fullscreen#"^^xsd:anyURI ],
     [ sh:prefix "perf" ; sh:namespace "https://semblance.dev/ns/perf#"^^xsd:anyURI ] .

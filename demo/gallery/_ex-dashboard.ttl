@@ -6,6 +6,8 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -23,7 +25,8 @@
 # product and channel with its orders and revenue, each new order +1 to one cell. Everything on
 # the page reads the cube, never the orders: the facets' counts, the charts, the table and the
 # totals are SELECTs over at most 4 x 4 x 3 cells. The filters are triples on dx:filters, written
-# by the chips; every query applies them, and each facet's counts apply all but its own.
+# by the chips; every query applies them, and each facet's counts apply all but its own. Either
+# chart fills the screen: a fact (fs:fullscreen) on its card, asserted by a toggle or a reaction.
 # =================================================================================================
 
 ui:ex-dashboard-prefixes sh:declare [ sh:prefix "dx" ; sh:namespace "https://semblance.dev/demo/dashboard#"^^xsd:anyURI ] .
@@ -233,7 +236,10 @@ ui:ex-dashboard-cells a c:Stat ; c:label "Cube cells" ; c:help "What every query
 
 ui:ex-dashboard-charts a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ;
     c:children ( ui:ex-dashboard-region-card ui:ex-dashboard-product-card ) .
-ui:ex-dashboard-region-card a c:Card ; c:label "Sales by region, €" ; c:badge "by channel" ; c:content ui:ex-dashboard-by-region .
+ui:ex-dashboard-region-card a c:Card ; c:label "Sales by region, €" ; c:badge "by channel" ; c:content ui:ex-dashboard-by-region ;
+    c:actions ( ui:ex-dashboard-region-full ) .
+# Full screen is a fact on the card: a c:Toggle over fs:fullscreen asserts and retracts it (F too).
+ui:ex-dashboard-region-full a c:Toggle ; c:controls ui:ex-dashboard-region-card ; c:property fs:fullscreen ; key:shortcut "f" .
 ui:ex-dashboard-by-region a c:BarChart ; rdfs:label "Sales by region and channel" ;
     c:view dx:qByRegion ; c:dataset dx:totals , dx:filters ;
     c:categoryVariable "region" ; c:seriesVariable "channel" ; c:valueVariable "value" ;
@@ -241,7 +247,10 @@ ui:ex-dashboard-by-region a c:BarChart ; rdfs:label "Sales by region and channel
 dx:webSeries a c:series ; rdfs:label "Web" ; c:key "Web" .
 dx:storeSeries a c:series ; rdfs:label "Store" ; c:key "Store" .
 dx:partnerSeries a c:series ; rdfs:label "Partner" ; c:key "Partner" .
-ui:ex-dashboard-product-card a c:Card ; c:label "Orders by product" ; c:content ui:ex-dashboard-by-product .
+ui:ex-dashboard-product-card a c:Card ; c:label "Orders by product" ; c:content ui:ex-dashboard-by-product ;
+    c:actions ( ui:ex-dashboard-product-full ) .
+# The same fact from a reaction of the example's own (dx:Present): any reaction may assert it.
+ui:ex-dashboard-product-full a c:Button ; c:label "Present" ; sty:size sty:Small ; sty:emphasis sty:Ghost .
 ui:ex-dashboard-by-product a c:BarChart ; rdfs:label "Orders by product" ;
     c:view dx:qByProduct ; c:dataset dx:totals , dx:filters ;
     c:categoryVariable "product" ; c:valueVariable "value" .
@@ -276,6 +285,12 @@ ui:ex-dashboard-work a c:Progress ; c:active true ; c:valueQuery dx:qWork ; c:da
 
 dx:Clear a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-dashboard-clear ;
     beh:deletes """CONSTRUCT { dx:filters ?p ?v } WHERE { VALUES ?p { dx:region dx:product dx:channel } dx:filters ?p ?v }""" .
+
+# Present: the product chart's card fills the screen, by asserting the fact (and leaves it again).
+# The host shows it full screen, or over the page where it cannot, and Esc retracts the fact.
+dx:Present a beh:Reaction ; beh:when beh:Click ; beh:source ui:ex-dashboard-product-full ;
+    beh:deletes """CONSTRUCT { ui:ex-dashboard-product-card fs:fullscreen ?on } WHERE { ui:ex-dashboard-product-card fs:fullscreen ?on }""" ;
+    beh:inserts """CONSTRUCT { ui:ex-dashboard-product-card fs:fullscreen true } WHERE { FILTER NOT EXISTS { ui:ex-dashboard-product-card fs:fullscreen true } }""" .
 
 # A feed of batches: the buttons set how many are left and how big they are, and make the feed due
 # now (beh:dueAt). The host turns a due time into a beh:Due event; dx:Batch adds a batch of orders
@@ -321,7 +336,7 @@ WHERE {
 
 ui:ex-dashboard-how a c:Walkthrough ; c:label "How it works" ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
-    c:steps ( ui:ex-dashboard-w1 ui:ex-dashboard-w2 ui:ex-dashboard-w3 ui:ex-dashboard-w4 ui:ex-dashboard-w5 ui:ex-dashboard-w6 ui:ex-dashboard-w7 ) .
+    c:steps ( ui:ex-dashboard-w1 ui:ex-dashboard-w2 ui:ex-dashboard-w3 ui:ex-dashboard-w4 ui:ex-dashboard-w5 ui:ex-dashboard-w6 ui:ex-dashboard-w7 ui:ex-dashboard-w8 ) .
 
 ui:ex-dashboard-w1 a c:WalkthroughStep ; rdfs:label "The orders are a stream" ;
     c:children ( ui:ex-dashboard-m-orders " is an " ui:ex-dashboard-m-EventStream ": each order, such as " ui:ex-dashboard-m-o1 ", is a member with a region, a product, a channel and an amount. The dimensions are properties whose range holds their values - " ui:ex-dashboard-m-region " ranges over the four regions, in sem:order - so the facets need no list of options." ) .
@@ -337,6 +352,9 @@ ui:ex-dashboard-w6 a c:WalkthroughStep ; rdfs:label "More orders, a batch at a t
     c:children ( ui:ex-dashboard-m-add1000 " runs " ui:ex-dashboard-m-add1000r ", which makes " ui:ex-dashboard-m-feed " due now (" ui:ex-dashboard-m-dueAt "). The host turns that into a " ui:ex-dashboard-m-Due " event, and " ui:ex-dashboard-m-batch " adds fifty orders to the stream - their dimensions and amounts drawn from a hash of the event - and makes the next batch due shortly after. Each batch is one tick of the cube." ) .
 ui:ex-dashboard-w7 a c:WalkthroughStep ; rdfs:label "Work that does not grow" ;
     c:children ( "The cube is " ui:ex-dashboard-m-measured ": in idle time the runtime writes the rows of work its last step took and what a from-scratch run would read. " ui:ex-dashboard-m-work " shows them (" ui:ex-dashboard-m-qWork "): a batch of fifty is a hundred-odd rows of work - each order read once, each cell it touched updated - whether the stream holds a hundred orders or ten thousand, while a re-run reads every one. A filter changes nothing in the cube at all: it costs the few queries over its cells." ) .
+
+ui:ex-dashboard-w8 a c:WalkthroughStep ; rdfs:label "A chart fills the screen" ;
+    c:children ( "Full screen is a fact: " ui:ex-dashboard-m-regionCard " " ui:ex-dashboard-m-fullscreen " true. " ui:ex-dashboard-m-regionFull " is a c:Toggle over that property - press it, or F - and " ui:ex-dashboard-m-present " asserts the same fact for the product chart from a reaction of the example's own. The host's fullscreen effect shows the card full screen, or over the page where the browser will not; when the browser leaves on its own (Esc), it reports " ui:ex-dashboard-m-Exited " and a reaction retracts the fact, so the graph says what the screen shows." ) .
 
 ui:ex-dashboard-m-orders a c:Mention ; c:label "dx:orders" ; c:mentions dx:orders .
 ui:ex-dashboard-m-EventStream a c:Mention ; c:label "ldes:EventStream" ; c:mentions ldes:EventStream ; c:to ldes:EventStream .
@@ -366,3 +384,8 @@ ui:ex-dashboard-m-batch a c:Mention ; c:label "dx:Batch" ; c:mentions dx:Batch .
 ui:ex-dashboard-m-measured a c:Mention ; c:label "iv:measured" ; c:mentions iv:measured ; c:to iv:measured .
 ui:ex-dashboard-m-work a c:Mention ; c:label "The bar" ; c:mentions ui:ex-dashboard-work .
 ui:ex-dashboard-m-qWork a c:Mention ; c:label "dx:qWork" ; c:mentions dx:qWork .
+ui:ex-dashboard-m-regionCard a c:Mention ; c:label "the region chart's card" ; c:mentions ui:ex-dashboard-region-card .
+ui:ex-dashboard-m-fullscreen a c:Mention ; c:label "fs:fullscreen" ; c:mentions fs:fullscreen ; c:to fs:fullscreen .
+ui:ex-dashboard-m-regionFull a c:Mention ; c:label "Its toggle" ; c:mentions ui:ex-dashboard-region-full .
+ui:ex-dashboard-m-present a c:Mention ; c:label "dx:Present" ; c:mentions dx:Present .
+ui:ex-dashboard-m-Exited a c:Mention ; c:label "fs:Exited" ; c:mentions fs:Exited ; c:to fs:Exited .

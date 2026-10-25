@@ -1,6 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix clip: <https://semblance.dev/ns/clipboard#> .
+@prefix fs: <https://semblance.dev/ns/fullscreen#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
@@ -25,7 +26,8 @@ sem:ComponentShape a sh:NodeShape ; sh:targetClass sem:Component ;
                 [ sh:path pos:align ; sh:maxCount 1 ; sh:class pos:Alignment ] ,
                 [ sh:path c:label ; sh:nodeKind sh:Literal ] ,
                 [ sh:path c:help ; sh:nodeKind sh:Literal ] ,
-                [ sh:path c:disabled ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+                [ sh:path c:disabled ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path fs:fullscreen ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 
 # An accessible name, for a control a c:Field can wrap (one with a c:labelPart): its own c:label, or
 # the label of the c:Field whose c:content it is (that label points at the control's labelPart). Only

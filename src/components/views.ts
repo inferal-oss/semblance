@@ -7,6 +7,7 @@ import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
+import { fullscreenToggle } from '../layers/fullscreen.ts'
 import { labelOf as textLabelOf, text } from './util.ts'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
@@ -366,6 +367,7 @@ const sourceView: FnRule = (ctx, focus) => {
   const head = o.el('head', 'Div', { class: 'sem-source-head' }, [
     o.el('name', 'Span', { class: 'sem-source-name' }, [o.text('name-text', text(ctx, focus, C.label) ?? 'Source')]),
     o.el('path', 'Code', { class: 'sem-source-path' }, [o.text('path-text', path)]),
+    ...(ctx.modality === MOD.Screen ? [fullscreenToggle(ctx, o, focus)] : []),
   ])
   const lines = sourceLines(body.replace(/\s+$/, ''))
   const number = (n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
