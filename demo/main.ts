@@ -26,6 +26,7 @@ import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
+import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
@@ -291,6 +292,17 @@ persistence.attach(runtime)
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
 network.attach()
 Object.assign(globalThis, { network })
+// Where the components that ask for it (rnd:observes) are, and in what state: the rendered graph.
+// The page is patched only when a rule that reads it derived something (most writes derive nothing).
+const derived = () => screen.engine.stats.derivedAdded + screen.engine.stats.derivedRemoved + text.engine.stats.derivedAdded + text.engine.stats.derivedRemoved
+let derivedBefore = derived()
+const rendered = new RenderedState(runtime, shell, {
+  onWrite: () => {
+    if (derived() !== derivedBefore) flush()
+    derivedBefore = derived()
+  },
+})
+rendered.attach()
 // Maintained views keep time on the bus's clock (their windows age with beh:at); a window that
 // moved by itself patches the page like an event does.
 runtime.views.clock = bus.clock
@@ -446,4 +458,4 @@ void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls } })
+if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })

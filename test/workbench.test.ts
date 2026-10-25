@@ -50,7 +50,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     const h = workbench()
     const d = h.document
     expect(d.querySelector('[data-sem-c=query-workbench]')!.getAttribute('aria-label')).toBe('SPARQL workbench')
-    expect(d.querySelectorAll('.sem-sample').length).toBe(10)
+    expect(d.querySelectorAll('.sem-sample').length).toBe(13)
     expect(d.querySelector('.sem-sample[aria-pressed=true] .sem-sample-label')!.textContent).toBe('Components and their renderings')
     expect(area(h).getAttribute('aria-label')).toBe('SPARQL query')
     expect(area(h).value).toBe(editorValue(h))
@@ -183,6 +183,12 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
 
   it('every sample runs, into a table, a graph and Turtle', () => {
     const h = workbench()
+    // The rendered state, from a layout the test sets (linkedom has none): the tools window partly
+    // below the viewport, the toasts over it, and the focus in the query editor.
+    h.layout.place(UI + 'tools', 0, 400, 1280, 500).place(UI + 'announcements', 1000, 700, 280, 100)
+    h.fire(area(h), 'focusin')
+    h.rendered.invalidate()
+    h.rendered.flush()
     const labels = [...h.document.querySelectorAll('.sem-sample-label')].map((l) => l.textContent!)
     for (const label of labels) {
       sample(h, label)

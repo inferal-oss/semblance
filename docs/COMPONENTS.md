@@ -444,6 +444,9 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   host effect brings the item the graph calls current (`data-sem-current`) into view and reports
   where a swipe came to rest as an unrecorded `c:Snapped` event. `mount` attaches it; by hand,
   `attachSnaps(element)` (`@inferal-oss/semblance/web`).
+- **Rendered state.** What the page knows about a component and the graph does not (where it is,
+  whether it is on screen or overlaps another, focus, hover, scroll, open) is written to the graph
+  for the components that ask (`rnd:observes`); see [Rendered state](#rendered-state) below.
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
   shown; `sem:warm sem:Eager | sem:OnIntent` says which.
 - **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
@@ -478,6 +481,46 @@ A body can also be a `c:HostSlot`. Put the existing application's rich content i
 slot through `renderer.slot(name)`. Stable message and body IRIs let the renderer retain that
 content, including drafts and focus, when other messages are inserted. Keep those IRIs stable
 when updating the graph with `runtime.apply`.
+
+### Rendered state
+
+A component asks for its rendered state with `rnd:observes` (for itself and everything shown in
+it) or `rnd:observesSelf` (for itself alone), naming the aspects it wants:
+
+```turtle
+ex:board rnd:observes rnd:Focus , rnd:Hover .                       # cheap: follows events
+ex:card  rnd:observesSelf rnd:Overlap , rnd:Visibility .             # measured each frame that moves
+```
+
+The rendered-state effect (`RenderedState`, `src/rendered.ts`; `mount` attaches it) writes one
+`rnd:State` per observed component (`rnd:of` the component) to the rendered graph
+(`urn:semblance:rendered`): `rnd:x` / `rnd:y` / `rnd:width` / `rnd:height` in whole document pixels,
+`rnd:within` (the observed components it is inside), `rnd:rendered`, `rnd:inViewport` and
+`rnd:ratio` (quarters), `rnd:focused` / `rnd:focusWithin` / `rnd:focusVisible`, `rnd:hovered`,
+`rnd:pressed`, `rnd:scrollTop` / `rnd:scrollLeft` (steps of 8 px) with `rnd:atStart` / `rnd:atEnd` /
+`rnd:overflows`, `rnd:open` / `rnd:topLayer` for native details, dialogs and popovers, and
+`rnd:animating`. One `rnd:Viewport` node holds the viewport's size and scroll, so scrolling the page
+rewrites two triples, not every box: a box's place in the viewport is `?y - ?scrollTop`. What moves
+with the viewport (`position: fixed`: a docked window, a toast) is `rnd:fixed` and placed in the
+viewport instead, so scrolling moves no box at all.
+`rnd:overlaps` (both ways, neither inside the other) is a maintained view over the boxes of
+components that ask for `rnd:Overlap`, joined on the 256 px grid cells they cover (`rnd:cell`), so
+a box that moves is compared with its neighbours only (fixed boxes with fixed boxes).
+
+An app turns that state into facts of its own with a maintained view over it, which ordinary
+components then show: the Reader example (`demo/gallery/_ex-reader.ttl`) marks the section being
+read in its table of contents and says how far along the reader is, from where its pane
+(`pos:scroll pos:ScrollPane`, scrolling on its own) and its sections are.
+
+It costs what changes. Nothing is measured without a scope. Focus, hover, press and animation
+follow their events and have a node only while true. The measured aspects are read once per frame
+in which something may have moved (a patch, a resize, a scroll, a transition's end): every read
+before any write, then one tick with only the triples that changed. The state is on its own nodes
+in its own graph, not on the components, so measuring re-runs no rule and patches nothing; and it
+is never recorded in the change log. A rule that wants it reads it (`sem:follows`, a query), and
+should not move what it measures. A CSS animation is measured where it starts and ends, not
+during it. Tests pass a layout of their own (`RenderedOptions.layout`, as `test/rendered-layout.ts`
+does), since linkedom has none.
 
 ### When the page is busy
 

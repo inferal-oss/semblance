@@ -69,6 +69,15 @@ pos:Versus a pos:Layout ; sem:slug "versus" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(0, 1fr)" ] ,
                  [ sty:property "align-items" ; sty:raw "stretch" ] .
+
+# The mirror of pos:Aside: the main column first, then a narrow column after it (on the right, or on
+# the left right to left) - a minimap, a summary, tools - which goes below the main column when narrow.
+pos:AsideEnd a pos:Layout ; sem:slug "aside-end" ;
+    rdfs:label "aside at the end"@en , "бічна колонка в кінці"@uk , "Seitenspalte am Ende"@de , "عمود جانبي في النهاية"@ar ;
+    rdfs:comment "A main column and a narrow column after it; the narrow one goes below when narrow. Each column is as tall as its content."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] .
 pos:Grid a pos:Layout ; sem:slug "grid" ;
     rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -264,6 +273,37 @@ pos:WideMeasure a pos:Measure ; sem:slug "wide" ;
                  [ sty:property "inline-size" ; sty:raw "100%" ] ,
                  [ sty:property "margin-inline" ; sty:raw "auto" ] ,
                  [ sty:property "box-sizing" ; sty:raw "border-box" ] .
+
+pos:scroll a owl:ObjectProperty ;
+    rdfs:range pos:Scroll ;
+    rdfs:label "scroll"@en , "прокручування"@uk , "Bildlauf"@de , "التمرير"@ar ;
+    rdfs:comment """Whether a component scrolls its own content: pos:ScrollPane bounds its height and scrolls what
+does not fit, so what is around it (a table of contents, a toolbar) stays in place. The rendered-state
+layer can say how far it is scrolled (rnd:Scroll)."""@en ;
+    sty:hookAttribute "data-sem-scroll" .
+pos:Scroll a owl:Class .
+pos:ScrollPane a pos:Scroll ; sem:slug "pane" ;
+    rdfs:label "scroll pane"@en , "панель прокручування"@uk , "Bildlaufbereich"@de , "لوحة تمرير"@ar ;
+    rdfs:comment "At most 70% of the viewport tall (and 36rem), scrolling vertically, without passing its scroll on to the page."@en ;
+    sty:declares [ sty:property "max-block-size" ; sty:raw "min(70vh, 36rem)" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] ,
+                 [ sty:property "overscroll-behavior" ; sty:raw "contain" ] .
+
+pos:sticky a owl:ObjectProperty ;
+    rdfs:range pos:Sticky ;
+    rdfs:label "sticky"@en , "липкий"@uk , "haftend"@de , "مثبّت عند التمرير"@ar ;
+    rdfs:comment """Whether a component stays in view while what holds it scrolls past: pos:StickToTop keeps it
+just below the app bar until the end of its container. Give it a container
+taller than itself, such as a column of pos:AsideEnd."""@en ;
+    sty:hookAttribute "data-sem-sticky" .
+pos:Sticky a owl:Class .
+pos:StickToTop a pos:Sticky ; sem:slug "top" ;
+    rdfs:label "to the top"@en , "до верху"@uk , "oben"@de , "إلى الأعلى"@ar ;
+    rdfs:comment "Sticks below the app bar (116px from the top of the viewport, enough for a bar of two rows), and below a taskbar docked there too."@en ;
+    sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
+                 [ sty:property "top" ; sty:raw "calc(var(--sem-dock-top, 0px) + 116px)" ] ,
+                 [ sty:property "align-self" ; sty:raw "flex-start" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
 
 pos:textAlign a owl:ObjectProperty ;
     rdfs:range pos:TextAlignment ;
