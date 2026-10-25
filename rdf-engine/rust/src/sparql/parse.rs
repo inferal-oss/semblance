@@ -12,6 +12,10 @@ const RDF: &[u8] = b"http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const XSD: &[u8] = b"http://www.w3.org/2001/XMLSchema#";
 
 /// XSD datatypes that may be used as cast functions.
+/// The first byte of the engine's own variables (blank nodes, unnamed reifiers): one no
+/// SPARQL variable name has, so `?_1` or `?__i` stay the query's own (and in SELECT *).
+const HIDDEN: u8 = b'#';
+
 const CASTS: &[&[u8]] = &[
     b"string", b"boolean", b"integer", b"decimal", b"float", b"double", b"dateTime", b"date", b"time",
     b"duration", b"dayTimeDuration", b"yearMonthDuration",
@@ -191,7 +195,7 @@ impl P<'_, '_> {
 
     fn fresh_var(&mut self) -> Var {
         self.hidden += 1;
-        let mut name = vec![b'_'];
+        let mut name = vec![HIDDEN];
         let mut n = self.hidden;
         while n > 0 {
             name.push(b'0' + (n % 10) as u8);
@@ -656,7 +660,7 @@ impl P<'_, '_> {
     fn visible_in(&self, p: &Pattern) -> Vec<Var> {
         let mut out = Vec::new();
         pattern_vars(p, &mut out);
-        out.retain(|&v| self.vars[v as usize].first() != Some(&b'_'));
+        out.retain(|&v| self.vars[v as usize].first() != Some(&HIDDEN));
         out
     }
 
@@ -2133,7 +2137,7 @@ impl P<'_, '_> {
                 Tt::Term(_) => false,
             }
         }
-        let hidden = |v: Var| self.vars[v as usize].first() == Some(&b'_');
+        let hidden = |v: Var| self.vars[v as usize].first() == Some(&HIDDEN);
         if quads.iter().flatten().any(|t| any(t, &hidden)) {
             return self.c.err("blank nodes are not allowed when deleting");
         }
