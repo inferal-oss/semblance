@@ -444,10 +444,10 @@ WHERE {
       FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
     }
   }
-  OPTIONAL { $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
-  OPTIONAL { $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
-  OPTIONAL { $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
-  OPTIONAL { $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  OPTIONAL { FILTER(!BOUND(?picko)) $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino)) $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno)) $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno) && !BOUND(?enxo)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
   BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?label)
   BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
   BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)

@@ -76,8 +76,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~", "tablist-role")) AS ?listRole)
   BIND(EXISTS { $this c:detachable ?detachableFlag FILTER(STR(?detachableFlag) = "true") } AS ?detachable)
   OPTIONAL { $this c:windowsOn ?desktop0 FILTER(isIRI(?desktop0)) }
-  OPTIONAL { $this c:selected ?chosen .
-    FILTER EXISTS { $this c:tabs/rdf:rest*/rdf:first ?chosen }
+  # (A join, not FILTER EXISTS over the list path: Oxigraph evaluates that one slowly.)
+  OPTIONAL { $this c:selected ?chosen ; c:tabs/rdf:rest* ?chosenCell . ?chosenCell rdf:first ?chosen .
     FILTER NOT EXISTS { ?chosen c:detached ?chosenDetached FILTER(STR(?chosenDetached) = "true") } }
   OPTIONAL { SELECT ?first WHERE {
     $this c:tabs/rdf:rest* ?firstCell . ?firstCell rdf:first ?first . FILTER(isIRI(?first))
@@ -90,7 +90,9 @@ WHERE {
     { SELECT ?cell (COUNT(?before) - 1 AS ?index) WHERE { $this c:tabs/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
     BIND(EXISTS { ?tab c:detached ?flag FILTER(STR(?flag) = "true") } AS ?detached)
     BIND(ENCODE_FOR_URI(STR(?tab)) AS ?key)
-    OPTIONAL {
+    LATERAL { OPTIONAL { SELECT ?tab ?c WHERE {
+  
+  OPTIONAL {
     ?tab c:label ?pickc . FILTER(isLiteral(?pickc))
     ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
     BIND(LCASE(LANG(?pickc)) AS ?tagc)
@@ -103,12 +105,15 @@ WHERE {
       FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
     }
   }
-  OPTIONAL { ?tab c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
-  OPTIONAL { ?tab c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
-  OPTIONAL { ?tab c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
-  OPTIONAL { ?tab c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?tab c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc)) ?tab c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc)) ?tab c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc) && !BOUND(?enxc)) ?tab c:label ?anyc FILTER(isLiteral(?anyc)) }
   BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
-    OPTIONAL {
+  } } }
+    LATERAL { OPTIONAL { SELECT ?tab ?r WHERE {
+  
+  OPTIONAL {
     ?tab rdfs:label ?pickr . FILTER(isLiteral(?pickr))
     ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
     BIND(LCASE(LANG(?pickr)) AS ?tagr)
@@ -121,11 +126,12 @@ WHERE {
       FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
     }
   }
-  OPTIONAL { ?tab rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
-  OPTIONAL { ?tab rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
-  OPTIONAL { ?tab rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
-  OPTIONAL { ?tab rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?tab rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr)) ?tab rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr)) ?tab rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr) && !BOUND(?enxr)) ?tab rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
   BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  } } }
     BIND(COALESCE(?c, ?r, REPLACE(STR(?tab), "^.*[#/]", "")) AS ?name)
     OPTIONAL { ?tab c:content ?component FILTER(isIRI(?component)) }
     OPTIONAL { ?tab c:slot ?slotRaw }
@@ -186,8 +192,8 @@ WHERE {
   $this c:tabs ?tabList .
   BIND(IRI(CONCAT(STR($this), "/~", "root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~", "tablist")) AS ?list)
-  OPTIONAL { $this c:selected ?chosen .
-    FILTER EXISTS { $this c:tabs/rdf:rest*/rdf:first ?chosen }
+  # (A join, not FILTER EXISTS over the list path: Oxigraph evaluates that one slowly.)
+  OPTIONAL { $this c:selected ?chosen ; c:tabs/rdf:rest* ?chosenCell . ?chosenCell rdf:first ?chosen .
     FILTER NOT EXISTS { ?chosen c:detached ?chosenDetached FILTER(STR(?chosenDetached) = "true") } }
   OPTIONAL { SELECT ?first WHERE {
     $this c:tabs/rdf:rest* ?firstCell . ?firstCell rdf:first ?first . FILTER(isIRI(?first))
@@ -200,7 +206,9 @@ WHERE {
     { SELECT ?cell (COUNT(?before) - 1 AS ?index) WHERE { $this c:tabs/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
     BIND(EXISTS { ?tab c:detached ?flag FILTER(STR(?flag) = "true") } AS ?detached)
     BIND(ENCODE_FOR_URI(STR(?tab)) AS ?key)
-    OPTIONAL {
+    LATERAL { OPTIONAL { SELECT ?tab ?c WHERE {
+  
+  OPTIONAL {
     ?tab c:label ?pickc . FILTER(isLiteral(?pickc))
     ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
     BIND(LCASE(LANG(?pickc)) AS ?tagc)
@@ -213,12 +221,15 @@ WHERE {
       FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
     }
   }
-  OPTIONAL { ?tab c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
-  OPTIONAL { ?tab c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
-  OPTIONAL { ?tab c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
-  OPTIONAL { ?tab c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?tab c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc)) ?tab c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc)) ?tab c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc) && !BOUND(?enxc)) ?tab c:label ?anyc FILTER(isLiteral(?anyc)) }
   BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
-    OPTIONAL {
+  } } }
+    LATERAL { OPTIONAL { SELECT ?tab ?r WHERE {
+  
+  OPTIONAL {
     ?tab rdfs:label ?pickr . FILTER(isLiteral(?pickr))
     ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
     BIND(LCASE(LANG(?pickr)) AS ?tagr)
@@ -231,11 +242,12 @@ WHERE {
       FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
     }
   }
-  OPTIONAL { ?tab rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
-  OPTIONAL { ?tab rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
-  OPTIONAL { ?tab rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
-  OPTIONAL { ?tab rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?tab rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr)) ?tab rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr)) ?tab rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr) && !BOUND(?enxr)) ?tab rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
   BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  } } }
     BIND(COALESCE(?c, ?r, REPLACE(STR(?tab), "^.*[#/]", "")) AS ?name)
     
   }
@@ -515,6 +527,8 @@ WHERE {
   UNION
   { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?subject a ?range . FILTER(isIRI(?subject))
     BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  LATERAL { OPTIONAL { SELECT ?subject ?c WHERE {
+  
   OPTIONAL {
     ?subject c:label ?pickc . FILTER(isLiteral(?pickc))
     ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
@@ -528,11 +542,14 @@ WHERE {
       FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
     }
   }
-  OPTIONAL { ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
-  OPTIONAL { ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
-  OPTIONAL { ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
-  OPTIONAL { ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc)) ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc)) ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc) && !BOUND(?enxc)) ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
   BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?subject ?r WHERE {
+  
   OPTIONAL {
     ?subject rdfs:label ?pickr . FILTER(isLiteral(?pickr))
     ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
@@ -546,11 +563,12 @@ WHERE {
       FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
     }
   }
-  OPTIONAL { ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
-  OPTIONAL { ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
-  OPTIONAL { ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
-  OPTIONAL { ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr)) ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr)) ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr) && !BOUND(?enxr)) ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
   BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  } } }
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
 
@@ -985,6 +1003,8 @@ WHERE {
   UNION
   { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?subject a ?range . FILTER(isIRI(?subject))
     BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  LATERAL { OPTIONAL { SELECT ?subject ?c WHERE {
+  
   OPTIONAL {
     ?subject c:label ?pickc . FILTER(isLiteral(?pickc))
     ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
@@ -998,11 +1018,14 @@ WHERE {
       FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
     }
   }
-  OPTIONAL { ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
-  OPTIONAL { ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
-  OPTIONAL { ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
-  OPTIONAL { ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc)) ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc)) ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc) && !BOUND(?enxc)) ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
   BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?subject ?r WHERE {
+  
   OPTIONAL {
     ?subject rdfs:label ?pickr . FILTER(isLiteral(?pickr))
     ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
@@ -1016,11 +1039,12 @@ WHERE {
       FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
     }
   }
-  OPTIONAL { ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
-  OPTIONAL { ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
-  OPTIONAL { ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
-  OPTIONAL { ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr)) ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr)) ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr) && !BOUND(?enxr)) ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
   BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  } } }
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
 c:ChoiceSelect a beh:Reaction ;
@@ -1240,6 +1264,8 @@ WHERE {
   UNION
   { FILTER NOT EXISTS { $this c:options ?explicit } $this c:property/rdfs:range ?range . ?subject a ?range . FILTER(isIRI(?subject))
     BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?subject)))) AS ?node) }
+  LATERAL { OPTIONAL { SELECT ?subject ?c WHERE {
+  
   OPTIONAL {
     ?subject c:label ?pickc . FILTER(isLiteral(?pickc))
     ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
@@ -1253,11 +1279,14 @@ WHERE {
       FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
     }
   }
-  OPTIONAL { ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
-  OPTIONAL { ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
-  OPTIONAL { ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
-  OPTIONAL { ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?subject c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc)) ?subject c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc)) ?subject c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc) && !BOUND(?enxc)) ?subject c:label ?anyc FILTER(isLiteral(?anyc)) }
   BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?subject ?r WHERE {
+  
   OPTIONAL {
     ?subject rdfs:label ?pickr . FILTER(isLiteral(?pickr))
     ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
@@ -1271,11 +1300,12 @@ WHERE {
       FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
     }
   }
-  OPTIONAL { ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
-  OPTIONAL { ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
-  OPTIONAL { ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
-  OPTIONAL { ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?subject rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr)) ?subject rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr)) ?subject rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr) && !BOUND(?enxr)) ?subject rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
   BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  } } }
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
 c:ChipsToggle a beh:Reaction ;

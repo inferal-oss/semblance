@@ -325,10 +325,10 @@ WHERE {
       FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
     }
   }
-  OPTIONAL { c:Link c:externalHint ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { c:Link c:externalHint ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { c:Link c:externalHint ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) c:Link c:externalHint ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) c:Link c:externalHint ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) c:Link c:externalHint ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?hint)
   BIND(IRI(CONCAT(STR($this), "/~l10n-hint")) AS ?node)
 }""" .

@@ -85,10 +85,10 @@ WHERE {
       FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
     }
   }
-  OPTIONAL { $this c:countLabel ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { $this c:countLabel ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { $this c:countLabel ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { $this c:countLabel ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) $this c:countLabel ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:countLabel ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:countLabel ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:countLabel ?any FILTER(isLiteral(?any)) }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?spokenWord)
   BIND(CONCAT(", ", ?figureValue, IF(COALESCE(?spokenWord, "") != "", CONCAT(" ", ?spokenWord), "")) AS ?spokenLine)
   BIND(CONCAT("opt-", ENCODE_FOR_URI(STR(?opt))) AS ?key)

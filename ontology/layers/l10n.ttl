@@ -75,10 +75,10 @@ WHERE {
       FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
     }
   }
-  OPTIONAL { $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { $this c:label ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { $this c:label ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:label ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:label ?any FILTER(isLiteral(?any)) }
   BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?label)
 }""" .
 
