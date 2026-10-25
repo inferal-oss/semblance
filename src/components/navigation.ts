@@ -4,7 +4,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { C, MOD, NS, XSD_INTEGER } from '../ns.ts'
 import { el, hashKey, marked, md5Key } from './data.ts'
-import { isTrue, labelOf, named, nodes, num, text } from './util.ts'
+import { isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
 
 const C_ITEMS = NS.c + 'items'
 const C_PARENT_PROPERTY = NS.c + 'parentProperty'
@@ -14,6 +14,7 @@ const C_GOES_TO = NS.c + 'goesTo'
 const C_STEPS = NS.c + 'steps'
 const C_CURRENT = NS.c + 'current'
 const C_NAVIGABLE = NS.c + 'navigable'
+const C_HREF = NS.c + 'href'
 
 const NONE = { add: [], remove: [] }
 
@@ -77,7 +78,12 @@ const breadcrumbs: FnRule = (ctx, focus) => {
     } else if (navigates) {
       content = el(o, `${id}-link`, 'Button', { type: 'button', class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
       o.t(content, C.selects, crumb)
-    } else content = el(o, `${id}-crumb`, 'Span', { class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
+    } else {
+      const href = str(ctx.object(crumb, NS.nav + 'href') ?? ctx.object(crumb, C_HREF))
+      content = href === undefined
+        ? el(o, `${id}-crumb`, 'Span', { class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
+        : el(o, `${id}-link`, 'A', { class: 'sem-crumb', href }, [o.text(`${id}-text`, label)])
+    }
     const parts = [content]
     if (i < last) parts.push(el(o, `${id}-sep`, 'Span', { class: 'sem-sep', 'aria-hidden': 'true' }, [o.text(`${id}-sep-text`, '/')]))
     return el(o, id, 'Li', {}, parts)
