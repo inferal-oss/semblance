@@ -41,12 +41,17 @@ trap 'rm -f "$Q/$TICKET" "$STARTED"; exit 130' INT TERM HUP
 
 announced=""
 while :; do
-  # Forget tickets whose callers are gone (killed, timed out).
+  # Forget tickets whose callers are gone (killed, timed out). Ask ps, not kill -0: kill -0 also fails
+  # with EPERM for a live caller this one may not signal (a sandboxed session), which dropped live
+  # tickets and left their callers waiting forever.
   for f in "$Q"/*; do
     [ -e "$f" ] || continue
-    kill -0 "${f##*-}" 2>/dev/null || rm -f "$f"
+    ps -p "${f##*-}" >/dev/null 2>&1 || rm -f "$f"
   done
+  # A ticket removed by someone else anyway comes back under its own name, so its place is kept.
+  [ -e "$Q/$TICKET" ] || touch "$Q/$TICKET"
   rank="$(ls "$Q" | sort | grep -n "^$TICKET\$" | cut -d: -f1)"
+  [ -n "$rank" ] || rank=999999
   if [ "$rank" -le "$SLOTS" ]; then
     i=1
     while [ "$i" -le "$SLOTS" ]; do
