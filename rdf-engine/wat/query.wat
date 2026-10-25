@@ -62,7 +62,109 @@
       (local.set $el (i32.load offset=28 (local.get $el)))
       (br $elements))))
   (call $an_filters (i32.load offset=8 (local.get $g)))
+  ;; the variables its elements mention (+24), for early filters and joins
+  (local.set $sub (call $anew (call $bits_words)))
+  (local.set $el (i32.load offset=4 (local.get $g)))
+  (loop $mentions
+    (if (local.get $el) (then
+      (call $mention_elem (local.get $el) (local.get $sub))
+      (local.set $el (i32.load offset=28 (local.get $el)))
+      (br $mentions))))
+  (i32.store offset=24 (local.get $g) (local.get $sub))
   (local.get $b))
+
+;; Set in bitset m every variable element el mentions, at any depth.
+(func $mention_elem (param $el i32) (param $m i32)
+  (local $k i32) (local $i i32) (local $l i32)
+  (local.set $k (i32.load (local.get $el)))
+  (if (i32.eq (local.get $k) (i32.const P_TRIPLE)) (then
+    (call $an_ref (local.get $m) (i32.load offset=4 (local.get $el)))
+    (call $an_ref (local.get $m) (i32.load offset=8 (local.get $el)))
+    (call $an_ref (local.get $m) (i32.load offset=12 (local.get $el)))
+    (return)))
+  (if (i32.eq (local.get $k) (i32.const P_PATH)) (then
+    (call $an_ref (local.get $m) (i32.load offset=4 (local.get $el)))
+    (call $an_ref (local.get $m) (i32.load offset=12 (local.get $el)))
+    (return)))
+  (if (i32.eq (local.get $k) (i32.const P_GROUP)) (then (call $mention_group (local.get $el) (local.get $m)) (return)))
+  (if (i32.eq (local.get $k) (i32.const P_UNION)) (then
+    (call $mention_elem (i32.load offset=4 (local.get $el)) (local.get $m))
+    (call $mention_elem (i32.load offset=8 (local.get $el)) (local.get $m))
+    (return)))
+  (if (i32.or (i32.or (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (i32.eq (local.get $k) (i32.const P_MINUS)))
+              (i32.eq (local.get $k) (i32.const P_LATERAL)))
+    (then (call $mention_group (i32.load offset=4 (local.get $el)) (local.get $m)) (return)))
+  (if (i32.eq (local.get $k) (i32.const P_GRAPH)) (then
+    (call $an_ref (local.get $m) (i32.load offset=4 (local.get $el)))
+    (call $mention_group (i32.load offset=8 (local.get $el)) (local.get $m))
+    (return)))
+  (if (i32.eq (local.get $k) (i32.const P_BIND)) (then
+    (drop (call $mention_expr (i32.load offset=4 (local.get $el)) (local.get $m)))
+    (call $an_ref (local.get $m) (i32.sub (i32.const -1) (i32.load offset=8 (local.get $el))))
+    (return)))
+  (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then
+    (loop $vars
+      (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $el))) (then
+        (call $an_ref (local.get $m) (call $vref (i32.load (i32.add (i32.load offset=8 (local.get $el)) (i32.shl (local.get $i) (i32.const 2))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $vars))))
+    (return)))
+  (if (i32.eq (local.get $k) (i32.const P_SUB)) (then
+    ;; its WHERE and the slots it projects to (inner slots are its own)
+    (call $mention_group (i32.load offset=12 (i32.load offset=4 (local.get $el))) (local.get $m))
+    (local.set $l (i32.load offset=72 (i32.load offset=4 (local.get $el))))
+    (loop $items
+      (if (local.get $l) (then
+        (call $an_ref (local.get $m) (i32.sub (i32.const -1) (i32.load offset=4 (local.get $l))))
+        (call $an_ref (local.get $m) (i32.sub (i32.const -1) (i32.load offset=8 (local.get $l))))
+        (local.set $l (i32.load offset=28 (local.get $l)))
+        (br $items))))
+    (local.set $l (i32.load offset=8 (i32.load offset=4 (local.get $el))))
+    (loop $proj
+      (if (local.get $l) (then
+        (call $an_ref (local.get $m) (i32.sub (i32.const -1) (i32.load offset=4 (local.get $l))))
+        (local.set $l (i32.load offset=28 (local.get $l)))
+        (br $proj))))
+    (return))))
+
+;; A group's elements and filters.
+(func $mention_group (param $g i32) (param $m i32)
+  (local $el i32)
+  (local.set $el (i32.load offset=4 (local.get $g)))
+  (loop $elements
+    (if (local.get $el) (then
+      (call $mention_elem (local.get $el) (local.get $m))
+      (local.set $el (i32.load offset=28 (local.get $el)))
+      (br $elements))))
+  (local.set $el (i32.load offset=8 (local.get $g)))
+  (loop $filters
+    (if (local.get $el) (then
+      (drop (call $mention_expr (i32.load offset=4 (local.get $el)) (local.get $m)))
+      (local.set $el (i32.load offset=28 (local.get $el)))
+      (br $filters)))))
+
+;; Set in m the variables of expression e; whether it is free of RAND, BNODE
+;; and UUID (whose values differ from call to call).
+(func $mention_expr (param $e i32) (param $m i32) (result i32)
+  (local $k i32) (local $f i32) (local $ok i32)
+  (local.set $k (i32.load (local.get $e)))
+  (if (i32.eq (local.get $k) (i32.const E_VAR)) (then
+    (call $an_ref (local.get $m) (i32.sub (i32.const -1) (i32.load offset=4 (local.get $e))))
+    (return (i32.const 1))))
+  (if (i32.eq (local.get $k) (i32.const E_EXISTS)) (then
+    (call $mention_group (i32.load offset=4 (local.get $e)) (local.get $m))
+    (return (i32.const 1))))
+  (if (i32.ne (local.get $k) (i32.const E_CALL)) (then (return (i32.eq (local.get $k) (i32.const E_CONST)))))
+  (local.set $f (i32.load offset=4 (local.get $e)))
+  (local.set $ok (i32.eqz (i32.or (i32.or (i32.eq (local.get $f) (i32.const F_RAND)) (i32.eq (local.get $f) (i32.const F_BNODE)))
+                                  (i32.or (i32.eq (local.get $f) (i32.const F_UUID)) (i32.eq (local.get $f) (i32.const F_STRUUID))))))
+  (local.set $e (i32.load offset=8 (local.get $e)))
+  (loop $args
+    (if (local.get $e) (then
+      (local.set $ok (i32.and (local.get $ok) (call $mention_expr (local.get $e) (local.get $m))))
+      (local.set $e (i32.load offset=28 (local.get $e)))
+      (br $args))))
+  (local.get $ok))
 
 ;; A BIND whose expression depends on its variables alone (no EXISTS, no
 ;; RAND, BNODE, UUID): the list of those (+12: count, then slots), so rows
@@ -108,16 +210,28 @@
       (call $an_union (i32.load offset=8 (local.get $n))))
     (else (drop (call $an_group (local.get $n))))))
 
-;; Each filter that is a function of its variables gets their list (+8, as
-;; for BIND), so a group can apply it as soon as they are bound.
+;; Each filter free of RAND, BNODE and UUID gets the list of the variables it
+;; mentions at any depth (+8: count, then slots; EXISTS patterns included), so
+;; a group can apply it as soon as its rows decide them.
 (func $an_filters (param $f i32)
-  (local $b i32)
+  (local $b i32) (local $l i32) (local $s i32) (local $n i32)
   (loop $each
     (if (local.get $f) (then
       (call $an_expr (i32.load offset=4 (local.get $f)))
-      (local.set $b (call $anew (i32.shl (i32.add (global.get $nvars) (i32.const 1)) (i32.const 2))))
-      (if (call $pure_vars (i32.load offset=4 (local.get $f)) (local.get $b))
-        (then (i32.store offset=8 (local.get $f) (local.get $b))))
+      (local.set $b (call $anew (call $bits_words)))
+      (if (call $mention_expr (i32.load offset=4 (local.get $f)) (local.get $b)) (then
+        (local.set $l (call $anew (i32.shl (i32.add (global.get $nvars) (i32.const 1)) (i32.const 2))))
+        (local.set $n (i32.const 0))
+        (local.set $s (i32.const 0))
+        (loop $slots
+          (if (i32.lt_u (local.get $s) (global.get $nvars)) (then
+            (if (call $bit (local.get $b) (local.get $s)) (then
+              (local.set $n (i32.add (local.get $n) (i32.const 1)))
+              (i32.store (i32.add (local.get $l) (i32.shl (local.get $n) (i32.const 2))) (local.get $s))))
+            (local.set $s (i32.add (local.get $s) (i32.const 1)))
+            (br $slots))))
+        (i32.store (local.get $l) (local.get $n))
+        (i32.store offset=8 (local.get $f) (local.get $l))))
       (local.set $f (i32.load offset=28 (local.get $f)))
       (br $each)))))
 

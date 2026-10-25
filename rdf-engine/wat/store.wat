@@ -65,21 +65,24 @@
 
 ;; Rehash the set into cap slots.
 (func $qset_grow (param $cap i32)
-  (local $old i32) (local $n i32) (local $i i32) (local $v i32) (local $q i32)
-  (local.set $old (global.get $qset))
-  (local.set $n (global.get $qscap))
+  (local $mask i32) (local $i i32) (local $at i32) (local $q i32)
+  (call $free (global.get $qset) (i32.shl (global.get $qscap) (i32.const 2)))
   (global.set $qscap (local.get $cap))
-  (global.set $qset (call $alloc0 (i32.shl (global.get $qscap) (i32.const 2))))
+  (global.set $qset (call $alloc0 (i32.shl (local.get $cap) (i32.const 2))))
+  (local.set $mask (i32.sub (local.get $cap) (i32.const 1)))
+  ;; every quad once, in table order: no key comparisons, only empty slots to find
   (loop $each
-    (if (i32.lt_u (local.get $i) (local.get $n)) (then
-      (if (local.tee $v (i32.load (i32.add (local.get $old) (i32.shl (local.get $i) (i32.const 2))))) (then
-        (local.set $q (call $quad (i32.sub (local.get $v) (i32.const 1))))
-        (i32.store (call $qfind (i32.load (local.get $q)) (i32.load offset=4 (local.get $q))
-                                (i32.load offset=8 (local.get $q)) (i32.load offset=12 (local.get $q)))
-                   (local.get $v))))
+    (if (i32.lt_u (local.get $i) (global.get $qn)) (then
+      (local.set $q (call $quad (local.get $i)))
+      (local.set $at (call $qhash (i32.load (local.get $q)) (i32.load offset=4 (local.get $q))
+                                  (i32.load offset=8 (local.get $q)) (i32.load offset=12 (local.get $q))))
+      (loop $probe
+        (if (i32.load (i32.add (global.get $qset) (i32.shl (i32.and (local.get $at) (local.get $mask)) (i32.const 2)))) (then
+          (local.set $at (i32.add (local.get $at) (i32.const 1)))
+          (br $probe))))
+      (i32.store (i32.add (global.get $qset) (i32.shl (i32.and (local.get $at) (local.get $mask)) (i32.const 2))) (i32.add (local.get $i) (i32.const 1)))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $each))))
-  (call $free (local.get $old) (i32.shl (local.get $n) (i32.const 2))))
+      (br $each)))))
 
 ;; Empty the set slot at `slot`, shifting back the entries probed past it.
 (func $qset_delete (param $slot i32)

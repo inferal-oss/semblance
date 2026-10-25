@@ -113,43 +113,19 @@
   (i32.or (i32.or (i32.eqz (local.get $x)) (i32.eqz (local.get $y))) (i32.eq (local.get $x) (local.get $y))))
 
 ;; Push to t the merge of compatible rows a and b: where both are bound they
-;; are equal, so the merge is their bitwise or.
+;; are equal, so the merge is their bitwise or (two slots at a time).
 (func $push_merge (param $t i32) (param $a i32) (param $b i32)
-  (call $row_or (call $t_add (local.get $t)) (local.get $a) (local.get $b) (i32.const 0)))
-
-;; dst = a | b, or with and_ a & b, slot by slot.
-(func $row_or (param $dst i32) (param $a i32) (param $b i32) (param $and_ i32)
-  (local $i i32) (local $x i64) (local $y i64)
+  (local $i i32) (local $dst i32)
+  (local.set $dst (call $t_add (local.get $t)))
   (loop $pairs
     (if (i32.le_u (i32.add (local.get $i) (i32.const 8)) (global.get $W)) (then
-      (local.set $x (i64.load (i32.add (local.get $a) (local.get $i))))
-      (local.set $y (i64.load (i32.add (local.get $b) (local.get $i))))
       (i64.store (i32.add (local.get $dst) (local.get $i))
-        (select (i64.and (local.get $x) (local.get $y)) (i64.or (local.get $x) (local.get $y)) (local.get $and_)))
+        (i64.or (i64.load (i32.add (local.get $a) (local.get $i))) (i64.load (i32.add (local.get $b) (local.get $i)))))
       (local.set $i (i32.add (local.get $i) (i32.const 8)))
       (br $pairs))))
   (if (i32.lt_u (local.get $i) (global.get $W)) (then
-    (local.set $x (i64.load32_u (i32.add (local.get $a) (local.get $i))))
-    (local.set $y (i64.load32_u (i32.add (local.get $b) (local.get $i))))
     (i32.store (i32.add (local.get $dst) (local.get $i))
-      (i32.wrap_i64 (select (i64.and (local.get $x) (local.get $y)) (i64.or (local.get $x) (local.get $y)) (local.get $and_)))))))
-
-;; The slots a nested group with certain variables bits sees (and parameters,
-;; and the substituted row's variables): a scratch row of all-ones and zero
-;; slots, for $row_or with and_.
-(func $keep_mask (param $bits i32) (result i32)
-  (local $m i32) (local $s i32) (local $i i32)
-  (local.set $m (call $row_get))
-  (memory.fill (local.get $m) (i32.const 0) (global.get $W))
-  (loop $slots
-    (if (i32.lt_u (local.get $s) (global.get $NV)) (then
-      (local.set $i (i32.shl (local.get $s) (i32.const 2)))
-      (if (i32.or (i32.or (call $bit (local.get $bits) (local.get $s)) (i32.load (i32.add (global.get $params) (local.get $i))))
-                  (if (result i32) (global.get $lat) (then (i32.load (i32.add (global.get $lat) (local.get $i)))) (else (i32.const 0))))
-        (then (i32.store (i32.add (local.get $m) (local.get $i)) (i32.const -1))))
-      (local.set $s (i32.add (local.get $s) (i32.const 1)))
-      (br $slots))))
-  (local.get $m))
+      (i32.or (i32.load (i32.add (local.get $a) (local.get $i))) (i32.load (i32.add (local.get $b) (local.get $i))))))))
 
 (func $bit (param $bits i32) (param $s i32) (result i32)
   (i32.and (i32.shr_u (i32.load (i32.add (local.get $bits) (i32.shl (i32.shr_u (local.get $s) (i32.const 5)) (i32.const 2))))
@@ -552,9 +528,9 @@
   (local.set $el (i32.load offset=4 (local.get $g)))
   ;; filters on what the input binds already, before any element
   (if (i32.eqz (local.get $nf)) (then
-    (if (call $early_ready (i32.load offset=8 (local.get $g)) (local.get $t)) (then
+    (if (call $early_ready (local.get $g) (local.get $t)) (then
       (local.set $cur (call $t_copy (local.get $t)))
-      (local.set $applied (call $early_filters (i32.load offset=8 (local.get $g)) (local.get $cur) (i32.const 0)))))))
+      (local.set $applied (call $early_filters (local.get $g) (local.get $cur) (i32.const 0)))))))
   (block $done
     (loop $elements
       (br_if $done (i32.eqz (local.get $el)))
@@ -585,21 +561,22 @@
       ;; a filter whose variables every row binds holds the same now as at the
       ;; end (later elements keep the values rows have): apply it early
       (if (i32.and (i32.eqz (local.get $nf)) (i32.ne (local.get $cur) (local.get $t)))
-        (then (local.set $applied (call $early_filters (i32.load offset=8 (local.get $g)) (local.get $cur) (local.get $applied)))))
+        (then (local.set $applied (call $early_filters (local.get $g) (local.get $cur) (local.get $applied)))))
       (br $elements)))
   (if (i32.eq (local.get $cur) (local.get $t)) (then (local.set $cur (call $t_copy (local.get $t)))))
   (if (i32.eqz (local.get $nf)) (then (call $filter_mask (local.get $cur) (i32.load offset=8 (local.get $g)) (local.get $applied))))
   (local.get $cur))
 
-;; Apply to t the filters of list f not yet applied (bits of applied, by
-;; position) whose variables every row of t binds; returns the new applied.
-(func $early_filters (param $f i32) (param $t i32) (param $applied i32) (result i32)
-  (local $i i32) (local $bit i32)
+;; Apply to t the filters of group g not yet applied (bits of applied, by
+;; position) that t's rows decide; returns the new applied.
+(func $early_filters (param $g i32) (param $t i32) (param $applied i32) (result i32)
+  (local $i i32) (local $bit i32) (local $f i32)
+  (local.set $f (i32.load offset=8 (local.get $g)))
   (loop $filters
     (if (i32.and (i32.ne (local.get $f) (i32.const 0)) (i32.lt_u (local.get $i) (i32.const 32))) (then
       (local.set $bit (i32.shl (i32.const 1) (local.get $i)))
       (if (i32.and (i32.eqz (i32.and (local.get $applied) (local.get $bit))) (i32.ne (i32.load offset=8 (local.get $f)) (i32.const 0))) (then
-        (if (call $all_bound (local.get $t) (i32.load offset=8 (local.get $f))) (then
+        (if (call $decided (local.get $t) (i32.load offset=8 (local.get $f)) (i32.load offset=24 (local.get $g))) (then
           (call $filter_one (local.get $t) (i32.load offset=4 (local.get $f)))
           (local.set $applied (i32.or (local.get $applied) (local.get $bit)))))))
       (local.set $f (i32.load offset=28 (local.get $f)))
@@ -607,12 +584,14 @@
       (br $filters))))
   (local.get $applied))
 
-;; Whether some filter of list f could apply early to t.
-(func $early_ready (param $f i32) (param $t i32) (result i32)
+;; Whether some filter of group g could apply early to t.
+(func $early_ready (param $g i32) (param $t i32) (result i32)
+  (local $f i32)
+  (local.set $f (i32.load offset=8 (local.get $g)))
   (loop $filters
     (if (local.get $f) (then
       (if (i32.load offset=8 (local.get $f)) (then
-        (if (call $all_bound (local.get $t) (i32.load offset=8 (local.get $f))) (then (return (i32.const 1))))))
+        (if (call $decided (local.get $t) (i32.load offset=8 (local.get $f)) (i32.load offset=24 (local.get $g))) (then (return (i32.const 1))))))
       (local.set $f (i32.load offset=28 (local.get $f)))
       (br $filters))))
   (i32.const 0))
@@ -630,21 +609,37 @@
       (br $rows))))
   (i32.store offset=4 (local.get $t) (local.get $k)))
 
-;; Whether every row of t binds every variable of list vars (count, slots).
-(func $all_bound (param $t i32) (param $vars i32) (result i32)
-  (local $i i32) (local $j i32) (local $row i32)
-  (loop $rows
-    (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
-      (local.set $row (call $t_row (local.get $t) (local.get $i)))
-      (local.set $j (i32.const 0))
-      (loop $vars
-        (if (i32.lt_u (local.get $j) (i32.load (local.get $vars))) (then
-          (if (i32.eqz (i32.load (i32.add (local.get $row) (i32.shl (i32.load offset=4 (i32.add (local.get $vars) (i32.shl (local.get $j) (i32.const 2)))) (i32.const 2)))))
+;; Whether the rows of t decide each variable of list vars (count, slots) as
+;; the group's end will: every row binds it (later elements keep values), or
+;; none does and the group's elements (bitset m) never mention it. The first
+;; row rules most filters out.
+(func $decided (param $t i32) (param $vars i32) (param $m i32) (result i32)
+  (local $i i32) (local $j i32) (local $s i32) (local $b i32) (local $n i32) (local $first i32)
+  (if (i32.eqz (local.get $m)) (then (return (i32.const 0))))
+  (if (i32.eqz (local.tee $n (i32.load offset=4 (local.get $t)))) (then (return (i32.const 1))))
+  (local.set $first (call $t_row (local.get $t) (i32.const 0)))
+  (loop $vars
+    (if (i32.lt_u (local.get $j) (i32.load (local.get $vars))) (then
+      (local.set $s (i32.load offset=4 (i32.add (local.get $vars) (i32.shl (local.get $j) (i32.const 2)))))
+      (if (i32.eqz (i32.load (i32.add (local.get $first) (i32.shl (local.get $s) (i32.const 2))))) (then
+        (if (call $bit (local.get $m) (local.get $s)) (then (return (i32.const 0))))))
+      (local.set $j (i32.add (local.get $j) (i32.const 1)))
+      (br $vars))))
+  ;; the other rows, like the first
+  (local.set $j (i32.const 0))
+  (loop $vars
+    (if (i32.lt_u (local.get $j) (i32.load (local.get $vars))) (then
+      (local.set $s (i32.shl (i32.load offset=4 (i32.add (local.get $vars) (i32.shl (local.get $j) (i32.const 2)))) (i32.const 2)))
+      (local.set $b (i32.ne (i32.load (i32.add (local.get $first) (local.get $s))) (i32.const 0)))
+      (local.set $i (i32.const 1))
+      (loop $rows
+        (if (i32.lt_u (local.get $i) (local.get $n)) (then
+          (if (i32.ne (local.get $b) (i32.ne (i32.load (i32.add (call $t_row (local.get $t) (local.get $i)) (local.get $s))) (i32.const 0)))
             (then (return (i32.const 0))))
-          (local.set $j (i32.add (local.get $j) (i32.const 1)))
-          (br $vars))))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $rows))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $rows))))
+      (local.set $j (i32.add (local.get $j) (i32.const 1)))
+      (br $vars))))
   (i32.const 1))
 
 ;; Keep the rows of t for which every filter of the list holds.
@@ -684,17 +679,30 @@
 ;; mode 0 join, 1 left join (OPTIONAL, with g's filters as its condition).
 (func $join_group (param $g i32) (param $t i32) (param $mode i32) (param $out i32)
   (local $i i32) (local $mu i32) (local $key i32) (local $prev i32) (local $r i32) (local $j i32) (local $m i32) (local $matched i32)
-  (local $memo i32) (local $tabs i32) (local $x i32) (local $keep i32) (local $offs i32) (local $k i32) (local $kb i32) (local $full i32)
-  ;; the key: the values of the slots the group sees
-  (local.set $keep (call $keep_mask (i32.load offset=12 (local.get $g))))
+  (local $memo i32) (local $tabs i32) (local $x i32) (local $offs i32) (local $k i32) (local $kb i32) (local $full i32)
+  (local $diff i32) (local $bits i32) (local $ment i32) (local $o i32)
+  ;; in one pass over the slots: the key, the values of the slots the group
+  ;; sees (its certain variables, parameters, the substituted row's); and the
+  ;; slots a result can bind, those the group's elements mention (every slot
+  ;; when that is not known), ended by -1
+  (local.set $bits (i32.load offset=12 (local.get $g)))
+  (local.set $ment (i32.load offset=24 (local.get $g)))
   (local.set $offs (call $rs_alloc (i32.add (global.get $W) (i32.const 4))))
+  (local.set $diff (call $rs_alloc (i32.add (global.get $W) (i32.const 4))))
+  (local.set $x (local.get $diff))
   (loop $slots
-    (if (i32.lt_u (local.get $j) (global.get $W)) (then
-      (if (i32.load (i32.add (local.get $keep) (local.get $j))) (then
-        (i32.store (i32.add (local.get $offs) (i32.shl (local.get $k) (i32.const 2))) (local.get $j))
+    (if (i32.lt_u (local.get $j) (global.get $NV)) (then
+      (local.set $o (i32.shl (local.get $j) (i32.const 2)))
+      (if (i32.or (i32.or (call $bit (local.get $bits) (local.get $j)) (i32.load (i32.add (global.get $params) (local.get $o))))
+                  (if (result i32) (global.get $lat) (then (i32.load (i32.add (global.get $lat) (local.get $o)))) (else (i32.const 0)))) (then
+        (i32.store (i32.add (local.get $offs) (i32.shl (local.get $k) (i32.const 2))) (local.get $o))
         (local.set $k (i32.add (local.get $k) (i32.const 1)))))
-      (local.set $j (i32.add (local.get $j) (i32.const 4)))
+      (if (i32.or (i32.eqz (local.get $ment)) (call $bit (local.get $ment) (local.get $j))) (then
+        (i32.store (local.get $x) (local.get $o))
+        (local.set $x (i32.add (local.get $x) (i32.const 4)))))
+      (local.set $j (i32.add (local.get $j) (i32.const 1)))
       (br $slots))))
+  (i32.store (local.get $x) (i32.const -1))
   (local.set $kb (i32.shl (select (local.get $k) (i32.const 1) (local.get $k)) (i32.const 2)))
   (local.set $key (call $rs_alloc (local.get $kb)))
   (local.set $prev (call $rs_alloc (local.get $kb)))
@@ -720,7 +728,15 @@
         (local.set $x (if (result i32) (local.get $memo) (then (call $set_add (local.get $memo) (local.get $key))) (else (i32.const 0))))
         (if (i32.or (i32.eqz (local.get $memo)) (global.get $set_new))
           (then
-            (call $row_or (local.get $full) (local.get $mu) (local.get $keep) (i32.const 1))
+            ;; the row the group starts from: the key's slots of mu
+            (memory.fill (local.get $full) (i32.const 0) (global.get $W))
+            (local.set $j (i32.const 0))
+            (loop $fill
+              (if (i32.lt_u (local.get $j) (local.get $k)) (then
+                (local.set $o (i32.load (i32.add (local.get $offs) (i32.shl (local.get $j) (i32.const 2)))))
+                (i32.store (i32.add (local.get $full) (local.get $o)) (i32.load (i32.add (local.get $mu) (local.get $o))))
+                (local.set $j (i32.add (local.get $j) (i32.const 1)))
+                (br $fill))))
             (local.set $m (call $t_one (local.get $full)))
             (local.set $r (call $eval_group (local.get $g) (local.get $m) (local.get $mode)))
             (call $t_free (local.get $m))
@@ -731,8 +747,7 @@
       (local.set $j (i32.const 0))
       (loop $results
         (if (if (result i32) (i32.lt_u (local.get $j) (i32.load offset=4 (local.get $r))) (then (i32.eqz (call $step))) (else (i32.const 0))) (then
-          (if (call $compatible (local.get $mu) (call $t_row (local.get $r) (local.get $j))) (then
-            (call $push_merge (local.get $out) (local.get $mu) (call $t_row (local.get $r) (local.get $j)))
+          (if (call $merge_diff (local.get $out) (local.get $mu) (call $t_row (local.get $r) (local.get $j)) (local.get $diff)) (then
             (if (local.get $mode) (then
               ;; OPTIONAL's condition, on the merged row
               (if (call $filters_hold (i32.load offset=8 (local.get $g)) (call $t_row (local.get $out) (i32.sub (i32.load offset=4 (local.get $out)) (i32.const 1))))
@@ -754,7 +769,30 @@
       (call $v_free (local.get $tabs))
       (call $set_free (local.get $memo)))
     (else (if (local.get $r) (then (call $t_free (local.get $r))))))
-  (call $row_put (local.get $keep)))
+  (call $row_put (local.get $offs)))
+
+;; Push to t the merge of row mu and result row b of a nested group, when they
+;; are compatible: b binds only the slots of list diff and the key, where it
+;; agrees with mu; whether it was pushed.
+(func $merge_diff (param $t i32) (param $mu i32) (param $b i32) (param $diff i32) (result i32)
+  (local $at i32) (local $x i32) (local $y i32) (local $d i32) (local $row i32)
+  (local.set $d (local.get $diff))
+  (loop $check
+    (if (i32.ge_s (local.tee $at (i32.load (local.get $d))) (i32.const 0)) (then
+      (local.set $x (i32.load (i32.add (local.get $mu) (local.get $at))))
+      (local.set $y (i32.load (i32.add (local.get $b) (local.get $at))))
+      (if (i32.eqz (call $agree (local.get $x) (local.get $y))) (then (return (i32.const 0))))
+      (local.set $d (i32.add (local.get $d) (i32.const 4)))
+      (br $check))))
+  (memory.copy (local.tee $row (call $t_add (local.get $t))) (local.get $mu) (global.get $W))
+  (local.set $d (local.get $diff))
+  (loop $merge
+    (if (i32.ge_s (local.tee $at (i32.load (local.get $d))) (i32.const 0)) (then
+      (if (local.tee $y (i32.load (i32.add (local.get $b) (local.get $at))))
+        (then (i32.store (i32.add (local.get $row) (local.get $at)) (local.get $y))))
+      (local.set $d (i32.add (local.get $d) (i32.const 4)))
+      (br $merge))))
+  (i32.const 1))
 
 ;; A group as an element: P_GROUP, or a UNION of groups.
 (func $join_union (param $n i32) (param $t i32) (param $out i32)
