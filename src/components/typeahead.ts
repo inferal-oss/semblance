@@ -3,12 +3,13 @@
 // combining marks removed, lower case, one character for each of the label's.
 import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
+import { C, L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
+import { aria, shortcutLabels } from '../layers/keyboard.ts'
 import { compact } from './reference.ts'
 import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text } from './util.ts'
 
 const c = (local: string) => NS.c + local
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
+export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 
 /**
  * Case- and diacritic-insensitive form of a text that keeps its length in code points: each
@@ -153,4 +154,60 @@ const query: FnRule = (ctx, focus) => {
   return ctx.out(focus).t(focus, c('foldedQuery'), fold(typed)).quads
 }
 
-export const typeaheadFunctions: Record<string, FnRule> = { 'typeahead:texts': texts, 'typeahead:values': values, 'typeahead:query': query }
+/**
+ * One option (c:TypeaheadOptionRendering): a role=option row, hidden while it does not match the
+ * folded query, the matched part of its label (or of its detail) in a <mark>; then what it does (c:help) and the keys
+ * that do the same (key:hint), in Apple and other glyphs, announced with aria-keyshortcuts.
+ */
+const option: FnRule = (ctx, focus) => {
+  const typeahead = ctx.object(focus, c('of'))
+  const opt = ctx.object(focus, c('option'))
+  const label = str(ctx.object(focus, C.label))
+  const key = str(ctx.object(focus, c('searchKey')))
+  if (!typeahead || !opt || label === undefined || key === undefined) return []
+  const q = str(ctx.object(typeahead, c('foldedQuery'))) ?? ''
+  // Matched against the match key: the search key, and a detail's after a line break.
+  const mk = str(ctx.object(focus, c('matchKey'))) ?? key
+  const detail = str(ctx.object(focus, c('detail')))
+  const matches = q === '' || mk.includes(q)
+  const o = ctx.out(focus)
+  const found = q !== '' && matches ? [...mk.slice(0, mk.indexOf(q))].length : -1
+  const n = [...label].length
+  const at = found >= 0 && found < n ? found : -1
+  const dat = found > n ? found - n - 1 : -1
+  const width = [...q].length
+  /** A text cut where the match is: before it, the match (a <mark>), after it. */
+  const cut = (text: string, from: number, local: (part: string) => string) => {
+    const chars = [...text]
+    const pre = from >= 0 ? chars.slice(0, from).join('') : text
+    const hit = from >= 0 ? chars.slice(from, from + width).join('') : undefined
+    const post = from >= 0 ? chars.slice(from + width).join('') : ''
+    return [
+      ...(pre !== '' ? [o.text(local('pre'), pre)] : []),
+      ...(hit !== undefined ? [o.el(local('hit'), 'Mark', {}, [o.text(local('hit') + '-text', hit)])] : []),
+      ...(post !== '' ? [o.text(local('post'), post)] : []),
+    ]
+  }
+  const parts = [o.el('text', 'Span', { class: 'sem-ta-label' }, cut(label, at, (part) => part))]
+  if (detail !== undefined) parts.push(o.text('gap', ' '), o.el('detail', 'Span', { class: 'sem-ta-detail' }, cut(detail, dat, (part) => 'd' + part)))
+  const help = ctx.objects(focus, C.help).find((t) => t.value !== '')?.value
+  if (help !== undefined) parts.push(o.el('help', 'Span', { class: 'sem-ta-help' }, [o.text('help-text', help)]))
+  const hint = ctx.objects(focus, NS.key + 'hint').find((t) => t.value !== '')?.value
+  if (hint !== undefined) {
+    const [apple, other] = shortcutLabels(hint)
+    const keys = o.el('keys', 'Span', { class: 'sem-ta-keys' }, [
+      o.el('apple', 'Kbd', { class: 'sem-apple' }, [o.text('apple-text', apple)]),
+      o.el('other', 'Kbd', { class: 'sem-other' }, [o.text('other-text', other)]),
+    ])
+    o.attr(keys, 'aria-hidden', 'true')
+    parts.push(keys)
+  }
+  const root = o.el('root', 'Li', { id: o.node('root').value, hidden: matches ? undefined : '' }, parts)
+  o.attr(root, 'role', 'option')
+  if (hint !== undefined) o.attr(root, 'aria-keyshortcuts', aria(hint))
+  o.t(root, c('optionRow'), typeahead).t(root, c('pick'), opt)
+  o.renders(root)
+  return o.quads
+}
+
+export const typeaheadFunctions: Record<string, FnRule> = { 'typeahead:texts': texts, 'typeahead:values': values, 'typeahead:query': query, 'typeahead:option': option }

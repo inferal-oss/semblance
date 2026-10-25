@@ -342,6 +342,9 @@ export const BEH = {
   sourceClass: beh + 'sourceClass',
   deletes: beh + 'deletes',
   inserts: beh + 'inserts',
+  Click: beh + 'Click',
+  raise: beh + 'raise',
+  raisedBy: beh + 'raisedBy',
 } as const
 
 export const A11Y = { Layer: NS.a11y + 'Layer' } as const

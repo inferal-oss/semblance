@@ -122,9 +122,13 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   instead, its text selected, and an Escape nothing else uses gives the focus
   back ("/" goes to the Reference page's search). `key:Command` is a shortcut that belongs to
   no component: its press is an event its reactions handle (Z pauses the
-  inspector). Component classes declare arrow-key navigation patterns
+  inspector); one that `c:opens` an overlay opens it (⌘K opens the command
+  palette). Component classes declare arrow-key navigation patterns
   (`key:navigation`: roving focus for menus, tabs, trees, accordions).
-  `c:ShortcutList` lists every shortcut.
+  `c:ShortcutList` lists every shortcut; a `c:CommandPalette` lists every
+  command, every component with a shortcut and every place of the app,
+  filtered as one types, and runs the one picked (its key press, its click,
+  or going there), the recent ones first.
 - **Component shapes**: SHACL node shapes on component classes
   (`ontology/shapes/components.ttl`); the shapes layer validates every
   component, records `sh:ValidationResult`s, outlines offenders and
@@ -186,7 +190,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   Forward and typed addresses as `nav:Navigate` events. A `c:Link` with `c:to` a
   resource goes to the location that shows it, found by walking up the component
   tree to the switches that show it (`#components/inputs/inp-codes-spec`), and the
-  target is brought into view once rendered.
+  target is brought into view once rendered. A reaction goes somewhere the same
+  way by asking for it (`?x nav:goTo ?resource`): the effect makes it a step
+  and follows it.
 
 Our vocabularies are aligned with DCMI, SKOS, schema.org, ActivityStreams,
 PROV-O and others in `ontology/alignments.ttl`, with the strength of each link
@@ -202,7 +208,11 @@ the component set. The demo's **Components** page shows all of it.
   node, the value, and whether the control is checked.
 - Reactions are `beh:deletes` / `beh:inserts` CONSTRUCTs over `$event` / `$this`,
   with function fallbacks for stores without SPARQL. All matching reactions see
-  the pre-event state, and their union is applied as one delta.
+  the pre-event state, and their union is applied as one delta. A reaction may
+  raise a further event on another node (`?node beh:raise key:Press`): the bus
+  records it after this one (`beh:raisedBy`), for that node's own reactions.
+- A modal overlay (`aria-modal`) takes the focus when it opens (its `autofocus`
+  element), keeps Tab inside, and gives the focus back when it closes.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member
@@ -300,8 +310,9 @@ or its history is:
 - correlated sub-patterns in SPARQL use `EXISTS` / `LATERAL`, not `OPTIONAL` /
   `UNION`, which Oxigraph plans as scans.
 
-Two tests guard this. `test/cost.test.ts` measures ten interactions (toggle,
-type, hover, density, theme, tabs, page, source flip, window move, add) in
+Two tests guard this. `test/cost.test.ts` measures eleven interactions (toggle,
+type, hover, density, theme, tabs, page, source flip, window move, add, the
+command palette) in
 work counters: rule runs, derived triples written, triples matched, SPARQL
 result rows and DOM operations. They must not grow when the list grows by 300
 items and the history by 250 events. `test/soak.test.ts` runs 3,600 events on

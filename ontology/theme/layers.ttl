@@ -5,8 +5,8 @@
 
 # Theme for what the layers add: shortcut hints, busy state, shortcut lists.
 
-# --- keyboard: a hint after any element that declares a shortcut (Apple or other glyphs) ---
-[] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
+# --- keyboard: a hint after any element that declares a shortcut or a key hint (Apple or other glyphs) ---
+[] a sty:StyleRule ; sty:part ":is(button, a, [role=button], [role=switch]):is([data-sem-shortcut], [data-sem-key-hint])::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-other)" ] ,
                  [ sty:property "margin-inline-start" ; sty:raw "8px" ] ,
                  [ sty:property "padding" ; sty:raw "2px 5px" ] ,
@@ -15,7 +15,7 @@
                  [ sty:property "font" ; sty:raw "600 10px/1 var(--sem-font-mono)" ] ,
                  [ sty:property "opacity" ; sty:raw "0.75" ] ,
                  [ sty:property "vertical-align" ; sty:raw "1px" ] .
-[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch]):is([data-sem-shortcut], [data-sem-key-hint])::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple)" ] .
 
 # A hint on the part a component's class names (key:hintPart): a key cap at the end of a field box,
