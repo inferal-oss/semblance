@@ -71,6 +71,7 @@ export const ONTOLOGY_FILES = [
   'components/live.ttl',
   'components/forms.ttl',
   'components/sheet.ttl',
+  'components/gallery.ttl',
   'perf/perf.ttl',
   'domain/network.ttl',
   'shapes/components.ttl',
@@ -90,6 +91,7 @@ export const ONTOLOGY_FILES = [
   'shapes/upload.ttl',
   'shapes/forms.ttl',
   'shapes/sheet.ttl',
+  'shapes/gallery.ttl',
   'alignments.ttl',
   'theme/foundations.ttl',
   'theme/default.ttl',
@@ -129,4 +131,5 @@ export const ONTOLOGY_FILES = [
   'theme/live.ttl',
   'theme/forms.ttl',
   'theme/sheet.ttl',
+  'theme/gallery.ttl',
 ] as const

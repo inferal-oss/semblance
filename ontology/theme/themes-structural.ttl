@@ -842,20 +842,20 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Sheets and drawers: a large radius, no close glyph box, actions at the bottom right.
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--mac-glass-strong)" ] ,
                  [ sty:property "backdrop-filter" ; sty:raw "var(--mac-blur)" ] ,
                  [ sty:property "border" ; sty:raw "0.5px solid var(--mac-hairline)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=dialog] > .sem-panel:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "14px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "font-size" ; sty:raw "15px" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "-0.01em" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "50%" ] ,
                  [ sty:property "width" ; sty:raw "22px" ] ,
                  [ sty:property "height" ; sty:raw "22px" ] ,
@@ -1184,35 +1184,35 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Push buttons: a raised face; pressed, open or on, the bevel turns inside out.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-raised)" ] ,
                  [ sty:property "border-radius" ; sty:raw "3px" ] ,
                  [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
                  [ sty:property "text-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent], [aria-current=page]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent], [aria-current=page]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-button)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part "[data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent]):is([aria-pressed=true], [data-open]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent]):is([aria-pressed=true], [data-open]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-dither)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):disabled:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):disabled:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-faint)" ] ,
                  [ sty:property "opacity" ; sty:raw "1" ] ,
                  [ sty:property "text-shadow" ; sty:raw "1px 1px 0 var(--bv-hi)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-thin-raised)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):active:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):active:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-thin-sunken)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
     sty:part "[data-sem-c=menu] > button:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
@@ -1558,22 +1558,22 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "var(--sem-faint)" ] ,
                  [ sty:property "text-shadow" ; sty:raw "1px 1px 0 var(--bv-hi)" ] .
 
-# Dialogs and drawers are windows: a raised frame and a caption bar for a title, with a square
+# Dialogs, lightboxes and drawers are windows: a raised frame and a caption bar for a title, with a square
 # close button; no dimming behind them.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=popover]) > .sem-panel:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=popover]) > .sem-panel:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-face)" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-raised), var(--sem-shadow-4)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "padding" ; sty:raw "3px 3px 12px" ] ,
                  [ sty:property "gap" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > :not(.sem-head):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > :not(.sem-head):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "margin-inline" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-title)" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-title-fg)" ] ,
                  [ sty:property "padding" ; sty:raw "3px 3px 3px 6px" ] ,
@@ -1582,14 +1582,14 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--bv-dark), inset 1px 1px 0 1px #fff6b8" ] ,
                  [ sty:property "margin" ; sty:raw "-3px 0 0 -3px" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "flex" ; sty:raw "1" ] ,
                  [ sty:property "color" ; sty:raw "#000" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-face)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-raised)" ] ,
@@ -1599,10 +1599,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "font-size" ; sty:raw "10px" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:active:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:active:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "backdrop-filter" ; sty:raw "none" ] .
 
 # Frames: a raised window border, the theme's caption bar, and square controls.
@@ -1770,7 +1770,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding" ; sty:raw "4px 14px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0 0 1px var(--bv-dark), inset 1px 1px 0 1px #fff6b8" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head .sem-close:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head .sem-close:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "order" ; sty:raw "-1" ] ,
                  [ sty:property "width" ; sty:raw "13px" ] ,
                  [ sty:property "height" ; sty:raw "13px" ] ,
@@ -1844,35 +1844,35 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Push buttons: a raised face; pressed, open or on, the bevel turns inside out.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-raised)" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "font-family" ; sty:raw "var(--sem-font)" ] ,
                  [ sty:property "text-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent], [aria-current=page]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent], [aria-current=page]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-button)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part "[data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent]):is([aria-pressed=true], [data-open]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):not([data-sem-emphasis], [data-sem-tone]):not([data-sem-intent]):is([aria-pressed=true], [data-open]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-dither)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):disabled:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold):not([data-sem-emphasis=ghost]):disabled:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-faint)" ] ,
                  [ sty:property "opacity" ; sty:raw "1" ] ,
                  [ sty:property "text-shadow" ; sty:raw "1px 1px 0 var(--bv-hi)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-thin-raised)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):active:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=specimen] > .sem-docs > .sem-docs-toggle, [data-sem-c=status-bar] > .sem-fold)[data-sem-emphasis=ghost]:not(:disabled):active:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-thin-sunken)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
     sty:part "[data-sem-c=menu] > button:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
@@ -2216,35 +2216,35 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "var(--sem-faint)" ] ,
                  [ sty:property "text-shadow" ; sty:raw "1px 1px 0 var(--bv-hi)" ] .
 
-# Dialogs and drawers are windows: a raised frame and a caption bar for a title, with a square
+# Dialogs, lightboxes and drawers are windows: a raised frame and a caption bar for a title, with a square
 # close button; no dimming behind them.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=popover]) > .sem-panel:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=popover]) > .sem-panel:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-face)" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-raised), var(--sem-shadow-4)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "padding" ; sty:raw "3px 3px 12px" ] ,
                  [ sty:property "gap" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > :not(.sem-head):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > :not(.sem-head):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "margin-inline" ; sty:raw "10px" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-title)" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-title-fg)" ] ,
                  [ sty:property "padding" ; sty:raw "3px 3px 3px 6px" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "flex" ; sty:raw "1" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-title-fg)" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-face)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-raised)" ] ,
@@ -2254,10 +2254,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "font-size" ; sty:raw "10px" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:active:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:active:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-pressed)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "backdrop-filter" ; sty:raw "none" ] .
 
 # Frames: a raised window border, the theme's caption bar, and square controls.
@@ -2412,25 +2412,25 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # Everything with an edge is inked: two-pixel strokes on wobbly corners (elliptical radii that
 # never agree), a pencil shadow offset down and right, and a tilt when the pointer is over it.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border-width" ; sty:raw "2px" ] ,
                  [ sty:property "border-style" ; sty:raw "solid" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--ink)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-a)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "2px 3px 0 var(--ink)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):nth-child(2n):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):nth-child(2n):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "var(--wob-b)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):hover:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):hover:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "transform" ; sty:raw "rotate(-1.5deg) translateY(-1px)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "3px 4px 0 var(--ink)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "transform" ; sty:raw "translate(2px, 3px)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "0 0 0 var(--ink)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "3px" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
@@ -2701,16 +2701,16 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "color" ; sty:raw "inherit" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border" ; sty:raw "2px solid var(--ink)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-4)" ] ,
                  [ sty:property "overflow" ; sty:raw "visible" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=dialog] > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "rotate" ; sty:raw "-0.6deg" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-c)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=dialog] > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))::before" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "top" ; sty:raw "-13px" ] ,
@@ -2722,12 +2722,12 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "background" ; sty:raw "light-dark(rgb(240 220 140 / 0.75), rgb(200 190 120 / 0.45))" ] ,
                  [ sty:property "box-shadow" ; sty:raw "0 1px 2px rgb(0 0 0 / 0.1)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "font-family" ; sty:raw "var(--sem-font-display)" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] ,
                  [ sty:property "font-size" ; sty:raw "22px" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border" ; sty:raw "2px solid var(--ink)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-o)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
@@ -2888,36 +2888,36 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # corners, regular weight; pressed, the label greys and nothing moves. Accent buttons carry an inner
 # bottom edge.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "font-weight" ; sty:raw "400" ] ,
                  [ sty:property "border-radius" ; sty:raw "4px" ] ,
                  [ sty:property "transform" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "border-width" ; sty:raw "1px" ] ,
                  [ sty:property "border-style" ; sty:raw "solid" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-hover)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:disabled):active:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button):not([data-sem-emphasis], [data-sem-tone], [aria-current=page], [aria-pressed=true]):not(:disabled):active:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-pressed)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button)[data-sem-emphasis=solid]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button)[data-sem-emphasis=solid]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "border-color" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=pagination] button)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=flippable] .sem-flip, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button)[data-sem-emphasis=ghost]:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
     sty:part "[data-sem-c=menu] > button:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
@@ -2933,7 +2933,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border-color" ; sty:raw "transparent" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part "[data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button[aria-current=page]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--fl-accent-edge)" ] ,
                  [ sty:property "border-color" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Button ; sty:intent sty:Primary ;
@@ -3267,7 +3267,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # Content dialogs: an eight-pixel sheet on a smoke layer, the actions on a darker footer band, buttons
 # sharing its width.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-overlay)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke-flyout)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-4)" ] .
@@ -3276,7 +3276,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "8px" ] ,
                  [ sty:property "padding" ; sty:raw "24px 24px 0" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-panel > .sem-head h2:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "font-family" ; sty:raw "var(--sem-font-display)" ] ,
                  [ sty:property "font-size" ; sty:raw "20px" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
@@ -3292,10 +3292,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=dialog] > .sem-panel > .sem-actions > *:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 0" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer], [data-sem-c=toast]) .sem-close:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "4px" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=dialog], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox], [data-sem-c=drawer]) > .sem-scrim:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "backdrop-filter" ; sty:raw "none" ] .
 
 # Frames: an eight-pixel window on Mica with a soft layered shadow; the title sits at the left after

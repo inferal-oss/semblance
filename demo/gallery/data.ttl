@@ -18,7 +18,7 @@
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -165,6 +165,33 @@ ui:dt-avatars a c:Flippable ; c:front ui:dt-avatars-spec .
 ui:dt-avatars-spec a c:Specimen ; c:demonstrates c:Avatar , c:AvatarGroup ; c:label "Avatar" ;
     c:help "Initials on a hue derived from the label (the same name always gets the same color), or an image; sized by sty:size. A group overlaps them and counts the rest past c:max." ;
     c:children ( ui:dt-av-ada ui:dt-av-tim ui:dt-av-grace ui:dt-av-image ui:dt-av-group ) .
+
+# --- Gallery: images in a layout the radio cards pick -----------------------------------------------
+
+# The pictures (shared with the Overlays page's lightbox): a URL, what each shows, a caption, a size.
+ui:photo-harbour a c:Picture ; c:image "photos/harbour.jpg" ; c:width 1200 ; c:height 800 ;
+    c:alt "A pier with lamps runs into a calm harbour at dusk, sailboats in silhouette" ; c:caption "Harbour at dusk" .
+ui:photo-lake a c:Picture ; c:image "photos/lake.jpg" ; c:width 1200 ; c:height 900 ;
+    c:alt "Snow-capped mountains and a pine forest reflected in a still lake" ; c:caption "Mountain lake" .
+ui:photo-lighthouse a c:Picture ; c:image "photos/lighthouse.jpg" ; c:width 800 ; c:height 1200 ;
+    c:alt "A red and white lighthouse on dark rocks above breaking waves" ; c:caption "Lighthouse" .
+ui:photo-dunes a c:Picture ; c:image "photos/dunes.webp" ; c:width 1200 ; c:height 675 ;
+    c:alt "Rolling sand dunes in warm afternoon light, three walkers on a crest" ; c:caption "Dunes" .
+ui:photo-forest a c:Picture ; c:image "photos/forest.jpg" ; c:width 1200 ; c:height 1200 ;
+    c:alt "A sandy path leads into layers of pine forest in morning haze" ; c:caption "Forest path" .
+ui:photo-city a c:Picture ; c:image "photos/city.jpg" ; c:width 1200 ; c:height 800 ;
+    c:alt "City towers with lit windows under a starry sky and a crescent moon" ; c:caption "City at night" .
+
+# Lightboxes are fixed to the viewport, so they live on the desktop, like dialogs.
+ui:desktop c:hosts ui:dt-lightbox .
+ui:dt-photos a c:Gallery ; c:label "Places" ; c:galleryLayout c:PileLayout ; c:lightbox ui:dt-lightbox ;
+    c:images ( ui:photo-harbour ui:photo-lake ui:photo-lighthouse ui:photo-dunes ui:photo-forest ui:photo-city ) .
+ui:dt-lightbox a c:Lightbox ; c:of ui:dt-photos .
+ui:dt-layout a c:Segmented ; c:controls ui:dt-photos ; c:property c:galleryLayout .
+ui:dt-gallery a c:Flippable ; c:front ui:dt-gallery-spec .
+ui:dt-gallery-spec a c:Specimen ; c:demonstrates c:Gallery ; c:label "Gallery" ;
+    c:help "Images in a layout (c:galleryLayout), switched live here by a segmented control over the property: a carousel (swipe, scroll, arrows or a dot per image), a grid that fits its columns to the width, or a pile of prints - hover or focus one and it straightens and lifts while the others fan out. With a c:lightbox, every image opens it." ;
+    c:children ( ui:dt-layout ui:dt-photos ) .
 
 # --- MessageList: a thread of ActivityStreams notes -----------------------------------------------
 

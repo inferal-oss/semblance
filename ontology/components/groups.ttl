@@ -103,6 +103,8 @@ c:LiveIndicator sem:group c:FeedbackGroup . c:CountBadge sem:group c:FeedbackGro
 c:List sem:group c:DataGroup . c:ListItem sem:group c:DataGroup . c:Table sem:group c:DataGroup .
 c:DescriptionList sem:group c:DataGroup . c:Stat sem:group c:DataGroup . c:Metrics sem:group c:DataGroup .
 c:Avatar sem:group c:DataGroup . c:AvatarGroup sem:group c:DataGroup . c:Timeline sem:group c:DataGroup .
+c:Gallery sem:group c:DataGroup . c:ImageBrowser sem:group c:DataGroup . c:Snapped sem:group c:DataGroup .
+c:Picture sem:group c:DataGroup . c:GalleryLayout sem:group c:DataGroup .
 c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
 c:DataGrid sem:group c:DataGroup . c:GridRow sem:group c:DataGroup . c:TimeAxis sem:group c:DataGroup .
 c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView sem:group c:DataGroup .
@@ -127,7 +129,7 @@ c:Breadcrumbs sem:group c:NavigationGroup . c:Pagination sem:group c:NavigationG
 c:AppBar sem:group c:NavigationGroup . c:TabsDetachKey sem:group c:NavigationGroup .
 
 # --- Overlays ---
-c:Overlay sem:group c:OverlaysGroup . c:Dialog sem:group c:OverlaysGroup . c:Drawer sem:group c:OverlaysGroup .
+c:Overlay sem:group c:OverlaysGroup . c:Dialog sem:group c:OverlaysGroup . c:Lightbox sem:group c:OverlaysGroup . c:Drawer sem:group c:OverlaysGroup .
 c:Popover sem:group c:OverlaysGroup .
 
 # --- Disclosure ---

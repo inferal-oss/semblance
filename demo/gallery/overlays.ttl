@@ -14,7 +14,7 @@
 # Gallery page: Overlays.
 
 ui:gallery-overlays a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ) .
+    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ui:ov-lightboxes ) .
 ui:gallery-overlays-intro a c:Heading ; c:label "Overlays" .
 
 # Dialogs and drawers are fixed to the viewport, so they live on the shell's desktop
@@ -83,3 +83,15 @@ ui:ov-popovers a c:Flippable ; c:front ui:ov-popovers-spec .
 ui:ov-popovers-spec a c:Specimen ; c:demonstrates c:Popover ; c:label "Popover" ;
     c:help "Non-modal and anchored, so it can live inside the page (and inside this card). It shows c:help and c:content while c:open." ;
     c:children ( ui:ov-pop-info ui:ov-pop-status ui:ov-pop-small ) .
+
+# --- lightbox ---
+# A grid of the Data page's pictures whose lightbox loops, has a thumbnail strip and links to the
+# original. It shows the images of a gallery on the page (whose index it reads).
+ui:desktop c:hosts ui:ov-lightbox .
+ui:ov-photos a c:Gallery ; c:label "Places" ; c:galleryLayout c:GridLayout ; c:lightbox ui:ov-lightbox ;
+    c:images ( ui:photo-lake ui:photo-lighthouse ui:photo-city ui:photo-harbour ) .
+ui:ov-lightbox a c:Lightbox ; c:of ui:ov-photos ; c:loops true ; c:thumbnails true ; c:offersOriginal true .
+ui:ov-lightboxes a c:Flippable ; c:front ui:ov-lightboxes-spec .
+ui:ov-lightboxes-spec a c:Specimen ; c:demonstrates c:Lightbox ; c:label "Lightbox" ;
+    c:help "A modal viewer of a gallery's current image: ←/→ (mirrored right to left), a swipe, the thumbnails; Esc, ✕ or the scrim close it. Zoom with the button or a double-click. This one loops (c:loops) and links to the original (c:offersOriginal)." ;
+    c:children ( ui:ov-photos ) .

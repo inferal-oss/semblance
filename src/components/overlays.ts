@@ -12,6 +12,7 @@ const OV = {
   Dialog: c + 'Dialog',
   Drawer: c + 'Drawer',
   Popover: c + 'Popover',
+  Lightbox: c + 'Lightbox',
   opens: c + 'opens',
   side: c + 'side',
   trigger: c + 'trigger',
@@ -134,7 +135,7 @@ const openerAria: FnRule = (ctx, focus) => {
   const root = o.node('root')
   o.attr(root, 'aria-controls', mint(target.value, 'root'), 'root-aria-controls')
   o.attr(root, 'aria-expanded', String(isTrue(ctx.object(target, FB.open))), 'root-aria-expanded')
-  if (isA(ctx, target, OV.Dialog) || isA(ctx, target, OV.Drawer) || isA(ctx, target, OV.Popover)) o.attr(root, 'aria-haspopup', 'dialog', 'root-aria-haspopup')
+  if (isA(ctx, target, OV.Dialog) || isA(ctx, target, OV.Drawer) || isA(ctx, target, OV.Popover) || isA(ctx, target, OV.Lightbox)) o.attr(root, 'aria-haspopup', 'dialog', 'root-aria-haspopup')
   return o.quads
 }
 

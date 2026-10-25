@@ -34,6 +34,7 @@ import { reactions as liveReactions } from '../components/live.ts'
 import { reactions as formsReactions } from '../components/forms.ts'
 import { reactions as sheetReactions } from '../components/sheet.ts'
 import { reactions as stallReactions } from '../components/stall.ts'
+import { reactions as galleryReactions } from '../components/gallery.ts'
 
 const textFieldInput: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
@@ -146,6 +147,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...dataReactions,
   ...navigationReactions,
   ...overlaysReactions,
+  ...galleryReactions,
   ...workbenchReactions,
   ...referenceReactions,
   ...docsReactions,

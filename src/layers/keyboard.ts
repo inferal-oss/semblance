@@ -38,6 +38,37 @@ export function shortcutLabels(combo: string): [string, string] {
   return [parts.map((p) => GLYPHS[p]![0]).join('') + k, parts.map((p) => GLYPHS[p]![1]).join('') + k]
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Tab and Shift+Tab stay inside the topmost open modal dialog ([aria-modal=true] under `host`): past
+ * its last control to its first, and back. A focus outside it is brought in. Returns whether it moved
+ * the focus (the caller then prevents the browser's own move).
+ */
+export function trapTab(e: KeyboardEvent, host: Element): boolean {
+  if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return false
+  const modal = [...host.querySelectorAll('[aria-modal=true]')].filter((m) => !m.closest('[hidden], [inert]')).at(-1)
+  if (!modal) return false
+  const parts = ([...modal.querySelectorAll(FOCUSABLE)] as HTMLElement[]).filter((el) => !el.closest('[hidden], [inert]') && (el.getClientRects?.().length ?? 1) > 0)
+  const active = modal.ownerDocument.activeElement
+  const first = parts[0] ?? (modal as HTMLElement)
+  const last = parts.at(-1) ?? (modal as HTMLElement)
+  const to = !modal.contains(active) ? first : e.shiftKey && (active === first || active === modal) ? last : !e.shiftKey && active === last ? first : undefined
+  if (!to) return false
+  to.focus()
+  return true
+}
+
+/** Whether an element reads right to left (its computed direction, else the nearest dir attribute). */
+export function rightToLeft(el: Element): boolean {
+  const direction = el.ownerDocument.defaultView?.getComputedStyle?.(el)?.direction
+  return direction ? direction === 'rtl' : el.closest('[dir]')?.getAttribute('dir') === 'rtl'
+}
+
+/** A combination with its horizontal arrows swapped: what it means in a right-to-left page. */
+export const mirrored = (combo: string) =>
+  combo.replace(/arrow(left|right)$/, (_, side: string) => (side === 'left' ? 'arrowright' : 'arrowleft'))
+
 /** aria-keyshortcuts uses platform key names. */
 const aria = (combo: string) =>
   normalizeShortcut(combo)
