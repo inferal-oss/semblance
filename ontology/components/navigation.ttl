@@ -49,7 +49,8 @@ c:Breadcrumbs a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A trail of nodes in a <nav> (c:label names it, default "Breadcrumb"): c:items, or the path
 from the root down to c:of (or to c:property of c:controls) through c:parentProperty. The last is
-aria-current=page. With c:controls and c:property, earlier crumbs navigate there."""@en ;
+aria-current=page. With c:controls and c:property, earlier crumbs select a graph node. Otherwise,
+an earlier crumb with c:href or nav:href is a link to that address."""@en ;
     sem:slug "breadcrumbs" .
 c:BreadcrumbsRendering a sem:Rendering ; sem:targets c:Breadcrumbs ; sem:stratum 0 ;
     sem:functionOnly "The derived trail follows c:parentProperty, a predicate named in the data, up to any depth: SPARQL 1.1 property paths need a fixed predicate." .

@@ -19,9 +19,9 @@ ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" .
 
 # --- Breadcrumbs ----------------------------------------------------------------------------------
 
-ui:nv-crumb-home c:label "Semblance" .
-ui:nv-crumb-components c:label "Components" .
-ui:nv-crumb-navigation c:label "Navigation" .
+ui:nv-crumb-home c:label "Semblance" ; c:href "/" .
+ui:nv-crumb-components c:label "Components" ; c:href "/components/" .
+ui:nv-crumb-navigation c:label "Navigation" ; c:href "/components/navigation/" .
 ui:nv-crumb-breadcrumbs c:label "Breadcrumbs" .
 ui:nv-crumbs-explicit a c:Breadcrumbs ;
     c:items ( ui:nv-crumb-home ui:nv-crumb-components ui:nv-crumb-navigation ui:nv-crumb-breadcrumbs ) .
