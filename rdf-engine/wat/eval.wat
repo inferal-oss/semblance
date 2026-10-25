@@ -860,13 +860,17 @@
       (br $done))))
   (local.get $out))
 
-;; BIND el: set its variable in each row of t where it is unbound. A pure
-;; expression (see $an_bind) is evaluated once per distinct value of its
-;; variables.
+;; BIND el: set its variable in each row of t where it is unbound. A row that
+;; binds it already (passed into a nested group, which BIND then joins) keeps
+;; it when the value is compatible and is dropped otherwise; a parameter or a
+;; substituted variable is a constant. A pure expression (see $an_bind) is
+;; evaluated once per distinct value of its variables.
 (func $bind_rows (param $el i32) (param $t i32)
   (local $i i32) (local $at i32) (local $v i32) (local $vars i32) (local $k i32) (local $set i32) (local $vals i32)
-  (local $key i32) (local $j i32) (local $x i32) (local $row i32) (local $new i32)
+  (local $key i32) (local $j i32) (local $x i32) (local $row i32) (local $new i32) (local $cur i32) (local $fixed i32) (local $n i32)
   (local.set $v (i32.shl (i32.load offset=8 (local.get $el)) (i32.const 2)))
+  (local.set $fixed (i32.or (i32.ne (i32.load (i32.add (global.get $params) (local.get $v))) (i32.const 0))
+                            (if (result i32) (global.get $lat) (then (i32.ne (i32.load (i32.add (global.get $lat) (local.get $v))) (i32.const 0))) (else (i32.const 0)))))
   (if (i32.and (i32.ne (local.tee $vars (i32.load offset=12 (local.get $el))) (i32.const 0))
                (i32.ge_u (i32.load offset=4 (local.get $t)) (i32.const 4))) (then
     (local.set $k (i32.load (local.get $vars)))
@@ -878,23 +882,30 @@
     (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
       (local.set $row (call $t_row (local.get $t) (local.get $i)))
       (local.set $at (i32.add (local.get $row) (local.get $v)))
-      (if (i32.eqz (i32.load (local.get $at))) (then
-        (if (local.get $set)
-          (then
-            (local.set $j (i32.const 0))
-            (loop $keys
-              (if (i32.lt_u (local.get $j) (local.get $k)) (then
-                (i32.store (i32.add (local.get $key) (i32.shl (local.get $j) (i32.const 2)))
-                  (i32.load (i32.add (local.get $row) (i32.shl (i32.load offset=4 (i32.add (local.get $vars) (i32.shl (local.get $j) (i32.const 2)))) (i32.const 2)))))
-                (local.set $j (i32.add (local.get $j) (i32.const 1)))
-                (br $keys))))
-            (local.set $x (call $set_add (local.get $set) (local.get $key)))
-            (local.set $new (global.get $set_new))
-            (if (local.get $new) (then (call $v_push1 (local.get $vals) (call $ev (i32.load offset=4 (local.get $el)) (local.get $row)))))
-            (i32.store (local.get $at) (call $v_at (local.get $vals) (local.get $x))))
-          (else (i32.store (local.get $at) (call $ev (i32.load offset=4 (local.get $el)) (local.get $row)))))))
+      (block $kept
+        (if (i32.or (i32.eqz (local.tee $cur (i32.load (local.get $at)))) (i32.eqz (local.get $fixed))) (then
+          (if (local.get $set)
+            (then
+              (local.set $j (i32.const 0))
+              (loop $keys
+                (if (i32.lt_u (local.get $j) (local.get $k)) (then
+                  (i32.store (i32.add (local.get $key) (i32.shl (local.get $j) (i32.const 2)))
+                    (i32.load (i32.add (local.get $row) (i32.shl (i32.load offset=4 (i32.add (local.get $vars) (i32.shl (local.get $j) (i32.const 2)))) (i32.const 2)))))
+                  (local.set $j (i32.add (local.get $j) (i32.const 1)))
+                  (br $keys))))
+              (local.set $x (call $set_add (local.get $set) (local.get $key)))
+              (local.set $new (global.get $set_new))
+              (if (local.get $new) (then (call $v_push1 (local.get $vals) (call $ev (i32.load offset=4 (local.get $el)) (local.get $row)))))
+              (local.set $x (call $v_at (local.get $vals) (local.get $x))))
+            (else (local.set $x (call $ev (i32.load offset=4 (local.get $el)) (local.get $row)))))
+          (if (i32.eqz (local.get $cur))
+            (then (i32.store (local.get $at) (local.get $x)))
+            (else (br_if $kept (i32.and (i32.ne (local.get $x) (i32.const 0)) (i32.ne (local.get $x) (local.get $cur))))))))
+        (if (i32.ne (local.get $i) (local.get $n)) (then (memory.copy (call $t_row (local.get $t) (local.get $n)) (local.get $row) (global.get $W))))
+        (local.set $n (i32.add (local.get $n) (i32.const 1))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $rows))))
+  (i32.store offset=4 (local.get $t) (local.get $n))
   (if (local.get $set) (then
     (call $row_put (local.get $key))
     (call $v_free (local.get $vals))
