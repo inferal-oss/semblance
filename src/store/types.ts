@@ -42,4 +42,21 @@ export interface GraphStore {
    * must not be used afterwards. Optional; stores that hold nothing outside the heap omit it.
    */
   dispose?(): void
+  /**
+   * A deadline for the queries that follow (select, construct, constructFor), in Date.now()
+   * milliseconds; undefined clears it. A query still running at the deadline throws
+   * QueryInterrupted, leaving the store as it was. Optional: a store that cannot interrupt a query
+   * (Oxigraph has no such hook) omits it, and a long query then runs to the end. The engine sets it
+   * to the end of the turn's budget (src/engine/watchdog.ts) and treats an interruption as a stall.
+   */
+  setDeadline?(at: number | undefined): void
+}
+
+/** Thrown by a query a store's deadline (setDeadline) cut off. Nothing was changed. */
+export class QueryInterrupted extends Error {
+  readonly interrupted = true
+  constructor(message = 'Query interrupted: it ran past its deadline') {
+    super(message)
+    this.name = 'QueryInterrupted'
+  }
 }

@@ -14,6 +14,7 @@ import { exampleFunctions } from './examples/index.ts'
 import { functions as referenceFunctions } from './components/reference.ts'
 import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
 import { viewFunctions } from './view/functions.ts'
+import { Watchdog } from './engine/watchdog.ts'
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -49,6 +50,11 @@ export class Runtime {
 
   /** Maintained views (docs/IVM.md): stepped once per tick, before the projections. */
   readonly views: ViewRuntime
+  /**
+   * The turn budget every projection and view of this runtime shares (src/engine/watchdog.ts): a
+   * turn over it is suspended, its pending work held until continueStall() or stopStall().
+   */
+  readonly watchdog = new Watchdog()
   /** The open transaction: every effective change since it began, by graph and quad (net weight). */
   private tx?: Map<string, { graph: string | undefined; q: Quad; w: number }>
 
@@ -61,6 +67,7 @@ export class Runtime {
     }
     // A view maintained while something is shown asks the projections that show it.
     this.views.shown = (component) => this.projections.some((p) => !p.engine.demand || p.engine.demand(component))
+    this.views.watchdog = this.watchdog
   }
 
   private readonly timerListeners: (() => void)[] = []
@@ -124,6 +131,10 @@ export class Runtime {
 
   /** One tick: views first, so the projections see their outputs in the same tick; then projections; then listeners. */
   private tick(byGraph: Map<string | undefined, Delta>, input: Delta) {
+    this.watchdog.turn(() => this.tickWatched(byGraph, input))
+  }
+
+  private tickWatched(byGraph: Map<string | undefined, Delta>, input: Delta) {
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
@@ -150,6 +161,10 @@ export class Runtime {
    * (`frame`); call it to refresh now. Returns whether anything was re-run.
    */
   refresh(): boolean {
+    return this.watchdog.turn(() => this.refreshWatched())
+  }
+
+  private refreshWatched(): boolean {
     const t = performance.now()
     let any = false
     for (const p of this.projections) if (p.engine.refresh()) settle(p), (any = true)
@@ -189,12 +204,17 @@ export class Runtime {
   project(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
     // Views start with the first projection (whose rule preference they share), before it reads the store.
     if (!this.views.isStarted) this.views.start(opts.prefer)
+    return this.watchdog.turn(() => this.projectWatched(opts, onError))
+  }
+
+  private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
     const index = new HtmlIndex(onError)
+    engine.watchdog = this.watchdog
     engine.onChange((d) => index.apply(d))
     engine.onStale = () => this.queueRefresh()
     if (opts.roots) {
@@ -287,6 +307,66 @@ export class Runtime {
       settle(p)
     }
     return more
+  }
+
+  // --- stalls (src/engine/watchdog.ts) ---------------------------------------------------------------
+
+  /** (rule, focus) pairs a suspended turn holds, in every projection. */
+  get held(): number {
+    return this.watchdog.held
+  }
+
+  /** Pairs a stopped stall left out of date, in every projection. */
+  get stopped(): number {
+    let n = 0
+    for (const p of this.projections) n += p.engine.stoppedCount
+    return n
+  }
+
+  /**
+   * Continue a stall for one slice of at most `sliceMs` (the host yields between slices, so the
+   * page stays responsive and shows progress). Continued to the end, the result is the same as a
+   * turn that was never suspended. Returns whether work is still held.
+   */
+  continueStall(sliceMs = 50): boolean {
+    const more = this.watchdog.turn(
+      () => {
+        let more = false
+        for (const p of this.projections) {
+          if (p.engine.heldCount) more = p.engine.continueHeld() || more
+          settle(p)
+        }
+        this.resumeViews()
+        return more || this.watchdog.held > 0
+      },
+      undefined,
+      sliceMs,
+    )
+    if (!more) this.watchdog.resolve()
+    for (const l of this.refreshListeners) l()
+    return more
+  }
+
+  /**
+   * Stop a stall: its held work is dropped (Engine.stopHeld). Every derived triple still comes
+   * from a complete evaluation; the pairs not evaluated keep their output from before the stall
+   * and are counted as stopped (out of date) until their input changes or retryStopped(). Input,
+   * views and the change log are not rolled back: what the stalled turn applied stays applied.
+   * Returns how many pairs are out of date.
+   */
+  stopStall(): number {
+    for (const p of this.projections) if (p.engine.heldCount) p.engine.stopHeld()
+    this.watchdog.resolve()
+    for (const l of this.refreshListeners) l()
+    return this.stopped
+  }
+
+  /** Evaluate what a stopped stall left out of date, as a turn of its own (it may stall again). */
+  retryStopped(): void {
+    this.watchdog.turn(() => {
+      for (const p of this.projections) p.engine.retryStopped(), settle(p)
+    })
+    for (const l of this.refreshListeners) l()
   }
 
   /** Apply a change to the input graph (default graph) and update every projection. */
