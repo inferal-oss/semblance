@@ -10,17 +10,19 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
 
 # Gallery page: Overlays.
 
 ui:gallery-overlays a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ui:ov-lightboxes ) .
+    c:children ( ui:gallery-overlays-intro ui:ov-dialogs ui:ov-drawers ui:ov-popovers ui:ov-lightboxes ui:ov-palettes ) .
 ui:gallery-overlays-intro a c:Heading ; c:label "Overlays" .
 
 # Dialogs and drawers are fixed to the viewport, so they live on the shell's desktop
 # (outside the gallery's flippable cards, whose 3D transforms would contain them).
 # The buttons on this page open them by saying so: `c:opens`.
-ui:desktop c:hosts ui:ov-dialog , ui:ov-confirm , ui:ov-drawer-end , ui:ov-drawer-start .
+ui:desktop c:hosts ui:ov-dialog , ui:ov-confirm , ui:ov-drawer-end , ui:ov-drawer-start , ui:ov-palette .
 
 # --- dialogs ---
 ui:ov-dialog a c:Dialog ; c:label "Rename graph" ;
@@ -95,3 +97,33 @@ ui:ov-lightboxes a c:Flippable ; c:front ui:ov-lightboxes-spec .
 ui:ov-lightboxes-spec a c:Specimen ; c:demonstrates c:Lightbox ; c:label "Lightbox" ;
     c:help "A modal viewer of a gallery's current image: ←/→ (mirrored right to left), a swipe, the thumbnails; Esc, ✕ or the scrim close it. Zoom with the button or a double-click. This one loops (c:loops) and links to the original (c:offersOriginal)." ;
     c:children ( ui:ov-photos ) .
+
+# --- command palette ---
+# The site has its own (⌘K / Ctrl+K anywhere; ui:palette in app.ttl): every keyboard command, every
+# component with a shortcut, every page and section. This one lists the commands and what this page
+# gives it (c:entries), in a section of its own: a command whose reaction changes the badge and says
+# so, two buttons of this page (running one clicks it), and a specimen on another page (c:to).
+ui:ov-palette a c:CommandPalette ; c:label "Gallery palette" ; c:placeholder "Run something on this page…" ;
+    c:lists c:PaletteCommands ; c:recentLimit 3 ;
+    c:entries ( ui:ov-pal-wave ui:ov-open-dialog ui:ov-open-drawer-end ui:ov-pal-to-combobox ) .
+ui:ov-pal-section a c:PaletteSection ; sem:order 4 ;
+    rdfs:label "Overlays page"@en , "Сторінка накладок"@uk , "Seite Overlays"@de , "صفحة الطبقات المنبثقة"@ar .
+ui:ov-pal-wave a key:Command ; c:paletteSection ui:ov-pal-section ;
+    rdfs:label "Wave hello" , "Помахати"@uk , "Winken"@de , "التلويح بالتحية"@ar ;
+    rdfs:comment "Changes the badge on the card" , "Змінює значок на картці"@uk , "Ändert das Abzeichen auf der Karte"@de , "يغيّر الشارة على البطاقة"@ar .
+ui:WaveHello a beh:Reaction ; beh:when key:Press ; beh:source ui:ov-pal-wave ;
+    beh:deletes """CONSTRUCT { ui:ov-pal-badge c:label ?old ; sty:tone ?tone } WHERE { { ui:ov-pal-badge c:label ?old } UNION { ui:ov-pal-badge sty:tone ?tone } }""" ;
+    beh:inserts """CONSTRUCT { ui:ov-pal-badge c:label "Waved from the palette" ; sty:tone sty:Success } WHERE {}""" ;
+    ann:announces "Hello from the palette" , "Привіт із палітри"@uk , "Hallo aus der Palette"@de , "مرحبًا من اللوحة"@ar ; ann:tone sty:Success .
+ui:ov-open-dialog c:paletteSection ui:ov-pal-section .
+ui:ov-open-drawer-end c:paletteSection ui:ov-pal-section .
+ui:ov-pal-to-combobox c:paletteSection ui:ov-pal-section ; c:to ui:inp-typeahead-spec ;
+    rdfs:label "The combobox specimen" , "Зразок комбобокса"@uk , "Das Kombinationsfeld-Muster"@de , "نموذج مربع التحرير والسرد"@ar ;
+    rdfs:comment "On the Inputs page" , "На сторінці «Введення»"@uk , "Auf der Seite „Eingaben“"@de , "في صفحة المدخلات"@ar .
+
+ui:ov-open-palette a c:Button ; c:label "Open the gallery palette" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; c:opens ui:ov-palette .
+ui:ov-pal-badge a c:Badge ; c:label "Not waved yet" ; sty:tone sty:Neutral .
+ui:ov-palettes a c:Flippable ; c:front ui:ov-palettes-spec .
+ui:ov-palettes-spec a c:Specimen ; c:demonstrates c:CommandPalette , c:PaletteSection ; c:label "Command palette" ;
+    c:help "A modal list of what one can do or go to, filtered as you type (a typeahead: the WAI-ARIA combobox over a listbox, in a dialog). It lists every key:Command, every component with a key:shortcut and every place of the app's location (c:lists), and the app's own c:entries, in sections (c:PaletteSection), the recently run first. ↓ ↑ move, Enter runs: a command gets its key:Press, a component its click, a place is gone to (c:to). A key:Command that c:opens it opens it - on this site ⌘K / Ctrl+K, anywhere - and the focus comes back where it was when it closes." ;
+    c:children ( ui:ov-open-palette ui:ov-pal-badge ) .

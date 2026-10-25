@@ -42,6 +42,7 @@ mot:preference rdfs:label "Рух"@uk , "Bewegung"@de , "الحركة"@ar .
 mot:Full rdfs:label "Повний"@uk , "Voll"@de , "كاملة"@ar .
 mot:Reduced rdfs:label "Зменшений"@uk , "Reduziert"@de , "مخففة"@ar .
 mot:None rdfs:label "Без руху"@uk , "Keine"@de , "بلا"@ar .
+mot:System rdfs:label "Як у системі"@uk , "System"@de , "حسب النظام"@ar .
 sty:density rdfs:label "Density" , "Щільність"@uk , "Dichte"@de , "الكثافة"@ar .
 sty:Comfortable rdfs:label "Comfortable" , "Простора"@uk , "Bequem"@de , "مريحة"@ar .
 sty:Compact rdfs:label "Compact" , "Компактна"@uk , "Kompakt"@de , "مضغوطة"@ar .

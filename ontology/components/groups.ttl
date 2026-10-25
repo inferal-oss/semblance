@@ -33,7 +33,7 @@ c:NavigationGroup a sem:ComponentGroup ; sem:order 7 ;
     rdfs:comment "Moving between views: tabs, navigation lists, breadcrumbs, steppers, the app bar."@en .
 c:OverlaysGroup a sem:ComponentGroup ; sem:order 8 ;
     rdfs:label "Overlays"@en , "Накладки"@uk , "Overlays"@de , "الطبقات المنبثقة"@ar ;
-    rdfs:comment "Content above the page: dialogs, drawers, popovers."@en .
+    rdfs:comment "Content above the page: dialogs, drawers, popovers, the command palette."@en .
 c:DisclosureGroup a sem:ComponentGroup ; sem:order 9 ;
     rdfs:label "Disclosure"@en , "Розкриття"@uk , "Aufklappen"@de , "الإفصاح"@ar ;
     rdfs:comment "Showing and hiding: accordions, and cards that turn over to their source."@en .
@@ -46,7 +46,7 @@ c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
 
 # --- Layout ---
 c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
-c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup .
+c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup . c:LinkedCard sem:group c:LayoutGroup .
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
 c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup .
 c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Connector sem:group c:LayoutGroup .
@@ -134,6 +134,9 @@ c:AppBar sem:group c:NavigationGroup . c:TabsDetachKey sem:group c:NavigationGro
 # --- Overlays ---
 c:Overlay sem:group c:OverlaysGroup . c:Dialog sem:group c:OverlaysGroup . c:Lightbox sem:group c:OverlaysGroup . c:Drawer sem:group c:OverlaysGroup .
 c:Popover sem:group c:OverlaysGroup .
+# The command palette, what it lists and how it groups and remembers it.
+c:CommandPalette sem:group c:OverlaysGroup . c:PaletteSource sem:group c:OverlaysGroup .
+c:PaletteSection sem:group c:OverlaysGroup . c:RecentRun sem:group c:OverlaysGroup .
 
 # --- Disclosure ---
 c:Accordion sem:group c:DisclosureGroup . c:AccordionItem sem:group c:DisclosureGroup .

@@ -63,14 +63,14 @@ Thin vocabularies. Every component
 
 | group | components |
 |---|---|
-| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
+| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · LinkedCard · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
 | **Type** | Heading · Text · Link · Kbd · Code · Blockquote · GraphMark · Emblem · SourceView · Walkthrough (WalkthroughStep, Mention) · LiveExample |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
 | **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavLink · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
-| **Overlays** | Dialog · Drawer · Popover · Lightbox · Tooltip (layer) |
+| **Overlays** | Dialog · Drawer · Popover · Lightbox · CommandPalette · Tooltip (layer) |
 | **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
 | **Disclosure** | Accordion / AccordionItem · Flippable |
 | **Inspection** | QueryWorkbench (RunQueryButton) · ResultTable · ResultGraph · ResultTurtle · QueryView · TriplesView · StreamMembers · StreamStats · ElementMarkup · Highlight · ProjectionView · ShapeReport · ClassDoc · the Reference's TermTree, TermOverview, TermAlignment, TermMembers |
@@ -148,6 +148,18 @@ listed (`c:FileItem`) with the reason. With `file:uploadTo` or `file:handler` ea
 uploaded at once, with a `c:Progress`, and its remove button cancels the upload. The picker, the
 drop's `DataTransfer` and the uploads are a host effect (`Files`, `src/files.ts`).
 
+A **command palette** (`c:CommandPalette`, `ontology/components/palette.ttl`; ⌘K / Ctrl+K) is a
+typeahead in a modal overlay whose options are things to run: every `key:Command`, every component
+with a `key:shortcut` and every place of the app's location (the cases of the switches that follow a
+`nav:Dimension`: pages, sections, examples), chosen with `c:lists`, and the app's own `c:entries`,
+grouped in sections (`c:PaletteSection`, `c:paletteSection`) with the recently run ones first (`c:RecentRun`, kept by a
+`per:Policy`). Each shows what it does (`c:help`) and its keys (`key:hint`). Running one (Enter or a
+click) closes it and gives the item what its key would: a command its `key:Press`, a component its
+`beh:Click` (a reaction raises them: `beh:raise`), and a place is gone to as a link to it would go
+(`nav:goTo`). A `key:Command` that `c:opens` it opens it; like every modal overlay it takes the focus
+and gives it back when it closes. The options are minted when it opens; a keystroke costs what the
+palette shows, not the size of the app. On a phone it is a full-screen sheet.
+
 (`c:Switch` is the case switcher that picks one child by a property's value;
 the on/off control is `c:ToggleSwitch`.)
 
@@ -187,7 +199,7 @@ per projection. New ones:
 | layer | vocabulary | effect |
 |---|---|---|
 | **Validation** (`val:`) | SHACL: `c:validates` a `sh:PropertyShape` on the data | Each field shows the shape's `sh:message` (and `aria-invalid`) while the value violates `sh:minLength`, `sh:maxLength`, `sh:pattern`, `sh:minInclusive`/`sh:maxInclusive`, `sh:minCount`. A form's submit is disabled while any of its fields is invalid. |
-| **Keyboard** (`key:`) | `key:shortcut "mod+k"` on any component | `aria-keyshortcuts` and a `<kbd>` hint on the element; the key press becomes a `beh:Shortcut` event addressed to that component, which runs its click reactions. `c:ShortcutList` lists them all (SPARQL). |
+| **Keyboard** (`key:`) | `key:shortcut "mod+k"` on any component; `key:Command` for a key that belongs to no component | `aria-keyshortcuts` and a `<kbd>` hint on the element; the key press activates that component, which runs its click reactions; a command's press is a `key:Press` event its reactions handle (one that `c:opens` an overlay opens it). `c:ShortcutList` lists them all; a command palette lists and runs them, showing their keys (`key:hint`). |
 | **Motion** (`mot:`) | `mot:preference` Full / Reduced / None on a subtree | Re-values the duration and easing tokens every transition and animation uses (shared `sty:Keyframes` in the foundations). |
 | **Localization** (`l10n:`) | `l10n:language` on the app; language-tagged `rdfs:label` / `c:label` | Components read labels through the layer: the app language wins, then English, then untagged. Languages with `l10n:direction l10n:RTL` set `dir="rtl"` on the shell. |
 | **Announcements** (`ann:`) | `ann:announces "…"` (and `ann:tone`) on a reaction | A `c:ToastRegion` with `ann:from` a change log shows the newest announcing events as toasts, reading the log from its head. |

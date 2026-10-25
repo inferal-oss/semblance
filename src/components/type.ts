@@ -53,38 +53,45 @@ const link: FnRule = (ctx, focus) => {
   // A link to a resource (c:to) goes where the navigation layer resolved it (nav:href); c:href is the fallback.
   const href = str(ctx.object(focus, NS.nav + 'href') ?? ctx.object(focus, C_HREF))
   if (href === undefined) return []
-  const label = text(ctx, focus, C.label) ?? href
+  const ownLabel = text(ctx, focus, C.label)
+  const label = ownLabel ?? href
   const external = isExternal(href, str(ctx.object(focus, C_EXTERNAL)))
+  // A component as the link's body (c:content) takes the label's place.
+  const content = ctx.object(focus, C.content)
+  const body = named(content) ? content : undefined
   // A count above zero (c:count) follows the label.
   const n = num(ctx, focus, C_COUNT, 0)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
     const count = n > 0 ? ` (${n})` : ''
-    o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>${count}` : `${label}${count} <${href}>${external ? ' ↗' : ''}`)]))
+    if (body) o.renders(o.el('root', 'Div', {}, [body, o.text('label', `${count} <${href}>${external ? ' ↗' : ''}`)]))
+    else o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>${count}` : `${label}${count} <${href}>${external ? ' ↗' : ''}`)]))
     return o.quads
   }
   // A logo (c:logo, a component) comes before the label.
   const logo = ctx.object(focus, C.logo)
-  const parts = [...(named(logo) ? [logo] : []), o.text('label', label)]
+  const parts = [...(named(logo) ? [logo] : []), body ?? o.text('label', label)]
+  // The hint is the class's, in the viewer's language (c:externalHint on c:Link).
+  const hint = external ? ` (${ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'})` : ''
+  // The figure (99+ past 99) is shown; the number and c:countLabel, in the viewer's language, are said.
+  const said = n > 0 ? `, ${n}${(s => s !== undefined ? ' ' + s : '')(text(ctx, focus, C_COUNT_LABEL))}` : ''
   if (n > 0) {
-    // The figure (99+ past 99) is shown; the number and c:countLabel, in the viewer's language, are said.
-    const spoken = text(ctx, focus, C_COUNT_LABEL)
     const figure = o.el('count-figure', 'Span', {}, [o.text('count-text', n > 99 ? '99+' : String(n))])
     o.attr(figure, 'aria-hidden', 'true')
-    const said = o.el('count-spoken', 'Span', { class: 'sem-visually-hidden' }, [o.text('count-spoken-text', `, ${n}${spoken !== undefined ? ' ' + spoken : ''}`)])
-    parts.push(o.el('count', 'Span', { class: 'sem-count' }, [figure, said]))
+    const spoken = o.el('count-spoken', 'Span', { class: 'sem-visually-hidden' }, [o.text('count-spoken-text', said)])
+    parts.push(o.el('count', 'Span', { class: 'sem-count' }, [figure, spoken]))
   }
   if (external) {
-    // The hint is the class's, in the viewer's language (c:externalHint on c:Link).
-    const hint = ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'
     parts.push(o.el('external', 'Span', { class: 'sem-external' }, [o.text('external-text', '↗')]))
     o.attr(o.node('external'), 'aria-hidden', 'true')
-    parts.push(o.el('hint', 'Span', { class: 'sem-sr' }, [o.text('hint-text', ` (${hint})`)]))
+    parts.push(o.el('hint', 'Span', { class: 'sem-sr' }, [o.text('hint-text', hint)]))
   }
   o.renders(o.el('root', 'A', {
     href,
     target: external ? '_blank' : undefined,
     rel: external ? 'noopener noreferrer' : undefined,
+    // Around a component, a label names the link (with the count and the hint, which the name would otherwise hide).
+    'aria-label': body && ownLabel !== undefined ? ownLabel + said + hint : undefined,
     'aria-current': isCurrent(ctx, focus) ? 'page' : undefined,
   }, parts))
   return o.quads

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
+import { motionCalmed } from '../src/layers/motion.ts'
 import { compileStyles } from '../src/style/compile.ts'
 
 // The motion layer stills motion by re-valuing the motion tokens, so every transition and
@@ -94,6 +95,33 @@ describe('motion preference', () => {
       const set = block(`[data-sem-motion="${pref}"]`)
       for (const k of durations) expect(set.has(k), `${pref} ${k}`).toBe(true)
     }
+  })
+
+  it('follows the system setting under System: Reduced where it asks for reduced motion', () => {
+    const at = css.indexOf('  @media (prefers-reduced-motion: reduce) {\n')
+    expect(at).toBeGreaterThan(0)
+    // every rule that selects Reduced, in every layer, has a System twin inside the condition
+    const sections = css.split('\n@layer ').slice(1)
+    for (const section of sections) {
+      const lines = section.split('\n')
+      const media = lines.findIndex((l) => l === '  @media (prefers-reduced-motion: reduce) {')
+      const plain = lines.filter((l, i) => /^  [^ @]/.test(l) && (media < 0 || i < media))
+      const reduced = plain.filter((l) => /\[data-sem-motion="?reduced"?\]/.test(l.slice(0, l.indexOf(' { '))))
+      if (!reduced.length) continue
+      expect(media, section.slice(0, 20)).toBeGreaterThan(0)
+      const twins = lines.slice(media + 1, lines.indexOf('  }', media)).map((l) => l.trim())
+      for (const r of reduced) expect(twins).toContain(r.trim().replace(/\[data-sem-motion="?reduced"?\]/g, '[data-sem-motion="system"]'))
+    }
+  })
+
+  it('calms host motion (scrolling, drawing) the same way', () => {
+    const os = (matches: boolean) => ({ matchMedia: () => ({ matches }) })
+    expect(motionCalmed('full', os(true))).toBe(false)
+    expect(motionCalmed('reduced', os(false))).toBe(true)
+    expect(motionCalmed('none', os(false))).toBe(true)
+    expect(motionCalmed('system', os(true))).toBe(true)
+    expect(motionCalmed('system', os(false))).toBe(false)
+    expect(motionCalmed(undefined, os(true))).toBe(true)
   })
 
   it('leaves no transition or animation in any theme or component timed outside the motion tokens', () => {

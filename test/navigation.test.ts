@@ -122,6 +122,26 @@ describe('c:NavLink', () => {
     }
   })
 
+  it('names a link around a component with its count (c:content and c:count together)', () => {
+    const root = 'https://example.org/list'
+    const html: string[] = []
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+      const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix ex: <https://example.org/> .
+        ex:card a c:Link ; c:href "/inbox" ; c:label "Inbox" ; c:count 3 ; c:countLabel "unread" ; c:content ex:body .
+        ex:body a c:Text ; c:text "Inbox" .
+        <${root}> a c:Stack ; c:children ( ex:card ) .`)
+      const screen = new Runtime(store).project({ modality: MOD.Screen, prefer, roots: [root], name: 'links' })
+      new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+      const a = document.querySelector('a')!
+      expect(a.getAttribute('aria-label')).toBe('Inbox, 3 unread')
+      expect(a.querySelector('[aria-hidden=true]')?.textContent).toBe('3')
+      html.push(a.outerHTML)
+    }
+    expect(html[0]).toBe(html[1])
+    expect(sketch('ex:n a c:Link ; c:href "/inbox" ; c:count 3 ; c:content ex:b . ex:b a c:Text ; c:text "Inbox" .', 'n')).toContain(' (3) </inbox>')
+  })
+
   it('shares one count pill with the nav list (a style rule for several classes)', () => {
     const css = compileStyles(loadStore('n3'))
     const pills = css.split('\n').filter((line) => line.includes('.sem-count > [aria-hidden]') && line.includes('{'))

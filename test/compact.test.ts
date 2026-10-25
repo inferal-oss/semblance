@@ -109,7 +109,7 @@ describe('the app bar on a compact screen', () => {
   it('puts the more actions after the others, behind a More button that says what it opens', () => {
     const { $ } = site()
     const actions = $('[data-sem-c=app-bar] > .sem-actions')
-    expect([...actions.children].map((c) => c.getAttribute('data-sem-c') ?? c.className)).toEqual(['segmented', 'sem-more'])
+    expect([...actions.children].map((c) => c.getAttribute('data-sem-c') ?? c.className)).toEqual(['segmented', 'button', 'sem-more'])
     const toggle = actions.querySelector('.sem-more > .sem-more-toggle')!
     const body = actions.querySelector('.sem-more > .sem-more-body')!
     expect(toggle.getAttribute('aria-expanded')).toBe('false')

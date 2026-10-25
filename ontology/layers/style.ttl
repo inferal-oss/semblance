@@ -168,8 +168,8 @@ sty:WidthClass a owl:Class ;
     rdfs:comment "A range of viewport widths a style rule can be limited to (sty:atWidth)."@en .
 sty:atWidth a owl:ObjectProperty ; rdfs:domain sty:StyleRule ; rdfs:range sty:WidthClass ;
     rdfs:comment "Limits a style rule to viewports of this width class (with several, of any of them)."@en .
-sty:media a owl:DatatypeProperty ; rdfs:domain sty:WidthClass ;
-    rdfs:comment "The width class's CSS media condition."@en .
+sty:media a owl:DatatypeProperty ;
+    rdfs:comment "A CSS media condition: a width class's, or a sty:underMedia condition's."@en .
 sty:CompactWidth a sty:WidthClass ; rdfs:label "Compact"@en ;
     rdfs:comment "A phone held upright, or a narrow window: one column, chrome folded away."@en ;
     sty:media "(max-width: 640px)" .
@@ -181,6 +181,15 @@ sty:RegularWidth a sty:WidthClass ; rdfs:label "Regular"@en ;
 sty:MediumWidth a sty:WidthClass ; rdfs:label "Medium"@en ;
     rdfs:comment "Between compact and a wide desktop window (641-1099px): tablets, narrow windows."@en ;
     sty:media "(min-width: 641px) and (max-width: 1099px)" .
+
+# A value of a hooked property can follow the viewer's system setting: under a media condition
+# it is styled as another value of that property (mot:System is mot:Reduced where the system asks
+# for reduced motion). The compiler copies every rule that selects the other value, in its layer,
+# into the condition with this value's attribute instead, after the layer's other rules.
+sty:underMedia a owl:ObjectProperty ;
+    rdfs:comment "Under a media condition (sty:media), this value is styled as another (sty:as)."@en .
+sty:as a owl:ObjectProperty ;
+    rdfs:comment "The value a sty:underMedia condition styles its subject as."@en .
 
 # --- The single style rule ------------------------------------------------------------
 

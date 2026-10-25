@@ -16,10 +16,14 @@ import type { GraphStore } from '../store/types.ts'
  * A rule with sty:atWidth (a sty:WidthClass such as sty:CompactWidth) is compiled into its
  * layer inside the width class's media condition, after that layer's other rules, so at
  * equal specificity it wins where the condition holds. With several, it applies at any of them.
+ * A value with sty:underMedia (mot:System) gets a copy of every rule that selects the value it
+ * stands for (mot:Reduced) inside the media condition, at the end of each layer.
  */
 const hyphens = (decl: string) => decl.slice(0, decl.indexOf(':')).split('-').length
 const STY_AT_WIDTH = NS.sty + 'atWidth'
 const STY_MEDIA = NS.sty + 'media'
+const STY_UNDER_MEDIA = NS.sty + 'underMedia'
+const STY_AS = NS.sty + 'as'
 
 export function compileStyles(store: GraphStore): string {
   const f = store.factory
@@ -189,14 +193,40 @@ export function compileStyles(store: GraphStore): string {
     .filter((k): k is string => k !== undefined)
     .sort()
 
+  // sty:underMedia: a value styled as another under a media condition (mot:System is mot:Reduced
+  // where the system asks for reduced motion). Every rule of a layer that selects the other value
+  // is copied, with this value's attribute, into the condition after the layer's other rules.
+  const aliases = store.match(null, nn(STY_UNDER_MEDIA), null, f.defaultGraph()).flatMap((q) => {
+    const media = object(q.object, STY_MEDIA)?.value
+    const as = object(q.object, STY_AS)
+    const to = as && whenAttr(as)
+    const from = whenAttr(q.subject)
+    return media && to && from ? [{ media, from, to, bare: to.replace(/"/g, '') }] : []
+  })
+  const underMedia = (rules: (string | undefined)[]) => {
+    const extra: string[] = []
+    for (const a of aliases.sort((x, y) => (x.from < y.from ? -1 : 1))) {
+      const copies = rules
+        .filter((r): r is string => !!r && r.startsWith('  ') && !r.startsWith('  @'))
+        .flatMap((r) => {
+          const brace = r.indexOf(' { ')
+          const selector = r.slice(0, brace)
+          if (!selector.includes(a.to) && !selector.includes(a.bare)) return []
+          return ['  ' + selector.split(a.to).join(a.from).split(a.bare).join(a.from) + r.slice(brace)]
+        })
+      if (copies.length) extra.push(`  @media ${a.media} {\n${copies.join('\n')}\n  }`)
+    }
+    return [...rules, ...extra]
+  }
+
   return [
     ...keyframes,
     '@layer sem.tokens, sem.hooks, sem.components, sem.variants, sem.intents;',
     layer('tokens', tokenRules),
-    layer('hooks', hookRules, true),
-    layer('components', ranked(componentRules), true),
-    layer('variants', ranked(variantRules), true),
-    layer('intents', ranked(intentRules), true),
+    layer('hooks', underMedia(hookRules), true),
+    layer('components', underMedia(ranked(componentRules)), true),
+    layer('variants', underMedia(ranked(variantRules)), true),
+    layer('intents', underMedia(ranked(intentRules)), true),
   ]
     .filter(Boolean)
     .join('\n\n')
