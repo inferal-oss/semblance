@@ -4,7 +4,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
 import { C, MOD, NS, XSD_INTEGER } from '../ns.ts'
 import { el, hashKey, marked, md5Key } from './data.ts'
-import { isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { isTrue, labelOf, named, nodes, num, text } from './util.ts'
 
 const C_ITEMS = NS.c + 'items'
 const C_PARENT_PROPERTY = NS.c + 'parentProperty'
@@ -79,7 +79,8 @@ const breadcrumbs: FnRule = (ctx, focus) => {
       content = el(o, `${id}-link`, 'Button', { type: 'button', class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
       o.t(content, C.selects, crumb)
     } else {
-      const href = str(ctx.object(crumb, NS.nav + 'href') ?? ctx.object(crumb, C_HREF))
+      // A link where the navigation layer resolved the crumb (a c:Link with c:to: nav:href), else c:href.
+      const href = (ctx.object(crumb, NS.nav + 'href') ?? ctx.object(crumb, C_HREF))?.value
       content = href === undefined
         ? el(o, `${id}-crumb`, 'Span', { class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
         : el(o, `${id}-link`, 'A', { class: 'sem-crumb', href }, [o.text(`${id}-text`, label)])

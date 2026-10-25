@@ -19,10 +19,13 @@ ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" .
 
 # --- Breadcrumbs ----------------------------------------------------------------------------------
 
-ui:nv-crumb-home c:label "Semblance" ; c:href "/" .
-ui:nv-crumb-components c:label "Components" ; c:href "/components/" .
-ui:nv-crumb-navigation c:label "Navigation" ; c:href "/components/navigation/" .
-ui:nv-crumb-breadcrumbs c:label "Breadcrumbs" .
+# The explicit trail links to the site's own pages (c:href, the addresses the navigation layer reads).
+ui:nv-crumb-home c:href "#home" ; c:label "Semblance" .
+ui:nv-crumb-components c:href "#components" ;
+    c:label "Components" , "Компоненти"@uk , "Komponenten"@de , "المكوّنات"@ar .
+ui:nv-crumb-navigation c:href "#components/navigation" ;
+    c:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقّل"@ar .
+ui:nv-crumb-breadcrumbs c:label "Breadcrumbs" , "Хлібні крихти"@uk , "Brotkrümel"@de , "مسار التنقّل"@ar .
 ui:nv-crumbs-explicit a c:Breadcrumbs ;
     c:items ( ui:nv-crumb-home ui:nv-crumb-components ui:nv-crumb-navigation ui:nv-crumb-breadcrumbs ) .
 ui:nv-crumbs-derived a c:Breadcrumbs ; c:label "Class path" ; c:of c:ThemeSwitcher ; c:parentProperty rdfs:subClassOf ; c:upTo sem:Component .

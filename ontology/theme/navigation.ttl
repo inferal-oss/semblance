@@ -97,19 +97,15 @@
                  [ sty:property "color" ; sty:raw "inherit" ] ,
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part "button.sem-crumb" ;
+# Earlier crumbs that go somewhere: a button (selecting a graph node) or a link (to an address).
+[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part ":is(a, button).sem-crumb" ;
     sty:declares [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
                  [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease), color var(--sem-duration-fast) var(--sem-ease)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part "button.sem-crumb:hover" ;
+[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part ":is(a, button).sem-crumb:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part "button.sem-crumb:focus-visible" ;
-    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
-                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
-[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part "a.sem-crumb:hover" ;
-    sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] ,
-                 [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part "a.sem-crumb:focus-visible" ;
+[] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part ":is(a, button).sem-crumb:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:Breadcrumbs ; sty:part ".sem-current" ;

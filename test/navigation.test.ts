@@ -54,7 +54,7 @@ describe('c:Breadcrumbs', () => {
     expect(items[0]!.querySelector('.sem-sep')!.getAttribute('aria-hidden')).toBe('true')
     expect(items[3]!.querySelector('.sem-sep')).toBeNull()
     expect([...nav.querySelectorAll('a.sem-crumb')].map((link) => link.getAttribute('href'))).toEqual([
-      '/', '/components/', '/components/navigation/',
+      '#home', '#components', '#components/navigation',
     ])
     // without c:controls the crumbs are links, not graph-selection buttons
     expect(nav.querySelector('button')).toBeNull()
