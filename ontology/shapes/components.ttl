@@ -76,6 +76,13 @@ c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
 c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
     sh:property [ sh:path c:slot ; sh:maxCount 1 ; sh:datatype xsd:string ;
                   sh:message "A host slot has one name (c:slot), a plain string." ] .
+c:LinkedCardShape a sh:NodeShape ; sh:targetClass c:LinkedCard ;
+    sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+                  sh:message "A linked card needs a web, mail, or relative address." ] ,
+                [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ;
+                  sh:message "A linked card needs a name for the link." ] ,
+                [ sh:path c:content ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                  sh:message "A linked card wraps one component." ] .
 c:ProgressShape a sh:NodeShape ; sh:targetClass c:Progress ;
     sh:property [ sh:path c:value ; sh:minInclusive 0 ; sh:lessThanOrEquals c:max ;
                   sh:message "Progress can't exceed its c:max or go below zero." ] .

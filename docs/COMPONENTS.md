@@ -9,6 +9,11 @@ built that way.
 Start with [Getting started](GETTING-STARTED.md) for the smallest complete example. On the site (<https://semblance.dev>, Docs → Building components) a component of this
 shape, `ex:Avatar`, is live: edit its rule, shape or style rules and it renders again as you type.
 
+Use `c:LinkedCard` when an entire non-interactive card should open a destination.
+Give it `c:href`, an accessible `c:label`, and the card as `c:content`. The
+screen rendering is one link around the component; the text rendering includes
+its address after the content. Keep buttons and other links outside that card.
+
 ## SPARQL first; functions are the escape hatch
 
 Every rendering is implemented by one or more `sem:Rule`s. A rule is either a SPARQL `CONSTRUCT`

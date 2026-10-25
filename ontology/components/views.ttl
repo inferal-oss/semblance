@@ -112,6 +112,49 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
 }""" .
 
+# --- Linked card ---------------------------------------------------------------------------
+
+c:LinkedCard a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:label "linked card"@en , "картка-посилання"@uk , "verlinkte Karte"@de , "بطاقة مرتبطة"@ar ;
+    rdfs:comment "A named link around one non-interactive component, commonly a card (c:content)."@en ;
+    sem:slug "linked-card" .
+
+c:LinkedCardRendering a sem:Rendering ; sem:targets c:LinkedCard ; sem:stratum 0 .
+c:LinkedCardRendering-fn a sem:Rule ; sem:implements c:LinkedCardRendering ; sem:function "linked-card" .
+c:LinkedCardRendering-sparql-screen a sem:Rule ;
+    sem:implements c:LinkedCardRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:A ; sem:renders $this ; rdfhtml:href ?href ; rdfhtml:attribute ?name ; rdfhtml:hasChild ?content .
+  ?name a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+}
+WHERE {
+  $this a c:LinkedCard ; c:href ?href ; c:content ?content .
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
+}""" .
+
+c:LinkedCardRendering-sparql-text a sem:Rule ;
+    sem:implements c:LinkedCardRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?content, ?address .
+  ?content ord:immediatelyPrecedes ?address .
+  ?address a rdfhtml:Text ; rdfhtml:data ?shown .
+}
+WHERE {
+  $this a c:LinkedCard ; c:href ?href ; c:content ?content .
+  BIND(CONCAT(" <", STR(?href), ">") AS ?shown)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~address")) AS ?address)
+}""" .
+
 # --- App bar and logo ----------------------------------------------------------------------
 
 c:AppBar a owl:Class ;

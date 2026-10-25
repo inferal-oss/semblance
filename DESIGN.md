@@ -63,7 +63,7 @@ Thin vocabularies. Every component
 
 | group | components |
 |---|---|
-| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
+| **Layout** | Stack · Grid · Surface · Divider · Spacer · Card · LinkedCard · Specimen · Swatches · StatusBar · Switch · SplitView · DockPanel · Canvas (CanvasItem) · Connector |
 | **Type** | Heading · Text · Link · Kbd · Code · Blockquote · GraphMark · Emblem · SourceView · Walkthrough (WalkthroughStep, Mention) · LiveExample |
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |

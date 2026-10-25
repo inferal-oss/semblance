@@ -72,6 +72,19 @@ const card: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+const linkedCard: FnRule = (ctx, focus) => {
+  const href = ctx.object(focus, C_HREF)?.value
+  const content = ctx.object(focus, C.content)
+  if (href === undefined || !named(content)) return []
+  const o = ctx.out(focus)
+  if (ctx.modality === MOD.Text) {
+    o.renders(o.el('root', 'Div', {}, [content, o.text('address', ` <${href}>`)]))
+  } else {
+    o.renders(o.el('root', 'A', { href, 'aria-label': text(ctx, focus, C.label) }, [content]))
+  }
+  return o.quads
+}
+
 // --- App bar and its logo ------------------------------------------------------------------
 
 const appbar: FnRule = (ctx, focus) => {
@@ -582,6 +595,7 @@ const hostslot: FnRule = (ctx, focus) => {
 
 export const viewFunctions: Record<string, FnRule> = {
   card,
+  'linked-card': linkedCard,
   appbar,
   graphmark,
   emblem,

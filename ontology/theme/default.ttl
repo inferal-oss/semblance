@@ -773,6 +773,17 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:tokens ( tok:space-4 tok:space-5 ) ] .
 
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-card ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ; sty:state ":focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-accent)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ; sty:state ":hover" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "none" ] .
+
 # --- app bar and logo -----------------------------------------------------------------------------
 
 # Sticky below a taskbar docked to the top (--sem-dock-top, windows.ttl), if there is one.
