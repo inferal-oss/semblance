@@ -80,6 +80,24 @@ const CASES: [string, string | undefined][] = [
   [`${dtd('PT1H')} < ${ymd('P1M')}`, undefined],
   [`${t('10:00:00')} < ${t('11:00:00')}`, 'true^^boolean'],
   [`${t('10:00:00')} = ${t('10:00:00')}`, 'true^^boolean'],
+  // dateTimes and times compare exactly, to the second and the millisecond (#21)
+  [`${dt('2026-01-01T09:00:00Z')} < ${dt('2026-01-01T09:00:01Z')}`, 'true^^boolean'],
+  [`${dt('2026-01-01T09:00:00Z')} >= ${dt('2026-01-01T09:00:01Z')}`, 'false^^boolean'],
+  [`${dt('2026-01-01T09:00:01Z')} >= ${dt('2026-01-01T09:00:01Z')}`, 'true^^boolean'],
+  [`${dt('2026-01-01T09:00:00Z')} = ${dt('2026-01-01T09:00:01Z')}`, 'false^^boolean'],
+  [`${dt('2026-01-01T09:00:00.000Z')} < ${dt('2026-01-01T09:00:00.001Z')}`, 'true^^boolean'],
+  [`${dt('2026-01-01T09:00:00.000Z')} >= ${dt('2026-01-01T09:00:00.001Z')}`, 'false^^boolean'],
+  [`${dt('2026-01-01T09:00:00.000Z')} = ${dt('2026-01-01T09:00:00.500Z')}`, 'false^^boolean'],
+  [`${dt('2026-01-01T09:00:00.5Z')} = ${dt('2026-01-01T09:00:00.500Z')}`, 'true^^boolean'],
+  [`${dt('2026-01-01T09:00:00Z')} = ${dt('2026-01-01T09:00:00.000Z')}`, 'true^^boolean'],
+  [`${dt('2026-01-01T09:00:00.999Z')} < ${dt('2026-01-01T09:00:01Z')}`, 'true^^boolean'],
+  [`${dt('2026-01-01T10:00:00.001+01:00')} > ${dt('2026-01-01T09:00:00Z')}`, 'true^^boolean'],
+  [`${dt('1969-12-31T23:59:59.9Z')} < ${dt('1969-12-31T23:59:59.95Z')}`, 'true^^boolean'],
+  [`${t('09:00:00Z')} < ${t('09:00:01Z')}`, 'true^^boolean'],
+  [`${t('09:00:00.000Z')} < ${t('09:00:00.001Z')}`, 'true^^boolean'],
+  [`${t('09:00:00.001Z')} >= ${t('09:00:00.002Z')}`, 'false^^boolean'],
+  [`${t('09:00:00.250Z')} = ${t('09:00:00.25Z')}`, 'true^^boolean'],
+  [`${t('09:00:00.250Z')} = ${t('09:00:00.251Z')}`, 'false^^boolean'],
   // casts (XPath casting rules; canonical results)
   ['xsd:duration("PT2.5S"^^xsd:duration)', 'PT2.5S^^duration'],
   ['xsd:duration("PT2.5S")', 'PT2.5S^^duration'],
@@ -112,5 +130,30 @@ describe.skipIf(!built.length).each(built)('%s engine: dates, times and duration
     if (r.kind !== 'bindings') throw new Error('expected bindings')
     const v = r.rows[0]?.get('x') as { v: string; dt?: string } | undefined
     expect(v ? `${v.v}^^${(v.dt ?? '').replace(/.*#/, '')}` : undefined).toBe(want)
+  })
+})
+
+// Stored values against constants (#21): a filter keeps exactly the values on its side of the bound.
+const STORED = ['2026-01-01T09:00:00Z', '2026-01-01T09:00:00.000Z', '2026-01-01T09:00:00.500Z', '2026-01-01T09:00:01Z']
+const FILTERS: [string, number[]][] = [
+  [`?t >= ${dt('2026-01-01T09:00:01Z')}`, [3]],
+  [`?t < ${dt('2026-01-01T09:00:01Z')}`, [0, 1, 2]],
+  [`?t >= ${dt('2026-01-01T09:00:00.400Z')}`, [2, 3]],
+  [`?t >= ${dt('2026-01-01T09:00:00.500Z')}`, [2, 3]],
+  [`?t > ${dt('2026-01-01T09:00:00.500Z')}`, [3]],
+  [`?t < ${dt('2026-01-01T09:00:00.001Z')}`, [0, 1]],
+  [`?t = ${dt('2026-01-01T09:00:00.5Z')}`, [2]],
+  [`?t = ${dt('2026-01-01T09:00:00Z')}`, [0, 1]],
+]
+
+describe.skipIf(!built.length).each(built)('%s engine: stored dateTimes against constants', async (kind) => {
+  const target = await wasmTarget(kind)
+  const data = STORED.map((v, i) => `<http://example/v${i}> <http://example/t> "${v}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .`).join('\n')
+  it.each(FILTERS)('FILTER(%s)', (filter, want) => {
+    const q = `PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\nSELECT ?s { ?s <http://example/t> ?t FILTER(${filter}) }`
+    const r = target.query({ default: [{ text: data, format: 'ntriples', base: 'http://example/data' }], named: [] }, q, 'http://example/')
+    if (r.kind !== 'bindings') throw new Error('expected bindings')
+    const got = r.rows.map((row) => (row.get('s') as { v: string }).v).sort()
+    expect(got).toEqual(want.map((i) => `http://example/v${i}`))
   })
 })
