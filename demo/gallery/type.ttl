@@ -14,7 +14,7 @@
 # Gallery page: Type.
 
 ui:gallery-type a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-kbd ui:ty-code ui:ty-quote ui:ty-walk ui:ty-live ) .
+    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-link-cards ui:ty-kbd ui:ty-code ui:ty-quote ui:ty-walk ui:ty-live ) .
 ui:gallery-type-intro a c:Heading ; c:label "Type" .
 
 # --- the type scale ---
@@ -71,6 +71,20 @@ ui:ty-links a c:Flippable ; c:front ui:ty-links-spec .
 ui:ty-links-spec a c:Specimen ; c:demonstrates c:Link ; c:label "Link" ;
     c:help "Accent by default, toned by sty:tone. Absolute http(s) addresses open in a new tab with rel=noopener, an ↗ mark, and a spoken hint taken from c:Link's own c:externalHint in the viewer's language." ;
     c:children ( ui:ty-links-row ) .
+
+ui:ty-link-card-current a c:LinkCard ; c:label "Components" ;
+    c:note "Explore the component library." ; c:badge "42" ;
+    c:href "#components" ; c:currentPage true .
+ui:ty-link-card-next a c:LinkCard ; c:label "Documentation" ;
+    c:note "Learn to build a graph-based interface." ; c:href "#docs" .
+ui:ty-link-card-external a c:LinkCard ; c:label "RDF/HTML" ;
+    c:note "The vocabulary used for rendered output." ; c:href "https://ia2.dev/spec/rdf-html" .
+ui:ty-link-cards-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:ty-link-card-current ui:ty-link-card-next ui:ty-link-card-external ) .
+ui:ty-link-cards a c:Flippable ; c:front ui:ty-link-cards-spec .
+ui:ty-link-cards-spec a c:Specimen ; c:demonstrates c:LinkCard ; c:label "Link card" ;
+    c:help "A whole-card link for a navigable summary. It has a title, optional description and badge, and marks the current page when selected." ;
+    c:children ( ui:ty-link-cards-row ) .
 
 # --- keys ---
 ui:ty-kbd-palette a c:Kbd ; c:keys ( "⌘" "K" ) .

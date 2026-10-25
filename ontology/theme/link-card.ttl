@@ -1,0 +1,49 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-4 ] ,
+                 [ sty:property "padding" ; sty:token tok:space-4 ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-md)" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "transition" ; sty:raw "border-color var(--sem-duration-fast) var(--sem-ease), background var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:state ":hover" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-accent-7)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:state ":focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:state "[aria-current=page]" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-accent-7)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-3)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-copy" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-1 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-note" ;
+    sty:declares [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "font-size" ; sty:raw "var(--sem-text-sm)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-badge" ;
+    sty:declares [ sty:property "padding" ; sty:raw "0.15em 0.55em" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-full)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-accent-3)" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-accent-11)" ] ,
+                 [ sty:property "font-size" ; sty:raw "var(--sem-text-xs)" ] ,
+                 [ sty:property "font-weight" ; sty:raw "650" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-external" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "0.25em" ] ,
+                 [ sty:property "font-size" ; sty:raw "0.8em" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-sr" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "width" ; sty:raw "1px" ] ,
+                 [ sty:property "height" ; sty:raw "1px" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .

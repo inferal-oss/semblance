@@ -70,6 +70,12 @@ c:EmblemShape a sh:NodeShape ; sh:targetClass c:Emblem ;
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
     sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
                   sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .
+c:LinkCardShape a sh:NodeShape ; sh:targetClass c:LinkCard ;
+    sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+                  sh:message "A link card needs a safe web, mail, or relative address." ] ,
+                [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:message "A link card needs a title." ] ,
+                [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 c:ProgressShape a sh:NodeShape ; sh:targetClass c:Progress ;
     sh:property [ sh:path c:value ; sh:minInclusive 0 ; sh:lessThanOrEquals c:max ;
                   sh:message "Progress can't exceed its c:max or go below zero." ] .

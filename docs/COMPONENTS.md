@@ -61,6 +61,11 @@ which the style layer already turns into `data-sem-*` hooks for every component 
 Capabilities are mixin classes: an instance that is also `c:Draggable`, `c:Flippable` or
 `dnd:Draggable` gets that behaviour without its component knowing.
 
+Use `c:LinkCard` when a navigable summary needs one link across its whole surface. It accepts
+`c:href`, `c:label`, an optional `c:note` and `c:badge`, and `c:currentPage true` when its
+destination is the current page. The screen rendering is one anchor, so keyboard and pointer
+users activate the same target; the text rendering keeps the summary and address together.
+
 ## Writing a rendering rule
 
 A rendering rule runs once per instance (`$this`) and constructs RDF/HTML

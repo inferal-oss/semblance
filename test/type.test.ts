@@ -78,6 +78,27 @@ describe('the Type page', () => {
     expect(root('ty-link-danger').getAttribute('data-sem-tone')).toBe('danger')
   })
 
+  it('renders a linked card as one accessible link with summary and current state', () => {
+    const { root } = showPage('type')
+    const current = root('ty-link-card-current')
+    expect(current.localName).toBe('a')
+    expect(current.getAttribute('href')).toBe('#components')
+    expect(current.getAttribute('aria-current')).toBe('page')
+    expect(current.querySelectorAll('a')).toHaveLength(0)
+    expect(current.querySelector('strong')!.textContent).toBe('Components')
+    expect(current.querySelector('.sem-link-card-note')!.textContent).toBe('Explore the component library.')
+    expect(current.querySelector('.sem-link-card-badge')!.textContent).toBe('42')
+    const next = root('ty-link-card-next')
+    expect(next.getAttribute('href')).toBe('#docs')
+    expect(next.hasAttribute('aria-current')).toBe(false)
+    expect(next.querySelector('.sem-link-card-badge')).toBeNull()
+    const external = root('ty-link-card-external')
+    expect(external.getAttribute('target')).toBe('_blank')
+    expect(external.getAttribute('rel')).toContain('noopener')
+    expect(external.querySelector('.sem-link-card-external')!.getAttribute('aria-hidden')).toBe('true')
+    expect(external.querySelector('.sem-sr')!.textContent).toBe(' (opens in a new tab)')
+  })
+
   it('renders key combinations as nested kbd', () => {
     const { root } = showPage('type')
     const combo = root('ty-kbd-command')
@@ -104,6 +125,14 @@ describe('the Type page', () => {
 })
 
 describe('type components in the text modality', () => {
+  it('keeps a link card summary and address together', () => {
+    const store = loadStore('oxigraph',
+      `@prefix c: <https://semblance.dev/ns/component#> . @prefix ex: <https://example.org/> .
+       ex:item a c:LinkCard ; c:label "Governance" ; c:note "Review data use" ; c:badge "7" ; c:href "/governance" .`)
+    const text = new Runtime(store).project({ modality: MOD.Text, name: 'text' })
+    expect(toText(text.index, 'https://example.org/item')).toBe('Governance — Review data use [7] </governance>')
+  })
+
   it('sketch text, links, keys and code compactly', () => {
     const store = loadStore(
       'oxigraph',
