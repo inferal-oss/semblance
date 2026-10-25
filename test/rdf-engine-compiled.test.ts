@@ -4,7 +4,8 @@
 // expressions (with errors and fallbacks), EXISTS, grouped subqueries, paths.
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { Engine, Form, Format, type Solutions } from '../rdf-engine/host/engine.ts'
+import { Engine, Form, Format, IDLE_COMPILE, type Solutions } from '../rdf-engine/host/engine.ts'
+import { engineStore } from '../rdf-engine/host/store.ts'
 
 const built = (['rust', 'wat'] as const).filter((k) => existsSync(new URL(`../rdf-engine/build/${k}.wasm`, import.meta.url)))
 
@@ -62,5 +63,106 @@ describe.skipIf(!built.length).each(built)('%s compiled queries', (kind) => {
     const interpreted = show(q.run())
     if (q.compile() === null) expect(show(q.run())).toBe(interpreted)
     q.release()
+  })
+})
+
+// Idle-time compilation (Engine.compileIdle): runs are timed; in idle time the queries whose
+// runs say compiling pays are compiled, for the variables they were bound with, and later runs
+// with those bound use the module; one that runs slower than the interpreter is dropped.
+describe.skipIf(!built.length).each(built)('%s idle-time compilation', (kind) => {
+  const module = new WebAssembly.Module(readFileSync(new URL(`../rdf-engine/build/${kind}.wasm`, import.meta.url)))
+  const PREFIX = 'PREFIX : <http://ex/> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> '
+  const withCost = <T>(cost: number, f: () => T): T => {
+    const was = IDLE_COMPILE.cost
+    IDLE_COMPILE.cost = cost
+    try {
+      return f()
+    } finally {
+      IDLE_COMPILE.cost = was
+    }
+  }
+
+  it('compiles, in idle time, the queries that ran, for the variables they were bound with', () => {
+    const e = new Engine(module)
+    e.idleCompile = true
+    e.load(Format.Turtle, DATA)
+    const q = e.prepare(PREFIX + 'CONSTRUCT { ?this :pos ?o } WHERE { ?this :next ?n OPTIONAL { ?n :order ?o0 } BIND(COALESCE(xsd:double(?o0), 0) AS ?o) }')
+    const a = e.iri('http://ex/a')
+    const b = e.iri('http://ex/b')
+    const bound = () => {
+      q.bindValues('this', [a, b])
+      try {
+        return JSON.stringify(q.run())
+      } finally {
+        q.bindValues('this', [])
+      }
+    }
+    const expected = bound()
+    bound()
+    const unbound = JSON.stringify(q.run())
+    q.run()
+    // Nothing compiles on the interaction's path, only in idle time.
+    expect(e.stats.compiled).toBe(0)
+    expect(withCost(0, () => e.compileIdle(50))).toBe(false)
+    expect(e.stats.idleCompiled).toBe(2)
+    expect(q.isCompiled).toBe(true)
+    expect(JSON.stringify(q.run())).toBe(unbound)
+    expect(bound()).toBe(expected)
+    expect(e.stats.compiledRuns).toBe(2)
+    // Compiling one shape restored the other's bindings: unbound runs stay unbound.
+    expect(e.candidates.size).toBe(0)
+  })
+
+  it('leaves alone the queries whose runs would not repay a module', () => {
+    const e = new Engine(module)
+    e.idleCompile = true
+    e.load(Format.Turtle, DATA)
+    const q = e.prepare(PREFIX + 'SELECT ?a WHERE { ?a a :R }')
+    q.run()
+    q.run()
+    expect(withCost(1e9, () => e.compileIdle(50))).toBe(false)
+    expect(e.stats.compiled).toBe(0)
+    expect(e.candidates.size).toBe(1)
+    // One run is not yet a candidate, however costly.
+    const once = e.prepare(PREFIX + 'SELECT ?a ?b WHERE { ?a a :R . ?b a :R }')
+    once.run()
+    expect(withCost(0, () => e.compileIdle(50))).toBe(false)
+    expect(once.isCompiled).toBe(false)
+    expect(q.isCompiled).toBe(true)
+  })
+
+  it('stays within the slice: a module per slice at most when the budget allows one', () => {
+    const e = new Engine(module)
+    e.idleCompile = true
+    e.load(Format.Turtle, DATA)
+    const qs = QUERIES.slice(0, 6).map((t) => e.prepare(PREFIX + t))
+    for (const q of qs) q.run(), q.run()
+    const was = IDLE_COMPILE.perSlice
+    const saving = IDLE_COMPILE.saving
+    IDLE_COMPILE.perSlice = 1
+    try {
+      expect(withCost(0, () => e.compileIdle(50))).toBe(true)
+      expect(e.stats.idleCompiled).toBe(1)
+      // A budget below a module's cost compiles nothing (however much compiling would save).
+      IDLE_COMPILE.saving = 1e9
+      expect(withCost(1, () => e.compileIdle(0.5))).toBe(true)
+      expect(e.stats.idleCompiled).toBe(1)
+    } finally {
+      IDLE_COMPILE.perSlice = was
+      IDLE_COMPILE.saving = saving
+    }
+  })
+
+  it('is what an engine store does in maintain, with compile: idle', () => {
+    const store = engineStore(module, kind, { compile: 'idle' })
+    store.loadTurtle(DATA)
+    const text = PREFIX + 'SELECT ?a ?s WHERE { ?a :slug ?s FILTER(STRSTARTS(?s, "s-")) }'
+    const show = () => store.select(text, []).map((m) => m.get('a')!.value + m.get('s')!.value).sort().join(' ')
+    const expected = show()
+    show()
+    withCost(0, () => store.maintain!(50))
+    expect(store.engine.stats.idleCompiled).toBe(1)
+    expect(show()).toBe(expected)
+    expect(store.engine.stats.compiledRuns).toBe(1)
   })
 })

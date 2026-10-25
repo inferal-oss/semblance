@@ -340,6 +340,118 @@
       (br $slots))))
   (i32.const 1))
 
+;; Whether group g (a subquery's WHERE) is a cross product of independent
+;; chains with BINDs: its triple, path, OPTIONAL and BIND elements fall into
+;; two or more sets that share no variable but the parameters and what a
+;; pattern from a bound subject reaches (`$this c:of ?scale`), so only its
+;; filters relate them (the rank-by-COUNT shape). In line, the module would
+;; evaluate the BINDs of an inner chain once per pair; the interpreter
+;; evaluates a pure BIND once per distinct input, so such a subquery is left
+;; to it. Any other element kind: not this shape.
+(func $cross (param $g i32) (result i32)
+  (local $known i32) (local $el i32) (local $k i32) (local $n i32) (local $sets i32) (local $i i32)
+  (local $comp i32) (local $grew i32) (local $s i32) (local $binds i32) (local $ref i32)
+  (local.set $known (call $cx_bits))
+  (local.set $s (i32.const 0))
+  (loop $params
+    (if (i32.lt_u (local.get $s) (global.get $cx_nv)) (then
+      (if (call $bit (global.get $cx_shape) (local.get $s)) (then (call $setbit (local.get $known) (local.get $s))))
+      (local.set $s (i32.add (local.get $s) (i32.const 1)))
+      (br $params))))
+  ;; count the elements, and what bound subjects reach
+  (local.set $el (i32.load offset=4 (local.get $g)))
+  (loop $each
+    (if (local.get $el) (then
+      (local.set $k (i32.load (local.get $el)))
+      (if (i32.eqz (i32.or (i32.or (i32.eq (local.get $k) (i32.const P_TRIPLE)) (i32.eq (local.get $k) (i32.const P_PATH)))
+                           (i32.or (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (i32.eq (local.get $k) (i32.const P_BIND)))))
+        (then (return (i32.const 0))))
+      (if (i32.eq (local.get $k) (i32.const P_BIND)) (then (local.set $binds (i32.add (local.get $binds) (i32.const 1)))))
+      (if (i32.eq (local.get $k) (i32.const P_TRIPLE)) (then
+        (local.set $ref (i32.load offset=4 (local.get $el)))
+        ;; a constant or known subject (a variable: not a triple term pattern)
+        (if (i32.and (call $plain (i32.load offset=12 (local.get $el)))
+              (if (result i32) (i32.gt_s (local.get $ref) (i32.const 0)) (then (i32.const 1))
+                (else (if (result i32) (i32.gt_s (local.get $ref) (i32.const -0x100000))
+                  (then (call $bit (local.get $known) (i32.sub (i32.const -1) (local.get $ref))))
+                  (else (i32.const 0))))))
+          (then (call $an_ref (local.get $known) (i32.load offset=12 (local.get $el)))))))
+      (local.set $n (i32.add (local.get $n) (i32.const 1)))
+      (local.set $el (i32.load offset=28 (local.get $el)))
+      (br $each))))
+  (if (i32.or (i32.lt_u (local.get $n) (i32.const 2)) (i32.eqz (local.get $binds))) (then (return (i32.const 0))))
+  ;; each element's other variables
+  (local.set $sets (call $anew (i32.shl (local.get $n) (i32.const 2))))
+  (local.set $el (i32.load offset=4 (local.get $g)))
+  (local.set $i (i32.const 0))
+  (loop $each
+    (if (local.get $el) (then
+      (call $deep (local.tee $comp (call $cx_bits)) (local.get $el))
+      (call $bits_andnot (local.get $comp) (local.get $known))
+      (i32.store (i32.add (local.get $sets) (i32.shl (local.get $i) (i32.const 2))) (local.get $comp))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (local.set $el (i32.load offset=28 (local.get $el)))
+      (br $each))))
+  ;; the set the first element with variables reaches, through shared variables
+  (local.set $comp (call $cx_bits))
+  (local.set $grew (i32.const 1))
+  (loop $grow
+    (if (local.get $grew) (then
+      (local.set $grew (i32.const 0))
+      (local.set $i (i32.const 0))
+      (loop $each
+        (if (i32.lt_u (local.get $i) (local.get $n)) (then
+          (local.set $el (i32.load (i32.add (local.get $sets) (i32.shl (local.get $i) (i32.const 2)))))
+          (if (i32.and (call $bits_any (local.get $el))
+                (i32.or (call $bits_meet (local.get $el) (local.get $comp)) (i32.eqz (call $bits_any (local.get $comp)))))
+            (then
+              (call $bits_or (local.get $comp) (local.get $el))
+              (i32.store (i32.add (local.get $sets) (i32.shl (local.get $i) (i32.const 2))) (call $cx_bits))
+              (local.set $grew (i32.const 1))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $each))))
+      (br $grow))))
+  ;; anything left with variables of its own is another chain
+  (local.set $i (i32.const 0))
+  (loop $each
+    (if (i32.lt_u (local.get $i) (local.get $n)) (then
+      (if (call $bits_any (i32.load (i32.add (local.get $sets) (i32.shl (local.get $i) (i32.const 2))))) (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $each))))
+  (i32.const 0))
+
+;; Slot bitsets of $cx_bw bytes (a multiple of 4).
+(func $bits_any (param $a i32) (result i32)
+  (local $i i32)
+  (loop $w
+    (if (i32.lt_u (local.get $i) (global.get $cx_bw)) (then
+      (if (i32.load (i32.add (local.get $a) (local.get $i))) (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 4)))
+      (br $w))))
+  (i32.const 0))
+(func $bits_meet (param $a i32) (param $b i32) (result i32)
+  (local $i i32)
+  (loop $w
+    (if (i32.lt_u (local.get $i) (global.get $cx_bw)) (then
+      (if (i32.and (i32.load (i32.add (local.get $a) (local.get $i))) (i32.load (i32.add (local.get $b) (local.get $i)))) (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 4)))
+      (br $w))))
+  (i32.const 0))
+(func $bits_or (param $a i32) (param $b i32)
+  (local $i i32)
+  (loop $w
+    (if (i32.lt_u (local.get $i) (global.get $cx_bw)) (then
+      (i32.store (i32.add (local.get $a) (local.get $i)) (i32.or (i32.load (i32.add (local.get $a) (local.get $i))) (i32.load (i32.add (local.get $b) (local.get $i)))))
+      (local.set $i (i32.add (local.get $i) (i32.const 4)))
+      (br $w)))))
+(func $bits_andnot (param $a i32) (param $b i32)
+  (local $i i32)
+  (loop $w
+    (if (i32.lt_u (local.get $i) (global.get $cx_bw)) (then
+      (i32.store (i32.add (local.get $a) (local.get $i)) (i32.and (i32.load (i32.add (local.get $a) (local.get $i))) (i32.xor (i32.load (i32.add (local.get $b) (local.get $i))) (i32.const -1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 4)))
+      (br $w)))))
+
 ;; --- plans --------------------------------------------------------------------------
 
 ;; The run of triple patterns from el, most bound first (as the interpreter
@@ -891,7 +1003,10 @@
   (local.set $r (call $local (local.get $f)))
   (local.set $top (call $local (local.get $f)))
   (local.set $k (i32.load (local.get $el)))
-  (if (i32.and (i32.eq (local.get $k) (i32.const P_SUB)) (i32.eqz (call $cx_off (i32.const 8))))
+  ;; (a cross product of chains with BINDs is the interpreter's: see $cross)
+  (if (if (result i32) (i32.and (i32.eq (local.get $k) (i32.const P_SUB)) (i32.eqz (call $cx_off (i32.const 8))))
+        (then (i32.or (i32.ne (global.get $cx_lat) (i32.const 0)) (i32.eqz (call $cross (i32.load offset=12 (i32.load offset=4 (local.get $el)))))))
+        (else (i32.const 0)))
     (then (call $sub_rows (local.get $f) (i32.load offset=4 (local.get $el)) (local.get $st) (local.get $n)))
     (else (call $em (local.get $f) (@str "kagbC4vc") (call $eval_key (local.get $el)) (local.get $at) (local.get $n) (i32.const 0))))
   (call $em (local.get $f) (@str "gagbkcljvd") (local.get $at) (local.get $n) (i32.shr_u (call $width) (i32.const 2)) (local.get $top))
