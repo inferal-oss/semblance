@@ -10,6 +10,7 @@ const C_LINK = NS.c + 'Link'
 const C_INLINE = NS.c + 'inline'
 const C_HREF = NS.c + 'href'
 const C_EXTERNAL = NS.c + 'external'
+const C_CURRENT_PAGE = NS.c + 'currentPage'
 const C_EXTERNAL_HINT = NS.c + 'externalHint'
 const C_KEYS = NS.c + 'keys'
 const C_BLOCK = NS.c + 'block'
@@ -44,24 +45,36 @@ const link: FnRule = (ctx, focus) => {
   // A link to a resource (c:to) goes where the navigation layer resolved it (nav:href); c:href is the fallback.
   const href = str(ctx.object(focus, NS.nav + 'href') ?? ctx.object(focus, C_HREF))
   if (href === undefined) return []
-  const label = text(ctx, focus, C.label) ?? href
+  const ownLabel = text(ctx, focus, C.label)
+  const label = ownLabel ?? href
   const external = isExternal(href, str(ctx.object(focus, C_EXTERNAL)))
+  // A component as the link's body (c:content) takes the label's place.
+  const content = ctx.object(focus, C.content)
+  const body = named(content) ? content : undefined
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>` : `${label} <${href}>${external ? ' ↗' : ''}`)]))
+    if (body) o.renders(o.el('root', 'Div', {}, [body, o.text('label', ` <${href}>${external ? ' ↗' : ''}`)]))
+    else o.renders(o.el('root', 'Span', {}, [o.text('label', label === href ? `<${href}>` : `${label} <${href}>${external ? ' ↗' : ''}`)]))
     return o.quads
   }
   // A logo (c:logo, a component) comes before the label.
   const logo = ctx.object(focus, C.logo)
-  const parts = [...(named(logo) ? [logo] : []), o.text('label', label)]
+  const parts = [...(named(logo) ? [logo] : []), body ?? o.text('label', label)]
+  // The hint is the class's, in the viewer's language (c:externalHint on c:Link).
+  const hint = external ? ` (${ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'})` : ''
   if (external) {
-    // The hint is the class's, in the viewer's language (c:externalHint on c:Link).
-    const hint = ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'
     parts.push(o.el('external', 'Span', { class: 'sem-external' }, [o.text('external-text', '↗')]))
     o.attr(o.node('external'), 'aria-hidden', 'true')
-    parts.push(o.el('hint', 'Span', { class: 'sem-sr' }, [o.text('hint-text', ` (${hint})`)]))
+    parts.push(o.el('hint', 'Span', { class: 'sem-sr' }, [o.text('hint-text', hint)]))
   }
-  o.renders(o.el('root', 'A', { href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined }, parts))
+  o.renders(o.el('root', 'A', {
+    href,
+    target: external ? '_blank' : undefined,
+    rel: external ? 'noopener noreferrer' : undefined,
+    // Around a component, a label names the link (with the hint, which the name would otherwise hide).
+    'aria-label': body && ownLabel !== undefined ? ownLabel + hint : undefined,
+    'aria-current': isTrue(ctx.object(focus, C_CURRENT_PAGE)) ? 'page' : undefined,
+  }, parts))
   return o.quads
 }
 

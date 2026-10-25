@@ -101,6 +101,10 @@ sty:Mono sty:declares
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:state ":focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
+# The current page's link: bolder, its underline solid.
+[] a sty:StyleRule ; sty:appliesTo c:Link ; sty:state "[aria-current=page]" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "text-decoration-color" ; sty:raw "currentColor" ] .
 # A link with a logo (c:logo) reads as a brand mark: the logo and the name side by side,
 # underlined only while pointed at.
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:state ":has(> [data-sem-c=emblem], > [data-sem-c=graph-mark])" ;
@@ -118,7 +122,7 @@ sty:Mono sty:declares
     sty:declares [ sty:property "text-decoration-color" ; sty:raw "currentColor" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:part ".sem-external" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
-                 [ sty:property "margin-left" ; sty:raw "0.15em" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "0.15em" ] ,
                  [ sty:property "font-size" ; sty:raw "0.85em" ] ,
                  [ sty:property "text-decoration" ; sty:raw "none" ] ,
                  [ sty:property "transition" ; sty:raw "transform var(--sem-duration-fast) var(--sem-ease)" ] .
@@ -132,6 +136,31 @@ sty:Mono sty:declares
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
+
+# --- Linked card: a link around a component, styled by that component (a card in every theme) ---
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ; sty:state ":focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+# Pointed at, or the current page: its component's edge takes the accent.
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ; sty:part "> :not(.sem-external, .sem-sr)" ;
+    sty:declares [ sty:property "height" ; sty:raw "100%" ] ,
+                 [ sty:property "transition" ; sty:raw "border-color var(--sem-duration-fast) var(--sem-ease)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ; sty:state ":is(:hover, [aria-current=page])" ; sty:part "> :not(.sem-external, .sem-sr)" ;
+    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-accent-8)" ] .
+# The external mark sits in the card's top end corner.
+[] a sty:StyleRule ; sty:appliesTo c:LinkedCard ; sty:part "> .sem-external" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-block-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "inset-inline-end" ; sty:token tok:space-3 ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-muted)" ] ,
+                 [ sty:property "font-size" ; sty:raw "0.85em" ] .
 
 # --- kbd ---
 [] a sty:StyleRule ; sty:appliesTo c:Kbd ;

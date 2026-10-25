@@ -9,10 +9,13 @@ built that way.
 Start with [Getting started](GETTING-STARTED.md) for the smallest complete example. On the site (<https://semblance.dev>, Docs → Building components) a component of this
 shape, `ex:Avatar`, is live: edit its rule, shape or style rules and it renders again as you type.
 
-Use `c:LinkedCard` when an entire non-interactive card should open a destination.
-Give it `c:href`, an accessible `c:label`, and the card as `c:content`. The
-screen rendering is one link around the component; the text rendering includes
-its address after the content. Keep buttons and other links outside that card.
+Use `c:LinkedCard` when an entire non-interactive card should open a destination. It is a
+`c:Link` whose body is a component: give it `c:to` or `c:href` and the card as `c:content`, and
+optionally a `c:label` to name the link (otherwise its name is the card's text). Every link
+property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true` for
+`aria-current="page"`), and every theme styles the card inside as a card. The screen rendering is
+one link around the component; the text rendering gives the address after the content. Keep
+buttons and other links outside that card.
 
 ## SPARQL first; functions are the escape hatch
 
