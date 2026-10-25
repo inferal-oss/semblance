@@ -70,6 +70,28 @@ An HTTP(S) address opens in a new tab with a spoken hint and safe `rel` value; s
 Set `c:currentPage true` when a card represents the current page; it adds
 `aria-current="page"`. The text projection includes the label, optional details, and address.
 
+## Host-owned table cells
+
+`c:Table` normally writes each SELECT value as text. Set `c:slotPrefix` on a `c:Column`
+when an application needs to mount an interactive control in that column's cells:
+
+```turtle
+ex:actions a c:Column ;
+    c:label "Actions" ;
+    c:variable "name" ;
+    c:slotPrefix "action-" ;
+    c:slotVariable "id" ;
+    c:sortable false .
+```
+
+Each row must bind `?id` to a unique, stable value. The cell becomes a host slot named
+`action-` plus that value, which `DomRenderer.slot(name)` can find. Semblance keeps the cell
+and its mounted content when rows sort. A row with no bound value has an empty cell and no
+slot. If `c:slotVariable` is absent, the slot key comes from `c:variable`. A host cell can
+still sort by `c:variable`, independent of its slot key. Set `c:sortable false` for an
+action column; otherwise column headers sort by default.
+Text projection leaves host-owned cells empty because the host controls their content.
+
 ## Writing a rendering rule
 
 A rendering rule runs once per instance (`$this`) and constructs RDF/HTML

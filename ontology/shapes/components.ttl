@@ -120,6 +120,10 @@ c:WindowShape a sh:NodeShape ; sh:targetClass c:Window ;
     sh:property [ sh:path c:width ; sh:maxCount 1 ; sh:minInclusive 160 ] , [ sh:path c:height ; sh:maxCount 1 ; sh:minInclusive 100 ] .
 c:TableShape a sh:NodeShape ; sh:targetClass c:Table ;
     sh:property [ sh:path c:query ; sh:minCount 1 ; sh:maxCount 1 ; sh:message "A table shows the rows of a query (c:query)." ] .
+c:ColumnShape a sh:NodeShape ; sh:targetClass c:Column ;
+    sh:property [ sh:path c:slotPrefix ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
+                [ sh:path c:slotVariable ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
+                [ sh:path c:sortable ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 c:FlippableShape a sh:NodeShape ; sh:targetClass c:Flippable ;
     sh:property [ sh:path c:front ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .
 c:SpecimenShape a sh:NodeShape ; sh:targetClass c:Specimen ;
