@@ -18,7 +18,8 @@
 # instead, its text selected, so typing replaces it ("/" to search); an Escape
 # nothing else uses there gives the focus back to where it was. A key that
 # Shift only spells ("/", "?" on another layout) is matched without Shift.
-# Shortcuts without a modifier do not apply while a text field has the focus.
+# Shortcuts without a modifier do not apply while a text field has the focus. Horizontal arrows
+# follow the reading direction: in a right-to-left page, a part's ArrowLeft shortcut is ArrowRight.
 # c:ShortcutList shows every shortcut in the graph.
 
 <https://semblance.dev/ns/keyboard> a owl:Ontology ;

@@ -4,7 +4,7 @@ import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.t
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
-import { comboOf, navigate, normalizeShortcut, rove } from '../layers/keyboard.ts'
+import { comboOf, mirrored, navigate, normalizeShortcut, rightToLeft, rove } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
@@ -504,7 +504,12 @@ export class EventBus {
         if (handled.recorded || handled.delta.add.length || handled.delta.remove.length) onHandled(handled)
         return
       }
-      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => x.getAttribute('data-sem-shortcut') === combo && !renderer.inSlot(x)) as HTMLElement | undefined
+      // Horizontal arrows follow the reading direction: in a right-to-left page, ArrowLeft is "next".
+      const flipped = mirrored(combo)
+      const el = [...renderer.host.querySelectorAll('[data-sem-shortcut]')].find((x) => {
+        const own = x.getAttribute('data-sem-shortcut')
+        return (own === combo ? flipped === combo || !rightToLeft(x) : flipped !== combo && own === flipped && rightToLeft(x)) && !renderer.inSlot(x)
+      }) as HTMLElement | undefined
       if (!el && combo === 'escape') {
         // Escape dismisses the most recent open overlay: its control marked data-sem-escape.
         const dismiss = [...renderer.host.querySelectorAll('[data-sem-escape]')].filter((x) => !x.closest('[hidden]') && !renderer.inSlot(x)).at(-1) as HTMLElement | undefined

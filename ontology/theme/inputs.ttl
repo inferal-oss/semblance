@@ -128,9 +128,9 @@
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part "> .sem-options" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "6px" ] .
+# A row wraps where its tiles would get too narrow to read (a phone): each at least 8rem.
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:state "[data-sem-direction=row]" ; sty:part "> .sem-options" ;
-    sty:declares [ sty:property "grid-auto-flow" ; sty:raw "column" ] ,
-                 [ sty:property "grid-auto-columns" ; sty:raw "minmax(0, 1fr)" ] .
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 8rem), 1fr))" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RadioGroup ; sty:part ".sem-radio" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "flex-start" ] ,

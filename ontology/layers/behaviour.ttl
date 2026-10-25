@@ -31,6 +31,8 @@ beh:Event a owl:Class ; rdfs:comment "Something that happened to a component."@e
 beh:domEvent a owl:DatatypeProperty ; rdfs:comment "DOM event type an event class is recorded from."@en .
 
 beh:Click a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "click" .
+beh:DoubleClick a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "dblclick" ;
+    rdfs:comment "A rendered element was double-clicked (its two clicks are events too)."@en .
 beh:Input a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "input" ;
     rdfs:comment "The value of a text control changed (per keystroke)."@en .
 beh:Change a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "change" ;

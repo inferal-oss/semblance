@@ -5,3 +5,4 @@ export { createStore, hasStore, initWeb, loadStore, ontologySources, type StoreK
 export { DomRenderer } from '../render/dom.ts'
 export { DEFAULT_LAYERS, mount, type MountedApp, type MountOptions } from './mount.ts'
 export { attachConnectors, type ConnectorHost } from './connectors.ts'
+export { attachSnaps, type SnapHost } from './snap.ts'

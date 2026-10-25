@@ -46,6 +46,7 @@ import { functions as liveFunctions } from './live.ts'
 import { functions as formsFunctions } from './forms.ts'
 import { functions as sheetFunctions } from './sheet.ts'
 import { functions as connectorFunctions } from './connector.ts'
+import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
@@ -807,6 +808,7 @@ export const functions: Record<string, FnRule> = {
   ...formsFunctions,
   ...sheetFunctions,
   ...connectorFunctions,
+  ...galleryFunctions,
   stack,
   'heading:screen': headingScreen,
   'heading:text': headingText,

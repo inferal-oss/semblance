@@ -8,6 +8,7 @@ import { compileStyles } from '../style/compile.ts'
 import { Files, type FilesOptions } from '../files.ts'
 import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
+import { attachSnaps } from './snap.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
 export { DEFAULT_LAYERS }
@@ -141,6 +142,8 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
             opts.onHandled?.(h)
           },
         }).attach()
+  // Swiped tracks (a carousel, a lightbox) report where they came to rest and follow the graph.
+  const snaps = attachSnaps(element)
 
   return {
     store,
@@ -156,6 +159,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachFiles?.()
       detachFullscreen?.()
       connectors.dispose()
+      snaps.dispose()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },
   }

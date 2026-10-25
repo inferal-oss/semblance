@@ -477,5 +477,5 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-controls")) AS ?controls)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-expanded")) AS ?expanded)
-  BIND(IF(EXISTS { ?target a ?kind FILTER(?kind IN (c:Dialog, c:Drawer, c:Popover)) }, IRI(CONCAT(STR($this), "/~root-aria-haspopup")), ?none) AS ?hasPopup)
+  BIND(IF(EXISTS { ?target a ?kind FILTER(?kind IN (c:Dialog, c:Drawer, c:Popover, c:Lightbox)) }, IRI(CONCAT(STR($this), "/~root-aria-haspopup")), ?none) AS ?hasPopup)
 }""" .

@@ -21,6 +21,7 @@ import { compileStyles } from '../src/style/compile.ts'
 import { hasStore, initWeb, loadStoreWith, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
+import { attachSnaps } from '../src/web/snap.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 
@@ -275,6 +276,8 @@ attachIntent(runtime, shell, { flush: () => flush() })
 attachWalkthroughs(document.getElementById('app')!)
 // Connectors (a sheet's dependencies, a walkthrough's arrows, a canvas's): drawn where their ends are.
 const connectors = attachConnectors(document.getElementById('app')!)
+// Swiped tracks (a gallery's carousel, a lightbox): where they come to rest, and the current item in view.
+attachSnaps(document.getElementById('app')!)
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })

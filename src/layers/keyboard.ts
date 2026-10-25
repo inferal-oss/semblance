@@ -38,6 +38,16 @@ export function shortcutLabels(combo: string): [string, string] {
   return [parts.map((p) => GLYPHS[p]![0]).join('') + k, parts.map((p) => GLYPHS[p]![1]).join('') + k]
 }
 
+/** Whether an element reads right to left (its computed direction, else the nearest dir attribute). */
+export function rightToLeft(el: Element): boolean {
+  const direction = el.ownerDocument.defaultView?.getComputedStyle?.(el)?.direction
+  return direction ? direction === 'rtl' : el.closest('[dir]')?.getAttribute('dir') === 'rtl'
+}
+
+/** A combination with its horizontal arrows swapped: what it means in a right-to-left page. */
+export const mirrored = (combo: string) =>
+  combo.replace(/arrow(left|right)$/, (_, side: string) => (side === 'left' ? 'arrowright' : 'arrowleft'))
+
 /** aria-keyshortcuts uses platform key names. */
 const aria = (combo: string) =>
   normalizeShortcut(combo)

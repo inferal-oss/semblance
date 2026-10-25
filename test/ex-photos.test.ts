@@ -1,0 +1,58 @@
+// The photo post example (demo/gallery/_ex-photos.ttl): a headline, a layout picked by radio cards,
+// switches for the viewer's options, and a live preview that opens the viewer - through events only.
+import { describe, expect, it } from 'vitest'
+import { mountSite } from './harness.ts'
+
+const UI = 'https://semblance.dev/demo#'
+const C = 'https://semblance.dev/ns/component#'
+
+function post(prefer: 'sparql' | 'function' = 'sparql') {
+  const h = mountSite('oxigraph', prefer)
+  const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
+  const click = (el: Element) => (h.fire(el, 'click'), h.shell.flush())
+  click([...h.document.querySelectorAll('button')].find((b) => b.textContent!.trim() === 'Examples' && visible(b))!)
+  click([...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === 'Photo post' && visible(b))!)
+  const root = (id: string) => h.shell.nodeOf(`${UI}${id}/~root`) as HTMLElement
+  const part = (id: string, local: string) => h.shell.nodeOf(`${UI}${id}/~${local}`) as HTMLElement
+  const fact = (s: string, p: string) => h.store.match(h.store.factory.namedNode(UI + s), h.store.factory.namedNode(C + p), null).map((q) => q.object.value)
+  return { ...h, root, part, click, fact }
+}
+
+describe('the photo post example', () => {
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`titles the post as you type, switches the layout live and opens the viewer (${prefer})`, () => {
+      const s = post(prefer)
+      const gallery = () => s.root('ph-gallery')
+      expect(gallery().getAttribute('data-layout')).toBe('carousel')
+      expect(s.part('ph-gallery', 'counter').textContent).toBe('1 / 4')
+      // The headline titles the preview and the gallery (the viewer's title).
+      const field = s.root('ph-headline').querySelector('input')!
+      field.value = 'Sea, sand and pines'
+      s.fire(field, 'input')
+      s.shell.flush()
+      expect(s.root('ph-title').textContent).toBe('Sea, sand and pines')
+      expect(gallery().getAttribute('aria-label')).toBe('Sea, sand and pines')
+      // The radio cards: the layouts with their descriptions; picking one is one triple.
+      const radios = [...s.root('ph-layout').querySelectorAll('input[type=radio]')] as HTMLInputElement[]
+      expect(radios.map((r) => r.value)).toEqual([C + 'CarouselLayout', C + 'GridLayout', C + 'PileLayout'])
+      radios[2]!.checked = true
+      s.fire(radios[2]!, 'change')
+      s.shell.flush()
+      expect(s.fact('ph-gallery', 'galleryLayout')).toEqual([C + 'PileLayout'])
+      expect(gallery().querySelector('.sem-summary')!.textContent).toBe('4 photos · Hover to explore, click or tap to open.')
+      // A print opens the viewer at its photo, with its thumbnails.
+      s.click(s.part('ph-gallery', 'photo-3'))
+      expect(s.fact('ph-viewer', 'open')).toEqual(['true'])
+      expect(s.document.getElementById(s.part('ph-viewer', 'panel').getAttribute('aria-labelledby')!)!.textContent).toBe('Sea, sand and pines')
+      expect(s.part('ph-viewer', 'caption').textContent).toBe('Walking the dunes')
+      expect(s.part('ph-viewer', 'strip').querySelectorAll('.sem-thumb')).toHaveLength(4)
+      // The loop switch: past the last photo is the first.
+      s.click(s.part('ph-viewer', 'close'))
+      s.click(s.root('ph-loop').querySelector('[role=switch]')!)
+      expect(s.fact('ph-viewer', 'loops')).toEqual(['true'])
+      s.click(s.part('ph-gallery', 'photo-4'))
+      s.click(s.part('ph-viewer', 'next'))
+      expect(s.fact('ph-gallery', 'current')).toEqual([UI.replace('#', '/photos#') + 'harbour'])
+    })
+  }
+})

@@ -289,6 +289,10 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
   `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no
   connector, at most one frame's work per frame otherwise, and never writes geometry into the graph.
+- **Swiped tracks.** A gallery's carousel and a lightbox scroll on snap points (`data-sem-snap`): a
+  host effect brings the item the graph calls current (`data-sem-current`) into view and reports
+  where a swipe came to rest as an unrecorded `c:Snapped` event. `mount` attaches it; by hand,
+  `attachSnaps(element)` (`@inferal-oss/semblance/web`).
 - **Idle work.** Call `runtime.warm(ms)` in idle time so hidden views are ready before they are
   shown; `sem:warm sem:Eager | sem:OnIntent` says which.
 - **Live examples.** `c:LiveExample` shows Turtle (code editors, `c:CodeEditor` with `c:language
