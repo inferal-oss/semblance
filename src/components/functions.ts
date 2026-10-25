@@ -11,6 +11,7 @@ import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
 import { typeaheadFunctions } from './typeahead.ts'
 import { functions as calendarFunctions } from './calendar.ts'
+import { datesFunctions } from './dates.ts'
 import { functions as outlineFunctions } from './outline.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
@@ -771,6 +772,7 @@ export const functions: Record<string, FnRule> = {
   ...boardFunctions,
   ...typeaheadFunctions,
   ...calendarFunctions,
+  ...datesFunctions,
   ...outlineFunctions,
   ...validationFunctions,
   ...keyboardFunctions,

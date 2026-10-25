@@ -1,6 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -26,6 +27,13 @@
 # (c:allowsCustom) is a candidate value: it is checked against the value
 # constraints, and val:invalidEntry (the message) keeps it from being committed. A field may
 # validate against several shapes; the first violated one speaks.
+#
+# A dated field (one the localization layer gives a date pattern: a date field, a time field) over
+# a date or time property (sh:datatype, else the property's rdfs:range) also has its typed text
+# checked: it must read as a date or time in the locale's format, or the field says how to write
+# one (c:InvalidDatePhrase, with the locale's pattern). Its values are checked against
+# sh:minInclusive / sh:maxInclusive as ISO text, and against sh:lessThanOrEquals (a range's start
+# shape names the end property); a shape speaks for the property its sh:path names.
 
 <https://semblance.dev/ns/validation> a owl:Ontology ;
     rdfs:label "Semblance validation layer"@en .
@@ -44,7 +52,7 @@ val:full a owl:DatatypeProperty ;
     rdfs:comment "Derived: the property a field edits holds as many values as its shape's sh:maxCount allows. The value is the shape's sh:message."@en .
 
 val:Check a sem:Rendering ;
-    sem:requires val:validates , val:requires ;
+    sem:requires val:validates , val:requires , l10n:datePattern ;
     rdfs:comment "Checks fields against their shapes and gates buttons on them."@en ;
     sem:targets sem:Component ;
     sem:layer val:Layer ;

@@ -17,7 +17,7 @@
 
 ui:gallery-inputs a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:gallery-inputs-intro ui:inp-text ui:inp-search ui:inp-codes ui:inp-editor ui:inp-checkboxes ui:inp-radios ui:inp-switches
-                 ui:inp-sliders ui:inp-fields ui:inp-selection ui:inp-typeahead ui:inp-tags ) .
+                 ui:inp-sliders ui:inp-fields ui:inp-selection ui:inp-typeahead ui:inp-tags ui:inp-dates ui:inp-month ) .
 ui:gallery-inputs-intro a c:Heading ; c:label "Inputs" .
 
 # --- The node the shared controls edit ------------------------------------------------------------
@@ -252,6 +252,54 @@ ui:inp-tags a c:Flippable ; c:front ui:inp-tags-spec .
 ui:inp-tags-spec a c:Specimen ; c:demonstrates c:TagInput ; c:label "Tag input" ;
     c:help "A c:TagInput edits a multi-valued property: its values are c:Tag pills (✕ removes one), and the field finds more to add with the same typeahead. A value is never added twice. With c:allowsCustom, Enter or a comma adds what you typed; c:optionsInUse offers every value the property already has. The shape's sh:maxCount caps the count, and its message is shown at the cap." ;
     c:children ( ui:inp-tags-col ) .
+
+# --- Dates and times ---------------------------------------------------------------------------------
+# A trip on ui:inputsDemo: a departure (a date field and, below, a month grid edit the same value),
+# a stay (a date range) and a pickup time. What may be picked is SHACL: departures run from
+# 3 November 2026 to 31 March 2027, a stay ends on or after it starts, pickups are by day. Switch the
+# language (Arabic: right to left, the arrows swap) and the formats, names and first day of the week
+# follow the locale.
+
+ui:inputsDemo ui:inp-departs "2026-11-12"^^xsd:date ; ui:inp-stay-from "2026-11-20"^^xsd:date ; ui:inp-stay-until "2026-11-24"^^xsd:date ;
+    ui:inp-pickup "09:30:00"^^xsd:time .
+ui:inp-departs a owl:DatatypeProperty ; rdfs:label "Departure" ; rdfs:range xsd:date .
+ui:inp-stay-from a owl:DatatypeProperty ; rdfs:label "Check-in" ; rdfs:range xsd:date .
+ui:inp-stay-until a owl:DatatypeProperty ; rdfs:label "Check-out" ; rdfs:range xsd:date .
+ui:inp-pickup a owl:DatatypeProperty ; rdfs:label "Pickup" ; rdfs:range xsd:time .
+ui:DepartureShape a sh:PropertyShape ; sh:path ui:inp-departs ; sh:datatype xsd:date ; sh:minCount 1 ;
+    sh:minInclusive "2026-11-03"^^xsd:date ; sh:maxInclusive "2027-03-31"^^xsd:date ;
+    sh:message "Departures run from 3 November 2026 to 31 March 2027."@en , "Відправлення з 3 листопада 2026 до 31 березня 2027."@uk ,
+               "Abfahrten vom 3. November 2026 bis 31. März 2027."@de , "الرحلات من 3 نوفمبر 2026 حتى 31 مارس 2027."@ar .
+ui:StayShape a sh:PropertyShape ; sh:path ui:inp-stay-from ; sh:datatype xsd:date ; sh:lessThanOrEquals ui:inp-stay-until ;
+    sh:message "The stay ends before it starts."@en , "Перебування закінчується раніше, ніж починається."@uk ,
+               "Der Aufenthalt endet, bevor er beginnt."@de , "تنتهي الإقامة قبل أن تبدأ."@ar .
+ui:PickupShape a sh:PropertyShape ; sh:path ui:inp-pickup ; sh:datatype xsd:time ;
+    sh:minInclusive "07:00:00"^^xsd:time ; sh:maxInclusive "21:00:00"^^xsd:time ;
+    sh:message "Pickups are from 7:00 to 21:00."@en , "Трансфер з 7:00 до 21:00."@uk , "Abholung von 7:00 bis 21:00."@de , "الاستلام من 7:00 حتى 21:00."@ar .
+
+ui:inp-date-departs a c:DateField ; c:controls ui:inputsDemo ; c:property ui:inp-departs ; val:validates ui:DepartureShape ;
+    c:label "Departure"@en , "Відправлення"@uk , "Abfahrt"@de , "المغادرة"@ar ;
+    c:help "Type a date in your locale's format, or pick one from the calendar beside it." .
+ui:inp-date-stay a c:DateRangeField ; c:controls ui:inputsDemo ; c:property ui:inp-stay-from ; c:endProperty ui:inp-stay-until ;
+    val:validates ui:StayShape ;
+    c:label "Stay"@en , "Перебування"@uk , "Aufenthalt"@de , "الإقامة"@ar ;
+    c:help "Pick the first night, then the last: the days between are highlighted." .
+ui:inp-time-pickup a c:TimeField ; c:controls ui:inputsDemo ; c:property ui:inp-pickup ; val:validates ui:PickupShape ; c:minuteStep 15 ;
+    c:label "Pickup"@en , "Трансфер"@uk , "Abholung"@de , "الاستلام"@ar .
+ui:inp-date-off a c:DateField ; c:controls ui:inputsDemo ; c:property ui:inp-departs ; c:disabled true ;
+    c:label "Departure (locked)"@en , "Відправлення (заблоковано)"@uk , "Abfahrt (gesperrt)"@de , "المغادرة (مقفل)"@ar .
+ui:inp-dates-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:inp-date-departs ui:inp-date-stay ui:inp-time-pickup ui:inp-date-off ) .
+ui:inp-dates a c:Flippable ; c:front ui:inp-dates-spec .
+ui:inp-dates-spec a c:Specimen ; c:demonstrates c:DateField , c:DateRangeField , c:TimeField ; c:label "Date and time fields" ;
+    c:help "A c:DateField edits an xsd:date of a node (c:controls, c:property): it shows and reads the date in the viewer's locale (dd.mm.yyyy, mm/dd/yyyy, ISO always), and ▦ opens a month grid in a popup (role=dialog) that takes the focus on the date: the arrows move by a day and a week, Home and End to the week's ends, Page Up and Down by a month (Shift: a year), Enter picks and closes, Escape closes; the focus returns to the button. A c:DateRangeField picks a start and then an end (c:endProperty) on one grid, the span highlighted and previewed under the pointer. A c:TimeField reads 14:30 or 2:30 pm and lists times every c:minuteStep minutes. What may be picked is the val:validates shape's sh:minInclusive / sh:maxInclusive (and sh:lessThanOrEquals for a range); text that is not a date says how to write one." ;
+    c:children ( ui:inp-dates-col ) .
+
+ui:inp-month-grid a c:MonthGrid ; c:controls ui:inputsDemo ; c:property ui:inp-departs ; val:validates ui:DepartureShape .
+ui:inp-month a c:Flippable ; c:front ui:inp-month-spec .
+ui:inp-month-spec a c:Specimen ; c:demonstrates c:MonthGrid ; c:label "Month grid" ;
+    c:help "A c:MonthGrid is the month a date field's popup shows, on its own: a WAI-ARIA grid of day buttons under the month and its arrows, the weeks from the locale's first day (or c:firstDayOfWeek), today marked (aria-current), the picked day selected (aria-selected), days out of the shape's bounds disabled. Only the active day is in the tab order; the keys move it, and the month with it. It sets the same departure as the field above; with c:endProperty it picks a range." ;
+    c:children ( ui:inp-month-grid ) .
 
 # --- Code editor: Turtle and SPARQL ----------------------------------------------------------------
 
