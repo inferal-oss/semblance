@@ -94,8 +94,11 @@ pub extern "C" fn abi_version() -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn input(len: u32) -> *mut u8 {
     let s = st();
+    // The host overwrites what it asked for, so the bytes need no clearing.
     s.input.clear();
-    s.input.resize(len as usize, 0);
+    s.input.reserve(len as usize);
+    // SAFETY: u8 has no invalid values, and the capacity was just reserved.
+    unsafe { s.input.set_len(len as usize) };
     s.input.as_mut_ptr()
 }
 

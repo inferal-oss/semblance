@@ -249,6 +249,9 @@ pub fn push_utf8(out: &mut Vec<u8>, cp: u32) {
 }
 
 pub fn pn_chars_base(c: u32) -> bool {
+    if c < 0x80 {
+        return (c as u8).is_ascii_alphabetic();
+    }
     matches!(c,
         0x41..=0x5a | 0x61..=0x7a | 0xc0..=0xd6 | 0xd8..=0xf6 | 0xf8..=0x2ff | 0x370..=0x37d
         | 0x37f..=0x1fff | 0x200c..=0x200d | 0x2070..=0x218f | 0x2c00..=0x2fef | 0x3001..=0xd7ff
@@ -260,6 +263,9 @@ pub fn pn_chars_u(c: u32) -> bool {
 }
 
 pub fn pn_chars(c: u32) -> bool {
+    if c < 0x80 {
+        return (c as u8).is_ascii_alphanumeric() || c == '_' as u32 || c == '-' as u32;
+    }
     pn_chars_u(c) || matches!(c, 0x2d | 0x30..=0x39 | 0xb7 | 0x300..=0x36f | 0x203f..=0x2040)
 }
 

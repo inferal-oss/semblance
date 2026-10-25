@@ -15,15 +15,15 @@ struct Parser<'a, 'd> {
     c: Cur<'a>,
     dict: &'d mut Dict,
     out: &'d mut Vec<Quad>,
-    /// Namespaces by prefix (an index into `namespaces`).
-    prefixes: IdMap,
-    namespaces: Vec<Vec<u8>>,
+    /// (prefix, namespace), in order of definition; a later one wins.
+    namespaces: Vec<(Vec<u8>, Vec<u8>)>,
     base: Vec<u8>,
     bnodes: IdMap,
     /// Where triples go: the load's graph, or the graph block being read.
     graph: u32,
     buf: Vec<u8>,
     lang: Vec<u8>,
+    iri_buf: Vec<u8>,
 }
 
 /// Parse a Turtle (or, with `trig`, TriG) document; triples outside graph blocks go to `graph`.
@@ -32,13 +32,13 @@ pub fn parse(text: &[u8], trig: bool, base: &[u8], graph: u32, dict: &mut Dict, 
         c: Cur::new(text),
         dict,
         out,
-        prefixes: IdMap::new(),
         namespaces: Vec::new(),
         base: base.to_vec(),
         bnodes: IdMap::new(),
         graph,
         buf: Vec::new(),
         lang: Vec::new(),
+        iri_buf: Vec::new(),
     };
     loop {
         p.ws();
@@ -129,8 +129,7 @@ impl Parser<'_, '_> {
                 let prefix = self.pname_ns()?;
                 self.ws();
                 let ns = self.iri_string()?;
-                self.namespaces.push(ns);
-                self.prefixes.set(&bytes_key(&prefix), self.namespaces.len() as u32 - 1);
+                self.namespaces.push((prefix.to_vec(), ns));
             }
             1 => self.base = self.iri_string()?,
             _ => match self.c.peek() {
@@ -519,35 +518,44 @@ impl Parser<'_, '_> {
 
     /// An IRI (written or prefixed), resolved, as a string.
     fn iri_string(&mut self) -> Res<Vec<u8>> {
+        let mut out = Vec::new();
+        self.iri_into(&mut out)?;
+        Ok(out)
+    }
+
+    /// An IRI (`<...>` resolved, or a prefixed name) into `out`, replacing it.
+    fn iri_into(&mut self, out: &mut Vec<u8>) -> Res<()> {
+        out.clear();
         if self.c.peek() == b'<' {
             self.c.iriref(&mut self.buf)?;
-            let mut out = Vec::new();
             if has_scheme(&self.buf) {
                 out.extend_from_slice(&self.buf);
             } else {
-                iri::resolve(&self.base, &self.buf, &mut out);
+                iri::resolve(&self.base, &self.buf, out);
             }
-            return Ok(out);
+            return Ok(());
         }
-        self.prefixed_name()
+        self.prefixed_name(out)
     }
 
     fn iri(&mut self) -> Res<u32> {
-        let s = self.iri_string()?;
-        Ok(self.dict.intern(Key::iri(&s)))
+        let mut s = core::mem::take(&mut self.iri_buf);
+        let r = self.iri_into(&mut s).map(|()| self.dict.intern(Key::iri(&s)));
+        self.iri_buf = s;
+        r
     }
 
-    fn prefixed_name(&mut self) -> Res<Vec<u8>> {
+    fn prefixed_name(&mut self, out: &mut Vec<u8>) -> Res<()> {
         let start = self.c.i;
         self.prefix_chars()?;
         let prefix = &self.c.s[start..self.c.i];
         if !self.c.eat(b':') {
             return self.c.err("expected prefixed name");
         }
-        let Some(ns) = self.prefixes.get(&bytes_key(prefix)) else {
+        let Some(ns) = self.namespaces.iter().rposition(|(p, _)| p == prefix) else {
             return self.c.err("undefined prefix");
         };
-        let mut out = self.namespaces[ns as usize].clone();
+        out.extend_from_slice(&self.namespaces[ns].1);
         // PN_LOCAL; a trailing unescaped '.' ends the statement instead.
         let (mut keep_len, mut keep_i) = (out.len(), self.c.i);
         let mut first = true;
@@ -584,7 +592,7 @@ impl Parser<'_, '_> {
         }
         out.truncate(keep_len);
         self.c.i = keep_i;
-        Ok(out)
+        Ok(())
     }
 
     fn literal(&mut self) -> Res<u32> {

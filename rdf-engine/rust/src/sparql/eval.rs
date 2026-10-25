@@ -17,6 +17,15 @@ use core::cmp::Ordering;
 
 pub type Row = Vec<u32>;
 
+/// Compiled regexes by pattern and flags (an index into the list), kept
+/// across queries: a rule's query runs once per focus, with the same patterns.
+struct Regexes(core::cell::UnsafeCell<(IdMap, Vec<Rc<Regex>>)>);
+
+// Wasm without threads: there is one caller at a time.
+unsafe impl Sync for Regexes {}
+
+static REGEXES: Regexes = Regexes(core::cell::UnsafeCell::new((IdMap::EMPTY, Vec::new())));
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Active {
     Default,
@@ -35,9 +44,8 @@ pub struct Ctx<'a> {
     pub now_ms: f64,
     /// Datatype kinds by datatype id (`Dt as u32`).
     pub dt_cache: IdMap,
-    /// Compiled regexes by pattern and flags (an index into `regex_list`).
-    regexes: IdMap,
-    regex_list: Vec<Rc<Regex>>,
+    /// `xsd(...)` ids by local name (see `xsd`); NONE until first used.
+    pub xsd_ids: [u32; 6],
     /// BNODE(str) by string, for the solution at `bnode_row` (rows are
     /// extended in place, so a solution keeps its address while its
     /// expressions are evaluated).
@@ -46,7 +54,7 @@ pub struct Ctx<'a> {
     scan: Vec<u32>,
     /// Per pattern (by address): the variables a join may pass into it.
     side: IdMap,
-    side_list: Vec<Rc<[bool]>>,
+    side_list: Vec<Option<Rc<[bool]>>>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
     active: Active,
 }
@@ -62,8 +70,7 @@ impl<'a> Ctx<'a> {
             nvars,
             now_ms: crate::host::now(),
             dt_cache: IdMap::new(),
-            regexes: IdMap::new(),
-            regex_list: Vec::new(),
+            xsd_ids: [NONE; 6],
             bnodes: IdMap::new(),
             bnode_row: 0,
             scan: Vec::new(),
@@ -126,12 +133,17 @@ impl<'a> Ctx<'a> {
     pub fn regex(&mut self, pattern: &[u8], flags: &[u8]) -> R<Rc<Regex>> {
         let mut key = bytes_key(pattern);
         key.extend(bytes_key(flags));
-        if let Some(i) = self.regexes.get(&key) {
-            return Ok(self.regex_list[i as usize].clone());
+        // Wasm without threads: one caller at a time, and nothing here re-enters.
+        let c = unsafe { &mut *REGEXES.0.get() };
+        if let Some(i) = c.0.get(&key) {
+            return Ok(c.1[i as usize].clone());
         }
         let r = Rc::new(super::regex::compile(pattern, flags).ok_or(())?);
-        self.regex_list.push(r.clone());
-        self.regexes.insert(&key, self.regex_list.len() as u32 - 1);
+        if c.1.len() >= 256 {
+            *c = (IdMap::new(), Vec::new());
+        }
+        c.1.push(r.clone());
+        c.0.insert(&key, c.1.len() as u32 - 1);
         Ok(r)
     }
 
@@ -154,12 +166,7 @@ impl<'a> Ctx<'a> {
         !self.eval(p, row, active).is_empty()
     }
 
-    fn graphs(&self, active: Active) -> Vec<u32> {
-        match active {
-            Active::Default => self.default.clone(),
-            Active::Named(g) => alloc::vec![g],
-        }
-    }
+
 
     pub fn named_graphs(&self) -> Vec<u32> {
         match &self.named {
@@ -184,30 +191,29 @@ impl<'a> Ctx<'a> {
             Pattern::Join(a, b) => {
                 let left = self.eval(a, sub, active);
                 if left.is_empty() {
-                    left
-                } else if pure(b) {
+                    return left;
+                }
+                let Some(safe) = self.sideways(b) else {
                     let mut out = Vec::new();
                     for r in &left {
                         out.extend(self.eval(b, r, active));
                     }
-                    out
-                } else {
-                    let safe = self.sideways(b);
-                    if !left.iter().any(|r| useful(r, sub, &safe)) {
-                        let right = self.eval(b, sub, active);
-                        return join_rows(left, &right);
-                    }
-                    let (mut whole, mut out) = (None, Vec::new());
-                    for r in &left {
-                        self.join_one(b, sub, r, &safe, &mut whole, active, &mut out);
-                    }
-                    out
+                    return out;
+                };
+                if !left.iter().any(|r| useful(r, sub, &safe)) {
+                    let right = self.eval(b, sub, active);
+                    return join_rows(left, &right);
                 }
+                let (mut whole, mut out) = (None, Vec::new());
+                for r in &left {
+                    self.join_one(b, sub, r, &safe, &mut whole, active, &mut out);
+                }
+                out
             }
             Pattern::LeftJoin(a, b, f) => {
                 let left = self.eval(a, sub, active);
                 let mut out = Vec::new();
-                let safe = if pure(b) { None } else { Some(self.sideways(b)) };
+                let safe = self.sideways(b);
                 let (mut whole, mut ms) = (None, Vec::new());
                 for r in left {
                     match &safe {
@@ -236,6 +242,13 @@ impl<'a> Ctx<'a> {
                 out
             }
             Pattern::Filter(f, a) => {
+                // A filter that reads only bound variables, which `a` keeps,
+                // has one answer for every row: decide it before evaluating `a`.
+                if let Some(reads) = self.early(p) {
+                    if reads.iter().zip(sub).all(|(&r, &x)| !r || x != NONE) {
+                        return if self.test(f, sub) { self.eval(a, sub, active) } else { Vec::new() };
+                    }
+                }
                 let rows = self.eval(a, sub, active);
                 rows.into_iter().filter(|r| self.test(f, r)).collect()
             }
@@ -318,9 +331,9 @@ impl<'a> Ctx<'a> {
                 let left = self.eval(a, sub, active);
                 let mut out = Vec::new();
                 for r in &left {
-                    for x in self.eval(b, r, active) {
-                        if let Some(m) = merge(r, &x) {
-                            out.push(m);
+                    for mut x in self.eval(b, r, active) {
+                        if merge_into(&mut x, r) {
+                            out.push(x);
                         }
                     }
                 }
@@ -337,43 +350,70 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// For each variable, whether a left row may pass its binding into `b`
-    /// (`b` mentions it and substituting it is safe), cached per pattern.
-    fn sideways(&mut self, b: &Pattern) -> Rc<[bool]> {
+    /// None when `b` is pure (a row may pass it every binding); otherwise, for
+    /// each variable, whether a left row may pass its binding into `b` (`b`
+    /// mentions it and substituting it is safe). Cached per pattern.
+    fn sideways(&mut self, b: &Pattern) -> Option<Rc<[bool]>> {
         let key = [b as *const Pattern as usize as u32];
         if let Some(i) = self.side.get(&key) {
             return self.side_list[i as usize].clone();
         }
-        let mut m = alloc::vec![false; self.nvars];
-        pattern_vars(b, &mut m);
-        for (v, x) in m.iter_mut().enumerate() {
-            *x = *x && subst_ok(b, v as Var);
-        }
-        let safe: Rc<[bool]> = m.into();
+        let safe = if pure(b) {
+            None
+        } else {
+            let mut m = alloc::vec![false; self.nvars];
+            pattern_vars(b, &mut m);
+            for (v, x) in m.iter_mut().enumerate() {
+                *x = *x && subst_ok(b, v as Var);
+            }
+            Some(m.into())
+        };
         self.side_list.push(safe.clone());
         self.side.insert(&key, self.side_list.len() as u32 - 1);
         safe
+    }
+
+    /// For FILTER(f, a): the variables `f` reads, when it reads nothing else
+    /// (no EXISTS) and `a` keeps each one as substituted; cached per pattern.
+    fn early(&mut self, p: &Pattern) -> Option<Rc<[bool]>> {
+        let Pattern::Filter(f, a) = p else { return None };
+        let key = [p as *const Pattern as usize as u32];
+        if let Some(i) = self.side.get(&key) {
+            return self.side_list[i as usize].clone();
+        }
+        let mut m = alloc::vec![false; self.nvars];
+        expr_vars(f, &mut m);
+        let ok = !has_exists(f) && m.iter().enumerate().all(|(v, &r)| !r || keeps(a, v as Var));
+        let reads = if ok { Some(m.into()) } else { None };
+        self.side_list.push(reads.clone());
+        self.side.insert(&key, self.side_list.len() as u32 - 1);
+        reads
     }
 
     /// Join one left row with `b`: evaluated with the row's safe bindings
     /// substituted, or (when it has none) from `b` evaluated once, unsubstituted.
     #[allow(clippy::too_many_arguments)]
     fn join_one(&mut self, b: &Pattern, sub: &[u32], r: &[u32], safe: &[bool], whole: &mut Option<Vec<Row>>, active: Active, out: &mut Vec<Row>) {
-        let rows;
-        let right: &[Row] = if useful(r, sub, safe) {
+        if useful(r, sub, safe) {
             let s: Row = sub.iter().zip(r).zip(safe).map(|((&x, &y), &ok)| if x == NONE && ok { y } else { x }).collect();
-            rows = self.eval(b, &s, active);
-            &rows
-        } else {
-            whole.get_or_insert_with(|| self.eval(b, sub, active))
-        };
-        for x in right {
-            // Each pair tried is a budget step, as in join_rows.
-            if crate::budget::step() {
-                return;
+            for mut x in self.eval(b, &s, active) {
+                if crate::budget::step() {
+                    return;
+                }
+                if merge_into(&mut x, r) {
+                    out.push(x);
+                }
             }
-            if let Some(m) = merge(r, x) {
-                out.push(m);
+        } else {
+            let right = whole.get_or_insert_with(|| self.eval(b, sub, active));
+            for x in right.iter() {
+                // Each pair tried is a budget step, as in join_rows.
+                if crate::budget::step() {
+                    return;
+                }
+                if let Some(m) = merge(r, x) {
+                    out.push(m);
+                }
             }
         }
     }
@@ -438,11 +478,12 @@ impl<'a> Ctx<'a> {
             }
         };
         let (Some(s), Some(p), Some(o)) = (pos(&t.s, self), pos(&t.p, self), pos(&t.o, self)) else { return };
-        let graphs = self.graphs(active);
+        let mut one = [0];
+        let graphs = graphs(&self.default, active, &mut one);
         let dedupe = graphs.len() > 1;
-        let mut seen = IdMap::new();
+        let (mut seen, mut spare) = (IdMap::new(), None::<Row>);
         let mut scan = core::mem::take(&mut self.scan);
-        for g in graphs {
+        for &g in graphs {
             scan.clear();
             self.store.scan([s, p, o, g], &mut scan);
             for q in scan.chunks_exact(4) {
@@ -452,9 +493,18 @@ impl<'a> Ctx<'a> {
                 if dedupe && !seen.add(&q[..3]) {
                     continue;
                 }
-                let mut r = row.to_vec();
+                // A row that failed to bind is reused for the next quad.
+                let mut r = match spare.take() {
+                    Some(mut r) => {
+                        r.copy_from_slice(row);
+                        r
+                    }
+                    None => row.to_vec(),
+                };
                 if bind(&t.s, q[0], &mut r, self.dict) && bind(&t.p, q[1], &mut r, self.dict) && bind(&t.o, q[2], &mut r, self.dict) {
                     out.push(r);
+                } else {
+                    spare = Some(r);
                 }
             }
         }
@@ -483,11 +533,12 @@ impl<'a> Ctx<'a> {
     }
 
     fn scan_pairs(&mut self, s: u32, p: u32, o: u32, active: Active, out: &mut Vec<(u32, u32, u32)>) {
-        let graphs = self.graphs(active);
+        let mut one = [0];
+        let graphs = graphs(&self.default, active, &mut one);
         let dedupe = graphs.len() > 1;
         let mut seen = IdMap::new();
         let mut scan = core::mem::take(&mut self.scan);
-        for g in graphs {
+        for &g in graphs {
             scan.clear();
             self.store.scan([s, p, o, g], &mut scan);
             for q in scan.chunks_exact(4) {
@@ -598,7 +649,8 @@ impl<'a> Ctx<'a> {
     fn is_node(&mut self, n: u32, active: Active) -> bool {
         let mut scan = core::mem::take(&mut self.scan);
         let mut found = false;
-        for g in self.graphs(active) {
+        let mut one = [0];
+        for &g in graphs(&self.default, active, &mut one) {
             scan.clear();
             self.store.scan([n, 0, 0, g], &mut scan);
             if scan.is_empty() {
@@ -898,6 +950,33 @@ fn subst_ok(p: &Pattern, v: Var) -> bool {
     }
 }
 
+/// Whether every row of `p`, evaluated with `v` substituted, has `v` as substituted:
+/// nothing in it rebinds `v`, and no subquery projects it away.
+fn keeps(p: &Pattern, v: Var) -> bool {
+    match p {
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => true,
+        Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) | Pattern::LeftJoin(a, b, _) => keeps(a, v) && keeps(b, v),
+        Pattern::Graph(_, a) | Pattern::Filter(_, a) => keeps(a, v),
+        Pattern::Extend(a, w, _) => *w != v && keeps(a, v),
+        Pattern::Sub(_) => false,
+    }
+}
+
+/// Whether an expression has EXISTS, or a function whose value differs per row
+/// whatever the row binds (RAND, BNODE, UUID).
+fn has_exists(e: &Expr) -> bool {
+    match e {
+        Expr::Exists(..) => true,
+        Expr::Call(Func::Rand | Func::Bnode | Func::Uuid | Func::StrUuid, _) => true,
+        Expr::Var(_) | Expr::Bound(_) | Expr::Const(_) | Expr::Unknown => false,
+        Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => has_exists(a) || has_exists(b),
+        Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => has_exists(a),
+        Expr::In(a, l, _) => has_exists(a) || l.iter().any(has_exists),
+        Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().any(has_exists),
+        Expr::If(a, b, c) => has_exists(a) || has_exists(b) || has_exists(c),
+    }
+}
+
 /// Whether an expression reads `v` (EXISTS is taken to read every variable).
 fn reads(e: &Expr, v: Var) -> bool {
     match e {
@@ -1024,6 +1103,17 @@ fn reads_only(e: &Expr, vars: &[Var]) -> bool {
     }
 }
 
+/// The graphs whose union is the active graph.
+fn graphs<'s>(default: &'s [u32], active: Active, one: &'s mut [u32; 1]) -> &'s [u32] {
+    match active {
+        Active::Default => default,
+        Active::Named(g) => {
+            *one = [g];
+            one
+        }
+    }
+}
+
 /// Whether a row binds a variable, beyond `sub`, that may be passed into a pattern.
 fn useful(r: &[u32], sub: &[u32], safe: &[bool]) -> bool {
     r.iter().zip(sub).zip(safe).any(|((&x, &s), &ok)| ok && s == NONE && x != NONE)
@@ -1070,6 +1160,20 @@ fn bind(x: &Tv, id: u32, row: &mut [u32], dict: &Dict) -> bool {
             _ => false,
         },
     }
+}
+
+/// Merge `a` into `b` in place; false if they conflict.
+fn merge_into(b: &mut [u32], a: &[u32]) -> bool {
+    for (y, &x) in b.iter_mut().zip(a) {
+        if x != NONE {
+            if *y == NONE {
+                *y = x;
+            } else if *y != x {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 pub fn merge(a: &[u32], b: &[u32]) -> Option<Row> {

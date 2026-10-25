@@ -77,7 +77,9 @@ pub struct Dict {
     terms: Vec<Term>,
     arena: Vec<u8>,
     /// Ids by hash; 0 is an empty slot. The length is a power of two.
-    table: Vec<u32>,
+    /// Per slot: an id in the low half and its hash in the high half (0 = empty),
+    /// so a probe compares hashes without touching `terms`.
+    table: Vec<u64>,
     live: u32,
     fresh: u32,
     /// Freed ids, reused before new ones.
@@ -126,8 +128,8 @@ impl Dict {
         let mask = self.table.len() - 1;
         let mut i = h as usize & mask;
         loop {
-            let id = self.table[i];
-            if id == NONE || self.matches(&self.terms[id as usize], k, h) {
+            let e = self.table[i];
+            if e == 0 || (e >> 32) as u32 == h && self.matches(&self.terms[e as u32 as usize], k, h) {
                 return i;
             }
             i = (i + 1) & mask;
@@ -135,14 +137,14 @@ impl Dict {
     }
 
     pub fn get(&self, k: Key) -> u32 {
-        self.table[self.slot(&k, k.hash())]
+        self.table[self.slot(&k, k.hash())] as u32
     }
 
     pub fn intern(&mut self, k: Key) -> u32 {
         let h = k.hash();
         let i = self.slot(&k, h);
-        if self.table[i] != NONE {
-            return self.table[i];
+        if self.table[i] != 0 {
+            return self.table[i] as u32;
         }
         let voff = self.arena.len() as u32;
         self.arena.extend_from_slice(k.value);
@@ -170,26 +172,26 @@ impl Dict {
                 self.terms.len() as u32 - 1
             }
         };
-        self.table[i] = id;
+        self.table[i] = (h as u64) << 32 | id as u64;
         self.live += 1;
-        if self.live as usize * 4 > self.table.len() * 3 {
+        if self.live as usize * 2 > self.table.len() {
             self.grow();
         }
         id
     }
 
     fn grow(&mut self) {
-        let mut table = alloc::vec![NONE; self.table.len() * 2];
+        let mut table = alloc::vec![0u64; self.table.len() * 2];
         let mask = table.len() - 1;
-        for &id in &self.table {
-            if id == NONE {
+        for &e in &self.table {
+            if e == 0 {
                 continue;
             }
-            let mut i = self.terms[id as usize].hash as usize & mask;
-            while table[i] != NONE {
+            let mut i = (e >> 32) as usize & mask;
+            while table[i] != 0 {
                 i = (i + 1) & mask;
             }
-            table[i] = id;
+            table[i] = e;
         }
         self.table = table;
     }
@@ -284,20 +286,20 @@ impl Dict {
         // Lower ids are reused first.
         self.free.sort_unstable_by(|a, b| b.cmp(a));
         let mut size = 1024;
-        while self.live as usize * 4 > size * 3 {
+        while self.live as usize * 2 > size {
             size *= 2;
         }
-        self.table = alloc::vec![NONE; size];
+        self.table = alloc::vec![0u64; size];
         let mask = size - 1;
         for (id, t) in self.terms.iter().enumerate() {
             if t.kind == FREE || t.kind == DEFAULT {
                 continue;
             }
             let mut i = t.hash as usize & mask;
-            while self.table[i] != NONE {
+            while self.table[i] != 0 {
                 i = (i + 1) & mask;
             }
-            self.table[i] = id as u32;
+            self.table[i] = (t.hash as u64) << 32 | id as u64;
         }
         freed
     }

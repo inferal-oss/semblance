@@ -64,9 +64,20 @@ pub struct Lit {
 
 impl Ctx<'_> {
     pub fn xsd(&mut self, local: &[u8]) -> u32 {
+        // The datatypes computed values take, interned once per query.
+        let slot = [&b"boolean"[..], b"integer", b"decimal", b"float", b"double", b"dateTime"].iter().position(|x| *x == local);
+        if let Some(i) = slot {
+            if self.xsd_ids[i] != NONE {
+                return self.xsd_ids[i];
+            }
+        }
         let mut v = XSD.to_vec();
         v.extend_from_slice(local);
-        self.dict.intern(Key::iri(&v))
+        let id = self.dict.intern(Key::iri(&v));
+        if let Some(i) = slot {
+            self.xsd_ids[i] = id;
+        }
+        id
     }
 
     pub fn dt_kind(&mut self, dt: u32) -> Dt {
@@ -182,6 +193,43 @@ impl Ctx<'_> {
         }
     }
 
+    /// Two simple literals (xsd:string), by their values.
+    fn simple_pair(&self, x: u32, y: u32) -> Option<(&[u8], &[u8])> {
+        let simple = |id: u32| self.dict.term(id).is_some_and(|t| t.kind == dict::LITERAL && t.a == XSD_STRING);
+        if simple(x) && simple(y) { Some((self.dict.value(x), self.dict.value(y))) } else { None }
+    }
+
+    /// Check that a value is a string literal, for `str_view`.
+    fn str_check(&mut self, v: &Val) -> R<()> {
+        match v {
+            Val::Str(..) => Ok(()),
+            Val::Id(i) => {
+                let t = *self.dict.term(*i).ok_or(())?;
+                if t.kind != dict::LITERAL {
+                    return Err(());
+                }
+                match self.dt_kind(t.a) {
+                    Dt::String | Dt::LangString => Ok(()),
+                    _ => Err(()),
+                }
+            }
+            _ => Err(()),
+        }
+    }
+
+    /// A string literal's value and language tag, borrowed (after `str_check`).
+    fn str_view<'v>(&'v self, v: &'v Val) -> (&'v [u8], Option<(&'v [u8], u8)>) {
+        match v {
+            Val::Str(s, l) => (s, l.as_ref().map(|(t, d)| (&t[..], *d))),
+            Val::Id(i) => {
+                let lang = self.dict.lang(*i);
+                let dir = self.dict.term(*i).map_or(0, |t| t.dir);
+                (self.dict.value(*i), if lang.is_empty() { None } else { Some((lang, dir)) })
+            }
+            _ => (&[], None),
+        }
+    }
+
     /// A string literal (simple, xsd:string or language-tagged): value and tag.
     pub fn string(&mut self, v: &Val) -> R<(Vec<u8>, Option<(Vec<u8>, u8)>)> {
         match v {
@@ -224,6 +272,16 @@ impl Ctx<'_> {
     /// `=`: value equality where defined, else term equality (or an error for
     /// different literals of unknown types).
     pub fn equal(&mut self, a: &Val, b: &Val) -> R<bool> {
+        if let (Val::Id(x), Val::Id(y)) = (a, b) {
+            let (kx, ky) = (self.kind(a), self.kind(b));
+            // An IRI or blank node equals only itself.
+            if matches!(kx, dict::IRI | dict::BNODE) || matches!(ky, dict::IRI | dict::BNODE) {
+                return Ok(x == y);
+            }
+            if let Some((p, q)) = self.simple_pair(*x, *y) {
+                return Ok(p == q);
+            }
+        }
         if let (Some(x), Some(y)) = (self.num(a), self.num(b)) {
             return Ok(num::cmp(x, y) == Some(Ordering::Equal));
         }
@@ -282,6 +340,11 @@ impl Ctx<'_> {
 
     /// `<`, `>`, ...: an ordering for comparable values, else an error.
     pub fn order(&mut self, a: &Val, b: &Val) -> R<Ordering> {
+        if let (Val::Id(x), Val::Id(y)) = (a, b) {
+            if let Some((p, q)) = self.simple_pair(*x, *y) {
+                return Ok(p.cmp(q));
+            }
+        }
         if let (Some(x), Some(y)) = (self.num(a), self.num(b)) {
             return num::cmp(x, y).ok_or(());
         }
@@ -593,6 +656,9 @@ impl Ctx<'_> {
                     Ok(Val::Str(self.dict.value(id).to_vec(), None))
                 }
                 dict::LITERAL => {
+                    if let Val::Id(i) = v[0] {
+                        return Ok(Val::Str(self.dict.value(i).to_vec(), None));
+                    }
                     if let Val::Num(n) = v[0] {
                         let mut s = Vec::new();
                         num::write_num(&mut s, n);
@@ -603,6 +669,12 @@ impl Ctx<'_> {
                 _ => Err(()),
             },
             Lang => {
+                if let Val::Id(i) = v[0] {
+                    if self.kind(&v[0]) != dict::LITERAL {
+                        return Err(());
+                    }
+                    return Ok(Val::Str(self.dict.lang(i).to_vec(), None));
+                }
                 let l = self.lit(&v[0]).ok_or(())?;
                 Ok(Val::Str(l.lang.map(|x| x.0).unwrap_or_default(), None))
             }
@@ -620,12 +692,11 @@ impl Ctx<'_> {
             LangMatches => {
                 let (tag, _) = self.string(&v[0])?;
                 let (range, _) = self.string(&v[1])?;
-                let tag = tag.to_ascii_lowercase();
-                let range = range.to_ascii_lowercase();
+                let n = range.len();
                 Ok(Val::Bool(if range == b"*" {
                     !tag.is_empty()
                 } else {
-                    tag == range || tag.len() > range.len() && tag.starts_with(&range) && tag[range.len()] == b'-'
+                    tag.len() >= n && tag[..n].eq_ignore_ascii_case(&range) && (tag.len() == n || tag[n] == b'-')
                 }))
             }
             Datatype => {
@@ -635,12 +706,13 @@ impl Ctx<'_> {
             Iri => match self.kind(&v[0]) {
                 dict::IRI => Ok(v[0].clone()),
                 _ => {
-                    let (s, l) = self.string(&v[0])?;
+                    self.str_check(&v[0])?;
+                    let (s, l) = self.str_view(&v[0]);
                     if l.is_some() {
                         return Err(());
                     }
                     let mut out = Vec::new();
-                    iri::resolve(self.base, &s, &mut out);
+                    iri::resolve(self.base, s, &mut out);
                     Ok(Val::Iri(out))
                 }
             },
@@ -657,34 +729,43 @@ impl Ctx<'_> {
                 let mut out = Vec::new();
                 let mut lang: Option<Option<(Vec<u8>, u8)>> = None;
                 for x in &v {
-                    let (s, l) = self.string(x)?;
-                    out.extend_from_slice(&s);
+                    self.str_check(x)?;
+                    let (s, l) = self.str_view(x);
+                    out.extend_from_slice(s);
                     lang = Some(match lang {
-                        None => l,
-                        Some(prev) if prev == l => prev,
+                        None => l.map(|(t, d)| (t.to_vec(), d)),
+                        Some(prev) if prev.as_ref().map(|(t, d)| (&t[..], *d)) == l => prev,
                         Some(_) => None,
                     });
                 }
                 Ok(Val::Str(out, lang.flatten()))
             }
             SubStr => {
-                let (s, l) = self.string(&v[0])?;
+                self.str_check(&v[0])?;
                 let start = self.num(&v[1]).ok_or(())?.as_f64();
-                let cs = regex::chars(&s);
                 let first = libm_round(start);
                 let end = if v.len() > 2 { first + libm_round(self.num(&v[2]).ok_or(())?.as_f64()) } else { f64::INFINITY };
-                let mut out = Vec::new();
-                for (i, &c) in cs.iter().enumerate() {
-                    let p = (i + 1) as f64;
-                    if p >= first && p < end {
-                        crate::lex::push_utf8(&mut out, c);
+                let (s, l) = self.str_view(&v[0]);
+                // Characters p (1-based) with first <= p < end, as a byte range.
+                let (mut from, mut to, mut p) = (s.len(), s.len(), 0.0);
+                for (i, &b) in s.iter().enumerate() {
+                    if b & 0xc0 != 0x80 {
+                        p += 1.0;
+                        if p >= first && from == s.len() && p < end {
+                            from = i;
+                        }
+                        if p >= end && from != s.len() {
+                            to = i;
+                            break;
+                        }
                     }
                 }
-                Ok(Val::Str(out, l))
+                Ok(Val::Str(s[from.min(to)..to].to_vec(), l.map(|(t, d)| (t.to_vec(), d))))
             }
             StrLen => {
-                let (s, _) = self.string(&v[0])?;
-                Ok(Val::Num(Num::Int(regex::chars(&s).len() as i128)))
+                self.str_check(&v[0])?;
+                let (s, _) = self.str_view(&v[0]);
+                Ok(Val::Num(Num::Int(s.iter().filter(|&&b| b & 0xc0 != 0x80).count() as i128)))
             }
             UCase | LCase => {
                 let (s, l) = self.string(&v[0])?;
@@ -714,16 +795,18 @@ impl Ctx<'_> {
                 Ok(Val::Str(out, None))
             }
             Contains | StrStarts | StrEnds | StrBefore | StrAfter => {
-                let (a, la) = self.string(&v[0])?;
-                let (b, lb) = self.string(&v[1])?;
-                if lb.is_some() && la.as_ref().map(|x| &x.0) != lb.as_ref().map(|x| &x.0) {
+                self.str_check(&v[0])?;
+                self.str_check(&v[1])?;
+                let ((a, la), (b, lb)) = (self.str_view(&v[0]), self.str_view(&v[1]));
+                if lb.is_some() && la.map(|x| x.0) != lb.map(|x| x.0) {
                     return Err(());
                 }
-                let at = find(&a, &b);
+                let la = la.map(|(t, d)| (t.to_vec(), d));
+                let at = find(a, b);
                 Ok(match f {
                     Contains => Val::Bool(at.is_some()),
-                    StrStarts => Val::Bool(a.starts_with(&b)),
-                    StrEnds => Val::Bool(a.ends_with(&b)),
+                    StrStarts => Val::Bool(a.starts_with(b)),
+                    StrEnds => Val::Bool(a.ends_with(b)),
                     StrBefore => match at {
                         Some(i) => Val::Str(a[..i].to_vec(), if i == 0 && !b.is_empty() { None } else { la }),
                         None => Val::Str(Vec::new(), None),

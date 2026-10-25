@@ -36,6 +36,8 @@ pub fn bytes_key(b: &[u8]) -> Vec<u32> {
 }
 
 impl IdMap {
+    pub const EMPTY: IdMap = IdMap { keys: Vec::new(), entries: Vec::new(), table: Vec::new() };
+
     pub fn new() -> IdMap {
         IdMap::default()
     }
