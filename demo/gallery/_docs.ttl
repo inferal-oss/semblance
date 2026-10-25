@@ -723,6 +723,9 @@ ui:doc-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:doc-iv-h ui:doc-iv-1 ui:doc-iv-2
                  ui:doc-iv-decl-h ui:doc-iv-decl-1 ui:doc-iv-decl-code ui:doc-iv-decl-live-1 ui:iv-live ui:doc-iv-decl-2
                  ui:doc-iv-group-h ui:doc-iv-group-1 ui:doc-iv-group-code
+                 ui:doc-iv-join-h ui:doc-iv-join-1 ui:doc-iv-join-code ui:doc-iv-join-2
+                 ui:doc-iv-top-h ui:doc-iv-top-1 ui:iv-live-top ui:doc-iv-top-2
+                 ui:doc-iv-param-h ui:doc-iv-param-1 ui:doc-iv-param-code
                  ui:doc-iv-time-h ui:doc-iv-time-1 ui:doc-iv-time-code ui:doc-iv-time-2
                  ui:doc-iv-show-h ui:doc-iv-show-1
                  ui:doc-iv-see-h ui:doc-iv-see-1 ui:doc-iv-see-code ui:doc-iv-see-2
@@ -768,7 +771,7 @@ ex:qEvents a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:events ?va
 ex:qChanged a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:changed ?value }""" .
 ex:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery ex:qEvents ; c:dataset ex:log .
 ex:changed a c:Stat ; c:label "Triples changed" ; c:valueQuery ex:qChanged ; c:dataset ex:log .''' .
-ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX and DISTINCT are maintained. A query of another shape still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
+ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX, DISTINCT, HAVING and arithmetic over aggregates are maintained, and so are joins, OPTIONAL, EXISTS, NOT EXISTS, MINUS, UNION, VALUES and ORDER BY with LIMIT (below). A query of another shape (GROUP_CONCAT, NOW()) still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
 
 ui:doc-iv-group-h a c:Heading ; c:level 2 ; c:label "Groups" .
 ui:doc-iv-group-1 a c:Text ; c:label "With GROUP BY, only the groups an event touched change - one row of output, not all of them. Mint each group's node from a key, as rules do, so a row keeps its identity and its DOM element." .
@@ -782,6 +785,56 @@ WHERE {
     GROUP BY ?type }
   BIND(IRI(CONCAT(STR(vx:log), "/~", ENCODE_FOR_URI(?type))) AS ?row)
 }\"\"\" .""" .
+
+ui:doc-iv-join-h a c:Heading ; c:level 2 ; c:label "Joins, negation, sets" .
+ui:doc-iv-join-1 a c:Text ; c:label "A view's body is split into partitions - a stream's members, or the subjects of its triple patterns - and each partition is the query run with its key bound, so a join that leaves the member (its target's label), an OPTIONAL, a FILTER NOT EXISTS or a MINUS is the store's own SPARQL for that one partition. Which partitions a change reaches comes from the query's patterns: the changed triple is bound to the pattern it matches, and the store's indexes are probed from there to the key. A label changing re-evaluates the events that point at that component, and nothing else." .
+ui:doc-iv-join-code a c:Code ; c:block true ; c:language "turtle" ; c:label """vx:Busiest a sem:View , iv:View ; iv:materialize iv:Graph ;
+    sem:select \"\"\"
+SELECT ?component (COUNT(?m) AS ?events) WHERE {
+  beh:ChangeLog tree:member ?m . ?m beh:target ?t .      # leaves the member: its target
+  ?t a ?class . ?class sem:slug ?component .              # and the target's class
+  FILTER NOT EXISTS { ?t c:hidden true }                  # a match appearing flips its rows
+}
+GROUP BY ?component ORDER BY DESC(?events) ?component LIMIT 5\"\"\" .""" .
+ui:doc-iv-join-2 a c:Text ; c:label "DISTINCT keeps a count per row, so a row leaves when its last source does. UNION of subqueries adds their parts. A setting every row depends on (a filter's value) reaches every partition: the view is evaluated again once, and says so in its figures." .
+
+ui:doc-iv-top-h a c:Heading ; c:level 2 ; c:label "Top-k and rows in the graph" .
+ui:doc-iv-top-1 a c:Text ; c:label "ORDER BY with LIMIT keeps every candidate in an ordered multiset: a vote moves one drink, and the window of two rows changes only if the vote crosses its edge. With iv:materialize iv:Graph a SELECT's rows are a result set in the views graph (rs:solution, rs:binding, rs:index for its order), which charts, tables and stats read instead of running the query. Vote, and watch the table:" .
+ui:iv-live-top a c:LiveExample ; c:label "A maintained top-k" ; c:exampleRoot <https://example.org/votes#page> ; c:sources ( ui:iv-live-top-app ) .
+ui:iv-live-top-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/votes#> .
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/votes#"^^xsd:anyURI ] .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ex:buttons ex:top ) .
+ex:buttons a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-2 ; c:children ( ex:voteTea ex:voteCoffee ex:voteCocoa ) .
+ex:voteTea a c:Button ; c:label "Tea" ; ex:for ex:tea .
+ex:voteCoffee a c:Button ; c:label "Coffee" ; ex:for ex:coffee .
+ex:voteCocoa a c:Button ; c:label "Cocoa" ; ex:for ex:cocoa .
+ex:tea a ex:Drink ; rdfs:label "Tea" ; ex:votes 3 .
+ex:coffee a ex:Drink ; rdfs:label "Coffee" ; ex:votes 2 .
+ex:cocoa a ex:Drink ; rdfs:label "Cocoa" ; ex:votes 1 .
+
+# Any button: its drink gets a vote.
+ex:Vote a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:Button ;
+    beh:deletes """CONSTRUCT { ?d ex:votes ?n } WHERE { $this ex:for ?d . ?d ex:votes ?n }""" ;
+    beh:inserts """CONSTRUCT { ?d ex:votes ?next } WHERE { $this ex:for ?d . ?d ex:votes ?n BIND(?n + 1 AS ?next) }""" .
+
+# The two with the most votes: a top-k, maintained. A vote re-evaluates one drink.
+ex:Top a sem:View , iv:View ; iv:materialize iv:Graph ;
+    sem:select """SELECT ?drink ?votes WHERE { ?d a ex:Drink ; rdfs:label ?drink ; ex:votes ?votes }
+ORDER BY DESC(?votes) ?drink LIMIT 2""" .
+
+# The table reads the view's rows from the views graph.
+ex:top a c:Table ; c:label "Most votes" ; c:query ex:Top ; c:dataset ex:Top ;
+    c:tableColumns ( ex:colDrink ex:colVotes ) .
+ex:colDrink a c:Column ; c:variable "drink" ; c:label "Drink" .
+ex:colVotes a c:Column ; c:variable "votes" ; c:label "Votes" ; c:align "end" .''' .
+ui:doc-iv-top-2 a c:Text ; c:label "The data grid's window works this way: three views per grid keep its members in capture order, and the window shows at most three pages of their rows, so a response arriving for an old request re-sorts its row at once, whatever the size of the capture. Each row carries a tuple order key (sem:orderKey: has a value, the value, capture order), so one row's key changing moves only that row." .
+
+ui:doc-iv-param-h a c:Heading ; c:level 2 ; c:label "Parameters and a view per instance" .
+ui:doc-iv-param-1 a c:Text ; c:label "iv:parameter binds a $name in the query to a value in the graph; when it changes the view is evaluated again once - or, for a LIMIT, its window just moves. iv:targets makes a view per instance of a class, with $this bound, maintained while that instance is shown; its rows are minted under the instance, so the instance's own rules read them (sem:readsMinted)." .
+ui:doc-iv-param-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:GridWindowCounts a iv:View ; iv:targets c:DataGrid ; iv:materialize iv:Graph ;
+    iv:parameter [ iv:variable "collection" ; iv:property c:collection ; iv:default c:none ] ;
+    sem:select \"\"\"SELECT (COUNT(*) AS ?total) WHERE { $collection tree:member ?m . … $this c:filteredBy … }\"\"\" .""" .
 
 ui:doc-iv-time-h a c:Heading ; c:level 2 ; c:label "Windows and time" .
 ui:doc-iv-time-1 a c:Text ; c:label "A sliding window keeps only the members of the last stretch of time. Members leave it as time passes - on one timer, set for the next expiry - even when nothing else happens, and each that leaves counts -1." .
@@ -801,35 +854,40 @@ ui:doc-iv-see-code a c:Code ; c:block true ; c:language "turtle" ; c:label """vx
 ui:doc-iv-see-2 a c:Text ; c:label "The status bar counts view rows beside rule runs, and the SPARQL workbench reads the views graph like any other." .
 
 ui:doc-iv-cost-h a c:Heading ; c:level 2 ; c:label "What it costs" .
-ui:doc-iv-cost-1 a c:Text ; c:label "The Activity tool and the count badges read maintained views. A todo toggle with Activity shown, with the change log keeping 200 or 2,000 events:" .
-ui:doc-iv-cost a c:DescriptionList ; c:of ui:doc-iv-cost-items ; c:fields ( ui:ivc-fn ui:ivc-sparql ui:ivc-work ) .
+ui:doc-iv-cost-1 a c:Text ; c:label "The Activity tool and the count badges read maintained views. A todo toggle with Activity shown, with the change log keeping 200 or 2,000 events - and the network inspector, sorted by duration, when a response arrives for an old request, over 200 or 2,000 captured entries:" .
+ui:doc-iv-cost a c:DescriptionList ; c:of ui:doc-iv-cost-items ; c:fields ( ui:ivc-fn ui:ivc-sparql ui:ivc-work ui:ivc-grid ) .
 ui:doc-iv-cost-items ui:ivc-fn "1.0 ms either way (before: 8.3 ms and 52.4 ms)" ;
     ui:ivc-sparql "4-6 ms either way (before: 10.9 ms and 284.6 ms)" ;
-    ui:ivc-work "identical at both sizes: rule runs, triples read, rows, DOM operations (a test requires it)" .
-ui:ivc-fn rdfs:label "Function rules" . ui:ivc-sparql rdfs:label "SPARQL rules" . ui:ivc-work rdfs:label "Work" .
+    ui:ivc-work "identical at both sizes: rule runs, triples read, rows, DOM operations (a test requires it)" ;
+    ui:ivc-grid "its row moves first in the same tick: 3 partitions, 9 rule runs, 8 DOM operations at either size (before: every member ranked by pairs, and the row moved only when the next entry arrived)" .
+ui:ivc-fn rdfs:label "Function rules" . ui:ivc-sparql rdfs:label "SPARQL rules" . ui:ivc-work rdfs:label "Work" . ui:ivc-grid rdfs:label "Data grid" .
 
 ui:doc-iv-status-h a c:Heading ; c:level 2 ; c:label "Status" .
-ui:doc-iv-landed-h a c:Heading ; c:level 3 ; c:label "Landed: phases 0 and 1" .
-ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ui:ivl-example ) .
+ui:doc-iv-landed-h a c:Heading ; c:level 3 ; c:label "Landed: phases 0, 1 and 2" .
+ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ui:ivl-example ui:ivl-joins ui:ivl-grid ui:ivl-charts ) .
 ui:doc-iv-landed-items ui:ivl-ticks "Every change is a tick; Runtime.transaction makes several one, consolidated. An event's reaction and its change-log entry are one tick." ;
     ui:ivl-agg "Aggregates over a stream's members, maintained member by member; other shapes recomputed, with the reason (iv:fallback)." ;
     ui:ivl-uses "The Activity tool and count badges, at constant cost per event." ;
     ui:ivl-window "Sliding windows on one timer, ahead of phase 4 because the example needed one." ;
     ui:ivl-demand "iv:whileShown: hidden views idle, rebuilt when shown." ;
     ui:ivl-see "Plans, figures, per-step logs and from-scratch checks, as graph data." ;
-    ui:ivl-example "The Maintained views example: each step, a check per view, work against a re-run's." .
+    ui:ivl-example "The Maintained views example: each step, a check per view, work against a re-run's." ;
+    ui:ivl-joins "Phase 2: a SPARQL parser; partitions with exact dependencies (joins outside the member, OPTIONAL, EXISTS, MINUS, UNION, VALUES); DISTINCT, HAVING, top-k; parameters, a view per instance, views over views; rows as a result set." ;
+    ui:ivl-grid "The data grid's window as three views per grid." ;
+    ui:ivl-charts "Charts, tables, stats and facet counts read maintained views' rows: the dashboard, the activity example, the performance page." .
+ui:ivl-joins rdfs:label "Joins and order" . ui:ivl-grid rdfs:label "Data grid" . ui:ivl-charts rdfs:label "Charts and tables" .
 ui:ivl-ticks rdfs:label "Ticks" . ui:ivl-agg rdfs:label "Aggregates" . ui:ivl-uses rdfs:label "In use" .
 ui:ivl-window rdfs:label "Windows" . ui:ivl-demand rdfs:label "Demand" . ui:ivl-see rdfs:label "Inspection" . ui:ivl-example rdfs:label "Example" .
 ui:doc-iv-pending-h a c:Heading ; c:level 3 ; c:label "Pending" .
 ui:doc-iv-pending a c:DescriptionList ; c:of ui:doc-iv-pending-items ; c:fields ( ui:ivp-2 ui:ivp-3 ui:ivp-4 ui:ivp-5 ui:ivp-6 ) .
-ui:doc-iv-pending-items ui:ivp-2 "Joins outside the member, DISTINCT, OPTIONAL, EXISTS and MINUS, top-k with order keys; then the data grid's window and the charts become views." ;
+ui:doc-iv-pending-items ui:ivp-2 "Judgements and the toast region as views; charts' and tables' renderings in SPARQL over the rows; the engine's parser when main has its algebra." ;
     ui:ivp-3 "Exact dependencies for SPARQL rules from their algebra, in place of sem:follows; rules that are themselves maintained." ;
     ui:ivp-4 "Tumbling and count windows, event time with watermarks, delta logs for replication, \"since\" and undo." ;
     ui:ivp-5 "The rest of SPARQL incrementally: LATERAL, correlated subqueries, paths, GROUP_CONCAT." ;
     ui:ivp-6 "The operators in Rust inside Semblance's engine, if profiling shows the runtime dominating." .
-ui:ivp-2 rdfs:label "Phase 2: joins" . ui:ivp-3 rdfs:label "Phase 3: rules" . ui:ivp-4 rdfs:label "Phase 4: time" .
+ui:ivp-2 rdfs:label "Phase 2: the rest" . ui:ivp-3 rdfs:label "Phase 3: rules" . ui:ivp-4 rdfs:label "Phase 4: time" .
 ui:ivp-5 rdfs:label "Phase 5: SPARQL" . ui:ivp-6 rdfs:label "Phase 6: engine" .
-ui:doc-iv-gaps a c:Text ; sty:tone sty:Neutral ; c:label "Known gaps today: HAVING, ORDER BY with LIMIT and joins outside the member are recomputed; SPARQL views still run a few store queries per step for the member-local part; rules find a view's output through sem:follows." .
+ui:doc-iv-gaps a c:Text ; sty:tone sty:Neutral ; c:label "Known gaps today: GROUP_CONCAT, SAMPLE, GROUP BY an expression and NOW() are recomputed; SPARQL views still run a few store queries per step (a partition's evaluation); rules find a view's output through sem:follows or sem:readsMinted." .
 ui:doc-iv-more a c:Text ; c:label "docs/IVM.md in the repository has the full design, the decisions taken, what was built and where it differs, and the measurements." .
 
 # --- Tools ---

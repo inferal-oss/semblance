@@ -1,10 +1,10 @@
 # Views over changes: incremental view maintenance for Semblance
 
-Status: **phases 0 and 1 landed** (October 2026); phases 2-6 pending. Below the status, the
+Status: **phases 0, 1 and 2 landed** (October 2026); phases 3-6 pending. Below the status, the
 document is the design: what a maintained view is, how it is declared and inspected, how it
 relates to the rule engine, the operator set and each operator's incremental form, time and
 windows, correctness, cost, and the phased plan. The decisions taken are at the end; what was
-built, and where it differs from the design, is §20.
+built, and where it differs from the design, is §20 (phases 0 and 1) and §21 (phase 2).
 
 ## Status
 
@@ -19,6 +19,9 @@ built, and where it differs from the design, is §20.
 | **Demand.** `iv:whileShown` (a component or a class): a hidden view does nothing per tick and is rebuilt when shown. | `src/runtime.ts` (`views.shown`) | e32a8bf |
 | **Observability.** Each view's plan as data (`iv:operator`, `iv:kind`, `iv:algebra`), with PROV-O; figures (`iv:stateRows`, `iv:lastRows`, `iv:lastMs`, …) for `iv:measured` views; a per-tick log of each view (`iv:deltaLog`, members `iv:Delta`: what came in, which groups changed, rows of work); a correctness check against a from-scratch run (`iv:matches`, `iv:resultRows`, `iv:checkedTick`); view rows in the status bar. | `src/view/runtime.ts`, `ontology/layers/view.ttl` | e32a8bf, a050a46 |
 | **The "Maintained views" example**: a dashboard of three measured views (two windowed), with each step, a ✓ check per view, work against a re-run's work, the window draining on the clock, and stream / one-event / keep-50 controls. | `demo/gallery/_ex-views.ttl`, `test/ex-views.test.ts` | d59e856, a050a46 |
+| **Phase 2, the operators** (§21): a SPARQL parser in place of the recognizer; partitions by any key (an LDES member, the subjects of the body) evaluated on the store with the key bound; exact dependencies from the body's patterns - delta queries over the store's indexes, so **joins outside the member**, **OPTIONAL**, **EXISTS / NOT EXISTS**, **MINUS**, **UNION** and **VALUES** inside a partition are maintained, and a change reaches exactly the partitions (or the slice of a cross product) it can affect; **DISTINCT** with counts; GROUP BY with arithmetic over aggregates and **HAVING**; UNION of subqueries; **top-k** over an ordered multiset (`ORDER BY … LIMIT / OFFSET`); **parameters** (`iv:parameter`; a LIMIT-only change retunes in place); a view per instance (`iv:targets`); views over views (`iv:reads`); SELECT rows materialized as a W3C result set (`iv:materialize iv:Graph`, `rs:index` for ORDER BY); tuple order keys in `compareKeys`. Strict operator laws per shape, on Oxigraph and WAT. | `src/view/sparql.ts`, `deps.ts`, `compile.ts`, `runtime.ts`, `ordered.ts`, `rows.ts`, `src/render/order-key.ts`, `test/view-laws.test.ts` | 42d77a1 |
+| **The data grid's window as views**: three views per grid (`c:GridWindowOlder`, `c:GridWindowNewer`, `c:GridWindowCounts`) keep its members in capture order with their order keys; the window rule (SPARQL and function) reads at most three pages. A response for an old entry re-sorts its row in the same tick, at identical cost over 200 or 2,000 entries. | `ontology/components/grid.ttl`, `src/components/grid.ts`, `test/grid-cost.test.ts` | c734148 |
+| **Charts, tables, stats and facet counts over views**: they read a maintained SELECT's rows from the views graph; the dashboard's queries are views over its cube, the activity example's over the change log, the performance page's over observations. | `src/view/rows.ts`, `src/components/charts.ts`, `data.ts`, `formula.ts`, `demo/gallery/_ex-dashboard.ttl`, `_ex-activity.ttl`, `demo/app.ttl`, `test/view-charts.test.ts` | 8d25274 |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
 query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
@@ -34,17 +37,18 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 
 | phase | what | replaces or enables |
 |---|---|---|
-| 2: joins, negation, order | delta queries over the store's indexes (joins outside the member, so labels and filters can live in views); `DISTINCT`, `UNION`, `OPTIONAL`, `EXISTS` / `NOT EXISTS` / `MINUS` with magic sets; `VALUES`; top-k with order keys (tuple keys in `compareKeys`); parameters; the rdf-engine parser in place of the recognizer | the data grid's window (`c:DataGridWindow`), chart and table SELECTs, judgements, `c:ToastRegion` |
+| 2, the rest | judgements (`perf:Judgement` CONSTRUCTs as maintained findings) and `c:ToastRegion` as views; SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra | judgements live during a run; no function-only chart |
 | 3: views and rules together | view graphs as projection inputs (done for the views graph); exact dependencies for SPARQL rules from their algebra, replacing `sem:follows`; `iv:strategy iv:Incremental` for rules; persistence policies as views | a count row changing alone re-runs nothing it does not feed |
 | 4: time | tumbling and count windows; event time and watermarks for `net:Capture`; delta logs for replication, "since" and undo; the workbench's Plan tab | constant cost per event and per expiry everywhere |
 | 5: the rest of SPARQL | `LATERAL`, correlated subqueries, anchored paths, `GROUP_CONCAT`, `SAMPLE`, the remaining expressions; incremental W3C conformance | `c:StreamStats`'s full rule and the grid rule as views |
 | 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
 
-Known gaps in what landed (§20): the recognizer does not prove a member-local part reads only the
-member (the oracle checks it in tests); SPARQL views still evaluate member-local parts and changed
-groups with a few store queries per tick; rules find view output through `sem:follows`; `HAVING`,
-`ORDER BY … LIMIT` and joins outside the member fall back to recompute; `MIN` / `MAX` keep a
-sorted array, not a tree.
+Known gaps in what landed (§20, §21): SPARQL views evaluate partitions and expressions with a few
+store queries per tick (a Rust circuit removes them, phase 6); SPARQL rules find view output through
+`sem:follows` or `sem:readsMinted` (exact dependencies are phase 3); `GROUP_CONCAT`, `SAMPLE`,
+`GROUP BY` an expression, `NOW()` and `SERVICE` fall back to recompute; a `GRAPH` pattern is refused;
+`MIN` / `MAX` keep a sorted array, not a tree; a parameter change other than LIMIT / OFFSET builds
+its view again.
 
 ## 1. Summary
 
@@ -1415,6 +1419,121 @@ labels and filters can live in views), DISTINCT, OPTIONAL / EXISTS / MINUS with 
 top-k with order keys (and tuple keys in `compareKeys`), then the grid's window
 (`c:DataGridWindow`) and the charts' SELECTs as views; and a real algebra (the rdf-engine
 parser) to replace the recognizer.
+
+## 21. Phase 2, as built
+
+What exists (`src/view/`):
+
+- **The parser** (`sparql.ts`). Main has no algebra from the rdf-engine yet (its host ABI is v1:
+  prepare, bind, run - no algebra export), so decision 4's interim holds: a parser of our own
+  behind `ViewCompiler`, now a real one. It reads the structure of a query - form, solution
+  modifiers, and group graph patterns with triples (`;` `,` blank-node lists, property paths),
+  OPTIONAL, UNION, MINUS, FILTER with EXISTS / NOT EXISTS, BIND, VALUES, subqueries, LATERAL,
+  GRAPH - keeping every part's source span; expressions stay text, with their variables, EXISTS
+  groups and aggregate calls found. All 659 queries in the repository parse. The Rust parser can
+  replace it behind the same interface; the plan IR (`plan.ts`) does not depend on it.
+- **Partitions** (`compile.ts`). A view's body is partitioned by a key: `iv:partitionBy`, else the
+  member of a `<stream> tree:member ?m` pattern, else the variables of the body's own triples (the
+  subjects, and the objects of a constant subject: a cell; a configuration × scenario × size). A
+  partition is the body evaluated on the store with its key bound (`VALUES` then `LATERAL`), so
+  everything inside a partition - joins outside the member, OPTIONAL, UNION, MINUS, EXISTS,
+  VALUES, BIND, FILTER - is the store's own SPARQL. Rows are cached (as interned ids) per partition.
+- **Exact dependencies** (`deps.ts`), the delta queries of §6.2 and the correlated restriction of
+  §6.4 in one mechanism. Every triple pattern of the body is a dependency, with the patterns it
+  occurs with in a solution (its group and the groups around it; a subquery's own variables
+  renamed; `BIND(?a AS ?b)`, `COALESCE` and `IF` as aliases). A changed triple is routed by
+  constant positions; for each pattern it matches, a probe binds the pattern to the triple and
+  joins, through the store's `match` with this tick's removed triples put back (the old and the
+  new state together, so a solution on either side is found), toward the key. Closures (`p*`) are
+  walked both ways. The result is the partitions to evaluate again; a probe that reaches part of a
+  composite key gives a **slice** (`VALUES` with `UNDEF`, numbered so overlapping slices count a
+  partition once); one that reaches none, or a pattern under `LIMIT` in a subquery, is global: the
+  view is evaluated again, once (`iv:rebuilds`). This is what makes "a match appearing or
+  disappearing flips exactly the affected rows": NOT EXISTS / MINUS / OPTIONAL are counted per
+  partition by the store's evaluation of that partition, and the partitions are those the
+  changed match reaches. There is no separate existence-count operator: per-partition evaluation
+  is that count, and keeping it in the store's hands keeps the semantics SPARQL's.
+- **Operators above the partitions** (`runtime.ts`): bag projection; DISTINCT with counts (a row is
+  in while a partition has it); GROUP BY with incremental aggregates (§20), arithmetic over
+  aggregates and HAVING as expressions evaluated by the store for a tick's new rows in one query
+  and cached while a row is in; UNION of subqueries (parts summed); top-k (`ordered.ts`, a treap
+  with sizes and multiplicities: O(log n) per candidate, the window re-read only when a change
+  lands before its end); a CONSTRUCT's BINDs after its subquery, and its template instantiated in
+  TypeScript.
+- **Output**: CONSTRUCT triples, as before; SELECT rows to subscribers, and with `iv:materialize
+  iv:Graph` as a result set in the views graph (`view.ttl` documents the shape: one node per row,
+  keyed by its values; a binding per variable at `<row>-<var>`; `rs:index` when ordered).
+  `rows.ts` reads them for function rules, traced.
+- **Views per instance** (`iv:targets`): `<instance>/~view-<name>`, `$this` bound, maintained while
+  the instance is shown, rows minted under the instance (a rule on it with `sem:readsMinted`
+  re-runs when they change). **Parameters** (`iv:parameter`): `$name` replaced by a value from the
+  graph (`iv:property` of `iv:from`, or the `?value` of `iv:select`; `iv:default`), re-resolved
+  when a triple its own patterns read changes; when only LIMIT / OFFSET change, the top-k moves its
+  window without evaluating a partition. **Views over views** (`iv:reads`): step after the views
+  they read, see what those wrote this tick, read the views graph.
+- **Order keys** (`src/render/order-key.ts`): tuple keys (§6.6), U+0001-separated components, `n`
+  number or `s` string, `-` for descending; `compareKeys` compares them component by component.
+- **Tests**: `test/view-laws.test.ts` (the operator-law generator: a stream whose members point
+  outside themselves, a collection, a settings node, a class hierarchy; 19 SELECT shapes, 3
+  CONSTRUCTs, a materialized one, a parameterized one, one per instance; seeded random changes and
+  transactions; strict on Oxigraph and on WAT), `test/view-charts.test.ts`, `test/grid-cost.test.ts`.
+  Strict mode is unchanged: every view against a from-scratch run of its own query after every
+  tick, positions too for ordered SELECTs where the order is total; a fallback is an error.
+
+What uses it:
+
+- **The data grid's window** (`grid.ttl`): `c:GridWindowOlder` (matching members up to the pin,
+  newest first, `LIMIT page + 1`: the window and where Older pins), `c:GridWindowNewer` (after the
+  pin, oldest first, `LIMIT 2 × page`: where Newer pins, and the window when the pin is before every
+  member) and `c:GridWindowCounts`, per grid; the filters, the sort and the member class are in the
+  body, the grid's settings are parameters. Each row carries its tuple order key (has a value, the
+  value - descending when the grid is -, capture order). The window rule's SPARQL reads those rows
+  (bindings by IRI, `LATERAL`) and ranks only the shown page for the tab stop; the function twin
+  reads the same rows (and, without SPARQL, computes the window from the members as before).
+- **Charts, tables, stats, facet counts**: `c:BarChart`, `c:LineChart`, `c:Heatmap`, `c:Table`,
+  `c:Stat` (`c:valueQuery` without `$this`), chips' `c:countQuery` read a maintained SELECT's rows
+  when its `sem:View` is a materialized `iv:View`. The dashboard's ten queries are views over its
+  cube (`iv:reads dx:Cube`); the activity example's views over the change log (the per-minute one
+  reads `NOW()` and stays a SELECT); the performance page's four `perf:View`s. Their renderings stay
+  function-only for now: the rows are in the graph in a shape SPARQL reads, which is the building
+  block the SPARQL coverage work turns them into plain SPARQL with.
+
+Measured (Node, `test/grid-cost.test.ts`, the network inspector sorted by duration, the earlier
+visit's samples hidden; a response for an old entry inside the window, then one outside it):
+
+| | 200 entries | 2,000 entries |
+|---|---:|---:|
+| SPARQL rules, inside the window: rule runs / triples read / SPARQL rows / DOM ops / view rows / partitions | 9 / 19 / 516 / 8 / 4 / 3 | identical |
+| SPARQL rules, outside: rule runs / DOM ops / partitions | 0 / 0 / 3 | identical |
+| function rules, inside: rule runs / triples read / DOM ops / partitions | 9 / 1,597 / 8 / 5 | identical |
+| time per response inside the window (SPARQL / function rules) | 57 ms / 23 ms | about the same |
+
+Before, the window rule ranked every matching member by pairs on each new member (quadratic in
+the capture), and a member changing in place moved its row only when the next member arrived.
+`test/view-laws.test.ts`, over 200 and 2,000 members, per change (all views of the law set):
+T9's label (a join outside the member) 18 partitions, T9 hidden (EXISTS / NOT EXISTS) 6, T9 into
+the group a MINUS removes 6, a new member at the top of a top-k 23; identical at both sizes, no
+rebuild. The dashboard (`test/ex-dashboard.test.ts`): a filter costs 393 view rows over its ten
+queries (the 48 cells they gate), a batch of fifty orders about 1,835, the same at 1,000 and
+2,000 orders. The performance views over 300 observations arriving five at a time: no rebuild,
+fewer than 20 partitions per step. Activity (`test/view-cost.test.ts`) is unchanged: equal
+counters at a log bound of 200 and 2,000.
+
+Where this differs from the design:
+
+- The parser is ours, not the rdf-engine's (above); decision 4 stands for when main has the algebra.
+- Existence counts are per partition, by the store, rather than a separate semi/anti-join operator
+  keyed by the correlated binding (§6.4); the magic set is the set of partitions a probe reaches.
+  The same holds for OPTIONAL's per-left-row count (§6.3). This keeps SPARQL's semantics exact and
+  costs a partition's evaluation per touched partition; a partition reads O(1) triples in every
+  view we have.
+- Rank numbers are emitted for ordered result sets (`rs:index`): a new first row renumbers the
+  window, O(k) triples, as §6.6 allows for a view that must show positions. Order keys are tuple
+  keys rows carry, so rendering a re-sort is O(1).
+- Parameters are text substitution (as `c:QueryView` binds its variable), so a view with
+  parameters is plain SPARQL only once they are bound; the oracle runs the bound text.
+- The grid's views are three, with one body written out three times (Turtle has no macros); each
+  changed member is one partition in each.
 
 ## Decisions
 
