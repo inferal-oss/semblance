@@ -115,13 +115,11 @@ describe('the chat example', () => {
     expect(h.bodies().at(-1)).toBe('Accent works for me.')
   })
 
-  // On every store with SPARQL: each step of a script sets the next one due with dateTime + duration
-  // arithmetic, which Semblance's WASM engine (the site's default) left unbound, so the scripts
-  // stopped after their first step there while Oxigraph's tests passed. The engines now add
-  // durations, but not yet cast to xsd:duration (the reactions do): until they do, the wat case
-  // is expected to fail, and this test.fails turns red the day it passes - drop it then.
+  // On every store with SPARQL: each step of a script sets the next one due with xsd:duration casts and
+  // dateTime + duration arithmetic, which Semblance's WASM engine (the site's default) once left
+  // unbound, so the scripts stopped after their first step there while Oxigraph's tests passed.
   it('plays the others’ script over time: typing, then the message in its place (oxigraph)', () => plays('oxigraph'))
-  it.fails('plays the others’ script over time on the WASM engine (awaits the engines\' xsd:duration cast)', () => plays('wat'))
+  it('plays the others’ script over time: typing, then the message in its place (wat)', () => plays('wat'))
   function plays(kind: 'oxigraph' | 'wat') {
     const clock = new ManualClock()
     const h = chat(kind, 'sparql', clock)

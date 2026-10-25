@@ -68,9 +68,9 @@ npx tsc --noEmit       # typecheck
 ```
 
 - **Tests go through the queue: at most two vitest runs at a time, machine-wide, first come first
-  served, each with at most 4 workers.** Many concurrent runs have exhausted the machine's memory,
+  served, each with at most 2 workers (the queue lowers a larger `--maxWorkers`).** Many concurrent runs have exhausted the machine's memory,
   and a plain lock starves older waiters. Always run tests as
-  `scripts/test-queue.sh npx vitest run --maxWorkers=4 <files>` (`npm test` does this), in the
+  `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>` (`npm test` does this), in the
   foreground; from a worktree whose checkout predates the script, use the main checkout's copy by
   its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. A run that
   holds its slot longer than 30 minutes is stopped (`SEMBLANCE_RUN_LIMIT`), so keep runs to the

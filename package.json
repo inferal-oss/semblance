@@ -51,7 +51,7 @@
     "gen:mark": "tsx scripts/gen-mark.ts",
     "dev": "vite",
     "build": "vite build",
-    "test": "scripts/test-queue.sh vitest run --maxWorkers=4",
+    "test": "scripts/test-queue.sh vitest run --maxWorkers=2",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/node.ts",
     "build:single": "vite build --mode single && node scripts/name-single.mjs",

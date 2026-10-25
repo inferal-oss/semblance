@@ -9,7 +9,7 @@
 # under the first that is free. Slot 1 is /tmp/semblance-vitest.lock, the lock callers of plain
 # lockf take, so they still count against it.
 #
-#   scripts/test-queue.sh npx vitest run --maxWorkers=4 test/foo.test.ts
+#   scripts/test-queue.sh npx vitest run --maxWorkers=2 test/foo.test.ts
 #
 # A run holds its slot for at most SEMBLANCE_RUN_LIMIT seconds (default 1800, enough for the full
 # suite with both slots busy): past that it and every process it started are stopped (exit 124), so
@@ -21,6 +21,17 @@ Q="${SEMBLANCE_QUEUE:-/tmp/semblance-vitest.queue}"
 LOCK="${SEMBLANCE_LOCK:-/tmp/semblance-vitest.lock}"
 SLOTS="${SEMBLANCE_SLOTS:-2}"
 LIMIT="${SEMBLANCE_RUN_LIMIT:-1800}"
+# Workers per run, at most: a whole-app test worker holds 1-2 GB, and two runs of four had the machine
+# swapping (everything ten times slower). A larger --maxWorkers=N in the command is lowered to this.
+WORKERS="${SEMBLANCE_MAX_WORKERS:-2}"
+args=""
+for a in "$@"; do
+  case "$a" in
+    --maxWorkers=*) n="${a#--maxWorkers=}"; [ "$n" -gt "$WORKERS" ] 2>/dev/null && a="--maxWorkers=$WORKERS" ;;
+  esac
+  args="$args$(printf '%s' "$a" | sed "s/'/'\\\\''/g; s/^/'/; s/\$/'/") "
+done
+eval "set -- $args"
 mkdir -p "$Q"
 TICKET="$(python3 -c 'import time; print(time.time_ns())')-$$"
 touch "$Q/$TICKET"
