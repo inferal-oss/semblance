@@ -338,3 +338,35 @@ describe('structural themes', () => {
     expect(root('thf-cupertino')!.getAttribute('data-sem-theme')).toBe('cupertino')
   })
 })
+
+describe('long labels', () => {
+  const lines = css.split('\n')
+  const ruleAt = (selector: string) => lines.findIndex((l) => l.startsWith(`  ${selector} { `))
+
+  it('wrap inside a nav list item and a menu item, over the inherited nowrap', () => {
+    for (const selector of ['[data-sem-c="nav-list"] button', '[data-sem-c="menu-item"]']) {
+      const decl = block(selector)
+      expect(decl.get('white-space'), selector).toBe('normal')
+      expect(decl.get('overflow-wrap'), selector).toBe('anywhere')
+      expect(decl.get('text-align'), selector).toBe('start')
+    }
+    // The nav list is a segmented control, whose (horizontal, scrolling) options do not wrap: its
+    // own rule comes later in the same layer, so it wins.
+    const segmented = lines.findIndex((l) => l.startsWith('  [data-sem-c="segmented"] button, [data-sem-c="nav-list"] button, '))
+    expect(segmented).toBeGreaterThan(-1)
+    expect(lines[segmented]).toContain('white-space: nowrap')
+    expect(layerOf('[data-sem-c="nav-list"] button')).toBe(layerOf(lines[segmented]!.trim().split(' { ')[0]!))
+    expect(ruleAt('[data-sem-c="nav-list"] button')).toBeGreaterThan(segmented)
+    // A menu's popup is never wider than the screen, so its items have somewhere to wrap.
+    expect(block('[data-sem-c="menu"] > .sem-menu-popup').get('max-width')).toBe('min(360px, calc(100vw - 32px))')
+  })
+
+  it('no theme puts nowrap back on a nav list item or a menu item', () => {
+    const offending = lines.filter((l) => /white-space: nowrap/.test(l) && /nav-list\] button|menu-item\]/.test(l) && !/visually-hidden/.test(l))
+    expect(offending.filter((l) => !l.startsWith('  [data-sem-c="segmented"] button, '))).toEqual([])
+  })
+
+  it('align text logically, so it follows the writing direction (RTL)', () => {
+    expect(lines.filter((l) => /text-align: (left|right)\b/.test(l))).toEqual([])
+  })
+})

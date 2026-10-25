@@ -1208,7 +1208,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "gap" ; sty:raw "10px" ] ,
                  [ sty:property "height" ; sty:raw "26px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-category" ;
-    sty:declares [ sty:property "text-align" ; sty:raw "right" ] ,
+    sty:declares [ sty:property "text-align" ; sty:raw "end" ] ,
                  [ sty:property "font-size" ; sty:raw "12px" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] ,
@@ -1230,7 +1230,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-total" ;
     sty:declares [ sty:property "font" ; sty:raw "600 11px/1 var(--sem-mono)" ] ,
                  [ sty:property "min-width" ; sty:raw "58px" ] ,
-                 [ sty:property "text-align" ; sty:raw "right" ] .
+                 [ sty:property "text-align" ; sty:raw "end" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BarChart ; sty:part ".sem-pending" ;
     sty:declares [ sty:property "font-style" ; sty:raw "italic" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] ,
@@ -1248,12 +1248,12 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "font-size" ; sty:raw "11px" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] ,
-                 [ sty:property "text-align" ; sty:raw "left" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part "td" ;
     sty:declares [ sty:property "padding" ; sty:raw "7px 8px" ] ,
                  [ sty:property "border-radius" ; sty:raw "6px" ] ,
-                 [ sty:property "text-align" ; sty:raw "right" ] ,
+                 [ sty:property "text-align" ; sty:raw "end" ] ,
                  [ sty:property "font" ; sty:raw "500 12px/1.2 var(--sem-mono)" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Heatmap ; sty:part "td.sem-flagged" ;

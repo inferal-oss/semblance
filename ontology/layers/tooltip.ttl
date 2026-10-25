@@ -82,6 +82,6 @@ tok:tooltip-fg a sty:Token ; sty:scale sty:Color ; sem:slug "tooltip-fg" ; sty:v
                  [ sty:property "color" ; sty:token tok:tooltip-fg ] ,
                  [ sty:property "font" ; sty:raw "500 12px/1.4 var(--sem-font)" ] ,
                  [ sty:property "white-space" ; sty:raw "pre-line" ] ,
-                 [ sty:property "text-align" ; sty:raw "left" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow-raised ] ,
                  [ sty:property "pointer-events" ; sty:raw "none" ] .

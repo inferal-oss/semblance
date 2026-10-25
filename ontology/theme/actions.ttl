@@ -157,6 +157,8 @@
                  [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "gap" ; sty:raw "1px" ] ,
                  [ sty:property "min-width" ; sty:raw "max(100%, 200px)" ] ,
+                 # Never wider than the screen: long items wrap instead.
+                 [ sty:property "max-width" ; sty:raw "min(360px, calc(100vw - 32px))" ] ,
                  [ sty:property "padding" ; sty:raw "5px" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
@@ -178,7 +180,7 @@
                  [ sty:property "gap" ; sty:raw "10px" ] ,
                  [ sty:property "width" ; sty:raw "100%" ] ,
                  [ sty:property "min-height" ; sty:raw "32px" ] ,
-                 [ sty:property "padding" ; sty:raw "0 10px" ] ,
+                 [ sty:property "padding" ; sty:raw "4px 10px" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] ,
@@ -186,7 +188,9 @@
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "font-weight" ; sty:raw "500" ] ,
                  [ sty:property "text-align" ; sty:raw "start" ] ,
-                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 # A label longer than the popup is wide wraps inside its item.
+                 [ sty:property "white-space" ; sty:raw "normal" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
                  [ sty:property "transition" ; sty:raw "background var(--sem-duration-fast) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:MenuItem ; sty:state ":not(:disabled):is(:hover, :focus-visible)" ;

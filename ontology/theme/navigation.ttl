@@ -31,7 +31,10 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
                  [ sty:property "font-size" ; sty:token tok:text-sm ] ,
                  [ sty:property "font-weight" ; sty:raw "550" ] ,
-                 [ sty:property "text-align" ; sty:raw "left" ] .
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 # A label longer than the list is wide wraps inside its item (buttons do not wrap by default).
+                 [ sty:property "white-space" ; sty:raw "normal" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 [] a sty:StyleRule ; sty:appliesTo c:NavList ; sty:part "button[aria-pressed=true]" ;
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
