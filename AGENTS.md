@@ -87,6 +87,12 @@ npx tsc --noEmit       # typecheck
 
 ## Working in the repository
 
+- **Every request beyond the very trivial gets an issue.** When a feature, change or fix is asked for
+  (anything more than a one-line tweak), file a GitHub issue in `inferal-oss/semblance` with what is
+  wanted and a task list (`- [ ]`), and add it, linked, to the plan issue it belongs to: the Plan
+  (#8) for the framework, site and examples; the engine tracker (#9) for `rdf-engine/`. Tick its
+  boxes as the work lands on `main`, and close it when it is pushed. Work in progress that has no
+  issue is invisible to the next person - or agent - who picks it up.
 - Several agents often work at once. Do non-trivial work in your own git worktree
   (`git worktree add <dir> HEAD`, symlink `node_modules`, copy `rdf-engine/build/*.wasm`), and
   rebase onto `main` before committing.
