@@ -13,19 +13,24 @@ const UI = 'https://semblance.dev/demo#'
 const STYLES = ['display', 'title', 'subtitle', 'body', 'caption', 'overline', 'mono']
 
 /** One gallery page (demo/gallery/<page>.ttl), projected on its own into a DOM. */
-function showPage(page: string) {
+function showPage(page: string, language = 'en') {
   const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const store = loadStore('oxigraph', readFileSync(new URL(`../demo/gallery/${page}.ttl`, import.meta.url), 'utf8'))
   const runtime = new Runtime(store)
   const root = UI + 'gallery-' + page
-  const screen = runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer, SEM.SourceLayer], name: 'screen', roots: [root] }, (e) => {
+  const screen = runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer, SEM.SourceLayer], languages: [language], name: 'screen', roots: [root] }, (e) => {
     throw e
   })
   const dom = new DomRenderer(screen.index, document.getElementById('app')!, root)
   dom.flush()
   new EventBus(runtime, screen).attach(dom, () => dom.flush())
   const byKey = (key: string) => [...document.querySelectorAll('*')].find((e) => dom.keyOf(e) === key) as HTMLElement
-  return { document, store, root: (id: string) => byKey(`${UI}${id}/~root`) }
+  return {
+    document,
+    store,
+    root: (id: string) => byKey(`${UI}${id}/~root`),
+    setLanguage: (next: string) => { screen.engine.reconfigure({ languages: [next] }); dom.flush() },
+  }
 }
 
 describe('sty:textStyle', () => {
@@ -39,6 +44,54 @@ describe('sty:textStyle', () => {
     // a tone colors text through --tone-text
     // (and its subclasses': a walkthrough's steps are running text too)
     expect(css).toMatch(/\[data-sem-c="text"\]\[data-sem-tone\](, [^{]+)? \{ color: var\(--tone-text\); \}/)
+  })
+})
+
+describe('c:LinkCard', () => {
+  it('makes the whole card one safe, accessible link', () => {
+    const { root } = showPage('type')
+    const internal = root('ty-link-card-internal')
+    expect(internal.localName).toBe('a')
+    expect(internal.getAttribute('href')).toBe('#components/type')
+    expect(internal.getAttribute('aria-current')).toBe('page')
+    expect(internal.hasAttribute('target')).toBe(false)
+    expect(internal.querySelectorAll('a')).toHaveLength(0)
+    expect(internal.textContent).toContain('Type gallery')
+    expect(internal.textContent).toContain('The current component group')
+    expect(internal.textContent).toContain('Current')
+
+    const external = root('ty-link-card-external')
+    expect(external.getAttribute('target')).toBe('_blank')
+    expect(external.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(external.textContent).toContain('opens in a new tab')
+  })
+
+  it('renders a readable text projection and theme styling', () => {
+    const store = loadStore('oxigraph', readFileSync(new URL('../demo/gallery/type.ttl', import.meta.url), 'utf8'))
+    const root = UI + 'ty-link-card-internal'
+    const text = new Runtime(store).project({ modality: MOD.Text, roots: [root] })
+    expect(toText(text.index, root)).toContain('Type gallery [Current] — The current component group. (#components/type)')
+
+    const css = compileStyles(store)
+    expect(css).toContain('[data-sem-c="link-card"]')
+    expect(css).toContain('[data-sem-c="link-card"]:focus-visible')
+  })
+
+  it('uses the viewer’s language for the external-link hint', () => {
+    const { root, setLanguage } = showPage('type')
+    setLanguage('ar')
+    expect(root('ty-link-card-external').textContent).toContain('يفتح في علامة تبويب جديدة')
+  })
+
+  it('does not turn an unsafe address into a browser link', () => {
+    const bad = UI + 'unsafe-link-card'
+    const store = loadStore('oxigraph', `
+      @prefix ui: <${UI}> .
+      @prefix c: <https://semblance.dev/ns/component#> .
+      ui:unsafe-link-card a c:LinkCard ; c:label "Unsafe" ; c:href "javascript:alert(1)" .
+    `)
+    const screen = new Runtime(store).project({ modality: MOD.Screen, roots: [bad] })
+    expect(screen.index.rootOf(bad)).toBeUndefined()
   })
 })
 

@@ -58,8 +58,17 @@ Reuse the shared properties where they fit — `c:label`, `c:value`, `c:help`, `
 `c:disabled`, `c:children`, `c:content`, `c:controls` / `c:property` (a control bound to a
 property of another node) — and the shared variant axes (`sty:tone`, `sty:emphasis`, `sty:size`),
 which the style layer already turns into `data-sem-*` hooks for every component that has them.
+
 Capabilities are mixin classes: an instance that is also `c:Draggable`, `c:Flippable` or
 `dnd:Draggable` gets that behaviour without its component knowing.
+
+For a navigable summary, use `c:LinkCard` with one `c:label` and one `c:href`.
+Optional `c:note` and `c:badge` add supporting text. The entire card is one link.
+An HTTP(S) address opens in a new tab with a spoken hint and safe `rel` value; set
+`c:external false` when that address should open in the current tab. Relative, HTTP(S),
+`mailto:` and `tel:` addresses are accepted. Unsafe schemes do not render as links.
+Set `c:currentPage true` when a card represents the current page; it adds
+`aria-current="page"`. The text projection includes the label, optional details, and address.
 
 ## Writing a rendering rule
 

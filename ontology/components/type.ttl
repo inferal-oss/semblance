@@ -150,7 +150,7 @@ e.g. a c:Emblem). Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
 technology (c:externalHint). Accent by default; sty:tone recolors it."""@en ;
     sem:slug "link" ;
-    c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de .
+    c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de , "يفتح في علامة تبويب جديدة"@ar .
 c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
 c:to a owl:ObjectProperty ;
     rdfs:comment "The resource a link goes to (e.g. a gallery specimen): its address is the location that shows it (navigation layer)."@en .

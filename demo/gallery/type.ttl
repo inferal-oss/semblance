@@ -14,7 +14,7 @@
 # Gallery page: Type.
 
 ui:gallery-type a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-kbd ui:ty-code ui:ty-quote ui:ty-walk ui:ty-live ) .
+    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-link-cards ui:ty-kbd ui:ty-code ui:ty-quote ui:ty-walk ui:ty-live ) .
 ui:gallery-type-intro a c:Heading ; c:label "Type" .
 
 # --- the type scale ---
@@ -61,6 +61,18 @@ ui:ty-running-spec a c:Specimen ; c:demonstrates c:Text ; c:label "Running text"
     c:children ( ui:ty-run ) .
 
 # --- links ---
+ui:ty-link-card-internal a c:LinkCard ; c:label "Type gallery" ;
+    c:note "The current component group." ; c:badge "Current" ;
+    c:href "#components/type" ; c:currentPage true .
+ui:ty-link-card-external a c:LinkCard ; c:label "RDF/HTML" ;
+    c:note "Read the rendering vocabulary." ; c:href "https://ia2.dev/spec/rdf-html" .
+ui:ty-link-card-grid a c:Grid ; c:columns 2 ; c:minWidth "16rem" ; pos:gap tok:space-3 ;
+    c:children ( ui:ty-link-card-internal ui:ty-link-card-external ) .
+ui:ty-link-cards a c:Flippable ; c:front ui:ty-link-cards-spec .
+ui:ty-link-cards-spec a c:Specimen ; c:demonstrates c:LinkCard ; c:label "Link card" ;
+    c:help "The whole surface is one link. Its title, optional note and badge share the same keyboard target." ;
+    c:children ( ui:ty-link-card-grid ) .
+
 ui:ty-link-internal a c:Link ; c:label "Components" ; c:href "#components" .
 ui:ty-link-external a c:Link ; c:label "RDF/HTML specification" ; c:href "https://ia2.dev/spec/rdf-html" .
 ui:ty-link-success a c:Link ; c:label "All checks passed" ; c:href "#components" ; sty:tone sty:Success .

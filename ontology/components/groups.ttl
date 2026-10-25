@@ -52,7 +52,7 @@ c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Conn
 c:Route sem:group c:LayoutGroup . c:Arrowheads sem:group c:LayoutGroup . c:LineStyle sem:group c:LayoutGroup . c:ConnectorCondition sem:group c:LayoutGroup .
 
 # --- Type ---
-c:Heading sem:group c:TypeGroup . c:Text sem:group c:TypeGroup . c:Link sem:group c:TypeGroup .
+c:Heading sem:group c:TypeGroup . c:Text sem:group c:TypeGroup . c:Link sem:group c:TypeGroup . c:LinkCard sem:group c:TypeGroup .
 c:Kbd sem:group c:TypeGroup . c:Code sem:group c:TypeGroup . c:Blockquote sem:group c:TypeGroup .
 c:GraphMark sem:group c:TypeGroup . c:MarkNode sem:group c:TypeGroup . c:Emblem sem:group c:TypeGroup .
 c:Walkthrough sem:group c:TypeGroup . c:WalkthroughStep sem:group c:TypeGroup . c:Mention sem:group c:TypeGroup .

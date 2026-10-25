@@ -1,0 +1,43 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ;
+  sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+    [ sty:property "gap" ; sty:token tok:space-2 ] ,
+    [ sty:property "padding" ; sty:token tok:space-4 ] ,
+    [ sty:property "background" ; sty:token tok:surface ] ,
+    [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+    [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
+    [ sty:property "box-shadow" ; sty:token tok:shadow-1 ] ,
+    [ sty:property "color" ; sty:token tok:text ] ,
+    [ sty:property "text-decoration" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:state ":hover" ;
+  sty:declares [ sty:property "box-shadow" ; sty:token tok:shadow-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:state ":focus-visible" ;
+  sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+    [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:state "[aria-current=page]" ;
+  sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-accent-8)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part "> strong" ;
+  sty:declares [ sty:property "font-weight" ; sty:raw "650" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-note" ;
+  sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
+    [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-badge" ;
+  sty:declares [ sty:property "justify-self" ; sty:raw "start" ] ,
+    [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+    [ sty:property "color" ; sty:raw "var(--sem-accent-11)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LinkCard ; sty:part ".sem-link-card-sr" ;
+  sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+    [ sty:property "width" ; sty:raw "1px" ] ,
+    [ sty:property "height" ; sty:raw "1px" ] ,
+    [ sty:property "overflow" ; sty:raw "hidden" ] ,
+    [ sty:property "clip-path" ; sty:raw "inset(50%)" ] .

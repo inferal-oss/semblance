@@ -1,0 +1,19 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix rdfhtml: <https://ia2.dev/spec/rdf-html#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+c:LinkCardShape a sh:NodeShape ; sh:targetClass c:LinkCard ;
+  sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ] ,
+              [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ;
+                sh:pattern "^(https?://|mailto:|tel:|[/#?]|[A-Za-z0-9._~%-]+([/?#]|$))" ; sh:flags "i" ;
+                sh:message "Use a relative address, HTTP(S), mailto, or tel." ] ,
+              [ sh:path c:external ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+              [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
