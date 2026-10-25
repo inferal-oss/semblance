@@ -152,7 +152,7 @@ c:QueryView sem:group c:InspectionGroup . c:TriplesView sem:group c:InspectionGr
 c:StreamMembers sem:group c:InspectionGroup . c:StreamStats sem:group c:InspectionGroup .
 c:ElementMarkup sem:group c:InspectionGroup . c:Highlight sem:group c:InspectionGroup .
 c:ProjectionView sem:group c:InspectionGroup . c:ShapeReport sem:group c:InspectionGroup .
-c:ClassDoc sem:group c:InspectionGroup .
+c:ClassDoc sem:group c:InspectionGroup . c:StallReport sem:group c:InspectionGroup .
 c:TermTree sem:group c:InspectionGroup . c:TermBranch sem:group c:InspectionGroup .
 c:TermSection sem:group c:InspectionGroup . c:TermOverview sem:group c:InspectionGroup .
 c:TermAlignment sem:group c:InspectionGroup . c:TermKind sem:group c:InspectionGroup .

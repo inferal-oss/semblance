@@ -121,7 +121,7 @@ ui:inferalChevron a c:Emblem ; rdfs:label "Inferal" ; c:decorative true ;
     c:pathData "M2.44,399.9c-5.45,5.86-1.16,15.22,6.97,15.22h126.55c3.88,0,7.6-1.5,10.33-4.16l197.28-191.95c2.98-2.9,4.6-6.63,4.84-10.43.29-4.47-1.33-9.04-4.84-12.46L146.29,4.16C143.55,1.5,139.83,0,135.96,0H9.4C1.27,0-3.01,9.35,2.44,15.22l193.06,184.2c2.4,2.58,3.46,5.91,3.18,9.15-.22,2.57-1.28,5.08-3.18,7.13L2.44,399.9Z" .
 
 # Detached views live here, outside the pages, so they survive page changes.
-ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools .
+ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools , ui:stallDialog .
 
 # What the last interaction cost and what memory holds, on every page: a bar
 # docked to the bottom of the shell. The host writes ui:stats; c:Metrics shows it.
@@ -187,7 +187,7 @@ ui:toolsToggle a c:Toggle ; c:controls ui:tools ; c:property c:open ;
 # The engine: which store, which rule implementations, which layers.
 ui:engineTab a c:Tab ; c:label "Engine" , "Рушій"@uk , "Engine"@de , "المحرك"@ar ; c:content ui:toolbar .
 ui:toolbar a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
-    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ui:locationAddress ui:locationTable ) .
+    c:children ( ui:storeChoice ui:rulesChoice ui:layerChips ui:stallsHeading ui:stallReport ui:stallRetry ui:stallTable ui:locationAddress ui:locationTable ) .
 # Where we are, as the navigation effect reports it (urn:semblance:navigation): the address, and
 # each dimension of ui:location with its value, how the address spells it and where it is carried.
 ui:locationAddress a c:Metrics ; c:of ui:location ; c:fields ( nav:address ) .
@@ -611,3 +611,48 @@ ui:LeavePrivate a beh:Reaction ; beh:when key:Press ; beh:source ui:togglePrivat
     beh:deletes """CONSTRUCT { ui:shell prv:privacy prv:Private } WHERE { ui:shell prv:privacy prv:Private }""" ;
     beh:inserts """CONSTRUCT { ui:shell prv:privacy prv:Conceal } WHERE { ui:shell prv:privacy prv:Private }""" ;
     ann:announces "Private mode off" , "Приватний режим вимкнено"@uk , "Privatmodus aus"@de , "تم إيقاف الوضع الخاص"@ar .
+
+# --- the watchdog (ontology/layers/watchdog.ttl) ----------------------------------------------------
+# A turn (an event, its reactions, the views and every projection's rules) gets 1.5 s. Over it, the
+# engine suspends the turn and holds what is left; the host records a sem:Stall and raises
+# sem:Stalled here, whose reaction opens the dialog. Continue finishes in slices, the page answering
+# in between; Stop drops the rest and counts what it leaves out of date. Hangs nothing could
+# interrupt (a heartbeat gap, a long task) are logged too. Tools › Engine lists them all.
+ui:watchdog a sem:Watchdog ; sem:budget "PT1.5S"^^xsd:duration ; sem:slice "PT0.05S"^^xsd:duration ;
+    sem:heartbeat "PT0.25S"^^xsd:duration ; sem:hangAfter "PT2S"^^xsd:duration ; sem:logAfter "PT0.5S"^^xsd:duration ;
+    sem:stallDialog ui:stallDialog ; sem:stallLog sem:StallLog .
+ui:stallDialog a c:Dialog ; c:open false ;
+    c:label "The page is busy" , "Сторінка зайнята"@uk , "Die Seite ist beschäftigt"@de , "الصفحة مشغولة"@ar ;
+    c:help "Something takes longer than it should. Continue lets it finish while the page keeps answering; Stop leaves what it had not updated yet as it was, marked out of date." ;
+    c:content ui:stallNow ; c:actions ( ui:stallStop ui:stallContinue ) .
+ui:stallNow a c:StallReport ; c:of ui:watchdog .
+ui:stallContinue a c:Button ; sty:intent sty:Primary ; sem:decides ui:watchdog ; sem:stallChoice sem:Continue ;
+    c:label "Continue" , "Продовжити"@uk , "Fortsetzen"@de , "متابعة"@ar .
+ui:stallStop a c:Button ; sty:intent sty:Secondary ; sem:decides ui:watchdog ; sem:stallChoice sem:Stop ;
+    c:label "Stop" , "Зупинити"@uk , "Anhalten"@de , "إيقاف"@ar .
+
+# In Tools › Engine: the stall in progress (or what a stopped one left out of date), and the log.
+ui:stallsHeading a c:Heading ; c:level 3 ; c:label "Stalls" , "Зависання"@uk , "Stillstände"@de , "التوقفات"@ar .
+ui:stallReport a c:StallReport ; c:of ui:watchdog ;
+    c:emptyText "Nothing is stalled now. A turn over 1.5 s is suspended and asks; hangs nothing could interrupt are logged below." .
+ui:stallRetry a c:Button ; sty:intent sty:Secondary ; sem:decides ui:watchdog ; sem:stallChoice sem:Retry ;
+    c:label "Retry what is out of date" , "Повторити застаріле"@uk , "Veraltetes wiederholen"@de , "إعادة ما هو غير محدّث"@ar .
+ui:stallTable a c:Table ; c:label "Stall log" ; c:query ui:stallRows ; c:dataset sem:StallLog ;
+    c:tableColumns ( ui:stall-col-at ui:stall-col-state ui:stall-col-detector ui:stall-col-ms ui:stall-col-culprit ui:stall-col-event ui:stall-col-script ) ;
+    c:emptyText "No stalls yet." , "Зависань ще не було."@uk , "Noch keine Stillstände."@de , "لا توجد توقفات بعد."@ar .
+ui:stall-col-at a c:Column ; c:variable "at" ; c:label "When" ; c:format "time" .
+ui:stall-col-state a c:Column ; c:variable "state" ; c:label "State" .
+ui:stall-col-detector a c:Column ; c:variable "detector" ; c:label "Noticed by" .
+ui:stall-col-ms a c:Column ; c:variable "ms" ; c:label "Busy" ; c:align "end" ; c:format "number" ; c:unit "ms" .
+ui:stall-col-culprit a c:Column ; c:variable "culprit" ; c:label "Slowest work" ; c:format "code" .
+ui:stall-col-event a c:Column ; c:variable "event" ; c:label "Started by" .
+ui:stall-col-script a c:Column ; c:variable "script" ; c:label "Script" ; c:format "code" .
+ui:stallRows a sem:View ; rdfs:label "the stall log"@en ;
+    sem:select """
+SELECT ?at ?state ?detector ?ms ?culprit ?event ?script WHERE {
+  sem:StallLog tree:member ?s .
+  ?s sem:sequence ?seq ; sem:stallState ?state .
+  OPTIONAL { ?s sem:at ?at } OPTIONAL { ?s sem:detectedBy ?detector } OPTIONAL { ?s sem:spentMs ?ms }
+  OPTIONAL { ?s sem:culprit ?culprit } OPTIONAL { ?s sem:eventType ?event } OPTIONAL { ?s sem:script ?script }
+}
+ORDER BY DESC(?seq)""" .

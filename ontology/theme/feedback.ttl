@@ -308,3 +308,42 @@
                  [ sty:property "pointer-events" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:ToastRegion ; sty:part "> *" ;
     sty:declares [ sty:property "pointer-events" ; sty:raw "auto" ] .
+
+# --- stall report (ontology/layers/watchdog.ttl) -----------------------------------------------------
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part ":is(.sem-empty, .sem-summary, .sem-stale)" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part ":is(.sem-empty, .sem-stale)" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part ".sem-summary" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part "dl" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "max-content minmax(0, 1fr)" ] ,
+                 [ sty:property "gap" ; sty:raw "var(--sem-space-1) var(--sem-space-3)" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part ".sem-fact" ;
+    sty:declares [ sty:property "display" ; sty:raw "contents" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part "dt" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part "dd" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "gap" ; sty:raw "var(--sem-space-1) var(--sem-space-2)" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part "code" ;
+    sty:declares [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:StallReport ; sty:part ".sem-note" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .

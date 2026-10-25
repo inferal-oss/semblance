@@ -71,6 +71,20 @@ export interface SandboxOptions {
   prefer?: 'sparql' | 'function'
   /** Function rules beyond the built-in ones, by name. */
   functions?: Record<string, FnRule>
+  /**
+   * How long one turn of a sandbox may run, in ms (1500). Over it, the sandbox stops itself (its
+   * watchdog's held work is dropped, src/engine/watchdog.ts) and says so inline, rather than
+   * freezing the site: a build is reported broken, an interaction leaves a problem.
+   */
+  budgetMs?: number
+}
+
+/** What a stalled sandbox says: the budget, and the slowest work of the turn. */
+function stallProblem(runtime: Runtime, sources: SandboxSource[], budgetMs: number): SandboxProblem {
+  const s = runtime.watchdog.stall
+  const w = s?.culprit
+  const what = w ? ` The slowest work was ${short(w.iri, sources)}${w.focus ? ` for ${short(w.focus.split(' ')[0]!, sources)}` : ''} (${Math.round(w.ms)} ms).` : ''
+  return { message: `Stopped: rendering took longer than ${budgetMs} ms, and ${s?.pending ?? runtime.held} renderings were left undone.${what}`, severity: 'error' }
 }
 
 /** A built sandbox: the example's own store, runtime and projections. */
@@ -136,9 +150,17 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
   const warnings: string[] = []
   try {
     const runtime = new Runtime(store)
+    const budgetMs = opts.budgetMs ?? 1500
+    runtime.watchdog.budgetMs = budgetMs
     const base = { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [root] }
     const screen = runtime.project({ ...base, modality: MOD.Screen, name: 'screen' }, (e) => warnings.push(e.message))
     const text = opts.withText ? runtime.project({ ...base, modality: MOD.Text, name: 'text' }, (e) => warnings.push(e.message)) : undefined
+    // Over budget: the sandbox stops itself, and the build is broken (the site never waits on it).
+    if (runtime.held) {
+      problems.push(stallProblem(runtime, sources, budgetMs))
+      runtime.stopStall()
+      return done()
+    }
     if (!screen.index.resolve(root)) problems.push({ message: `${short(root, sources)} renders nothing: is it an instance of a component class with a rendering?`, severity: 'error' })
     for (const w of new Set(warnings)) problems.push({ message: w, severity: 'warning' })
     problems.push(...violations(store, sources))
@@ -396,9 +418,15 @@ export class Sandboxes {
     this.builds++
     m.builds++
     const t0 = now()
-    const built = root
-      ? buildSandbox(sources, root, { ...this.opts, languages: this.opts.languages?.(), withText })
-      : { problems: [{ message: 'The example names nothing to show (c:exampleRoot).', severity: 'error' as const }], ms: 0 }
+    // A build is a turn of the site's watchdog (no budget of its own there): a hang it causes is blamed on the example.
+    const wd = this.runtime.watchdog
+    const built = wd.turn(() => {
+      const b = root
+        ? buildSandbox(sources, root, { ...this.opts, languages: this.opts.languages?.(), withText })
+        : { problems: [{ message: 'The example names nothing to show (c:exampleRoot).', severity: 'error' as const }], ms: 0 }
+      wd.note('rule', LIVE.LiveExample, m.iri, 1, now() - t0)
+      return b
+    })
     if (built.sandbox) this.mount(m, built.sandbox)
     const ms = Math.max(0, Math.round(now() - t0))
     const state = built.sandbox ? LIVE.Live : m.sandbox ? LIVE.Stale : LIVE.Broken
@@ -427,6 +455,17 @@ export class Sandboxes {
     const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
     const failed = (e: Error) => this.write(m.iri, { problems: [{ message: e.message, severity: 'error' }] })
     const detachBus = bus.attach(renderer, () => flush(), failed)
+    // An interaction over budget: the sandbox stops itself (what it left undone keeps its last
+    // rendering) and the problem shows inline.
+    const detachStall = sandbox.runtime.watchdog.onStall(() =>
+      queueMicrotask(() => {
+        if (m.sandbox !== sandbox || !sandbox.runtime.held) return
+        const problem = stallProblem(sandbox.runtime, this.sources(m.iri), this.opts.budgetMs ?? 1500)
+        sandbox.runtime.stopStall()
+        flush()
+        this.write(m.iri, { problems: [problem] })
+      }),
+    )
     const detachRefresh = sandbox.runtime.onRefresh(flush)
     const detachTimer = sandbox.runtime.onTimer(flush)
     const sheet = sandbox.styled ? this.sheet(doc, sandbox.store, n) : undefined
@@ -439,6 +478,7 @@ export class Sandboxes {
     m.textRenderer = textRenderer
     m.sheet = sheet
     m.detach = () => {
+      detachStall()
       detachBus()
       detachRefresh()
       detachTimer()

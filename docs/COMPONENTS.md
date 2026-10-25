@@ -253,6 +253,57 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   example's slot when it is shown, rebuilds it when typing pauses, and writes back
   `c:sandboxState`, `c:problem` and `c:renderTime`; the site's Docs are built with it.
 
+### When the page is busy
+
+A *turn* is everything one input causes: an event's reactions, the tick's maintained views and
+every projection's rule evaluations. `runtime.watchdog` gives a turn a budget (off by default; the
+stall effect sets it from the app's `sem:budget`, 1.5 s). The engine asks it between evaluations
+(a counter; the clock is read every 8 evaluations and at every rule batch); over budget, the turn
+is **suspended** at a consistent point: strata below the one it reached are complete, every derived
+triple comes from a complete evaluation, and the pending (rule, focus) pairs are **held**. The page
+renders and answers again. Reactions and maintained views compute one consistent change each, so
+they are timed and blamed, not cut: a turn they took over budget suspends at the engine's first
+check.
+
+```turtle
+ui:watchdog a sem:Watchdog ; sem:budget "PT1.5S"^^xsd:duration ; sem:stallDialog ui:busy .
+ui:busy a c:Dialog ; c:label "The page is busy" ; c:content ui:busyReport ; c:actions ( ui:stop ui:continue ) .
+ui:busyReport a c:StallReport ; c:of ui:watchdog .
+ui:continue a c:Button ; c:label "Continue" ; sem:decides ui:watchdog ; sem:stallChoice sem:Continue .
+ui:stop a c:Button ; c:label "Stop" ; sem:decides ui:watchdog ; sem:stallChoice sem:Stop .
+```
+
+```ts
+const stalls = new StallMonitor(runtime, { watchdog: UI + 'watchdog', bus, flush })
+stalls.attach()   // suspended turns: a sem:Stall record, sem:Stalled, the dialog, the decision
+stalls.observe()  // hangs nothing could interrupt: a heartbeat worker and long-task observers
+```
+
+`StallMonitor` (`src/behaviour/stall.ts`) records a `sem:Stall` in the performance graph (what was
+slowest, for which focus, how much is done and waiting, the event that started the turn) and raises
+`sem:Stalled` on the watchdog; `sem:OpenStallDialog` opens the dialog. The buttons' reaction
+(`sem:DecideStall`) writes `sem:decision`, and the effect does it:
+
+- **Continue** (`runtime.continueStall(sliceMs)`): the held work runs in slices with a yield
+  between them; the report shows progress. Continued to the end, the result is the same as a turn
+  that was never suspended. Closing the dialog without deciding continues too.
+- **Stop** (`runtime.stopStall()`): the held work is dropped. Pairs whose focus is gone are
+  retracted (no query); the others keep the output of their last complete evaluation and are
+  counted out of date (`sem:outOfDate`, `runtime.stopped`) until their input changes again (they
+  are then evaluated as usual) or `sem:Retry` (`runtime.retryStopped()`) runs them. Nothing is
+  rolled back: the input change, the views and the change log stay as the stalled turn left them.
+- **One long query** cannot be interrupted from outside. A store with `setDeadline` (Semblance's
+  WASM engines) stops a query at the end of the budget with `QueryInterrupted`; the pair stays
+  held, and runs without a deadline when continued. Oxigraph has no such hook.
+- **Hangs nothing could interrupt** (a long query on Oxigraph, DOM patching, layout) are noticed
+  once the page answers again, by a heartbeat in a Web Worker (it also hears, from inside long
+  turns, which rule and focus the engine is on) and by `long-animation-frame` / `longtask`
+  observers. Each is blamed on the turn, or the DOM patch, it overlapped, logged to `sem:StallLog`
+  (a bounded LDES in the performance graph), and announced (`sem:Unresponsive`) when it lasted
+  longer than `sem:hangAfter`. The site lists them in Tools › Engine.
+- **Sandboxes** (`Sandboxes`, `buildSandbox`) have a budget of their own (`budgetMs`): a sandbox
+  over it stops itself and shows the problem inline.
+
 ## Where things are
 
 | | |
