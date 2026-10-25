@@ -147,6 +147,19 @@ if (scenario === 'pages') {
   result = { openMs, first10Ms: sum(steps.slice(0, 10)), last30Ms: sum(steps.slice(10)), medianLastMs: median(steps.slice(10)), lastQueryMs: sum(stepQueryMs.slice(12)) }
 }
 const s = store!.engine.stats
+if (process.argv.includes('--profiles')) {
+  // What compiled in idle time: runs and ms per binding combination each way, the least gain first.
+  const rows = store!.engine.idleCompiledProfiles.map((p) => ({
+    runs: p.runs,
+    combos: p.combos,
+    interpreted: p.ms / p.combos,
+    compiledRuns: p.compiledRuns,
+    compiled: p.compiledRuns > 1 ? p.compiledMs / p.compiledCombos : NaN,
+    query: p.query.vars.join(' ') + ' | ' + p.shape,
+  }))
+  rows.sort((a, b) => b.compiled / b.interpreted - a.compiled / a.interpreted)
+  for (const r of rows) console.error(JSON.stringify(r))
+}
 const mode = process.env.SEMBLANCE_ENGINE_COMPILE ?? '0'
 console.log(
   JSON.stringify({
@@ -160,6 +173,7 @@ console.log(
     compiled: s.compiled,
     idleCompiled: s.idleCompiled,
     reverted: s.reverted,
+    fallbacks: s.fallbacks,
     declined: [...s.declined.values()].reduce((a, b) => a + b, 0),
     compileMs: s.emitMs + s.wasmMs,
     compiledRuns: s.compiledRuns,

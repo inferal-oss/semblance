@@ -103,20 +103,25 @@ export interface CompileStats {
   idleCompiled: number
   idleMs: number
   reverted: number
+  /** Compiled runs that failed and ran again interpreted (the module is then dropped). */
+  fallbacks: number
 }
 
 /** A prepared query's runs with one set of variables bound, as idle-time compilation sees them. */
-interface Profile {
+export interface Profile {
   query: Query
   shape: string
-  /** Interpreted runs and their milliseconds. */
+  /** Interpreted runs, their milliseconds and binding combinations (one run of a query bound to n values is n). */
   runs: number
   ms: number
-  /** Compiled runs (after it compiled in idle time), and the milliseconds of all but the first. */
+  combos: number
+  /** Compiled runs (after it compiled in idle time); the milliseconds and combinations of all but the first. */
   compiledRuns: number
   compiledMs: number
-  /** A value of each bound variable, from its first run. */
+  compiledCombos: number
+  /** A value of each bound variable, and the graphs, from its latest interpreted run. */
   sample?: Map<string, number>
+  graphs?: number[]
 }
 
 /** Idle-time compilation: what one idle slice may do, and what compiling is assumed to save before it is measured. */
@@ -131,7 +136,7 @@ export const IDLE_COMPILE = {
   cost: 0.25,
   /** Interpreted runs before a query is a candidate. */
   minRuns: 2,
-  /** Compiled runs (after the first, which the engine's lazy compilation of the module slows) after which a module that runs slower than the interpreted mean is dropped. */
+  /** Compiled runs (after the first) after which a module that runs slower than the interpreted mean is dropped. */
   probation: 4,
 }
 
@@ -169,11 +174,13 @@ export class Engine {
    * measured runs say compiling pays: runs are timed while this is on.
    */
   idleCompile = false
-  readonly stats: CompileStats = { compiled: 0, declined: new Map(), emitMs: 0, wasmMs: 0, bytes: 0, compiledRuns: 0, interpretedRuns: 0, idleCompiled: 0, idleMs: 0, reverted: 0 }
+  readonly stats: CompileStats = { compiled: 0, declined: new Map(), emitMs: 0, wasmMs: 0, bytes: 0, compiledRuns: 0, interpretedRuns: 0, idleCompiled: 0, idleMs: 0, reverted: 0, fallbacks: 0 }
   /** @internal Interpreted (query, bound variables) profiles not yet compiled: idle-time candidates. */
   readonly candidates = new Set<Profile>()
   /** Compiled modules' measured runs against their interpreted ones (the saving, measured). */
   private measured = { interpretedMs: 0, compiledMs: 0, profiles: 0 }
+  /** What compiled in idle time, for reports (compiled-pages.ts --profiles). */
+  readonly idleCompiledProfiles: Profile[] = []
   private modules = 0
 
   /** `now` replaces the clock (`env.now`), for tests of the query budget. */
@@ -384,9 +391,10 @@ export class Engine {
     worth.sort((a, b) => b.ms - a.ms)
     let done = 0
     for (const p of worth) {
-      if (done >= IDLE_COMPILE.perSlice || this.modules >= IDLE_COMPILE.maxModules || performance.now() + cost > until) break
+      // a module's cost, and its first run (compileShape warms it)
+      if (done >= IDLE_COMPILE.perSlice || this.modules >= IDLE_COMPILE.maxModules || performance.now() + cost + p.ms / p.runs > until) break
       this.candidates.delete(p)
-      if (p.query.compileShape(p.shape) === null) this.stats.idleCompiled++
+      if (p.query.compileShape(p.shape) === null) this.stats.idleCompiled++, this.idleCompiledProfiles.push(p)
       done++
     }
     this.stats.idleMs += performance.now() - t0
@@ -512,19 +520,31 @@ export class Query {
   }
 
   /**
-   * @internal Compile for another set of bound variables (`shape`, as the
-   * profiles name it) than the one bound now, which is restored afterwards:
-   * a module depends on which variables are bound, not on their values, so
-   * each is bound to a term it was bound to before.
+   * @internal Compile for a set of bound variables (`shape`, as the profiles
+   * name it), restoring the bindings of now afterwards: a module depends on
+   * which variables are bound, not on their values, so each is bound to a
+   * term it was bound to lately. Then the module runs once on them: the
+   * engine compiles a module's functions at their first call, which should
+   * happen now, in idle time, rather than on the next interaction's path.
    */
   compileShape(shape: string): string | null {
-    if (shape === this.shape) return this.compile()
+    const warm = (why: string | null) => {
+      const c = this.compiled.get(shape)
+      if (why !== null || typeof c !== 'object') return why
+      const n = this.engine.runCompiled(c, this.profiles.get(shape)?.graphs ?? [])
+      // Failed (not stopped by the budget): it would fail on the next run too.
+      if (n >= 0 || n === -2) return null
+      this.compiled.set(shape, 'compiled run failed')
+      this.engine.dropModule()
+      return 'compiled run failed'
+    }
+    if (shape === this.shape) return warm(this.compile())
     const want = shape ? shape.split(' ') : []
     const saved = new Map(this.bound)
     for (const name of saved.keys()) if (!want.includes(name)) this.unbind(name)
     for (const name of want) if (!this.bound.has(name)) this.bindValues(name, [this.profiles.get(shape)?.sample?.get(name) ?? 1])
     try {
-      return this.compile()
+      return warm(this.compile())
     } finally {
       for (const name of want) if (!saved.has(name)) this.unbind(name)
       for (const [name, v] of saved) if (this.bound.get(name) !== v) typeof v === 'number' ? this.bind(name, v) : this.bindValues(name, v)
@@ -557,12 +577,18 @@ export class Query {
       if (n >= 0) this.engine.stats.compiledRuns++
       // Stopped by the budget: the interpreter would be too, so no fallback.
       else if (n === -2) this.engine.interrupted()
+      else {
+        // Failed: run interpreted, now and from now on (it would fail again).
+        this.engine.stats.fallbacks++
+        this.compiled.set(key, 'compiled run failed')
+        this.engine.dropModule()
+      }
     }
     if (n < 0) {
       n = this.engine.runQuery(this.handle, graphs)
       this.engine.stats.interpretedRuns++
     }
-    if (timed) this.profile(key, typeof c === 'object' && n >= 0, performance.now() - t0)
+    if (timed) this.profile(key, typeof c === 'object' && n >= 0, performance.now() - t0, graphs)
     if (this.form === Form.Ask) return { form: Form.Ask, value: n === 1 }
     if (this.form === Form.Select) return { form: Form.Select, vars: this.vars, count: n, rows: this.engine.resultIds(n * this.vars.length) }
     return { form: this.form, triples: this.engine.resultIds(n * 3) }
@@ -573,32 +599,48 @@ export class Query {
    * candidate; a compiled module that, after its probation, runs slower than
    * the interpreter did is dropped, and the query stays interpreted.
    */
-  private profile(key: string, compiled: boolean, ms: number): void {
+  private profile(key: string, compiled: boolean, ms: number, graphs: ArrayLike<number>): void {
     let p = this.profiles.get(key)
     if (!p) {
-      p = { query: this, shape: key, runs: 0, ms: 0, compiledRuns: 0, compiledMs: 0 }
+      p = { query: this, shape: key, runs: 0, ms: 0, combos: 0, compiledRuns: 0, compiledMs: 0, compiledCombos: 0 }
       this.profiles.set(key, p)
     }
     if (!compiled) {
       p.runs++
       p.ms += ms
-      if (p.runs === 1 && key) p.sample = this.sample()
+      p.combos += this.combos()
+      // values it was bound to lately, to compile and warm the module with
+      if (key) p.sample = this.sample()
+      p.graphs = Array.from(graphs)
       if (!this.compiled.has(key)) this.engine.candidates.add(p)
       return
     }
-    // A new module's first run pays for the engine's lazy compilation of its functions: not counted.
-    if (p.compiledRuns++ === 0) return
+    // A module's first run here is not counted: WebAssembly engines start new code on a baseline tier.
+    if (p.compiledRuns++ === 0 || p.compiledRuns > IDLE_COMPILE.probation + 1) return
     p.compiledMs += ms
-    if (p.compiledRuns === IDLE_COMPILE.probation + 1) {
-      const interpreted = p.ms / p.runs
-      const compiledMean = p.compiledMs / IDLE_COMPILE.probation
-      this.engine.noteCompiled(interpreted, compiledMean)
-      if (compiledMean > interpreted) {
-        this.compiled.set(key, 'slower compiled')
-        this.engine.dropModule()
-        this.engine.stats.reverted++
-      }
+    p.compiledCombos += this.combos()
+    // Per binding combination (a run over many foci is not one over a few): twice as slow
+    // drops it at once, slower at all by the end of its probation.
+    const interpreted = p.ms / p.combos
+    const compiledMean = p.compiledMs / p.compiledCombos
+    const done = p.compiledRuns === IDLE_COMPILE.probation + 1
+    const slower = compiledMean > interpreted * (done ? 1 : 2)
+    if (slower) {
+      this.compiled.set(key, 'slower compiled')
+      this.engine.dropModule()
+      this.engine.stats.reverted++
     }
+    if (done || slower) {
+      this.engine.noteCompiled(interpreted, compiledMean)
+      p.compiledRuns = IDLE_COMPILE.probation + 2
+    }
+  }
+
+  /** The binding combinations of a run: the product of how many values each bound variable has. */
+  private combos(): number {
+    let n = 1
+    for (const v of this.bound.values()) if (typeof v !== 'number') n *= v.length
+    return n
   }
 
   /** One value of each bound variable, for compiling this shape later. */
