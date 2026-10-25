@@ -727,7 +727,13 @@ impl<'a> Ctx<'a> {
     // --- queries -------------------------------------------------------------------
 
     pub fn select(&mut self, s: &Select, sub: &[u32], active: Active) -> Vec<Row> {
-        let mut rows = self.eval(&s.pattern, sub, active);
+        let rows = self.eval(&s.pattern, sub, active);
+        self.select_rows(s, rows, active)
+    }
+
+    /// What follows a SELECT's WHERE, on its solutions (a compiled subquery's
+    /// too): grouping, VALUES, SELECT expressions, ORDER BY, projection, slice.
+    pub fn select_rows(&mut self, s: &Select, mut rows: Vec<Row>, active: Active) -> Vec<Row> {
         if s.group.is_some() || !s.aggregates.is_empty() {
             rows = self.group(s, rows);
             rows.retain(|r| s.having.iter().all(|h| self.test_owned(h, r)));

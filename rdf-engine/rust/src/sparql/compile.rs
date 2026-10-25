@@ -47,7 +47,10 @@ const FRESH: u32 = 11;
 const KIND: u32 = 12;
 const DATATYPE: u32 = 13;
 const LANG_LEN: u32 = 14;
-const IMPORTS: [(&[u8], u32); 15] = [
+const SUB: u32 = 15;
+const KEEP: u32 = 16;
+const GROUP: u32 = 17;
+const IMPORTS: [(&[u8], u32); 18] = [
     (b"cq_begin", T_III_I),
     (b"cq_combo", T_I_V),
     (b"cq_scan", T_IIII_I),
@@ -63,6 +66,9 @@ const IMPORTS: [(&[u8], u32); 15] = [
     (b"term_kind", T_I_I),
     (b"term_datatype", T_I_I),
     (b"term_lang_len", T_I_I),
+    (b"cq_sub", T_V_V),
+    (b"cq_keep", T_V_V),
+    (b"cq_group", T_II_I),
 ];
 const NIMPORTS: u32 = IMPORTS.len() as u32;
 
@@ -80,6 +86,8 @@ pub struct Tables {
     pub paths: Vec<*const Triple>,
     /// For `cq_eval`.
     pub patterns: Vec<*const Pattern>,
+    /// For `cq_group`: subqueries whose WHERE runs in the module.
+    pub subs: Vec<*const Select>,
 }
 
 pub type Res<T> = Result<T, &'static str>;
@@ -105,6 +113,10 @@ enum Step<'a> {
     Found(u32),
     Call(u32),
     Final,
+    /// A solution of a subquery's WHERE: `cq_keep`.
+    Keep,
+    /// EXISTS found a solution: global g set, return.
+    Exit(u32),
 }
 
 #[derive(Clone)]
@@ -121,13 +133,15 @@ struct Gen<'q> {
     width: u32,
     funcs: Vec<Body>,
     t: Tables,
-    base: [u32; 3],
+    base: [u32; 4],
     globals: u32,
+    /// The plan state where the expression being compiled is evaluated.
+    here: Option<St>,
 }
 
 /// Compile `q` for runs with the variables `bound` bound (to any values). `base`:
 /// where the module's expressions, paths and patterns start in the engine's tables.
-pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame: u32, base: [u32; 3]) -> Res<(Vec<u8>, Tables)> {
+pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame: u32, base: [u32; 4]) -> Res<(Vec<u8>, Tables)> {
     let s = &q.select;
     if q.form == Form::Describe {
         return Err("not compilable: DESCRIBE");
@@ -141,7 +155,7 @@ pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame:
     if q.template.iter().flatten().any(|t| matches!(t, Tt::Triple(_))) {
         return Err("not compilable: triple term in template");
     }
-    let mut g = Gen { q, dict, frame, width: q.vars.len() as u32, funcs: Vec::new(), t: Tables::default(), base, globals: 0 };
+    let mut g = Gen { q, dict, frame, width: q.vars.len() as u32, funcs: Vec::new(), t: Tables::default(), base, globals: 0, here: None };
     // run(graphs) -> n
     let mut run = Body::new(T_I_I, 1);
     let (n, i, top) = (run.local(), run.local(), run.local());
@@ -231,6 +245,93 @@ fn native(p: &Pattern) -> bool {
     }
 }
 
+/// The conjuncts of a filter, as filter steps (a row passes all of them iff it passes their AND).
+fn conjuncts<'q>(e: &'q Expr, out: &mut Vec<Step<'q>>) {
+    match e {
+        Expr::And(a, b) => {
+            conjuncts(a, out);
+            conjuncts(b, out);
+        }
+        _ => out.push(Step::Filter(e)),
+    }
+}
+
+/// Every variable an expression reads, EXISTS patterns included; false if it is impure.
+fn expr_reads(e: &Expr, out: &mut Vec<Var>) -> bool {
+    match e {
+        Expr::Var(v) | Expr::Bound(v) => {
+            out.push(*v);
+            true
+        }
+        Expr::Const(_) | Expr::Unknown => true,
+        Expr::Exists(p, _) => {
+            super::parse::pattern_vars(p, out);
+            true
+        }
+        Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => expr_reads(a, out) & expr_reads(b, out),
+        Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => expr_reads(a, out),
+        Expr::In(a, l, _) => expr_reads(a, out) & l.iter().fold(true, |ok, x| expr_reads(x, out) & ok),
+        Expr::Call(func, l) => !matches!(func, Func::Bnode | Func::Rand | Func::Uuid | Func::StrUuid) & l.iter().fold(true, |ok, x| expr_reads(x, out) & ok),
+        Expr::Coalesce(l) => l.iter().fold(true, |ok, x| expr_reads(x, out) & ok),
+        Expr::If(a, b, c) => expr_reads(a, out) & expr_reads(b, out) & expr_reads(c, out),
+    }
+}
+
+fn has_exists(e: &Expr) -> bool {
+    match e {
+        Expr::Exists(..) => true,
+        Expr::Or(a, b) | Expr::And(a, b) | Expr::Cmp(_, a, b) | Expr::Arith(_, a, b) => has_exists(a) || has_exists(b),
+        Expr::Not(a) | Expr::Neg(a) | Expr::Plus(a) | Expr::Cast(_, a) => has_exists(a),
+        Expr::In(a, l, _) => has_exists(a) || l.iter().any(has_exists),
+        Expr::Call(_, l) | Expr::Coalesce(l) => l.iter().any(has_exists),
+        Expr::If(a, b, c) => has_exists(a) || has_exists(b) || has_exists(c),
+        _ => false,
+    }
+}
+
+/// Variables a step may bind.
+fn step_binds(s: &Step, out: &mut Vec<Var>) {
+    match s {
+        Step::Pat(p) | Step::Eval(p) | Step::Rows(_, p) | Step::OptRows(_, p, _) | Step::Optional(p, _) => super::parse::pattern_vars(p, out),
+        Step::Triple(t) => [&t.s, &t.p, &t.o].iter().for_each(|x| tv_vars(x, out)),
+        Step::Extend(v, _) => out.push(*v),
+        _ => {}
+    }
+}
+
+/// The first filter after the first step that is ready now: each variable it
+/// reads is certainly bound, or bound by none of the steps before it. One
+/// with EXISTS does not pass a triple pattern (which may well be cheaper).
+fn ready_filter(steps: &[Step], bound: &[u8]) -> Option<usize> {
+    for j in 1..steps.len() {
+        let Step::Filter(e) = steps[j] else { continue };
+        let mut reads = Vec::new();
+        if !expr_reads(e, &mut reads) {
+            continue;
+        }
+        if has_exists(e) && steps[..j].iter().any(|s| matches!(s, Step::Triple(_) | Step::Pat(Pattern::Bgp(_)))) {
+            continue;
+        }
+        let mut before = Vec::new();
+        steps[..j].iter().for_each(|s| step_binds(s, &mut before));
+        if reads.iter().all(|&v| bound[v as usize] == CERTAIN || !before.contains(&v)) {
+            return Some(j);
+        }
+    }
+    None
+}
+
+/// An EXISTS pattern the compiler runs itself: triples and filters.
+fn exists_inline(p: &Pattern) -> bool {
+    match p {
+        Pattern::Unit => true,
+        Pattern::Bgp(ts) => ts.iter().all(|t| ![&t.s, &t.p, &t.o].iter().any(|x| matches!(x, Tv::Triple(_)))),
+        Pattern::Join(a, b) => exists_inline(a) && exists_inline(b),
+        Pattern::Filter(e, a) => exists_inline(a) && !has_exists(e),
+        _ => false,
+    }
+}
+
 /// An expression whose value is a term id already: a variable or a constant.
 fn simple(e: &Expr) -> bool {
     matches!(e, Expr::Var(_) | Expr::Const(_))
@@ -290,6 +391,20 @@ impl<'q> Gen<'q> {
     }
 
     fn emit(&mut self, f: usize, steps: &[Step<'q>], st: &St) -> Res<()> {
+        // A filter further on whose variables nothing before it can change:
+        // tested now (pushed down).
+        if let Some(j) = ready_filter(steps, &st.bound) {
+            let Step::Filter(e) = steps[j] else { unreachable!() };
+            let mut rest = steps.to_vec();
+            rest.remove(j);
+            self.f(f).open(BLOCK);
+            self.here = Some(st.clone());
+            self.bool3(f, e);
+            self.f(f).i32(1).op(NE).br(BR_IF, 0);
+            self.emit(f, &rest, st)?;
+            self.f(f).op(END);
+            return Ok(());
+        }
         let (first, rest) = (steps[0], &steps[1..]);
         let then = |head: &[Step<'q>]| -> Vec<Step<'q>> {
             let mut v = head.to_vec();
@@ -308,19 +423,23 @@ impl<'q> Gen<'q> {
                 Pattern::Join(a, b) if pure(b) => self.emit(f, &then(&[Step::Pat(a), Step::Pat(b)]), st),
                 // Else the right side's rows, computed (as the interpreter does) before the left side runs.
                 Pattern::Join(a, b) => {
-                    let (g, top) = self.table(f, b, st);
+                    let (g, top) = self.table(f, b, st)?;
                     let next = St { bound: st.bound.clone(), top };
                     self.emit(f, &then(&[Step::Pat(a), Step::Rows(g, b)]), &next)
                 }
                 Pattern::LeftJoin(a, b, c) if pure(b) => self.emit(f, &then(&[Step::Pat(a), Step::Optional(b, c.as_ref())]), st),
                 Pattern::LeftJoin(a, b, c) => {
-                    let (g, top) = self.table(f, b, st);
+                    let (g, top) = self.table(f, b, st)?;
                     let next = St { bound: st.bound.clone(), top };
                     self.emit(f, &then(&[Step::Pat(a), Step::OptRows(g, b, c.as_ref())]), &next)
                 }
                 // The right side sees each row of the left: exactly what a continuation sees.
                 Pattern::Lateral(a, b) => self.emit(f, &then(&[Step::Pat(a), Step::Pat(b)]), st),
-                Pattern::Filter(e, a) => self.emit(f, &then(&[Step::Pat(a), Step::Filter(e)]), st),
+                Pattern::Filter(e, a) => {
+                    let mut head = vec![Step::Pat(a)];
+                    conjuncts(e, &mut head);
+                    self.emit(f, &then(&head), st)
+                }
                 Pattern::Extend(a, v, e) => self.emit(f, &then(&[Step::Pat(a), Step::Extend(*v, e)]), st),
                 Pattern::Union(a, b) => {
                     let k = self.cont(rest, after(p, &st.bound))?;
@@ -333,6 +452,7 @@ impl<'q> Gen<'q> {
             Step::Triple(t) => self.triple(f, t, rest, st),
             Step::Filter(e) => {
                 self.f(f).open(BLOCK);
+                self.here = Some(st.clone());
                 self.bool3(f, e);
                 self.f(f).i32(1).op(NE).br(BR_IF, 0);
                 self.emit(f, rest, st)?;
@@ -346,6 +466,7 @@ impl<'q> Gen<'q> {
                     self.load_var(f, v);
                     self.f(f).set(save);
                 }
+                self.here = Some(st.clone());
                 self.value(f, e);
                 self.f(f).tee(val).open(IF);
                 self.store_var(f, v, val);
@@ -371,7 +492,7 @@ impl<'q> Gen<'q> {
                 Ok(())
             }
             Step::Eval(p) => {
-                let (g, top) = self.table(f, p, st);
+                let (g, top) = self.table(f, p, st)?;
                 let next = St { bound: st.bound.clone(), top };
                 self.emit(f, &then(&[Step::Rows(g, p)]), &next)
             }
@@ -397,21 +518,39 @@ impl<'q> Gen<'q> {
                 Ok(())
             }
             Step::Final => self.final_(f),
+            Step::Keep => {
+                self.f(f).call(KEEP);
+                Ok(())
+            }
+            Step::Exit(g) => {
+                self.f(f).i32(1).global_set(g).op(RETURN);
+                Ok(())
+            }
         }
     }
 
     /// Evaluate `p` with the interpreter now, onto the stack: the rows start at
     /// the word in global g, g + 1 holds their count. Returns g and the new top's local.
-    fn table(&mut self, f: usize, p: &'q Pattern, st: &St) -> (u32, u32) {
-        self.t.patterns.push(p);
-        let k = self.base[2] + self.t.patterns.len() as u32 - 1;
+    fn table(&mut self, f: usize, p: &'q Pattern, st: &St) -> Res<(u32, u32)> {
         let g = self.global();
         self.global();
         let top = self.f(f).local();
         let (w, cur) = (self.width as i32, st.top);
-        self.f(f).get(cur).global_set(g).i32(k as i32).get(cur).call(EVAL).global_set(g + 1);
+        if let Pattern::Sub(s) = p {
+            // A subquery: its WHERE here, against the frame (the interpreter's
+            // substitution row); its solutions collected and finished by the engine.
+            self.t.subs.push(&**s);
+            let k = self.base[3] + self.t.subs.len() as u32 - 1;
+            self.f(f).call(SUB);
+            self.emit(f, &[Step::Pat(&s.pattern), Step::Keep], st)?;
+            self.f(f).get(cur).global_set(g).i32(k as i32).get(cur).call(GROUP).global_set(g + 1);
+        } else {
+            self.t.patterns.push(p);
+            let k = self.base[2] + self.t.patterns.len() as u32 - 1;
+            self.f(f).get(cur).global_set(g).i32(k as i32).get(cur).call(EVAL).global_set(g + 1);
+        }
         self.f(f).get(cur).global_get(g + 1).i32(w).op(MUL).op(ADD).set(top);
-        (g, top)
+        Ok((g, top))
     }
 
     /// Loop over the rows of a table (globals g, g + 1): each row compatible
@@ -507,6 +646,32 @@ impl<'q> Gen<'q> {
     /// Push a condition's value: 0 false, 1 true, 2 error.
     fn bool3(&mut self, f: usize, e: &Expr) {
         match e {
+            // EXISTS over triples and filters: a function of its own that returns
+            // at the first solution; what it binds is restored around the call.
+            Expr::Exists(p, neg) if self.here.is_some() && exists_inline(p) => {
+                let st = self.here.clone().unwrap();
+                let flag = self.global();
+                let p: &'q Pattern = unsafe { &*(&**p as *const Pattern) };
+                let k = self.cont(&[Step::Pat(p), Step::Exit(flag)], st.bound.clone()).unwrap_or(u32::MAX);
+                self.here = Some(st.clone());
+                let mut saves = Vec::new();
+                for v in vars_of(p) {
+                    if st.bound[v as usize] != CERTAIN {
+                        let l = self.f(f).local();
+                        self.load_var(f, v);
+                        self.f(f).set(l);
+                        saves.push((v, l));
+                    }
+                }
+                self.f(f).i32(0).global_set(flag).get(st.top).call(k);
+                for (v, l) in saves {
+                    self.store_var(f, v, l);
+                }
+                self.f(f).global_get(flag);
+                if *neg {
+                    self.f(f).i32(1).op(XOR);
+                }
+            }
             Expr::Bound(v) => {
                 self.load_var(f, *v);
                 self.f(f).i32(0).op(NE);

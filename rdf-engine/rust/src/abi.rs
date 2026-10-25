@@ -548,12 +548,13 @@ pub extern "C" fn compile(h: u32) -> i32 {
         }
     };
     let t = &cq.tables;
-    let base = [t.exprs.len() as u32, t.paths.len() as u32, t.patterns.len() as u32];
+    let base = [t.exprs.len() as u32, t.paths.len() as u32, t.patterns.len() as u32, t.subs.len() as u32];
     match sparql::compile::compile(&p.query, &st().dict, &bound, h, id as u32, cq.frame.as_ptr() as u32, base) {
         Ok((bytes, t)) => {
             cq.tables.exprs.extend(t.exprs);
             cq.tables.paths.extend(t.paths);
             cq.tables.patterns.extend(t.patterns);
+            cq.tables.subs.extend(t.subs);
             let r = &mut st().result;
             r.clear();
             r.resize(bytes.len().div_ceil(4), 0);
@@ -574,6 +575,8 @@ struct Run {
     distinct: crate::idmap::IdMap,
     stack: Vec<u32>,
     scan: Vec<u32>,
+    /// Solutions of compiled subqueries' WHEREs being collected (nested).
+    keep: Vec<Vec<sparql::eval::Row>>,
 }
 
 struct RunCell(UnsafeCell<Option<Run>>);
@@ -616,7 +619,7 @@ pub extern "C" fn cq_begin(h: u32, shape_id: u32, graphs: u32) -> i32 {
     let ctx = sparql::eval::Ctx::new(&mut s.dict, &s.store, default, named, &q.base, q.vars.len());
     s.result.clear();
     unsafe {
-        *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new() });
+        *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new(), keep: Vec::new() });
     }
     n
 }
@@ -683,6 +686,39 @@ pub extern "C" fn cq_eval(k: u32, at: u32) -> u32 {
     r.stack.truncate(at as usize);
     let p = unsafe { &*cq(r).tables.patterns[k as usize] };
     let rows = r.ctx.eval(p, frame(r), sparql::eval::Active::Default);
+    for row in &rows {
+        r.stack.extend_from_slice(row);
+    }
+    if r.stack.len() > (16 << 20) {
+        core::arch::wasm32::unreachable()
+    }
+    rows.len() as u32
+}
+
+/// A compiled subquery: `cq_sub` starts collecting its WHERE's solutions (the
+/// frame at each `cq_keep`); `cq_group` finishes them as the interpreter does
+/// (grouping, aggregates, modifiers, projection): rows as `cq_eval` gives them.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_sub() {
+    run_state().keep.push(Vec::new());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_keep() {
+    let r = run_state();
+    let row = frame(r).to_vec();
+    if let Some(k) = r.keep.last_mut() {
+        k.push(row);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_group(k: u32, at: u32) -> u32 {
+    let r = run_state();
+    r.stack.truncate(at as usize);
+    let s = unsafe { &*cq(r).tables.subs[k as usize] };
+    let rows = r.keep.pop().unwrap_or_default();
+    let rows = r.ctx.select_rows(s, rows, sparql::eval::Active::Default);
     for row in &rows {
         r.stack.extend_from_slice(row);
     }
