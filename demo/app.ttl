@@ -58,7 +58,8 @@ ui:PreferSparql a ui:RuleKind ; rdfs:label "Prefer SPARQL" ; sem:order 1 ; ui:ke
 ui:PreferFunction a ui:RuleKind ; rdfs:label "Prefer functions" ; sem:order 2 ; ui:key "function" .
 # Semblance's engines (WASM and Rust) can run prepared queries compiled to WebAssembly
 # (rdf-engine/results/compiled.md): never, from a query's second run, or in idle time for the
-# queries whose measured runs say it pays. Other stores ignore it.
+# queries whose measured runs say it pays. Other stores ignore it. The host sets the store's
+# default before projecting: in idle time on Rust, off on WAT.
 ui:compile rdfs:label "Compiled queries" ; rdfs:range ui:CompileMode .
 ui:CompileOff a ui:CompileMode ; rdfs:label "Off" ; sem:order 1 ; ui:key "off" .
 ui:CompileOnRun a ui:CompileMode ; rdfs:label "On second run" ; sem:order 2 ; ui:key "run" .

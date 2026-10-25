@@ -39,8 +39,13 @@ const kind = (params.get('store') ?? (hasStore('wat') ? 'wat' : 'hybrid')) as St
 // HTML, faster in the browser (Rules menu, ?prefer=function); a store without SPARQL (N3) needs them.
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
 // Compiled queries (Semblance's engines only; rdf-engine/results/compiled.md): off, on a query's
-// second run, or in idle time (?compile=run|idle; Tools › Engine).
-const compile = (['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? params.get('compile') : 'off') as 'off' | 'run' | 'idle'
+// second run, or in idle time (?compile=off|run|idle; Tools › Engine). By default in idle time on
+// the Rust engine, where it pays on whole pages, and off on WAT, where queries are too small a part
+// of a page for it to.
+type CompileMode = 'off' | 'run' | 'idle'
+const defaultCompile = (store: string): CompileMode => (store === 'rust' ? 'idle' : 'off')
+const compileParam = ['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? (params.get('compile') as CompileMode) : undefined
+const compile = compileParam ?? defaultCompile(kind)
 const COMPILES = { off: 'CompileOff', run: 'CompileOnRun', idle: 'CompileIdle' } as const
 const STORES: Record<StoreKind, string> = { wat: 'SemblanceWasm', rust: 'SemblanceRust', hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
@@ -207,10 +212,12 @@ function syncSettings() {
 
   const nextStore = key(UI + 'store') ?? kind
   const nextRules = key(UI + 'rules') ?? prefer
-  const nextCompile = key(UI + 'compile') ?? compile
-  if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3') || nextCompile !== compile) {
+  const chosenCompile = (key(UI + 'compile') ?? compile) as CompileMode
+  // Another store keeps a mode chosen here (in the menu or the address), else takes its own default.
+  const nextCompile = chosenCompile !== compile || compileParam ? chosenCompile : defaultCompile(nextStore)
+  if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3') || chosenCompile !== compile) {
     const search = new URLSearchParams({ store: nextStore, prefer: nextRules })
-    if (nextCompile !== 'off') search.set('compile', nextCompile)
+    if (nextCompile !== defaultCompile(nextStore)) search.set('compile', nextCompile)
     location.search = search.toString()
   }
   checkPerf()
