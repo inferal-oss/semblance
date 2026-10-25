@@ -769,10 +769,10 @@ WHERE {
       FILTER(?rank2e < ?ranke || (?rank2e = ?ranke && ?tag2e = ?code2e && ?tage != ?codee))
     }
   }
-  OPTIONAL { $this c:emptyText ?plaine FILTER(isLiteral(?plaine) && LANG(?plaine) = "") }
-  OPTIONAL { $this c:emptyText ?ene FILTER(LCASE(LANG(?ene)) = "en") }
-  OPTIONAL { $this c:emptyText ?enxe FILTER(STRSTARTS(LCASE(LANG(?enxe)), "en-")) }
-  OPTIONAL { $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
+  OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?plaine FILTER(isLiteral(?plaine) && LANG(?plaine) = "") }
+  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine)) $this c:emptyText ?ene FILTER(LCASE(LANG(?ene)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene)) $this c:emptyText ?enxe FILTER(STRSTARTS(LCASE(LANG(?enxe)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene) && !BOUND(?enxe)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
   BIND(STR(COALESCE(?picke, ?plaine, ?ene, ?enxe, ?anye)) AS ?ownEmpty)
   BIND(IF(BOUND(?view), ?none, COALESCE(?ownEmpty, "No members yet.")) AS ?empty)
   BIND(IF(BOUND(?view), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?emptyText)
