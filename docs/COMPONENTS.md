@@ -251,7 +251,10 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   "turtle"`) beside what it renders, each in a sandbox of its own: attach `Sandboxes`
   (`src/sandbox.ts`) with a store loader and call `sync()` after each flush. It mounts a sandbox in an
   example's slot when it is shown, rebuilds it when typing pauses, and writes back
-  `c:sandboxState`, `c:problem` and `c:renderTime`; the site's Docs are built with it.
+  `c:sandboxState`, `c:problem` and `c:renderTime`; the site's Docs are built with it. A sandbox it
+  drops (rebuilt, unmounted, a build that failed) releases its runtime and store
+  (`Runtime.dispose()`, `GraphStore.dispose()`); `dispose()` stops them all, cancelling the
+  rebuilds waiting for typing to pause, so nothing runs against a released store.
 
 ### When the page is busy
 
