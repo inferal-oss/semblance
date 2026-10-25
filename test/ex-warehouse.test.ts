@@ -130,12 +130,7 @@ describe('the warehouse example', () => {
     expect(h.alert().textContent).toContain('Every item is at or above its minimum.')
     expect(h.alert().getAttribute('data-sem-tone')).toBe('success')
     // An hour later the sales have left the window, on the clock alone; the stock has not moved.
-    // (WAT compares xsd:dateTime coarsely, #21, so the from-scratch check at the window's very
-    // edge waits until the clock is past it; the next test checks the edge itself on Oxigraph.)
-    h.runtime.views.strict = false
     h.advance(61 * 60_000)
-    h.runtime.views.strict = true
-    h.runtime.advance() // a tick with nothing in it: strict mode compares every view again
     expect(h.bars()).toEqual([])
     expect(h.stat('Sold in the last hour')).toBe('0')
     expect(h.stock()['Chain lube']).toBe(21)
@@ -145,8 +140,8 @@ describe('the warehouse example', () => {
     expect(h.stat('Movements recorded')).toBe('14')
   }, 120_000)
 
-  it('lets each sale leave the last hour when it is an hour old, checked at the edge (Oxigraph, until #21)', () => {
-    const h = warehouse({ kind: 'oxigraph' })
+  it.each(['wat', 'rust', 'oxigraph'] as const)('lets each sale leave the last hour when it is an hour old, checked at the edge (%s)', (kind) => {
+    const h = warehouse({ kind })
     h.choose('Water bottle')
     h.click(h.button('Sell'))
     h.advance(30 * 60_000)
