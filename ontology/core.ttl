@@ -155,7 +155,10 @@ and validation) need it: a minted instance appears after their stratum has run."
 sem:orderKey a owl:DatatypeProperty ;
     rdfs:comment """On an RDF/HTML node: orders it among siblings that carry no ord: precedence (numerically
 when both keys are numbers, else as strings; the node IRI breaks ties). Member-wise rules
-place their parts this way, so inserting one is O(log n) instead of rewriting a chain."""@en .
+place their parts this way, so inserting one is O(log n) instead of rewriting a chain. A tuple
+key (U+0001, then components separated by U+0001: "n" and a number or "s" and a string, "-"
+before one for descending) compares component by component, e.g. a grid row by its sort value,
+missing values last, then capture order: one row's key changing moves only that row."""@en .
 
 sem:slot a owl:DatatypeProperty ;
     rdfs:comment "Marks an RDF/HTML element as a host-owned slot: renderers create it but never manage its children, so a host application can mount its own content there."@en .
