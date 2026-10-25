@@ -299,10 +299,10 @@ WHERE {
     BIND(IF(BOUND(?twisty), IRI(CONCAT(STR($this), "/~twisty-icon")), ?none) AS ?icon)
     BIND(IF(BOUND(?twisty), IRI(CONCAT(STR($this), "/~twisty-icon-aria-hidden")), ?none) AS ?iconHidden)
     BIND(IF(BOUND(?twisty), IRI(CONCAT(STR($this), "/~twisty-text")), ?none) AS ?iconText)
-    OPTIONAL { c:CollapsePhrase l10n:label ?collapse0 }
+    OPTIONAL { ?collapse0At l10n:of c:CollapsePhrase ; l10n:name ?collapse0 }
   OPTIONAL { c:CollapsePhrase rdfs:label ?collapse0 FILTER(lang(?collapse0) = "") }
     OPTIONAL { c:CollapsePhrase rdfs:label ?collapse1 FILTER(langMatches(lang(?collapse1), "en")) }
-    OPTIONAL { c:ExpandPhrase l10n:label ?expand0 }
+    OPTIONAL { ?expand0At l10n:of c:ExpandPhrase ; l10n:name ?expand0 }
   OPTIONAL { c:ExpandPhrase rdfs:label ?expand0 FILTER(lang(?expand0) = "") }
     OPTIONAL { c:ExpandPhrase rdfs:label ?expand1 FILTER(langMatches(lang(?expand1), "en")) }
     BIND(CONCAT(IF(?open, STR(COALESCE(?collapse0, ?collapse1, "Collapse")), STR(COALESCE(?expand0, ?expand1, "Expand"))), " ", ?bname) AS ?twistyWords)
@@ -480,7 +480,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
     OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") }
     OPTIONAL { $this c:emptyText ?e1 FILTER(langMatches(lang(?e1), "en")) }
-    OPTIONAL { c:NoTermPhrase l10n:label ?e2 }
+    OPTIONAL { ?e2At l10n:of c:NoTermPhrase ; l10n:name ?e2 }
   OPTIONAL { c:NoTermPhrase rdfs:label ?e2 FILTER(lang(?e2) = "") }
     OPTIONAL { c:NoTermPhrase rdfs:label ?e3 FILTER(langMatches(lang(?e3), "en")) }
     BIND(STR(COALESCE(?e0, ?e1, ?e2, ?e3, "Pick a term.")) AS ?emptyWords)
@@ -573,7 +573,7 @@ WHERE {
         BIND("gallery" AS ?fk)
         OPTIONAL { c:GalleryFacet sem:order ?galleryOrder }
         BIND(CONCAT("b", STR(COALESCE(?galleryOrder, ""))) AS ?factKey)
-        OPTIONAL { c:GalleryFacet l10n:label ?gl0 }
+        OPTIONAL { ?gl0At l10n:of c:GalleryFacet ; l10n:name ?gl0 }
   OPTIONAL { c:GalleryFacet rdfs:label ?gl0 FILTER(lang(?gl0) = "") }
         OPTIONAL { c:GalleryFacet rdfs:label ?gl1 FILTER(langMatches(lang(?gl1), "en")) }
         BIND(STR(COALESCE(?gl0, ?gl1, "Shown in the gallery")) AS ?factName)
@@ -583,7 +583,7 @@ WHERE {
         BIND("shape" AS ?fk)
         OPTIONAL { c:ShapeFacet sem:order ?shapeOrder }
         BIND(CONCAT("b", STR(COALESCE(?shapeOrder, ""))) AS ?factKey)
-        OPTIONAL { c:ShapeFacet l10n:label ?sl0 }
+        OPTIONAL { ?sl0At l10n:of c:ShapeFacet ; l10n:name ?sl0 }
   OPTIONAL { c:ShapeFacet rdfs:label ?sl0 FILTER(lang(?sl0) = "") }
         OPTIONAL { c:ShapeFacet rdfs:label ?sl1 FILTER(langMatches(lang(?sl1), "en")) }
         BIND(STR(COALESCE(?sl0, ?sl1, "Shape")) AS ?factName)
@@ -704,10 +704,10 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
     OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") }
     OPTIONAL { $this c:emptyText ?e1 FILTER(langMatches(lang(?e1), "en")) }
-    OPTIONAL { c:NoTermPhrase l10n:label ?e2 }
+    OPTIONAL { ?e2At l10n:of c:NoTermPhrase ; l10n:name ?e2 }
   OPTIONAL { c:NoTermPhrase rdfs:label ?e2 FILTER(lang(?e2) = "") }
     OPTIONAL { c:NoTermPhrase rdfs:label ?e3 FILTER(langMatches(lang(?e3), "en")) }
-    OPTIONAL { c:NoAlignmentPhrase l10n:label ?e4 }
+    OPTIONAL { ?e4At l10n:of c:NoAlignmentPhrase ; l10n:name ?e4 }
   OPTIONAL { c:NoAlignmentPhrase rdfs:label ?e4 FILTER(lang(?e4) = "") }
     OPTIONAL { c:NoAlignmentPhrase rdfs:label ?e5 FILTER(langMatches(lang(?e5), "en")) }
     BIND(STR(IF(BOUND(?t), COALESCE(?e4, ?e5, "No links to other vocabularies."), COALESCE(?e0, ?e1, ?e2, ?e3, "Pick a term."))) AS ?emptyWords)
@@ -726,13 +726,13 @@ WHERE {
     BIND(IRI(CONCAT(STR(?thRelation), "-text")) AS ?thRelationText)
     BIND(IRI(CONCAT(STR(?thTerm), "-text")) AS ?thTermText)
     BIND(IRI(CONCAT(STR(?thStrength), "-text")) AS ?thStrengthText)
-    OPTIONAL { c:AlignmentRelationPhrase l10n:label ?r0 }
+    OPTIONAL { ?r0At l10n:of c:AlignmentRelationPhrase ; l10n:name ?r0 }
   OPTIONAL { c:AlignmentRelationPhrase rdfs:label ?r0 FILTER(lang(?r0) = "") }
     OPTIONAL { c:AlignmentRelationPhrase rdfs:label ?r1 FILTER(langMatches(lang(?r1), "en")) }
-    OPTIONAL { c:AlignmentTermPhrase l10n:label ?m0 }
+    OPTIONAL { ?m0At l10n:of c:AlignmentTermPhrase ; l10n:name ?m0 }
   OPTIONAL { c:AlignmentTermPhrase rdfs:label ?m0 FILTER(lang(?m0) = "") }
     OPTIONAL { c:AlignmentTermPhrase rdfs:label ?m1 FILTER(langMatches(lang(?m1), "en")) }
-    OPTIONAL { c:AlignmentStrengthPhrase l10n:label ?g0 }
+    OPTIONAL { ?g0At l10n:of c:AlignmentStrengthPhrase ; l10n:name ?g0 }
   OPTIONAL { c:AlignmentStrengthPhrase rdfs:label ?g0 FILTER(lang(?g0) = "") }
     OPTIONAL { c:AlignmentStrengthPhrase rdfs:label ?g1 FILTER(langMatches(lang(?g1), "en")) }
     BIND(STR(COALESCE(?r0, ?r1, "Relation")) AS ?relationWord)

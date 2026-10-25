@@ -1,5 +1,7 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -154,40 +156,75 @@ l10n:CalendarTexts a sem:Rendering ;
     sem:watches <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> , l10n:locale ;
     sem:functionOnly "The locale's calendar comes from the host's Intl (names, the order of a date's fields, the hour cycle, the first day of the week), and the locale is the viewer's language, a projection setting; no query can see either." .
 l10n:CalendarTexts-fn a sem:Rule ; sem:implements l10n:CalendarTexts ; sem:function "l10n:calendar" .
-# --- phrases ---------------------------------------------------------------------------
-# What components say of their own accord (c:Phrase) in the viewer's language, for SPARQL
-# rules: each phrase's rdfs:label picked as util.text picks it, as its l10n:label in the
-# engine's derived graph. Phrases are never shown themselves, so this is evaluated whether or
-# not its focus is (sem:always); a rule reading a phrase prefers its l10n:label.
-l10n:Phrases a sem:BuildingBlock ;
-    sem:targets c:Phrase ;
-    sem:stratum -20 ;
-    sem:always true ;
-    sem:watches rdfs:label .
-l10n:Phrases-fn a sem:Rule ; sem:implements l10n:Phrases ; sem:function "l10n:phrase" .
-l10n:Phrases-sparql a sem:Rule ;
-    sem:implements l10n:Phrases ;
-    sem:bulk false ;
+# --- texts in the viewer's language, for SPARQL rules -------------------------------------
+# A text property whose values are translations has an l10n: twin (l10n:pickedAs). l10n:Terms
+# derives, in each engine's derived graph, every node's twin value when it has two values or
+# more, on a node of its own about it (l10n:of, so the node's own triples stay as written): the one util.text picks (the viewer's languages by rank, then the untagged value, then
+# English, then any). A SPARQL rule reads a text as its twin, else the one value it has:
+#   OPTIONAL { ?pickedAt l10n:of ?n ; l10n:name ?picked } OPTIONAL { FILTER(!BOUND(?picked)) ?n rdfs:label ?only }
+# Components' own labels (c:label) are l10n:Labels', per component, since they may change;
+# l10n:Terms covers what does not change while the page runs (phrases, the ontology's terms,
+# options, shapes' messages), and is re-run when the viewer's languages change. Its focus is
+# the viewer (the engine's agent), never shown, so it is evaluated regardless (sem:always).
+
+l10n:of a owl:ObjectProperty ; rdfs:comment "What a derived text node (l10n:Terms) gives the texts of."@en .
+l10n:pickedAs a owl:ObjectProperty ; rdfs:range owl:DatatypeProperty ;
+    rdfs:comment "A text property's twin: its value in the viewer's language (derived by l10n:Terms)."@en .
+rdfs:label l10n:pickedAs l10n:name .
+c:label l10n:pickedAs l10n:label .
+sh:message l10n:pickedAs l10n:message .
+c:title l10n:pickedAs l10n:title .
+c:externalHint l10n:pickedAs l10n:hint .
+ann:announces l10n:pickedAs l10n:announcement .
+c:emptyText l10n:pickedAs l10n:emptyText .
+c:countLabel l10n:pickedAs l10n:countLabel .
+c:pausedLabel l10n:pickedAs l10n:pausedLabel .
+l10n:name a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the rdfs:label in the viewer's language."@en .
+l10n:message a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the sh:message in the viewer's language."@en .
+l10n:title a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:title in the viewer's language."@en .
+l10n:hint a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:externalHint in the viewer's language."@en .
+l10n:announcement a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the ann:announces in the viewer's language."@en .
+l10n:emptyText a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:emptyText in the viewer's language."@en .
+l10n:countLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:countLabel in the viewer's language."@en .
+l10n:pausedLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:pausedLabel in the viewer's language."@en .
+
+l10n:Terms a sem:BuildingBlock ;
+    sem:targets l10n:Viewer ;
+    sem:stratum -25 ;
+    sem:always true .
+l10n:Terms-fn a sem:Rule ; sem:implements l10n:Terms ; sem:function "l10n:terms" .
+l10n:Terms-sparql a sem:Rule ;
+    sem:implements l10n:Terms ;
     sem:construct """
-CONSTRUCT { $this l10n:label ?label }
+CONSTRUCT { ?at l10n:of ?n ; ?twin ?picked }
 WHERE {
-  $this a c:Phrase .
+  $this a l10n:Viewer .
+  { SELECT ?p ?twin ?n WHERE {
+    ?p l10n:pickedAs ?twin . ?n ?p ?value . FILTER(isLiteral(?value))
+  } GROUP BY ?p ?twin ?n HAVING(COUNT(DISTINCT ?value) > 1) }
+  # Components' own c:label is l10n:Labels'. (MINUS against the component classes: a path per
+  # node, in a FILTER, made this a hundred times slower on Oxigraph.)
+  MINUS { ?n a ?nt . { SELECT DISTINCT ?nt WHERE { ?nt rdfs:subClassOf* sem:Component } } BIND(c:label AS ?p) }
+  LATERAL { OPTIONAL { SELECT ?n ?p ?twin ?picked WHERE {
+  ?p l10n:pickedAs ?twin . 
   OPTIONAL {
-    $this rdfs:label ?pick . FILTER(isLiteral(?pick))
+    ?n ?p ?pick . FILTER(isLiteral(?pick))
     ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
     BIND(LCASE(LANG(?pick)) AS ?tag)
     FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
     FILTER NOT EXISTS {
       ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
-      $this rdfs:label ?other . FILTER(isLiteral(?other))
+      ?n ?p ?other . FILTER(isLiteral(?other))
       BIND(LCASE(LANG(?other)) AS ?tag2)
       FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
       FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
     }
   }
-  OPTIONAL { FILTER(!BOUND(?pick)) $this rdfs:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this rdfs:label ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this rdfs:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this rdfs:label ?any FILTER(isLiteral(?any)) }
-  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?label)
+  OPTIONAL { FILTER(!BOUND(?pick)) ?n ?p ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) ?n ?p ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) ?n ?p ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) ?n ?p ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?picked)
+  } } }
+  BIND(IRI(CONCAT(STR($this), "/~t-", MD5(STR(?n)))) AS ?at)
 }""" .

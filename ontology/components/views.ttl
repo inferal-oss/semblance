@@ -764,24 +764,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~m-", SUBSTR(MD5(STR(?member)), 1, 8))) AS ?view)
   }
   BIND(IF(BOUND(?view), ?none, "sem-empty") AS ?emptyClass)
-  OPTIONAL {
-    $this c:emptyText ?picke . FILTER(isLiteral(?picke))
-    ?viewere l10n:prefers ?prefe . ?prefe l10n:code ?codee ; sem:order ?ranke .
-    BIND(LCASE(LANG(?picke)) AS ?tage)
-    FILTER(?tage = ?codee || STRSTARTS(?tage, CONCAT(?codee, "-")))
-    FILTER NOT EXISTS {
-      ?viewere l10n:prefers ?bettere . ?bettere l10n:code ?code2e ; sem:order ?rank2e .
-      $this c:emptyText ?othere . FILTER(isLiteral(?othere))
-      BIND(LCASE(LANG(?othere)) AS ?tag2e)
-      FILTER(?tag2e = ?code2e || STRSTARTS(?tag2e, CONCAT(?code2e, "-")))
-      FILTER(?rank2e < ?ranke || (?rank2e = ?ranke && ?tag2e = ?code2e && ?tage != ?codee))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?plaine FILTER(isLiteral(?plaine) && LANG(?plaine) = "") }
-  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine)) $this c:emptyText ?ene FILTER(LCASE(LANG(?ene)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene)) $this c:emptyText ?enxe FILTER(STRSTARTS(LCASE(LANG(?enxe)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picke) && !BOUND(?plaine) && !BOUND(?ene) && !BOUND(?enxe)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
-  BIND(STR(COALESCE(?picke, ?plaine, ?ene, ?enxe, ?anye)) AS ?ownEmpty)
+  OPTIONAL { ?pickeAt l10n:of $this ; l10n:emptyText ?picke }
+  OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
+  BIND(STR(COALESCE(?picke, ?anye)) AS ?ownEmpty)
   BIND(IF(BOUND(?view), ?none, COALESCE(?ownEmpty, "No members yet.")) AS ?empty)
   BIND(IF(BOUND(?view), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?emptyText)
 }""" .

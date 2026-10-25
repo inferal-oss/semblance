@@ -87,9 +87,10 @@ export interface Selection {
 
 /**
  * What makes a SPARQL rule language-dependent: it reads the viewer's preferences, or a text
- * picked by them (l10n:label, derived in a lower stratum), so it re-runs when they change.
+ * picked by them (l10n:label, l10n:name and the other twins derived in lower strata), so it
+ * re-runs when they change.
  */
-const READS_LANGUAGE = /l10n:(prefers|label)\b|<https:\/\/semblance\.dev\/ns\/l10n#(prefers|label)>/
+const READS_LANGUAGE = /\bl10n:[a-z]\w*|<https:\/\/semblance\.dev\/ns\/l10n#[a-z]\w*>/
 
 /** Read every sem:Rule from the ontology graph(s) loaded in the store. */
 /** localeCompare's order, without setting up a comparison per call. */

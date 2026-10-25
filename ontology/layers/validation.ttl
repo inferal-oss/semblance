@@ -91,24 +91,9 @@ WHERE {
     OPTIONAL { ?shape sh:maxInclusive ?maxp }
     LATERAL { OPTIONAL { SELECT ?shape ?messagep WHERE {
   
-  OPTIONAL {
-    ?shape sh:message ?pickmsgp . FILTER(isLiteral(?pickmsgp))
-    ?viewermsgp l10n:prefers ?prefmsgp . ?prefmsgp l10n:code ?codemsgp ; sem:order ?rankmsgp .
-    BIND(LCASE(LANG(?pickmsgp)) AS ?tagmsgp)
-    FILTER(?tagmsgp = ?codemsgp || STRSTARTS(?tagmsgp, CONCAT(?codemsgp, "-")))
-    FILTER NOT EXISTS {
-      ?viewermsgp l10n:prefers ?bettermsgp . ?bettermsgp l10n:code ?code2msgp ; sem:order ?rank2msgp .
-      ?shape sh:message ?othermsgp . FILTER(isLiteral(?othermsgp))
-      BIND(LCASE(LANG(?othermsgp)) AS ?tag2msgp)
-      FILTER(?tag2msgp = ?code2msgp || STRSTARTS(?tag2msgp, CONCAT(?code2msgp, "-")))
-      FILTER(?rank2msgp < ?rankmsgp || (?rank2msgp = ?rankmsgp && ?tag2msgp = ?code2msgp && ?tagmsgp != ?codemsgp))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickmsgp)) ?shape sh:message ?plainmsgp FILTER(isLiteral(?plainmsgp) && LANG(?plainmsgp) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickmsgp) && !BOUND(?plainmsgp)) ?shape sh:message ?enmsgp FILTER(LCASE(LANG(?enmsgp)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickmsgp) && !BOUND(?plainmsgp) && !BOUND(?enmsgp)) ?shape sh:message ?enxmsgp FILTER(STRSTARTS(LCASE(LANG(?enxmsgp)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickmsgp) && !BOUND(?plainmsgp) && !BOUND(?enmsgp) && !BOUND(?enxmsgp)) ?shape sh:message ?anymsgp FILTER(isLiteral(?anymsgp)) }
-  BIND(STR(COALESCE(?pickmsgp, ?plainmsgp, ?enmsgp, ?enxmsgp, ?anymsgp)) AS ?messagep)
+  OPTIONAL { ?pickmsgpAt l10n:of ?shape ; l10n:message ?pickmsgp }
+  OPTIONAL { FILTER(!BOUND(?pickmsgp)) ?shape sh:message ?anymsgp FILTER(isLiteral(?anymsgp)) }
+  BIND(STR(COALESCE(?pickmsgp, ?anymsgp)) AS ?messagep)
   } } }
     BIND(xsd:double(REPLACE(?value, "^\\\\s+|\\\\s+$", "")) AS ?xp)
     BIND(?datatypep = xsd:integer || ?datatypep = xsd:decimal AS ?numericp)
@@ -137,24 +122,9 @@ WHERE {
     $this val:validates ?shape . FILTER EXISTS { $this c:controls ?ct ; c:property ?cp } { SELECT (COUNT(?held) AS ?count) WHERE { OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target)) ?target ?property ?held } } } ?shape sh:maxCount ?over . FILTER(?count > xsd:double(?over))
     LATERAL { OPTIONAL { SELECT ?shape ?overMessage WHERE {
   
-  OPTIONAL {
-    ?shape sh:message ?pickom . FILTER(isLiteral(?pickom))
-    ?viewerom l10n:prefers ?prefom . ?prefom l10n:code ?codeom ; sem:order ?rankom .
-    BIND(LCASE(LANG(?pickom)) AS ?tagom)
-    FILTER(?tagom = ?codeom || STRSTARTS(?tagom, CONCAT(?codeom, "-")))
-    FILTER NOT EXISTS {
-      ?viewerom l10n:prefers ?betterom . ?betterom l10n:code ?code2om ; sem:order ?rank2om .
-      ?shape sh:message ?otherom . FILTER(isLiteral(?otherom))
-      BIND(LCASE(LANG(?otherom)) AS ?tag2om)
-      FILTER(?tag2om = ?code2om || STRSTARTS(?tag2om, CONCAT(?code2om, "-")))
-      FILTER(?rank2om < ?rankom || (?rank2om = ?rankom && ?tag2om = ?code2om && ?tagom != ?codeom))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickom)) ?shape sh:message ?plainom FILTER(isLiteral(?plainom) && LANG(?plainom) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickom) && !BOUND(?plainom)) ?shape sh:message ?enom FILTER(LCASE(LANG(?enom)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickom) && !BOUND(?plainom) && !BOUND(?enom)) ?shape sh:message ?enxom FILTER(STRSTARTS(LCASE(LANG(?enxom)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickom) && !BOUND(?plainom) && !BOUND(?enom) && !BOUND(?enxom)) ?shape sh:message ?anyom FILTER(isLiteral(?anyom)) }
-  BIND(STR(COALESCE(?pickom, ?plainom, ?enom, ?enxom, ?anyom)) AS ?overMessage)
+  OPTIONAL { ?pickomAt l10n:of ?shape ; l10n:message ?pickom }
+  OPTIONAL { FILTER(!BOUND(?pickom)) ?shape sh:message ?anyom FILTER(isLiteral(?anyom)) }
+  BIND(STR(COALESCE(?pickom, ?anyom)) AS ?overMessage)
   } } }
     BIND(COALESCE(?overMessage, CONCAT("At most ", STR(?over), ".")) AS ?tooMany)
     FILTER(BOUND(?tooMany))
@@ -163,24 +133,9 @@ WHERE {
     $this val:validates ?shape . FILTER EXISTS { $this c:controls ?ct ; c:property ?cp } { SELECT (COUNT(?held) AS ?count) WHERE { OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target)) ?target ?property ?held } } } ?shape sh:maxCount ?cap . FILTER(?count >= xsd:double(?cap))
     LATERAL { OPTIONAL { SELECT ?shape ?capMessage WHERE {
   
-  OPTIONAL {
-    ?shape sh:message ?pickcm . FILTER(isLiteral(?pickcm))
-    ?viewercm l10n:prefers ?prefcm . ?prefcm l10n:code ?codecm ; sem:order ?rankcm .
-    BIND(LCASE(LANG(?pickcm)) AS ?tagcm)
-    FILTER(?tagcm = ?codecm || STRSTARTS(?tagcm, CONCAT(?codecm, "-")))
-    FILTER NOT EXISTS {
-      ?viewercm l10n:prefers ?bettercm . ?bettercm l10n:code ?code2cm ; sem:order ?rank2cm .
-      ?shape sh:message ?othercm . FILTER(isLiteral(?othercm))
-      BIND(LCASE(LANG(?othercm)) AS ?tag2cm)
-      FILTER(?tag2cm = ?code2cm || STRSTARTS(?tag2cm, CONCAT(?code2cm, "-")))
-      FILTER(?rank2cm < ?rankcm || (?rank2cm = ?rankcm && ?tag2cm = ?code2cm && ?tagcm != ?codecm))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickcm)) ?shape sh:message ?plaincm FILTER(isLiteral(?plaincm) && LANG(?plaincm) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickcm) && !BOUND(?plaincm)) ?shape sh:message ?encm FILTER(LCASE(LANG(?encm)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickcm) && !BOUND(?plaincm) && !BOUND(?encm)) ?shape sh:message ?enxcm FILTER(STRSTARTS(LCASE(LANG(?enxcm)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickcm) && !BOUND(?plaincm) && !BOUND(?encm) && !BOUND(?enxcm)) ?shape sh:message ?anycm FILTER(isLiteral(?anycm)) }
-  BIND(STR(COALESCE(?pickcm, ?plaincm, ?encm, ?enxcm, ?anycm)) AS ?capMessage)
+  OPTIONAL { ?pickcmAt l10n:of ?shape ; l10n:message ?pickcm }
+  OPTIONAL { FILTER(!BOUND(?pickcm)) ?shape sh:message ?anycm FILTER(isLiteral(?anycm)) }
+  BIND(STR(COALESCE(?pickcm, ?anycm)) AS ?capMessage)
   } } }
     BIND(COALESCE(?capMessage, CONCAT("At most ", STR(?cap), ".")) AS ?atCapacity)
     FILTER(BOUND(?atCapacity))
@@ -198,24 +153,9 @@ WHERE {
     OPTIONAL { ?shape sh:maxInclusive ?maxe }
     LATERAL { OPTIONAL { SELECT ?shape ?messagee WHERE {
   
-  OPTIONAL {
-    ?shape sh:message ?pickmsge . FILTER(isLiteral(?pickmsge))
-    ?viewermsge l10n:prefers ?prefmsge . ?prefmsge l10n:code ?codemsge ; sem:order ?rankmsge .
-    BIND(LCASE(LANG(?pickmsge)) AS ?tagmsge)
-    FILTER(?tagmsge = ?codemsge || STRSTARTS(?tagmsge, CONCAT(?codemsge, "-")))
-    FILTER NOT EXISTS {
-      ?viewermsge l10n:prefers ?bettermsge . ?bettermsge l10n:code ?code2msge ; sem:order ?rank2msge .
-      ?shape sh:message ?othermsge . FILTER(isLiteral(?othermsge))
-      BIND(LCASE(LANG(?othermsge)) AS ?tag2msge)
-      FILTER(?tag2msge = ?code2msge || STRSTARTS(?tag2msge, CONCAT(?code2msge, "-")))
-      FILTER(?rank2msge < ?rankmsge || (?rank2msge = ?rankmsge && ?tag2msge = ?code2msge && ?tagmsge != ?codemsge))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickmsge)) ?shape sh:message ?plainmsge FILTER(isLiteral(?plainmsge) && LANG(?plainmsge) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickmsge) && !BOUND(?plainmsge)) ?shape sh:message ?enmsge FILTER(LCASE(LANG(?enmsge)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickmsge) && !BOUND(?plainmsge) && !BOUND(?enmsge)) ?shape sh:message ?enxmsge FILTER(STRSTARTS(LCASE(LANG(?enxmsge)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickmsge) && !BOUND(?plainmsge) && !BOUND(?enmsge) && !BOUND(?enxmsge)) ?shape sh:message ?anymsge FILTER(isLiteral(?anymsge)) }
-  BIND(STR(COALESCE(?pickmsge, ?plainmsge, ?enmsge, ?enxmsge, ?anymsge)) AS ?messagee)
+  OPTIONAL { ?pickmsgeAt l10n:of ?shape ; l10n:message ?pickmsge }
+  OPTIONAL { FILTER(!BOUND(?pickmsge)) ?shape sh:message ?anymsge FILTER(isLiteral(?anymsge)) }
+  BIND(STR(COALESCE(?pickmsge, ?anymsge)) AS ?messagee)
   } } }
     BIND(xsd:double(REPLACE(?typed, "^\\\\s+|\\\\s+$", "")) AS ?xe)
     BIND(?datatypee = xsd:integer || ?datatypee = xsd:decimal AS ?numerice)

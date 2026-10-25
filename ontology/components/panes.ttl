@@ -431,24 +431,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* c:DockPanel .
-  OPTIONAL {
-    $this c:label ?picko . FILTER(isLiteral(?picko))
-    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
-    BIND(LCASE(LANG(?picko)) AS ?tago)
-    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
-    FILTER NOT EXISTS {
-      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
-      $this c:label ?othero . FILTER(isLiteral(?othero))
-      BIND(LCASE(LANG(?othero)) AS ?tag2o)
-      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
-      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picko)) $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino)) $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno)) $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno) && !BOUND(?enxo)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
-  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?label)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
   BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
   BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)
   OPTIONAL { $this c:toolbar ?toolbar0 FILTER(isIRI(?toolbar0)) }

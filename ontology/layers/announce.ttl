@@ -110,24 +110,9 @@ WHERE {
   } } }
   LATERAL { OPTIONAL { SELECT ?reaction ?announced WHERE {
   
-  OPTIONAL {
-    ?reaction ann:announces ?picka . FILTER(isLiteral(?picka))
-    ?viewera l10n:prefers ?prefa . ?prefa l10n:code ?codea ; sem:order ?ranka .
-    BIND(LCASE(LANG(?picka)) AS ?taga)
-    FILTER(?taga = ?codea || STRSTARTS(?taga, CONCAT(?codea, "-")))
-    FILTER NOT EXISTS {
-      ?viewera l10n:prefers ?bettera . ?bettera l10n:code ?code2a ; sem:order ?rank2a .
-      ?reaction ann:announces ?othera . FILTER(isLiteral(?othera))
-      BIND(LCASE(LANG(?othera)) AS ?tag2a)
-      FILTER(?tag2a = ?code2a || STRSTARTS(?tag2a, CONCAT(?code2a, "-")))
-      FILTER(?rank2a < ?ranka || (?rank2a = ?ranka && ?tag2a = ?code2a && ?taga != ?codea))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picka)) ?reaction ann:announces ?plaina FILTER(isLiteral(?plaina) && LANG(?plaina) = "") }
-  OPTIONAL { FILTER(!BOUND(?picka) && !BOUND(?plaina)) ?reaction ann:announces ?ena FILTER(LCASE(LANG(?ena)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picka) && !BOUND(?plaina) && !BOUND(?ena)) ?reaction ann:announces ?enxa FILTER(STRSTARTS(LCASE(LANG(?enxa)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picka) && !BOUND(?plaina) && !BOUND(?ena) && !BOUND(?enxa)) ?reaction ann:announces ?anya FILTER(isLiteral(?anya)) }
-  BIND(STR(COALESCE(?picka, ?plaina, ?ena, ?enxa, ?anya)) AS ?announced)
+  OPTIONAL { ?pickaAt l10n:of ?reaction ; l10n:announcement ?picka }
+  OPTIONAL { FILTER(!BOUND(?picka)) ?reaction ann:announces ?anya FILTER(isLiteral(?anya)) }
+  BIND(STR(COALESCE(?picka, ?anya)) AS ?announced)
   } } }
   BIND(COALESCE(?fromEvent, ?announced) AS ?said)
   OPTIONAL { ?reaction ann:tone ?tone }

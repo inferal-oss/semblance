@@ -274,7 +274,7 @@ WHERE {
     BIND(IF(?removable, IRI(CONCAT(STR($this), "/~remove-text")), ?none) AS ?removeText)
     BIND(IF(?removable, IRI(CONCAT(STR($this), "/~remove-aria-label")), ?none) AS ?removeLabel)
     BIND(IF(?removable, $this, ?none) AS ?removed)
-    OPTIONAL { c:RemoveCommand l10n:label ?removeWord0 }
+    OPTIONAL { ?removeWord0At l10n:of c:RemoveCommand ; l10n:name ?removeWord0 }
   OPTIONAL { c:RemoveCommand rdfs:label ?removeWord0 FILTER(lang(?removeWord0) = "") }
     OPTIONAL { c:RemoveCommand rdfs:label ?removeWord1 FILTER(langMatches(lang(?removeWord1), "en")) }
     BIND(STR(COALESCE(?removeWord0, ?removeWord1, "Remove")) AS ?removeWord)
@@ -352,7 +352,7 @@ WHERE {
   $this a c:Spinner .
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { c:LoadingStatus l10n:label ?loading0 }
+  OPTIONAL { ?loading0At l10n:of c:LoadingStatus ; l10n:name ?loading0 }
   OPTIONAL { c:LoadingStatus rdfs:label ?loading0 FILTER(lang(?loading0) = "") }
   OPTIONAL { c:LoadingStatus rdfs:label ?loading1 FILTER(langMatches(lang(?loading1), "en")) }
   BIND(STR(COALESCE(?loading0, ?loading1, "Loading")) AS ?loading)
@@ -376,7 +376,7 @@ WHERE {
   $this a c:Spinner .
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { c:LoadingStatus l10n:label ?loading0 }
+  OPTIONAL { ?loading0At l10n:of c:LoadingStatus ; l10n:name ?loading0 }
   OPTIONAL { c:LoadingStatus rdfs:label ?loading0 FILTER(lang(?loading0) = "") }
   OPTIONAL { c:LoadingStatus rdfs:label ?loading1 FILTER(langMatches(lang(?loading1), "en")) }
   BIND(STR(COALESCE(?loading0, ?loading1, "Loading")) AS ?loading)
@@ -627,7 +627,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND($this AS ?closed)
-    OPTIONAL { c:DismissCommand l10n:label ?dismiss0 }
+    OPTIONAL { ?dismiss0At l10n:of c:DismissCommand ; l10n:name ?dismiss0 }
   OPTIONAL { c:DismissCommand rdfs:label ?dismiss0 FILTER(lang(?dismiss0) = "") }
     OPTIONAL { c:DismissCommand rdfs:label ?dismiss1 FILTER(langMatches(lang(?dismiss1), "en")) }
     BIND(STR(COALESCE(?dismiss0, ?dismiss1, "Dismiss")) AS ?dismiss)
@@ -721,7 +721,7 @@ WHERE {
     $this a c:ToastRegion .
     OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { c:NotificationsRegion l10n:label ?notifications0 }
+    OPTIONAL { ?notifications0At l10n:of c:NotificationsRegion ; l10n:name ?notifications0 }
   OPTIONAL { c:NotificationsRegion rdfs:label ?notifications0 FILTER(lang(?notifications0) = "") }
     OPTIONAL { c:NotificationsRegion rdfs:label ?notifications1 FILTER(langMatches(lang(?notifications1), "en")) }
     BIND(STR(COALESCE(?notifications0, ?notifications1, "Notifications")) AS ?notifications)

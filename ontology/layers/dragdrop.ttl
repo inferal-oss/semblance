@@ -449,7 +449,7 @@ WHERE {
   OPTIONAL { $this dnd:carries ?declared }
   OPTIONAL { $this dnd:name ?ownName FILTER(isLiteral(?ownName) && lang(?ownName) = "") }
   OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
-  OPTIONAL { dnd:DraggablePhrase l10n:label ?draggablePhrase }
+  OPTIONAL { ?draggablePhraseAt l10n:of dnd:DraggablePhrase ; l10n:name ?draggablePhrase }
   OPTIONAL { dnd:DraggablePhrase rdfs:label ?draggablePhrase FILTER(langMatches(lang(?draggablePhrase), "en")) }
   BIND(COALESCE(?declared, $this) AS ?x)
   BIND(STR(?x) AS ?carriedId)
@@ -469,11 +469,11 @@ WHERE {
   OPTIONAL { $this dnd:lifted ?drag4 . ?drag4 dnd:after ?a ; dnd:dropTarget ?t4 . ?ad dnd:carries ?a ; dnd:name ?afterName
              FILTER(STRSTARTS(STR(?ad), CONCAT(STR(?t4), "/~"))) }
   OPTIONAL { dnd:PickedUpPhrase rdfs:label ?pickedUp FILTER(langMatches(lang(?pickedUp), "en")) }
-  OPTIONAL { dnd:BeforePhrase l10n:label ?beforeWord }
+  OPTIONAL { ?beforeWordAt l10n:of dnd:BeforePhrase ; l10n:name ?beforeWord }
   OPTIONAL { dnd:BeforePhrase rdfs:label ?beforeWord FILTER(langMatches(lang(?beforeWord), "en")) }
-  OPTIONAL { dnd:AfterPhrase l10n:label ?afterWord }
+  OPTIONAL { ?afterWordAt l10n:of dnd:AfterPhrase ; l10n:name ?afterWord }
   OPTIONAL { dnd:AfterPhrase rdfs:label ?afterWord FILTER(langMatches(lang(?afterWord), "en")) }
-  OPTIONAL { dnd:RefusedPhrase l10n:label ?refusedWord }
+  OPTIONAL { ?refusedWordAt l10n:of dnd:RefusedPhrase ; l10n:name ?refusedWord }
   OPTIONAL { dnd:RefusedPhrase rdfs:label ?refusedWord FILTER(langMatches(lang(?refusedWord), "en")) }
   BIND(STR(COALESCE(?zoneOwn, ?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
   BIND(IF(!?lifted, ?none,

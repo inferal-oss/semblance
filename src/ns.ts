@@ -405,7 +405,7 @@ export const DND = {
   Accepted: NS.dnd + 'Accepted', Refused: NS.dnd + 'Refused', Start: NS.dnd + 'Start', Over: NS.dnd + 'Over', Drop: NS.dnd + 'Drop', Refusal: NS.dnd + 'Refusal',
   Cancel: NS.dnd + 'Cancel', End: NS.dnd + 'End', count: NS.dnd + 'count',
 } as const
-export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL', Viewer: NS.l10n + 'Viewer', prefers: NS.l10n + 'prefers', Preference: NS.l10n + 'Preference' } as const
+export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL', Viewer: NS.l10n + 'Viewer', prefers: NS.l10n + 'prefers', pickedAs: NS.l10n + 'pickedAs', of: NS.l10n + 'of', Preference: NS.l10n + 'Preference' } as const
 export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
 export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const
 /** Copying to the clipboard (ontology/layers/clipboard.ttl, src/clipboard.ts). */

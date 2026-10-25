@@ -313,24 +313,9 @@ WHERE {
   $this a ?type .
   FILTER EXISTS { ?viewer l10n:prefers ?preference }
   FILTER EXISTS { c:Link c:externalHint ?anyHint FILTER(isLiteral(?anyHint)) }
-  OPTIONAL {
-    c:Link c:externalHint ?pick . FILTER(isLiteral(?pick))
-    ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
-    BIND(LCASE(LANG(?pick)) AS ?tag)
-    FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
-    FILTER NOT EXISTS {
-      ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
-      c:Link c:externalHint ?other . FILTER(isLiteral(?other))
-      BIND(LCASE(LANG(?other)) AS ?tag2)
-      FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
-      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pick)) c:Link c:externalHint ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) c:Link c:externalHint ?en FILTER(LCASE(LANG(?en)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) c:Link c:externalHint ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
-  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?hint)
+  OPTIONAL { ?pickAt l10n:of c:Link ; l10n:hint ?pick }
+  OPTIONAL { FILTER(!BOUND(?pick)) c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?any)) AS ?hint)
   BIND(IRI(CONCAT(STR($this), "/~l10n-hint")) AS ?node)
 }""" .
 

@@ -103,7 +103,7 @@ WHERE {
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
-  OPTIONAL { c:SearchPhrase l10n:label ?search_u }
+  OPTIONAL { ?search_uAt l10n:of c:SearchPhrase ; l10n:name ?search_u }
   OPTIONAL { c:SearchPhrase rdfs:label ?search_u FILTER(lang(?search_u) = "") }
   OPTIONAL { c:SearchPhrase rdfs:label ?search_en FILTER(langMatches(lang(?search_en), "en")) }
   BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?search_u, ?search_en)) AS ?label)
@@ -111,7 +111,7 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?hint_u)) $this c:placeholder ?hint_en FILTER(langMatches(lang(?hint_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?hint_u) && !BOUND(?hint_en)) $this c:placeholder ?hint_any FILTER(isLiteral(?hint_any)) }
   BIND(STR(COALESCE(?hint_u, ?hint_en, ?hint_any)) AS ?placeholder)
-  OPTIONAL { c:ClearSearchCommand l10n:label ?clear_u }
+  OPTIONAL { ?clear_uAt l10n:of c:ClearSearchCommand ; l10n:name ?clear_u }
   OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_u FILTER(lang(?clear_u) = "") }
   OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_en FILTER(langMatches(lang(?clear_en), "en")) }
   BIND(STR(COALESCE(?clear_u, ?clear_en)) AS ?clearLabel)
@@ -141,60 +141,17 @@ WHERE {
   $this a/rdfs:subClassOf* c:SearchField ; c:controls ?target ; c:property ?property .
   FILTER(isIRI(?target) && isIRI(?property))
   OPTIONAL { ?target ?property ?value FILTER(isLiteral(?value) && STR(?value) != "") }
-  OPTIONAL {
-    $this c:label ?picko . FILTER(isLiteral(?picko))
-    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
-    BIND(LCASE(LANG(?picko)) AS ?tago)
-    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
-    FILTER NOT EXISTS {
-      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
-      $this c:label ?othero . FILTER(isLiteral(?othero))
-      BIND(LCASE(LANG(?othero)) AS ?tag2o)
-      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
-      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picko)) $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino)) $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno)) $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno) && !BOUND(?enxo)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
-  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?ownLabel)
-  OPTIONAL {
-    c:SearchPhrase c:label ?picklcp . FILTER(isLiteral(?picklcp))
-    ?viewerlcp l10n:prefers ?preflcp . ?preflcp l10n:code ?codelcp ; sem:order ?ranklcp .
-    BIND(LCASE(LANG(?picklcp)) AS ?taglcp)
-    FILTER(?taglcp = ?codelcp || STRSTARTS(?taglcp, CONCAT(?codelcp, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlcp l10n:prefers ?betterlcp . ?betterlcp l10n:code ?code2lcp ; sem:order ?rank2lcp .
-      c:SearchPhrase c:label ?otherlcp . FILTER(isLiteral(?otherlcp))
-      BIND(LCASE(LANG(?otherlcp)) AS ?tag2lcp)
-      FILTER(?tag2lcp = ?code2lcp || STRSTARTS(?tag2lcp, CONCAT(?code2lcp, "-")))
-      FILTER(?rank2lcp < ?ranklcp || (?rank2lcp = ?ranklcp && ?tag2lcp = ?code2lcp && ?taglcp != ?codelcp))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklcp)) c:SearchPhrase c:label ?plainlcp FILTER(isLiteral(?plainlcp) && LANG(?plainlcp) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklcp) && !BOUND(?plainlcp)) c:SearchPhrase c:label ?enlcp FILTER(LCASE(LANG(?enlcp)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklcp) && !BOUND(?plainlcp) && !BOUND(?enlcp)) c:SearchPhrase c:label ?enxlcp FILTER(STRSTARTS(LCASE(LANG(?enxlcp)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklcp) && !BOUND(?plainlcp) && !BOUND(?enlcp) && !BOUND(?enxlcp)) c:SearchPhrase c:label ?anylcp FILTER(isLiteral(?anylcp)) }
-  BIND(STR(COALESCE(?picklcp, ?plainlcp, ?enlcp, ?enxlcp, ?anylcp)) AS ?lcp)
-  OPTIONAL {
-    c:SearchPhrase rdfs:label ?picklrp . FILTER(isLiteral(?picklrp))
-    ?viewerlrp l10n:prefers ?preflrp . ?preflrp l10n:code ?codelrp ; sem:order ?ranklrp .
-    BIND(LCASE(LANG(?picklrp)) AS ?taglrp)
-    FILTER(?taglrp = ?codelrp || STRSTARTS(?taglrp, CONCAT(?codelrp, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlrp l10n:prefers ?betterlrp . ?betterlrp l10n:code ?code2lrp ; sem:order ?rank2lrp .
-      c:SearchPhrase rdfs:label ?otherlrp . FILTER(isLiteral(?otherlrp))
-      BIND(LCASE(LANG(?otherlrp)) AS ?tag2lrp)
-      FILTER(?tag2lrp = ?code2lrp || STRSTARTS(?tag2lrp, CONCAT(?code2lrp, "-")))
-      FILTER(?rank2lrp < ?ranklrp || (?rank2lrp = ?ranklrp && ?tag2lrp = ?code2lrp && ?taglrp != ?codelrp))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklrp)) c:SearchPhrase rdfs:label ?plainlrp FILTER(isLiteral(?plainlrp) && LANG(?plainlrp) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklrp) && !BOUND(?plainlrp)) c:SearchPhrase rdfs:label ?enlrp FILTER(LCASE(LANG(?enlrp)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklrp) && !BOUND(?plainlrp) && !BOUND(?enlrp)) c:SearchPhrase rdfs:label ?enxlrp FILTER(STRSTARTS(LCASE(LANG(?enxlrp)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklrp) && !BOUND(?plainlrp) && !BOUND(?enlrp) && !BOUND(?enxlrp)) c:SearchPhrase rdfs:label ?anylrp FILTER(isLiteral(?anylrp)) }
-  BIND(STR(COALESCE(?picklrp, ?plainlrp, ?enlrp, ?enxlrp, ?anylrp)) AS ?lrp)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
+  OPTIONAL { c:SearchPhrase l10n:label ?picklcp }
+  OPTIONAL { FILTER(!BOUND(?picklcp)) ?picklcpAt l10n:of c:SearchPhrase ; l10n:label ?picklcpT }
+  OPTIONAL { FILTER(!BOUND(?picklcp) && !BOUND(?picklcpT)) c:SearchPhrase c:label ?anylcp FILTER(isLiteral(?anylcp)) }
+  BIND(STR(COALESCE(?picklcp, ?picklcpT, ?anylcp)) AS ?lcp)
+  OPTIONAL { ?picklrpAt l10n:of c:SearchPhrase ; l10n:name ?picklrp }
+  OPTIONAL { FILTER(!BOUND(?picklrp)) c:SearchPhrase rdfs:label ?anylrp FILTER(isLiteral(?anylrp)) }
+  BIND(STR(COALESCE(?picklrp, ?anylrp)) AS ?lrp)
   BIND(COALESCE(?lcp, ?lrp, REPLACE(STR(c:SearchPhrase), "^.*[#/]", "")) AS ?phrase)
   BIND(COALESCE(?ownLabel, ?phrase) AS ?label)
   BIND(CONCAT("\u2315 ", ?label, ": [", COALESCE(STR(?value), ""), "_]") AS ?line)
@@ -306,24 +263,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Legend .
-  OPTIONAL {
-    $this c:label ?picko . FILTER(isLiteral(?picko))
-    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
-    BIND(LCASE(LANG(?picko)) AS ?tago)
-    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
-    FILTER NOT EXISTS {
-      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
-      $this c:label ?othero . FILTER(isLiteral(?othero))
-      BIND(LCASE(LANG(?othero)) AS ?tag2o)
-      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
-      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picko)) $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino)) $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno)) $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno) && !BOUND(?enxo)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
-  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?label)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
   OPTIONAL {
     SELECT (GROUP_CONCAT(?entry; separator="  ") AS ?items) WHERE {
       { SELECT DISTINCT ?item ?entry ?key ?id WHERE {
@@ -342,45 +285,16 @@ WHERE {
         }
         LATERAL { OPTIONAL { SELECT ?item ?lci WHERE {
   
-  OPTIONAL {
-    ?item c:label ?picklci . FILTER(isLiteral(?picklci))
-    ?viewerlci l10n:prefers ?preflci . ?preflci l10n:code ?codelci ; sem:order ?ranklci .
-    BIND(LCASE(LANG(?picklci)) AS ?taglci)
-    FILTER(?taglci = ?codelci || STRSTARTS(?taglci, CONCAT(?codelci, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlci l10n:prefers ?betterlci . ?betterlci l10n:code ?code2lci ; sem:order ?rank2lci .
-      ?item c:label ?otherlci . FILTER(isLiteral(?otherlci))
-      BIND(LCASE(LANG(?otherlci)) AS ?tag2lci)
-      FILTER(?tag2lci = ?code2lci || STRSTARTS(?tag2lci, CONCAT(?code2lci, "-")))
-      FILTER(?rank2lci < ?ranklci || (?rank2lci = ?ranklci && ?tag2lci = ?code2lci && ?taglci != ?codelci))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklci)) ?item c:label ?plainlci FILTER(isLiteral(?plainlci) && LANG(?plainlci) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklci) && !BOUND(?plainlci)) ?item c:label ?enlci FILTER(LCASE(LANG(?enlci)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklci) && !BOUND(?plainlci) && !BOUND(?enlci)) ?item c:label ?enxlci FILTER(STRSTARTS(LCASE(LANG(?enxlci)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklci) && !BOUND(?plainlci) && !BOUND(?enlci) && !BOUND(?enxlci)) ?item c:label ?anylci FILTER(isLiteral(?anylci)) }
-  BIND(STR(COALESCE(?picklci, ?plainlci, ?enlci, ?enxlci, ?anylci)) AS ?lci)
+  OPTIONAL { ?item l10n:label ?picklci }
+  OPTIONAL { FILTER(!BOUND(?picklci)) ?picklciAt l10n:of ?item ; l10n:label ?picklciT }
+  OPTIONAL { FILTER(!BOUND(?picklci) && !BOUND(?picklciT)) ?item c:label ?anylci FILTER(isLiteral(?anylci)) }
+  BIND(STR(COALESCE(?picklci, ?picklciT, ?anylci)) AS ?lci)
   } } }
   LATERAL { OPTIONAL { SELECT ?item ?lri WHERE {
   
-  OPTIONAL {
-    ?item rdfs:label ?picklri . FILTER(isLiteral(?picklri))
-    ?viewerlri l10n:prefers ?preflri . ?preflri l10n:code ?codelri ; sem:order ?ranklri .
-    BIND(LCASE(LANG(?picklri)) AS ?taglri)
-    FILTER(?taglri = ?codelri || STRSTARTS(?taglri, CONCAT(?codelri, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlri l10n:prefers ?betterlri . ?betterlri l10n:code ?code2lri ; sem:order ?rank2lri .
-      ?item rdfs:label ?otherlri . FILTER(isLiteral(?otherlri))
-      BIND(LCASE(LANG(?otherlri)) AS ?tag2lri)
-      FILTER(?tag2lri = ?code2lri || STRSTARTS(?tag2lri, CONCAT(?code2lri, "-")))
-      FILTER(?rank2lri < ?ranklri || (?rank2lri = ?ranklri && ?tag2lri = ?code2lri && ?taglri != ?codelri))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklri)) ?item rdfs:label ?plainlri FILTER(isLiteral(?plainlri) && LANG(?plainlri) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklri) && !BOUND(?plainlri)) ?item rdfs:label ?enlri FILTER(LCASE(LANG(?enlri)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklri) && !BOUND(?plainlri) && !BOUND(?enlri)) ?item rdfs:label ?enxlri FILTER(STRSTARTS(LCASE(LANG(?enxlri)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklri) && !BOUND(?plainlri) && !BOUND(?enlri) && !BOUND(?enxlri)) ?item rdfs:label ?anylri FILTER(isLiteral(?anylri)) }
-  BIND(STR(COALESCE(?picklri, ?plainlri, ?enlri, ?enxlri, ?anylri)) AS ?lri)
+  OPTIONAL { ?picklriAt l10n:of ?item ; l10n:name ?picklri }
+  OPTIONAL { FILTER(!BOUND(?picklri)) ?item rdfs:label ?anylri FILTER(isLiteral(?anylri)) }
+  BIND(STR(COALESCE(?picklri, ?anylri)) AS ?lri)
   } } }
   BIND(COALESCE(?lci, ?lri, REPLACE(STR(?item), "^.*[#/]", "")) AS ?itemLabel)
         BIND(CONCAT("\u25A0 ", ?itemLabel) AS ?entry)
@@ -412,45 +326,16 @@ WHERE {
   { FILTER NOT EXISTS { $this c:items ?list } $this c:of ?class . FILTER(isIRI(?class)) ?item a ?class . FILTER(isIRI(?item)) }
   LATERAL { OPTIONAL { SELECT ?item ?c WHERE {
   
-  OPTIONAL {
-    ?item c:label ?pickc . FILTER(isLiteral(?pickc))
-    ?viewerc l10n:prefers ?prefc . ?prefc l10n:code ?codec ; sem:order ?rankc .
-    BIND(LCASE(LANG(?pickc)) AS ?tagc)
-    FILTER(?tagc = ?codec || STRSTARTS(?tagc, CONCAT(?codec, "-")))
-    FILTER NOT EXISTS {
-      ?viewerc l10n:prefers ?betterc . ?betterc l10n:code ?code2c ; sem:order ?rank2c .
-      ?item c:label ?otherc . FILTER(isLiteral(?otherc))
-      BIND(LCASE(LANG(?otherc)) AS ?tag2c)
-      FILTER(?tag2c = ?code2c || STRSTARTS(?tag2c, CONCAT(?code2c, "-")))
-      FILTER(?rank2c < ?rankc || (?rank2c = ?rankc && ?tag2c = ?code2c && ?tagc != ?codec))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickc)) ?item c:label ?plainc FILTER(isLiteral(?plainc) && LANG(?plainc) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc)) ?item c:label ?enc FILTER(LCASE(LANG(?enc)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc)) ?item c:label ?enxc FILTER(STRSTARTS(LCASE(LANG(?enxc)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?plainc) && !BOUND(?enc) && !BOUND(?enxc)) ?item c:label ?anyc FILTER(isLiteral(?anyc)) }
-  BIND(STR(COALESCE(?pickc, ?plainc, ?enc, ?enxc, ?anyc)) AS ?c)
+  OPTIONAL { ?item l10n:label ?pickc }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?pickcAt l10n:of ?item ; l10n:label ?pickcT }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?item c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?pickcT, ?anyc)) AS ?c)
   } } }
   LATERAL { OPTIONAL { SELECT ?item ?r WHERE {
   
-  OPTIONAL {
-    ?item rdfs:label ?pickr . FILTER(isLiteral(?pickr))
-    ?viewerr l10n:prefers ?prefr . ?prefr l10n:code ?coder ; sem:order ?rankr .
-    BIND(LCASE(LANG(?pickr)) AS ?tagr)
-    FILTER(?tagr = ?coder || STRSTARTS(?tagr, CONCAT(?coder, "-")))
-    FILTER NOT EXISTS {
-      ?viewerr l10n:prefers ?betterr . ?betterr l10n:code ?code2r ; sem:order ?rank2r .
-      ?item rdfs:label ?otherr . FILTER(isLiteral(?otherr))
-      BIND(LCASE(LANG(?otherr)) AS ?tag2r)
-      FILTER(?tag2r = ?code2r || STRSTARTS(?tag2r, CONCAT(?code2r, "-")))
-      FILTER(?rank2r < ?rankr || (?rank2r = ?rankr && ?tag2r = ?code2r && ?tagr != ?coder))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickr)) ?item rdfs:label ?plainr FILTER(isLiteral(?plainr) && LANG(?plainr) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr)) ?item rdfs:label ?enr FILTER(LCASE(LANG(?enr)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr)) ?item rdfs:label ?enxr FILTER(STRSTARTS(LCASE(LANG(?enxr)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickr) && !BOUND(?plainr) && !BOUND(?enr) && !BOUND(?enxr)) ?item rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
-  BIND(STR(COALESCE(?pickr, ?plainr, ?enr, ?enxr, ?anyr)) AS ?r)
+  OPTIONAL { ?pickrAt l10n:of ?item ; l10n:name ?pickr }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?item rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?anyr)) AS ?r)
   } } }
   BIND(COALESCE(?c, ?r, REPLACE(STR(?item), "^.*[#/]", "")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?item)))) AS ?node)
@@ -498,14 +383,14 @@ WHERE {
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
-  OPTIONAL { c:LivePhrase l10n:label ?live_u }
+  OPTIONAL { ?live_uAt l10n:of c:LivePhrase ; l10n:name ?live_u }
   OPTIONAL { c:LivePhrase rdfs:label ?live_u FILTER(lang(?live_u) = "") }
   OPTIONAL { c:LivePhrase rdfs:label ?live_en FILTER(langMatches(lang(?live_en), "en")) }
   BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?live_u, ?live_en)) AS ?label)
   OPTIONAL { $this c:pausedLabel ?paused_u FILTER(isLiteral(?paused_u) && lang(?paused_u) = "") }
   OPTIONAL { FILTER(!BOUND(?paused_u)) $this c:pausedLabel ?paused_en FILTER(langMatches(lang(?paused_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?paused_u) && !BOUND(?paused_en)) $this c:pausedLabel ?paused_any FILTER(isLiteral(?paused_any)) }
-  OPTIONAL { c:PausedPhrase l10n:label ?pausedPhrase_u }
+  OPTIONAL { ?pausedPhrase_uAt l10n:of c:PausedPhrase ; l10n:name ?pausedPhrase_u }
   OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_u FILTER(lang(?pausedPhrase_u) = "") }
   OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_en FILTER(langMatches(lang(?pausedPhrase_en), "en")) }
   BIND(STR(COALESCE(?paused_u, ?paused_en, ?paused_any, ?pausedPhrase_u, ?pausedPhrase_en)) AS ?pausedLabel)
@@ -533,116 +418,29 @@ WHERE {
   OPTIONAL { $this c:controls ?controls ; c:property ?controlsProperty FILTER(isIRI(?controls) && isIRI(?controlsProperty)) }
   BIND(COALESCE(?controls, $this) AS ?n) BIND(COALESCE(?controlsProperty, c:checked) AS ?p)
   BIND(!EXISTS { ?n ?p ?off FILTER(STR(?off) = "false") } AS ?isLive)
-  OPTIONAL {
-    $this c:label ?picko . FILTER(isLiteral(?picko))
-    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
-    BIND(LCASE(LANG(?picko)) AS ?tago)
-    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
-    FILTER NOT EXISTS {
-      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
-      $this c:label ?othero . FILTER(isLiteral(?othero))
-      BIND(LCASE(LANG(?othero)) AS ?tag2o)
-      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
-      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picko)) $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino)) $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno)) $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno) && !BOUND(?enxo)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
-  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?ownLabel)
-  OPTIONAL {
-    c:LivePhrase c:label ?picklcl . FILTER(isLiteral(?picklcl))
-    ?viewerlcl l10n:prefers ?preflcl . ?preflcl l10n:code ?codelcl ; sem:order ?ranklcl .
-    BIND(LCASE(LANG(?picklcl)) AS ?taglcl)
-    FILTER(?taglcl = ?codelcl || STRSTARTS(?taglcl, CONCAT(?codelcl, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlcl l10n:prefers ?betterlcl . ?betterlcl l10n:code ?code2lcl ; sem:order ?rank2lcl .
-      c:LivePhrase c:label ?otherlcl . FILTER(isLiteral(?otherlcl))
-      BIND(LCASE(LANG(?otherlcl)) AS ?tag2lcl)
-      FILTER(?tag2lcl = ?code2lcl || STRSTARTS(?tag2lcl, CONCAT(?code2lcl, "-")))
-      FILTER(?rank2lcl < ?ranklcl || (?rank2lcl = ?ranklcl && ?tag2lcl = ?code2lcl && ?taglcl != ?codelcl))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklcl)) c:LivePhrase c:label ?plainlcl FILTER(isLiteral(?plainlcl) && LANG(?plainlcl) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklcl) && !BOUND(?plainlcl)) c:LivePhrase c:label ?enlcl FILTER(LCASE(LANG(?enlcl)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklcl) && !BOUND(?plainlcl) && !BOUND(?enlcl)) c:LivePhrase c:label ?enxlcl FILTER(STRSTARTS(LCASE(LANG(?enxlcl)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklcl) && !BOUND(?plainlcl) && !BOUND(?enlcl) && !BOUND(?enxlcl)) c:LivePhrase c:label ?anylcl FILTER(isLiteral(?anylcl)) }
-  BIND(STR(COALESCE(?picklcl, ?plainlcl, ?enlcl, ?enxlcl, ?anylcl)) AS ?lcl)
-  OPTIONAL {
-    c:LivePhrase rdfs:label ?picklrl . FILTER(isLiteral(?picklrl))
-    ?viewerlrl l10n:prefers ?preflrl . ?preflrl l10n:code ?codelrl ; sem:order ?ranklrl .
-    BIND(LCASE(LANG(?picklrl)) AS ?taglrl)
-    FILTER(?taglrl = ?codelrl || STRSTARTS(?taglrl, CONCAT(?codelrl, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlrl l10n:prefers ?betterlrl . ?betterlrl l10n:code ?code2lrl ; sem:order ?rank2lrl .
-      c:LivePhrase rdfs:label ?otherlrl . FILTER(isLiteral(?otherlrl))
-      BIND(LCASE(LANG(?otherlrl)) AS ?tag2lrl)
-      FILTER(?tag2lrl = ?code2lrl || STRSTARTS(?tag2lrl, CONCAT(?code2lrl, "-")))
-      FILTER(?rank2lrl < ?ranklrl || (?rank2lrl = ?ranklrl && ?tag2lrl = ?code2lrl && ?taglrl != ?codelrl))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklrl)) c:LivePhrase rdfs:label ?plainlrl FILTER(isLiteral(?plainlrl) && LANG(?plainlrl) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklrl) && !BOUND(?plainlrl)) c:LivePhrase rdfs:label ?enlrl FILTER(LCASE(LANG(?enlrl)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklrl) && !BOUND(?plainlrl) && !BOUND(?enlrl)) c:LivePhrase rdfs:label ?enxlrl FILTER(STRSTARTS(LCASE(LANG(?enxlrl)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklrl) && !BOUND(?plainlrl) && !BOUND(?enlrl) && !BOUND(?enxlrl)) c:LivePhrase rdfs:label ?anylrl FILTER(isLiteral(?anylrl)) }
-  BIND(STR(COALESCE(?picklrl, ?plainlrl, ?enlrl, ?enxlrl, ?anylrl)) AS ?lrl)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
+  OPTIONAL { c:LivePhrase l10n:label ?picklcl }
+  OPTIONAL { FILTER(!BOUND(?picklcl)) ?picklclAt l10n:of c:LivePhrase ; l10n:label ?picklclT }
+  OPTIONAL { FILTER(!BOUND(?picklcl) && !BOUND(?picklclT)) c:LivePhrase c:label ?anylcl FILTER(isLiteral(?anylcl)) }
+  BIND(STR(COALESCE(?picklcl, ?picklclT, ?anylcl)) AS ?lcl)
+  OPTIONAL { ?picklrlAt l10n:of c:LivePhrase ; l10n:name ?picklrl }
+  OPTIONAL { FILTER(!BOUND(?picklrl)) c:LivePhrase rdfs:label ?anylrl FILTER(isLiteral(?anylrl)) }
+  BIND(STR(COALESCE(?picklrl, ?anylrl)) AS ?lrl)
   BIND(COALESCE(?lcl, ?lrl, REPLACE(STR(c:LivePhrase), "^.*[#/]", "")) AS ?livePhrase)
   BIND(COALESCE(?ownLabel, ?livePhrase) AS ?label)
-  OPTIONAL {
-    $this c:pausedLabel ?pickq . FILTER(isLiteral(?pickq))
-    ?viewerq l10n:prefers ?prefq . ?prefq l10n:code ?codeq ; sem:order ?rankq .
-    BIND(LCASE(LANG(?pickq)) AS ?tagq)
-    FILTER(?tagq = ?codeq || STRSTARTS(?tagq, CONCAT(?codeq, "-")))
-    FILTER NOT EXISTS {
-      ?viewerq l10n:prefers ?betterq . ?betterq l10n:code ?code2q ; sem:order ?rank2q .
-      $this c:pausedLabel ?otherq . FILTER(isLiteral(?otherq))
-      BIND(LCASE(LANG(?otherq)) AS ?tag2q)
-      FILTER(?tag2q = ?code2q || STRSTARTS(?tag2q, CONCAT(?code2q, "-")))
-      FILTER(?rank2q < ?rankq || (?rank2q = ?rankq && ?tag2q = ?code2q && ?tagq != ?codeq))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?pickq)) $this c:pausedLabel ?plainq FILTER(isLiteral(?plainq) && LANG(?plainq) = "") }
-  OPTIONAL { FILTER(!BOUND(?pickq) && !BOUND(?plainq)) $this c:pausedLabel ?enq FILTER(LCASE(LANG(?enq)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?pickq) && !BOUND(?plainq) && !BOUND(?enq)) $this c:pausedLabel ?enxq FILTER(STRSTARTS(LCASE(LANG(?enxq)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?pickq) && !BOUND(?plainq) && !BOUND(?enq) && !BOUND(?enxq)) $this c:pausedLabel ?anyq FILTER(isLiteral(?anyq)) }
-  BIND(STR(COALESCE(?pickq, ?plainq, ?enq, ?enxq, ?anyq)) AS ?ownPaused)
-  OPTIONAL {
-    c:PausedPhrase c:label ?picklcz . FILTER(isLiteral(?picklcz))
-    ?viewerlcz l10n:prefers ?preflcz . ?preflcz l10n:code ?codelcz ; sem:order ?ranklcz .
-    BIND(LCASE(LANG(?picklcz)) AS ?taglcz)
-    FILTER(?taglcz = ?codelcz || STRSTARTS(?taglcz, CONCAT(?codelcz, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlcz l10n:prefers ?betterlcz . ?betterlcz l10n:code ?code2lcz ; sem:order ?rank2lcz .
-      c:PausedPhrase c:label ?otherlcz . FILTER(isLiteral(?otherlcz))
-      BIND(LCASE(LANG(?otherlcz)) AS ?tag2lcz)
-      FILTER(?tag2lcz = ?code2lcz || STRSTARTS(?tag2lcz, CONCAT(?code2lcz, "-")))
-      FILTER(?rank2lcz < ?ranklcz || (?rank2lcz = ?ranklcz && ?tag2lcz = ?code2lcz && ?taglcz != ?codelcz))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklcz)) c:PausedPhrase c:label ?plainlcz FILTER(isLiteral(?plainlcz) && LANG(?plainlcz) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklcz) && !BOUND(?plainlcz)) c:PausedPhrase c:label ?enlcz FILTER(LCASE(LANG(?enlcz)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklcz) && !BOUND(?plainlcz) && !BOUND(?enlcz)) c:PausedPhrase c:label ?enxlcz FILTER(STRSTARTS(LCASE(LANG(?enxlcz)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklcz) && !BOUND(?plainlcz) && !BOUND(?enlcz) && !BOUND(?enxlcz)) c:PausedPhrase c:label ?anylcz FILTER(isLiteral(?anylcz)) }
-  BIND(STR(COALESCE(?picklcz, ?plainlcz, ?enlcz, ?enxlcz, ?anylcz)) AS ?lcz)
-  OPTIONAL {
-    c:PausedPhrase rdfs:label ?picklrz . FILTER(isLiteral(?picklrz))
-    ?viewerlrz l10n:prefers ?preflrz . ?preflrz l10n:code ?codelrz ; sem:order ?ranklrz .
-    BIND(LCASE(LANG(?picklrz)) AS ?taglrz)
-    FILTER(?taglrz = ?codelrz || STRSTARTS(?taglrz, CONCAT(?codelrz, "-")))
-    FILTER NOT EXISTS {
-      ?viewerlrz l10n:prefers ?betterlrz . ?betterlrz l10n:code ?code2lrz ; sem:order ?rank2lrz .
-      c:PausedPhrase rdfs:label ?otherlrz . FILTER(isLiteral(?otherlrz))
-      BIND(LCASE(LANG(?otherlrz)) AS ?tag2lrz)
-      FILTER(?tag2lrz = ?code2lrz || STRSTARTS(?tag2lrz, CONCAT(?code2lrz, "-")))
-      FILTER(?rank2lrz < ?ranklrz || (?rank2lrz = ?ranklrz && ?tag2lrz = ?code2lrz && ?taglrz != ?codelrz))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picklrz)) c:PausedPhrase rdfs:label ?plainlrz FILTER(isLiteral(?plainlrz) && LANG(?plainlrz) = "") }
-  OPTIONAL { FILTER(!BOUND(?picklrz) && !BOUND(?plainlrz)) c:PausedPhrase rdfs:label ?enlrz FILTER(LCASE(LANG(?enlrz)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picklrz) && !BOUND(?plainlrz) && !BOUND(?enlrz)) c:PausedPhrase rdfs:label ?enxlrz FILTER(STRSTARTS(LCASE(LANG(?enxlrz)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picklrz) && !BOUND(?plainlrz) && !BOUND(?enlrz) && !BOUND(?enxlrz)) c:PausedPhrase rdfs:label ?anylrz FILTER(isLiteral(?anylrz)) }
-  BIND(STR(COALESCE(?picklrz, ?plainlrz, ?enlrz, ?enxlrz, ?anylrz)) AS ?lrz)
+  OPTIONAL { ?pickqAt l10n:of $this ; l10n:pausedLabel ?pickq }
+  OPTIONAL { FILTER(!BOUND(?pickq)) $this c:pausedLabel ?anyq FILTER(isLiteral(?anyq)) }
+  BIND(STR(COALESCE(?pickq, ?anyq)) AS ?ownPaused)
+  OPTIONAL { c:PausedPhrase l10n:label ?picklcz }
+  OPTIONAL { FILTER(!BOUND(?picklcz)) ?picklczAt l10n:of c:PausedPhrase ; l10n:label ?picklczT }
+  OPTIONAL { FILTER(!BOUND(?picklcz) && !BOUND(?picklczT)) c:PausedPhrase c:label ?anylcz FILTER(isLiteral(?anylcz)) }
+  BIND(STR(COALESCE(?picklcz, ?picklczT, ?anylcz)) AS ?lcz)
+  OPTIONAL { ?picklrzAt l10n:of c:PausedPhrase ; l10n:name ?picklrz }
+  OPTIONAL { FILTER(!BOUND(?picklrz)) c:PausedPhrase rdfs:label ?anylrz FILTER(isLiteral(?anylrz)) }
+  BIND(STR(COALESCE(?picklrz, ?anylrz)) AS ?lrz)
   BIND(COALESCE(?lcz, ?lrz, REPLACE(STR(c:PausedPhrase), "^.*[#/]", "")) AS ?pausedPhrase)
   BIND(COALESCE(?ownPaused, ?pausedPhrase) AS ?pausedLabel)
   BIND(CONCAT(IF(?isLive, "\u25CF", "\u2759\u2759"), " ", IF(?isLive, ?label, ?pausedLabel)) AS ?line)
@@ -769,24 +567,10 @@ WHERE {
   } }
   BIND(IF(?via != tree:member, ?direct, IF(BOUND(?class), COALESCE(?ofClass, 0), COALESCE(?all, 0))) AS ?counted)
   BIND(STR(?counted) AS ?number)
-  OPTIONAL {
-    $this c:label ?picko . FILTER(isLiteral(?picko))
-    ?viewero l10n:prefers ?prefo . ?prefo l10n:code ?codeo ; sem:order ?ranko .
-    BIND(LCASE(LANG(?picko)) AS ?tago)
-    FILTER(?tago = ?codeo || STRSTARTS(?tago, CONCAT(?codeo, "-")))
-    FILTER NOT EXISTS {
-      ?viewero l10n:prefers ?bettero . ?bettero l10n:code ?code2o ; sem:order ?rank2o .
-      $this c:label ?othero . FILTER(isLiteral(?othero))
-      BIND(LCASE(LANG(?othero)) AS ?tag2o)
-      FILTER(?tag2o = ?code2o || STRSTARTS(?tag2o, CONCAT(?code2o, "-")))
-      FILTER(?rank2o < ?ranko || (?rank2o = ?ranko && ?tag2o = ?code2o && ?tago != ?codeo))
-    }
-  }
-  OPTIONAL { FILTER(!BOUND(?picko)) $this c:label ?plaino FILTER(isLiteral(?plaino) && LANG(?plaino) = "") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino)) $this c:label ?eno FILTER(LCASE(LANG(?eno)) = "en") }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno)) $this c:label ?enxo FILTER(STRSTARTS(LCASE(LANG(?enxo)), "en-")) }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?plaino) && !BOUND(?eno) && !BOUND(?enxo)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
-  BIND(STR(COALESCE(?picko, ?plaino, ?eno, ?enxo, ?anyo)) AS ?label)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
   BIND(CONCAT("[", IF(BOUND(?label), CONCAT(?number, " ", ?label), ?number), "]") AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)

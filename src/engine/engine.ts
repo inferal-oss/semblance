@@ -436,7 +436,8 @@ export class Engine {
     const next = new Map<string, Quad>()
     const put = (q: Quad) => next.set(quadKey(q), q)
     const languages = this.selection.languages ?? []
-    if (languages.length) put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
+    // Always a viewer (its texts are picked even without a preference: untagged, then English).
+    put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
     languages.forEach((code, i) => {
       const pref = nn(mint(this.agent.value, 'prefers-' + (i + 1)))
       put(f.quad(this.agent, nn(L10N.prefers), pref, g))

@@ -280,10 +280,10 @@ WHERE {
   } UNION {
     { SELECT (MIN(?f) AS ?first) WHERE { $this c:of ?t0 ; c:highlightsSubject ?s0 . ?sp0 c:in ?t0 ; c:subject ?s0 ; c:fromLine ?f } }
     ?span c:in ?text ; c:subject ?term ; c:fromLine ?first ; c:toLine ?last ; c:label ?name .
-    OPTIONAL { c:SourceLinesPhrase l10n:label ?many0 }
+    OPTIONAL { ?many0At l10n:of c:SourceLinesPhrase ; l10n:name ?many0 }
   OPTIONAL { c:SourceLinesPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
     OPTIONAL { c:SourceLinesPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) }
-    OPTIONAL { c:SourceLinePhrase l10n:label ?one0 }
+    OPTIONAL { ?one0At l10n:of c:SourceLinePhrase ; l10n:name ?one0 }
   OPTIONAL { c:SourceLinePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
     OPTIONAL { c:SourceLinePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) }
     BIND(IF(?first = ?last, STR(COALESCE(?one0, ?one1, "{name} · line {from}")), STR(COALESCE(?many0, ?many1, "{name} · lines {from}–{to}"))) AS ?pattern)
