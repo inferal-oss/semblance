@@ -139,6 +139,11 @@ export class Engine {
   private derivedTrigger = false
   /** The (rule, focus) whose output is being committed: its own writes never re-dirty it. */
   private committing?: { rule: Rule; focus: string }
+  /**
+   * typedInInput's answers until the end of the run: rules write only the derived graph, so
+   * the input graphs do not change while one runs (a new input change clears it, in process).
+   */
+  private typedIn = new Map<string, boolean>()
   /** Evaluations per (rule, focus) in the current run, to catch rules that never settle. */
   private evaluations = new Map<string, number>()
   private pending = { add: new Map<string, Quad>(), remove: new Map<string, Quad>() }
@@ -247,6 +252,7 @@ export class Engine {
 
   /** Propagate a change that has already been applied to the store's default graph. */
   process(delta: Delta): void {
+    this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
     this.run()
@@ -463,8 +469,12 @@ export class Engine {
 
   /** Whether a node is typed in one of the input graphs (not only by a rule's output). */
   private typedInInput(focus: string): boolean {
-    const f = this.store.factory
-    return this.holds(f.namedNode(focus), f.namedNode(RDF_TYPE), null, this.inputGraphKeys)
+    let typed = this.typedIn.get(focus)
+    if (typed === undefined) {
+      const f = this.store.factory
+      this.typedIn.set(focus, (typed = this.holds(f.namedNode(focus), f.namedNode(RDF_TYPE), null, this.inputGraphKeys)))
+    }
+    return typed
   }
 
   /**
@@ -671,6 +681,7 @@ export class Engine {
     } finally {
       this.current = -Infinity
       this.evaluations.clear()
+      this.typedIn.clear()
     }
     this.emit()
   }
