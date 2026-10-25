@@ -471,6 +471,8 @@ export class ViewRuntime {
   }
 
   private compileFor(def: Definition, params: Param[]): ViewPlan | undefined {
+    // A store without SPARQL runs no SPARQL plan, not even a recompute.
+    if (!this.store.sparql) return undefined
     const f = this.store.factory
     const s = f.namedNode(def.node)
     const select = this.one(s, SEM.select)?.value
@@ -499,7 +501,7 @@ export class ViewRuntime {
       partitionBy: partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
     }
-    if (!this.store.sparql || !source.query) return undefined
+    if (!source.query) return undefined
     return (this.opts.compiler ?? compiler).compile(source, this.runner(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0))
   }
 
