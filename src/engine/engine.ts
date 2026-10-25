@@ -479,9 +479,11 @@ export class Engine {
 
   /**
    * Whether a pattern matches in one of the graphs `keys` names (by value, '' for the default
-   * graph): one lookup across all graphs rather than one per graph.
+   * graph): one lookup across all graphs where that is as cheap as one (store.crossGraphMatch),
+   * else graph by graph.
    */
   private holds(s: Term, p: Term, o: Term | null, keys: ReadonlySet<string>): boolean {
+    if (!this.store.crossGraphMatch) return this.graphs.some((g) => keys.has(g.value) && this.store.match(s, p, o, g).length > 0)
     for (const q of this.store.match(s, p, o)) if (keys.has(q.graph.value)) return true
     return false
   }

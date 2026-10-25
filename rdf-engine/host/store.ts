@@ -321,6 +321,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     kind,
     factory,
     sparql,
+    crossGraphMatch: true,
     add(q) {
       e.add(idOf(q.subject, true), idOf(q.predicate, true), idOf(q.object, true), idOf(q.graph, true))
     },

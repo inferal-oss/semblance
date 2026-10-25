@@ -79,7 +79,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
   const term = (t: Term | string | null) => (typeof t === 'string' ? nn(t) : t)
   /** A graph's position in the view, by value ('' = the default graph). */
   const graphIndex = new Map(graphs.map((g, i) => [g.value, i]))
-  const probe = graphs.length <= 31 && graphIndex.size === graphs.length
+  const probe = !!store.crossGraphMatch && graphs.length <= 31 && graphIndex.size === graphs.length
   const memo = new Map<string, unknown>()
   // Graph-declared prefixes (sh:declare) are read once per context.
   let declared: string | undefined
@@ -95,8 +95,9 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
       }
     }
     const [ts, tp, to] = [term(s), term(p), term(o)]
-    // With a subject, one lookup across all graphs finds which of the view's graphs hold
-    // matches (usually none or one); only those are asked, in order, for the same result.
+    // With a subject, and where a lookup across graphs costs what one in a graph does
+    // (store.crossGraphMatch), one lookup finds which of the view's graphs hold matches
+    // (usually none or one); only those are asked, in order, for the same result.
     let holding = -1
     if (ts && probe) {
       const all = store.match(ts, tp, to)
