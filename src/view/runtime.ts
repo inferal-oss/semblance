@@ -590,8 +590,9 @@ export class ViewRuntime {
     }
     if (plan.kind === 'recompute') {
       const note = `<${def.iri}> is recomputed from scratch: ${plan.reason}`
-      if (this.strict || strategy === IV + 'Incremental') throw new Error(note)
-      warn(note)
+      // iv:Auto says a fallback is expected (a query typed into the workbench): no error, no warning; strict still compares it.
+      if (strategy === IV + 'Incremental' || (this.strict && strategy !== IV + 'Auto')) throw new Error(note)
+      if (strategy !== IV + 'Auto') warn(note)
     }
     const view = new MaintainedView(this, def, plan, windowNode?.termType === 'NamedNode' ? windowNode.value : undefined)
     view.params = params
@@ -599,7 +600,10 @@ export class ViewRuntime {
     view.whileShown = this.one(s, IV + 'whileShown')?.value ?? def.focus
     view.deltaLog = this.one(s, IV + 'deltaLog')?.value
     if (view.deltaLog) view.keepHistory(this.retained(view.deltaLog) ?? 12)
-    view.materialize = this.one(s, IV + 'materialize')?.value === IV + 'Graph'
+    // iv:ResultSet: a SELECT's rows in the views graph, a CONSTRUCT's triples nowhere (a query typed into the workbench).
+    const materialize = this.one(s, IV + 'materialize')?.value
+    view.materialize = materialize === IV + 'Graph' || materialize === IV + 'ResultSet'
+    view.ephemeral = materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
     view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
     view.readsViews = view.reads.length > 0
     this.views.set(def.iri, view)
@@ -1369,6 +1373,8 @@ export class MaintainedView implements ViewHandle {
   whileShown?: string
   /** iv:materialize iv:Graph: a SELECT view writes its rows to the views graph (rs:). */
   materialize = false
+  /** iv:materialize iv:Ephemeral: a CONSTRUCT view's triples go to subscribers only, not to the views graph. */
+  ephemeral = false
   /** iv:reads: the views whose output it reads (it steps after them, and sees the views graph). */
   reads: string[] = []
   readsViews = false
@@ -1510,7 +1516,13 @@ export class MaintainedView implements ViewHandle {
 
   /** One tick; undefined when the view had nothing to do. */
   step(changes: Delta, now: number): ZSet<Quad> | undefined {
-    if (this.plan.kind === 'recompute') return changes.add.length || changes.remove.length ? this.recompute(false) : undefined
+    if (this.plan.kind === 'recompute') {
+      if (!changes.add.length && !changes.remove.length) return undefined
+      // Exact dependencies where the query's patterns could be read: only a change it can see re-runs it.
+      const deps = this.plan.deps
+      if (deps && ![...changes.add, ...changes.remove].some((q) => deps.route(q).length)) return undefined
+      return this.recompute(false)
+    }
     const t0 = performance.now()
     const happened = blank()
     const union = new ZSet<Row>()
@@ -1578,7 +1590,7 @@ export class MaintainedView implements ViewHandle {
     }
     if (plan.form === 'select' && this.materialize) this.writeRows(out)
     this.notify(rowDelta, out)
-    return out
+    return this.ephemeral ? new ZSet() : out
   }
 
   /**
@@ -1734,6 +1746,10 @@ export class MaintainedView implements ViewHandle {
       for (const [k, q] of prev) if (!next.has(k)) out.add(k, q, -1)
       for (const [k, q] of next) if (!prev.has(k)) out.add(k, q, 1)
       this.recomputed = next
+      if (this.ephemeral) {
+        this.notify(rowDelta, out)
+        return new ZSet()
+      }
     } else {
       const next = new Map<string, Row>()
       const counts = new ZSet<Row>()
@@ -1828,7 +1844,7 @@ export class MaintainedView implements ViewHandle {
   }
 
   private reset(out: ZSet<Quad>) {
-    for (const q of this.quads()) out.add(quadKey(q), q, -1)
+    if (!this.ephemeral) for (const q of this.quads()) out.add(quadKey(q), q, -1)
     if (this.plan.kind === 'maintained' && this.plan.form === 'select') {
       const f = this.rt.store.factory
       for (const w of this.written.values()) {

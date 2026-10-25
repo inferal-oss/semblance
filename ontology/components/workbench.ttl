@@ -145,6 +145,44 @@ WHERE {
 }""" ;
     sem:function "workbench:run" .
 
+# Following updates, the query is a maintained view (docs/IVM.md, iv:): the switch over a workbench's
+# c:followUpdates also types the query it runs as an iv:View - its rows a result set the result views
+# read (iv:ResultSet: a CONSTRUCT's triples are never written, so a typed query cannot become input),
+# measured, a fallback to recompute expected (iv:Auto) - and the plan the runtime writes for it is
+# what the Plan tab shows. Off again, it is a plain query. Every reaction sees the state before the
+# click: on (true now) means the switch is turning it off.
+c:FollowAsView a beh:Reaction ;
+    rdfs:label "Maintain the query as a view while the results follow updates"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:ToggleSwitch ;
+    beh:deletes """CONSTRUCT { ?query a iv:View ; iv:materialize iv:ResultSet ; iv:strategy iv:Auto ; iv:measured true } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  FILTER NOT EXISTS { $this c:disabled true }
+  $this c:controls ?bench ; c:property c:followUpdates . ?bench a c:QueryWorkbench ; c:runs ?query .
+  ?bench c:followUpdates ?on FILTER(STR(?on) = "true") }""" ;
+    beh:inserts """CONSTRUCT { ?query a iv:View ; iv:materialize iv:ResultSet ; iv:strategy iv:Auto ; iv:measured true } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  FILTER NOT EXISTS { $this c:disabled true }
+  $this c:controls ?bench ; c:property c:followUpdates . ?bench a c:QueryWorkbench ; c:runs ?query .
+  FILTER NOT EXISTS { ?bench c:followUpdates ?on FILTER(STR(?on) = "true") } }""" ;
+    sem:function "workbench:follow-as-view" .
+# The toolbar's live indicator stops following too: the same, from it.
+c:FollowAsViewLive a beh:Reaction ;
+    rdfs:label "Stop maintaining the query as a view when the live indicator stops following"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:LiveIndicator ;
+    beh:deletes """CONSTRUCT { ?query a iv:View ; iv:materialize iv:ResultSet ; iv:strategy iv:Auto ; iv:measured true } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  FILTER NOT EXISTS { $this c:disabled true }
+  $this c:controls ?bench ; c:property c:followUpdates . ?bench a c:QueryWorkbench ; c:runs ?query .
+  ?bench c:followUpdates ?on FILTER(STR(?on) = "true") }""" ;
+    beh:inserts """CONSTRUCT { ?query a iv:View ; iv:materialize iv:ResultSet ; iv:strategy iv:Auto ; iv:measured true } WHERE {
+  $event beh:node ?hit . ?t rdfhtml:hasChild* ?hit . ?t c:toggles $this .
+  FILTER NOT EXISTS { $this c:disabled true }
+  $this c:controls ?bench ; c:property c:followUpdates . ?bench a c:QueryWorkbench ; c:runs ?query .
+  FILTER NOT EXISTS { ?bench c:followUpdates ?on FILTER(STR(?on) = "true") } }""" ;
+    sem:function "workbench:follow-as-view" .
+
 # --- the editor -----------------------------------------------------------------------------------------
 # The workbench's editor is a code editor (c:CodeEditor, ontology/components/editor.ttl) in SPARQL.
 
@@ -258,6 +296,7 @@ c:ResultTable a owl:Class ;
     rdfs:comment "The results as a table: one column per variable the query selects, or subject, predicate and object for a graph."@en ;
     sem:slug "result-table" .
 c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
+    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
     sem:functionOnly "It runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." .
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
 
@@ -542,6 +581,7 @@ c:ResultTurtle a owl:Class ;
 as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
     sem:slug "result-turtle" .
 c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
+    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
     sem:functionOnly "It runs the query held in the data and pretty-prints the result as Turtle tokens, which needs a tokenizer." .
 c:ResultTurtleRendering-fn a sem:Rule ; sem:implements c:ResultTurtleRendering ; sem:function "workbench:turtle" .
 

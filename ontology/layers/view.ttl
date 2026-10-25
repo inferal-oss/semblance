@@ -30,6 +30,8 @@ iv:strategy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Strategy 
 runtime in the views graph: what the view got."""@en .
 iv:Incremental a iv:Strategy ; rdfs:label "incremental"@en ;
     rdfs:comment "Every operator does work in proportion to the change, not to the data."@en .
+iv:Auto a iv:Strategy ; rdfs:label "as it can"@en ;
+    rdfs:comment "Asked for on a view whose query may not be maintainable (one typed into the workbench): a fallback to recompute is expected - no warning, and no error in strict mode, which still compares it."@en .
 iv:Recompute a iv:Strategy ; rdfs:label "recomputed"@en ;
     rdfs:comment "Re-run from scratch whenever an input changes, and diffed (the fallback)."@en .
 iv:fallback a owl:DatatypeProperty ; rdfs:domain iv:View ;
@@ -130,6 +132,11 @@ iv:materialize a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Materi
 iv:Materialization a owl:Class .
 iv:Graph a iv:Materialization ; rdfs:label "in the views graph"@en ;
     rdfs:comment "A SELECT view's rows written to the views graph as a result set (rs:)."@en .
+iv:Ephemeral a iv:Materialization ; rdfs:label "to subscribers only"@en ;
+    rdfs:comment "A CONSTRUCT view's triples are not written to the views graph: only subscribers (and since()) see them."@en .
+iv:ResultSet a iv:Materialization ; rdfs:label "rows only"@en ;
+    rdfs:comment """A SELECT's rows as a result set in the views graph (as iv:Graph), a CONSTRUCT's triples nowhere (as
+iv:Ephemeral): for a query whose text anyone may type (the workbench), whose triples must not become input."""@en .
 iv:multiplicity a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "How many times a result set's row occurs (when more than once)."@en .
 
 # Designed, not built yet (docs/IVM.md §8.1): iv:maxState.

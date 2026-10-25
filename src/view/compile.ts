@@ -50,7 +50,15 @@ export const compiler: ViewCompiler = {
       return compile(source, run)
     } catch (e) {
       if (!(e instanceof Unsupported) && !(e instanceof SparqlSyntaxError)) throw e
-      return { kind: 'recompute', form: source.form, query: source.query, reason: (e as Error).message } satisfies RecomputePlan
+      // Re-run only when a change matches one of its triple patterns, where they can be read.
+      let deps: Dependencies | undefined
+      try {
+        deps = new Dependencies(run.factory, parseQuery(source.query, prefixMap(source.prefixes)).select.where, [])
+        if (deps.problem) deps = undefined
+      } catch {
+        deps = undefined
+      }
+      return { kind: 'recompute', form: source.form, query: source.query, reason: (e as Error).message, deps } satisfies RecomputePlan
     }
   },
 }
