@@ -222,7 +222,10 @@ describe('the coffee tasting example', () => {
     h.shell.flush()
     h.click([...h.root().querySelectorAll('button')].find((b) => b.textContent === 'Add to the tasting')!)
     expect(markers()).toHaveLength(4)
+    const shown = () => [...h.root().querySelectorAll('[data-sem-c=alert]')].filter((a) => !a.closest('[hidden]')).map((a) => a.textContent).join()
+    expect(shown()).toContain('No origin yet')
     h.click(h.root().querySelector('[data-sem-c=ex-fx-map] .ground')!)
+    expect(shown()).not.toContain('No origin yet')
     expect(markers()).toEqual(['Yirgacheffe', 'Huila', 'Nyeri', 'Mandheling', 'Guji *'])
     // The date field shows the chosen coffee's date, and a change is the coffee's.
     const input = () => h.root().querySelector('[data-sem-c=ex-fx-date] input.date') as HTMLInputElement

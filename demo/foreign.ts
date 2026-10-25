@@ -229,9 +229,9 @@ type LeafletModule = any
 
 /**
  * Leaflet as a widget: a map of `places` ({ id, label, lat, lng }) as circle markers, `selected` (an id)
- * drawn larger and brought into view, `label` the map's accessible name. A marker's click (or Enter on a
- * focused marker) calls emit('select', { id }); a click on the map elsewhere calls emit('place', { lat, lng })
- * (two decimals). Markers are vectors, coloured from --map-marker and --map-marker-selected; the tiles are
+ * brought into view as a marker to drag, `label` the map's accessible name. A marker's click (or Enter on
+ * a focused marker) calls emit('select', { id }); a click on the map elsewhere, dragging the chosen
+ * marker, or the arrow keys on it (Shift: further) call emit('place', { lat, lng }) (two decimals). Markers are vectors, coloured from --map-marker and --map-marker-selected; the tiles are
  * OpenStreetMap's, fetched with CORS.
  */
 export const leaflet: { load(): Promise<Widget> } = {
@@ -260,22 +260,18 @@ function leafletWidget(L: LeafletModule): Widget {
       let places: Place[] = []
       let selected: string | undefined
       let fitted = false
-      map.on('click', (e: any) => emit('place', { lat: Math.round(e.latlng.lat * 100) / 100, lng: Math.round(e.latlng.lng * 100) / 100 }))
+      const round = (n: number) => Math.round(n * 100) / 100
+      const place = (lat: number, lng: number) => emit('place', { lat: round(lat), lng: round(((((lng + 180) % 360) + 360) % 360) - 180) })
       const draw = () => {
+        // The chosen marker keeps the focus across a redraw (a nudge by key redraws it).
+        const refocus = !!markers.getLayers().find((m: any) => m.options.draggable && m.getElement?.()?.contains(doc.activeElement))
         markers.clearLayers()
         const plain = colour('--map-marker', 'steelblue')
         const strong = colour('--map-marker-selected', 'navy')
+        const surface = colour('--map-surface', 'white')
         for (const p of places) {
-          const chosen = p.id === selected
-          const marker = L.circleMarker([p.lat, p.lng], {
-            radius: chosen ? 10 : 7,
-            color: strong,
-            weight: 2,
-            fillColor: chosen ? strong : plain,
-            fillOpacity: 0.9,
-            bubblingMouseEvents: false,
-            keyboard: true,
-          })
+          if (p.id === selected) continue
+          const marker = L.circleMarker([p.lat, p.lng], { radius: 7, color: strong, weight: 2, fillColor: plain, fillOpacity: 0.9, bubblingMouseEvents: false })
           marker.bindTooltip(p.label, { direction: 'top', offset: [0, -6] })
           marker.on('click', () => emit('select', { id: p.id }))
           marker.addTo(markers)
@@ -285,14 +281,45 @@ function leafletWidget(L: LeafletModule): Widget {
             path.setAttribute('tabindex', '0')
             path.setAttribute('role', 'button')
             path.setAttribute('aria-label', p.label)
-            path.setAttribute('aria-pressed', String(chosen))
             path.addEventListener('keydown', (e) => {
               if (e.key !== 'Enter' && e.key !== ' ') return
               e.preventDefault()
               emit('select', { id: p.id })
             })
           }
-          if (chosen) marker.bringToFront()
+        }
+        // The chosen coffee: a marker to drag, or to nudge with the arrow keys, which places it.
+        const chosen = places.find((p) => p.id === selected)
+        if (!chosen) return
+        const icon = L.divIcon({
+          className: '',
+          html: `<span style="display:block;inline-size:22px;block-size:22px;border-radius:50%;background:${strong};border:3px solid ${surface};box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:grab"></span>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        })
+        const marker = L.marker([chosen.lat, chosen.lng], { icon, draggable: true, keyboard: true, autoPanOnFocus: false, zIndexOffset: 1000 })
+        marker.bindTooltip(chosen.label, { direction: 'top', offset: [0, -12] })
+        marker.on('dragend', () => {
+          const at = marker.getLatLng()
+          place(at.lat, at.lng)
+        })
+        marker.addTo(markers)
+        const el = marker.getElement?.() as HTMLElement | undefined
+        if (el) {
+          el.setAttribute('role', 'button')
+          el.setAttribute('aria-label', chosen.label)
+          el.setAttribute('aria-roledescription', 'draggable marker')
+          el.addEventListener('keydown', (e) => {
+            const step = e.shiftKey ? 2 : 0.5
+            const move: Record<string, [number, number]> = { ArrowUp: [step, 0], ArrowDown: [-step, 0], ArrowLeft: [0, -step], ArrowRight: [0, step] }
+            const d = move[e.key]
+            if (!d) return
+            // The map pans by the arrow keys too: this one is the marker's.
+            e.preventDefault()
+            e.stopPropagation()
+            place(chosen.lat + d[0], chosen.lng + d[1])
+          })
+          if (refocus) el.focus({ preventScroll: true })
         }
       }
       const view = () => {
@@ -308,6 +335,7 @@ function leafletWidget(L: LeafletModule): Widget {
         if ('selected' in o) selected = o.selected === undefined ? undefined : String(o.selected)
         if ('label' in o) box.setAttribute('aria-label', o.label === undefined ? '' : String(o.label))
       }
+      map.on('click', (e: any) => place(e.latlng.lat, e.latlng.lng))
       // Shown after it was mounted (a hidden page, a narrower column): the map measures again.
       const sized = new ResizeObserver(() => map.invalidateSize())
       sized.observe(box)

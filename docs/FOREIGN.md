@@ -106,6 +106,7 @@ ex:Pointed rdfs:subClassOf ext:Output ; beh:recorded false .  # state, but not i
 | `ext:output` | class or instance | binding: `ext:on` (DOM event type or callback name), `ext:emits` (event class), `ext:path` (into the payload, giving `beh:value`), `ext:field` (`ext:path` → `ext:predicate`) |
 | `ext:Output` | class | superclass of output events (`rdfs:subClassOf beh:Event`) |
 | `ext:summary` | class | the property the text modality shows after the label |
+| `ext:outlines` | any component | `true`: outline every island inside it, dashed, each named by what it mounts (each island's root says `data-sem-island="<tag or widget>"`), for showing which parts of a page are foreign; a `c:ToggleSwitch` can flip it |
 
 ### Why inputs are projected and not read by the effect
 
@@ -328,7 +329,7 @@ reaction that rewrites the value.
 | `src/render/serialize.ts` | a custom element island's tag and attribute inputs in `toHTML` |
 | `src/ns.ts`, `src/ontology.ts`, `src/index.ts` | `ext:` prefix, `EXT`, the file, the exports |
 | `examples/foreign/` | `<star-rating>` (a stand-in web component), `spark` (a stand-in vanilla chart), their Turtle, a host (`npx vite --config examples/foreign/vite.config.ts`) |
-| `demo/gallery/_ex-foreign.ttl`, `demo/foreign.ts`, `demo/main.ts` | the site's **Coffee tasting** example (Examples page): Shoelace's `<sl-rating>`, a Chart.js chart, a Leaflet map (click a marker to choose, the map to place a coffee) and a flatpickr date field, loaded from jsDelivr, themed by the site's tokens, with a walkthrough that links into the Reference. Native components on both sides: a dependency-layer alert at 0 and at 5 stars, a derived average, the graph's triples and the newest change-log members; a text field and button add coffees that the foreign components pick up. One card follows the chosen coffee: the app's rule derives its parts' `c:of` from `cf:tasting cf:chosen`, so the same Shoelace element is pointed at another coffee |
+| `demo/gallery/_ex-foreign.ttl`, `demo/foreign.ts`, `demo/main.ts` | the site's **Coffee tasting** example (Examples page): Shoelace's `<sl-rating>`, a Chart.js chart, a Leaflet map (click a marker to choose; click the map, drag the chosen marker or nudge it with the arrow keys to place the coffee) and a flatpickr date field, loaded from jsDelivr, themed by the site's tokens, with a walkthrough that links into the Reference. Native components on both sides: a dependency-layer alert at 0 and at 5 stars, a derived average, the graph's triples and the newest change-log members; a text field and button add coffees that the foreign components pick up. One card follows the chosen coffee: the app's rule derives its parts' `c:of` from `cf:tasting cf:chosen`, so the same Shoelace element is pointed at another coffee |
 | `test/ex-foreign.test.ts` | that example through events, with stand-ins for the CDN modules |
 | `test/foreign.test.ts` | mount, round trips through DOM events on the foreign components, echo suppression, clamping, RTL keys, unrecorded outputs, data changes, SSR and text, SPARQL/function parity, destroy |
 

@@ -44,8 +44,18 @@ const island: FnRule = (ctx, focus) => {
       for (const v of values) o.t(input, EXT.value, v)
     }
   }
-  const root = o.el('root', 'Div', {}, [mount])
+  const kind = all.flatMap((d) => [...ctx.objects(d, EXT.tag)])[0]?.value ?? all.flatMap((d) => [...ctx.objects(d, EXT.widget)])[0]?.value ?? 'island'
+  const root = o.el('root', 'Div', { 'data-sem-island': kind }, [mount])
   o.renders(root)
+  return o.quads
+}
+
+/** A component whose ext:outlines is true marks its root, which the style outlines its islands by. */
+const outlines: FnRule = (ctx, focus) => {
+  const on = ctx.object(focus, EXT.outlines)
+  if (on?.termType !== 'Literal' || on.value !== 'true') return []
+  const o = ctx.out(focus)
+  o.attr(o.node('root'), 'data-sem-islands', 'outlined')
   return o.quads
 }
 
@@ -68,4 +78,5 @@ const islandText: FnRule = (ctx, focus) => {
 export const foreignFunctions: Record<string, FnRule> = {
   'foreign:island': island,
   'foreign:island-text': islandText,
+  'foreign:outlines': outlines,
 }

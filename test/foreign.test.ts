@@ -175,6 +175,19 @@ describe('foreign components', () => {
     expect(fri()).toBe('Fri: 3')
   })
 
+  it('marks each island with what it mounts, and outlines them inside a component that says ext:outlines', () => {
+    for (const prefer of ['sparql', 'function'] as const) {
+      const h = mount('wat', prefer)
+      expect(h.document.querySelector('[data-sem-c=ex-rating]')!.getAttribute('data-sem-island')).toBe('star-rating')
+      expect(h.document.querySelector('[data-sem-c=ex-spark]')!.getAttribute('data-sem-island')).toBe('spark')
+      expect(h.document.querySelector('[data-sem-c=stack]')!.getAttribute('data-sem-islands')).toBe('outlined')
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode(EX + 'page'), f.namedNode(NS.ext + 'outlines'), null), add: [] })
+      h.renderer.flush()
+      expect(h.document.querySelector('[data-sem-islands]')).toBeNull()
+    }
+  })
+
   it('renders on the server as a custom element tag with its attribute inputs, and as text', () => {
     const h = mount('wat')
     expect(html(h)).toContain('<star-rating aria-label="Coffee" max="5"></star-rating>')

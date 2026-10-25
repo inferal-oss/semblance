@@ -198,8 +198,11 @@ WHERE { $this c:of ?coffee . $event beh:value ?v . FILTER(REGEX(?v, "^[0-9]{4}-[
 
 # --- The page ---------------------------------------------------------------------------------------
 
-ui:ex-foreign a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:ex-foreign-intro ui:ex-foreign-views ui:ex-foreign-card ui:ex-foreign-add-row ui:ex-foreign-graph ) .
+ui:ex-foreign a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; ext:outlines true ;
+    c:children ( ui:ex-foreign-intro ui:ex-foreign-outlines ui:ex-foreign-views ui:ex-foreign-card ui:ex-foreign-add-row ui:ex-foreign-graph ) .
+# Which parts are islands: each is outlined and named by what it mounts while the switch is on.
+ui:ex-foreign-outlines a c:ToggleSwitch ; c:controls ui:ex-foreign ; c:property ext:outlines ;
+    c:label "Outline the islands" , "Обвести острівці"@uk , "Inseln umranden"@de , "حدّد الجزر"@ar .
 ui:ex-foreign-views a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:ex-foreign-chart ui:ex-foreign-map ) .
 ui:ex-foreign-intro a c:Text ;
     c:label "Rate the coffees you tasted. Four open-source libraries, loaded from a CDN, share one graph: Shoelace's star rating, a Chart.js chart, a Leaflet map and a flatpickr date field. Choose a coffee by its bar or its marker, add one of your own, and click the map to place it." ,
@@ -233,6 +236,16 @@ ui:FxPointAtChosen-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT { $this ?as ?coffee }
 WHERE { $this a ui:FxOnChosen ; ui:fxTasting ?tasting ; ui:fxAs ?as . ?tasting cf:chosen ?coffee }""" .
+# The "no origin yet" hint is hidden once the coffee it is c:of has a latitude. It follows c:of, which
+# the rule above derives, and watches the latitude there (sem:watches filters followed changes too).
+ui:FxNeedsOrigin a owl:Class ; rdfs:comment "Mixin: c:hidden while the coffee it is c:of has an origin (cf:lat)."@en .
+ui:FxUnplaced a sem:Rendering ; sem:targets ui:FxNeedsOrigin ; sem:stratum -14 ; sem:follows c:of ;
+    sem:watches rdf:type , c:of , cf:lat .
+ui:FxUnplaced-sparql a sem:Rule ;
+    sem:implements ui:FxUnplaced ;
+    sem:construct """
+CONSTRUCT { $this c:hidden ?placed }
+WHERE { $this a ui:FxNeedsOrigin ; c:of ?coffee . BIND(EXISTS { ?coffee cf:lat ?lat } AS ?placed) }""" .
 # The card's title is the chosen coffee's name.
 ui:FxTitled a owl:Class ; rdfs:comment "Mixin: c:label is the name of the coffee its ui:fxTasting has chosen."@en .
 ui:FxTitle a sem:Rendering ; sem:targets ui:FxTitled ; sem:stratum -15 ; sem:follows ui:fxTasting ;
@@ -245,7 +258,7 @@ WHERE { $this a ui:FxTitled ; ui:fxTasting ?tasting . ?tasting cf:chosen ?coffee
 
 ui:ex-foreign-card a c:Card , ui:FxTitled ; ui:fxTasting cf:tasting ; c:content ui:ex-foreign-body .
 ui:ex-foreign-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-foreign-notes ui:ex-foreign-rate ui:ex-foreign-date ui:ex-foreign-unrated ui:ex-foreign-top ui:ex-foreign-triples ) .
+    c:children ( ui:ex-foreign-notes ui:ex-foreign-rate ui:ex-foreign-date ui:ex-foreign-unrated ui:ex-foreign-top ui:ex-foreign-unplaced ui:ex-foreign-triples ) .
 ui:ex-foreign-notes a c:DescriptionList , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of ; c:fields ( cf:notes ) .
 ui:ex-foreign-rate a ui:FxRating , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of .
 ui:ex-foreign-date a ui:FxDate , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of ;
@@ -256,6 +269,8 @@ ui:ex-foreign-unrated a c:Alert , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:f
 ui:ex-foreign-top a c:Alert , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs dep:follows ; sty:tone sty:Success ;
     c:label "Top marks" ; c:help "Five stars: the best of the tasting." ;
     dep:property cf:rating ; dep:case ui:fx-at-5 ; dep:otherwise ui:fx-hidden .
+ui:ex-foreign-unplaced a c:Alert , ui:FxOnChosen , ui:FxNeedsOrigin ; ui:fxTasting cf:tasting ; ui:fxAs c:of ; sty:tone sty:Info ;
+    c:label "No origin yet" ; c:help "Click the map where it grows. Drag its marker, or focus it and use the arrow keys, to move it." .
 ui:ex-foreign-triples a c:TriplesView , ui:FxOnChosen ; ui:fxTasting cf:tasting ; ui:fxAs c:of .
 
 # --- Adding a coffee: native components feeding the foreign ones --------------------------------------
@@ -346,7 +361,9 @@ ui:ex-foreign-log a c:StreamMembers ; c:of beh:ChangeLog ; c:limit 3 .
 [] a sty:StyleRule ; sty:appliesTo ui:FxMap ;
     sty:declares [ sty:property "--map-marker" ; sty:token tok:accent-soft ] ,
                  [ sty:property "--map-marker-selected" ; sty:token tok:accent ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
+                 [ sty:property "--map-surface" ; sty:token tok:surface ] .
+[] a sty:StyleRule ; sty:appliesTo ui:FxMap ; sty:part ".sem-island-widget" ;
+    sty:declares [ sty:property "border-radius" ; sty:token tok:radius-card ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
                  [ sty:property "isolation" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo ui:FxDate ; sty:part "input" ;
@@ -394,13 +411,14 @@ ui:ex-foreign-w5 a c:WalkthroughStep ; rdfs:label "One card follows the choice" 
 ui:ex-foreign-w6 a c:WalkthroughStep ; rdfs:label "Native components follow the foreign ones" ;
     c:children ( "Native components read what the islands wrote. " ui:ex-foreign-m-unrated " is shown only while the coffee has no stars and " ui:ex-foreign-m-top " only at five: the dependency layer gives them c:hidden from the rating, so a hidden one is not evaluated. " ui:ex-foreign-m-average " is derived from every rating by " ui:ex-foreign-m-averagerule ", and the card's " ui:ex-foreign-m-TriplesView " prints the coffee as the graph has it." ) .
 ui:ex-foreign-w7 a c:WalkthroughStep ; rdfs:label "And the other way: native components feed them" ;
-    c:children ( "Type a name into " ui:ex-foreign-m-new ", a " ui:ex-foreign-m-TextField ", and press Add. " ui:ex-foreign-m-add " mints a coffee from the event, unrated and last in order, adds it to every view that compares coffees, and chooses it. Chart.js grows a bar, the average counts it, and Shoelace's stars turn to it, empty, with \"Not rated yet\" beside them. It has no origin yet, so the map has no marker: click where it grows, and " ui:ex-foreign-m-place " gives it one, from the map's own click. Themed by the site's tokens throughout: switch the theme, the scheme or the language (Arabic turns the chart and the keys around)." ) .
+    c:children ( "Type a name into " ui:ex-foreign-m-new ", a " ui:ex-foreign-m-TextField ", and press Add. " ui:ex-foreign-m-add " mints a coffee from the event, unrated and last in order, adds it to every view that compares coffees, and chooses it. Chart.js grows a bar, the average counts it, and Shoelace's stars turn to it, empty, with \"Not rated yet\" beside them. It has no origin yet, so the map has no marker and the card says so: click where it grows, and " ui:ex-foreign-m-place " gives it one, from the map's own click; drag the marker (or nudge it with the arrow keys) to move it. The switch at the top, " ui:ex-foreign-m-outlines ", outlines every island and names what it mounts. Themed by the site's tokens throughout: switch the theme, the scheme or the language (Arabic turns the chart and the keys around)." ) .
 
 ui:ex-foreign-m-FxRating a c:Mention ; c:label "ui:FxRating" ; c:mentions ui:FxRating .
 ui:ex-foreign-m-FxChart a c:Mention ; c:label "ui:FxChart" ; c:mentions ui:FxChart .
 ui:ex-foreign-m-FxMap a c:Mention ; c:label "ui:FxMap" ; c:mentions ui:FxMap .
 ui:ex-foreign-m-FxDate a c:Mention ; c:label "ui:FxDate" ; c:mentions ui:FxDate .
 ui:ex-foreign-m-place a c:Mention ; c:label "ui:FxPlace" ; c:mentions ui:FxPlace .
+ui:ex-foreign-m-outlines a c:Mention ; c:label "ext:outlines" ; c:mentions ext:outlines ; c:to ext:outlines .
 ui:ex-foreign-m-Island a c:Mention ; c:label "ext:Island" ; c:mentions ext:Island ; c:to ext:Island .
 ui:ex-foreign-m-CustomElement a c:Mention ; c:label "ext:CustomElement" ; c:mentions ext:CustomElement ; c:to ext:CustomElement .
 ui:ex-foreign-m-Widget a c:Mention ; c:label "ext:Widget" ; c:mentions ext:Widget ; c:to ext:Widget .
