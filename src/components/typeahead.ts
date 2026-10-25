@@ -4,7 +4,8 @@
 import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
-import { isTrue, labelOf, rdfList, str, text } from './util.ts'
+import { compact } from './reference.ts'
+import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
@@ -27,30 +28,85 @@ export function fold(s: string): string {
   return out
 }
 
-/** The typeahead's options, as the SPARQL rule c:TypeaheadOptions finds them (order aside). */
-function options(ctx: RuleContext, focus: Term, property: Term | undefined): Term[] {
+/**
+ * The typeahead's options, as the SPARQL rule c:TypeaheadOptions finds them, each with its
+ * position (the least, for an option from two sources): in the c:options list (from 1), its
+ * sem:order (an instance of the option class), or 0.
+ */
+function options(ctx: RuleContext, focus: Term, property: Term | undefined): { term: Term; position: number }[] {
   const explicit = ctx.object(focus, c('options'))
-  if (explicit) return rdfList(ctx, explicit)
-  const out = new Map<string, Term>()
-  const cls = ctx.object(focus, c('optionClass')) ?? (property ? ctx.object(property, RDFS_RANGE) : undefined)
-  if (cls) for (const q of ctx.match(null, RDF_TYPE, cls)) if (q.subject.termType === 'NamedNode') out.set(key(q.subject), q.subject)
-  if (property && isTrue(ctx.object(focus, c('optionsInUse')))) for (const q of ctx.match(null, property, null)) out.set(key(q.object), q.object)
+  if (explicit) {
+    const out = new Map<string, { term: Term; position: number }>()
+    rdfList(ctx, explicit).forEach((term, i) => out.has(key(term)) || out.set(key(term), { term, position: i + 1 }))
+    return [...out.values()]
+  }
+  const out = new Map<string, { term: Term; position: number }>()
+  const add = (term: Term, position: number) => {
+    const had = out.get(key(term))
+    if (!had || position < had.position) out.set(key(term), { term, position })
+  }
+  const cls = classOf(ctx, focus, property)
+  if (cls) {
+    for (const q of ctx.match(null, RDF_TYPE, cls)) {
+      if (q.subject.termType !== 'NamedNode') continue
+      const order = Math.round(Number(str(ctx.object(q.subject, NS.sem + 'order'))))
+      add(q.subject, Number.isFinite(order) ? order : 0)
+    }
+  }
+  if (property && isTrue(ctx.object(focus, c('optionsInUse')))) for (const q of ctx.match(null, property, null)) add(q.object, 0)
+  const from = ctx.object(focus, c('optionsFrom'))
+  if (from) for (const t of ctx.objects(from, c('lists'))) add(t, 0)
   return [...out.values()]
 }
 
+/** The class whose instances are options: c:optionClass, else (without c:optionsFrom) the property's range. */
+const classOf = (ctx: RuleContext, focus: Term, property: Term | undefined) =>
+  ctx.object(focus, c('optionClass')) ?? (property && !ctx.object(focus, c('optionsFrom')) ? ctx.object(property, RDFS_RANGE) : undefined)
+
 const key = (t: Term) => (t.termType === 'Literal' ? '"' : '<') + t.value
 
-/** What an option or value is called: a literal is its own text. */
-const nameOf = (ctx: RuleContext, t: Term) => (t.termType === 'Literal' ? t.value : labelOf(ctx, t))
+/**
+ * What an option or value is called (a literal is its own text), and, with c:optionNames
+ * c:PrefixedNames, its prefixed name with its label as the detail it is also found by, when the
+ * label says more than the local name. A term whose namespace has no prefix is called by its label.
+ */
+function namesOf(ctx: RuleContext, focus: Term, t: Term): { label: string; detail?: string } {
+  if (t.termType === 'Literal') return { label: t.value }
+  if (ctx.object(focus, c('optionNames'))?.value !== c('PrefixedNames')) return { label: labelOf(ctx, t) }
+  const name = compact(ctx, t.value)
+  const label = text(ctx, t, c('label')) ?? text(ctx, t, RDFS_LABEL)
+  if (name.startsWith('<')) return { label: label ?? t.value.replace(/^.*[#/]/, '') }
+  const said = label === undefined ? undefined : fold(label)
+  return said === undefined || said === fold(name) || said === fold(t.value.replace(/^.*[#/]/, '')) ? { label: name } : { label: name, detail: label }
+}
+
+/** What typing is matched against: the folded name, then, with a detail, a line break and the folded detail. */
+const matchKeyOf = (searchKey: string, detail: string | undefined) => (detail === undefined ? searchKey : searchKey + '\n' + fold(detail))
+
+/** An option's rank, as c:TypeaheadOptions computes it: its position, zero-padded, then its search key. */
+const rankOf = (position: number, searchKey: string) => {
+  const n = String(Math.max(0, Math.min(999_999, position)))
+  return '0'.repeat(6 - n.length) + n + ' ' + searchKey
+}
+
+/** A text node: <typeahead>/~term-<term>, with the term's names and keys. */
+function describe(ctx: RuleContext, o: ReturnType<RuleContext['out']>, focus: Term, term: Term) {
+  const node = o.node('term-' + encodeForUri(term.value))
+  const { label, detail } = namesOf(ctx, focus, term)
+  const searchKey = fold(label)
+  o.t(node, c('textOf'), focus).t(node, c('textFor'), term).t(node, L10N.label, label).t(node, c('searchKey'), searchKey).t(node, c('matchKey'), matchKeyOf(searchKey, detail))
+  if (detail !== undefined) o.t(node, c('detail'), detail)
+  return { node, searchKey }
+}
 
 /**
- * For each option and each current value, <typeahead>/~term-<term>: what it is called in the
- * viewer's language (l10n:label) and its search key (c:searchKey), whether it is offered (an
- * option) and chosen (a current value). Also the caption (<…>/~l10n-caption) and the phrases.
+ * For each option, <typeahead>/~term-<term>: what it is called in the viewer's language
+ * (l10n:label), its search and match keys (c:searchKey, c:matchKey), its detail, its rank, and
+ * that it is offered. Also the caption (<…>/~l10n-caption) and the phrases. The current values'
+ * nodes are typeahead:values'.
  */
 const texts: FnRule = (ctx, focus) => {
   const property = ctx.object(focus, c('property'))
-  const target = ctx.object(focus, c('controls'))
   const o = ctx.out(focus)
   const bool = ctx.f.literal('true', ctx.nn(XSD_BOOLEAN))
   const caption = text(ctx, focus, c('label')) ?? (property ? labelOf(ctx, property) : undefined)
@@ -59,29 +115,35 @@ const texts: FnRule = (ctx, focus) => {
     const words = text(ctx, ctx.nn(c(phrase)), NS.rdfs + 'label')
     if (words !== undefined) o.t(o.node('l10n-' + local), L10N.label, words)
   }
-  const nodes = new Map<string, { term: Term; offered?: boolean; chosen?: boolean }>()
-  for (const t of options(ctx, focus, property)) nodes.set(key(t), { term: t, offered: true })
-  if (target?.termType === 'NamedNode' && property) {
-    for (const v of ctx.objects(target, property)) {
-      const n = nodes.get(key(v)) ?? { term: v }
-      n.chosen = true
-      nodes.set(key(v), n)
-    }
-  }
-  for (const { term, offered, chosen } of nodes.values()) {
-    const node = o.node('term-' + encodeForUri(term.value))
-    const label = nameOf(ctx, term)
-    o.t(node, c('textOf'), focus).t(node, c('textFor'), term).t(node, L10N.label, label).t(node, c('searchKey'), fold(label))
-    if (offered) o.t(node, c('offered'), bool)
-    if (chosen) o.t(node, c('chosen'), bool)
+  for (const { term, position } of options(ctx, focus, property)) {
+    const { node, searchKey } = describe(ctx, o, focus, term)
+    o.t(node, c('offered'), bool).t(node, c('rank'), rankOf(position, searchKey))
   }
   return o.quads
 }
-// The values are read through the controlled node (sem:follows c:controls): the property itself
-// is what to watch there, besides where the options come from.
+// Options of a class or in use may change with the controlled node (a value created, an instance
+// added elsewhere): the property is then watched there (sem:follows c:controls). Options from a
+// list or from what a node lists follow those (traced reads), not the values.
 texts.watches = (ctx, focus) => {
   const property = ctx.object(focus, c('property'))
-  return new Set([RDF_TYPE, c('label'), c('controls'), c('property'), c('options'), c('optionClass'), c('optionsInUse'), ...(property ? [property.value] : [])])
+  const values = property && !ctx.object(focus, c('options')) && (classOf(ctx, focus, property) || isTrue(ctx.object(focus, c('optionsInUse'))))
+  return new Set([RDF_TYPE, c('label'), c('controls'), c('property'), c('options'), c('optionClass'), c('optionsInUse'), c('optionsFrom'), c('optionNames'), ...(values ? [property.value] : [])])
+}
+
+/** For each current value, its text node (as for an option), marked chosen. */
+const values: FnRule = (ctx, focus) => {
+  const property = ctx.object(focus, c('property'))
+  const target = ctx.object(focus, c('controls'))
+  if (target?.termType !== 'NamedNode' || !property) return []
+  const o = ctx.out(focus)
+  const bool = ctx.f.literal('true', ctx.nn(XSD_BOOLEAN))
+  for (const v of ctx.objects(target, property)) o.t(describe(ctx, o, focus, v).node, c('chosen'), bool)
+  return o.quads
+}
+// The values are read through the controlled node (sem:follows c:controls): the property itself is what to watch there.
+values.watches = (ctx, focus) => {
+  const property = ctx.object(focus, c('property'))
+  return new Set([RDF_TYPE, c('controls'), c('property'), c('optionNames'), ...(property ? [property.value] : [])])
 }
 
 /** The typed text, trimmed and folded: what the options' search keys are matched against. */
@@ -91,4 +153,4 @@ const query: FnRule = (ctx, focus) => {
   return ctx.out(focus).t(focus, c('foldedQuery'), fold(typed)).quads
 }
 
-export const typeaheadFunctions: Record<string, FnRule> = { 'typeahead:texts': texts, 'typeahead:query': query }
+export const typeaheadFunctions: Record<string, FnRule> = { 'typeahead:texts': texts, 'typeahead:values': values, 'typeahead:query': query }

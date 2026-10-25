@@ -116,8 +116,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   currency and dialling code), which stay editable. The Checkout example's form follows the
   country; Settings' online switch follows the public profile.
 - **Keyboard**: `key:shortcut "mod+k"` on any component gives
-  `aria-keyshortcuts`, a hint, and activation by key press (through the
-  component's own click reactions). `key:Command` is a shortcut that belongs to
+  `aria-keyshortcuts`, a hint (on the root, or the part its class names:
+  `key:hintPart`), and activation by key press (through the component's own
+  click reactions). A component whose control is a text field is focused
+  instead, its text selected, and an Escape nothing else uses gives the focus
+  back ("/" goes to the Reference page's search). `key:Command` is a shortcut that belongs to
   no component: its press is an event its reactions handle (Z pauses the
   inspector). Component classes declare arrow-key navigation patterns
   (`key:navigation`: roving focus for menus, tabs, trees, accordions).

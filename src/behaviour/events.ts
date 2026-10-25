@@ -473,7 +473,9 @@ export class EventBus {
     renderer.host.addEventListener('input', controlled)
     const gestures = (e: Event) => renderer.inSlot(e.target as Node) || this.gesture(e as PointerEvent, renderer, drags)
     renderer.host.addEventListener('pointerdown', gestures)
-    // Keyboard layer: a key combination activates the element that declares it.
+    // Keyboard layer: a key combination activates the element that declares it. A field it focuses
+    // remembers where the focus was, to give it back on an Escape nothing else uses.
+    const cameFrom = new WeakMap<Element, HTMLElement | null>()
     const keys = guarded((e: Event) => {
       const k = e as KeyboardEvent
       if (!k.key || consumed.has(k) || ['Shift', 'Control', 'Alt', 'Meta'].includes(k.key)) return
@@ -482,6 +484,15 @@ export class EventBus {
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
+      // An Escape nothing used in a field a shortcut focused: back to where the focus was.
+      const back = typing && combo === 'escape' ? cameFrom.get(typing) : undefined
+      if (typing && back !== undefined) {
+        k.preventDefault()
+        cameFrom.delete(typing)
+        if (back?.isConnected && back !== doc.body) back.focus?.()
+        else (typing as HTMLElement).blur?.()
+        return
+      }
       // Commands (key:Command) are graph nodes, not elements: the press becomes their event,
       // carrying where the pointer is (the node under it, its distance to the edges).
       const command = this.commandFor(combo)
@@ -505,7 +516,16 @@ export class EventBus {
       if (!el || el.closest('[hidden], [inert]')) return
       k.preventDefault()
       const field = el.matches('input, textarea, select') ? el : (el.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select') as HTMLElement | null)
-      if (field) return field.focus()
+      if (field) {
+        const from = doc.activeElement as HTMLElement | null
+        field.focus()
+        ;(field as HTMLInputElement).select?.()
+        if (from !== field) {
+          cameFrom.set(field, from)
+          field.addEventListener('focusout', () => cameFrom.delete(field), { once: true })
+        }
+        return
+      }
       const control = el.matches('button, a, [role=button], input') ? el : (el.querySelector('button, a, [role=button], input') as HTMLElement | null)
       ;(control ?? el).click()
     })

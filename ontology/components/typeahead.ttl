@@ -16,8 +16,12 @@
 #   c:TagInput  edits a multi-valued one: its values are removable c:Tag pills before the field.
 #
 # Where the options come from is said on the instance: an explicit c:options list; else the
-# instances of c:optionClass (by default the property's rdfs:range, as for c:Choice), together
-# with, when c:optionsInUse is true, every value the property already has on any node. With
+# instances of c:optionClass (by default, when there is no c:optionsFrom, the property's
+# rdfs:range, as for c:Choice), together with what the node c:optionsFrom names lists (c:lists:
+# a c:TermTree lists every term it shows) and, when c:optionsInUse is true, every value the
+# property already has on any node. An option is called by its label (c:optionNames c:Labels, the
+# default) or by its prefixed name, its label then being a second name it is found by
+# (c:PrefixedNames: "c:List", "key:Layer · keyboard"). With
 # c:allowsCustom true, text that names no option can be committed as a new value: a literal or a
 # new resource with that rdfs:label (c:customAs; by default a literal for an owl:DatatypeProperty,
 # a resource otherwise, minted under c:mintBase). What a new value may be, and how many values a
@@ -31,9 +35,16 @@
 # aria-expanded, aria-controls (the role=listbox popup) and aria-activedescendant (the active
 # option), so focus stays in the field while the arrow keys move through the list.
 #
+# Thousands of options. With c:optionLimit n, the list is only the n best matches of what is typed,
+# built while the list is open: an exact name first, then a name or a word of it that starts with
+# the text, then any other that contains it, the shorter first (c:TypeaheadMatches, one query per
+# keystroke; c:TypeaheadOptions is not run). c:picksFirstMatch true lets Enter take the best match
+# when nothing is highlighted, as a search field does.
+#
 # How a keystroke stays cheap. Typing writes c:value; a function rule folds it (case and
 # diacritics, which SPARQL cannot) into c:foldedQuery; then
-#   - each option is its own component (c:TypeaheadOption, minted once by c:TypeaheadOptions) whose
+#   - each option is its own component (c:TypeaheadOption, minted once by c:TypeaheadOptions, or
+#     under c:optionLimit only the best few, minted anew by c:TypeaheadMatches as the text changes) whose
 #     SPARQL rule decides whether it matches and highlights the matched part: the options are
 #     evaluated member-wise, in one bulk query, and only those whose state changed write anything;
 #   - the typeahead's own rule (the field, the popup, the "create" and status rows) is O(1) but for
@@ -46,7 +57,9 @@
 # Options follow what the typeahead itself does (a value it creates is an option at once) and any
 # change to the node it controls. Instances of the option class added elsewhere join the list at
 # the next such change, as for c:Choice: SPARQL rules hear their focus and the nodes they follow,
-# and a function rule what it read, not every new member of a class.
+# and a function rule what it read, not every new member of a class. Options a node lists
+# (c:optionsFrom) follow its c:lists, and only them: a pick costs what the values changed, however
+# many options there are.
 
 <https://semblance.dev/ns/component/typeahead> a owl:Ontology ;
     rdfs:label "Semblance typeaheads: combobox and tag input"@en .
@@ -57,9 +70,11 @@ c:Typeahead a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A text field with a list of options that typing filters (case- and diacritic-insensitively,
 the matched part highlighted). It edits c:property of the node it c:controls. Options: c:options, or the
-instances of c:optionClass (default: the property's rdfs:range), plus the values in use
-(c:optionsInUse). c:allowsCustom lets text that matches no option be committed as a new value
-(c:customAs, c:mintBase). Also: c:label, c:placeholder, c:help, c:disabled, val:validates.
+instances of c:optionClass (default: the property's rdfs:range), plus what a node lists (c:optionsFrom)
+and the values in use (c:optionsInUse), called by label or by prefixed name (c:optionNames). For
+thousands of options, c:optionLimit lists only the best matches. c:allowsCustom lets text that matches
+no option be committed as a new value (c:customAs, c:mintBase). Also: c:label, c:placeholder, c:help,
+c:disabled, val:validates, c:picksFirstMatch, and a key:shortcut that focuses the field.
 Down and Up move through the shown options (opening the list), Enter picks the highlighted one (or the
 one the text names exactly, or creates it, or the only one shown), Escape closes the list and gives the typed text back, and
 a second Escape clears it."""@en ;
@@ -85,7 +100,24 @@ in the val:validates shape caps how many there are (its sh:message is shown at t
 
 c:optionClass a owl:ObjectProperty ; rdfs:domain c:Typeahead ; rdfs:range owl:Class ;
     rdfs:label "Options from"@en ;
-    rdfs:comment "Options are the instances of this class (default: the controlled property's rdfs:range)."@en .
+    rdfs:comment "Options are the instances of this class (default, without c:optionsFrom: the controlled property's rdfs:range)."@en .
+c:optionsFrom a owl:ObjectProperty ; rdfs:domain c:Typeahead ;
+    rdfs:label "Options listed by"@en ;
+    rdfs:comment "Options are what this node lists (c:lists): a c:TermTree's terms, say. They follow its c:lists exactly."@en .
+c:lists a rdf:Property ;
+    rdfs:comment "What a node lists, one value each: stated, or derived by a component from what it shows (a c:TermTree lists every term of its sections). A typeahead's c:optionsFrom offers them."@en .
+c:optionNames a owl:ObjectProperty ; rdfs:domain c:Typeahead ; rdfs:range c:OptionNaming ;
+    rdfs:comment "How options are called (default c:Labels)."@en .
+c:OptionNaming a owl:Class ; rdfs:comment "How a typeahead calls its options and values."@en .
+c:Labels a c:OptionNaming ; rdfs:label "by label"@en ; sem:order 1 ;
+    rdfs:comment "By c:label or rdfs:label in the viewer's language, else the IRI's local name; a literal is its own text."@en .
+c:PrefixedNames a c:OptionNaming ; rdfs:label "by prefixed name"@en ; sem:order 2 ;
+    rdfs:comment "By prefixed name (c:List; sh:prefix declarations), with the label, when it says more, shown after it and searched too (c:detail). A term of an undeclared namespace is called by its label."@en .
+c:optionLimit a owl:DatatypeProperty ; rdfs:domain c:Typeahead ; rdfs:range xsd:positiveInteger ;
+    rdfs:label "Options shown"@en ;
+    rdfs:comment "At most this many options are listed: the best matches of the typed text (up to 50, the SPARQL rule's bound), built only while the list is open. For thousands of options."@en .
+c:picksFirstMatch a owl:DatatypeProperty ; rdfs:domain c:Typeahead ; rdfs:range xsd:boolean ;
+    rdfs:comment "true: Enter with typed text and nothing highlighted picks the first option shown (the best match), when no option is named exactly."@en .
 c:optionsInUse a owl:DatatypeProperty ; rdfs:domain c:Typeahead ; rdfs:range xsd:boolean ;
     rdfs:comment "Options include every value the controlled property already has, on any node (literals too)."@en .
 c:allowsCustom a owl:DatatypeProperty ; rdfs:domain c:Typeahead ; rdfs:range xsd:boolean ;
@@ -112,6 +144,10 @@ c:foldedQuery a owl:DatatypeProperty ; rdfs:domain c:Typeahead ;
     rdfs:comment "Derived: the typed text, trimmed, lower-cased and without diacritics, which the options are matched against."@en .
 c:searchKey a owl:DatatypeProperty ;
     rdfs:comment "Derived: a label folded like c:foldedQuery, one character for each of the label's, so that a match's position in it is its position in the label."@en .
+c:detail a owl:DatatypeProperty ;
+    rdfs:comment "Derived, on a text node and an option: a second name the option is found by and shown with (its label, under c:PrefixedNames)."@en .
+c:matchKey a owl:DatatypeProperty ;
+    rdfs:comment "Derived: what typing is matched against: the c:searchKey, then, with a c:detail, a line break and the detail folded the same way (a match before the break is in the name, one after it in the detail)."@en .
 c:textOf a owl:ObjectProperty ; rdfs:range c:Typeahead ;
     rdfs:comment "Derived, on a node minted <typeahead>/~term-<term>: the typeahead whose option or value it describes."@en .
 c:textFor a rdf:Property ;
@@ -119,7 +155,7 @@ c:textFor a rdf:Property ;
 c:offered a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Derived, on a text node: the term is one of the options."@en .
 c:chosen a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Derived, on a text node: the term is a current value of the controlled property."@en .
 c:rank a owl:DatatypeProperty ;
-    rdfs:comment "Derived: where an option sorts (its list position or sem:order, zero-padded, then its search key), or a pill (its search key). Also its sem:orderKey."@en .
+    rdfs:comment "Derived: where an option sorts (its list position or sem:order, zero-padded, then its search key; under c:optionLimit, how well it matches first), or a pill (its search key). Also its sem:orderKey. A text node of an option has its unlimited rank."@en .
 c:option a rdf:Property ; rdfs:domain c:TypeaheadOption ; rdfs:comment "The option (an IRI or a literal) a c:TypeaheadOption shows."@en .
 
 # On rendered rows of the list, for the reactions: which typeahead a row belongs to, what picking it
@@ -150,10 +186,13 @@ c:AlreadyAdded a c:Phrase ; rdfs:label "“{}” is already added"@en , "«{}» 
 
 # --- texts: labels in the viewer's language, and search keys ------------------------------------------
 # A function layer, like c:ChoiceTexts: before anything renders, every option and every current
-# value gets a node <typeahead>/~term-<term> with its label in the viewer's language and its
-# search key; the caption and the phrases get theirs too. It is the only rule that hears the
-# controlled property change (its watches are the property itself), so the option list and the
-# pills, which read what it derives (sem:readsMinted), follow the values without hearing typing.
+# value gets a node <typeahead>/~term-<term> with its label in the viewer's language (or prefixed
+# name, c:optionNames), its search and match keys, a detail if it has one, and (an option) its
+# rank; the caption and the phrases get theirs too. Two rules: the options' texts, which hear the
+# controlled property only when options of a class or in use may change with it (a value created,
+# a new instance), and the values' texts, which do (chosen, c:chosen). So a pick over options a node
+# lists rewrites two text nodes, not all of them. The option list and the pills read what they
+# derive (sem:readsMinted), so they follow the values without hearing typing.
 
 c:TypeaheadTexts a sem:Rendering ;
     sem:targets c:Typeahead ;
@@ -162,6 +201,14 @@ c:TypeaheadTexts a sem:Rendering ;
     sem:follows c:controls ;
     sem:functionOnly "It folds labels for matching: Unicode normalization (NFD) and the removal of combining marks, which SPARQL has no function for; and it picks labels in the viewer's language, a projection setting no query can see." .
 c:TypeaheadTexts-fn a sem:Rule ; sem:implements c:TypeaheadTexts ; sem:function "typeahead:texts" .
+
+c:TypeaheadValueTexts a sem:Rendering ;
+    sem:targets c:Typeahead ;
+    sem:stratum -20 ;
+    sem:inputOnly true ;
+    sem:follows c:controls ;
+    sem:functionOnly "It folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed), in the viewer's language, which SPARQL cannot." .
+c:TypeaheadValueTexts-fn a sem:Rule ; sem:implements c:TypeaheadValueTexts ; sem:function "typeahead:values" .
 
 c:TypeaheadQuery a sem:Rendering ;
     sem:targets c:Typeahead ;
@@ -278,7 +325,7 @@ WHERE {
   # What the typed text names: an option or a value exactly, a value already added, any option shown.
   BIND(?q != "" && EXISTS { ?known c:textOf $this ; c:searchKey ?q } AS ?isKnown)
   BIND(?multi && ?q != "" && EXISTS { ?added c:textOf $this ; c:chosen true ; c:searchKey ?q } AS ?duplicate)
-  BIND(EXISTS { ?shownOption c:textOf $this ; c:offered true ; c:searchKey ?shownKey
+  BIND(EXISTS { ?shownOption c:textOf $this ; c:offered true ; c:matchKey ?shownKey
                 FILTER(CONTAINS(?shownKey, ?q)) FILTER(!?multi || NOT EXISTS { ?shownOption c:chosen true }) } AS ?anyShown)
   # The validation layer: the typed text breaks the shape (val:invalidEntry), the values fill it (val:full).
   OPTIONAL { $this val:invalidEntry ?entryProblem0 }
@@ -429,20 +476,23 @@ WHERE {
 # --- the options: one component each, minted once ------------------------------------------------------
 # It does not hear typing: it watches where options come from, and re-runs when the texts layer's
 # nodes change (an option added, relabelled, translated). Each option's rank is its list position
-# or sem:order (the least, for an option from two sources) and its search key.
+# or sem:order (the least, for an option from two sources) and its search key. Under c:optionLimit
+# it is not run: c:TypeaheadMatches mints the best few instead.
 
 c:TypeaheadOptions a sem:Rendering ;
     sem:targets c:Typeahead ;
     sem:stratum 0 ;
     sem:readsMinted true ;
-    sem:watches rdf:type , c:controls , c:property , c:options , c:optionClass , c:optionsInUse .
+    sem:unless c:optionLimit ;
+    sem:watches rdf:type , c:controls , c:property , c:options , c:optionClass , c:optionsInUse , c:optionsFrom , c:optionLimit .
 c:TypeaheadOptions-sparql a sem:Rule ;
     sem:implements c:TypeaheadOptions ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
   ?list rdfhtml:hasChild ?item .
-  ?item a c:TypeaheadOption ; c:of $this ; c:option ?opt ; c:label ?label ; c:searchKey ?key ; c:rank ?rank ; sem:orderKey ?rank .
+  ?item a c:TypeaheadOption ; c:of $this ; c:option ?opt ; c:label ?label ; c:searchKey ?key ; c:matchKey ?matchKey ; c:detail ?detail ;
+        c:rank ?rank ; sem:orderKey ?rank .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Typeahead .
@@ -457,7 +507,7 @@ WHERE {
           } GROUP BY ?self ?cell }
       } UNION {
         FILTER NOT EXISTS { $this c:options ?explicit }
-        { $this c:optionClass ?class } UNION { FILTER NOT EXISTS { $this c:optionClass ?declared } $this c:property/rdfs:range ?class }
+        { $this c:optionClass ?class } UNION { FILTER NOT EXISTS { $this c:optionClass ?declared } FILTER NOT EXISTS { $this c:optionsFrom ?lister } $this c:property/rdfs:range ?class }
         ?opt a ?class FILTER(isIRI(?opt))
         OPTIONAL { ?opt sem:order ?order }
         BIND(COALESCE(xsd:integer(ROUND(xsd:decimal(?order))), 0) AS ?position)
@@ -466,37 +516,129 @@ WHERE {
         $this c:optionsInUse ?inUse FILTER(STR(?inUse) = "true")
         $this c:property ?used . ?anyone ?used ?opt .
         BIND(0 AS ?position)
+      } UNION {
+        FILTER NOT EXISTS { $this c:options ?explicit }
+        $this c:optionsFrom ?source . ?source c:lists ?opt .
+        BIND(0 AS ?position)
       }
     } GROUP BY ?self ?opt }
   FILTER(?self = $this)
   BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?opt)))) AS ?textNode)
-  LATERAL { OPTIONAL { ?textNode l10n:label ?localLabel } OPTIONAL { ?textNode c:searchKey ?foldedKey } }
+  LATERAL { OPTIONAL { ?textNode l10n:label ?localLabel } OPTIONAL { ?textNode c:searchKey ?foldedKey } OPTIONAL { ?textNode c:matchKey ?foldedMatch }
+            OPTIONAL { ?textNode c:detail ?detail0 } }
   LATERAL { OPTIONAL { ?opt rdfs:label ?plain FILTER(isLiteral(?plain) && lang(?plain) = "") } }
   BIND(STR(COALESCE(?localLabel, IF(isLiteral(?opt), STR(?opt), ?plain), REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?label)
   BIND(COALESCE(STR(?foldedKey), LCASE(?label)) AS ?key)
+  BIND(COALESCE(STR(?foldedMatch), ?key) AS ?matchKey)
+  BIND(STR(?detail0) AS ?detail)
   BIND(xsd:integer(IF(?n < 0, 0, IF(?n > 999999, 999999, ?n))) AS ?clamped)
   BIND(CONCAT(SUBSTR("000000", STRLEN(STR(?clamped)) + 1), STR(?clamped), " ", ?key) AS ?rank)
   BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
   BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?item)
 }""" .
 
-# One option. Matching is containment of the folded query in the folded label; the search key
-# has a character for each of the label's, so the match is cut out of the label where it is in
-# the key. Hidden rows stay in the list (they do not match now; the next keystroke may show them).
+# The best matches, under c:optionLimit: while the list is open, the options whose match key
+# contains the typed text, best first - the exact name or detail, then those where a name, a word
+# of it or the detail starts with the text, then the rest; each the shorter first, then by rank -
+# and only as many as the limit. SPARQL's LIMIT is a number in the query, so the rule takes the
+# first 50 and counts, for each, the better ones among them (50 is the most it shows). It reads the
+# text nodes, which list every option already: a keystroke is one query, a scan of their keys, and
+# writes only the rows that came, went or moved. Closed, it lists nothing.
+
+c:TypeaheadMatches a sem:Rendering ;
+    sem:targets c:Typeahead ;
+    sem:stratum 0 ;
+    sem:readsMinted true ;
+    sem:requires c:optionLimit ;
+    sem:watches rdf:type , c:optionLimit , c:foldedQuery , c:expanded , c:disabled .
+c:TypeaheadMatches-sparql a sem:Rule ;
+    sem:implements c:TypeaheadMatches ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?list rdfhtml:hasChild ?item .
+  ?item a c:TypeaheadOption ; c:of $this ; c:option ?opt ; c:label ?label ; c:searchKey ?key ; c:matchKey ?matchKey ; c:detail ?detail ;
+        c:rank ?rank ; sem:orderKey ?rank .
+}
+WHERE {
+  $this c:optionLimit ?limit0 .
+  BIND(xsd:integer(STR(?limit0)) AS ?limit)
+  {
+    SELECT ?opt ?rank ((COUNT(?betterRank) - 1) AS ?before) WHERE {
+      { SELECT ?opt ?rank WHERE {
+          $this c:expanded ?open .
+          ?t c:textOf $this ; c:offered true ; c:textFor ?opt ; c:searchKey ?k0 ; c:matchKey ?mk0 ; c:rank ?base .
+          FILTER(STR(?open) = "true")
+          FILTER NOT EXISTS { $this c:disabled ?off FILTER(STR(?off) = "true") }
+          FILTER(NOT EXISTS { ?t c:chosen true } || NOT EXISTS { $this a/rdfs:subClassOf* c:TagInput })
+          OPTIONAL { $this c:foldedQuery ?q0 }
+          BIND(COALESCE(STR(?q0), "") AS ?q)
+          BIND(STR(?k0) AS ?k)
+          BIND(STR(?mk0) AS ?mk)
+          FILTER(CONTAINS(?mk, ?q))
+          BIND(STRAFTER(?mk, "\\n") AS ?dk)
+          BIND(IF(?q != "" && (?k = ?q || ?dk = ?q), "0",
+                  IF(STRSTARTS(?k, ?q) || STRSTARTS(?dk, ?q) || CONTAINS(?mk, CONCAT(" ", ?q)) || CONTAINS(?mk, CONCAT(":", ?q)) || CONTAINS(?mk, CONCAT("-", ?q)), "1", "2")) AS ?quality)
+          BIND(IF(?q = "", 0, IF(STRLEN(?k) > 999, 999, STRLEN(?k))) AS ?n)
+          BIND(CONCAT(?quality, SUBSTR("000", STRLEN(STR(?n)) + 1), STR(?n), " ", STR(?base), " ", STR(?opt)) AS ?rank)
+        } ORDER BY ?rank LIMIT 50 }
+      { SELECT (?rank AS ?betterRank) WHERE {
+          $this c:expanded ?open .
+          ?t c:textOf $this ; c:offered true ; c:textFor ?opt ; c:searchKey ?k0 ; c:matchKey ?mk0 ; c:rank ?base .
+          FILTER(STR(?open) = "true")
+          FILTER NOT EXISTS { $this c:disabled ?off FILTER(STR(?off) = "true") }
+          FILTER(NOT EXISTS { ?t c:chosen true } || NOT EXISTS { $this a/rdfs:subClassOf* c:TagInput })
+          OPTIONAL { $this c:foldedQuery ?q0 }
+          BIND(COALESCE(STR(?q0), "") AS ?q)
+          BIND(STR(?k0) AS ?k)
+          BIND(STR(?mk0) AS ?mk)
+          FILTER(CONTAINS(?mk, ?q))
+          BIND(STRAFTER(?mk, "\\n") AS ?dk)
+          BIND(IF(?q != "" && (?k = ?q || ?dk = ?q), "0",
+                  IF(STRSTARTS(?k, ?q) || STRSTARTS(?dk, ?q) || CONTAINS(?mk, CONCAT(" ", ?q)) || CONTAINS(?mk, CONCAT(":", ?q)) || CONTAINS(?mk, CONCAT("-", ?q)), "1", "2")) AS ?quality)
+          BIND(IF(?q = "", 0, IF(STRLEN(?k) > 999, 999, STRLEN(?k))) AS ?n)
+          BIND(CONCAT(?quality, SUBSTR("000", STRLEN(STR(?n)) + 1), STR(?n), " ", STR(?base), " ", STR(?opt)) AS ?rank)
+        } ORDER BY ?rank LIMIT 50 }
+      FILTER(?betterRank <= ?rank)
+    } GROUP BY ?opt ?rank
+  }
+  FILTER(?before < ?limit)
+  BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?opt)))) AS ?textNode)
+  LATERAL { OPTIONAL { ?textNode l10n:label ?label0 } OPTIONAL { ?textNode c:searchKey ?key0 } OPTIONAL { ?textNode c:matchKey ?matchKey0 }
+            OPTIONAL { ?textNode c:detail ?detail0 } }
+  BIND(STR(?label0) AS ?label)
+  BIND(STR(?key0) AS ?key)
+  BIND(STR(?matchKey0) AS ?matchKey)
+  BIND(STR(?detail0) AS ?detail)
+  BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
+  BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?item)
+}""" .
+
+# One option. Matching is containment of the folded query in the match key (the folded label, and
+# the folded detail after a line break); the key has a character for each of theirs, so the match
+# is cut out of the label, or the detail, where it is in the key. Hidden rows stay in the list
+# (they do not match now; the next keystroke may show them).
 
 c:TypeaheadOptionRendering a sem:Rendering ;
     sem:targets c:TypeaheadOption ;
     sem:stratum 0 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:option , c:label , c:searchKey , c:foldedQuery .
+    sem:watches rdf:type , c:of , c:option , c:label , c:searchKey , c:matchKey , c:detail , c:foldedQuery .
 c:TypeaheadOptionRendering-sparql a sem:Rule ;
     sem:implements c:TypeaheadOptionRendering ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hidden ?hidden ; rdfhtml:attribute ?role ;
-        rdfhtml:hasChild ?text ; c:optionRow ?typeahead ; c:pick ?opt .
-  ?text a rdfhtml:Span ; rdfhtml:class "sem-ta-label" ; rdfhtml:hasChild ?pre, ?hit, ?post .
+        rdfhtml:hasChild ?text, ?gap, ?detailEl ; c:optionRow ?typeahead ; c:pick ?opt .
+  ?text a rdfhtml:Span ; rdfhtml:class "sem-ta-label" ; rdfhtml:hasChild ?pre, ?hit, ?post ; ord:immediatelyPrecedes ?gap .
+  ?gap a rdfhtml:Text ; rdfhtml:data " " ; ord:immediatelyPrecedes ?detailEl .
+  ?detailEl a rdfhtml:Span ; rdfhtml:class "sem-ta-detail" ; rdfhtml:hasChild ?dpre, ?dhit, ?dpost .
+  ?dpre a rdfhtml:Text ; rdfhtml:data ?dpreText ; ord:immediatelyPrecedes ?dafterPre .
+  ?dhit a rdfhtml:Mark ; rdfhtml:hasChild ?dhitText ; ord:immediatelyPrecedes ?dpost .
+  ?dhitText a rdfhtml:Text ; rdfhtml:data ?dhitData .
+  ?dpost a rdfhtml:Text ; rdfhtml:data ?dpostText .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "option" .
   ?pre a rdfhtml:Text ; rdfhtml:data ?preText ; ord:immediatelyPrecedes ?afterPre .
   ?hit a rdfhtml:Mark ; rdfhtml:hasChild ?hitText ; ord:immediatelyPrecedes ?post .
@@ -509,9 +651,16 @@ WHERE {
   BIND(STR(?key0) AS ?key)
   LATERAL { OPTIONAL { ?typeahead c:foldedQuery ?query } }
   BIND(COALESCE(STR(?query), "") AS ?q)
-  BIND(?q = "" || CONTAINS(?key, ?q) AS ?matches)
+  LATERAL { OPTIONAL { $this c:matchKey ?matchKey0 } OPTIONAL { $this c:detail ?detail0 } }
+  BIND(COALESCE(STR(?matchKey0), ?key) AS ?mk)
+  BIND(STR(?detail0) AS ?detail)
+  BIND(?q = "" || CONTAINS(?mk, ?q) AS ?matches)
   BIND(IF(?matches, ?none, "") AS ?hidden)
-  BIND(IF(?q != "" && ?matches, STRLEN(STRBEFORE(?key, ?q)), -1) AS ?at)
+  # Where the match is: in the label (before the line break), or in the detail (after it).
+  BIND(IF(?q != "" && ?matches, STRLEN(STRBEFORE(?mk, ?q)), -1) AS ?found)
+  BIND(STRLEN(?label) AS ?n)
+  BIND(IF(?found >= 0 && ?found < ?n, ?found, -1) AS ?at)
+  BIND(IF(?found > ?n, ?found - ?n - 1, -1) AS ?dat)
   BIND(IF(?at >= 0, SUBSTR(?label, 1, ?at), ?label) AS ?pre0)
   BIND(IF(?pre0 != "", ?pre0, ?none) AS ?preText)
   BIND(IF(?at >= 0, SUBSTR(?label, ?at + 1, STRLEN(?q)), ?none) AS ?hitData)
@@ -526,6 +675,19 @@ WHERE {
   BIND(IF(BOUND(?hitData), IRI(CONCAT(STR($this), "/~hit-text")), ?none) AS ?hitText)
   BIND(IF(BOUND(?postText), IRI(CONCAT(STR($this), "/~post")), ?none) AS ?post)
   BIND(COALESCE(?hit, ?post) AS ?afterPre)
+  # The detail, cut the same way, after a space (so the option's name reads as two words).
+  BIND(IF(BOUND(?detail), IRI(CONCAT(STR($this), "/~detail")), ?none) AS ?detailEl)
+  BIND(IF(BOUND(?detail), IRI(CONCAT(STR($this), "/~gap")), ?none) AS ?gap)
+  BIND(IF(?dat >= 0, SUBSTR(?detail, 1, ?dat), ?detail) AS ?dpre0)
+  BIND(IF(?dpre0 != "", ?dpre0, ?none) AS ?dpreText)
+  BIND(IF(?dat >= 0, SUBSTR(?detail, ?dat + 1, STRLEN(?q)), ?none) AS ?dhitData)
+  BIND(IF(?dat >= 0, SUBSTR(?detail, ?dat + 1 + STRLEN(?q)), "") AS ?dpost0)
+  BIND(IF(BOUND(?detail) && ?dpost0 != "", ?dpost0, ?none) AS ?dpostText)
+  BIND(IF(BOUND(?dpreText), IRI(CONCAT(STR($this), "/~dpre")), ?none) AS ?dpre)
+  BIND(IF(BOUND(?dhitData), IRI(CONCAT(STR($this), "/~dhit")), ?none) AS ?dhit)
+  BIND(IF(BOUND(?dhitData), IRI(CONCAT(STR($this), "/~dhit-text")), ?none) AS ?dhitText)
+  BIND(IF(BOUND(?dpostText), IRI(CONCAT(STR($this), "/~dpost")), ?none) AS ?dpost)
+  BIND(COALESCE(?dhit, ?dpost) AS ?dafterPre)
 }""" .
 
 # --- the pills of a tag input --------------------------------------------------------------------------
@@ -635,15 +797,15 @@ WHERE {
   BIND(BOUND(?createPick) && sameTerm(?active, ?createPick) AS ?activeCreates)
   FILTER NOT EXISTS { $this val:full ?full }
   LATERAL { OPTIONAL {
-    ?firstItem a c:TypeaheadOption ; c:of $this ; c:option ?firstPick ; c:searchKey ?firstKey ; c:rank ?firstRank .
+    ?firstItem a c:TypeaheadOption ; c:of $this ; c:option ?firstPick ; c:matchKey ?firstKey ; c:rank ?firstRank .
     FILTER(?q = "" || CONTAINS(STR(?firstKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?firstPick })
-    FILTER NOT EXISTS { ?firstOther a c:TypeaheadOption ; c:of $this ; c:option ?firstOtherPick ; c:searchKey ?firstOtherKey ; c:rank ?firstOtherRank . FILTER(?q = "" || CONTAINS(STR(?firstOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?firstOtherPick }) FILTER(?firstOtherRank < ?firstRank) }
+    FILTER NOT EXISTS { ?firstOther a c:TypeaheadOption ; c:of $this ; c:option ?firstOtherPick ; c:matchKey ?firstOtherKey ; c:rank ?firstOtherRank . FILTER(?q = "" || CONTAINS(STR(?firstOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?firstOtherPick }) FILTER(?firstOtherRank < ?firstRank) }
   } }
   LATERAL { OPTIONAL {
     FILTER(BOUND(?activeRank))
-    ?afterItem a c:TypeaheadOption ; c:of $this ; c:option ?afterPick ; c:searchKey ?afterKey ; c:rank ?afterRank .
+    ?afterItem a c:TypeaheadOption ; c:of $this ; c:option ?afterPick ; c:matchKey ?afterKey ; c:rank ?afterRank .
     FILTER(?q = "" || CONTAINS(STR(?afterKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?afterPick }) FILTER(?afterRank > ?activeRank)
-    FILTER NOT EXISTS { ?afterOther a c:TypeaheadOption ; c:of $this ; c:option ?afterOtherPick ; c:searchKey ?afterOtherKey ; c:rank ?afterOtherRank . FILTER(?q = "" || CONTAINS(STR(?afterOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?afterOtherPick }) FILTER(?afterOtherRank > ?activeRank) FILTER(?afterOtherRank < ?afterRank) }
+    FILTER NOT EXISTS { ?afterOther a c:TypeaheadOption ; c:of $this ; c:option ?afterOtherPick ; c:matchKey ?afterOtherKey ; c:rank ?afterOtherRank . FILTER(?q = "" || CONTAINS(STR(?afterOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?afterOtherPick }) FILTER(?afterOtherRank > ?activeRank) FILTER(?afterOtherRank < ?afterRank) }
   } }
   BIND(IF(BOUND(?activeRank), COALESCE(?afterPick, ?createPick, ?firstPick),
           IF(?activeCreates, COALESCE(?firstPick, ?createPick), COALESCE(?firstPick, ?createPick))) AS ?next)
@@ -665,15 +827,15 @@ WHERE {
   BIND(BOUND(?createPick) && sameTerm(?active, ?createPick) AS ?activeCreates)
   FILTER NOT EXISTS { $this val:full ?full }
   LATERAL { OPTIONAL {
-    ?firstItem a c:TypeaheadOption ; c:of $this ; c:option ?firstPick ; c:searchKey ?firstKey ; c:rank ?firstRank .
+    ?firstItem a c:TypeaheadOption ; c:of $this ; c:option ?firstPick ; c:matchKey ?firstKey ; c:rank ?firstRank .
     FILTER(?q = "" || CONTAINS(STR(?firstKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?firstPick })
-    FILTER NOT EXISTS { ?firstOther a c:TypeaheadOption ; c:of $this ; c:option ?firstOtherPick ; c:searchKey ?firstOtherKey ; c:rank ?firstOtherRank . FILTER(?q = "" || CONTAINS(STR(?firstOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?firstOtherPick }) FILTER(?firstOtherRank < ?firstRank) }
+    FILTER NOT EXISTS { ?firstOther a c:TypeaheadOption ; c:of $this ; c:option ?firstOtherPick ; c:matchKey ?firstOtherKey ; c:rank ?firstOtherRank . FILTER(?q = "" || CONTAINS(STR(?firstOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?firstOtherPick }) FILTER(?firstOtherRank < ?firstRank) }
   } }
   LATERAL { OPTIONAL {
     FILTER(BOUND(?activeRank))
-    ?afterItem a c:TypeaheadOption ; c:of $this ; c:option ?afterPick ; c:searchKey ?afterKey ; c:rank ?afterRank .
+    ?afterItem a c:TypeaheadOption ; c:of $this ; c:option ?afterPick ; c:matchKey ?afterKey ; c:rank ?afterRank .
     FILTER(?q = "" || CONTAINS(STR(?afterKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?afterPick }) FILTER(?afterRank > ?activeRank)
-    FILTER NOT EXISTS { ?afterOther a c:TypeaheadOption ; c:of $this ; c:option ?afterOtherPick ; c:searchKey ?afterOtherKey ; c:rank ?afterOtherRank . FILTER(?q = "" || CONTAINS(STR(?afterOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?afterOtherPick }) FILTER(?afterOtherRank > ?activeRank) FILTER(?afterOtherRank < ?afterRank) }
+    FILTER NOT EXISTS { ?afterOther a c:TypeaheadOption ; c:of $this ; c:option ?afterOtherPick ; c:matchKey ?afterOtherKey ; c:rank ?afterOtherRank . FILTER(?q = "" || CONTAINS(STR(?afterOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?afterOtherPick }) FILTER(?afterOtherRank > ?activeRank) FILTER(?afterOtherRank < ?afterRank) }
   } }
   BIND(IF(BOUND(?activeRank), COALESCE(?afterPick, ?createPick, ?firstPick),
           IF(?activeCreates, COALESCE(?firstPick, ?createPick), COALESCE(?firstPick, ?createPick))) AS ?next)
@@ -700,15 +862,15 @@ WHERE {
   BIND(BOUND(?createPick) && sameTerm(?active, ?createPick) AS ?activeCreates)
   FILTER NOT EXISTS { $this val:full ?full }
   LATERAL { OPTIONAL {
-    ?lastItem a c:TypeaheadOption ; c:of $this ; c:option ?lastPick ; c:searchKey ?lastKey ; c:rank ?lastRank .
+    ?lastItem a c:TypeaheadOption ; c:of $this ; c:option ?lastPick ; c:matchKey ?lastKey ; c:rank ?lastRank .
     FILTER(?q = "" || CONTAINS(STR(?lastKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?lastPick })
-    FILTER NOT EXISTS { ?lastOther a c:TypeaheadOption ; c:of $this ; c:option ?lastOtherPick ; c:searchKey ?lastOtherKey ; c:rank ?lastOtherRank . FILTER(?q = "" || CONTAINS(STR(?lastOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?lastOtherPick }) FILTER(?lastOtherRank > ?lastRank) }
+    FILTER NOT EXISTS { ?lastOther a c:TypeaheadOption ; c:of $this ; c:option ?lastOtherPick ; c:matchKey ?lastOtherKey ; c:rank ?lastOtherRank . FILTER(?q = "" || CONTAINS(STR(?lastOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?lastOtherPick }) FILTER(?lastOtherRank > ?lastRank) }
   } }
   LATERAL { OPTIONAL {
     FILTER(BOUND(?activeRank))
-    ?beforeItem a c:TypeaheadOption ; c:of $this ; c:option ?beforePick ; c:searchKey ?beforeKey ; c:rank ?beforeRank .
+    ?beforeItem a c:TypeaheadOption ; c:of $this ; c:option ?beforePick ; c:matchKey ?beforeKey ; c:rank ?beforeRank .
     FILTER(?q = "" || CONTAINS(STR(?beforeKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?beforePick }) FILTER(?beforeRank < ?activeRank)
-    FILTER NOT EXISTS { ?beforeOther a c:TypeaheadOption ; c:of $this ; c:option ?beforeOtherPick ; c:searchKey ?beforeOtherKey ; c:rank ?beforeOtherRank . FILTER(?q = "" || CONTAINS(STR(?beforeOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?beforeOtherPick }) FILTER(?beforeOtherRank < ?activeRank) FILTER(?beforeOtherRank > ?beforeRank) }
+    FILTER NOT EXISTS { ?beforeOther a c:TypeaheadOption ; c:of $this ; c:option ?beforeOtherPick ; c:matchKey ?beforeOtherKey ; c:rank ?beforeOtherRank . FILTER(?q = "" || CONTAINS(STR(?beforeOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?beforeOtherPick }) FILTER(?beforeOtherRank < ?activeRank) FILTER(?beforeOtherRank > ?beforeRank) }
   } }
   BIND(IF(BOUND(?activeRank), COALESCE(?beforePick, ?createPick, ?lastPick),
           IF(?activeCreates, COALESCE(?lastPick, ?createPick), COALESCE(?createPick, ?lastPick))) AS ?next)
@@ -730,15 +892,15 @@ WHERE {
   BIND(BOUND(?createPick) && sameTerm(?active, ?createPick) AS ?activeCreates)
   FILTER NOT EXISTS { $this val:full ?full }
   LATERAL { OPTIONAL {
-    ?lastItem a c:TypeaheadOption ; c:of $this ; c:option ?lastPick ; c:searchKey ?lastKey ; c:rank ?lastRank .
+    ?lastItem a c:TypeaheadOption ; c:of $this ; c:option ?lastPick ; c:matchKey ?lastKey ; c:rank ?lastRank .
     FILTER(?q = "" || CONTAINS(STR(?lastKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?lastPick })
-    FILTER NOT EXISTS { ?lastOther a c:TypeaheadOption ; c:of $this ; c:option ?lastOtherPick ; c:searchKey ?lastOtherKey ; c:rank ?lastOtherRank . FILTER(?q = "" || CONTAINS(STR(?lastOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?lastOtherPick }) FILTER(?lastOtherRank > ?lastRank) }
+    FILTER NOT EXISTS { ?lastOther a c:TypeaheadOption ; c:of $this ; c:option ?lastOtherPick ; c:matchKey ?lastOtherKey ; c:rank ?lastOtherRank . FILTER(?q = "" || CONTAINS(STR(?lastOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?lastOtherPick }) FILTER(?lastOtherRank > ?lastRank) }
   } }
   LATERAL { OPTIONAL {
     FILTER(BOUND(?activeRank))
-    ?beforeItem a c:TypeaheadOption ; c:of $this ; c:option ?beforePick ; c:searchKey ?beforeKey ; c:rank ?beforeRank .
+    ?beforeItem a c:TypeaheadOption ; c:of $this ; c:option ?beforePick ; c:matchKey ?beforeKey ; c:rank ?beforeRank .
     FILTER(?q = "" || CONTAINS(STR(?beforeKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?beforePick }) FILTER(?beforeRank < ?activeRank)
-    FILTER NOT EXISTS { ?beforeOther a c:TypeaheadOption ; c:of $this ; c:option ?beforeOtherPick ; c:searchKey ?beforeOtherKey ; c:rank ?beforeOtherRank . FILTER(?q = "" || CONTAINS(STR(?beforeOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?beforeOtherPick }) FILTER(?beforeOtherRank < ?activeRank) FILTER(?beforeOtherRank > ?beforeRank) }
+    FILTER NOT EXISTS { ?beforeOther a c:TypeaheadOption ; c:of $this ; c:option ?beforeOtherPick ; c:matchKey ?beforeOtherKey ; c:rank ?beforeOtherRank . FILTER(?q = "" || CONTAINS(STR(?beforeOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?beforeOtherPick }) FILTER(?beforeOtherRank < ?activeRank) FILTER(?beforeOtherRank > ?beforeRank) }
   } }
   BIND(IF(BOUND(?activeRank), COALESCE(?beforePick, ?createPick, ?lastPick),
           IF(?activeCreates, COALESCE(?lastPick, ?createPick), COALESCE(?createPick, ?lastPick))) AS ?next)
@@ -758,7 +920,8 @@ WHERE {
 }""" .
 
 # Enter (and, in a tag input, a comma) commits: the highlighted row; else the option the text names
-# exactly; else the "create" row; else the only option shown. A combobox replaces its value; a tag input adds one, never one it
+# exactly; else the "create" row; else the only option shown; else, with c:picksFirstMatch, the
+# first one shown. A combobox replaces its value; a tag input adds one, never one it
 # has, nor past its shape's sh:maxCount (val:full). A new resource is typed and labelled. The text
 # is cleared and the list closed; the field keeps the focus.
 c:TypeaheadCommit a beh:Reaction ;
@@ -787,11 +950,18 @@ WHERE {
   } }
   LATERAL { OPTIONAL {
     FILTER(?q != "")
-    ?onlyItem a c:TypeaheadOption ; c:of $this ; c:option ?onlyPick ; c:searchKey ?onlyKey .
+    ?onlyItem a c:TypeaheadOption ; c:of $this ; c:option ?onlyPick ; c:matchKey ?onlyKey .
     FILTER(CONTAINS(STR(?onlyKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?onlyPick })
-    FILTER NOT EXISTS { ?onlyOther a c:TypeaheadOption ; c:of $this ; c:option ?onlyOtherPick ; c:searchKey ?onlyOtherKey . FILTER(?onlyOther != ?onlyItem) FILTER(CONTAINS(STR(?onlyOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?onlyOtherPick }) }
+    FILTER NOT EXISTS { ?onlyOther a c:TypeaheadOption ; c:of $this ; c:option ?onlyOtherPick ; c:matchKey ?onlyOtherKey . FILTER(?onlyOther != ?onlyItem) FILTER(CONTAINS(STR(?onlyOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?onlyOtherPick }) }
   } }
-  BIND(IF(?key = "enter" && (BOUND(?activeRank) || ?activeCreates), ?active, COALESCE(?exactPick, ?createPick, ?onlyPick)) AS ?value)
+  # With c:picksFirstMatch, the best match shown (the least rank).
+  LATERAL { OPTIONAL {
+    FILTER(?q != "" && EXISTS { $this c:picksFirstMatch ?firstMatch FILTER(STR(?firstMatch) = "true") })
+    ?bestItem a c:TypeaheadOption ; c:of $this ; c:option ?bestPick ; c:matchKey ?bestKey ; c:rank ?bestRank .
+    FILTER(CONTAINS(STR(?bestKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?bestPick })
+    FILTER NOT EXISTS { ?bestOther a c:TypeaheadOption ; c:of $this ; c:option ?bestOtherPick ; c:matchKey ?bestOtherKey ; c:rank ?bestOtherRank . FILTER(CONTAINS(STR(?bestOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?bestOtherPick }) FILTER(?bestOtherRank < ?bestRank) }
+  } }
+  BIND(IF(?key = "enter" && (BOUND(?activeRank) || ?activeCreates), ?active, COALESCE(?exactPick, ?createPick, ?onlyPick, ?bestPick)) AS ?value)
   FILTER(BOUND(?value))
   FILTER(!?multi || (NOT EXISTS { ?target ?property ?value } && NOT EXISTS { $this val:full ?full }))
   {
@@ -821,11 +991,18 @@ WHERE {
   } }
   LATERAL { OPTIONAL {
     FILTER(?q != "")
-    ?onlyItem a c:TypeaheadOption ; c:of $this ; c:option ?onlyPick ; c:searchKey ?onlyKey .
+    ?onlyItem a c:TypeaheadOption ; c:of $this ; c:option ?onlyPick ; c:matchKey ?onlyKey .
     FILTER(CONTAINS(STR(?onlyKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?onlyPick })
-    FILTER NOT EXISTS { ?onlyOther a c:TypeaheadOption ; c:of $this ; c:option ?onlyOtherPick ; c:searchKey ?onlyOtherKey . FILTER(?onlyOther != ?onlyItem) FILTER(CONTAINS(STR(?onlyOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?onlyOtherPick }) }
+    FILTER NOT EXISTS { ?onlyOther a c:TypeaheadOption ; c:of $this ; c:option ?onlyOtherPick ; c:matchKey ?onlyOtherKey . FILTER(?onlyOther != ?onlyItem) FILTER(CONTAINS(STR(?onlyOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?onlyOtherPick }) }
   } }
-  BIND(IF(?key = "enter" && (BOUND(?activeRank) || ?activeCreates), ?active, COALESCE(?exactPick, ?createPick, ?onlyPick)) AS ?value)
+  # With c:picksFirstMatch, the best match shown (the least rank).
+  LATERAL { OPTIONAL {
+    FILTER(?q != "" && EXISTS { $this c:picksFirstMatch ?firstMatch FILTER(STR(?firstMatch) = "true") })
+    ?bestItem a c:TypeaheadOption ; c:of $this ; c:option ?bestPick ; c:matchKey ?bestKey ; c:rank ?bestRank .
+    FILTER(CONTAINS(STR(?bestKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?bestPick })
+    FILTER NOT EXISTS { ?bestOther a c:TypeaheadOption ; c:of $this ; c:option ?bestOtherPick ; c:matchKey ?bestOtherKey ; c:rank ?bestOtherRank . FILTER(CONTAINS(STR(?bestOtherKey), ?q)) FILTER(!?multi || NOT EXISTS { ?target ?property ?bestOtherPick }) FILTER(?bestOtherRank < ?bestRank) }
+  } }
+  BIND(IF(?key = "enter" && (BOUND(?activeRank) || ?activeCreates), ?active, COALESCE(?exactPick, ?createPick, ?onlyPick, ?bestPick)) AS ?value)
   FILTER(BOUND(?value))
   FILTER(!?multi || (NOT EXISTS { ?target ?property ?value } && NOT EXISTS { $this val:full ?full }))
   # A new resource (the create row's c:mints, when it is what is committed) is typed and labelled.

@@ -37,6 +37,8 @@ export interface Rule {
   bulk: boolean
   /** The focus must have at least one of these properties, or the rule is not run (sem:requires). */
   requires: string[]
+  /** The focus must have none of these properties, or the rule is not run (sem:unless). */
+  unless: string[]
   /**
    * When a triple a query the rule followed reads changes (RuleContext.select with follow):
    * re-run it in the same run ('now'), or at the host's next frame, once for all such changes
@@ -97,6 +99,7 @@ export function loadRules(store: GraphStore): Rule[] {
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       bulk: get(SEM.bulk)?.value !== 'false' && (!query || attributable(query)),
       requires: getAll(SEM.requires),
+      unless: getAll(SEM.unless),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
     })
   }

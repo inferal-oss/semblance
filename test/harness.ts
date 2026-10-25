@@ -30,9 +30,9 @@ export function mountShell(todos = 5, kind: StoreKind = 'oxigraph', prefer: 'spa
   return mount(workbench(sources(loadStore(kind, todoApp(todos), appGraph, ...gallery))), prefer, clock)
 }
 
-/** The site as a visitor first sees it: the landing page, tools closed. */
-export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock) {
-  return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery)), prefer, clock)
+/** The site as a visitor first sees it: the landing page, tools closed (with `extra` Turtle loaded too). */
+export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock, extra: string[] = []) {
+  return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery, ...extra)), prefer, clock)
 }
 
 /**
@@ -68,8 +68,8 @@ export async function mountRemembering(backends: Record<string, Backend>, clock?
  * The site with the navigation effect over an injected location and history (and, given
  * backends, persistence), as the host runs it: storage, then the URL, before the first projection.
  */
-export async function mountNavigating(opts: NavigationOptions, backends?: Record<string, Backend>, prefer: 'sparql' | 'function' = 'sparql') {
-  const store = sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery))
+export async function mountNavigating(opts: NavigationOptions, backends?: Record<string, Backend>, prefer: 'sparql' | 'function' = 'sparql', kind: StoreKind = 'oxigraph') {
+  const store = sources(loadStore(kind, todoApp(5), appGraph, ...gallery))
   const persistence = backends && new Persistence(store, backends, { delayMs: 60_000 })
   await persistence?.restore()
   const navigation = new Navigation(store, { root: UI + 'shell', ...opts, persistence })

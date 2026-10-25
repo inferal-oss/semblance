@@ -31,7 +31,8 @@ the section's c:membersVia (e.g. sem:group), or, without one, the classes and pr
 branch's namespace (an owl:Ontology's IRI and "#") that have no c:exceptProperty. Each branch is a
 c:TermBranch the tree mints, opened and closed on its own. With c:controls and c:property, clicking
 a term, or a branch's own name, selects it (`<controls> <property> <term>`); the branch holding the
-selection opens to show it (until it is closed by hand), and the selected item is aria-selected."""@en ;
+selection opens to show it (until it is closed by hand), and the selected item is aria-selected. It
+lists (c:lists) every branch and term it shows, for a typeahead to search (c:optionsFrom)."""@en ;
     sem:slug "term-tree" .
 c:sections a owl:ObjectProperty ; rdfs:domain c:TermTree ; rdfs:range rdf:List ;
     rdfs:comment "The tree's sections, in order (c:TermSection nodes)."@en .
@@ -173,6 +174,37 @@ WHERE {
     BIND(IF(?holds, true, ?none) AS ?reveals)
     BIND(IF(?isBranch, IRI(CONCAT(STR(?inst), "/~root")), IF(?holds, IRI(CONCAT(STR(?inst), "/~t-", SUBSTR(MD5(STR(?sel)), 1, 8))), ?none)) AS ?selNode)
     BIND(IF(?isBranch, IRI(CONCAT(STR($this), "/~sel-", ?bk, "-root")), IF(?holds, IRI(CONCAT(STR($this), "/~sel-", ?bk)), ?none)) AS ?selAttr)
+  } }
+}""" .
+
+# What the tree lists (c:lists): every branch and every term the branches hold, open or not: the
+# options of a typeahead over the tree (c:optionsFrom). Before the components and the typeahead's
+# texts (stratum -20) that read it; it hears only the sections, so a selection does not re-run it.
+c:TermTreeListing a sem:Rendering ; sem:targets c:TermTree ; sem:stratum -25 ; sem:watches rdf:type , c:sections .
+c:TermTreeListing-fn a sem:Rule ; sem:implements c:TermTreeListing ; sem:function "reference:listing" .
+c:TermTreeListing-sparql a sem:Rule ;
+    sem:implements c:TermTreeListing ;
+    sem:construct """
+CONSTRUCT { $this c:lists ?term }
+WHERE {
+  $this a c:TermTree ; c:sections/rdf:rest*/rdf:first ?section .
+  ?section c:branchClass ?cls .
+  # LATERAL: each branch below sees ?section and ?cls (a plain UNION's branches would not).
+  LATERAL { {
+    # The branches.
+    ?term a ?cls FILTER(isIRI(?term))
+  } UNION {
+    # What points at a branch through the section's c:membersVia (sem:group, sem:layer).
+    ?section c:membersVia ?via . ?term ?via ?b . ?b a ?cls FILTER(isIRI(?term) && isIRI(?b))
+  } UNION {
+    # Without one: the classes and properties in a branch's namespace (its IRI and "#"), but those
+    # that have the section's c:exceptProperty.
+    FILTER NOT EXISTS { ?section c:membersVia ?anyVia }
+    VALUES ?listedKind { c:ClassKind c:PropertyKind } ?listedKind c:kindOf ?listedType . ?term a ?listedType
+    FILTER(isIRI(?term) && CONTAINS(STR(?term), "#"))
+    BIND(IRI(STRBEFORE(STR(?term), "#")) AS ?b)
+    ?b a ?cls .
+    FILTER NOT EXISTS { ?section c:exceptProperty ?except . ?term ?except ?anything }
   } }
 }""" .
 

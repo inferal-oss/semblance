@@ -18,6 +18,25 @@
 [] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] :is(button, a, [role=button], [role=switch])[data-sem-shortcut]::after" ;
     sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-shortcut-apple)" ] .
 
+# A hint on the part a component's class names (key:hintPart): a key cap at the end of a field box,
+# gone while the field has the focus (typing there is not the shortcut).
+[] a sty:StyleRule ; sty:part "[data-sem-key-hint]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint)" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "min-width" ; sty:raw "1.6em" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "padding" ; sty:raw "2px 5px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "5px" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid color-mix(in oklab, currentColor 28%, transparent)" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] ,
+                 [ sty:property "font" ; sty:raw "600 11px/1.2 var(--sem-font-mono)" ] ,
+                 [ sty:property "text-align" ; sty:raw "center" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:part ":root[data-sem-platform=apple] [data-sem-key-hint]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-key-hint-apple)" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-key-hint]:focus-within::after" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
+
 # --- shortcut list ---
 [] a sty:StyleRule ; sty:appliesTo c:ShortcutList ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,

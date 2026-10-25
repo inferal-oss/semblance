@@ -831,10 +831,11 @@ export class Engine {
       if (!foci.size) return
       for (const focus of foci) parked?.delete(focus)
     }
-    // A rule that requires a property its focus doesn't have has nothing to say about it.
-    if (rule.requires.length) {
+    // A rule that requires a property its focus doesn't have (or is not for one it has) has nothing to say about it.
+    if (rule.requires.length || rule.unless.length) {
       for (const focus of [...foci]) {
-        if (!this.hasAny(focusOf(focus), rule.requires)) {
+        const node = focusOf(focus)
+        if ((rule.requires.length && !this.hasAny(node, rule.requires)) || (rule.unless.length && this.hasAny(node, rule.unless))) {
           this.commit(rule, focus, [])
           foci.delete(focus)
         }
