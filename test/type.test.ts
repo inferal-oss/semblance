@@ -6,7 +6,7 @@ import { functions as typeFunctions } from '../src/components/type.ts'
 import { loadStore } from '../src/node/load.ts'
 import { A11Y, MOD, SEM, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
-import { toText } from '../src/render/serialize.ts'
+import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
 
@@ -112,6 +112,43 @@ describe('the Type page', () => {
     expect(external.getAttribute('rel')).toContain('noopener')
     expect(external.querySelector('.sem-link-card-external')!.getAttribute('aria-hidden')).toBe('true')
     expect(external.querySelector('.sem-sr')!.textContent).toBe(' (opens in a new tab)')
+  })
+
+  it('renders linked cards with the function rule on the N3 store', () => {
+    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const root = 'https://example.org/current-card'
+    const store = loadStore('n3',
+      `@prefix c: <https://semblance.dev/ns/component#> .
+       <${root}> a c:LinkCard ; c:href "https://example.org/docs" ; c:label "Documentation" ;
+         c:note "Read the guide" ; c:badge "3" ; c:currentPage true .`)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, prefer: 'function', name: 'current-card', roots: [root] })
+    new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+    const card = document.querySelector('a')!
+    expect(card.getAttribute('href')).toBe('https://example.org/docs')
+    expect(card.getAttribute('target')).toBe('_blank')
+    expect(card.getAttribute('rel')).toContain('noopener')
+    expect(card.getAttribute('aria-current')).toBe('page')
+    expect(card.querySelector('strong')?.textContent).toContain('Documentation')
+    expect(card.querySelector('.sem-link-card-note')?.textContent).toBe('Read the guide')
+    expect(card.querySelector('.sem-link-card-badge')?.textContent).toBe('3')
+    expect(card.querySelector('.sem-link-card-external')?.getAttribute('aria-hidden')).toBe('true')
+    expect(card.querySelector('.sem-sr')?.textContent).toBe(' (opens in a new tab)')
+    const text = runtime.project({ modality: MOD.Text, prefer: 'function', name: 'current-card-text', roots: [root] })
+    expect(toText(text.index, root)).toBe('Documentation — Read the guide [3] <https://example.org/docs>')
+  })
+
+  it('keeps the SPARQL and function link card renderings identical', () => {
+    const root = 'https://example.org/current-card'
+    const data = `@prefix c: <https://semblance.dev/ns/component#> .
+      <${root}> a c:LinkCard ; c:href "https://example.org/docs" ; c:label "Documentation" ;
+        c:note "Read the guide" ; c:badge "3" ; c:currentPage true .`
+    const runtime = new Runtime(loadStore('oxigraph', data))
+    for (const modality of [MOD.Screen, MOD.Text]) {
+      const sparql = runtime.project({ modality, prefer: 'sparql', name: `card-sparql-${modality}`, roots: [root] })
+      const fn = runtime.project({ modality, prefer: 'function', name: `card-function-${modality}`, roots: [root] })
+      expect(toHTML(fn.index, root)).toBe(toHTML(sparql.index, root))
+    }
   })
 
   it('renders key combinations as nested kbd', () => {

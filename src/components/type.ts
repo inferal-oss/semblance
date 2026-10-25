@@ -71,6 +71,42 @@ const link: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** A whole-card link with the same title, note, badge and current-page semantics as its SPARQL rule. */
+const linkCard: FnRule = (ctx, focus) => {
+  const href = str(ctx.object(focus, C_HREF))
+  const label = text(ctx, focus, C.label)
+  if (href === undefined || label === undefined) return []
+  const note = text(ctx, focus, C.note)
+  const badge = text(ctx, focus, C.badge)
+  const external = isExternal(href, str(ctx.object(focus, C_EXTERNAL)))
+  const o = ctx.out(focus)
+  if (ctx.modality === MOD.Text) {
+    const line = `${label}${note === undefined ? '' : ` — ${note}`}${badge === undefined ? '' : ` [${badge}]`} <${href}>`
+    o.renders(o.el('root', 'Div', {}, [o.text('text', line)]))
+    return o.quads
+  }
+  const titleParts = [o.text('title-text', label)]
+  if (external) {
+    const hint = ctx.memo('type:external-hint:' + ctx.languages.join(','), () => text(ctx, ctx.nn(C_LINK), C_EXTERNAL_HINT)) ?? 'opens in a new tab'
+    const mark = o.el('external-mark', 'Span', { class: 'sem-link-card-external' }, [o.text('external-mark-text', '↗')])
+    o.attr(mark, 'aria-hidden', 'true')
+    titleParts.push(mark, o.el('external-hint', 'Span', { class: 'sem-sr' }, [o.text('external-hint-text', ` (${hint})`)]))
+  }
+  const title = o.el('title', 'Strong', {}, titleParts)
+  const copy = o.el('copy', 'Span', { class: 'sem-link-card-copy' }, [
+    title,
+    ...(note === undefined ? [] : [o.el('note', 'Span', { class: 'sem-link-card-note' }, [o.text('note-text', note)])]),
+  ])
+  const parts = [copy, ...(badge === undefined ? [] : [o.el('badge', 'Span', { class: 'sem-link-card-badge' }, [o.text('badge-text', badge)])])]
+  o.renders(o.el('root', 'A', {
+    href,
+    target: external ? '_blank' : undefined,
+    rel: external ? 'noopener noreferrer' : undefined,
+    'aria-current': isTrue(ctx.object(focus, C_CURRENT_PAGE)) ? 'page' : undefined,
+  }, parts))
+  return o.quads
+}
+
 /** Spoken names of modifier glyphs, for a combination's title. */
 const KEY_NAMES: Record<string, string> = {
   '⌘': 'Command', '⇧': 'Shift', '⌥': 'Option', '⌃': 'Control', '↵': 'Enter', '⏎': 'Return', '⌫': 'Backspace',
@@ -153,6 +189,6 @@ const blockquote: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { text: textRun, link, kbd, code: codeRun(false), 'code:colored': codeRun(true), blockquote }
+export const functions: Record<string, FnRule> = { text: textRun, link, 'link-card': linkCard, kbd, code: codeRun(false), 'code:colored': codeRun(true), blockquote }
 
 export const reactions: Record<string, ReactionFn> = {}

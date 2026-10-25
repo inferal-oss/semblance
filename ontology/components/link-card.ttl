@@ -17,6 +17,7 @@ c:currentPage a owl:DatatypeProperty ;
     rdfs:comment "Marks a navigation link as the current page for assistive technology and visual styling."@en .
 
 c:LinkCardRendering a sem:Rendering ; sem:targets c:LinkCard ; sem:stratum 0 .
+c:LinkCardRendering-fn a sem:Rule ; sem:implements c:LinkCardRendering ; sem:function "link-card" .
 c:LinkCardRendering-sparql-screen a sem:Rule ;
     sem:implements c:LinkCardRendering ; sem:modality mod:Screen ;
     sem:construct """
