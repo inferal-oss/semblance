@@ -169,9 +169,11 @@ SELECT ?label ?tone WHERE {
 # views' own figures, iv:lastRows and iv:inputRows; $this is the line, c:of its views).
 wh:qCost a sem:View ; sem:select """
 SELECT ?label WHERE {
-  { SELECT (SUM(?l) AS ?last) (SUM(?r) AS ?reads) (COUNT(?v) AS ?n)
-    WHERE { $this c:of ?v . ?v iv:lastRows ?l ; iv:inputRows ?r } }
-  BIND(IF(?n > 0, CONCAT("Last change: ", STR(?last), " rows of work; a recount would read ", STR(?reads), "."), "Measuring…") AS ?label)
+  { SELECT (SUM(?l) AS ?last) (SUM(?r) AS ?reads) (SUM(?t) AS ?ticks) (COUNT(?v) AS ?n)
+    WHERE { $this c:of ?v . ?v iv:lastRows ?l ; iv:inputRows ?r ; iv:ticks ?t } }
+  BIND(IF(?n = 0, "Measuring…",
+       IF(?ticks = 0, CONCAT("No change yet; a recount would read ", STR(?reads), " rows."),
+          CONCAT("Last change: ", STR(?last), " rows of work; a recount would read ", STR(?reads), "."))) AS ?label)
 }""" .
 
 # --- the page ---------------------------------------------------------------------------------------
@@ -191,7 +193,7 @@ wh:five a wh:Amount ; rdfs:label "5" ; sem:order 3 ; wh:units 5 .
 wh:desk wh:item wh:tube ; wh:amount wh:one .
 
 ui:ex-warehouse-counter a c:Card ; c:label "At the counter" ;
-    c:note "Sell takes the amount off the shelf; Restock receives one case from the item's supplier." ;
+    c:note "Choose an item and how many. Sell takes them off the shelf; Restock receives one case from the item's supplier." ;
     c:content ui:ex-warehouse-controls .
 ui:ex-warehouse-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; pos:align pos:End ;
     c:children ( ui:ex-warehouse-item ui:ex-warehouse-amount ui:ex-warehouse-actions ) .

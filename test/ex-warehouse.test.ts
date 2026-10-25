@@ -66,7 +66,7 @@ function warehouse(opts: { kind?: StoreKind; prefer?: 'sparql' | 'function'; str
   const reorder = () => rows(1)
   const bars = () => [...root().querySelectorAll('[data-sem-c=bar-chart] .sem-bar')].map((b) => `${b.querySelector('.sem-category')!.textContent} ${b.querySelector('.sem-total')!.textContent}`)
   const alert = () => root().querySelector('[data-sem-c=alert]')!
-  const costs = () => [...root().querySelectorAll('[data-sem-c=text]')].map((t) => t.textContent!.trim()).filter((t) => t.startsWith('Last change') || t.startsWith('Measuring'))
+  const costs = () => [...root().querySelectorAll('[data-sem-c=text]')].map((t) => t.textContent!.trim()).filter((t) => t.startsWith('Last change') || t.startsWith('No change') || t.startsWith('Measuring'))
   const choose = (item: string) => {
     const select = root().querySelector('[data-sem-c=choice] select')!
     const o = [...select.querySelectorAll('option')].find((x) => x.textContent === item)!
