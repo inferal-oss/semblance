@@ -77,7 +77,13 @@ class TripleTerm extends Base {
 const quad = (s: Term, p: Term, o: Term, g: Term) => new TripleTerm(s, p, o, g) as unknown as Quad
 
 /** A GraphStore with the engine's own counters, for tests and benchmarks. */
-export type EngineStore = GraphStore & { termCount(): number }
+export type EngineStore = GraphStore & {
+  termCount(): number
+  /** A deadline for queries, on the Date.now() clock: one running past it throws an error with `interrupted` (undefined: none). */
+  setDeadline(at: number | undefined): void
+  /** A step budget for each query, as setDeadline (undefined: unlimited). */
+  setFuel(steps: number | undefined): void
+}
 
 export function engineStore(module: WebAssembly.Module, kind: string): EngineStore {
   const e = new Engine(module)
@@ -346,6 +352,8 @@ export function engineStore(module: WebAssembly.Module, kind: string): EngineSto
       literals.clear()
       e.dispose()
     },
+    setDeadline: (at) => e.setDeadline(at),
+    setFuel: (steps) => e.setFuel(steps),
     maintain() {
       // Collect once the dictionary has grown by half since the last collection.
       if (e.termCount() > liveAfterCollect * 1.5 + 1000) collect()

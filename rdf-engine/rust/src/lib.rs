@@ -5,6 +5,7 @@
 extern crate alloc;
 
 mod abi;
+mod budget;
 mod dict;
 mod hash;
 mod heap;

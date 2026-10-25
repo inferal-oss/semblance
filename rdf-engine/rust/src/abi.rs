@@ -406,7 +406,28 @@ pub extern "C" fn bind_values(h: u32, count: u32, name_len: u32) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn set_deadline(at_ms: f64) {
+    crate::budget::set_deadline(at_ms);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn set_fuel(steps: u32) {
+    crate::budget::set_fuel(steps);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
+    crate::budget::start();
+    let n = run_query(h, graphs);
+    if crate::budget::finish() {
+        st().result.clear();
+        fail(b"interrupted");
+        return -2;
+    }
+    n
+}
+
+fn run_query(h: u32, graphs: u32) -> i32 {
     let s = st();
     let graph_ids: Vec<u32> = (0..graphs as usize).map(|i| u32::from_le_bytes([s.input[i * 4], s.input[i * 4 + 1], s.input[i * 4 + 2], s.input[i * 4 + 3]])).collect();
     let Some(p) = s.queries.get((h as usize).wrapping_sub(1)).and_then(Option::as_ref) else { return fail(b"no such query") };
@@ -423,6 +444,9 @@ pub extern "C" fn run(h: u32, graphs: u32) -> i32 {
     let mut count = 0usize;
     let mut seen = crate::idmap::IdMap::new();
     for c in combos {
+        if crate::budget::stopped() {
+            break;
+        }
         match sparql::execute(&p.query, &mut s.dict, &s.store, &graph_ids, &c) {
             sparql::Output::Rows(r, n) => {
                 count += n;

@@ -74,6 +74,8 @@ interface Exports {
   bind(h: number, nameLen: number, id: number): number
   bind_values(h: number, count: number, nameLen: number): number
   run(h: number, graphs: number): number
+  set_deadline?(atMs: number): void
+  set_fuel?(steps: number): void
   release(h: number): number
   parse_update(textLen: number, baseLen: number): number
   update(textLen: number, baseLen: number): number
@@ -94,13 +96,23 @@ export async function compile(bytes: BufferSource): Promise<WebAssembly.Module> 
   return WebAssembly.compile(bytes)
 }
 
-export class EngineError extends Error {}
+export class EngineError extends Error {
+  /** A query stopped by its budget (setDeadline, setFuel): code -2. */
+  readonly interrupted: boolean
+  constructor(message: string, interrupted = false) {
+    super(message)
+    this.interrupted = interrupted
+    if (interrupted) this.name = 'QueryInterrupted'
+  }
+}
 
 export class Engine {
   private x: Exports
 
-  constructor(module: WebAssembly.Module) {
-    this.x = new WebAssembly.Instance(module, imports).exports as unknown as Exports
+  /** `now` replaces the clock (`env.now`), for tests of the query budget. */
+  constructor(module: WebAssembly.Module, now?: () => number) {
+    const env = now ? { ...imports, env: { ...imports.env, now } } : imports
+    this.x = new WebAssembly.Instance(module, env).exports as unknown as Exports
     const v = this.x.abi_version()
     if (v !== ABI_VERSION) throw new Error(`engine ABI ${v}, host expects ${ABI_VERSION}`)
   }
@@ -140,8 +152,25 @@ export class Engine {
   }
 
   private check(r: number): number {
-    if (r < 0) throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || `engine error ${r}`)
+    if (r < 0) throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || `engine error ${r}`, r === -2)
     return r
+  }
+
+  // --- query budget ------------------------------------------------------------
+
+  /** Whether this build can stop a query (ABI.md, "Query budget"). */
+  get budgeted(): boolean {
+    return !!this.x.set_deadline
+  }
+
+  /** Queries running past `atMs` (on the `env.now` clock) stop with an interrupted error; undefined: no deadline. */
+  setDeadline(atMs?: number): void {
+    this.x.set_deadline?.(atMs ?? 0)
+  }
+
+  /** Queries taking more than `steps` evaluation steps stop with an interrupted error; undefined: unlimited. */
+  setFuel(steps?: number): void {
+    this.x.set_fuel?.((steps ?? 0) >>> 0)
   }
 
   // --- terms ----------------------------------------------------------------

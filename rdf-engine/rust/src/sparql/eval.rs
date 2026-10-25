@@ -38,8 +38,11 @@ pub struct Ctx<'a> {
     /// Compiled regexes by pattern and flags (an index into `regex_list`).
     regexes: IdMap,
     regex_list: Vec<Rc<Regex>>,
-    /// BNODE(str) per solution and string.
+    /// BNODE(str) by string, for the solution at `bnode_row` (rows are
+    /// extended in place, so a solution keeps its address while its
+    /// expressions are evaluated).
     bnodes: IdMap,
+    bnode_row: usize,
     scan: Vec<u32>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
     active: Active,
@@ -59,6 +62,7 @@ impl<'a> Ctx<'a> {
             regexes: IdMap::new(),
             regex_list: Vec::new(),
             bnodes: IdMap::new(),
+            bnode_row: 0,
             scan: Vec::new(),
             active: Active::Default,
         }
@@ -127,8 +131,11 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn bnode_for(&mut self, row: &[u32], s: &[u8]) -> u32 {
-        let mut key = row.to_vec();
-        key.extend(bytes_key(s));
+        if row.as_ptr() as usize != self.bnode_row {
+            self.bnodes = IdMap::new();
+            self.bnode_row = row.as_ptr() as usize;
+        }
+        let key = bytes_key(s);
         if let Some(b) = self.bnodes.get(&key) {
             return b;
         }
@@ -387,6 +394,9 @@ impl<'a> Ctx<'a> {
             scan.clear();
             self.store.scan([s, p, o, g], &mut scan);
             for q in scan.chunks_exact(4) {
+                if crate::budget::step() {
+                    break;
+                }
                 if dedupe && !seen.add(&q[..3]) {
                     continue;
                 }
@@ -585,6 +595,9 @@ impl<'a> Ctx<'a> {
         }
         let mut frontier = alloc::vec![start];
         while let Some(n) = frontier.pop() {
+            if crate::budget::step() {
+                break;
+            }
             let next = if backwards { self.pairs(q, None, Some(n), active).into_iter().map(|(a, _)| a).collect::<Vec<_>>() } else { self.pairs(q, Some(n), None, active).into_iter().map(|(_, b)| b).collect() };
             for m in next {
                 if seen.add(&[m]) {
@@ -608,8 +621,9 @@ impl<'a> Ctx<'a> {
             let data = self.eval(v, &alloc::vec![NONE; self.nvars], active);
             rows = join_rows(rows, &data);
         }
-        for (v, e) in &s.extend {
-            for r in rows.iter_mut() {
+        // Row by row, so BNODE(str) gives one node per string in each solution.
+        for r in rows.iter_mut() {
+            for (v, e) in &s.extend {
                 if let Ok(val) = self.expr(e, r) {
                     r[*v as usize] = self.to_id(&val);
                 }
@@ -640,7 +654,8 @@ impl<'a> Ctx<'a> {
                 }
             }
         }
-        if s.distinct || s.reduced {
+        // REDUCED may keep duplicates; it does, as the WAT build does.
+        if s.distinct {
             let mut seen = IdMap::new();
             rows.retain(|r| seen.add(r));
         }
@@ -908,6 +923,9 @@ pub fn join_rows(left: Vec<Row>, right: &[Row]) -> Vec<Row> {
                     while at != u32::MAX {
                         let i = at as usize;
                         at = next[i];
+                        if crate::budget::step() {
+                            return out;
+                        }
                         if let Some(m) = merge(l, &right[i]) {
                             out.push(m);
                         }
@@ -918,6 +936,9 @@ pub fn join_rows(left: Vec<Row>, right: &[Row]) -> Vec<Row> {
         None => {
             for l in &left {
                 for r in right {
+                    if crate::budget::step() {
+                        return out;
+                    }
                     if let Some(m) = merge(l, r) {
                         out.push(m);
                     }
