@@ -101,7 +101,10 @@ c:IconButtonShape a sh:NodeShape ; sh:targetClass c:IconButton ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "An icon-only button needs a c:label: it is its accessible name." ] .
 c:DialogShape a sh:NodeShape ; sh:targetClass c:Dialog ;
     sh:property [ sh:path c:label ; sh:minCount 1 ; sh:message "A dialog needs a title (c:label): it labels the dialog." ] ,
-                [ sh:path c:open ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+                [ sh:path c:open ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path c:dismissible ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+c:DrawerShape a sh:NodeShape ; sh:targetClass c:Drawer ;
+    sh:property [ sh:path c:dismissible ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
 c:ChoiceShape a sh:NodeShape ; sh:targetClass c:Choice ;
     sh:property [ sh:path c:controls ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
                 [ sh:path c:property ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .

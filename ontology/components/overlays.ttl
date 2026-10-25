@@ -28,6 +28,9 @@ c:Overlay a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "A component shown on demand, over the page (c:open). Closing it is one reaction for every kind."@en .
 
+c:dismissible a owl:DatatypeProperty ; rdfs:domain c:Overlay ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether a dialog or drawer can be dismissed with its close button, scrim or Escape key. Defaults to true; false keeps explicit actions available."@en .
+
 c:opens a owl:ObjectProperty ; rdfs:domain c:Button ; rdfs:range c:Overlay ;
     rdfs:comment "The overlay this button opens (sets its c:open true). The button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
 
@@ -49,7 +52,7 @@ c:DialogRendering-sparql a sem:Rule ;
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?scrim, ?panel ;
         rdfhtml:attribute ?dataSide .
-  ?scrim a rdfhtml:Div ; rdfhtml:class "sem-scrim" ; rdfhtml:attribute ?scrimHidden ; c:closes ?closed ; ord:immediatelyPrecedes ?panel .
+  ?scrim a rdfhtml:Div ; rdfhtml:class "sem-scrim" ; rdfhtml:attribute ?scrimHidden ; c:closes ?scrimCloses ; ord:immediatelyPrecedes ?panel .
   ?scrimHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?panel a rdfhtml:Section ; rdfhtml:class "sem-panel" ; rdfhtml:tabIndex "-1" ; rdfhtml:hasChild ?head, ?desc, ?body, ?actions ;
          rdfhtml:attribute ?role, ?modal, ?labelledBy, ?ariaLabel, ?describedBy .
@@ -91,6 +94,8 @@ WHERE {
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
     OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
     BIND(STR(?rawHelp) AS ?bodyText)
+    OPTIONAL { $this c:dismissible ?rawDismissible }
+    BIND(!BOUND(?rawDismissible) || STR(?rawDismissible) != "false" AS ?dismissible)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
     BIND(?rawContent AS ?content)
     OPTIONAL { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) }
@@ -98,6 +103,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~scrim")) AS ?scrim)
     BIND(IRI(CONCAT(STR($this), "/~scrim-aria-hidden")) AS ?scrimHidden)
     BIND($this AS ?closed)
+    BIND(IF(?dismissible, ?closed, ?none) AS ?scrimCloses)
     BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
     BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)
     BIND(IRI(CONCAT(STR($this), "/~panel-aria-modal")) AS ?modal)
@@ -108,10 +114,10 @@ WHERE {
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
     BIND(CONCAT(STR($this), "/~title") AS ?titleId)
-    BIND(IRI(CONCAT(STR($this), "/~close")) AS ?close)
-    BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
-    BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
-    BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close")), ?none) AS ?close)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-text")), ?none) AS ?closeText)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-aria-label")), ?none) AS ?closeLabel)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-data-sem-escape")), ?none) AS ?escape)
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
@@ -193,7 +199,7 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?scrim, ?panel ;
         rdfhtml:attribute ?dataSide .
   ?dataSide a rdfhtml:Attribute ; rdfhtml:attributeName "data-side" ; rdfhtml:attributeValue ?side .
-  ?scrim a rdfhtml:Div ; rdfhtml:class "sem-scrim" ; rdfhtml:attribute ?scrimHidden ; c:closes ?closed ; ord:immediatelyPrecedes ?panel .
+  ?scrim a rdfhtml:Div ; rdfhtml:class "sem-scrim" ; rdfhtml:attribute ?scrimHidden ; c:closes ?scrimCloses ; ord:immediatelyPrecedes ?panel .
   ?scrimHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?panel a rdfhtml:Section ; rdfhtml:class "sem-panel" ; rdfhtml:tabIndex "-1" ; rdfhtml:hasChild ?head, ?desc, ?body, ?actions ;
          rdfhtml:attribute ?role, ?modal, ?labelledBy, ?ariaLabel, ?describedBy .
@@ -235,6 +241,8 @@ WHERE {
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
     OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
     BIND(STR(?rawHelp) AS ?bodyText)
+    OPTIONAL { $this c:dismissible ?rawDismissible }
+    BIND(!BOUND(?rawDismissible) || STR(?rawDismissible) != "false" AS ?dismissible)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
     BIND(?rawContent AS ?content)
     OPTIONAL { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) }
@@ -245,6 +253,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~scrim")) AS ?scrim)
     BIND(IRI(CONCAT(STR($this), "/~scrim-aria-hidden")) AS ?scrimHidden)
     BIND($this AS ?closed)
+    BIND(IF(?dismissible, ?closed, ?none) AS ?scrimCloses)
     BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
     BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)
     BIND(IRI(CONCAT(STR($this), "/~panel-aria-modal")) AS ?modal)
@@ -255,10 +264,10 @@ WHERE {
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
     BIND(IF(BOUND(?title), IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
     BIND(CONCAT(STR($this), "/~title") AS ?titleId)
-    BIND(IRI(CONCAT(STR($this), "/~close")) AS ?close)
-    BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
-    BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
-    BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close")), ?none) AS ?close)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-text")), ?none) AS ?closeText)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-aria-label")), ?none) AS ?closeLabel)
+    BIND(IF(?dismissible, IRI(CONCAT(STR($this), "/~close-data-sem-escape")), ?none) AS ?escape)
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)

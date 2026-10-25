@@ -5,8 +5,8 @@ import { mountShell } from './harness.ts'
 const UI = 'https://semblance.dev/demo#'
 
 /** The shell on the Components page, showing one gallery group. */
-function showGroup(key: string, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
-  const h = mountShell(5, kind)
+function showGroup(key: string, kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+  const h = mountShell(5, kind, prefer)
   const f = h.store.factory
   const app = f.namedNode(UI + 'app')
   const group = f.namedNode(UI + 'galleryGroup')
@@ -92,6 +92,59 @@ describe('overlay components', () => {
     expect(root('ov-drawer-end').hasAttribute('hidden')).toBe(false)
     click(root('ov-drawer-apply'))
     expect(root('ov-drawer-end').hasAttribute('hidden')).toBe(true)
+  })
+
+  it.each(['oxigraph', 'n3'] as const)('keeps nondismissible dialogs and drawers open until an explicit action with %s', (kind) => {
+    const h = showGroup('GroupOverlays', kind)
+    const { root, fact, click } = h
+    const f = h.store.factory
+    const dismissible = f.namedNode(NS.c + 'dismissible')
+    const makePersistent = (local: string) => h.runtime.apply({
+      add: [f.quad(f.namedNode(UI + local), dismissible, f.literal('false', f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))],
+      remove: [],
+    })
+
+    makePersistent('ov-dialog')
+    click(root('ov-open-dialog'))
+    const dialog = root('ov-dialog')
+    expect(dialog.querySelector('[role=dialog]')).not.toBeNull()
+    expect(dialog.querySelector('.sem-close')).toBeNull()
+    expect(dialog.querySelector('[data-sem-escape]')).toBeNull()
+    click(dialog.querySelector('.sem-scrim')!)
+    expect(fact('ov-dialog', 'open')).toBe('true')
+    const escape = new h.window.Event('keydown', { bubbles: true, cancelable: true }) as unknown as KeyboardEvent
+    Object.assign(escape, { key: 'Escape', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+    dialog.querySelector('.sem-panel')!.dispatchEvent(escape)
+    h.shell.flush()
+    expect(fact('ov-dialog', 'open')).toBe('true')
+    click(root('ov-dialog-save'))
+    expect(fact('ov-dialog', 'open')).toBe('false')
+
+    makePersistent('ov-drawer-start')
+    click(root('ov-open-drawer-start'))
+    const drawer = root('ov-drawer-start')
+    expect(drawer.querySelector('[role=dialog]')).not.toBeNull()
+    expect(drawer.querySelector('.sem-close')).toBeNull()
+    click(drawer.querySelector('.sem-scrim')!)
+    expect(fact('ov-drawer-start', 'open')).toBe('true')
+  })
+
+  it('renders nondismissible modal overlays identically through SPARQL and function rules', () => {
+    const sparql = showGroup('GroupOverlays')
+    const functionRule = showGroup('GroupOverlays', 'oxigraph', 'function')
+    for (const h of [sparql, functionRule]) {
+      const f = h.store.factory
+      for (const local of ['ov-dialog', 'ov-drawer-start']) {
+        h.runtime.apply({
+          add: [f.quad(f.namedNode(UI + local), f.namedNode(NS.c + 'dismissible'), f.literal('false', f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))],
+          remove: [],
+        })
+      }
+      h.click(h.root('ov-open-dialog'))
+      h.click(h.root('ov-open-drawer-start'))
+    }
+    expect(sparql.root('ov-dialog').outerHTML).toBe(functionRule.root('ov-dialog').outerHTML)
+    expect(sparql.root('ov-drawer-start').outerHTML).toBe(functionRule.root('ov-drawer-start').outerHTML)
   })
 
   it('popovers toggle from their trigger, which reports aria-expanded and controls the panel', () => {
