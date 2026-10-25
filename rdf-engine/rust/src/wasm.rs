@@ -1,5 +1,5 @@
 //! A minimal WebAssembly binary writer: just what compiled queries need
-//! (i32 locals, structured control, calls, loads and stores).
+//! (i32, i64 and f64 locals, structured control, calls, loads and stores).
 
 use alloc::vec::Vec;
 
@@ -16,7 +16,10 @@ pub fn uleb(out: &mut Vec<u8>, mut v: u32) {
 }
 
 pub fn sleb(out: &mut Vec<u8>, v: i32) {
-    let mut v = v as i64;
+    sleb64(out, v as i64)
+}
+
+pub fn sleb64(out: &mut Vec<u8>, mut v: i64) {
     loop {
         let b = (v & 0x7f) as u8;
         v >>= 7;
@@ -28,13 +31,17 @@ pub fn sleb(out: &mut Vec<u8>, v: i32) {
     }
 }
 
-/// One function body under construction: its parameter and i32 local counts.
+/// One function body under construction: its parameter count and its locals' types.
 pub struct Body {
     pub ty: u32,
     pub params: u32,
-    pub locals: u32,
+    pub locals: Vec<u8>,
     pub code: Vec<u8>,
 }
+
+pub const I32: u8 = 0x7f;
+pub const I64: u8 = 0x7e;
+pub const F64: u8 = 0x7c;
 
 pub const BLOCK: u8 = 0x02;
 pub const LOOP: u8 = 0x03;
@@ -57,11 +64,36 @@ pub const OR: u8 = 0x72;
 
 impl Body {
     pub fn new(ty: u32, params: u32) -> Body {
-        Body { ty, params, locals: 0, code: Vec::new() }
+        Body { ty, params, locals: Vec::new(), code: Vec::new() }
     }
     pub fn local(&mut self) -> u32 {
-        self.locals += 1;
-        self.params + self.locals - 1
+        self.local_of(I32)
+    }
+    /// A local of type t (I32, I64, F64).
+    pub fn local_of(&mut self, t: u8) -> u32 {
+        self.locals.push(t);
+        self.params + self.locals.len() as u32 - 1
+    }
+    /// A block, loop or if with a result of type t.
+    pub fn open_t(&mut self, b: u8, t: u8) -> &mut Self {
+        self.code.extend_from_slice(&[b, t]);
+        self
+    }
+    /// A memory access: opcode, alignment (log2), offset.
+    pub fn mem(&mut self, op: u8, align: u8, offset: u32) -> &mut Self {
+        self.code.extend_from_slice(&[op, align]);
+        uleb(&mut self.code, offset);
+        self
+    }
+    pub fn i64(&mut self, v: i64) -> &mut Self {
+        self.code.push(0x42);
+        sleb64(&mut self.code, v);
+        self
+    }
+    pub fn f64(&mut self, v: f64) -> &mut Self {
+        self.code.push(0x44);
+        self.code.extend_from_slice(&v.to_le_bytes());
+        self
     }
     pub fn op(&mut self, b: u8) -> &mut Self {
         self.code.push(b);
@@ -190,12 +222,18 @@ pub fn module(types: &[(u32, u32)], module_name: &[u8], imports: &[(&[u8], u32)]
     let mut body = Vec::new();
     for f in funcs {
         body.clear();
-        if f.locals > 0 {
-            body.push(1);
-            uleb(&mut body, f.locals);
-            body.push(0x7f);
-        } else {
-            body.push(0);
+        // The locals as runs of one type.
+        let mut runs: Vec<(u32, u8)> = Vec::new();
+        for &t in &f.locals {
+            match runs.last_mut() {
+                Some((n, u)) if *u == t => *n += 1,
+                _ => runs.push((1, t)),
+            }
+        }
+        uleb(&mut body, runs.len() as u32);
+        for (n, t) in runs {
+            uleb(&mut body, n);
+            body.push(t);
         }
         body.extend_from_slice(&f.code);
         body.push(END);

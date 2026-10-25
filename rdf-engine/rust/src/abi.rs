@@ -555,6 +555,7 @@ pub extern "C" fn compile(h: u32) -> i32 {
             cq.tables.paths.extend(t.paths);
             cq.tables.patterns.extend(t.patterns);
             cq.tables.subs.extend(t.subs);
+            cq.tables.consts.extend(t.consts);
             let r = &mut st().result;
             r.clear();
             r.resize(bytes.len().div_ceil(4), 0);
@@ -746,9 +747,20 @@ pub extern "C" fn cq_group(k: u32, at: u32) -> u32 {
     rows.len() as u32
 }
 
+/// Expression k of a compiled module: with bit 31 (a SELECT expression after
+/// another) BNODE(str) keeps the nodes of the call before, as the interpreter's
+/// projection does row by row; else they are a new solution's.
+fn same_solution(r: &mut Run, k: u32) -> u32 {
+    if k & 0x8000_0000 == 0 {
+        r.ctx.bnode_new();
+    }
+    k & 0x7fff_ffff
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_test(k: u32) -> u32 {
     let r = run_state();
+    let k = same_solution(r, k);
     let e = unsafe { &*cq(r).tables.exprs[k as usize] };
     match r.ctx.expr(e, frame(r)).and_then(|v| r.ctx.ebv(&v)) {
         Ok(b) => b as u32,
@@ -759,10 +771,180 @@ pub extern "C" fn cq_test(k: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_value(k: u32) -> u32 {
     let r = run_state();
+    let k = same_solution(r, k);
     let e = unsafe { &*cq(r).tables.exprs[k as usize] };
     match r.ctx.expr(e, frame(r)) {
         Ok(v) => r.ctx.to_id(&v),
         Err(()) => 0,
+    }
+}
+
+// --- typed expressions (sparql/ctyped.rs) ------------------------------------------
+// Compiled code keeps strings as bytes in TX_BUF (term bytes are copied there: the
+// dictionary's arena moves when a term is interned) and numbers in locals; these
+// calls read and make terms. NUM: the number record, i64 at +0, f64 at +8 (a
+// SUBSTR's start), i32 at +16 (a slice's length), f64 at +24 (a SUBSTR's length).
+
+pub const TX_BUF_LEN: u32 = 65536;
+pub struct TxBuf(pub UnsafeCell<[u8; TX_BUF_LEN as usize]>);
+unsafe impl Sync for TxBuf {}
+pub static TX_BUF: TxBuf = TxBuf(UnsafeCell::new([0; TX_BUF_LEN as usize]));
+pub struct TxNum(pub UnsafeCell<[u64; 4]>);
+unsafe impl Sync for TxNum {}
+pub static TX_NUM: TxNum = TxNum(UnsafeCell::new([0; 4]));
+
+pub fn tx_buf() -> u32 {
+    TX_BUF.0.get() as u32
+}
+pub fn tx_num() -> u32 {
+    TX_NUM.0.get() as u32
+}
+fn num_rec() -> &'static mut [u64; 4] {
+    unsafe { &mut *TX_NUM.0.get() }
+}
+fn bytes_at(p: u32, n: u32) -> &'static [u8] {
+    unsafe { core::slice::from_raw_parts(p as *const u8, n as usize) }
+}
+
+/// A number into the record: its type (1 an integer that fits in 64 bits, 4 a
+/// double), or 6 for a number compiled code leaves to the engine.
+fn put_num(n: sparql::num::Num) -> i32 {
+    let r = num_rec();
+    match n {
+        sparql::num::Num::Int(i) if i64::try_from(i).is_ok() => {
+            r[0] = i as i64 as u64;
+            r[1] = (i as i64 as f64).to_bits();
+            1
+        }
+        sparql::num::Num::Double(d) => {
+            r[1] = d.to_bits();
+            4
+        }
+        _ => 6,
+    }
+}
+
+/// The lexical form of term id into the buffer at `at`: its length; -1 an
+/// error, -2 left to the engine (a language-tagged string; no room). Mode 0:
+/// STR (an IRI's or any literal's); 1: a string argument (xsd:string only).
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_lex(id: u32, at: u32, mode: u32) -> i32 {
+    let d = &st().dict;
+    let Some(t) = d.term(id) else { return -1 };
+    let ok = match mode {
+        0 => t.kind == dict::IRI || t.kind == dict::LITERAL,
+        _ if t.kind == dict::LITERAL && (t.a == dict::RDF_LANG_STRING || t.a == dict::RDF_DIR_LANG_STRING) => return -2,
+        _ => t.kind == dict::LITERAL && t.a == dict::XSD_STRING,
+    };
+    if !ok {
+        return -1;
+    }
+    let v = d.value(id);
+    let end = tx_buf() + TX_BUF_LEN;
+    if at < tx_buf() || at > end || v.len() as u32 > end - at {
+        return -2;
+    }
+    unsafe { core::ptr::copy_nonoverlapping(v.as_ptr(), at as *mut u8, v.len()) };
+    v.len() as i32
+}
+
+/// Term id as a number (into the record): its type, 0 when it is not one.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_num(id: u32) -> i32 {
+    let r = run_state();
+    match r.ctx.num(&sparql::expr::Val::Id(id)) {
+        Some(n) => put_num(n),
+        None => 0,
+    }
+}
+
+/// The term of the record's number of type t (1 integer, 4 double; 5 a boolean,
+/// the i64 its value).
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_numterm(t: u32) -> u32 {
+    let r = run_state();
+    let n = num_rec();
+    use sparql::expr::Val;
+    let v = match t {
+        1 => Val::Num(sparql::num::Num::Int(n[0] as i64 as i128)),
+        4 => Val::Num(sparql::num::Num::Double(f64::from_bits(n[1]))),
+        _ => Val::Bool(n[0] != 0),
+    };
+    r.ctx.to_id(&v)
+}
+
+/// The simple literal of n bytes at p.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_strterm(p: u32, n: u32) -> u32 {
+    run_state().ctx.dict.intern(Key::literal(bytes_at(p, n), dict::NONE))
+}
+
+/// IRI(s) of the simple string of n bytes at p: resolved against the base.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_iri(p: u32, n: u32) -> u32 {
+    let r = run_state();
+    let mut out = Vec::new();
+    crate::iri::resolve(r.ctx.base, bytes_at(p, n), &mut out);
+    r.ctx.dict.intern(Key::iri(&out))
+}
+
+/// Strings a, b: mode 0 STRSTARTS, 1 STRENDS, 2 CONTAINS (0 or 1); 3 a <=> b (-1, 0, 1).
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_strfn(mode: u32, pa: u32, na: u32, pb: u32, nb: u32) -> i32 {
+    let (a, b) = (bytes_at(pa, na), bytes_at(pb, nb));
+    match mode {
+        0 => a.starts_with(b) as i32,
+        1 => a.ends_with(b) as i32,
+        2 => sparql::expr::find(a, b).is_some() as i32,
+        _ => a.cmp(b) as i32,
+    }
+}
+
+/// The number of characters (code points) of n bytes at p.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_cplen(p: u32, n: u32) -> u32 {
+    bytes_at(p, n).iter().filter(|&&b| b & 0xc0 != 0x80).count() as u32
+}
+
+/// SUBSTR of n bytes at p from the record's start (f64 at +8), and length (f64
+/// at +24) when k is 3: the slice's offset, its length at +16.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_substr(p: u32, n: u32, k: u32) -> u32 {
+    let r = num_rec();
+    let (from, to) = sparql::expr::substr_range(bytes_at(p, n), f64::from_bits(r[1]), if k == 3 { Some(f64::from_bits(r[3])) } else { None });
+    r[2] = (to - from) as u64;
+    from as u32
+}
+
+/// A cast to xsd:integer (tc 1) or xsd:double (tc 4) of: term a (src 0), the
+/// simple string of b bytes at a (src 1), or the record's number of type a
+/// (src 2). The result into the record: its type, 0 an error, 6 left to the engine.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_tonum(src: u32, a: u32, b: u32, tc: u32) -> i32 {
+    use sparql::expr::Val;
+    let r = run_state();
+    let n = num_rec();
+    let v = match src {
+        0 => Val::Id(a),
+        1 => Val::Str(bytes_at(a, b).to_vec(), None),
+        _ if a == 1 => Val::Num(sparql::num::Num::Int(n[0] as i64 as i128)),
+        _ => Val::Num(sparql::num::Num::Double(f64::from_bits(n[1]))),
+    };
+    let dt = r.ctx.xsd(if tc == 1 { b"integer" } else { b"double" });
+    match r.ctx.cast(dt, &v) {
+        Ok(Val::Num(x)) => put_num(x),
+        Ok(_) => 6,
+        Err(()) => 0,
+    }
+}
+
+/// The effective boolean value of term id: 0, 1, or 2 for an error.
+#[unsafe(no_mangle)]
+pub extern "C" fn cq_ebv(id: u32) -> u32 {
+    let r = run_state();
+    match r.ctx.ebv(&sparql::expr::Val::Id(id)) {
+        Ok(b) => b as u32,
+        Err(()) => 2,
     }
 }
 
@@ -773,7 +955,8 @@ pub extern "C" fn cq_solution() {
     if r.p.query.form == sparql::Form::Select {
         let f = frame(r);
         let row: Vec<u32> = sel.project.iter().map(|&v| f[v as usize]).collect();
-        if (sel.distinct || sel.reduced) && !r.distinct.add(&row) {
+        // REDUCED keeps duplicates, as the interpreter does
+        if sel.distinct && !r.distinct.add(&row) {
             return;
         }
         st().result.extend_from_slice(&row);

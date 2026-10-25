@@ -182,6 +182,20 @@ host passes every export through). The WAT engine's: `cq_sub`, `cq_keep`,
 engine), `cq_room` (stack room a module writes itself), and helpers for typed
 expressions (`cq_str`, `cq_iri`, `cq_num`, `cq_tonum`, `cq_term`, `cq_cplen`,
 `cq_cpoff`, `cq_strfn`, `cq_ebv`); `rdf-engine/wat/cx-header.ts` lists them.
+The Rust engine's: helpers for typed expressions (`cq_lex`, `cq_num`,
+`cq_numterm`, `cq_strterm`, `cq_iri`, `cq_strfn`, `cq_cplen`, `cq_substr`,
+`cq_tonum`, `cq_ebv`); `rust/src/sparql/compile.rs` lists them.
+
+A compiled run is budgeted as an interpreted one is (`set_deadline`,
+`set_fuel`): `cq_begin` starts the budget, and `cq_end` returns -2 with the
+error `interrupted` once it is spent (the host then throws rather than
+running the query again interpreted). The module takes a step per quad it
+scans, path node it walks and row it joins, at the head of each loop: it
+counts down a word in engine memory whose address the engine baked into the
+module, and at 0 calls `cq_bu_event() -> 0 | 1`, which reads the clock or
+the fuel and says whether the budget is spent; once it is, every later step
+ends its loop, so the run unwinds to `cq_end`. What the module asks the
+engine for (`cq_scan`, `cq_path`, `cq_eval`, ...) steps in the engine.
 
 A module may also read the engine's own structures in its memory directly
 (the WAT engine's compiled triple patterns and path walks read its store's

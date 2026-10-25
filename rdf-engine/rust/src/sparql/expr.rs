@@ -513,7 +513,7 @@ impl Ctx<'_> {
         }
     }
 
-    fn cast(&mut self, dt: u32, v: &Val) -> R<Val> {
+    pub(crate) fn cast(&mut self, dt: u32, v: &Val) -> R<Val> {
         let local = self.dict.value(dt).strip_prefix(XSD).ok_or(())?.to_vec();
         if self.kind(v) == dict::IRI {
             if local == b"string" {
@@ -752,24 +752,10 @@ impl Ctx<'_> {
             SubStr => {
                 self.str_check(&v[0])?;
                 let start = self.num(&v[1]).ok_or(())?.as_f64();
-                let first = libm_round(start);
-                let end = if v.len() > 2 { first + libm_round(self.num(&v[2]).ok_or(())?.as_f64()) } else { f64::INFINITY };
+                let length = if v.len() > 2 { Some(self.num(&v[2]).ok_or(())?.as_f64()) } else { None };
                 let (s, l) = self.str_view(&v[0]);
-                // Characters p (1-based) with first <= p < end, as a byte range.
-                let (mut from, mut to, mut p) = (s.len(), s.len(), 0.0);
-                for (i, &b) in s.iter().enumerate() {
-                    if b & 0xc0 != 0x80 {
-                        p += 1.0;
-                        if p >= first && from == s.len() && p < end {
-                            from = i;
-                        }
-                        if p >= end && from != s.len() {
-                            to = i;
-                            break;
-                        }
-                    }
-                }
-                Ok(Val::Str(s[from.min(to)..to].to_vec(), l.map(|(t, d)| (t.to_vec(), d))))
+                let (from, to) = substr_range(s, start, length);
+                Ok(Val::Str(s[from..to].to_vec(), l.map(|(t, d)| (t.to_vec(), d))))
             }
             StrLen => {
                 self.str_check(&v[0])?;
@@ -1024,7 +1010,31 @@ fn trim(s: &[u8]) -> &[u8] {
     &s[start..end]
 }
 
-fn find(a: &[u8], b: &[u8]) -> Option<usize> {
+/// SUBSTR's byte range of s: characters p (1-based) with first <= p < end,
+/// first and end the rounded start and start + length.
+pub fn substr_range(s: &[u8], start: f64, length: Option<f64>) -> (usize, usize) {
+    let first = libm_round(start);
+    let end = match length {
+        Some(n) => first + libm_round(n),
+        None => f64::INFINITY,
+    };
+    let (mut from, mut to, mut p) = (s.len(), s.len(), 0.0);
+    for (i, &b) in s.iter().enumerate() {
+        if b & 0xc0 != 0x80 {
+            p += 1.0;
+            if p >= first && from == s.len() && p < end {
+                from = i;
+            }
+            if p >= end && from != s.len() {
+                to = i;
+                break;
+            }
+        }
+    }
+    (from.min(to), to)
+}
+
+pub fn find(a: &[u8], b: &[u8]) -> Option<usize> {
     if b.is_empty() {
         return Some(0);
     }

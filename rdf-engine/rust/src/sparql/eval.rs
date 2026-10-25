@@ -147,6 +147,12 @@ impl<'a> Ctx<'a> {
         Ok(r)
     }
 
+    /// The next BNODE(str) starts a new solution's nodes (compiled queries
+    /// evaluate every solution in the same frame).
+    pub fn bnode_new(&mut self) {
+        self.bnode_row = 0;
+    }
+
     pub fn bnode_for(&mut self, row: &[u32], s: &[u8]) -> u32 {
         if row.as_ptr() as usize != self.bnode_row {
             self.bnodes = IdMap::new();
@@ -369,16 +375,7 @@ impl<'a> Ctx<'a> {
         if let Some(i) = self.side.get(&key) {
             return self.side_list[i as usize].clone();
         }
-        let safe = if pure(b) {
-            None
-        } else {
-            let mut m = alloc::vec![false; self.nvars];
-            pattern_vars(b, &mut m);
-            for (v, x) in m.iter_mut().enumerate() {
-                *x = *x && subst_ok(b, v as Var);
-            }
-            Some(m.into())
-        };
+        let safe: Option<Rc<[bool]>> = side_safe(b, self.nvars).map(Into::into);
         self.side_list.push(safe.clone());
         self.side.insert(&key, self.side_list.len() as u32 - 1);
         safe
@@ -899,6 +896,20 @@ impl<'a> Ctx<'a> {
 /// and for BIND / FILTER over such a pattern when the expression only reads
 /// variables the pattern always binds: a substituted value then equals the
 /// pattern's own, so the expression cannot tell.
+/// What `sideways` gives, uncached: None when `b` is pure, else per variable
+/// whether a left row may pass its binding into `b`.
+pub(crate) fn side_safe(b: &Pattern, nvars: usize) -> Option<Vec<bool>> {
+    if pure(b) {
+        return None;
+    }
+    let mut m = alloc::vec![false; nvars];
+    pattern_vars(b, &mut m);
+    for (v, x) in m.iter_mut().enumerate() {
+        *x = *x && subst_ok(b, v as Var);
+    }
+    Some(m)
+}
+
 pub(crate) fn pure(p: &Pattern) -> bool {
     match p {
         Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) => true,

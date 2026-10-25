@@ -37,6 +37,17 @@ const QUERIES = [
   'SELECT ?a ?l WHERE { ?a a :R LATERAL { SELECT ?a (MAX(?s) AS ?l) WHERE { ?a :slug ?s } GROUP BY ?a } }',
   'SELECT ?a ?first WHERE { ?a a :R OPTIONAL { ?first :next ?n OPTIONAL { ?first :order ?o0 } BIND(COALESCE(xsd:double(?o0), 0) AS ?o) FILTER NOT EXISTS { ?e :next ?m OPTIONAL { ?e :order ?p0 } BIND(COALESCE(xsd:double(?p0), 0) AS ?p) FILTER(?p < ?o) } } }',
   'SELECT ?a ?d ?e WHERE { ?a :order ?o BIND(xsd:date("2020-01-01") AS ?x) BIND(?x + xsd:dayTimeDuration("P1D") AS ?d) BIND(?d - ?x AS ?e) FILTER(?d > ?x) }',
+  // comparisons across kinds (numbers, strings, IRIs, language-tagged strings), overflow, slices
+  'SELECT ?a ?b ?x ?y ?z WHERE { ?a ?p ?s . ?b ?q ?t BIND(?s = ?t AS ?x) BIND(?s != ?t AS ?y) BIND(?s <= ?t AS ?z) }',
+  'SELECT ?a ?x ?y ?z WHERE { ?a :order ?o BIND(?o + 9223372036854775807 AS ?x) BIND(?o - 1.5e0 AS ?y) BIND(?o - 2 AS ?z) }',
+  'SELECT ?a ?x ?n ?y WHERE { ?a :slug ?s BIND(CONCAT(?s, ?s, "-", STR(?a)) AS ?x) BIND(STRLEN(?s) AS ?n) BIND(SUBSTR(?s, 2.5, 1.4) AS ?y) }',
+  'SELECT ?a ?x ?y ?z ?w WHERE { ?a :slug ?s BIND(xsd:integer(?s) AS ?x) BIND(xsd:double(STRLEN(?s)) AS ?y) BIND(xsd:integer(2.7e0) AS ?z) BIND(xsd:integer("12") + 1 AS ?w) }',
+  'SELECT ?a ?x ?y ?z WHERE { ?a ?p ?o BIND(IRI(?o) AS ?x) BIND(IRI(CONCAT("rel/", STR(?a))) AS ?y) BIND(COALESCE(STRLEN(?o), xsd:double(?o), -1) AS ?z) }',
+  // right sides run per left row with the bindings the interpreter passes in (the rest hidden)
+  'SELECT ?a ?n ?m WHERE { ?a a :R . { ?a :next ?n FILTER(STR(?a) < STR(?n)) } UNION { { SELECT (MIN(?s) AS ?m) WHERE { ?x :slug ?s } } ?a :slug ?m } }',
+  'SELECT ?a ?o ?n WHERE { ?a :slug ?s OPTIONAL { { ?a :order ?o FILTER(STRSTARTS(?s, "s-1")) } UNION { { SELECT ?n WHERE { ?n a :R } } FILTER(?n = ?a) } } }',
+  // a BIND onto a variable the joined row binds keeps the row only when they agree
+  'SELECT ?a ?b ?c WHERE { ?a :next ?b BIND(STR(?b) AS ?c) { BIND(:c AS ?b) } }',
 ]
 
 describe.skipIf(!built.length).each(built)('%s compiled queries', (kind) => {

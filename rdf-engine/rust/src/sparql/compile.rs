@@ -14,7 +14,7 @@
 //! rest of the plan inside its innermost loop; a rest reached from two places
 //! (after OPTIONAL, UNION, VALUES) becomes a function of its own.
 
-use super::eval::pure;
+use super::eval::{pure, side_safe};
 use super::*;
 use crate::dict::{self, Dict};
 use crate::wasm::{self, *};
@@ -29,7 +29,8 @@ const T_V_I: u32 = 4;
 const T_V_V: u32 = 5;
 const T_III_V: u32 = 6;
 const T_II_I: u32 = 7;
-const TYPES: [(u32, u32); 8] = [(1, 0), (1, 1), (3, 1), (4, 1), (0, 1), (0, 0), (3, 0), (2, 1)];
+const T_IIIII_I: u32 = 8;
+const TYPES: [(u32, u32); 9] = [(1, 0), (1, 1), (3, 1), (4, 1), (0, 1), (0, 0), (3, 0), (2, 1), (5, 1)];
 
 // Imports, in this order (their function indices).
 const BEGIN: u32 = 0;
@@ -51,7 +52,18 @@ const SUB: u32 = 15;
 const KEEP: u32 = 16;
 const GROUP: u32 = 17;
 const BU_EVENT: u32 = 18;
-const IMPORTS: [(&[u8], u32); 19] = [
+// typed expressions (ctyped.rs)
+const LEX: u32 = 19;
+const NUM: u32 = 20;
+const NUMTERM: u32 = 21;
+const STRTERM: u32 = 22;
+const IRI_OF: u32 = 23;
+const STRFN: u32 = 24;
+const CPLEN: u32 = 25;
+const SUBSTR: u32 = 26;
+const TONUM: u32 = 27;
+const EBV: u32 = 28;
+const IMPORTS: [(&[u8], u32); 29] = [
     (b"cq_begin", T_III_I),
     (b"cq_combo", T_I_V),
     (b"cq_scan", T_IIII_I),
@@ -71,6 +83,16 @@ const IMPORTS: [(&[u8], u32); 19] = [
     (b"cq_keep", T_V_V),
     (b"cq_group", T_II_I),
     (b"cq_bu_event", T_V_I),
+    (b"cq_lex", T_III_I),
+    (b"cq_num", T_I_I),
+    (b"cq_numterm", T_I_I),
+    (b"cq_strterm", T_II_I),
+    (b"cq_iri", T_II_I),
+    (b"cq_strfn", T_IIIII_I),
+    (b"cq_cplen", T_II_I),
+    (b"cq_substr", T_III_I),
+    (b"cq_tonum", T_IIII_I),
+    (b"cq_ebv", T_I_I),
 ];
 const NIMPORTS: u32 = IMPORTS.len() as u32;
 
@@ -90,6 +112,8 @@ pub struct Tables {
     pub patterns: Vec<*const Pattern>,
     /// For `cq_group`: subqueries whose WHERE runs in the module.
     pub subs: Vec<*const Select>,
+    /// Constant strings typed expressions read (ctyped.rs), at fixed addresses.
+    pub consts: Vec<alloc::boxed::Box<[u8]>>,
 }
 
 pub type Res<T> = Result<T, &'static str>;
@@ -97,7 +121,8 @@ pub type Res<T> = Result<T, &'static str>;
 /// Debugging switches (`cq_debug`), for bisecting a difference: compile without
 /// (1) OPTIONAL right sides computed in the module, (2) join right sides
 /// computed in the module, (4) filters pushed down, (8) EXISTS as functions,
-/// (16) subqueries in the module.
+/// (16) subqueries in the module, (32) typed expressions, (64) right sides in
+/// line with the left row's bindings (masked).
 pub static DEBUG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 fn off(bit: u32) -> bool {
     DEBUG.load(core::sync::atomic::Ordering::Relaxed) & bit != 0
@@ -113,6 +138,8 @@ enum Step<'a> {
     Triple(&'a Triple),
     Filter(&'a Expr),
     Extend(Var, &'a Expr),
+    /// A SELECT expression after another: BNODE(str) as in the one before.
+    Project(Var, &'a Expr),
     /// OPTIONAL over a pattern that may see the row (pure).
     Optional(&'a Pattern, Option<&'a Expr>),
     /// A pattern's rows, from the interpreter now, joined in.
@@ -128,7 +155,19 @@ enum Step<'a> {
     Keep,
     /// EXISTS found a solution: global g set, return.
     Exit(u32),
+    /// A join's right side, in line, seeing the left row's bindings the
+    /// interpreter would pass into it (its `sideways`): the others are hidden
+    /// (mask i: saved, cleared) while it runs, and checked against its rows at
+    /// `Unmask(i)`.
+    Masked(&'a Pattern, u32),
+    Unmask(u32),
+    /// OPTIONAL over such a right side, with its condition.
+    OptMasked(&'a Pattern, Option<&'a Expr>, u32),
 }
+
+/// A mask: per hidden variable, the global holding its value and what is
+/// known of it after the left side.
+type Mask = Vec<(Var, u32, u8)>;
 
 #[derive(Clone)]
 struct St {
@@ -148,7 +187,18 @@ struct Gen<'q> {
     globals: u32,
     /// The plan state where the expression being compiled is evaluated.
     here: Option<St>,
+    /// Typed expressions (ctyped.rs): blocks opened since the bail block, whether
+    /// one is being compiled, and the global holding the string buffer's use.
+    txd: u32,
+    in_tx: bool,
+    tx_used: Option<u32>,
+    masks: Vec<Mask>,
+    /// Expressions compiled now are SELECT expressions after another (bit 31 of their index).
+    same_solution: bool,
 }
+
+#[path = "ctyped.rs"]
+mod ctyped;
 
 /// Compile `q` for runs with the variables `bound` bound (to any values). `base`:
 /// where the module's expressions, paths and patterns start in the engine's tables.
@@ -166,7 +216,7 @@ pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame:
     if q.template.iter().flatten().any(|t| matches!(t, Tt::Triple(_))) {
         return Err("not compilable: triple term in template");
     }
-    let mut g = Gen { q, dict, frame, width: q.vars.len() as u32, funcs: Vec::new(), t: Tables::default(), base, globals: 0, here: None };
+    let mut g = Gen { q, dict, frame, width: q.vars.len() as u32, funcs: Vec::new(), t: Tables::default(), base, globals: 0, here: None, txd: 0, in_tx: false, tx_used: None, masks: Vec::new(), same_solution: false };
     // run(graphs) -> n
     let mut run = Body::new(T_I_I, 1);
     let (n, i, top) = (run.local(), run.local(), run.local());
@@ -177,8 +227,8 @@ pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame:
     if let Some(v) = &s.values {
         steps.push(Step::Pat(v));
     }
-    for (v, e) in &s.extend {
-        steps.push(Step::Extend(*v, e));
+    for (i, (v, e)) in s.extend.iter().enumerate() {
+        steps.push(if i == 0 { Step::Extend(*v, e) } else { Step::Project(*v, e) });
     }
     steps.push(Step::Final);
     let mut st = St { bound: vec![0; q.vars.len()], top };
@@ -330,9 +380,9 @@ fn has_exists(e: &Expr) -> bool {
 /// Variables a step may bind.
 fn step_binds(s: &Step, out: &mut Vec<Var>) {
     match s {
-        Step::Pat(p) | Step::Eval(p) | Step::Rows(_, p) | Step::OptRows(_, p, _) | Step::Optional(p, _) => super::parse::pattern_vars(p, out),
+        Step::Pat(p) | Step::Eval(p) | Step::Rows(_, p) | Step::OptRows(_, p, _) | Step::Optional(p, _) | Step::Masked(p, _) | Step::OptMasked(p, _, _) => super::parse::pattern_vars(p, out),
         Step::Triple(t) => [&t.s, &t.p, &t.o].iter().for_each(|x| tv_vars(x, out)),
-        Step::Extend(v, _) => out.push(*v),
+        Step::Extend(v, _) | Step::Project(v, _) => out.push(*v),
         _ => {}
     }
 }
@@ -438,7 +488,7 @@ impl<'q> Gen<'q> {
 
     fn expr_index(&mut self, e: &Expr) -> u32 {
         self.t.exprs.push(e);
-        self.base[0] + self.t.exprs.len() as u32 - 1
+        (self.base[0] + self.t.exprs.len() as u32 - 1) | if self.same_solution { 0x8000_0000 } else { 0 }
     }
 
     fn emit(&mut self, f: usize, steps: &[Step<'q>], st: &St) -> Res<()> {
@@ -472,6 +522,11 @@ impl<'q> Gen<'q> {
                     self.emit(f, &then(&head), st)
                 }
                 Pattern::Join(a, b) if pure(b) => self.emit(f, &then(&[Step::Pat(a), Step::Pat(b)]), st),
+                // The left row's bindings make the right side cheap: it runs per row, as the interpreter's join_one.
+                Pattern::Join(a, b) if self.hidden(a, b, st).is_some() => {
+                    let m = self.mask(a, b, st);
+                    self.emit(f, &then(&[Step::Pat(a), Step::Masked(b, m)]), st)
+                }
                 // Else the right side's rows, computed (as the interpreter does) before the left side runs.
                 Pattern::Join(a, b) => {
                     let (g, top) = self.table(f, b, st)?;
@@ -479,6 +534,10 @@ impl<'q> Gen<'q> {
                     self.emit(f, &then(&[Step::Pat(a), Step::Rows(g, b)]), &next)
                 }
                 Pattern::LeftJoin(a, b, c) if pure(b) => self.emit(f, &then(&[Step::Pat(a), Step::Optional(b, c.as_ref())]), st),
+                Pattern::LeftJoin(a, b, c) if self.hidden(a, b, st).is_some() => {
+                    let m = self.mask(a, b, st);
+                    self.emit(f, &then(&[Step::Pat(a), Step::OptMasked(b, c.as_ref(), m)]), st)
+                }
                 Pattern::LeftJoin(a, b, c) => {
                     let (g, top) = self.table_as(f, b, st, 1)?;
                     let next = St { bound: st.bound.clone(), top };
@@ -510,7 +569,7 @@ impl<'q> Gen<'q> {
                 self.f(f).op(END);
                 Ok(())
             }
-            Step::Extend(v, e) => {
+            Step::Extend(v, e) | Step::Project(v, e) => {
                 let before = st.bound[v as usize];
                 let (save, val) = (self.f(f).local(), self.f(f).local());
                 if before != 0 {
@@ -518,23 +577,36 @@ impl<'q> Gen<'q> {
                     self.f(f).set(save);
                 }
                 self.here = Some(st.clone());
+                self.same_solution = matches!(first, Step::Project(..));
                 self.value(f, e);
+                self.same_solution = false;
                 self.f(f).tee(val).open(IF);
                 self.store_var(f, v, val);
                 self.f(f).op(END);
                 let mut next = st.clone();
                 next.bound[v as usize] = before.max(MAYBE);
+                // A BIND onto a variable the row binds already (from the row it
+                // is joined with): the row stays only if the values agree.
+                let check = before != 0 && matches!(first, Step::Extend(..));
+                self.f(f).open(BLOCK);
+                if check {
+                    self.f(f).get(val).i32(0).op(NE).get(save).i32(0).op(NE).op(AND).get(val).get(save).op(NE).op(AND).br(BR_IF, 0);
+                }
                 self.emit(f, rest, &next)?;
+                self.f(f).op(END);
                 // `save` is 0 when the variable was unbound before.
                 self.store_var(f, v, save);
                 Ok(())
             }
-            Step::Optional(b, cond) => {
+            Step::Optional(b, cond) | Step::OptMasked(b, cond, _) => {
                 let k = self.cont(rest, optional(&st.bound, b))?;
                 // A global: the inner pattern's matches may end in another function.
                 let found = self.global();
                 self.f(f).i32(0).global_set(found);
-                let mut inner = vec![Step::Pat(b)];
+                let mut inner = vec![match first {
+                    Step::OptMasked(_, _, m) => Step::Masked(b, m),
+                    _ => Step::Pat(b),
+                }];
                 inner.extend(cond.map(Step::Filter));
                 inner.extend([Step::Found(found), Step::Call(k)]);
                 self.emit(f, &inner, st)?;
@@ -577,7 +649,92 @@ impl<'q> Gen<'q> {
                 self.f(f).i32(1).global_set(g).op(RETURN);
                 Ok(())
             }
+            Step::Masked(b, m) => {
+                let mask = self.masks[m as usize].clone();
+                let mut inner = st.clone();
+                for &(v, g, _) in &mask {
+                    self.load_var(f, v);
+                    self.f(f).global_set(g);
+                    self.store_const(f, v, 0);
+                    inner.bound[v as usize] = 0;
+                }
+                self.emit(f, &then(&[Step::Pat(b), Step::Unmask(m)]), &inner)?;
+                for &(v, g, _) in &mask {
+                    let a = self.frame + 4 * v;
+                    self.f(f).i32(0).global_get(g).store(a);
+                }
+                Ok(())
+            }
+            Step::Unmask(m) => {
+                let mask = self.masks[m as usize].clone();
+                let x = self.f(f).local();
+                self.f(f).open(BLOCK);
+                // a hidden binding the right side's row binds otherwise: not compatible
+                for &(v, g, _) in &mask {
+                    self.f(f).global_get(g).i32(0).op(NE);
+                    self.load_var(f, v);
+                    self.f(f).tee(x).i32(0).op(NE).op(AND).get(x).global_get(g).op(NE).op(AND).br(BR_IF, 0);
+                }
+                // merged: the hidden values back, what the right side had kept to restore after
+                let mut next = st.clone();
+                let mut keep = Vec::new();
+                for &(v, g, known) in &mask {
+                    let t = self.f(f).local();
+                    let a = self.frame + 4 * v;
+                    self.load_var(f, v);
+                    self.f(f).set(t).i32(0).global_get(g).get(t).global_get(g).op(SELECT).store(a);
+                    keep.push((v, t));
+                    let b = &mut next.bound[v as usize];
+                    *b = if known == CERTAIN { CERTAIN } else { (*b).max(known) };
+                }
+                self.emit(f, rest, &next)?;
+                for (v, t) in keep {
+                    self.store_var(f, v, t);
+                }
+                self.f(f).op(END);
+                Ok(())
+            }
         }
+    }
+
+    /// For a join of `a` and `b` (not pure) from state st: when the interpreter
+    /// would pass some of the left row's certain bindings into `b`, the
+    /// variables to hide while `b` runs in line after `a` (those it would not
+    /// pass), with what is known of each after `a`.
+    fn hidden(&self, a: &Pattern, b: &Pattern, st: &St) -> Option<Vec<(Var, u8)>> {
+        if off(64) {
+            return None;
+        }
+        let n = self.q.vars.len();
+        let safe = side_safe(b, n)?;
+        let aft = after(a, &st.bound);
+        let mut m = Vec::new();
+        super::parse::pattern_vars(b, &mut m);
+        let mut mentioned = alloc::vec![false; n];
+        m.iter().for_each(|&v| mentioned[v as usize] = true);
+        if !(0..n).any(|v| mentioned[v] && safe[v] && st.bound[v] == 0 && aft[v] == CERTAIN) {
+            return None;
+        }
+        let mut mask = Vec::new();
+        for v in 0..n {
+            // (b's expressions may read a variable its patterns do not mention)
+            if !safe[v] && st.bound[v] != CERTAIN && aft[v] != 0 {
+                // bound maybe before the join: the interpreter would pass it whatever its safety
+                if st.bound[v] == MAYBE {
+                    return None;
+                }
+                mask.push((v as Var, aft[v]));
+            }
+        }
+        Some(mask)
+    }
+
+    /// The mask for `hidden`'s variables (each with a global for its value).
+    fn mask(&mut self, a: &Pattern, b: &Pattern, st: &St) -> u32 {
+        let vars = self.hidden(a, b, st).unwrap();
+        let mask = vars.into_iter().map(|(v, k)| (v, self.global(), k)).collect();
+        self.masks.push(mask);
+        self.masks.len() as u32 - 1
     }
 
     /// Evaluate `p` with the interpreter now, onto the stack: the rows start at
@@ -667,6 +824,9 @@ impl<'q> Gen<'q> {
 
     /// Push an expression's value as a term id (0: unbound, or an error).
     fn value(&mut self, f: usize, e: &Expr) {
+        if !self.in_tx && self.tx_worth(e) {
+            return self.tx_top(f, e, false);
+        }
         match e {
             Expr::Var(v) => self.load_var(f, *v),
             Expr::Const(c) => {
@@ -708,6 +868,9 @@ impl<'q> Gen<'q> {
 
     /// Push a condition's value: 0 false, 1 true, 2 error.
     fn bool3(&mut self, f: usize, e: &Expr) {
+        if !self.in_tx && self.tx_worth(e) {
+            return self.tx_top(f, e, true);
+        }
         match e {
             // EXISTS over triples and filters: a function of its own that returns
             // at the first solution; what it binds is restored around the call.
