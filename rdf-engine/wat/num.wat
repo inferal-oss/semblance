@@ -123,6 +123,14 @@
   (if (i32.le_u (i32.sub (local.get $c) (i32.const C_INTEGER)) (i32.const 3)) (then
     (local.set $t (i32.sub (local.get $c) (i32.const 1)))
     (if (i32.eqz (call $parse_num (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $t))) (then (local.set $t (i32.const 0))))))
+  ;; a dateTime or date (not a number, type 0) keeps its instant for $date_cmp: $ni whole
+  ;; seconds, $nf the fraction's bits, $nsc 1 when valid, | 2 with a timezone
+  (if (i32.or (i32.eq (local.get $c) (i32.const C_DATETIME)) (i32.eq (local.get $c) (i32.const C_DATE))) (then
+    (if (call $date_parse (call $tval (local.get $id)) (call $tlen (local.get $id))) (then
+      (call $date_key)
+      (global.set $ni (global.get $dk_s))
+      (global.set $nf (f64.reinterpret_i64 (global.get $dk_f)))
+      (global.set $nsc (i32.or (i32.const 1) (i32.shl (i32.ne (global.get $d_tz) (i32.const 0)) (i32.const 1))))))))
   (if (i32.eq (global.get $ncache_n) (global.get $ncache_cap)) (then
     (local.set $c (i32.add (i32.shl (global.get $ncache_cap) (i32.const 1)) (i32.const 64)))
     (global.set $ncache (if (result i32) (global.get $ncache_cap)
@@ -630,25 +638,26 @@
   (i32.sub (i64.gt_u (local.get $f) (local.get $g)) (i64.lt_u (local.get $f) (local.get $g))))
 
 ;; a <=> b for dateTimes (or dates): -1, 0, 1, or 2 (incomparable). A value
-;; without a timezone stands for any between -14:00 and +14:00.
+;; without a timezone stands for any between -14:00 and +14:00. Instants are
+;; parsed once per literal ($num keeps them).
 (func $date_cmp (param $a i32) (param $b i32) (result i32)
   (local $xs i64) (local $xf i64) (local $tx i32) (local $w i64)
-  (if (i32.eqz (call $date_parse (call $tval (local.get $a)) (call $tlen (local.get $a)))) (then (return (i32.const 2))))
-  (call $date_key)
-  (local.set $xs (global.get $dk_s))
-  (local.set $xf (global.get $dk_f))
-  (local.set $tx (i32.ne (global.get $d_tz) (i32.const 0)))
-  (if (i32.eqz (call $date_parse (call $tval (local.get $b)) (call $tlen (local.get $b)))) (then (return (i32.const 2))))
-  (call $date_key)
-  (if (i32.ne (local.get $tx) (i32.ne (global.get $d_tz) (i32.const 0))) (then
+  (drop (call $num (local.get $a)))
+  (if (i32.eqz (i32.and (global.get $nsc) (i32.const 1))) (then (return (i32.const 2))))
+  (local.set $xs (global.get $ni))
+  (local.set $xf (i64.reinterpret_f64 (global.get $nf)))
+  (local.set $tx (i32.shr_u (global.get $nsc) (i32.const 1)))
+  (drop (call $num (local.get $b)))
+  (if (i32.eqz (i32.and (global.get $nsc) (i32.const 1))) (then (return (i32.const 2))))
+  (if (i32.ne (local.get $tx) (i32.shr_u (global.get $nsc) (i32.const 1))) (then
     ;; 14 hours either way
     (local.set $w (i64.const 50400))
-    (if (i32.eq (call $key_cmp (local.get $xs) (local.get $xf) (i64.sub (global.get $dk_s) (local.get $w)) (global.get $dk_f)) (i32.const -1))
+    (if (i32.eq (call $key_cmp (local.get $xs) (local.get $xf) (i64.sub (global.get $ni) (local.get $w)) (i64.reinterpret_f64 (global.get $nf))) (i32.const -1))
       (then (return (i32.const -1))))
-    (if (i32.eq (call $key_cmp (local.get $xs) (local.get $xf) (i64.add (global.get $dk_s) (local.get $w)) (global.get $dk_f)) (i32.const 1))
+    (if (i32.eq (call $key_cmp (local.get $xs) (local.get $xf) (i64.add (global.get $ni) (local.get $w)) (i64.reinterpret_f64 (global.get $nf))) (i32.const 1))
       (then (return (i32.const 1))))
     (return (i32.const 2))))
-  (call $key_cmp (local.get $xs) (local.get $xf) (global.get $dk_s) (global.get $dk_f)))
+  (call $key_cmp (local.get $xs) (local.get $xf) (global.get $ni) (i64.reinterpret_f64 (global.get $nf))))
 
 ;; YEAR ... TZ of a dateTime.
 (func $date_part (param $f i32) (param $a i32) (result i32)
