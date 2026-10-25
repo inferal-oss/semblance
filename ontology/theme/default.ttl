@@ -72,6 +72,7 @@ sty:Compact a sty:Density ; sem:slug "compact" ;
                  [ sty:token tok:space-5 ; sty:value "16px" ] ,
                  [ sty:token tok:space-6 ; sty:value "20px" ] ,
                  [ sty:token tok:font-size ; sty:value "13.5px" ] ,
+                 [ sty:token tok:control-height ; sty:value "32px" ] ,
                  [ sty:token tok:font-size-title ; sty:value "21px" ] .
 
 sty:Flat a sty:Elevation ; sem:slug "flat" .
@@ -114,7 +115,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 
 [] a sty:StyleRule ; sty:appliesTo c:Button ;
     sty:declares [ sty:property "padding" ; sty:raw "0 var(--control-px, var(--sem-space-4))" ] ,
-                 [ sty:property "min-height" ; sty:raw "var(--control-h, 38px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "font-size" ; sty:raw "var(--control-font, inherit)" ] ,
                  [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
@@ -183,6 +184,46 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:part ":where(input[type=number])" ;
     sty:declares [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
 
+# --- single-line controls: one box --------------------------------------------------------------
+# A control's height used to be its padding plus whatever the engine draws inside: a native select
+# (appearance: auto) ignores vertical padding and keeps its own height (WebKit's is about 23px), a
+# date input adds its segments' box, a number input its spinner. So the controls of one form came
+# out three heights, differently per engine and theme. Every single-line control is now one box: a
+# block size (tok:control-height, or --control-h at a sty:size), padding only inline, the line
+# centred by the box. Components and themes give it colour, border, radius and inline padding; none
+# gives it a height of its own (test/control-heights.test.ts checks it in every theme).
+[] a sty:StyleRule ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] input:not([type=checkbox]), [data-sem-c=shape-field] select)" ;
+    sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] .
+# A select is drawn by the theme, not the engine: no native menulist, a chevron in the text colour
+# at the end of the line (the start, right to left), and room for it.
+[] a sty:StyleRule ; sty:part ":where(select:not([multiple], [size]))" ;
+    sty:declares [ sty:property "appearance" ; sty:raw "none" ] ,
+                 [ sty:property "-webkit-appearance" ; sty:raw "none" ] ,
+                 [ sty:property "background-image" ; sty:token tok:chevron ] ,
+                 [ sty:property "background-repeat" ; sty:raw "no-repeat" ] ,
+                 [ sty:property "background-size" ; sty:raw "6px 6px" ] ,
+                 [ sty:property "background-position" ; sty:raw "calc(100% - 20px) 50%, calc(100% - 14px) 50%" ] ,
+                 [ sty:property "padding-inline-end" ; sty:token tok:chevron-space ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+[] a sty:StyleRule ; sty:part "select:not([multiple], [size]):dir(rtl)" ;
+    sty:declares [ sty:property "background-position" ; sty:raw "14px 50%, 20px 50%" ] .
+# Date and time inputs: the engine's segments and picker button add no height of their own, and
+# the value starts where text does (iOS centres it).
+[] a sty:StyleRule ; sty:part ":where(input)::-webkit-datetime-edit" ;
+    sty:declares [ sty:property "padding-block" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:part ":where(input)::-webkit-datetime-edit-fields-wrapper" ;
+    sty:declares [ sty:property "padding-block" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:part ":where(input)::-webkit-date-and-time-value" ;
+    sty:declares [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "margin-block" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:part ":where(input)::-webkit-calendar-picker-indicator" ;
+    sty:declares [ sty:property "margin-block" ; sty:raw "0" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] .
+
 # --- text field ---------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ;
@@ -197,7 +238,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "letter-spacing" ; sty:raw "0.005em" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input" ;
-    sty:declares [ sty:property "padding" ; sty:tokens ( tok:space-3 tok:space-4 ) ] ,
+    sty:declares [ sty:property "padding-inline" ; sty:token tok:space-4 ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] ,
@@ -457,7 +498,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "overflow" ; sty:raw "visible" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> :not(.sem-picker)" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
-# One line, as tall as a finger: the current option and a chevron.
+# One line, as tall as a finger: the current option and the chevron every select has.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
                  [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
@@ -468,15 +509,12 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "appearance" ; sty:raw "none" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
-                 [ sty:property "background" ; sty:raw "linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 20px) 50% / 6px 6px no-repeat, linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 14px) 50% / 6px 6px no-repeat, var(--sem-surface)" ] ,
+                 [ sty:property "background-color" ; sty:token tok:surface ] ,
                  [ sty:property "box-shadow" ; sty:token tok:shadow ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "font" ; sty:raw "600 14px/1.2 var(--sem-font)" ] ,
                  [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
-# Right to left, the chevron is at the start of the line too.
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker:dir(rtl)" ;
-    sty:declares [ sty:property "background-position" ; sty:raw "14px 50%, 20px 50%, 0 0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:when c:Picker ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-picker:focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
@@ -611,9 +649,12 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
 
 # --- choice (dropdown) and chips (pills) ---------------------------------------------------
 
+# A caption and a select in one outline, as tall as any single-line control: the select fills it.
 [] a sty:StyleRule ; sty:appliesTo c:Choice ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "block-size" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "padding" ; sty:raw "4px 4px 4px 12px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
@@ -637,17 +678,20 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-radius" ; sty:raw "7px" ] ,
-                 [ sty:property "padding" ; sty:raw "6px 8px" ] ,
-                 [ sty:property "background" ; sty:token tok:surface-sunken ] ,
-                 [ sty:property "cursor" ; sty:raw "pointer" ] .
+                 [ sty:property "align-self" ; sty:raw "stretch" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "8px var(--sem-chevron-space)" ] ,
+                 [ sty:property "background-color" ; sty:token tok:surface-sunken ] .
 
 # Narrower than its options, the select gives way (its text is cut, not the page).
 [] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "select" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
-                 [ sty:property "min-height" ; sty:raw "36px" ] .
-# On a phone the caption goes above the select, as a form's labels do there.
+                 [ sty:property "block-size" ; sty:raw "var(--control-h, var(--sem-control-height))" ] .
+# On a phone the caption goes above the select, as a form's labels do there; the select is then
+# the single-line box.
 [] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "display" ; sty:raw "inline-grid" ] ,
+                 [ sty:property "block-size" ; sty:raw "auto" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:raw "6px" ] ,
