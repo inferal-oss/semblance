@@ -356,7 +356,16 @@ impl<'a> Ctx<'a> {
                 }
                 out
             }
-            Pattern::Sub(s) => self.select(s, sub, active),
+            Pattern::Sub(s) => {
+                // The row's bindings stay with the subquery's solutions (projection drops
+                // them), so a filter of the enclosing group still reads them: in a LATERAL,
+                // `{ FILTER(?outer) { SELECT ... } }` keeps the rows ?outer allows.
+                let mut rows = self.select(s, sub, active);
+                if sub.iter().any(|&x| x != NONE) {
+                    rows.retain_mut(|r| merge_into(r, sub));
+                }
+                rows
+            }
             Pattern::Service(silent) => {
                 if *silent {
                     alloc::vec![sub.to_vec()]
