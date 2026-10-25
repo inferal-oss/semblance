@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
-import { mountNavigating, mountShell } from './harness.ts'
+import { memoryBackend } from '../src/persistence.ts'
+import { mountNavigating, mountRemembering, mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = NS.c
@@ -369,5 +370,43 @@ describe('the command palette renders the same with SPARQL rules as with functio
     all((p) => p.open(), 'reopening, with a recent run')
     all((p) => p.press('ArrowUp'), 'Up')
     all((p) => p.press('Escape'), 'Escape')
+  })
+})
+
+describe('the recent runs', () => {
+  it('are remembered on this device (ui:rememberPalette, a per:Policy)', async () => {
+    const PER = NS.per
+    const storage = { [PER + 'Session']: memoryBackend(), [PER + 'Device']: memoryBackend(), [PER + 'Database']: memoryBackend() }
+    const a = await mountRemembering(storage)
+    const p = drive(a as unknown as Shell)
+    p.open()
+    p.type('private')
+    p.press('Enter')
+    await a.persistence.flush()
+    expect(await storage[PER + 'Device']!.get('semblance:' + UI + 'rememberPalette')).toBeTruthy()
+    // A reload: a new shell over the same storage.
+    const b = await mountRemembering(storage)
+    const q = drive(b as unknown as Shell)
+    q.open()
+    expect(q.sections()[0]).toEqual({ heading: 'Recent', options: ['*Private mode on or off'] })
+  })
+})
+
+describe('the command palette shape', () => {
+  it('flags nothing on the site and its gallery palette, and says what is wrong with a malformed one', () => {
+    const h = mountShell(5)
+    const p = drive(h)
+    p.open()
+    p.type('private')
+    p.press('Enter')
+    const f = h.store.factory
+    const SH = 'http://www.w3.org/ns/shacl#'
+    const flagged = () => h.store.match(null, f.namedNode(SH + 'focusNode'), null).map((q) => q.object.value).filter((v) => v.includes('palette') || v.includes('recent'))
+    expect(flagged()).toEqual([])
+    h.runtime.apply({ remove: [], add: [f.quad(f.namedNode(UI + 'palette'), f.namedNode(C + 'recentLimit'), f.literal('-1', f.namedNode(NS.xsd + 'integer')))] })
+    h.shell.flush()
+    expect(flagged()).toEqual([UI + 'palette'])
+    const messages = h.store.match(null, f.namedNode(SH + 'resultMessage'), null).map((q) => q.object.value)
+    expect(messages).toContain('How many recent runs a palette keeps is a number, 0 or more (c:recentLimit).')
   })
 })
