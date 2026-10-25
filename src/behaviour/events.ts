@@ -845,7 +845,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([t
  * The WAI-ARIA dialog pattern's focus, as view state: when a modal overlay (aria-modal="true")
  * opens, the focus moves into it (to its [autofocus] element, else the panel itself) and Tab keeps
  * it there; when it closes, the focus goes back to where it was before it opened, unless something
- * else took it meanwhile. Nested modals stack. Nothing here is graph state.
+ * else took it meanwhile (the renderer moving it off a removed panel does not count). Nested modals stack. Nothing here is graph state.
  */
 class ModalFocus {
   private readonly open: { panel: HTMLElement; back: Element | null }[] = []
@@ -864,7 +864,8 @@ class ModalFocus {
       if (now.includes(panel)) continue
       this.open.splice(i, 1)
       const active = doc.activeElement
-      const lost = !active || active === doc.body || !active.isConnected || panel.contains(active)
+      // The renderer's guess at a nearby control, when the panel went with the focus in it, is not a choice.
+      const lost = !active || active === doc.body || !active.isConnected || panel.contains(active) || active === this.renderer.refocused
       if (lost && back?.isConnected && this.shown(back)) (back as HTMLElement).focus?.({ preventScroll: true })
     }
     for (const panel of now) {

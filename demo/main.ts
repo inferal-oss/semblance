@@ -116,7 +116,8 @@ function focusModal() {
     const open = [...document.querySelectorAll(p.selector)].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
     if (open === p.open) continue
     if (open && !p.open) p.opener = document.activeElement as HTMLElement | null
-    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body)
+    // Inside, or moved off it by the renderer when it went away (shell.refocused): either way, it comes back.
+    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body || document.activeElement === shell.refocused)
     p.open = open
     if (open) {
       if (!open.contains(document.activeElement)) ((open.querySelector(p.first) as HTMLElement | null) ?? (open as HTMLElement)).focus?.()
