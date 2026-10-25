@@ -105,11 +105,18 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
   const vars = q.form === 'select' ? (q.select.star ? [...groupVars(q.select.where)].filter((v) => !v.startsWith('__')) : q.select.projection.map((p) => p.v)) : []
   // The oracle: the query itself, with the window written out at the clock's time.
   const windowed = parts.find((p) => p.window)
+  // SAMPLE may be any value; ours is the least, so the oracle asks for MIN (same length: offsets hold).
+  let oracle = q.text
+  for (const a of allAggregates(q.select)) if (a.fn === 'SAMPLE') oracle = oracle.slice(0, a.at) + 'MIN   ' + oracle.slice(a.at + 6)
   const reference = (now: number) => {
-    if (!windowed?.window) return q.text
+    if (!windowed?.window) return oracle
     const at = windowAt(q)
-    return q.text.slice(0, at) + '\n' + windowText(windowed.window, windowed.stream!.memberVar, now, run) + '\n' + q.text.slice(at)
+    return oracle.slice(0, at) + '\n' + windowText(windowed.window, windowed.stream!.memberVar, now, run) + '\n' + oracle.slice(at)
   }
+  // GROUP_CONCAT's order is ours (term order), the store's its own: the oracle compares the parts.
+  const concat = new Map<string, string>()
+  for (const p of parts) if (p.op.k === 'group') for (const a of p.op.aggregates) if (a.fn === 'GROUP_CONCAT') concat.set(a.as, a.separator ?? ' ')
+  const unordered = q.form === 'select' ? new Map([...concat].filter(([v]) => vars.includes(v))) : new Map((q.template ?? []).flatMap((t) => (t.o.k === 'var' && concat.has(t.o.v) && t.p.k === 'link' ? [[t.p.iri, concat.get(t.o.v)!] as const] : [])))
   const signature = JSON.stringify([parts.map(shape), topk?.topk?.order, topk?.orderPost, post, q.templateText])
   return {
     kind: 'maintained',
@@ -121,6 +128,7 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
     vars,
     template: q.template,
     reference,
+    unordered: unordered.size ? unordered : undefined,
     signature,
     algebra: {
       topk: topk?.topk ? `TopK((${topk.topk.order.map((o) => (o.desc ? `DESC(?${o.slot})` : `?${o.slot}`)).join(' ')}), offset ${topk.topk.offset}${topk.topk.limit === undefined ? '' : `, limit ${topk.topk.limit}`})` : undefined,
@@ -128,6 +136,33 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
       output: q.templateText !== undefined ? `Construct({${flat(q.templateText)}})` : undefined,
     },
   }
+}
+
+/** Every aggregate call in a SELECT, its subqueries and EXISTS groups. */
+function allAggregates(sel: Select): import('./sparql.ts').Aggregate[] {
+  const out: import('./sparql.ts').Aggregate[] = []
+  const expr = (e: Expr) => {
+    out.push(...e.aggregates)
+    for (const a of e.aggregates) if (a.arg !== '*') expr(a.arg)
+    for (const x of e.exists) group(x.g)
+  }
+  const group = (g: Group) => {
+    for (const it of g.items) {
+      if (it.k === 'select') select(it.q)
+      else if (it.k === 'union') it.gs.forEach(group)
+      else if (it.k === 'filter' || it.k === 'bind') expr(it.e)
+      else if ('g' in it) group(it.g)
+    }
+  }
+  const select = (q: Select) => {
+    for (const p of q.projection) if (p.e) expr(p.e)
+    q.having.forEach(expr)
+    q.orderBy.forEach((o) => expr(o.e))
+    q.groupBy.forEach(expr)
+    group(q.where)
+  }
+  select(sel)
+  return out
 }
 
 /** A part's structure, without its body's text. */
@@ -230,7 +265,6 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   const aggregates: (Aggregate & { expr?: string })[] = []
   const post: Post = { binds: [], filters: [], inputs: [], prologue }
   const aggOf = (a: Expr['aggregates'][number], as: string): Aggregate => {
-    if (a.fn === 'SAMPLE' || a.fn === 'GROUP_CONCAT') throw new Unsupported(`${a.fn} (phase 5)`)
     let slot = '*'
     if (a.arg !== '*') {
       const v = /^[?$](\w+)$/.exec(a.arg.text.trim())?.[1]
@@ -241,7 +275,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
       }
       if (NONDETERMINISTIC.test(a.arg.text)) throw new Unsupported('a non-deterministic aggregate argument')
     }
-    const agg = { as, fn: a.fn as AggregateFn, distinct: a.distinct, slot }
+    const agg = { as, fn: a.fn as AggregateFn, distinct: a.distinct, slot, separator: a.separator }
     aggregates.push(agg)
     return agg
   }
@@ -250,6 +284,8 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     let out = ''
     let at = e.at
     for (const a of e.aggregates) {
+      // Its order is ours (term order); in an expression it could not be compared with the store's.
+      if (a.fn === 'GROUP_CONCAT') throw new Unsupported('GROUP_CONCAT inside an expression')
       const g = aggOf(a, `__g${aggregates.length}`)
       out += text.slice(at, a.at) + '?' + g.as
       at = a.end
@@ -260,11 +296,17 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   let op: Op
   let vars: string[]
   if (grouped) {
-    const groupBy = sel.groupBy.map((e) => {
+    const groupBy = sel.groupBy.map((e, i) => {
       const v = /^[?$](\w+)$/.exec(e.text.trim())?.[1]
-      if (!v) throw new Unsupported('GROUP BY an expression')
-      slots.set(v, undefined)
-      return v
+      if (v && !e.as) {
+        slots.set(v, undefined)
+        return v
+      }
+      // An expression: a slot of the partition rows, computed with them (named, it can be projected).
+      if (e.exists.length || e.aggregates.length || NONDETERMINISTIC.test(e.text)) throw new Unsupported('GROUP BY an expression with EXISTS, an aggregate or NOW()')
+      const slot = e.as ?? `__gb${i}`
+      slots.set(slot, e.text)
+      return slot
     })
     if (sel.star) throw new Unsupported('SELECT * with GROUP BY')
     for (const p of sel.projection) {
@@ -476,8 +518,7 @@ function checkGroup(g: Group) {
     if (it.k === 'graph') throw new Unsupported('GRAPH (views read the union of their graphs)')
     if (it.k === 'select') {
       checkGroup(it.q.where)
-      for (const p of it.q.projection) if (p.e?.aggregates.some((a) => a.fn === 'SAMPLE')) throw new Unsupported('SAMPLE')
-    }
+      }
     if ('g' in it) checkGroup(it.g)
     if (it.k === 'union') it.gs.forEach(checkGroup)
   }

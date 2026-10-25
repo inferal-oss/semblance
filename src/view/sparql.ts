@@ -54,6 +54,8 @@ export interface Aggregate {
   distinct: boolean
   /** The argument, or '*'. */
   arg: Expr | '*'
+  /** GROUP_CONCAT's SEPARATOR. */
+  separator?: string
   at: number
   end: number
 }
@@ -79,7 +81,8 @@ export interface Select {
   star: boolean
   projection: Projected[]
   where: Group
-  groupBy: Expr[]
+  /** GROUP BY: variables or expressions, an expression optionally named (`(expr AS ?v)`). */
+  groupBy: (Expr & { as?: string })[]
   having: Expr[]
   orderBy: { e: Expr; desc: boolean }[]
   limit?: number
@@ -306,7 +309,24 @@ class Parser {
   private modifiers(s: Select) {
     if (this.is('GROUP') && this.is('BY', 1)) {
       this.i += 2
-      while (this.peek() && !this.is('HAVING') && !this.is('ORDER') && !this.is('LIMIT') && !this.is('OFFSET') && !this.is('}') && !this.is('VALUES')) s.groupBy.push(this.condition())
+      while (this.peek() && !this.is('HAVING') && !this.is('ORDER') && !this.is('LIMIT') && !this.is('OFFSET') && !this.is('}') && !this.is('VALUES')) {
+        if (!this.is('(')) {
+          s.groupBy.push(this.condition())
+          continue
+        }
+        // (expr) or (expr AS ?v): the expression without its parentheses.
+        this.i++
+        const e = this.expression(['AS'])
+        let as: string | undefined
+        if (this.eat('AS')) {
+          const v = this.peek()
+          if (v?.k !== 'var') this.fail('AS ?var')
+          as = v.v.slice(1)
+          this.i++
+        }
+        this.expect(')')
+        s.groupBy.push({ ...e, as })
+      }
     }
     if (this.eat('HAVING')) while (this.is('(') || this.isCall()) s.having.push(this.condition())
     if (this.is('ORDER') && this.is('BY', 1)) {
@@ -398,13 +418,17 @@ class Parser {
           exists.push(...arg.exists)
         }
         // GROUP_CONCAT(... ; SEPARATOR = "x")
+        let separator: string | undefined
         if (this.eat(';')) {
           this.expect('SEPARATOR')
           this.expect('=')
+          const sep = this.peek()
+          if (sep?.k !== 'str') this.fail('a separator string')
+          separator = unquote(sep.v)
           this.i++
         }
         this.expect(')')
-        aggregates.push({ fn: t.v as Aggregate['fn'], distinct, arg, at: aAt, end: this.last })
+        aggregates.push({ fn: t.v as Aggregate['fn'], distinct, arg, separator, at: aAt, end: this.last })
         if (one && depth === 0) break
         continue
       }

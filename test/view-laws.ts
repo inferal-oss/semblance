@@ -31,6 +31,10 @@ export const LAW_VIEWS: Record<string, string> = {
   topkJoin: `SELECT ?m ?label WHERE { v:s tree:member ?m . ?m v:x ?x ; v:target/rdfs:label ?label } ORDER BY ?label ?m OFFSET 1 LIMIT 4`,
   items: `SELECT ?i ?label ?s WHERE { ?i a v:Item ; v:owner ?t . ?t rdfs:label ?label OPTIONAL { ?i v:score ?s } }`,
   having: `SELECT ?t (SUM(?s) AS ?total) (SUM(?s) / COUNT(?i) AS ?mean) WHERE { ?i a v:Item ; v:owner ?t ; v:score ?s } GROUP BY ?t HAVING (COUNT(?i) > 1)`,
+  concat: `SELECT ?t (GROUP_CONCAT(?label; SEPARATOR = "|") AS ?labels) (GROUP_CONCAT(DISTINCT ?k) AS ?kinds) (SAMPLE(?x) AS ?some) WHERE { v:s tree:member ?m . ?m v:target ?t ; v:kind ?k ; v:x ?x . ?t rdfs:label ?label } GROUP BY ?t`,
+  concatErr: `SELECT ?t (GROUP_CONCAT(?x) AS ?xs) WHERE { ?i a v:Item ; v:owner ?t OPTIONAL { ?i v:score ?x } } GROUP BY ?t`,
+  byExpr: `SELECT ?big (COUNT(?m) AS ?n) (SUM(?x) AS ?sum) WHERE { v:s tree:member ?m . ?m v:x ?x } GROUP BY (?x >= 5 AS ?big)`,
+  byExprAnon: `SELECT (COUNT(*) AS ?n) WHERE { v:s tree:member ?m . ?m v:target ?t } GROUP BY (STR(?t))`,
   minMax: `SELECT ?t (MIN(?s) AS ?lo) (MAX(?s) AS ?hi) (MAX(?label) AS ?last) WHERE { ?i a v:Item ; v:owner ?t ; v:score ?s . ?t rdfs:label ?label } GROUP BY ?t`,
   topGroups: `SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?t } GROUP BY ?t ORDER BY DESC(?n) ?t LIMIT 2`,
   orderedExpr: `SELECT ?i ?s WHERE { ?i a v:Item ; v:score ?s } ORDER BY DESC(?s * 2 - 1) ?i LIMIT 3`,
@@ -57,11 +61,18 @@ export const LAW_VIEWS: Record<string, string> = {
 const CONSTRUCTS: Record<string, string> = {
   labelled: `CONSTRUCT { ?m v:labelled ?label } WHERE { v:s tree:member ?m . ?m v:target ?t . ?t rdfs:label ?label }`,
   unionParts: `CONSTRUCT { ?row v:n ?n } WHERE { { SELECT ?row (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:kind ?row } GROUP BY ?row } UNION { SELECT ?row (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?row } GROUP BY ?row } }`,
+  labelsOf: `CONSTRUCT { ?t v:labels ?labels ; v:kinds ?kinds } WHERE { { SELECT ?t (GROUP_CONCAT(?l) AS ?labels) (GROUP_CONCAT(DISTINCT STR(?k); SEPARATOR = ",") AS ?kinds) WHERE { v:s tree:member ?m . ?m v:target ?t ; v:kind ?k . ?t rdfs:label ?l } GROUP BY ?t } }`,
   busiest: `CONSTRUCT { ?t v:busiest ?label } WHERE { { SELECT (MAX(?n) AS ?max) WHERE { { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } } } { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } FILTER(?n = ?max) ?t rdfs:label ?label }`,
   topRows: `CONSTRUCT { ?node v:top ?m ; v:x ?x } WHERE { { SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT 2 } BIND(IRI(CONCAT(STR(?m), "/~top")) AS ?node) }`,
 }
 
-export const lawTurtle = `
+/**
+ * Views an engine evaluates differently from SPARQL (engine gaps, reported on #9): left out there.
+ * WAT joins numbers in GROUP_CONCAT, where SPARQL (and Oxigraph, and Rust) make it an error.
+ */
+export const ENGINE_GAPS: Record<string, string[]> = { wat: ['concatErr'] }
+
+export const lawTurtle = (kind = 'oxigraph') => `
 @prefix v: <${V}> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
@@ -75,7 +86,7 @@ v:s a ldes:EventStream .
 v:K3 rdfs:subClassOf v:K1 .
 v:list v:items ( v:T1 v:T2 ) .
 v:K4 rdfs:subClassOf v:K3 .
-${Object.entries(LAW_VIEWS).map(([k, q]) => `v:${k} a iv:View ; sem:select """${q}""" .`).join('\n')}
+${Object.entries(LAW_VIEWS).filter(([k]) => !ENGINE_GAPS[kind]?.includes(k)).map(([k, q]) => `v:${k} a iv:View ; sem:select """${q}""" .`).join('\n')}
 ${Object.entries(CONSTRUCTS).map(([k, q]) => `v:${k} a iv:View ; sem:construct """${q}""" .`).join('\n')}
 v:rows a iv:View ; iv:materialize iv:Graph ; sem:select """${LAW_VIEWS.topk}""" .
 v:paged a iv:View ; iv:parameter [ iv:variable "k" ; iv:from v:cfg ; iv:property v:limit ; iv:default 2 ] ;
@@ -102,7 +113,7 @@ export function rng(seed: number) {
 }
 
 export function lawRuntime(kind: 'oxigraph' | 'wat' = 'oxigraph') {
-  const store = loadStore(kind, lawTurtle)
+  const store = loadStore(kind, lawTurtle(kind))
   const runtime = new Runtime(store)
   runtime.views.clock = new ManualClock()
   runtime.views.strict = true

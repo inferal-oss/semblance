@@ -469,6 +469,10 @@ export class Dependencies {
     this.group(q.where, s, inner, left)
     for (const p of q.projection) if (p.e) this.expr(p.e, s, inner)
     for (const h of q.having) this.expr(h, s, inner)
+    for (const e of q.groupBy) {
+      this.expr(e, s, inner)
+      if (e.as) this.alias(e, inner(e.as), s, inner)
+    }
   }
 }
 

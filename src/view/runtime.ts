@@ -1940,6 +1940,9 @@ export class MaintainedView implements ViewHandle {
     if (!query) return undefined
     const expected = new ZSet<string>()
     const actual = new ZSet<string>()
+    const unordered = this.plan.kind === 'maintained' ? this.plan.unordered : undefined
+    const normQuad = (q: Quad) => normQuadIn(q, unordered)
+    const normRow = (r: Row) => normRowIn(r, unordered)
     if (this.plan.form === 'construct') {
       // CONSTRUCT results are sets; provenance is the view's own decoration.
       const isProv = (q: Quad) => q.predicate.value === PROV.wasGeneratedBy || q.predicate.value === PROV.wasInfluencedBy
@@ -2026,14 +2029,16 @@ export const mapKey = (row: Row) =>
     .join(' ')
 
 /** Numeric literals compare by value, to 12 digits (lexical forms and float sums differ between engines). */
-function norm(t: Term): string {
+function norm(t: Term, unordered?: string): string {
   if (t.termType === 'Literal' && /#(integer|decimal|double|float|int|long)$/.test(t.datatype.value) && !Number.isNaN(Number(t.value))) return `${Number(Number(t.value).toPrecision(12))}^^numeric`
+  // A GROUP_CONCAT: its parts, in any order.
+  if (unordered !== undefined && t.termType === 'Literal') return (t.language ? '@' + t.language : '^^' + t.datatype.value) + ' parts:' + (unordered ? t.value.split(unordered) : [...t.value]).sort().join('\u0000')
   return termKey(t)
 }
-const normQuad = (q: Quad) => `${norm(q.subject)} ${q.predicate.value} ${norm(q.object)}`
-const normRow = (r: Row) =>
+const normQuadIn = (q: Quad, unordered?: Map<string, string>) => `${norm(q.subject)} ${q.predicate.value} ${norm(q.object, unordered?.get(q.predicate.value))}`
+const normRowIn = (r: Row, unordered?: Map<string, string>) =>
   [...r.entries()]
     .filter(([k]) => !k.startsWith('__'))
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([k, t]) => `${k}=${norm(t)}`)
+    .map(([k, t]) => `${k}=${norm(t, unordered?.get(k))}`)
     .join(' ')
