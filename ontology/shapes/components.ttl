@@ -73,6 +73,9 @@ c:EmblemShape a sh:NodeShape ; sh:targetClass c:Emblem ;
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
     sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
                   sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .
+c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
+    sh:property [ sh:path c:slot ; sh:maxCount 1 ; sh:datatype xsd:string ;
+                  sh:message "A host slot has one name (c:slot), a plain string." ] .
 c:NavLinkShape a sh:NodeShape ; sh:targetClass c:NavLink ;
     sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
                   sh:message "A navigation link needs a safe web, mail, or relative address." ] ,

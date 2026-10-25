@@ -662,28 +662,35 @@ WHERE {
   }
 }""" .
 
+# --- Host-owned slots and projection view -------------------------------------------------------------
+
+c:HostSlot a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "An unstyled host-owned slot (c:slot) for content mounted by the embedding application."@en ;
+    sem:slug "host-slot" .
+c:HostSlotRendering a sem:Rendering ; sem:targets c:HostSlot ; sem:stratum 0 .
+c:HostSlotRendering-fn a sem:Rule ; sem:implements c:HostSlotRendering ; sem:function "hostslot" .
+
+c:HostSlotRendering-sparql a sem:Rule ;
+    sem:implements c:HostSlotRendering ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; sem:slot ?slot . }
+WHERE {
+  $this a/rdfs:subClassOf* c:HostSlot .
+  OPTIONAL { $this c:slot ?slot0 }
+  BIND(COALESCE(STR(?slot0), "projection") AS ?slot)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
+
 # --- Projection view ---------------------------------------------------------------------------------
 
 c:ProjectionView a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf c:HostSlot ;
     rdfs:comment """A host-owned slot (c:slot) where another projection of the graph is mounted - e.g. the
 Text modality. c:projectionGraph names that projection's derived graph; its PROV-O says which
 rules made it, so a c:Flippable around this view can show them."""@en ;
     sem:slug "projection-view" .
 c:projectionGraph a owl:DatatypeProperty .
-c:ProjectionViewRendering a sem:Rendering ; sem:targets c:ProjectionView ; sem:stratum 0 .
-c:ProjectionViewRendering-fn a sem:Rule ; sem:implements c:ProjectionViewRendering ; sem:function "projectionview" .
-
-c:ProjectionViewRendering-sparql a sem:Rule ;
-    sem:implements c:ProjectionViewRendering ;
-    sem:construct """
-CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; sem:slot ?slot . }
-WHERE {
-  $this a/rdfs:subClassOf* c:ProjectionView .
-  OPTIONAL { $this c:slot ?slot0 }
-  BIND(COALESCE(STR(?slot0), "projection") AS ?slot)
-  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-}""" .
 
 # --- stream members and triples views ---------------------------------------------------------
 

@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-panes ui:ly-connect ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -175,6 +175,18 @@ ui:ly-spacer a c:Flippable ; c:front ui:ly-spacer-spec .
 ui:ly-spacer-spec a c:Specimen ; c:demonstrates c:Spacer ; c:label "Spacer" ;
     c:help "Space that grows: in a row it pushes what follows it to the far end." ;
     c:children ( ui:ly-sp-bar ) .
+
+# --- host-owned slot ---
+# The site's host mounts a native control into the slot named "gallery-host" (demo/main.ts).
+ui:ly-hs-before a c:Text ; sty:textStyle sty:Caption ; c:label "Rendered by Semblance" .
+ui:ly-hs-slot a c:HostSlot ; c:slot "gallery-host" .
+ui:ly-hs-after a c:Text ; sty:textStyle sty:Caption ; c:label "Rendered by Semblance, after the host's content" .
+ui:ly-hs-box a c:Surface ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:inset tok:space-4 ;
+    c:children ( ui:ly-hs-before ui:ly-hs-slot ui:ly-hs-after ) .
+ui:ly-host-slot a c:Flippable ; c:front ui:ly-host-slot-spec .
+ui:ly-host-slot-spec a c:Specimen ; c:demonstrates c:HostSlot ; c:label "Host slot" ;
+    c:help "An unstyled place (c:slot names it) where the host application mounts content of its own - here a native slider - inside a Semblance layout. Semblance never touches what the host puts there; c:ProjectionView is the styled kind, for another projection of the graph." ;
+    c:children ( ui:ly-hs-box ) .
 
 # --- rows that line up -------------------------------------------------------------------------------
 # The same three rows twice. On the left each row is its own flex row: its cells sit wherever its own

@@ -45,7 +45,7 @@ c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
     rdfs:comment "Looking at the graph itself: the SPARQL workbench and its results, query, triples and stream views, the element markup inspector, the reference."@en .
 
 # --- Layout ---
-c:Stack sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
+c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
 c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup .
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
 c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup .

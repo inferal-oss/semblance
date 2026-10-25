@@ -73,8 +73,26 @@ describe('c:Breadcrumbs', () => {
     expect(nav.querySelectorAll('[aria-current]')).toHaveLength(1)
     expect(items[0]!.querySelector('.sem-sep')!.getAttribute('aria-hidden')).toBe('true')
     expect(items[3]!.querySelector('.sem-sep')).toBeNull()
-    // without c:controls the crumbs are not buttons
+    expect([...nav.querySelectorAll('a.sem-crumb')].map((link) => link.getAttribute('href'))).toEqual([
+      '#home', '#components', '#components/navigation',
+    ])
+    // without c:controls the crumbs are links, not graph-selection buttons
     expect(nav.querySelector('button')).toBeNull()
+  })
+
+  it('renders linked crumbs from the N3 store while leaving the current item a span', () => {
+    const root = 'https://example.org/trail'
+    const store = loadStore('n3', `@prefix c: <${NS.c}> . @prefix nav: <${NS.nav}> . @prefix ex: <https://example.org/> .
+      ex:home c:label "Home" ; c:href "/" .
+      ex:docs c:label "Docs" ; c:href "/old-docs/" ; nav:href "/docs/" .
+      ex:current c:label "Guide" .
+      <${root}> a c:Breadcrumbs ; c:items ( ex:home ex:docs ex:current ) .`)
+    const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+    const screen = new Runtime(store).project({ modality: MOD.Screen, prefer: 'function', roots: [root], name: 'breadcrumbs' })
+    new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+    expect([...document.querySelectorAll('a.sem-crumb')].map((link) => link.getAttribute('href'))).toEqual(['/', '/docs/'])
+    expect(document.querySelectorAll('button')).toHaveLength(0)
+    expect(document.querySelector('[aria-current="page"]')?.textContent).toBe('Guide')
   })
 
   it('derives the trail by walking c:parentProperty up from c:of', () => {

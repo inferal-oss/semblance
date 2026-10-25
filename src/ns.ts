@@ -170,6 +170,7 @@ export const C = {
   cases: c + 'cases',
   when: c + 'when',
   ProjectionView: c + 'ProjectionView',
+  HostSlot: c + 'HostSlot',
   projectionGraph: c + 'projectionGraph',
   judgementClassOf: c + 'judgementClass',
   title: c + 'title',
