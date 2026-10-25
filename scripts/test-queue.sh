@@ -51,7 +51,7 @@ while :; do
           my $pid = fork() // die; if (!$pid) { exec @ARGV or die "$ARGV[0]: $!\n" }
           local $SIG{ALRM} = sub {
             print STDERR "[test-queue] stopped: the run took more than $limit s\n";
-            $SIG{TERM} = "IGNORE"; kill "TERM", -$$; sleep 5; kill "KILL", $pid; exit 124 };
+            $SIG{TERM} = "IGNORE"; kill "TERM", -$$; sleep 5; kill "KILL", grep { $_ && $_ != $$ } split /\s+/, `pgrep -g $$`; exit 124 };
           alarm $limit; waitpid($pid, 0); exit($? & 127 ? 128 + ($? & 127) : $? >> 8)
         '"'"' "$limit" "$@"' "$STARTED" "$LIMIT" "$@"
       status=$?
