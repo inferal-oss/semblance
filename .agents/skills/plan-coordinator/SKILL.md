@@ -115,6 +115,17 @@ that decides what may start must be written there, not just held in your briefs:
   commit until approved): they bind every coordinator and worker, not just the session that heard
   them.
 
+## 5b. PRs opened by others
+
+When the user asks, scan open PRs on a schedule (hourly; in Claude Code a `CronCreate` job, in Codex
+a recurring task) and start a reviewer for each PR whose branch no row in #8's Coordination table
+owns and that has no "review PR #N" row yet. The reviewer reviews against AGENTS.md, rebases, runs
+the affected tests, fixes or comments, ensures an issue linked from #8, and merges once green.
+Group PRs that duplicate each other (several agents building the same component) under one reviewer,
+who recommends which survives and asks the user before closing any. PRs from outside the team are
+reviewed without running their code, and merged only with the user's approval. Record each reviewer
+as a "review PR #N" row.
+
 ## 6. When a worker reports
 
 - A report is not proof. Check the result: the branch or `main` (`git log origin/main`), the PR's
