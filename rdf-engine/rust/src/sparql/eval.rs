@@ -196,6 +196,10 @@ impl<'a> Ctx<'a> {
                     for r in left {
                         let mut any = false;
                         for m in self.eval(b, &r, active) {
+                            // An OPTIONAL pair is a budget step, as a join pair is (and as in WAT).
+                            if crate::budget::step() {
+                                break;
+                            }
                             if f.as_ref().is_none_or(|f| self.test(f, &m)) {
                                 out.push(m);
                                 any = true;
@@ -210,6 +214,9 @@ impl<'a> Ctx<'a> {
                     for r in left {
                         let mut any = false;
                         for x in &right {
+                            if crate::budget::step() {
+                                break;
+                            }
                             if let Some(m) = merge(&r, x) {
                                 if f.as_ref().is_none_or(|f| self.test(f, &m)) {
                                     out.push(m);
