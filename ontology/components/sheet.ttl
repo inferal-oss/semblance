@@ -69,7 +69,7 @@ c:SheetRendering a sem:Rendering ; sem:targets c:Sheet ; sem:stratum 0 ;
 c:SheetRendering-fn a sem:Rule ; sem:implements c:SheetRendering ; sem:function "sheet:grid" .
 c:SheetRendering-sparql a sem:Rule ;
     sem:implements c:SheetRendering ;
-    sem:modality mod:Screen ;
+    # Like the function, the same in every modality.
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?tools , ?bar , ?scroll , ?status .
@@ -144,7 +144,7 @@ c:SheetCellRendering a sem:Rendering ; sem:targets c:SheetCell ; sem:stratum 0 .
 c:SheetCellRendering-fn a sem:Rule ; sem:implements c:SheetCellRendering ; sem:function "sheet:cell" .
 c:SheetCellRendering-sparql a sem:Rule ;
     sem:implements c:SheetCellRendering ;
-    sem:modality mod:Screen ;
+    # Like the function, the same in every modality.
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class "sem-cell" ; rdfhtml:style ?style ; rdfhtml:hasChild ?content ;
