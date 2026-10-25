@@ -11,6 +11,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { el, marked, md5Key } from './data.ts'
+import { compareKeys } from '../render/order-key.ts'
 import { isTrue, labelOf, named, nodes, RDFS_LABEL, str, text } from './util.ts'
 
 const C = NS.c
@@ -292,19 +293,74 @@ function filtersOf(ctx: RuleContext, grid: NamedNode): ((m: NamedNode) => boolea
   return tests
 }
 
+/** What the window shows: its rows (in display order), its bounds, and where the footer's buttons pin. */
+interface Window {
+  total: number
+  first: number
+  end: number
+  rows: { m: NamedNode; key: string }[]
+  pinned: boolean
+  shownEnd?: Term
+  olderEnd?: Term
+  newerEnd?: Term
+}
+
+const RS = NS.rs
+
+/** A materialized view's rows (rs: in the views graph): each row's position and bindings. */
+function resultRows(ctx: RuleContext, view: NamedNode): { index: number; get: (v: string) => Term | undefined }[] {
+  return ctx
+    .objects(view, RS + 'solution')
+    .map((r) => {
+      const values = new Map<string, Term>()
+      for (const b of ctx.objects(r, RS + 'binding')) {
+        const v = ctx.object(b, RS + 'variable')?.value
+        const value = ctx.object(b, RS + 'value')
+        if (v && value) values.set(v, value)
+      }
+      return { index: numberOf(ctx.object(r, RS + 'index')) ?? 0, get: (v: string) => values.get(v) }
+    })
+    .sort((a, b) => a.index - b.index)
+}
+
 /**
- * Which members are rows. Members that pass the filters are taken in capture order (their
- * numeric sequence: c:sequenceProperty, else the collection's ldes:sequencePath); the window is the c:pageSize of
- * them ending at the newest (following) or at the pinned c:windowEnd. Among them, rows sort by
- * the sort column (missing values last; ties keep capture order). Also: the waterfall's scale,
- * which row is selected and which takes focus first, and the footer.
+ * The window from the grid's maintained views (c:GridWindowOlder, c:GridWindowNewer,
+ * c:GridWindowCounts; ontology/components/grid.ttl): at most three pages of rows, whatever the
+ * size of the collection. Rows are placed by their order key (sort value, then capture order).
  */
-const window: FnRule = (ctx, focus) => {
-  const o = ctx.out(focus)
+function windowFromViews(ctx: RuleContext, focus: NamedNode, size: number, pinned: boolean): Window {
+  const view = (local: string) => ctx.nn(`${focus.value}/~view-${local}`)
+  const counts = resultRows(ctx, view('GridWindowCounts'))[0]
+  const total = numberOf(counts?.get('total')) ?? 0
+  const upTo = numberOf(counts?.get('upTo')) ?? 0
+  const fromNewer = pinned && upTo === 0
+  const end = pinned ? (upTo === 0 ? Math.min(total, size) : upTo) : total
+  const first = Math.max(1, end - size + 1)
+  const older = fromNewer ? [] : resultRows(ctx, view('GridWindowOlder'))
+  const newer = resultRows(ctx, view('GridWindowNewer'))
+  const shown = (fromNewer ? newer.filter((r) => r.index <= end) : older.filter((r) => r.index <= size)).filter((r) => named(r.get('m')))
+  const at = (rows: typeof older, i: number) => rows.find((r) => r.index === i)?.get('sn')
+  return {
+    total,
+    first,
+    end,
+    pinned,
+    rows: shown.map((r) => ({ m: r.get('m') as NamedNode, key: r.get('key')?.value ?? '' })).sort((a, b) => compareKeys(a.key, b.key)),
+    shownEnd: total > 0 ? at(fromNewer ? newer : older, fromNewer ? end : 1) : undefined,
+    olderEnd: fromNewer ? undefined : at(older, size + 1),
+    newerEnd: at(newer, fromNewer ? end + size : size),
+  }
+}
+
+/**
+ * The window from the members themselves, for stores without SPARQL (where views do not run).
+ * Members that pass the filters are taken in capture order (their numeric sequence:
+ * c:sequenceProperty, else the collection's ldes:sequencePath); the window is the c:pageSize of
+ * them ending at the newest (following) or at the pinned c:windowEnd. Among them, rows sort by the
+ * sort column (missing values last; ties keep capture order).
+ */
+function windowFromMembers(ctx: RuleContext, focus: NamedNode, size: number, pinned: boolean, all: Column[]): Window {
   const collection = ctx.object(focus, GRID.collection)
-  const { all, visible } = columnsOf(ctx, focus, false)
-  const body = o.node('body')
-  const footer = o.node('footer')
   const via = ctx.object(focus, GRID.memberProperty) ?? ctx.nn(TREE_MEMBER)
   const memberClass = ctx.object(focus, GRID.memberClass)
   const sequence = ctx.object(focus, GRID.sequenceProperty) ?? (collection ? ctx.object(collection, LDES_SEQUENCE) : undefined)
@@ -316,18 +372,15 @@ const window: FnRule = (ctx, focus) => {
     .filter((r): r is { m: NamedNode; n: number } => r.n !== undefined && tests.every((pass) => pass(r.m)))
     .sort((a, b) => a.n - b.n || (a.m.value < b.m.value ? -1 : a.m.value > b.m.value ? 1 : 0))
   const total = ordered.length
-  const size = Math.max(1, Math.round(numberOf(ctx.object(focus, GRID.pageSize)) ?? DEFAULT_PAGE))
-  const following = ctx.object(focus, GRID.followTail)?.value !== 'false'
   const pin = numberOf(ctx.object(focus, GRID.windowEnd))
   // How many rows end the window: all of them, or those up to the pinned sequence.
   let end = total
-  if (!following && pin !== undefined) {
+  if (pinned && pin !== undefined) {
     end = ordered.filter((r) => r.n <= pin).length
     if (end === 0) end = Math.min(size, total)
   }
   const first = Math.max(1, end - size + 1)
   const rows = ordered.slice(first - 1, end)
-
   // The sort among them.
   const sortNode = ctx.object(focus, GRID.sortColumn)
   const sortBy = sortNode ? all.find((c) => c.node.equals(sortNode)) : undefined
@@ -340,23 +393,52 @@ const window: FnRule = (ctx, focus) => {
       return sign * d || a.i - b.i
     })
   }
+  return {
+    total,
+    first,
+    end,
+    pinned,
+    rows: ranked.map((r, k) => ({ m: r.m, key: num(k + 1) })),
+    shownEnd: rows.length ? seqTerm(ctx, rows[rows.length - 1]!) : undefined,
+    olderEnd: first > 1 ? seqTerm(ctx, ordered[first - 2]!) : undefined,
+    newerEnd: end + size < total ? seqTerm(ctx, ordered[end + size - 1]!) : undefined,
+  }
+}
+
+/**
+ * Which members are rows, and the footer. The rows come from the grid's maintained views (or,
+ * without SPARQL, from its members); this rule places them (order key), marks the selected row
+ * and the one Tab enters at (the selected one if shown, else the first), draws the waterfall's
+ * scale from the rows shown, and says what matches and where Older / Newer go.
+ */
+const window: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const { all, visible } = columnsOf(ctx, focus, false)
+  const body = o.node('body')
+  const footer = o.node('footer')
+  const size = Math.max(1, Math.round(numberOf(ctx.object(focus, GRID.pageSize)) ?? DEFAULT_PAGE))
+  const following = ctx.object(focus, GRID.followTail)?.value !== 'false'
+  const pinned = !following && numberOf(ctx.object(focus, GRID.windowEnd)) !== undefined
+  const w = ctx.sparql ? windowFromViews(ctx, focus, size, pinned) : windowFromMembers(ctx, focus, size, pinned, all)
+  const { total, first, end, rows } = w
+
   const selected = ctx.object(focus, GRID.selectedRow)
   const dragSource = isA(ctx, focus, ctx.nn(NS.dnd + 'DragSource'))
-  const selectedShown = selected ? ranked.some((r) => r.m.equals(selected)) : false
-  ranked.forEach((r, k) => {
+  const selectedShown = selected ? rows.some((r) => r.m.equals(selected)) : false
+  rows.forEach((r, k) => {
     const row = o.node('r-' + md5Key(r.m.value))
     o.t(row, RDF_TYPE, ctx.nn(GRID.GridRow))
     o.t(row, C + 'of', r.m)
     o.t(row, GRID.inGrid, focus)
     o.t(row, GRID.columnsFrom, o.node('cols'))
-    o.t(row, SEM.orderKey, num(k + 1))
+    o.t(row, SEM.orderKey, r.key)
     if (selected?.equals(r.m)) o.t(row, GRID.isSelected, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     if (selectedShown ? selected!.equals(r.m) : k === 0) o.t(row, GRID.tabStop, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     // A grid that is a drag source: each row can be picked up, carrying its member.
     if (dragSource) o.t(row, RDF_TYPE, ctx.nn(NS.dnd + 'Draggable')).t(row, NS.dnd + 'carries', r.m)
     o.t(body, H.hasChild, row)
   })
-  if (!rows.length) {
+  if (!total) {
     const message = text(ctx, focus, C + 'emptyText') ?? 'No rows.'
     if (ctx.modality === MOD.Text) o.t(body, H.hasChild, el(o, 'empty-row', 'Div', {}, [o.text('empty-text', message)]))
     else o.t(body, H.hasChild, el(o, 'empty-row', 'Tr', {}, [el(o, 'empty-cell', 'Td', { colSpan: String(Math.max(1, visible.length)), class: 'sem-empty' }, [o.text('empty-text', message)])]))
@@ -385,10 +467,9 @@ const window: FnRule = (ctx, focus) => {
   }
 
   // The footer: how many match and which are shown; following or pinned; older and newer.
-  const shownEnd = rows.length ? seqTerm(ctx, rows[rows.length - 1]!) : undefined
+  const shownEnd = w.shownEnd
   if (shownEnd) o.t(o.node('window'), GRID.shownEnd, shownEnd)
-  const status = `${total} matching · ${rows.length ? `showing ${first}–${end}` : 'none shown'}`
-  const pinned = !following && pin !== undefined
+  const status = `${total} matching · ${total ? `showing ${first}–${end}` : 'none shown'}`
   if (ctx.modality === MOD.Text) {
     o.t(footer, H.hasChild, o.text('footer-text', `${status}${pinned ? ` · ${total - end} new` : ''}`))
     return o.quads
@@ -403,12 +484,12 @@ const window: FnRule = (ctx, focus) => {
     o.t(jump, GRID.followsLatest, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
     parts.push(jump)
   }
-  const older = el(o, 'older', 'Button', { type: 'button', class: 'sem-page', disabled: first > 1 ? undefined : '' }, [o.text('older-text', 'Older')])
-  if (first > 1) o.t(older, GRID.windowTo, seqTerm(ctx, ordered[first - 2]!))
+  const older = el(o, 'older', 'Button', { type: 'button', class: 'sem-page', disabled: first > 1 && total ? undefined : '' }, [o.text('older-text', 'Older')])
+  if (first > 1 && total && w.olderEnd) o.t(older, GRID.windowTo, w.olderEnd)
   const newer = el(o, 'newer', 'Button', { type: 'button', class: 'sem-page', disabled: end < total ? undefined : '' }, [o.text('newer-text', 'Newer')])
   if (end < total) {
     if (end + size >= total) o.t(newer, GRID.followsLatest, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
-    else o.t(newer, GRID.windowTo, seqTerm(ctx, ordered[end + size - 1]!))
+    else if (w.newerEnd) o.t(newer, GRID.windowTo, w.newerEnd)
   }
   parts.push(older, newer)
   parts.forEach((p, i) => o.t(footer, H.hasChild, p).t(p, SEM.orderKey, num(i + 1)))

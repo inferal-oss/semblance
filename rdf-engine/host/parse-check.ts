@@ -35,7 +35,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let failed = 0
   for (const q of queries) {
     // Rules use $this; the shell's own queries carry the demo's prefixes.
-    const text = SPARQL_PREFIXES + '\nPREFIX ui: <https://semblance.dev/demo#>\nPREFIX ex: <https://example.org/todo#>\nPREFIX perf: <https://semblance.dev/ns/perf#>\n' + q.replaceAll('$this', '<https://example.org/this>')
+    // Maintained views' parameters (iv:parameter) are substituted before they run: a number where SPARQL needs one.
+    const text = SPARQL_PREFIXES + '\nPREFIX ui: <https://semblance.dev/demo#>\nPREFIX ex: <https://example.org/todo#>\nPREFIX perf: <https://semblance.dev/ns/perf#>\n' + q.replaceAll('$this', '<https://example.org/this>').replace(/\b(LIMIT|OFFSET)\s+\$\w+/g, '$1 1')
     try {
       e.prepare(text).release()
     } catch (err) {
