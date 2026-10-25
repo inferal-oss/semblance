@@ -22,13 +22,13 @@ ex:page a c:Stack ; c:children ( ex:dl ex:triples ex:rate ex:choose ) .
 ${of}
 ex:triples a c:TriplesView ; c:of ex:eth .
 ex:rate a c:Button ; c:label "Rate" .
-ex:choose a c:Button ; c:label "Choose" .
+ex:choose a c:Button ; c:label "Choose the other" .
 ex:Rate a beh:Reaction ; beh:when beh:Click ; beh:source ex:rate ;
   beh:deletes """PREFIX ex: <${EX}> CONSTRUCT { ?x ex:rating ?n } WHERE { ex:dl c:of ?x . ?x ex:rating ?n }""" ;
   beh:inserts """PREFIX ex: <${EX}> CONSTRUCT { ?x ex:rating ?next } WHERE { ex:dl c:of ?x . ?x ex:rating ?n BIND(?n + 1 AS ?next) }""" .
 ex:Choose a beh:Reaction ; beh:when beh:Click ; beh:source ex:choose ;
   beh:deletes """PREFIX ex: <${EX}> CONSTRUCT { ex:tasting ex:chosen ?x } WHERE { ex:tasting ex:chosen ?x }""" ;
-  beh:inserts """PREFIX ex: <${EX}> CONSTRUCT { ex:tasting ex:chosen ex:col } WHERE {}""" .
+  beh:inserts """PREFIX ex: <${EX}> CONSTRUCT { ex:tasting ex:chosen ?y } WHERE { ex:tasting ex:chosen ?x BIND(IF(?x = ex:eth, ex:col, ex:eth) AS ?y) }""" .
 `
 
 function mount(of: string, kind: StoreKind, prefer: 'sparql' | 'function') {
@@ -45,9 +45,10 @@ function mount(of: string, kind: StoreKind, prefer: 'sparql' | 'function') {
   const f = store.factory
   const byId = (id: string) => [...document.querySelectorAll('*')].find((e) => dom.keyOf(e) === `${EX}${id}/~root`) as HTMLElement
   const click = (id: string) => byId(id).dispatchEvent(new window.Event('click', { bubbles: true }))
-  const pairs = () => Object.fromEntries([...byId('dl').querySelectorAll('.sem-pair')].map((p) => [p.querySelector('dt')!.textContent, p.querySelector('dd')!.textContent]))
+  const pairs = (id = 'dl') => Object.fromEntries([...byId(id).querySelectorAll('.sem-pair')].map((p) => [p.querySelector('dt')!.textContent, p.querySelector('dd')!.textContent]))
   const rating = (s: string) => store.match(f.namedNode(EX + s), f.namedNode(EX + 'rating'), null).map((q) => q.object.value)
-  return { click, pairs, rating }
+  const triples = () => byId('triples').textContent
+  return { click, pairs, rating, triples }
 }
 
 describe('c:DescriptionList follows the node it describes', () => {
@@ -85,6 +86,40 @@ describe('c:DescriptionList follows the node it describes', () => {
         m.click('rate')
         expect(m.rating('col')).toEqual(['5'])
         expect(m.pairs()).toEqual({ notes: 'Caramel', rating: '5' })
+      })
+
+      it(`follows every change inside a c:Switch case, as the triples view does (${kind}, ${prefer})`, () => {
+        // The shape #51 was seen in: a switch over the chosen coffee, each case a card holding the
+        // coffee's description list (c:of fixed in the input). Only the shown case is demanded.
+        const m = mount(
+          `ex:dl a c:Switch ; c:controls ex:tasting ; c:property ex:chosen ; c:of ex:eth ; c:cases ( ex:case-eth ex:case-col ) .
+           ex:case-eth c:when ex:eth ; c:content ex:card-eth .
+           ex:case-col c:when ex:col ; c:content ex:card-col .
+           ex:card-eth a c:Card ; c:label "Yirgacheffe" ; c:content ex:stack-eth .
+           ex:card-col a c:Card ; c:label "Huila" ; c:content ex:stack-col .
+           ex:stack-eth a c:Stack ; c:children ( ex:dl-eth ) .
+           ex:stack-col a c:Stack ; c:children ( ex:dl-col ) .
+           ex:dl-eth a c:DescriptionList ; c:of ex:eth ; c:fields ( ex:notes ex:rating ) .
+           ex:dl-col a c:DescriptionList ; c:of ex:col ; c:fields ( ex:notes ex:rating ) .`,
+          kind,
+          prefer,
+        )
+        expect(m.pairs('dl-eth')).toEqual({ notes: 'Jasmine', rating: '1' })
+        for (const n of ['2', '3', '4', '5']) {
+          m.click('rate')
+          expect(m.rating('eth')).toEqual([n])
+          expect(m.triples()).toContain(n)
+          expect(m.pairs('dl-eth')).toEqual({ notes: 'Jasmine', rating: n })
+        }
+        // Shown, hidden (its case parked), shown again: it still follows.
+        m.click('choose')
+        m.click('rate')
+        m.click('choose')
+        expect(m.rating('eth')).toEqual(['6'])
+        expect(m.pairs('dl-eth')).toEqual({ notes: 'Jasmine', rating: '6' })
+        m.click('rate')
+        m.click('rate')
+        expect(m.pairs('dl-eth')).toEqual({ notes: 'Jasmine', rating: '8' })
       })
     }
 })
