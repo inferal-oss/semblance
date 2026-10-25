@@ -85,11 +85,13 @@
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:raw "none" ] .
 
-# Counts after an option's label (c:countProperty): a small solid pill at the end of the row.
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count" ;
+# Counts after a label (an option's c:countProperty, a link's c:count): a small solid pill at the
+# end of the row (a nav list's option, a c:NavLink).
+[] a sty:StyleRule ; sty:appliesTo c:Segmented , c:Link ; sty:part ".sem-count" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
-                 [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] .
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count > [aria-hidden]" ;
+                 [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented , c:Link ; sty:part ".sem-count > [aria-hidden]" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
                  [ sty:property "min-width" ; sty:raw "1.5em" ] ,
                  [ sty:property "padding" ; sty:raw "1px 6px" ] ,

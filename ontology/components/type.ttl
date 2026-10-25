@@ -148,7 +148,8 @@ c:Link a owl:Class ;
 location that shows it, nav:href) or c:href (an address, also the fallback), after an optional c:logo (a component,
 e.g. a c:Emblem). Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
-technology (c:externalHint). c:currentPage true marks the current destination (aria-current=page).
+technology (c:externalHint). c:currentPage true marks the current destination (aria-current=page); a link
+to the address the location shows now is marked too (nav:current), unless c:currentPage is false.
 c:count (above zero) follows the label as a number, spelled out with c:countLabel for assistive
 technology (", 3 unread"). Accent by default; sty:tone recolors it."""@en ;
     sem:slug "link" ;
@@ -205,7 +206,9 @@ WHERE {
   BIND(IF(BOUND(?external0), STR(?external0) = "true", REGEX(?href, "^https?://", "i")) AS ?external)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelText)
-  BIND(IF(EXISTS { $this c:currentPage true }, IRI(CONCAT(STR($this), "/~aria-current")), ?none) AS ?currentAttr)
+  # The current page: said (c:currentPage), or derived from the address (nav:current) unless it says otherwise.
+  BIND(EXISTS { $this c:currentPage true } || (EXISTS { $this nav:current true } && NOT EXISTS { $this c:currentPage false }) AS ?isCurrent)
+  BIND(IF(?isCurrent, IRI(CONCAT(STR($this), "/~aria-current")), ?none) AS ?currentAttr)
   # A count above zero: the figure (99+ past 99) shown, the number and c:countLabel (in the viewer's
   # language when c:LinkTexts put it here) said.
   OPTIONAL { $this c:count ?n FILTER(?n > 0) }

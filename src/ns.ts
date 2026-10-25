@@ -116,6 +116,7 @@ export const SEM = {
   readsMinted: sem + 'readsMinted',
   forEach: sem + 'forEach',
   inputOnly: sem + 'inputOnly',
+  always: sem + 'always',
   bulk: sem + 'bulk',
   requires: sem + 'requires',
   unless: sem + 'unless',

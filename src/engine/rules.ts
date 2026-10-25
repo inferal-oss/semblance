@@ -30,6 +30,11 @@ export interface Rule {
    */
   inputOnly: boolean
   /**
+   * Evaluated whether or not its focus is shown (sem:always): state derived about a node no
+   * projection shows (a nav:Location), which shown components read.
+   */
+  always?: boolean
+  /**
    * Whether a SPARQL rule may be evaluated once for many foci (bulk). Only if every
    * subject its template writes is the focus or a node minted under it, so the output
    * can be grouped back by focus (see attributable()); sem:bulk false opts out.
@@ -97,6 +102,7 @@ export function loadRules(store: GraphStore): Rule[] {
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach: get(SEM.forEach)?.value,
       inputOnly: get(SEM.inputOnly)?.value === 'true',
+      always: get(SEM.always)?.value === 'true',
       bulk: get(SEM.bulk)?.value !== 'false' && (!query || attributable(query)),
       requires: getAll(SEM.requires),
       unless: getAll(SEM.unless),

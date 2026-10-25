@@ -124,24 +124,6 @@ sty:Mono sty:declares
                  [ sty:property "transition" ; sty:raw "transform var(--sem-duration-fast) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:state ":hover" ; sty:part ".sem-external" ;
     sty:declares [ sty:property "transform" ; sty:raw "translate(1px, -1px)" ] .
-# A count (c:count) after the label: a small solid pill, as a nav list's counts; at the end of a
-# row that lays the link out as one (c:NavLink).
-[] a sty:StyleRule ; sty:appliesTo c:Link ; sty:part "> .sem-count" ;
-    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
-                 [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] ,
-                 [ sty:property "text-decoration" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Link ; sty:part "> .sem-count > [aria-hidden]" ;
-    sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
-                 [ sty:property "min-width" ; sty:raw "1.5em" ] ,
-                 [ sty:property "padding" ; sty:raw "1px 6px" ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
-                 [ sty:property "background" ; sty:token tok:accent ] ,
-                 [ sty:property "color" ; sty:token tok:on-accent ] ,
-                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
-                 [ sty:property "font-weight" ; sty:raw "650" ] ,
-                 [ sty:property "line-height" ; sty:raw "1.4" ] ,
-                 [ sty:property "text-align" ; sty:raw "center" ] ,
-                 [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
 # Said to assistive technology, not shown.
 [] a sty:StyleRule ; sty:appliesTo c:Link ; sty:part ".sem-sr" ;
     sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,

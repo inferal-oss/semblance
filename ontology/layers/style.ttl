@@ -145,7 +145,8 @@ sty:Elevation a owl:Class .
 
 sty:StyleRule a owl:Class ;
     rdfs:comment "Declarations for a component class, optionally narrowed by intent and a part selector."@en .
-sty:appliesTo a owl:ObjectProperty ; rdfs:domain sty:StyleRule .
+sty:appliesTo a owl:ObjectProperty ; rdfs:domain sty:StyleRule ;
+    rdfs:comment "The component class the rule styles, with its subclasses. Several values: one style a family of classes shares."@en .
 sty:part a owl:DatatypeProperty ; rdfs:comment "Descendant selector suffix (escape hatch for component internals)."@en .
 sty:state a owl:DatatypeProperty ; rdfs:comment "Pseudo-class of the component root, e.g. \":hover\" or \":focus-within\"."@en .
 sty:declares a owl:ObjectProperty ; rdfs:comment "A declaration: sty:property plus one of sty:token, sty:tokens (list), sty:raw."@en .

@@ -168,6 +168,24 @@ nav:href a owl:DatatypeProperty ;
 c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to ;
     sem:functionOnly "It walks the component tree up to any depth through containment properties named in the data, and spells the location as URL text exactly as the navigation effect parses it (key order, escaping, prefixed names); SPARQL 1.1 paths cannot have variable predicates." .
 c:LinkDestination-fn a sem:Rule ; sem:implements c:LinkDestination ; sem:function "navigation:link-destination" .
+# The current page: a link that goes to the address the location shows now (nav:address, as the
+# navigation effect reports it; its fragment, which is what links spell) is nav:current, and its
+# rendering marks it aria-current=page as if it said c:currentPage (unless it says c:currentPage
+# false). The rule is focused on the location: a step costs the links to the old and the new
+# address, found by their address, not every link.
+nav:current a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Derived, on a c:Link: it goes to the address the location shows now."@en .
+c:LinkCurrent a sem:Rendering ; sem:targets nav:Location ; sem:stratum 0 ; sem:always true .
+c:LinkCurrent-fn a sem:Rule ; sem:implements c:LinkCurrent ; sem:function "navigation:link-current" .
+c:LinkCurrent-sparql a sem:Rule ; sem:implements c:LinkCurrent ;
+    sem:construct """
+CONSTRUCT { ?link nav:current true }
+WHERE {
+  $this a nav:Location ; nav:address ?address .
+  BIND(IF(CONTAINS(?address, "#"), CONCAT("#", STRAFTER(?address, "#")), "#") AS ?fragment)
+  { ?link nav:href ?fragment } UNION { ?link c:href ?fragment FILTER NOT EXISTS { ?link nav:href ?any } }
+  ?link a/rdfs:subClassOf* c:Link .
+}""" .
 # An app bar's c:to (its home) is resolved the same way, for the link its logo and name make.
 c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to ;
     sem:functionOnly "As c:LinkDestination: it walks the component tree up to any depth through containment properties named in the data." .

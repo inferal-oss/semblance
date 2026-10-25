@@ -4,10 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { pageWindow } from '../src/components/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
-import { A11Y, MOD, NS, SEM, STY } from '../src/ns.ts'
+import { A11Y, MOD, NAV_GRAPH, NS, SEM, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import { compileStyles } from '../src/style/compile.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -52,7 +53,8 @@ describe('c:NavLink', () => {
       expect(home.getAttribute('href')).toBe('#home')
       expect(home.getAttribute('aria-current')).toBeNull()
       expect(home.querySelector('[data-sem-c=emblem]')).not.toBeNull()
-      expect(root('nv-link-navigation').getAttribute('aria-current')).toBe('page')
+      // Current only once the address says so (the next test); nothing reports one here.
+      expect(root('nv-link-navigation').getAttribute('aria-current')).toBeNull()
       const components = root('nv-link-components')
       // The figure is hidden from assistive technology; the number and what it counts are said.
       expect(components.querySelector('.sem-count > [aria-hidden=true]')?.textContent).toBe('3')
@@ -74,6 +76,34 @@ describe('c:NavLink', () => {
     }
   })
 
+  it('is the current page while the address is its own, unless it says otherwise', () => {
+    const root = 'https://example.org/list'
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+      const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix nav: <${NS.nav}> . @prefix ex: <https://example.org/> .
+        ex:loc a nav:Location .
+        ex:a a c:NavLink ; c:href "#a" ; c:label "A" .
+        ex:b a c:Link ; c:href "#b" ; c:label "B" .
+        ex:never a c:Link ; c:href "#b" ; c:label "Not this one" ; c:currentPage false .
+        <${root}> a c:Stack ; c:children ( ex:a ex:b ex:never ) .`)
+      const runtime = new Runtime(store)
+      const screen = runtime.project({ modality: MOD.Screen, prefer, roots: [root], name: 'links' })
+      const dom = new DomRenderer(screen.index, document.getElementById('app')!, root)
+      const f = store.factory
+      const address = (a: string) => f.quad(f.namedNode('https://example.org/loc'), f.namedNode(NS.nav + 'address'), f.literal(a))
+      const current = () => {
+        dom.flush()
+        return [...document.querySelectorAll('a[aria-current=page]')].map((a) => a.textContent)
+      }
+      expect(current()).toEqual([])
+      // The effect reports the query too; links spell only the fragment.
+      runtime.write(NAV_GRAPH, { add: [address('?q=1#b')], remove: [] })
+      expect(current(), prefer).toEqual(['B'])
+      runtime.write(NAV_GRAPH, { add: [address('#a')], remove: [address('?q=1#b')] })
+      expect(current(), prefer).toEqual(['A'])
+    }
+  })
+
   it('shows 99+ past 99 and nothing for zero, on any c:Link', () => {
     const root = 'https://example.org/list'
     for (const prefer of ['sparql', 'function'] as const) {
@@ -90,6 +120,15 @@ describe('c:NavLink', () => {
       expect(many.querySelector('.sem-visually-hidden')?.textContent).toBe(', 120')
       expect(none.querySelector('.sem-count')).toBeNull()
     }
+  })
+
+  it('shares one count pill with the nav list (a style rule for several classes)', () => {
+    const css = compileStyles(loadStore('n3'))
+    const pills = css.split('\n').filter((line) => line.includes('.sem-count > [aria-hidden]') && line.includes('{'))
+    const shared = pills.filter((line) => line.includes('[data-sem-c="nav-list"] .sem-count') && line.includes('[data-sem-c="nav-link"] .sem-count'))
+    expect(shared).toHaveLength(1)
+    expect(shared[0]).toContain('[data-sem-c="link"] .sem-count')
+    expect(shared[0]).toContain('[data-sem-c="segmented"] .sem-count')
   })
 
   it('sketches the link and count as text', () => {

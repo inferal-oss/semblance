@@ -1,7 +1,7 @@
 // Function rules and reactions for the type components (ontology/components/type.ttl).
 import type { NamedNode } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
-import type { FnRule, Out } from '../engine/context.ts'
+import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { C, MOD, NS } from '../ns.ts'
 import { tokenizeCode } from '../sparql-tokens.ts'
 import { isTrue, labelOf, named, num, rdfList, str, text } from './util.ts'
@@ -43,6 +43,12 @@ const textRun: FnRule = (ctx, focus) => {
 /** Absolute http(s) addresses leave the application unless c:external says otherwise. */
 const isExternal = (href: string, flag: string | undefined) => (flag === undefined ? /^https?:\/\//i.test(href) : flag === 'true')
 
+/** The current page: said (c:currentPage), or derived from the address (nav:current) unless it says otherwise. */
+const isCurrent = (ctx: RuleContext, focus: NamedNode) => {
+  const said = ctx.object(focus, C_CURRENT_PAGE)
+  return isTrue(said) || (isTrue(ctx.object(focus, NS.nav + 'current')) && said?.value !== 'false')
+}
+
 const link: FnRule = (ctx, focus) => {
   // A link to a resource (c:to) goes where the navigation layer resolved it (nav:href); c:href is the fallback.
   const href = str(ctx.object(focus, NS.nav + 'href') ?? ctx.object(focus, C_HREF))
@@ -79,7 +85,7 @@ const link: FnRule = (ctx, focus) => {
     href,
     target: external ? '_blank' : undefined,
     rel: external ? 'noopener noreferrer' : undefined,
-    'aria-current': isTrue(ctx.object(focus, C_CURRENT_PAGE)) ? 'page' : undefined,
+    'aria-current': isCurrent(ctx, focus) ? 'page' : undefined,
   }, parts))
   return o.quads
 }
