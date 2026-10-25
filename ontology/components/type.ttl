@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -548,7 +549,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
 c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:functionOnly "It splits a SPARQL or Turtle sample into tokens and colors each, which needs a tokenizer; SPARQL cannot split text into tokens." .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it splits a SPARQL or Turtle sample into tokens to color each, which needs a regex-match relation." ;
+    sem:needsExtension sx:Matches .
 c:CodeColoredRendering-fn a sem:Rule ; sem:implements c:CodeColoredRendering ; sem:function "code:colored" .
 
 # --- Blockquote --------------------------------------------------------------------------------

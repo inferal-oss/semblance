@@ -172,12 +172,18 @@ WHERE {
     BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
     OPTIONAL { $this c:sandboxState ?state0 . ?state0 sem:slug ?stateSlug0 }
     BIND(COALESCE(STR(?stateSlug0), "pending") AS ?stateSlug)
-    OPTIONAL { c:LiveSourcesPhrase rdfs:label ?sourcesPhrase0 FILTER(langMatches(lang(?sourcesPhrase0), "en")) }
-    OPTIONAL { c:LiveResetPhrase rdfs:label ?resetPhrase0 FILTER(langMatches(lang(?resetPhrase0), "en")) }
-    OPTIONAL { c:LiveCopyPhrase rdfs:label ?copyPhrase0 FILTER(langMatches(lang(?copyPhrase0), "en")) }
-    OPTIONAL { c:LiveCopiedPhrase rdfs:label ?copiedPhrase0 FILTER(langMatches(lang(?copiedPhrase0), "en")) }
-    OPTIONAL { c:LiveRenderingPhrase rdfs:label ?renderingPhrase0 FILTER(langMatches(lang(?renderingPhrase0), "en")) }
-    OPTIONAL { c:LiveTimePhrase rdfs:label ?timePhrase0 FILTER(langMatches(lang(?timePhrase0), "en")) }
+    OPTIONAL { c:LiveSourcesPhrase l10n:label ?sourcesPhrase0 }
+  OPTIONAL { c:LiveSourcesPhrase rdfs:label ?sourcesPhrase0 FILTER(langMatches(lang(?sourcesPhrase0), "en")) }
+    OPTIONAL { c:LiveResetPhrase l10n:label ?resetPhrase0 }
+  OPTIONAL { c:LiveResetPhrase rdfs:label ?resetPhrase0 FILTER(langMatches(lang(?resetPhrase0), "en")) }
+    OPTIONAL { c:LiveCopyPhrase l10n:label ?copyPhrase0 }
+  OPTIONAL { c:LiveCopyPhrase rdfs:label ?copyPhrase0 FILTER(langMatches(lang(?copyPhrase0), "en")) }
+    OPTIONAL { c:LiveCopiedPhrase l10n:label ?copiedPhrase0 }
+  OPTIONAL { c:LiveCopiedPhrase rdfs:label ?copiedPhrase0 FILTER(langMatches(lang(?copiedPhrase0), "en")) }
+    OPTIONAL { c:LiveRenderingPhrase l10n:label ?renderingPhrase0 }
+  OPTIONAL { c:LiveRenderingPhrase rdfs:label ?renderingPhrase0 FILTER(langMatches(lang(?renderingPhrase0), "en")) }
+    OPTIONAL { c:LiveTimePhrase l10n:label ?timePhrase0 }
+  OPTIONAL { c:LiveTimePhrase rdfs:label ?timePhrase0 FILTER(langMatches(lang(?timePhrase0), "en")) }
     BIND(STR(?sourcesPhrase0) AS ?sourcesPhrase)
     BIND(STR(?resetPhrase0) AS ?resetPhrase)
     BIND(STR(?renderingPhrase0) AS ?renderingPhrase)
@@ -270,7 +276,8 @@ WHERE {
       OPTIONAL { ?problem c:sourceLine ?line }
       OPTIONAL { ?problem sty:tone/sem:slug ?tone0 }
       OPTIONAL { $this c:problem ?nextProblem . ?nextProblem sem:order ?nextOrder FILTER(?nextOrder = ?i + 1) }
-      OPTIONAL { c:LiveLinePhrase rdfs:label ?linePhrase FILTER(langMatches(lang(?linePhrase), "en")) }
+      OPTIONAL { c:LiveLinePhrase l10n:label ?linePhrase }
+  OPTIONAL { c:LiveLinePhrase rdfs:label ?linePhrase FILTER(langMatches(lang(?linePhrase), "en")) }
     }
     BIND(STR(?message0) AS ?message)
     BIND(COALESCE(STR(?tone0), "danger") AS ?toneSlug)

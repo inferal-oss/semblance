@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -67,7 +68,8 @@ c:jsonParent a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonNo
 # among its siblings (its position in its parent).
 
 c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ;
-    sem:functionOnly "It parses the payload as JSON, which needs a tokenizer; SPARQL cannot split text into tokens. What it mints, the c:JsonNode structure, is rendered by a rule with both a SPARQL and a function implementation." .
+    sem:functionOnly "awaits sx:Json (sx:json): it parses the payload as JSON. What it mints, the c:JsonNode structure, is rendered by SPARQL." ;
+    sem:needsExtension sx:Json .
 c:JsonTreeRendering-fn a sem:Rule ; sem:implements c:JsonTreeRendering ; sem:function "payload:json-tree" .
 
 c:JsonNodeRendering a sem:Rendering ; sem:targets c:JsonNode ; sem:stratum 0 .
@@ -192,7 +194,8 @@ ASCII characters ('.' for the rest), in a scrolling region. At most c:limit byte
 are shown; a note counts the rest."""@en ;
     sem:slug "hex-view" .
 c:HexViewRendering a sem:Rendering ; sem:targets c:HexView ; sem:stratum 0 ;
-    sem:functionOnly "It encodes the text as UTF-8 and writes each byte in hex, which needs a character's code point: SPARQL has no function from a character to its code (or bytes), and no way to count through a string's positions." .
+    sem:functionOnly "awaits sx:Text (sx:codepoint): it writes each UTF-8 byte of the text in hex, which needs a character's code point." ;
+    sem:needsExtension sx:Text .
 c:HexViewRendering-fn a sem:Rule ; sem:implements c:HexViewRendering ; sem:function "payload:hex-view" .
 
 # --- BodyViewer: one payload as text, hex or JSON ------------------------------------------------

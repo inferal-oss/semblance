@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -205,7 +206,8 @@ c:TypeaheadTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:follows c:controls ;
-    sem:functionOnly "It folds labels for matching: Unicode normalization (NFD) and the removal of combining marks, which SPARQL has no function for; and it picks labels in the viewer's language, a projection setting no query can see." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed, lower-cased); the labels themselves are picked from the viewer's languages in the graph." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadTexts-fn a sem:Rule ; sem:implements c:TypeaheadTexts ; sem:function "typeahead:texts" .
 
 c:TypeaheadValueTexts a sem:Rendering ;
@@ -222,7 +224,8 @@ c:TypeaheadQuery a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches c:value ;
-    sem:functionOnly "It folds the typed text as the labels are folded (NFD, combining marks removed), which SPARQL cannot." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the typed text as the labels are folded (NFD, combining marks removed, lower-cased)." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function "typeahead:query" .
 
 # --- the field, the popup and their state ------------------------------------------------------------
@@ -324,8 +327,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-create")) AS ?createNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-already-added")) AS ?addedNode)
   LATERAL { OPTIONAL { ?noMatchesNode l10n:label ?noMatches0 } OPTIONAL { ?createNode l10n:label ?createPhrase0 } OPTIONAL { ?addedNode l10n:label ?addedPhrase0 } }
+  OPTIONAL { c:NoMatches l10n:label ?noMatches1 }
   OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) }
+  OPTIONAL { c:CreatePhrase l10n:label ?createPhrase1 }
   OPTIONAL { c:CreatePhrase rdfs:label ?createPhrase1 FILTER(langMatches(lang(?createPhrase1), "en")) }
+  OPTIONAL { c:AlreadyAdded l10n:label ?addedPhrase1 }
   OPTIONAL { c:AlreadyAdded rdfs:label ?addedPhrase1 FILTER(langMatches(lang(?addedPhrase1), "en")) }
   BIND(STR(COALESCE(?noMatches0, ?noMatches1)) AS ?noMatchesPhrase)
   BIND(STR(COALESCE(?createPhrase0, ?createPhrase1)) AS ?createPhrase)

@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
@@ -120,6 +121,8 @@ nav:Navigate a owl:Class ; rdfs:subClassOf beh:Event ;
 to the nav:Location, with the URL's query and fragment as beh:value; recorded in the change log."""@en .
 nav:Follow a beh:Reaction ; beh:when nav:Navigate ; beh:sourceClass nav:Location ;
     rdfs:comment "Writes the dimensions the URL carries (and the target's) into the graph."@en ;
+    sem:functionOnly "awaits sx:Text (sx:decodeURI): it reads the address, whose keys are percent-encoded." ;
+    sem:needsExtension sx:Text ;
     sem:function "navigation:follow" .
 
 # What the effect reports (in the navigation graph, urn:semblance:navigation).

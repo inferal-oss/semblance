@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
@@ -96,7 +97,8 @@ c:toLine a owl:DatatypeProperty ; rdfs:domain c:SourceSpan ; rdfs:range xsd:inte
 # Not the reading state: moving between steps must not lay the diagram out again.
 c:WalkthroughRendering a sem:Rendering ; sem:targets c:Walkthrough ; sem:stratum 0 ;
     sem:watches rdf:type , c:label , c:note , c:steps , c:sourceView , c:diagramIncludes , c:diagramExcludes ;
-    sem:functionOnly "It lays the diagram out (bands by step, rows, curved links with arrowheads: arithmetic and trigonometry) and finds links in query text, which SPARQL cannot do." .
+    sem:functionOnly "awaits sx:Math (sx:sqrt, sx:atan2) and sx:Matches (sx:matches): it lays the diagram out (bands, rows, curved links with arrowheads) and finds links in query text." ;
+    sem:needsExtension sx:Math , sx:Matches .
 c:WalkthroughRendering-fn a sem:Rule ; sem:implements c:WalkthroughRendering ; sem:function "walkthrough" .
 
 c:MentionRendering a sem:Rendering ; sem:targets c:Mention ; sem:stratum 0 .
@@ -278,9 +280,11 @@ WHERE {
   } UNION {
     { SELECT (MIN(?f) AS ?first) WHERE { $this c:of ?t0 ; c:highlightsSubject ?s0 . ?sp0 c:in ?t0 ; c:subject ?s0 ; c:fromLine ?f } }
     ?span c:in ?text ; c:subject ?term ; c:fromLine ?first ; c:toLine ?last ; c:label ?name .
-    OPTIONAL { c:SourceLinesPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
+    OPTIONAL { c:SourceLinesPhrase l10n:label ?many0 }
+  OPTIONAL { c:SourceLinesPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
     OPTIONAL { c:SourceLinesPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) }
-    OPTIONAL { c:SourceLinePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
+    OPTIONAL { c:SourceLinePhrase l10n:label ?one0 }
+  OPTIONAL { c:SourceLinePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
     OPTIONAL { c:SourceLinePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) }
     BIND(IF(?first = ?last, STR(COALESCE(?one0, ?one1, "{name} · line {from}")), STR(COALESCE(?many0, ?many1, "{name} · lines {from}–{to}"))) AS ?pattern)
     BIND(CONCAT(STRBEFORE(?pattern, "{name}"), STR(?name), STRAFTER(?pattern, "{name}")) AS ?named)

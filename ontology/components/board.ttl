@@ -256,7 +256,9 @@ WHERE {
     ?board c:cardPerson ?personProperty . ?item ?personProperty ?personValue .
     OPTIONAL { ?personValue rdfs:label ?personPlain FILTER(lang(?personPlain) = "") }
   }
+  OPTIONAL { c:MoveCommand l10n:label ?movePhrase }
   OPTIONAL { c:MoveCommand rdfs:label ?movePhrase FILTER(langMatches(lang(?movePhrase), "en")) }
+  OPTIONAL { c:RemoveCommand l10n:label ?removePhrase }
   OPTIONAL { c:RemoveCommand rdfs:label ?removePhrase FILTER(langMatches(lang(?removePhrase), "en")) }
   OPTIONAL { $this c:previousLane ?prevLane . OPTIONAL { ?prevLane rdfs:label ?prevPlain FILTER(lang(?prevPlain) = "") } }
   OPTIONAL { $this c:nextLane ?nextLane . OPTIONAL { ?nextLane rdfs:label ?nextPlain FILTER(lang(?nextPlain) = "") } }

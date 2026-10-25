@@ -113,7 +113,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
+    OPTIONAL { c:CloseCommand l10n:label ?closeWord0 }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
@@ -260,7 +261,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
+    OPTIONAL { c:CloseCommand l10n:label ?closeWord0 }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)

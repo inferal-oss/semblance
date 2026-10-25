@@ -154,3 +154,40 @@ l10n:CalendarTexts a sem:Rendering ;
     sem:watches <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> , l10n:locale ;
     sem:functionOnly "The locale's calendar comes from the host's Intl (names, the order of a date's fields, the hour cycle, the first day of the week), and the locale is the viewer's language, a projection setting; no query can see either." .
 l10n:CalendarTexts-fn a sem:Rule ; sem:implements l10n:CalendarTexts ; sem:function "l10n:calendar" .
+# --- phrases ---------------------------------------------------------------------------
+# What components say of their own accord (c:Phrase) in the viewer's language, for SPARQL
+# rules: each phrase's rdfs:label picked as util.text picks it, as its l10n:label in the
+# engine's derived graph. Phrases are never shown themselves, so this is evaluated whether or
+# not its focus is (sem:always); a rule reading a phrase prefers its l10n:label.
+l10n:Phrases a sem:BuildingBlock ;
+    sem:targets c:Phrase ;
+    sem:stratum -20 ;
+    sem:always true ;
+    sem:watches rdfs:label .
+l10n:Phrases-fn a sem:Rule ; sem:implements l10n:Phrases ; sem:function "l10n:phrase" .
+l10n:Phrases-sparql a sem:Rule ;
+    sem:implements l10n:Phrases ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { $this l10n:label ?label }
+WHERE {
+  $this a c:Phrase .
+  OPTIONAL {
+    $this rdfs:label ?pick . FILTER(isLiteral(?pick))
+    ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
+    BIND(LCASE(LANG(?pick)) AS ?tag)
+    FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
+    FILTER NOT EXISTS {
+      ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
+      $this rdfs:label ?other . FILTER(isLiteral(?other))
+      BIND(LCASE(LANG(?other)) AS ?tag2)
+      FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
+      FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+    }
+  }
+  OPTIONAL { FILTER(!BOUND(?pick)) $this rdfs:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this rdfs:label ?en FILTER(LCASE(LANG(?en)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this rdfs:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this rdfs:label ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?label)
+}""" .

@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -49,7 +50,8 @@ c:Heatmap a owl:Class ;
     rdfs:comment "A table of values: series down, categories across, cells colored on a log ramp; flagged cells are outlined."@en ;
     sem:slug "heatmap" .
 c:HeatmapRendering a sem:Rendering ; sem:targets c:Heatmap ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query; and its color ramp is logarithmic (SPARQL 1.1 has no LOG)." .
+    sem:functionOnly "awaits sx:Math (sx:log10): its color ramp is logarithmic. (Its rows, the SELECT named in c:view, become graph data with the views runtime.)" ;
+    sem:needsExtension sx:Math .
 c:HeatmapRendering-fn a sem:Rule ; sem:implements c:HeatmapRendering ; sem:function "heatmap" .
 
 c:LineChart a owl:Class ;
@@ -57,7 +59,8 @@ c:LineChart a owl:Class ;
     rdfs:comment "Lines of value against a numeric category (log–log when c:logScale), one per series."@en ;
     sem:slug "line-chart" .
 c:LineChartRendering a sem:Rendering ; sem:targets c:LineChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query; and its axes are logarithmic (SPARQL 1.1 has no LOG)." .
+    sem:functionOnly "awaits sx:Math (sx:log10): its axes may be logarithmic. (Its rows, the SELECT named in c:view, become graph data with the views runtime.)" ;
+    sem:needsExtension sx:Math .
 c:LineChartRendering-fn a sem:Rule ; sem:implements c:LineChartRendering ; sem:function "linechart" .
 
 c:FindingList a owl:Class ;

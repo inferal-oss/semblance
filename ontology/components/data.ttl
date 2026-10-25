@@ -45,7 +45,8 @@ c:sortDescending a owl:DatatypeProperty ; rdfs:domain c:Table ; rdfs:range xsd:b
 c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column that activating it sorts by."@en .
 
 c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "It runs the SELECT named in the data (c:query), and writes numbers and times in the viewer's locale (Intl); SPARQL 1.1 can do neither." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber, sx:formatDateTime): numbers and times in the viewer's locale. (Its rows, the result of the SELECT named in c:query, become graph data with the views runtime.)" ;
+    sem:needsExtension sx:Locale .
 c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .
 
 c:TableSort a beh:Reaction ;
@@ -73,7 +74,8 @@ c:entryProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A
 c:keyProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's key (e.g. http:fieldName)."@en .
 c:valueProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's value (e.g. http:fieldValue)."@en .
 c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem:stratum 0 ;
-    sem:functionOnly "Numeric values are written in the viewer's locale (Intl.NumberFormat: grouping, separators, digits), which SPARQL 1.1 cannot do." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): numeric values are written in the viewer's locale (Intl.NumberFormat)." ;
+    sem:needsExtension sx:Locale .
 c:DescriptionListRendering-fn a sem:Rule ; sem:implements c:DescriptionListRendering ; sem:function "data:description-list" .
 
 # --- Stat: a KPI tile -------------------------------------------------------------------------------
@@ -89,7 +91,8 @@ c:deltaUnit a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:comment "Unit of 
 c:lowerIsBetter a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:boolean ;
     rdfs:comment "A falling value is good news (latency, errors): the trend's tone flips."@en .
 c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 ;
-    sem:functionOnly "The value and its change are numbers written in the viewer's locale (Intl.NumberFormat: grouping, separators, rounding), which SPARQL 1.1 cannot do." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): the value and its change are written in the viewer's locale." ;
+    sem:needsExtension sx:Locale .
 c:StatRendering-fn a sem:Rule ; sem:implements c:StatRendering ; sem:function "data:stat" .
 
 # --- Avatar and AvatarGroup ---------------------------------------------------------------------
@@ -424,7 +427,8 @@ WHERE {
   }
 }""" .
 c:TimelineItemRendering a sem:Rendering ; sem:targets c:TimelineItem ; sem:stratum 0 ;
-    sem:functionOnly "It writes the event's clock time in the viewer's time zone and locale (toLocaleTimeString); SPARQL 1.1 sees only the time zone of the literal." .
+    sem:functionOnly "awaits sx:Locale (sx:formatDateTime): the event's clock time in the viewer's time zone and locale." ;
+    sem:needsExtension sx:Locale .
 c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ; sem:function "data:timeline-item" .
 
 # --- Tree: an expandable hierarchy ----------------------------------------------------------------

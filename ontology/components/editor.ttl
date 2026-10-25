@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -47,7 +48,8 @@ c:completion a owl:DatatypeProperty ;
     rdfs:comment "On a rendered suggestion: the text that accepting it puts in place of the word."@en .
 
 c:CodeEditorRendering a sem:Rendering ; sem:targets c:CodeEditor ; sem:stratum 0 ;
-    sem:functionOnly "It tokenizes the text for highlighting and finds the word before the caret to complete, which needs a tokenizer; SPARQL cannot split text into tokens." .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it tokenizes the text for highlighting and finds the word before the caret to complete." ;
+    sem:needsExtension sx:Matches .
 c:CodeEditorRendering-fn a sem:Rule ; sem:implements c:CodeEditorRendering ; sem:function "workbench:editor" .
 
 # Key presses the editor reacts to. Other keys are not events (the text area handles them), and a

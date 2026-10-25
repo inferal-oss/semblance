@@ -103,6 +103,7 @@ WHERE {
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  OPTIONAL { c:SearchPhrase l10n:label ?search_u }
   OPTIONAL { c:SearchPhrase rdfs:label ?search_u FILTER(lang(?search_u) = "") }
   OPTIONAL { c:SearchPhrase rdfs:label ?search_en FILTER(langMatches(lang(?search_en), "en")) }
   BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?search_u, ?search_en)) AS ?label)
@@ -110,6 +111,7 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?hint_u)) $this c:placeholder ?hint_en FILTER(langMatches(lang(?hint_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?hint_u) && !BOUND(?hint_en)) $this c:placeholder ?hint_any FILTER(isLiteral(?hint_any)) }
   BIND(STR(COALESCE(?hint_u, ?hint_en, ?hint_any)) AS ?placeholder)
+  OPTIONAL { c:ClearSearchCommand l10n:label ?clear_u }
   OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_u FILTER(lang(?clear_u) = "") }
   OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_en FILTER(langMatches(lang(?clear_en), "en")) }
   BIND(STR(COALESCE(?clear_u, ?clear_en)) AS ?clearLabel)
@@ -496,12 +498,14 @@ WHERE {
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  OPTIONAL { c:LivePhrase l10n:label ?live_u }
   OPTIONAL { c:LivePhrase rdfs:label ?live_u FILTER(lang(?live_u) = "") }
   OPTIONAL { c:LivePhrase rdfs:label ?live_en FILTER(langMatches(lang(?live_en), "en")) }
   BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?live_u, ?live_en)) AS ?label)
   OPTIONAL { $this c:pausedLabel ?paused_u FILTER(isLiteral(?paused_u) && lang(?paused_u) = "") }
   OPTIONAL { FILTER(!BOUND(?paused_u)) $this c:pausedLabel ?paused_en FILTER(langMatches(lang(?paused_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?paused_u) && !BOUND(?paused_en)) $this c:pausedLabel ?paused_any FILTER(isLiteral(?paused_any)) }
+  OPTIONAL { c:PausedPhrase l10n:label ?pausedPhrase_u }
   OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_u FILTER(lang(?pausedPhrase_u) = "") }
   OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_en FILTER(langMatches(lang(?pausedPhrase_en), "en")) }
   BIND(STR(COALESCE(?paused_u, ?paused_en, ?paused_any, ?pausedPhrase_u, ?pausedPhrase_en)) AS ?pausedLabel)
