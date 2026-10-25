@@ -78,6 +78,9 @@ function legend(o: ReturnType<RuleContext['out']>, series: { label: string }[]) 
 const barchart: FnRule = (ctx, focus) => {
   const data = rows(ctx, focus)
   if (typeof data === 'string') return message(ctx, focus, data)
+  // No rows: the chart's own c:emptyText, when it has one, instead of an empty figure.
+  const empty = data.length ? undefined : text(ctx, focus, C.emptyText)
+  if (empty) return message(ctx, focus, empty)
   const e = encoding(ctx, focus)
   const series = legendOf(ctx, focus, data, e.series)
   const o = ctx.out(focus)

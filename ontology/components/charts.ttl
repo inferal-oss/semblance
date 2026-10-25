@@ -38,7 +38,7 @@ c:Chart a owl:Class ; rdfs:subClassOf sem:Component .
 
 c:BarChart a owl:Class ;
     rdfs:subClassOf c:Chart ;
-    rdfs:comment "Horizontal stacked bars: one bar per category, one segment per series, totals at the end."@en ;
+    rdfs:comment "Horizontal stacked bars: one bar per category, one segment per series, totals at the end. With no rows, its c:emptyText (when it has one)."@en ;
     sem:slug "bar-chart" .
 c:BarChartRendering a sem:Rendering ; sem:targets c:BarChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
     sem:functionOnly "It runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query." .

@@ -734,8 +734,8 @@ ui:doc-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
                  ui:doc-iv-more ) .
 ui:doc-iv-h a c:Heading ; c:level 1 ; c:label "Maintained views" .
 ui:doc-iv-1 a c:Text ; c:label "Rules re-run their query when what they read changes. That is cheap for a list item and expensive for a query over a collection - counting the change log on every event costs as much as the log is long. A maintained view (iv:View) is a query whose result is kept up to date from the changes themselves, in the style of DBSP: a member that arrives counts once (+1), and once more, negatively (-1), when it retires or leaves a window, so a change costs what it changes, whatever the size of what it is counted over." .
-ui:doc-iv-2 a c:Text ; c:children ( "A view is ordinary SPARQL: the same text runs from scratch on any store, which is how the tests check every view after every change. The " ui:doc-iv-example " example shows all of it working." ) .
-ui:doc-iv-example a c:Link ; c:label "Maintained views" ; c:to ui:exp-views .
+ui:doc-iv-2 a c:Text ; c:children ( "A view is ordinary SPARQL: the same text runs from scratch on any store, which is how the tests check every view after every change. The " ui:doc-iv-example " example puts it to work: stock per item, a reorder list and the last hour's best sellers, kept right as sales and deliveries happen." ) .
+ui:doc-iv-example a c:Link ; c:label "Warehouse" ; c:to ui:exp-warehouse .
 
 ui:doc-iv-decl-h a c:Heading ; c:level 2 ; c:label "Declaring a view" .
 ui:doc-iv-decl-1 a c:Text ; c:label "Make a query an iv:View. Over the members of a stream (an LDES such as the change log, beh:ChangeLog), an aggregate is maintained member by member; its CONSTRUCT is written to a views graph that every projection reads, so components render the result like any other data." .
@@ -851,7 +851,7 @@ ui:doc-iv-see-code a c:Code ; c:block true ; c:language "turtle" ; c:label """vx
                                     # and a from-scratch run to compare (iv:matches)
     iv:deltaLog vx:steps .          # each step as a stream member: what came in (+1 / -1),
                                     # which groups changed, rows of work""" .
-ui:doc-iv-see-2 a c:Text ; c:label "The status bar counts view rows beside rule runs, and the SPARQL workbench reads the views graph like any other." .
+ui:doc-iv-see-2 a c:Text ; c:label "The status bar counts view rows beside rule runs, and the SPARQL workbench reads the views graph like any other: its sample \"Maintained views: their work, and a check\" lists every view with its last step's work, what a from-scratch run reads, and whether it matched." .
 
 ui:doc-iv-cost-h a c:Heading ; c:level 2 ; c:label "What it costs" .
 ui:doc-iv-cost-1 a c:Text ; c:label "The Activity tool and the count badges read maintained views. A todo toggle with Activity shown, with the change log keeping 200 or 2,000 events - and the network inspector, sorted by duration, when a response arrives for an old request, over 200 or 2,000 captured entries:" .
@@ -871,7 +871,7 @@ ui:doc-iv-landed-items ui:ivl-ticks "Every change is a tick; Runtime.transaction
     ui:ivl-window "Sliding windows on one timer, ahead of phase 4 because the example needed one." ;
     ui:ivl-demand "iv:whileShown: hidden views idle, rebuilt when shown." ;
     ui:ivl-see "Plans, figures, per-step logs and from-scratch checks, as graph data." ;
-    ui:ivl-example "The Maintained views example: each step, a check per view, work against a re-run's." ;
+    ui:ivl-example "The Warehouse example: stock, a reorder list (HAVING) and best sellers of the last hour (a window and a top five), each tile with what its last change cost against a recount." ;
     ui:ivl-joins "Phase 2: a SPARQL parser; partitions with exact dependencies (joins outside the member, OPTIONAL, EXISTS, MINUS, UNION, VALUES); DISTINCT, HAVING, top-k; parameters, a view per instance, views over views; rows as a result set." ;
     ui:ivl-grid "The data grid's window as three views per grid." ;
     ui:ivl-charts "Charts, tables, stats and facet counts read maintained views' rows: the dashboard, the activity example, the performance page." .
