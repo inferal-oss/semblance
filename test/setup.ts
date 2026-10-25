@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach } from 'vitest'
 import { watchStores } from '../src/node/load.ts'
 import type { GraphStore } from '../src/store/types.ts'
+import { type Sandboxes, watchSandboxes } from '../src/sandbox.ts'
 
 // Stores are released when they are done with (GraphStore.dispose): Oxigraph's share one capped
 // WebAssembly memory that garbage collection does not see, so a file that mounts the whole site a
@@ -17,12 +18,24 @@ watchStores((store) => store.dispose && (inTest ? ofTest : ofFile).push(new Weak
 const dispose = (stores: WeakRef<GraphStore>[]) => {
   for (const s of stores.splice(0)) s.deref()?.dispose?.()
 }
+// Live examples' sandboxes stop first (their timers, buses and stores), so no rebuild waiting for
+// typing to pause runs against a store released here.
+const sandboxesOfTest: WeakRef<Sandboxes>[] = []
+const sandboxesOfFile: WeakRef<Sandboxes>[] = []
+watchSandboxes((s) => (inTest ? sandboxesOfTest : sandboxesOfFile).push(new WeakRef(s)))
+const stop = (all: WeakRef<Sandboxes>[]) => {
+  for (const s of all.splice(0)) s.deref()?.dispose()
+}
 
 beforeEach(() => {
   inTest = true
 })
 afterEach(() => {
   inTest = false
+  stop(sandboxesOfTest)
   dispose(ofTest)
 })
-afterAll(() => dispose(ofFile))
+afterAll(() => {
+  stop(sandboxesOfFile)
+  dispose(ofFile)
+})

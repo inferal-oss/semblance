@@ -256,6 +256,15 @@ interface Mounted {
 
 let sandboxes = 0
 
+let created: ((s: Sandboxes) => void) | undefined
+/**
+ * Hear about every Sandboxes made (one listener; undefined stops): test/setup.ts disposes each
+ * test's before releasing its stores, so no rebuild waiting for typing to pause outlives them.
+ */
+export function watchSandboxes(listener: ((s: Sandboxes) => void) | undefined): void {
+  created = listener
+}
+
 /**
  * Mounts a sandbox in every c:LiveExample that is shown, and keeps it in step with its sources.
  * Call `sync()` after each flush of the site's renderer (it is cheap when nothing was shown or
@@ -268,6 +277,9 @@ export class Sandboxes {
   private syncs = 0
   private syncing = false
   private detachInput?: () => void
+  /** Timers that are not a sandbox's own (withdrawing a copy request). */
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>()
+  private disposed = false
   /** Builds done, for tests and cost checks. */
   builds = 0
 
@@ -275,7 +287,9 @@ export class Sandboxes {
     readonly runtime: Runtime,
     readonly screen: Projection,
     private readonly opts: SandboxesOptions,
-  ) {}
+  ) {
+    created?.(this)
+  }
 
   /** Follow the site's input: an edit of a source rebuilds its sandbox (once typing pauses); a copy request copies. */
   attach(): () => void {
@@ -300,7 +314,7 @@ export class Sandboxes {
 
   /** Mount the sandboxes of the examples shown since the last call, and follow the site's language. */
   sync(): void {
-    if (this.syncing) return
+    if (this.syncing || this.disposed) return
     this.syncing = true
     try {
       const languages = this.opts.languages?.() ?? []
@@ -353,8 +367,16 @@ export class Sandboxes {
     }
   }
 
+  /**
+   * Stop: every sandbox's timers are cancelled, its bus and listeners detached and its runtime and
+   * store released; a callback that was already on its way does nothing.
+   */
   dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
     this.detachInput?.()
+    for (const t of this.timers) clearTimeout(t)
+    this.timers.clear()
     for (const m of this.mounted.values()) this.unmount(m)
     this.mounted.clear()
     this.editorOf.clear()
@@ -377,7 +399,7 @@ export class Sandboxes {
     if (m.timer !== undefined) clearTimeout(m.timer)
     m.timer = setTimeout(() => {
       m.timer = undefined
-      this.build(m)
+      if (!this.disposed && this.mounted.get(m.iri) === m) this.build(m)
     }, this.opts.delayMs ?? 300)
   }
 
@@ -462,7 +484,7 @@ export class Sandboxes {
     // rendering) and the problem shows inline.
     const detachStall = sandbox.runtime.watchdog.onStall(() =>
       queueMicrotask(() => {
-        if (m.sandbox !== sandbox || !sandbox.runtime.held) return
+        if (this.disposed || m.sandbox !== sandbox || !sandbox.runtime.held) return
         const problem = stallProblem(sandbox.runtime, this.sources(m.iri), this.opts.budgetMs ?? 1500)
         sandbox.runtime.stopStall()
         flush()
@@ -571,13 +593,17 @@ export class Sandboxes {
         console.warn('[semblance] could not copy', e)
       }
     }
-    setTimeout(() => {
+    if (this.disposed) return
+    const t = setTimeout(() => {
+      this.timers.delete(t)
+      if (this.disposed) return
       const f = this.runtime.store.factory
       const requests = this.runtime.store.match(f.namedNode(example), f.namedNode(LIVE.copied), null, f.defaultGraph())
       if (!requests.length) return
       this.runtime.apply({ remove: requests, add: [] })
       this.opts.flush()
     }, this.opts.copiedMs ?? 1500)
+    this.timers.add(t)
   }
 }
 
