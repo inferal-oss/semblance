@@ -27,7 +27,8 @@ const terms: FnRule = (ctx, focus) => {
   for (const twin of ctx.match(null, L10N.pickedAs, null)) {
     const p = twin.subject.value
     const subjects = new Map<string, Term>()
-    for (const q of ctx.match(null, p, null)) if (q.object.termType === 'Literal') subjects.set(q.subject.value, q.subject)
+    // Named nodes only: a derived node cannot be about a blank one (l10n.ttl).
+    for (const q of ctx.match(null, p, null)) if (q.object.termType === 'Literal' && q.subject.termType === 'NamedNode') subjects.set(q.subject.value, q.subject)
     for (const n of subjects.values()) {
       if (new Set(ctx.objects(n, p).filter((t) => t.termType === 'Literal').map((t) => t.value + '@' + (t as { language?: string }).language)).size < 2) continue
       if (p === C.label && component(n)) continue

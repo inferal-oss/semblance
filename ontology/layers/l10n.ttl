@@ -169,6 +169,8 @@ l10n:CalendarTexts-fn a sem:Rule ; sem:implements l10n:CalendarTexts ; sem:funct
 # l10n:Terms covers what does not change while the page runs (phrases, the ontology's terms,
 # options, shapes' messages), and is re-run when the viewer's languages change. Its focus is
 # the viewer (the engine's agent), never shown, so it is evaluated regardless (sem:always).
+# Only named nodes get twins (a derived node cannot be about a blank one): a translated text a
+# SPARQL rule reads lives on a node with an IRI (a shape, a phrase, an option).
 
 l10n:of a owl:ObjectProperty ; rdfs:comment "What a derived text node (l10n:Terms) gives the texts of."@en .
 l10n:pickedAs a owl:ObjectProperty ; rdfs:range owl:DatatypeProperty ;
@@ -215,7 +217,7 @@ CONSTRUCT { ?at l10n:of ?n ; ?twin ?picked }
 WHERE {
   $this a l10n:Viewer .
   { SELECT ?p ?twin ?n WHERE {
-    ?p l10n:pickedAs ?twin . ?n ?p ?value . FILTER(isLiteral(?value))
+    ?p l10n:pickedAs ?twin . ?n ?p ?value . FILTER(isLiteral(?value) && isIRI(?n))
   } GROUP BY ?p ?twin ?n HAVING(COUNT(DISTINCT ?value) > 1) }
   # Components' own c:label is l10n:Labels'. (MINUS against the component classes: a path per
   # node, in a FILTER, made this a hundred times slower on Oxigraph.)
