@@ -212,6 +212,11 @@ export class EventBus {
 
   /** Record an event on `target`, apply its reactions, and append it to the change log. */
   emit(type: string, target: string, detail: EventDetail = {}, reactions = this.reactionsFor(type, target)): Handled {
+    // An event, its reactions and the tick they cause are one turn of the watchdog's budget.
+    return this.runtime.watchdog.turn(() => this.emitWatched(type, target, detail, reactions))
+  }
+
+  private emitWatched(type: string, target: string, detail: EventDetail, reactions: Reaction[]): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     // A restored log (persistence) continues where it left off.
@@ -220,6 +225,8 @@ export class EventBus {
     }
     const seq = ++this.sequence
     const event = nn(`urn:semblance:event:${RUN}-${seq}`)
+    const wd = this.runtime.watchdog
+    wd.startedBy(event.value, type)
     const quads = [
       f.quad(event, nn(RDF_TYPE), nn(type)),
       f.quad(event, nn(BEH.target), nn(target)),
@@ -241,7 +248,10 @@ export class EventBus {
     const delta: Delta = { add: [], remove: [] }
     const acted: Reaction[] = []
     for (const r of reactions) {
+      // Reactions are atomic (they see the state before the event); each is timed, so a slow one is blamed.
+      const t0 = wd.clock()
       const d = this.react(r, event, nn(target))
+      wd.note('reaction', r.iri, target, 1, wd.clock() - t0)
       if (!d.add.length && !d.remove.length) continue
       acted.push(r)
       delta.remove.push(...d.remove)

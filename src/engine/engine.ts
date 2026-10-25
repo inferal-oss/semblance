@@ -1,10 +1,11 @@
 import type { NamedNode, Quad, Quad_Graph } from '@rdfjs/types'
 import { H, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey } from '../rdf.ts'
-import type { GraphStore } from '../store/types.ts'
+import { QueryInterrupted, type GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
+import type { Watchdog } from './watchdog.ts'
 
 export interface EngineOptions {
   modality: string
@@ -44,6 +45,18 @@ interface Follower {
 }
 
 const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
+
+/** A store's error, about a rule; an interruption (the store's deadline) stays one. */
+function ruleError(rule: Rule, e: unknown): Error {
+  if ((e as { interrupted?: boolean })?.interrupted) return e instanceof QueryInterrupted ? e : new QueryInterrupted(`SPARQL rule <${rule.iri}> was interrupted: ${(e as Error).message}`)
+  return new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
+}
+
+/** Foci of a rule batch a suspended run did not evaluate; `interrupted` when a query was cut off by the store's deadline. */
+interface Leftover {
+  foci: Set<string>
+  interrupted: boolean
+}
 
 /**
  * Member-wise rules (sem:forEach) evaluate per (focus, member); the pair is keyed
@@ -131,6 +144,17 @@ export class Engine {
   private deferred = new Map<Rule, Set<string>>()
   /** While warming, parked work is evaluated regardless of demand. */
   private warming = false
+  /**
+   * The turn's time budget (src/engine/watchdog.ts): over it, the rest of a run's pending pairs
+   * are held instead of evaluated, until the runtime continues or stops them.
+   */
+  watchdog?: Watchdog
+  /** Pairs set aside by a suspended run, by stratum: still to evaluate. */
+  private held = new Map<number, Map<Rule, Set<string>>>()
+  private heldPairs = 0
+  /** Pairs a stopped stall left out of date: their output is as it was before the stall. */
+  private stopped = new Map<Rule, Set<string>>()
+  private stoppedPairs = 0
 
   constructor(
     readonly store: GraphStore,
@@ -403,6 +427,9 @@ export class Engine {
     let foci = byRule.get(rule)
     if (!foci) byRule.set(rule, (foci = new Set()))
     foci.add(focus)
+    // Dirty again: it is evaluated now, not as held or stopped work.
+    if (this.heldPairs && this.held.get(rule.stratum)?.get(rule)?.delete(focus)) this.heldPairs--
+    if (this.stoppedPairs && this.stopped.get(rule)?.delete(focus)) this.stoppedPairs--
   }
 
   /** Whether a node is typed in one of the input graphs (not only by a rule's output). */
@@ -595,6 +622,8 @@ export class Engine {
   // --- evaluation ------------------------------------------------------------
 
   private run() {
+    const wd = this.watchdog
+    if (wd) return wd.turn(() => this.runWatched(wd))
     try {
       for (const stratum of this.strata) {
         this.current = stratum
@@ -607,6 +636,154 @@ export class Engine {
       this.current = -Infinity
       this.evaluations.clear()
     }
+    this.emit()
+  }
+
+  /**
+   * A run within a turn's budget. Between rule batches (and every few evaluations within one) the
+   * watchdog is asked whether the turn is over budget; if it is, everything still dirty is held:
+   * set aside, as it is, until continueHeld() or stopHeld(). Strata below the one it stopped in are
+   * complete; every derived triple comes from a complete evaluation. What changed so far is
+   * reported as usual, so the page shows it (and can show that it is not finished).
+   */
+  private runWatched(wd: Watchdog) {
+    let suspended = false
+    let interrupted = false
+    const ms = wd.remaining()
+    if (ms !== undefined) this.store.setDeadline?.(Date.now() + ms)
+    try {
+      outer: for (const stratum of this.strata) {
+        this.current = stratum
+        for (let batch = this.dirty.get(stratum); batch?.size; batch = this.dirty.get(stratum)) {
+          this.dirty.set(stratum, new Map())
+          // Over budget: this rule's unevaluated foci, and the rules after it in the batch, are held.
+          let stop: Rule | undefined
+          let left: Leftover | undefined
+          for (const [rule, foci] of batch) {
+            if (stop) {
+              if (foci.size) this.hold(rule, foci)
+              continue
+            }
+            if (wd.due()) {
+              stop = rule
+              if (foci.size) this.hold(rule, foci)
+              continue
+            }
+            left = this.evaluate(rule, foci)
+            if (left) (stop = rule), this.hold(rule, left.foci), (interrupted = left.interrupted)
+          }
+          if (stop) {
+            suspended = true
+            break outer
+          }
+        }
+      }
+    } finally {
+      this.current = -Infinity
+      this.evaluations.clear()
+      if (ms !== undefined) this.store.setDeadline?.(undefined)
+    }
+    if (suspended) {
+      // Everything else that is dirty waits too (higher strata read what is held).
+      for (const [stratum, byRule] of this.dirty) for (const [r, fs] of byRule) if (fs.size) this.hold(r, fs, stratum)
+      this.dirty.clear()
+      wd.suspended(this, interrupted)
+    }
+    this.emit()
+  }
+
+  private hold(rule: Rule, foci: Iterable<string>, stratum = rule.stratum) {
+    let byRule = this.held.get(stratum)
+    if (!byRule) this.held.set(stratum, (byRule = new Map()))
+    let set = byRule.get(rule)
+    if (!set) byRule.set(rule, (set = new Set()))
+    for (const f of foci) if (!set.has(f)) set.add(f), this.heldPairs++
+  }
+
+  /** (rule, focus) pairs a suspended run set aside, still to evaluate. */
+  get heldCount(): number {
+    return this.heldPairs
+  }
+
+  /** Pairs a stopped stall left out of date. */
+  get stoppedCount(): number {
+    return this.stoppedPairs
+  }
+
+  /** The foci of held (or stopped) pairs, at most `n`: what is out of date. */
+  heldFoci(n = 50, which: 'held' | 'stopped' = 'held'): string[] {
+    const out = new Set<string>()
+    const sets = which === 'held' ? [...this.held.values()].flatMap((m) => [...m.values()]) : [...this.stopped.values()]
+    for (const fs of sets) for (const f of fs) if (out.add(focusOf(f)).size >= n) return [...out]
+    return [...out]
+  }
+
+  /**
+   * Evaluate held work, within the open turn (a slice: the runtime calls this in a turn with a
+   * small budget, and yields between slices). Returns whether work is still held.
+   */
+  continueHeld(): boolean {
+    if (!this.heldPairs) return false
+    for (const [stratum, byRule] of this.held) for (const [r, fs] of byRule) for (const f of fs) this.markDirtyAt(r, f, stratum)
+    this.held.clear()
+    this.heldPairs = 0
+    this.run()
+    if (!this.heldPairs) this.watchdog?.released(this)
+    return this.heldPairs > 0
+  }
+
+  /**
+   * Drop held work: the stall is stopped. Pairs whose focus is gone (or no longer linked) are
+   * retracted, which costs no query, so nothing is shown for what no longer exists; the rest keep
+   * the output of their last complete evaluation and are recorded as stopped (out of date) until
+   * their input changes again (they are then evaluated as usual) or retryStopped() runs them.
+   * What the retractions dirty is stopped too: stopping evaluates nothing.
+   */
+  stopHeld(): number {
+    const held = this.held
+    this.held = new Map()
+    this.heldPairs = 0
+    const stop = (rule: Rule, focus: string) => {
+      let set = this.stopped.get(rule)
+      if (!set) this.stopped.set(rule, (set = new Set()))
+      if (!set.has(focus)) set.add(focus), this.stoppedPairs++
+    }
+    for (const byRule of held.values()) {
+      for (const [rule, foci] of byRule) {
+        for (const focus of foci) {
+          if (!this.isInstance(focus, rule) || !this.linked(rule, focus)) this.commit(rule, focus, [])
+          else stop(rule, focus)
+        }
+      }
+    }
+    for (const byRule of this.dirty.values()) for (const [rule, foci] of byRule) for (const focus of foci) stop(rule, focus)
+    this.dirty.clear()
+    this.watchdog?.released(this)
+    this.emit()
+    return this.stoppedPairs
+  }
+
+  /** Evaluate the pairs a stopped stall left out of date (under the turn's budget, as any run). */
+  retryStopped(): void {
+    if (!this.stoppedPairs) return
+    const stopped = this.stopped
+    this.stopped = new Map()
+    this.stoppedPairs = 0
+    for (const [rule, foci] of stopped) for (const focus of foci) this.markDirty(rule, focus)
+    this.run()
+  }
+
+  /** Dirty a pair at the stratum it was held in (the stratum check passed when it was first dirtied). */
+  private markDirtyAt(rule: Rule, focus: string, stratum: number) {
+    let byRule = this.dirty.get(stratum)
+    if (!byRule) this.dirty.set(stratum, (byRule = new Map()))
+    let foci = byRule.get(rule)
+    if (!foci) byRule.set(rule, (foci = new Set()))
+    foci.add(focus)
+  }
+
+  /** Report the run's net change to listeners. */
+  private emit() {
     const { add, remove } = this.pending
     if (!add.size && !remove.size) return
     this.pending = { add: new Map(), remove: new Map() }
@@ -614,20 +791,30 @@ export class Engine {
     for (const l of this.listeners) l(delta)
   }
 
-  private evaluate(rule: Rule, foci: Set<string>) {
+  private evaluate(rule: Rule, foci: Set<string>): Leftover | undefined {
     const t = performance.now()
+    const wd = this.watchdog
+    const w0 = wd ? wd.clock() : 0
+    let n = foci.size
+    let left: Leftover | undefined
     try {
-      this.evaluateAll(rule, foci)
+      left = this.evaluateAll(rule, foci)
+      if (left) n -= left.foci.size
+      return left
     } finally {
       const entry = this.stats.byRule.get(rule.iri) ?? { runs: 0, ms: 0 }
+      const ms = performance.now() - t
       // (rule, focus) evaluations, whether one query answered several of them or not.
-      entry.runs += foci.size
-      entry.ms += performance.now() - t
+      entry.runs += n
+      entry.ms += ms
       this.stats.byRule.set(rule.iri, entry)
+      if (wd) wd.note('rule', rule.iri, wd.focus, n, wd.clock() - w0)
     }
   }
 
-  private evaluateAll(rule: Rule, foci: Set<string>) {
+  private evaluateAll(rule: Rule, foci: Set<string>): Leftover | undefined {
+    const wd = this.watchdog
+    if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
     if (this.demand && !this.warming) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       let parked = this.deferred.get(rule)
@@ -654,12 +841,43 @@ export class Engine {
     // Several foci of an attributable SPARQL rule: one query, restricted to them (VALUES).
     if (rule.kind === 'sparql' && rule.bulk && foci.size >= this.bulkThreshold) {
       const live = [...foci].filter((focus) => this.isInstance(focus, rule))
+      let groups: Map<string, Quad[]>
+      try {
+        groups = live.length ? this.bulk(rule, live) : new Map<string, Quad[]>()
+      } catch (e) {
+        // The store's deadline interrupted the query: the whole batch waits, uncommitted.
+        if (e instanceof QueryInterrupted && wd) return { foci: new Set(foci), interrupted: true }
+        throw e
+      }
       this.stats.ruleRuns += live.length
-      const groups = live.length ? this.bulk(rule, live) : new Map<string, Quad[]>()
       for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) ? (groups.get(focus) ?? []) : [])
+      if (wd) wd.evaluated(live.length)
       return
     }
-    for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : [])
+    if (!wd) {
+      for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : [])
+      return
+    }
+    // Watched: every few evaluations the clock is read; over budget, the rest of the foci wait.
+    let left: Leftover | undefined
+    for (const focus of foci) {
+      if (left) {
+        left.foci.add(focus)
+        continue
+      }
+      wd.focus = focus
+      let quads: Quad[]
+      try {
+        quads = this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : []
+      } catch (e) {
+        if (!(e instanceof QueryInterrupted)) throw e
+        left = { foci: new Set([focus]), interrupted: true }
+        continue
+      }
+      this.commit(rule, focus, quads)
+      if (wd.check()) left = { foci: new Set(), interrupted: false }
+    }
+    return left?.foci.size ? left : undefined
   }
 
   private evaluateOne(rule: Rule, focus: string): Quad[] {
@@ -755,7 +973,7 @@ export class Engine {
     try {
       return this.store.constructFor!(rule.queryParts!.join('?this'), 'this', foci.map((x) => f.namedNode(x)), this.graphs)
     } catch (e) {
-      throw new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
+      throw ruleError(rule, e)
     }
   }
 
@@ -763,7 +981,7 @@ export class Engine {
     try {
       return this.store.construct(query, this.graphs)
     } catch (e) {
-      throw new Error(`SPARQL rule <${rule.iri}> failed: ${(e as Error).message}`)
+      throw ruleError(rule, e)
     }
   }
 

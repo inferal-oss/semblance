@@ -120,6 +120,8 @@ export class ViewRuntime {
    * instances - is shown; otherwise it is suspended, and rebuilt when it is shown again.
    */
   shown?: (component: string) => boolean
+  /** Times each view's step (the watchdog blames the slowest work of a turn). */
+  watchdog?: { clock(): number; note(kind: 'view', iri: string, focus: string | undefined, count: number, ms: number): void }
   private views = new Map<string, MaintainedView>()
   private refs = new Map<string, { q: Quad; n: number }>()
   private dataset: Set<string>
@@ -204,7 +206,10 @@ export class ViewRuntime {
         v.suspended = true
         continue
       }
+      const w = this.watchdog
+      const t0 = w ? w.clock() : 0
       const d = v.step(changes, now)
+      if (w) w.note('view', v.iri, undefined, d?.size ?? 0, w.clock() - t0)
       if (d) out.plus(d), (worked = true)
     }
     const result = this.sink(out)
