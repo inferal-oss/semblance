@@ -398,18 +398,17 @@ The notes with sources are in the session notes (`foreign-prior-art.md`).
 
 ## Found along the way
 
-- **`c:DescriptionList` goes stale.** With `c:of` a node and `c:fields` that include a property that
-  changes (a coffee's `cf:rating`), the list showed the first change and then never another. A
-  `c:TriplesView` of the same node follows every change, so this is the description list's own
-  dependency tracking. The example shows only the notes in it for now.
-- **Labels tagged `@en` only.** A `c:Heading` or `c:Button` whose labels are all language-tagged did
-  not render at all for an `en-US` viewer (a `c:Text` did). Adding an untagged label fixed it in the
-  spike example.
-- **Long labels in a nav list.** `c:NavList` buttons inherited `white-space: nowrap`, so a long label
-  ran out of the card. They now wrap (`ontology/theme/navigation.ttl`).
-- **`sem:watches` also filters `sem:follows`.** A rule that follows a link and narrows its own
-  triples with `sem:watches` must also list the followed node's predicates it reads (here
-  `cf:chosen`). Otherwise a change to the followed node does not re-run it. COMPONENTS.md does not say this.
+Filed as issues of their own:
+
+- **#51 `c:DescriptionList` went stale** in an early layout of the example (a list in a `c:Switch`
+  case, rated repeatedly); not reproduced since.
+- **#52 labels tagged only `@en`** made a `c:Heading` or `c:Button` render nothing for an `en-US` viewer.
+- **#53 long nav-list labels overflowed** their card; fixed on main.
+- **#54 `sem:watches` also filters `sem:follows`**: a rule that follows a link and narrows its own
+  triples must list the followed node's predicates it reads too (the example's `ui:FxPointAtChosen`
+  watches `cf:chosen`).
+- **#59 outlines for any component**: the example's island outlines (`ext:outlines`,
+  `data-sem-island`) move onto that general layer once it lands.
 
 ## Still open
 
