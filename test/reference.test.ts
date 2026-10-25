@@ -251,6 +251,11 @@ describe('the reference, as components', () => {
     const classes = store.getQuads(null, NS.rdf + 'type', NS.owl + 'Class', null).map((q) => q.subject.value)
     const ungrouped = classes.filter((c) => c !== NS.sem + 'Component' && sub(c) && !store.getQuads(c, NS.sem + 'group', null, null).length)
     expect(ungrouped, 'component classes without a sem:group (ontology/components/groups.ttl)').toEqual([])
+    // Their parts too (events, kinds, words of a language): every class of the component
+    // vocabulary is in the group of the component it is part of, but for the few several share.
+    const shared = [NS.c + 'Phrase', NS.c + 'CompactPresentation']
+    const parts = classes.filter((c) => c.startsWith(NS.c) && !shared.includes(c) && !store.getQuads(c, NS.sem + 'group', null, null).length)
+    expect(parts, 'classes of the component vocabulary without a sem:group (ontology/components/groups.ttl)').toEqual([])
   })
 
   it('has SPARQL and function implementations of every rendering', () => {
