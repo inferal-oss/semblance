@@ -280,7 +280,8 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
     } } },
   })
   ```
-- **Full screen.** Attach `Fullscreen` with how to find a rendered element (`renderer.nodeOf`):
+- **Full screen.** `mount` attaches the fullscreen effect (option `fullscreen`, or `false`); wiring
+  by hand, attach `Fullscreen` with how to find a rendered element (`renderer.nodeOf`):
   `fs:fullscreen true` is shown with the document's Fullscreen API (the window filled where it is
   refused), `fs:fullViewport true` fills the window; pass `host` (a stand-in in tests, `null` for
   no Fullscreen API at all).

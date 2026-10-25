@@ -6,6 +6,7 @@ import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
 import { Files, type FilesOptions } from '../files.ts'
+import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
@@ -32,6 +33,8 @@ export interface MountOptions {
   onHandled?: (h: Handled) => void
   /** The files effect (c:FileDrop: the picker, drops, uploads and their handlers); false leaves it off. */
   files?: Omit<FilesOptions, 'onHandled'> | false
+  /** The fullscreen effect (fs:fullscreen, fs:fullViewport): its host, or how long it may take; false leaves it off. */
+  fullscreen?: Omit<FullscreenOptions, 'element' | 'onHandled'> | false
 }
 
 export interface MountedApp {
@@ -52,7 +55,8 @@ export interface MountedApp {
  * Mount a component graph into an element: load the store, compile the theme, project the
  * root on screen, patch it into `element` and route the element's events to reactions.
  * Hidden parts are evaluated in idle time; connectors (c:Connector) are drawn where their ends
- * are; picked, dropped and uploaded files go through the files effect (opts.files). Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
+ * are; picked, dropped and uploaded files go through the files effect (opts.files), and what is
+ * asserted full screen or filling the window through the fullscreen effect (opts.fullscreen). Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
  */
 export async function mount(element: HTMLElement, opts: MountOptions): Promise<MountedApp> {
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
@@ -119,6 +123,24 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
           },
         })
   const detachFiles = files?.attach(renderer)
+  // Full screen and filling the window: fs:fullscreen and fs:fullViewport on a component are shown
+  // so; the browser leaving on its own, or Esc, comes back as an event.
+  const detachFullscreen =
+    opts.fullscreen === false
+      ? undefined
+      : new Fullscreen(bus, {
+          ...opts.fullscreen,
+          element: (iri) => {
+            const n = renderer.nodeOf(iri)
+            return n?.nodeType === 1 ? (n as Element) : undefined
+          },
+          document: opts.fullscreen?.document ?? doc,
+          onHandled: (h) => {
+            flush()
+            scheduleWarmup()
+            opts.onHandled?.(h)
+          },
+        }).attach()
 
   return {
     store,
@@ -132,6 +154,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       stopped = true
       detach()
       detachFiles?.()
+      detachFullscreen?.()
       connectors.dispose()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },
