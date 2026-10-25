@@ -50,6 +50,14 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?list , ?panel , ?looseWindow .
   ?list a rdfhtml:Div ; sem:orderKey "-1" ; rdfhtml:attribute ?listRole ; rdfhtml:hasChild ?button , ?detach .
   ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tablist" .
+  ?list rdfhtml:attribute ?tearDistanceAttr , ?tearCueAttr , ?tearBackCueAttr , ?returnCueAttr ; c:gathers ?gathered .
+  ?tearDistanceAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tear-distance" ; rdfhtml:attributeValue ?tearDistance .
+  ?tearCueAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tear-cue" ; rdfhtml:attributeValue ?tearCue .
+  ?tearBackCueAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tear-back-cue" ; rdfhtml:attributeValue ?tearBackCue .
+  ?returnCueAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-return-cue" ; rdfhtml:attributeValue ?returnCue .
+  ?button rdfhtml:attribute ?tearGesture , ?tearKeys ; c:tearsOff ?tearTab ; c:tearsInto ?tearWindow .
+  ?tearGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "tear" .
+  ?tearKeys a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue "Shift+Enter" .
   ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?tabId ; rdfhtml:tabIndex ?tabIndex ; sem:orderKey ?buttonKey ;
           rdfhtml:attribute ?roleAttr , ?selectedAttr , ?controlsAttr ; c:selects ?tab ; rdfhtml:hasChild ?tabLabel .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tab" .
@@ -76,6 +84,73 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~", "tablist")) AS ?list)
   BIND(IRI(CONCAT(STR($this), "/~", "tablist-role")) AS ?listRole)
   BIND(EXISTS { $this c:detachable ?detachableFlag FILTER(STR(?detachableFlag) = "true") } AS ?detachable)
+  # How far out a tab tears off, and what the ghost that follows it says (detachable tabs only).
+  OPTIONAL { c:Tabs c:tearDistance ?tearDistanceRaw }
+  BIND(COALESCE(STR(?tearDistanceRaw), "24") AS ?tearDistance)
+  OPTIONAL {
+    c:TearOffCue rdfs:label ?picktc . FILTER(isLiteral(?picktc))
+    ?viewertc l10n:prefers ?preftc . ?preftc l10n:code ?codetc ; sem:order ?ranktc .
+    BIND(LCASE(LANG(?picktc)) AS ?tagtc)
+    FILTER(?tagtc = ?codetc || STRSTARTS(?tagtc, CONCAT(?codetc, "-")))
+    FILTER NOT EXISTS {
+      ?viewertc l10n:prefers ?bettertc . ?bettertc l10n:code ?code2tc ; sem:order ?rank2tc .
+      c:TearOffCue rdfs:label ?othertc . FILTER(isLiteral(?othertc))
+      BIND(LCASE(LANG(?othertc)) AS ?tag2tc)
+      FILTER(?tag2tc = ?code2tc || STRSTARTS(?tag2tc, CONCAT(?code2tc, "-")))
+      FILTER(?rank2tc < ?ranktc || (?rank2tc = ?ranktc && ?tag2tc = ?code2tc && ?tagtc != ?codetc))
+    }
+  }
+  OPTIONAL { FILTER(!BOUND(?picktc)) c:TearOffCue rdfs:label ?plaintc FILTER(isLiteral(?plaintc) && LANG(?plaintc) = "") }
+  OPTIONAL { FILTER(!BOUND(?picktc) && !BOUND(?plaintc)) c:TearOffCue rdfs:label ?entc FILTER(LCASE(LANG(?entc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?picktc) && !BOUND(?plaintc) && !BOUND(?entc)) c:TearOffCue rdfs:label ?enxtc FILTER(STRSTARTS(LCASE(LANG(?enxtc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?picktc) && !BOUND(?plaintc) && !BOUND(?entc) && !BOUND(?enxtc)) c:TearOffCue rdfs:label ?anytc FILTER(isLiteral(?anytc)) }
+  BIND(STR(COALESCE(?picktc, ?plaintc, ?entc, ?enxtc, ?anytc)) AS ?tearCuePhrase)
+  OPTIONAL {
+    c:TearBackCue rdfs:label ?picktb . FILTER(isLiteral(?picktb))
+    ?viewertb l10n:prefers ?preftb . ?preftb l10n:code ?codetb ; sem:order ?ranktb .
+    BIND(LCASE(LANG(?picktb)) AS ?tagtb)
+    FILTER(?tagtb = ?codetb || STRSTARTS(?tagtb, CONCAT(?codetb, "-")))
+    FILTER NOT EXISTS {
+      ?viewertb l10n:prefers ?bettertb . ?bettertb l10n:code ?code2tb ; sem:order ?rank2tb .
+      c:TearBackCue rdfs:label ?othertb . FILTER(isLiteral(?othertb))
+      BIND(LCASE(LANG(?othertb)) AS ?tag2tb)
+      FILTER(?tag2tb = ?code2tb || STRSTARTS(?tag2tb, CONCAT(?code2tb, "-")))
+      FILTER(?rank2tb < ?ranktb || (?rank2tb = ?ranktb && ?tag2tb = ?code2tb && ?tagtb != ?codetb))
+    }
+  }
+  OPTIONAL { FILTER(!BOUND(?picktb)) c:TearBackCue rdfs:label ?plaintb FILTER(isLiteral(?plaintb) && LANG(?plaintb) = "") }
+  OPTIONAL { FILTER(!BOUND(?picktb) && !BOUND(?plaintb)) c:TearBackCue rdfs:label ?entb FILTER(LCASE(LANG(?entb)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?picktb) && !BOUND(?plaintb) && !BOUND(?entb)) c:TearBackCue rdfs:label ?enxtb FILTER(STRSTARTS(LCASE(LANG(?enxtb)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?picktb) && !BOUND(?plaintb) && !BOUND(?entb) && !BOUND(?enxtb)) c:TearBackCue rdfs:label ?anytb FILTER(isLiteral(?anytb)) }
+  BIND(STR(COALESCE(?picktb, ?plaintb, ?entb, ?enxtb, ?anytb)) AS ?tearBackPhrase)
+  OPTIONAL {
+    c:ReturnCue rdfs:label ?pickrc . FILTER(isLiteral(?pickrc))
+    ?viewerrc l10n:prefers ?prefrc . ?prefrc l10n:code ?coderc ; sem:order ?rankrc .
+    BIND(LCASE(LANG(?pickrc)) AS ?tagrc)
+    FILTER(?tagrc = ?coderc || STRSTARTS(?tagrc, CONCAT(?coderc, "-")))
+    FILTER NOT EXISTS {
+      ?viewerrc l10n:prefers ?betterrc . ?betterrc l10n:code ?code2rc ; sem:order ?rank2rc .
+      c:ReturnCue rdfs:label ?otherrc . FILTER(isLiteral(?otherrc))
+      BIND(LCASE(LANG(?otherrc)) AS ?tag2rc)
+      FILTER(?tag2rc = ?code2rc || STRSTARTS(?tag2rc, CONCAT(?code2rc, "-")))
+      FILTER(?rank2rc < ?rankrc || (?rank2rc = ?rankrc && ?tag2rc = ?code2rc && ?tagrc != ?coderc))
+    }
+  }
+  OPTIONAL { FILTER(!BOUND(?pickrc)) c:ReturnCue rdfs:label ?plainrc FILTER(isLiteral(?plainrc) && LANG(?plainrc) = "") }
+  OPTIONAL { FILTER(!BOUND(?pickrc) && !BOUND(?plainrc)) c:ReturnCue rdfs:label ?enrc FILTER(LCASE(LANG(?enrc)) = "en") }
+  OPTIONAL { FILTER(!BOUND(?pickrc) && !BOUND(?plainrc) && !BOUND(?enrc)) c:ReturnCue rdfs:label ?enxrc FILTER(STRSTARTS(LCASE(LANG(?enxrc)), "en-")) }
+  OPTIONAL { FILTER(!BOUND(?pickrc) && !BOUND(?plainrc) && !BOUND(?enrc) && !BOUND(?enxrc)) c:ReturnCue rdfs:label ?anyrc FILTER(isLiteral(?anyrc)) }
+  BIND(STR(COALESCE(?pickrc, ?plainrc, ?enrc, ?enxrc, ?anyrc)) AS ?returnPhrase)
+  BIND(COALESCE(?tearCuePhrase, "Release to open in a window") AS ?tearCue)
+  BIND(COALESCE(?tearBackPhrase, "Release to keep it a tab") AS ?tearBackCue)
+  BIND(IF(?detachable, IRI(CONCAT(STR($this), "/~", "tablist-data-sem-tear-distance")), ?none) AS ?tearDistanceAttr)
+  BIND(IF(?detachable, IRI(CONCAT(STR($this), "/~", "tablist-data-sem-tear-cue")), ?none) AS ?tearCueAttr)
+  BIND(IF(?detachable, IRI(CONCAT(STR($this), "/~", "tablist-data-sem-tear-back-cue")), ?none) AS ?tearBackCueAttr)
+  # (A subquery, not EXISTS over the list path, which Oxigraph evaluates slowly.)
+  OPTIONAL { SELECT ?anyDetached WHERE { $this c:tabs/rdf:rest* ?detachedCell . ?detachedCell rdf:first ?anyDetached . ?anyDetached c:detached ?dflag FILTER(STR(?dflag) = "true") } LIMIT 1 }
+  BIND(IF(?detachable && BOUND(?anyDetached),
+       IRI(CONCAT(STR($this), "/~", "tablist-data-sem-return-cue")), ?none) AS ?returnCueAttr)
+  BIND(COALESCE(?returnPhrase, "Release to return it to its tab") AS ?returnCue)
   OPTIONAL { $this c:windowsOn ?desktop0 FILTER(isIRI(?desktop0)) }
   # (A join, not FILTER EXISTS over the list path: Oxigraph evaluates that one slowly.)
   OPTIONAL { $this c:selected ?chosen ; c:tabs/rdf:rest* ?chosenCell . ?chosenCell rdf:first ?chosen .
@@ -145,6 +220,12 @@ WHERE {
   # An attached tab: its button (and detach control) in the list, and its panel.
   BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key))), ?none) AS ?button)
   BIND(STR(?button) AS ?tabId)
+  # A detachable tab tears off into its window: dragged out of the list, or Shift+Enter.
+  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-data-sem-gesture"))), ?none) AS ?tearGesture)
+  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-keyshortcuts"))), ?none) AS ?tearKeys)
+  BIND(IF(?attached && ?detachable, ?tab, ?none) AS ?tearTab)
+  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("window-", ?key))), ?none) AS ?tearWindow)
+  BIND(IF(?detachable && BOUND(?tab) && ?detached, ?window, ?none) AS ?gathered)
   BIND(IF(?on, "0", "-1") AS ?tabIndex)
   BIND(?index * 2 AS ?buttonKey)
   BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-role"))), ?none) AS ?roleAttr)
