@@ -117,6 +117,16 @@ export class StallMonitor {
     let counted = 0
     this.detach.push(
       wd.onTurn(() => {
+        // Later turns may have evaluated everything that was held (its input changed again): the stall is over.
+        if (this.current && !this.continuing && wd.stall && !this.runtime.held && !this.settling) {
+          this.settling = true
+          defer(() => {
+            this.settling = false
+            if (!this.current || this.continuing || this.runtime.held) return
+            wd.resolve()
+            this.settle(WD.Continued)
+          })
+        }
         if (this.runtime.stopped === counted || this.outOfDateQueued) return
         this.outOfDateQueued = true
         defer(() => {
@@ -262,6 +272,7 @@ export class StallMonitor {
   }
 
   private outOfDateQueued = false
+  private settling = false
 
   private writeOutOfDate() {
     const n = this.runtime.stopped

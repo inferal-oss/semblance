@@ -795,13 +795,13 @@ export class Engine {
     const t = performance.now()
     const wd = this.watchdog
     const w0 = wd ? wd.clock() : 0
-    let n = foci.size
     let left: Leftover | undefined
     try {
       left = this.evaluateAll(rule, foci)
-      if (left) n -= left.foci.size
       return left
     } finally {
+      // What was evaluated: the foci left in the set (parked ones were taken out), less those held.
+      const n = foci.size - (left?.foci.size ?? 0)
       const entry = this.stats.byRule.get(rule.iri) ?? { runs: 0, ms: 0 }
       const ms = performance.now() - t
       // (rule, focus) evaluations, whether one query answered several of them or not.

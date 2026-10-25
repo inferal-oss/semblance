@@ -131,6 +131,22 @@ describe('the stall dialog', () => {
     expect(h.state()).toEqual(['Continued'])
   })
 
+  it('settles by itself when later turns evaluated everything that was held', () => {
+    const h = site()
+    h.stats(3)
+    h.drain()
+    h.shell.flush()
+    expect(h.open()).toBe(true)
+    h.fast()
+    // Later turns re-run what was held (as when its input changes again).
+    for (const p of h.runtime.projections) p.engine.continueHeld()
+    expect(h.runtime.held).toBe(0)
+    h.drain()
+    h.shell.flush()
+    expect(h.open()).toBe(false)
+    expect(h.state()).toEqual(['Continued'])
+  })
+
   it('blames a slow reaction, and suspends the tick after it', () => {
     const store = loadStore('wat', todoApp(5))
     const runtime = new Runtime(store)
