@@ -14,7 +14,7 @@
 
 # Messages: a conversation, a comment thread, a feed. The messages are data items
 # in ActivityStreams terms (as:attributedTo a person with an rdfs:label and
-# optionally a c:image, as:content, as:published); the list shows them in order of
+# optionally a c:image, as:content or c:content, as:published); the list shows them in order of
 # publication. Like c:List, the container renders only its element and the items
 # are placed member-wise (sem:forEach c:item): posting a message evaluates that
 # message alone, however long the thread is.
@@ -30,7 +30,9 @@
 c:MessageList a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """Messages (c:item: nodes with as:attributedTo, as:content, as:published) in order of
-publication, as a log (role=log, so new messages are announced politely). Each is a minted c:Message
+publication, as a log (role=log, so new messages are announced politely). An item may give c:content
+as a component body; as:content is then its optional plain-text summary. Screen output prefers the
+component; text output prefers the summary, or renders the component when there is none. Each is a minted c:Message
 with the author's avatar, name and time. Messages by c:viewer are marked as one's own; a message with
 prv:sensitive true is hidden in private mode. A message being written (prov:startedAtTime, no
 as:published) shows as its author typing, until it is published. c:label names the thread."""@en ;
@@ -141,7 +143,7 @@ CONSTRUCT {
   ?whoText a rdfhtml:Text ; rdfhtml:data ?author .
   ?time a rdfhtml:Time ; rdfhtml:dateTime ?at ; rdfhtml:hasChild ?timeText .
   ?timeText a rdfhtml:Text ; rdfhtml:data ?clock .
-  ?body a rdfhtml:P ; rdfhtml:class "sem-message-body" ; rdfhtml:hasChild ?bodyText .
+  ?body a ?bodyElement ; rdfhtml:class "sem-message-body" ; rdfhtml:hasChild ?bodyText, ?componentContent .
   ?bodyText a rdfhtml:Text ; rdfhtml:data ?content .
   ?typing a rdfhtml:P ; rdfhtml:class "sem-typing" ; rdfhtml:hasChild ?dots, ?say .
   ?dots a rdfhtml:Span ; rdfhtml:class "sem-dots" ; rdfhtml:attribute ?dotsHidden ; rdfhtml:hasChild ?dot ; ord:immediatelyPrecedes ?say .
@@ -154,11 +156,14 @@ CONSTRUCT {
 WHERE {
   $this a c:Message ; c:of ?message .
   OPTIONAL { ?message as:content ?rawContent }
+  OPTIONAL { ?message c:content ?rawComponent FILTER(isIRI(?rawComponent)) }
   OPTIONAL { ?message as:published ?published }
   OPTIONAL { ?message prov:startedAtTime ?started }
   BIND(!BOUND(?published) && BOUND(?started) AS ?pending)
-  FILTER(?pending || BOUND(?rawContent))
+  FILTER(?pending || BOUND(?rawContent) || BOUND(?rawComponent))
   BIND(IF(?pending, ?none, STR(?rawContent)) AS ?content)
+  BIND(IF(?pending, ?none, ?rawComponent) AS ?componentContent)
+  BIND(IF(BOUND(?componentContent), rdfhtml:Div, rdfhtml:P) AS ?bodyElement)
   BIND(STR(?published) AS ?at)
   BIND(SUBSTR(STR(?published), 12, 5) AS ?clock)
   OPTIONAL { ?message as:attributedTo ?person
@@ -180,7 +185,7 @@ WHERE {
   BIND(IF(BOUND(?published), IRI(CONCAT(STR($this), "/~time")), ?none) AS ?time)
   BIND(IF(BOUND(?published), IRI(CONCAT(STR($this), "/~time-text")), ?none) AS ?timeText)
   BIND(IF(?pending, ?none, IRI(CONCAT(STR($this), "/~body"))) AS ?body)
-  BIND(IF(?pending, ?none, IRI(CONCAT(STR($this), "/~body-text"))) AS ?bodyText)
+  BIND(IF(?pending || BOUND(?componentContent), ?none, IRI(CONCAT(STR($this), "/~body-text"))) AS ?bodyText)
   BIND(IF(?pending, IRI(CONCAT(STR($this), "/~typing")), ?none) AS ?typing)
   BIND(COALESCE(?body, ?typing) AS ?afterMeta)
   # The three dots: d1 d2 d3, in order.
@@ -199,16 +204,18 @@ c:MessageRendering-sparql-text a sem:Rule ;
     sem:modality mod:Text ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
-  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text, ?componentContent .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line ; ord:immediatelyPrecedes ?componentContent .
 }
 WHERE {
   $this a c:Message ; c:of ?message .
   OPTIONAL { ?message as:content ?content }
+  OPTIONAL { ?message c:content ?rawComponent FILTER(isIRI(?rawComponent)) }
   OPTIONAL { ?message as:published ?published }
   OPTIONAL { ?message prov:startedAtTime ?started }
   BIND(!BOUND(?published) && BOUND(?started) AS ?pending)
-  FILTER(?pending || BOUND(?content))
+  FILTER(?pending || BOUND(?content) || BOUND(?rawComponent))
+  BIND(IF(!?pending && !BOUND(?content), ?rawComponent, ?none) AS ?componentContent)
   OPTIONAL { ?message as:attributedTo ?person
     OPTIONAL { ?personCAt l10n:of ?person ; l10n:label ?personC }
   OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
@@ -216,7 +223,7 @@ WHERE {
   OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(IF(?pending, CONCAT("  ", ?author, " is typing…"),
-          CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ": ", STR(?content))) AS ?line)
+          CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ":", IF(BOUND(?content), CONCAT(" ", STR(?content)), ""))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .
