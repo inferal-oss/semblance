@@ -303,7 +303,8 @@ c:LinkedCard a owl:Class ;
 c:label as the link's name (else the content's text), c:external, c:currentPage, as any c:Link."""@en ;
     sem:slug "linked-card" .
 
-# The localization layer for links: the external hint in the viewer's language, at <focus>/~l10n-hint.
+# The localization layer for links: the external hint in the viewer's language, at <focus>/~l10n-hint,
+# and what a link's count counts (c:countLabel), at <focus>/~l10n-count.
 c:LinkTexts a sem:Rendering ;
     sem:targets c:Link ;
     sem:modality mod:Screen ;
@@ -312,15 +313,18 @@ c:LinkTexts a sem:Rendering ;
 c:LinkTexts-fn a sem:Rule ; sem:implements c:LinkTexts ; sem:function "l10n:link-hint" .
 c:LinkTexts-sparql a sem:Rule ; sem:implements c:LinkTexts ;
     sem:construct """
-CONSTRUCT { ?node l10n:label ?hint }
+CONSTRUCT { ?node l10n:label ?text }
 WHERE {
   $this a ?type .
   FILTER EXISTS { ?viewer l10n:prefers ?preference }
-  FILTER EXISTS { c:Link c:externalHint ?anyHint FILTER(isLiteral(?anyHint)) }
-  OPTIONAL { ?pickAt l10n:of c:Link ; l10n:hint ?pick }
-  OPTIONAL { FILTER(!BOUND(?pick)) c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
-  BIND(STR(COALESCE(?pick, ?any)) AS ?hint)
-  BIND(IRI(CONCAT(STR($this), "/~l10n-hint")) AS ?node)
+  # (One pattern for both texts, not a UNION: the focus is bound outside, where bulk evaluation binds it.)
+  VALUES ?which { "hint" "count" }
+  OPTIONAL { FILTER(?which = "hint") ?pickAt l10n:of c:Link ; l10n:hint ?pick }
+  OPTIONAL { FILTER(?which = "hint" && !BOUND(?pick)) c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(?which = "count") ?countPickAt l10n:of $this ; l10n:countLabel ?countPick }
+  OPTIONAL { FILTER(?which = "count" && !BOUND(?countPick)) $this c:countLabel ?countAny FILTER(isLiteral(?countAny)) }
+  BIND(STR(COALESCE(?pick, ?any, ?countPick, ?countAny)) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ?which)) AS ?node)
 }""" .
 
 # --- Kbd ---------------------------------------------------------------------------------------

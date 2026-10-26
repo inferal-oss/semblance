@@ -151,7 +151,6 @@ WHERE {
   BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-keyshortcuts"))), ?none) AS ?tearKeys)
   BIND(IF(?attached && ?detachable, ?tab, ?none) AS ?tearTab)
   BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("window-", ?key))), ?none) AS ?tearWindow)
-  BIND(IF(?detachable && BOUND(?tab) && ?detached, ?window, ?none) AS ?gathered)
   BIND(IF(?on, "0", "-1") AS ?tabIndex)
   BIND(?index * 2 AS ?buttonKey)
   BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-role"))), ?none) AS ?roleAttr)
@@ -175,6 +174,8 @@ WHERE {
   BIND(IF(?attached, ?content, ?none) AS ?panelContent)
   # A detached tab: a window derived from it, on the desktop the tabs name (else inside the tabs).
   BIND(IF(BOUND(?tab) && ?detached, IRI(CONCAT(STR($this), "/~", CONCAT("window-", ?key))), ?none) AS ?window)
+  # (After ?window: a BIND sees only what is bound before it.)
+  BIND(IF(?detachable && BOUND(?tab) && ?detached, ?window, ?none) AS ?gathered)
   BIND(IF(BOUND(?window), ?name, ?none) AS ?windowTitle)
   BIND(IF(BOUND(?window), ?tab, ?none) AS ?windowTab)
   BIND(IF(BOUND(?window), ?content, ?none) AS ?windowBody)
