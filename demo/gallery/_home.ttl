@@ -14,14 +14,12 @@ ui:home a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-7 ; pos:inset t
 
 # --- hero ---
 ui:hero a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align pos:Center ;
-    c:children ( ui:heroMark ui:heroClaim ui:heroTitle ui:heroTagline ui:heroLead ui:heroActions ) .
+    c:children ( ui:heroMark ui:heroClaim ui:heroTitle ui:heroLead ui:heroActions ) .
 ui:heroMark a c:GraphMark ; sty:size sty:Large ; rdfs:label "Semblance" .
 ui:heroClaim a c:Badge ; sty:tone sty:Accent ; sty:emphasis sty:Soft ; sty:size sty:Large ;
     c:label "RDF-native" , "RDF-нативний"@uk , "RDF-nativ"@de , "أصلي في RDF"@ar .
 ui:heroTitle a c:Text ; sty:textStyle sty:Display ; pos:textAlign pos:TextCenter ;
     c:label "The UI is data." , "Інтерфейс — це дані."@uk , "Die Oberfläche ist Daten."@de , "الواجهة بيانات."@ar .
-ui:heroTagline a c:Text ; sty:textStyle sty:Title ; pos:textAlign pos:TextCenter ;
-    c:label "The interface is a graph." , "Інтерфейс — це граф."@uk , "Die Oberfläche ist ein Graph."@de , "الواجهة رسم بياني."@ar .
 ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ; pos:measure pos:ReadingMeasure ;
     c:label "Semblance is a web UI framework where components, layers, themes and behaviour are RDF ontologies. Rules - SPARQL queries or functions - project one graph to the screen, to text, to anything; every interaction is an event in the graph." ,
             "Semblance — вебфреймворк, де компоненти, шари, теми й поведінка є онтологіями RDF. Правила — запити SPARQL або функції — проєктують один граф на екран, у текст, будь-куди; кожна взаємодія — подія в графі."@uk ,
@@ -41,10 +39,11 @@ ui:goComponents a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ;
 
 # --- why it matters: a live data system, not a program driven by events ---
 ui:why a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:whyHead ui:whyLead ui:whyContrast ui:whyFollows ) .
-ui:whyHead a c:Heading ; c:level 2 ;
+    c:children ( ui:whyIntro ui:whyContrast ui:whyFollows ) .
+ui:whyIntro a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; pos:align pos:Center ; c:children ( ui:whyHead ui:whyLead ) .
+ui:whyHead a c:Heading ; c:level 2 ; pos:textAlign pos:TextCenter ;
     c:label "Why it matters" , "Чому це важливо"@uk , "Warum das zählt"@de , "لماذا يهم ذلك"@ar .
-ui:whyLead a c:Text ; sty:textStyle sty:Subtitle ; pos:measure pos:ReadingMeasure ;
+ui:whyLead a c:Text ; sty:textStyle sty:Subtitle ; pos:measure pos:ReadingMeasure ; pos:textAlign pos:TextCenter ;
     c:label "Semblance is a live data system, not a program driven by events. The interface is data, and rules over that data." ,
             "Semblance — жива система даних, а не програма, яку ведуть події. Інтерфейс — це дані й правила над ними."@uk ,
             "Semblance ist ein lebendiges Datensystem, kein von Ereignissen getriebenes Programm. Die Oberfläche ist Daten und Regeln über diesen Daten."@de ,

@@ -20,7 +20,6 @@ describe('the site', () => {
     expect(value(UI + 'page')).toBe(UI + 'Home')
     expect(document.body.textContent).toContain('The UI is data.')
     expect(document.body.textContent).toContain('RDF-native')
-    expect(document.body.textContent).toContain('The interface is a graph.')
     // The todo, live beside its data and its text, then why that matters.
     const live = document.querySelector('[data-sem-c=live-example][data-sem-sources=hidden]')!
     expect(visible(live)).toBe(true)
