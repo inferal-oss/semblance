@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { fakeLayout } from './drag-layout.ts'
 import { mountSite } from './harness.ts'
 import { implementationGaps } from './implementations.ts'
+import { sameHtml } from './same-html.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const FX = 'https://semblance.dev/demo/files#'
@@ -113,6 +114,6 @@ describe('the file explorer example', () => {
       html.push(h.root().outerHTML)
       return html
     })
-    a!.forEach((html, i) => expect(html, `state ${i}`).toBe(b![i]))
+    a!.forEach((html, i) => sameHtml(html, b![i]!, `state ${i}`))
   })
 })

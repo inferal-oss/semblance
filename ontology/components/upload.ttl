@@ -261,7 +261,9 @@ c:FileItemRendering a sem:Rendering ;
     sem:targets c:FileItem ;
     sem:stratum 0 ;
     sem:readsMinted true ;
-    sem:follows c:of , c:itemOf .
+    sem:follows c:of , c:itemOf ;
+    # What it reads: of the drop only c:disabled, so a file arriving at the drop re-runs no other item.
+    sem:watches rdf:type , c:of , c:itemOf , file:name , file:size , file:loaded , file:reason , file:state , c:disabled , l10n:label .
 c:FileItemRendering-fn a sem:Rule ; sem:implements c:FileItemRendering ; sem:function "upload:item" .
 c:FileItemRendering-sparql-screen a sem:Rule ;
     sem:implements c:FileItemRendering ;

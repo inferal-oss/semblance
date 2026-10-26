@@ -520,8 +520,9 @@ const storeRoom: FnRule = (ctx, focus) => {
   for (const drag of ctx.objects(focus, DND.offered)) {
     const x = ctx.object(drag, DND.carrying)
     if (!x) continue
+    // Only files coming in from outside the page (dragged in, or arriving), not a member dragged from elsewhere in it.
+    if (ctx.objects(drag, DND.source).some((s) => s.value !== FILE.Dragged)) continue
     for (const store of ctx.objects(focus, FILE.keepIn)) {
-      if (ctx.objects(x, FILE.keptIn).some((s) => s.equals(store))) continue
       const size = integer(ctx.object(x, FILE.size))
       const count = integer(ctx.object(drag, DND.count)) ?? 1
       let reason: string | undefined

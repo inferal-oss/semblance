@@ -440,8 +440,8 @@ WHERE {
 # them in it? Each sh:maxInclusive (sh:maxExclusive) the store's shapes put on file:usedBytes (with
 # the carried file's size, known once it is dropped) and file:usedFiles (with how many are carried)
 # that would be passed objects to every receptacle of the receiver, with the shape's message - so the
-# drop layer refuses it there like any other refusal. A file already kept there (moved between
-# folders) takes no more room.
+# drop layer refuses it there like any other refusal. Only files coming in from outside the page
+# count: a member dragged between folders (kept or not) takes no more room.
 file:StoreRoom a sem:Rendering ;
     sem:targets file:Receiver ;
     sem:modality mod:Screen ;
@@ -456,7 +456,9 @@ file:StoreRoom-sparql a sem:Rule ;
 CONSTRUCT { ?objection a dnd:Objection ; dnd:receptacle ?r ; dnd:against ?drag ; dnd:reason ?reason }
 WHERE {
   $this dnd:offered ?drag ; file:keepIn ?store . ?drag dnd:carrying ?x .
-  FILTER NOT EXISTS { ?x file:keptIn ?store }
+  # Only files coming in from outside the page (dragged in, or arriving): a member dragged from
+  # elsewhere in the page is not kept anew.
+  FILTER NOT EXISTS { ?drag dnd:source ?source FILTER(?source != file:Dragged) }
   # The first message of a limit it would pass.
   LATERAL { SELECT ?store ?x ?drag (MIN(?said) AS ?reason) WHERE {
     ?shape sh:targetNode ?store ; sh:property ?ps .

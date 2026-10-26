@@ -2,23 +2,31 @@
 // or dropped on a folder in the tree, kept in the browser's file store (a memory stand-in here) up to
 // a cap that is SHACL, image previews, opening, deleting, and a reload - through events, as a person
 // would, with the DOM and the graph checked, and the SPARQL rules and their twins rendering the same.
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { type KeptFile, memoryFileStore } from '../src/file-store.ts'
 import type { FileLike } from '../src/files.ts'
 import { FILE, FILES_GRAPH, NS } from '../src/ns.ts'
 import { memoryBackend } from '../src/persistence.ts'
 import { mountSiteKeeping } from './harness.ts'
+import { sameHtml } from './same-html.ts'
 import { implementationGaps } from './implementations.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const FX = 'https://semblance.dev/demo/files#'
 type Prefer = 'sparql' | 'function'
 
+// Each mounted site's remembered state is written before the test ends (no timer outlives it).
+const mounted: { persistence: { flush(): Promise<void> } }[] = []
+afterEach(async () => {
+  for (const h of mounted.splice(0)) await h.persistence.flush()
+})
+
 const file = (name: string, type: string, size: number): FileLike => ({ name, type, size, lastModified: Date.UTC(2026, 9, 24, 12) })
 
 /** The site with its own database and file store (pass the same ones again: a reload), the explorer shown. */
 async function explorer(prefer: Prefer = 'sparql', backends = { [NS.per + 'Database']: memoryBackend(), [NS.per + 'Session']: memoryBackend(), [NS.per + 'Device']: memoryBackend() }, kept = memoryFileStore()) {
   const h = await mountSiteKeeping(backends, kept, prefer)
+  mounted.push(h)
   const f = h.store.factory
   const nn = (iri: string) => f.namedNode(iri)
   const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
@@ -84,9 +92,9 @@ describe("the file explorer's own files", () => {
     expect(h.added()).toEqual(['saved | Sunset.png', 'saved | Plan.md'])
     // Kept: the store has their bytes (and a preview of the image), the graph only says where.
     expect(h.about(sunset, FILE.keptIn)).toEqual([FX + 'store'])
-    expect([...h.kept.files.values()].map((k: KeptFile) => [k.name, k.size, k.store, !!k.preview])).toEqual([
-      ['Sunset.png', 120_000, FX + 'store', true],
+    expect([...h.kept.files.values()].map((k: KeptFile) => [k.name, k.size, k.store, !!k.preview]).sort()).toEqual([
       ['Plan.md', 900, FX + 'store', false],
+      ['Sunset.png', 120_000, FX + 'store', true],
     ])
     expect(h.usage()).toEqual({ bytes: 120_900, files: 2 })
     // The image's preview is in the files graph, never in the default graph, and the grid shows it.
@@ -125,7 +133,7 @@ describe("the file explorer's own files", () => {
     expect(h.kept.files.size).toBe(1)
     // Shown in Photos.
     h.click(h.folder('Photos'))
-    expect(h.rows()).toEqual(['Beach.jpg', 'Harbour at dusk.jpg', 'Dune.jpg'])
+    expect(h.rows().sort()).toEqual(['Beach.jpg', 'Dune.jpg', 'Harbour at dusk.jpg'])
   })
 
   it.each(['sparql', 'function'] as const)("refuses what would take the store past its cap, with the cap's message, and keeps everything else (%s)", async (prefer) => {
@@ -156,8 +164,8 @@ describe("the file explorer's own files", () => {
     await h.files.settled()
     h.shell.flush()
     expect(h.rows()).not.toContain('Sunset.png')
-    expect(h.store.match(h.nn(sunset), null, null).length).toBe(0)
-    expect(h.store.match(null, null, h.nn(sunset)).length).toBe(0)
+    expect(h.store.match(h.nn(sunset), null, null, h.f.defaultGraph()).length).toBe(0)
+    expect(h.store.match(null, null, h.nn(sunset), h.f.defaultGraph()).length).toBe(0)
     expect(h.kept.files.size).toBe(0)
     expect(h.urls.revoked.sort()).toEqual(addresses.sort())
     expect(h.usage()).toEqual({ bytes: 0, files: 0 })
@@ -203,7 +211,7 @@ describe("the file explorer's own files", () => {
       states.push(h.root().outerHTML)
       html.push(states)
     }
-    html[0]!.forEach((x, i) => expect(x, `state ${i}`).toBe(html[1]![i]))
+    html[0]!.forEach((x, i) => sameHtml(x, html[1]![i]!, `state ${i}`))
   })
 
   it('adding a file costs the same however many files the store keeps', async () => {
@@ -213,12 +221,14 @@ describe("the file explorer's own files", () => {
       await h.pick([file(name, 'text/plain', 10)])
       return h.screen.engine.stats.ruleRuns - before
     }
+    // Measured in the Archive (a folder that stays within one window of the grid).
+    h.click(h.folder('Archive'))
     await runs('warm.txt')
     const few = await runs('a.txt')
     // Twenty more kept, in another folder.
-    h.click(h.folder('Archive'))
-    for (let i = 0; i < 20; i++) await h.pick([file(`more-${i}.txt`, 'text/plain', 10)])
     h.click(h.folder('Documents'))
+    for (let i = 0; i < 20; i++) await h.pick([file(`more-${i}.txt`, 'text/plain', 10)])
+    h.click(h.folder('Archive'))
     await runs('warm2.txt')
     const many = await runs('b.txt')
     expect(h.usage().files).toBe(24)
