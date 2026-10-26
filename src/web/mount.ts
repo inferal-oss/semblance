@@ -33,6 +33,8 @@ export interface MountOptions {
   languages?: string[]
   /** Called after each event is handled and the DOM patched. */
   onHandled?: (h: Handled) => void
+  /** false when the host has already loaded CSS compiled from the same ontology and theme graphs. */
+  styles?: false
   /** The files effect (c:FileDrop: the picker, drops, uploads and their handlers); false leaves it off. */
   files?: Omit<FilesOptions, 'onHandled'> | false
   /** The fullscreen effect (fs:fullscreen, fs:fullViewport): its host, or how long it may take; false leaves it off. */
@@ -49,12 +51,13 @@ export interface MountedApp {
   files?: Files
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
-  /** Detach events and idle work, and remove the styles. The DOM is left as it is. */
+  /** Detach events and idle work, and remove styles this mount injected. The DOM is left as it is. */
   unmount(): void
 }
 
 /**
- * Mount a component graph into an element: load the store, compile the theme, project the
+ * Mount a component graph into an element: load the store, compile the theme unless the host
+ * already loaded it, project the
  * root on screen, patch it into `element` and route the element's events to reactions.
  * Hidden parts are evaluated in idle time; connectors (c:Connector) are drawn where their ends
  * are; picked, dropped and uploaded files go through the files effect (opts.files), and what is
@@ -78,9 +81,11 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   })
 
   const doc = element.ownerDocument
-  const sheet = new (doc.defaultView ?? globalThis).CSSStyleSheet()
-  sheet.replaceSync(compileStyles(store))
-  doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
+  const sheet = opts.styles === false ? undefined : new (doc.defaultView ?? globalThis).CSSStyleSheet()
+  if (sheet) {
+    sheet.replaceSync(compileStyles(store))
+    doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet]
+  }
 
   const renderer = new DomRenderer(projection.index, element, opts.root)
   const flush = () => renderer.flush()
@@ -164,7 +169,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       connectors.dispose()
       snaps.dispose()
       lightboxes.dispose()
-      doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
+      if (sheet) doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },
   }
 }
