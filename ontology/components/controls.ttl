@@ -42,13 +42,23 @@ c:TabsRendering-fn a sem:Rule ;
 c:TabsRendering-sparql-screen a sem:Rule ;
     sem:implements c:TabsRendering ;
     sem:modality mod:Screen ;
-    sem:follows ( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
-    sem:watches rdf:type , c:tabs , c:selected , c:detachable , c:windowsOn , c:detached , c:content , c:slot , c:label , rdfs:label , rdf:first , rdf:rest ;
+    sem:follows ( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first ) , ( [ sem:inverse c:primary ] ) , ( [ sem:inverse c:secondary ] ) , ( [ sem:inverse c:rootTile ] ) ;
+    sem:watches rdf:type , c:tabs , c:selected , c:detachable , c:windowsOn , c:detached , c:content , c:slot , c:label , rdfs:label , rdf:first , rdf:rest ,
+                c:primary , c:secondary , c:rootTile ;
     sem:bulk false ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?list , ?panel , ?looseWindow .
-  ?list a rdfhtml:Div ; sem:orderKey "-1" ; rdfhtml:attribute ?listRole ; rdfhtml:hasChild ?button , ?detach .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?list , ?panel , ?looseWindow , ?splitZone .
+  ?list a rdfhtml:Div ; sem:orderKey "-1" ; rdfhtml:attribute ?listRole ; rdfhtml:hasChild ?listItem , ?detach .
+  ?listItem sem:orderKey ?buttonKey .
+  ?handle a c:TabHandle , dnd:Draggable ; c:of ?tab ; dnd:carries ?tab ; dnd:name ?handleName .
+  ?button sem:renders ?handle .
+  $this dnd:zone ?paneZone , ?splitZone .
+  ?paneZone dnd:receptacle $this ; c:label ?paneName .
+  ?splitZone a rdfhtml:Div ; rdfhtml:class "sem-split-zone" ; sem:orderKey ?zoneKey ; rdfhtml:attribute ?zoneHidden , ?zoneEdge ;
+             dnd:receptacle ?splitZone ; c:splitsAt ?edge ; c:label ?edgeSaid .
+  ?zoneHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?zoneEdge a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-edge" ; rdfhtml:attributeValue ?edgeSlug .
   ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tablist" .
   ?list rdfhtml:attribute ?tearDistanceAttr , ?tearCueAttr , ?tearBackCueAttr , ?returnCueAttr ; c:gathers ?gathered .
   ?tearDistanceAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tear-distance" ; rdfhtml:attributeValue ?tearDistance .
@@ -58,7 +68,7 @@ CONSTRUCT {
   ?button rdfhtml:attribute ?tearGesture , ?tearKeys ; c:tearsOff ?tearTab ; c:tearsInto ?tearWindow .
   ?tearGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "tear" .
   ?tearKeys a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue "Shift+Enter" .
-  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?tabId ; rdfhtml:tabIndex ?tabIndex ; sem:orderKey ?buttonKey ;
+  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?tabId ; rdfhtml:tabIndex ?tabIndex ;
           rdfhtml:attribute ?roleAttr , ?selectedAttr , ?controlsAttr ; c:selects ?tab ; rdfhtml:hasChild ?tabLabel .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tab" .
   ?selectedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue ?onText .
@@ -84,6 +94,39 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~", "tablist")) AS ?list)
   BIND(IRI(CONCAT(STR($this), "/~", "tablist-role")) AS ?listRole)
   BIND(EXISTS { $this c:detachable ?detachableFlag FILTER(STR(?detachableFlag) = "true") } AS ?detachable)
+  # Sortable tabs (dnd:Sortable): each attached tab is dragged by its button, the root of a
+  # c:TabHandle carrying it, and is not torn off by dragging. A pane of a tiled workspace (below its
+  # c:rootTile, through split views) takes tabs as a whole and splits at its edges.
+  BIND(EXISTS { $this a dnd:Sortable } AS ?sortable)
+  BIND(?sortable && EXISTS { ?workspace a c:TiledWorkspace ; c:rootTile ?top . ?top (c:primary|c:secondary)* $this } AS ?pane)
+  OPTIONAL { SELECT (GROUP_CONCAT(?paneTabName; separator=", ") AS ?paneNames) WHERE {
+    { SELECT ?paneTabName WHERE {
+      $this c:tabs/rdf:rest* ?paneCell . ?paneCell rdf:first ?paneTab . FILTER(isIRI(?paneTab))
+      FILTER NOT EXISTS { ?paneTab c:detached ?paneDetached FILTER(STR(?paneDetached) = "true") }
+      { SELECT ?paneCell (COUNT(?paneBefore) AS ?paneAt) WHERE { $this c:tabs/rdf:rest* ?paneBefore . ?paneBefore rdf:rest* ?paneCell } GROUP BY ?paneCell }
+      OPTIONAL { ?paneTab l10n:label ?paneC0 }
+      OPTIONAL { FILTER(!BOUND(?paneC0)) ?paneC1At l10n:of ?paneTab ; l10n:label ?paneC1 }
+      OPTIONAL { FILTER(!BOUND(?paneC0) && !BOUND(?paneC1)) ?paneTab c:label ?paneC2 FILTER(isLiteral(?paneC2)) }
+      OPTIONAL { ?paneR0At l10n:of ?paneTab ; l10n:name ?paneR0 }
+      OPTIONAL { FILTER(!BOUND(?paneR0)) ?paneTab rdfs:label ?paneR1 FILTER(isLiteral(?paneR1)) }
+      BIND(STR(COALESCE(?paneC0, ?paneC1, ?paneC2, ?paneR0, ?paneR1, REPLACE(STR(?paneTab), "^.*[#/]", ""))) AS ?paneTabName)
+    } ORDER BY ?paneAt }
+  } }
+  BIND(IF(?pane, IRI(CONCAT(STR($this), "/~root")), ?none) AS ?paneZone)
+  BIND(IF(?pane && COALESCE(?paneNames, "") != "", ?paneNames, ?none) AS ?paneName)
+  OPTIONAL {
+    FILTER(?pane)
+    VALUES (?edge ?edgeAt) { (c:StartEdge 0) (c:EndEdge 1) (c:TopEdge 2) (c:BottomEdge 3) }
+    ?edge sem:slug ?edgeSlug0 .
+    OPTIONAL { ?edgeSaidAt l10n:of ?edge ; l10n:splitLabel ?edgeSaid0 }
+    OPTIONAL { FILTER(!BOUND(?edgeSaid0)) ?edge c:splitLabel ?edgeSaid1 FILTER(isLiteral(?edgeSaid1)) }
+    BIND(STR(?edgeSlug0) AS ?edgeSlug)
+    BIND(STR(COALESCE(?edgeSaid0, ?edgeSaid1)) AS ?edgeSaid)
+    BIND(IRI(CONCAT(STR($this), "/~split-", ?edgeSlug)) AS ?splitZone)
+    BIND(IRI(CONCAT(STR($this), "/~split-", ?edgeSlug, "-aria-hidden")) AS ?zoneHidden)
+    BIND(IRI(CONCAT(STR($this), "/~split-", ?edgeSlug, "-data-sem-edge")) AS ?zoneEdge)
+    BIND(200000 + ?edgeAt AS ?zoneKey)
+  }
   # How far out a tab tears off, and what the ghost that follows it says (detachable tabs only).
   OPTIONAL { c:Tabs c:tearDistance ?tearDistanceRaw }
   BIND(COALESCE(STR(?tearDistanceRaw), "24") AS ?tearDistance)
@@ -144,18 +187,23 @@ WHERE {
   BIND(BOUND(?tab) && !?detached AS ?attached)
   BIND(?attached && ?tab = ?selected AS ?on)
   # An attached tab: its button (and detach control) in the list, and its panel.
-  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key))), ?none) AS ?button)
-  BIND(STR(?button) AS ?tabId)
+  BIND(IF(?attached && ?sortable, IRI(CONCAT(STR($this), "/~", CONCAT("drag-", ?key))), ?none) AS ?handle)
+  BIND(IF(BOUND(?handle), ?name, ?none) AS ?handleName)
+  # The button's own name (its attributes are named after it): a handle's root, else the tab's.
+  BIND(IF(?sortable, CONCAT("drag-", ?key, "/~root"), CONCAT("tab-", ?key)) AS ?b)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", ?b)), ?none) AS ?button)
+  BIND(COALESCE(?handle, ?button) AS ?listItem)
+  BIND(STR(IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key)))) AS ?tabId)
   # A detachable tab tears off into its window: dragged out of the list, or Shift+Enter.
-  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-data-sem-gesture"))), ?none) AS ?tearGesture)
-  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-keyshortcuts"))), ?none) AS ?tearKeys)
+  BIND(IF(?attached && ?detachable && !?sortable, IRI(CONCAT(STR($this), "/~", CONCAT(?b, "-data-sem-gesture"))), ?none) AS ?tearGesture)
+  BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT(?b, "-aria-keyshortcuts"))), ?none) AS ?tearKeys)
   BIND(IF(?attached && ?detachable, ?tab, ?none) AS ?tearTab)
   BIND(IF(?attached && ?detachable, IRI(CONCAT(STR($this), "/~", CONCAT("window-", ?key))), ?none) AS ?tearWindow)
   BIND(IF(?on, "0", "-1") AS ?tabIndex)
   BIND(?index * 2 AS ?buttonKey)
-  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-role"))), ?none) AS ?roleAttr)
-  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-selected"))), ?none) AS ?selectedAttr)
-  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-aria-controls"))), ?none) AS ?controlsAttr)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT(?b, "-role"))), ?none) AS ?roleAttr)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT(?b, "-aria-selected"))), ?none) AS ?selectedAttr)
+  BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT(?b, "-aria-controls"))), ?none) AS ?controlsAttr)
   BIND(IF(?on, "true", "false") AS ?onText)
   BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-name"))), ?none) AS ?tabLabel)
   BIND(IF(?attached, IRI(CONCAT(STR($this), "/~", CONCAT("tab-", ?key, "-label"))), ?none) AS ?tabLabelText)

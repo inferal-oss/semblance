@@ -131,7 +131,8 @@ export function loadRules(store: GraphStore): Rule[] {
         const inverse = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverse)
         path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
       }
-      return path.length === 1 ? path[0]! : path
+      // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
+      return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
     })
     rules.push({
       iri: r.value,

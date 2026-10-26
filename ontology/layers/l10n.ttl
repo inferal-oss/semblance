@@ -184,6 +184,7 @@ ann:announces l10n:pickedAs l10n:announcement .
 c:emptyText l10n:pickedAs l10n:emptyText .
 c:countLabel l10n:pickedAs l10n:countLabel .
 c:pausedLabel l10n:pickedAs l10n:pausedLabel .
+c:splitLabel l10n:pickedAs l10n:splitLabel .
 c:moreLabel l10n:pickedAs l10n:moreLabel .
 c:badge l10n:pickedAs l10n:badge .
 c:note l10n:pickedAs l10n:note .
@@ -204,6 +205,7 @@ l10n:help a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:hel
 l10n:placeholder a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:placeholder in the viewer's language."@en .
 l10n:moreLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:moreLabel in the viewer's language."@en .
 l10n:pausedLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:pausedLabel in the viewer's language."@en .
+l10n:splitLabel a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:splitLabel in the viewer's language."@en .
 
 l10n:Terms a sem:BuildingBlock ;
     sem:targets l10n:Viewer ;

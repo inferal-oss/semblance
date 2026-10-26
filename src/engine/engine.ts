@@ -88,6 +88,9 @@ const isPlacementOrProvenance = (p: string) => p.startsWith(H.ns) || p.startsWit
  * same triple) and written to this engine's derived graph. Net changes of a
  * run are reported to listeners as one delta.
  */
+/** A node's value that is an IRI (a scheme), not a blank node's label. */
+const IRI_LIKE = /^[A-Za-z][A-Za-z0-9+.-]*:/
+
 export class Engine {
   readonly graph: NamedNode
   /** The PROV-O software agent standing for this projection. */
@@ -686,7 +689,7 @@ export class Engine {
     // Along a path whose last step is against a predicate: from this node itself.
     // (Rendered output - RDF/HTML structure, placement, provenance - is never what a path follows,
     // and a rule that watches predicates is not walked to for others: this runs for every triple.)
-    if (this.inverseFollowers.length && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
+    if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
         if (r.watches && !r.watches.has(p)) continue
         for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
@@ -1222,6 +1225,8 @@ export class Engine {
         // Against p: back is forward, to what the node is p of.
         const p = f.namedNode(step.slice(1))
         for (const n of nodes) {
+          // (A list cell on the way is a blank node, never the subject of a named step.)
+          if (!IRI_LIKE.test(n)) continue
           for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
         }
       } else for (const n of nodes) for (const x of this.links.get(n)?.get(step) ?? []) next.add(x)
