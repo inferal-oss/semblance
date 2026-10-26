@@ -292,7 +292,7 @@ WHERE {
 # size is c:height (top and bottom) or c:width (start and end); c:expanded false folds it.
 
 c:DockPanel a owl:Class ;
-    rdfs:subClassOf sem:Component , c:Dockable ;
+    rdfs:subClassOf sem:Component , c:Foldable , c:Dockable ;
     rdfs:label "Dock panel"@en , "Прикріплена панель"@uk , "Angedocktes Panel"@de , "لوحة مثبتة"@ar ;
     rdfs:comment """A panel attached to an edge of its container (c:attachedTo, bottom by default; with
 c:overViewport true, of the viewport): a header with a fold control and title (c:label), a c:badge
@@ -471,9 +471,3 @@ WHERE {
   BIND(xsd:integer(IF(?capped < ?min, ?min, ?capped)) AS ?size)
 }""" ;
     sem:function "panes:dock-resize" .
-
-# Its fold control (c:folds, as a c:StatusBar's) flips c:expanded.
-c:DockPanelFold a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:DockPanel ;
-    beh:deletes """CONSTRUCT { $this c:expanded ?e } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . $this c:expanded ?e }""" ;
-    beh:inserts """CONSTRUCT { $this c:expanded ?next } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . OPTIONAL { $this c:expanded ?e } BIND(COALESCE(?e, true) = false AS ?next) }""" ;
-    sem:function "status-bar:fold" .

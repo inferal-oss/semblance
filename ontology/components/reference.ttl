@@ -46,7 +46,7 @@ c:exceptProperty a owl:ObjectProperty ; rdfs:domain c:TermSection ; rdfs:range r
     rdfs:comment "Without c:membersVia: terms that have this property are listed elsewhere, not here (sem:group: component classes are in their groups)."@en .
 
 c:TermBranch a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """Internal: one branch of a c:TermTree, minted by the tree (c:of the group, layer or vocabulary;
 c:branchOf the tree; c:section). Its row names the branch, which a click selects, and counts its
 terms; its twisty opens and closes it (c:expanded, graph state on the branch). Open, it lists its
@@ -367,15 +367,6 @@ WHERE {
 }""" ;
     sem:function "reference:toggle" .
 
-# A click on a name selects that term: `<controls> <property> <term>`, as c:Tree and c:NavList do.
-c:SelectTerm a beh:Reaction ;
-    rdfs:label "Select a term"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:TermBranch ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .
-
 # Up and Down move among the visible names; Right opens a branch (then enters it), Left closes it
 # (then goes to its section). Enter or Space on a name is its click.
 c:TermTree key:navigation key:TreeNavigation .
@@ -389,7 +380,7 @@ c:TermTree key:navigation key:TreeNavigation .
 # one is a node here, rendered by both implementations alike.
 
 c:TermOverview a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """What the ontology says about one term: the term c:bindProperty of c:bindFrom holds (a
 selection). A header (its prefixed name, its kind, its IRI) and its rdfs:comment, then its facts:
 what it says, by predicate, and what points at it (c:InverseFacet, and its shape). Values that are
@@ -643,15 +634,6 @@ WHERE {
   } }
 }""" .
 
-# A click on a linked term selects it, as a click in the tree does.
-c:SelectOverviewTerm a beh:Reaction ;
-    rdfs:label "Select a term"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:TermOverview ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .
-
 # --- one term: how it is aligned with other vocabularies ------------------------------------------
 
 c:TermAlignment a owl:Class ;
@@ -809,7 +791,7 @@ a card's name selects its term there."""@en ;
 c:membersOf a owl:ObjectProperty ; rdfs:domain c:TermMembers ; rdfs:range c:TermTree ;
     rdfs:comment "The tree whose sections say what a branch holds."@en .
 c:TermCard a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """Internal: one term's card, minted by a c:TermMembers (c:of the term, c:role its role). Its name
 (selecting it), its slug, the first sentence of its comment, its superclasses, super-properties
 and range as tags (mixins marked), how many properties, renderings, rules (SPARQL, function) and
@@ -1030,12 +1012,3 @@ WHERE {
     BIND(IF(BOUND(?gpfx) && REGEX(?glocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?gpfx, ":", ?glocal), CONCAT("<", STR(?spec), ">")) AS ?specName)
   } }
 }""" .
-
-# A card's name selects its term, as the tree's names do.
-c:SelectCardTerm a beh:Reaction ;
-    rdfs:label "Select a term"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:TermCard ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .

@@ -361,7 +361,7 @@ WHERE {
 # --- Segmented control -------------------------------------------------------------------
 
 c:Segmented a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Chooser , c:Selector ;
     rdfs:comment """Sets one property (c:property) of one node (c:controls). The options are not
 configured: they are the individuals in the property's rdfs:range, ordered by sem:order,
 labelled by rdfs:label and sem:symbol."""@en ;
@@ -579,9 +579,17 @@ WHERE {
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
 
-c:SegmentedSelect a beh:Reaction ;
+# --- Selector: a click selects a value ---------------------------------------------------------
+# A click on an element that c:selects a value writes it as c:property of c:controls: a segmented
+# control's option, a tree's node, a crumb, a term's name. Components opt in by type.
+
+c:Selector a owl:Class ;
+    rdfs:label "Selector"@en , "Вибір"@uk , "Auswahl"@de , "مُحدِّد"@ar ;
+    rdfs:comment "Mixin: a click on a rendered element of it that c:selects a value writes that value as c:property of c:controls, in place of the one there."@en .
+c:Select a beh:Reaction ;
+    rdfs:label "Select"@en ;
     beh:when beh:Click ;
-    beh:sourceClass c:Segmented ;
+    beh:sourceClass c:Selector ;
     beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
     beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?option . $this c:controls ?target ; c:property ?p }""" ;
     sem:function "segmented:select" .
@@ -594,7 +602,7 @@ c:SegmentedSelect a beh:Reaction ;
 # native select of the same options, showing the current one and opening the platform's own
 # picker. Both are rendered; the theme shows one (hooked: data-sem-compact-as), so focus and
 # screen readers meet only that one. A change of the select writes the property as a click on an
-# option does (c:SegmentedPick).
+# option does (c:Pick, as a c:Chooser).
 
 c:compactAs a owl:ObjectProperty ;
     rdfs:range c:CompactPresentation ;
@@ -711,12 +719,19 @@ WHERE {
     }
   }
 }""" .
-# Choosing in the picker writes the property, as a click on an option does.
-c:SegmentedPick a beh:Reaction ;
+# --- Chooser: a change picks a value -----------------------------------------------------------
+# A change of a native select or a radio (beh:value, an IRI) writes that value as c:property of
+# c:controls: a choice, a radio group, a segmented control's compact picker.
+
+c:Chooser a owl:Class ;
+    rdfs:label "Chooser"@en , "Вибір значення"@uk , "Wertauswahl"@de , "مُختار القيمة"@ar ;
+    rdfs:comment "Mixin: a change of it (beh:value, an IRI) writes that value as c:property of c:controls, in place of the one there, unless it is c:disabled."@en .
+c:Pick a beh:Reaction ;
+    rdfs:label "Pick"@en ;
     beh:when beh:Change ;
-    beh:sourceClass c:Segmented ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
+    beh:sourceClass c:Chooser ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER NOT EXISTS { $this c:disabled true } BIND(IRI(?v) AS ?option) }""" ;
     sem:function "choice:select" .
 
 # --- Flippable: any component, with its making on the back ----------------------------------
@@ -845,7 +860,7 @@ c:options a owl:ObjectProperty ; rdfs:range rdf:List ;
     rdfs:comment "Explicit, ordered options (overrides the property's range)."@en .
 
 c:Choice a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Chooser ;
     rdfs:comment "A dropdown setting a single-valued property."@en ;
     sem:slug "choice" .
 c:ChoiceRendering a sem:Rendering ;
@@ -1039,12 +1054,6 @@ WHERE {
   } } }
   BIND(COALESCE(?c, ?r, REPLACE(STR(?subject), "^.*[#/]", "")) AS ?label)
 }""" .
-c:ChoiceSelect a beh:Reaction ;
-    beh:when beh:Change ;
-    beh:sourceClass c:Choice ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER NOT EXISTS { $this c:disabled true } BIND(IRI(?v) AS ?option) }""" ;
-    sem:function "choice:select" .
 
 c:Chips a owl:Class ;
     rdfs:subClassOf sem:Component ;

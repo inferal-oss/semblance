@@ -61,7 +61,7 @@ c:UnsetterUnset a beh:Reaction ;
 # --- vocabulary -------------------------------------------------------------------------------------
 
 c:DataGrid a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Sortable ;
     rdfs:label "Data grid"@en , "Таблиця даних"@uk , "Datenraster"@de , "شبكة البيانات"@ar ;
     rdfs:comment """The members of c:collection (through c:memberProperty, default tree:member; only
 c:memberClass instances when given) as rows (role=grid) under c:gridColumns (an rdf:List of
@@ -1167,18 +1167,6 @@ WHERE {
 }""" .
 
 # --- behaviour ----------------------------------------------------------------------------------------
-
-# A header sorts by its column; again reverses it (the table's reaction, for grids).
-c:DataGridSort a beh:Reaction ;
-    beh:when beh:Click ;
-    beh:sourceClass c:DataGrid ;
-    beh:deletes """CONSTRUCT { $this c:sortColumn ?old . $this c:sortDescending ?desc }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
-        { $this c:sortColumn ?old } UNION { $this c:sortDescending ?desc } }""" ;
-    beh:inserts """CONSTRUCT { $this c:sortColumn ?col ; c:sortDescending ?desc }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
-        BIND(EXISTS { $this c:sortColumn ?col . FILTER NOT EXISTS { $this c:sortDescending true } } AS ?desc) }""" ;
-    sem:function "data:table-sort" .
 
 # A row selects its member and pins the window where it is (new members do not move the row
 # away); the selected row again deselects it.
