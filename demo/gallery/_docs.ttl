@@ -885,7 +885,7 @@ ui:doc-iv-landed-items ui:ivl-ticks "Every change is a tick; Runtime.transaction
     ui:ivl-time "Phase 4: tumbling and count windows; event time with a watermark (the network inspector's last five seconds); every window an edge that moves, so an event and an expiry cost what they change." ;
     ui:ivl-delta "Changes as a stream: since(tick), replicas in another store, delta logs that carry their triples; undo over the change log." ;
     ui:ivl-bench "The workbench's Follow updates maintains its query as a view; a Plan tab shows how." ;
-    ui:ivl-rules "Phase 3: SPARQL rules re-run from their own patterns (an engine option for now: a priority change no longer re-runs a todo's rendering); a rule can be a maintained view (iv:strategy iv:Incremental); persistence policies are views, and a write stores the change." ;
+    ui:ivl-rules "Phase 3: SPARQL rules re-run from their own patterns (an engine option for now: a priority change no longer re-runs a todo's rendering); a rule can be a maintained view (iv:strategy iv:Incremental); a persistence policy can be a view (the change log's is), and a write stores the change." ;
     ui:ivl-demand "iv:whileShown: hidden views idle, rebuilt when shown." ;
     ui:ivl-see "Plans, figures, per-step logs and from-scratch checks, as graph data." ;
     ui:ivl-example "The Warehouse example: stock, a reorder list (HAVING) and best sellers of the last hour (a window and a top five), each tile with what its last change cost against a recount." ;

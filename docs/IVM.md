@@ -1766,12 +1766,14 @@ What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts
   member reads of member-wise rules; the instance index, `sem:requires` / `sem:unless`, `sem:inputOnly`
   and member links stay. Not probed: a rule below the stratum running, one with no instance (counted as
   types come and go), one whose foci all wait to run anyway (the mount, a reconfiguration).
-- **Probes, better for views too.** A walk now goes through the groups beside a pattern's - a sibling
-  LATERAL, a UNION branch, an OPTIONAL - entering by any variable and leaving only by what they
-  certainly bind, without pruning by them; and it prunes by patterns only partly bound (some triple must
-  agree with what is bound), also when the change binds the key itself. Before, `dep:Facets` (a LATERAL
-  after a LATERAL of UNIONs) answered "every focus" to every change, and `sty:HookAttributes` (`$this ?p
-  ?v . ?p sty:hookAttribute ?name`) re-ran for every triple about its focus.
+- **Probes, better for views too.** A probe prunes by the patterns around it even when they are only
+  partly bound (some triple must agree with what is bound, looked up through a bound node), also when
+  the change binds the key itself: `sty:HookAttributes` (`$this ?p ?v . ?p sty:hookAttribute ?name`) no
+  longer re-runs for every triple about its focus. Walking through the groups beside a pattern (a sibling
+  OPTIONAL or UNION branch) was tried and dropped: a solution need not match them, so a walk through one
+  can miss it (the performance page's matrix lost a new configuration's rows). So `dep:Facets` (a LATERAL
+  after a LATERAL of UNIONs) still reaches "every focus" from its last pattern; `sem:requires` makes that
+  cheap.
 - **The measure.** `engine.test.ts`: the from-scratch test passes with exact dependencies (every step,
   screen and text, against a fresh projection), and "re-renders only what changed" is tightened in its
   exact twin: a todo's `ex:priority` changing re-runs one rule (the list's member placement), not two.
@@ -1787,9 +1789,11 @@ What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts
   each pattern's walk once (a probe plan), or running it in the engine (phase 6), is what makes it the
   default; so is a full-suite run with `SEMBLANCE_EXACT_DEPS=1`.
 - **`ctx.rows(view)`**: a materialized view's rows, read and traced row by row (`viewRows` delegates).
-- **Persistence policies as views** (§15). A `per:construct` policy is a hosted view (`ViewRuntime.host`:
-  defined by a host effect, ephemeral, a fallback expected), kept when its result equals a run of the
-  query - a policy over a projection's derived graph stays a run. Its view's changes make it dirty
+- **Persistence policies as views** (§15). A `per:construct` policy marked `iv:strategy iv:Incremental`
+  is a hosted view (`ViewRuntime.host`: defined by a host effect, ephemeral, a fallback expected), checked
+  once against a run of the query. Opt-in, because a view reads input graphs only and a policy that reads
+  a projection's derived graph (the torn-off inspector's geometry) cannot be told apart by comparing
+  once; the change log's policy, which reads the events graph only, opts in. Its view's changes make it dirty
   (exactly what its patterns read, not "a predicate it mentions"), and a write stores what changed since
   the last one as a chunk of its own beside the base, compacted when the chunks outgrow it; restore
   applies them, forget removes them. `test/persistence-cost.test.ts`: one change of a 2,000-triple policy
@@ -1807,7 +1811,8 @@ What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts
 
 Where this differs from the design: exact dependencies are an option, not yet the default (above);
 rules as views are opt-in per rule and must read only input graphs (views step before projections);
-persistence keeps one blob per policy plus chunks, not per-triple keys (the backends have no key listing).
+persistence policies are views when they opt in; persistence keeps one blob per policy plus chunks, not
+per-triple keys (the backends have no key listing).
 
 ## Decisions
 
