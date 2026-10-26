@@ -1,8 +1,10 @@
 // Incremental GROUP BY aggregates (docs/IVM.md §6.5): per group, an accumulator per
 // aggregate that rows enter (+1) and leave (-1). COUNT, SUM and AVG are invertible;
-// MIN and MAX keep the group's values ordered; DISTINCT keeps values with weights.
+// MIN and MAX keep the group's values in an ordered multiset (a treap: O(log n) per change);
+// DISTINCT keeps values with weights.
 import type { Term } from '@rdfjs/types'
 import type { Factory } from '../store/types.ts'
+import { OrderedMultiset } from './ordered.ts'
 import type { Aggregate } from './plan.ts'
 import type { Terms } from './terms.ts'
 
@@ -19,10 +21,10 @@ interface Acc {
   errors: number
   /** Values per numeric type rank, so a retraction can narrow the result type again. */
   types: [number, number, number, number]
-  /** DISTINCT, MIN, MAX: value id -> weight. */
+  /** DISTINCT: value id -> weight. */
   values?: Map<number, number>
-  /** MIN, MAX: the values in order. */
-  sorted?: number[]
+  /** MIN, MAX: the values in term order, with multiplicities. */
+  sorted?: OrderedMultiset<number>
 }
 
 export interface Group {
@@ -31,11 +33,15 @@ export interface Group {
   accs: Acc[]
 }
 
-export function newGroup(ids: number[], aggregates: readonly Aggregate[]): Group {
+export function newGroup(terms: Terms, ids: number[], aggregates: readonly Aggregate[]): Group {
+  const order = (a: number, b: number) => compareTerms(terms, a, b)
   return {
     ids,
     rows: 0,
-    accs: aggregates.map((a) => ({ n: 0, sum: 0, errors: 0, types: [0, 0, 0, 0], values: a.distinct || a.fn === 'MIN' || a.fn === 'MAX' ? new Map() : undefined, sorted: a.fn === 'MIN' || a.fn === 'MAX' ? [] : undefined })),
+    accs: aggregates.map((a) => {
+      const ordered = a.fn === 'MIN' || a.fn === 'MAX'
+      return { n: 0, sum: 0, errors: 0, types: [0, 0, 0, 0], values: a.distinct && !ordered ? new Map() : undefined, sorted: ordered ? new OrderedMultiset(order) : undefined }
+    }),
   }
 }
 
@@ -62,6 +68,10 @@ export function accumulate(terms: Terms, a: Aggregate, acc: Acc, value: number, 
     acc.n += w
     return
   }
+  if (acc.sorted) {
+    if (value) acc.sorted.add(value, w)
+    return
+  }
   if (acc.values) {
     if (!value) {
       if (a.fn === 'SUM' || a.fn === 'AVG') acc.errors += w
@@ -71,11 +81,6 @@ export function accumulate(terms: Terms, a: Aggregate, acc: Acc, value: number, 
     const after = before + w
     if (after) acc.values.set(value, after)
     else acc.values.delete(value)
-    if (acc.sorted) {
-      if (before === 0 && after > 0) acc.sorted.splice(search(terms, acc.sorted, value), 0, value)
-      else if (before > 0 && after === 0) acc.sorted.splice(search(terms, acc.sorted, value), 1)
-      return
-    }
     // DISTINCT: a value counts while its weight is positive.
     if (before === 0 && after > 0) numeric(terms, a, acc, value, 1)
     else if (before > 0 && after === 0) numeric(terms, a, acc, value, -1)
@@ -104,17 +109,6 @@ function numeric(terms: Terms, a: Aggregate, acc: Acc, value: number, w: number)
   acc.types[RANK[t.datatype.value] ?? 0]! += w
 }
 
-function search(terms: Terms, sorted: number[], value: number): number {
-  let lo = 0
-  let hi = sorted.length
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (compareTerms(terms, sorted[mid]!, value) < 0) lo = mid + 1
-    else hi = mid
-  }
-  return lo
-}
-
 const fmt = (n: number, type: string) => (type === TYPE[0] ? String(Math.round(n)) : String(n))
 
 /** The aggregate's current value as a term (undefined: unbound). */
@@ -134,9 +128,9 @@ export function result(f: Factory, terms: Terms, a: Aggregate, acc: Acc): Term |
       return lit(acc.sum / acc.n, TYPE[Math.max(1, r)]!)
     }
     case 'MIN':
-      return acc.sorted!.length ? terms.term(acc.sorted![0]!) : undefined
+      return acc.sorted!.size ? terms.term(acc.sorted!.at(0)!.value) : undefined
     case 'MAX':
-      return acc.sorted!.length ? terms.term(acc.sorted![acc.sorted!.length - 1]!) : undefined
+      return acc.sorted!.size ? terms.term(acc.sorted!.at(acc.sorted!.size - 1)!.value) : undefined
   }
 }
 
@@ -147,5 +141,5 @@ function widest(acc: Acc): number {
 
 /** Rows of state an aggregate holds (for footprints). */
 export function accSize(acc: Acc): number {
-  return 1 + (acc.values?.size ?? 0)
+  return 1 + (acc.values?.size ?? 0) + (acc.sorted?.count ?? 0)
 }

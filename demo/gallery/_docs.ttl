@@ -771,7 +771,7 @@ ex:qEvents a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:events ?va
 ex:qChanged a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:changed ?value }""" .
 ex:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery ex:qEvents ; c:dataset ex:log .
 ex:changed a c:Stat ; c:label "Triples changed" ; c:valueQuery ex:qChanged ; c:dataset ex:log .''' .
-ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX, DISTINCT, HAVING and arithmetic over aggregates are maintained, and so are joins, OPTIONAL, EXISTS, NOT EXISTS, MINUS, UNION, VALUES and ORDER BY with LIMIT (below). A query of another shape (GROUP_CONCAT, NOW()) still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
+ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX, DISTINCT, HAVING and arithmetic over aggregates are maintained, and so are joins, OPTIONAL, EXISTS, NOT EXISTS, MINUS, UNION, VALUES and ORDER BY with LIMIT (below). An aggregate subquery - the busiest per kind, then the largest of those; the best time per size, joined to the run that made it - is a view inside the view: maintained group by group, its rows joined to the rest of the query, so a change reaches only the rows its group's new value touches. A query of another shape (GROUP_CONCAT, NOW()) still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
 
 ui:doc-iv-group-h a c:Heading ; c:level 2 ; c:label "Groups" .
 ui:doc-iv-group-1 a c:Text ; c:label "With GROUP BY, only the groups an event touched change - one row of output, not all of them. Mint each group's node from a key, as rules do, so a row keeps its identity and its DOM element." .
@@ -831,7 +831,7 @@ ex:colVotes a c:Column ; c:variable "votes" ; c:label "Votes" ; c:align "end" .'
 ui:doc-iv-top-2 a c:Text ; c:label "The data grid's window works this way: three views per grid keep its members in capture order, and the window shows at most three pages of their rows, so a response arriving for an old request re-sorts its row at once, whatever the size of the capture. Each row carries a tuple order key (sem:orderKey: has a value, the value, capture order), so one row's key changing moves only that row." .
 
 ui:doc-iv-param-h a c:Heading ; c:level 2 ; c:label "Parameters and a view per instance" .
-ui:doc-iv-param-1 a c:Text ; c:label "iv:parameter binds a $name in the query to a value in the graph; when it changes the view is evaluated again once - or, for a LIMIT, its window just moves. iv:targets makes a view per instance of a class, with $this bound, maintained while that instance is shown; its rows are minted under the instance, so the instance's own rules read them (sem:readsMinted)." .
+ui:doc-iv-param-1 a c:Text ; c:label "iv:parameter binds a $name in the query to a value in the graph. When it changes, the view is retuned in place: a constant in a triple pattern re-evaluates the partitions that match its old or new value, one in a FILTER every partition (once), and for a LIMIT the window just moves. iv:targets makes a view per instance of a class, with $this bound, maintained while that instance is shown; its rows are minted under the instance, so the instance's own rules read them (sem:readsMinted)." .
 ui:doc-iv-param-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:GridWindowCounts a iv:View ; iv:targets c:DataGrid ; iv:materialize iv:Graph ;
     iv:parameter [ iv:variable "collection" ; iv:property c:collection ; iv:default c:none ] ;
     sem:select \"\"\"SELECT (COUNT(*) AS ?total) WHERE { $collection tree:member ?m . … $this c:filteredBy … }\"\"\" .""" .
@@ -864,7 +864,7 @@ ui:ivc-fn rdfs:label "Function rules" . ui:ivc-sparql rdfs:label "SPARQL rules" 
 
 ui:doc-iv-status-h a c:Heading ; c:level 2 ; c:label "Status" .
 ui:doc-iv-landed-h a c:Heading ; c:level 3 ; c:label "Landed: phases 0, 1 and 2" .
-ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ui:ivl-example ui:ivl-joins ui:ivl-grid ui:ivl-charts ) .
+ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ui:ivl-example ui:ivl-joins ui:ivl-grid ui:ivl-charts ui:ivl-rest ) .
 ui:doc-iv-landed-items ui:ivl-ticks "Every change is a tick; Runtime.transaction makes several one, consolidated. An event's reaction and its change-log entry are one tick." ;
     ui:ivl-agg "Aggregates over a stream's members, maintained member by member; other shapes recomputed, with the reason (iv:fallback)." ;
     ui:ivl-uses "The Activity tool and count badges, at constant cost per event." ;
@@ -874,13 +874,15 @@ ui:doc-iv-landed-items ui:ivl-ticks "Every change is a tick; Runtime.transaction
     ui:ivl-example "The Warehouse example: stock, a reorder list (HAVING) and best sellers of the last hour (a window and a top five), each tile with what its last change cost against a recount." ;
     ui:ivl-joins "Phase 2: a SPARQL parser; partitions with exact dependencies (joins outside the member, OPTIONAL, EXISTS, MINUS, UNION, VALUES); DISTINCT, HAVING, top-k; parameters, a view per instance, views over views; rows as a result set." ;
     ui:ivl-grid "The data grid's window as three views per grid." ;
-    ui:ivl-charts "Charts, tables, stats and facet counts read maintained views' rows: the dashboard, the activity example, the performance page." .
+    ui:ivl-charts "Charts, tables, stats and facet counts read maintained views' rows: the dashboard, the activity example, the performance page." ;
+    ui:ivl-rest "The rest of phase 2: aggregate subqueries as views inside the view; the performance page's judgements as maintained findings, live during a run; the toast region's newest announcements as a top-k over the change log; MIN and MAX in an ordered tree; parameters retuned in place." .
+ui:ivl-rest rdfs:label "Subqueries and findings" .
 ui:ivl-joins rdfs:label "Joins and order" . ui:ivl-grid rdfs:label "Data grid" . ui:ivl-charts rdfs:label "Charts and tables" .
 ui:ivl-ticks rdfs:label "Ticks" . ui:ivl-agg rdfs:label "Aggregates" . ui:ivl-uses rdfs:label "In use" .
 ui:ivl-window rdfs:label "Windows" . ui:ivl-demand rdfs:label "Demand" . ui:ivl-see rdfs:label "Inspection" . ui:ivl-example rdfs:label "Example" .
 ui:doc-iv-pending-h a c:Heading ; c:level 3 ; c:label "Pending" .
 ui:doc-iv-pending a c:DescriptionList ; c:of ui:doc-iv-pending-items ; c:fields ( ui:ivp-2 ui:ivp-3 ui:ivp-4 ui:ivp-5 ui:ivp-6 ) .
-ui:doc-iv-pending-items ui:ivp-2 "Judgements and the toast region as views; charts' and tables' renderings in SPARQL over the rows; the engine's parser when main has its algebra." ;
+ui:doc-iv-pending-items ui:ivp-2 "Charts' and tables' renderings in SPARQL over the rows (with the SPARQL coverage work); the engine's parser behind the view compiler once main has its algebra." ;
     ui:ivp-3 "Exact dependencies for SPARQL rules from their algebra, in place of sem:follows; rules that are themselves maintained." ;
     ui:ivp-4 "Tumbling and count windows, event time with watermarks, delta logs for replication, \"since\" and undo." ;
     ui:ivp-5 "The rest of SPARQL incrementally: LATERAL, correlated subqueries, paths, GROUP_CONCAT." ;

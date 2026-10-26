@@ -8,6 +8,8 @@
 // back (the union of the old and the new state), so a solution that existed before the change,
 // or exists after it, is found either way. A pattern that cannot reach the key (a setting that
 // gates every row; anything under LIMIT) is global: a change to it re-evaluates the view once.
+// An aggregate subquery maintained as a part of its own (a derived input) contributes no patterns:
+// a change of its rows binds the variables it projects, and probes from there.
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import { termKey } from '../rdf.ts'
 import type { Factory } from '../store/types.ts'
@@ -55,11 +57,14 @@ export class Dependencies {
   private readonly nn = (iri: string) => this.f.namedNode(iri)
   /** What could not be analysed (the view is then recomputed). */
   problem?: string
+  /** Derived subqueries, in the order given: the scope they sit in, and their variables as named there. */
+  private derivedAt: { scope: Scope; vars: Map<string, string> }[] = []
 
   constructor(
     private readonly f: Factory,
     where: Group,
     readonly keys: string[],
+    private readonly derived: readonly Select[] = [],
   ) {
     const root: Scope = { global: false, pats: [], aliases: [] }
     try {
@@ -105,9 +110,27 @@ export class Dependencies {
     if (p.scope.global || this.inGlobal(p.scope)) return 'global'
     const starts = this.bind(p, q, lookup)
     if (starts === 'global') return 'global'
+    return this.keysOf(starts.map((start) => this.walk(p.scope, p, start, lookup)))
+  }
+
+  /**
+   * The partition keys a row of derived subquery `i` (appearing or going) may touch: its
+   * variables bound as the row binds them, joined toward the key through the patterns around it.
+   */
+  probeDerived(i: number, row: ReadonlyMap<string, Term>, lookup: Lookup): (Term | undefined)[][] | 'global' {
+    const d = this.derivedAt[i]!
+    if (this.inGlobal(d.scope)) return 'global'
+    const start = new Map<string, Term>()
+    for (const [inner, outer] of d.vars) {
+      const t = row.get(inner)
+      if (t) start.set(outer, t)
+    }
+    return this.keysOf([this.walk(d.scope, undefined, start, lookup)])
+  }
+
+  private keysOf(walks: (Map<string, Term>[] | 'global')[]): (Term | undefined)[][] | 'global' {
     const out = new Map<string, (Term | undefined)[]>()
-    for (const start of starts) {
-      const rows = this.walk(p, start, lookup)
+    for (const rows of walks) {
       if (rows === 'global') return 'global'
       for (const r of rows) {
         const key = this.keys.map((k) => r.get(k))
@@ -177,14 +200,14 @@ export class Dependencies {
     return [...seen.values()]
   }
 
-  /** From a pattern bound to a triple, join through the patterns it occurs with until the keys are bound. */
-  private walk(p: Pat, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
+  /** From bindings in a scope (a pattern bound to a triple, or a derived row), join through the patterns around them until the keys are bound. */
+  private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
     const bound = new Set(start.keys())
     if (this.keys.every((k) => bound.has(k))) return [start]
     // The patterns (and aliases) that occur with p in a solution: its scope and the scopes around it.
     const pats: Pat[] = []
     const aliases: Alias[] = []
-    for (let s: Scope | undefined = p.scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
+    for (let s: Scope | undefined = scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
     // Breadth-first over variables, from the bound ones to each key.
     type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
     const via = new Map<string, Edge>()
@@ -215,7 +238,19 @@ export class Dependencies {
       for (let w = k; via.has(w); w = via.get(w)!.from) chain.push(via.get(w)!)
       for (const e of chain.reverse()) if (!seen.has(e)) seen.add(e), needed.push(e)
     }
-    let rows = [start]
+    // Patterns that hold in every solution p takes part in (its scope and those around it; not
+    // paths) prune the rows once they bind all of a pattern's variables: a semi-join, so a probe
+    // reaches the partitions that hold the change, not every one its first edge leads to.
+    const checks = pats.filter((x) => !('path' in x.p) && x !== p)
+    const holds = (r: Map<string, Term>) =>
+      checks.every((x) => {
+        const val = (pos: Pos) => ('t' in pos ? pos.t : r.get(pos.v))
+        const s = val(x.s)
+        const pp = val(x.p as Pos)
+        const o = val(x.o)
+        return !s || !pp || !o || lookup(s, pp, o).length > 0
+      })
+    let rows = [start].filter(holds)
     const done = new Set<Pat | Alias>()
     for (const e of needed) {
       const x = (e.pat ?? e.alias)!
@@ -242,7 +277,7 @@ export class Dependencies {
         }
         if (next.length > 50_000) return 'global'
       }
-      rows = dedupe(next)
+      rows = dedupe(next).filter(holds)
     }
     return rows.filter((r) => this.keys.every((k) => r.has(k) || !reached.has(k)))
   }
@@ -382,6 +417,12 @@ export class Dependencies {
     const projected = new Set(projectedVars(q))
     const id = this.fresh++
     const inner = (v: string) => (projected.has(v) ? rename(v) : `${v}#${id}`)
+    const at = this.derived.indexOf(q)
+    if (at >= 0) {
+      // A derived input: its own part follows its patterns; here only its rows matter.
+      this.derivedAt[at] = { scope, vars: new Map([...projected].map((v) => [v, rename(v)])) }
+      return
+    }
     const s = this.child(scope, q.limit !== undefined || q.offset !== undefined)
     // Projected expressions alias their variables.
     for (const p of q.projection) if (p.e) this.alias(p.e, inner(p.v), s, inner)
