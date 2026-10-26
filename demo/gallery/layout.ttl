@@ -14,8 +14,26 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-linked ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-linked ui:ly-tinted ui:ly-linked-card ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
+
+ui:ly-linked-card a c:Flippable ; c:front ui:ly-linked-card-spec .
+ui:ly-linked-card-spec a c:Specimen ; c:demonstrates c:Card ;
+    c:label "Linked card title"@en , "Пов’язана назва картки"@uk , "Verlinkter Kartentitel"@de , "عنوان البطاقة المرتبط"@ar ;
+    c:help "A card title can link to a resource while its actions keep separate destinations."@en ,
+        "Назва картки може вести до ресурсу, а її дії — до інших адрес."@uk ,
+        "Der Kartentitel kann zu einer Ressource führen, während die Aktionen eigene Ziele haben."@de ,
+        "يمكن لعنوان البطاقة الارتباط بمورد، بينما تبقى للإجراءات وجهاتها المستقلة."@ar ;
+    c:children ( ui:ly-linked-card-example ) .
+ui:ly-linked-card-example a c:Card ;
+    c:label "Project notes"@en , "Нотатки проєкту"@uk , "Projektnotizen"@de , "ملاحظات المشروع"@ar ; c:href "#docs" ;
+    c:note "Open the notes from the title, or use the independent action."@en ,
+        "Відкрийте нотатки через назву або скористайтеся окремою дією."@uk ,
+        "Öffnen Sie die Notizen über den Titel oder nutzen Sie die eigene Aktion."@de ,
+        "افتح الملاحظات من العنوان أو استخدم الإجراء المستقل."@ar ;
+    c:actions ( ui:ly-linked-card-action ) .
+ui:ly-linked-card-action a c:Link ; c:href "#components" ;
+    c:label "View components"@en , "Переглянути компоненти"@uk , "Komponenten ansehen"@de , "عرض المكوّنات"@ar .
 
 # --- surfaces and elevation ---
 ui:ly-flat a c:Surface ; sty:elevation sty:Flat ; c:children ( ui:ly-flat-over ui:ly-flat-title ui:ly-flat-text ) .

@@ -751,6 +751,15 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "font-weight" ; sty:raw "650" ] .
 
+[] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header h2 a" ;
+    sty:declares [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header h2 a:hover" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "underline" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header h2 a:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "2px solid var(--sem-ring)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "2px" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header .sem-badge" ;
     sty:declares [ sty:property "font" ; sty:raw "500 11px/1 var(--sem-mono)" ] ,
                  [ sty:property "padding" ; sty:raw "4px 7px" ] ,
