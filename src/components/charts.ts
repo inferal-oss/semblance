@@ -3,7 +3,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { labelOf, rdfList } from './views.ts'
-import { text } from './util.ts'
+import { labelOf as localizedLabelOf, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
 const str = (t: Term | undefined) => t?.value
@@ -217,6 +217,149 @@ const linechart: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- dated rows (Gantt) -----------------------------------------------------------------------
+
+/** ISO dates are days in UTC; invalid calendar dates do not enter the chart. */
+const day = (value: string | undefined): number | undefined => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.slice(0, 10))) return undefined
+  const iso = value.slice(0, 10)
+  const d = Date.parse(`${iso}T00:00:00Z`)
+  return Number.isFinite(d) && new Date(d).toISOString().slice(0, 10) === iso ? d / 86_400_000 : undefined
+}
+const isoDay = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10)
+const safeHref = (value: string | undefined) => value && (/^https?:\/\//.test(value) || /^\/(?!\/)/.test(value)) ? value : undefined
+type GanttRow = {
+  id: string; label: string; start?: number; end?: number; baseStart?: number; baseEnd?: number
+  uncertainty?: number; milestone: boolean; tone: string; href?: string; dependsOn: Set<string>
+}
+
+const ganttchart: FnRule = (ctx, focus) => {
+  const data = rows(ctx, focus)
+  if (typeof data === 'string') return message(ctx, focus, data)
+  if (!data.length) return message(ctx, focus, text(ctx, focus, C.emptyText) ?? localizedLabelOf(ctx, ctx.nn(NS.c + 'GanttNoRows')))
+  const variable = (property: string, fallback: string) => str(ctx.object(focus, property)) ?? fallback
+  const v = {
+    task: variable(C.taskVariable, 'task'), label: variable(C.labelVariable, 'label'),
+    start: variable(C.startVariable, 'start'), end: variable(C.endVariable, 'end'),
+    baseStart: variable(C.baselineStartVariable, 'baselineStart'), baseEnd: variable(C.baselineEndVariable, 'baselineEnd'),
+    uncertainty: variable(C.uncertaintyVariable, 'uncertainty'), dependency: variable(C.dependencyVariable, 'dependsOn'),
+    milestone: variable(C.milestoneVariable, 'milestone'), tone: variable(C.toneVariable, 'tone'), href: variable(C.hrefVariable, 'href'),
+  }
+  const tasks = new Map<string, GanttRow>()
+  for (const r of data) {
+    const id = str(r.get(v.task)) ?? str(r.get(v.label))
+    if (!id) continue
+    const dependency = str(r.get(v.dependency))
+    const existing = tasks.get(id)
+    if (existing) { if (dependency) existing.dependsOn.add(dependency); continue }
+    const tone = (str(r.get(v.tone)) ?? 'accent').replace(/^.*[#/]/, '').toLowerCase()
+    const task: GanttRow = {
+      id, label: str(r.get(v.label)) ?? id, start: day(str(r.get(v.start))), end: day(str(r.get(v.end))),
+      baseStart: day(str(r.get(v.baseStart))), baseEnd: day(str(r.get(v.baseEnd))),
+      uncertainty: day(str(r.get(v.uncertainty))), milestone: ['true', '1'].includes(str(r.get(v.milestone)) ?? ''),
+      tone: ['accent', 'neutral', 'info', 'success', 'warning', 'danger'].includes(tone) ? tone : 'accent',
+      href: safeHref(str(r.get(v.href))), dependsOn: new Set(dependency ? [dependency] : []),
+    }
+    tasks.set(id, task)
+  }
+  const dated = [...tasks.values()].flatMap((t) => [t.start, t.end, t.baseStart, t.baseEnd, t.uncertainty].filter((n): n is number => n !== undefined))
+  if (!dated.length) return message(ctx, focus, text(ctx, focus, C.emptyText) ?? localizedLabelOf(ctx, ctx.nn(NS.c + 'GanttNoRows')))
+  let first = Number.POSITIVE_INFINITY, last = Number.NEGATIVE_INFINITY
+  for (const d of dated) { first = Math.min(first, d); last = Math.max(last, d) }
+  first -= 2
+  last += 2
+  if (last - first > 3657) return message(ctx, focus, localizedLabelOf(ctx, ctx.nn(NS.c + 'GanttRangeTooWide')))
+  const tick = Math.max(2, Math.min(18, 10_000 / (last - first + 1)))
+  const left = 150, header = 44, rowHeight = 30
+  const width = Math.ceil(left + (last - first + 1) * tick)
+  const height = header + Math.max(tasks.size, 1) * rowHeight + 12
+  const x = (d: number) => left + (d - first) * tick
+  const o = ctx.out(focus)
+  const phrase = (name: string) => localizedLabelOf(ctx, ctx.nn(NS.c + name))
+  ctx.readsLanguage()
+  const locale = ctx.languages.find((language) => ['en', 'uk', 'de', 'ar'].includes(language)) ?? 'en'
+  const monthFormat = new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric', timeZone: 'UTC' })
+  const plotted: NamedNode[] = []
+  const arrowId = `sem-gantt-arrow-${key(focus.value)}`
+  plotted.push(o.svg('defs', 'Defs', {}, [o.svg('arrow-marker', 'Marker', { id: arrowId, viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: 'auto' }, [o.svg('arrow-head', 'Path', { d: 'M0 0 8 4 0 8z', class: 'sem-gantt-arrowhead' })])]))
+  const all = [...tasks.values()]
+  const positions = new Map<string, { x: number; y: number; w: number }>()
+  for (let d = first; d <= last; d++) {
+    const date = new Date(d * 86_400_000)
+    if (date.getUTCDate() === 1 || d === first) {
+      plotted.push(o.svg(`month-line-${d}`, 'Line', { x1: x(d), x2: x(d), y1: 0, y2: height, class: 'sem-gantt-month-line' }))
+      plotted.push(o.svg(`month-${d}`, 'Text', { x: x(d) + 4, y: 18, class: 'sem-gantt-month' }, [o.text(`month-text-${d}`, monthFormat.format(date))]))
+    } else if (date.getUTCDay() === 1 && tick >= 10) plotted.push(o.svg(`week-${d}`, 'Line', { x1: x(d), x2: x(d), y1: 26, y2: height, class: 'sem-gantt-week' }))
+  }
+  all.forEach((t, i) => {
+    const k = key(t.id), y = header + i * rowHeight
+    plotted.push(o.svg(`lane-${k}`, 'Rect', { x: 0, y, width, height: rowHeight, class: i % 2 ? 'sem-gantt-lane sem-gantt-lane-alt' : 'sem-gantt-lane' }))
+    const label = o.svg(`label-${k}`, 'Text', { x: 10, y: y + 20, class: 'sem-gantt-label' }, [o.text(`label-text-${k}`, t.label.length > 21 ? t.label.slice(0, 20) + '…' : t.label)])
+    o.tip(label, t.label)
+    plotted.push(t.href ? o.svg(`label-link-${k}`, 'A', { href: t.href }, [label]) : label)
+    if (t.start === undefined) return
+    if (t.milestone) {
+      const cx = x(t.start) + tick / 2
+      const diamond = o.svg(`milestone-${k}`, 'Path', { d: `M${cx} ${y + 8}l7 7-7 7-7-7z`, class: `sem-gantt-milestone sem-gantt-tone-${t.tone}` })
+      o.tip(diamond, `${t.label}: ${isoDay(t.start)}`)
+      plotted.push(t.href ? o.svg(`milestone-link-${k}`, 'A', { href: t.href }, [diamond]) : diamond)
+      positions.set(t.id, { x: cx, y: y + 15, w: 0 })
+      return
+    }
+    const end = Math.max(t.end ?? t.start, t.start)
+    const barX = x(t.start), barW = (end - t.start + 1) * tick
+    if (t.baseStart !== undefined || t.baseEnd !== undefined) {
+      const bs = t.baseStart ?? t.baseEnd!, be = Math.max(t.baseEnd ?? bs, bs)
+      plotted.push(o.svg(`baseline-${k}`, 'Rect', { x: x(bs), y: y + 4, width: (be - bs + 1) * tick, height: 22, rx: 4, class: 'sem-gantt-baseline' }))
+    }
+    const bar = o.svg(`bar-${k}`, 'Rect', { x: barX, y: y + 9, width: barW, height: 13, rx: 4, class: `sem-gantt-bar sem-gantt-tone-${t.tone}` })
+    o.tip(bar, `${t.label}: ${isoDay(t.start)} – ${isoDay(end)}`)
+    plotted.push(t.href ? o.svg(`bar-link-${k}`, 'A', { href: t.href }, [bar]) : bar)
+    if (t.uncertainty !== undefined && t.uncertainty > end) {
+      const tipX = x(t.uncertainty) + tick
+      const uncertainty = o.svg(`uncertainty-${k}`, 'Line', { x1: barX + barW, x2: tipX, y1: y + 15, y2: y + 15, class: 'sem-gantt-uncertainty' })
+      o.tip(uncertainty, `${t.label}: ${isoDay(t.uncertainty)}`)
+      plotted.push(uncertainty)
+      plotted.push(o.svg(`uncertainty-cap-${k}`, 'Line', { x1: tipX, x2: tipX, y1: y + 9, y2: y + 21, class: 'sem-gantt-uncertainty' }))
+    }
+    positions.set(t.id, { x: barX, y: y + 15, w: barW })
+  })
+  all.forEach((t) => t.dependsOn.forEach((id) => {
+    const from = positions.get(id), to = positions.get(t.id)
+    if (!from || !to) return
+    const bend = Math.max(from.x + from.w + 8, to.x - 9)
+    plotted.push(o.svg(`dependency-${key(id)}-${key(t.id)}`, 'Path', { d: `M${from.x + from.w} ${from.y}H${bend}V${to.y}H${to.x - 3}`, class: 'sem-gantt-dependency', 'marker-end': `url(#${arrowId})` }))
+  }))
+  const today = Math.floor(Date.now() / 86_400_000)
+  if (today >= first && today <= last) {
+    plotted.push(o.svg('today', 'Line', { x1: x(today) + tick / 2, x2: x(today) + tick / 2, y1: 26, y2: height, class: 'sem-gantt-today' }))
+    plotted.push(o.svg('today-label', 'Text', { x: x(today) + tick / 2 + 3, y: 38, class: 'sem-gantt-today-label' }, [o.text('today-text', phrase('GanttToday'))]))
+  }
+  const svg = o.svg('plot', 'Svg', { width, height, viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': labelOf(ctx, focus) }, plotted)
+  const scroll = o.el('scroll', 'Div', { class: 'sem-gantt-scroll', tabindex: '0', role: 'region', 'aria-label': labelOf(ctx, focus) }, [svg])
+  const heading = o.el('table-head', 'Tr', {}, ['GanttTask', 'GanttStart', 'GanttEnd', 'GanttBaseline', 'GanttDetails'].map((name) => o.el(`th-${name}`, 'Th', { scope: 'col' }, [o.text(`th-${name}-text`, phrase(name))])))
+  const body = o.el('table-body', 'Tbody', {}, all.map((t, i) => {
+    const k = `table-${i}`
+    const task = t.href ? o.el(`${k}-link`, 'A', { href: t.href }, [o.text(`${k}-link-text`, t.label)]) : o.text(`${k}-label`, t.label)
+    const notes = [
+      t.milestone ? phrase('GanttMilestone') : undefined,
+      t.uncertainty === undefined ? undefined : `${phrase('GanttUncertainty')}: ${isoDay(t.uncertainty)}`,
+      ...[...t.dependsOn].map((id) => `${phrase('GanttAfter')} ${tasks.get(id)?.label ?? id}`),
+    ].filter((note): note is string => note !== undefined)
+    return o.el(k, 'Tr', {}, [
+      o.el(`${k}-name`, 'Th', { scope: 'row' }, [task]),
+      o.el(`${k}-start`, 'Td', {}, [o.text(`${k}-start-text`, t.start === undefined ? phrase('GanttUnscheduled') : isoDay(t.start))]),
+      o.el(`${k}-end`, 'Td', {}, [o.text(`${k}-end-text`, t.end === undefined ? '' : isoDay(t.end))]),
+      o.el(`${k}-baseline`, 'Td', {}, [o.text(`${k}-baseline-text`, t.baseStart === undefined && t.baseEnd === undefined ? '' : `${t.baseStart === undefined ? '' : isoDay(t.baseStart)} – ${t.baseEnd === undefined ? '' : isoDay(t.baseEnd)}`)]),
+      o.el(`${k}-details`, 'Td', {}, [o.text(`${k}-details-text`, notes.join(' · '))]),
+    ])
+  }))
+  const table = o.el('table', 'Table', {}, [o.el('table-header', 'Thead', {}, [heading]), body])
+  const details = o.el('details', 'Details', {}, [o.el('summary', 'Summary', {}, [o.text('summary-text', phrase('GanttAsTable'))]), table])
+  o.renders(o.el('root', 'Figure', {}, [scroll, details]))
+  return o.quads
+}
+
 // --- findings ----------------------------------------------------------------------------------
 
 const PERF = 'https://semblance.dev/ns/perf#'
@@ -268,4 +411,4 @@ const findings: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const chartFunctions: Record<string, FnRule> = { barchart, heatmap, linechart, findings }
+export const chartFunctions: Record<string, FnRule> = { barchart, heatmap, linechart, ganttchart, findings }

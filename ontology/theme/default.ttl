@@ -1215,6 +1215,52 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # --- charts ------------------------------------------------------------------------------------------------
 
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] , [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-scroll" ;
+    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] , [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "svg" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] , [ sty:property "max-width" ; sty:raw "none" ] ,
+                 [ sty:property "font" ; sty:raw "12px var(--sem-font)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-lane" ; sty:declares [ sty:property "fill" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-lane-alt" ;
+    sty:declares [ sty:property "fill" ; sty:token tok:surface-sunken ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-week, .sem-gantt-month-line" ;
+    sty:declares [ sty:property "stroke" ; sty:token tok:border ] , [ sty:property "stroke-width" ; sty:raw "1" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-month, .sem-gantt-label" ;
+    sty:declares [ sty:property "fill" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-month" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-bar, .sem-gantt-milestone" ;
+    sty:declares [ sty:property "fill" ; sty:token tok:accent ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-neutral" ; sty:declares [ sty:property "fill" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-info" ; sty:declares [ sty:property "fill" ; sty:token tok:info-9 ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-success" ; sty:declares [ sty:property "fill" ; sty:token tok:success-9 ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-warning" ; sty:declares [ sty:property "fill" ; sty:token tok:warning-9 ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-danger" ; sty:declares [ sty:property "fill" ; sty:token tok:danger-9 ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-baseline" ;
+    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke" ; sty:token tok:muted ] ,
+                 [ sty:property "stroke-dasharray" ; sty:raw "3 2" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-uncertainty, .sem-gantt-dependency" ;
+    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke" ; sty:token tok:muted ] ,
+                 [ sty:property "stroke-width" ; sty:raw "1.25" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-arrowhead" ; sty:declares [ sty:property "fill" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-today" ;
+    sty:declares [ sty:property "stroke" ; sty:token tok:flag ] , [ sty:property "stroke-width" ; sty:raw "1.5" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-today-label" ; sty:declares [ sty:property "fill" ; sty:token tok:flag ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "details" ;
+    sty:declares [ sty:property "margin-top" ; sty:token tok:space-2 ] , [ sty:property "overflow-x" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "table" ;
+    sty:declares [ sty:property "border-collapse" ; sty:raw "collapse" ] , [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "min-width" ; sty:raw "760px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "th, td" ;
+    sty:declares [ sty:property "padding" ; sty:token tok:space-2 ] , [ sty:property "border-bottom" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "tr > :nth-child(-n+4)" ;
+    sty:declares [ sty:property "white-space" ; sty:raw "nowrap" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:Chart ;
     sty:declares [ sty:property "font-family" ; sty:token tok:font ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
