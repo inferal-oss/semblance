@@ -99,7 +99,7 @@ WHERE {
   { SELECT ?c ?n ?budget (MAX(?t) AS ?worst) (SUM(IF(?t > ?budget, 1, 0)) AS ?over) (COUNT(?o) AS ?all)
     WHERE { perf:Budget perf:frameBudgetMs ?budget . ?o perf:configuration ?c ; perf:items ?n ; perf:scenario ?s ; perf:totalMs ?t . ?s a perf:Update }
     GROUP BY ?c ?n ?budget }
-  ?c rdfs:label ?label .
+  ?c rdfs:label ?label FILTER(NOT EXISTS { ?l10nAt l10n:of ?c ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?c ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?label)) }) .
   ?wo perf:configuration ?c ; perf:items ?n ; perf:totalMs ?worst ; perf:scenario/rdfs:label ?worstScenario .
   ?wo perf:scenario/a perf:Update .
   BIND(IF(?over > 0, perf:Concern, perf:Good) AS ?verdict)
@@ -170,7 +170,7 @@ WHERE {
   FILTER(?large > ?small)
   ?a perf:configuration ?c ; perf:scenario perf:InitialRender ; perf:items ?small ; perf:totalMs ?t1 .
   ?b perf:configuration ?c ; perf:scenario perf:InitialRender ; perf:items ?large ; perf:totalMs ?t2 .
-  ?c rdfs:label ?label .
+  ?c rdfs:label ?label FILTER(NOT EXISTS { ?l10nAt l10n:of ?c ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?c ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?label)) }) .
   BIND((?t2 / ?t1) / (?large / ?small) AS ?perItem)
   BIND(IF(?perItem > 1.5, perf:Concern, perf:Good) AS ?verdict)
   BIND(IRI(CONCAT(STR(perf:), "finding-scaling-", ENCODE_FOR_URI(STR(?c)))) AS ?f)

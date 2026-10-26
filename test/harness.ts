@@ -32,6 +32,13 @@ export function mountShell(todos = 5, kind: StoreKind = 'oxigraph', prefer: 'spa
   return mount(workbench(sources(loadStore(kind, todoApp(todos), appGraph, ...gallery))), prefer, clock)
 }
 
+/** As mountShell, with the loaded graph changed by `prepare` before anything is projected. */
+export function mountShellPrepared(prepare: (store: GraphStore) => void, prefer: 'sparql' | 'function' = 'sparql', kind: StoreKind = 'oxigraph') {
+  const store = workbench(sources(loadStore(kind, todoApp(5), appGraph, ...gallery)))
+  prepare(store)
+  return mount(store, prefer)
+}
+
 /** The site as a visitor first sees it: the landing page, tools closed (with `extra` Turtle loaded too). */
 export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql', clock?: Clock, extra: string[] = []) {
   return mount(sources(loadStore(kind, todoApp(5), appGraph, ...gallery, ...extra)), prefer, clock)

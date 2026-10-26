@@ -287,11 +287,11 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
   BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
   OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
-  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of $this ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:title ?l10nPick }) }
   BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
   OPTIONAL { $this l10n:label ?pickl }
   OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
-  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) { $this l10n:label ?anyl } UNION { ?l10nAt_anyl l10n:of $this ; l10n:label ?anyl } } OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
   BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -311,7 +311,7 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?phraseNode ?phrase WHERE {
   
   OPTIONAL { ?pickpAt l10n:of ?phraseNode ; l10n:name ?pickp }
-  OPTIONAL { FILTER(!BOUND(?pickp)) ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  OPTIONAL { FILTER(!BOUND(?pickp)) ?l10nAt_anyp l10n:of ?phraseNode ; l10n:name ?anyp } OPTIONAL { FILTER(!BOUND(?pickp)) ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?phraseNode ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
   } } }
   }
@@ -404,11 +404,11 @@ WHERE {
     VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
   BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
   OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
-  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of $this ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:title ?l10nPick }) }
   BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
   OPTIONAL { $this l10n:label ?pickl }
   OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
-  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) { $this l10n:label ?anyl } UNION { ?l10nAt_anyl l10n:of $this ; l10n:label ?anyl } } OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
   BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
   OPTIONAL { $this c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
@@ -471,11 +471,11 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
   BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
   OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
-  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of $this ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:title ?l10nPick }) }
   BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
   OPTIONAL { $this l10n:label ?pickl }
   OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
-  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) { $this l10n:label ?anyl } UNION { ?l10nAt_anyl l10n:of $this ; l10n:label ?anyl } } OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
   BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -495,7 +495,7 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?phraseNode ?phrase WHERE {
   
   OPTIONAL { ?pickpAt l10n:of ?phraseNode ; l10n:name ?pickp }
-  OPTIONAL { FILTER(!BOUND(?pickp)) ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  OPTIONAL { FILTER(!BOUND(?pickp)) ?l10nAt_anyp l10n:of ?phraseNode ; l10n:name ?anyp } OPTIONAL { FILTER(!BOUND(?pickp)) ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?phraseNode ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
   } } }
   }
@@ -587,11 +587,11 @@ WHERE {
     VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
   BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
   OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
-  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of $this ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:title ?l10nPick }) }
   BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
   OPTIONAL { $this l10n:label ?pickl }
   OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
-  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) { $this l10n:label ?anyl } UNION { ?l10nAt_anyl l10n:of $this ; l10n:label ?anyl } } OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
   BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
   OPTIONAL { $this c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
@@ -966,10 +966,10 @@ WHERE {
   $this a c:Taskbar .
   OPTIONAL { $this l10n:label ?picko }
   OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) { $this l10n:label ?anyo } UNION { ?l10nAt_anyo l10n:of $this ; l10n:label ?anyo } } OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
   OPTIONAL { ?pickpAt l10n:of c:WindowsRegion ; l10n:name ?pickp }
-  OPTIONAL { FILTER(!BOUND(?pickp)) c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  OPTIONAL { FILTER(!BOUND(?pickp)) ?l10nAt_anyp l10n:of c:WindowsRegion ; l10n:name ?anyp } OPTIONAL { FILTER(!BOUND(?pickp)) c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) FILTER(NOT EXISTS { ?l10nAt l10n:of c:WindowsRegion ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
   BIND(COALESCE(?ownLabel, ?phrase, "Windows") AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -993,10 +993,10 @@ WHERE {
   BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-aria-label")), ?none) AS ?gripLabel)
   BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-aria-keyshortcuts")), ?none) AS ?gripKeys)
   OPTIONAL { ?pickmAt l10n:of c:MoveHandle ; l10n:name ?pickm }
-  OPTIONAL { FILTER(!BOUND(?pickm)) c:MoveHandle rdfs:label ?anym FILTER(isLiteral(?anym)) }
+  OPTIONAL { FILTER(!BOUND(?pickm)) ?l10nAt_anym l10n:of c:MoveHandle ; l10n:name ?anym } OPTIONAL { FILTER(!BOUND(?pickm)) c:MoveHandle rdfs:label ?anym FILTER(isLiteral(?anym)) FILTER(NOT EXISTS { ?l10nAt l10n:of c:MoveHandle ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickm, ?anym)) AS ?movePhrase)
   OPTIONAL { ?pickhAt l10n:of c:MoveHint ; l10n:name ?pickh }
-  OPTIONAL { FILTER(!BOUND(?pickh)) c:MoveHint rdfs:label ?anyh FILTER(isLiteral(?anyh)) }
+  OPTIONAL { FILTER(!BOUND(?pickh)) ?l10nAt_anyh l10n:of c:MoveHint ; l10n:name ?anyh } OPTIONAL { FILTER(!BOUND(?pickh)) c:MoveHint rdfs:label ?anyh FILTER(isLiteral(?anyh)) FILTER(NOT EXISTS { ?l10nAt l10n:of c:MoveHint ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickh, ?anyh)) AS ?hintPhrase)
   BIND(CONCAT(COALESCE(?movePhrase, "Move"), " ", ?label) AS ?moveLabel)
   BIND(COALESCE(?hintPhrase, "Drag, or use the arrow keys; at an edge it docks") AS ?moveHint)
@@ -1024,20 +1024,20 @@ WHERE {
       LATERAL { OPTIONAL { SELECT ?w ?wTitle WHERE {
   
   OPTIONAL { ?picktAt l10n:of ?w ; l10n:title ?pickt }
-  OPTIONAL { FILTER(!BOUND(?pickt)) ?w c:title ?anyt FILTER(isLiteral(?anyt)) }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of ?w ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) ?w c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?w ; l10n:title ?l10nPick }) }
   BIND(STR(COALESCE(?pickt, ?anyt)) AS ?wTitle)
   } } }
       LATERAL { OPTIONAL { SELECT ?w ?wLabel WHERE {
   
   OPTIONAL { ?w l10n:label ?pickl }
   OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of ?w ; l10n:label ?picklT }
-  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) ?w c:label ?anyl FILTER(isLiteral(?anyl)) }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) { ?w l10n:label ?anyl } UNION { ?l10nAt_anyl l10n:of ?w ; l10n:label ?anyl } } OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) ?w c:label ?anyl FILTER(isLiteral(?anyl)) FILTER(NOT EXISTS { ?w l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?w ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?wLabel)
   } } }
       BIND(COALESCE(?wTitle, ?wLabel, "Window") AS ?title)
       BIND(EXISTS { ?desktop c:topmost ?w } && !?minimized AS ?active)
       OPTIONAL { ?w c:windowState ?state . ?picksAt l10n:of ?state ; l10n:name ?picks }
-  OPTIONAL { FILTER(!BOUND(?picks)) ?w c:windowState ?state . ?state rdfs:label ?anys FILTER(isLiteral(?anys)) }
+  OPTIONAL { FILTER(!BOUND(?picks)) ?w c:windowState ?state . ?state rdfs:label ?anys FILTER(NOT EXISTS { ?l10nAt l10n:of ?state ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?state ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?anys)) }) FILTER(isLiteral(?anys)) }
   BIND(STR(COALESCE(?picks, ?anys)) AS ?stateName)
       BIND(IF(BOUND(?state), COALESCE(?stateName, ?slug), ?none) AS ?stateLabel)
       BIND(IF(BOUND(?stateLabel), CONCAT(?title, " \u00B7 ", ?stateLabel), ?none) AS ?tip)
@@ -1068,10 +1068,10 @@ WHERE {
   $this a c:Taskbar .
   OPTIONAL { $this l10n:label ?picko }
   OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) { $this l10n:label ?anyo } UNION { ?l10nAt_anyo l10n:of $this ; l10n:label ?anyo } } OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
   OPTIONAL { ?pickpAt l10n:of c:WindowsRegion ; l10n:name ?pickp }
-  OPTIONAL { FILTER(!BOUND(?pickp)) c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  OPTIONAL { FILTER(!BOUND(?pickp)) ?l10nAt_anyp l10n:of c:WindowsRegion ; l10n:name ?anyp } OPTIONAL { FILTER(!BOUND(?pickp)) c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) FILTER(NOT EXISTS { ?l10nAt l10n:of c:WindowsRegion ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
   BIND(COALESCE(?ownLabel, ?phrase, "Windows") AS ?label)
   OPTIONAL {
@@ -1093,14 +1093,14 @@ WHERE {
       LATERAL { OPTIONAL { SELECT ?w ?wTitle WHERE {
   
   OPTIONAL { ?picktAt l10n:of ?w ; l10n:title ?pickt }
-  OPTIONAL { FILTER(!BOUND(?pickt)) ?w c:title ?anyt FILTER(isLiteral(?anyt)) }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?l10nAt_anyt l10n:of ?w ; l10n:title ?anyt } OPTIONAL { FILTER(!BOUND(?pickt)) ?w c:title ?anyt FILTER(isLiteral(?anyt)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?w ; l10n:title ?l10nPick }) }
   BIND(STR(COALESCE(?pickt, ?anyt)) AS ?wTitle)
   } } }
       LATERAL { OPTIONAL { SELECT ?w ?wLabel WHERE {
   
   OPTIONAL { ?w l10n:label ?pickl }
   OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of ?w ; l10n:label ?picklT }
-  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) ?w c:label ?anyl FILTER(isLiteral(?anyl)) }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) { ?w l10n:label ?anyl } UNION { ?l10nAt_anyl l10n:of ?w ; l10n:label ?anyl } } OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) ?w c:label ?anyl FILTER(isLiteral(?anyl)) FILTER(NOT EXISTS { ?w l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?w ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?wLabel)
   } } }
       BIND(COALESCE(?wTitle, ?wLabel, "Window") AS ?title)

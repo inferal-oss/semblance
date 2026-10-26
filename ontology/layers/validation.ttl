@@ -93,7 +93,7 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?shape ?messagep WHERE {
   
   OPTIONAL { ?pickmsgpAt l10n:of ?shape ; l10n:message ?pickmsgp }
-  OPTIONAL { FILTER(!BOUND(?pickmsgp)) ?shape sh:message ?anymsgp FILTER(isLiteral(?anymsgp)) }
+  OPTIONAL { FILTER(!BOUND(?pickmsgp)) ?l10nAt_anymsgp l10n:of ?shape ; l10n:message ?anymsgp } OPTIONAL { FILTER(!BOUND(?pickmsgp)) ?shape sh:message ?anymsgp FILTER(isLiteral(?anymsgp)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
   BIND(STR(COALESCE(?pickmsgp, ?anymsgp)) AS ?messagep)
   } } }
     BIND(xsd:double(REPLACE(?value, "^\\\\s+|\\\\s+$", "")) AS ?xp)
@@ -124,7 +124,7 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?shape ?overMessage WHERE {
   
   OPTIONAL { ?pickomAt l10n:of ?shape ; l10n:message ?pickom }
-  OPTIONAL { FILTER(!BOUND(?pickom)) ?shape sh:message ?anyom FILTER(isLiteral(?anyom)) }
+  OPTIONAL { FILTER(!BOUND(?pickom)) ?l10nAt_anyom l10n:of ?shape ; l10n:message ?anyom } OPTIONAL { FILTER(!BOUND(?pickom)) ?shape sh:message ?anyom FILTER(isLiteral(?anyom)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
   BIND(STR(COALESCE(?pickom, ?anyom)) AS ?overMessage)
   } } }
     BIND(COALESCE(?overMessage, CONCAT("At most ", STR(?over), ".")) AS ?tooMany)
@@ -135,7 +135,7 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?shape ?capMessage WHERE {
   
   OPTIONAL { ?pickcmAt l10n:of ?shape ; l10n:message ?pickcm }
-  OPTIONAL { FILTER(!BOUND(?pickcm)) ?shape sh:message ?anycm FILTER(isLiteral(?anycm)) }
+  OPTIONAL { FILTER(!BOUND(?pickcm)) ?l10nAt_anycm l10n:of ?shape ; l10n:message ?anycm } OPTIONAL { FILTER(!BOUND(?pickcm)) ?shape sh:message ?anycm FILTER(isLiteral(?anycm)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
   BIND(STR(COALESCE(?pickcm, ?anycm)) AS ?capMessage)
   } } }
     BIND(COALESCE(?capMessage, CONCAT("At most ", STR(?cap), ".")) AS ?atCapacity)
@@ -155,7 +155,7 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?shape ?messagee WHERE {
   
   OPTIONAL { ?pickmsgeAt l10n:of ?shape ; l10n:message ?pickmsge }
-  OPTIONAL { FILTER(!BOUND(?pickmsge)) ?shape sh:message ?anymsge FILTER(isLiteral(?anymsge)) }
+  OPTIONAL { FILTER(!BOUND(?pickmsge)) ?l10nAt_anymsge l10n:of ?shape ; l10n:message ?anymsge } OPTIONAL { FILTER(!BOUND(?pickmsge)) ?shape sh:message ?anymsge FILTER(isLiteral(?anymsge)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
   BIND(STR(COALESCE(?pickmsge, ?anymsge)) AS ?messagee)
   } } }
     BIND(xsd:double(REPLACE(?typed, "^\\\\s+|\\\\s+$", "")) AS ?xe)
@@ -252,7 +252,7 @@ WHERE {
   BIND(BOUND(?kind) && ((?kind = "date" && BOUND(?badDate)) || (?kind = "time" && BOUND(?badTime))) AS ?unreadable)
   BIND(IF(?kind = "date", c:InvalidDatePhrase, c:InvalidTimePhrase) AS ?unreadablePhrase)
   OPTIONAL { FILTER(?unreadable) ?pickurAt l10n:of ?unreadablePhrase ; l10n:name ?pickur }
-  OPTIONAL { FILTER(?unreadable && !BOUND(?pickur)) ?unreadablePhrase rdfs:label ?anyur FILTER(isLiteral(?anyur)) }
+  OPTIONAL { FILTER(?unreadable && !BOUND(?pickur)) ?l10nAt_anyur l10n:of ?unreadablePhrase ; l10n:name ?anyur } OPTIONAL { FILTER(?unreadable && !BOUND(?pickur)) ?unreadablePhrase rdfs:label ?anyur FILTER(isLiteral(?anyur)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?unreadablePhrase ; l10n:name ?l10nPick }) }
   BIND(IF(?kind = "date", l10n:dateHint, l10n:timeHint) AS ?hintP)
   OPTIONAL { FILTER(?unreadable) $this ?hintP ?hint0 }
   BIND(STR(COALESCE(?pickur, ?anyur, "Not a valid {}.")) AS ?unreadableText)
@@ -268,7 +268,7 @@ WHERE {
     OPTIONAL { ?shape sh:lessThanOrEquals ?before FILTER(isIRI(?before)) }
     LATERAL { OPTIONAL { SELECT ?shape ?messageb WHERE {
   OPTIONAL { ?pickmsgbAt l10n:of ?shape ; l10n:message ?pickmsgb }
-  OPTIONAL { FILTER(!BOUND(?pickmsgb)) ?shape sh:message ?anymsgb FILTER(isLiteral(?anymsgb)) }
+  OPTIONAL { FILTER(!BOUND(?pickmsgb)) ?l10nAt_anymsgb l10n:of ?shape ; l10n:message ?anymsgb } OPTIONAL { FILTER(!BOUND(?pickmsgb)) ?shape sh:message ?anymsgb FILTER(isLiteral(?anymsgb)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
   BIND(STR(COALESCE(?pickmsgb, ?anymsgb)) AS ?messageb)
   } } }
     BIND(IF(BOUND(?minb) && STR(?held) < STR(?minb), COALESCE(?messageb, CONCAT("At least ", STR(?minb), ".")),

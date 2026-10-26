@@ -6,7 +6,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { C, H, L10N, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
-import { isTrue, named, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, named, RDFS_LABEL, str, text, picked } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const l10n = (local: string) => NS.l10n + local
@@ -240,8 +240,8 @@ function phrase(ctx: RuleContext, owner: Term, local: string): string | undefine
 /** What a field is called: c:label in the viewer's language, else its property's label, else the property's local name. */
 function captionOf(ctx: RuleContext, focus: Term, property: Term): string {
   const local = str(ctx.object(focus, L10N.label))
-  const own = ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value
-  const prop = ctx.objects(property, RDFS_LABEL).find((t) => t.termType === 'Literal' && t.language === '')?.value
+  const own = (picked(ctx, focus, C.label) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value)
+  const prop = (picked(ctx, property, RDFS_LABEL) ?? ctx.objects(property, RDFS_LABEL).find((t) => t.termType === 'Literal' && t.language === '')?.value)
   return local ?? own ?? prop ?? localName(property)
 }
 
@@ -274,7 +274,7 @@ function formatTime(h: number, mi: number, k: Clock): string {
 
 /** Help and error, and the ids that describe the inputs. */
 function foot(ctx: RuleContext, o: Out, focus: NamedNode) {
-  const helpData = plain(ctx, focus, C.help)
+  const helpData = text(ctx, focus, C.help)
   const errorData = plain(ctx, focus, C.error)
   const help = helpData !== undefined ? o.el('help', 'Div', { class: 'sem-help', id: o.node('help').value }, [o.text('help-text', helpData)]) : undefined
   const error = errorData !== undefined ? o.el('error', 'Div', { class: 'sem-error', id: o.node('error').value, role: 'alert' }, [o.text('error-text', errorData)]) : undefined
@@ -486,7 +486,7 @@ const dateField: FnRule = (ctx, focus) => {
   if (ctx.modality === NS.mod + 'Text') {
     const lineData = `${caption}: [${shown}_]${f.ranged ? ` – [${endShown}_]` : ''} ▦`
     const line = o.el('line', 'Div', {}, [o.text('line-text', lineData)])
-    const helpData = plain(ctx, focus, C.help)
+    const helpData = text(ctx, focus, C.help)
     const errorData = plain(ctx, focus, C.error)
     const help = helpData !== undefined ? o.el('help', 'Div', {}, [o.text('help-text', '  ' + helpData)]) : undefined
     const error = errorData !== undefined ? o.el('error', 'Div', {}, [o.text('error-text', '  ! ' + errorData)]) : undefined
@@ -499,7 +499,7 @@ const dateField: FnRule = (ctx, focus) => {
   }
   const disabled = isTrue(ctx.object(focus, C.disabled))
   const open = !disabled && isTrue(ctx.object(focus, c('expanded')))
-  const placeholder = plain(ctx, focus, C.placeholder) ?? plain(ctx, focus, l10n('dateHint')) ?? 'yyyy-mm-dd'
+  const placeholder = text(ctx, focus, C.placeholder) ?? plain(ctx, focus, l10n('dateHint')) ?? 'yyyy-mm-dd'
   const choose = phrase(ctx, focus, 'ChooseDatePhrase')
   const { help, error, described, invalid } = foot(ctx, o, focus)
   const inputId = o.node('input').value
@@ -575,7 +575,7 @@ const timeField: FnRule = (ctx, focus) => {
   const shown = plain(ctx, focus, C.value) ?? formatted ?? ''
   if (ctx.modality === NS.mod + 'Text') {
     const line = o.el('line', 'Div', {}, [o.text('line-text', `${caption}: [${shown}_] ◷`)])
-    const helpData = plain(ctx, focus, C.help)
+    const helpData = text(ctx, focus, C.help)
     const errorData = plain(ctx, focus, C.error)
     const help = helpData !== undefined ? o.el('help', 'Div', {}, [o.text('help-text', '  ' + helpData)]) : undefined
     const error = errorData !== undefined ? o.el('error', 'Div', {}, [o.text('error-text', '  ! ' + errorData)]) : undefined
@@ -588,7 +588,7 @@ const timeField: FnRule = (ctx, focus) => {
   }
   const disabled = isTrue(ctx.object(focus, C.disabled))
   const open = !disabled && isTrue(ctx.object(focus, c('expanded')))
-  const placeholder = plain(ctx, focus, C.placeholder) ?? plain(ctx, focus, l10n('timeHint')) ?? 'hh:mm'
+  const placeholder = text(ctx, focus, C.placeholder) ?? plain(ctx, focus, l10n('timeHint')) ?? 'hh:mm'
   const step = Number(plain(ctx, focus, c('minuteStep')) ?? 30)
   const { min, max } = bounds(ctx, focus)
   const active = open ? plain(ctx, focus, c('activeTime')) : undefined

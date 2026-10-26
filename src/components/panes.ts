@@ -217,7 +217,7 @@ const dockPanel: FnRule = (ctx, focus) => {
   const { edge, across } = edgeOf(ctx, focus)
   const size = int(str(ctx.object(focus, C + (across ? 'width' : 'height'))), DEFAULT_DOCK)
   const min = int(str(ctx.object(focus, C + 'minSize')), DEFAULT_MIN)
-  const badge = ctx.objects(focus, C + 'badge').find((t) => t.termType === 'Literal')
+  const badge = text(ctx, focus, C + 'badge')
   const actions = nodes(ctx, ctx.object(focus, C + 'actions'))
   const main = o.node('main')
   const fold = el(o, 'fold', 'Button', { type: 'button', class: 'sem-fold', 'aria-expanded': String(open), 'aria-controls': main.value }, [
@@ -227,7 +227,7 @@ const dockPanel: FnRule = (ctx, focus) => {
   o.t(fold, C + 'folds', focus)
   const header = el(o, 'header', 'Header', { class: 'sem-dock-header' }, [
     fold,
-    ...(badge ? [el(o, 'badge', 'Span', { class: 'sem-dock-badge' }, [o.text('badge-text', badge.value)])] : []),
+    ...(badge ? [el(o, 'badge', 'Span', { class: 'sem-dock-badge' }, [o.text('badge-text', badge)])] : []),
     ...(actions.length ? [el(o, 'actions', 'Div', { class: 'sem-dock-actions' }, actions)] : []),
   ])
   el(o, 'main', 'Div', { class: 'sem-dock-main', id: main.value, hidden: open ? undefined : '' }, [

@@ -75,7 +75,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~view-RecentAnnouncements")) AS ?view)
     ?view a rs:ResultSet ; rs:solution ?row . ?row rs:binding ?mBinding . ?mBinding rs:variable "m" ; rs:value ?m .
     ?m beh:sequence ?seq ; beh:handledBy ?reaction .
-    FILTER(EXISTS { ?reaction ann:announces ?a } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
+    FILTER(EXISTS { ?reaction ann:announces ?a FILTER(NOT EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?a)) }) } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
   } UNION {
     BIND(IRI(CONCAT(STR($this), "/~view-RecentAnnouncements")) AS ?noView)
     FILTER NOT EXISTS { ?noView a rs:ResultSet }
@@ -85,16 +85,16 @@ WHERE {
       $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
       ?stream tree:member ?m . ?m beh:sequence ?seq . FILTER(?seq > ?top - 50)
       ?m beh:handledBy ?reaction .
-      FILTER(EXISTS { ?reaction ann:announces ?a } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
+      FILTER(EXISTS { ?reaction ann:announces ?a FILTER(NOT EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?a)) }) } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
     } }
     # The newest c:limit of them.
     { SELECT ?m (COUNT(DISTINCT ?newer) AS ?rank) WHERE {
       $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
       ?stream tree:member ?m . ?m beh:sequence ?seq ; beh:handledBy ?r . FILTER(?seq > ?top - 50)
-      FILTER(EXISTS { ?r ann:announces ?a } || EXISTS { ?r ann:announcesFrom ?from . ?m ?from ?b })
+      FILTER(EXISTS { ?r ann:announces ?a FILTER(NOT EXISTS { ?l10nAt l10n:of ?r ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?r ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?a)) }) } || EXISTS { ?r ann:announcesFrom ?from . ?m ?from ?b })
       OPTIONAL {
         ?stream tree:member ?newer . ?newer beh:sequence ?ns ; beh:handledBy ?nr . FILTER(?ns > ?seq)
-        FILTER(EXISTS { ?nr ann:announces ?na } || EXISTS { ?nr ann:announcesFrom ?nf . ?newer ?nf ?nb })
+        FILTER(EXISTS { ?nr ann:announces ?na FILTER(NOT EXISTS { ?l10nAt l10n:of ?nr ; l10n:announcement ?l10nPick } || EXISTS { ?l10nAt l10n:of ?nr ; l10n:announcement ?l10nPick FILTER(STR(?l10nPick) = STR(?na)) }) } || EXISTS { ?nr ann:announcesFrom ?nf . ?newer ?nf ?nb })
       }
     } GROUP BY ?m }
     FILTER(?rank < ?limit)
@@ -124,7 +124,7 @@ WHERE {
   LATERAL { OPTIONAL { SELECT ?reaction ?announced WHERE {
   
   OPTIONAL { ?pickaAt l10n:of ?reaction ; l10n:announcement ?picka }
-  OPTIONAL { FILTER(!BOUND(?picka)) ?reaction ann:announces ?anya FILTER(isLiteral(?anya)) }
+  OPTIONAL { FILTER(!BOUND(?picka)) ?l10nAt_anya l10n:of ?reaction ; l10n:announcement ?anya } OPTIONAL { FILTER(!BOUND(?picka)) ?reaction ann:announces ?anya FILTER(isLiteral(?anya)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?reaction ; l10n:announcement ?l10nPick }) }
   BIND(STR(COALESCE(?picka, ?anya)) AS ?announced)
   } } }
   BIND(COALESCE(?fromEvent, ?announced) AS ?said)

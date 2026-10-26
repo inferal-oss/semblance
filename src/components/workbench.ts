@@ -436,7 +436,7 @@ function languageWords(ctx: RuleContext, language: string): Word[] {
         ctx
           .match(null, RDF_TYPE, cls)
           .filter((q) => named(q.subject))
-          .map((q) => ({ node: q.subject as NamedNode, label: str(ctx.object(q.subject, RDFS_LABEL)) ?? '', kind }))
+          .map((q) => ({ node: q.subject as NamedNode, label: text(ctx, q.subject, RDFS_LABEL) ?? '', kind }))
           .filter((w) => w.label),
       )
     }),

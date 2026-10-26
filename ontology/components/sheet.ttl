@@ -97,8 +97,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~tools")) AS ?tools)
   BIND(IRI(CONCAT(STR($this), "/~add-row")) AS ?addRow)
   BIND(IRI(CONCAT(STR($this), "/~add-column")) AS ?addColumn)
-  OPTIONAL { c:AddRowPhrase rdfs:label ?rowPhrase FILTER(langMatches(lang(?rowPhrase), "en")) }
-  OPTIONAL { c:AddColumnPhrase rdfs:label ?columnPhrase FILTER(langMatches(lang(?columnPhrase), "en")) }
+  OPTIONAL { ?l10nAt_rowPhrase l10n:of c:AddRowPhrase ; l10n:name ?rowPhrase } OPTIONAL { c:AddRowPhrase rdfs:label ?rowPhrase FILTER(langMatches(lang(?rowPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AddRowPhrase ; l10n:name ?l10nPick }) }
+  OPTIONAL { ?l10nAt_columnPhrase l10n:of c:AddColumnPhrase ; l10n:name ?columnPhrase } OPTIONAL { c:AddColumnPhrase rdfs:label ?columnPhrase FILTER(langMatches(lang(?columnPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AddColumnPhrase ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?rowPhrase, "Add a row")) AS ?rowLabel)
   BIND(STR(COALESCE(?columnPhrase, "Add a column")) AS ?columnLabel)
   BIND(IF(?columns >= 26, true, ?none) AS ?full)
@@ -110,7 +110,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~corner")) AS ?corner)
   BIND(IRI(CONCAT(STR($this), "/~links")) AS ?links)
   BIND(CONCAT("grid-template-columns: 44px repeat(", STR(?columns), ", 104px)") AS ?gridStyle)
-  OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) }
+  OPTIONAL { { $this l10n:label ?label0 } UNION { ?l10nAt_label0 l10n:of $this ; l10n:label ?label0 } } OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?label0, "Sheet")) AS ?label)
   LATERAL { {
     # Column letters.
@@ -169,7 +169,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~corner")) AS ?corner)
   BIND(IRI(CONCAT(STR($this), "/~links")) AS ?links)
   BIND(CONCAT("grid-template-columns: 44px repeat(", STR(?columns), ", 104px)") AS ?gridStyle)
-  OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) }
+  OPTIONAL { { $this l10n:label ?label0 } UNION { ?l10nAt_label0 l10n:of $this ; l10n:label ?label0 } } OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?label0, "Sheet")) AS ?label)
   LATERAL { {
     # Column letters.

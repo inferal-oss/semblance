@@ -267,7 +267,7 @@ WHERE {
       BIND("sem-empty" AS ?rootClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
-  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No payload.")) AS ?emptyText)
     } UNION {
       # The header and the chosen view.
@@ -310,9 +310,9 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~l10n-", ?optSlug)) AS ?optLabelNode)
       OPTIONAL { ?optLabelNode l10n:label ?optLabelLocal }
       OPTIONAL { ?optLabel_uAt l10n:of ?opt ; l10n:name ?optLabel_u }
-  OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") }
-      OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) }
-      OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) }
+  OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?l10nAt_optLabel_en l10n:of ?opt ; l10n:name ?optLabel_en } OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?l10nAt_optLabel_any l10n:of ?opt ; l10n:name ?optLabel_any } OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?optLabelLocal, ?optLabel_u, ?optLabel_en, ?optLabel_any, ?optSlug)) AS ?optLabel)
     }
   }
@@ -344,7 +344,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   # No payload: a muted line.
   OPTIONAL { ?pickeAt l10n:of $this ; l10n:emptyText ?picke }
-  OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
+  OPTIONAL { FILTER(!BOUND(?picke)) ?l10nAt_anye l10n:of $this ; l10n:emptyText ?anye } OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
   BIND(STR(COALESCE(?picke, ?anye)) AS ?ownEmpty)
   BIND(IF(BOUND(?payload), ?none, "sem-empty") AS ?rootClass)
   BIND(IF(BOUND(?payload), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
@@ -367,7 +367,7 @@ WHERE {
         LATERAL { OPTIONAL { SELECT ?opt ?optName WHERE {
   
   OPTIONAL { ?pickoAt l10n:of ?opt ; l10n:name ?picko }
-  OPTIONAL { FILTER(!BOUND(?picko)) ?opt rdfs:label ?anyo FILTER(isLiteral(?anyo)) }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?l10nAt_anyo l10n:of ?opt ; l10n:name ?anyo } OPTIONAL { FILTER(!BOUND(?picko)) ?opt rdfs:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?picko, ?anyo)) AS ?optName)
   } } }
         BIND(COALESCE(?optName, ?optSlug) AS ?optLabel)
@@ -402,13 +402,13 @@ WHERE {
   $this a ?type .
   FILTER EXISTS { ?viewer l10n:prefers ?preference }
   ?representation a c:Representation . FILTER(isIRI(?representation))
-  FILTER EXISTS { ?representation rdfs:label ?some FILTER(isLiteral(?some)) }
+  FILTER EXISTS { ?representation rdfs:label ?some FILTER(NOT EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?some)) }) FILTER(isLiteral(?some)) }
   OPTIONAL { ?representation sem:slug ?declared }
   BIND(COALESCE(STR(?declared), REPLACE(STR(?representation), "^.*[#/]", "")) AS ?slug)
   LATERAL { OPTIONAL { SELECT ?representation ?label WHERE {
   
   OPTIONAL { ?pickAt l10n:of ?representation ; l10n:name ?pick }
-  OPTIONAL { FILTER(!BOUND(?pick)) ?representation rdfs:label ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) ?l10nAt_any l10n:of ?representation ; l10n:name ?any } OPTIONAL { FILTER(!BOUND(?pick)) ?representation rdfs:label ?any FILTER(isLiteral(?any)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pick, ?any)) AS ?label)
   } } }
   BIND(IRI(CONCAT(STR($this), "/~l10n-", ?slug)) AS ?node)

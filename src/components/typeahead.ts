@@ -190,7 +190,7 @@ const option: FnRule = (ctx, focus) => {
   }
   const parts = [o.el('text', 'Span', { class: 'sem-ta-label' }, cut(label, at, (part) => part))]
   if (detail !== undefined) parts.push(o.text('gap', ' '), o.el('detail', 'Span', { class: 'sem-ta-detail' }, cut(detail, dat, (part) => 'd' + part)))
-  const help = ctx.objects(focus, C.help).find((t) => t.value !== '')?.value
+  const help = text(ctx, focus, C.help) || undefined
   if (help !== undefined) parts.push(o.el('help', 'Span', { class: 'sem-ta-help' }, [o.text('help-text', help)]))
   const hint = ctx.objects(focus, NS.key + 'hint').find((t) => t.value !== '')?.value
   if (hint !== undefined) {

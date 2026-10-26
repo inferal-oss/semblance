@@ -37,7 +37,7 @@ function encoding(ctx: RuleContext, focus: NamedNode) {
     value: v(C.valueVariable) ?? 'value',
     flag: v(C.flagVariable),
     flagLabel: v(C.flagLabel),
-    unit: v(C.unit) ?? '',
+    unit: text(ctx, focus, C.unit) ?? '',
     log: v(C.logScale) === 'true',
     reference: v(C.referenceLine),
   }
