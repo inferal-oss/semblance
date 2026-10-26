@@ -40,7 +40,8 @@ ui:ly-tiled-spec a c:Specimen ; c:demonstrates c:TiledWorkspace ; c:label "Tiled
     c:children ( ui:ly-tiled-workspace ) .
 
 # The arrangement: the tree's edges, its split views' ratios and directions, its tabs' lists and
-# selections. Restored, each replaces what the example starts with.
+# selections - and the lists of the example's own tabs that closed (empty now), so a restore does
+# not bring back what they held. Restored, each replaces what the example starts with.
 ui:rememberWorkspace a per:Policy ; per:scope per:Session ;
     rdfs:label "The workspace's panes" , "Панелі робочого простору"@uk , "Die Bereiche des Arbeitsbereichs"@de , "أجزاء مساحة العمل"@ar ;
     per:construct """
@@ -50,6 +51,7 @@ WHERE {
   UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n ?p ?o
           FILTER(?p IN (rdf:type, c:primary, c:secondary, c:ratio, pos:direction, c:tabs, c:selected)) }
   UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?rest }
+  UNION { VALUES ?n { ui:ly-tiled-main ui:ly-tiled-inspector ui:ly-tiled-notes } ?n c:tabs rdf:nil BIND(c:tabs AS ?p) BIND(rdf:nil AS ?o) }
 }""" .
 
 # --- SplitView: a list beside its details ---------------------------------------------------------
