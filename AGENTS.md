@@ -85,7 +85,12 @@ npx tsc --noEmit       # typecheck
   foreground; from a worktree whose checkout predates the script, use the main checkout's copy by
   its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. A run that
   holds its slot longer than 30 minutes is stopped (`SEMBLANCE_RUN_LIMIT`), so keep runs to the
-  affected files. Run the files your change affects; the full suite runs before a push or merge.
+  affected files.
+- **A branch or PR runs targeted tests only**: the files its change affects (the components,
+  layers and examples it touches, their parity and cost tests), then it merges. It does **not** run
+  the full suite. **The full suite runs on `main` after a batch of merges**, once, by whoever
+  coordinates the plan; the failures it finds are filed and fixed as issues. This keeps the machine
+  usable: many agents share it, and per-PR full runs saturated its CPU.
 - **The full suite is `npm run test:full`**, never one `npm test` of everything (it no longer fits
   in 30 minutes) and never batches of your own. It runs fixed shards (soak and shell alone, the
   rest packed by the per-file times in `test/timings.json`), each its own queued run, at most two
@@ -114,15 +119,15 @@ npx tsc --noEmit       # typecheck
   affected tests, push `main`, tick and close the issue. A larger one (a subagent's branch, several
   commits, anything a reviewer should see as a whole): push its branch and open a pull request
   against `main` that says `Closes #<issue>`, with what changed, the design and the test results;
-  merge it once the affected tests (and, before a release-sized merge, the full suite) pass.
+  merge it once the affected tests pass (the full suite runs on `main` after a batch of merges).
 - Several agents often work at once. Do non-trivial work in your own git worktree
   (`git worktree add <dir> HEAD`, symlink `node_modules`, copy `rdf-engine/build/*.wasm`), and
   rebase onto `main` before committing.
 - In a shared checkout, stage only your own hunks (`git add -p`, or `git apply --cached` of your
   patch); never `git add -A` / `git commit -a`.
 - Commit at every verified step (typecheck and the relevant tests green) with a message that says
-  what changed and why. Push `main` to `origin` (github.com/inferal-oss/semblance) when the full
-  suite passes; GitHub Pages deploys the site from `main` to <https://semblance.dev>.
+  what changed and why. Push `main` to `origin` (github.com/inferal-oss/semblance) when the
+  affected tests pass; GitHub Pages deploys the site from `main` to <https://semblance.dev>.
 - Licence: `MIT OR Apache-2.0`. The npm package is `@inferal-oss/semblance`.
 
 ## Map
