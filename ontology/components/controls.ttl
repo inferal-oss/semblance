@@ -864,7 +864,7 @@ CONSTRUCT {
   ?root a rdfhtml:Label ; sem:renders $this ; rdfhtml:for ?selectId ; rdfhtml:hasChild ?captionEl, ?select .
   ?captionEl a rdfhtml:Span ; rdfhtml:hasChild ?captionText ; ord:immediatelyPrecedes ?select .
   ?captionText a rdfhtml:Text ; rdfhtml:data ?caption .
-  ?select a rdfhtml:Select ; rdfhtml:id ?selectId ; rdfhtml:hasChild ?option .
+  ?select a rdfhtml:Select ; rdfhtml:id ?selectId ; rdfhtml:disabled ?disabled ; rdfhtml:hasChild ?option .
   ?option a rdfhtml:Option ; rdfhtml:value ?optValue ; rdfhtml:selected ?selected ; rdfhtml:hasChild ?optText .
   ?optText a rdfhtml:Text ; rdfhtml:data ?optLabel .
   ?before ord:immediatelyPrecedes ?after .
@@ -897,6 +897,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~caption-text")) AS ?captionText)
   BIND(IRI(CONCAT(STR($this), "/~select")) AS ?select)
   BIND(STR(?select) AS ?selectId)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
   {
     {} UNION {
       { $this c:options/rdf:rest*/rdf:first ?opt FILTER(isIRI(?opt)) BIND($this AS ?self) }
@@ -1041,8 +1042,8 @@ WHERE {
 c:ChoiceSelect a beh:Reaction ;
     beh:when beh:Change ;
     beh:sourceClass c:Choice ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
+    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old . FILTER NOT EXISTS { $this c:disabled true } }""" ;
+    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . FILTER NOT EXISTS { $this c:disabled true } BIND(IRI(?v) AS ?option) }""" ;
     sem:function "choice:select" .
 
 c:Chips a owl:Class ;
