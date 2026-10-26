@@ -87,7 +87,7 @@ c:galleryLayout a owl:ObjectProperty ; rdfs:domain c:Gallery ; rdfs:range c:Gall
 c:lightbox a owl:ObjectProperty ; rdfs:domain c:Gallery ; rdfs:range c:Lightbox ;
     rdfs:comment "The lightbox that shows the gallery's images at full size. Activating an image opens it there."@en .
 c:loops a owl:DatatypeProperty ; rdfs:domain c:ImageBrowser ; rdfs:range xsd:boolean ;
-    rdfs:comment "Moving past the last image goes to the first (and back past the first to the last)."@en .
+    rdfs:comment "Moving past the last image goes to the first (and back past the first to the last). On a gallery, its carousel and its lightbox loop; on a lightbox, the lightbox alone."@en .
 # c:current (the image shown) is the c:Stepper's property: the item being worked on (navigation.ttl).
 
 c:GalleryLayout a owl:Class ;
@@ -185,6 +185,7 @@ WHERE {
   OPTIONAL { ?img c:alt ?alt1 FILTER(langMatches(lang(?alt1), "en")) }
   OPTIONAL { ?img c:caption ?cap0 FILTER(lang(?cap0) = "") }
   OPTIONAL { ?img c:caption ?cap1 FILTER(langMatches(lang(?cap1), "en")) }
+  OPTIONAL { ?ip0At l10n:of c:ImagePositionPhrase ; l10n:name ?ip0 }
   OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip0 FILTER(lang(?ip0) = "") }
   OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip1 FILTER(langMatches(lang(?ip1), "en")) }
   BIND(IF(BOUND(?img), STR(COALESCE(?alt0, ?alt1, ?cap0, ?cap1, REPLACE(REPLACE(STR(COALESCE(?ip0, ?ip1, "Image %i of %n")), "%i", STR(?i)), "%n", STR(?n)))), ?none) AS ?name)
@@ -263,6 +264,7 @@ WHERE {
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+    OPTIONAL { ?iw0At l10n:of c:ImagesPhrase ; l10n:name ?iw0 }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw0 FILTER(lang(?iw0) = "") }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw1 FILTER(langMatches(lang(?iw1), "en")) }
     BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, ?iw0, ?iw1, "Images")) AS ?label)
@@ -271,6 +273,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
     BIND(IF(?carousel, "region", "group") AS ?roleValue)
     BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?ariaLabel)
+    OPTIONAL { ?cw0At l10n:of c:CarouselPhrase ; l10n:name ?cw0 }
     OPTIONAL { c:CarouselPhrase rdfs:label ?cw0 FILTER(lang(?cw0) = "") }
     OPTIONAL { c:CarouselPhrase rdfs:label ?cw1 FILTER(langMatches(lang(?cw1), "en")) }
     BIND(IF(?carousel, STR(COALESCE(?cw0, ?cw1, "carousel")), ?none) AS ?carouselWord)
@@ -285,6 +288,7 @@ WHERE {
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~prev-glyph-text")), ?none) AS ?prevGlyphText)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~prev-aria-label")), ?none) AS ?prevLabel)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~prev-aria-controls")), ?none) AS ?prevControls)
+    OPTIONAL { ?pw0At l10n:of c:PreviousImagePhrase ; l10n:name ?pw0 }
     OPTIONAL { c:PreviousImagePhrase rdfs:label ?pw0 FILTER(lang(?pw0) = "") }
     OPTIONAL { c:PreviousImagePhrase rdfs:label ?pw1 FILTER(langMatches(lang(?pw1), "en")) }
     BIND(STR(COALESCE(?pw0, ?pw1, "Previous image")) AS ?prevWord)
@@ -295,6 +299,7 @@ WHERE {
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~next-glyph-text")), ?none) AS ?nextGlyphText)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~next-aria-label")), ?none) AS ?nextLabel)
     BIND(IF(?carousel, IRI(CONCAT(STR($this), "/~next-aria-controls")), ?none) AS ?nextControls)
+    OPTIONAL { ?nw0At l10n:of c:NextImagePhrase ; l10n:name ?nw0 }
     OPTIONAL { c:NextImagePhrase rdfs:label ?nw0 FILTER(lang(?nw0) = "") }
     OPTIONAL { c:NextImagePhrase rdfs:label ?nw1 FILTER(langMatches(lang(?nw1), "en")) }
     BIND(STR(COALESCE(?nw0, ?nw1, "Next image")) AS ?nextWord)
@@ -315,6 +320,7 @@ WHERE {
     ?atNode c:indexedImage ?img ; c:position ?i ; c:imageName ?name FILTER(STRSTARTS(STR(?atNode), CONCAT(STR($this), "/~at-")))
     OPTIONAL { ?img c:image ?url }
     BIND(STR(?url) AS ?src)
+    OPTIONAL { ?sp0At l10n:of c:SlidePositionPhrase ; l10n:name ?sp0 }
     OPTIONAL { c:SlidePositionPhrase rdfs:label ?sp0 FILTER(lang(?sp0) = "") }
     OPTIONAL { c:SlidePositionPhrase rdfs:label ?sp1 FILTER(langMatches(lang(?sp1), "en")) }
     BIND(REPLACE(REPLACE(STR(COALESCE(?sp0, ?sp1, "%i of %n")), "%i", STR(?i)), "%n", STR(?n)) AS ?placeText)
@@ -341,6 +347,7 @@ WHERE {
     BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-role")), ?none) AS ?slideRole)
     BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-aria-roledescription")), ?none) AS ?slideRoleDesc)
     BIND(IF(?layout = "carousel", IRI(CONCAT(?base, STR(?i), "-aria-label")), ?none) AS ?slideLabel)
+    OPTIONAL { ?sw0At l10n:of c:SlidePhrase ; l10n:name ?sw0 }
     OPTIONAL { c:SlidePhrase rdfs:label ?sw0 FILTER(lang(?sw0) = "") }
     OPTIONAL { c:SlidePhrase rdfs:label ?sw1 FILTER(langMatches(lang(?sw1), "en")) }
     BIND(STR(COALESCE(?sw0, ?sw1, "slide")) AS ?slideWord)
@@ -391,6 +398,7 @@ WHERE {
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+    OPTIONAL { ?iw0At l10n:of c:ImagesPhrase ; l10n:name ?iw0 }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw0 FILTER(lang(?iw0) = "") }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw1 FILTER(langMatches(lang(?iw1), "en")) }
     BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, ?iw0, ?iw1, "Images")) AS ?label)
@@ -444,6 +452,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~dot-", STR(?i), "-aria-current")) AS ?dotCurrent)
   BIND(IRI(CONCAT(STR($this), "/~live")) AS ?live)
   BIND(IRI(CONCAT(STR($this), "/~live-text")) AS ?liveText)
+  OPTIONAL { ?ip0At l10n:of c:ImagePositionPhrase ; l10n:name ?ip0 }
   OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip0 FILTER(lang(?ip0) = "") }
   OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip1 FILTER(langMatches(lang(?ip1), "en")) }
   BIND(REPLACE(REPLACE(STR(COALESCE(?ip0, ?ip1, "Image %i of %n")), "%i", STR(?i)), "%n", STR(?n)) AS ?liveData)
@@ -555,7 +564,7 @@ WHERE {
     BIND(COALESCE(?cur0, ?first) AS ?cur)
     ?atNode c:indexedImage ?cur ; c:position ?i FILTER(STRSTARTS(STR(?atNode), CONCAT(STR(?g), "/~at-")))
     ?g c:imageCount ?n .
-    BIND(EXISTS { $this c:loops ?l FILTER(STR(?l) = "true") } AS ?loops)
+    BIND(EXISTS { { $this c:loops ?l } UNION { ?g c:loops ?l } FILTER(STR(?l) = "true") } AS ?loops)
     BIND(EXISTS { $this c:zoomed ?z FILTER(STR(?z) = "true") } AS ?zoomed)
     BIND(EXISTS { $this c:thumbnails ?t FILTER(STR(?t) = "true") } AS ?thumbs)
     BIND(EXISTS { $this c:offersOriginal ?oo FILTER(STR(?oo) = "true") } AS ?offers)
@@ -563,6 +572,7 @@ WHERE {
     OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { ?g l10n:label ?gLocalLabel }
     OPTIONAL { ?g c:label ?gRawLabel FILTER(lang(?gRawLabel) = "") }
+    OPTIONAL { ?iw0At l10n:of c:ImagesPhrase ; l10n:name ?iw0 }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw0 FILTER(lang(?iw0) = "") }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw1 FILTER(langMatches(lang(?iw1), "en")) }
     BIND(STR(COALESCE(?localLabel, ?rawLabel, ?gLocalLabel, ?gRawLabel, ?iw0, ?iw1, "Images")) AS ?title)
@@ -573,6 +583,7 @@ WHERE {
     OPTIONAL { ?cur c:caption ?cap0 FILTER(lang(?cap0) = "") }
     OPTIONAL { ?cur c:caption ?cap1 FILTER(langMatches(lang(?cap1), "en")) }
     BIND(STR(COALESCE(?cap0, ?cap1)) AS ?captionData)
+    OPTIONAL { ?ip0At l10n:of c:ImagePositionPhrase ; l10n:name ?ip0 }
     OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip0 FILTER(lang(?ip0) = "") }
     OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip1 FILTER(langMatches(lang(?ip1), "en")) }
     BIND(REPLACE(REPLACE(STR(COALESCE(?ip0, ?ip1, "Image %i of %n")), "%i", STR(?i)), "%n", STR(?n)) AS ?place)
@@ -596,18 +607,22 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~zoom-aria-pressed")) AS ?zoomPressed)
     BIND(IF(?zoomed, "true", "false") AS ?zoomedValue)
     BIND(IRI(CONCAT(STR($this), "/~zoom-text")) AS ?zoomText)
+    OPTIONAL { ?zw0At l10n:of c:ZoomPhrase ; l10n:name ?zw0 }
     OPTIONAL { c:ZoomPhrase rdfs:label ?zw0 FILTER(lang(?zw0) = "") }
     OPTIONAL { c:ZoomPhrase rdfs:label ?zw1 FILTER(langMatches(lang(?zw1), "en")) }
     BIND(STR(COALESCE(?zw0, ?zw1, "Zoom")) AS ?zoomWord)
     BIND(IF(?offers && BOUND(?src), IRI(CONCAT(STR($this), "/~original")), ?none) AS ?original)
     BIND(IF(BOUND(?original), IRI(CONCAT(STR($this), "/~original-text")), ?none) AS ?originalText)
+    OPTIONAL { ?ow0At l10n:of c:OpenOriginalPhrase ; l10n:name ?ow0 }
     OPTIONAL { c:OpenOriginalPhrase rdfs:label ?ow0 FILTER(lang(?ow0) = "") }
     OPTIONAL { c:OpenOriginalPhrase rdfs:label ?ow1 FILTER(langMatches(lang(?ow1), "en")) }
     BIND(STR(COALESCE(?ow0, ?ow1, "Open original")) AS ?originalWord)
     BIND(IRI(CONCAT(STR($this), "/~close")) AS ?close)
     # Its own full-screen toggles (fs:Fullscreenable): fill the window, full screen.
-    OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) }
-    OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) }
+    OPTIONAL { ?vpPhrase0At l10n:of fs:ViewportCommand ; l10n:name ?vpPhrase0 }
+    OPTIONAL { FILTER(!BOUND(?vpPhrase0)) fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) }
+    OPTIONAL { ?fsPhrase0At l10n:of fs:ToggleCommand ; l10n:name ?fsPhrase0 }
+    OPTIONAL { FILTER(!BOUND(?fsPhrase0)) fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) }
     BIND(STR(COALESCE(?vpPhrase0, "Fill the window")) AS ?vpPhrase)
     BIND(STR(COALESCE(?fsPhrase0, "Full screen")) AS ?fsPhrase)
     BIND(IRI(CONCAT(STR($this), "/~viewport-toggle")) AS ?vpToggle)
@@ -620,6 +635,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
+    OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
@@ -634,6 +650,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~prev-aria-label")) AS ?prevLabel)
     BIND(IRI(CONCAT(STR($this), "/~prev-data-sem-shortcut")) AS ?prevKey)
     BIND(IRI(CONCAT(STR($this), "/~prev-aria-keyshortcuts")) AS ?prevAriaKey)
+    OPTIONAL { ?pw0At l10n:of c:PreviousImagePhrase ; l10n:name ?pw0 }
     OPTIONAL { c:PreviousImagePhrase rdfs:label ?pw0 FILTER(lang(?pw0) = "") }
     OPTIONAL { c:PreviousImagePhrase rdfs:label ?pw1 FILTER(langMatches(lang(?pw1), "en")) }
     BIND(STR(COALESCE(?pw0, ?pw1, "Previous image")) AS ?prevWord)
@@ -645,6 +662,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~next-aria-label")) AS ?nextLabel)
     BIND(IRI(CONCAT(STR($this), "/~next-data-sem-shortcut")) AS ?nextKey)
     BIND(IRI(CONCAT(STR($this), "/~next-aria-keyshortcuts")) AS ?nextAriaKey)
+    OPTIONAL { ?nw0At l10n:of c:NextImagePhrase ; l10n:name ?nw0 }
     OPTIONAL { c:NextImagePhrase rdfs:label ?nw0 FILTER(lang(?nw0) = "") }
     OPTIONAL { c:NextImagePhrase rdfs:label ?nw1 FILTER(langMatches(lang(?nw1), "en")) }
     BIND(STR(COALESCE(?nw0, ?nw1, "Next image")) AS ?nextWord)
@@ -667,7 +685,7 @@ WHERE {
     BIND(COALESCE(?cur0, ?first) AS ?cur)
     ?atNode c:indexedImage ?cur ; c:position ?i FILTER(STRSTARTS(STR(?atNode), CONCAT(STR(?g), "/~at-")))
     ?g c:imageCount ?n .
-    BIND(EXISTS { $this c:loops ?l FILTER(STR(?l) = "true") } AS ?loops)
+    BIND(EXISTS { { $this c:loops ?l } UNION { ?g c:loops ?l } FILTER(STR(?l) = "true") } AS ?loops)
     BIND(EXISTS { $this c:zoomed ?z FILTER(STR(?z) = "true") } AS ?zoomed)
     BIND(IF(?i > 1, ?i - 1, IF(?loops && ?n > 2, ?n, 0)) AS ?pj)
     BIND(IF(?i < ?n, ?i + 1, IF(?loops && ?n > 1, 1, 0)) AS ?nj0)
@@ -724,6 +742,7 @@ WHERE {
     OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { ?g l10n:label ?gLocalLabel }
     OPTIONAL { ?g c:label ?gRawLabel FILTER(lang(?gRawLabel) = "") }
+    OPTIONAL { ?iw0At l10n:of c:ImagesPhrase ; l10n:name ?iw0 }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw0 FILTER(lang(?iw0) = "") }
     OPTIONAL { c:ImagesPhrase rdfs:label ?iw1 FILTER(langMatches(lang(?iw1), "en")) }
     BIND(STR(COALESCE(?localLabel, ?rawLabel, ?gLocalLabel, ?gRawLabel, ?iw0, ?iw1, "Images")) AS ?title)
@@ -731,6 +750,7 @@ WHERE {
     OPTIONAL { ?cur c:alt ?alt1 FILTER(langMatches(lang(?alt1), "en")) }
     OPTIONAL { ?cur c:caption ?cap0 FILTER(lang(?cap0) = "") }
     OPTIONAL { ?cur c:caption ?cap1 FILTER(langMatches(lang(?cap1), "en")) }
+    OPTIONAL { ?ip0At l10n:of c:ImagePositionPhrase ; l10n:name ?ip0 }
     OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip0 FILTER(lang(?ip0) = "") }
     OPTIONAL { c:ImagePositionPhrase rdfs:label ?ip1 FILTER(langMatches(lang(?ip1), "en")) }
     BIND(REPLACE(REPLACE(STR(COALESCE(?ip0, ?ip1, "Image %i of %n")), "%i", STR(?i)), "%n", STR(?n)) AS ?place)
@@ -771,6 +791,7 @@ WHERE {
   {
     BIND(IRI(CONCAT(STR($this), "/~strip-role")) AS ?role)
     BIND(IRI(CONCAT(STR($this), "/~strip-aria-label")) AS ?label)
+    OPTIONAL { ?tw0At l10n:of c:ThumbnailsPhrase ; l10n:name ?tw0 }
     OPTIONAL { c:ThumbnailsPhrase rdfs:label ?tw0 FILTER(lang(?tw0) = "") }
     OPTIONAL { c:ThumbnailsPhrase rdfs:label ?tw1 FILTER(langMatches(lang(?tw1), "en")) }
     BIND(STR(COALESCE(?tw0, ?tw1, "Thumbnails")) AS ?stripWord)
@@ -844,7 +865,7 @@ WHERE {
   BIND(COALESCE(?cur0, ?first) AS ?cur)
   ?atNode c:indexedImage ?cur ; c:position ?i FILTER(STRSTARTS(STR(?atNode), CONCAT(STR(?g), "/~at-")))
   ?g c:imageCount ?n .
-  BIND(EXISTS { $this c:loops ?l FILTER(STR(?l) = "true") } AS ?loops)
+  BIND(EXISTS { { $this c:loops ?l } UNION { ?g c:loops ?l } FILTER(STR(?l) = "true") } AS ?loops)
   BIND(?i + xsd:integer(?step) AS ?j0)
   BIND(IF(?loops, IF(?j0 < 1, ?n, IF(?j0 > ?n, 1, ?j0)), IF(?j0 < 1, 1, IF(?j0 > ?n, ?n, ?j0))) AS ?j)
   BIND(IRI(CONCAT(STR(?g), "/~at-", STR(?j))) AS ?toAt) ?toAt c:indexedImage ?new .

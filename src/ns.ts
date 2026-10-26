@@ -274,6 +274,8 @@ export const C = {
   sortBy: c + 'sortBy',
   itemLabel: c + 'itemLabel',
   itemChecked: c + 'itemChecked',
+  itemImage: c + 'itemImage',
+  imageFrom: c + 'imageFrom',
   of: c + 'of',
   inList: c + 'inList',
   labelFrom: c + 'labelFrom',

@@ -291,6 +291,14 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:ListItem ; sty:state ":hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:surface ] .
 
+# An item's thumbnail (c:itemImage): a small crop beside its label.
+[] a sty:StyleRule ; sty:appliesTo c:ListItem ; sty:part "> .sem-thumb" ;
+    sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "width" ; sty:raw "40px" ] ,
+                 [ sty:property "height" ; sty:raw "30px" ] ,
+                 [ sty:property "object-fit" ; sty:raw "cover" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:token tok:surface-sunken ] .
 [] a sty:StyleRule ; sty:appliesTo c:ListItem ; sty:part "input" ;
     sty:declares [ sty:property "appearance" ; sty:raw "none" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
