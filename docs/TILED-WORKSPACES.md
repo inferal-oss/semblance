@@ -67,6 +67,6 @@ Restored, each subject's properties replace what the application starts with.
 
 ## On a phone
 
-At compact width each split view stacks its panes, so the workspace is a column of panes, each
-about half a screen tall, and the dividers go. Tabs still move between panes and split them by
+At compact width each split view stacks its panes, so the workspace is a column of panes, each as
+tall as what it shows (a few lines at least), and the dividers go. Tabs still move between panes and split them by
 dragging (a long press picks a tab up) or by keyboard.
