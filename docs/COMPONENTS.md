@@ -359,6 +359,26 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   (`Runtime.dispose()`, `GraphStore.dispose()`); `dispose()` stops them all, cancelling the
   rebuilds waiting for typing to pause, so nothing runs against a released store.
 
+### Description list values
+
+Explicit `c:DescriptionList` items can supply a component through `c:content`, including a link,
+another description list, an interactive control or a `c:HostSlot`:
+
+```turtle
+ex:facts a c:DescriptionList ; c:items ( ex:review ) .
+ex:review c:label "Review" ; c:value "Review summary" ; c:content ex:body .
+ex:body a c:Stack ; c:children ( ex:note ex:approved ) .
+ex:note a c:Text ; c:label "Check the attached item." .
+ex:approved a c:ToggleSwitch ; c:label "Approved" ; c:checked false .
+```
+
+Screen prefers the component value. Text uses `c:value` as a summary when it is present; omit
+the summary to render the component in Text too, including its current control state. Existing
+text values, field and entry modes, units and locale formatting keep their behavior.
+
+Keep item and content IRIs stable when changing the list. A host slot inside a value then keeps
+its DOM and drafts when another item is inserted or the list is reordered.
+
 ### When the page is busy
 
 A *turn* is everything one input causes: an event's reactions, the tick's maintained views and

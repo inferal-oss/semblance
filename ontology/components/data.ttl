@@ -68,7 +68,9 @@ c:DescriptionList a owl:Class ;
 rdfs:label, with their c:unit) on c:of, or explicit c:items (each a c:label and a c:value), or the
 entries of c:of (its c:entryProperty values, each a c:keyProperty / c:valueProperty pair, by
 sem:order: HTTP headers). Instead of c:of it may describe what c:bindProperty of c:bindFrom holds
-(a grid's selection), and c:via takes one hop from there first (an exchange's response)."""@en ;
+(a grid's selection), and c:via takes one hop from there first (an exchange's response).
+An explicit item can supply c:content as a component value. Screen shows the component;
+Text prefers its optional c:value summary, or renders the component when no summary is given."""@en ;
     sem:slug "description-list" .
 c:entryProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A multi-valued property whose values are the pairs to list (e.g. http:headers)."@en .
 c:keyProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's key (e.g. http:fieldName)."@en .
@@ -77,6 +79,45 @@ c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem
     sem:functionOnly "awaits sx:Locale (sx:formatNumber): numeric values are written in the viewer's locale (Intl.NumberFormat)." ;
     sem:needsExtension sx:Locale .
 c:DescriptionListRendering-fn a sem:Rule ; sem:implements c:DescriptionListRendering ; sem:function "data:description-list" .
+
+# The list keeps locale-sensitive value formatting; this internal cell only projects the chosen
+# component or the already formatted summary. Existing text-only pairs keep their original markup.
+c:DescriptionValue a owl:Class ; rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal component-valued description cell. c:content is the component, c:value its optional formatted text summary."@en ;
+    sem:slug "description-value" .
+c:DescriptionValueRendering a sem:Rendering ; sem:targets c:DescriptionValue ; sem:stratum 0 ;
+    sem:watches c:content , c:value .
+c:DescriptionValueRendering-fn a sem:Rule ; sem:implements c:DescriptionValueRendering ; sem:function "data:description-value" .
+c:DescriptionValueRendering-sparql-screen a sem:Rule ;
+    sem:implements c:DescriptionValueRendering ; sem:modality mod:Screen ; sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:hasChild ?component, ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?value .
+}
+WHERE {
+  $this a c:DescriptionValue .
+  OPTIONAL { $this c:content ?component FILTER(isIRI(?component)) }
+  OPTIONAL { $this c:value ?summary }
+  BIND(COALESCE(STR(?summary), "") AS ?value)
+  BIND(IF(BOUND(?component), rdfhtml:Div, rdfhtml:Span) AS ?element)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(BOUND(?component), ?none, IRI(CONCAT(STR($this), "/~text"))) AS ?text)
+}""" .
+c:DescriptionValueRendering-sparql-text a sem:Rule ;
+    sem:implements c:DescriptionValueRendering ; sem:modality mod:Text ; sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?component, ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?value .
+}
+WHERE {
+  $this a c:DescriptionValue .
+  OPTIONAL { $this c:content ?rawComponent FILTER(isIRI(?rawComponent)) }
+  OPTIONAL { $this c:value ?summary }
+  BIND(IF(BOUND(?summary), ?none, ?rawComponent) AS ?component)
+  BIND(COALESCE(STR(?summary), "") AS ?value)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(BOUND(?component), ?none, IRI(CONCAT(STR($this), "/~text"))) AS ?text)
+}""" .
 
 # --- Stat: a KPI tile -------------------------------------------------------------------------------
 
