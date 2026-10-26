@@ -101,6 +101,11 @@ await mount(element, { root, graphs: [app], styles: false })
 The host owns this stylesheet and its cleanup. Include any custom styles from mounted graphs in
 the build-time stylesheet; `styles: false` skips compilation and injection for that mount.
 
+The browser host anchors open menus, calendars, typeahead lists and popover panels to their
+controls and keeps them within the viewport. Where available, native popovers lift them above
+scrolling containers without moving their DOM. Other browsers use fixed positioning. Scrolling
+and resizing update their placement; the graph continues to own open and hidden state.
+
 The components you can use, with live specimens and their ontology, are on the site's
 [Components](https://semblance.dev/#components) page; [Reference](https://semblance.dev/#reference)
 has every term.
