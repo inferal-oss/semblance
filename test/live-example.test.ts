@@ -428,7 +428,7 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
     const t = todo('sparql')
     expect(t.ex.getAttribute('data-sem-sources')).toBe('hidden')
     expect(t.ex.querySelector('.sem-live-sources, [role=tab]')).toBeNull()
-    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'RDF', 'As text'])
+    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'Data', 'Query projection'])
     expect(t.lines()).toEqual([
       'ex:t1 rdfs:label "Write the core ontology"',
       'ex:t1 ex:done true',
@@ -475,6 +475,23 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
     expect(t.flow()).toBe('You changed the data (+3 −1); the screen and the text followed.')
     expect(t.text()).toContain('[ ] Ship it')
     expect(t.connectors()[0]![1]).toBe(t.ex.querySelector('.sem-live-line[data-sem-change=added]')!.id)
+  })
+
+  it('enables Reset once used, and Reset builds it again as written', () => {
+    const t = todo('sparql')
+    const reset = () => [...t.ex.querySelectorAll('.sem-live-actions button')].find((b) => b.textContent === 'Reset') as HTMLButtonElement
+    expect(reset().disabled).toBe(true)
+    t.tick('Sketch the style layer')
+    expect(reset().disabled).toBe(false)
+    const builds = t.h.sandboxes.builds
+    t.h.fire(reset(), 'click')
+    t.h.sandboxes.settle()
+    expect(t.h.sandboxes.builds).toBe(builds + 1)
+    expect(reset().disabled).toBe(true)
+    expect(t.lines()).toContain('ex:t2 ex:done false')
+    expect(t.lines().some((l) => /^(added|removed)/.test(l))).toBe(false)
+    expect(t.flow()).toBe('Use the example: what you do changes its data, and the screen and the text follow.')
+    expect(t.text()).toContain('[ ] Sketch the style layer')
   })
 
   it('costs an interaction the lines it changed, not the whole example', () => {

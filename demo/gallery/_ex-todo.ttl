@@ -81,12 +81,15 @@ ui:todoLive a c:LiveExample ;
     c:sources ( ui:todoLive-app ) ;
     c:showSources false ;
     c:textPreview true ;
+    c:textHeading ui:QueryProjectionPhrase ;
     c:dataPreview """CONSTRUCT { ?s ?p ?o }
 WHERE {
   { ex:todos c:item ?s . ?s ?p ?o }
   UNION
   { BIND(ex:newTodo AS ?s) ex:newTodo ?p ?o FILTER(?p IN (c:value, c:error)) }
 }""" .
+ui:QueryProjectionPhrase a c:Phrase ;
+    rdfs:label "Query projection"@en , "Проєкція запитом"@uk , "Abfrageprojektion"@de , "إسقاط بالاستعلام"@ar .
 ui:todoLive-app a c:CodeEditor ; c:language "turtle" ; c:label "todo.ttl" ; c:original '''@prefix ex: <https://example.org/todo#> .
 
 ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

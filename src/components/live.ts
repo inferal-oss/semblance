@@ -15,6 +15,7 @@ const L = {
   selectedSource: c + 'selectedSource',
   textPreview: c + 'textPreview',
   showSources: c + 'showSources',
+  textHeading: c + 'textHeading',
   dataPreview: c + 'dataPreview',
   lineSubject: c + 'lineSubject',
   linePredicate: c + 'linePredicate',
@@ -35,6 +36,7 @@ const L = {
   sourceLine: c + 'sourceLine',
   renderTime: c + 'renderTime',
   edited: c + 'edited',
+  interacted: c + 'interacted',
   copied: c + 'copied',
   showsSource: c + 'showsSource',
   resets: c + 'resets',
@@ -111,7 +113,7 @@ const liveExample: FnRule = (ctx, focus) => {
     panels.push(panel)
   })
 
-  // The actions: how long the last build took, Reset (while a source is edited) and Copy.
+  // The actions: how long the last build took, Reset (once a source is edited or the example used) and Copy.
   const ms = str(ctx.object(focus, L.renderTime))
   const actions: NamedNode[] = []
   if (ms !== undefined) actions.push(o.el('time', 'Span', { class: 'sem-live-time' }, [o.text('time-text', fill(phrase(ctx, P.time), 'ms', ms))]))
@@ -122,7 +124,7 @@ const liveExample: FnRule = (ctx, focus) => {
     return b
   }
   const reset = button('reset', phrase(ctx, P.reset), L.resets)
-  if (!isTrue(ctx.object(focus, L.edited))) o.t(reset, L.disabled, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
+  if (!isTrue(ctx.object(focus, L.edited)) && !isTrue(ctx.object(focus, L.interacted))) o.t(reset, L.disabled, ctx.f.literal('true', ctx.nn(XSD_BOOLEAN)))
   const copy = button('copy', phrase(ctx, ctx.object(focus, L.copied) ? P.copied : P.copy), L.copies)
   actions.push(reset, copy, ...fullscreenToggles(ctx, o, focus))
 
@@ -161,7 +163,7 @@ const liveExample: FnRule = (ctx, focus) => {
   preview.push(screen)
   const textParts: NamedNode[] = []
   if (withText) {
-    textParts.push(o.el('text-head', 'P', { class: 'sem-live-modality' }, [o.text('text-head-text', phrase(ctx, P.text))]))
+    textParts.push(o.el('text-head', 'P', { class: 'sem-live-modality' }, [o.text('text-head-text', phrase(ctx, ctx.object(focus, L.textHeading)?.value ?? P.text))]))
     const slot = o.el('text', 'Div', { class: 'sem-live-text' })
     o.t(slot, SEM.slot, `${focus.value} text`)
     textParts.push(slot)
@@ -288,7 +290,8 @@ export const reactions: Record<string, ReactionFn> = {
   'live-example:reset': (ctx) => {
     if (!control(ctx, L.resets)) return none()
     const editors = listOf(ctx, ctx.object(ctx.target, L.sources))
-    return { add: [], remove: editors.flatMap((e) => [L.value, L.caret, L.suggesting, L.activeSuggestion].flatMap((p) => ctx.match(e, p, null))) }
+    const sources = editors.flatMap((e) => [L.value, L.caret, L.suggesting, L.activeSuggestion].flatMap((p) => ctx.match(e, p, null)))
+    return { add: [], remove: [...sources, ...ctx.match(ctx.target, L.interacted, null)] }
   },
   'live-example:copy': (ctx) => {
     if (!control(ctx, L.copies)) return none()

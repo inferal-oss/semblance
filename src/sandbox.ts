@@ -58,6 +58,7 @@ export const LIVE = {
   sourceLine: c + 'sourceLine',
   renderTime: c + 'renderTime',
   edited: c + 'edited',
+  interacted: c + 'interacted',
   copied: c + 'copied',
 } as const
 
@@ -307,6 +308,8 @@ export class Sandboxes {
   /** Timers that are not a sandbox's own (withdrawing a copy request). */
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
   private disposed = false
+  /** While the host writes what happened to the site's graph (its own removals ask for nothing). */
+  private writing = false
   /** Builds done, for tests and cost checks. */
   builds = 0
 
@@ -410,7 +413,11 @@ export class Sandboxes {
   }
 
   private changed(delta: Delta) {
-    for (const q of delta.remove) this.touched(q)
+    for (const q of delta.remove) {
+      this.touched(q)
+      // Reset withdrew c:interacted: build the example again as written (at once, not after typing pauses).
+      if (q.predicate.value === LIVE.interacted && !this.writing) this.rebuild(q.subject.value, 0)
+    }
     for (const q of delta.add) {
       this.touched(q)
       if (q.predicate.value === LIVE.copied) void this.copy(q.subject.value, q.object.value)
@@ -421,13 +428,19 @@ export class Sandboxes {
     const p = q.predicate.value
     if (p !== LIVE.value && p !== LIVE.original) return
     const example = this.editorOf.get(q.subject.value)
-    const m = example && this.mounted.get(example)
+    if (example) this.rebuild(example, this.opts.delayMs ?? 300)
+  }
+
+  /** Build an example again after `ms` (a later request replaces a waiting one); with 0, even if its sources are the same. */
+  private rebuild(example: string, ms: number) {
+    const m = this.mounted.get(example)
     if (!m) return
     if (m.timer !== undefined) clearTimeout(m.timer)
+    if (ms === 0) m.key = undefined
     m.timer = setTimeout(() => {
       m.timer = undefined
       if (!this.disposed && this.mounted.get(m.iri) === m) this.build(m)
-    }, this.opts.delayMs ?? 300)
+    }, ms)
   }
 
   /** The example's sources from the site's graph: each editor's text as edited, else as written. */
@@ -482,7 +495,7 @@ export class Sandboxes {
     if (built.sandbox) this.mount(m, built.sandbox)
     const ms = Math.max(0, Math.round(now() - t0))
     const state = built.sandbox ? LIVE.Live : m.sandbox ? LIVE.Stale : LIVE.Broken
-    this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited })
+    this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited, interacted: built.sandbox ? false : undefined })
   }
 
   /** Put a built sandbox in the slot, in place of the one there (whose bus and styles go with it). */
@@ -510,7 +523,9 @@ export class Sandboxes {
       renderer,
       (h) => {
         flush()
-        if (h.delta.add.length || h.delta.remove.length) this.followData(m, sandbox, true)
+        if (!h.delta.add.length && !h.delta.remove.length) return
+        this.followData(m, sandbox, true)
+        this.write(m.iri, { interacted: true })
       },
       failed,
     )
@@ -583,7 +598,7 @@ export class Sandboxes {
   }
 
   /** Write what a build found to the site's graph (only what changed; what is not given stays), and patch the site. */
-  private write(example: string, status: { state?: string; problems?: SandboxProblem[]; ms?: number; edited?: boolean }) {
+  private write(example: string, status: { state?: string; problems?: SandboxProblem[]; ms?: number; edited?: boolean; interacted?: boolean }) {
     const store = this.runtime.store
     const f = store.factory
     const dg = f.defaultGraph()
@@ -596,6 +611,7 @@ export class Sandboxes {
       [LIVE.problem, status.problems],
       [LIVE.renderTime, status.ms],
       [LIVE.edited, status.edited],
+      [LIVE.interacted, status.interacted],
     ] as const
     for (const [p, v] of given) {
       if (v === undefined) continue
@@ -608,6 +624,7 @@ export class Sandboxes {
     if (status.state) desired.push(f.quad(s, nn(LIVE.sandboxState), nn(status.state)))
     if (status.ms !== undefined) desired.push(f.quad(s, nn(LIVE.renderTime), integer(status.ms)))
     if (status.edited) desired.push(f.quad(s, nn(LIVE.edited), f.literal('true', nn(XSD_BOOLEAN))))
+    if (status.interacted) desired.push(f.quad(s, nn(LIVE.interacted), f.literal('true', nn(XSD_BOOLEAN))))
     ;(status.problems ?? []).slice(0, 20).forEach((p, i) => {
       const node = nn(`${example}/problem-${i}`)
       desired.push(
@@ -624,7 +641,12 @@ export class Sandboxes {
     const had = new Set(current.map(quadKey))
     const delta: Delta = { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
     if (!delta.add.length && !delta.remove.length) return
-    this.runtime.apply(delta)
+    this.writing = true
+    try {
+      this.runtime.apply(delta)
+    } finally {
+      this.writing = false
+    }
     this.opts.flush()
   }
 

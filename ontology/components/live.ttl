@@ -21,7 +21,8 @@
 # this component - so a broken edit or a rule that throws stays inside it, and the reactions of
 # the example run in it. The host effect (src/sandbox.ts) only parses the sources, builds and mounts
 # the sandbox while it is shown, and writes back what happened: c:sandboxState, the problems it met
-# (c:problem), how long the rendering took (c:renderTime) and whether a source was edited (c:edited).
+# (c:problem), how long the rendering took (c:renderTime), whether a source was edited (c:edited) and
+# whether the example was used (c:interacted).
 # Reset and Copy are reactions; copying is a request (c:copied) the host carries out.
 
 c:LiveExample a owl:Class ;
@@ -46,6 +47,8 @@ c:selectedSource a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c
     rdfs:comment "The source shown (default: the first)."@en .
 c:textPreview a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether the example is also shown in the Text modality, under its rendering on screen."@en .
+c:textHeading a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:Phrase ;
+    rdfs:comment "What the Text pane is headed (default: c:LiveTextPhrase, \"As text\")."@en .
 c:showSources a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether the sources' editors are shown beside the rendering (default true; false shows the panes only, and Copy still copies the source)."@en .
 c:dataPreview a owl:DatatypeProperty ; rdfs:domain c:LiveExample ;
@@ -79,6 +82,8 @@ c:renderTime a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd
     rdfs:comment "How long the last build of the sandbox took, in whole milliseconds: loading the store, projecting and rendering."@en .
 c:edited a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a source differs from its c:original (Reset is enabled)."@en .
+c:interacted a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:boolean ;
+    rdfs:comment "Whether an interaction changed the example since it was built (Reset is enabled, and builds it again as written)."@en .
 c:copied a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:CodeEditor ;
     rdfs:comment "A request to copy a source to the clipboard: the host carries it out and removes it a moment later."@en .
 # The data (c:dataPreview), as the host last found it: a line per triple, each with its terms as
@@ -134,7 +139,7 @@ c:LiveBrokenPhrase a c:Phrase ;
                "Die Quelle hat einen Fehler, und noch wurde nichts dargestellt."@de ,
                "في المصدر خطأ، ولم يُعرض شيء بعد."@ar .
 c:LiveScreenPhrase a c:Phrase ; rdfs:label "On screen"@en , "На екрані"@uk , "Auf dem Bildschirm"@de , "على الشاشة"@ar .
-c:LiveDataPhrase a c:Phrase ; rdfs:label "RDF"@en , "RDF"@uk , "RDF"@de , "RDF"@ar .
+c:LiveDataPhrase a c:Phrase ; rdfs:label "Data"@en , "Дані"@uk , "Daten"@de , "البيانات"@ar .
 c:LiveFlowHintPhrase a c:Phrase ;
     rdfs:label "Use the example: what you do changes its data, and the screen and the text follow."@en ,
                "Скористайтеся прикладом: ваші дії змінюють його дані, а екран і текст ідуть за ними."@uk ,
@@ -151,8 +156,8 @@ c:LiveLinePhrase a c:Phrase ; rdfs:label "line {n}"@en , "рядок {n}"@uk , "
 
 c:LiveExampleRendering a sem:Rendering ; sem:targets c:LiveExample ; sem:stratum 0 ; sem:follows c:problem ;
     # Not the data (its lines and the flow are renderings of their own): an interaction does not render the frame again.
-    sem:watches rdf:type , c:label , c:sources , c:selectedSource , c:textPreview , c:showSources , c:dataPreview ,
-                c:sandboxState , c:problem , c:renderTime , c:edited , c:copied , fs:fullscreen , fs:fullViewport , l10n:label ,
+    sem:watches rdf:type , c:label , c:sources , c:selectedSource , c:textPreview , c:textHeading , c:showSources , c:dataPreview ,
+                c:sandboxState , c:problem , c:renderTime , c:edited , c:interacted , c:copied , fs:fullscreen , fs:fullViewport , l10n:label ,
                 sem:order , c:message , c:inSource , c:sourceLine , sty:tone .
 c:LiveExampleRendering-fn a sem:Rule ; sem:implements c:LiveExampleRendering ; sem:function "live-example" .
 
@@ -270,7 +275,7 @@ WHERE {
     BIND(STR(?resetPhrase0) AS ?resetPhrase)
     BIND(STR(?renderingPhrase0) AS ?renderingPhrase)
     BIND(IF(EXISTS { $this c:copied ?copiedSource }, STR(?copiedPhrase0), STR(?copyPhrase0)) AS ?copyLabel)
-    BIND(IF(EXISTS { $this c:edited ?edited FILTER(STR(?edited) = "true") }, ?none, true) AS ?pristine)
+    BIND(IF(EXISTS { $this c:edited|c:interacted ?changed FILTER(STR(?changed) = "true") }, ?none, true) AS ?pristine)
     OPTIONAL { $this c:renderTime ?ms }
     BIND(CONCAT(STRBEFORE(STR(?timePhrase0), "{ms}"), STR(?ms), STRAFTER(STR(?timePhrase0), "{ms}")) AS ?timeData)
     BIND(IF(BOUND(?ms), IRI(CONCAT(STR($this), "/~time")), ?none) AS ?time)
@@ -339,8 +344,10 @@ WHERE {
     BIND(IF(?withData, IRI(CONCAT(STR($this), "/~links")), ?none) AS ?links)
     # The Text modality, when asked for.
     BIND(EXISTS { $this c:textPreview ?tp FILTER(STR(?tp) = "true") } AS ?withText)
-    OPTIONAL { FILTER(?withText) ?textPhrase0At l10n:of c:LiveTextPhrase ; l10n:name ?textPhrase0 }
-    OPTIONAL { FILTER(?withText) c:LiveTextPhrase rdfs:label ?textPhrase0 FILTER(langMatches(lang(?textPhrase0), "en")) }
+    OPTIONAL { FILTER(?withText) $this c:textHeading ?ownTextPhrase }
+    BIND(COALESCE(?ownTextPhrase, c:LiveTextPhrase) AS ?textPhraseIri)
+    OPTIONAL { FILTER(?withText) ?textPhrase0At l10n:of ?textPhraseIri ; l10n:name ?textPhrase0 }
+    OPTIONAL { FILTER(?withText) ?textPhraseIri rdfs:label ?textPhrase0 FILTER(langMatches(lang(?textPhrase0), "en")) }
     BIND(STR(?textPhrase0) AS ?textPhrase)
     BIND(IF(?withText, IRI(CONCAT(STR($this), "/~text-head")), ?none) AS ?textHead)
     BIND(IF(?withText, IRI(CONCAT(STR($this), "/~text-head-text")), ?none) AS ?textHeadText)
@@ -565,11 +572,14 @@ c:LiveExampleReset a beh:Reaction ;
     beh:sourceClass c:LiveExample ;
     ann:announces "The example is back as written."@en , "Приклад знову такий, як написано."@uk ,
                   "Das Beispiel ist wieder wie geschrieben."@de , "عاد المثال كما كُتب."@ar ;
-    beh:deletes """CONSTRUCT { ?editor c:value ?value ; c:caret ?caret ; c:suggesting ?suggesting ; c:activeSuggestion ?active }
+    # The sources as written; and, the example having been used, the request to build it again
+    # (removing c:interacted, which the host carries out).
+    beh:deletes """CONSTRUCT { ?editor c:value ?value ; c:caret ?caret ; c:suggesting ?suggesting ; c:activeSuggestion ?active . $this c:interacted ?used }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n sem:renders ?control . ?control c:resets $this .
-  $this c:sources/rdf:rest*/rdf:first ?editor .
-  { ?editor c:value ?value } UNION { ?editor c:caret ?caret } UNION { ?editor c:suggesting ?suggesting } UNION { ?editor c:activeSuggestion ?active }
+  { $this c:sources/rdf:rest*/rdf:first ?editor .
+    { ?editor c:value ?value } UNION { ?editor c:caret ?caret } UNION { ?editor c:suggesting ?suggesting } UNION { ?editor c:activeSuggestion ?active } }
+  UNION { $this c:interacted ?used }
 }""" ;
     sem:function "live-example:reset" .
 
@@ -596,4 +606,5 @@ c:LiveExampleShape a sh:NodeShape ; sh:targetClass c:LiveExample ;
                 [ sh:path c:selectedSource ; sh:maxCount 1 ; sh:class c:CodeEditor ] ,
                 [ sh:path c:textPreview ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path c:showSources ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path c:textHeading ; sh:maxCount 1 ; sh:class c:Phrase ] ,
                 [ sh:path c:dataPreview ; sh:maxCount 1 ; sh:message "A live example shows at most one data query (c:dataPreview, a CONSTRUCT)." ] .
