@@ -4,6 +4,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
+@prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -151,7 +152,8 @@ like a button. Items are only built while the menu is open."""@en ;
 c:MenuItem a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """An entry of a c:Menu: c:label, optional c:icon, optional sty:tone (e.g. sty:Danger for a
-destructive action), c:disabled. Choosing it closes its menu; anything else it does is its own
+destructive action), c:disabled. A destination (c:href or resolved nav:href) renders an anchor with
+role=menuitem; a disabled item remains a disabled button and cannot navigate. Choosing it closes its menu; anything else it does is its own
 beh:Reaction (per instance or per class), applied in the same delta."""@en ;
     sem:slug "menu-item" .
 
@@ -280,7 +282,7 @@ c:MenuItemRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Button ; sem:renders $this ; rdfhtml:type "button" ; rdfhtml:disabled ?disabled ;
+  ?root a ?rootType ; sem:renders $this ; rdfhtml:type ?buttonType ; rdfhtml:href ?linkHref ; rdfhtml:disabled ?disabled ;
         rdfhtml:hasChild ?icon, ?labelSpan ; rdfhtml:attribute ?role, ?ariaDisabled .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menuitem" .
   ?ariaDisabled a rdfhtml:Attribute ; rdfhtml:attributeName "aria-disabled" ; rdfhtml:attributeValue "true" .
@@ -300,6 +302,13 @@ WHERE {
   OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }
   BIND(STR(?iconValue) AS ?iconData)
   BIND(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } AS ?isDisabled)
+  OPTIONAL { $this nav:href ?resolvedHref }
+  OPTIONAL { $this c:href ?rawHref }
+  BIND(COALESCE(?resolvedHref, ?rawHref) AS ?href)
+  BIND(BOUND(?href) && !?isDisabled AS ?linked)
+  BIND(IF(?linked, rdfhtml:A, rdfhtml:Button) AS ?rootType)
+  BIND(IF(?linked, ?none, "button") AS ?buttonType)
+  BIND(IF(?linked, STR(?href), ?none) AS ?linkHref)
   BIND(IF(?isDisabled, "", ?none) AS ?disabled)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
@@ -325,7 +334,11 @@ WHERE {
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }
-  BIND(CONCAT("  › ", COALESCE(CONCAT(STR(?iconValue), " "), ""), ?label) AS ?line)
+  OPTIONAL { $this nav:href ?resolvedHref }
+  OPTIONAL { $this c:href ?rawHref }
+  BIND(COALESCE(?resolvedHref, ?rawHref) AS ?href)
+  BIND(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } AS ?isDisabled)
+  BIND(CONCAT("  › ", COALESCE(CONCAT(STR(?iconValue), " "), ""), ?label, IF(BOUND(?href) && !?isDisabled, CONCAT(" <", STR(?href), ">"), "")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .

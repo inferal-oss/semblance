@@ -78,6 +78,9 @@ c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
                 [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
                 [ sh:path c:count ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ;
                   sh:message "A link's c:count is one whole number, zero or more." ] .
+c:MenuItemShape a sh:NodeShape ; sh:targetClass c:MenuItem ;
+    sh:property [ sh:path c:href ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+                  sh:message "A menu item's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .
 c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
     sh:property [ sh:path c:slot ; sh:maxCount 1 ; sh:datatype xsd:string ;
                   sh:message "A host slot has one name (c:slot), a plain string." ] .

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { mountShell } from './harness.ts'
+import { fitMenus } from '../src/web/menu.ts'
+import { compileStyles } from '../src/style/compile.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = NS.c
@@ -55,6 +57,13 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     expect(danger.getAttribute('data-sem-tone')).toBe('danger')
     expect(danger.getAttribute('data-sem-emphasis')).toBe('soft')
     expect(root('act-ib-off')!.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('gives open card menus a scrollable overlay above neighbouring cards', () => {
+    const { store } = actions()
+    const css = compileStyles(store)
+    expect(css).toContain('[data-sem-c="card"]:has([data-sem-c=menu][data-open])')
+    expect(css).toContain('overflow-y: auto')
   })
 
   it('flips a pressable icon button through its reaction', () => {
@@ -127,6 +136,49 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     fire(trigger.querySelector('.sem-label')!, 'click')
     expect(value('act-menu-new', C + 'open')).toEqual(['false'])
     expect(menu.hasAttribute('data-open')).toBe(false)
+  })
+
+  it('fits a long menu above its trigger and limits its scroll height', () => {
+    const { document, root, fire } = actions()
+    const menu = root('act-menu-links')!
+    fire(menu.querySelector('button')!, 'click')
+    const trigger = menu.querySelector('button')!
+    const popup = menu.querySelector('.sem-menu-popup')!
+    Object.defineProperty(document.defaultView, 'innerHeight', { configurable: true, value: 720 })
+    trigger.getBoundingClientRect = () => ({ top: 530, bottom: 565 } as DOMRect)
+    Object.defineProperty(popup, 'scrollHeight', { configurable: true, value: 1100 })
+    fitMenus(document.body)
+    expect(menu.hasAttribute('data-sem-menu-above')).toBe(true)
+    expect(menu.style.getPropertyValue('--sem-menu-max-height')).toBe('420px')
+    trigger.getBoundingClientRect = () => ({ top: 30, bottom: 65 } as DOMRect)
+    fitMenus(document.body)
+    expect(menu.hasAttribute('data-sem-menu-above')).toBe(false)
+    expect(menu.style.getPropertyValue('--sem-menu-max-height')).toBe('420px')
+  })
+
+  it('renders destination items as links and disabled destinations as buttons', () => {
+    const { root, fire, value, runtime, window } = actions()
+    const menu = root('act-menu-links')!
+    fire(menu.querySelector('button')!, 'click')
+    const guide = root('act-mi-guide')!
+    expect(guide.localName).toBe('a')
+    expect(guide.getAttribute('href')).toBe('/docs/COMPONENTS')
+    expect(guide.getAttribute('role')).toBe('menuitem')
+    const disabled = root('act-mi-disabled-guide')!
+    expect(disabled.localName).toBe('button')
+    expect(disabled.hasAttribute('disabled')).toBe(true)
+    const text = runtime.project({ modality: MOD.Text, name: 'text-linked-menu', roots: [UI + 'act-menu-links'] })
+    expect(toText(text.index, UI + 'act-mi-guide')).toBe('  › Component guide </docs/COMPONENTS>')
+    expect(toText(text.index, UI + 'act-mi-disabled-guide')).toBe('  › Unavailable guide')
+    fire(guide, 'click')
+    expect(value('act-menu-links', C + 'open')).toEqual(['false'])
+    expect(menu.querySelector('[role=menu]')).toBeNull()
+    fire(menu.querySelector('button')!, 'click')
+    const space = new window.Event('keydown', { bubbles: true, cancelable: true })
+    Object.defineProperty(space, 'key', { value: ' ' })
+    root('act-mi-guide')!.dispatchEvent(space)
+    expect(space.defaultPrevented).toBe(true)
+    expect(value('act-menu-links', C + 'open')).toEqual(['false'])
   })
 
   it('closes with Escape through the keyboard layer', () => {
