@@ -1,6 +1,7 @@
 import type { Term } from '@rdfjs/types'
 import { RDF_FIRST, RDF_NIL, RDF_REST, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
+import { queryReads } from '../sparql-reads.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Rule {
@@ -22,6 +23,11 @@ export interface Rule {
    * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse).
    */
   followPaths: string[][]
+  /**
+   * The predicates whose changes (on the focus, or on a followed node) make the focus dirty:
+   * sem:watches, else, for a SPARQL rule, every predicate its query names (with what it requires,
+   * is stopped by and follows), when it names them all. Absent: any predicate.
+   */
   watches?: Set<string>
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
@@ -139,6 +145,9 @@ export function loadRules(store: GraphStore): Rule[] {
       // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
       return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
     })
+    const requires = getAll(SEM.requires)
+    const unless = getAll(SEM.unless)
+    const forEach = get(SEM.forEach)?.value
     rules.push({
       iri: r.value,
       target: target.value,
@@ -151,9 +160,9 @@ export function loadRules(store: GraphStore): Rule[] {
       fn,
       follows: follows.filter((p): p is string => typeof p === 'string'),
       followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
-      watches: watches.length ? new Set(watches) : undefined,
+      watches: watches.length ? new Set(watches) : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
-      forEach: get(SEM.forEach)?.value,
+      forEach,
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
@@ -162,14 +171,27 @@ export function loadRules(store: GraphStore): Rule[] {
       always: get(SEM.always)?.value === 'true',
       // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
       bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
-      requires: getAll(SEM.requires),
-      unless: getAll(SEM.unless),
+      requires,
+      unless,
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
       readsLanguage: !!query && READS_LANGUAGE.test(query),
       incremental: !!query && get('https://semblance.dev/ns/view#strategy')?.value === 'https://semblance.dev/ns/view#Incremental',
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
+}
+
+/**
+ * The predicates a query names in its patterns (with `also`), or undefined when some pattern takes
+ * any predicate (a variable, a negated set) or the query cannot be read: a changed triple whose
+ * predicate it does not name matches none of its patterns, so it cannot change the query's result.
+ * A SPARQL rule watches these as a function rule's traced reads would, and is not re-run for the
+ * rest of its focus's (or a followed node's) triples.
+ */
+function namedPredicates(query: string, also: string[]): Set<string> | undefined {
+  const reads = queryReads(query)
+  if (!reads || reads.some((r) => r.p === undefined)) return undefined
+  return new Set([...reads.map((r) => r.p!), ...also])
 }
 
 /** Pick the active rules: matching modality, enabled layer, one runnable implementation per slot. */
