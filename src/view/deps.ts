@@ -296,87 +296,13 @@ export class Dependencies {
 
   /** From bindings in a scope (a pattern bound to a triple, or a derived row), join through the patterns around them until the keys are bound. */
   private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
-    const bound = new Set(start.keys())
-    // The patterns (and aliases) that occur with p in a solution: its scope and the scopes around it.
-    const { around, aliases, byVar } = this.neighbours(scope, p)
-    // Breadth-first over variables, from the bound ones to each key.
-    type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
-    const via = new Map<string, Edge>()
-    const queue = [...bound]
-    const reached = new Set(bound)
-    // Where each variable is bound: a walk leaves a scope only through what it certainly binds.
-    const level = new Map<string, Scope>([...bound].map((v) => [v, scope]))
-    const leaves = (v: string, to: Scope) => {
-      let s: Scope | undefined = level.get(v)
-      const inside = (x: Scope | undefined) => {
-        for (; x; x = x.parent) if (x === to) return true
-        return false
-      }
-      if (!inside(s)) return true
-      for (; s && s !== to; s = s.parent) if (s.certain && !s.certain.has(v)) return false
-      return true
-    }
-    const reach = (w: string, edge: Edge, at: Scope) => {
-      if (reached.has(w)) return
-      reached.add(w), via.set(w, edge), queue.push(w), level.set(w, at)
-    }
-    const varsOf = patVars
-    while (queue.length && !this.keys.every((k) => reached.has(k))) {
-      const v = queue.shift()!
-      for (const x of byVar.get(v) ?? []) {
-        const vs = varsOf(x)
-        if (!leaves(v, x.scope)) continue
-        // Path connectors need a bound end to walk from.
-        for (const w of vs) reach(w, { pat: x, from: v }, x.scope)
-      }
-      for (const a of aliases) {
-        if (!leaves(v, a.scope)) continue
-        if (a.to === v) for (const w of a.from) reach(w, { alias: a, dir: 'out', from: v }, a.scope)
-        if (a.first && a.from[0] === v) reach(a.to, { alias: a, dir: 'in', from: v }, a.scope)
-      }
-    }
-    // No part of the key reached: any partition - unless the change joins with nothing around it
-    // (then it is in no solution). Part of it: the slice it binds.
-    const unreachable = this.keys.length > 0 && !this.keys.some((k) => reached.has(k))
-    // The edges on the way to each key, in the order they were found (unreachable: all of them).
-    const needed: Edge[] = unreachable ? [...via.values()] : []
-    const seen = new Set<Edge>()
-    for (const k of unreachable ? [] : this.keys) {
-      if (!reached.has(k)) continue
-      const chain: Edge[] = []
-      for (let w = k; via.has(w); w = via.get(w)!.from) chain.push(via.get(w)!)
-      for (const e of chain.reverse()) if (!seen.has(e)) seen.add(e), needed.push(e)
-    }
-    // Patterns that hold in every solution p takes part in (its scope and those around it; not
-    // paths) prune the rows once they bind all of a pattern's variables: a semi-join, so a probe
-    // reaches the partitions that hold the change, not every one its first edge leads to.
-    const checks = around
-    const holds = (r: Map<string, Term>) =>
-      checks.every((x) => {
-        // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
-        if (!varsOf(x).every((v) => !r.has(v) || leaves(v, x.scope))) return true
-        const val = (pos: Pos) => ('t' in pos ? pos.t : r.get(pos.v))
-        const s = val(x.s)
-        const pp = val(x.p as Pos)
-        const o = val(x.o)
-        // With a part unbound, it still needs some triple that agrees with what is bound (a
-        // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
-        // No triple has a literal subject (and the store would refuse to look).
-        if (s && s.termType === 'Literal') return false
-        if (!s || !pp || !o) {
-          if (!this.semiJoin) return true
-          // (Only through an index of a bound node: a predicate alone would read all of it.)
-          if (!varsOf(x).some((v) => r.has(v)) || (!s && !o)) return true
-          if (pp && pp.termType !== 'NamedNode') return true
-        }
-        if (!x.g) return lookup(s ?? null, pp ?? null, o ?? null).length > 0
-        return lookup(s ?? null, pp ?? null, o ?? null, val(x.g) ?? null).length > 0
-      })
+    const plan = this.plan(scope, p, start)
+    const holds = (r: Map<string, Term>) => this.holds(plan, r, lookup)
     // Bound already: the key is the change's own (with semiJoin, if the patterns around it hold).
-    if (this.keys.every((k) => bound.has(k))) return this.semiJoin ? [start].filter(holds) : [start]
+    if (plan.bound) return this.semiJoin ? [start].filter(holds) : [start]
     let rows = [start].filter(holds)
     const done = new Set<Pat | Alias>()
-    for (const e of needed) {
+    for (const e of plan.needed) {
       const x = (e.pat ?? e.alias)!
       if (e.pat && done.has(x)) continue
       done.add(x)
@@ -404,8 +330,100 @@ export class Dependencies {
       rows = dedupe(next).filter(holds)
       if (!rows.length) return []
     }
-    if (unreachable) return rows.length ? 'global' : []
-    return rows.filter((r) => this.keys.every((k) => r.has(k) || !reached.has(k)))
+    if (plan.unreachable) return rows.length ? 'global' : []
+    return rows.filter((r) => this.keys.every((k) => r.has(k) || !plan.reached.has(k)))
+  }
+
+  /** Walk plans by where the walk starts (a pattern, or a derived row's scope) and which variables are bound there. */
+  private plans = new Map<Pat | Scope, Map<string, Plan>>()
+
+  /**
+   * How a walk goes from these bound variables to the key (#137): the search is done once per pattern
+   * and set of bound variables, not per probe. Breadth-first over variables through the patterns (and
+   * aliases) that occur with p in a solution, leaving a scope only through what it certainly binds;
+   * the edges on the way to each key, in the order they were found (no part of the key reached:
+   * all of them, and any partition - unless the change joins with nothing around it). Patterns that
+   * hold in every solution p takes part in (its scope and those around it; not paths) prune the rows
+   * once they bind all of a pattern's variables: a semi-join, so a probe reaches the partitions that
+   * hold the change, not every one its first edge leads to - except through a variable an inner group
+   * may leave unbound (`blocked`), which is no constraint.
+   */
+  private plan(scope: Scope, p: Pat | undefined, start: Map<string, Term>): Plan {
+    const signature = [...start.keys()].sort().join(' ')
+    let byStart = this.plans.get(p ?? scope)
+    if (!byStart) this.plans.set(p ?? scope, (byStart = new Map()))
+    const cached = byStart.get(signature)
+    if (cached) return cached
+    const bound = new Set(start.keys())
+    const { around, aliases, byVar } = this.neighbours(scope, p)
+    const via = new Map<string, Edge>()
+    const queue = [...bound]
+    const reached = new Set(bound)
+    const level = new Map<string, Scope>([...bound].map((v) => [v, scope]))
+    const leaves = (v: string, to: Scope) => {
+      let s: Scope | undefined = level.get(v)
+      const inside = (x: Scope | undefined) => {
+        for (; x; x = x.parent) if (x === to) return true
+        return false
+      }
+      if (!inside(s)) return true
+      for (; s && s !== to; s = s.parent) if (s.certain && !s.certain.has(v)) return false
+      return true
+    }
+    const reach = (w: string, edge: Edge, at: Scope) => {
+      if (reached.has(w)) return
+      reached.add(w), via.set(w, edge), queue.push(w), level.set(w, at)
+    }
+    while (queue.length && !this.keys.every((k) => reached.has(k))) {
+      const v = queue.shift()!
+      for (const x of byVar.get(v) ?? []) {
+        if (!leaves(v, x.scope)) continue
+        // Path connectors need a bound end to walk from.
+        for (const w of patVars(x)) reach(w, { pat: x, from: v }, x.scope)
+      }
+      for (const a of aliases) {
+        if (!leaves(v, a.scope)) continue
+        if (a.to === v) for (const w of a.from) reach(w, { alias: a, dir: 'out', from: v }, a.scope)
+        if (a.first && a.from[0] === v) reach(a.to, { alias: a, dir: 'in', from: v }, a.scope)
+      }
+    }
+    const unreachable = this.keys.length > 0 && !this.keys.some((k) => reached.has(k))
+    const needed: Edge[] = unreachable ? [...via.values()] : []
+    const seen = new Set<Edge>()
+    for (const k of unreachable ? [] : this.keys) {
+      if (!reached.has(k)) continue
+      const chain: Edge[] = []
+      for (let w = k; via.has(w); w = via.get(w)!.from) chain.push(via.get(w)!)
+      for (const e of chain.reverse()) if (!seen.has(e)) seen.add(e), needed.push(e)
+    }
+    const checks = around.map((x) => ({ x, vars: patVars(x), blocked: new Set(patVars(x).filter((v) => !leaves(v, x.scope))) }))
+    const plan: Plan = { needed, unreachable, reached, checks, bound: this.keys.every((k) => bound.has(k)) }
+    byStart.set(signature, plan)
+    return plan
+  }
+
+  /** Whether a row passes the plan's checks (see plan()). */
+  private holds(plan: Plan, r: Map<string, Term>, lookup: Lookup): boolean {
+    for (const { x, vars, blocked } of plan.checks) {
+      let skip = false
+      for (const v of blocked) if (r.has(v)) (skip = true)
+      if (skip) continue
+      const s = 't' in x.s ? x.s.t : r.get(x.s.v)
+      const pp = 't' in (x.p as Pos) ? (x.p as { t: Term }).t : r.get((x.p as { v: string }).v)
+      const o = 't' in x.o ? x.o.t : r.get(x.o.v)
+      // No triple has a literal subject (and the store would refuse to look).
+      if (s && s.termType === 'Literal') return false
+      if (!s || !pp || !o) {
+        // With a part unbound (semiJoin), some triple must still agree with what is bound - through
+        // an index of a bound node (a predicate alone would read all of it).
+        if (!this.semiJoin) continue
+        if (!vars.some((v) => r.has(v)) || (!s && !o)) continue
+        if (pp && pp.termType !== 'NamedNode') continue
+      }
+      const g = x.g ? ('t' in x.g ? x.g.t : r.get(x.g.v)) : undefined
+      if (!(x.g ? lookup(s ?? null, pp ?? null, o ?? null, g ?? null) : lookup(s ?? null, pp ?? null, o ?? null)).length) return false
+    }
+    return true
   }
 
   private neighbourhoods = new Map<Pat | Scope, { around: Pat[]; aliases: Alias[]; byVar: Map<string, Pat[]> }>()
@@ -621,6 +639,19 @@ const NUMERIC = /#(integer|decimal|double|float|int|long|short|byte|nonNegativeI
  * A query's constant and a stored term: equal, or the same number (a store may keep "01" and "+1"
  * as 1, and a query may write either): matching more is safe, a dependency missed is not.
  */
+/** A step of a walk: through a pattern, or an alias, from a variable already bound. */
+type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
+
+/** A walk's plan (Dependencies.plan). */
+interface Plan {
+  needed: Edge[]
+  unreachable: boolean
+  reached: Set<string>
+  checks: { x: Pat; vars: string[]; blocked: Set<string> }[]
+  /** The start binds the whole key already. */
+  bound: boolean
+}
+
 const varCache = new WeakMap<Pat, string[]>()
 /** A pattern's variables (its subject, plain predicate, object and graph). */
 function patVars(x: Pat): string[] {

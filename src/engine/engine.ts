@@ -8,6 +8,7 @@ import { loadRules, type Rule, type Selection, selectRules, superclasses } from 
 import type { Watchdog } from './watchdog.ts'
 import { Parked } from './parked.ts'
 import { ExactIndex } from './exact.ts'
+import { matchIn } from '../view/probe.ts'
 import type { Lookup } from '../view/deps.ts'
 
 export interface EngineOptions {
@@ -131,7 +132,7 @@ export class Engine {
   private readonly graphs: Quad_Graph[]
   /** The graphs rules read, and the input graphs among them, by value ('' = the default graph). */
   private readonly graphKeys: ReadonlySet<string>
-  private readonly inputGraphKeys: ReadonlySet<string>
+  private readonly inputKeys: ReadonlySet<string>
   private readonly supers: (cls: string) => Set<string>
   private ctx: RuleContext
 
@@ -147,6 +148,11 @@ export class Engine {
   private exact?: ExactIndex
   private readonly exactOn: boolean
   private removedBatch: Quad[] = []
+  /**
+   * Set by the runtime while it processes a tick: its views' lookup of the input graphs (old and
+   * new state), shared by the probes of rules with exact dependencies (view/probe.ts).
+   */
+  inputLookup?: Lookup
   /** Rules maintained as views (iv:strategy iv:Incremental), and those whose view was checked against an evaluation. */
   private readonly maintain?: EngineOptions['maintain']
   private maintained = new Map<Rule, MaintainedRule & { stop: () => void }>()
@@ -241,7 +247,7 @@ export class Engine {
     this.agent = f.namedNode('urn:semblance:projection:' + (opts.name ?? 'main'))
     this.graphs = [f.defaultGraph(), ...(opts.inputGraphs ?? []).map((g) => f.namedNode(g)), this.graph]
     this.graphKeys = new Set(this.graphs.map((g) => g.value))
-    this.inputGraphKeys = new Set(this.graphs.slice(0, -1).map((g) => g.value))
+    this.inputKeys = new Set(this.graphs.slice(0, -1).map((g) => g.value))
     this.functions = opts.functions ?? {}
     this.provenance = opts.provenance ?? false
     this.bulkThreshold = opts.bulkThreshold ?? 2
@@ -252,6 +258,11 @@ export class Engine {
     this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
     this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
+  }
+
+  /** The input graphs rules read (by value; '' is the default graph). */
+  get inputGraphKeys(): ReadonlySet<string> {
+    return this.inputKeys
   }
 
   get languages(): readonly string[] {
@@ -639,7 +650,7 @@ export class Engine {
     let typed = this.typedIn.get(focus)
     if (typed === undefined) {
       const f = this.store.factory
-      this.typedIn.set(focus, (typed = this.holds(f.namedNode(focus), f.namedNode(RDF_TYPE), null, this.inputGraphKeys)))
+      this.typedIn.set(focus, (typed = this.holds(f.namedNode(focus), f.namedNode(RDF_TYPE), null, this.inputKeys)))
     }
     return typed
   }
@@ -846,6 +857,7 @@ export class Engine {
   private exactLookup(): Lookup {
     const removed = this.removedBatch
     const graphs = this.graphs
+    const shared = this.inputLookup
     return (s, p, o, g) => {
       const out: Quad[] = []
       const seen = new Set<string>()
@@ -855,7 +867,12 @@ export class Engine {
       }
       // A literal (or a variable's stand-in) never is a subject or a predicate: nothing matches.
       if ((s && s.termType === 'Literal') || (p && p.termType !== 'NamedNode')) return out
-      for (const graph of g ? [g] : graphs) for (const x of this.store.match(s as never, p as never, o as never, graph as never)) put(x)
+      if (shared && g === undefined) {
+        // The input graphs as the tick's views saw them (shared, remembered); this engine's own graph live.
+        for (const x of shared(s, p, o)) put(x)
+        for (const x of this.store.match(s as never, p as never, o as never, this.graph)) put(x)
+      } else if (g) for (const x of this.store.match(s as never, p as never, o as never, g as never)) put(x)
+      else for (const x of matchIn(this.store, graphs, this.graphKeys, s ?? null, p ?? null, o ?? null)) put(x)
       if (removed.length) {
         const pool = s ? this.removedBy.get('s' + termKey(s)) : o ? this.removedBy.get('o' + termKey(o)) : p ? this.removedBy.get('p' + p.value) : removed
         for (const x of pool ?? []) if ((!s || x.subject.equals(s)) && (!p || x.predicate.equals(p)) && (!o || x.object.equals(o)) && (!g || x.graph.equals(g))) put(x)
@@ -863,6 +880,7 @@ export class Engine {
       return out
     }
   }
+
 
   private touchFollowers(followers: Set<Follower> | undefined, q: Quad) {
     if (!followers) return
@@ -1388,7 +1406,7 @@ export class Engine {
         for (const n of nodes) {
           // (A list cell on the way is a blank node, never the subject of a named step.)
           if (!IRI_LIKE.test(n)) continue
-          for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+          for (const q of matchIn(this.store, this.graphs, this.graphKeys, f.namedNode(n), p, null)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
         }
       } else for (const n of nodes) for (const x of this.links.get(n)?.get(step) ?? []) next.add(x)
       nodes = next

@@ -20,6 +20,7 @@ import type { FnView, MaintainedPlan, Part, Post, ViewCompiler, ViewPlan, ViewSo
 import { WindowState } from './window.ts'
 import type { Node, Triple } from './sparql.ts'
 import { Terms } from './terms.ts'
+import { GraphLookup } from './probe.ts'
 import { ZSet } from './zset.ts'
 
 export const IV = 'https://semblance.dev/ns/view#'
@@ -291,10 +292,13 @@ export class ViewRuntime {
   tick(delta: Delta): Delta {
     if (!this.started) return { add: [], remove: [] }
     this.tickNo++
+    // The store changed since the last tick: no lookup carries over.
+    this.forgetLookups(false)
     const t = performance.now()
     const now = this.clock.now()
     const inDataset = (q: Quad) => this.dataset.has(q.graph.value)
     const changes = { add: delta.add.filter(inDataset), remove: delta.remove.filter(inDataset) }
+    this.tickRemoved = changes.remove
     if ([...changes.add, ...changes.remove].some((q) => q.predicate.value === NS.sh + 'prefix' || q.predicate.value === NS.sh + 'namespace')) this.prefixText = undefined
     const out = new ZSet<Quad>()
     // A view's own triples (its query, its window, its parameters) changed: compile it again.
@@ -392,6 +396,7 @@ export class ViewRuntime {
 
   /** Rebuild suspended views whose component is shown again; returns the view graph's change (applied). */
   resume(): Delta {
+    this.forgetLookups(false)
     const out = new ZSet<Quad>()
     const now = this.clock.now()
     const applied: Delta = { add: [], remove: [] }
@@ -766,37 +771,37 @@ export class ViewRuntime {
    * the new state together, for dependency probes.
    */
   lookup(removed: readonly Quad[], readsViews: boolean): Lookup {
-    const graphs = this.datasetFor(readsViews)
-    const by = new Map<string, Quad[]>()
-    const index = (k: string, q: Quad) => {
-      let l = by.get(k)
-      if (!l) by.set(k, (l = []))
-      l.push(q)
-    }
-    for (const q of removed) {
-      index('s' + termKey(q.subject), q)
-      index('p' + q.predicate.value, q)
-      index('o' + termKey(q.object), q)
-    }
-    // Without `g`: the union default graph (a triple once). With it: quads of the named graphs
-    // (`g` one of them, or null: any), each with its graph.
-    return (s, p, o, g) => {
-      const seen = new Set<string>()
-      const out: Quad[] = []
-      const named = g !== undefined
-      const put = (q: Quad) => {
-        if (named && (q.graph.termType !== 'NamedNode' || (g && !q.graph.equals(g)))) return
-        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object) + (named ? ' ' + q.graph.value : '')
-        if (!seen.has(k)) seen.add(k), out.push(q)
-      }
-      for (const x of graphs) if (!named || (x.termType === 'NamedNode' && (!g || x.equals(g)))) for (const q of this.store.match(s as never, p as never, o as never, x as never)) put(q)
-      if (removed.length) {
-        const pool = s ? by.get('s' + termKey(s)) : o ? by.get('o' + termKey(o)) : p ? by.get('p' + p.value) : removed
-        for (const q of pool ?? []) if ((!s || q.subject.equals(s)) && (!p || q.predicate.equals(p)) && (!o || q.object.equals(o))) put(q)
-      }
-      return out
-    }
+    // One per dataset and set of removals while a tick lasts: every view's probes share it (probe.ts).
+    let byDataset = this.lookups.get(removed)
+    if (!byDataset) this.lookups.set(removed, (byDataset = new Map()))
+    let l = byDataset.get(readsViews)
+    if (!l) byDataset.set(readsViews, (l = new GraphLookup(this.store, this.datasetFor(readsViews), removed)))
+    return l.lookup
   }
+
+  /** Shared lookups (see lookup()), by the removals they put back; the views graph's go when a view writes it. */
+  private lookups = new Map<readonly Quad[], Map<boolean, GraphLookup>>()
+
+  private forgetLookups(viewsGraphOnly: boolean) {
+    if (!viewsGraphOnly) return this.lookups.clear()
+    for (const byDataset of this.lookups.values()) byDataset.delete(true)
+  }
+
+  /** This tick's removals in the views' dataset (the shared lookups put them back). */
+  private tickRemoved: readonly Quad[] = []
+
+  /**
+   * The tick's lookup over the input graphs and the views graph, old and new state together: what
+   * a projection's rules probe the input with during the same tick (the engine's exact
+   * dependencies), so views and rules share each lookup. Valid until the next tick.
+   */
+  sharedLookup(): Lookup {
+    return this.lookup(this.tickRemoved, true)
+  }
+
+  /** No triples put back: lookups of the state as it is (anchors). */
+  readonly unchanged: readonly Quad[] = []
+
 
   /** A stream's retention (tree:view/ldes:retentionPolicy/ldes:amount), if it has one. */
   retained(stream: string): number | undefined {
@@ -835,6 +840,7 @@ export class ViewRuntime {
 
   /** Apply a change of view output (weights) to the store through reference counts. */
   private sink(out: ZSet<Quad>): Delta {
+    if (out.size) this.forgetLookups(true)
     const add: Quad[] = []
     const remove: Quad[] = []
     const f = this.store.factory
@@ -1075,8 +1081,7 @@ class PartState {
     const s = val(a.s)
     const pp = val(a.p as { v: string } | { t: Term })
     const o = val(a.o)
-    for (const g of this.rt.datasetFor(this.view.readsViews)) if (this.rt.store.match((s ?? null) as never, (pp ?? null) as never, (o ?? null) as never, g as never).length) return true
-    return false
+    return this.rt.lookup(this.rt.unchanged, this.view.readsViews)(s ?? null, pp ?? null, o ?? null).length > 0
   }
 
   /** Partitions by one part of their key: position -> term key -> partition keys (keys of more than one variable). */

@@ -153,7 +153,18 @@ export class Runtime {
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
-    for (const p of this.projections) p.engine.process(all), settle(p)
+    // Rules probe the input with the views' lookups of this tick (shared, view/probe.ts).
+    const shared = this.views.isStarted ? this.views.sharedLookup() : undefined
+    const sharedKeys = new Set(this.views.datasetFor(true).map((g) => g.value))
+    for (const p of this.projections) {
+      const keys = p.engine.inputGraphKeys
+      p.engine.inputLookup = keys.size === sharedKeys.size && [...keys].every((k) => sharedKeys.has(k)) ? shared : undefined
+      try {
+        p.engine.process(all), settle(p)
+      } finally {
+        p.engine.inputLookup = undefined
+      }
+    }
     this.resumeViews()
     for (const [graph, d] of byGraph) for (const l of this.inputListeners) l(graph, d)
   }
