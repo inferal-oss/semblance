@@ -15,7 +15,8 @@
 import type { Term } from '@rdfjs/types'
 import { termKey } from '../rdf.ts'
 import { Dependencies } from './deps.ts'
-import type { Aggregate, AggregateFn, MaintainedPlan, Op, Order, Part, Post, RecomputePlan, SparqlRunner, ViewCompiler, ViewPlan, ViewSource } from './plan.ts'
+import type { Aggregate, AggregateFn, MaintainedPlan, Op, Order, Part, Post, RecomputePlan, SparqlRunner, ViewCompiler, ViewPlan, ViewSource, WindowSpec } from './plan.ts'
+import { bucketStart, timeLiteral, timeOf } from './window.ts'
 import { certainVars, type Expr, type Group, groupVars, type Item, parseQuery, projectedVars, type Query, type Select, SparqlSyntaxError } from './sparql.ts'
 
 export const TREE_MEMBER = 'https://w3id.org/tree#member'
@@ -49,7 +50,15 @@ export const compiler: ViewCompiler = {
       return compile(source, run)
     } catch (e) {
       if (!(e instanceof Unsupported) && !(e instanceof SparqlSyntaxError)) throw e
-      return { kind: 'recompute', form: source.form, query: source.query, reason: (e as Error).message } satisfies RecomputePlan
+      // Re-run only when a change matches one of its triple patterns, where they can be read.
+      let deps: Dependencies | undefined
+      try {
+        deps = new Dependencies(run.factory, parseQuery(source.query, prefixMap(source.prefixes)).select.where, [])
+        if (deps.problem) deps = undefined
+      } catch {
+        deps = undefined
+      }
+      return { kind: 'recompute', form: source.form, query: source.query, reason: (e as Error).message, deps } satisfies RecomputePlan
     }
   },
 }
@@ -80,27 +89,26 @@ function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
       const sub = subqueries.length === 1 ? subqueries[0]! : undefined
       const topk = sub && (sub.limit !== undefined || sub.offset !== undefined) ? topkOf(sub, parts[0]!, text) : undefined
       if (!topk && subqueries.some((s) => s.limit !== undefined || s.offset !== undefined)) throw new Unsupported('LIMIT in one branch of a UNION')
-      return plan(source, q, parts, topk, post)
+      return plan(source, q, parts, topk, post, run)
     }
     // CONSTRUCT { … } WHERE { body }: the template over the body's solutions.
     const p = part({ ...sel, star: true, projection: [] }, source, run, text, prologue)
-    return plan(source, q, [p], undefined, undefined)
+    return plan(source, q, [p], undefined, undefined, run)
   }
   const sel = q.select
   const p = part(sel, source, run, text, prologue)
   const topk = sel.limit !== undefined || sel.offset !== undefined || sel.orderBy.length ? topkOf(sel, p, text) : undefined
-  return plan(source, q, [p], topk, undefined)
+  return plan(source, q, [p], topk, undefined, run)
 }
 
-function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: MaintainedPlan['topk']; orderPost?: Post } | undefined, post: Post | undefined): MaintainedPlan {
+function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: MaintainedPlan['topk']; orderPost?: Post } | undefined, post: Post | undefined, run: SparqlRunner): MaintainedPlan {
   const vars = q.form === 'select' ? (q.select.star ? [...groupVars(q.select.where)].filter((v) => !v.startsWith('__')) : q.select.projection.map((p) => p.v)) : []
-  // The oracle: the query itself, with a window written as a filter at the clock's time.
+  // The oracle: the query itself, with the window written out at the clock's time.
   const windowed = parts.find((p) => p.window)
   const reference = (now: number) => {
-    if (!windowed?.window || !source.window) return q.text
-    const cutoff = new Date(now - windowed.window.rangeMs).toISOString()
+    if (!windowed?.window) return q.text
     const at = windowAt(q)
-    return q.text.slice(0, at) + `\n  ?${windowed.stream!.memberVar} <${windowed.window.timeBy}> ?__t . FILTER(?__t >= "${cutoff}"^^<${XSD}dateTime>)\n` + q.text.slice(at)
+    return q.text.slice(0, at) + '\n' + windowText(windowed.window, windowed.stream!.memberVar, now, run) + '\n' + q.text.slice(at)
   }
   const signature = JSON.stringify([parts.map(shape), topk?.topk?.order, topk?.orderPost, post, q.templateText])
   return {
@@ -125,6 +133,33 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
 /** A part's structure, without its body's text. */
 function shape(p: Part): unknown {
   return [p.keys, p.slots, p.op, p.vars, p.post, p.stream, p.window, p.algebra.op, (p.derived ?? []).map((d) => [d.vars, shape(d.part)])]
+}
+
+/**
+ * A window as plain SPARQL at clock time `now`, for the oracle: a filter on the member's
+ * timestamp (sliding), the kept buckets as VALUES with the bucket start bound (tumbling), the
+ * latest members as a subquery (count). With event time, now is the greatest timestamp of the
+ * stream's members minus the lateness, read from the store.
+ */
+function windowText(w: WindowSpec, m: string, clock: number, run: SparqlRunner): string {
+  const f = run.factory
+  const term = (t: Term) => (t.termType === 'NamedNode' ? `<${t.value}>` : `"${t.value}"^^<${(t as import('@rdfjs/types').Literal).datatype.value}>`)
+  if (w.kind === 'count') return `  { SELECT ?${m} WHERE { <${w.stream}> <${TREE_MEMBER}> ?${m} . ?${m} <${w.timeBy}> ?__ct } ORDER BY DESC(?__ct) DESC(STR(?${m})) LIMIT ${w.amount ?? 0} }`
+  const latest = run.select(`SELECT ?t WHERE { <${w.stream}> <${TREE_MEMBER}> ?m . ?m <${w.timeBy}> ?t } ORDER BY DESC(?t) LIMIT 1`)[0]?.get('t')
+  const max = timeOf(latest)
+  if (max === undefined) return ''
+  const dt = latest!.termType === 'Literal' ? latest!.datatype.value : XSD + 'dateTime'
+  const lit = (ms: number) => term(timeLiteral(f, ms, dt))
+  const now = w.eventTime ? max - (w.latenessMs ?? 0) : clock
+  if (w.kind === 'sliding') return `  ?${m} <${w.timeBy}> ?__t . FILTER(?__t >= ${lit(now - w.rangeMs!)})`
+  const size = w.sizeMs!
+  const from = bucketStart(now, size) - ((w.keep ?? 1) - 1) * size
+  const rows: string[] = []
+  for (let b = from; b <= bucketStart(max, size); b += size) {
+    if (rows.length > 100_000) throw new Error('the oracle of a tumbling window would list more than 100,000 buckets')
+    rows.push(`(${lit(b)} ${lit(b + size)} ${term(timeLiteral(f, b, dt))})`)
+  }
+  return `  ?${m} <${w.timeBy}> ?__t . VALUES (?__lo ?__hi ?${w.bucketVar ?? '__b'}) { ${rows.join(' ')} } FILTER(?__t >= ?__lo && ?__t < ?__hi)`
 }
 
 /** Where the window's filter goes in the oracle: the start of the (first) member-local body. */
@@ -317,6 +352,9 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   const timeBy = source.window ? (source.window.timeBy ?? (stream?.stream ? run.timestampPath(stream.stream) : undefined)) : undefined
   if (source.window && !stream?.stream) throw new Unsupported('a window needs a fixed stream')
   if (source.window && !timeBy) throw new Unsupported('a window over a stream without ldes:timestampPath (and no iv:timeBy)')
+  const bucketVar = source.window?.bucketVar
+  if (bucketVar && groupVars(sel.where).has(bucketVar)) throw new Unsupported(`?${bucketVar} is the window's bucket; the body cannot bind it`)
+  const window: WindowSpec | undefined = source.window && timeBy ? { ...source.window, stream: stream!.stream!, timeBy } : undefined
   const keyText = keys.length ? keys.map((k) => '?' + k).join(' ') : '()'
   return {
     keys,
@@ -324,7 +362,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     local,
     deps,
     stream,
-    window: source.window && timeBy ? { rangeMs: source.window.rangeMs, timeBy } : undefined,
+    window,
     op,
     vars,
     post: post.binds.length || post.filters.length ? post : undefined,

@@ -1,12 +1,11 @@
 # Views over changes: incremental view maintenance for Semblance
 
-Status: **phases 0, 1 and 2 landed** (October 2026), the rest of phase 2 too (§22, but for the rdf-engine's
-parser, which main does not export yet); phases 3-6 pending. Below the status, the
-document is the design: what a maintained view is, how it is declared and inspected, how it
-relates to the rule engine, the operator set and each operator's incremental form, time and
-windows, correctness, cost, and the phased plan. The decisions taken are at the end; what was
-built, and where it differs from the design, is §20 (phases 0 and 1), §21 (phase 2) and §22 (the rest of
-phase 2).
+Status: **phases 0, 1, 2 and 4 landed** (October 2026), the rest of phase 2 too (but for the rdf-engine's
+parser, which main does not export yet); phases 3, 5 and 6 pending. Below the status, the document is
+the design: what a maintained view is, how it is declared and inspected, how it relates to the rule
+engine, the operator set and each operator's incremental form, time and windows, correctness, cost,
+and the phased plan. The decisions taken are at the end; what was built, and where it differs from the
+design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2) and §23 (phase 4).
 
 ## Status
 
@@ -27,6 +26,10 @@ phase 2).
 | **Phase 2, the rest** (§22): aggregate subqueries as parts of their own (a view inside the view: maintained group by group, their rows inlined into the body's evaluation, their changes probed outward); a probe prunes by every pattern it has bound (a semi-join), so a change reaches the partitions that hold it; the performance page's **judgements as maintained findings** (`perf:Judgement` CONSTRUCTs, live during a run: a step re-evaluates the findings it can change); **`c:ToastRegion`'s announcements as a view** (`ann:RecentAnnouncements`, a top-k over the change log per region); **MIN / MAX in an ordered tree**; **parameters retune in place** (a pattern's constant re-evaluates what its old and new values match; a FILTER's every partition, once; LIMIT / OFFSET move the window). | `src/view/compile.ts`, `deps.ts`, `runtime.ts`, `aggregate.ts`, `src/components/charts.ts`, `src/layers/announce.ts`, `ontology/layers/announce.ttl`, `demo/app.ttl`, `test/view-judgements.test.ts`, `test/view-laws.test.ts` | |
 | **The Warehouse example**, in place of "Maintained views": a bike shop's stockroom, every figure a maintained view over one stream of movements - stock per item (SUM joined to names and suppliers), a reorder list (HAVING), best sellers of the last hour (a sliding window and a top five) - with Sell, Restock and a Rush hour on the scheduler; each tile's one quiet line is its views' last change against what a recount reads. A sale costs the same counters over 200 or 2,000 earlier movements. | `demo/gallery/_ex-warehouse.ttl`, `test/ex-warehouse.test.ts` | |
 
+| **Phase 4, time** (§23): tumbling windows (`iv:TumblingWindow`, `iv:size`, `iv:keep`, a bucket column `iv:bucketVariable`) and count windows (`iv:CountWindow`, `ldes:amount`) beside sliding ones, every window an edge over the stream's members ordered by time, moved at the cost of the members it flips; event time (`iv:clock iv:EventTime`, `iv:lateness`): the watermark is the greatest timestamp less the lateness, no timer, numeric timestamps as well as dates - the network inspector counts the last five seconds of `net:Capture` that way; the oracle writes each window out as SPARQL. | `src/view/window.ts`, `compile.ts`, `runtime.ts`, `ontology/layers/view.ttl`, `demo/gallery/_network.ttl`, `test/view-time.test.ts` | |
+| **Changes as a stream**: `ViewHandle.since(tick)` and `keepHistory`; replicas (`src/view/replica.ts`: messages, catch-up, a reset after a redefinition, BroadcastChannel adapters); `iv:recordsChanges` puts the triples on a delta log's members; **undo** over the change log (`beh:undoable` reactions record their effective change as `rdf:Statement`s on the member, `beh:Undoer` / `beh:UndoLatest` applies the opposite of the latest one that still applies), in the Kanban example. | `src/view/runtime.ts`, `replica.ts`, `src/behaviour/events.ts`, `undo.ts`, `ontology/layers/behaviour.ttl`, `test/view-delta.test.ts`, `test/ex-kanban.test.ts` | |
+| **The workbench on views**: Follow updates (the Live switch) types the query as an `iv:View` (`c:FollowAsView`; `iv:materialize iv:ResultSet`, `iv:strategy iv:Auto`, measured), the table reads its maintained rows (followed at the next frame), and a **Plan** tab shows its strategy or fallback, the last change's work against a re-run, the from-scratch check and its operators. Recomputed views re-run only for changes their patterns see. | `ontology/components/workbench.ttl`, `src/components/workbench.ts`, `demo/gallery/_workbench.ttl`, `test/follow-updates.test.ts` | |
+
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
 query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
 dependencies, the workbench "Live switch" of phase 4 without a circuit.
@@ -42,7 +45,6 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 |---|---|---|
 | 2, the rest | SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | no function-only chart; one algebra |
 | 3: views and rules together | view graphs as projection inputs (done for the views graph); exact dependencies for SPARQL rules from their algebra, replacing `sem:follows`; `iv:strategy iv:Incremental` for rules; persistence policies as views | a count row changing alone re-runs nothing it does not feed |
-| 4: time | tumbling and count windows; event time and watermarks for `net:Capture`; delta logs for replication, "since" and undo; the workbench's Plan tab | constant cost per event and per expiry everywhere |
 | 5: the rest of SPARQL | `LATERAL`, correlated subqueries, anchored paths, `GROUP_CONCAT`, `SAMPLE`, the remaining expressions; incremental W3C conformance | `c:StreamStats`'s full rule and the grid rule as views |
 | 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
 
@@ -51,7 +53,9 @@ store queries per tick (a Rust circuit removes them, phase 6); SPARQL rules find
 `sem:follows` or `sem:readsMinted` (exact dependencies are phase 3); `GROUP_CONCAT`, `SAMPLE`,
 `GROUP BY` an expression, `NOW()` and `SERVICE` fall back to recompute; a `GRAPH` pattern is refused;
 an aggregate subquery nested below the root that projects a partition key is left to the store (evaluated
-with each partition); a parameter in a projection, HAVING or ORDER BY builds its view again.
+with each partition); a parameter in a projection, HAVING or ORDER BY builds its view again; a tumbling window's buckets are epoch-aligned (UTC
+for dates); a count window and event time need a fixed stream; replicas carry a SELECT's rows, or a
+view's triples, not its plan.
 
 ## 1. Summary
 
@@ -1590,6 +1594,89 @@ Where this differs from the design:
   replaced (they were left behind before).
 - **The rdf-engine's parser**: not yet. Main's engine ABI is v1 (prepare, bind, run) with no algebra
   export, so decision 4's interim stands; the plan IR does not depend on the parser.
+
+## 23. Phase 4, as built
+
+What exists (`src/view/window.ts`, `replica.ts`, `runtime.ts`, `src/behaviour/undo.ts`):
+
+- **One window operator for three windows.** Every window is a suffix of the stream's members ordered
+  by (timestamp, IRI): sliding, `t >= now - range`; tumbling, `t >= bucket(now) - (keep - 1) × size`
+  with `bucket(t) = floor(t / size) × size`; count, the latest `n`. The operator keeps an ordered
+  multiset (the treap of `ordered.ts`) of **every member of the stream that has a timestamp** - not
+  only those the body has rows for, so a count window counts the stream's latest members - and the
+  window as its edge, the least member inside. A tick moves the edge and flips only the members
+  between the old and the new one (plus members that arrived, left or moved): O(log n + flips).
+  Partitions are gated by their member's side; a member that changed side without changing is
+  entered or left from its cached rows. A row leaves a view once, whichever comes first, as §7.3
+  asks, because a partition's rows count only while both it and its member's side say so.
+- **Buckets as a column.** With `iv:bucketVariable`, each member's bucket start is bound to that
+  variable in its rows (a literal of its timestamp's datatype: a canonical `xsd:dateTime`, or the
+  number), so a view groups by it; the body may not bind it. A member whose timestamp changes is
+  evaluated again (its bucket moved).
+- **Event time.** `iv:clock iv:EventTime`: now is the watermark, the greatest timestamp among the
+  stream's members less `iv:lateness`. It moves only when the index does, so it needs no timer; a
+  late member (behind the watermark) counts while it is inside the window and is counted in
+  `iv:lateMembers`. Timestamps may be numbers: `net:startedAt` is milliseconds of the page, and the
+  network inspector's footer counts the last five seconds of the capture on event time. The
+  watermark is a function of the stream's current members, so the oracle computes it the same way;
+  it can move back when the newest member retires, and the edge moves back with it.
+- **The oracle** writes each window out as SPARQL at the clock's time: a filter on the timestamp
+  (sliding, in the timestamp's own datatype), the kept buckets as `VALUES (?lo ?hi ?bucket)` up to the
+  newest member's (tumbling), the latest members as `{ SELECT ?m … ORDER BY DESC(?t) DESC(STR(?m))
+  LIMIT n }` (count); with event time it reads the greatest timestamp first.
+- **The clock** stays injectable (`ViewRuntime.clock`, `ManualClock`); one timer for the next expiry of
+  every wall-clock window (`nextExpiry`: `t + range + 1`, or the bucket start plus `keep × size`).
+- **Changes as a stream.** Each view can keep the changes of its last ticks (`keepHistory`; a view
+  with an `iv:deltaLog` keeps as many as the log retains): `since(tick)` returns everything after a
+  tick consolidated, or undefined when it no longer reaches back (a reader then takes `snapshot()`).
+  A rebuild or a redefinition is a retraction of the old output and the new one, so the history stays
+  exact across them. `replica.ts` turns this into messages (N-Triples terms; a SELECT's rows, a view's
+  triples): `publish` sends a tick's change after every tick (the runtime's `afterTick` hook) and a
+  reset when the view was compiled again; a `Replica` applies them into another store, notices a gap
+  (`since` is not its tick) and asks to catch up. `iv:recordsChanges` on a delta log puts the tick's
+  triples on its member as `rdf:Statement`s (`iv:added`, `iv:removed`), which SPARQL integrates.
+- **Undo** (decision 11). A reaction marked `beh:undoable` has its effective change (what the store
+  actually took) recorded on the event's member as `rdf:Statement`s, `beh:asserted` / `beh:retracted`,
+  retired with the member. `beh:UndoLatest` (SPARQL, and its function twin) on a `beh:Undoer` applies
+  the opposite of the latest recorded change that is not undone and still applies: every triple it
+  added is still there and none it removed is back. A change that later ones overlapped is skipped
+  rather than forced; the undone member is state on the log (`beh:undone`), forgotten when retired.
+- **The workbench.** Follow updates also makes the query a view (`c:FollowAsView`): its rows as a
+  result set, `iv:materialize iv:ResultSet` (a CONSTRUCT typed into the workbench never writes its
+  triples to the views graph, which every projection reads), `iv:strategy iv:Auto` (a fallback is
+  expected: no warning, and strict mode still compares it), measured. The table reads the maintained
+  rows instead of running the query, followed through the result set's `rs:solution` triples so a
+  burst still costs one run at the next frame. The Plan tab is ordinary workbench parts over what the
+  runtime writes: a summary (strategy or fallback, the last change's work against a re-run, ✓ / ✕)
+  and a result table of the operators. Recompute fallbacks now re-run only when a change matches one
+  of their triple patterns.
+
+Measured (Node, Oxigraph, `test/view-time.test.ts`: twenty members in the last minute behind 200 or
+2,000 a day old, and 10 recent capture entries behind 200 or 2,000 long ago; all nine views of the
+test at once):
+
+| | 200 members | 2,000 members |
+|---|---:|---:|
+| one more member: partitions / view rows | 10 / 28 | identical |
+| the clock moves past one expiry: partitions / view rows | 0 / 29 | identical |
+| a new ten-second bucket begins: partitions / view rows | 0 / 53 | identical |
+| one more capture entry (event time): partitions / view rows | 6 / 16 | identical |
+
+An expiry evaluates no partition: the members that leave are taken out from their cached rows. No
+rebuild in any of them.
+
+Where this differs from the design:
+
+- Windows are one operator, an edge over all of the stream's members, not a deque per window kind:
+  the stream is not always in timestamp order (late members, changed timestamps), and a count window
+  must see members the body has no rows for.
+- The watermark is the greatest timestamp *now*, not the greatest ever seen: that keeps it a function
+  of the graph, so the oracle can compute it.
+- Tumbling buckets are epoch-aligned; `iv:keep` defaults to 1.
+- Delta logs carry statements (`rdf:Statement`), not RDF 1.2 triple terms: every store reads them.
+- Undo is over reactions that opt in (`beh:undoable`), not every event: an event's whole change
+  includes view state (focus, a refusal), which later events change all the time, so every older
+  change would conflict.
 
 ## Decisions
 

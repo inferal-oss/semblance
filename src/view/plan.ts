@@ -26,12 +26,27 @@ export interface Aggregate {
   slot: string
 }
 
-/** A sliding window over the members' timestamps (iv:SlidingWindow). */
+/** A window over a stream's members (iv:SlidingWindow, iv:TumblingWindow, iv:CountWindow; window.ts). */
 export interface WindowSpec {
-  rangeMs: number
-  /** The timestamp property (iv:timeBy, else the stream's ldes:timestampPath). */
+  kind: 'sliding' | 'tumbling' | 'count'
+  /** The stream, and the timestamp property (iv:timeBy, else the stream's ldes:timestampPath). */
+  stream: string
   timeBy: string
+  /** Sliding: how far back from now. */
+  rangeMs?: number
+  /** Tumbling: the bucket's length, how many buckets are kept (default 1), the variable holding a member's bucket start. */
+  sizeMs?: number
+  keep?: number
+  bucketVar?: string
+  /** Count: how many of the latest members. */
+  amount?: number
+  /** iv:clock iv:EventTime: now is the greatest timestamp seen minus iv:lateness. */
+  eventTime?: boolean
+  latenessMs?: number
 }
+
+/** A window as declared on a view, before the compiler resolves its stream and timestamp. */
+export type WindowSource = Omit<WindowSpec, 'stream' | 'timeBy'> & { timeBy?: string }
 
 /**
  * Partitions (by key string) and their rows (variable name -> term). `derived` is the current
@@ -148,7 +163,7 @@ export interface ViewSource {
   over?: string
   /** iv:partitionBy */
   partitionBy?: string[]
-  window?: { rangeMs: number; timeBy?: string }
+  window?: WindowSource
 }
 
 export interface ViewCompiler {

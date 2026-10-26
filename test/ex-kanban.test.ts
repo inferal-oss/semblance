@@ -136,6 +136,42 @@ describe('the kanban example', () => {
     expect(store.match(null, store.factory.namedNode(KB + 'title'), store.factory.literal('Ship the board'))).toHaveLength(0)
   })
 
+  for (const prefer of ['sparql', 'function'] as const)
+  it(`undoes moves, an added card and a removed one, latest first, skipping a change later ones overlapped (${prefer})`, () => {
+    const { click, control, press, column, lanes, type, button, store } = kanban(prefer)
+    const before = lanes()
+    click(control('Toast overlaps the dock', 'Move to Doing'))
+    press('Write the persistence guide', 'ArrowRight')
+    expect(column('c3')).toEqual(['todo']) // Doing is full: refused, nothing to undo
+    type('Ship the board')
+    click(button('Add to To do'))
+    click(control('Bump Oxigraph', 'Remove'))
+    expect(lanes()['To do'].cards).toContain('Ship the board')
+    // The removal comes back, then the added card goes (and its title returns to the field).
+    click(button('Undo'))
+    expect(lanes().Doing.cards).toContain('Bump Oxigraph')
+    click(button('Undo'))
+    expect(lanes()['To do'].cards).not.toContain('Ship the board')
+    expect(store.match(null, store.factory.namedNode(KB + 'title'), store.factory.literal('Ship the board'))).toHaveLength(0)
+    // The move: c6 goes back to Done.
+    click(button('Undo'))
+    expect(lanes()).toEqual(before)
+    // Nothing left to undo: a click changes nothing.
+    click(button('Undo'))
+    expect(lanes()).toEqual(before)
+    // A change overlapped by a later one is skipped: c6 to Doing, then on to Done by hand.
+    click(control('Toast overlaps the dock', 'Move to Doing'))
+    click(control('Write the persistence guide', 'Move to Doing'))
+    click(control('Toast overlaps the dock', 'Move to Done'))
+    click(button('Undo'))
+    expect(column('c6')).toEqual(['doing'])
+    click(button('Undo'))
+    expect(column('c3')).toEqual(['todo'])
+    // c6's first move applies again (undoing the last one put c6 back in Doing): back to Done.
+    click(button('Undo'))
+    expect(column('c6')).toEqual(['done'])
+  })
+
   it('gives a new card the assignee and tag picked in the add row, a new tag included', () => {
     const h = kanban()
     const combo = (n: number) => h.root().querySelectorAll('[data-sem-c=combobox] .sem-ta-field > input')[n] as HTMLInputElement

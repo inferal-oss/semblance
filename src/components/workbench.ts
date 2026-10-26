@@ -7,6 +7,8 @@ import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { turtleTokens } from '../turtle.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { hitToggles } from './actions.ts'
+import { maintainedRows } from '../view/rows.ts'
 
 const c = NS.c
 const W = {
@@ -294,6 +296,17 @@ function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
     run.text = run.text.replaceAll('$' + variable, `<${value.value}>`)
   }
   if (!ctx.sparql) return { kind: 'nosparql' }
+  // A query maintained as a view (followed, see FollowAsView): its rows, from the views graph, are
+  // read instead of running it again. Followed like a query - its result set's rows and their
+  // multiplicities are the reads - so a burst of changes still costs one run at the next frame.
+  const maintained = !run.graph && !variable ? (follow ? ctx.untraced(() => maintainedRows(ctx, q)) : maintainedRows(ctx, q)) : undefined
+  if (maintained && follow) ctx.queryReads?.push({ s: q.value, p: NS.rs + 'solution' }, { p: NS.iv + 'multiplicity' }, { s: q.value, p: RDF_TYPE })
+  if (maintained) {
+    const declared = selectVariables(run.text)
+    const shown = declared ? [...declared] : []
+    for (const r of maintained) for (const k of r.keys()) if (!shown.includes(k)) shown.push(k)
+    return { kind: 'select', vars: shown, rows: maintained }
+  }
   try {
     const result = (run.graph ? ctx.construct(run.text, { follow }) : ctx.select(run.text, { follow })) as unknown
     if (typeof result === 'boolean') return { kind: 'ask', answer: result }
@@ -1384,7 +1397,25 @@ const selectNodeByKey: ReactionFn = (ctx) => (keyIs(ctx, 'enter', 'space') && hi
 
 const clearNode: ReactionFn = (ctx) => (keyIs(ctx, 'escape') ? { remove: own(ctx, ctx.target, W.selectedTerm), add: [] } : none())
 
+/**
+ * The workbench's Follow updates switch also makes the query it runs a maintained view (IVM) while
+ * it is on: iv:View, its rows as a result set (iv:ResultSet: a CONSTRUCT's triples are never
+ * written), measured, a fallback to recompute expected (iv:Auto). Off again, it is a plain query.
+ */
+const followAsView: ReactionFn = (ctx) => {
+  if (!hitToggles(ctx) || isTrue(ctx.object(ctx.target, C.disabled))) return none()
+  const bench = ctx.object(ctx.target, W.controls)
+  if (!bench || ctx.object(ctx.target, W.property)?.value !== W.followUpdates || !ctx.match(bench, RDF_TYPE, ctx.runtime.store.factory.namedNode(c + 'QueryWorkbench')).length) return none()
+  const query = ctx.object(bench, W.runs)
+  if (!query) return none()
+  const f = ctx.runtime.store.factory
+  const IV = NS.iv
+  const triples = [put(ctx, query, RDF_TYPE, f.namedNode(IV + 'View')), put(ctx, query, IV + 'materialize', f.namedNode(IV + 'ResultSet')), put(ctx, query, IV + 'strategy', f.namedNode(IV + 'Auto')), put(ctx, query, IV + 'measured', lit(ctx, true))]
+  return isOn(ctx, bench, W.followUpdates) ? { remove: triples, add: [] } : { remove: [], add: triples }
+}
+
 export const reactions: Record<string, ReactionFn> = {
+  'workbench:follow-as-view': followAsView,
   'workbench:input': input,
   'workbench:click': click,
   'workbench:dismiss': dismiss,
