@@ -20,6 +20,13 @@
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] .
 
+# On a compact screen the split views stack (see "split view"); in a workspace each pane is then
+# as tall as what it shows, at least a few lines, rather than half the screen, so the column of
+# panes stays short enough to see several at once.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:atWidth sty:CompactWidth ; sty:part "[data-sem-c=split-view] > .sem-pane" ;
+    sty:declares [ sty:property "height" ; sty:raw "auto" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "8rem" ] .
+
 # Tabs in a pane fill it, so the whole pane takes a dropped tab: their list on top, the panel below.
 [] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part ".sem-pane > [data-sem-c=tabs]" ;
     sty:declares [ sty:property "min-block-size" ; sty:raw "100%" ] ,
@@ -37,7 +44,10 @@
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "z-index" ; sty:raw "2" ] ,
                  [ sty:property "inset-block" ; sty:raw "0" ] ,
-                 [ sty:property "inline-size" ; sty:raw "25%" ] ,
+                 [ sty:property "inline-size" ; sty:raw "25%" ] .
+# The strip itself is never drawn as a zone (the half it would take is, below).
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-drop-zone][data-sem-drop]" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:part ":root[data-sem-dragging] [data-sem-c=tabs] > .sem-split-zone, [data-sem-c=tabs] > .sem-split-zone[data-sem-drop-over]" ;
