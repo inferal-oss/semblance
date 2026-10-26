@@ -27,6 +27,8 @@ const PER = NS.per
 const PROV = NS.prov
 const TREE_MEMBER = NS.tree + 'member'
 const XSD_DATETIME = NS.xsd + 'dateTime'
+/** A term's kind and value, so an IRI and a blank node of the same label stay apart. */
+const termKey = (t: Term) => t.termType + ':' + t.value
 
 /** Where a scope keeps its strings. Asynchronous, so IndexedDB fits too. */
 export interface Backend {
@@ -243,12 +245,10 @@ export class Persistence {
       }
       const quads = [...held.values()].map((q) => f.quad(q.subject, q.predicate, q.object, g))
       // What is restored replaces the current values of the same subject and property.
-      const pairs = new Set(quads.map((q) => q.subject.value + ' ' + q.predicate.value))
+      // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
+      const pairs = new Map(quads.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
       if (!policy.graph) {
-        for (const pair of pairs) {
-          const [s, p] = pair.split(' ')
-          for (const q of this.store.match(f.namedNode(s!), f.namedNode(p!), null, g)) this.store.delete(q)
-        }
+        for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) this.store.delete(q)
       }
       for (const q of quads) if (!this.store.has(q)) this.store.add(q)
       this.restoredCounts.set(policy.iri, quads.length)
