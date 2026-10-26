@@ -73,4 +73,26 @@ ui:slot a h:Div ; sem:slot "page" .`, true)
       expect(app.moves).toContain(app.slot)
     } finally { app.dispose() }
   })
+
+  it('builds a new subtree detached and attaches it whole', () => {
+    const app = mount(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:slot .
+ui:slot a h:Div ; sem:slot "page" .`, true)
+    const prototype = Object.getPrototypeOf(Object.getPrototypeOf(app.host)) as Node
+    const insert = Object.getOwnPropertyDescriptor(prototype, 'insertBefore') ? prototype : Object.getPrototypeOf(prototype) as Node
+    const original = insert.insertBefore
+    const connected: Node[] = []
+    insert.insertBefore = function <T extends Node>(this: Node, node: T, before: Node | null): T {
+      if (this.isConnected) connected.push(node)
+      return original.call(this, node, before) as T
+    }
+    try {
+      app.apply('', 'ui:root h:hasChild ui:panel . ui:panel a h:Div ; h:hasChild ui:a . ui:a a h:Div ; h:hasChild ui:b . ui:b a h:Span .')
+      expect(connected).toHaveLength(1)
+      expect(app.renderer.keyOf(connected[0]!)).toBe('https://example.org/ui#panel')
+      expect(app.host.querySelectorAll('span')).toHaveLength(1)
+    } finally {
+      insert.insertBefore = original
+      app.dispose()
+    }
+  })
 })
