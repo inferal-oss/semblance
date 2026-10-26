@@ -168,7 +168,7 @@
                  [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "z-index" ; sty:raw "40" ] ,
                  [ sty:property "width" ; sty:raw "max-content" ] ,
-                 [ sty:property "min-width" ; sty:raw "220px" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(220px, calc(100vw - 24px))" ] ,
                  [ sty:property "max-width" ; sty:raw "min(320px, calc(100vw - 32px))" ] ,
                  [ sty:property "padding" ; sty:token tok:space-4 ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
