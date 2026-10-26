@@ -638,7 +638,7 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label , ?row , ?popup , ?help , ?error .
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?row .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-date-row" ; rdfhtml:hasChild ?input , ?dash , ?endInput , ?opener ; ord:immediatelyPrecedes ?popup .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-date-row" ; rdfhtml:id ?rowId ; rdfhtml:hasChild ?input , ?dash , ?endInput , ?opener ; ord:immediatelyPrecedes ?popup .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-date-input" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ;
          rdfhtml:placeholder ?placeholder ; rdfhtml:autocomplete "off" ; rdfhtml:spellcheck "false" ; rdfhtml:disabled ?disabled ;
          rdfhtml:attribute ?inputDescribed , ?inputInvalid ; ord:immediatelyPrecedes ?afterInput .
@@ -662,8 +662,9 @@ CONSTRUCT {
   ?outside a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-dismiss-outside" ; rdfhtml:attributeValue "" .
   ?takesFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?popup a rdfhtml:Div ; rdfhtml:class "sem-date-popup" ; rdfhtml:id ?popupId ; rdfhtml:hidden ?popupHidden ;
-         rdfhtml:attribute ?popupRole , ?popupName ; rdfhtml:hasChild ?grid ; ord:precedes ?help , ?error .
+         rdfhtml:attribute ?popupRole , ?popupName , ?popupAnchor ; rdfhtml:hasChild ?grid ; ord:precedes ?help , ?error .
   ?popupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
+  ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?rowId .
   ?popupName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?chooseLabel .
   ?grid a c:MonthGrid ; c:pickerFor $this ; c:controls ?target ; c:property ?property ; c:endProperty ?endProperty .
   ?help a rdfhtml:Div ; rdfhtml:class "sem-help" ; rdfhtml:id ?helpId ; rdfhtml:hasChild ?helpText ; ord:precedes ?error .
@@ -739,6 +740,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
+  BIND(STR(?row) AS ?rowId)
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
   BIND(STR(?input) AS ?inputId)
   BIND(IF(BOUND(?describedIds), IRI(CONCAT(STR($this), "/~input-aria-describedby")), ?none) AS ?inputDescribed)
@@ -766,6 +768,7 @@ WHERE {
   BIND(IF(?open, ?none, "") AS ?popupHidden)
   BIND(IRI(CONCAT(STR($this), "/~popup-role")) AS ?popupRole)
   BIND(IRI(CONCAT(STR($this), "/~popup-aria-label")) AS ?popupName)
+  BIND(IRI(CONCAT(STR($this), "/~popup-data-sem-anchor")) AS ?popupAnchor)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~grid")), ?none) AS ?grid)
 }""" .
 

@@ -361,9 +361,10 @@ CONSTRUCT {
   ?caret a rdfhtml:Span ; rdfhtml:class "sem-caret" ; rdfhtml:attribute ?caretHidden .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?panel a rdfhtml:Div ; rdfhtml:class "sem-panel" ; rdfhtml:id ?panelId ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?desc, ?content ;
-         rdfhtml:attribute ?role, ?labelledBy .
+         rdfhtml:attribute ?role, ?labelledBy, ?anchor .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
+  ?anchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?triggerId .
   ?desc a rdfhtml:P ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?content .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
 }
@@ -398,6 +399,7 @@ WHERE {
   BIND(STR(?panel) AS ?panelId)
   BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)
   BIND(IRI(CONCAT(STR($this), "/~panel-aria-labelledby")) AS ?labelledBy)
+  BIND(IRI(CONCAT(STR($this), "/~panel-data-sem-anchor")) AS ?anchor)
   BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
   BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc-text")), ?none) AS ?descText)
 }""" .

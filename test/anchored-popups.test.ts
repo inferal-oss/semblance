@@ -3,16 +3,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
 
 function fixture({ native = true, rtl = false, top = 30, left = 250, kind = 'menu', hidden = false } = {}) {
+  // The renderings mark each panel with its anchor's id (and a typeahead's list with a matched width).
   const klass = kind === 'menu' ? 'sem-menu-popup' : kind === 'popover' ? 'sem-panel' : kind.includes('date') ? 'sem-date-popup' : 'sem-ta-popup'
-  const popupHtml = `<section class="${klass}" style="color:red" ${hidden ? 'hidden' : ''}>Options</section>`
-  const contents = kind === 'menu' ? `<button data-test-anchor aria-haspopup="menu">Actions</button>${popupHtml}`
-    : kind === 'popover' ? `<button data-test-anchor class="sem-trigger">Details</button>${popupHtml}`
-    : kind.includes('date') ? `<span class="sem-date-row" data-test-anchor><input><button>Calendar</button></span>${popupHtml}`
-    : `<span class="sem-ta-field" data-test-anchor><input>${popupHtml}</span>`
+  const width = kind === 'menu' || kind === 'popover' || kind.includes('date') ? '' : ' data-sem-anchor-width="match"'
+  const popupHtml = `<section class="${klass}" data-sem-anchor="anchor"${width} style="color:red" ${hidden ? 'hidden' : ''}>Options</section>`
+  const contents = kind === 'menu' ? `<button id="anchor" data-test-anchor aria-haspopup="menu">Actions</button>${popupHtml}`
+    : kind === 'popover' ? `<button id="anchor" data-test-anchor class="sem-trigger">Details</button>${popupHtml}`
+    : kind.includes('date') ? `<span id="anchor" class="sem-date-row" data-test-anchor><input><button>Calendar</button></span>${popupHtml}`
+    : `<span id="anchor" class="sem-ta-field" data-test-anchor><input>${popupHtml}</span>`
   const { document, window } = parseHTML(`<!doctype html><html><body><main><section data-sem-c="${kind}">${contents}</section></main></body></html>`)
   Object.defineProperty(document.documentElement, 'clientWidth', { value: 480 })
   Object.defineProperty(document.documentElement, 'clientHeight', { value: 600 })
-  Object.defineProperty(window, 'getComputedStyle', { configurable: true, value: () => ({ direction: rtl ? 'rtl' : 'ltr' }) })
+  Object.defineProperty(window, 'getComputedStyle', { configurable: true, value: () => ({ direction: rtl ? 'rtl' : 'ltr', overflowX: 'visible', overflowY: 'visible' }) })
   const callbacks: FrameRequestCallback[] = []
   Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: (callback: FrameRequestCallback) => (callbacks.push(callback), callbacks.length) })
   Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: vi.fn() })
@@ -188,6 +190,25 @@ describe('anchored popup host effect', () => {
     const dispose = attachAnchoredPopups(app.host, element => element === app.host)
     expect(app.show).not.toHaveBeenCalled()
     expect(app.popup.getAttribute('style')).toBe('color:red')
+    dispose()
+  })
+
+  it('lifts only panels the rendering anchors', () => {
+    const app = fixture()
+    app.popup.removeAttribute('data-sem-anchor')
+    const dispose = attachAnchoredPopups(app.host)
+    expect(app.show).not.toHaveBeenCalled()
+    expect(app.popup.getAttribute('style')).toBe('color:red')
+    dispose()
+  })
+
+  it('hides a panel whose anchor its scrolling container has scrolled out of sight', () => {
+    const app = fixture({ top: 30 })
+    const scroller = app.host.firstElementChild as HTMLElement
+    Object.defineProperty(app.window, 'getComputedStyle', { configurable: true, value: (el: Element) => ({ direction: 'ltr', overflowX: 'visible', overflowY: el === scroller ? 'auto' : 'visible' }) })
+    scroller.getBoundingClientRect = () => ({ top: 100, bottom: 300, left: 0, right: 480, width: 480, height: 200 }) as DOMRect
+    const dispose = attachAnchoredPopups(app.host)
+    expect(app.popup.style.visibility).toBe('hidden')
     dispose()
   })
 

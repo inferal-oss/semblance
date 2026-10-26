@@ -80,9 +80,11 @@ events to reactions. It returns the pieces (`store`, `runtime`, `projection`, `r
 for when you need more.
 
 The browser host anchors open menus, calendars, typeahead lists and popover panels to their
-controls and keeps them within the viewport. Where available, native popovers lift them above
-scrolling containers without moving their DOM. Other browsers use fixed positioning. Scrolling
-and resizing update their placement; the graph continues to own open and hidden state.
+controls and keeps them within the viewport. Their renderings say which control each panel opens
+from (`data-sem-anchor`, the control's id; see the position layer); where available, native
+popovers lift a shown panel above scrolling containers without moving its DOM, and other browsers
+use fixed positioning. Scrolling and resizing update the placement; the graph continues to own
+open and hidden state.
 
 The components you can use, with live specimens and their ontology, are on the site's
 [Components](https://semblance.dev/#components) page; [Reference](https://semblance.dev/#reference)

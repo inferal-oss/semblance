@@ -249,7 +249,7 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label, ?field, ?foot .
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?field .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
-  ?field a rdfhtml:Div ; rdfhtml:class "sem-ta-field" ; rdfhtml:hasChild ?pills, ?input, ?chevron, ?popup ; ord:immediatelyPrecedes ?foot .
+  ?field a rdfhtml:Div ; rdfhtml:class "sem-ta-field" ; rdfhtml:id ?fieldId ; rdfhtml:hasChild ?pills, ?input, ?chevron, ?popup ; ord:immediatelyPrecedes ?foot .
   ?pills a rdfhtml:Ul ; rdfhtml:class "sem-ta-pills" ; rdfhtml:attribute ?pillsLabel ; ord:immediatelyPrecedes ?input .
   ?pillsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ; rdfhtml:placeholder ?placeholder ;
@@ -268,9 +268,11 @@ CONSTRUCT {
   ?chevronHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?chevronKeep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
   ?chevronText a rdfhtml:Text ; rdfhtml:data "▾" .
-  ?popup a rdfhtml:Div ; rdfhtml:class "sem-ta-popup" ; rdfhtml:hidden ?popupHidden ; rdfhtml:attribute ?popupKeep ;
+  ?popup a rdfhtml:Div ; rdfhtml:class "sem-ta-popup" ; rdfhtml:hidden ?popupHidden ; rdfhtml:attribute ?popupKeep, ?popupAnchor, ?popupWidth ;
          rdfhtml:hasChild ?list, ?status .
   ?popupKeep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
+  ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?fieldId .
+  ?popupWidth a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor-width" ; rdfhtml:attributeValue "match" .
   ?list a rdfhtml:Ul ; rdfhtml:id ?listId ; rdfhtml:class "sem-ta-list" ; rdfhtml:hidden ?listHidden ;
         rdfhtml:attribute ?listRole, ?listLabel ; rdfhtml:hasChild ?create ; ord:immediatelyPrecedes ?status .
   ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "listbox" .
@@ -422,6 +424,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~field")) AS ?field)
+  BIND(STR(?field) AS ?fieldId)
   BIND(IF(?multi, IRI(CONCAT(STR($this), "/~pills")), ?none) AS ?pills)
   BIND(IF(?multi, IRI(CONCAT(STR($this), "/~pills-aria-label")), ?none) AS ?pillsLabel)
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
@@ -437,6 +440,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~popup")) AS ?popup)
   BIND(COALESCE(?chevron, ?popup) AS ?afterInput)
   BIND(IRI(CONCAT(STR($this), "/~popup-keep")) AS ?popupKeep)
+  BIND(IRI(CONCAT(STR($this), "/~popup-anchor")) AS ?popupAnchor)
+  BIND(IRI(CONCAT(STR($this), "/~popup-anchor-width")) AS ?popupWidth)
   BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
   BIND(STR(?list) AS ?listId)
   BIND(IRI(CONCAT(STR($this), "/~list-role")) AS ?listRole)
