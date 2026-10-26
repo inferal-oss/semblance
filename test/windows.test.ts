@@ -32,6 +32,36 @@ function showWindows(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
 }
 
 describe('windows', () => {
+  it('tiles open floating windows and restores their saved geometry when floating again', () => {
+    const h = showWindows()
+    const { root, click, fact, store, runtime, shell } = h
+    const f = store.factory
+    const desktop = f.namedNode(UI + 'desktop')
+    const layout = f.namedNode(c + 'tileLayout')
+    click(root('wn-open-checklist'))
+    click(root('wn-open-log'))
+    const saved = root('win-checklist').getAttribute('style')
+    expect(saved).toContain('left: 140px')
+    runtime.apply({ add: [f.quad(desktop, layout, f.namedNode(c + 'DesktopGridLayout'))], remove: store.match(desktop, layout, null) })
+    shell.flush()
+    expect(root('desktop').getAttribute('data-sem-layout')).toBe('grid')
+    expect(root('desktop').querySelector('.sem-frames')!.getAttribute('style')).toBe('--sem-tile-columns: 2')
+    expect(root('win-checklist').getAttribute('data-sem-tiled')).toBe('true')
+    expect(root('win-checklist').getAttribute('style')).toBeNull()
+    expect(root('win-checklist').querySelector('.sem-window-bar')!.hasAttribute('data-sem-gesture')).toBe(false)
+    expect(root('win-checklist').querySelector('.sem-window-grip')).toBeNull()
+    expect(fact('win-checklist', 'x')).toBe('140')
+    const columns = f.namedNode(c + 'tileColumns')
+    runtime.apply({ add: [f.quad(desktop, columns, f.literal('1'))], remove: [] })
+    shell.flush()
+    expect(root('desktop').querySelector('.sem-frames')!.getAttribute('style')).toBe('--sem-tile-columns: 1')
+    runtime.apply({ add: [], remove: store.match(desktop, layout, null) })
+    shell.flush()
+    expect(root('desktop').hasAttribute('data-sem-layout')).toBe(false)
+    expect(root('win-checklist').getAttribute('style')).toBe(saved)
+    expect(root('win-checklist').querySelector('.sem-window-bar')!.getAttribute('data-sem-gesture')).toBe('move')
+  })
+
   it('closed frames are not placed on the desktop, so neither they nor their content are evaluated', () => {
     const { root, document, taskbar, screen } = showWindows()
     expect(root('win-checklist')).toBeNull()

@@ -118,6 +118,15 @@ function originTab(ctx: RuleContext, frame: Term): Term | undefined {
   return origin && ctx.objects(origin, RDF_TYPE).some((t) => t.value === WIN.Tab) ? origin : undefined
 }
 
+/** Only normal floating windows join a desktop's tile grid. Docked and maximized frames keep their state. */
+function tiledOn(ctx: RuleContext, frame: NamedNode): boolean {
+  if (ctx.object(frame, WIN.windowState)?.value === WIN.Maximized || ctx.object(frame, WIN.windowState)?.value === WIN.Minimized) return false
+  const edge = ctx.object(frame, WIN.attachedTo)?.value
+  if (edge && edge !== WIN.NoEdge) return false
+  if (!classesOf(ctx, frame).has(WIN.Window)) return false
+  return ctx.match(null, C.hosts, frame).some(({ subject }) => ctx.object(subject, C.tileLayout)?.value === C.DesktopGridLayout)
+}
+
 /**
  * A frame: a title bar over a body, with the controls of the capabilities its instance has.
  * Closed (c:open false) it is an empty hidden root, and its body is not evaluated; minimized,
@@ -134,6 +143,7 @@ export const frame: FnRule = (ctx, focus) => {
   const caps = classesOf(ctx, focus)
   const title = titleOf(ctx, focus)
   const { state, edge, edgeNode, minimized, maximized } = stateOf(ctx, focus)
+  const tiled = tiledOn(ctx, focus)
   const body = ctx.object(focus, C.body)
   const content = named(body) ? [body] : []
   if (text) {
@@ -167,16 +177,17 @@ export const frame: FnRule = (ctx, focus) => {
   controls.push(control('close', '✕', `${phrase(ctx, FB.Close, 'Close')} ${title}`, tab ? C.docks : FB.closes))
 
   const bar = o.el('bar', 'Header', { class: 'sem-window-bar' }, [o.el('title', 'Strong', {}, [o.text('title-text', title)]), ...controls])
-  if (caps.has(WIN.Draggable) && !maximized) o.attr(bar, 'data-sem-gesture', 'move')
+  if (caps.has(WIN.Draggable) && !maximized && !tiled) o.attr(bar, 'data-sem-gesture', 'move')
   const parts = [bar, o.el('body', 'Div', { class: 'sem-window-body' }, content)]
-  if (caps.has(WIN.Resizable) && !maximized && !edge) {
+  if (caps.has(WIN.Resizable) && !maximized && !edge && !tiled) {
     const grip = o.el('grip', 'Div', { class: 'sem-window-grip' })
     o.attr(grip, 'data-sem-gesture', 'resize').attr(grip, 'aria-hidden', 'true')
     parts.push(grip)
   }
-  o.renders(o.el('root', 'Section', { style: geometry(ctx, focus, caps, maximized, edge?.slug), hidden: hidden ? '' : undefined }, parts))
+  o.renders(o.el('root', 'Section', { style: tiled ? undefined : geometry(ctx, focus, caps, maximized, edge?.slug), hidden: hidden ? '' : undefined }, parts))
   const root = o.node('root')
   o.attr(root, 'role', 'dialog').attr(root, 'aria-label', title)
+  if (tiled) o.attr(root, 'data-sem-tiled', 'true')
   return o.quads
 }
 
@@ -261,11 +272,18 @@ export const desktop: FnRule = (ctx, focus) => {
   const raisable = hosted.filter((n) => classesOf(ctx, n).has(WIN.Raisable))
   const frames = raisable.filter((n) => !isFalse(ctx.object(n, FB.open)))
   const others = hosted.filter((n) => !raisable.includes(n))
+  const grid = ctx.object(focus, C.tileLayout)?.value === C.DesktopGridLayout
   if (ctx.modality === MOD.Text) {
     o.renders(o.el('root', 'Div', {}, hosted.filter((n) => !raisable.includes(n) || frames.includes(n))))
     return o.quads
   }
-  o.renders(o.el('root', 'Div', {}, [o.el('frames', 'Div', { class: 'sem-frames' }, frames), ...others]))
+  const tileCount = frames.filter((n) => tiledOn(ctx, n)).length
+  const rawColumns = Number(ctx.object(focus, C.tileColumns)?.value)
+  const columns = Number.isInteger(rawColumns) && rawColumns > 0 ? Math.min(12, rawColumns) : Math.max(1, Math.ceil(Math.sqrt(tileCount)))
+  const layer = o.el('frames', 'Div', { class: 'sem-frames', style: grid ? `--sem-tile-columns: ${columns}` : undefined }, frames)
+  const root = o.el('root', 'Div', {}, [layer, ...others])
+  if (grid) o.attr(root, 'data-sem-layout', 'grid')
+  o.renders(root)
   return o.quads
 }
 

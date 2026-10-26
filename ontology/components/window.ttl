@@ -461,6 +461,15 @@ c:hosts. Components that open windows say where with c:windowsOn, so a detached 
 survives navigation between pages that would hide its origin. Raisable frames go in one
 stacking layer, ordered by their c:z; other hosted overlays (dialogs, toasts) stay above it."""@en ;
     sem:slug "desktop" .
+c:tileLayout a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range c:DesktopLayout ;
+    rdfs:comment "How open floating windows are arranged. Absent or c:DesktopFloatingLayout keeps their saved geometry; c:DesktopGridLayout tiles them without changing that geometry."@en .
+c:DesktopLayout a owl:Class .
+c:DesktopFloatingLayout a c:DesktopLayout ; sem:slug "desktop-floating" ;
+    rdfs:label "Floating"@en , "Вільне розміщення"@uk , "Frei schwebend"@de , "عائم"@ar .
+c:DesktopGridLayout a c:DesktopLayout ; sem:slug "desktop-grid" ; sem:symbol "▦" ;
+    rdfs:label "Grid"@en , "Сітка"@uk , "Raster"@de , "شبكة"@ar .
+c:tileColumns a owl:DatatypeProperty ; rdfs:domain c:Desktop ; rdfs:range xsd:integer ;
+    rdfs:comment "Columns in grid layout (1-12). When absent, the desktop chooses a near-square grid."@en .
 c:hosts a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range sem:Component .
 c:windowsOn a owl:ObjectProperty ; rdfs:range c:Desktop ;
     rdfs:comment "Where a component's windows are placed (else: inside the component)."@en .
