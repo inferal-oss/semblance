@@ -126,9 +126,9 @@
     sty:declares [ sty:property "unicode-bidi" ; sty:raw "plaintext" ] .
 
 # The data (c:dataPreview): the caption of what happened across the panes; each further pane (the
-# data, the text) beside the rendering with a rule between; the data as Turtle, a line per triple,
-# what the last interaction added in the success tone and what it removed struck through in the
-# danger tone; the arrows in a layer over the body (hidden on a phone, where the panes stack and the
+# data, the text) beside the rendering with a rule between; the data as a tree - each subject, its
+# rows (predicate, object) under it along a guide line - what the last interaction added in the
+# success tone and what it removed struck through in the danger tone; the arrows in a layer over the body (hidden on a phone, where the panes stack and the
 # caption says what happened).
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-flow" ;
     sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
@@ -145,18 +145,37 @@
                  [ sty:property "padding" ; sty:token tok:space-3 ] ,
                  [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-data" ;
-    sty:declares [ sty:property "padding" ; sty:token tok:space-2 ] ,
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "padding" ; sty:token tok:space-3 ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius ] ,
                  [ sty:property "background" ; sty:token tok:code-bg ] ,
                  [ sty:property "font" ; sty:raw "12px/1.6 var(--sem-font-mono)" ] ,
                  [ sty:property "direction" ; sty:raw "ltr" ] ,
                  [ sty:property "text-align" ; sty:raw "left" ] ,
                  [ sty:property "overflow-x" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-node" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-subject" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-rows" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:raw "1px" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "5px" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "10px" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border-strong, var(--sem-border))" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-line" ;
-    sty:declares [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
-                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] ,
-                 [ sty:property "padding-inline" ; sty:raw "4px" ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] .
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 7em) minmax(0, 1fr)" ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "padding" ; sty:raw "0 4px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-line[data-sem-change=added]" ;
     sty:declares [ sty:property "background" ; sty:token tok:success-3 ] ,
                  [ sty:property "color" ; sty:token tok:success-11 ] ,

@@ -50,8 +50,9 @@ c:showSources a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xs
     rdfs:comment "Whether the sources' editors are shown beside the rendering (default true; false shows the panes only, and Copy still copies the source)."@en .
 c:dataPreview a owl:DatatypeProperty ; rdfs:domain c:LiveExample ;
     rdfs:comment """The example's data to show beside its rendering: a CONSTRUCT over the example's own graph (the
-Semblance prefixes and the sources' own are declared). Its result is shown as Turtle that follows
-every interaction, the triples the last one added and removed are marked, and arrows run from the
+Semblance prefixes and the sources' own are declared). Its result is shown as a tree - each subject
+with its predicates and objects under it, written as Turtle writes them - that follows every
+interaction; the triples the last one added and removed are marked, and arrows run from the
 rendering to the first of them and on to the text (with c:textPreview), with a caption that says
 what happened."""@en .
 
@@ -80,15 +81,23 @@ c:edited a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:boo
     rdfs:comment "Whether a source differs from its c:original (Reset is enabled)."@en .
 c:copied a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:CodeEditor ;
     rdfs:comment "A request to copy a source to the clipboard: the host carries it out and removes it a moment later."@en .
-# The data (c:dataPreview), as the host last found it: a line per triple, in Turtle order, each with
-# its text (c:lineText, the subject or an indent, the predicate and object, its punctuation) and its
-# place (c:lineKey). A triple the last interaction added is c:LineAdded; one it removed stays, as
+# The data (c:dataPreview), as the host last found it: a line per triple, each with its terms as
+# Turtle writes them (subject, predicate, object, each with its kind of token for colouring), its
+# subject's node (c:lineNode, a key) and its place (c:lineKey: by subject, then rdf:type, rdfs:label
+# and the other predicates). A triple the last interaction added is c:LineAdded; one it removed stays, as
 # c:LineRemoved, until the next. c:changedLine is the first changed line, c:triplesAdded and
 # c:triplesRemoved count them (absent until something changed).
 c:dataLine a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:DataLine ;
     rdfs:comment "A line of the example's data, as Turtle (written by the host)."@en .
 c:DataLine a owl:Class ; rdfs:comment "One triple of a live example's data, as a line of Turtle."@en .
-c:lineText a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The line as written."@en .
+c:lineSubject a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The subject."@en .
+c:lineNode a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "A key of the line's subject: the lines of one subject share its node."@en .
+c:linePredicate a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The predicate (a for rdf:type)."@en .
+c:lineObject a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The object."@en .
+c:subjectToken a owl:DatatypeProperty ; rdfs:domain c:DataLine ;
+    rdfs:comment "The kind of token the subject is, as the code colours name them: pname, iri, string, number, keyword."@en .
+c:predicateToken a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The kind of token the predicate is."@en .
+c:objectToken a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The kind of token the object is."@en .
 c:lineKey a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "Where the line goes: lines sort by it."@en .
 c:lineChange a owl:ObjectProperty ; rdfs:domain c:DataLine ; rdfs:range c:LineChange ;
     rdfs:comment "What the last interaction did to the line's triple (absent: nothing)."@en .
@@ -125,17 +134,17 @@ c:LiveBrokenPhrase a c:Phrase ;
                "Die Quelle hat einen Fehler, und noch wurde nichts dargestellt."@de ,
                "في المصدر خطأ، ولم يُعرض شيء بعد."@ar .
 c:LiveScreenPhrase a c:Phrase ; rdfs:label "On screen"@en , "На екрані"@uk , "Auf dem Bildschirm"@de , "على الشاشة"@ar .
-c:LiveDataPhrase a c:Phrase ; rdfs:label "RDF (Turtle)"@en , "RDF (Turtle)"@uk , "RDF (Turtle)"@de , "RDF (Turtle)"@ar .
+c:LiveDataPhrase a c:Phrase ; rdfs:label "RDF"@en , "RDF"@uk , "RDF"@de , "RDF"@ar .
 c:LiveFlowHintPhrase a c:Phrase ;
     rdfs:label "Use the example: what you do changes its data, and the screen and the text follow."@en ,
                "Скористайтеся прикладом: ваші дії змінюють його дані, а екран і текст ідуть за ними."@uk ,
                "Benutzen Sie das Beispiel: Was Sie tun, ändert seine Daten, und Bildschirm und Text folgen."@de ,
                "استخدم المثال: ما تفعله يغيّر بياناته، والشاشة والنص يتبعانها."@ar .
 c:LiveFlowPhrase a c:Phrase ;
-    rdfs:label "You changed the data: +{added} −{removed} triples. The screen and the text followed."@en ,
-               "Ви змінили дані: +{added} −{removed} трійок. Екран і текст пішли за ними."@uk ,
-               "Sie haben die Daten geändert: +{added} −{removed} Tripel. Bildschirm und Text sind gefolgt."@de ,
-               "غيّرتَ البيانات: +{added} −{removed} ثلاثيات. وتبعتها الشاشة والنص."@ar .
+    rdfs:label "You changed the data (+{added} −{removed}); the screen and the text followed."@en ,
+               "Ви змінили дані (+{added} −{removed}); екран і текст пішли за ними."@uk ,
+               "Sie haben die Daten geändert (+{added} −{removed}); Bildschirm und Text sind gefolgt."@de ,
+               "غيّرتَ البيانات (+{added} −{removed})؛ وتبعتها الشاشة والنص."@ar .
 c:LiveCausePhrase a c:Phrase ; rdfs:label "you changed this"@en , "ви змінили це"@uk , "Sie haben dies geändert"@de , "غيّرتَ هذا"@ar .
 c:LiveFollowPhrase a c:Phrase ; rdfs:label "the text followed"@en , "текст пішов за ним"@uk , "der Text folgte"@de , "تبعه النص"@ar .
 c:LiveLinePhrase a c:Phrase ; rdfs:label "line {n}"@en , "рядок {n}"@uk , "Zeile {n}"@de , "السطر {n}"@ar .
@@ -435,9 +444,11 @@ WHERE {
 }""" .
 
 # --- the data and what happened ----------------------------------------------------------------------------
-# The data's lines, member-wise (sem:forEach c:dataLine): an interaction re-runs the lines it changed,
-# not the others. Each is placed in the data pane by its key, marked with what the last interaction
-# did to it (data-sem-change).
+# The data as a tree, member-wise (sem:forEach c:dataLine): each subject a node, its predicates and
+# objects the rows under it. Each line places its row in its subject's node, and the node in the data
+# pane (the lines of one subject mint the same node), so an interaction re-runs the lines it changed,
+# not the others. A row is marked with what the last interaction did to it (data-sem-change); terms
+# are coloured by kind (tok-<kind>, as code is).
 
 c:LiveExampleData a sem:Rendering ; sem:targets c:LiveExample ; sem:modality mod:Screen ; sem:stratum 0 ;
     sem:forEach c:dataLine ;
@@ -447,22 +458,45 @@ c:LiveExampleData-sparql a sem:Rule ;
     sem:implements c:LiveExampleData ;
     sem:construct """
 CONSTRUCT {
-  ?data rdfhtml:hasChild ?line .
-  ?line a rdfhtml:Div ; rdfhtml:class "sem-live-line" ; sem:orderKey ?key ; rdfhtml:attribute ?changeAttr ; rdfhtml:hasChild ?lineText .
+  ?data rdfhtml:hasChild ?node .
+  ?node a rdfhtml:Div ; rdfhtml:class "sem-live-node" ; sem:orderKey ?s ; rdfhtml:attribute ?nodeRole , ?nodeLabel ; rdfhtml:hasChild ?subject , ?rows .
+  ?nodeRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?nodeLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?s .
+  ?subject a rdfhtml:Span ; rdfhtml:class ?subjectClass ; rdfhtml:hasChild ?subjectText ; ord:immediatelyPrecedes ?rows .
+  ?subjectText a rdfhtml:Text ; rdfhtml:data ?s .
+  ?rows a rdfhtml:Div ; rdfhtml:class "sem-live-rows" ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Div ; rdfhtml:class "sem-live-line" ; sem:orderKey ?key ; rdfhtml:attribute ?changeAttr ; rdfhtml:hasChild ?predicate , ?object .
   ?changeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?change .
-  ?lineText a rdfhtml:Text ; rdfhtml:data ?text .
+  ?predicate a rdfhtml:Span ; rdfhtml:class ?predicateClass ; rdfhtml:hasChild ?predicateText ; ord:immediatelyPrecedes ?object .
+  ?predicateText a rdfhtml:Text ; rdfhtml:data ?p .
+  ?object a rdfhtml:Span ; rdfhtml:class ?objectClass ; rdfhtml:hasChild ?objectText .
+  ?objectText a rdfhtml:Text ; rdfhtml:data ?o .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:LiveExample ; c:dataPreview ?query .
-  $member c:lineText ?text0 ; c:lineKey ?key0 .
+  $member c:lineSubject ?s0 ; c:subjectToken ?sk ; c:lineNode ?n0 ; c:linePredicate ?p0 ; c:predicateToken ?pk ;
+          c:lineObject ?o0 ; c:objectToken ?ok ; c:lineKey ?key0 .
   OPTIONAL { $member c:lineChange/sem:slug ?change }
-  BIND(STR(?text0) AS ?text)
   BIND(STR(?key0) AS ?key)
+  BIND(STR(?s0) AS ?s) BIND(STR(?p0) AS ?p) BIND(STR(?o0) AS ?o)
+  BIND(CONCAT("sem-live-subject tok-", STR(?sk)) AS ?subjectClass)
+  BIND(CONCAT("tok-", STR(?pk)) AS ?predicateClass)
+  BIND(CONCAT("tok-", STR(?ok)) AS ?objectClass)
   BIND(IRI(CONCAT(STR($this), "/~data")) AS ?data)
+  BIND(CONCAT(STR($this), "/~node-", STR(?n0)) AS ?nodeLocal)
+  BIND(IRI(?nodeLocal) AS ?node)
+  BIND(IRI(CONCAT(?nodeLocal, "-role")) AS ?nodeRole)
+  BIND(IRI(CONCAT(?nodeLocal, "-aria-label")) AS ?nodeLabel)
+  BIND(IRI(CONCAT(?nodeLocal, "-subject")) AS ?subject)
+  BIND(IRI(CONCAT(?nodeLocal, "-subject-text")) AS ?subjectText)
+  BIND(IRI(CONCAT(?nodeLocal, "-rows")) AS ?rows)
   BIND(CONCAT(STR($this), "/~line-", REPLACE(STR($member), "^.*/", "")) AS ?local)
   BIND(IRI(?local) AS ?line)
   BIND(IF(BOUND(?change), IRI(CONCAT(?local, "-data-sem-change")), ?none) AS ?changeAttr)
-  BIND(IRI(CONCAT(?local, "-text")) AS ?lineText)
+  BIND(IRI(CONCAT(?local, "-p")) AS ?predicate)
+  BIND(IRI(CONCAT(?local, "-p-text")) AS ?predicateText)
+  BIND(IRI(CONCAT(?local, "-o")) AS ?object)
+  BIND(IRI(CONCAT(?local, "-o-text")) AS ?objectText)
 }""" .
 
 # What happened, once something did: the caption says it, and two arrows show it - from the

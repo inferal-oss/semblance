@@ -30,7 +30,13 @@ export const LIVE = {
   dataPreview: c + 'dataPreview',
   dataLine: c + 'dataLine',
   DataLine: c + 'DataLine',
-  lineText: c + 'lineText',
+  lineSubject: c + 'lineSubject',
+  lineNode: c + 'lineNode',
+  linePredicate: c + 'linePredicate',
+  lineObject: c + 'lineObject',
+  subjectToken: c + 'subjectToken',
+  predicateToken: c + 'predicateToken',
+  objectToken: c + 'objectToken',
   lineKey: c + 'lineKey',
   lineChange: c + 'lineChange',
   LineAdded: c + 'LineAdded',
@@ -660,7 +666,13 @@ export class Sandboxes {
       desired.push(
         sf.quad(s, nn(LIVE.dataLine), node),
         sf.quad(node, nn(RDF_TYPE), nn(LIVE.DataLine)),
-        sf.quad(node, nn(LIVE.lineText), sf.literal(l.text)),
+        sf.quad(node, nn(LIVE.lineSubject), sf.literal(l.subject.text)),
+        sf.quad(node, nn(LIVE.subjectToken), sf.literal(l.subject.token)),
+        sf.quad(node, nn(LIVE.lineNode), sf.literal(hash(l.subject.text))),
+        sf.quad(node, nn(LIVE.linePredicate), sf.literal(l.predicate.text)),
+        sf.quad(node, nn(LIVE.predicateToken), sf.literal(l.predicate.token)),
+        sf.quad(node, nn(LIVE.lineObject), sf.literal(l.object.text)),
+        sf.quad(node, nn(LIVE.objectToken), sf.literal(l.object.token)),
         sf.quad(node, nn(LIVE.lineKey), sf.literal(l.sort)),
       )
       if (l.change) desired.push(sf.quad(node, nn(LIVE.lineChange), nn(l.change === 'added' ? LIVE.LineAdded : LIVE.LineRemoved)))
@@ -704,56 +716,56 @@ export class Sandboxes {
   }
 }
 
-/** A line of a live example's data: its text, where it sorts, and what the last interaction did to its triple. */
+/** A term as Turtle writes it, and the kind of token it is (pname, iri, string, number, keyword), as code colours them. */
+export interface DataTerm {
+  text: string
+  token: string
+}
+
+/** A line of a live example's data: its triple's terms, where it sorts, and what the last interaction did to it. */
 export interface DataLine {
   key: string
   sort: string
-  text: string
+  subject: DataTerm
+  predicate: DataTerm
+  object: DataTerm
   change?: 'added' | 'removed'
 }
 
 /**
- * The data as Turtle, a line per triple: by subject, then rdf:type, rdfs:label and the other
- * predicates, then object. A subject's first line names it; the others are indented. The lines of
- * present triples end in ";" or "." as Turtle has them; a removed triple (marked) stays in its
- * place, without punctuation, beside what replaced it.
+ * The data, a line per triple: by subject, then rdf:type, rdfs:label and the other predicates,
+ * then object; a removed triple (marked) in its place, beside what replaced it.
  */
 export function dataLines(present: Map<string, Quad>, removed: Quad[], added: Set<string>, prefixes: Record<string, string>): DataLine[] {
-  const term = (t: Term) => termText(t, prefixes)
   const rank = (p: string) => (p === RDF_TYPE ? '0' : p === NS.rdfs + 'label' ? '1' : '2')
   const rows = [
     ...[...present].map(([key, q]) => ({ key, q, change: added.has(key) ? ('added' as const) : undefined })),
     ...removed.map((q) => ({ key: quadKey(q), q, change: 'removed' as const })),
   ].map((r) => {
-    const subject = term(r.q.subject)
-    const predicate = r.q.predicate.value === RDF_TYPE ? 'a' : term(r.q.predicate)
-    const object = term(r.q.object)
-    return { ...r, subject, predicate, object, sort: `${subject} ${rank(r.q.predicate.value)}${predicate} ${r.change === 'removed' ? 0 : 1}${object}` }
+    const subject = dataTerm(r.q.subject, prefixes)
+    const predicate = r.q.predicate.value === RDF_TYPE ? { text: 'a', token: 'keyword' } : dataTerm(r.q.predicate, prefixes)
+    const object = dataTerm(r.q.object, prefixes)
+    const sort = `${subject.text} ${rank(r.q.predicate.value)}${predicate.text} ${r.change === 'removed' ? 0 : 1}${object.text}`
+    return { key: r.key, sort, subject, predicate, object, change: r.change }
   })
-  rows.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0))
-  const lastPresent = new Map<string, number>()
-  rows.forEach((r, i) => r.change !== 'removed' && lastPresent.set(r.subject, i))
-  return rows.map((r, i) => {
-    const lead = i === 0 || rows[i - 1]!.subject !== r.subject ? r.subject : '    '
-    const end = r.change === 'removed' ? '' : lastPresent.get(r.subject) === i ? ' .' : ' ;'
-    return { key: r.key, sort: r.sort, text: `${lead} ${r.predicate} ${r.object}${end}`.replace(/^ {5}/, '    '), change: r.change }
-  })
+  return rows.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0))
 }
 
-/** A term as Turtle writes it, with the given prefixes. */
-function termText(t: Term, prefixes: Record<string, string>): string {
+/** A term as Turtle writes it, with the given prefixes, and its kind of token. */
+function dataTerm(t: Term, prefixes: Record<string, string>): DataTerm {
   if (t.termType === 'NamedNode') {
     const short = compactIri(t.value, prefixes)
-    return short === t.value ? `<${t.value}>` : short
+    return short === t.value ? { text: `<${t.value}>`, token: 'iri' } : { text: short, token: 'pname' }
   }
-  if (t.termType === 'BlankNode') return `_:${t.value}`
-  if (t.termType !== 'Literal') return t.value
+  if (t.termType === 'BlankNode') return { text: `_:${t.value}`, token: 'pname' }
+  if (t.termType !== 'Literal') return { text: t.value, token: 'string' }
   const dt = t.datatype?.value
-  if ((dt === XSD_BOOLEAN && /^(true|false)$/.test(t.value)) || (dt === XSD_INTEGER && /^[+-]?\d+$/.test(t.value))) return t.value
+  if (dt === XSD_BOOLEAN && /^(true|false)$/.test(t.value)) return { text: t.value, token: 'keyword' }
+  if (dt === XSD_INTEGER && /^[+-]?\d+$/.test(t.value)) return { text: t.value, token: 'number' }
   const quoted = JSON.stringify(t.value)
-  if (t.language) return `${quoted}@${t.language}`
-  if (!dt || dt === NS.xsd + 'string') return quoted
-  return `${quoted}^^${termText(t.datatype, prefixes)}`
+  if (t.language) return { text: `${quoted}@${t.language}`, token: 'string' }
+  if (!dt || dt === NS.xsd + 'string') return { text: quoted, token: 'string' }
+  return { text: `${quoted}^^${dataTerm(t.datatype, prefixes).text}`, token: 'string' }
 }
 
 /** A short, stable name for a line's triple (FNV-1a, hex). */

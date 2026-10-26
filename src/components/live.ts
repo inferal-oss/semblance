@@ -16,7 +16,13 @@ const L = {
   textPreview: c + 'textPreview',
   showSources: c + 'showSources',
   dataPreview: c + 'dataPreview',
-  lineText: c + 'lineText',
+  lineSubject: c + 'lineSubject',
+  linePredicate: c + 'linePredicate',
+  lineObject: c + 'lineObject',
+  lineNode: c + 'lineNode',
+  subjectToken: c + 'subjectToken',
+  predicateToken: c + 'predicateToken',
+  objectToken: c + 'objectToken',
   lineKey: c + 'lineKey',
   lineChange: c + 'lineChange',
   changedLine: c + 'changedLine',
@@ -188,18 +194,29 @@ const liveExample: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** c:LiveExampleData: one line of the example's data, placed in the data pane by its key. */
+/** c:LiveExampleData: one triple of the example's data, as a row of its subject's node in the data tree. */
 const dataLine: FnRule = (ctx, focus, member) => {
   if (!member || !ctx.object(focus, L.dataPreview)) return []
   const o = ctx.out(focus)
-  const text = str(ctx.object(member, L.lineText))
-  const key = str(ctx.object(member, L.lineKey))
-  if (text === undefined || key === undefined) return []
+  const get = (p: string) => str(ctx.object(member, p))
+  const [subject, sk, node, p, pk, obj, ok, key] = [L.lineSubject, L.subjectToken, L.lineNode, L.linePredicate, L.predicateToken, L.lineObject, L.objectToken, L.lineKey].map(get)
+  if ([subject, sk, node, p, pk, obj, ok, key].some((x) => x === undefined)) return []
+  // The subject's node, minted alike by each of its lines.
+  const n = `node-${node}`
+  const rows = o.el(`${n}-rows`, 'Div', { class: 'sem-live-rows' })
+  const group = o.el(n, 'Div', { class: 'sem-live-node', role: 'group', 'aria-label': subject }, [
+    o.el(`${n}-subject`, 'Span', { class: `sem-live-subject tok-${sk}` }, [o.text(`${n}-subject-text`, subject!)]),
+    rows,
+  ])
+  o.t(group, SEM.orderKey, subject!)
+  o.t(o.node('data'), H.hasChild, group)
+  // The row: predicate and object, coloured by kind, marked with what the last interaction did.
   const change = ctx.object(member, L.lineChange)
   const local = 'line-' + member.value.replace(/^.*\//, '')
-  const line = o.el(local, 'Div', { class: 'sem-live-line', 'data-sem-change': (change && str(ctx.object(change, SEM.slug))) || undefined }, [o.text(local + '-text', text)])
-  o.t(line, SEM.orderKey, key)
-  o.t(o.node('data'), H.hasChild, line)
+  const term = (part: string, kind: string, text: string) => o.el(`${local}-${part}`, 'Span', { class: `tok-${kind}` }, [o.text(`${local}-${part}-text`, text)])
+  const line = o.el(local, 'Div', { class: 'sem-live-line', 'data-sem-change': (change && str(ctx.object(change, SEM.slug))) || undefined }, [term('p', pk!, p!), term('o', ok!, obj!)])
+  o.t(line, SEM.orderKey, key!)
+  o.t(rows, H.hasChild, line)
   return o.quads
 }
 

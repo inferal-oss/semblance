@@ -23,7 +23,7 @@ describe('the site', () => {
     // The todo, live beside its data and its text, then why that matters.
     const live = document.querySelector('[data-sem-c=live-example][data-sem-sources=hidden]')!
     expect(visible(live)).toBe(true)
-    expect([...live.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'RDF (Turtle)', 'As text'])
+    expect([...live.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'RDF', 'As text'])
     expect([...document.querySelectorAll('[data-sem-c=heading]')].filter(visible).map((h) => h.textContent)).toContain('Why it matters')
     expect([...document.querySelectorAll('[data-sem-c=card]')].filter(visible).length).toBeGreaterThanOrEqual(6)
     const tools = document.querySelector('[data-sem-c=app-bar] [data-sem-c=toggle]')!

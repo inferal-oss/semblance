@@ -397,7 +397,14 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
   const todo = (prefer: 'sparql' | 'function') => {
     const h = host({ store: loadStore('wat', exTodo), root: UI + 'todoLive', prefer })
     const ex = h.document.querySelector('[data-sem-c=live-example]')!
-    const lines = () => [...ex.querySelectorAll('.sem-live-line')].map((l) => (l.getAttribute('data-sem-change') ? `${l.getAttribute('data-sem-change')}: ` : '') + l.textContent)
+    // The data tree, a row each: "subject predicate object", prefixed by what the last interaction did to it.
+    const lines = () =>
+      [...ex.querySelectorAll('.sem-live-node')].flatMap((node) =>
+        [...node.querySelectorAll('.sem-live-line')].map((l) => {
+          const change = l.getAttribute('data-sem-change')
+          return (change ? `${change}: ` : '') + [node.querySelector('.sem-live-subject')!, ...l.children].map((e) => e.textContent).join(' ')
+        }),
+      )
     const flow = () => ex.querySelector('.sem-live-flow')!.textContent
     const text = () => ex.querySelector('.sem-live-text')!.textContent
     const connectors = () => [...ex.querySelectorAll('svg[data-sem-c=connector]')].map((s) => [s.getAttribute('data-sem-from'), s.getAttribute('data-sem-to')])
@@ -417,22 +424,25 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
     return { h, ex, lines, flow, text, connectors, tick, write, add, html }
   }
 
-  it('shows the panes only, the data as Turtle, and the text, and says how to start', () => {
+  it('shows the panes only, the data as a tree, and the text, and says how to start', () => {
     const t = todo('sparql')
     expect(t.ex.getAttribute('data-sem-sources')).toBe('hidden')
     expect(t.ex.querySelector('.sem-live-sources, [role=tab]')).toBeNull()
-    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'RDF (Turtle)', 'As text'])
+    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'RDF', 'As text'])
     expect(t.lines()).toEqual([
-      'ex:t1 rdfs:label "Write the core ontology" ;',
-      '    ex:done true ;',
-      '    ex:priority 1 .',
-      'ex:t2 rdfs:label "Sketch the style layer" ;',
-      '    ex:done false ;',
-      '    ex:priority 2 .',
-      'ex:t3 rdfs:label "Wire up behaviour" ;',
-      '    ex:done false ;',
-      '    ex:priority 3 .',
+      'ex:t1 rdfs:label "Write the core ontology"',
+      'ex:t1 ex:done true',
+      'ex:t1 ex:priority 1',
+      'ex:t2 rdfs:label "Sketch the style layer"',
+      'ex:t2 ex:done false',
+      'ex:t2 ex:priority 2',
+      'ex:t3 rdfs:label "Wire up behaviour"',
+      'ex:t3 ex:done false',
+      'ex:t3 ex:priority 3',
     ])
+    // Each subject a node; terms coloured as code is.
+    expect([...t.ex.querySelectorAll('.sem-live-node')].map((n) => n.getAttribute('aria-label'))).toEqual(['ex:t1', 'ex:t2', 'ex:t3'])
+    expect([...t.ex.querySelector('.sem-live-line')!.children].map((e) => e.className)).toEqual(['tok-pname', 'tok-string'])
     expect(t.flow()).toBe('Use the example: what you do changes its data, and the screen and the text follow.')
     expect(t.connectors()).toEqual([])
     expect(t.text()).toContain('[ ] Sketch the style layer')
@@ -441,8 +451,8 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
   it('follows each interaction: marks the triples it changed, says so, and points from the screen to them and on to the text', () => {
     const t = todo('sparql')
     t.tick('Sketch the style layer')
-    expect(t.lines().slice(3, 7)).toEqual(['ex:t2 rdfs:label "Sketch the style layer" ;', 'removed:     ex:done false', 'added:     ex:done true ;', '    ex:priority 2 .'])
-    expect(t.flow()).toBe('You changed the data: +1 −1 triples. The screen and the text followed.')
+    expect(t.lines().slice(3, 7)).toEqual(['ex:t2 rdfs:label "Sketch the style layer"', 'removed: ex:t2 ex:done false', 'added: ex:t2 ex:done true', 'ex:t2 ex:priority 2'])
+    expect(t.flow()).toBe('You changed the data (+1 −1); the screen and the text followed.')
     expect(t.text()).toContain('[x] Sketch the style layer')
     const added = t.ex.querySelector('.sem-live-line[data-sem-change=added]')!
     const screen = t.ex.querySelector('.sem-live-screen')!
@@ -453,16 +463,16 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
     ])
     // Typing is data too; adding a todo adds its triples and takes the field's away.
     t.write('Ship it')
-    expect(t.lines()[0]).toBe('added: ex:newTodo c:value "Ship it" .')
-    expect(t.lines()).not.toContain('removed:     ex:done false')
+    expect(t.lines()[0]).toBe('added: ex:newTodo c:value "Ship it"')
+    expect(t.lines()).not.toContain('removed: ex:t2 ex:done false')
     t.add()
     expect(t.lines().filter((l) => /^(added|removed)/.test(l))).toEqual([
       'removed: ex:newTodo c:value "Ship it"',
-      'added: ex:t4 rdfs:label "Ship it" ;',
-      'added:     ex:done false ;',
-      'added:     ex:priority 4 .',
+      'added: ex:t4 rdfs:label "Ship it"',
+      'added: ex:t4 ex:done false',
+      'added: ex:t4 ex:priority 4',
     ])
-    expect(t.flow()).toBe('You changed the data: +3 −1 triples. The screen and the text followed.')
+    expect(t.flow()).toBe('You changed the data (+3 −1); the screen and the text followed.')
     expect(t.text()).toContain('[ ] Ship it')
     expect(t.connectors()[0]![1]).toBe(t.ex.querySelector('.sem-live-line[data-sem-change=added]')!.id)
   })
