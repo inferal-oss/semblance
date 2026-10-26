@@ -23,6 +23,7 @@ const C_TIMELINE_ITEM = NS.c + 'TimelineItem'
 const C_PARENT_PROPERTY = NS.c + 'parentProperty'
 const C_EXPANDED = NS.c + 'expandedNode'
 const C_DETAIL_PROPERTY = NS.c + 'detailProperty'
+const C_DESCRIPTION_VALUE = NS.c + 'DescriptionValue'
 const C_TOGGLES = NS.c + 'expands'
 
 /** A short, stable key for an IRI or a value (FNV-1a, base 36). */
@@ -318,8 +319,14 @@ const descriptionList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const of = describedNode(ctx, focus)
   const items = nodes(ctx, ctx.object(focus, C_ITEMS))
-  const pairs: { key: string; term: string; value: string }[] = items.length
-    ? items.map((item) => ({ key: hashKey(item.value), term: labelOf(ctx, item), value: display(ctx, ctx.object(item, C.value)) }))
+  const pairs: { key: string; term: string; value?: string; component?: NamedNode }[] = items.length
+    ? items.map((item) => {
+        const content = ctx.object(item, C.content)
+        const component = named(content) ? content : undefined
+        const value = ctx.object(item, C.value)
+        return { key: hashKey(item.value), term: labelOf(ctx, item), component,
+          value: value !== undefined || !component ? display(ctx, value) : undefined }
+      })
     : of && ctx.object(focus, NS.c + 'entryProperty')
       ? entriesOf(ctx, focus, of)
       : of
@@ -332,18 +339,40 @@ const descriptionList: FnRule = (ctx, focus) => {
         })
       : []
   if (!pairs.length) return message(o, 'P', text(ctx, focus, C.emptyText) ?? 'Nothing to describe.')
+  const componentValue = (p: typeof pairs[number]) => {
+    const node = o.node(`p${p.key}-value`)
+    o.t(node, RDF_TYPE, ctx.nn(C_DESCRIPTION_VALUE))
+    o.t(node, C.content, p.component!)
+    if (p.value !== undefined) o.t(node, C.value, p.value)
+    return node
+  }
   if (ctx.modality === MOD.Text) {
     const width = Math.max(...pairs.map((p) => p.term.length))
-    o.renders(el(o, 'root', 'Div', {}, pairs.map((p) => el(o, `p${p.key}`, 'Div', {}, [o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  ${p.value}`)]))))
+    o.renders(el(o, 'root', 'Div', {}, pairs.map((p) => el(o, `p${p.key}`, 'Div', {}, p.component
+      ? [o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  `), componentValue(p)]
+      : [o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  ${p.value ?? ''}`)]))))
     return o.quads
   }
   const groups = pairs.map((p) =>
     el(o, `p${p.key}`, 'Div', { class: 'sem-pair' }, [
       el(o, `p${p.key}-dt`, 'Dt', {}, [o.text(`p${p.key}-dt-text`, p.term)]),
-      el(o, `p${p.key}-dd`, 'Dd', {}, [o.text(`p${p.key}-dd-text`, p.value)]),
+      el(o, `p${p.key}-dd`, 'Dd', {}, [p.component ? componentValue(p) : o.text(`p${p.key}-dd-text`, p.value ?? '')]),
     ]),
   )
   o.renders(el(o, 'root', 'Dl', {}, groups))
+  return o.quads
+}
+
+/** Internal component-valued cell: the container has already formatted any text summary. */
+const descriptionValue: FnRule = (ctx, focus) => {
+  const component = ctx.object(focus, C.content)
+  const rich = named(component) ? component : undefined
+  const summary = ctx.object(focus, C.value)
+  const useComponent = rich && (ctx.modality !== MOD.Text || summary === undefined)
+  const o = ctx.out(focus)
+  o.renders(el(o, 'root', ctx.modality !== MOD.Text && rich ? 'Div' : 'Span', {}, [
+    useComponent ? rich : o.text('text', str(summary) ?? ''),
+  ]))
   return o.quads
 }
 
@@ -609,6 +638,7 @@ const treeToggle: ReactionFn = (ctx) => {
 export const functions: Record<string, FnRule> = {
   'data:table': table,
   'data:description-list': descriptionList,
+  'data:description-value': descriptionValue,
   'data:stat': stat,
   'data:avatar': avatar,
   'data:avatar-group': avatarGroup,

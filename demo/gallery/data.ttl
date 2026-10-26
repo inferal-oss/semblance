@@ -140,10 +140,23 @@ ui:dt-dl-item-strata c:label "Strata" ; c:value "0 components · 10 a11y · 20 s
 ui:dt-dl-item-log c:label "Change log" ; c:value "LDES, latest 200 members" .
 ui:dt-dl-item-ids c:label "Identity" ; c:value "<focus>/~<local>, never blank nodes" .
 ui:dt-dl-explicit a c:DescriptionList ; c:items ( ui:dt-dl-item-store ui:dt-dl-item-strata ui:dt-dl-item-log ui:dt-dl-item-ids ) .
+ui:dt-dl-components a c:DescriptionList ; c:items ( ui:dt-dl-review ui:dt-dl-resource ) .
+ui:dt-dl-review c:label "Review"@en , "Перевірка"@uk , "Prüfung"@de , "مراجعة"@ar ; c:content ui:dt-dl-review-body .
+ui:dt-dl-review-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-dl-review-text ui:dt-dl-approved ) .
+ui:dt-dl-review-text a c:Text ; c:label "Components can be values too."@en ,
+    "Компоненти також можуть бути значеннями."@uk , "Auch Komponenten können Werte sein."@de ,
+    "يمكن أن تكون المكونات قيمًا أيضًا."@ar .
+ui:dt-dl-approved a c:ToggleSwitch ; c:checked false ; c:label "Approved"@en ,
+    "Схвалено"@uk , "Genehmigt"@de , "تمت الموافقة"@ar .
+ui:dt-dl-resource c:label "Resource"@en , "Ресурс"@uk , "Ressource"@de , "المورد"@ar ;
+    c:value "Framework home" ; c:content ui:dt-dl-home .
+ui:dt-dl-home a c:Link ; c:href "https://semblance.dev/" ;
+    c:label "Open framework home"@en , "Відкрити головну сторінку"@uk , "Startseite öffnen"@de , "افتح الصفحة الرئيسية"@ar .
 ui:dt-dl a c:Flippable ; c:front ui:dt-dl-spec .
 ui:dt-dl-spec a c:Specimen ; c:demonstrates c:DescriptionList ; c:label "Description list" ;
-    c:help "Key / value pairs: the values of chosen properties on a node (here the class c:Table itself), or explicit items." ;
-    c:children ( ui:dt-dl-class ui:dt-dl-explicit ) .
+    c:help "Key / value pairs: the values of chosen properties on a node (here the class c:Table itself), or explicit items. An item can supply c:content for a component value, including links, nested lists and controls. Screen shows the component; Text uses a c:value summary when given, or the component otherwise." ;
+    c:children ( ui:dt-dl-class ui:dt-dl-explicit ui:dt-dl-components ) .
 
 # --- Avatar and AvatarGroup -----------------------------------------------------------------------
 
