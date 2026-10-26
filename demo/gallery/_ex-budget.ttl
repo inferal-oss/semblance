@@ -62,7 +62,7 @@ bud:AmountShape a sh:PropertyShape ; sh:path bud:amount ; sh:datatype xsd:decima
 # Each is a sem:View. A Stat takes its figure from one (c:valueQuery: the first row's ?value,
 # and ?tone if bound); the table and the chart take their rows from one (c:query, c:view).
 
-bud:TotalOf a sem:View ; rdfs:label "total of a kind" ;
+bud:TotalOf a sem:View , iv:View ; iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; rdfs:label "total of a kind" ;
     # $this is the Stat asking; it names the kind it sums (bud:sums).
     sem:select """
 SELECT (SUM(?amount) AS ?value) WHERE {
@@ -71,7 +71,7 @@ SELECT (SUM(?amount) AS ?value) WHERE {
   BIND(COALESCE(?a, 0) AS ?amount)
 }""" .
 
-bud:Balance a sem:View ; rdfs:label "balance" ;
+bud:Balance a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-budget ; rdfs:label "balance" ;
     sem:select """
 SELECT ?value ?tone WHERE {
   { SELECT (SUM(IF(?kind = bud:Income, ?a, -?a)) AS ?sum) WHERE { bud:sheet bud:entry ?e . ?e bud:category/bud:kind ?kind ; bud:amount ?a } }
@@ -79,7 +79,7 @@ SELECT ?value ?tone WHERE {
   BIND(IF(?value < 0, sty:Danger, sty:Success) AS ?tone)
 }""" .
 
-bud:SavingsRate a sem:View ; rdfs:label "savings rate" ;
+bud:SavingsRate a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-budget ; rdfs:label "savings rate" ;
     sem:select """
 SELECT ?value ?tone WHERE {
   { SELECT (SUM(IF(?kind = bud:Income, ?a, 0)) AS ?in) (SUM(IF(?kind = bud:Expense, ?a, 0)) AS ?out)

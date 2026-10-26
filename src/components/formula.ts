@@ -1,24 +1,14 @@
 // Formulas (ontology/components/formula.ttl): a component's value from a SELECT.
-import type { FnRule } from '../engine/context.ts'
-import { NS, SEM, STY } from '../ns.ts'
+import type { Term } from '@rdfjs/types'
+import type { FnRule, Out } from '../engine/context.ts'
+import { NS, RDF_TYPE, SEM, STY } from '../ns.ts'
 import { str } from './util.ts'
-import { viewRows } from '../view/rows.ts'
+import { maintainedRows } from '../view/rows.ts'
 
 const VALUE_QUERY = NS.c + 'valueQuery'
 
-/** The first solution of the component's c:valueQuery, as its c:value (and sty:tone). */
-const formulaValue: FnRule = (ctx, focus) => {
-  const view = ctx.object(focus, VALUE_QUERY)
-  const query = view && str(ctx.object(view, SEM.select))
-  if (!query || !ctx.sparql) return []
-  let row
-  try {
-    row = (query.includes('$this') ? ctx.select(query.replaceAll('$this', `<${focus.value}>`)) : viewRows(ctx, view, query))[0]
-  } catch {
-    return []
-  }
-  if (!row) return []
-  const o = ctx.out(focus)
+/** What a solution says, on the component: ?value as c:value, ?tone as sty:tone, ?max and ?label. */
+function write(o: Out, focus: Term, row: Map<string, Term>) {
   const value = row.get('value')
   if (value?.termType === 'Literal') o.t(focus, NS.c + 'value', value)
   const tone = row.get('tone')
@@ -31,4 +21,27 @@ const formulaValue: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const formulaFunctions: Record<string, FnRule> = { 'formula:value': formulaValue }
+/** c:Formula: the first row of the component's c:valueQuery, a maintained view - its own instance when it is one per component. */
+const formulaValue: FnRule = (ctx, focus) => {
+  const view = ctx.object(focus, VALUE_QUERY)
+  if (!view || !ctx.match(view, RDF_TYPE, NS.iv + 'View').length) return []
+  const instance = ctx.match(null, NS.iv + 'focus', focus).map((q) => q.subject).find((i) => ctx.match(i, NS.iv + 'instanceOf', view).length)
+  const row = maintainedRows(ctx, instance ?? view)?.[0]
+  return row ? write(ctx.out(focus), focus, row) : []
+}
+
+/** c:QueryFormula: a c:valueQuery that is not a view, run (with $this the component). */
+const formulaQuery: FnRule = (ctx, focus) => {
+  const view = ctx.object(focus, VALUE_QUERY)
+  const query = view && str(ctx.object(view, SEM.select))
+  if (!query || !ctx.sparql || ctx.match(view, RDF_TYPE, NS.iv + 'View').length) return []
+  let row
+  try {
+    row = ctx.select(query.replaceAll('$this', `<${focus.value}>`))[0]
+  } catch {
+    return []
+  }
+  return row ? write(ctx.out(focus), focus, row) : []
+}
+
+export const formulaFunctions: Record<string, FnRule> = { 'formula:value': formulaValue, 'formula:query': formulaQuery }

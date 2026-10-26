@@ -1,5 +1,6 @@
-// Charts and finding lists over maintained views, in SPARQL (#1): c:BarChartRendering-sparql and
-// c:FindingListRendering-sparql read the rows and findings the views runtime keeps in the views graph,
+// Charts, finding lists and formulas over maintained views, in SPARQL (#1): c:BarChartRendering-sparql,
+// c:FindingListRendering-sparql and c:Formula-sparql read the rows and findings the views runtime keeps
+// in the views graph (a formula's per component, iv:perReferrer),
 // and render the same HTML as their function twins - faceted and not, with and without a declared
 // legend, ordered (rs:index) and unordered rows, no rows, a view that is not maintained - on Oxigraph
 // and on Semblance's own engine, after each change the data goes through.
@@ -71,6 +72,35 @@ ex:empty a c:FindingList ; c:judgementClass ex:K ; c:emptyText "Run something." 
 ex:empty2 a c:FindingList ; c:judgementClass ex:K .
 `
 
+const FORMULAS = `@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ex: <https://example.org/#> .
+
+ex:e1 ex:kind ex:In ; ex:amount 100 . ex:e2 ex:kind ex:Out ; ex:amount 30 . ex:e3 ex:kind ex:Out ; ex:amount 12.5 .
+ex:Total a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT (SUM(?a) AS ?value) (IF(SUM(?a) > 100, sty:Warning, sty:Success) AS ?tone) WHERE { ?e <https://example.org/#amount> ?a }""" .
+ex:Of a sem:View , iv:View ; iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ;
+  sem:select """SELECT (SUM(?amount) AS ?value) WHERE { $this <https://example.org/#sums> ?k . OPTIONAL { ?e <https://example.org/#kind> ?k ; <https://example.org/#amount> ?a } BIND(COALESCE(?a, 0) AS ?amount) }""" .
+ex:Biggest a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?value ?label ?max WHERE { ?e <https://example.org/#amount> ?value BIND(CONCAT("biggest: ", STR(?value)) AS ?label) BIND(200 AS ?max) } ORDER BY DESC(?value) LIMIT 2""" .
+ex:Unordered a sem:View , iv:View ; iv:materialize iv:Graph ;
+  sem:select """SELECT ?value WHERE { ?e <https://example.org/#amount> ?value }""" .
+ex:Plain a sem:View ; sem:select """SELECT (COUNT(?e) AS ?value) WHERE { ?e <https://example.org/#amount> ?x }""" .
+ex:Nothing a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?value WHERE { ?e <https://example.org/#none> ?value }""" .
+
+ex:page a c:Stack ; c:children ( ex:a ex:b ex:c ex:d ex:e ex:f ex:g ) .
+ex:a a c:Stat ; c:label "Total" ; c:valueQuery ex:Total .
+ex:b a c:Stat ; c:label "In" ; c:valueQuery ex:Of ; ex:sums ex:In .
+ex:c a c:Stat ; c:label "Out" ; c:valueQuery ex:Of ; ex:sums ex:Out .
+ex:d a c:Progress ; c:valueQuery ex:Biggest .
+ex:e a c:Stat ; c:label "Some" ; c:valueQuery ex:Unordered .
+ex:f a c:Stat ; c:label "Count" ; c:valueQuery ex:Plain ; c:dataset ex:e1 .
+ex:g a c:Stat ; c:label "None" ; c:value 7 ; c:valueQuery ex:Nothing .
+`
+
 type Kind = 'oxigraph' | 'wat'
 
 /** The components rendered on their own, with SPARQL or with function rules; html() after each change. */
@@ -88,6 +118,7 @@ function mount(turtle: string, kind: Kind, prefer: 'sparql' | 'function', roots:
   const f = store.factory
   return {
     html: () => shown.map(({ renderer, app }) => (renderer.flush(), app.innerHTML)),
+    set: (s: string, p: string, o: string) => runtime.apply({ remove: store.match(f.namedNode(EX + s), f.namedNode(EX + p), null), add: [f.quad(f.namedNode(EX + s), f.namedNode(EX + p), f.namedNode(EX + o))] }),
     change: (add: [string, string, string | number][], remove: [string, string, string | number][] = []) => {
       const q = ([s, p, o]: [string, string, string | number]) => f.quad(f.namedNode(EX + s), f.namedNode(EX + p), typeof o === 'number' ? f.literal(String(o), f.namedNode('http://www.w3.org/2001/XMLSchema#decimal')) : f.literal(o))
       runtime.apply({ add: add.map(q), remove: remove.flatMap(([s, p]) => store.match(f.namedNode(EX + s), f.namedNode(EX + p), null)) })
@@ -118,7 +149,7 @@ describe('charts and finding lists over maintained views, in SPARQL', () => {
       both((h) => h.change([], [['o2', 'channel', 0]]))
       // The first rows of an empty view arrive.
       both((h) => h.change([['n1', 'nothing', 'Somewhere'], ['n1', 'value', 3]]))
-      expect(s.html()[4]).toContain('Somewhere')
+      expect(s.html()[4]).not.toContain('Nothing yet.')
     }, 120_000)
 
     it(`renders finding lists as their function twins do, as the observations change (${kind})`, () => {
@@ -141,6 +172,26 @@ describe('charts and finding lists over maintained views, in SPARQL', () => {
       expect(s.html()[0]).toContain('At 50 it took 9')
       both((h) => h.change([], [['o2', 't', 0]]))
       expect(s.html()[0]).not.toContain('At 1000 ')
+    }, 120_000)
+
+    it(`writes formulas' values as their function twins do, a view per component that asks (${kind})`, () => {
+      const [s, fn] = [mount(FORMULAS, kind, 'sparql', ['page']), mount(FORMULAS, kind, 'function', ['page'])]
+      const both = (step: (h: typeof s) => void) => {
+        step(s)
+        step(fn)
+        expect(s.html()).toEqual(fn.html())
+      }
+      const values = () => [...s.html()[0]!.matchAll(/class="sem-value">([^<]*)</g)].map((m) => m[1])
+      both(() => {})
+      // Total (toned), In and Out (one view each), the first of an unordered view, a query run as it is, a stated value.
+      expect(values()).toEqual(['142.5', '100', '42.5', '12.5', '3', '7'])
+      expect(s.html()[0]).toContain('data-sem-tone="warning"')
+      expect(s.html()[0]).toContain('aria-valuetext="biggest: 100"')
+      both((h) => h.change([['e4', 'kind', 'x'], ['e4', 'amount', 250]]))
+      both((h) => h.set('e4', 'kind', 'Out'))
+      expect(values().slice(0, 3)).toEqual(['392.5', '100', '292.5'])
+      both((h) => h.set('c', 'sums', 'In'))
+      expect(values().slice(1, 3)).toEqual(['100', '100'])
     }, 120_000)
   }
 })

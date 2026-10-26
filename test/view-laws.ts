@@ -115,6 +115,8 @@ v:upTo a iv:View ; iv:parameter [ iv:variable "min" ; iv:from v:cfg ; iv:propert
     sem:select """SELECT (SUM(IF(?x <= $min, 1, 0)) AS ?below) (COUNT(*) AS ?all) WHERE { v:s tree:member ?m . ?m v:x ?x }""" .
 v:perTarget a iv:View ; iv:targets v:Target ; iv:materialize iv:Graph ;
     sem:select """SELECT (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:target $this }""" .
+v:perAsker a iv:View ; iv:perReferrer v:asks ; iv:materialize iv:Graph ;
+    sem:select """SELECT (COUNT(?m) AS ?n) WHERE { $this v:about ?t . v:s tree:member ?m . ?m v:target ?t }""" .
 `
 
 /** A seeded PRNG (mulberry32), so a failure replays. */
@@ -198,6 +200,9 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     ['member kind', 0.5, () => (members.length ? set(pick(members), 'kind', nn(pick(K))) : [[], []])],
     ['label', 1, () => set(pick(T), RDFS + 'label', r() < 0.2 ? undefined : f.literal('label ' + Math.floor(r() * 6)))],
     ['hidden', 1, () => set(pick(T), 'hidden', r() < 0.5 ? f.literal('true', f.namedNode(NS.xsd + 'boolean')) : undefined)],
+    // A view per node that names it (iv:perReferrer): askers come, go and change what they ask about.
+    ['asker', 0.5, () => set(pick(['A1', 'A2', 'A3']), 'asks', r() < 0.3 ? undefined : nn('perAsker'))],
+    ['asker about', 0.5, () => set(pick(['A1', 'A2', 'A3']), 'about', r() < 0.2 ? undefined : nn(pick(T)))],
     ['group', 0.7, () => set(pick(T), 'group', nn(pick(G)))],
     ['group label', 0.5, () => set(pick(G), RDFS + 'label', f.literal('group ' + Math.floor(r() * 4)))],
     ['showKind', 0.4, () => (r() < 0.5 ? [[], [f.quad(nn('cfg'), p('showKind'), nn(pick(K)))]] : [store.match(nn('cfg'), p('showKind'), null).slice(0, 1), []])],

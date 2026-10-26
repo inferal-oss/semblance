@@ -207,8 +207,10 @@ WHERE {
     } GROUP BY ?fac ?cat }
     BIND(CONCAT(?me, "/~b-", SUBSTR(MD5(?fac), 1, 8), "-", SUBSTR(MD5(?cat), 1, 8)) AS ?id)
     BIND(?total AS ?x) BIND(?measuredRows = 1 AS ?measured)
+    # fmtIn (charts.ts): 0 to 3 decimals by size, ROUND(x × 10^k) with the point put in. ROUND's double
+    # may be a hair below the whole number (Oxigraph), so + 0.5 before the cast to xsd:integer.
     BIND(IF(?x >= 100, 0, IF(?x >= 10, 1, IF(?x >= 1, 2, 3))) AS ?xK)
-    BIND(STR(xsd:integer(ROUND(?x * IF(?xK = 0, 1, IF(?xK = 1, 10, IF(?xK = 2, 100, 1000)))))) AS ?xD)
+    BIND(STR(xsd:integer(ROUND(?x * IF(?xK = 0, 1, IF(?xK = 1, 10, IF(?xK = 2, 100, 1000)))) + 0.5)) AS ?xD)
     BIND(IF(STRLEN(?xD) <= ?xK, CONCAT(SUBSTR("000", 1, ?xK + 1 - STRLEN(?xD)), ?xD), ?xD) AS ?xP)
     BIND(IF(?xK = 0, ?xP, CONCAT(SUBSTR(?xP, 1, STRLEN(?xP) - ?xK), ".", SUBSTR(?xP, STRLEN(?xP) - ?xK + 1))) AS ?xF)
     BIND(IF(?unit = "" && FLOOR(?x) = ?x, STR(xsd:integer(?x)), IF(?x >= 0.01, ?xF, "<0.01")) AS ?xN)
@@ -316,21 +318,24 @@ WHERE {
     BIND(IRI(CONCAT(STR(?first), "-", COALESCE(STR(?vvar), "value"))) AS ?firstValue)
     LATERAL { ?firstValue rs:value ?fv0 }
     BIND(xsd:double(?fv0) AS ?x) FILTER(?x > 0)
+    # fmtIn (charts.ts): 0 to 3 decimals by size, ROUND(x × 10^k) with the point put in. ROUND's double
+    # may be a hair below the whole number (Oxigraph), so + 0.5 before the cast to xsd:integer.
     BIND(IF(?x >= 100, 0, IF(?x >= 10, 1, IF(?x >= 1, 2, 3))) AS ?xK)
-    BIND(STR(xsd:integer(ROUND(?x * IF(?xK = 0, 1, IF(?xK = 1, 10, IF(?xK = 2, 100, 1000)))))) AS ?xD)
+    BIND(STR(xsd:integer(ROUND(?x * IF(?xK = 0, 1, IF(?xK = 1, 10, IF(?xK = 2, 100, 1000)))) + 0.5)) AS ?xD)
     BIND(IF(STRLEN(?xD) <= ?xK, CONCAT(SUBSTR("000", 1, ?xK + 1 - STRLEN(?xD)), ?xD), ?xD) AS ?xP)
     BIND(IF(?xK = 0, ?xP, CONCAT(SUBSTR(?xP, 1, STRLEN(?xP) - ?xK), ".", SUBSTR(?xP, STRLEN(?xP) - ?xK + 1))) AS ?xF)
     BIND(IF(?unit = "" && FLOOR(?x) = ?x, STR(xsd:integer(?x)), IF(?x >= 0.01, ?xF, "<0.01")) AS ?xN)
     BIND(IF(?unit = "", ?xN, CONCAT(?xN, " ", ?unit)) AS ?valueText)
     BIND((?x / ?fmax) * 100 AS ?w)
-    BIND(STR(xsd:integer(ROUND(?w * 100))) AS ?wD)
+    BIND(STR(xsd:integer(ROUND(?w * 100) + 0.5)) AS ?wD)
     BIND(IF(STRLEN(?wD) <= 2, CONCAT(SUBSTR("000", 1, 3 - STRLEN(?wD)), ?wD), ?wD) AS ?wP)
     BIND(CONCAT(SUBSTR(?wP, 1, STRLEN(?wP) - 2), ".", SUBSTR(?wP, STRLEN(?wP) - 1)) AS ?width)
     BIND(CONCAT(?me, "/~b-", SUBSTR(MD5(?fac), 1, 8), "-", SUBSTR(MD5(?cat), 1, 8)) AS ?id)
     BIND(IRI(CONCAT(?id, "-s", STR(?si))) AS ?el) BIND(IRI(CONCAT(?id, "-track")) AS ?parent)
     BIND(rdfhtml:Span AS ?tag) BIND("sem-seg" AS ?cls) BIND(STR(?si) AS ?key)
     BIND(CONCAT("width: ", ?width, "%; background: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?style)
-    BIND(CONCAT(?cat, " · ", ?slabel, ": ", ?valueText) AS ?tip)
+    # As the function writes it: trimmed (an empty category leaves no space).
+    BIND(REPLACE(CONCAT(?cat, " · ", ?slabel, ": ", ?valueText), "^ +| +$", "") AS ?tip)
   } UNION {
     # The legend: a swatch and a label per series.
     FILTER(!BOUND(?message))

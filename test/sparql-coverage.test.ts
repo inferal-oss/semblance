@@ -46,9 +46,11 @@ describe('SPARQL coverage', () => {
     const awaiting = rows(`SELECT ?rendering ?issue WHERE { ?rendering sem:awaitsWork ?issue } ORDER BY ?issue ?rendering`)
     expect(awaiting).toEqual([
       // Query results as graph rows (#1): a query held in data, read as rows SPARQL can join.
-      ...['Formula', 'ResultTableRendering'].map((rendering) => ({ rendering, issue: '1' })),
+      ...['ResultTableRendering'].map((rendering) => ({ rendering, issue: '1' })),
       // The combobox work (#14) brings the typeahead's function twins.
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
+      // Views over derived triples (#147): formulas over a sheet's derived inputs or a view's figures.
+      { rendering: 'QueryFormula', issue: '147' },
     ])
   })
 

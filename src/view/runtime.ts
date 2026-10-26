@@ -196,8 +196,8 @@ export class ViewRuntime {
   private afterTicks: ((tick: number) => void)[] = []
   /** Views in the order they step: a view after the views it reads (iv:reads). */
   private order: MaintainedView[] = []
-  /** Templates (iv:targets): template IRI -> its class. */
-  private templates = new Map<string, string>()
+  /** Templates: template IRI -> its class (iv:targets), or the property that names it (iv:perReferrer). */
+  private templates = new Map<string, { cls?: string; referrer?: string }>()
   private refs = new Map<string, { q: Quad; n: number }>()
   private dataset: Set<string>
   readonly graphs: Term[]
@@ -272,19 +272,23 @@ export class ViewRuntime {
     return applied
   }
 
-  /** The views a view node defines: itself, or (iv:targets) one per instance of the class. */
+  /**
+   * The views a view node defines: itself, or one per instance of the class (iv:targets), or one per
+   * node that names it by the property (iv:perReferrer: `?node <property> <view>`).
+   */
   private definitions(iri: string): Definition[] {
     const f = this.store.factory
     const cls = this.store.match(f.namedNode(iri), f.namedNode(IV + 'targets'), null)[0]?.object
-    if (!cls) {
+    const referrer = this.store.match(f.namedNode(iri), f.namedNode(IV + 'perReferrer'), null)[0]?.object
+    if (!cls && referrer?.termType !== 'NamedNode') {
       this.templates.delete(iri)
       return [{ iri, node: iri }]
     }
-    this.templates.set(iri, cls.value)
-    return this.store
-      .match(null, f.namedNode(RDF_TYPE), cls as NamedNode)
-      .filter((q) => q.subject.termType === 'NamedNode')
-      .map((q) => ({ iri: this.instanceOf(iri, q.subject.value), node: iri, focus: q.subject.value }))
+    this.templates.set(iri, cls ? { cls: cls.value } : { referrer: referrer!.value })
+    const foci = cls
+      ? this.store.match(null, f.namedNode(RDF_TYPE), cls as NamedNode).map((q) => q.subject)
+      : this.store.match(null, referrer as NamedNode, f.namedNode(iri)).map((q) => q.subject)
+    return [...new Set(foci.filter((t) => t.termType === 'NamedNode').map((t) => t.value))].map((focus) => ({ iri: this.instanceOf(iri, focus), node: iri, focus }))
   }
 
   /** One tick: the consolidated change of the input graphs. Returns the view graph's change (applied). */
@@ -300,17 +304,28 @@ export class ViewRuntime {
     // A view's own triples (its query, its window, its parameters) changed: compile it again.
     const redefine = new Set<string>()
     const nodes = new Set<string>()
+    const members = new Set<string>()
     for (const q of [...changes.add, ...changes.remove]) {
       if (q.subject.termType !== 'NamedNode') continue
       const s = q.subject.value
       if (q.predicate.value === RDF_TYPE && q.object.value === IV + 'View') nodes.add(s)
       else if (this.views.has(s) || this.templates.has(s)) nodes.add(s)
-      // An instance of a template's class came or went.
-      if (q.predicate.value === RDF_TYPE) for (const [tpl, cls] of this.templates) if (q.object.value === cls) nodes.add(tpl)
+      // An instance of a template's class, or a node naming it (iv:perReferrer), came or went.
+      for (const [tpl, t] of this.templates) {
+        if (t.cls !== undefined && q.predicate.value === RDF_TYPE && q.object.value === t.cls) members.add(tpl)
+        if (t.referrer !== undefined && q.predicate.value === t.referrer && q.object.value === tpl) members.add(tpl)
+      }
       for (const v of this.views.values()) {
         if (v.window === s) redefine.add(v.iri)
         if (v.def.node === s) redefine.add(v.iri)
       }
+    }
+    // Only the instances that came or went are defined or dropped; the others keep their state.
+    for (const tpl of members) {
+      if (nodes.has(tpl)) continue
+      const defined = new Set(this.definitions(tpl).map((d) => d.iri))
+      for (const v of this.views.values()) if (v.def.node === tpl && !defined.has(v.iri)) redefine.add(v.iri)
+      for (const iri of defined) if (!this.views.has(iri)) redefine.add(iri)
     }
     for (const node of nodes) {
       for (const v of this.views.values()) if (v.def.node === node) redefine.add(v.iri)
