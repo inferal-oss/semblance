@@ -83,3 +83,33 @@ WHERE {
 a11y:ListLabel-fn a sem:Rule ;
     sem:implements a11y:ListLabel ;
     sem:function "a11y:list" .
+
+a11y:TabsLabel a sem:Rendering ;
+    rdfs:comment "A tab group's label becomes its accessible name."@en ;
+    sem:targets c:Tabs ;
+    sem:modality mod:Screen ;
+    sem:layer a11y:Layer ;
+    sem:stratum 10 .
+
+a11y:TabsLabel-sparql a sem:Rule ;
+    sem:implements a11y:TabsLabel ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?a .
+  ?a a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+}
+WHERE {
+  $this a c:Tabs .
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~tablist")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~tablist-aria-label")) AS ?a)
+}""" .
+
+a11y:TabsLabel-fn a sem:Rule ;
+    sem:implements a11y:TabsLabel ;
+    sem:function "a11y:tabs" .

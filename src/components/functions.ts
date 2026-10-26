@@ -811,6 +811,14 @@ const a11yList: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+const a11yTabs: FnRule = (ctx, focus) => {
+  const label = text(ctx, focus, C.label)
+  if (label === undefined) return []
+  const o = ctx.out(focus)
+  o.attr(o.node('tablist'), 'aria-label', label, 'tablist-aria-label')
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
   ...stallFunctions,
   ...containerFunctions,
@@ -879,6 +887,7 @@ export const functions: Record<string, FnRule> = {
   'style:hooks': styleHooks,
   'a11y:textfield': a11yTextField,
   'a11y:list': a11yList,
+  'a11y:tabs': a11yTabs,
   'stream-stats:screen': streamStatsScreen,
   'stream-stats:text': streamStatsText,
   'l10n:option-labels': optionLabels,
