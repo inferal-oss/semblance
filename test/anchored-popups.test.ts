@@ -137,6 +137,17 @@ describe('anchored popup host effect', () => {
     expect(app.popup.style.color).toBe('red')
     dispose()
   })
+  it('keeps percentage minimums relative to the original anchor instead of the viewport', () => {
+    const app = fixture()
+    app.popup.getBoundingClientRect = () => ({
+      width: app.popup.style.position === 'fixed' && !app.popup.style.minWidth ? 480 : 200,
+      height: 100,
+    }) as DOMRect
+    const dispose = attachAnchoredPopups(app.host)
+    expect(app.popup.style.width).toBe('200px')
+    dispose()
+  })
+
   it('remeasures a panel when lazy content arrives after it opens', async () => {
     const app = fixture({ kind: 'date-field' })
     let intrinsicWidth = 18
