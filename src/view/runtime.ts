@@ -527,6 +527,7 @@ export class ViewRuntime {
       over: this.one(s, IV + 'over')?.value,
       partitionBy: partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
+      graphs: this.datasetFor(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0).filter((g) => g.termType === 'NamedNode').map((g) => g.value),
     }
     if (!source.query) return undefined
     return (this.opts.compiler ?? compiler).compile(source, this.runner(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0))
@@ -699,14 +700,18 @@ export class ViewRuntime {
       index('p' + q.predicate.value, q)
       index('o' + termKey(q.object), q)
     }
-    return (s, p, o) => {
+    // Without `g`: the union default graph (a triple once). With it: quads of the named graphs
+    // (`g` one of them, or null: any), each with its graph.
+    return (s, p, o, g) => {
       const seen = new Set<string>()
       const out: Quad[] = []
+      const named = g !== undefined
       const put = (q: Quad) => {
-        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object)
+        if (named && (q.graph.termType !== 'NamedNode' || (g && !q.graph.equals(g)))) return
+        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object) + (named ? ' ' + q.graph.value : '')
         if (!seen.has(k)) seen.add(k), out.push(q)
       }
-      for (const g of graphs) for (const q of this.store.match(s as never, p as never, o as never, g as never)) put(q)
+      for (const x of graphs) if (!named || (x.termType === 'NamedNode' && (!g || x.equals(g)))) for (const q of this.store.match(s as never, p as never, o as never, x as never)) put(q)
       if (removed.length) {
         const pool = s ? by.get('s' + termKey(s)) : o ? by.get('o' + termKey(o)) : p ? by.get('p' + p.value) : removed
         for (const q of pool ?? []) if ((!s || q.subject.equals(s)) && (!p || q.predicate.equals(p)) && (!o || q.object.equals(o))) put(q)
@@ -1043,6 +1048,8 @@ class PartState {
     let evaluated: Map<string, Row[]>
     let visit: Set<string>
     const derived = this.derivedRows()
+    // A key VALUES cannot hold (a blank node): every partition, once.
+    if (keys && [...keys.values()].some((k) => k.some((t) => t?.termType === 'BlankNode'))) keys = undefined
     if (keys === undefined) {
       evaluated = p.local(undefined, derived)
       visit = new Set([...this.partitions.keys(), ...evaluated.keys()])
@@ -1243,7 +1250,7 @@ class PartState {
  * query, and cached while the row is in (so its retraction is exact).
  */
 class PostCache {
-  private cache = new Map<string, { out?: Row; n: number }>()
+  private cache = new Map<string, { out: Row[]; n: number }>()
 
   constructor(
     private readonly view: MaintainedView,
@@ -1271,7 +1278,7 @@ class PostCache {
       const c = this.cache.get(k)
       if (!c) throw new Error(`view <${this.view.iri}>: a row left that never came in`)
       c.n += w
-      if (c.out) out.add(mapKey(c.out), c.out, w)
+      for (const r of c.out) out.add(mapKey(r), r, w)
       if (c.n <= 0) this.cache.delete(k)
     }
     return out
@@ -1282,7 +1289,7 @@ class PostCache {
     const out = new ZSet<Row>()
     for (const [k, , w] of z.entries()) {
       const c = this.cache.get(k)
-      if (c?.out) out.add(mapKey(c.out), c.out, w)
+      for (const r of c?.out ?? []) out.add(mapKey(r), r, w)
     }
     return out
   }
@@ -1653,15 +1660,24 @@ export class MaintainedView implements ViewHandle {
   }
 
   /** Evaluate expressions (BIND, FILTER) over rows with the store: one query for all of them. */
-  evaluate(post: Post, rows: Row[]): (Row | undefined)[] {
+  evaluate(post: Post, rows: Row[]): Row[][] {
     const vars = post.inputs
-    const values = rows.map((r, i) => `(${i} ${vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`).join(' ')
-    const query = `${post.prologue ?? ''}SELECT * WHERE {\n  VALUES (?__i ${vars.map((v) => '?' + v).join(' ')}) { ${values} }\n${post.binds.map((b) => `  BIND(${b.expr} AS ?${b.as})`).join('\n')}\n${post.filters.map((x) => `  FILTER(${x})`).join('\n')}\n}`
-    const out: (Row | undefined)[] = rows.map(() => undefined)
+    // Blank nodes (VALUES cannot hold them) go in as IRIs of their own and come back.
+    const blanks = new Map<string, Term>()
+    const term = (t: Term | undefined) => {
+      if (t?.termType !== 'BlankNode') return sparqlTerm(t)
+      const iri = `urn:semblance:blank:${encodeURIComponent(t.value)}`
+      blanks.set(iri, t)
+      return `<${iri}>`
+    }
+    const values = rows.map((r, i) => `(${i} ${vars.map((v) => term(r.get(v))).join(' ')})`).join(' ')
+    const query = `${post.prologue ?? ''}SELECT * WHERE {\n  VALUES (?__i ${vars.map((v) => '?' + v).join(' ')}) { ${values} }\n${post.values ? `  ${post.values}\n` : ''}${post.binds.map((b) => `  BIND(${b.expr} AS ?${b.as})`).join('\n')}\n${post.filters.map((x) => `  FILTER(${x})`).join('\n')}\n}`
+    const out: Row[][] = rows.map(() => [])
     for (const r of this.rt.runner(this.readsViews).select(query)) {
       const i = Number(r.get('__i')!.value)
       r.delete('__i')
-      out[i] = r
+      if (blanks.size) for (const [k, t] of r) if (t.termType === 'NamedNode' && blanks.has(t.value)) r.set(k, blanks.get(t.value)!)
+      out[i]!.push(r)
     }
     return out
   }
@@ -1771,7 +1787,21 @@ export class MaintainedView implements ViewHandle {
     return out
   }
 
-  private notify(rows: ZSet<Row>, quads: ZSet<Quad>) {
+  /** How many of the view's solutions give each output triple: what is a triple of the output (a set). */
+  private quadCounts = new Map<string, number>()
+
+  private notify(rows: ZSet<Row>, weighted: ZSet<Quad>, set = false) {
+    // Readers get the output's change as a set: a triple comes when its first solution does, goes with its last.
+    const quads = set ? weighted : new ZSet<Quad>()
+    if (!set)
+      for (const [k, q, w] of weighted.entries()) {
+        const before = this.quadCounts.get(k) ?? 0
+        const after = before + w
+        if (after > 0) this.quadCounts.set(k, after)
+        else this.quadCounts.delete(k)
+        if (before <= 0 && after > 0) quads.add(k, q, 1)
+        else if (before > 0 && after <= 0) quads.add(k, q, -1)
+      }
     if (!rows.size && !quads.size) return
     if (this.historyKeep) {
       const tick = this.rt.tickNo
@@ -1822,7 +1852,8 @@ export class MaintainedView implements ViewHandle {
   /** What leaves when the view is emptied (a rebuild, a redefinition): the current output, negated. */
   private retractAll() {
     const now = this.snapshot()
-    this.notify(now.rows.negate(), now.quads.negate())
+    this.quadCounts.clear()
+    this.notify(now.rows.negate(), now.quads.negate(), true)
   }
 
   /** Evaluate again from the inputs (after a suspension): the change is the difference. */
@@ -1940,6 +1971,9 @@ export class MaintainedView implements ViewHandle {
     if (!query) return undefined
     const expected = new ZSet<string>()
     const actual = new ZSet<string>()
+    const unordered = this.plan.kind === 'maintained' ? this.plan.unordered : undefined
+    const normQuad = (q: Quad) => normQuadIn(q, unordered)
+    const normRow = (r: Row) => normRowIn(r, unordered)
     if (this.plan.form === 'construct') {
       // CONSTRUCT results are sets; provenance is the view's own decoration.
       const isProv = (q: Quad) => q.predicate.value === PROV.wasGeneratedBy || q.predicate.value === PROV.wasInfluencedBy
@@ -1947,7 +1981,8 @@ export class MaintainedView implements ViewHandle {
       for (const k of new Set(this.quads().filter((q) => !isProv(q)).map(normQuad))) actual.add(k, '', 1)
     } else {
       const scratch = this.fromScratch(now) as Row[]
-      for (const r of scratch) expected.add(normRow(r), '', 1)
+      const reduced = this.plan.kind === 'maintained' && this.plan.reduced
+      for (const r of reduced ? [...new Map(scratch.map((x) => [normRow(x), x])).values()] : scratch) expected.add(normRow(r), '', 1)
       for (const r of this.rows()) actual.add(normRow(r), '', 1)
       // Ordered views: positions too, where the order is total (no ties among the expected rows).
       const plan = this.plan
@@ -2026,14 +2061,16 @@ export const mapKey = (row: Row) =>
     .join(' ')
 
 /** Numeric literals compare by value, to 12 digits (lexical forms and float sums differ between engines). */
-function norm(t: Term): string {
+function norm(t: Term, unordered?: string): string {
   if (t.termType === 'Literal' && /#(integer|decimal|double|float|int|long)$/.test(t.datatype.value) && !Number.isNaN(Number(t.value))) return `${Number(Number(t.value).toPrecision(12))}^^numeric`
+  // A GROUP_CONCAT: its parts, in any order.
+  if (unordered !== undefined && t.termType === 'Literal') return (t.language ? '@' + t.language : '^^' + t.datatype.value) + ' parts:' + (unordered ? t.value.split(unordered) : [...t.value]).sort().join('\u0000')
   return termKey(t)
 }
-const normQuad = (q: Quad) => `${norm(q.subject)} ${q.predicate.value} ${norm(q.object)}`
-const normRow = (r: Row) =>
+const normQuadIn = (q: Quad, unordered?: Map<string, string>) => `${norm(q.subject)} ${q.predicate.value} ${norm(q.object, unordered?.get(q.predicate.value))}`
+const normRowIn = (r: Row, unordered?: Map<string, string>) =>
   [...r.entries()]
     .filter(([k]) => !k.startsWith('__'))
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([k, t]) => `${k}=${norm(t)}`)
+    .map(([k, t]) => `${k}=${norm(t, unordered?.get(k))}`)
     .join(' ')

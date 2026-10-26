@@ -127,7 +127,7 @@ describe('maintained views: replicas', () => {
     rt.apply({ remove: [], add: [f.quad(log, f.namedNode(IV + 'recordsChanges'), f.literal('true', f.namedNode('http://www.w3.org/2001/XMLSchema#boolean'))), f.quad(node, f.namedNode(IV + 'deltaLog'), log)] })
     const from = rt.views.tickNo
     const before = new Set(rt.views.view(V + 'labelled')!.quads().map(quadKey))
-    stepsOn(rt, 41, 10)
+    stepsOn(rt, 41, 40)
     const rows = rt.store.select(
       `PREFIX iv: <${IV}> PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
        SELECT ?n ?change ?s ?p ?o WHERE { ?d iv:view <${V}labelled> ; iv:tick ?n ; ?change ?st . FILTER(?n > ${from} && ?change IN (iv:added, iv:removed))

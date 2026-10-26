@@ -15,7 +15,7 @@ import type { RuleContext } from '../engine/context.ts'
 import type { Dependencies } from './deps.ts'
 import type { Triple } from './sparql.ts'
 
-export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX'
+export type AggregateFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'SAMPLE' | 'GROUP_CONCAT'
 
 export interface Aggregate {
   /** Output variable (without '?'). */
@@ -24,6 +24,8 @@ export interface Aggregate {
   distinct: boolean
   /** The argument: '*' (COUNT(*)), or the partition row slot holding its value. */
   slot: string
+  /** GROUP_CONCAT's separator (default " "). */
+  separator?: string
 }
 
 /** A window over a stream's members (iv:SlidingWindow, iv:TumblingWindow, iv:CountWindow; window.ts). */
@@ -68,6 +70,8 @@ export interface Post {
   inputs: string[]
   /** The query's own PREFIX declarations. */
   prologue?: string
+  /** A VALUES clause after an aggregating query: joined with the groups (a row may become several). */
+  values?: string
 }
 
 export interface Part {
@@ -133,6 +137,13 @@ export interface MaintainedPlan {
   output?: (row: Map<string, Term>) => Quad[]
   /** The from-scratch query this view must equal at clock time `now` (the test oracle). */
   reference?: (now: number) => string
+  /**
+   * GROUP_CONCAT outputs, whose order is the store's in the oracle: SELECT variables, or for a
+   * CONSTRUCT the predicates they are the objects of, with the separator. Compared as parts.
+   */
+  unordered?: Map<string, string>
+  /** SELECT REDUCED: maintained as DISTINCT; a store may keep duplicates, so the oracle compares sets. */
+  reduced?: boolean
   algebra: { topk?: string; post?: string; output?: string }
   /**
    * What decides whether a parameter change can retune the plan in place: everything but the
@@ -164,6 +175,8 @@ export interface ViewSource {
   /** iv:partitionBy */
   partitionBy?: string[]
   window?: WindowSource
+  /** The named graphs it reads (its input graphs): what GRAPH ?g ranges over. */
+  graphs?: string[]
 }
 
 export interface ViewCompiler {

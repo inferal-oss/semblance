@@ -1,7 +1,8 @@
 // Incremental GROUP BY aggregates (docs/IVM.md §6.5): per group, an accumulator per
 // aggregate that rows enter (+1) and leave (-1). COUNT, SUM and AVG are invertible;
-// MIN and MAX keep the group's values in an ordered multiset (a treap: O(log n) per change);
-// DISTINCT keeps values with weights.
+// MIN, MAX and SAMPLE keep the group's values in an ordered multiset (a treap: O(log n) per
+// change; SAMPLE is the least value, which SPARQL allows); DISTINCT and GROUP_CONCAT keep values
+// with weights, and GROUP_CONCAT joins them in term order (SPARQL leaves the order to the store).
 import type { Term } from '@rdfjs/types'
 import type { Factory } from '../store/types.ts'
 import { OrderedMultiset } from './ordered.ts'
@@ -39,8 +40,8 @@ export function newGroup(terms: Terms, ids: number[], aggregates: readonly Aggre
     ids,
     rows: 0,
     accs: aggregates.map((a) => {
-      const ordered = a.fn === 'MIN' || a.fn === 'MAX'
-      return { n: 0, sum: 0, errors: 0, types: [0, 0, 0, 0], values: a.distinct && !ordered ? new Map() : undefined, sorted: ordered ? new OrderedMultiset(order) : undefined }
+      const ordered = a.fn === 'MIN' || a.fn === 'MAX' || a.fn === 'SAMPLE'
+      return { n: 0, sum: 0, errors: 0, types: [0, 0, 0, 0], values: (a.distinct && !ordered) || a.fn === 'GROUP_CONCAT' ? new Map() : undefined, sorted: ordered ? new OrderedMultiset(order) : undefined }
     }),
   }
 }
@@ -70,6 +71,18 @@ export function accumulate(terms: Terms, a: Aggregate, acc: Acc, value: number, 
   }
   if (acc.sorted) {
     if (value) acc.sorted.add(value, w)
+    return
+  }
+  if (a.fn === 'GROUP_CONCAT') {
+    // Only strings join: anything else (or nothing) makes the result an error.
+    const t = value ? terms.term(value) : undefined
+    if (!t || t.termType !== 'Literal' || !(t.language || t.datatype.value === XSD + 'string')) {
+      acc.errors += w
+      return
+    }
+    const after = (acc.values!.get(value) ?? 0) + w
+    if (after) acc.values!.set(value, after)
+    else acc.values!.delete(value)
     return
   }
   if (acc.values) {
@@ -128,7 +141,16 @@ export function result(f: Factory, terms: Terms, a: Aggregate, acc: Acc): Term |
       return lit(acc.sum / acc.n, TYPE[Math.max(1, r)]!)
     }
     case 'MIN':
+    case 'SAMPLE':
       return acc.sorted!.size ? terms.term(acc.sorted!.at(0)!.value) : undefined
+    case 'GROUP_CONCAT': {
+      if (acc.errors > 0) return undefined
+      const ids = [...acc.values!.keys()].sort((x, y) => compareTerms(terms, x, y))
+      const parts = ids.flatMap((id) => Array.from({ length: a.distinct ? 1 : acc.values!.get(id)! }, () => terms.term(id)!))
+      const langs = new Set(parts.map((t) => (t as { language: string }).language))
+      const text = parts.map((t) => t.value).join(a.separator ?? ' ')
+      return langs.size === 1 && !langs.has('') ? f.literal(text, [...langs][0]) : f.literal(text)
+    }
     case 'MAX':
       return acc.sorted!.size ? terms.term(acc.sorted!.at(acc.sorted!.size - 1)!.value) : undefined
   }
