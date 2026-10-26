@@ -158,9 +158,10 @@ describe('incremental updates', () => {
       runtime.apply(change)
       return screen.engine.stats.ruleRuns - before
     }
-    // As with what the rules declare: the item's rendering for done, it and the member-wise list for a label.
+    // The item's rendering for done; for a label, it, the member-wise list, and the viewer's terms
+    // (l10n:Terms reads every labelled node, to pick a label by language: what it declares misses that).
     expect(ran(t.set('t7', 'done', true))).toBe(1)
-    expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(2)
+    expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(3)
     // The item's rendering never reads ex:priority (its patterns say so): only the list, which places the item by it.
     expect(ran(t.set('t7', 'priority', 1000))).toBe(1)
   })
