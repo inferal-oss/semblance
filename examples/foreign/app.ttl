@@ -6,11 +6,12 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ex: <https://example.org/foreign#> .
 @prefix ext: <https://semblance.dev/ns/foreign#> .
+@prefix ol: <https://semblance.dev/ns/outline#> .
 
-# Two foreign components in one graph with built-in ones, outlined (ext:outlines) to show which they are. The slider and the rating show one value:
+# Two foreign components in one graph with built-in ones, outlined (ol:shows) to show which they are. The slider and the rating show one value:
 # moving the slider rates, and picking stars moves the slider. Adding a cup changes the chart's data.
 
-ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ; ext:outlines true ;
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ; ol:shows true ;
     c:children ( ex:title ex:intro ex:rating ex:slider ex:week ex:add ) .
 ex:title a c:Heading ; c:level 1 ;
     c:label "Foreign components" , "Зовнішні компоненти"@uk , "Fremdkomponenten"@de , "مكوّنات خارجية"@ar .

@@ -272,8 +272,10 @@ ui:outlines a c:ToggleSwitch ; c:label "Show outlines" ; c:controls ui:report ; 
 The names land on the roots as `data-sem-outline`, the switch as `data-sem-outlines="shown"`, and
 the style does the rest: an `outline` and an absolutely positioned `::before`, so nothing moves
 when outlines turn on, and the tag's text is not part of the component's accessible name. A root
-that is a replaced element (`<input>`, `<img>`) has no `::before`: name a component around it. The
-Layers page of the gallery has a specimen.
+that is a replaced element (`<input>`, `<img>`) has no `::before`: name a component around it. A
+layer can give a whole class a name to fall back on, `ol:defaultLabel`, derived below the
+components and shown only where there is no `ol:label`: an island is named by what it mounts
+([FOREIGN.md](FOREIGN.md)). The Layers page of the gallery has a specimen.
 
 ## Testing a component
 

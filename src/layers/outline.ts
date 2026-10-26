@@ -8,7 +8,7 @@ import { isTrue, text } from '../components/util.ts'
 
 /** ol:Named: data-sem-outline, the name in the viewer's language. */
 const named: FnRule = (ctx, focus) => {
-  const name = text(ctx, focus, OL.label)
+  const name = text(ctx, focus, OL.label) ?? ctx.objects(focus, OL.defaultLabel).find((t) => t.termType === 'Literal')?.value
   if (name === undefined) return []
   return ctx.out(focus).attr(ctx.nn(mint(focus.value, 'root')), 'data-sem-outline', name).quads
 }

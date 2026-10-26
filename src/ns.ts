@@ -440,11 +440,11 @@ export const EXT = {
   Island: NS.ext + 'Island', island: NS.ext + 'island', tag: NS.ext + 'tag', widget: NS.ext + 'widget', adapter: NS.ext + 'adapter',
   input: NS.ext + 'input', output: NS.ext + 'output', name: NS.ext + 'name', from: NS.ext + 'from', value: NS.ext + 'value',
   as: NS.ext + 'as', Property: NS.ext + 'Property', Attribute: NS.ext + 'Attribute', on: NS.ext + 'on', emits: NS.ext + 'emits',
-  path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module', outlines: NS.ext + 'outlines',
+  path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module',
   CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
 } as const
 /** The outlines layer (ontology/layers/outline.ttl). */
-export const OL = { label: NS.ol + 'label', shows: NS.ol + 'shows' } as const
+export const OL = { label: NS.ol + 'label', defaultLabel: NS.ol + 'defaultLabel', shows: NS.ol + 'shows' } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',
