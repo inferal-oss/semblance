@@ -45,8 +45,6 @@ export interface EngineStats {
   /** Exact dependencies: probes run (one per rule a changed triple routes to), and foci they dirtied. */
   probes?: number
   probed?: number
-  /** Exact dependencies: matches of a rule below the stratum running (it reads output of a rule above it), ignored. */
-  lowerStratum?: number
 }
 
 type Listener = (delta: Delta) => void
@@ -135,6 +133,8 @@ export class Engine {
   private exact?: ExactIndex
   private readonly exactOn: boolean
   private removedBatch: Quad[] = []
+  /** The batch's removals by subject, predicate and object (term keys), for lookups. */
+  private removedBy = new Map<string, Quad[]>()
   /** Exact dependencies: instances per rule (by (focus, class)), and the rules none of whose foci was evaluated since all were marked. */
   private instancesOf = new Map<Rule, number>()
   private pristine = new Set<Rule>()
@@ -412,6 +412,8 @@ export class Engine {
     const full = sel.modality !== undefined || sel.prefer !== undefined
     const before = new Set(this.rules)
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
+    // A rule on its way out is not probed while its output is withdrawn (nor is one about to run for every focus).
+    if (this.exact) for (const r of [...this.rules, ...after]) if (!kept.has(r)) this.pristine.add(r)
     for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
     for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r), this.forgetAllFollowing(r)
     for (const [member, byRule] of [...this.memberReaders]) {
@@ -423,6 +425,7 @@ export class Engine {
     this.activate(after)
     this.reindex()
     for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markFocus(r, focus)
+    if (this.exact) for (const r of after) if (!kept.has(r)) this.pristine.add(r)
     this.run()
   }
 
@@ -675,7 +678,14 @@ export class Engine {
     // Only the discovery of minted instances (a derived rdf:type) is hidden from
     // input-only rules; what they read still re-runs them as usual.
     this.derivedTrigger = q.predicate.value === RDF_TYPE && q.graph.equals(this.graph)
-    if (sign < 0 && this.exact) this.removedBatch.push(q)
+    if (sign < 0 && this.exact) {
+      this.removedBatch.push(q)
+      for (const k of ['s' + termKey(q.subject), 'p' + q.predicate.value, 'o' + termKey(q.object)]) {
+        const list = this.removedBy.get(k)
+        if (list) list.push(q)
+        else this.removedBy.set(k, [q])
+      }
+    }
     try {
       this.propagateQuad(q, sign)
     } finally {
@@ -771,9 +781,8 @@ export class Engine {
     const stats = this.stats
     // Not probed: a rule below the stratum running (its output is settled; reading what is above it
     // is a stratification error, counted), one with no instance, one whose foci all wait to run anyway.
-    const skip = (r: Rule) => !this.instancesOf.get(r) || this.pristine.has(r)
-    const below = (r: Rule) => r.stratum < this.current && ((stats.lowerStratum = (stats.lowerStratum ?? 0) + 1), true)
-    for (const [r, keys] of this.exact!.touched(q, this.exactLookup(), skip, below)) {
+    const skip = (r: Rule) => r.stratum < this.current || !this.instancesOf.get(r) || this.pristine.has(r)
+    for (const [r, keys] of this.exact!.touched(q, this.exactLookup(), skip)) {
       stats.probes = (stats.probes ?? 0) + 1
       const mark = (focus: string, member?: string) => {
         if (!this.isInstance(focus, r)) return
@@ -808,7 +817,10 @@ export class Engine {
       // A literal (or a variable's stand-in) never is a subject or a predicate: nothing matches.
       if ((s && s.termType === 'Literal') || (p && p.termType !== 'NamedNode')) return out
       for (const graph of g ? [g] : graphs) for (const x of this.store.match(s as never, p as never, o as never, graph as never)) put(x)
-      for (const x of removed) if ((!s || x.subject.equals(s)) && (!p || x.predicate.equals(p)) && (!o || x.object.equals(o)) && (!g || x.graph.equals(g))) put(x)
+      if (removed.length) {
+        const pool = s ? this.removedBy.get('s' + termKey(s)) : o ? this.removedBy.get('o' + termKey(o)) : p ? this.removedBy.get('p' + p.value) : removed
+        for (const x of pool ?? []) if ((!s || x.subject.equals(s)) && (!p || x.predicate.equals(p)) && (!o || x.object.equals(o)) && (!g || x.graph.equals(g))) put(x)
+      }
       return out
     }
   }
@@ -1041,6 +1053,7 @@ export class Engine {
     // Also the end of a stopped stall's retractions, which run outside a run.
     this.typedIn.clear()
     this.removedBatch = []
+    this.removedBy.clear()
     const { add, remove } = this.pending
     if (!add.size && !remove.size) return
     this.pending = { add: new Map(), remove: new Map() }

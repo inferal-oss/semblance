@@ -71,7 +71,7 @@ export class ExactIndex {
    * The keys a changed triple can touch, per rule: [focus] or [focus, member] (undefined parts:
    * a slice, any value there), or 'global' (every instance).
    */
-  *touched(q: Quad, lookup: Lookup, skip?: (rule: Rule) => boolean, below?: (rule: Rule) => boolean): Generator<[Rule, (Term | undefined)[][] | 'global']> {
+  *touched(q: Quad, lookup: Lookup, skip?: (rule: Rule) => boolean): Generator<[Rule, (Term | undefined)[][] | 'global']> {
     const rules = this.byPredicate.get(q.predicate.value)
     for (const list of [rules ?? [], this.any]) {
       for (const r of list) {
@@ -79,7 +79,6 @@ export class ExactIndex {
         const deps = this.deps.get(r)!
         const pats = deps.route(q)
         if (!pats.length) continue
-        if (below?.(r)) continue
         const keys: (Term | undefined)[][] = []
         let global = false
         for (const p of pats) {
