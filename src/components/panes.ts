@@ -104,6 +104,7 @@ const tileClose: ReactionFn = (ctx) => {
     const split = side.subject
     if (!inTree(ctx, split)) continue
     const siblings = SIDES.filter((p) => p !== side.predicate.value).flatMap((p) => ctx.match(split, p, null))
+    if (!siblings.length) continue
     for (const up of [C + 'rootTile', ...SIDES].flatMap((p) => ctx.match(null, p, split))) {
       remove.push(up)
       for (const s of siblings) add.push(f.quad(up.subject as NamedNode, up.predicate as NamedNode, s.object as NamedNode))

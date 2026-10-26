@@ -313,7 +313,7 @@ const tabs: FnRule = (ctx, focus) => {
   const desktop = ctx.object(focus, C.windowsOn)
   if (desktop?.termType === 'NamedNode') for (const w of windows) o.t(desktop, C.hosts, w)
   // A pane of a tiled workspace: besides taking tabs, its edges split it (c:splitsAt).
-  const zones = sortable && inWorkspace(ctx, focus) ? splitZones(ctx, o, focus, items.map((t) => label(ctx, t)).join(', ')) : []
+  const zones = sortable && inWorkspace(ctx, focus) ? splitZones(ctx, o, focus, attached.map((t) => label(ctx, t)).join(', ')) : []
   o.renders(o.el('root', 'Div', {}, [list, ...panels, ...(desktop ? [] : windows), ...zones]))
   return o.quads
 }

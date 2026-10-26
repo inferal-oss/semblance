@@ -180,7 +180,10 @@ function workspace(prefer: 'sparql' | 'function') {
   const ws = () => h.root('ly-tiled-workspace')
   const tab = (name: string) => [...ws().querySelectorAll('[role=tab]')].find((t) => t.textContent!.trim() === name) as HTMLElement
   const status = () => h.document.querySelector('[data-sem-drag-live]')?.textContent ?? ''
-  const over = () => h.shell.keyOf(ws().querySelector('[data-sem-drop-over]')!)
+  const over = () => {
+    const at = ws().querySelector('[data-sem-drop-over]')
+    return at ? h.shell.keyOf(at) : undefined
+  }
   /** Pick a tab up (Space), carry it with the arrow keys to a zone (`<pane>/~root` or `<pane>/~split-<edge>`), put it down. */
   const carry = (name: string, zone: string) => {
     const el = tab(name)
@@ -259,10 +262,11 @@ describe('tiled workspace', () => {
     it(`(${prefer}) a pane's only tab dropped beside itself changes nothing`, () => {
       const w = workspace(prefer)
       const before = w.tree()
-      const recorded = w.bus.recent(100).length
+      const last = () => w.bus.recent(1)[0]?.[0]?.subject.value
+      const recorded = last()
       w.carry('Notes', UI + 'ly-tiled-notes/~split-start')
       expect(w.tree()).toBe(before)
-      expect(w.bus.recent(100).length).toBe(recorded)
+      expect(last()).toBe(recorded)
     })
   }
 
