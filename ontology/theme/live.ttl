@@ -153,7 +153,7 @@
                  [ sty:property "background" ; sty:token tok:code-bg ] ,
                  [ sty:property "font" ; sty:raw "12px/1.6 var(--sem-font-mono)" ] ,
                  [ sty:property "direction" ; sty:raw "ltr" ] ,
-                 [ sty:property "text-align" ; sty:raw "left" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
                  [ sty:property "overflow-x" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-node" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
