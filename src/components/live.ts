@@ -6,7 +6,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
-import { isTrue, nodes, picked, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, nodes, RDFS_LABEL, str, text, rdfList, picked } from './util.ts'
 
 const c = NS.c
 const L = {
@@ -289,24 +289,16 @@ export const reactions: Record<string, ReactionFn> = {
   },
   'live-example:reset': (ctx) => {
     if (!control(ctx, L.resets)) return none()
-    const editors = listOf(ctx, ctx.object(ctx.target, L.sources))
+    const editors = rdfList(ctx, ctx.object(ctx.target, L.sources))
     const sources = editors.flatMap((e) => [L.value, L.caret, L.suggesting, L.activeSuggestion].flatMap((p) => ctx.match(e, p, null)))
     return { add: [], remove: [...sources, ...ctx.match(ctx.target, L.interacted, null)] }
   },
   'live-example:copy': (ctx) => {
     if (!control(ctx, L.copies)) return none()
     const f = ctx.runtime.store.factory
-    const editor = ctx.object(ctx.target, L.selectedSource) ?? listOf(ctx, ctx.object(ctx.target, L.sources))[0]
+    const editor = ctx.object(ctx.target, L.selectedSource) ?? rdfList(ctx, ctx.object(ctx.target, L.sources))[0]
     if (!editor) return none()
     return { remove: ctx.match(ctx.target, L.copied, null), add: [f.quad(ctx.target, f.namedNode(L.copied), editor)] }
   },
 }
 
-function listOf(ctx: Parameters<ReactionFn>[0], head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== NS.rdf + 'nil' && out.length < 64; n = ctx.object(n, NS.rdf + 'rest')) {
-    const first = ctx.object(n, NS.rdf + 'first')
-    if (first) out.push(first)
-  }
-  return out
-}

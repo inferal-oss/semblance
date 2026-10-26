@@ -5,13 +5,11 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { mint } from '../rdf.ts'
 import { C, DND, NS, RDF_TYPE, RDFS_SUBCLASS, VAL, XSD_INTEGER } from '../ns.ts'
-import { named, RDFS_LABEL, rdfList, text } from '../components/util.ts'
+import { named, RDFS_LABEL, rdfList, text, encodeForUri } from '../components/util.ts'
 
 const SH = NS.sh
 const XSD_DECIMAL = NS.xsd + 'decimal'
 
-/** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 const local = (t: Term) => t.value.replace(/^.*[#/]/, '')
 type Reader = { match(s: Term | null, p: string | null, o: Term | null): Quad[] }
 const objects = (ctx: Reader, s: Term, p: string) => ctx.match(s, p, null).map((q) => q.object)

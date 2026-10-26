@@ -3,7 +3,7 @@
 // swapped per rule and compared head-to-head.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
@@ -55,21 +55,8 @@ import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
-import { encodeForUri, labelOf, RDFS_LABEL, text } from './util.ts'
+import { encodeForUri, labelOf, RDFS_LABEL, text, isTrue, rdfList, str } from './util.ts'
 import { viewRows } from '../view/rows.ts'
-
-const str = (t: Term | undefined) => t?.value
-export { encodeForUri } from './util.ts'
-const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
-
-function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
 
 // --- components ----------------------------------------------------------------
 

@@ -12,7 +12,7 @@ import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { el, marked, md5Key } from './data.ts'
 import { compareKeys } from '../render/order-key.ts'
-import { isTrue, labelOf, named, nodes, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, labelOf, named, nodes, RDFS_LABEL, str, text, isA } from './util.ts'
 
 const C = NS.c
 const TREE_MEMBER = NS.tree + 'member'
@@ -259,20 +259,6 @@ const frame: FnRule = (ctx, focus) => {
 }
 
 // --- the window ------------------------------------------------------------------------------------
-
-/** Whether a node is an instance of a class or of one of its subclasses. */
-function isA(ctx: RuleContext, node: NamedNode, cls: NamedNode): boolean {
-  const seen = new Set<string>()
-  const todo = ctx.objects(node, RDF_TYPE)
-  while (todo.length) {
-    const t = todo.pop()!
-    if (t.equals(cls)) return true
-    if (seen.has(t.value) || seen.size > 64) continue
-    seen.add(t.value)
-    todo.push(...ctx.objects(t, NS.rdfs + 'subClassOf'))
-  }
-  return false
-}
 
 /** The grid's filters (read once per evaluation): a test each member must pass. */
 function filtersOf(ctx: RuleContext, grid: NamedNode): ((m: NamedNode) => boolean)[] {

@@ -4,7 +4,7 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import type { Delta } from '../rdf.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY } from '../ns.ts'
-import { named, picked, RDFS_LABEL, str, text } from './util.ts'
+import { named, RDFS_LABEL, str, text, plainLabel, encodeForUri } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const SH = NS.sh
@@ -23,13 +23,6 @@ const P = {
   removesCard: c('removesCard'),
   refusedBy: c('refusedBy'),
   removable: c('removable'),
-}
-
-/** As the SPARQL rules read a label: the untagged rdfs:label, else the IRI's local name. */
-function plainLabel(ctx: RuleContext, t: Term): string {
-  if (t.termType === 'Literal') return t.value
-  const plain = ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')
-  return picked(ctx, t, RDFS_LABEL) ?? plain?.value ?? t.value.replace(/^.*[#/]/, '')
 }
 
 /** The lanes: the individuals of the property's range, by sem:order (then IRI). */
@@ -57,8 +50,6 @@ function limitOf(ctx: { match(s: Term | null, p: string, o: Term | null): Quad[]
   return bounds.length ? Math.min(...bounds) : undefined
 }
 
-/** SPARQL's ENCODE_FOR_URI, so minted keys match the SPARQL rules' (as functions.ts encodeForUri; not imported, which would be a cycle). */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 const laneKey = (lane: Term) => 'lane-' + encodeForUri(lane.value)
 
 // --- the board ------------------------------------------------------------------------------------

@@ -6,11 +6,8 @@ import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { mint } from '../rdf.ts'
-import { RDFS_LABEL, named, nodes, str, text } from './util.ts'
-import { compact, fnv } from './workbench.ts'
-
-/** SPARQL's ENCODE_FOR_URI, so minted keys match the SPARQL rules'. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
+import { RDFS_LABEL, named, nodes, str, text, encodeForUri, fnv } from './util.ts'
+import { compact } from './workbench.ts'
 
 const c = NS.c
 const W = {
@@ -489,16 +486,6 @@ type RCtx = Parameters<ReactionFn>[0]
 const none = () => ({ add: [] as Quad[], remove: [] as Quad[] })
 const own = (ctx: RCtx, s: Term, p: string) => ctx.match(s, p, null).filter((q) => q.graph.termType === 'DefaultGraph')
 const put = (ctx: RCtx, s: Term, p: string, o: Term) => ctx.runtime.store.factory.quad(s as NamedNode, ctx.runtime.store.factory.namedNode(p), o as NamedNode)
-
-/** Members of an RDF list, read through the reaction's view. */
-function list(ctx: RCtx, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== NS.rdf + 'nil' && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
 
 /** The step a rendered node belongs to (it, or an ancestor, shows a step). */
 function hitStep(ctx: RCtx): Term | undefined {

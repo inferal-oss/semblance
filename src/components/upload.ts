@@ -5,9 +5,9 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { mint, type Delta } from '../rdf.ts'
-import { BEH, C, DND, FILE, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, FILE, H, L10N, MOD, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { md5Key } from './data.ts'
-import { isTrue, named, picked, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, named, RDFS_LABEL, str, text, rdfList, picked } from './util.ts'
 
 const SH = NS.sh
 const FILE_DROP = NS.c + 'FileDrop'
@@ -248,16 +248,6 @@ const nn = (ctx: Ctx, iri: string) => ctx.runtime.store.factory.namedNode(iri)
 const q = (ctx: Ctx, s: Term, p: string, o: Term) => ctx.runtime.store.factory.quad(s as NamedNode, nn(ctx, p), o)
 const disabled = (ctx: Ctx) => isTrue(ctx.object(ctx.target, C.disabled))
 
-/** The members of an RDF list, for reactions. */
-function list(ctx: Ctx, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
-
 /** Whether the event hit the drop's zone (the button or one of its parts). */
 const onZone = (ctx: Ctx) => (str(ctx.object(ctx.event, BEH.node)) ?? '').startsWith(mint(ctx.target.value, 'zone'))
 
@@ -312,7 +302,7 @@ const pick: ReactionFn = (ctx) => {
         .flatMap((v) => ctx.match(v.object, SH + 'node', null))
         .flatMap((n) => ctx.match(n.object, SH + 'property', null))
         .filter((p) => ctx.match(p.object, SH + 'path', nn(ctx, FILE.mediaType)).length)
-        .flatMap((p) => ctx.match(p.object, SH + 'in', null).flatMap((l) => list(ctx, l.object)))
+        .flatMap((p) => ctx.match(p.object, SH + 'in', null).flatMap((l) => rdfList(ctx, l.object)))
         .map((t) => t.value),
     ),
   ].join(',')

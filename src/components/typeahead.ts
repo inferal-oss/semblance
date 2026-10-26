@@ -6,10 +6,9 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
 import { aria, shortcutLabels } from '../layers/keyboard.ts'
 import { compact } from './reference.ts'
-import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text } from './util.ts'
+import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text, encodeForUri } from './util.ts'
 
 const c = (local: string) => NS.c + local
-export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 
 /**
  * Case- and diacritic-insensitive form of a text that keeps its length in code points: each

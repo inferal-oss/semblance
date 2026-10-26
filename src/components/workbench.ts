@@ -6,7 +6,7 @@ import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD
 import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { turtleTokens } from '../turtle.ts'
-import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes, fnv } from './util.ts'
 import { hitToggles } from './actions.ts'
 import { maintainedRows } from '../view/rows.ts'
 
@@ -107,16 +107,7 @@ const int = (ctx: RuleContext, n: number) => ctx.f.literal(String(n), ctx.nn(XSD
 
 /** The prefixes the store knows: the framework's (NS) and those declared in the graph (sh:declare), longest namespace first. */
 function prefixMap(ctx: RuleContext): [string, string][] {
-  return ctx.memo('workbench:prefixes', () =>
-    ctx.untraced(() => {
-      const out: Record<string, string> = {}
-      for (const q of ctx.match(null, SH + 'prefix', null)) {
-        const ns = str(ctx.object(q.subject, SH + 'namespace'))
-        if (ns) out[q.object.value] = ns
-      }
-      return Object.entries({ ...out, ...NS }).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
-    }),
-  )
+  return ctx.memo('workbench:prefixes', () => Object.entries(declaredPrefixes(ctx)).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])))
 }
 const prefixRecord = (ctx: RuleContext): Record<string, string> => ctx.memo('workbench:prefix-record', () => Object.fromEntries(prefixMap(ctx)))
 
@@ -133,13 +124,6 @@ function display(ctx: RuleContext, t: Term | undefined): string {
   if (t.termType === 'NamedNode') return compact(ctx, t.value)
   if (t.termType === 'BlankNode') return '_:' + t.value
   return t.value
-}
-
-/** FNV-1a, base 36: short, stable keys for content-addressed nodes. */
-export function fnv(s: string): string {
-  let h = 0x811c9dc5
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
-  return (h >>> 0).toString(36)
 }
 
 const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
