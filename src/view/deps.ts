@@ -106,6 +106,11 @@ export class Dependencies {
     }
   }
 
+  /** The predicates a changed triple must have to reach a pattern, and whether some pattern takes any predicate. */
+  predicates(): { iris: string[]; any: boolean } {
+    return { iris: [...this.byPredicate.keys()], any: this.anyPredicate.length > 0 }
+  }
+
   /** Root patterns over the key alone (and constants): a new key must match them to have rows. */
   anchors(): Pat[] {
     return this.patterns.filter((p) => !p.scope.parent && !p.g && !('path' in p.p) && [p.s, p.p as Pos, p.o].every((x) => 't' in x || this.keys.includes(x.v)))
@@ -287,11 +292,15 @@ export class Dependencies {
   /** From bindings in a scope (a pattern bound to a triple, or a derived row), join through the patterns around them until the keys are bound. */
   private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
     const bound = new Set(start.keys())
-    if (this.keys.every((k) => bound.has(k))) return [start]
     // The patterns (and aliases) that occur with p in a solution: its scope and the scopes around it.
     const pats: Pat[] = []
     const aliases: Alias[] = []
     for (let s: Scope | undefined = scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
+    // Those hold in every solution p takes part in (they prune, below). The groups beside them - a
+    // sibling LATERAL, a UNION branch, an OPTIONAL - join where they share a variable: the walk may go
+    // through them (entering by any variable, leaving only by what they certainly bind), not prune.
+    const around = new Set(pats)
+    for (const x of this.patterns) if (x !== p && !around.has(x) && !this.inGlobal(x.scope)) pats.push(x)
     // Breadth-first over variables, from the bound ones to each key.
     type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
     const via = new Map<string, Edge>()
@@ -343,7 +352,7 @@ export class Dependencies {
     // Patterns that hold in every solution p takes part in (its scope and those around it; not
     // paths) prune the rows once they bind all of a pattern's variables: a semi-join, so a probe
     // reaches the partitions that hold the change, not every one its first edge leads to.
-    const checks = pats.filter((x) => !('path' in x.p) && x !== p)
+    const checks = [...around].filter((x) => !('path' in x.p))
     const holds = (r: Map<string, Term>) =>
       checks.every((x) => {
         // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
@@ -352,10 +361,17 @@ export class Dependencies {
         const s = val(x.s)
         const pp = val(x.p as Pos)
         const o = val(x.o)
-        if (!s || !pp || !o) return true
-        if (!x.g) return lookup(s, pp, o).length > 0
-        return lookup(s, pp, o, val(x.g) ?? null).length > 0
+        // With a part unbound, it still needs some triple that agrees with what is bound (a
+        // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
+        if (!s || !pp || !o) {
+          if (!varsOf(x).some((v) => r.has(v))) return true
+          if (pp && pp.termType !== 'NamedNode') return true
+        }
+        if (!x.g) return lookup(s ?? null, pp ?? null, o ?? null).length > 0
+        return lookup(s ?? null, pp ?? null, o ?? null, val(x.g) ?? null).length > 0
       })
+    // Bound already: the key is the change's own, if the patterns around it hold.
+    if (this.keys.every((k) => bound.has(k))) return [start].filter(holds)
     let rows = [start].filter(holds)
     const done = new Set<Pat | Alias>()
     for (const e of needed) {
