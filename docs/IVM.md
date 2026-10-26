@@ -1,10 +1,13 @@
 # Views over changes: incremental view maintenance for Semblance
 
-Status: **phases 0, 1 and 2 landed** (October 2026); phases 3-6 pending. Below the status, the
-document is the design: what a maintained view is, how it is declared and inspected, how it
-relates to the rule engine, the operator set and each operator's incremental form, time and
-windows, correctness, cost, and the phased plan. The decisions taken are at the end; what was
-built, and where it differs from the design, is §20 (phases 0 and 1) and §21 (phase 2).
+Status: **phases 0 to 5 landed** (October 2026), but for the rdf-engine's parser (main does not export
+its algebra yet) and exact dependencies being the engine's default (an option for now, §25); phase 6
+pending. Below the status, the
+document is the design: what a maintained view is, how it is declared and inspected, how it relates to
+the rule engine, the operator set and each operator's incremental form, time and windows, correctness,
+cost, and the phased plan. The decisions taken are at the end; what was built, and where it differs
+from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2), §23 (phase 4),
+§24 (phase 5) and §25 (phase 3).
 
 ## Status
 
@@ -22,7 +25,14 @@ built, and where it differs from the design, is §20 (phases 0 and 1) and §21 (
 | **Phase 2, the operators** (§21): a SPARQL parser in place of the recognizer; partitions by any key (an LDES member, the subjects of the body) evaluated on the store with the key bound; exact dependencies from the body's patterns - delta queries over the store's indexes, so **joins outside the member**, **OPTIONAL**, **EXISTS / NOT EXISTS**, **MINUS**, **UNION** and **VALUES** inside a partition are maintained, and a change reaches exactly the partitions (or the slice of a cross product) it can affect; **DISTINCT** with counts; GROUP BY with arithmetic over aggregates and **HAVING**; UNION of subqueries; **top-k** over an ordered multiset (`ORDER BY … LIMIT / OFFSET`); **parameters** (`iv:parameter`; a LIMIT-only change retunes in place); a view per instance (`iv:targets`); views over views (`iv:reads`); SELECT rows materialized as a W3C result set (`iv:materialize iv:Graph`, `rs:index` for ORDER BY); tuple order keys in `compareKeys`. Strict operator laws per shape, on Oxigraph and WAT. | `src/view/sparql.ts`, `deps.ts`, `compile.ts`, `runtime.ts`, `ordered.ts`, `rows.ts`, `src/render/order-key.ts`, `test/view-laws.test.ts` | 42d77a1 |
 | **The data grid's window as views**: three views per grid (`c:GridWindowOlder`, `c:GridWindowNewer`, `c:GridWindowCounts`) keep its members in capture order with their order keys; the window rule (SPARQL and function) reads at most three pages. A response for an old entry re-sorts its row in the same tick, at identical cost over 200 or 2,000 entries. | `ontology/components/grid.ttl`, `src/components/grid.ts`, `test/grid-cost.test.ts` | c734148 |
 | **Charts, tables, stats and facet counts over views**: they read a maintained SELECT's rows from the views graph; the dashboard's queries are views over its cube, the activity example's over the change log, the performance page's over observations. | `src/view/rows.ts`, `src/components/charts.ts`, `data.ts`, `formula.ts`, `demo/gallery/_ex-dashboard.ttl`, `_ex-activity.ttl`, `demo/app.ttl`, `test/view-charts.test.ts` | 8d25274 |
+| **Phase 2, the rest** (§22): aggregate subqueries as parts of their own (a view inside the view: maintained group by group, their rows inlined into the body's evaluation, their changes probed outward); a probe prunes by every pattern it has bound (a semi-join), so a change reaches the partitions that hold it; the performance page's **judgements as maintained findings** (`perf:Judgement` CONSTRUCTs, live during a run: a step re-evaluates the findings it can change); **`c:ToastRegion`'s announcements as a view** (`ann:RecentAnnouncements`, a top-k over the change log per region); **MIN / MAX in an ordered tree**; **parameters retune in place** (a pattern's constant re-evaluates what its old and new values match; a FILTER's every partition, once; LIMIT / OFFSET move the window). | `src/view/compile.ts`, `deps.ts`, `runtime.ts`, `aggregate.ts`, `src/components/charts.ts`, `src/layers/announce.ts`, `ontology/layers/announce.ttl`, `demo/app.ttl`, `test/view-judgements.test.ts`, `test/view-laws.test.ts` | |
+| **Phase 5, the rest of SPARQL** (§24): aggregate subqueries anywhere as derived inputs (a key they project renamed and joined); correlated subqueries (LIMIT under a LATERAL, per binding); anchored and zero-length paths (inverse steps, closures of sequences, `p*` / `p?` holding of every node); negated property sets with inverses; `GROUP_CONCAT` (term order, compared by parts), `SAMPLE`, `GROUP BY` an expression; EXISTS in projections, ORDER BY and aggregate arguments; aggregates in ORDER BY; CONSTRUCT with ORDER BY / LIMIT; `CONSTRUCT WHERE`; RDF collections; `BASE`; a VALUES clause after the query; `GRAPH <g>` / `GRAPH ?g` over the view's graphs; a body evaluated as a join where binding its key would change what it means; walks leave an OPTIONAL / MINUS / UNION branch only through what it certainly binds. **Incremental W3C conformance**: 484 of the suites' SELECT / CONSTRUCT tests maintained and equal to a from-scratch run after every step, on Oxigraph and WAT (`scripts/view-conformance.ts`, `docs/IVM-CONFORMANCE.md`). **The measure**: `c:StreamStats`'s full SPARQL rule and the data grid's full window rule run as views, strict on Oxigraph and WAT; the statistics' work per event is the same over 200 and 2,000 members. | `src/view/sparql.ts`, `compile.ts`, `deps.ts`, `aggregate.ts`, `runtime.ts`, `scripts/view-conformance.ts`, `test/view-laws.test.ts`, `test/view-measure.test.ts` | |
 | **The Warehouse example**, in place of "Maintained views": a bike shop's stockroom, every figure a maintained view over one stream of movements - stock per item (SUM joined to names and suppliers), a reorder list (HAVING), best sellers of the last hour (a sliding window and a top five) - with Sell, Restock and a Rush hour on the scheduler; each tile's one quiet line is its views' last change against what a recount reads. A sale costs the same counters over 200 or 2,000 earlier movements. | `demo/gallery/_ex-warehouse.ttl`, `test/ex-warehouse.test.ts` | |
+
+| **Phase 4, time** (§23): tumbling windows (`iv:TumblingWindow`, `iv:size`, `iv:keep`, a bucket column `iv:bucketVariable`) and count windows (`iv:CountWindow`, `ldes:amount`) beside sliding ones, every window an edge over the stream's members ordered by time, moved at the cost of the members it flips; event time (`iv:clock iv:EventTime`, `iv:lateness`): the watermark is the greatest timestamp less the lateness, no timer, numeric timestamps as well as dates - the network inspector counts the last five seconds of `net:Capture` that way; the oracle writes each window out as SPARQL. | `src/view/window.ts`, `compile.ts`, `runtime.ts`, `ontology/layers/view.ttl`, `demo/gallery/_network.ttl`, `test/view-time.test.ts` | |
+| **Changes as a stream**: `ViewHandle.since(tick)` and `keepHistory`; replicas (`src/view/replica.ts`: messages, catch-up, a reset after a redefinition, BroadcastChannel adapters); `iv:recordsChanges` puts the triples on a delta log's members; **undo** over the change log (`beh:undoable` reactions record their effective change as `rdf:Statement`s on the member, `beh:Undoer` / `beh:UndoLatest` applies the opposite of the latest one that still applies), in the Kanban example. | `src/view/runtime.ts`, `replica.ts`, `src/behaviour/events.ts`, `undo.ts`, `ontology/layers/behaviour.ttl`, `test/view-delta.test.ts`, `test/ex-kanban.test.ts` | |
+| **Phase 3, views and rules together** (§25): **exact dependencies for SPARQL rules** from their own patterns (the view compiler's dependencies, `$this` the partition key), replacing `sem:follows` / `sem:watches` / `sem:readsMinted` behind an engine option (`exactDependencies`); probes walk sibling groups and prune by partly bound patterns (views gain too); `ctx.rows(view)` for function rules; **persistence policies as views** (dirty from their view, a write stores the change: one change of a 2,000-triple policy writes three triples); **`iv:strategy iv:Incremental` for rules** (a hosted view per rule, partitioned by `$this`, feeding each focus's output). | `src/engine/exact.ts`, `engine.ts`, `context.ts`, `rules.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`, `test/engine.test.ts`, `test/persistence-cost.test.ts`, `test/rules-incremental.test.ts` | |
+| **The workbench on views**: Follow updates (the Live switch) types the query as an `iv:View` (`c:FollowAsView`; `iv:materialize iv:ResultSet`, `iv:strategy iv:Auto`, measured), the table reads its maintained rows (followed at the next frame), and a **Plan** tab shows its strategy or fallback, the last change's work against a re-run, the from-scratch check and its operators. Recomputed views re-run only for changes their patterns see. | `ontology/components/workbench.ttl`, `src/components/workbench.ts`, `demo/gallery/_workbench.ttl`, `test/follow-updates.test.ts` | |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
 query when a triple it reads changes, by tracing the query's patterns; it is recompute with exact
@@ -37,18 +47,22 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 
 | phase | what | replaces or enables |
 |---|---|---|
-| 2, the rest | judgements (`perf:Judgement` CONSTRUCTs as maintained findings) and `c:ToastRegion` as views; SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra | judgements live during a run; no function-only chart |
-| 3: views and rules together | view graphs as projection inputs (done for the views graph); exact dependencies for SPARQL rules from their algebra, replacing `sem:follows`; `iv:strategy iv:Incremental` for rules; persistence policies as views | a count row changing alone re-runs nothing it does not feed |
-| 4: time | tumbling and count windows; event time and watermarks for `net:Capture`; delta logs for replication, "since" and undo; the workbench's Plan tab | constant cost per event and per expiry everywhere |
-| 5: the rest of SPARQL | `LATERAL`, correlated subqueries, anchored paths, `GROUP_CONCAT`, `SAMPLE`, the remaining expressions; incremental W3C conformance | `c:StreamStats`'s full rule and the grid rule as views |
+| 2, the rest | SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | no function-only chart; one algebra |
+| 3, the rest | exact dependencies as the engine's default, once the full suite passes with `SEMBLANCE_EXACT_DEPS=1` and their probes are cheaper (compiled per pattern, or in the engine, phase 6); then `sem:follows` / `sem:watches` / `sem:readsMinted` deleted from SPARQL rules | one way to say what a rule reads |
 | 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
 
-Known gaps in what landed (§20, §21): SPARQL views evaluate partitions and expressions with a few
+Known gaps in what landed (§20-§25): SPARQL views evaluate partitions and expressions with a few
 store queries per tick (a Rust circuit removes them, phase 6); SPARQL rules find view output through
-`sem:follows` or `sem:readsMinted` (exact dependencies are phase 3); `GROUP_CONCAT`, `SAMPLE`,
-`GROUP BY` an expression, `NOW()` and `SERVICE` fall back to recompute; a `GRAPH` pattern is refused;
-`MIN` / `MAX` keep a sorted array, not a tree; a parameter change other than LIMIT / OFFSET builds
-its view again.
+`sem:follows` or `sem:readsMinted` unless the engine's exact dependencies are on (§25: an option until
+their probes are cheaper); `NOW()`, `RAND()`, `UUID()`,
+`BNODE()` and `SERVICE` fall back to recompute; so do RDF 1.2 triple terms and directional language
+tags (the views' parser does not read them yet), a blank node in a CONSTRUCT template,
+GROUP_CONCAT inside a larger expression, a property path inside `GRAPH ?g`, and a `GRAPH <g>` outside
+the view's graphs (`docs/IVM-CONFORMANCE.md` lists every fallback the W3C suites meet); a parameter in a
+projection, HAVING or ORDER BY builds its view again; a change reaching a partition keyed by a blank
+node evaluates every partition (VALUES holds no blank node); a tumbling window's buckets are
+epoch-aligned (UTC for dates); a count window and event time need a fixed stream; replicas carry a
+SELECT's rows, or a view's triples, not its plan.
 
 ## 1. Summary
 
@@ -1543,6 +1557,262 @@ Where this differs from the design:
   parameters is plain SPARQL only once they are bound; the oracle runs the bound text.
 - The grid's views are three, with one body written out three times (Turtle has no macros); each
   changed member is one partition in each.
+
+## 22. Phase 2, the rest, as built
+
+- **Aggregate subqueries as derived inputs** (`compile.ts`, `deps.ts`, `runtime.ts`). A subquery with
+  GROUP BY, aggregates or HAVING (and no LIMIT), at the root of a view's body or anywhere below it that
+  projects no partition key, is compiled as a part of its own (`Part.derived`): partitions, its group
+  operator, its HAVING. The outer body is evaluated with the subquery's current rows in its place
+  (`VALUES`, filtered to the batch's keys), so a partition's evaluation reads O(rows of the subquery that
+  fit the key), not the subquery's input. A key the body also binds is renamed in those rows and joined
+  by `FILTER(sameTerm(…))` (SPARQL 1.2 forbids VALUES inside a LATERAL to bind what its left side binds); a
+  key only the subquery binds (an aggregate of aggregates: `MAX` over per-key `COUNT`s) is not correlated,
+  the rows are filtered instead. In a tick the derived parts step first; each row they emit or retract
+  binds the variables the subquery projects, and probes outward through the patterns around it
+  (`Dependencies.probeDerived`) to the partitions it can change. The subquery's own patterns are not the
+  outer view's dependencies. A row with an unbound value (an aggregate over nothing) reaches every
+  partition: it joins with any.
+- **Probes prune** (`deps.ts`): a walk toward the key filters its rows by every pattern of the scopes
+  around the changed one once it binds all of that pattern's variables (old and new state, as the probe
+  reads), so "the observations of this size" becomes "the observation with this best time". On the
+  judgements below this took a step from 163 partitions to 14.
+- **Judgements as maintained findings**: the eight `perf:Judgement` CONSTRUCTs are `iv:View`s on the
+  performance page (`demo/app.ttl`, `iv:whileShown ui:findings`), and `c:FindingList` reads their
+  findings from the views graph instead of running them. `test/view-judgements.test.ts` feeds a whole
+  benchmark (16 configurations, two sizes, four scenarios: about 1,600 triples, seven at a time, some
+  withdrawn and restored), strict on Oxigraph and WAT: every judgement equals a from-scratch run after
+  every step, two rebuilds in all (an aggregate's first value), about 55 partitions per step over the
+  eight judgements (the findings of the configurations and sizes a step measures; pairwise judgements
+  compare a configuration with every other).
+- **`c:ToastRegion` as a view**: `ann:RecentAnnouncements` (`announce.ttl`), a view per region
+  (`iv:targets`): the change log's members a reaction announces, `ORDER BY DESC(?seq) LIMIT $limit`
+  (`c:limit`), materialized. The toasts function reads its rows instead of walking the log from its head;
+  without views (a store without SPARQL) it walks, as before.
+- **MIN / MAX** keep an `OrderedMultiset` (the top-k's treap) per group: O(log n) per change.
+- **Parameters retune in place** (`MaintainedView.retune`, `PartState.retarget`): a plan's signature is
+  its structure without its bodies' text; when a parameter changes and the structure is the same, the
+  view keeps its state. A parameter in an expression a partition row computes (an aggregate's argument:
+  the grid's `SUM(IF(?sn <= $pin, 1, 0))`) evaluates every partition once. Where the bodies differ only in triple patterns' constants (`Part.patternless`,
+  the body without its triples), the patterns whose constants changed are matched with the old and the
+  new value, and those matches probed: the partitions they reach are evaluated again. A difference
+  elsewhere in a body (a FILTER) evaluates every partition once; a derived part's body changing, every
+  partition of the outer part. LIMIT / OFFSET move the top-k's window as before. Its plan triples are
+  replaced (they were left behind before).
+- **The rdf-engine's parser**: not yet. Main's engine ABI is v1 (prepare, bind, run) with no algebra
+  export, so decision 4's interim stands; the plan IR does not depend on the parser.
+
+## 23. Phase 4, as built
+
+What exists (`src/view/window.ts`, `replica.ts`, `runtime.ts`, `src/behaviour/undo.ts`):
+
+- **One window operator for three windows.** Every window is a suffix of the stream's members ordered
+  by (timestamp, IRI): sliding, `t >= now - range`; tumbling, `t >= bucket(now) - (keep - 1) × size`
+  with `bucket(t) = floor(t / size) × size`; count, the latest `n`. The operator keeps an ordered
+  multiset (the treap of `ordered.ts`) of **every member of the stream that has a timestamp** - not
+  only those the body has rows for, so a count window counts the stream's latest members - and the
+  window as its edge, the least member inside. A tick moves the edge and flips only the members
+  between the old and the new one (plus members that arrived, left or moved): O(log n + flips).
+  Partitions are gated by their member's side; a member that changed side without changing is
+  entered or left from its cached rows. A row leaves a view once, whichever comes first, as §7.3
+  asks, because a partition's rows count only while both it and its member's side say so.
+- **Buckets as a column.** With `iv:bucketVariable`, each member's bucket start is bound to that
+  variable in its rows (a literal of its timestamp's datatype: a canonical `xsd:dateTime`, or the
+  number), so a view groups by it; the body may not bind it. A member whose timestamp changes is
+  evaluated again (its bucket moved).
+- **Event time.** `iv:clock iv:EventTime`: now is the watermark, the greatest timestamp among the
+  stream's members less `iv:lateness`. It moves only when the index does, so it needs no timer; a
+  late member (behind the watermark) counts while it is inside the window and is counted in
+  `iv:lateMembers`. Timestamps may be numbers: `net:startedAt` is milliseconds of the page, and the
+  network inspector's footer counts the last five seconds of the capture on event time. The
+  watermark is a function of the stream's current members, so the oracle computes it the same way;
+  it can move back when the newest member retires, and the edge moves back with it.
+- **The oracle** writes each window out as SPARQL at the clock's time: a filter on the timestamp
+  (sliding, in the timestamp's own datatype), the kept buckets as `VALUES (?lo ?hi ?bucket)` up to the
+  newest member's (tumbling), the latest members as `{ SELECT ?m … ORDER BY DESC(?t) DESC(STR(?m))
+  LIMIT n }` (count); with event time it reads the greatest timestamp first.
+- **The clock** stays injectable (`ViewRuntime.clock`, `ManualClock`); one timer for the next expiry of
+  every wall-clock window (`nextExpiry`: `t + range + 1`, or the bucket start plus `keep × size`).
+- **Changes as a stream.** Each view can keep the changes of its last ticks (`keepHistory`; a view
+  with an `iv:deltaLog` keeps as many as the log retains): `since(tick)` returns everything after a
+  tick consolidated, or undefined when it no longer reaches back (a reader then takes `snapshot()`).
+  A rebuild or a redefinition is a retraction of the old output and the new one, so the history stays
+  exact across them. `replica.ts` turns this into messages (N-Triples terms; a SELECT's rows, a view's
+  triples): `publish` sends a tick's change after every tick (the runtime's `afterTick` hook) and a
+  reset when the view was compiled again; a `Replica` applies them into another store, notices a gap
+  (`since` is not its tick) and asks to catch up. `iv:recordsChanges` on a delta log puts the tick's
+  triples on its member as `rdf:Statement`s (`iv:added`, `iv:removed`), which SPARQL integrates.
+- **Undo** (decision 11). A reaction marked `beh:undoable` has its effective change (what the store
+  actually took) recorded on the event's member as `rdf:Statement`s, `beh:asserted` / `beh:retracted`,
+  retired with the member. `beh:UndoLatest` (SPARQL, and its function twin) on a `beh:Undoer` applies
+  the opposite of the latest recorded change that is not undone and still applies: every triple it
+  added is still there and none it removed is back. A change that later ones overlapped is skipped
+  rather than forced; the undone member is state on the log (`beh:undone`), forgotten when retired.
+- **The workbench.** Follow updates also makes the query a view (`c:FollowAsView`): its rows as a
+  result set, `iv:materialize iv:ResultSet` (a CONSTRUCT typed into the workbench never writes its
+  triples to the views graph, which every projection reads), `iv:strategy iv:Auto` (a fallback is
+  expected: no warning, and strict mode still compares it), measured. The table reads the maintained
+  rows instead of running the query, followed through the result set's `rs:solution` triples so a
+  burst still costs one run at the next frame. The Plan tab is ordinary workbench parts over what the
+  runtime writes: a summary (strategy or fallback, the last change's work against a re-run, ✓ / ✕)
+  and a result table of the operators. Recompute fallbacks now re-run only when a change matches one
+  of their triple patterns.
+
+Measured (Node, Oxigraph, `test/view-time.test.ts`: twenty members in the last minute behind 200 or
+2,000 a day old, and 10 recent capture entries behind 200 or 2,000 long ago; all nine views of the
+test at once):
+
+| | 200 members | 2,000 members |
+|---|---:|---:|
+| one more member: partitions / view rows | 10 / 28 | identical |
+| the clock moves past one expiry: partitions / view rows | 0 / 29 | identical |
+| a new ten-second bucket begins: partitions / view rows | 0 / 53 | identical |
+| one more capture entry (event time): partitions / view rows | 6 / 16 | identical |
+
+An expiry evaluates no partition: the members that leave are taken out from their cached rows. No
+rebuild in any of them.
+
+Where this differs from the design:
+
+- Windows are one operator, an edge over all of the stream's members, not a deque per window kind:
+  the stream is not always in timestamp order (late members, changed timestamps), and a count window
+  must see members the body has no rows for.
+- The watermark is the greatest timestamp *now*, not the greatest ever seen: that keeps it a function
+  of the graph, so the oracle can compute it.
+- Tumbling buckets are epoch-aligned; `iv:keep` defaults to 1.
+- Delta logs carry statements (`rdf:Statement`), not RDF 1.2 triple terms: every store reads them.
+- Undo is over reactions that opt in (`beh:undoable`), not every event: an event's whole change
+  includes view state (focus, a refusal), which later events change all the time, so every older
+  change would conflict.
+
+## 24. Phase 5, the rest of SPARQL, as built
+
+- **Derived inputs everywhere** (§22): an aggregate subquery in a UNION branch, an OPTIONAL or an EXISTS
+  is a part of its own too. A partition key it projects is renamed in its inlined rows and joined by
+  `FILTER(sameTerm(…))` in its own group, where the key is the left side's constant; where a slice leaves
+  the key open, the key is left out of the correlation and the rows bind it. A grouped subquery's group
+  variables count as certainly bound.
+- **Correlated subqueries and LATERAL**: inside a LATERAL, a subquery with LIMIT that projects a variable
+  its left side certainly binds is evaluated per binding: a change reaches the bindings it joins to, not
+  every partition (an uncorrelated LIMIT still is global). OPTIONAL, aggregates and paths under LATERAL
+  are the store's evaluation of a partition, with their patterns' dependencies.
+- **When a partition is a join** (`substitutionChanges`, `compile.ts`): binding the key with VALUES and
+  LATERAL substitutes it everywhere, which differs from SPARQL's bottom-up evaluation where a part reads
+  the key before it is bound - an OPTIONAL, MINUS or LATERAL that mentions a key its left side does not
+  bind, a nested group that mentions one it does not bind (or a FILTER there that reads one), a subquery
+  with LIMIT that projects one; LATERAL also forbids a VALUES or BIND of a key. Such a body is evaluated as
+  `VALUES (keys) { … } { body }`. So is a MINUS whose rows may leave a variable unbound: Oxigraph and the
+  Rust engine remove rows under LATERAL that SPARQL keeps (#9).
+- **Walks are sound under unbound variables** (`deps.ts`): a walk leaves an OPTIONAL, a MINUS, a UNION
+  branch or a subquery only through a variable its group certainly binds (`Scope.certain`): one it may
+  leave unbound is compatible with any value outside, so joining on it would miss rows (W3C
+  `negation/full-minuend`). A walk that cannot reach the key but joins with nothing around it touches
+  nothing (a var-predicate pattern meeting an unrelated triple); the semi-join pruning counts only
+  variables that may leave their scope.
+- **Paths**: an inverse step orients the walk; a constant end anchors it; both ends are bound together
+  while the pairs are few; closures and `?` of sequences step through the sequence; negated property sets
+  keep forward and inverse members apart (`!^p`, `!(p|^q)`). `p*` and `p?` hold of every node of the
+  graph with itself, so a triple bringing a node in is their input - unless another pattern of the
+  solution already holds that node (`?m v:kind/rdfs:subClassOf* ?c`).
+- **Blank nodes**: a batch with a key VALUES cannot hold (a blank node) evaluates every partition; a
+  derived subquery's rows with one leave the subquery to the store; expressions over rows with one bind
+  it as an IRI of its own and map it back.
+- **Constants match by value**: a query's numeric constant and a stored number match when equal in
+  value (stores keep "01" or "+5" as their own canonical forms).
+- **Aggregates and expressions**: `GROUP_CONCAT` keeps its values with weights and joins them in term
+  order (any string-free value is an error, as Oxigraph and Rust do - WAT accepts numbers, #9); its
+  order is SPARQL's to leave open, so the oracle compares its parts. `SAMPLE` is the least value (the
+  oracle asks for MIN). `GROUP BY (expr [AS ?v])` is a slot of the partition rows. EXISTS in an
+  expression evaluated with a partition (a projection, an aggregate's argument, ORDER BY over a bag)
+  brings its patterns into the dependencies. ORDER BY an expression of aggregates is computed with the
+  groups. `SELECT REDUCED` is maintained as DISTINCT and compared as a set.
+- **The parser** reads `BASE`, RDF collections, a blank-node property list standing alone, `CONSTRUCT
+  WHERE`, a VALUES clause after the query (written into the WHERE as a join; after an aggregating
+  SELECT, joined with its groups - a group may become several rows), GROUP_CONCAT's SEPARATOR and GROUP BY's AS; a CONSTRUCT may have ORDER BY /
+  LIMIT (its first solutions, by the top-k) and GROUP BY (its template reads the groups); a template
+  with a blank node is a fallback.
+- **GRAPH** (`deps.ts`, `compile.ts`): `GRAPH <g>` reads one of the view's graphs (its input graphs); `GRAPH
+  ?g` ranges over them, written into the query (VALUES before it) so the oracle means the same.
+  Dependencies carry the pattern's graph; a group with no triples of its own depends on the graph having
+  any quad (`GRAPH ?g {}`).
+- **Incremental W3C conformance** (`scripts/view-conformance.ts`, `docs/IVM-CONFORMANCE.md`): every
+  SPARQL 1.0 / 1.1 / 1.2 query evaluation test whose query is a SELECT or CONSTRUCT is a view over an
+  empty store; its data arrives a few triples at a time in a seeded random order, some withdrawn and
+  restored, then all withdrawn; after every step the view equals a from-scratch run of its query. 484
+  tests are maintained, with no mismatch on Oxigraph and two on WAT (its zero-length paths, #9); 37
+  fall back (RDF 1.2 triple terms and directional tags, NOW / RAND / BNODE, a path in GRAPH ?g,
+  codepoint escapes), each listed with its reason. Data blank nodes are skolemized.
+- **The measure** (`test/view-measure.test.ts`): the full `c:StreamStats` rendering as it was before phase 1
+  (aggregates of aggregates over the change log - a MAX over per-key COUNTs - labels by LATERAL, a
+  rank by pairs) and the data grid's full window rule before its views (counts and positions by
+  subqueries, correlated LATERALs, `a/rdfs:subClassOf*`, pairs within the window) run as views over a
+  log that grows, retires, is renamed, sorted, filtered and pinned: strict on Oxigraph and WAT. Ten
+  events cost the stream statistics 138 partitions and 645 rows at 200 members and at 2,000, no
+  rebuild. (The grid rule is one partition per grid: maintained and exact, but its body is the store's
+  each time - the grid's own views, §21, are what makes it cheap.)
+
+## 25. Phase 3, as built
+
+What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`):
+
+- **Exact dependencies for SPARQL rules** (§10.1 step 2). A SPARQL rule is a view partitioned by its
+  focus: its WHERE with `$this` as `?this` (a member-wise rule's `$member` as `?member`, the key
+  `[this, member]`) is read by the view compiler's `Dependencies`; every one of the site's 291 SPARQL
+  rules is read without a problem. `ExactIndex` indexes the active rules by the predicates their
+  patterns can match; for a changed triple, each rule it routes to is probed - the triple bound to the
+  pattern, joined through the store toward `?this`, with the batch's removals put back (indexed) so the
+  old state is seen too - and the foci it reaches are dirty. For those rules the engine no longer uses
+  "every triple about the focus", `sem:follows` (paths too), `sem:watches`, `sem:readsMinted` or the
+  member reads of member-wise rules; the instance index, `sem:requires` / `sem:unless`, `sem:inputOnly`
+  and member links stay. Not probed: a rule below the stratum running, one with no instance (counted as
+  types come and go), one whose foci all wait to run anyway (the mount, a reconfiguration).
+- **Probes, better for views too.** A probe prunes by the patterns around it even when they are only
+  partly bound (some triple must agree with what is bound, looked up through a bound node), also when
+  the change binds the key itself: `sty:HookAttributes` (`$this ?p ?v . ?p sty:hookAttribute ?name`) no
+  longer re-runs for every triple about its focus. Walking through the groups beside a pattern (a sibling
+  OPTIONAL or UNION branch) was tried and dropped: a solution need not match them, so a walk through one
+  can miss it (the performance page's matrix lost a new configuration's rows). So `dep:Facets` (a LATERAL
+  after a LATERAL of UNIONs) still reaches "every focus" from its last pattern; `sem:requires` makes that
+  cheap.
+- **The measure.** `engine.test.ts`: the from-scratch test passes with exact dependencies (every step,
+  screen and text, against a fresh projection), and "re-renders only what changed" is tightened in its
+  exact twin: a todo's `ex:priority` changing re-runs one rule (the list's member placement), not two.
+- **The cost**, why it is an option for now (Node, the todo app):
+
+  | | declared | exact |
+  |---|---:|---:|
+  | mount, Oxigraph, 5 items | 474-558 ms | 682-714 ms |
+  | a change (done, priority): rule runs | 3 | 2 |
+  | 120 changes on WAT, 20 items | 13 ms | 126 ms (2,420 probes) |
+
+  About 20 probes a change, ~50 µs each: the walk is generic JavaScript over store lookups. Compiling
+  each pattern's walk once (a probe plan), or running it in the engine (phase 6), is what makes it the
+  default; so is a full-suite run with `SEMBLANCE_EXACT_DEPS=1`.
+- **`ctx.rows(view)`**: a materialized view's rows, read and traced row by row (`viewRows` delegates).
+- **Persistence policies as views** (§15). A `per:construct` policy marked `iv:strategy iv:Incremental`
+  is a hosted view (`ViewRuntime.host`: defined by a host effect, ephemeral, a fallback expected), checked
+  once against a run of the query. Opt-in, because a view reads input graphs only and a policy that reads
+  a projection's derived graph (the torn-off inspector's geometry) cannot be told apart by comparing
+  once; the change log's policy, which reads the events graph only, opts in. Its view's changes make it dirty
+  (exactly what its patterns read, not "a predicate it mentions"), and a write stores what changed since
+  the last one as a chunk of its own beside the base, compacted when the chunks outgrow it; restore
+  applies them, forget removes them. `test/persistence-cost.test.ts`: one change of a 2,000-triple policy
+  writes two entries and three triples, as of a 200-triple one; a restore after fifty chunked writes
+  equals the graph.
+- **`iv:strategy iv:Incremental` for rules** (§10.1 step 3). The runtime hosts the rule's query
+  (`ViewRuntime.hostRule`, `?this` the partition key, each output row attributed to its focus); the
+  engine reads a focus's output from the view and is told which foci changed. Checked once against an
+  evaluation; a mismatch (the rule reads what views cannot see) falls back with a warning.
+  `test/rules-incremental.test.ts`: a per-focus COUNT and MAX over a list agree with the rule evaluated
+  with exact dependencies after every change, run no query, and an added item costs the same over 200
+  items as over 2,000. (The same rule with only declared dependencies is stale: it follows nothing.)
+- **`sem:watches` through `sem:follows`** (#54): documented as it is (it narrows followed nodes' changes
+  too) and pinned by a test; with exact dependencies it does not apply to SPARQL rules at all.
+
+Where this differs from the design: exact dependencies are an option, not yet the default (above);
+rules as views are opt-in per rule and must read only input graphs (views step before projections);
+persistence policies are views when they opt in; persistence keeps one blob per policy plus chunks, not
+per-triple keys (the backends have no key listing).
 
 ## Decisions
 

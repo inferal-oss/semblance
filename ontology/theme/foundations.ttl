@@ -102,6 +102,15 @@ tok:radius-full a sty:Token ; sty:scale sty:Radius ; sem:slug "radius-full" ; st
 tok:control-sm a sty:Token ; sty:scale sty:Size ; sem:slug "control-sm" ; sty:value "28px" .
 tok:control-md a sty:Token ; sty:scale sty:Size ; sem:slug "control-md" ; sty:value "36px" .
 tok:control-lg a sty:Token ; sty:scale sty:Size ; sem:slug "control-lg" ; sty:value "44px" .
+# The block size of a single-line control (a text field, a select, a date or number input, a button)
+# where no sty:size says otherwise (--control-h): one value, so the controls in a row or a form line
+# up whatever their kind, theme or engine. Their padding is inline only; the box centres the line.
+tok:control-height a sty:Token ; sty:scale sty:Size ; sem:slug "control-height" ; sty:value "38px" .
+# A select's own chevron, drawn in the text colour (so in every theme's), and the room it takes at
+# the end of the line.
+tok:chevron a sty:Token ; sty:scale sty:Size ; sem:slug "chevron" ;
+    sty:value "linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%)" .
+tok:chevron-space a sty:Token ; sty:scale sty:Size ; sem:slug "chevron-space" ; sty:value "32px" .
 
 # --- elevation ---
 tok:shadow-1 a sty:Token ; sty:scale sty:Shadow ; sem:slug "shadow-1" ;

@@ -1,6 +1,6 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
-import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.ts'
+import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration, quadKey } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
@@ -64,6 +64,8 @@ interface Reaction {
   deletes?: string
   inserts?: string
   fn?: string
+  /** beh:undoable: its effect is recorded on the event's member, for undo. */
+  undoable?: boolean
 }
 
 /**
@@ -147,6 +149,7 @@ export class EventBus {
       deletes: this.value(r, BEH.deletes)?.value,
       inserts: this.value(r, BEH.inserts)?.value,
       fn: this.value(r, SEM.function)?.value,
+      undoable: this.value(r, BEH.undoable)?.value === 'true',
     }))
   }
 
@@ -249,6 +252,8 @@ export class EventBus {
     // Every reaction sees the state before the event. Only those that change
     // something handled it (generic reactions often match and do nothing).
     const delta: Delta = { add: [], remove: [] }
+    // What undoable reactions changed (recorded with the member, for undo).
+    const undoable = { add: new Set<string>(), remove: new Set<string>() }
     const acted: Reaction[] = []
     for (const r of reactions) {
       // Reactions are atomic (they see the state before the event); each is timed, so a slow one is blamed.
@@ -259,16 +264,52 @@ export class EventBus {
       acted.push(r)
       delta.remove.push(...d.remove)
       delta.add.push(...d.add)
+      if (r.undoable) for (const [k, qs] of [['add', d.add], ['remove', d.remove]] as const) for (const q of qs) undoable[k].add(quadKey(q))
     }
     reactions = acted
     for (const r of acted) quads.push(f.quad(event, nn(BEH.handledBy), nn(r.iri)))
     const forget = () => {
       for (const q of quads) this.runtime.store.delete(f.quad(q.subject, q.predicate, q.object, this.graph))
     }
-    if (!delta.add.length && !delta.remove.length) {
+    // Events the reactions raise (`?node beh:raise ?class`) are requests, not state: taken out of
+    // the change and raised once this event is applied and recorded.
+    const raised = delta.add.filter((q) => q.predicate.value === BEH.raise && q.subject.termType === 'NamedNode' && q.object.termType === 'NamedNode')
+    if (raised.length) delta.add = delta.add.filter((q) => q.predicate.value !== BEH.raise)
+    if (!delta.add.length && !delta.remove.length && !raised.length) {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
+    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable)
+    this.raise(raised, event)
+    return handled
+  }
+
+  /** How deep raised events may raise further ones (a reaction raising itself stops here). */
+  private raising = 0
+
+  /** Raise each requested event once, in a stable order: a click on a component is addressed to its root. */
+  private raise(requests: Quad[], by: NamedNode) {
+    if (!requests.length || this.raising >= 8) return
+    const seen = new Set<string>()
+    const todo = requests
+      .filter((q) => !seen.has(q.subject.value + ' ' + q.object.value) && seen.add(q.subject.value + ' ' + q.object.value))
+      .sort((a, b) => (a.subject.value + a.object.value < b.subject.value + b.object.value ? -1 : 1))
+    this.raising++
+    try {
+      for (const q of todo) {
+        const detail: EventDetail = { about: [[BEH.raisedBy, by]] }
+        if (q.object.value === BEH.Click) detail.node = q.subject.value + MINT_SEPARATOR + 'root'
+        this.emit(q.object.value, q.subject.value, detail)
+      }
+    } finally {
+      this.raising--
+    }
+  }
+
+  /** Apply an event's change and append it to the change log, as one tick. */
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }): Handled {
+    const { f } = this
+    const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
     // over the state agree after every event (docs/IVM.md, decision 8).
     return this.runtime.transaction(() => {
@@ -288,6 +329,7 @@ export class EventBus {
         remove: [...remove, ...head],
         add: [
           ...quads,
+          ...this.statements(event, applied, undoable),
           f.quad(event, nn(BEH.added), int(applied.add.length)),
           f.quad(event, nn(BEH.removed), int(applied.remove.length)),
           ...head.map((q) => f.quad(event, nn(BEH.previous), q.object)),
@@ -298,6 +340,32 @@ export class EventBus {
       this.members().push({ event, at: Date.now() })
       return { recorded: true, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
     })
+  }
+
+  /**
+   * The effective change of an event's undoable reactions, as rdf:Statement nodes minted under its
+   * member: beh:asserted (added), beh:retracted (removed). Only what actually changed is recorded.
+   */
+  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }): Quad[] {
+    if (!undoable.add.size && !undoable.remove.size) return []
+    const { f } = this
+    const nn = (iri: string) => f.namedNode(iri)
+    const out: Quad[] = []
+    let i = 0
+    for (const [p, qs, keep] of [[BEH.asserted, applied.add, undoable.add], [BEH.retracted, applied.remove, undoable.remove]] as const) {
+      for (const q of qs) {
+        if (!keep.has(quadKey(q))) continue
+        const st = nn(`${event.value}/~change-${i++}`)
+        out.push(
+          f.quad(event, nn(p), st),
+          f.quad(st, nn(RDF_TYPE), nn(NS.rdf + 'Statement')),
+          f.quad(st, nn(NS.rdf + 'subject'), q.subject as NamedNode),
+          f.quad(st, nn(NS.rdf + 'predicate'), q.predicate as NamedNode),
+          f.quad(st, nn(NS.rdf + 'object'), q.object),
+        )
+      }
+    }
+    return out
   }
 
   /**
@@ -329,6 +397,8 @@ export class EventBus {
     while (n < members.length && !keeps.some((keep) => keep(n, members[n].at, size))) {
       const m = members[n++].event
       out.push(...store.match(this.stream, this.f.namedNode(LDES.member), m, this.graph), ...store.match(m, null, null, this.graph))
+      // Its recorded change (for undo) goes with it.
+      for (const p of [BEH.asserted, BEH.retracted]) for (const q of store.match(m, this.f.namedNode(p), null, this.graph)) out.push(...store.match(q.object as NamedNode, null, null, this.graph))
     }
     members.splice(0, n)
     return out
@@ -390,9 +460,15 @@ export class EventBus {
    * throws while an event is handled is reported there instead of thrown (a sandbox
    * keeps its failures to itself).
    */
-  attach(renderer: DomRenderer, onHandled: (h: Handled) => void = () => {}, onError?: (e: Error) => void): () => void {
+  attach(renderer: DomRenderer, handledBy: (h: Handled) => void = () => {}, onError?: (e: Error) => void): () => void {
     const domTypes = new Set(this.runtime.store.match(null, this.f.namedNode(BEH.domEvent), null).map((q) => q.object.value))
     const doc = renderer.host.ownerDocument
+    // After every handled event (and the host's flush), the focus follows the modal overlays.
+    const modals = new ModalFocus(renderer)
+    const onHandled = (h: Handled) => {
+      handledBy(h)
+      modals.settle()
+    }
     const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
     // Key presses a reaction handled are not also the keyboard layer's (nor the browser's).
     const consumed = new WeakSet<Event>()
@@ -495,6 +571,8 @@ export class EventBus {
       if (trapTab(k, renderer.host)) return k.preventDefault()
       // Keys in slot content are the mounted projection's own (its bus navigates it).
       if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      // Tab stays inside an open modal overlay.
+      if (modals.tab(k)) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
@@ -793,6 +871,58 @@ export class EventBus {
     handle.addEventListener('pointermove', move)
     handle.addEventListener('pointerup', up)
     handle.addEventListener('pointercancel', up)
+  }
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * The WAI-ARIA dialog pattern's focus, as view state: when a modal overlay (aria-modal="true")
+ * opens, the focus moves into it (to its [autofocus] element, else the panel itself) and Tab keeps
+ * it there; when it closes, the focus goes back to where it was before it opened, unless something
+ * else took it meanwhile (the renderer moving it off a removed panel does not count). Nested modals stack. Nothing here is graph state.
+ */
+class ModalFocus {
+  private readonly open: { panel: HTMLElement; back: Element | null }[] = []
+
+  constructor(private readonly renderer: DomRenderer) {}
+
+  private shown = (el: Element) => el.isConnected && !el.closest('[hidden], [inert]') && !this.renderer.inSlot(el)
+
+  /** Follow what the last flush opened and closed. */
+  settle(): void {
+    const host = this.renderer.host
+    const doc = host.ownerDocument
+    const now = [...host.querySelectorAll<HTMLElement>('[aria-modal="true"]')].filter(this.shown)
+    for (let i = this.open.length - 1; i >= 0; i--) {
+      const { panel, back } = this.open[i]!
+      if (now.includes(panel)) continue
+      this.open.splice(i, 1)
+      const active = doc.activeElement
+      // The renderer's guess at a nearby control, when the panel went with the focus in it, is not a choice.
+      const lost = !active || active === doc.body || !active.isConnected || panel.contains(active) || active === this.renderer.refocused
+      if (lost && back?.isConnected && this.shown(back)) (back as HTMLElement).focus?.({ preventScroll: true })
+    }
+    for (const panel of now) {
+      if (this.open.some((m) => m.panel === panel)) continue
+      this.open.push({ panel, back: doc.activeElement })
+      const first = panel.querySelector<HTMLElement>('[autofocus]') ?? panel
+      if (!panel.contains(doc.activeElement)) first.focus?.({ preventScroll: true })
+    }
+  }
+
+  /** Tab and Shift+Tab cycle through the topmost modal's controls. Returns whether the key was used. */
+  tab(k: KeyboardEvent): boolean {
+    const top = this.open.at(-1)?.panel
+    if (k.key !== 'Tab' || !top || k.altKey || k.ctrlKey || k.metaKey || !this.shown(top)) return false
+    const parts = [...top.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(this.shown)
+    const active = top.ownerDocument.activeElement
+    if (!parts.length) return top.focus?.(), true
+    const at = parts.indexOf(active as HTMLElement)
+    if (at < 0) return parts[0]!.focus?.(), true
+    if (k.shiftKey && at === 0) return parts.at(-1)!.focus?.(), true
+    if (!k.shiftKey && at === parts.length - 1) return parts[0]!.focus?.(), true
+    return false
   }
 }
 

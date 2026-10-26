@@ -1,5 +1,5 @@
 import type { Quad } from '@rdfjs/types'
-import { type Delta, quadKey } from './rdf.ts'
+import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
@@ -65,8 +65,9 @@ export class Runtime {
       this.advance()
       for (const l of this.timerListeners) l()
     }
-    // A view maintained while something is shown asks the projections that show it.
-    this.views.shown = (component) => this.projections.some((p) => !p.engine.demand || p.engine.demand(component))
+    // A view maintained while something is shown asks the projections that show it; what the
+    // person last showed intent to see (preload) counts as shown, so its views are ready by the click.
+    this.views.shown = (component) => this.projections.some((p) => !p.engine.demand || p.engine.demand(component) || this.intended(p, component))
     this.views.watchdog = this.watchdog
   }
 
@@ -158,9 +159,11 @@ export class Runtime {
   }
 
   /** Views suspended while their components were hidden, shown now: rebuilt, and projected. */
-  private resumeViews() {
+  private resumeViews(): boolean {
     const resumed = this.views.resume()
-    if (resumed.add.length || resumed.remove.length) for (const p of this.projections) p.engine.process(resumed), settle(p)
+    if (!resumed.add.length && !resumed.remove.length) return false
+    for (const p of this.projections) p.engine.process(resumed), settle(p)
+    return true
   }
 
   /** Hear about every refresh (after the projections are updated): the host flushes its renderers. */
@@ -223,8 +226,11 @@ export class Runtime {
   }
 
   private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+    const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
+      // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
+      maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
@@ -310,19 +316,30 @@ export class Runtime {
    * (on intent or eager). Returns whether work remains.
    */
   preload(contents: ReadonlySet<string>, budgetMs: number): boolean {
+    this.intent = contents
     let more = false
     for (const p of this.projections) {
       const warmth = this.warmth.get(p.engine)
       if (!warmth) continue
-      const under = (focus: string) => p.index.nearest(focus, (key) => (contents.has(key) ? true : undefined)) === true
       const allowed = (focus: string) => {
         const w = warmth(focus)
-        return (w === SEM.OnIntent || w === SEM.Eager) && under(focus)
+        return (w === SEM.OnIntent || w === SEM.Eager) && this.intended(p, focus)
       }
       more = p.engine.warm(budgetMs / this.projections.length, 4, allowed) || more
       settle(p)
     }
-    return more
+    // Views suspended while hidden (iv:whileShown) whose components this built: rebuilt, and
+    // what they project is evaluated in the next slice.
+    return this.resumeViews() || more
+  }
+
+  /** The contents of the last preload: what the person last showed intent to see. */
+  private intent?: ReadonlySet<string>
+
+  /** Whether a focus is under what the person last showed intent to see, in a projection. */
+  private intended(p: Projection, focus: string): boolean {
+    const contents = this.intent
+    return !!contents && p.index.nearest(focus, (key) => (contents.has(key) ? true : undefined)) === true
   }
 
   // --- stalls (src/engine/watchdog.ts) ---------------------------------------------------------------

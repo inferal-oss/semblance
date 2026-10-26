@@ -171,23 +171,40 @@ export class HtmlIndex {
   }
 
   isShown(focus: string, roots: ReadonlySet<string>): boolean {
-    const seen = new Set<string>()
-    const up = (key: string): boolean => {
-      if (roots.has(key)) return true
-      if (seen.has(key)) return false
-      seen.add(key)
-      const n = this.nodes.get(key)
-      if (n?.props.has('hidden')) return false
-      const placedAs = this.focusByRoot.get(key)
-      if (placedAs !== undefined && up(placedAs)) return true
-      if (n) for (const p of n.parents) if (up(p)) return true
-      const chained = this.chainParent.get(key)
-      return chained !== undefined && up(chained)
-    }
-    return up(focus)
+    this.seen.clear()
+    return this.shownFrom(focus, roots)
+  }
+
+  /** The keys an isShown walk has visited (one walk at a time; reused). */
+  private seen = new Set<string>()
+
+  private shownFrom(key: string, roots: ReadonlySet<string>): boolean {
+    if (roots.has(key)) return true
+    if (this.seen.has(key)) return false
+    this.seen.add(key)
+    const n = this.nodes.get(key)
+    if (n?.props.has('hidden')) return false
+    const placedAs = this.focusByRoot.get(key)
+    if (placedAs !== undefined && this.shownFrom(placedAs, roots)) return true
+    if (n) for (const p of n.parents) if (this.shownFrom(p, roots)) return true
+    const chained = this.chainParent.get(key)
+    return chained !== undefined && this.shownFrom(chained, roots)
   }
 
   /** The renderable node for a child slot: component instances resolve to their root. */
+  /**
+   * The nodes that list this one as a child: its own parents and, for a component's root, the
+   * parents of the component it renders (and of what renders that, up a chain of roots).
+   */
+  placedUnder(key: string): string[] {
+    const out: string[] = []
+    for (let k: string | undefined = key, hops = 0; k !== undefined && hops < 64; hops++, k = this.focusByRoot.get(k)) {
+      const n = this.nodes.get(k)
+      if (n) out.push(...n.parents)
+    }
+    return out
+  }
+
   resolve(key: string): string | undefined {
     for (let k: string | undefined = key, hops = 0; k !== undefined && hops < 64; hops++) {
       if (this.nodes.get(k)?.cls) return k

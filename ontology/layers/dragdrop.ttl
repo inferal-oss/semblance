@@ -171,6 +171,11 @@ dnd:PickedUpPhrase a c:Phrase ;
 dnd:BeforePhrase a c:Phrase ; rdfs:label "before"@en , "перед"@uk , "vor"@de , "قبل"@ar .
 dnd:AfterPhrase a c:Phrase ; rdfs:label "after"@en , "після"@uk , "nach"@de , "بعد"@ar .
 dnd:RefusedPhrase a c:Phrase ; rdfs:label "refuses it:"@en , "не приймає:"@uk , "nimmt es nicht:"@de , "يرفضه:"@ar .
+# Why a target refuses what is carried when its shape gives no message.
+dnd:UnfitPhrase a c:Phrase ;
+    rdfs:label "It does not belong here."@en , "Цьому тут не місце."@uk , "Das gehört nicht hierher."@de , "لا مكان لهذا هنا."@ar .
+dnd:NoRoomPhrase a c:Phrase ;
+    rdfs:label "There is no room for it here."@en , "Тут для цього немає місця."@uk , "Hier ist kein Platz dafür."@de , "لا يوجد متسع له هنا."@ar .
 
 # --- events ----------------------------------------------------------------------------------------
 # Recorded by the host's gestures (not from a DOM event). beh:key names the keys of the keyboard
@@ -301,8 +306,9 @@ WHERE {
 # While there is a drag: each zone's reception of what is carried. Refused if it does not conform
 # to a dnd:accepts shape (or the sh:node of the target's val:validates shape), or if one more member
 # (dnd:count more) would exceed a sh:maxCount on the receptacle (or of that shape); the
-# reason is the (lexically first) violated shape's untagged sh:message - or an objection's reason
-# (dnd:Objection), whichever is first. The zone it came from accepts it back (a reorder adds no
+# reason is the (lexically first) violated shape's sh:message in the viewer's language (its
+# l10n:message twin, else its untagged one; dnd:UnfitPhrase or dnd:NoRoomPhrase when it has none) -
+# or an objection's reason (dnd:Objection), whichever is first. The zone it came from accepts it back (a reorder adds no
 # member), and a receptacle already holding it is not objected to.
 dnd:Receive a sem:Rendering ;
     sem:targets dnd:DropTarget ;
@@ -345,9 +351,12 @@ WHERE {
             ?x ?p ?v
             FILTER(!COALESCE(IF(?rangeBound = sh:minInclusive, ?v >= ?limit, IF(?rangeBound = sh:maxInclusive, ?v <= ?limit, IF(?rangeBound = sh:minExclusive, ?v > ?limit, ?v < ?limit))), false))
             BIND(?ps AS ?violated) }
+    OPTIONAL { ?ownAt l10n:of ?violated ; l10n:message ?own }
     OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?generalAt l10n:of ?shape ; l10n:message ?general }
     OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
-    BIND(STR(COALESCE(?own, ?general, "It does not belong here.")) AS ?said)
+    OPTIONAL { ?unfitAt l10n:of dnd:UnfitPhrase ; l10n:name ?unfit0 }
+    BIND(STR(COALESCE(?own, ?general, ?unfit0, "It does not belong here.")) AS ?said)
   } GROUP BY ?this ?x ?r } }
   # How many members the receptacle has, whether this is one already, and its capacity.
   LATERAL { OPTIONAL { SELECT ?this ?r (COUNT(?o) AS ?pointing) WHERE { $this dnd:memberOf ?m . ?o ?m ?r } GROUP BY ?this ?r } }
@@ -355,16 +364,21 @@ WHERE {
   LATERAL { OPTIONAL { SELECT ?this ?r (MIN(?bound) AS ?max) (MIN(?said) AS ?full) WHERE {
     ?capacity sh:targetNode ?r ; sh:property ?ps . ?ps sh:maxCount ?bound .
     { $this dnd:memberOf ?m . ?ps sh:path/sh:inversePath ?m } UNION { $this dnd:members ?m . ?ps sh:path ?m }
+    OPTIONAL { ?ownAt l10n:of ?ps ; l10n:message ?own }
     OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?generalAt l10n:of ?capacity ; l10n:message ?general }
     OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
-    BIND(STR(COALESCE(?own, ?general, "There is no room for it here.")) AS ?said)
+    OPTIONAL { ?noRoomAt l10n:of dnd:NoRoomPhrase ; l10n:name ?noRoom0 }
+    BIND(STR(COALESCE(?own, ?general, ?noRoom0, "There is no room for it here.")) AS ?said)
   } GROUP BY ?this ?r } }
   # A target that is a field over its membership property: that shape's sh:maxCount too.
   LATERAL { OPTIONAL { SELECT ?this (MIN(?fieldBound) AS ?fieldMax) (MIN(?fieldSaid) AS ?fieldFull) WHERE {
     $this val:validates ?field . ?field sh:maxCount ?fieldBound .
     { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm }
+    OPTIONAL { ?fieldOwnAt l10n:of ?field ; l10n:message ?fieldOwn }
     OPTIONAL { ?field sh:message ?fieldOwn FILTER(lang(?fieldOwn) = "") }
-    BIND(STR(COALESCE(?fieldOwn, "There is no room for it here.")) AS ?fieldSaid)
+    OPTIONAL { ?fieldNoRoomAt l10n:of dnd:NoRoomPhrase ; l10n:name ?fieldNoRoom }
+    BIND(STR(COALESCE(?fieldOwn, ?fieldNoRoom, "There is no room for it here.")) AS ?fieldSaid)
   } GROUP BY ?this } }
   # How many it carries at once.
   LATERAL { OPTIONAL { ?drag dnd:count ?declaredCount } }
@@ -448,7 +462,9 @@ WHERE {
   $this a/rdfs:subClassOf* dnd:Draggable .
   OPTIONAL { $this dnd:carries ?declared }
   OPTIONAL { $this dnd:name ?ownName FILTER(isLiteral(?ownName) && lang(?ownName) = "") }
+  OPTIONAL { ?ownLabelAt l10n:of $this ; l10n:label ?ownLabel }
   OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+  OPTIONAL { ?draggablePhraseAt l10n:of dnd:DraggablePhrase ; l10n:name ?draggablePhrase }
   OPTIONAL { dnd:DraggablePhrase rdfs:label ?draggablePhrase FILTER(langMatches(lang(?draggablePhrase), "en")) }
   BIND(COALESCE(?declared, $this) AS ?x)
   BIND(STR(?x) AS ?carriedId)
@@ -456,8 +472,12 @@ WHERE {
   BIND(EXISTS { $this dnd:lifted ?anyDrag } AS ?lifted)
   # Where it would go: the zone's name, the verdict there, and the neighbour it would precede or follow.
   OPTIONAL { $this dnd:lifted ?drag . ?drag dnd:into ?r ; dnd:dropTarget ?t .
+             OPTIONAL { ?zoneNameAt l10n:of ?r ; l10n:name ?zoneName }
              OPTIONAL { ?r rdfs:label ?zoneName FILTER(lang(?zoneName) = "") }
-             OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") } }
+             OPTIONAL { ?zoneLabelAt l10n:of ?r ; l10n:label ?zoneLabel }
+             OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") }
+             # A zone that names itself (a workspace pane, by its tabs) says so first.
+             OPTIONAL { ?t dnd:zone ?namedZone . ?namedZone dnd:receptacle ?r ; c:label ?zoneOwn FILTER(lang(?zoneOwn) = "") } }
   OPTIONAL { $this dnd:lifted ?drag2 . ?drag2 dnd:into ?r2 ; dnd:dropTarget ?t2 .
              BIND(IRI(CONCAT(STR(?t2), "/~drop-", ENCODE_FOR_URI(STR(?r2)))) AS ?reception)
              ?reception dnd:verdict dnd:Refused ; dnd:reason ?why }
@@ -465,11 +485,15 @@ WHERE {
              FILTER(STRSTARTS(STR(?bd), CONCAT(STR(?t3), "/~"))) }
   OPTIONAL { $this dnd:lifted ?drag4 . ?drag4 dnd:after ?a ; dnd:dropTarget ?t4 . ?ad dnd:carries ?a ; dnd:name ?afterName
              FILTER(STRSTARTS(STR(?ad), CONCAT(STR(?t4), "/~"))) }
+  OPTIONAL { ?pickedUpAt l10n:of dnd:PickedUpPhrase ; l10n:name ?pickedUp }
   OPTIONAL { dnd:PickedUpPhrase rdfs:label ?pickedUp FILTER(langMatches(lang(?pickedUp), "en")) }
+  OPTIONAL { ?beforeWordAt l10n:of dnd:BeforePhrase ; l10n:name ?beforeWord }
   OPTIONAL { dnd:BeforePhrase rdfs:label ?beforeWord FILTER(langMatches(lang(?beforeWord), "en")) }
+  OPTIONAL { ?afterWordAt l10n:of dnd:AfterPhrase ; l10n:name ?afterWord }
   OPTIONAL { dnd:AfterPhrase rdfs:label ?afterWord FILTER(langMatches(lang(?afterWord), "en")) }
+  OPTIONAL { ?refusedWordAt l10n:of dnd:RefusedPhrase ; l10n:name ?refusedWord }
   OPTIONAL { dnd:RefusedPhrase rdfs:label ?refusedWord FILTER(langMatches(lang(?refusedWord), "en")) }
-  BIND(STR(COALESCE(?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
+  BIND(STR(COALESCE(?zoneOwn, ?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
   BIND(IF(!?lifted, ?none,
        IF(!BOUND(?r), CONCAT(?name, " ", STR(?pickedUp)),
        IF(BOUND(?why), CONCAT(?name, ": ", ?zone, " ", STR(?refusedWord), " ", STR(?why)),

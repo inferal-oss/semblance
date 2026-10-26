@@ -22,5 +22,6 @@ c:Formula a sem:Rendering ;
     sem:stratum -1 ;
     sem:inputOnly true ;
     sem:follows c:dataset ;
-    sem:functionOnly "It runs the SELECT named in the data (c:valueQuery, a sem:View), which SPARQL 1.1 cannot do from inside a query." .
+    sem:functionOnly "awaits #1 (query results as graph rows): it runs the SELECT named in the data (c:valueQuery, a sem:View), which SPARQL 1.1 cannot do from inside a query." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
 c:Formula-fn a sem:Rule ; sem:implements c:Formula ; sem:function "formula:value" .

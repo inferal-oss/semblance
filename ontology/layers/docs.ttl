@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -24,7 +25,10 @@ sem:SpecimenOntology a sem:Rendering ;
     sem:modality mod:Screen ;
     sem:layer sem:DocsLayer ;
     sem:stratum 0 ;
-    sem:functionOnly "It walks the specimen's components, which may be nested through any list-valued property, to find the classes they use: an unbounded traversal over arbitrary properties that a CONSTRUCT can't express without enumerating them." .
+    sem:needsExtension sx:Locale ;
+    sem:functionOnly """awaits sx:Locale (sx:collated): the classes are listed in collation order of their labels
+(localeCompare). The walk needs no extension: the holding properties are a fixed set (c:children, c:items, c:content,
+c:front, c:tabs, c:actions, c:steps, c:body, each a node or a list), so a property path reaches the components.""" .
 sem:SpecimenOntology-fn a sem:Rule ; sem:implements sem:SpecimenOntology ; sem:function "docs:specimen" .
 
 c:ClassDoc a owl:Class ;
@@ -34,7 +38,8 @@ c:ClassDoc a owl:Class ;
 c:ClassDocRendering a sem:Rendering ;
     sem:targets c:ClassDoc ;
     sem:stratum 0 ;
-    sem:functionOnly "It pretty-prints triples as Turtle and colors the tokens, which needs a tokenizer; SPARQL cannot split text into tokens." .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it colors the Turtle it prints, token by token, and splitting text into tokens needs a regex-match relation no SPARQL (1.1 or 1.2) has." ;
+    sem:needsExtension sx:Matches .
 c:ClassDocRendering-fn a sem:Rule ; sem:implements c:ClassDocRendering ; sem:function "class-doc" .
 
 sem:ToggleOntology a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:Specimen ;

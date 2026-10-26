@@ -38,6 +38,38 @@ describe('the network inspector example', () => {
     }
   })
 
+  it('counts the last five seconds of the capture on its own time (an event-time window)', () => {
+    const h = showNetwork('sparql')
+    const { root, f } = h
+    const g = f.namedNode(NETWORK_GRAPH)
+    const entry = (n: number, started: number) => {
+      const e = f.namedNode('urn:semblance:net:recent-' + n)
+      h.runtime.write(NETWORK_GRAPH, {
+        remove: [],
+        add: [
+          f.quad(f.namedNode(NS.net + 'Capture'), f.namedNode(NS.tree + 'member'), e, g),
+          f.quad(e, f.namedNode(NS.rdf + 'type'), f.namedNode(NS.net + 'Event'), g),
+          f.quad(e, f.namedNode(NS.net + 'label'), f.literal('event ' + n), g),
+          f.quad(e, f.namedNode(NS.net + 'startedAt'), f.literal(String(started), f.namedNode(NS.xsd + 'double')), g),
+        ],
+      })
+      h.shell.flush()
+    }
+    const recent = () => root('net-recent').textContent
+    expect(recent()).toMatch(/entr(y|ies) in the last 5 s of the capture/)
+    // Long after the samples (page milliseconds): the watermark is a second behind it, the samples are out.
+    entry(1, 100_000)
+    expect(recent()).toBe('1 entry in the last 5 s of the capture')
+    entry(2, 103_000)
+    expect(recent()).toBe('2 entries in the last 5 s of the capture')
+    // A span reported late, started before the others: still inside, so it counts.
+    entry(3, 99_000)
+    expect(recent()).toBe('3 entries in the last 5 s of the capture')
+    // Six seconds on in the capture: the first two have left the window (watermark 108,000, back to 103,000).
+    entry(4, 109_000)
+    expect(recent()).toBe('2 entries in the last 5 s of the capture')
+  })
+
   for (const prefer of ['sparql', 'function'] as const) {
     it(`lists captured entries, filters them and shows the selected one's details (${prefer})`, () => {
       const h = showNetwork(prefer)

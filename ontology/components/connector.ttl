@@ -295,7 +295,7 @@ c:CanvasItemRendering a sem:Rendering ; sem:targets c:CanvasItem ; sem:stratum 0
 c:CanvasItemRendering-fn a sem:Rule ; sem:implements c:CanvasItemRendering ; sem:function "canvas:item" .
 c:CanvasItemRendering-sparql a sem:Rule ;
     sem:implements c:CanvasItemRendering ;
-    sem:modality mod:Screen ;
+    # Like the function, the same in every modality.
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class "sem-canvas-item" ; rdfhtml:style ?style ; rdfhtml:hasChild ?of ;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { todoOps } from '../src/examples/todo.ts'
+import { NS } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
 
 /**
@@ -54,6 +55,12 @@ function costHarness() {
   let hovered = 0
   let moved = 0
   const field = () => $('[data-sem-c=text-field] input') as HTMLInputElement
+  const key = (k: string, mods: object, target: EventTarget) => {
+    const e = new window.Event('keydown', { bubbles: true, cancelable: true })
+    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods })
+    target.dispatchEvent(e)
+    shell.shell.flush()
+  }
   const type = (value: string) => {
     field().value = value
     fire(field(), 'input')
@@ -92,6 +99,17 @@ function costHarness() {
     add: () => {
       type('another')
       fire(button('Add'), 'click')
+    },
+    // The command palette: opened with its key, searched (it lists every command, shortcut and
+    // place, none of which grow with the list or the log), closed with Escape.
+    palette: () => {
+      key('k', { ctrlKey: true }, document.body)
+      const search = $('[data-sem-c=command-palette] input') as HTMLInputElement
+      search.value = 'in'
+      fire(search, 'input')
+      shell.shell.flush()
+      key('ArrowDown', {}, search)
+      key('Escape', {}, search)
     },
   }
 
@@ -133,5 +151,38 @@ describe('interaction cost', () => {
         .map(([k, v]) => `${name}.${k}: ${before[name]![k]} -> ${v}`),
     )
     expect(grew).toEqual([])
+  }, 120_000)
+})
+
+describe('a large result table', () => {
+  // Its Markdown (c:ResultTableMarkdown-sparql) reads each cell once and names each IRI it shows
+  // against the declared prefixes once: it costs the order of the table rendering it reads (which
+  // runs the query and renders the rows), and grows with the rows, not with their square or with
+  // the square of the declarations. (Times, not counters: the work is inside one query. Each is the
+  // least of three runs, the two tables taking turns, so load slows both alike.)
+  it('costs its Markdown what its cells are (wat, SPARQL)', () => {
+    const h = mountShell(5, 'wat', 'sparql')
+    h.fire([...h.document.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Query')!, 'click')
+    const ms = (rule: string) => h.screen.engine.stats.byRule.get(NS.c + rule)?.ms ?? 0
+    const run = (limit: number) => {
+      const ta = h.document.querySelector('[data-sem-c=query-editor] textarea') as HTMLTextAreaElement
+      ta.value = `SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT ${limit}`
+      h.fire(ta, 'input')
+      const [md, table] = [ms('ResultTableMarkdown-sparql'), ms('ResultTableRendering-fn')]
+      h.fire(h.document.querySelector('[data-sem-c=query-workbench] .sem-toolbar button')!, 'click')
+      expect(h.document.querySelectorAll('[data-sem-c=result-table] tbody tr').length).toBe(limit)
+      return { md: ms('ResultTableMarkdown-sparql') - md, table: ms('ResultTableRendering-fn') - table }
+    }
+    const small = { md: Infinity, table: Infinity }
+    const large = { md: Infinity, table: Infinity }
+    for (let i = 0; i < 3; i++)
+      for (const [limit, least] of [[20, small], [200, large]] as const) {
+        const t = run(limit)
+        least.md = Math.min(least.md, t.md)
+        least.table = Math.min(least.table, t.table)
+      }
+    // (Measured on WAT: about 5 ms for 200 rows, against 17 ms for the table; it was 7 s.)
+    expect(large.md).toBeLessThan(2 * Math.max(large.table, 20))
+    expect(large.md).toBeLessThan(20 * Math.max(small.md, 2))
   }, 120_000)
 })

@@ -6,6 +6,90 @@
 
 # Default theme for the panes (c:SplitView, c:DockPanel).
 
+# --- tiled workspace ---
+# The workspace is a region as tall as a working area (it fills what it is given): its root split
+# view fills it, and each split view below draws no frame of its own (see "split view in a split
+# view" below), so the tree reads as one surface divided by its dividers.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "min-height" ; sty:raw "24rem" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "> *" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] .
+
+# On a compact screen the split views stack (see "split view"); in a workspace each pane is then
+# as tall as what it shows, at least a few lines, rather than half the screen, so the column of
+# panes stays short enough to see several at once.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:atWidth sty:CompactWidth ; sty:part "[data-sem-c=split-view] > .sem-pane" ;
+    sty:declares [ sty:property "height" ; sty:raw "auto" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "8rem" ] .
+
+# Tabs in a pane fill it, so the whole pane takes a dropped tab: their list on top, the panel below.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part ".sem-pane > [data-sem-c=tabs]" ;
+    sty:declares [ sty:property "min-block-size" ; sty:raw "100%" ] ,
+                 [ sty:property "grid-template-rows" ; sty:raw "auto 1fr" ] ,
+                 [ sty:property "align-content" ; sty:raw "start" ] .
+
+# A pane's edge zones (sortable c:Tabs in a workspace): strips along its edges, a quarter of it
+# deep, there only while something is carried (or the keyboard drag is at one). The one it is over
+# shows the half of the pane the new one would take; the strip keeps its size, so the pointer can
+# still reach the middle (the whole tabs, which take the tab).
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:state ":has(> .sem-split-zone)" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone" ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] ,
+                 [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "25%" ] .
+# The strip itself is never drawn as a zone (the half it would take is, below).
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-drop-zone][data-sem-drop]" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] .
+[] a sty:StyleRule ; sty:part ":root[data-sem-dragging] [data-sem-c=tabs] > .sem-split-zone, [data-sem-c=tabs] > .sem-split-zone[data-sem-drop-over]" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=start]" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=end]" ;
+    sty:declares [ sty:property "inset-inline-end" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone:is([data-sem-edge=top], [data-sem-edge=bottom])" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "auto" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "25%" ] ,
+                 [ sty:property "inline-size" ; sty:raw "auto" ] ,
+                 [ sty:property "block-size" ; sty:raw "25%" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=top]" ;
+    sty:declares [ sty:property "inset-block-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=bottom]" ;
+    sty:declares [ sty:property "inset-block-end" ; sty:raw "0" ] .
+# The half it would take (drawn by the strip, not hit by the pointer).
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "inline-size" ; sty:raw "200%" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "outline" ; sty:raw "2px solid var(--sem-accent-9)" ] ,
+                 [ sty:property "outline-offset" ; sty:raw "-2px" ] ,
+                 [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-accent-9) 14%, transparent)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=start][data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "inset-inline-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=end][data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "inset-inline-end" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone:is([data-sem-edge=top], [data-sem-edge=bottom])[data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "auto" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "-50%" ] ,
+                 [ sty:property "inline-size" ; sty:raw "auto" ] ,
+                 [ sty:property "block-size" ; sty:raw "200%" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=top][data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "inset-block-start" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "> .sem-split-zone[data-sem-edge=bottom][data-sem-drop-over]::after" ;
+    sty:declares [ sty:property "inset-block-end" ; sty:raw "0" ] .
+
 # --- split view ---
 # A flex row (a column with pos:direction pos:Column); the primary pane's basis is its share
 # (--split-ratio, set by the rendering), the secondary takes the rest. Panes scroll on their own.
@@ -87,6 +171,16 @@
 [] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:when pos:Column ; sty:part "> .sem-divider::after" ;
     sty:declares [ sty:property "width" ; sty:raw "28px" ] ,
                  [ sty:property "height" ; sty:raw "4px" ] .
+
+# A split view in a split view's pane (a workspace's tree, any nesting) is that pane: no frame,
+# corners or padding of its own, so dividers meet the outer frame and one another.
+[] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:part "> .sem-pane:has(> [data-sem-c=split-view])" ;
+    sty:declares [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SplitView ; sty:part "> .sem-pane > [data-sem-c=split-view]" ;
+    sty:declares [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] .
 
 # --- dock panel ---
 # Docked in the flow of its container: sticky at its edge (bottom by default), so it stays in

@@ -116,7 +116,8 @@ function focusModal() {
     const open = [...document.querySelectorAll(p.selector)].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
     if (open === p.open) continue
     if (open && !p.open) p.opener = document.activeElement as HTMLElement | null
-    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body)
+    // Inside, or moved off it by the renderer when it went away (shell.refocused): either way, it comes back.
+    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body || document.activeElement === shell.refocused)
     p.open = open
     if (open) {
       if (!open.contains(document.activeElement)) ((open.querySelector(p.first) as HTMLElement | null) ?? (open as HTMLElement)).focus?.()
@@ -125,6 +126,20 @@ function focusModal() {
       p.opener = null
     }
   }
+}
+
+// The Layout page's c:HostSlot specimen: content the host owns (a native slider), mounted once.
+function hostSlotDemo(slot: Element | undefined) {
+  if (!slot || slot.firstChild) return
+  const input = Object.assign(document.createElement('input'), { type: 'range', min: '0', max: '100', value: '40' })
+  input.setAttribute('aria-label', 'A slider the host owns')
+  const output = document.createElement('output')
+  output.textContent = input.value
+  input.addEventListener('input', () => (output.textContent = input.value))
+  const row = document.createElement('div')
+  row.style.cssText = 'display: flex; gap: 0.75em; align-items: center'
+  row.append(input, output)
+  slot.append(row)
 }
 
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
@@ -136,6 +151,7 @@ const patch = () => {
   shell.flush()
   sandboxes?.sync()
   focusModal()
+  hostSlotDemo(shell.slot('gallery-host'))
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
   textDom?.flush()

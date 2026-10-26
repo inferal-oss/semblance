@@ -5,6 +5,7 @@ import { mint } from '../rdf.ts'
 import { queryReads, type ReadPattern } from '../sparql-reads.ts'
 import type { Factory, GraphStore } from '../store/types.ts'
 import { ATTRIBUTE_NAMES } from '../vocab/rdfhtml.generated.ts'
+import { maintainedRows } from '../view/rows.ts'
 
 /** What a function rule sees: the input graph plus this engine's derived graph. */
 export interface RuleContext {
@@ -23,6 +24,12 @@ export interface RuleContext {
    */
   select(query: string, opts?: QueryOptions): Map<string, Term>[]
   construct(query: string, opts?: QueryOptions): Quad[]
+  /**
+   * A maintained view's rows (an iv:View materialized as a result set in the views graph, docs/IVM.md
+   * §8.2), in its ORDER BY, read - and traced - row by row, so the rule re-runs exactly when the rows
+   * it read change. Not a maintained view: `query` (the same SELECT) is run instead, untraced, or none.
+   */
+  rows(view: Term, query?: string): Map<string, Term>[]
   readonly sparql: boolean
   /**
    * When set (by the engine, around one function-rule evaluation), every
@@ -77,6 +84,9 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     return n
   }
   const term = (t: Term | string | null) => (typeof t === 'string' ? nn(t) : t)
+  /** A graph's position in the view, by value ('' = the default graph). */
+  const graphIndex = new Map(graphs.map((g, i) => [g.value, i]))
+  const probe = !!store.crossGraphMatch && graphs.length <= 31 && graphIndex.size === graphs.length
   const memo = new Map<string, unknown>()
   // Graph-declared prefixes (sh:declare) are read once per context.
   let declared: string | undefined
@@ -91,9 +101,23 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
         preds.add(p === null ? '*' : typeof p === 'string' ? p : p.value)
       }
     }
+    const [ts, tp, to] = [term(s), term(p), term(o)]
+    // With a subject, and where a lookup across graphs costs what one in a graph does
+    // (store.crossGraphMatch), one lookup finds which of the view's graphs hold matches
+    // (usually none or one); only those are asked, in order, for the same result.
+    let holding = -1
+    if (ts && probe) {
+      const all = store.match(ts, tp, to)
+      holding = 0
+      for (const q of all) holding |= 1 << (graphIndex.get(q.graph.value) ?? 31)
+      holding &= ~(1 << 31)
+      if (!holding) return []
+      if (all.length === 1) return all
+    }
     let out: Quad[] = []
-    for (const g of graphs) {
-      const found = store.match(term(s), term(p), term(o), g)
+    for (let i = 0; i < graphs.length; i++) {
+      if (!(holding & (1 << i))) continue
+      const found = store.match(ts, tp, to, graphs[i])
       if (found.length) out = out.length ? out.concat(found) : found
     }
     return out
@@ -129,6 +153,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     out: (focus) => new Out(ctx, focus, graph),
     sparql: store.sparql,
+    rows: (view, query) => maintainedRows(ctx, view) ?? (query && store.sparql ? ctx.select(query) : []),
     select: (query, opts) => store.select(followed(prefixes() + '\n' + query, opts), graphs),
     construct: (query, opts) => store.construct(followed(prefixes() + '\n' + query, opts), graphs),
   }

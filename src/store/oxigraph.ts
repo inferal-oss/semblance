@@ -36,6 +36,7 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
     kind: 'oxigraph',
     factory,
     sparql: true,
+    crossGraphMatch: true,
     add: (q) => store.add(q as Ox.Quad),
     delete: (q) => {
       store.delete(q as Ox.Quad)

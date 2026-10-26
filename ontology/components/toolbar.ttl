@@ -48,6 +48,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Toolbar .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?label_uAt l10n:of $this ; l10n:label ?label_u }
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
@@ -100,16 +101,22 @@ WHERE {
   OPTIONAL { ?target ?property ?raw FILTER(isLiteral(?raw) && STR(?raw) != "") }
   BIND(STR(?raw) AS ?value)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?label_uAt l10n:of $this ; l10n:label ?label_u }
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  OPTIONAL { ?search_uAt l10n:of c:SearchPhrase ; l10n:name ?search_u }
+  OPTIONAL { ?search_uAt l10n:of c:SearchPhrase ; l10n:name ?search_u }
   OPTIONAL { c:SearchPhrase rdfs:label ?search_u FILTER(lang(?search_u) = "") }
   OPTIONAL { c:SearchPhrase rdfs:label ?search_en FILTER(langMatches(lang(?search_en), "en")) }
   BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?search_u, ?search_en)) AS ?label)
+  OPTIONAL { ?hint_uAt l10n:of $this ; l10n:placeholder ?hint_u }
   OPTIONAL { $this c:placeholder ?hint_u FILTER(isLiteral(?hint_u) && lang(?hint_u) = "") }
   OPTIONAL { FILTER(!BOUND(?hint_u)) $this c:placeholder ?hint_en FILTER(langMatches(lang(?hint_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?hint_u) && !BOUND(?hint_en)) $this c:placeholder ?hint_any FILTER(isLiteral(?hint_any)) }
   BIND(STR(COALESCE(?hint_u, ?hint_en, ?hint_any)) AS ?placeholder)
+  OPTIONAL { ?clear_uAt l10n:of c:ClearSearchCommand ; l10n:name ?clear_u }
+  OPTIONAL { ?clear_uAt l10n:of c:ClearSearchCommand ; l10n:name ?clear_u }
   OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_u FILTER(lang(?clear_u) = "") }
   OPTIONAL { c:ClearSearchCommand rdfs:label ?clear_en FILTER(langMatches(lang(?clear_en), "en")) }
   BIND(STR(COALESCE(?clear_u, ?clear_en)) AS ?clearLabel)
@@ -125,6 +132,36 @@ WHERE {
   BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-icon")), ?none) AS ?clearIcon)
   BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-icon-aria-hidden")), ?none) AS ?clearIconHidden)
   BIND(IF(BOUND(?value), IRI(CONCAT(STR($this), "/~clear-icon-text")), ?none) AS ?clearIconText)
+}""" .
+c:SearchFieldRendering-sparql-text a sem:Rule ;
+    sem:implements c:SearchFieldRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SearchField ; c:controls ?target ; c:property ?property .
+  FILTER(isIRI(?target) && isIRI(?property))
+  OPTIONAL { ?target ?property ?value FILTER(isLiteral(?value) && STR(?value) != "") }
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
+  OPTIONAL { c:SearchPhrase l10n:label ?picklcp }
+  OPTIONAL { FILTER(!BOUND(?picklcp)) ?picklcpAt l10n:of c:SearchPhrase ; l10n:label ?picklcpT }
+  OPTIONAL { FILTER(!BOUND(?picklcp) && !BOUND(?picklcpT)) c:SearchPhrase c:label ?anylcp FILTER(isLiteral(?anylcp)) }
+  BIND(STR(COALESCE(?picklcp, ?picklcpT, ?anylcp)) AS ?lcp)
+  OPTIONAL { ?picklrpAt l10n:of c:SearchPhrase ; l10n:name ?picklrp }
+  OPTIONAL { FILTER(!BOUND(?picklrp)) c:SearchPhrase rdfs:label ?anylrp FILTER(isLiteral(?anylrp)) }
+  BIND(STR(COALESCE(?picklrp, ?anylrp)) AS ?lrp)
+  BIND(COALESCE(?lcp, ?lrp, REPLACE(STR(c:SearchPhrase), "^.*[#/]", "")) AS ?phrase)
+  BIND(COALESCE(?ownLabel, ?phrase) AS ?label)
+  BIND(CONCAT("\u2315 ", ?label, ": [", COALESCE(STR(?value), ""), "_]") AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
 }""" .
 
 c:SearchFieldInput a beh:Reaction ;
@@ -180,7 +217,8 @@ WHERE {
   {
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
+    OPTIONAL { ?label_uAt l10n:of $this ; l10n:label ?label_u }
+  OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
     OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
     BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any)) AS ?label)
@@ -211,23 +249,105 @@ WHERE {
     BIND(IF(BOUND(?toneSlug), IRI(CONCAT(?id, "-swatch-data-sem-tone")), ?none) AS ?tone)
     BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?item)))) AS ?itemLabelNode)
     OPTIONAL { ?itemLabelNode l10n:label ?itemLocal }
-    OPTIONAL { ?item c:label ?itemC_u FILTER(isLiteral(?itemC_u) && lang(?itemC_u) = "") }
+    OPTIONAL { ?itemC_uAt l10n:of ?item ; l10n:label ?itemC_u }
+  OPTIONAL { ?item c:label ?itemC_u FILTER(isLiteral(?itemC_u) && lang(?itemC_u) = "") }
     OPTIONAL { FILTER(!BOUND(?itemC_u)) ?item c:label ?itemC_en FILTER(langMatches(lang(?itemC_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?itemC_u) && !BOUND(?itemC_en)) ?item c:label ?itemC_any FILTER(isLiteral(?itemC_any)) }
-    OPTIONAL { ?item rdfs:label ?itemR_u FILTER(isLiteral(?itemR_u) && lang(?itemR_u) = "") }
+    OPTIONAL { ?itemR_uAt l10n:of ?item ; l10n:name ?itemR_u }
+  OPTIONAL { ?item rdfs:label ?itemR_u FILTER(isLiteral(?itemR_u) && lang(?itemR_u) = "") }
     OPTIONAL { FILTER(!BOUND(?itemR_u)) ?item rdfs:label ?itemR_en FILTER(langMatches(lang(?itemR_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?itemR_u) && !BOUND(?itemR_en)) ?item rdfs:label ?itemR_any FILTER(isLiteral(?itemR_any)) }
     BIND(STR(COALESCE(?itemLocal, ?itemC_u, ?itemC_en, ?itemC_any, ?itemR_u, ?itemR_en, ?itemR_any, REPLACE(STR(?item), "^.*[#/]", ""))) AS ?itemLabel)
   }
+}""" .
+c:LegendRendering-sparql-text a sem:Rule ;
+    sem:implements c:LegendRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Legend .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
+  OPTIONAL {
+    SELECT (GROUP_CONCAT(?entry; separator="  ") AS ?items) WHERE {
+      { SELECT DISTINCT ?item ?entry ?key ?id WHERE {
+        {
+          $this c:items ?list .
+          LATERAL { SELECT ?list ?item (COUNT(?before) AS ?pos) WHERE {
+            ?list rdf:rest* ?cell . ?cell rdf:first ?item FILTER(isIRI(?item))
+            ?list rdf:rest* ?before . ?before rdf:rest* ?cell
+          } GROUP BY ?list ?item }
+          BIND(STR(?pos) AS ?key)
+        } UNION {
+          FILTER NOT EXISTS { $this c:items ?explicit }
+          $this c:of ?class . ?item a ?class FILTER(isIRI(?item))
+          OPTIONAL { ?item sem:order ?order }
+          BIND(STR(COALESCE(?order, 0)) AS ?key)
+        }
+        LATERAL { OPTIONAL { SELECT ?item ?lci WHERE {
+  
+  OPTIONAL { ?item l10n:label ?picklci }
+  OPTIONAL { FILTER(!BOUND(?picklci)) ?picklciAt l10n:of ?item ; l10n:label ?picklciT }
+  OPTIONAL { FILTER(!BOUND(?picklci) && !BOUND(?picklciT)) ?item c:label ?anylci FILTER(isLiteral(?anylci)) }
+  BIND(STR(COALESCE(?picklci, ?picklciT, ?anylci)) AS ?lci)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?item ?lri WHERE {
+  
+  OPTIONAL { ?picklriAt l10n:of ?item ; l10n:name ?picklri }
+  OPTIONAL { FILTER(!BOUND(?picklri)) ?item rdfs:label ?anylri FILTER(isLiteral(?anylri)) }
+  BIND(STR(COALESCE(?picklri, ?anylri)) AS ?lri)
+  } } }
+  BIND(COALESCE(?lci, ?lri, REPLACE(STR(?item), "^.*[#/]", "")) AS ?itemLabel)
+        BIND(CONCAT("\u25A0 ", ?itemLabel) AS ?entry)
+        BIND(CONCAT(STR($this), "/~i-", ENCODE_FOR_URI(STR(?item))) AS ?id)
+      } ORDER BY xsd:double(?key) ?key ?id }
+    }
+  }
+  BIND(COALESCE(?items, "") AS ?line0)
+  BIND(IF(BOUND(?label) && ?label != "", CONCAT(?label, ": ", ?line0), ?line0) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
 }""" .
 
 # The viewer's language reaches the SPARQL rule as labels under the legend (<focus>/~l10n-<item>).
 c:LegendTexts a sem:Rendering ;
     sem:targets c:Legend ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rule: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:LegendTexts-fn a sem:Rule ; sem:implements c:LegendTexts ; sem:function "toolbar:legend-texts" .
+# The categories: the members of c:items, or the instances of the class it is c:of.
+c:LegendTexts-sparql a sem:Rule ; sem:implements c:LegendTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this a ?type .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  { $this c:items/rdf:rest*/rdf:first ?item . FILTER(isIRI(?item)) }
+  UNION
+  { FILTER NOT EXISTS { $this c:items ?list } $this c:of ?class . FILTER(isIRI(?class)) ?item a ?class . FILTER(isIRI(?item)) }
+  LATERAL { OPTIONAL { SELECT ?item ?c WHERE {
+  
+  OPTIONAL { ?item l10n:label ?pickc }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?pickcAt l10n:of ?item ; l10n:label ?pickcT }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?item c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?pickcT, ?anyc)) AS ?c)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?item ?r WHERE {
+  
+  OPTIONAL { ?pickrAt l10n:of ?item ; l10n:name ?pickr }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?item rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?anyr)) AS ?r)
+  } } }
+  BIND(COALESCE(?c, ?r, REPLACE(STR(?item), "^.*[#/]", "")) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ENCODE_FOR_URI(STR(?item)))) AS ?node)
+}""" .
 
 # --- LiveIndicator: is it live? -------------------------------------------------------------------
 # Shows the boolean c:property of the node it c:controls (absent counts as true: live), e.g.
@@ -268,15 +388,20 @@ WHERE {
   BIND(!EXISTS { ?n ?p ?off FILTER(STR(?off) = "false") } AS ?isLive)
   BIND(IF(?isLive, "true", "false") AS ?liveText)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?label_uAt l10n:of $this ; l10n:label ?label_u }
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
+  OPTIONAL { ?live_uAt l10n:of c:LivePhrase ; l10n:name ?live_u }
+  OPTIONAL { ?live_uAt l10n:of c:LivePhrase ; l10n:name ?live_u }
   OPTIONAL { c:LivePhrase rdfs:label ?live_u FILTER(lang(?live_u) = "") }
   OPTIONAL { c:LivePhrase rdfs:label ?live_en FILTER(langMatches(lang(?live_en), "en")) }
   BIND(STR(COALESCE(?localLabel, ?label_u, ?label_en, ?label_any, ?live_u, ?live_en)) AS ?label)
   OPTIONAL { $this c:pausedLabel ?paused_u FILTER(isLiteral(?paused_u) && lang(?paused_u) = "") }
   OPTIONAL { FILTER(!BOUND(?paused_u)) $this c:pausedLabel ?paused_en FILTER(langMatches(lang(?paused_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?paused_u) && !BOUND(?paused_en)) $this c:pausedLabel ?paused_any FILTER(isLiteral(?paused_any)) }
+  OPTIONAL { ?pausedPhrase_uAt l10n:of c:PausedPhrase ; l10n:name ?pausedPhrase_u }
+  OPTIONAL { ?pausedPhrase_uAt l10n:of c:PausedPhrase ; l10n:name ?pausedPhrase_u }
   OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_u FILTER(lang(?pausedPhrase_u) = "") }
   OPTIONAL { c:PausedPhrase rdfs:label ?pausedPhrase_en FILTER(langMatches(lang(?pausedPhrase_en), "en")) }
   BIND(STR(COALESCE(?paused_u, ?paused_en, ?paused_any, ?pausedPhrase_u, ?pausedPhrase_en)) AS ?pausedLabel)
@@ -290,6 +415,48 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~state")) AS ?state)
   BIND(IRI(CONCAT(STR($this), "/~state-aria-hidden")) AS ?stateHidden)
   BIND(IRI(CONCAT(STR($this), "/~state-text")) AS ?stateText)
+}""" .
+c:LiveIndicatorRendering-sparql-text a sem:Rule ;
+    sem:implements c:LiveIndicatorRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:LiveIndicator .
+  OPTIONAL { $this c:controls ?controls ; c:property ?controlsProperty FILTER(isIRI(?controls) && isIRI(?controlsProperty)) }
+  BIND(COALESCE(?controls, $this) AS ?n) BIND(COALESCE(?controlsProperty, c:checked) AS ?p)
+  BIND(!EXISTS { ?n ?p ?off FILTER(STR(?off) = "false") } AS ?isLive)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
+  OPTIONAL { c:LivePhrase l10n:label ?picklcl }
+  OPTIONAL { FILTER(!BOUND(?picklcl)) ?picklclAt l10n:of c:LivePhrase ; l10n:label ?picklclT }
+  OPTIONAL { FILTER(!BOUND(?picklcl) && !BOUND(?picklclT)) c:LivePhrase c:label ?anylcl FILTER(isLiteral(?anylcl)) }
+  BIND(STR(COALESCE(?picklcl, ?picklclT, ?anylcl)) AS ?lcl)
+  OPTIONAL { ?picklrlAt l10n:of c:LivePhrase ; l10n:name ?picklrl }
+  OPTIONAL { FILTER(!BOUND(?picklrl)) c:LivePhrase rdfs:label ?anylrl FILTER(isLiteral(?anylrl)) }
+  BIND(STR(COALESCE(?picklrl, ?anylrl)) AS ?lrl)
+  BIND(COALESCE(?lcl, ?lrl, REPLACE(STR(c:LivePhrase), "^.*[#/]", "")) AS ?livePhrase)
+  BIND(COALESCE(?ownLabel, ?livePhrase) AS ?label)
+  OPTIONAL { ?pickqAt l10n:of $this ; l10n:pausedLabel ?pickq }
+  OPTIONAL { FILTER(!BOUND(?pickq)) $this c:pausedLabel ?anyq FILTER(isLiteral(?anyq)) }
+  BIND(STR(COALESCE(?pickq, ?anyq)) AS ?ownPaused)
+  OPTIONAL { c:PausedPhrase l10n:label ?picklcz }
+  OPTIONAL { FILTER(!BOUND(?picklcz)) ?picklczAt l10n:of c:PausedPhrase ; l10n:label ?picklczT }
+  OPTIONAL { FILTER(!BOUND(?picklcz) && !BOUND(?picklczT)) c:PausedPhrase c:label ?anylcz FILTER(isLiteral(?anylcz)) }
+  BIND(STR(COALESCE(?picklcz, ?picklczT, ?anylcz)) AS ?lcz)
+  OPTIONAL { ?picklrzAt l10n:of c:PausedPhrase ; l10n:name ?picklrz }
+  OPTIONAL { FILTER(!BOUND(?picklrz)) c:PausedPhrase rdfs:label ?anylrz FILTER(isLiteral(?anylrz)) }
+  BIND(STR(COALESCE(?picklrz, ?anylrz)) AS ?lrz)
+  BIND(COALESCE(?lcz, ?lrz, REPLACE(STR(c:PausedPhrase), "^.*[#/]", "")) AS ?pausedPhrase)
+  BIND(COALESCE(?ownPaused, ?pausedPhrase) AS ?pausedLabel)
+  BIND(CONCAT(IF(?isLive, "\u25CF", "\u2759\u2759"), " ", IF(?isLive, ?label, ?pausedLabel)) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
 }""" .
 
 c:LiveIndicatorToggle a beh:Reaction ;
@@ -376,6 +543,7 @@ WHERE {
   BIND(IF(?via != tree:member, ?direct, IF(BOUND(?class), COALESCE(?ofClass, 0), COALESCE(?all, 0))) AS ?counted)
   BIND(STR(?counted) AS ?number)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?label_uAt l10n:of $this ; l10n:label ?label_u }
   OPTIONAL { $this c:label ?label_u FILTER(isLiteral(?label_u) && lang(?label_u) = "") }
   OPTIONAL { FILTER(!BOUND(?label_u)) $this c:label ?label_en FILTER(langMatches(lang(?label_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?label_u) && !BOUND(?label_en)) $this c:label ?label_any FILTER(isLiteral(?label_any)) }
@@ -387,4 +555,35 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~count")) AS ?count)
   BIND(IRI(CONCAT(STR($this), "/~count-aria-hidden")) AS ?countHidden)
   BIND(IRI(CONCAT(STR($this), "/~count-text")) AS ?countText)
+}""" .
+c:CountBadgeRendering-sparql-text a sem:Rule ;
+    sem:implements c:CountBadgeRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CountBadge ; c:collection ?collection .
+  OPTIONAL { $this c:memberProperty ?declared }
+  BIND(COALESCE(?declared, tree:member) AS ?via)
+  OPTIONAL { $this c:memberClass ?class }
+  OPTIONAL { ?collection c:memberCount ?all }
+  OPTIONAL { $this c:memberClass ?wanted . ?collection c:classCount ?classRow . ?classRow c:countClass ?wanted ; c:count ?ofClass }
+  { SELECT (COUNT(DISTINCT ?m) AS ?direct) WHERE {
+      $this c:collection ?c ; c:memberProperty ?p . FILTER(?p != tree:member)
+      ?c ?p ?m .
+      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?k . ?m a/rdfs:subClassOf* ?k })
+  } }
+  BIND(IF(?via != tree:member, ?direct, IF(BOUND(?class), COALESCE(?ofClass, 0), COALESCE(?all, 0))) AS ?counted)
+  BIND(STR(?counted) AS ?number)
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
+  BIND(CONCAT("[", IF(BOUND(?label), CONCAT(?number, " ", ?label), ?number), "]") AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
 }""" .

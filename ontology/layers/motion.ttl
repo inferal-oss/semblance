@@ -11,8 +11,9 @@
 # re-values them for its subtree: Reduced keeps opacity changes short, drops
 # the springs, makes long movements instant (move-fade fades in what they
 # bring instead) and slows the loops; None makes every change instant and
-# stills the loops. It is pure style: a hookable property whose values carry
-# token overrides.
+# stills the loops; System (Match) is Full, or Reduced where the system asks for
+# reduced motion (prefers-reduced-motion). It is pure style: a hookable property
+# whose values carry token overrides.
 
 <https://semblance.dev/ns/motion> a owl:Ontology ;
     rdfs:label "Semblance motion layer"@en .
@@ -44,3 +45,6 @@ mot:None a mot:Preference ; rdfs:label "None"@en ; sem:symbol "–" ; sem:order 
                  [ sty:property "--sem-duration-move" ; sty:raw "0ms" ] ,
                  [ sty:property "--sem-move-fade" ; sty:raw "none" ] ,
                  [ sty:property "--sem-duration-loop" ; sty:raw "0ms" ] .
+mot:System a mot:Preference ; rdfs:label "Match"@en ; sem:symbol "◐" ; sem:order 4 ; sem:slug "system" ;
+    rdfs:comment "Follows the system's setting: reduced motion where it asks for it (prefers-reduced-motion), full otherwise."@en ;
+    sty:underMedia [ sty:media "(prefers-reduced-motion: reduce)" ; sty:as mot:Reduced ] .

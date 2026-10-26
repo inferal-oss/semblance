@@ -194,6 +194,26 @@ describe('the room bookings example', () => {
     expect(h.refusing()).toContain('hopper: That room is booked then.')
   })
 
+  for (const [kind, prefer] of [['oxigraph', 'sparql'], ['wat', 'sparql'], ['oxigraph', 'function']] as const) {
+    it(`refuses in the viewer's language: the objections, the shapes and the toast (${kind}, ${prefer})`, () => {
+      const h = dragging(prefer, kind)
+      h.screen.engine.reconfigure({ languages: ['de'] })
+      h.shell.flush()
+      h.press(h.entry('Planning'), ' ')
+      expect(h.refusing()).toEqual([
+        'mon-12: Der Raum ist dann belegt.',
+        'mon-13: Der Raum ist dann belegt.',
+        'tue-13: Der Raum ist dann belegt.',
+        'fri-14: Der Raum ist dann belegt.',
+        'fri-15: Der Raum ist dann belegt.',
+        'babbage: Babbage hat 4 Plätze.',
+      ])
+      h.press(h.entry('Planning'), 'Escape')
+      h.drop('Retro', h.slot('mon', 13))
+      expect(h.toasts()).toContain('Der Raum ist dann belegt.')
+    })
+  }
+
   for (const kind of ['oxigraph', 'wat'] as const) {
     it(`renders the same with SPARQL (${kind}) and with function rules, while carrying and after drops`, () => {
       const [a, b] = [dragging('sparql', kind), dragging('function', 'oxigraph')]

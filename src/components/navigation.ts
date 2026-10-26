@@ -1,19 +1,24 @@
 // Function rules and reactions for the navigation components (ontology/components/navigation.ttl).
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
-import type { FnRule } from '../engine/context.ts'
-import { C, MOD, NS, XSD_INTEGER } from '../ns.ts'
-import { el, hashKey, marked, md5Key } from './data.ts'
+import type { FnRule, Out } from '../engine/context.ts'
+import { C, MOD, NS, RDF_TYPE, XSD_INTEGER } from '../ns.ts'
+import { el, marked, md5Key } from './data.ts'
 import { isTrue, labelOf, named, nodes, num, text } from './util.ts'
 
 const C_ITEMS = NS.c + 'items'
 const C_PARENT_PROPERTY = NS.c + 'parentProperty'
+const C_HAS_STEP = NS.c + 'hasStep'
+const C_STEP_OF = NS.c + 'stepOf'
+const C_STEP_UP = NS.c + 'stepUp'
+const C_TRAIL_UP = NS.c + 'trailUp'
 const C_PAGE = NS.c + 'page'
 const C_PAGES = NS.c + 'pages'
 const C_GOES_TO = NS.c + 'goesTo'
 const C_STEPS = NS.c + 'steps'
 const C_CURRENT = NS.c + 'current'
 const C_NAVIGABLE = NS.c + 'navigable'
+const C_HREF = NS.c + 'href'
 
 const NONE = { add: [], remove: [] }
 
@@ -48,6 +53,54 @@ function trail(ctx: Parameters<FnRule>[0], end: NamedNode, parent: Term, upTo?: 
   return out
 }
 
+// --- the breadcrumbs' building blocks (their SPARQL twins in navigation.ttl) ---------------------
+// The hierarchy along c:parentProperty as fixed-predicate edges between step nodes minted under
+// the breadcrumbs, and the step each trail takes up, for the SPARQL rendering to walk.
+
+const stepNode = (o: Out, node: Term) => o.node('at-' + encodeForUri(node.value))
+
+const breadcrumbSteps: FnRule = (ctx, focus) => {
+  const prop = ctx.object(focus, C_PARENT_PROPERTY)
+  if (!named(prop)) return []
+  const o = ctx.out(focus)
+  for (const q of ctx.untraced(() => ctx.match(null, prop, null))) {
+    if (!named(q.subject) || !named(q.object)) continue
+    const at = stepNode(o, q.subject)
+    const up = stepNode(o, q.object)
+    o.t(focus, C_HAS_STEP, at).t(focus, C_HAS_STEP, up).t(at, C_STEP_OF, q.subject).t(at, C_STEP_UP, up).t(up, C_STEP_OF, q.object)
+  }
+  return o.quads
+}
+breadcrumbSteps.watches = () => new Set([RDF_TYPE, C_PARENT_PROPERTY])
+
+const breadcrumbTrail: FnRule = (ctx, focus) => {
+  const prop = ctx.object(focus, C_PARENT_PROPERTY)
+  if (!named(prop)) return []
+  const upTo = ctx.object(focus, NS.c + 'upTo')
+  const o = ctx.out(focus)
+  const parents = new Map<string, NamedNode[]>()
+  for (const q of ctx.untraced(() => ctx.match(null, prop, null))) {
+    if (named(q.subject) && named(q.object)) parents.set(q.subject.value, [...(parents.get(q.subject.value) ?? []), q.object])
+  }
+  const reachesMemo = new Map<string, boolean>()
+  const reaches = (n: string): boolean => {
+    if (!upTo || n === upTo.value) return true
+    const known = reachesMemo.get(n)
+    if (known !== undefined) return known
+    reachesMemo.set(n, false)
+    const r = (parents.get(n) ?? []).some((p) => reaches(p.value))
+    reachesMemo.set(n, r)
+    return r
+  }
+  for (const [n, ps] of parents) {
+    if (upTo && n === upTo.value) continue
+    const up = ps.filter((p) => p.value !== n && reaches(p.value)).sort((a, b) => (a.value < b.value ? -1 : 1))[0]
+    if (up) o.t(stepNode(o, ctx.nn(n)), C_TRAIL_UP, stepNode(o, up))
+  }
+  return o.quads
+}
+breadcrumbTrail.watches = () => new Set([RDF_TYPE, C_PARENT_PROPERTY, NS.c + 'upTo'])
+
 const breadcrumbs: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const target = ctx.object(focus, C.controls)
@@ -68,7 +121,7 @@ const breadcrumbs: FnRule = (ctx, focus) => {
   }
   const last = crumbs.length - 1
   const lis = crumbs.map((crumb, i) => {
-    const id = 'c' + hashKey(crumb.value)
+    const id = 'c' + md5Key(crumb.value)
     const label = labelOf(ctx, crumb)
     let content: NamedNode
     if (i === last) {
@@ -77,7 +130,13 @@ const breadcrumbs: FnRule = (ctx, focus) => {
     } else if (navigates) {
       content = el(o, `${id}-link`, 'Button', { type: 'button', class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
       o.t(content, C.selects, crumb)
-    } else content = el(o, `${id}-crumb`, 'Span', { class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
+    } else {
+      // A link where the navigation layer resolved the crumb (a c:Link with c:to: nav:href), else c:href.
+      const href = (ctx.object(crumb, NS.nav + 'href') ?? ctx.object(crumb, C_HREF))?.value
+      content = href === undefined
+        ? el(o, `${id}-crumb`, 'Span', { class: 'sem-crumb' }, [o.text(`${id}-text`, label)])
+        : el(o, `${id}-link`, 'A', { class: 'sem-crumb', href }, [o.text(`${id}-text`, label)])
+    }
     const parts = [content]
     if (i < last) parts.push(el(o, `${id}-sep`, 'Span', { class: 'sem-sep', 'aria-hidden': 'true' }, [o.text(`${id}-sep-text`, '/')]))
     return el(o, id, 'Li', {}, parts)
@@ -293,6 +352,8 @@ export const functions: Record<string, FnRule> = {
   'segmented:picker': picker,
   'nav:counts': counts,
   'nav:breadcrumbs': breadcrumbs,
+  'nav:breadcrumb-steps': breadcrumbSteps,
+  'nav:breadcrumb-trail': breadcrumbTrail,
   'nav:pagination': pagination,
   'nav:stepper': stepper,
 }

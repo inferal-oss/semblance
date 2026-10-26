@@ -118,13 +118,18 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 - **Keyboard**: `key:shortcut "mod+k"` on any component gives
   `aria-keyshortcuts`, a hint (on the root, or the part its class names:
   `key:hintPart`), and activation by key press (through the component's own
-  click reactions). A component whose control is a text field is focused
+  click reactions); `key:hint` shows and announces a key the same way without
+  binding it (a button that opens what a command opens). A component whose control is a text field is focused
   instead, its text selected, and an Escape nothing else uses gives the focus
   back ("/" goes to the Reference page's search). `key:Command` is a shortcut that belongs to
   no component: its press is an event its reactions handle (Z pauses the
-  inspector). Component classes declare arrow-key navigation patterns
+  inspector); one that `c:opens` an overlay opens it (⌘K opens the command
+  palette). Component classes declare arrow-key navigation patterns
   (`key:navigation`: roving focus for menus, tabs, trees, accordions).
-  `c:ShortcutList` lists every shortcut.
+  `c:ShortcutList` lists every shortcut; a `c:CommandPalette` lists every
+  command, every component with a shortcut and every place of the app,
+  filtered as one types, and runs the one picked (its key press, its click,
+  or going there), the recent ones first.
 - **Component shapes**: SHACL node shapes on component classes
   (`ontology/shapes/components.ttl`); the shapes layer validates every
   component, records `sh:ValidationResult`s, outlines offenders and
@@ -158,6 +163,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   dragged in from outside the page into a drag of the dnd: layer (each zone shows its reception),
   offers each arriving file to its target so its SHACL decides, and uploads accepted files with
   progress, as events. `c:FileDrop` (Inputs) is built on it.
+- **Outlines** (`ol:`): `ol:label` names any component; a component whose `ol:shows` is true
+  outlines the named components inside it, dashed, with the name in a tag (in the viewer's
+  language), as overlays that move nothing. A switch on `ol:shows` turns them on and off.
 - **Announcements**: reactions say what they mean (`ann:announces`); a
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
@@ -186,7 +194,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   Forward and typed addresses as `nav:Navigate` events. A `c:Link` with `c:to` a
   resource goes to the location that shows it, found by walking up the component
   tree to the switches that show it (`#components/inputs/inp-codes-spec`), and the
-  target is brought into view once rendered.
+  target is brought into view once rendered. A reaction goes somewhere the same
+  way by asking for it (`?x nav:goTo ?resource`): the effect makes it a step
+  and follows it.
 
 Our vocabularies are aligned with DCMI, SKOS, schema.org, ActivityStreams,
 PROV-O and others in `ontology/alignments.ttl`, with the strength of each link
@@ -202,7 +212,11 @@ the component set. The demo's **Components** page shows all of it.
   node, the value, and whether the control is checked.
 - Reactions are `beh:deletes` / `beh:inserts` CONSTRUCTs over `$event` / `$this`,
   with function fallbacks for stores without SPARQL. All matching reactions see
-  the pre-event state, and their union is applied as one delta.
+  the pre-event state, and their union is applied as one delta. A reaction may
+  raise a further event on another node (`?node beh:raise key:Press`): the bus
+  records it after this one (`beh:raisedBy`), for that node's own reactions.
+- A modal overlay (`aria-modal`) takes the focus when it opens (its `autofocus`
+  element), keeps Tab inside, and gives the focus back when it closes.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member
@@ -235,6 +249,11 @@ it demonstrates (`c:demonstrates`), and `test/gallery.test.ts` keeps it on the
 page of their group. The whole demo
 (`demo/app.ttl`) is built from these; the host only mounts it and performs
 effects of graph state.
+
+A `c:TiledWorkspace` is a tree of split views whose panes are sortable tabs: a tab
+dragged onto other tabs moves there, onto an edge of a pane splits that pane, and tabs
+left with none close, each a reaction to one drop. See
+[Tiled workspaces](docs/TILED-WORKSPACES.md).
 
 A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 (`prov:wasDerivedFrom`), and hosted on a `c:Desktop` that is not part of any
@@ -300,8 +319,9 @@ or its history is:
 - correlated sub-patterns in SPARQL use `EXISTS` / `LATERAL`, not `OPTIONAL` /
   `UNION`, which Oxigraph plans as scans.
 
-Two tests guard this. `test/cost.test.ts` measures ten interactions (toggle,
-type, hover, density, theme, tabs, page, source flip, window move, add) in
+Two tests guard this. `test/cost.test.ts` measures eleven interactions (toggle,
+type, hover, density, theme, tabs, page, source flip, window move, add, the
+command palette) in
 work counters: rule runs, derived triples written, triples matched, SPARQL
 result rows and DOM operations. They must not grow when the list grows by 300
 items and the history by 250 events. `test/soak.test.ts` runs 3,600 events on
@@ -315,7 +335,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen, outline |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -325,7 +345,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
 | `src/components/` | function rules and reactions, one module per group |
-| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard and fullscreen layers |
+| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard, fullscreen and outlines layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
 | `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |

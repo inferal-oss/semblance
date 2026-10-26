@@ -6,6 +6,7 @@
 // graph before the first projection, writes the graph back to the URL after input
 // changes (coalesced, one history step per change), turns Back, Forward and typed
 // URLs into nav:Navigate events, and brings a followed target into view.
+import { md5 } from './components/data.ts'
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from './behaviour/events.ts'
 import type { EventBus } from './behaviour/events.ts'
@@ -14,12 +15,14 @@ import { NAV_GRAPH, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_BOOLEAN
 import type { Delta } from './rdf.ts'
 import type { Runtime } from './runtime.ts'
 import type { Factory, GraphStore } from './store/types.ts'
+import { motionCalmed } from './layers/motion.ts'
 
 const NAV = NS.nav
 const C = NS.c
 const SH = NS.sh
 const RDFS_RANGE = NS.rdfs + 'range'
 const URL_CARRIERS = new Set([NAV + 'Fragment', NAV + 'Query'])
+const GO_TO = NAV + 'goTo'
 
 // --- the model, read from the graph ----------------------------------------------------------
 
@@ -554,15 +557,48 @@ export class Navigation {
 
   private changed(graph: string | undefined, delta: Delta) {
     if (graph !== undefined) return
+    // Requests to go somewhere (nav:goTo), performed once this change is settled.
+    const goes = delta.add.filter((q) => q.predicate.value === GO_TO)
+    if (goes.length) {
+      const first = !this.going.length
+      this.going.push(...goes)
+      if (first) (this.opts.schedule ?? queueMicrotask)(() => this.go())
+    }
     const loc = this.location()
     let touched = false
     for (const q of [...delta.add, ...delta.remove]) {
+      if (q.predicate.value === GO_TO) continue
       if (q.predicate.value.startsWith(NAV)) this.model = undefined
       if (this.model === undefined || loc?.dimensions.some((d) => d.property === q.predicate.value && d.subject.equals(q.subject))) touched = true
     }
     if (!touched || this.pending) return
     this.pending = true
     ;(this.opts.schedule ?? queueMicrotask)(() => this.pending && this.flush())
+  }
+
+  /** Requests to go somewhere (nav:goTo) not performed yet. */
+  private going: Quad[] = []
+
+  /**
+   * Perform the nav:goTo requests: they are taken out of the graph, and the last one is gone to
+   * as a followed link to its resource is: a step in the history, then followed (a nav:Navigate
+   * event, the resource brought into view). A resource no location shows goes nowhere.
+   */
+  private go() {
+    const requests = this.going.splice(0)
+    const runtime = this.runtime
+    if (!runtime || !requests.length) return
+    const f = this.store.factory
+    const stated = requests.filter((q) => this.store.match(q.subject, q.predicate, q.object, f.defaultGraph()).length)
+    if (stated.length) runtime.apply({ add: [], remove: stated })
+    const address = addressOf(this.r, requests.at(-1)!.object)
+    if (address === undefined) return
+    // Anything the change wrote is spelled first, so the step goes from where it left us.
+    if (this.pending) this.flush()
+    const href = this.url.pathname + this.url.search + (address.startsWith('#') ? address : '#' + address)
+    if (href === this.url.pathname + this.url.search + this.url.hash) this.history.replaceState(null, '', href)
+    else this.history.pushState(null, '', href)
+    this.follow()
   }
 
   /** Write the graph's location to the URL now (if it changed). */
@@ -669,12 +705,12 @@ export class Navigation {
     attempt(tries)
   }
 
-  /** Smooth unless the location's root asks for less motion (mot:preference) or the system does. */
+  /** Smooth unless the location's root asks for less motion (mot:preference), or follows the system and it does. */
   private smooth(): boolean {
     const root = this.location()?.root
-    const pref = root && this.store.match(this.store.factory.namedNode(root), this.store.factory.namedNode(NS.mot + 'preference'), null)[0]?.object.value
-    if (pref && pref !== NS.mot + 'Full') return false
-    return !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const f = this.store.factory
+    const pref = root && this.store.match(f.namedNode(root), f.namedNode(NS.mot + 'preference'), null)[0]?.object
+    return !motionCalmed(pref ? this.store.match(pref as NamedNode, f.namedNode(SEM.slug), null)[0]?.object.value : undefined)
   }
 }
 
@@ -701,6 +737,25 @@ const linkDestination: FnRule = (ctx, focus) => {
   return href === undefined ? [] : ctx.out(focus).t(focus, NAV + 'href', href).quads
 }
 
+/**
+ * c:LinkCurrent: the links that go to the address the location shows now (its fragment, as links
+ * spell it) are nav:current. Found by their address, so a step costs the links it changes.
+ */
+const linkCurrent: FnRule = (ctx, focus) => {
+  const address = ctx.object(focus, NAV + 'address')?.value
+  if (address === undefined) return []
+  const fragment = address.includes('#') ? address.slice(address.indexOf('#')) : '#'
+  const r = ruleReader(ctx)
+  const links = [
+    ...ctx.match(null, NAV + 'href', ctx.f.literal(fragment)).map((q) => q.subject),
+    ...ctx.match(null, C + 'href', ctx.f.literal(fragment)).map((q) => q.subject).filter((s) => !ctx.object(s, NAV + 'href')),
+  ].filter((s) => isA(r, s, C + 'Link'))
+  const o = ctx.out(focus)
+  const yes = ctx.f.literal('true', ctx.nn(XSD_BOOLEAN))
+  for (const link of new Set(links)) o.t(link, NAV + 'current', yes)
+  return o.quads
+}
+
 /** nav:Follow: what the URL in the event says, written into the graph. */
 const follow: ReactionFn = (ctx) => {
   const r = storeReader(ctx.runtime.store)
@@ -709,5 +764,23 @@ const follow: ReactionFn = (ctx) => {
   return loc && address !== undefined ? followDelta(r, loc, address) : { add: [], remove: [] }
 }
 
-export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination }
+/**
+ * nav:Containment: each link of this containment property, from a container to what it holds
+ * (directly or through an RDF list), as an edge of its own (for the destinations' SPARQL).
+ */
+const containment: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const edge = (parent: Term, child: Term) => {
+    const e = o.node('up-' + md5(parent.value + ' ' + child.value))
+    o.t(e, NAV + 'from', child).t(e, NAV + 'to', parent)
+  }
+  for (const q of ctx.match(null, focus, null)) {
+    if (q.subject.termType !== 'NamedNode') continue
+    if (q.object.termType === 'NamedNode') edge(q.subject, q.object)
+    else for (const member of list(ruleReader(ctx), q.object)) if (member.termType === 'NamedNode') edge(q.subject, member)
+  }
+  return o.quads
+}
+
+export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
 export const locationReactions: Record<string, ReactionFn> = { 'navigation:follow': follow }

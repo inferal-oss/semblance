@@ -40,7 +40,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:TextArea ; sty:part "> textarea" ;
     sty:declares [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
                  [ sty:property "width" ; sty:raw "100%" ] ,
-                 [ sty:property "min-height" ; sty:raw "var(--control-h, 38px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "padding" ; sty:raw "10px var(--control-px, 14px)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
@@ -356,34 +356,34 @@
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
-                 [ sty:property "gap" ; sty:raw "calc(var(--control-h, 38px) * 0.16)" ] .
+                 [ sty:property "gap" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 0.16)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-cell" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,
                  [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
-                 [ sty:property "width" ; sty:raw "calc(var(--control-h, 38px) * 1.05)" ] ,
-                 [ sty:property "height" ; sty:raw "calc(var(--control-h, 38px) * 1.3)" ] ,
+                 [ sty:property "width" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 1.05)" ] ,
+                 [ sty:property "height" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 1.3)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
                  [ sty:property "background" ; sty:token tok:surface-sunken ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "font-family" ; sty:token tok:font-mono ] ,
-                 [ sty:property "font-size" ; sty:raw "calc(var(--control-h, 38px) * 0.55)" ] ,
+                 [ sty:property "font-size" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 0.55)" ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "transition" ; sty:raw "border-color var(--sem-motion), box-shadow var(--sem-motion), background var(--sem-motion)" ] .
 # On a phone the cells give way rather than wrap: each may narrow (to about two thirds) before the
 # row breaks, so a short code stays on one line and a long one still wraps.
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-cell" ; sty:atWidth sty:CompactWidth ;
-    sty:declares [ sty:property "flex" ; sty:raw "1 1 calc(var(--control-h, 38px) * 0.7)" ] ,
-                 [ sty:property "max-width" ; sty:raw "calc(var(--control-h, 38px) * 1.05)" ] ,
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 calc(var(--control-h, var(--sem-control-height)) * 0.7)" ] ,
+                 [ sty:property "max-width" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 1.05)" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-sep" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part "> .sem-code-box > .sem-code-cells" ; sty:atWidth sty:CompactWidth ;
-    sty:declares [ sty:property "gap" ; sty:raw "calc(var(--control-h, 38px) * 0.12)" ] .
+    sty:declares [ sty:property "gap" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 0.12)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:part ".sem-code-sep" ;
-    sty:declares [ sty:property "width" ; sty:raw "calc(var(--control-h, 38px) * 0.3)" ] ,
+    sty:declares [ sty:property "width" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 0.3)" ] ,
                  [ sty:property "height" ; sty:raw "2px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
                  [ sty:property "background" ; sty:token tok:faint ] .
@@ -441,7 +441,7 @@
     sty:declares [ sty:property "border-start-end-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
                  [ sty:property "border-end-end-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part ".sem-code-sep" ;
-    sty:declares [ sty:property "margin-inline" ; sty:raw "calc(var(--control-h, 38px) * 0.16)" ] .
+    sty:declares [ sty:property "margin-inline" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) * 0.16)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:CodeInput ; sty:when c:Joined ; sty:part "> .sem-code-box:focus-within .sem-code-cell[data-state=active]" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "z-index" ; sty:raw "1" ] .

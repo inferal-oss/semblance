@@ -11,8 +11,8 @@
 #
 #   scripts/test-queue.sh npx vitest run --maxWorkers=2 test/foo.test.ts
 #
-# A run holds its slot for at most SEMBLANCE_RUN_LIMIT seconds (default 1800, enough for the full
-# suite with both slots busy): past that it and every process it started are stopped (exit 124), so
+# A run holds its slot for at most SEMBLANCE_RUN_LIMIT seconds (default 1800; the full suite no longer
+# fits in one run, so `npm run test:full` runs it in shards, each its own run): past that it and every process it started are stopped (exit 124), so
 # a stuck run cannot hold a slot for the others. Each test also has its own limit (vite.config.ts).
 #
 # SEMBLANCE_QUEUE / SEMBLANCE_LOCK override the queue directory and lock path (tests of this script).
@@ -41,12 +41,17 @@ trap 'rm -f "$Q/$TICKET" "$STARTED"; exit 130' INT TERM HUP
 
 announced=""
 while :; do
-  # Forget tickets whose callers are gone (killed, timed out).
+  # Forget tickets whose callers are gone (killed, timed out). Ask ps, not kill -0: kill -0 also fails
+  # with EPERM for a live caller this one may not signal (a sandboxed session), which dropped live
+  # tickets and left their callers waiting forever.
   for f in "$Q"/*; do
     [ -e "$f" ] || continue
-    kill -0 "${f##*-}" 2>/dev/null || rm -f "$f"
+    ps -p "${f##*-}" >/dev/null 2>&1 || rm -f "$f"
   done
+  # A ticket removed by someone else anyway comes back under its own name, so its place is kept.
+  [ -e "$Q/$TICKET" ] || touch "$Q/$TICKET"
   rank="$(ls "$Q" | sort | grep -n "^$TICKET\$" | cut -d: -f1)"
+  [ -n "$rank" ] || rank=999999
   if [ "$rank" -le "$SLOTS" ]; then
     i=1
     while [ "$i" -le "$SLOTS" ]; do

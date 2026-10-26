@@ -28,8 +28,12 @@ iv:Strategy a owl:Class ; rdfs:comment "How a view is kept up to date."@en .
 iv:strategy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Strategy ;
     rdfs:comment """Asked for on a view (iv:Incremental makes a fallback an error), and stated by the
 runtime in the views graph: what the view got."""@en .
+# iv:strategy iv:Incremental on a SPARQL rule (or its rendering) maintains the rule as a view: its
+# query partitioned by $this, each focus's output read from the view (docs/COMPONENTS.md).
 iv:Incremental a iv:Strategy ; rdfs:label "incremental"@en ;
     rdfs:comment "Every operator does work in proportion to the change, not to the data."@en .
+iv:Auto a iv:Strategy ; rdfs:label "as it can"@en ;
+    rdfs:comment "Asked for on a view whose query may not be maintainable (one typed into the workbench): a fallback to recompute is expected - no warning, and no error in strict mode, which still compares it."@en .
 iv:Recompute a iv:Strategy ; rdfs:label "recomputed"@en ;
     rdfs:comment "Re-run from scratch whenever an input changes, and diffed (the fallback)."@en .
 iv:fallback a owl:DatatypeProperty ; rdfs:domain iv:View ;
@@ -43,11 +47,41 @@ iv:window a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Window ;
     rdfs:comment "Only the members inside this window count; they leave it as time passes."@en .
 iv:Window a owl:Class .
 iv:SlidingWindow a owl:Class ; rdfs:subClassOf iv:Window ;
-    rdfs:comment "The members whose timestamp is within iv:range of now (wall clock). One timer, set to the next expiry, moves it."@en .
+    rdfs:label "sliding window"@en , "ковзне вікно"@uk , "gleitendes Fenster"@de , "نافذة منزلقة"@ar ;
+    rdfs:comment "The members whose timestamp is within iv:range of now. On the wall clock, one timer, set to the next expiry, moves it."@en .
 iv:range a owl:DatatypeProperty ; rdfs:domain iv:Window ; rdfs:range xsd:dayTimeDuration ;
     rdfs:comment "How far back a sliding window reaches (e.g. \"PT30S\")."@en .
+iv:TumblingWindow a owl:Class ; rdfs:subClassOf iv:Window ;
+    rdfs:label "tumbling window"@en , "перекидне вікно"@uk , "springendes Fenster"@de , "نافذة متعاقبة"@ar ;
+    rdfs:comment """Fixed buckets of iv:size (epoch-aligned: a member's bucket starts at floor(t / size) × size); the
+newest iv:keep buckets up to now's are inside (default 1, the current one). With iv:bucketVariable,
+each member's bucket start is bound to that variable (the body does not bind it), so a view can
+GROUP BY it: counts per minute of the last ten minutes. A bucket leaves, all at once, when keep
+newer ones have begun."""@en .
+iv:size a owl:DatatypeProperty ; rdfs:domain iv:TumblingWindow ; rdfs:range xsd:dayTimeDuration ;
+    rdfs:comment "A tumbling window's bucket length (e.g. \"PT1M\")."@en .
+iv:keep a owl:DatatypeProperty ; rdfs:domain iv:TumblingWindow ; rdfs:range xsd:positiveInteger ;
+    rdfs:comment "How many buckets a tumbling window keeps, the current one included (default 1)."@en .
+iv:bucketVariable a owl:DatatypeProperty ; rdfs:domain iv:TumblingWindow ; rdfs:range xsd:string ;
+    rdfs:comment "The variable (e.g. \"bucket\") a member's bucket start is bound to: a literal of its timestamp's datatype."@en .
+iv:CountWindow a owl:Class ; rdfs:subClassOf iv:Window ;
+    rdfs:label "count window"@en , "вікно за кількістю"@uk , "Anzahlfenster"@de , "نافذة عددية"@ar ;
+    rdfs:comment """The latest ldes:amount members of the stream by timestamp (ties by IRI), whether or not the
+view's body has rows for them. No clock: an appended member pushes the oldest out, a retired one
+lets the next older back in."""@en .
 iv:timeBy a owl:ObjectProperty ; rdfs:domain iv:Window ; rdfs:range owl:DatatypeProperty ;
-    rdfs:comment "The member's timestamp (default: the stream's ldes:timestampPath)."@en .
+    rdfs:comment "The member's timestamp (default: the stream's ldes:timestampPath): an xsd:dateTime, or a number of milliseconds."@en .
+iv:Clock a owl:Class ; rdfs:comment "What a window's now is."@en .
+iv:clock a owl:ObjectProperty ; rdfs:domain iv:Window ; rdfs:range iv:Clock .
+iv:WallClock a iv:Clock ; rdfs:label "wall clock"@en , "годинник"@uk , "Uhrzeit"@de , "ساعة الحائط"@ar ;
+    rdfs:comment "Now is the clock's time (the default); one timer, set to the earliest expiry of every window, moves windows."@en .
+iv:EventTime a iv:Clock ; rdfs:label "event time"@en , "час подій"@uk , "Ereigniszeit"@de , "وقت الحدث"@ar ;
+    rdfs:comment """Now is the watermark: the greatest timestamp among the stream's members, less iv:lateness. Expiry
+follows the data and needs no timer; timestamps need not be dates (net:Capture's are milliseconds of
+the page). A member behind the watermark is late: inside the window it still counts, behind it it
+does not (iv:lateMembers counts them)."""@en .
+iv:lateness a owl:DatatypeProperty ; rdfs:domain iv:Window ; rdfs:range xsd:dayTimeDuration ;
+    rdfs:comment "How far the watermark of an event-time window stays behind the greatest timestamp (default PT0S)."@en .
 iv:whileShown a owl:ObjectProperty ; rdfs:domain iv:View ;
     rdfs:comment """Maintain the view only while this component - or, given a class, one of its instances - is
 shown; otherwise it is suspended (no work per tick) and rebuilt from its inputs when shown again."""@en .
@@ -100,15 +134,21 @@ iv:materialize a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Materi
 iv:Materialization a owl:Class .
 iv:Graph a iv:Materialization ; rdfs:label "in the views graph"@en ;
     rdfs:comment "A SELECT view's rows written to the views graph as a result set (rs:)."@en .
+iv:Ephemeral a iv:Materialization ; rdfs:label "to subscribers only"@en ;
+    rdfs:comment "A CONSTRUCT view's triples are not written to the views graph: only subscribers (and since()) see them."@en .
+iv:ResultSet a iv:Materialization ; rdfs:label "rows only"@en ;
+    rdfs:comment """A SELECT's rows as a result set in the views graph (as iv:Graph), a CONSTRUCT's triples nowhere (as
+iv:Ephemeral): for a query whose text anyone may type (the workbench), whose triples must not become input."""@en .
 iv:multiplicity a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "How many times a result set's row occurs (when more than once)."@en .
 
-# Designed, not built yet (docs/IVM.md §7.3-7.4): iv:TumblingWindow (iv:size, iv:keep),
-# iv:CountWindow, iv:clock (iv:WallClock, iv:EventTime) with iv:lateness; iv:Ephemeral, iv:maxState.
+# Designed, not built yet (docs/IVM.md §8.1): iv:maxState.
 
 # --- each step, as data (iv:deltaLog) -------------------------------------------------------------
 # A view may record its ticks in a stream: one member per tick that changed it, saying what came
 # in and what that did to its groups, in the views graph. The stream's retention (ldes:amount)
-# says how many it keeps (default 12).
+# says how many it keeps (default 12). With iv:recordsChanges, the members carry the triples too.
+# The host reads the same changes without the graph: ViewHandle.since(tick), and src/view/replica.ts
+# sends them to another store (a tab, a worker) that holds the view's output from them alone.
 
 iv:deltaLog a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range ldes:EventStream ;
     rdfs:comment "A stream the runtime appends one iv:Delta to for each tick that changed this view."@en .
@@ -121,6 +161,13 @@ iv:changed a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:comment "Which g
 iv:entered a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:range xsd:integer ; rdfs:comment "Members that entered (weight +1)."@en .
 iv:left a owl:DatatypeProperty ; rdfs:domain iv:Delta ; rdfs:range xsd:integer ; rdfs:comment "Members that left (weight −1): retired, or out of the window."@en .
 iv:work a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Rows the tick processed."@en .
+iv:recordsChanges a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a delta log: each iv:Delta also lists the triples the tick added to and removed from the
+view's output (iv:added, iv:removed: rdf:Statement nodes minted under it), so a reader holding the
+output as of tick n catches up with the members whose iv:tick is greater - SPARQL alone, no
+re-evaluation. A CONSTRUCT's triples; a materialized SELECT's rs: rows."""@en .
+iv:added a owl:ObjectProperty ; rdfs:domain iv:Delta ; rdfs:range rdf:Statement ; rdfs:comment "A triple this tick added to the view's output."@en .
+iv:removed a owl:ObjectProperty ; rdfs:domain iv:Delta ; rdfs:range rdf:Statement ; rdfs:comment "A triple this tick removed from the view's output."@en .
 
 # --- the plan, as data (written by the runtime) ---------------------------------------------------------
 
@@ -167,3 +214,4 @@ iv:resultRows a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Ro
 iv:matches a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether the maintained result equalled that from-scratch run, when last checked (iv:checkedTick)."@en .
 iv:checkedTick a owl:DatatypeProperty ; rdfs:range xsd:integer .
+iv:lateMembers a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "Members of an event-time window's stream that arrived behind its watermark."@en .

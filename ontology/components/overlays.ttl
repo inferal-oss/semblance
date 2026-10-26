@@ -10,6 +10,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix a11y: <https://semblance.dev/ns/a11y#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 
 # Overlays components (DESIGN.md §3): Dialog, Drawer and Popover.
 #
@@ -28,8 +29,8 @@ c:Overlay a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "A component shown on demand, over the page (c:open). Closing it is one reaction for every kind."@en .
 
-c:opens a owl:ObjectProperty ; rdfs:domain c:Button ; rdfs:range c:Overlay ;
-    rdfs:comment "The overlay this button opens (sets its c:open true). The button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
+c:opens a owl:ObjectProperty ; rdfs:range c:Overlay ;
+    rdfs:comment "The overlay this button (or keyboard command, key:Command) opens: sets its c:open true. A button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
 
 # --- Dialog ----------------------------------------------------------------------------------------
 
@@ -83,11 +84,13 @@ WHERE {
   } UNION {
     $this a c:Dialog .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?title0)
     BIND(IF(COALESCE(?title0, "") != "", ?title0, ?none) AS ?title)
-    OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+    OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
     OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
     BIND(STR(?rawHelp) AS ?bodyText)
@@ -112,7 +115,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
+    OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
+  OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
@@ -154,7 +159,8 @@ WHERE {
   } UNION {
     $this a c:Dialog .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
     BIND(CONCAT("╔ ", STR(COALESCE(?localLabel, ?rawLabel, "dialog")), " ╗", COALESCE(CONCAT(" ", STR(?rawHelp)), "")) AS ?lineData)
@@ -227,11 +233,13 @@ WHERE {
   } UNION {
     $this a c:Drawer .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?title0)
     BIND(IF(COALESCE(?title0, "") != "", ?title0, ?none) AS ?title)
-    OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+    OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
     OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
     BIND(STR(?rawHelp) AS ?bodyText)
@@ -259,7 +267,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-text")) AS ?closeText)
     BIND(IRI(CONCAT(STR($this), "/~close-aria-label")) AS ?closeLabel)
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
+    OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
+  OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
     OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
@@ -301,7 +311,8 @@ WHERE {
   } UNION {
     $this a c:Drawer .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
     BIND(CONCAT("╔ ", STR(COALESCE(?localLabel, ?rawLabel, "drawer")), " ╗", COALESCE(CONCAT(" ", STR(?rawHelp)), "")) AS ?lineData)
@@ -359,8 +370,10 @@ CONSTRUCT {
 WHERE {
   $this a c:Popover .
   OPTIONAL { $this c:trigger ?rawTrigger }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label0)
   BIND(COALESCE(STR(?rawTrigger), ?label0) AS ?label)
@@ -399,8 +412,10 @@ CONSTRUCT {
 WHERE {
   $this a c:Popover .
   OPTIONAL { $this c:trigger ?rawTrigger }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label0)
   BIND(COALESCE(STR(?rawTrigger), ?label0) AS ?label)
@@ -436,6 +451,16 @@ c:PopoverToggle a beh:Reaction ;
 c:Opens a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Button ;
+    beh:deletes """CONSTRUCT { ?overlay c:open ?old } WHERE { $this c:opens ?overlay . ?overlay c:open ?old }""" ;
+    beh:inserts """CONSTRUCT { ?overlay c:open true } WHERE { $this c:opens ?overlay }""" ;
+    sem:function "overlay:open" .
+
+# A keyboard command opens an overlay the same way (`ui:openPalette a key:Command ; key:shortcut
+# "mod+k" ; c:opens ui:palette`): its key:Press sets c:open.
+c:CommandOpens a beh:Reaction ;
+    rdfs:label "Open"@en , "Відкрити"@uk , "Öffnen"@de , "فتح"@ar ;
+    beh:when key:Press ;
+    beh:sourceClass key:Command ;
     beh:deletes """CONSTRUCT { ?overlay c:open ?old } WHERE { $this c:opens ?overlay . ?overlay c:open ?old }""" ;
     beh:inserts """CONSTRUCT { ?overlay c:open true } WHERE { $this c:opens ?overlay }""" ;
     sem:function "overlay:open" .
@@ -477,5 +502,5 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-controls")) AS ?controls)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-expanded")) AS ?expanded)
-  BIND(IF(EXISTS { ?target a ?kind FILTER(?kind IN (c:Dialog, c:Drawer, c:Popover, c:Lightbox)) }, IRI(CONCAT(STR($this), "/~root-aria-haspopup")), ?none) AS ?hasPopup)
+  BIND(IF(EXISTS { ?target a ?kind FILTER(?kind IN (c:Dialog, c:Drawer, c:Popover, c:Lightbox, c:CommandPalette)) }, IRI(CONCAT(STR($this), "/~root-aria-haspopup")), ?none) AS ?hasPopup)
 }""" .

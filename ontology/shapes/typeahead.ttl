@@ -8,7 +8,8 @@
 # What well-formed typeaheads look like (ontology/components/typeahead.ttl), checked by the
 # component shapes layer. The shape applies to c:Combobox and c:TagInput alike.
 
-c:TypeaheadShape a sh:NodeShape ; sh:targetClass c:Typeahead ;
+# A command palette, also a typeahead, edits no property (shapes/palette.ttl).
+c:TypeaheadShape a sh:NodeShape ; sh:targetClass c:Combobox , c:TagInput ;
     sh:property [ sh:path c:controls ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
                   sh:message "A typeahead edits a property of one node (c:controls)." ] ,
                 [ sh:path c:property ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;

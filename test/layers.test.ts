@@ -124,7 +124,7 @@ describe('display axes', () => {
   it('hooks motion, contrast and density onto the shell and compiles their token overrides', () => {
     const h = showLayers()
     const shell = h.byId(`${UI}shell/~root`)
-    expect(shell.getAttribute('data-sem-motion')).toBe('full')
+    expect(shell.getAttribute('data-sem-motion')).toBe('system')
     expect(shell.getAttribute('data-sem-contrast')).toBe('standard')
     const option = (text: string) => [...h.document.querySelectorAll('[data-sem-c=segmented] button')].find((b) => b.textContent!.includes(text))!
     h.fire(option('None'), 'click')

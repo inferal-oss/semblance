@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -5,6 +6,7 @@
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -69,7 +71,10 @@
 c:Typeahead a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A text field with a list of options that typing filters (case- and diacritic-insensitively,
-the matched part highlighted). It edits c:property of the node it c:controls. Options: c:options, or the
+the matched part highlighted). The typed text is c:value, folded into c:foldedQuery; the options are
+c:TypeaheadOption components; the highlighted one is c:activeOption. A c:CommandPalette is one whose
+options are things to run (palette.ttl); the rest of this comment is about the typeaheads that edit a
+property: c:Combobox and c:TagInput. Such a typeahead edits c:property of the node it c:controls. Options: c:options, or the
 instances of c:optionClass (default: the property's rdfs:range), plus what a node lists (c:optionsFrom)
 and the values in use (c:optionsInUse), called by label or by prefixed name (c:optionNames). For
 thousands of options, c:optionLimit lists only the best matches. c:allowsCustom lets text that matches
@@ -135,7 +140,7 @@ c:mintBase a owl:DatatypeProperty ; rdfs:domain c:Typeahead ;
 
 # State (c:value, the typed text, is shared with the other inputs; c:expanded with disclosures).
 c:activeOption a rdf:Property ; rdfs:domain c:Typeahead ;
-    rdfs:comment "The highlighted option (an IRI or a literal: the value picking it commits). None: nothing is highlighted."@en .
+    rdfs:comment "The highlighted option (an IRI or a literal: the value picking it commits; in a command palette, the c:TypeaheadOption itself). None: nothing is highlighted (a palette then highlights its first shown option)."@en .
 # c:caret (workbench.ttl) is where the caret is; on a typeahead its presence also means the field
 # keeps the focus after an event (picking, removing a pill), and leaving the field removes it.
 
@@ -177,7 +182,8 @@ c:TypeaheadOption a owl:Class ;
     rdfs:comment """One option of a typeahead's list (minted by c:TypeaheadOptions under it): c:of the typeahead,
 c:option the value, with its c:label, c:searchKey and c:rank. It renders a role=option row, hidden
 while it does not match the typed text, the matched part in a <mark>."""@en ;
-    sem:slug "typeahead-option" .
+    sem:slug "typeahead-option" ;
+    key:rendersHint true .
 
 # Phrases, translated like the other c:Phrase individuals. "{}" stands for the typed text.
 c:NoMatches a c:Phrase ; rdfs:label "No matches"@en , "Нічого не знайдено"@uk , "Keine Treffer"@de , "لا توجد نتائج"@ar .
@@ -196,18 +202,22 @@ c:AlreadyAdded a c:Phrase ; rdfs:label "“{}” is already added"@en , "«{}» 
 
 c:TypeaheadTexts a sem:Rendering ;
     sem:targets c:Typeahead ;
+    sem:requires c:controls ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:follows c:controls ;
-    sem:functionOnly "It folds labels for matching: Unicode normalization (NFD) and the removal of combining marks, which SPARQL has no function for; and it picks labels in the viewer's language, a projection setting no query can see." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed, lower-cased); the labels themselves are picked from the viewer's languages in the graph." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadTexts-fn a sem:Rule ; sem:implements c:TypeaheadTexts ; sem:function "typeahead:texts" .
 
 c:TypeaheadValueTexts a sem:Rendering ;
     sem:targets c:Typeahead ;
+    sem:requires c:controls ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:follows c:controls ;
-    sem:functionOnly "It folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed), in the viewer's language, which SPARQL cannot." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed, lower-cased)." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadValueTexts-fn a sem:Rule ; sem:implements c:TypeaheadValueTexts ; sem:function "typeahead:values" .
 
 c:TypeaheadQuery a sem:Rendering ;
@@ -215,7 +225,8 @@ c:TypeaheadQuery a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches c:value ;
-    sem:functionOnly "It folds the typed text as the labels are folded (NFD, combining marks removed), which SPARQL cannot." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the typed text as the labels are folded (NFD, combining marks removed, lower-cased)." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function "typeahead:query" .
 
 # --- the field, the popup and their state ------------------------------------------------------------
@@ -224,7 +235,9 @@ c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function 
 # foot (help, a note, the error).
 
 c:TypeaheadRendering a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
+    sem:requires c:controls ;
     sem:stratum 0 ;
     sem:follows c:controls ;
     sem:readsMinted true .
@@ -299,6 +312,7 @@ WHERE {
   # The caption: the texts layer's (c:label, else the property's label, in the viewer's language).
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
+  OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
   OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   # A combobox shows its chosen option's label until something is typed.
@@ -316,8 +330,14 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-create")) AS ?createNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-already-added")) AS ?addedNode)
   LATERAL { OPTIONAL { ?noMatchesNode l10n:label ?noMatches0 } OPTIONAL { ?createNode l10n:label ?createPhrase0 } OPTIONAL { ?addedNode l10n:label ?addedPhrase0 } }
+  OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
+  OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
   OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) }
+  OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
+  OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
   OPTIONAL { c:CreatePhrase rdfs:label ?createPhrase1 FILTER(langMatches(lang(?createPhrase1), "en")) }
+  OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
+  OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
   OPTIONAL { c:AlreadyAdded rdfs:label ?addedPhrase1 FILTER(langMatches(lang(?addedPhrase1), "en")) }
   BIND(STR(COALESCE(?noMatches0, ?noMatches1)) AS ?noMatchesPhrase)
   BIND(STR(COALESCE(?createPhrase0, ?createPhrase1)) AS ?createPhrase)
@@ -449,6 +469,7 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:TagInput } AS ?multi)
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
+  OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
   OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   OPTIONAL { $this c:value ?typed0 }
@@ -480,7 +501,9 @@ WHERE {
 # it is not run: c:TypeaheadMatches mints the best few instead.
 
 c:TypeaheadOptions a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
+    sem:requires c:controls ;
     sem:stratum 0 ;
     sem:readsMinted true ;
     sem:unless c:optionLimit ;
@@ -546,6 +569,7 @@ WHERE {
 # writes only the rows that came, went or moved. Closed, it lists nothing.
 
 c:TypeaheadMatches a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:stratum 0 ;
     sem:readsMinted true ;
@@ -620,21 +644,26 @@ WHERE {
 # is cut out of the label, or the detail, where it is in the key. Hidden rows stay in the list
 # (they do not match now; the next keystroke may show them).
 
+# An option may also say what it does (c:help, a line after its label) and the keys that do the same
+# (key:hint: shown in Apple or other glyphs, as the keyboard layer's hints are, and announced with
+# aria-keyshortcuts) - a command palette's options do.
 c:TypeaheadOptionRendering a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TypeaheadOption ;
     sem:stratum 0 ;
     sem:follows c:of ;
-    sem:watches rdf:type , c:of , c:option , c:label , c:searchKey , c:matchKey , c:detail , c:foldedQuery .
+    sem:watches rdf:type , c:of , c:option , c:label , c:searchKey , c:matchKey , c:detail , c:help , key:hint , c:foldedQuery .
+c:TypeaheadOptionRendering-fn a sem:Rule ; sem:implements c:TypeaheadOptionRendering ; sem:modality mod:Screen ; sem:function "typeahead:option" .
 c:TypeaheadOptionRendering-sparql a sem:Rule ;
     sem:implements c:TypeaheadOptionRendering ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hidden ?hidden ; rdfhtml:attribute ?role ;
-        rdfhtml:hasChild ?text, ?gap, ?detailEl ; c:optionRow ?typeahead ; c:pick ?opt .
-  ?text a rdfhtml:Span ; rdfhtml:class "sem-ta-label" ; rdfhtml:hasChild ?pre, ?hit, ?post ; ord:immediatelyPrecedes ?gap .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hidden ?hidden ; rdfhtml:attribute ?role, ?shortcuts ;
+        rdfhtml:hasChild ?text, ?gap, ?detailEl, ?helpEl, ?keys ; c:optionRow ?typeahead ; c:pick ?opt .
+  ?text a rdfhtml:Span ; rdfhtml:class "sem-ta-label" ; rdfhtml:hasChild ?pre, ?hit, ?post ; ord:immediatelyPrecedes ?afterText .
   ?gap a rdfhtml:Text ; rdfhtml:data " " ; ord:immediatelyPrecedes ?detailEl .
-  ?detailEl a rdfhtml:Span ; rdfhtml:class "sem-ta-detail" ; rdfhtml:hasChild ?dpre, ?dhit, ?dpost .
+  ?detailEl a rdfhtml:Span ; rdfhtml:class "sem-ta-detail" ; rdfhtml:hasChild ?dpre, ?dhit, ?dpost ; ord:immediatelyPrecedes ?afterDetail .
   ?dpre a rdfhtml:Text ; rdfhtml:data ?dpreText ; ord:immediatelyPrecedes ?dafterPre .
   ?dhit a rdfhtml:Mark ; rdfhtml:hasChild ?dhitText ; ord:immediatelyPrecedes ?dpost .
   ?dhitText a rdfhtml:Text ; rdfhtml:data ?dhitData .
@@ -644,6 +673,15 @@ CONSTRUCT {
   ?hit a rdfhtml:Mark ; rdfhtml:hasChild ?hitText ; ord:immediatelyPrecedes ?post .
   ?hitText a rdfhtml:Text ; rdfhtml:data ?hitData .
   ?post a rdfhtml:Text ; rdfhtml:data ?postText .
+  ?helpEl a rdfhtml:Span ; rdfhtml:class "sem-ta-help" ; rdfhtml:hasChild ?helpText ; ord:immediatelyPrecedes ?keys .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?help .
+  ?keys a rdfhtml:Span ; rdfhtml:class "sem-ta-keys" ; rdfhtml:attribute ?keysHidden ; rdfhtml:hasChild ?apple, ?other .
+  ?keysHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?apple a rdfhtml:Kbd ; rdfhtml:class "sem-apple" ; rdfhtml:hasChild ?appleText ; ord:immediatelyPrecedes ?other .
+  ?appleText a rdfhtml:Text ; rdfhtml:data ?appleValue .
+  ?other a rdfhtml:Kbd ; rdfhtml:class "sem-other" ; rdfhtml:hasChild ?otherText .
+  ?otherText a rdfhtml:Text ; rdfhtml:data ?otherValue .
+  ?shortcuts a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue ?ariaValue .
 }
 WHERE {
   $this a c:TypeaheadOption ; c:of ?typeahead ; c:option ?opt ; c:label ?label0 ; c:searchKey ?key0 .
@@ -688,6 +726,35 @@ WHERE {
   BIND(IF(BOUND(?dhitData), IRI(CONCAT(STR($this), "/~dhit-text")), ?none) AS ?dhitText)
   BIND(IF(BOUND(?dpostText), IRI(CONCAT(STR($this), "/~dpost")), ?none) AS ?dpost)
   BIND(COALESCE(?dhit, ?dpost) AS ?dafterPre)
+  # What it does, and its keys (normalized and spelled as the keyboard layer's key:Shortcuts-sparql does).
+  OPTIONAL { $this c:help ?help0 FILTER(STR(?help0) != "") }
+  BIND(STR(?help0) AS ?help)
+  OPTIONAL { $this key:hint ?hint0 FILTER(STR(?hint0) != "") }
+  VALUES (?pluses ?ends ?modifiers) { ("(\\\\s*\\\\+\\\\s*)+" "^[\\\\s+]+|[\\\\s+]+$" "\\\\+(?:(?:mod|ctrl|alt|shift|meta)\\\\+)+") }
+  BIND(CONCAT("+", REPLACE(REPLACE(LCASE(STR(?hint0)), ?pluses, "+"), ?ends, ""), "+") AS ?parts)
+  BIND(CONTAINS(?parts, "+mod+") AS ?mod)
+  BIND(CONTAINS(?parts, "+ctrl+") AS ?ctrl)
+  BIND(CONTAINS(?parts, "+alt+") AS ?alt)
+  BIND(CONTAINS(?parts, "+shift+") AS ?shift)
+  BIND(CONTAINS(?parts, "+meta+") AS ?meta)
+  BIND(REPLACE(?parts, ?modifiers, "+") AS ?keyParts)
+  BIND(SUBSTR(?keyParts, 2, STRLEN(?keyParts) - 2) AS ?k0)
+  BIND(IF(STRLEN(?k0) = 1, UCASE(?k0), CONCAT(UCASE(SUBSTR(?k0, 1, 1)), SUBSTR(?k0, 2))) AS ?k)
+  BIND(CONCAT(IF(?mod, "⌘", ""), IF(?ctrl, "⌃", ""), IF(?alt, "⌥", ""), IF(?shift, "⇧", ""), IF(?meta, "◆", ""), ?k) AS ?appleValue)
+  BIND(CONCAT(IF(?mod, "Ctrl+", ""), IF(?ctrl, "Ctrl+", ""), IF(?alt, "Alt+", ""), IF(?shift, "Shift+", ""), IF(?meta, "Win+", ""), ?k) AS ?otherValue)
+  BIND(CONCAT(IF(?mod, "Control+", ""), IF(?ctrl, "Control+", ""), IF(?alt, "Alt+", ""), IF(?shift, "Shift+", ""), IF(?meta, "Meta+", ""),
+              IF(STRLEN(?k0) = 1, UCASE(?k0), ?k0)) AS ?ariaValue)
+  BIND(IF(BOUND(?help), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?helpEl)
+  BIND(IF(BOUND(?help), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~keys")), ?none) AS ?keys)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~keys-aria-hidden")), ?none) AS ?keysHidden)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~apple")), ?none) AS ?apple)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~apple-text")), ?none) AS ?appleText)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~other")), ?none) AS ?other)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~other-text")), ?none) AS ?otherText)
+  BIND(IF(BOUND(?hint0), IRI(CONCAT(STR($this), "/~root-aria-keyshortcuts")), ?none) AS ?shortcuts)
+  BIND(COALESCE(?helpEl, ?keys) AS ?afterDetail)
+  BIND(COALESCE(?gap, ?afterDetail) AS ?afterText)
 }""" .
 
 # --- the pills of a tag input --------------------------------------------------------------------------
@@ -696,6 +763,7 @@ WHERE {
 # options, it re-runs when the texts layer's nodes change (which it does when the values do).
 
 c:TagInputPills a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TagInput ;
     sem:stratum 0 ;
     sem:readsMinted true ;
@@ -757,6 +825,7 @@ WHERE {
     beh:inserts """CONSTRUCT { $this c:expanded true ; c:caret ?caret }
 WHERE {
   $event beh:node ?hit FILTER(STR(?hit) IN (CONCAT(STR($this), "/~input"), CONCAT(STR($this), "/~chevron")))
+  $this c:controls ?controlled .
   FILTER NOT EXISTS { $this c:expanded ?open FILTER(STR(?open) = "true") }
   FILTER NOT EXISTS { $this c:disabled ?disabled FILTER(STR(?disabled) = "true") }
   BIND(IF(STR(?hit) != CONCAT(STR($this), "/~input") && NOT EXISTS { $this c:caret ?at }, 0, ?none) AS ?caret)
@@ -770,7 +839,7 @@ c:TypeaheadClose a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:expanded ?open ; c:activeOption ?active ; c:caret ?caret ; c:value ?typed }
 WHERE {
   { $this c:expanded ?open } UNION { $this c:activeOption ?active } UNION { $this c:caret ?caret }
-  UNION { FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:TagInput } $this c:value ?typed }
+  UNION { FILTER NOT EXISTS { $this a/rdfs:subClassOf* c:TagInput } $this c:controls ?controlled ; c:value ?typed }
 }""" .
 
 # The arrow keys move through what the list shows: the options that match the typed text (a tag

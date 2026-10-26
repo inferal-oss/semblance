@@ -62,14 +62,15 @@ ui:ty-running-spec a c:Specimen ; c:demonstrates c:Text ; c:label "Running text"
 
 # --- links ---
 ui:ty-link-internal a c:Link ; c:label "Components" ; c:href "#components" .
+ui:ty-link-current a c:Link ; c:label "This page" ; c:href "#type" ; c:currentPage true .
 ui:ty-link-external a c:Link ; c:label "RDF/HTML specification" ; c:href "https://ia2.dev/spec/rdf-html" .
 ui:ty-link-success a c:Link ; c:label "All checks passed" ; c:href "#components" ; sty:tone sty:Success .
 ui:ty-link-danger a c:Link ; c:label "3 rules failed" ; c:href "#components" ; sty:tone sty:Danger .
 ui:ty-links-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ;
-    c:children ( ui:ty-link-internal ui:ty-link-external ui:ty-link-success ui:ty-link-danger ) .
+    c:children ( ui:ty-link-internal ui:ty-link-current ui:ty-link-external ui:ty-link-success ui:ty-link-danger ) .
 ui:ty-links a c:Flippable ; c:front ui:ty-links-spec .
 ui:ty-links-spec a c:Specimen ; c:demonstrates c:Link ; c:label "Link" ;
-    c:help "Accent by default, toned by sty:tone. Absolute http(s) addresses open in a new tab with rel=noopener, an ↗ mark, and a spoken hint taken from c:Link's own c:externalHint in the viewer's language." ;
+    c:help "Accent by default, toned by sty:tone. Absolute http(s) addresses open in a new tab with rel=noopener, an ↗ mark, and a spoken hint taken from c:Link's own c:externalHint in the viewer's language. c:currentPage true marks the page being shown (aria-current=page)." ;
     c:children ( ui:ty-links-row ) .
 
 # --- keys ---
