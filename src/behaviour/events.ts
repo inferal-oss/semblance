@@ -536,6 +536,14 @@ export class EventBus {
       if (trapTab(k, renderer.host)) return k.preventDefault()
       // Keys in slot content are the mounted projection's own (its bus navigates it).
       if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      // A linked menu item uses an anchor so Enter follows its destination. Menu
+      // keyboard semantics also require Space to choose that same item.
+      if (k.key === ' ' && renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) &&
+        (k.target as Element | null)?.matches?.('a[role="menuitem"]')) {
+        k.preventDefault()
+        ;(k.target as HTMLElement).click()
+        return
+      }
       // Tab stays inside an open modal overlay.
       if (modals.tab(k)) return k.preventDefault()
       const combo = comboOf(k, apple)

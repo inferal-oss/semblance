@@ -11,6 +11,7 @@ import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
 import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
+import { attachMenus } from './menu.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
 export { DEFAULT_LAYERS }
@@ -118,6 +119,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   })
   flush()
   scheduleWarmup()
+  const detachMenus = attachMenus(element, renderer)
   // Connectors are drawn where their ends are (nothing to do while there is none).
   const connectors = attachConnectors(element)
   // Files: a file:Pick opens the system picker, files dropped on a file drop's zone arrive, and
@@ -184,6 +186,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       detachFiles?.()
       detachFullscreen?.()
       detachIslands()
+      detachMenus()
       connectors.dispose()
       snaps.dispose()
       lightboxes.dispose()

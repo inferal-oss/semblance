@@ -164,10 +164,13 @@ ui:act-menu-sort a c:Menu ; c:label "Sort" ; c:icon "⇅" ; c:open false ; sty:s
     c:items ( ui:act-mi-name ui:act-mi-date ) .
 ui:act-mi-none a c:MenuItem ; c:label "Nothing" .
 ui:act-menu-off a c:Menu ; c:label "Disabled" ; c:disabled true ; c:items ( ui:act-mi-none ) .
-ui:act-menu-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-menu-actions ui:act-menu-new ui:act-menu-sort ui:act-menu-off ui:act-menu-log ) .
+ui:act-mi-guide a c:MenuItem ; c:label "Component guide" , "Посібник із компонентів"@uk , "Komponentenleitfaden"@de , "دليل المكوّنات"@ar ; c:href "/docs/COMPONENTS" .
+ui:act-mi-disabled-guide a c:MenuItem ; c:label "Unavailable guide" , "Недоступний посібник"@uk , "Nicht verfügbarer Leitfaden"@de , "دليل غير متاح"@ar ; c:href "/docs/COMPONENTS" ; c:disabled true .
+ui:act-menu-links a c:Menu ; c:label "Go to" , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar ; c:items ( ui:act-mi-guide ui:act-mi-disabled-guide ) .
+ui:act-menu-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:act-menu-actions ui:act-menu-new ui:act-menu-sort ui:act-menu-links ui:act-menu-off ui:act-menu-log ) .
 ui:act-menus a c:Flippable ; c:front ui:act-menus-spec .
 ui:act-menus-spec a c:Specimen ; c:demonstrates c:Menu , c:MenuItem , c:Setter ; c:label "Menu" ;
-    c:help "A menu button: c:open is graph state that the trigger's reaction flips (Escape closes it too). Items are c:MenuItem instances, built only while the menu is open; choosing one closes the menu, and these are also c:Setter, so they write their c:value into the badge." ;
+    c:help "A menu button: c:open is graph state that the trigger's reaction flips (Escape closes it too). Items are c:MenuItem instances, built only while the menu is open; choosing one closes the menu. An item with c:href is a link; a disabled item cannot navigate. Action items here are also c:Setter, so they write their c:value into the badge." ;
     c:children ( ui:act-menu-row ) .
 
 # --- Toolbar: a filter bar of a search, a choice, a switch and buttons, all bound to one node -------------------------

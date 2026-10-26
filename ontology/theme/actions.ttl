@@ -159,6 +159,9 @@
                  [ sty:property "min-width" ; sty:raw "max(100%, 200px)" ] ,
                  # Never wider than the screen: long items wrap instead.
                  [ sty:property "max-width" ; sty:raw "min(360px, calc(100vw - 32px))" ] ,
+                 [ sty:property "max-height" ; sty:raw "var(--sem-menu-max-height, min(420px, calc(100dvh - 24px)))" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] ,
+                 [ sty:property "overscroll-behavior" ; sty:raw "contain" ] ,
                  [ sty:property "padding" ; sty:raw "5px" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-lg ] ,
@@ -172,6 +175,9 @@
                  [ sty:property "--tone-soft-hover" ; sty:raw "initial" ] ,
                  [ sty:property "--tone-border" ; sty:raw "initial" ] ,
                  [ sty:property "--tone-text" ; sty:raw "initial" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Menu ; sty:state "[data-sem-menu-above]" ; sty:part "> .sem-menu-popup" ;
+    sty:declares [ sty:property "top" ; sty:raw "auto" ] ,
+                 [ sty:property "bottom" ; sty:raw "calc(100% + 6px)" ] .
 
 # --- menu item ---
 [] a sty:StyleRule ; sty:appliesTo c:MenuItem ;
@@ -185,6 +191,7 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "color" ; sty:raw "var(--tone-text, var(--sem-text))" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "font-weight" ; sty:raw "500" ] ,
                  [ sty:property "text-align" ; sty:raw "start" ] ,
