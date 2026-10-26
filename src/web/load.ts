@@ -54,6 +54,8 @@ export interface StoreOptions {
    * true compiles a query on its second run, 'idle' the most-run ones in idle time.
    */
   compiled?: boolean | 'idle'
+  /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
+  timeZone?: string
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -63,7 +65,7 @@ export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphS
   if (kind === 'rust' || kind === 'wat') {
     const module = engines[kind]
     if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0 })
+    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0, timeZone: options.timeZone })
   }
   if (kind === 'n3') return n3Store()
   if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)

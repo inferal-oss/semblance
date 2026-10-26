@@ -189,12 +189,14 @@ sem:needsExtension a owl:ObjectProperty ;
 extension functions it needs (sx:Math, sx:Text, sx:Locale, sx:Matches, sx:Json; see the engine's
 EXTENSIONS.md). Stores without the group run the function twin."""@en .
 
-# The groups of SPARQL extension functions Semblance's own engines will offer (the engine's
-# EXTENSIONS.md); none is implemented yet, so the renderings that need one stay function-only.
+# The groups of SPARQL extensions Semblance's own engines offer (the engine's EXTENSIONS.md;
+# GraphStore.extensions). A SPARQL rule or reaction that uses one says so (sem:needsExtension) and
+# is chosen only on a store that has it; elsewhere its function twin runs. A rendering whose
+# SPARQL rule is not written yet carries sem:needsExtension itself, with sem:functionOnly.
 sem:ExtensionGroup a owl:Class ;
     rdfs:comment "A group of SPARQL extension functions a store may offer (sem:needsExtension)."@en .
 sx:Math a sem:ExtensionGroup ; rdfs:label "math"@en ; rdfs:comment "sx:log, sx:log10, sx:exp, sx:pow, sx:sqrt, trigonometry, sx:pi."@en .
-sx:Text a sem:ExtensionGroup ; rdfs:label "text"@en ; rdfs:comment "sx:codepoint, sx:char, sx:decodeURI."@en .
+sx:Text a sem:ExtensionGroup ; rdfs:label "text"@en ; rdfs:comment "sx:codepoint, sx:char, sx:utf8Hex, sx:decodeURI, sx:fnv1a."@en .
 sx:Locale a sem:ExtensionGroup ; rdfs:label "locale"@en ; rdfs:comment "sx:formatNumber, sx:formatDateTime, sx:collated, sx:sortKey (Intl)."@en .
 sx:Matches a sem:ExtensionGroup ; rdfs:label "matches"@en ; rdfs:comment "The sx:matches and sx:chars relations: regex matches and characters of a text as solutions (tokenizing)."@en .
 sx:Json a sem:ExtensionGroup ; rdfs:label "JSON"@en ; rdfs:comment "The sx:json relation: a JSON text's structure as solutions."@en .

@@ -65,6 +65,11 @@ export interface Rule {
   /** The focus must have none of these properties, or the rule is not run (sem:unless). */
   unless: string[]
   /**
+   * SPARQL extension groups the rule's query uses (sem:needsExtension, `sx:Math` …; the
+   * engine's EXTENSIONS.md): it is chosen only on a store that has them all (GraphStore.extensions).
+   */
+  needs: string[]
+  /**
    * When a triple a query the rule followed reads changes (RuleContext.select with follow):
    * re-run it in the same run ('now'), or at the host's next frame, once for all such changes
    * ('frame', sem:refresh sem:NextFrame).
@@ -90,6 +95,8 @@ export interface Selection {
   prefer: 'sparql' | 'function'
   /** Whether the store can evaluate SPARQL; slots with only SPARQL implementations are skipped otherwise. */
   sparql?: boolean
+  /** The SPARQL extension groups the store has (GraphStore.extensions); a SPARQL rule needing another is skipped. */
+  extensions?: ReadonlySet<string>
   /** The viewer's languages, most preferred first (the localization layer). */
   languages?: string[]
 }
@@ -173,6 +180,8 @@ export function loadRules(store: GraphStore): Rule[] {
       bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
       requires,
       unless,
+      // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.
+      needs: all(r, SEM.needsExtension),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
       readsLanguage: !!query && READS_LANGUAGE.test(query),
       incremental: !!query && get('https://semblance.dev/ns/view#strategy')?.value === 'https://semblance.dev/ns/view#Incremental',
@@ -194,7 +203,16 @@ function namedPredicates(query: string, also: string[]): Set<string> | undefined
   return new Set([...reads.map((r) => r.p!), ...also])
 }
 
-/** Pick the active rules: matching modality, enabled layer, one runnable implementation per slot. */
+/** Whether the store can run a rule: a SPARQL rule needs SPARQL and every extension group it names. */
+export function runnable(r: Pick<Rule, 'kind' | 'needs'>, sel: Pick<Selection, 'sparql' | 'extensions'>): boolean {
+  return r.kind !== 'sparql' || (sel.sparql !== false && r.needs.every((g) => sel.extensions?.has(g)))
+}
+
+/**
+ * Pick the active rules: matching modality, enabled layer, one runnable implementation per slot:
+ * the preferred kind if the store can run it, else the next (a SPARQL rule needing an extension
+ * the store lacks falls back to its function twin).
+ */
 export function selectRules(rules: Rule[], sel: Selection, warn: (msg: string) => void = () => {}): Rule[] {
   const bySlot = new Map<string, Rule[]>()
   for (const r of rules) {
@@ -204,12 +222,12 @@ export function selectRules(rules: Rule[], sel: Selection, warn: (msg: string) =
   }
   const out: Rule[] = []
   for (const [slot, impls] of bySlot) {
-    const runnable = sel.sparql === false ? impls.filter((r) => r.kind !== 'sparql') : impls
-    if (!runnable.length) {
+    const can = impls.filter((r) => runnable(r, sel))
+    if (!can.length) {
       warn(`<${slot}> has no implementation this store can run; skipped`)
       continue
     }
-    out.push(runnable.find((r) => r.kind === sel.prefer) ?? runnable[0]!)
+    out.push(can.find((r) => r.kind === sel.prefer) ?? can[0]!)
   }
   return out
 }
