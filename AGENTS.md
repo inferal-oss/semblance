@@ -73,7 +73,8 @@ Code and `.codex/skills/` for Codex; read the file directly if your tool does no
 npm install
 npm run engine:build   # Semblance's own SPARQL engines (WAT and Rust) into rdf-engine/build/
 npm run dev            # the site, http://localhost:5173
-npm test               # the suite (queued; see below)
+npm test               # the given files (queued; see below)
+npm run test:full      # the full suite, in queued shards, with one summary
 npx tsc --noEmit       # typecheck
 ```
 
@@ -84,8 +85,14 @@ npx tsc --noEmit       # typecheck
   foreground; from a worktree whose checkout predates the script, use the main checkout's copy by
   its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. A run that
   holds its slot longer than 30 minutes is stopped (`SEMBLANCE_RUN_LIMIT`), so keep runs to the
-  affected files. Run the files
-  your change affects; the full suite runs before a push.
+  affected files. Run the files your change affects; the full suite runs before a push or merge.
+- **The full suite is `npm run test:full`**, never one `npm test` of everything (it no longer fits
+  in 30 minutes) and never batches of your own. It runs fixed shards (soak and shell alone, the
+  rest packed by the per-file times in `test/timings.json`), each its own queued run, at most two
+  in the queue at a time, and prints one summary: the failing tests, any shard the queue stopped at
+  its limit, and a non-zero exit on either. Logs per shard are in `.test-full/`. `--list` shows the
+  shards, `--only=<shard,…>` re-runs some of them. When files are added or grow slower, refresh the
+  times with `npm run test:full -- --update-timings` and commit `test/timings.json`.
 - A test that times out under a full run is re-run alone before it counts as a failure.
 - The default store is Semblance's WASM engine (`wat`) with SPARQL rules preferred. A new query
   shape can be checked quickly with `npx tsx rdf-engine/host/parse-check.ts wat` and

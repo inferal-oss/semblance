@@ -52,6 +52,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "scripts/test-queue.sh vitest run --maxWorkers=2",
+    "test:full": "tsx scripts/test-full.ts",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/node.ts",
     "build:single": "vite build --mode single && node scripts/name-single.mjs",
@@ -64,6 +65,7 @@
     "predev": "npm run engine:build",
     "prebuild": "npm run engine:build",
     "pretest": "npm run engine:build",
+    "pretest:full": "npm run engine:build",
     "prebuild:single": "npm run engine:build",
     "prepack": "npm run engine:build"
   },
