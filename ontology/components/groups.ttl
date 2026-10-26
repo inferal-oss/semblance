@@ -145,6 +145,7 @@ c:Flippable sem:group c:DisclosureGroup . c:SourceBack sem:group c:DisclosureGro
 # --- Windows ---
 c:Frame sem:group c:WindowsGroup . c:Window sem:group c:WindowsGroup . c:Palette sem:group c:WindowsGroup .
 c:Desktop sem:group c:WindowsGroup . c:Taskbar sem:group c:WindowsGroup .
+c:DesktopLayout sem:group c:WindowsGroup .
 c:Draggable sem:group c:WindowsGroup . c:Resizable sem:group c:WindowsGroup . c:Raisable sem:group c:WindowsGroup .
 c:Restorable sem:group c:WindowsGroup . c:Minimizable sem:group c:WindowsGroup . c:Maximizable sem:group c:WindowsGroup .
 c:Dockable sem:group c:WindowsGroup . fs:Fullscreenable sem:group c:WindowsGroup .

@@ -62,6 +62,32 @@ describe('windows', () => {
     expect(root('win-checklist').querySelector('.sem-window-bar')!.getAttribute('data-sem-gesture')).toBe('move')
   })
 
+  it('offers a desktop layout control above the frames and returns to floating through its event', () => {
+    const { root, click, fact } = showWindows()
+    click(root('wn-open-all-grid'))
+    const saved = root('win-checklist').getAttribute('style')
+    const grid = [...root('wn-grid-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Grid'))!
+    click(grid)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopGridLayout')
+    expect(root('win-checklist').getAttribute('data-sem-tiled')).toBe('true')
+    const toolbar = root('wn-layout-toolbar')
+    expect(toolbar.getAttribute('role')).toBe('toolbar')
+    expect(toolbar.closest('.sem-frames')).toBeNull()
+    const floating = [...root('wn-layout-floating-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Floating'))!
+    click(floating)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopFloatingLayout')
+    expect(root('wn-layout-toolbar').closest('[hidden]')).not.toBeNull()
+    expect(root('win-checklist').getAttribute('style')).toBe(saved)
+    // The gallery control and the parked desktop control stay usable on another cycle.
+    click(grid)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopGridLayout')
+    expect(root('wn-layout-toolbar').closest('[hidden]')).toBeNull()
+    const floatingAgain = [...root('wn-layout-floating-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Floating'))!
+    click(floatingAgain)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopFloatingLayout')
+    expect(root('win-checklist').getAttribute('style')).toBe(saved)
+  })
+
   it('closed frames are not placed on the desktop, so neither they nor their content are evaluated', () => {
     const { root, document, taskbar, screen } = showWindows()
     expect(root('win-checklist')).toBeNull()

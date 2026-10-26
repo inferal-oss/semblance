@@ -81,17 +81,32 @@ ui:wn-windows-spec a c:Specimen ; c:demonstrates c:Window ; c:label "Window" ;
     c:children ( ui:wn-open-checklist ui:wn-open-log ui:wn-open-activity ) .
 
 ui:wn-grid-control a c:Segmented ; c:label "Desktop layout" ; c:controls ui:desktop ; c:property c:tileLayout .
-ui:GridDemoFlippable a owl:Class ; rdfs:subClassOf c:Flippable ; sem:slug "ex-grid-demo-flippable" .
-[] a sty:StyleRule ; sty:appliesTo ui:GridDemoFlippable ;
-    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
-                 [ sty:property "z-index" ; sty:raw "51" ] .
+# Keep only a small layout control above the tiled frames. Raising the whole specimen
+# above the desktop would cover the windows that it demonstrates.
+ui:desktop c:hosts ui:wn-layout-switch .
+ui:wn-layout-switch a c:Switch ; c:controls ui:desktop ; c:property c:tileLayout ;
+    c:cases ( ui:wn-layout-grid-case ) .
+ui:wn-layout-grid-case c:when c:DesktopGridLayout ; c:content ui:wn-layout-toolbar .
+ui:GridLayoutToolbar a owl:Class ; rdfs:subClassOf c:Toolbar ; sem:slug "ex-grid-layout-toolbar" .
+ui:wn-layout-toolbar a ui:GridLayoutToolbar ;
+    c:label "Desktop layout", "Розкладка стільниці"@uk, "Desktop-Anordnung"@de, "تخطيط سطح المكتب"@ar ;
+    c:children ( ui:wn-layout-floating-control ) .
+ui:wn-layout-floating-control a c:Segmented ;
+    c:label "Desktop layout", "Розкладка стільниці"@uk, "Desktop-Anordnung"@de, "تخطيط سطح المكتب"@ar ;
+    c:controls ui:desktop ; c:property c:tileLayout .
+[] a sty:StyleRule ; sty:appliesTo ui:GridLayoutToolbar ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "40px" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "24px" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "calc(100vw - 48px)" ] ,
+                 [ sty:property "z-index" ; sty:raw "55" ] .
 ui:wn-grid-controls a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:wn-open-all-grid ui:wn-open-checklist-grid ui:wn-open-log-grid ui:wn-open-activity-grid ui:wn-grid-control ) .
 ui:wn-open-all-grid a c:Button ; c:label "Open all windows" ; c:opens ui:win-checklist , ui:win-log , ui:win-activity .
 ui:wn-open-checklist-grid a c:Button ; c:label "Open checklist" ; c:opens ui:win-checklist .
 ui:wn-open-log-grid a c:Button ; c:label "Open change log" ; c:opens ui:win-log .
 ui:wn-open-activity-grid a c:Button ; c:label "Open activity" ; c:opens ui:win-activity .
-ui:wn-grid a ui:GridDemoFlippable ; c:front ui:wn-grid-spec .
+ui:wn-grid a c:Flippable ; c:front ui:wn-grid-spec .
 ui:wn-grid-spec a c:Specimen ; c:demonstrates c:Desktop , c:DesktopLayout ; c:label "Tile desktop windows" ;
     c:help "Open windows, then set the desktop to Grid. Normal floating windows fill a responsive grid; their saved positions and sizes remain in the graph. Set Floating to return them to the same geometry. c:tileColumns can request 1–12 columns." ;
     c:children ( ui:wn-grid-controls ) .
