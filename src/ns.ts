@@ -46,6 +46,7 @@ export const NS = {
   ext: 'https://semblance.dev/ns/foreign#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
+  ol: 'https://semblance.dev/ns/outline#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -442,6 +443,8 @@ export const EXT = {
   path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module', outlines: NS.ext + 'outlines',
   CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
 } as const
+/** The outlines layer (ontology/layers/outline.ttl). */
+export const OL = { label: NS.ol + 'label', shows: NS.ol + 'shows' } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',

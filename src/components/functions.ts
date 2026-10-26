@@ -27,6 +27,7 @@ import { foreignFunctions } from '../layers/foreign.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
 import { dragdropFunctions } from '../layers/dragdrop.ts'
 import { dependencyFunctions } from '../layers/dependency.ts'
+import { olFunctions } from '../layers/outline.ts'
 import { functions as layoutFunctions } from './layout.ts'
 import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
@@ -836,6 +837,7 @@ export const functions: Record<string, FnRule> = {
   ...shapeFunctions,
   ...dragdropFunctions,
   ...dependencyFunctions,
+  ...olFunctions,
   ...layoutFunctions,
   ...typeFunctions,
   ...actionsFunctions,

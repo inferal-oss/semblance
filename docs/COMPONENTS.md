@@ -256,6 +256,25 @@ Labels are language-tagged literals (`c:label "Save"@en , "Зберегти"@uk`
 picks the viewer's language into `l10n:label`, which rules read before `c:label`. Untagged
 literals are the fallback. RTL languages flip the page.
 
+## Outlines
+
+To show which parts a page is made of, name components and switch outlines on around them
+(`ontology/layers/outline.ttl`). `ol:label` on any component names it (language-tagged like
+`c:label`, and picked in the viewer's language the same way); a component whose `ol:shows` is true outlines every named component inside it, dashed in
+the accent, with the name in a tag on its top edge at the inline start (so it mirrors right to left):
+
+```turtle
+ui:report a c:Stack ; ol:shows true ; c:children ( ui:title ui:figures ) .
+ui:title a c:Heading ; c:label "Weekly report" ; ol:label "title" , "заголовок"@uk .
+ui:outlines a c:ToggleSwitch ; c:label "Show outlines" ; c:controls ui:report ; c:property ol:shows .
+```
+
+The names land on the roots as `data-sem-outline`, the switch as `data-sem-outlines="shown"`, and
+the style does the rest: an `outline` and an absolutely positioned `::before`, so nothing moves
+when outlines turn on, and the tag's text is not part of the component's accessible name. A root
+that is a replaced element (`<input>`, `<img>`) has no `::before`: name a component around it. The
+Layers page of the gallery has a specimen.
+
 ## Testing a component
 
 - **Render and interact** through events, as a person would: mount the graph in linkedom (see
