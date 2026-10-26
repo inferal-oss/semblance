@@ -28,6 +28,8 @@ iv:Strategy a owl:Class ; rdfs:comment "How a view is kept up to date."@en .
 iv:strategy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Strategy ;
     rdfs:comment """Asked for on a view (iv:Incremental makes a fallback an error), and stated by the
 runtime in the views graph: what the view got."""@en .
+# iv:strategy iv:Incremental on a SPARQL rule (or its rendering) maintains the rule as a view: its
+# query partitioned by $this, each focus's output read from the view (docs/COMPONENTS.md).
 iv:Incremental a iv:Strategy ; rdfs:label "incremental"@en ;
     rdfs:comment "Every operator does work in proportion to the change, not to the data."@en .
 iv:Auto a iv:Strategy ; rdfs:label "as it can"@en ;

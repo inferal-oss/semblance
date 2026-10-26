@@ -96,6 +96,16 @@ export interface ViewDelta {
   quads?: ZSet<Quad>
 }
 
+/** A rule maintained as a view (ViewRuntime.hostRule). */
+export interface RuleView {
+  view: ViewHandle
+  /** A focus's output now. */
+  quads(focus: string): Quad[]
+  /** Hear which foci's output changed (once per tick that changed any). */
+  onChange(fn: (foci: Set<string>) => void): () => void
+  dispose(): void
+}
+
 /** A view's change over several ticks, consolidated (ViewHandle.since): rows and triples both. */
 export interface ViewChange {
   /** The runtime's tick it brings a reader up to. */
@@ -147,6 +157,12 @@ interface Definition {
   node: string
   /** For an instance of a template: the instance ($this). */
   focus?: string
+  /**
+   * A view a host effect defines (ViewRuntime.host): its query, not read from the graph; with
+   * `attribute`, its partitions are by that variable and each output row is attributed to its value
+   * (a rule maintained as a view: the focus).
+   */
+  hosted?: { query: string; form: 'select' | 'construct'; attribute?: string }
 }
 
 /** A parameter, resolved: what it reads, so a change to that re-resolves it. */
@@ -234,6 +250,7 @@ export class ViewRuntime {
     for (const q of this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(IV + 'View'))) {
       if (q.subject.termType === 'NamedNode') for (const d of this.definitions(q.subject.value)) this.define(d, out)
     }
+    for (const d of this.hosted.values()) this.define(d, out)
     this.sort()
     const now = this.clock.now()
     const applied: Delta = { add: [], remove: [] }
@@ -401,6 +418,66 @@ export class ViewRuntime {
     return (instances.length ? instances.map((q) => q.subject.value) : [v.whileShown]).some((c) => this.shown!(c))
   }
 
+  private hosted = new Map<string, Definition>()
+
+  /**
+   * A view a host effect defines rather than the graph (a persistence policy's CONSTRUCT): maintained
+   * like any other, ephemeral (its output goes to subscribers and since(), never to the views graph),
+   * a fallback to recompute expected. Defined now if the runtime has started, else when it starts.
+   */
+  host(iri: string, query: string, form: 'select' | 'construct' = 'construct'): ViewHandle | undefined {
+    const def: Definition = { iri, node: iri, hosted: { query, form } }
+    this.hosted.set(iri, def)
+    if (!this.started) return undefined
+    const out = new ZSet<Quad>()
+    this.views.get(iri)?.drop(out)
+    this.define(def, out)
+    this.sort()
+    const v = this.views.get(iri)
+    if (v) out.plus(v.initial(this.clock.now()))
+    this.sink(out)
+    return v
+  }
+
+  /**
+   * A rule maintained as a view (iv:strategy iv:Incremental on a rule): its CONSTRUCT, with ?this
+   * (the focus) as the partition key, hosted; each output row belongs to its ?this. The engine reads a
+   * focus's output from it and hears which foci changed. Undefined: the runtime has not started, or
+   * the query cannot be maintained (the rule is evaluated as usual).
+   */
+  hostRule(iri: string, query: string): RuleView | undefined {
+    const def: Definition = { iri, node: iri, hosted: { query, form: 'construct', attribute: 'this' } }
+    if (!this.started || !this.store.sparql) return undefined
+    const plan = this.compileFor(def, [])
+    if (!plan || plan.kind !== 'maintained') return undefined
+    this.hosted.set(iri, def)
+    const out = new ZSet<Quad>()
+    this.views.get(iri)?.drop(out)
+    this.define(def, out)
+    this.sort()
+    const v = this.views.get(iri)!
+    out.plus(v.initial(this.clock.now()))
+    this.sink(out)
+    return {
+      view: v,
+      quads: (focus) => v.quadsFor(focus),
+      onChange: (fn) => v.onFoci(fn),
+      dispose: () => this.unhost(iri),
+    }
+  }
+
+  /** Stop maintaining a hosted view. */
+  unhost(iri: string): void {
+    this.hosted.delete(iri)
+    const v = this.views.get(iri)
+    if (!v) return
+    const out = new ZSet<Quad>()
+    v.drop(out)
+    this.views.delete(iri)
+    this.sort()
+    this.sink(out)
+  }
+
   /** Called after every tick (and start, and a resume) once every view has settled: replication pumps here. */
   afterTick(fn: (tick: number) => void): () => void {
     this.afterTicks.push(fn)
@@ -509,8 +586,8 @@ export class ViewRuntime {
     if (!this.store.sparql) return undefined
     const f = this.store.factory
     const s = f.namedNode(def.node)
-    const select = this.one(s, SEM.select)?.value
-    const construct = this.one(s, SEM.construct)?.value
+    const select = def.hosted ? (def.hosted.form === 'select' ? def.hosted.query : undefined) : this.one(s, SEM.select)?.value
+    const construct = def.hosted ? (def.hosted.form === 'construct' ? def.hosted.query : undefined) : this.one(s, SEM.construct)?.value
     let query = construct ?? select ?? ''
     if (def.focus) query = query.replaceAll('$this', `<${def.focus}>`)
     for (const p of [...params].sort((a, b) => b.name.length - a.name.length)) {
@@ -525,7 +602,7 @@ export class ViewRuntime {
       query,
       prefixes: this.prefixes(),
       over: this.one(s, IV + 'over')?.value,
-      partitionBy: partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
+      partitionBy: def.hosted?.attribute ? [def.hosted.attribute] : partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
       graphs: this.datasetFor(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0).filter((g) => g.termType === 'NamedNode').map((g) => g.value),
     }
@@ -573,13 +650,14 @@ export class ViewRuntime {
     const f = this.store.factory
     const s = f.namedNode(def.node)
     const fn = this.one(s, SEM.function)?.value
-    const strategy = this.one(s, IV + 'strategy')?.value
+    // A hosted view is expected to fall back now and then (its query is someone else's): iv:Auto.
+    const strategy = def.hosted ? IV + 'Auto' : this.one(s, IV + 'strategy')?.value
     const windowNode = this.one(s, IV + 'window')
     const paramNodes = this.store.match(s, f.namedNode(IV + 'parameter'), null).map((q) => q.object)
     const params = this.resolve(def, paramNodes)
     const fnView = fn ? this.opts.functions?.[fn] : undefined
     if (fn && !fnView) throw new Error(`No view function registered for "${fn}" (<${def.iri}>)`)
-    const hasQuery = !!(this.one(s, SEM.construct) ?? this.one(s, SEM.select))
+    const hasQuery = !!def.hosted || !!(this.one(s, SEM.construct) ?? this.one(s, SEM.select))
     const sparqlPlan = this.compileFor(def, params)
     const useFn = fnView && (!this.store.sparql || this.prefer === 'function' || !hasQuery)
     let plan: ViewPlan
@@ -604,7 +682,7 @@ export class ViewRuntime {
     // iv:ResultSet: a SELECT's rows in the views graph, a CONSTRUCT's triples nowhere (a query typed into the workbench).
     const materialize = this.one(s, IV + 'materialize')?.value
     view.materialize = materialize === IV + 'Graph' || materialize === IV + 'ResultSet'
-    view.ephemeral = materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
+    view.ephemeral = !!def.hosted || materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
     view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
     view.readsViews = view.reads.length > 0
     this.views.set(def.iri, view)
@@ -1400,6 +1478,9 @@ export class MaintainedView implements ViewHandle {
   private header?: Quad[]
   private recomputed?: Map<string, Quad> | Map<string, Row>
   private listeners: ((d: ViewDelta) => void)[] = []
+  /** Attributed views (Definition.hosted.attribute): output rows by focus, and who hears which foci changed. */
+  private byFocus = new Map<string, Set<string>>()
+  private fociListeners: ((foci: Set<string>) => void)[] = []
   /** The changes of the last ticks that changed the view (since()), and the tick from which they are complete. */
   private history: { tick: number; rows: ZSet<Row>; quads: ZSet<Quad> }[] = []
   private historyKeep = 0
@@ -1580,6 +1661,8 @@ export class MaintainedView implements ViewHandle {
     const out = new ZSet<Quad>()
     const rowDelta = new ZSet<Row>()
     const f = this.rt.store.factory
+    const attribute = this.def.hosted?.attribute
+    const changed = new Set<string>()
     for (const [k0, r0, w] of rows.entries()) {
       // SELECT: the projected variables; CONSTRUCT: the template over every variable.
       const row = plan.form === 'select' ? project(r0, plan.vars) : r0
@@ -1593,8 +1676,21 @@ export class MaintainedView implements ViewHandle {
       happened.rowsOut += Math.abs(w)
       rowDelta.add(k, row, w)
       for (const q of e.quads) out.add(quadKey(q), q, w)
+      const focus = attribute ? row.get(attribute)?.value : undefined
+      if (focus !== undefined) {
+        changed.add(focus)
+        let keys = this.byFocus.get(focus)
+        if (e.n > 0) {
+          if (!keys) this.byFocus.set(focus, (keys = new Set()))
+          keys.add(k)
+        } else if (keys) {
+          keys.delete(k)
+          if (!keys.size) this.byFocus.delete(focus)
+        }
+      }
       if (e.n <= 0) this.outRows.delete(k)
     }
+    if (changed.size) for (const l of this.fociListeners) l(changed)
     if (plan.form === 'select' && this.materialize) this.writeRows(out)
     this.notify(rowDelta, out)
     return this.ephemeral ? new ZSet() : out
@@ -1742,6 +1838,8 @@ export class MaintainedView implements ViewHandle {
 
   /** Subjects the view types were generated by its activity; others it decorates were influenced. */
   private withProvenance(quads: Quad[]): Quad[] {
+    // A hosted view's output is someone else's data (what a policy stores), not the views graph's.
+    if (this.def.hosted) return quads
     const f = this.rt.store.factory
     const typed = new Set(quads.filter((q) => q.predicate.value === RDF_TYPE).map((q) => q.subject.value))
     const subjects = new Map(quads.map((q) => [q.subject.value, q.subject]))
@@ -1812,6 +1910,19 @@ export class MaintainedView implements ViewHandle {
       while (this.history.length > this.historyKeep) this.complete = this.history.shift()!.tick
     } else this.complete = this.rt.tickNo
     for (const l of this.listeners) l(this.plan.form === 'select' ? { rows } : { quads })
+  }
+
+  /** An attributed view's output for one focus (its rows' triples, once each). */
+  quadsFor(focus: string): Quad[] {
+    const seen = new Map<string, Quad>()
+    for (const k of this.byFocus.get(focus) ?? []) for (const q of this.outRows.get(k)?.quads ?? []) seen.set(quadKey(q), q)
+    return [...seen.values()]
+  }
+
+  /** Hear which foci an attributed view's output changed for. */
+  onFoci(fn: (foci: Set<string>) => void): () => void {
+    this.fociListeners.push(fn)
+    return () => (this.fociListeners = this.fociListeners.filter((x) => x !== fn))
   }
 
   keepHistory(ticks: number): void {
@@ -1889,6 +2000,12 @@ export class MaintainedView implements ViewHandle {
       this.header = undefined
     }
     this.written.clear()
+    // An attributed view's foci all lose their output (the engine hears it).
+    if (this.byFocus.size) {
+      const foci = new Set(this.byFocus.keys())
+      this.byFocus.clear()
+      for (const l of this.fociListeners) l(foci)
+    }
     for (const ps of this.parts) ps.reset()
     this.topk?.clear()
     this.orderPost?.clear()

@@ -83,6 +83,11 @@ export class Dependencies {
     where: Group,
     readonly keys: string[],
     private readonly derived: readonly Select[] = [],
+    /**
+     * Prune also by patterns only partly bound (some triple must agree with what is bound), and when
+     * the change binds the key itself: fewer partitions for a rule (its focus), at a lookup per check.
+     */
+    private readonly semiJoin = false,
   ) {
     const root: Scope = { global: false, pats: [], aliases: [] }
     try {
@@ -104,6 +109,11 @@ export class Dependencies {
       if (!iris || zeroLength(p)) this.anyPredicate.push(p)
       else for (const iri of iris) this.byPredicate.set(iri, [...(this.byPredicate.get(iri) ?? []), p])
     }
+  }
+
+  /** The predicates a changed triple must have to reach a pattern, and whether some pattern takes any predicate. */
+  predicates(): { iris: string[]; any: boolean } {
+    return { iris: [...this.byPredicate.keys()], any: this.anyPredicate.length > 0 }
   }
 
   /** Root patterns over the key alone (and constants): a new key must match them to have rows. */
@@ -287,11 +297,8 @@ export class Dependencies {
   /** From bindings in a scope (a pattern bound to a triple, or a derived row), join through the patterns around them until the keys are bound. */
   private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
     const bound = new Set(start.keys())
-    if (this.keys.every((k) => bound.has(k))) return [start]
     // The patterns (and aliases) that occur with p in a solution: its scope and the scopes around it.
-    const pats: Pat[] = []
-    const aliases: Alias[] = []
-    for (let s: Scope | undefined = scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
+    const { around, aliases, byVar } = this.neighbours(scope, p)
     // Breadth-first over variables, from the bound ones to each key.
     type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
     const via = new Map<string, Edge>()
@@ -313,12 +320,12 @@ export class Dependencies {
       if (reached.has(w)) return
       reached.add(w), via.set(w, edge), queue.push(w), level.set(w, at)
     }
-    const varsOf = (x: Pat) => [x.s, 'path' in x.p ? undefined : x.p, x.o, x.g].filter((y): y is { v: string } => !!y && 'v' in y).map((y) => y.v)
+    const varsOf = patVars
     while (queue.length && !this.keys.every((k) => reached.has(k))) {
       const v = queue.shift()!
-      for (const x of pats) {
+      for (const x of byVar.get(v) ?? []) {
         const vs = varsOf(x)
-        if (!vs.includes(v) || !leaves(v, x.scope)) continue
+        if (!leaves(v, x.scope)) continue
         // Path connectors need a bound end to walk from.
         for (const w of vs) reach(w, { pat: x, from: v }, x.scope)
       }
@@ -343,7 +350,7 @@ export class Dependencies {
     // Patterns that hold in every solution p takes part in (its scope and those around it; not
     // paths) prune the rows once they bind all of a pattern's variables: a semi-join, so a probe
     // reaches the partitions that hold the change, not every one its first edge leads to.
-    const checks = pats.filter((x) => !('path' in x.p) && x !== p)
+    const checks = around
     const holds = (r: Map<string, Term>) =>
       checks.every((x) => {
         // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
@@ -352,10 +359,21 @@ export class Dependencies {
         const s = val(x.s)
         const pp = val(x.p as Pos)
         const o = val(x.o)
-        if (!s || !pp || !o) return true
-        if (!x.g) return lookup(s, pp, o).length > 0
-        return lookup(s, pp, o, val(x.g) ?? null).length > 0
+        // With a part unbound, it still needs some triple that agrees with what is bound (a
+        // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
+        // No triple has a literal subject (and the store would refuse to look).
+        if (s && s.termType === 'Literal') return false
+        if (!s || !pp || !o) {
+          if (!this.semiJoin) return true
+          // (Only through an index of a bound node: a predicate alone would read all of it.)
+          if (!varsOf(x).some((v) => r.has(v)) || (!s && !o)) return true
+          if (pp && pp.termType !== 'NamedNode') return true
+        }
+        if (!x.g) return lookup(s ?? null, pp ?? null, o ?? null).length > 0
+        return lookup(s ?? null, pp ?? null, o ?? null, val(x.g) ?? null).length > 0
       })
+    // Bound already: the key is the change's own (with semiJoin, if the patterns around it hold).
+    if (this.keys.every((k) => bound.has(k))) return this.semiJoin ? [start].filter(holds) : [start]
     let rows = [start].filter(holds)
     const done = new Set<Pat | Alias>()
     for (const e of needed) {
@@ -388,6 +406,29 @@ export class Dependencies {
     }
     if (unreachable) return rows.length ? 'global' : []
     return rows.filter((r) => this.keys.every((k) => r.has(k) || !reached.has(k)))
+  }
+
+  private neighbourhoods = new Map<Pat | Scope, { around: Pat[]; aliases: Alias[]; byVar: Map<string, Pat[]> }>()
+
+  /**
+   * What a walk from pattern `p` (or from a derived row in `scope`) may go through: the patterns of
+   * its scope and the scopes around it, which hold in every solution p takes part in (so they also
+   * prune: `around`, without paths). Not the groups beside them: an OPTIONAL or a UNION branch need
+   * not match where a solution does, so a walk through one could miss it. By variable; cached.
+   */
+  private neighbours(scope: Scope, p: Pat | undefined) {
+    const key = p ?? scope
+    let n = this.neighbourhoods.get(key)
+    if (n) return n
+    const pats: Pat[] = []
+    const aliases: Alias[] = []
+    for (let s: Scope | undefined = scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
+    const inner = new Set(pats)
+    const byVar = new Map<string, Pat[]>()
+    for (const x of pats) for (const v of new Set(patVars(x))) byVar.set(v, [...(byVar.get(v) ?? []), x])
+    n = { around: [...inner].filter((x) => !('path' in x.p)), aliases, byVar }
+    this.neighbourhoods.set(key, n)
+    return n
   }
 
   /** Rows extended by one pattern, looked up with what the row binds. */
@@ -580,6 +621,14 @@ const NUMERIC = /#(integer|decimal|double|float|int|long|short|byte|nonNegativeI
  * A query's constant and a stored term: equal, or the same number (a store may keep "01" and "+1"
  * as 1, and a query may write either): matching more is safe, a dependency missed is not.
  */
+const varCache = new WeakMap<Pat, string[]>()
+/** A pattern's variables (its subject, plain predicate, object and graph). */
+function patVars(x: Pat): string[] {
+  let vs = varCache.get(x)
+  if (!vs) varCache.set(x, (vs = [x.s, 'path' in x.p ? undefined : x.p, x.o, x.g].filter((y): y is { v: string } => !!y && 'v' in y).map((y) => y.v)))
+  return vs
+}
+
 function same(constant: Term, t: Term): boolean {
   if (constant.equals(t)) return true
   return constant.termType === 'Literal' && t.termType === 'Literal' && NUMERIC.test(constant.datatype.value) && constant.datatype.equals(t.datatype) && Number(constant.value) === Number(t.value)

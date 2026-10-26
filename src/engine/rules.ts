@@ -70,6 +70,11 @@ export interface Rule {
    * re-runs it for every focus.
    */
   readsLanguage: boolean
+  /**
+   * iv:strategy iv:Incremental on a SPARQL rule (or its rendering): its query is a maintained view
+   * partitioned by its focus (docs/IVM.md §10.1 step 3), and a focus's output is read from it.
+   */
+  incremental: boolean
 }
 
 export interface Selection {
@@ -161,6 +166,7 @@ export function loadRules(store: GraphStore): Rule[] {
       unless: getAll(SEM.unless),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
       readsLanguage: !!query && READS_LANGUAGE.test(query),
+      incremental: !!query && get('https://semblance.dev/ns/view#strategy')?.value === 'https://semblance.dev/ns/view#Incremental',
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
