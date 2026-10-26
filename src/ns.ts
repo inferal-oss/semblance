@@ -164,6 +164,8 @@ export const C = {
   TriplesView: c + 'TriplesView',
   limit: c + 'limit',
   Desktop: c + 'Desktop',
+  TiledWorkspace: c + 'TiledWorkspace',
+  rootTile: c + 'rootTile',
   hosts: c + 'hosts',
   windowsOn: c + 'windowsOn',
   Switch: c + 'Switch',

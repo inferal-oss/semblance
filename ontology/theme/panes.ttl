@@ -6,6 +6,19 @@
 
 # Default theme for the panes (c:SplitView, c:DockPanel).
 
+# A tiled workspace fills its allocated area. Nested split views and tabs are responsible for
+# their own separators, focus order and selection; this wrapper does not restyle their contents.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "12rem" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "height" ; sty:raw "100%" ] .
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "> *" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 auto" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "0" ] .
+
 # --- split view ---
 # A flex row (a column with pos:direction pos:Column); the primary pane's basis is its share
 # (--split-ratio, set by the rendering), the secondary takes the rest. Panes scroll on their own.

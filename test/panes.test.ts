@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
+import { TiledWorkspace } from '../src/layout/tiled-workspace.ts'
 import { mountShell } from './harness.ts'
 import { expectSameRendering, implementationGaps } from './implementations.ts'
 
@@ -53,6 +54,47 @@ describe('panes', () => {
 
   for (const prefer of ['sparql', 'function'] as const) {
     describe(`(${prefer})`, () => {
+      it('keeps tab content stable while panes split, move and close', () => {
+        const h = showPanes(prefer)
+        const { store, runtime, shell, root, click } = h
+        const f = store.factory
+        const node = (local: string) => f.namedNode(UI + local)
+        const manager = new TiledWorkspace(store, node('ly-tiled-workspace'))
+        const workspace = root('ly-tiled-workspace')
+        expect(workspace.tagName).toBe('SECTION')
+        expect(workspace.getAttribute('aria-label')).toBe('Research workspace')
+        expect(workspace.querySelectorAll('[data-sem-c="split-view"]')).toHaveLength(2)
+        expect(root('ly-tiled-main').querySelectorAll('[role=tab]')).toHaveLength(2)
+        click(root('ly-tiled-main').querySelectorAll('[role=tab]')[1]!)
+        const previewElement = root('ly-tiled-preview')
+
+        const extra = node('ly-tiled-extra')
+        runtime.apply({ add: [
+          f.quad(extra, f.namedNode(NS.rdf + 'type'), f.namedNode(c + 'Tabs')),
+          f.quad(extra, f.namedNode(c + 'tabs'), f.namedNode(NS.rdf + 'nil')),
+        ], remove: [] })
+        runtime.apply(manager.split(node('ly-tiled-notes'), extra, 'column'))
+        shell.flush()
+        expect(workspace.querySelectorAll('[data-sem-c="split-view"]')).toHaveLength(3)
+        expect(root('ly-tiled-notes').querySelector('[role=tab]')?.textContent).toBe('Notes')
+
+        const preview = node('ly-tiled-tab-preview')
+        runtime.apply(manager.moveTab(preview, node('ly-tiled-main'), extra))
+        shell.flush()
+        expect(root('ly-tiled-main').querySelectorAll('[role=tab]')).toHaveLength(1)
+        expect(root('ly-tiled-extra').querySelector('[role=tab]')?.textContent).toBe('Preview')
+        expect(root('ly-tiled-extra').textContent).toContain('Preview the document here.')
+        expect(root('ly-tiled-preview')).toBe(previewElement)
+        expect(store.match(extra, f.namedNode(c + 'selected'), preview)).toHaveLength(1)
+
+        runtime.apply(manager.close(node('ly-tiled-notes')))
+        shell.flush()
+        expect(workspace.querySelectorAll('[data-sem-c="split-view"]')).toHaveLength(2)
+        expect(root('ly-tiled-extra').textContent).toContain('Preview the document here.')
+        expect(root('ly-tiled-preview')).toBe(previewElement)
+        expect(store.match(node('ly-tiled-tab-preview'), f.namedNode(c + 'content'), null)).toHaveLength(1)
+      })
+
       it('a split view: two panes, a separator between them, its share as a style property', () => {
         const { root, part } = showPanes(prefer)
         const split = root('ly-split-view')

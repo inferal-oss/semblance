@@ -13,6 +13,18 @@ const XSD_DECIMAL = NS.xsd + 'decimal'
 const DEFAULT_MIN = 120
 const DEFAULT_DOCK = 280
 
+/** A stable root around a graph-owned tree of nested split views and tab groups. */
+const tiledWorkspace: FnRule = (ctx, focus) => {
+  const tile = ctx.object(focus, C + 'rootTile')
+  if (!named(tile)) return []
+  const o = ctx.out(focus)
+  const root = el(o, 'root', ctx.modality === MOD.Text ? 'Div' : 'Section', {}, [tile])
+  const label = text(ctx, focus, C + 'label')
+  if (label && ctx.modality !== MOD.Text) o.attr(root, 'aria-label', label)
+  o.renders(root)
+  return o.quads
+}
+
 /** An integer-valued property, or `fallback` (truncated, as SPARQL's xsd:integer cast does). */
 function int(value: string | undefined, fallback: number): number {
   const n = Number(value)
@@ -174,6 +186,7 @@ const dockResize: ReactionFn = (ctx) => {
 }
 
 export const functions: Record<string, FnRule> = {
+  'panes:tiled-workspace': tiledWorkspace,
   'panes:split-view': splitView,
   'panes:dock-panel': dockPanel,
 }
