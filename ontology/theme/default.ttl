@@ -1226,7 +1226,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 # The Gantt chart. The frame writes its scale (--first, --days: day numbers) and each mark its days
 # (--from, --to; --at for a tick or today); a day is --day wide (narrower the longer the scale), and
 # marks sit at inset-inline-start, so a right-to-left page runs time right to left. Labels stay in
-# view at the inline start while the plot scrolls.
+# view at the inline start while the plot scrolls; today's name is under the last row.
 [] a sty:StyleRule ; sty:appliesTo c:GanttChart ; 
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
@@ -1240,6 +1240,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "--day" ; sty:raw "clamp(4px, calc(1000px / var(--days, 30)), 18px)" ] ,
                  [ sty:property "--row" ; sty:raw "1.875rem" ] ,
                  [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "padding-block-end" ; sty:raw "1rem" ] ,
                  [ sty:property "inline-size" ; sty:raw "max-content" ] ,
                  [ sty:property "min-inline-size" ; sty:raw "100%" ] ,
                  [ sty:property "font-size" ; sty:raw "var(--sem-text-xs)" ] .
@@ -1267,7 +1268,9 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "inset-inline-start" ; sty:raw "calc(var(--label) + (var(--at) - var(--first) + 0.5) * var(--day))" ] ,
                  [ sty:property "border-inline-start" ; sty:raw "1.5px solid var(--sem-danger-9)" ] ,
                  [ sty:property "padding-inline-start" ; sty:raw "3px" ] ,
-                 [ sty:property "padding-block-start" ; sty:raw "1.75rem" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-end" ] ,
+                 [ sty:property "line-height" ; sty:raw "1rem" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] ,
                  [ sty:property "font-size" ; sty:raw "10px" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
@@ -1289,8 +1292,7 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
                  [ sty:property "z-index" ; sty:raw "1" ] ,
                  [ sty:property "align-self" ; sty:raw "stretch" ] ,
-                 [ sty:property "display" ; sty:raw "flex" ] ,
-                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "line-height" ; sty:raw "var(--row)" ] ,
                  [ sty:property "padding-inline" ; sty:raw "var(--sem-space-2)" ] ,
                  [ sty:property "background" ; sty:raw "inherit" ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
