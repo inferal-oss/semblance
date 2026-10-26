@@ -307,7 +307,7 @@ const connectors = attachConnectors(document.getElementById('app')!)
 attachSnaps(document.getElementById('app')!)
 // Lightboxes: grown from their image and given back to it, sliding, zooming and panning.
 attachLightboxes(document.getElementById('app')!)
-attachAnchoredPopups(document.getElementById('app')!)
+attachAnchoredPopups(document.getElementById('app')!, node => !shell.inSlot(node))
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })

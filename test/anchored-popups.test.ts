@@ -137,4 +137,47 @@ describe('anchored popup host effect', () => {
     expect(app.popup.style.color).toBe('red')
     dispose()
   })
+  it('remeasures a panel when lazy content arrives after it opens', async () => {
+    const app = fixture({ kind: 'date-field' })
+    let intrinsicWidth = 18
+    app.popup.getBoundingClientRect = () => ({ width: Number.parseFloat(app.popup.style.width) || intrinsicWidth, height: 100 }) as DOMRect
+    const dispose = attachAnchoredPopups(app.host)
+    expect(app.popup.style.width).toBe('18px')
+    intrinsicWidth = 268
+    const grid = app.document.createElement('section')
+    grid.textContent = 'Calendar content'
+    app.popup.append(grid)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(app.popup.style.width).toBe('268px')
+    expect(app.popup.contains(grid)).toBe(true)
+    dispose()
+  })
+
+  it('leaves host-slot content to its own popup controller', () => {
+    const app = fixture()
+    const slot = app.document.createElement('section')
+    slot.setAttribute('data-sem-c', 'host-slot')
+    const nested = app.host.firstElementChild!
+    app.host.append(slot)
+    slot.append(nested)
+    const disposeOuter = attachAnchoredPopups(app.host)
+    expect(app.show).not.toHaveBeenCalled()
+    const disposeInner = attachAnchoredPopups(nested)
+    expect(app.show).toHaveBeenCalledOnce()
+    disposeOuter()
+    expect(app.hide).not.toHaveBeenCalled()
+    expect(app.popup.style.width).toBe('200px')
+    disposeInner()
+    expect(app.hide).toHaveBeenCalledOnce()
+  })
+
+  it('supports renderer-owned slot detection for other foreign content', () => {
+    const app = fixture()
+    const dispose = attachAnchoredPopups(app.host, element => element === app.host)
+    expect(app.show).not.toHaveBeenCalled()
+    expect(app.popup.getAttribute('style')).toBe('color:red')
+    dispose()
+  })
+
 })
