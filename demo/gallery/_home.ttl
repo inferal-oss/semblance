@@ -21,10 +21,10 @@ ui:heroClaim a c:Badge ; sty:tone sty:Accent ; sty:emphasis sty:Soft ; sty:size 
 ui:heroTitle a c:Text ; sty:textStyle sty:Display ; pos:textAlign pos:TextCenter ;
     c:label "The UI is data." , "Інтерфейс — це дані."@uk , "Die Oberfläche ist Daten."@de , "الواجهة بيانات."@ar .
 ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ; pos:measure pos:ReadingMeasure ;
-    c:label "Semblance is a web UI framework where components, layers, themes and behaviour are RDF ontologies. Rules - SPARQL queries or functions - project one graph to the screen, to text, to anything; every interaction is an event in the graph." ,
-            "Semblance — вебфреймворк, де компоненти, шари, теми й поведінка є онтологіями RDF. Правила — запити SPARQL або функції — проєктують один граф на екран, у текст, будь-куди; кожна взаємодія — подія в графі."@uk ,
-            "Semblance ist ein Web-UI-Framework, in dem Komponenten, Schichten, Designs und Verhalten RDF-Ontologien sind. Regeln - SPARQL-Abfragen oder Funktionen - projizieren einen Graphen auf den Bildschirm, in Text, überallhin; jede Interaktion ist ein Ereignis im Graphen."@de ,
-            "Semblance إطار لواجهات الويب تكون فيه المكونات والطبقات والسمات والسلوك أنطولوجيات RDF. تُسقط القواعد - استعلامات SPARQL أو دوال - رسمًا بيانيًا واحدًا على الشاشة أو في نص أو أي مكان؛ وكل تفاعل حدث في الرسم البياني."@ar .
+    c:label "Semblance is a web UI framework where the whole interface is live data: what is shown, what you type and what you do. Rules turn that data into the screen, into text, into anything, and keep it current as the data changes." ,
+            "Semblance — вебфреймворк, де весь інтерфейс — живі дані: що показано, що ви вводите і що робите. Правила перетворюють ці дані на екран, на текст, на будь-що, і тримають їх актуальними, коли дані змінюються."@uk ,
+            "Semblance ist ein Web-UI-Framework, in dem die ganze Oberfläche lebendige Daten ist: was gezeigt wird, was Sie tippen und was Sie tun. Regeln machen aus diesen Daten den Bildschirm, Text, alles Mögliche, und halten es aktuell, wenn sich die Daten ändern."@de ,
+            "Semblance إطار لواجهات الويب تكون فيه الواجهة كلها بيانات حية: ما يُعرض وما تكتبه وما تفعله. تحوّل القواعد هذه البيانات إلى الشاشة أو نص أو أي شيء، وتبقيها محدَّثة كلما تغيّرت البيانات."@ar .
 ui:heroActions a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:justify pos:PackCenter ;
     c:children ( ui:goDocs ui:goExamples ui:goComponents ) .
 ui:goDocs a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ; c:value ui:Docs ;
@@ -68,10 +68,10 @@ ui:whyUsualText a c:Text ;
             "Ein Event-Handler verändert Zustand in Komponenten, und der Bildschirm ist, was die Handler zuletzt hinterließen. Der Zustand ist über Objekte verstreut, für Werkzeuge unerreichbar, und jede Funktion verdrahtet ihre Updates selbst."@de ,
             "يغيّر معالج الأحداث حالةً مخبأة داخل المكونات، والشاشة هي ما تركته المعالجات آخر مرة. الحالة مبعثرة بين الكائنات، بعيدة عن متناول الأدوات، وكل ميزة توصل تحديثاتها بنفسها."@ar .
 ui:whySemblanceText a c:Text ;
-    c:label "State is triples. Rendering is a projection of them that stays current, incrementally. An interaction is data too: an event in a change log, which reactions turn into one change. The same graph projects to the screen, to text and to anything else." ,
-            "Стан — це трійки. Відображення — їхня проєкція, що лишається актуальною, інкрементно. Взаємодія — теж дані: подія в журналі змін, яку реакції перетворюють на одну зміну. Той самий граф проєктується на екран, у текст і будь-куди."@uk ,
-            "Zustand sind Tripel. Darstellung ist eine Projektion davon, die inkrementell aktuell bleibt. Auch eine Interaktion ist Daten: ein Ereignis im Änderungsprotokoll, das Reaktionen in eine Änderung verwandeln. Derselbe Graph projiziert auf den Bildschirm, in Text und überallhin."@de ,
-            "الحالة ثلاثيات. والعرض إسقاط لها يبقى محدَّثًا تدريجيًا. والتفاعل بيانات أيضًا: حدث في سجل التغييرات تحوّله التفاعلات إلى تغيير واحد. والرسم البياني نفسه يُسقَط على الشاشة وفي النص وفي أي مكان."@ar .
+    c:label "Rendering is a projection of the data that stays current, incrementally. An interaction is data too: an event in a change log, which reactions turn into one change. The same graph projects to the screen, to text and to anything else." ,
+            "Відображення — проєкція даних, що лишається актуальною, інкрементно. Взаємодія — теж дані: подія в журналі змін, яку реакції перетворюють на одну зміну. Той самий граф проєктується на екран, у текст і будь-куди."@uk ,
+            "Darstellung ist eine Projektion der Daten, die inkrementell aktuell bleibt. Auch eine Interaktion ist Daten: ein Ereignis im Änderungsprotokoll, das Reaktionen in eine Änderung verwandeln. Derselbe Graph projiziert auf den Bildschirm, in Text und überallhin."@de ,
+            "العرض إسقاط للبيانات يبقى محدَّثًا تدريجيًا. والتفاعل بيانات أيضًا: حدث في سجل التغييرات تحوّله التفاعلات إلى تغيير واحد. والرسم البياني نفسه يُسقَط على الشاشة وفي النص وفي أي مكان."@ar .
 ui:whyFollows a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-4 ; pos:layout pos:AlignedColumns ;
     c:children ( ui:whyInspect ui:whyQuery ui:whyPersist ui:whyReplay ui:whyOneTruth ui:whyCost ) .
 ui:whyInspect a c:Card ; c:content ui:whyInspectText ;
