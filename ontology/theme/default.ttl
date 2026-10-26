@@ -1223,51 +1223,120 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # --- charts ------------------------------------------------------------------------------------------------
 
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ;
-    sty:declares [ sty:property "margin" ; sty:raw "0" ] , [ sty:property "min-width" ; sty:raw "0" ] .
+# The Gantt chart. The frame writes its scale (--first, --days: day numbers) and each mark its days
+# (--from, --to; --at for a tick or today); a day is --day wide (narrower the longer the scale), and
+# marks sit at inset-inline-start, so a right-to-left page runs time right to left. Labels stay in
+# view at the inline start while the plot scrolls.
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; 
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-scroll" ;
-    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius-md ] , [ sty:property "background" ; sty:token tok:surface ] ,
-                 [ sty:property "direction" ; sty:raw "ltr" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "svg" ;
-    sty:declares [ sty:property "display" ; sty:raw "block" ] , [ sty:property "max-width" ; sty:raw "none" ] ,
-                 [ sty:property "font" ; sty:raw "12px var(--sem-font)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-lane" ; sty:declares [ sty:property "fill" ; sty:raw "transparent" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-lane-alt" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:surface-sunken ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-week, .sem-gantt-month-line" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:border ] , [ sty:property "stroke-width" ; sty:raw "1" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-month, .sem-gantt-label" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-month" ;
-    sty:declares [ sty:property "font-weight" ; sty:raw "600" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-bar, .sem-gantt-milestone" ;
-    sty:declares [ sty:property "fill" ; sty:token tok:accent ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-neutral" ; sty:declares [ sty:property "fill" ; sty:token tok:muted ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-info" ; sty:declares [ sty:property "fill" ; sty:token tok:info-9 ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-success" ; sty:declares [ sty:property "fill" ; sty:token tok:success-9 ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-warning" ; sty:declares [ sty:property "fill" ; sty:token tok:warning-9 ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tone-danger" ; sty:declares [ sty:property "fill" ; sty:token tok:danger-9 ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-baseline" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke" ; sty:token tok:muted ] ,
-                 [ sty:property "stroke-dasharray" ; sty:raw "3 2" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-uncertainty, .sem-gantt-dependency" ;
-    sty:declares [ sty:property "fill" ; sty:raw "none" ] , [ sty:property "stroke" ; sty:token tok:muted ] ,
-                 [ sty:property "stroke-width" ; sty:raw "1.25" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-arrowhead" ; sty:declares [ sty:property "fill" ; sty:token tok:muted ] .
+    sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "var(--sem-radius-md)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-plot" ;
+    sty:declares [ sty:property "--label" ; sty:raw "clamp(7rem, 30vw, 11rem)" ] ,
+                 [ sty:property "--day" ; sty:raw "clamp(4px, calc(1000px / var(--days, 30)), 18px)" ] ,
+                 [ sty:property "--row" ; sty:raw "1.875rem" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "inline-size" ; sty:raw "max-content" ] ,
+                 [ sty:property "min-inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "font-size" ; sty:raw "var(--sem-text-xs)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-axis" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.75rem" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "var(--label)" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc(var(--days) * var(--day))" ] ,
+                 [ sty:property "border-block-end" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tick" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--at) - var(--first)) * var(--day))" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "4px" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "line-height" ; sty:raw "1.75rem" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-today" ;
-    sty:declares [ sty:property "stroke" ; sty:token tok:flag ] , [ sty:property "stroke-width" ; sty:raw "1.5" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-today-label" ; sty:declares [ sty:property "fill" ; sty:token tok:flag ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "details" ;
-    sty:declares [ sty:property "margin-top" ; sty:token tok:space-2 ] , [ sty:property "overflow-x" ; sty:raw "auto" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "table" ;
-    sty:declares [ sty:property "border-collapse" ; sty:raw "collapse" ] , [ sty:property "width" ; sty:raw "100%" ] ,
-                 [ sty:property "min-width" ; sty:raw "760px" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "th, td" ;
-    sty:declares [ sty:property "padding" ; sty:token tok:space-2 ] , [ sty:property "border-bottom" ; sty:raw "1px solid var(--sem-border)" ] ,
-                 [ sty:property "text-align" ; sty:raw "start" ] .
-[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part "tr > :nth-child(-n+4)" ;
-    sty:declares [ sty:property "white-space" ; sty:raw "nowrap" ] .
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-block" ; sty:raw "0" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc(var(--label) + (var(--at) - var(--first) + 0.5) * var(--day))" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1.5px solid var(--sem-danger-9)" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "3px" ] ,
+                 [ sty:property "padding-block-start" ; sty:raw "1.75rem" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-danger-11)" ] ,
+                 [ sty:property "font-size" ; sty:raw "10px" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttChart ; sty:part ".sem-gantt-tasks" ;
+    sty:declares [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] .
+# A task: its name, then its track, one row of the plot.
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; 
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "var(--label) calc(var(--days) * var(--day))" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "min-block-size" ; sty:raw "var(--row)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--sem-surface)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:state ":nth-child(even)" ;
+    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-label" ;
+    sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] ,
+                 [ sty:property "align-self" ; sty:raw "stretch" ] ,
+                 [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "var(--sem-space-2)" ] ,
+                 [ sty:property "background" ; sty:raw "inherit" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
+                 [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-track" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "align-self" ; sty:raw "stretch" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-track > span" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "inset-inline-start" ; sty:raw "calc((var(--from) - var(--first)) * var(--day))" ] ,
+                 [ sty:property "inline-size" ; sty:raw "calc((var(--to) - var(--from) + 1) * var(--day))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-bar" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "9px" ] ,
+                 [ sty:property "border-radius" ; sty:raw "4px" ] ,
+                 [ sty:property "background" ; sty:raw "var(--tone-solid, var(--sem-accent-9))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-track > .sem-gantt-milestone" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "8px" ] ,
+                 [ sty:property "inline-size" ; sty:raw "14px" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "calc(var(--day) / 2 - 7px)" ] ,
+                 [ sty:property "transform" ; sty:raw "rotate(45deg) scale(0.75)" ] ,
+                 [ sty:property "background" ; sty:raw "var(--tone-solid, var(--sem-accent-9))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-baseline" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "4px" ] ,
+                 [ sty:property "border" ; sty:raw "1px dashed var(--sem-muted)" ] ,
+                 [ sty:property "border-radius" ; sty:raw "5px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-uncertainty" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "10px" ] ,
+                 [ sty:property "border-inline-end" ; sty:raw "1.5px solid var(--sem-muted)" ] ,
+                 [ sty:property "background" ; sty:raw "linear-gradient(var(--sem-muted), var(--sem-muted)) center / 100% 1.5px no-repeat" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-lead" ;
+    sty:declares [ sty:property "inset-block" ; sty:raw "calc(50% - 0.75px) auto" ] ,
+                 [ sty:property "block-size" ; sty:raw "0" ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1.5px dashed var(--sem-muted)" ] .
+# The lead line's arrowhead points to the inline end: toward the task, in either direction.
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part ".sem-gantt-lead::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "''" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "-1px" ] ,
+                 [ sty:property "inset-block-start" ; sty:raw "-4.75px" ] ,
+                 [ sty:property "border-block" ; sty:raw "4px solid transparent" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "6px solid var(--sem-muted)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:GanttTask ; sty:part "a" ;
+    sty:declares [ sty:property "color" ; sty:raw "inherit" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Chart ;
     sty:declares [ sty:property "font-family" ; sty:token tok:font ] ,

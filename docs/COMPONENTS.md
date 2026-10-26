@@ -17,20 +17,24 @@ property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true
 one link around the component; the text rendering gives the address after the content. Keep
 buttons and other links outside that card.
 
-`c:GanttChart` draws dated rows returned by a `sem:View` SELECT. Each solution may bind `?task`,
-`?label`, `?start`, `?end`, `?baselineStart`, `?baselineEnd`, `?uncertainty`, `?dependsOn`,
-`?milestone`, `?tone` and `?href`. Dates are ISO calendar days. A task may occur in several
-solutions, one per dependency; the chart joins them by `?task`. `?tone` may be `sty:Accent`,
-`sty:Neutral`, `sty:Info`, `sty:Success`, `sty:Warning`, or `sty:Danger`. The chart shows a horizontally scrollable plot
-and an accessible table; task links work in both. Variable names can be mapped with the matching
-`c:…Variable` properties. Set `c:dataset` to the node whose changes should refresh the view.
+`c:GanttChart` draws dated tasks from a maintained `sem:View` (also an `iv:View` with
+`iv:materialize iv:Graph`, so its rows are graph data the SPARQL rules read). Each row may bind
+`?task`, `?label`, `?start`, `?end`, `?baselineStart`, `?baselineEnd`, `?uncertainty` (the latest it
+may end), `?dependsOn` (a predecessor's `?task`), `?milestone`, `?tone` (a `sty:Tone`) and `?href`
+(http(s) or a path on the site); map other names with the `c:…Variable` properties. Dates are ISO
+calendar days; a task may come in several rows, one per predecessor. Its plan rule mints one
+`c:GanttTask` per task and a `c:TimeScale` of months; bars are placed by custom properties
+(`--from`, `--to` against the scale's `--first`), so a moved scale re-renders no task, a changed
+row re-renders its own task, and in a right-to-left language time runs right to left. Each task
+says its dates in words, for screen readers and the Text modality. Today is `c:today`, else the
+viewer's.
 
 ```turtle
-ex:planView a sem:View ; sem:select """PREFIX ex: <https://example.org/>
+ex:planView a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """PREFIX ex: <https://example.org/>
 SELECT ?task ?label ?start ?end WHERE {
   ?task ex:start ?start ; ex:end ?end ; rdfs:label ?label
-}""" .
-ex:plan a c:GanttChart ; rdfs:label "Plan" ; c:view ex:planView ; c:dataset ex:planData .
+} ORDER BY ?start""" .
+ex:plan a c:GanttChart ; c:label "Plan" ; c:view ex:planView .
 ```
 
 ## SPARQL first; functions are the escape hatch

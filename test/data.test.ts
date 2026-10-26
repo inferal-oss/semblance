@@ -37,23 +37,17 @@ export function galleryPage(file: string, root: string, kind: StoreKind = 'oxigr
 const gallery = (kind: StoreKind = 'oxigraph', prefer?: 'sparql' | 'function') => galleryPage('data', 'gallery-data', kind, prefer)
 
 describe('c:GanttChart', () => {
-  it('renders dated rows, baselines, uncertainty, milestones, dependencies and a text table', () => {
+  it("shows the gallery's plan: a region that scrolls, a task a row, its dates in words", () => {
     const { root } = gallery()
     const chart = root('dt-gantt-chart')
     expect(chart.getAttribute('data-sem-c')).toBe('gantt-chart')
-    expect(chart.querySelector('.sem-gantt-scroll')?.getAttribute('role')).toBe('region')
-    expect(chart.querySelectorAll('svg .sem-gantt-bar')).toHaveLength(2)
-    expect(chart.querySelectorAll('svg .sem-gantt-baseline')).toHaveLength(1)
-    expect(chart.querySelectorAll('svg .sem-gantt-tone-success')).toHaveLength(1)
-    expect(chart.querySelectorAll('svg .sem-gantt-uncertainty')).toHaveLength(2)
-    expect(chart.querySelectorAll('svg .sem-gantt-milestone')).toHaveLength(1)
-    expect(chart.querySelectorAll('svg .sem-gantt-dependency')).toHaveLength(2)
-    expect(chart.querySelector('svg a')?.getAttribute('href')).toBe('/docs')
-    expect(chart.querySelectorAll('a[href^="javascript:"]')).toHaveLength(0)
-    expect([...chart.querySelectorAll('tbody th')].map((th) => th.textContent)).toEqual(['Sketch the interface', 'Build the component', 'Review'])
-    expect(chart.querySelectorAll('tbody tr')[1]?.textContent).toContain('Uncertainty end: 2026-11-11')
-    expect(chart.querySelectorAll('tbody tr')[1]?.textContent).toContain('After Sketch the interface')
-    expect(chart.querySelector('details summary')?.textContent).toBe('As a table')
+    const region = chart.querySelector('.sem-gantt-scroll')!
+    expect([region.getAttribute('role'), region.getAttribute('tabindex'), region.getAttribute('aria-label')]).toEqual(['region', '0', 'Release plan'])
+    expect([...chart.querySelectorAll('.sem-gantt-label')].map((l) => l.textContent)).toEqual(['Sketch the interface', 'Build the component', 'Write the docs', 'Review'])
+    expect(chart.querySelectorAll('.sem-gantt-bar')).toHaveLength(3)
+    expect(chart.querySelectorAll('.sem-gantt-milestone')).toHaveLength(1)
+    expect(chart.querySelector('.sem-gantt-track')!.getAttribute('aria-hidden')).toBe('true')
+    expect(chart.querySelectorAll('li')[3]!.querySelector('.sem-visually-hidden')!.textContent).toBe('2026-11-17 · Milestone · After Build the component · After Write the docs')
   })
 })
 

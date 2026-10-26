@@ -2,9 +2,7 @@
 export const SVG_TAG_NAMES: Readonly<Record<string, string>> = {
   Svg: 'svg',
   G: 'g',
-  A: 'a',
   Defs: 'defs',
-  Marker: 'marker',
   LinearGradient: 'linearGradient',
   Stop: 'stop',
   Rect: 'rect',
