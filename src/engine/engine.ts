@@ -332,11 +332,21 @@ export class Engine {
    */
   warm(budgetMs: number, slice = 4, only?: (focus: string) => boolean): boolean {
     if (!this.demand) return false
-    const allowed = only ?? this.warmable
+    const test = only ?? this.warmable
+    // Asked once per focus (many parked pairs share one), afresh after each run, which may move it.
+    const known = new Map<string, boolean>()
+    const allowed =
+      test &&
+      ((focus: string) => {
+        let v = known.get(focus)
+        if (v === undefined) known.set(focus, (v = test(focus)))
+        return v
+      })
     const until = performance.now() + budgetMs
     this.warming = true
     try {
-      while (performance.now() < until) {
+      // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
+      while (performance.now() < until && this.hasWarmable(allowed)) {
         let picked = 0
         for (const [rule, foci] of this.deferred) {
           for (const focus of foci) {
@@ -348,8 +358,8 @@ export class Engine {
           }
           if (picked >= slice) break
         }
-        if (!picked) break
         this.run()
+        known.clear()
       }
     } finally {
       this.warming = false
@@ -359,7 +369,8 @@ export class Engine {
 
   /** Whether parked work remains that idle time may evaluate. */
   private hasWarmable(allowed = this.warmable): boolean {
-    for (const [, foci] of this.deferred) for (const focus of foci) if (!allowed || allowed(focusOf(focus))) return true
+    if (!allowed) return this.deferred.size > 0
+    for (const focus of this.deferred.foci()) if (allowed(focus)) return true
     return false
   }
 

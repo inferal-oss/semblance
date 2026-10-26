@@ -251,7 +251,9 @@ describe('the room bookings example', () => {
 describe('moving a meeting costs what it changes', () => {
   it('the same rule runs and DOM operations with eleven meetings as with fifty more', () => {
     const measure = (grow: number) => {
-      const h = bookings('sparql', 'oxigraph', grow)
+      // The site's store: rule runs and DOM operations are the same on any, and Oxigraph's first
+      // render of the week takes most of a minute.
+      const h = bookings('sparql', 'wat', grow)
       // The week alone, in a projection of its own: its DOM operations are the calendar's.
       const week = h.runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer], prefer: 'sparql', name: 'week', roots: [WEEK] })
       const el = h.document.createElement('div')

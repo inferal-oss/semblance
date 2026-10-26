@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { todoOps } from '../src/examples/todo.ts'
-import { NS } from '../src/ns.ts'
+import { NS, SEM } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
 
 /**
@@ -185,4 +185,29 @@ describe('a large result table', () => {
     expect(large.md).toBeLessThan(2 * Math.max(large.table, 20))
     expect(large.md).toBeLessThan(20 * Math.max(small.md, 2))
   }, 120_000)
+})
+
+describe('idle time', () => {
+  it('asks once per focus with parked work, and reads nothing again until something changes', () => {
+    const h = mountShell(5, 'wat')
+    const engine = h.screen.engine
+    const asked = new Map<string, number>()
+    const warmable = engine.warmable!
+    engine.warmable = (focus) => (asked.set(focus, (asked.get(focus) ?? 0) + 1), warmable(focus))
+    h.runtime.warm(8)
+    // The hidden pages park many pairs per focus; each focus is asked about once.
+    expect(asked.size).toBeGreaterThan(100)
+    expect(engine.footprint().deferred).toBeGreaterThan(asked.size * 2)
+    expect(Math.max(...asked.values())).toBe(1)
+    // A slice with nothing new reads no warmth again, however much is parked.
+    let reads = 0
+    const { match } = h.store
+    h.store.match = (...args) => (args[1]?.value === SEM.warm && reads++, match.apply(h.store, args))
+    h.runtime.warm(8)
+    expect(reads).toBe(0)
+    // A part declared eager is seen at once.
+    h.runtime.apply({ add: [h.store.factory.quad(h.store.factory.namedNode('https://semblance.dev/demo#views'), h.store.factory.namedNode(SEM.warm), h.store.factory.namedNode(SEM.Eager))], remove: [] })
+    h.runtime.warm(8)
+    expect(reads).toBeGreaterThan(0)
+  })
 })
