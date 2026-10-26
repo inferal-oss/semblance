@@ -179,8 +179,11 @@ ui:inp-fields-spec a c:Specimen ; c:demonstrates c:Field ; c:label "Field" ;
 # --- Selection: Choice and Chips --------------------------------------------------------------------
 
 ui:inp-sel-choice a c:Choice ; c:label "Plan" ; c:controls ui:inputsDemo ; c:property ui:inp-plan .
+ui:inp-sel-choice-locked a c:Choice ;
+    c:label "Plan (disabled)"@en , "План (вимкнено)"@uk , "Plan (deaktiviert)"@de , "الخطة (معطّلة)"@ar ;
+    c:controls ui:inputsDemo ; c:property ui:inp-plan ; c:disabled true .
 ui:inp-sel-chips a c:Chips ; c:controls ui:inputsDemo ; c:property ui:inp-topic .
-ui:inp-sel-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-sel-choice ui:inp-sel-chips ) .
+ui:inp-sel-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:inp-sel-choice ui:inp-sel-choice-locked ui:inp-sel-chips ) .
 ui:inp-selection a c:Flippable ; c:front ui:inp-selection-spec .
 ui:inp-selection-spec a c:Specimen ; c:demonstrates c:Choice , c:Chips ; c:label "Select and chips" ;
     c:help "c:Choice is a native select for a single-valued property; c:Chips toggle the values of a multi-valued one (ui:inp-topic). Both draw their options from the property's rdfs:range." ;
