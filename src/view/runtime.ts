@@ -20,7 +20,7 @@ import type { FnView, MaintainedPlan, Part, Post, ViewCompiler, ViewPlan, ViewSo
 import { WindowState } from './window.ts'
 import type { Node, Triple } from './sparql.ts'
 import { Terms } from './terms.ts'
-import { GraphLookup } from './probe.ts'
+import { GraphLookup, unionLookup } from './probe.ts'
 import { ZSet } from './zset.ts'
 
 export const IV = 'https://semblance.dev/ns/view#'
@@ -371,6 +371,7 @@ export class ViewRuntime {
       }
       // A view that reads other views' output sees what they wrote this tick.
       const own = v.readsViews ? { add: [...changes.add, ...viewDelta.add], remove: [...changes.remove, ...viewDelta.remove] } : changes
+      if (own !== changes) this.stepRemoved.add(own.remove)
       const w = this.watchdog
       const t0 = w ? w.clock() : 0
       const d = v.step(own, now)
@@ -771,13 +772,28 @@ export class ViewRuntime {
    * the new state together, for dependency probes.
    */
   lookup(removed: readonly Quad[], readsViews: boolean): Lookup {
-    // One per dataset and set of removals while a tick lasts: every view's probes share it (probe.ts).
+    // In a tick: the input graphs' lookup is one for the whole tick, every view's probes share it
+    // (probe.ts); a view that reads other views adds the views graph's, which goes when a view
+    // writes it (its removals: what views wrote this tick).
+    if (removed === this.tickRemoved || this.stepRemoved.has(removed)) {
+      const input = this.shared(this.tickRemoved, false, () => new GraphLookup(this.store, this.graphs, this.tickRemoved))
+      if (!readsViews) return input.lookup
+      const views = this.shared(removed, true, () => new GraphLookup(this.store, [this.graph], removed.filter((q) => q.graph.equals(this.graph))))
+      return unionLookup(input.lookup, views.lookup)
+    }
+    return this.shared(removed, readsViews, () => new GraphLookup(this.store, this.datasetFor(readsViews), removed)).lookup
+  }
+
+  private shared(removed: readonly Quad[], viewsGraph: boolean, make: () => GraphLookup): GraphLookup {
     let byDataset = this.lookups.get(removed)
     if (!byDataset) this.lookups.set(removed, (byDataset = new Map()))
-    let l = byDataset.get(readsViews)
-    if (!l) byDataset.set(readsViews, (l = new GraphLookup(this.store, this.datasetFor(readsViews), removed)))
-    return l.lookup
+    let l = byDataset.get(viewsGraph)
+    if (!l) byDataset.set(viewsGraph, (l = make()))
+    return l
   }
+
+  /** A view step's removals (the tick's and what views wrote before it): lookups take the tick's input part from the shared one. */
+  private stepRemoved = new WeakSet<readonly Quad[]>()
 
   /** Shared lookups (see lookup()), by the removals they put back; the views graph's go when a view writes it. */
   private lookups = new Map<readonly Quad[], Map<boolean, GraphLookup>>()
