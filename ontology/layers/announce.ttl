@@ -1,3 +1,4 @@
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -53,12 +54,15 @@ ann:Toasts a sem:Rendering ;
     sem:stratum -5 ;
     sem:inputOnly true .
 ann:Toasts-fn a sem:Rule ; sem:implements ann:Toasts ; sem:function "announce:toasts" .
-# The announcing events among the newest 50 sequence numbers of the log, the region's c:limit
-# (default 3) newest of them; what each says in the viewer's language.
+# The members the region's maintained view (ann:RecentAnnouncements) holds, as its rows in the views
+# graph (rs:, under the region: sem:readsMinted re-runs it when they change), as the function reads
+# them; without the view, the announcing events among the log's newest 50 sequence numbers, the
+# region's c:limit (default 3) newest of them. What each says, in the viewer's language.
 ann:Toasts-sparql a sem:Rule ;
     sem:implements ann:Toasts ;
     sem:follows ann:from ;
     sem:watches rdf:type , ann:from , c:limit , beh:latest ;
+    sem:readsMinted true ;
     sem:bulk false ;
     sem:construct """
 CONSTRUCT {
@@ -67,25 +71,34 @@ CONSTRUCT {
 }
 WHERE {
   $this ann:from ?stream . FILTER(isIRI(?stream))
-  OPTIONAL { $this c:limit ?limitRaw }
-  BIND(COALESCE(xsd:double(?limitRaw), 3) AS ?limit)
-  { SELECT ?m ?seq ?reaction WHERE {
-    $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
-    ?stream tree:member ?m . ?m beh:sequence ?seq . FILTER(?seq > ?top - 50)
-    ?m beh:handledBy ?reaction .
+  {
+    BIND(IRI(CONCAT(STR($this), "/~view-RecentAnnouncements")) AS ?view)
+    ?view a rs:ResultSet ; rs:solution ?row . ?row rs:binding ?mBinding . ?mBinding rs:variable "m" ; rs:value ?m .
+    ?m beh:sequence ?seq ; beh:handledBy ?reaction .
     FILTER(EXISTS { ?reaction ann:announces ?a } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
-  } }
-  # The newest c:limit of them.
-  { SELECT ?m (COUNT(DISTINCT ?newer) AS ?rank) WHERE {
-    $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
-    ?stream tree:member ?m . ?m beh:sequence ?seq ; beh:handledBy ?r . FILTER(?seq > ?top - 50)
-    FILTER(EXISTS { ?r ann:announces ?a } || EXISTS { ?r ann:announcesFrom ?from . ?m ?from ?b })
-    OPTIONAL {
-      ?stream tree:member ?newer . ?newer beh:sequence ?ns ; beh:handledBy ?nr . FILTER(?ns > ?seq)
-      FILTER(EXISTS { ?nr ann:announces ?na } || EXISTS { ?nr ann:announcesFrom ?nf . ?newer ?nf ?nb })
-    }
-  } GROUP BY ?m }
-  FILTER(?rank < ?limit)
+  } UNION {
+    BIND(IRI(CONCAT(STR($this), "/~view-RecentAnnouncements")) AS ?noView)
+    FILTER NOT EXISTS { ?noView a rs:ResultSet }
+    OPTIONAL { $this c:limit ?limitRaw }
+    BIND(COALESCE(xsd:double(?limitRaw), 3) AS ?limit)
+    { SELECT ?m ?seq ?reaction WHERE {
+      $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
+      ?stream tree:member ?m . ?m beh:sequence ?seq . FILTER(?seq > ?top - 50)
+      ?m beh:handledBy ?reaction .
+      FILTER(EXISTS { ?reaction ann:announces ?a } || EXISTS { ?reaction ann:announcesFrom ?from . ?m ?from ?b })
+    } }
+    # The newest c:limit of them.
+    { SELECT ?m (COUNT(DISTINCT ?newer) AS ?rank) WHERE {
+      $this ann:from ?stream . ?stream beh:latest ?head . ?head beh:sequence ?top .
+      ?stream tree:member ?m . ?m beh:sequence ?seq ; beh:handledBy ?r . FILTER(?seq > ?top - 50)
+      FILTER(EXISTS { ?r ann:announces ?a } || EXISTS { ?r ann:announcesFrom ?from . ?m ?from ?b })
+      OPTIONAL {
+        ?stream tree:member ?newer . ?newer beh:sequence ?ns ; beh:handledBy ?nr . FILTER(?ns > ?seq)
+        FILTER(EXISTS { ?nr ann:announces ?na } || EXISTS { ?nr ann:announcesFrom ?nf . ?newer ?nf ?nb })
+      }
+    } GROUP BY ?m }
+    FILTER(?rank < ?limit)
+  }
   OPTIONAL { ?reaction ann:announcesFrom ?saidBy FILTER(isIRI(?saidBy)) }
   LATERAL { OPTIONAL { SELECT ?m ?reaction ?saidBy ?fromEvent WHERE {
   ?reaction ann:announcesFrom ?saidBy . 
