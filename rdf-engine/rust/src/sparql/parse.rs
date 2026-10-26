@@ -864,6 +864,7 @@ impl P<'_, '_> {
             } else {
                 let mut elts = Vec::new();
                 self.triples_block(&mut elts)?;
+                let magic = self.fold_magic(&mut elts);
                 // Paths are planned with the triples: the BGP evaluates the
                 // most-bound element first, whichever kind it is.
                 let triples: Vec<Triple> = elts
@@ -875,6 +876,10 @@ impl P<'_, '_> {
                     .collect();
                 if !triples.is_empty() {
                     g = join(g, Pattern::Bgp(triples));
+                }
+                // Magic relations after the triples, which may bind their inputs.
+                for m in magic {
+                    g = join(g, Pattern::Magic(Box::new(m)));
                 }
                 if !self.eat(b".") && self.at_triple_start() {
                     return self.c.err("expected .");
@@ -1220,6 +1225,64 @@ impl P<'_, '_> {
             b'<' if self.c.starts(b"<<") && !self.c.starts(b"<<(") => self.reified(out),
             _ => self.var_or_term(),
         }
+    }
+
+    /// Take the magic relations (EXTENSIONS.md) out of a block's triples: a
+    /// triple whose predicate is one, with collections written as its subject
+    /// and object, loses the collections' rdf:first/rdf:rest triples.
+    fn fold_magic(&mut self, elts: &mut Vec<Elt>) -> Vec<Magic> {
+        let mut found = Vec::new();
+        for (i, e) in elts.iter().enumerate() {
+            let Elt::T(Triple { p: Tv::Term(p), .. }) = e else { continue };
+            let v = self.dict.value(*p);
+            if let Some(rel) = v.strip_prefix(super::ext::SX).and_then(super::ext::rel) {
+                found.push((i, rel));
+            }
+        }
+        if found.is_empty() {
+            return Vec::new();
+        }
+        let (first, rest, nil) = (self.rdf(b"first"), self.rdf(b"rest"), self.rdf(b"nil"));
+        // A collection's items from its first cell, and the indices of its triples.
+        let list = |elts: &[Elt], head: &Tv, used: &mut Vec<usize>| -> Option<Vec<Tv>> {
+            let mut items = Vec::new();
+            let mut cell = head.clone();
+            loop {
+                let Tv::Var(c) = cell else { return (matches!(cell, Tv::Term(t) if t == nil) && !items.is_empty()).then_some(items) };
+                let (mut item, mut next) = (None, None);
+                for (j, e) in elts.iter().enumerate() {
+                    if let Elt::T(t) = e {
+                        if matches!(t.s, Tv::Var(s) if s == c) {
+                            match t.p {
+                                Tv::Term(p) if p == first => item = Some((j, t.o.clone())),
+                                Tv::Term(p) if p == rest => next = Some((j, t.o.clone())),
+                                // The relation itself, whose subject is the list's head.
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                let ((a, x), (b, n)) = (item?, next?);
+                used.extend([a, b]);
+                items.push(x);
+                cell = n;
+            }
+        };
+        let mut drop = Vec::new();
+        let mut out = Vec::new();
+        for (i, rel) in found {
+            let Elt::T(t) = &elts[i] else { continue };
+            let mut used = vec![i];
+            let (Some(ins), Some(outs)) = (list(elts, &t.s, &mut used), list(elts, &t.o, &mut used)) else { continue };
+            drop.extend(used);
+            out.push(Magic { rel, ins, outs });
+        }
+        let mut k = 0;
+        elts.retain(|_| {
+            k += 1;
+            !drop.contains(&(k - 1))
+        });
+        out
     }
 
     fn property_list_node(&mut self, out: &mut Vec<Elt>) -> Res<Tv> {
@@ -1711,6 +1774,12 @@ impl P<'_, '_> {
                     return Ok(Expr::Cast(dt, Box::new(args.into_iter().next().unwrap())));
                 }
             }
+            // An extension function (EXTENSIONS.md); with the wrong number of arguments, an error.
+            if let Some((f, min, max)) = iri.strip_prefix(super::ext::SX).and_then(super::ext::func) {
+                if (min..=max).contains(&args.len()) {
+                    return Ok(Expr::Call(Func::X(f), args));
+                }
+            }
             return Ok(Expr::Unknown);
         }
         self.builtin_call()
@@ -1959,6 +2028,7 @@ pub fn pattern_vars(p: &Pattern, out: &mut Vec<Var>) {
         }
         Pattern::Values(vs, _) => vs.iter().for_each(|v| add(*v, out)),
         Pattern::Sub(s) => s.project.iter().for_each(|v| add(*v, out)),
+        Pattern::Magic(m) => m.ins.iter().chain(&m.outs).for_each(|x| tv_vars(x, out)),
     }
 }
 
