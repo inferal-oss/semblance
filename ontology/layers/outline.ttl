@@ -20,7 +20,8 @@
 # The name is in the viewer's language: the SPARQL rule picks it from the viewer's preferences
 # (l10n:prefers) the way the localization layer picks a component's label (the most preferred
 # language, then the untagged name, then English, then any), and is re-run when they change; the
-# function twin reads it through util.text, which picks the same way.
+# function twin reads it through util.text, which picks the same way. Without an ol:label of its own,
+# a component shows its ol:defaultLabel, which a layer may derive (an island's is what it mounts).
 #
 # Outlines are overlays: the outline is a CSS outline and the tag the root's ::before, absolutely
 # positioned, so showing them never moves anything. A component whose root is a replaced element
@@ -34,6 +35,9 @@
 ol:label a owl:DatatypeProperty ;
     rdfs:label "Outline name"@en , "Назва обведення"@uk , "Umrissname"@de , "اسم الإطار"@ar ;
     rdfs:comment "On any component: the name its outline shows, short, language-tagged like c:label. Shown on its root as data-sem-outline."@en .
+ol:defaultLabel a owl:DatatypeProperty ;
+    rdfs:label "Default outline name"@en , "Типова назва обведення"@uk , "Standard-Umrissname"@de , "اسم الإطار الافتراضي"@ar ;
+    rdfs:comment "On any component: the name its outline shows when it has no ol:label of its own. For a layer to derive (an island's is what it mounts), so the component's own name always wins."@en .
 ol:shows a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:label "Show outlines"@en , "Показати обведення"@uk , "Umrisse zeigen"@de , "إظهار الإطارات"@ar ;
     rdfs:comment "On any component: true outlines every named component (ol:label) inside it, dashed and named. Marks its root data-sem-outlines=\"shown\"."@en .
@@ -43,9 +47,9 @@ ol:shows a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
 ol:Named a sem:Rendering ;
     rdfs:comment "A component's outline name, in the viewer's language, on its root (data-sem-outline)."@en ;
     sem:targets sem:Component ;
-    sem:requires ol:label ;
+    sem:requires ol:label , ol:defaultLabel ;
     sem:stratum 20 ;
-    sem:watches ol:label .
+    sem:watches ol:label , ol:defaultLabel .
 ol:Named-fn a sem:Rule ; sem:implements ol:Named ; sem:function "ol:named" .
 ol:Named-sparql a sem:Rule ;
     sem:implements ol:Named ;
@@ -55,8 +59,8 @@ CONSTRUCT {
   ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-outline" ; rdfhtml:attributeValue ?name .
 }
 WHERE {
-  # One name, in the viewer's language (as l10n:Labels-sparql picks a c:label).
-  $this ol:label ?some . FILTER(isLiteral(?some))
+  # One name, in the viewer's language (as l10n:Labels-sparql picks a c:label), else the default.
+  $this ol:label|ol:defaultLabel ?some . FILTER(isLiteral(?some))
   OPTIONAL {
     $this ol:label ?pick . FILTER(isLiteral(?pick))
     ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
@@ -74,7 +78,8 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this ol:label ?en FILTER(LCASE(LANG(?en)) = "en") }
   OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this ol:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
   OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this ol:label ?any FILTER(isLiteral(?any)) }
-  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any)) AS ?name)
+  OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx) && !BOUND(?any)) $this ol:defaultLabel ?default FILTER(isLiteral(?default)) }
+  BIND(STR(COALESCE(?pick, ?plain, ?en, ?enx, ?any, ?default)) AS ?name)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-outline")) AS ?mark)
 }""" .
