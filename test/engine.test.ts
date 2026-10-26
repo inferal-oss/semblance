@@ -216,7 +216,30 @@ describe('reconfiguration and layers', () => {
       <urn:x:Bad> a sem:Rule ; sem:targets c:Button ; sem:stratum 50 ;
         sem:construct """CONSTRUCT { ?x a c:Button ; c:label "spawned" } WHERE { $this a c:Button . BIND(IRI(CONCAT(STR($this), "/~spawn")) AS ?x) }""" .`
     const store = loadStore('oxigraph', todoApp(1), extra)
-    expect(() => new Runtime(store).project({ modality: MOD.Screen })).toThrow(/Stratification violation/)
+    expect(() => new Runtime(store).project({ modality: MOD.Screen })).toThrow(/Stratification violation.*sem:inputOnly/)
+  })
+
+  it('sem:watches narrows changes through sem:follows too (#54; docs/COMPONENTS.md)', () => {
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix ex: <urn:w:> .
+      <urn:w:Rule> a sem:Rule ; sem:targets ex:Shown ; sem:stratum 1 ; sem:follows ex:of ; sem:watches ex:of , ex:note ;
+        sem:construct """CONSTRUCT { $this <urn:w:seen> ?n } WHERE { $this <urn:w:of> ?d . ?d <urn:w:note> ?n }""" .
+      ex:a a ex:Shown ; ex:of ex:d . ex:d ex:note "one" ; ex:other "x" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen })
+    const f = store.factory
+    const runs = () => screen.engine.stats.byRule.get('urn:w:Rule')?.runs ?? 0
+    const seen = () => store.match(f.namedNode('urn:w:a'), f.namedNode('urn:w:seen'), null).map((q) => q.object.value)
+    expect(seen()).toEqual(['one'])
+    const before = runs()
+    // A watched predicate of the followed node re-runs it...
+    runtime.apply({ remove: store.match(f.namedNode('urn:w:d'), f.namedNode('urn:w:note'), null), add: [f.quad(f.namedNode('urn:w:d'), f.namedNode('urn:w:note'), f.literal('two'))] })
+    expect(seen()).toEqual(['two'])
+    expect(runs()).toBe(before + 1)
+    // ...an unwatched one does not.
+    runtime.apply({ remove: [], add: [f.quad(f.namedNode('urn:w:d'), f.namedNode('urn:w:other'), f.literal('y'))] })
+    expect(runs()).toBe(before + 1)
   })
 
   it('refuses blank nodes in rule output', () => {

@@ -6,14 +6,18 @@
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 # Announcements layer. A reaction may say what it means to the person who
 # triggered it (ann:announces "Todo added", optionally ann:tone). A
 # c:ToastRegion that reads a change log (ann:from beh:ChangeLog) shows the
-# most recent announcing events as c:Toast instances, newest last: the layer
-# walks the log from its head (beh:latest / beh:previous), so its cost is the
-# window, not the history. Toasts are minted before components render
-# (stratum -5) and hosted by the region (c:hosts); dismissing one closes it.
+# most recent announcing events as c:Toast instances, newest last. Which they
+# are is a maintained view per region (ann:RecentAnnouncements, docs/IVM.md): a
+# top-k over the log's members by sequence, so an event costs O(log n) whatever
+# the log holds, and a quiet event changes nothing. Without views (a store
+# without SPARQL) the layer walks the log from its head (beh:latest /
+# beh:previous) a bounded number of steps. Toasts are minted before components
+# render (stratum -5) and hosted by the region (c:hosts); dismissing one closes it.
 
 <https://semblance.dev/ns/announce> a owl:Ontology ;
     rdfs:label "Semblance announcements layer"@en .
@@ -26,6 +30,22 @@ ann:announcesFrom a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range r
     rdfs:comment "What the reaction's effect means is said by the event itself: its value of this property (e.g. a refused drop's reason), else ann:announces."@en .
 ann:tone a owl:ObjectProperty ; rdfs:domain beh:Reaction ; rdfs:range sty:Tone .
 ann:from a owl:ObjectProperty ; rdfs:domain c:ToastRegion ; rdfs:comment "The change log whose announcing events the region shows."@en .
+
+ann:RecentAnnouncements a iv:View ;
+    iv:targets c:ToastRegion ;
+    iv:materialize iv:Graph ;
+    iv:parameter [ iv:variable "limit" ; iv:property c:limit ; iv:default 3 ] ;
+    rdfs:label "recent announcements"@en ;
+    rdfs:comment "Per region: the newest members of its change log (ann:from) that a reaction announces, at most c:limit."@en ;
+    sem:select """
+SELECT DISTINCT ?m ?seq WHERE {
+  $this ann:from ?stream .
+  ?stream tree:member ?m .
+  ?m beh:sequence ?seq ; beh:handledBy ?reaction .
+  FILTER(EXISTS { ?reaction ann:announces ?said } || EXISTS { ?reaction ann:announcesFrom ?p . ?m ?p ?told })
+}
+ORDER BY DESC(?seq)
+LIMIT $limit""" .
 
 ann:Toasts a sem:Rendering ;
     sem:targets c:ToastRegion ;

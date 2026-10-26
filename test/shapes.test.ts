@@ -16,11 +16,13 @@ const C = NS.c
 const graph = `
 @prefix c: <${C}> .
 @prefix ui: <${UI}> .
-ui:root a c:Stack ; c:children ( ui:sl-field ui:tf-field ui:ci-field ui:sl-alone ui:tf-alone ui:ci-alone ui:sl-own ui:tabs ) .
+ui:root a c:Stack ; c:children ( ui:sl-field ui:tf-field ui:ci-field ui:tf-date ui:tf-unsupported ui:sl-alone ui:tf-alone ui:ci-alone ui:sl-own ui:tabs ) .
 ui:sl-field a c:Field ; c:label "Brightness" ; c:content ui:sl-in-field .
 ui:sl-in-field a c:Slider ; c:value 60 .
 ui:tf-field a c:Field ; c:label "Name" ; c:content ui:tf-in-field .
 ui:tf-in-field a c:TextField ; c:placeholder "Ada" .
+ui:tf-date a c:TextField ; c:label "Due" ; c:inputType "date" .
+ui:tf-unsupported a c:TextField ; c:label "Colour" ; c:inputType "color" .
 ui:ci-field a c:Field ; c:label "Code" ; c:content ui:ci-in-field .
 ui:ci-in-field a c:CodeInput ; c:length 6 .
 ui:sl-alone a c:Slider ; c:value 10 .
@@ -68,10 +70,15 @@ describe('component shapes: a c:Field labels its content (sh:or with an inverse 
       // The preferred implementation is the one that ran.
       expect(h.screen.engine.stats.byRule.get(`${NS.val}Shapes-${prefer === 'sparql' ? 'sparql' : 'fn'}`)?.runs).toBeGreaterThan(0)
       // Inside a Field, or with a label of its own: no violation.
-      for (const id of ['sl-in-field', 'tf-in-field', 'ci-in-field', 'sl-own']) {
+      for (const id of ['sl-in-field', 'tf-in-field', 'tf-date', 'ci-in-field', 'sl-own']) {
         expect(h.results(id), id).toEqual([])
         expect(h.root(id).hasAttribute('data-sem-shape-invalid'), id).toBe(false)
       }
+      expect(h.root('tf-date').querySelector('input')?.getAttribute('type')).toBe('date')
+      const unsupported = h.results('tf-unsupported')
+      expect(unsupported).toHaveLength(1)
+      expect(h.about(unsupported[0]!, 'resultPath')).toEqual([C + 'inputType'])
+      expect(h.root('tf-unsupported').getAttribute('data-sem-shape-invalid')).toBe('1')
       // Standalone without a label, or the content of a tab: one sh:or result about the focus itself.
       const expected = {
         'sl-alone': ['SliderShape', 'A slider needs a label'],

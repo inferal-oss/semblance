@@ -219,6 +219,8 @@ const linechart: FnRule = (ctx, focus) => {
 
 // --- findings ----------------------------------------------------------------------------------
 
+const PERF = 'https://semblance.dev/ns/perf#'
+
 const findings: FnRule = (ctx, focus) => {
   if (!ctx.sparql) return message(ctx, focus, 'Judgements run SPARQL; choose a store with SPARQL.')
   const cls = ctx.object(focus, C.judgementClass)
@@ -231,13 +233,17 @@ const findings: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const sections: NamedNode[] = []
   judgements.forEach((j, ji) => {
+    // A judgement that is a maintained view (iv:View) has its findings in the views graph,
+    // kept up to date as observations arrive; any other is run.
     let quads: Quad[]
-    try {
-      quads = ctx.construct(str(ctx.object(j, SEM.construct)) ?? '')
-    } catch (e) {
-      quads = []
-      sections.push(o.el(`j${ji}-error`, 'P', { class: 'sem-empty' }, [o.text(`j${ji}-error-t`, `${labelOf(ctx, j)} failed: ${(e as Error).message}`)]))
-    }
+    if (ctx.match(j, RDF_TYPE, NS.iv + 'View').length) quads = ctx.match(null, PERF + 'judgement', j).flatMap((q) => ctx.match(q.subject, null, null))
+    else
+      try {
+        quads = ctx.construct(str(ctx.object(j, SEM.construct)) ?? '')
+      } catch (e) {
+        quads = []
+        sections.push(o.el(`j${ji}-error`, 'P', { class: 'sem-empty' }, [o.text(`j${ji}-error-t`, `${labelOf(ctx, j)} failed: ${(e as Error).message}`)]))
+      }
     const items = [...groupBy(quads, (q) => q.subject.value)]
       .map(([, qs]) => ({
         text: qs.find((q) => q.predicate.value === SEM.text)?.object.value ?? '',
