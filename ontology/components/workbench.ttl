@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -59,7 +60,8 @@ c:loads a owl:ObjectProperty ; rdfs:range sem:Query ;
     rdfs:comment "On a rendered element: the sample query that activating it loads and runs."@en .
 
 c:QueryWorkbenchRendering a sem:Rendering ; sem:targets c:QueryWorkbench ; sem:stratum 0 ;
-    sem:functionOnly "It names each sample's query form, found by tokenizing its text past the prologue (comments, PREFIX and BASE), which SPARQL's REGEX can only approximate; and it lays out a list of any length." .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it names each sample's query form, found by tokenizing past the prologue (comments, PREFIX and BASE), which REGEX alone only approximates." ;
+    sem:needsExtension sx:Matches .
 c:QueryWorkbenchRendering-fn a sem:Rule ; sem:implements c:QueryWorkbenchRendering ; sem:function "workbench:workbench" .
 
 # Arrow keys move between the samples (focus only; Enter or Space loads one).
@@ -297,7 +299,8 @@ c:ResultTable a owl:Class ;
     sem:slug "result-table" .
 c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "It runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." .
+    sem:functionOnly "awaits #1 (query results as graph rows): it runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
 
 # --- the table as Markdown ----------------------------------------------------------------------------
@@ -403,7 +406,8 @@ c:selectedTerm."""@en ;
 # Not the selection: changing it must not run the query or lay the graph out again.
 c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "It runs the query held in the data and computes a layout (trigonometry, layering by longest path), which SPARQL cannot do." .
+    sem:functionOnly "awaits sx:Math (sx:sin, sx:cos): it lays the result graph out (trigonometry, layering by longest path). (Its triples would come from a step that writes the result as graph data.)" ;
+    sem:needsExtension sx:Math .
 c:ResultGraphRendering-fn a sem:Rule ; sem:implements c:ResultGraphRendering ; sem:function "workbench:graph" .
 
 # --- selecting in the graph ----------------------------------------------------------------------------
@@ -501,7 +505,9 @@ WHERE {
     } UNION {
       FILTER(!?selected)
       BIND(IRI(CONCAT(STR($this), "/~selection-text")) AS ?line)
-      OPTIONAL { c:GraphHintPhrase rdfs:label ?hint0 FILTER(lang(?hint0) = "") }
+      OPTIONAL { ?hint0At l10n:of c:GraphHintPhrase ; l10n:name ?hint0 }
+  OPTIONAL { ?hint0At l10n:of c:GraphHintPhrase ; l10n:name ?hint0 }
+  OPTIONAL { c:GraphHintPhrase rdfs:label ?hint0 FILTER(lang(?hint0) = "") }
       OPTIONAL { c:GraphHintPhrase rdfs:label ?hint1 FILTER(langMatches(lang(?hint1), "en")) }
       BIND(STR(COALESCE(?hint0, ?hint1, "Select a node to highlight its connections: click it, or press Enter on it.")) AS ?text)
     } UNION {
@@ -514,9 +520,13 @@ WHERE {
       FILTER(?selected)
       BIND(IRI(CONCAT(STR(?sel), "-a-aria-label")) AS ?nameAttribute)
       ?nameAttribute rdfhtml:attributeValue ?name .
-      OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
+      OPTIONAL { ?many0At l10n:of c:GraphSelectionPhrase ; l10n:name ?many0 }
+  OPTIONAL { ?many0At l10n:of c:GraphSelectionPhrase ; l10n:name ?many0 }
+  OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
       OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) }
-      OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
+      OPTIONAL { ?one0At l10n:of c:GraphSelectionOnePhrase ; l10n:name ?one0 }
+  OPTIONAL { ?one0At l10n:of c:GraphSelectionOnePhrase ; l10n:name ?one0 }
+  OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
       OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) }
       BIND(IF(?links = 1, STR(COALESCE(?one0, ?one1, "{name} — 1 connection")), STR(COALESCE(?many0, ?many1, "{name} — {n} connections"))) AS ?pattern)
       BIND(IF(CONTAINS(?pattern, "{name}"), CONCAT(STRBEFORE(?pattern, "{name}"), ?name, STRAFTER(?pattern, "{name}")), ?pattern) AS ?named)
@@ -526,7 +536,9 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~selection-clear-text")) AS ?clearText)
       BIND(IRI(CONCAT(STR($this), "/~selection-clear-aria-label")) AS ?clearLabel)
       BIND(IRI(CONCAT(STR($this), "/~selection-clear-data-sem-escape")) AS ?escape)
-      OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear0 FILTER(lang(?clear0) = "") }
+      OPTIONAL { ?clear0At l10n:of c:ClearSelectionPhrase ; l10n:name ?clear0 }
+  OPTIONAL { ?clear0At l10n:of c:ClearSelectionPhrase ; l10n:name ?clear0 }
+  OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear0 FILTER(lang(?clear0) = "") }
       OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear1 FILTER(langMatches(lang(?clear1), "en")) }
       BIND(STR(COALESCE(?clear0, ?clear1, "Clear the selection")) AS ?clearWord)
     }
@@ -582,7 +594,8 @@ as a SPARQL result set (the rs: vocabulary of the SPARQL test suite)."""@en ;
     sem:slug "result-turtle" .
 c:ResultTurtleRendering a sem:Rendering ; sem:targets c:ResultTurtle ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "It runs the query held in the data and pretty-prints the result as Turtle tokens, which needs a tokenizer." .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the result as Turtle colored token by token. (Its rows would come from a step that writes them as graph data, as the views runtime does.)" ;
+    sem:needsExtension sx:Matches .
 c:ResultTurtleRendering-fn a sem:Rule ; sem:implements c:ResultTurtleRendering ; sem:function "workbench:turtle" .
 
 # --- phrases --------------------------------------------------------------------------------------------------

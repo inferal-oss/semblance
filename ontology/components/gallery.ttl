@@ -699,6 +699,8 @@ WHERE {
 c:LightboxRendering-sparql-text a sem:Rule ;
     sem:implements c:LightboxRendering ;
     sem:modality mod:Text ;
+    # Per focus: its UNION branches read $this, which a bulk run's VALUES would not bind inside them.
+    sem:bulk false ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:id ?rootId ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?line .

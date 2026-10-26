@@ -7,7 +7,7 @@ import { BEH, C, DND, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_S
 import { mint, type Delta } from '../rdf.ts'
 import { md5 } from './data.ts'
 import { FB, hitMarks, phrase } from './feedback.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { encodeForUri, named, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
 /** Frame vocabulary (window.ttl) not in ns.ts. */
@@ -293,7 +293,7 @@ export const taskbar: FnRule = (ctx, focus) => {
     const symbol = (s.minimized || s.maximized ? symbolOf(ctx, s.state) : s.edge ? symbolOf(ctx, s.edgeNode) : undefined) ?? '▭'
     const slug = s.minimized ? 'minimized' : s.maximized ? 'maximized' : s.edge ? 'docked' : 'normal'
     const stateLabel = s.state ? (text(ctx, s.state, RDFS_LABEL) ?? slug) : undefined
-    return { w, key: encodeURIComponent(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
+    return { w, key: encodeForUri(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
   })
   const edgeNode = ctx.object(focus, WIN.attachedTo)
   const edge = EDGES.find((e) => e.iri === edgeNode?.value)

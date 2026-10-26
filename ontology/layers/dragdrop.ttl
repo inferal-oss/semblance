@@ -345,8 +345,10 @@ WHERE {
             ?x ?p ?v
             FILTER(!COALESCE(IF(?rangeBound = sh:minInclusive, ?v >= ?limit, IF(?rangeBound = sh:maxInclusive, ?v <= ?limit, IF(?rangeBound = sh:minExclusive, ?v > ?limit, ?v < ?limit))), false))
             BIND(?ps AS ?violated) }
-    OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
-    OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
+    OPTIONAL { ?ownAt l10n:of ?violated ; l10n:message ?own }
+  OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?generalAt l10n:of ?shape ; l10n:message ?general }
+  OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
     BIND(STR(COALESCE(?own, ?general, "It does not belong here.")) AS ?said)
   } GROUP BY ?this ?x ?r } }
   # How many members the receptacle has, whether this is one already, and its capacity.
@@ -355,8 +357,10 @@ WHERE {
   LATERAL { OPTIONAL { SELECT ?this ?r (MIN(?bound) AS ?max) (MIN(?said) AS ?full) WHERE {
     ?capacity sh:targetNode ?r ; sh:property ?ps . ?ps sh:maxCount ?bound .
     { $this dnd:memberOf ?m . ?ps sh:path/sh:inversePath ?m } UNION { $this dnd:members ?m . ?ps sh:path ?m }
-    OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
-    OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
+    OPTIONAL { ?ownAt l10n:of ?ps ; l10n:message ?own }
+  OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?generalAt l10n:of ?capacity ; l10n:message ?general }
+  OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
     BIND(STR(COALESCE(?own, ?general, "There is no room for it here.")) AS ?said)
   } GROUP BY ?this ?r } }
   # A target that is a field over its membership property: that shape's sh:maxCount too.
@@ -448,7 +452,9 @@ WHERE {
   $this a/rdfs:subClassOf* dnd:Draggable .
   OPTIONAL { $this dnd:carries ?declared }
   OPTIONAL { $this dnd:name ?ownName FILTER(isLiteral(?ownName) && lang(?ownName) = "") }
+  OPTIONAL { ?ownLabelAt l10n:of $this ; l10n:label ?ownLabel }
   OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+  OPTIONAL { ?draggablePhraseAt l10n:of dnd:DraggablePhrase ; l10n:name ?draggablePhrase }
   OPTIONAL { dnd:DraggablePhrase rdfs:label ?draggablePhrase FILTER(langMatches(lang(?draggablePhrase), "en")) }
   BIND(COALESCE(?declared, $this) AS ?x)
   BIND(STR(?x) AS ?carriedId)
@@ -456,7 +462,9 @@ WHERE {
   BIND(EXISTS { $this dnd:lifted ?anyDrag } AS ?lifted)
   # Where it would go: the zone's name, the verdict there, and the neighbour it would precede or follow.
   OPTIONAL { $this dnd:lifted ?drag . ?drag dnd:into ?r ; dnd:dropTarget ?t .
+             OPTIONAL { ?zoneNameAt l10n:of ?r ; l10n:name ?zoneName }
              OPTIONAL { ?r rdfs:label ?zoneName FILTER(lang(?zoneName) = "") }
+             OPTIONAL { ?zoneLabelAt l10n:of ?r ; l10n:label ?zoneLabel }
              OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") }
              # A zone that names itself (a workspace pane, by its tabs) says so first.
              OPTIONAL { ?t dnd:zone ?namedZone . ?namedZone dnd:receptacle ?r ; c:label ?zoneOwn FILTER(lang(?zoneOwn) = "") } }
@@ -467,9 +475,13 @@ WHERE {
              FILTER(STRSTARTS(STR(?bd), CONCAT(STR(?t3), "/~"))) }
   OPTIONAL { $this dnd:lifted ?drag4 . ?drag4 dnd:after ?a ; dnd:dropTarget ?t4 . ?ad dnd:carries ?a ; dnd:name ?afterName
              FILTER(STRSTARTS(STR(?ad), CONCAT(STR(?t4), "/~"))) }
+  OPTIONAL { ?pickedUpAt l10n:of dnd:PickedUpPhrase ; l10n:name ?pickedUp }
   OPTIONAL { dnd:PickedUpPhrase rdfs:label ?pickedUp FILTER(langMatches(lang(?pickedUp), "en")) }
+  OPTIONAL { ?beforeWordAt l10n:of dnd:BeforePhrase ; l10n:name ?beforeWord }
   OPTIONAL { dnd:BeforePhrase rdfs:label ?beforeWord FILTER(langMatches(lang(?beforeWord), "en")) }
+  OPTIONAL { ?afterWordAt l10n:of dnd:AfterPhrase ; l10n:name ?afterWord }
   OPTIONAL { dnd:AfterPhrase rdfs:label ?afterWord FILTER(langMatches(lang(?afterWord), "en")) }
+  OPTIONAL { ?refusedWordAt l10n:of dnd:RefusedPhrase ; l10n:name ?refusedWord }
   OPTIONAL { dnd:RefusedPhrase rdfs:label ?refusedWord FILTER(langMatches(lang(?refusedWord), "en")) }
   BIND(STR(COALESCE(?zoneOwn, ?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
   BIND(IF(!?lifted, ?none,

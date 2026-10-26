@@ -1,5 +1,5 @@
 import type { Term } from '@rdfjs/types'
-import { RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
+import { RDF_FIRST, RDF_NIL, RDF_REST, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { GraphStore } from '../store/types.ts'
 
@@ -16,14 +16,28 @@ export interface Rule {
   queryParts?: string[]
   fn?: string
   follows: string[]
+  /**
+   * Paths of followed predicates (sem:follows given an RDF list): a change on a node reached
+   * from the focus along a path, or on any node on the way, makes the focus dirty. A step
+   * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse).
+   */
+  followPaths: string[][]
   watches?: Set<string>
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
    * Member-wise rule: evaluated once per (focus, member) for each `focus <forEach> member`,
    * so adding, removing or changing one member re-runs only that member's evaluation.
+   * A function rule gets the member as an argument; a SPARQL rule as `$member`, which is
+   * substituted like `$this`.
    */
   forEach?: string
+  /**
+   * Which of its member's predicates a member-wise SPARQL rule reads: these
+   * (sem:memberWatches), and the values of these focus properties (sem:memberWatchesVia,
+   * for predicates the data names, such as a list's c:sortBy). Absent: all of them.
+   */
+  memberWatches?: { predicates: Set<string>; via: string[] }
   /**
    * Applies only to instances typed in the input graphs, not to ones other rules
    * mint (pre-render rules in strata below the components: localization, validation).
@@ -31,7 +45,7 @@ export interface Rule {
   inputOnly: boolean
   /**
    * Evaluated whether or not its focus is shown (sem:always): state derived about a node no
-   * projection shows (a nav:Location), which shown components read.
+   * projection shows (a nav:Location, a phrase, the viewer), which shown components read.
    */
   always?: boolean
   /**
@@ -50,6 +64,12 @@ export interface Rule {
    * ('frame', sem:refresh sem:NextFrame).
    */
   refresh: 'now' | 'frame'
+  /**
+   * A SPARQL rule that reads the viewer's language preferences (l10n:prefers, which the engine
+   * states in its derived graph) or a text picked by them (l10n:label): a language change
+   * re-runs it for every focus.
+   */
+  readsLanguage: boolean
 }
 
 export interface Selection {
@@ -62,6 +82,13 @@ export interface Selection {
   /** The viewer's languages, most preferred first (the localization layer). */
   languages?: string[]
 }
+
+/**
+ * What makes a SPARQL rule language-dependent: it reads the viewer's preferences, or a text
+ * picked by them (l10n:label, l10n:name and the other twins derived in lower strata), so it
+ * re-runs when they change.
+ */
+const READS_LANGUAGE = /\bl10n:[a-z]\w*|<https:\/\/semblance\.dev\/ns\/l10n#[a-z]\w*>/
 
 /** Read every sem:Rule from the ontology graph(s) loaded in the store. */
 /** localeCompare's order, without setting up a comparison per call. */
@@ -90,6 +117,23 @@ export function loadRules(store: GraphStore): Rule[] {
     const fn = one(r, SEM.function)?.value
     if (!query === !fn) throw new Error(`Rule <${r.value}> needs exactly one of sem:construct / sem:function`)
     const watches = getAll(SEM.watches)
+    // A followed predicate, or a path of them (an RDF list).
+    const followTerms = store.match(r, namedNode(SEM.follows), null).map((q) => q.object)
+    const follows = (followTerms.length || !slot ? followTerms : store.match(slot, namedNode(SEM.follows), null).map((q) => q.object)).map((t) => {
+      if (t.termType === 'NamedNode') return t.value
+      const path: string[] = []
+      for (let n: Term | undefined = t; n && n.value !== RDF_NIL; n = one(n, RDF_REST)) {
+        const first = one(n, RDF_FIRST)
+        if (!first) continue
+        // [ sem:zeroOrMore p ]: any number of p steps (an RDF list's rdf:rest), written "*p".
+        // [ sem:inverse p ]: a step against p (from a node to what it is p of), written "^p".
+        const star = first.termType === 'NamedNode' ? undefined : one(first, SEM.zeroOrMore)
+        const inverse = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverse)
+        path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
+      }
+      // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
+      return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
+    })
     rules.push({
       iri: r.value,
       target: target.value,
@@ -100,16 +144,23 @@ export function loadRules(store: GraphStore): Rule[] {
       kind: query ? 'sparql' : 'function',
       queryParts: query ? (prefixes + '\n' + query).split('$this') : undefined,
       fn,
-      follows: getAll(SEM.follows),
+      follows: follows.filter((p): p is string => typeof p === 'string'),
+      followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
       watches: watches.length ? new Set(watches) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach: get(SEM.forEach)?.value,
+      memberWatches:
+        getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
+          ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
+          : undefined,
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       always: get(SEM.always)?.value === 'true',
-      bulk: get(SEM.bulk)?.value !== 'false' && (!query || attributable(query)),
+      // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
+      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
       requires: getAll(SEM.requires),
       unless: getAll(SEM.unless),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
+      readsLanguage: !!query && READS_LANGUAGE.test(query),
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))

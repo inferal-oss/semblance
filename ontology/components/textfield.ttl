@@ -36,6 +36,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextField .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?labelData)
@@ -85,6 +86,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextField .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)

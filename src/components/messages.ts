@@ -4,7 +4,7 @@ import type { NamedNode } from '@rdfjs/types'
 import type { FnRule } from '../engine/context.ts'
 import { C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { el } from './data.ts'
-import { RDFS_LABEL, isTrue, named, str, text } from './util.ts'
+import { encodeForUri, RDFS_LABEL, isTrue, named, str, text } from './util.ts'
 
 const AS = NS.as
 const C_MESSAGE = NS.c + 'Message'
@@ -35,7 +35,7 @@ messageList.watches = () => new Set([C.label])
 const messageMember: FnRule = (ctx, focus, item) => {
   if (!item) return []
   const o = ctx.out(focus)
-  const inst = o.node('m-' + encodeURIComponent(item.value))
+  const inst = o.node('m-' + encodeForUri(item.value))
   o.t(inst, RDF_TYPE, ctx.nn(C_MESSAGE))
   o.t(inst, C.of, item)
   o.t(inst, C.inList, focus)
@@ -50,7 +50,8 @@ messageMember.watches = () => new Set<string>()
 
 /** An xsd:dateTime as a key that sorts as time does (missing or unreadable sorts last). */
 function sortableTime(t: string | undefined): string {
-  const ms = t === undefined ? NaN : Date.parse(t)
+  // A time without an offset counts as UTC (as the SPARQL rule reads it), not as local time.
+  const ms = t === undefined ? NaN : Date.parse(/(Z|[+-]\d\d:\d\d)$/.test(t) ? t : t + 'Z')
   return Number.isFinite(ms) ? new Date(ms).toISOString() : '\uffff'
 }
 

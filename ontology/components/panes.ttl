@@ -207,6 +207,7 @@ WHERE {
   OPTIONAL { $this c:primary ?primary FILTER(isIRI(?primary)) }
   OPTIONAL { $this c:secondary ?secondaryChild FILTER(isIRI(?secondaryChild)) }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -241,6 +242,25 @@ WHERE {
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-sizes"))) AS ?dSizes)
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-min"))) AS ?dMinPx)
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-step"))) AS ?dStep)
+}""" .
+c:SplitViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:SplitViewRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?primary , ?divider , ?secondary .
+  ?primary ord:precedes ?divider , ?secondary .
+  ?divider a rdfhtml:Text ; rdfhtml:data "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500" ; ord:precedes ?secondary .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SplitView .
+  BIND(EXISTS { $this c:collapsed ?flag FILTER(STR(?flag) = "true") } AS ?collapsed)
+  OPTIONAL { $this c:primary ?primary0 FILTER(isIRI(?primary0)) }
+  OPTIONAL { $this c:secondary ?secondary0 FILTER(isIRI(?secondary0)) }
+  BIND(?primary0 AS ?primary)
+  BIND(IF(?collapsed, ?none, ?secondary0) AS ?secondary)
+  BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider"))) AS ?divider)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
 }""" .
 
 # Dragging the divider (or an arrow key on it) sets the ratio: the new size over the room
@@ -332,6 +352,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:DockPanel .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -399,6 +420,33 @@ WHERE {
     $this c:footer ?footer FILTER(isIRI(?footer))
     BIND(IRI(CONCAT(STR($this), "/~footer")) AS ?footerWrap)
   }
+}""" .
+c:DockPanelRendering-sparql-text a sem:Rule ;
+    sem:implements c:DockPanelRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?caption , ?toolbar , ?content , ?footer .
+  ?caption a rdfhtml:Text ; rdfhtml:data ?line ; ord:precedes ?toolbar , ?content , ?footer .
+  ?toolbar ord:precedes ?content , ?footer .
+  ?content ord:precedes ?footer .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DockPanel .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
+  BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
+  BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)
+  OPTIONAL { $this c:toolbar ?toolbar0 FILTER(isIRI(?toolbar0)) }
+  OPTIONAL { $this c:content ?content0 FILTER(isIRI(?content0)) }
+  OPTIONAL { $this c:footer ?footer0 FILTER(isIRI(?footer0)) }
+  BIND(IF(?open, ?toolbar0, ?none) AS ?toolbar)
+  BIND(IF(?open, ?content0, ?none) AS ?content)
+  BIND(IF(?open, ?footer0, ?none) AS ?footer)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~caption")) AS ?caption)
 }""" .
 
 # Dragging the free edge (or an arrow key on it) sets the panel's size along its axis: c:width
