@@ -92,7 +92,7 @@ function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
       const sub = subqueries.length === 1 ? subqueries[0]! : undefined
       const topk = sub && (sub.limit !== undefined || sub.offset !== undefined) ? topkOf(sub, parts[0]!, text) : undefined
       if (!topk && subqueries.some((s) => s.limit !== undefined || s.offset !== undefined)) throw new Unsupported('LIMIT in one branch of a UNION')
-      return plan(source, q, asMeant, parts, topk, post)
+      return plan(source, q, asMeant, parts, topk, post, run)
     }
     // CONSTRUCT { … } WHERE { body } [ORDER BY …] [LIMIT …]: the template over the body's solutions (the first ones).
     // (Grouped: the template reads the groups - their keys, and a VALUES clause's variables after them.)
