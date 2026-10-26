@@ -551,14 +551,15 @@ const choice: FnRule = (ctx, focus) => {
     return o.quads
   }
   const selectId = mint(focus.value, 'select')
-  const select = o.el('select', 'Select', { id: selectId }, opts.map((opt) => {
+  const disabled = ctx.object(focus, C.disabled)?.value === 'true'
+  const select = o.el('select', 'Select', { id: selectId, disabled: disabled ? '' : undefined }, opts.map((opt) => {
     const key = encodeForUri(opt.value)
     return o.el('opt-' + key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text('opt-' + key + '-text', label(ctx, opt))])
   }))
   o.renders(o.el('root', 'Label', { for: selectId }, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), select]))
   return o.quads
 }
-choice.watches = watchControlled
+choice.watches = (ctx, focus) => new Set([...watchControlled(ctx, focus), C.disabled])
 
 const chips: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)

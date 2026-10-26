@@ -101,6 +101,7 @@ const flippableFlip: ReactionFn = (ctx) => {
 }
 
 const choiceSelect: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, C.disabled)?.value === 'true') return { add: [], remove: [] }
   const f = ctx.runtime.store.factory
   const target = ctx.object(ctx.target, C.controls)
   const p = ctx.object(ctx.target, C.property)
