@@ -391,3 +391,101 @@ ui:gs-react c:sandboxState c:SandboxBroken ; c:problem ui:p2 . ui:p2 a c:Sandbox
     expect(a[1]).toContain('[Live example: A page]')
   })
 })
+
+describe('a live example with its data (c:dataPreview): the todo of the home page', () => {
+  const exTodo = readFileSync(new URL('../demo/gallery/_ex-todo.ttl', import.meta.url), 'utf8')
+  const todo = (prefer: 'sparql' | 'function') => {
+    const h = host({ store: loadStore('wat', exTodo), root: UI + 'todoLive', prefer })
+    const ex = h.document.querySelector('[data-sem-c=live-example]')!
+    const lines = () => [...ex.querySelectorAll('.sem-live-line')].map((l) => (l.getAttribute('data-sem-change') ? `${l.getAttribute('data-sem-change')}: ` : '') + l.textContent)
+    const flow = () => ex.querySelector('.sem-live-flow')!.textContent
+    const text = () => ex.querySelector('.sem-live-text')!.textContent
+    const connectors = () => [...ex.querySelectorAll('svg[data-sem-c=connector]')].map((s) => [s.getAttribute('data-sem-from'), s.getAttribute('data-sem-to')])
+    const tick = (label: string) => {
+      const box = [...ex.querySelectorAll('.sem-live-screen li')].find((li) => li.textContent!.includes(label))!.querySelector('input')!
+      box.checked = !box.checked
+      h.fire(box, 'change')
+    }
+    const field = () => ex.querySelector('.sem-live-screen input[type=text]') as HTMLInputElement
+    const write = (value: string) => {
+      field().value = value
+      h.fire(field(), 'input')
+    }
+    const add = () => h.fire([...ex.querySelectorAll('.sem-live-screen button')].find((b) => b.textContent === 'Add')!, 'click')
+    // What the two implementations must agree on: the site's page, less the sandbox's number and the build time.
+    const html = () => h.document.getElementById('app')!.innerHTML.replace(/data-sem-sandbox="\d+"/g, '').replace(/\d+ ms/g, 'N ms')
+    return { h, ex, lines, flow, text, connectors, tick, write, add, html }
+  }
+
+  it('shows the panes only, the data as Turtle, and the text, and says how to start', () => {
+    const t = todo('sparql')
+    expect(t.ex.getAttribute('data-sem-sources')).toBe('hidden')
+    expect(t.ex.querySelector('.sem-live-sources, [role=tab]')).toBeNull()
+    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'Its data, as Turtle', 'As text'])
+    expect(t.lines()).toEqual([
+      'ex:t1 rdfs:label "Write the core ontology" ;',
+      '    ex:done true ;',
+      '    ex:priority 1 .',
+      'ex:t2 rdfs:label "Sketch the style layer" ;',
+      '    ex:done false ;',
+      '    ex:priority 2 .',
+      'ex:t3 rdfs:label "Wire up behaviour" ;',
+      '    ex:done false ;',
+      '    ex:priority 3 .',
+    ])
+    expect(t.flow()).toBe('Use the example: what you do changes its data, and the screen and the text follow.')
+    expect(t.connectors()).toEqual([])
+    expect(t.text()).toContain('[ ] Sketch the style layer')
+  })
+
+  it('follows each interaction: marks the triples it changed, says so, and points from the screen to them and on to the text', () => {
+    const t = todo('sparql')
+    t.tick('Sketch the style layer')
+    expect(t.lines().slice(3, 7)).toEqual(['ex:t2 rdfs:label "Sketch the style layer" ;', 'removed:     ex:done false', 'added:     ex:done true ;', '    ex:priority 2 .'])
+    expect(t.flow()).toBe('You changed the data: +1 −1 triples. The screen and the text followed.')
+    expect(t.text()).toContain('[x] Sketch the style layer')
+    const added = t.ex.querySelector('.sem-live-line[data-sem-change=added]')!
+    const screen = t.ex.querySelector('.sem-live-screen')!
+    const text = t.ex.querySelector('.sem-live-text')!
+    expect(t.connectors()).toEqual([
+      [screen.id, added.id],
+      [added.id, text.id],
+    ])
+    // Typing is data too; adding a todo adds its triples and takes the field's away.
+    t.write('Ship it')
+    expect(t.lines()[0]).toBe('added: ex:newTodo c:value "Ship it" .')
+    expect(t.lines()).not.toContain('removed:     ex:done false')
+    t.add()
+    expect(t.lines().filter((l) => /^(added|removed)/.test(l))).toEqual([
+      'removed: ex:newTodo c:value "Ship it"',
+      'added: ex:t4 rdfs:label "Ship it" ;',
+      'added:     ex:done false ;',
+      'added:     ex:priority 4 .',
+    ])
+    expect(t.flow()).toBe('You changed the data: +3 −1 triples. The screen and the text followed.')
+    expect(t.text()).toContain('[ ] Ship it')
+    expect(t.connectors()[0]![1]).toBe(t.ex.querySelector('.sem-live-line[data-sem-change=added]')!.id)
+  })
+
+  it('costs an interaction the lines it changed, not the whole example', () => {
+    const t = todo('sparql')
+    t.tick('Sketch the style layer')
+    const runs = t.h.screen.engine.stats.ruleRuns
+    const ops = t.h.renderer.ops
+    t.tick('Wire up behaviour')
+    // The changed lines (and the ones they replace), the flow and its connectors; not the frame.
+    expect(t.h.screen.engine.stats.ruleRuns - runs).toBeLessThanOrEqual(16)
+    expect(t.h.renderer.ops - ops).toBeLessThan(60)
+  })
+
+  it('renders the same with SPARQL rules as with functions, after every step', () => {
+    const [a, b] = [todo('sparql'), todo('function')]
+    const same = () => expect(a.html()).toBe(b.html())
+    same()
+    for (const step of [(t: typeof a) => t.tick('Sketch the style layer'), (t: typeof a) => t.write('Ship it'), (t: typeof a) => t.add()]) {
+      step(a)
+      step(b)
+      same()
+    }
+  })
+})
