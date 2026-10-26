@@ -126,8 +126,8 @@ ui:pillarRules a c:Card ; c:label "Rules are queries" ; c:badge "SPARQL · funct
 ui:pillarRulesText a c:Text ; c:label "Renderings are SPARQL CONSTRUCTs into RDF/HTML, with function twins that render the same. The engine re-runs only the rules whose input changed, member by member." .
 ui:pillarLayers a c:Card ; c:label "Layers decorate" ; c:badge "a11y · l10n · validation" ; c:content ui:pillarLayersText .
 ui:pillarLayersText a c:Text ; c:label "Accessibility, localization, validation, keyboard shortcuts, privacy, persistence and docs are layers: rules that add to every component without it knowing." .
-ui:pillarEvents a c:Card ; c:label "Interactions are events" ; c:badge "LDES" ; c:content ui:pillarEventsText .
-ui:pillarEventsText a c:Text ; c:label "A click is an RDF event; reactions are CONSTRUCT pairs; each event and its effect join a bounded, linked change log you can replay, inspect and remember." .
+ui:pillarEvents a c:Card ; c:label "Interactions are a change log" ; c:badge "LDES" ; c:content ui:pillarEventsText .
+ui:pillarEventsText a c:Text ; c:label "What you do is recorded, with what it changed, in a bounded, linked change log (an LDES stream) you can replay, inspect and remember; reactions - CONSTRUCT pairs - turn each entry into one change." .
 ui:pillarCost a c:Card ; c:label "Cost stays constant" ; c:badge "measured" ; c:content ui:pillarCostText .
 ui:pillarCostText a c:Text ; c:label "Hidden views are not evaluated; reads are traced; logs are read from their head. Tests require the work of each interaction not to grow with the app or its history." .
 ui:pillarThemes a c:Card ; c:label "Themes restructure" ; c:badge "11 themes" ; c:content ui:pillarThemesText .
