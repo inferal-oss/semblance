@@ -171,20 +171,24 @@ export class HtmlIndex {
   }
 
   isShown(focus: string, roots: ReadonlySet<string>): boolean {
-    const seen = new Set<string>()
-    const up = (key: string): boolean => {
-      if (roots.has(key)) return true
-      if (seen.has(key)) return false
-      seen.add(key)
-      const n = this.nodes.get(key)
-      if (n?.props.has('hidden')) return false
-      const placedAs = this.focusByRoot.get(key)
-      if (placedAs !== undefined && up(placedAs)) return true
-      if (n) for (const p of n.parents) if (up(p)) return true
-      const chained = this.chainParent.get(key)
-      return chained !== undefined && up(chained)
-    }
-    return up(focus)
+    this.seen.clear()
+    return this.shownFrom(focus, roots)
+  }
+
+  /** The keys an isShown walk has visited (one walk at a time; reused). */
+  private seen = new Set<string>()
+
+  private shownFrom(key: string, roots: ReadonlySet<string>): boolean {
+    if (roots.has(key)) return true
+    if (this.seen.has(key)) return false
+    this.seen.add(key)
+    const n = this.nodes.get(key)
+    if (n?.props.has('hidden')) return false
+    const placedAs = this.focusByRoot.get(key)
+    if (placedAs !== undefined && this.shownFrom(placedAs, roots)) return true
+    if (n) for (const p of n.parents) if (this.shownFrom(p, roots)) return true
+    const chained = this.chainParent.get(key)
+    return chained !== undefined && this.shownFrom(chained, roots)
   }
 
   /** The renderable node for a child slot: component instances resolve to their root. */

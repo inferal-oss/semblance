@@ -31,8 +31,15 @@ export const LAW_VIEWS: Record<string, string> = {
   topkJoin: `SELECT ?m ?label WHERE { v:s tree:member ?m . ?m v:x ?x ; v:target/rdfs:label ?label } ORDER BY ?label ?m OFFSET 1 LIMIT 4`,
   items: `SELECT ?i ?label ?s WHERE { ?i a v:Item ; v:owner ?t . ?t rdfs:label ?label OPTIONAL { ?i v:score ?s } }`,
   having: `SELECT ?t (SUM(?s) AS ?total) (SUM(?s) / COUNT(?i) AS ?mean) WHERE { ?i a v:Item ; v:owner ?t ; v:score ?s } GROUP BY ?t HAVING (COUNT(?i) > 1)`,
+  minMax: `SELECT ?t (MIN(?s) AS ?lo) (MAX(?s) AS ?hi) (MAX(?label) AS ?last) WHERE { ?i a v:Item ; v:owner ?t ; v:score ?s . ?t rdfs:label ?label } GROUP BY ?t`,
   topGroups: `SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?t } GROUP BY ?t ORDER BY DESC(?n) ?t LIMIT 2`,
   orderedExpr: `SELECT ?i ?s WHERE { ?i a v:Item ; v:score ?s } ORDER BY DESC(?s * 2 - 1) ?i LIMIT 3`,
+  // Aggregate subqueries as derived inputs (a view inside the view): an aggregate of aggregates,
+  // a join with a group's best row, an ungrouped one, one with HAVING under OPTIONAL.
+  aggOfAgg: `SELECT (MAX(?n) AS ?max) (COUNT(?t) AS ?targets) WHERE { { SELECT ?t (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:target ?t } GROUP BY ?t } }`,
+  bestOfGroup: `SELECT ?m ?t ?best WHERE { { SELECT ?t (MAX(?x) AS ?best) WHERE { v:s tree:member ?m . ?m v:target ?t ; v:x ?x } GROUP BY ?t } v:s tree:member ?m . ?m v:target ?t ; v:x ?best }`,
+  topScore: `SELECT ?i WHERE { { SELECT (MAX(?s) AS ?top) WHERE { ?j a v:Item ; v:score ?s } } ?i a v:Item ; v:score ?top }`,
+  busyTargets: `SELECT ?t ?n WHERE { ?t a v:Target OPTIONAL { { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t HAVING (COUNT(?i) > 1) } } }`,
   // A cross product: partitions by (item, kind); a new kind reaches every item's slice.
   cross: `SELECT ?i ?k ?s WHERE { ?i a v:Item . v:cfg v:showKind ?k OPTIONAL { ?i v:score ?s } }`,
 }
@@ -40,6 +47,7 @@ export const LAW_VIEWS: Record<string, string> = {
 const CONSTRUCTS: Record<string, string> = {
   labelled: `CONSTRUCT { ?m v:labelled ?label } WHERE { v:s tree:member ?m . ?m v:target ?t . ?t rdfs:label ?label }`,
   unionParts: `CONSTRUCT { ?row v:n ?n } WHERE { { SELECT ?row (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:kind ?row } GROUP BY ?row } UNION { SELECT ?row (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?row } GROUP BY ?row } }`,
+  busiest: `CONSTRUCT { ?t v:busiest ?label } WHERE { { SELECT (MAX(?n) AS ?max) WHERE { { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } } } { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } FILTER(?n = ?max) ?t rdfs:label ?label }`,
   topRows: `CONSTRUCT { ?node v:top ?m ; v:x ?x } WHERE { { SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT 2 } BIND(IRI(CONCAT(STR(?m), "/~top")) AS ?node) }`,
 }
 
@@ -61,6 +69,12 @@ ${Object.entries(CONSTRUCTS).map(([k, q]) => `v:${k} a iv:View ; sem:construct "
 v:rows a iv:View ; iv:materialize iv:Graph ; sem:select """${LAW_VIEWS.topk}""" .
 v:paged a iv:View ; iv:parameter [ iv:variable "k" ; iv:from v:cfg ; iv:property v:limit ; iv:default 2 ] ;
     sem:select """SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT $k""" .
+v:kinded a iv:View ; iv:parameter [ iv:variable "kind" ; iv:from v:cfg ; iv:property v:kind ; iv:default v:K1 ] ;
+    sem:select """SELECT ?m ?t WHERE { v:s tree:member ?m . ?m v:kind $kind OPTIONAL { ?m v:target ?t } }""" .
+v:atLeast a iv:View ; iv:parameter [ iv:variable "min" ; iv:from v:cfg ; iv:property v:min ; iv:default 3 ] , [ iv:variable "k" ; iv:from v:cfg ; iv:property v:limit ; iv:default 2 ] ;
+    sem:select """SELECT ?m ?x WHERE { v:s tree:member ?m . ?m v:x ?x FILTER(?x >= $min) } ORDER BY ?x ?m LIMIT $k""" .
+v:upTo a iv:View ; iv:parameter [ iv:variable "min" ; iv:from v:cfg ; iv:property v:min ; iv:default 3 ] ;
+    sem:select """SELECT (SUM(IF(?x <= $min, 1, 0)) AS ?below) (COUNT(*) AS ?all) WHERE { v:s tree:member ?m . ?m v:x ?x }""" .
 v:perTarget a iv:View ; iv:targets v:Target ; iv:materialize iv:Graph ;
     sem:select """SELECT (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:target $this }""" .
 `
@@ -141,6 +155,8 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
     ['group label', 0.5, () => set(pick(G), RDFS + 'label', f.literal('group ' + Math.floor(r() * 4)))],
     ['showKind', 0.4, () => (r() < 0.5 ? [[], [f.quad(nn('cfg'), p('showKind'), nn(pick(K)))]] : [store.match(nn('cfg'), p('showKind'), null).slice(0, 1), []])],
     ['limit', 0.4, () => set('cfg', 'limit', r() < 0.2 ? undefined : int(1 + Math.floor(r() * 4)))],
+    ['kind parameter', 0.4, () => set('cfg', 'kind', r() < 0.2 ? undefined : nn(pick(K)))],
+    ['min parameter', 0.4, () => set('cfg', 'min', r() < 0.2 ? undefined : int(Math.floor(r() * 10)))],
     ['subclass', 0.3, () => (r() < 0.5 ? [[], [f.quad(nn(pick(K)), p(RDFS + 'subClassOf'), nn(pick(K)))]] : [store.match(null, p(RDFS + 'subClassOf'), null).slice(0, 1), []])],
     ['item', 1.2, () => {
       const i = `i${++n}`

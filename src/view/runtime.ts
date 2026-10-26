@@ -286,7 +286,7 @@ export class ViewRuntime {
       const params = this.resolve(v.def, v.paramNodes)
       if (params.every((p, i) => sameTerm(p.value, v.params[i]?.value))) continue
       const next = this.compileFor(v.def, params)
-      if (next && v.retune(next, params, out, now)) retuned.add(v.iri)
+      if (next && v.retune(next, params, out, now, changes.remove)) retuned.add(v.iri)
       else redefine.add(v.iri)
     }
     for (const iri of redefine) {
@@ -772,6 +772,7 @@ interface Happened {
 /** One part's state: its partitions, and what its operator holds. */
 class PartState {
   partitions = new Map<string, PartitionState>()
+  part: Part
   /** Stream parts without exact dependencies: member IRI -> its partition keys (for the member closure). */
   byMember = new Map<string, Set<string>>()
   partitionRows = 0
@@ -784,21 +785,94 @@ class PartState {
   order: { t: number; key: string }[] = []
   post: PostCache
   slotIndex: Map<string, number>
+  /** The derived subqueries' own states (Part.derived), stepped before this part. */
+  inner: PartState[]
 
   constructor(
-    readonly part: Part,
+    part: Part,
     readonly view: MaintainedView,
   ) {
+    this.part = part
     this.slotIndex = new Map(part.slots.map((s, i) => [s, i]))
     this.post = new PostCache(view, part.post)
+    this.inner = (part.derived ?? []).map((d) => new PartState(d.part, view))
+  }
+
+  /** The derived subqueries' current rows (what the body's evaluation inlines). */
+  private derivedRows(): Map<string, Term>[][] | undefined {
+    if (!this.inner.length) return undefined
+    return this.inner.map((ps) => [...ps.current().entries()].flatMap(([, r, w]) => Array.from({ length: w }, () => r)))
+  }
+
+  /**
+   * Step the derived subqueries with this tick's change; the partitions their changed rows reach
+   * (merged into `into`), or 'all'.
+   */
+  stepDerived(changes: Delta, now: number, happened: Happened, into: Map<string, (Term | undefined)[]>): 'all' | undefined {
+    let all = false
+    this.inner.forEach((ps, i) => {
+      const touched = changes.add.length || changes.remove.length ? ps.touched(changes) : new Map<string, (Term | undefined)[]>()
+      // A derived part's own derived parts step inside its update.
+      const nested = ps.inner.length ? ps.stepDerived(changes, now, happened, touched === 'all' ? new Map() : touched) : undefined
+      if (touched !== 'all' && nested !== 'all' && !touched.size) return
+      const d = ps.update(touched === 'all' || nested === 'all' ? undefined : touched, now, happened)
+      if (all || !d.size) return
+      const lookup = this.rt.lookup(changes.remove, this.view.readsViews)
+      for (const [, row] of d.entries()) {
+        const keys = this.part.deps!.probeDerived(i, row, lookup)
+        if (keys === 'global') return void (all = true)
+        for (const k of keys) into.set(keyString(k), k)
+      }
+    })
+    return all ? 'all' : undefined
   }
 
   get rt() {
     return this.view.rt
   }
 
+  /**
+   * The same part with other constants (a parameter changed; the structure is the same): the
+   * partitions that may differ - those the changed patterns match, before and after - or 'all'
+   * when the change is elsewhere in the body (a FILTER). Derived parts are evaluated anew here.
+   */
+  retarget(next: Part, now: number, happened: Happened, removed: readonly Quad[]): Map<string, (Term | undefined)[]> | 'all' {
+    const old = this.part
+    this.part = next
+    let all = false
+    this.inner.forEach((ps, i) => {
+      if (ps.retarget(next.derived![i]!.part, now, happened, removed) === 'all' || ps.part.algebra.local !== old.derived![i]!.part.algebra.local) {
+        ps.update(undefined, now, happened)
+        all = true
+      }
+    })
+    if (all) return 'all'
+    const touched = new Map<string, (Term | undefined)[]>()
+    // An expression over the rows changed (a parameter in an aggregate's argument): every partition.
+    if (old.head !== next.head) return 'all'
+    if (old.algebra.local === next.algebra.local) return touched
+    if (!old.deps || !next.deps || old.patternless !== next.patternless || old.deps.patterns.length !== next.deps.patterns.length) return 'all'
+    const lookup = this.rt.lookup(removed, this.view.readsViews)
+    const constant = (x: import('./deps.ts').Pos | { path: unknown }) => ('t' in x ? x.t : null)
+    for (let j = 0; j < old.deps.patterns.length; j++) {
+      const a = old.deps.patterns[j]!
+      const b = next.deps.patterns[j]!
+      if (JSON.stringify([a.s, a.p, a.o]) === JSON.stringify([b.s, b.p, b.o])) continue
+      for (const [deps, pat] of [[old.deps, a], [next.deps, b]] as const) {
+        if ('path' in pat.p) return 'all'
+        for (const q of lookup(constant(pat.s), constant(pat.p), constant(pat.o))) {
+          const keys = deps.probe(pat, q, lookup)
+          if (keys === 'global') return 'all'
+          for (const k of keys) touched.set(keyString(k), k)
+        }
+      }
+    }
+    return touched
+  }
+
   /** Every partition anew (start, rebuild). */
   all(now: number, happened: Happened): ZSet<Row> {
+    for (const ps of this.inner) ps.all(now, happened)
     return this.update(undefined, now, happened)
   }
 
@@ -901,14 +975,15 @@ class PartState {
     }
     let evaluated: Map<string, Row[]>
     let visit: Set<string>
+    const derived = this.derivedRows()
     if (keys === undefined) {
-      evaluated = p.local(undefined)
+      evaluated = p.local(undefined, derived)
       visit = new Set([...this.partitions.keys(), ...evaluated.keys()])
     } else {
       let batch = [...keys.values()]
       // Function parts: only current members are evaluated (a retired member has no rows).
       if (!p.deps && p.stream) batch = batch.filter((k) => this.rt.members(p.stream!.streamVar ? k[0]!.value : p.stream!.stream, k[k.length - 1]!.value).length)
-      evaluated = batch.length ? p.local(batch as Term[][]) : new Map()
+      evaluated = batch.length ? p.local(batch, derived) : new Map()
       visit = new Set()
       for (const [k, key] of keys) {
         if (key.every((t) => !!t)) visit.add(k)
@@ -987,7 +1062,7 @@ class PartState {
       let g = this.groups.get(gk)
       if (!g) {
         gIds.forEach((id) => terms.retain(id))
-        this.groups.set(gk, (g = newGroup(gIds, op.aggregates)))
+        this.groups.set(gk, (g = newGroup(terms, gIds, op.aggregates)))
       }
       g.rows += w
       op.aggregates.forEach((a, i) => accumulate(terms, a, g!.accs[i]!, a.slot === '*' ? 0 : r[this.slotIndex.get(a.slot)!]!, w))
@@ -1024,7 +1099,7 @@ class PartState {
     const terms = this.rt.terms
     // Every query with aggregates and no GROUP BY has its one group, even empty (COUNT 0).
     if (!op.groupBy.length && !this.groups.has('')) {
-      this.groups.set('', newGroup([], op.aggregates))
+      this.groups.set('', newGroup(this.rt.terms, [], op.aggregates))
       dirty.add('')
     }
     for (const gk of dirty) {
@@ -1063,6 +1138,7 @@ class PartState {
   }
 
   reset() {
+    for (const ps of this.inner) ps.reset()
     const terms = this.rt.terms
     for (const st of this.partitions.values()) for (const r of st.rows) for (const id of r) terms.release(id)
     for (const g of this.groups.values()) for (const id of g.ids) terms.release(id)
@@ -1079,13 +1155,15 @@ class PartState {
   }
 
   stateRows(): number {
-    return this.partitionRows + this.groups.size + this.counts.size + this.order.length + this.post.size
+    return this.partitionRows + this.groups.size + this.counts.size + this.order.length + this.post.size + this.inner.reduce((n, ps) => n + ps.stateRows(), 0)
   }
 
   footprint(): Record<string, number> {
     let acc = 0
     for (const g of this.groups.values()) for (const a of g.accs) acc += accSize(a)
-    return { members: this.partitions.size, byMember: this.byMember.size, memberRows: this.partitionRows, groups: this.groups.size, accumulators: acc, counts: this.counts.size, window: this.order.length, post: this.post.size }
+    const out: Record<string, number> = { members: this.partitions.size, byMember: this.byMember.size, memberRows: this.partitionRows, groups: this.groups.size, accumulators: acc, counts: this.counts.size, window: this.order.length, post: this.post.size }
+    for (const ps of this.inner) for (const [k, n] of Object.entries(ps.footprint())) out[k] = (out[k] ?? 0) + n
+    return out
   }
 }
 
@@ -1275,16 +1353,28 @@ export class MaintainedView implements ViewHandle {
     return this.plan.kind === 'recompute' ? this.plan.reason : undefined
   }
 
-  /** A parameter changed only LIMIT / OFFSET: move the window; false when the plan must be built again. */
-  retune(next: ViewPlan, params: Param[], out: ZSet<Quad>, now: number): boolean {
+  /**
+   * A parameter changed: retune in place - the partitions the new constants can change are
+   * evaluated again (their difference flows through the operators), and the top-k moves its
+   * window to a new LIMIT / OFFSET. False when the plan's structure differs: build it again.
+   */
+  retune(next: ViewPlan, params: Param[], out: ZSet<Quad>, now: number, removed: readonly Quad[] = []): boolean {
     const plan = this.plan
-    if (plan.kind !== 'maintained' || next.kind !== 'maintained' || next.signature !== plan.signature || !plan.topk || !next.topk || !this.topk) return false
+    if (plan.kind !== 'maintained' || next.kind !== 'maintained' || next.signature !== plan.signature || !!plan.topk !== !!next.topk) return false
+    const before = this.planQuads()
     this.params = params
     this.plan = next
-    this.topk.retune(next.topk)
     const happened = blank()
-    out.plus(this.output(this.topk.refresh(), happened, now, true))
-    out.plus(this.planQuads())
+    const union = new ZSet<Row>()
+    this.parts.forEach((ps, i) => {
+      const touched = ps.retarget(next.parts[i]!, now, happened, removed)
+      if (touched === 'all' || touched.size) union.plus(ps.update(touched === 'all' ? undefined : touched, now, happened))
+    })
+    if (this.topk) {
+      this.topk.retune(next.topk!)
+      out.plus(this.output(this.ordered(union, true), happened, now, false))
+    } else out.plus(this.output(union, happened, now, false))
+    out.plus(before, -1).plus(this.planQuads())
     return true
   }
 
@@ -1354,7 +1444,8 @@ export class MaintainedView implements ViewHandle {
     const union = new ZSet<Row>()
     let any = false
     for (const ps of this.parts) {
-      const touched = changes.add.length || changes.remove.length ? ps.touched(changes) : new Map<string, (Term | undefined)[]>()
+      let touched = changes.add.length || changes.remove.length ? ps.touched(changes) : new Map<string, (Term | undefined)[]>()
+      if (ps.inner.length && ps.stepDerived(changes, now, happened, touched === 'all' ? new Map() : touched) === 'all') touched = 'all'
       const expiring = ps.part.window && ps.order.length && ps.order[0]!.t < now - ps.part.window.rangeMs
       if (touched !== 'all' && !touched.size && !expiring) continue
       any = true

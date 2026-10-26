@@ -33,8 +33,11 @@ export interface WindowSpec {
   timeBy: string
 }
 
-/** Partitions (by key string) and their rows (variable name -> term). */
-export type LocalEvaluator = (keys: readonly Term[][] | undefined) => Map<string, Map<string, Term>[]>
+/**
+ * Partitions (by key string) and their rows (variable name -> term). `derived` is the current
+ * output of each of the part's derived subqueries (Part.derived), inlined into the body.
+ */
+export type LocalEvaluator = (keys: readonly (Term | undefined)[][] | undefined, derived?: readonly Map<string, Term>[][]) => Map<string, Map<string, Term>[]>
 
 /** What a part does with its partitions' rows. */
 export type Op =
@@ -67,7 +70,23 @@ export interface Part {
   /** The variables a part's output rows have (before `post`). */
   vars: string[]
   post?: Post
+  /**
+   * Aggregate subqueries of the body, each maintained as a part of its own (a view inside the
+   * view): its rows are inlined into the body's evaluation (VALUES), and a change of its rows
+   * reaches the partitions through the patterns around it (Dependencies.probeDerived).
+   */
+  derived?: Derived[]
+  /** The body without its triple patterns: when only patterns' constants change (a parameter), their matches say which partitions to evaluate again. */
+  patternless?: string
+  /** What a partition row computes besides the body (expressions over it: an aggregate's argument). */
+  head?: string
   algebra: { local: string; op: string; post?: string }
+}
+
+export interface Derived {
+  part: Part
+  /** The variables it projects. */
+  vars: string[]
 }
 
 export interface Order {
@@ -100,7 +119,10 @@ export interface MaintainedPlan {
   /** The from-scratch query this view must equal at clock time `now` (the test oracle). */
   reference?: (now: number) => string
   algebra: { topk?: string; post?: string; output?: string }
-  /** What decides whether a parameter change can retune the plan in place (everything but LIMIT / OFFSET). */
+  /**
+   * What decides whether a parameter change can retune the plan in place: everything but the
+   * parts' bodies and LIMIT / OFFSET (a body that changed re-evaluates the partitions it can).
+   */
   signature: string
 }
 
