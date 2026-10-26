@@ -48,7 +48,7 @@ c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
 c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
 c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup . c:LinkedCard sem:group c:LayoutGroup .
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
-c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup .
+c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup . c:TiledWorkspace sem:group c:LayoutGroup . c:TabHandle sem:group c:LayoutGroup . c:CloseTile sem:group c:LayoutGroup .
 c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Connector sem:group c:LayoutGroup .
 # A foreign component (web component, framework component, widget) is laid out like any other part.
 ext:Island sem:group c:LayoutGroup .
