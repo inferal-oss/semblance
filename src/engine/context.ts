@@ -73,6 +73,23 @@ export interface FnRule {
   watches?: (ctx: RuleContext, focus: NamedNode) => ReadonlySet<string>
 }
 
+/**
+ * The viewer's languages as texts are matched against them: BCP 47 tags lower-cased (as LANG()
+ * is compared), each followed by its shorter forms (a lookup fallback: en-US, then en), in order
+ * and without repeats. A regional viewer reads a text tagged with its language.
+ */
+export function languageChain(languages: readonly string[]): string[] {
+  const out: string[] = []
+  for (const tag of languages) {
+    const parts = tag.toLowerCase().split('-').filter(Boolean)
+    for (let n = parts.length; n > 0; n--) {
+      const t = parts.slice(0, n).join('-')
+      if (!out.includes(t)) out.push(t)
+    }
+  }
+  return out
+}
+
 /** `graphs` is the rule's view: input graphs, then the engine's derived graph (last). */
 export function createContext(store: GraphStore, graphs: Quad_Graph[], modality: string, languages: string[] = []): RuleContext {
   const graph = graphs[graphs.length - 1] as NamedNode
@@ -129,7 +146,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
   const ctx: RuleContext = {
     f,
     modality,
-    languages,
+    languages: languageChain(languages),
     nn,
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
