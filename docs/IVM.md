@@ -51,22 +51,15 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 
 Known gaps in what landed (§20-§24): SPARQL views evaluate partitions and expressions with a few
 store queries per tick (a Rust circuit removes them, phase 6); SPARQL rules find view output through
-<<<<<<< HEAD
-`sem:follows` or `sem:readsMinted` (exact dependencies are phase 3); `GROUP_CONCAT`, `SAMPLE`,
-`GROUP BY` an expression, `NOW()` and `SERVICE` fall back to recompute; a `GRAPH` pattern is refused;
-an aggregate subquery nested below the root that projects a partition key is left to the store (evaluated
-with each partition); a parameter in a projection, HAVING or ORDER BY builds its view again; a tumbling window's buckets are epoch-aligned (UTC
-for dates); a count window and event time need a fixed stream; replicas carry a SELECT's rows, or a
-view's triples, not its plan.
-=======
 `sem:follows` or `sem:readsMinted` (exact dependencies are phase 3); `NOW()`, `RAND()`, `UUID()`,
 `BNODE()` and `SERVICE` fall back to recompute; so do RDF 1.2 triple terms and directional language
 tags (the views' parser does not read them yet), a blank node in a CONSTRUCT template,
 GROUP_CONCAT inside a larger expression, a property path inside `GRAPH ?g`, and a `GRAPH <g>` outside
 the view's graphs (`docs/IVM-CONFORMANCE.md` lists every fallback the W3C suites meet); a parameter in a
 projection, HAVING or ORDER BY builds its view again; a change reaching a partition keyed by a blank
-node evaluates every partition (VALUES holds no blank node).
->>>>>>> 18db340 (Maintained views, phase 5: sound walks, joins where substitution changes meaning, W3C conformance, the full rules as views)
+node evaluates every partition (VALUES holds no blank node); a tumbling window's buckets are
+epoch-aligned (UTC for dates); a count window and event time need a fixed stream; replicas carry a
+SELECT's rows, or a view's triples, not its plan.
 
 ## 1. Summary
 
@@ -1606,7 +1599,6 @@ Where this differs from the design:
 - **The rdf-engine's parser**: not yet. Main's engine ABI is v1 (prepare, bind, run) with no algebra
   export, so decision 4's interim stands; the plan IR does not depend on the parser.
 
-<<<<<<< HEAD
 ## 23. Phase 4, as built
 
 What exists (`src/view/window.ts`, `replica.ts`, `runtime.ts`, `src/behaviour/undo.ts`):
@@ -1689,7 +1681,7 @@ Where this differs from the design:
 - Undo is over reactions that opt in (`beh:undoable`), not every event: an event's whole change
   includes view state (focus, a refusal), which later events change all the time, so every older
   change would conflict.
-=======
+
 ## 24. Phase 5, the rest of SPARQL, as built
 
 - **Derived inputs everywhere** (§22): an aggregate subquery in a UNION branch, an OPTIONAL or an EXISTS
@@ -1755,7 +1747,6 @@ Where this differs from the design:
   events cost the stream statistics 138 partitions and 645 rows at 200 members and at 2,000, no
   rebuild. (The grid rule is one partition per grid: maintained and exact, but its body is the store's
   each time - the grid's own views, §21, are what makes it cheap.)
->>>>>>> 18db340 (Maintained views, phase 5: sound walks, joins where substitution changes meaning, W3C conformance, the full rules as views)
 
 ## Decisions
 
