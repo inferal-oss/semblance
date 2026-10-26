@@ -242,11 +242,12 @@ c:WindowRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     # It also reads the other frames on its desktops (one maximized in front covers it).
     sem:follows ( [ sem:inverse c:hosts ] c:hosts ) ;
-    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts ;
+    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts , c:tileLayout ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
-        rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+        rdfhtml:attribute ?roleAttr , ?nameAttr , ?tiledAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+  ?tiledAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tiled" ; rdfhtml:attributeValue "true" .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
   ?bar a rdfhtml:Header ; rdfhtml:class "sem-window-bar" ; rdfhtml:attribute ?moveAttr ; rdfhtml:hasChild ?titleEl ;
@@ -276,6 +277,9 @@ WHERE {
     VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
   BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Window } AS ?isWindow)
+  # A normal floating window on a desktop that tiles: the grid places it, not its geometry.
+  BIND(?isWindow && !?minimized && !?maximized && !BOUND(?edge)
+       && EXISTS { ?tiler c:hosts $this ; c:tileLayout c:DesktopGridLayout } AS ?tiled)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Draggable } AS ?draggable)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Resizable } AS ?resizable)
   BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
@@ -345,17 +349,18 @@ WHERE {
   BIND(IF(?closed || (?shown && (?minimized || ?covered)), "", ?none) AS ?hidden)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?bar)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar-data-sem-gesture")), ?none) AS ?barGesture)
-  BIND(IF(?draggable && !?maximized, ?barGesture, ?none) AS ?moveAttr)
+  BIND(IF(?draggable && !?maximized && !?tiled, ?barGesture, ?none) AS ?moveAttr)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~body")), ?none) AS ?body)
   OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
   BIND(IF(?shown, ?bodyNode, ?none) AS ?content)
-  BIND(IF(?shown && ?resizable && !?maximized && !BOUND(?edge), IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
+  BIND(IF(?shown && ?resizable && !?maximized && !BOUND(?edge) && !?tiled, IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
   BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-data-sem-gesture")), ?none) AS ?gripGesture)
   BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-aria-hidden")), ?none) AS ?gripHidden)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-role")), ?none) AS ?roleAttr)
   BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?nameAttr)
+  BIND(IF(?shown && ?tiled, IRI(CONCAT(STR($this), "/~root-data-sem-tiled")), ?none) AS ?tiledAttr)
   # Geometry: all of it floating, the docked dimension docked, none maximized; then the stacking order.
   OPTIONAL { $this c:index ?indexRaw }
   OPTIONAL { $this c:width ?widthRaw }
@@ -377,7 +382,7 @@ WHERE {
   BIND(COALESCE(?placed, CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))) AS ?decls)
   BIND(IF(BOUND(?zRaw), CONCAT("z-index: ", STR(COALESCE(xsd:integer(ROUND(xsd:double(?zRaw))), 0)), ";"), "") AS ?zDecl)
   BIND(IF(?decls = "", ?zDecl, IF(?zDecl = "", ?decls, CONCAT(?decls, " ", ?zDecl))) AS ?allDecls)
-  BIND(IF(?shown && ?allDecls != "", ?allDecls, ?none) AS ?style)
+  BIND(IF(?shown && !?tiled && ?allDecls != "", ?allDecls, ?none) AS ?style)
 }""" .
 c:WindowRendering-sparql-text a sem:Rule ;
     sem:implements c:WindowRendering ;
@@ -827,6 +832,23 @@ c:hosts. Components that open windows say where with c:windowsOn, so a detached 
 survives navigation between pages that would hide its origin. Raisable frames go in one
 stacking layer, ordered by their c:z; other hosted overlays (dialogs, toasts) stay above it."""@en ;
     sem:slug "desktop" .
+# Tiling. A desktop whose c:tileLayout is c:DesktopGridLayout lays its open, normal, floating
+# c:Window s out as tiles, with c:Grid's parameters: as many columns as fit at c:minWidth (default
+# 320px here), capped at c:columns. It is an arrangement the desktop derives, not state of the
+# windows: their c:x, c:y, c:width and c:height stay as they were, so c:DesktopFloatingLayout (or no
+# layout) puts them back. Maximized, minimized and docked windows keep their state; a tiled window
+# has no move or resize gesture. (A tree of panes the user splits and rearranges is a
+# c:TiledWorkspace; this one has no structure of its own.) The layout is a style hook, so the theme
+# keys on data-sem-tile-layout.
+c:tileLayout a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range c:DesktopLayout ;
+    sty:hookAttribute "data-sem-tile-layout" ;
+    rdfs:comment "How a desktop arranges its open floating windows. Absent or c:DesktopFloatingLayout keeps their saved geometry; c:DesktopGridLayout tiles them (c:columns, c:minWidth) without changing it."@en .
+c:DesktopLayout a owl:Class ;
+    rdfs:label "Desktop layout"@en , "Розкладка стільниці"@uk , "Desktop-Anordnung"@de , "تخطيط سطح المكتب"@ar .
+c:DesktopFloatingLayout a c:DesktopLayout ; sem:slug "desktop-floating" ; sem:order 1 ;
+    rdfs:label "Floating"@en , "Вільне розміщення"@uk , "Frei schwebend"@de , "عائم"@ar .
+c:DesktopGridLayout a c:DesktopLayout ; sem:slug "desktop-grid" ; sem:order 2 ; sem:symbol "▦" ;
+    rdfs:label "Grid"@en , "Сітка"@uk , "Raster"@de , "شبكة"@ar .
 c:hosts a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range sem:Component .
 c:windowsOn a owl:ObjectProperty ; rdfs:range c:Desktop ;
     rdfs:comment "Where a component's windows are placed (else: inside the component)."@en .
@@ -838,11 +860,12 @@ c:DesktopRendering-sparql-screen a sem:Rule ;
     sem:implements c:DesktopRendering ;
     sem:modality mod:Screen ;
     sem:follows c:hosts ;
-    sem:watches rdf:type , c:hosts , c:open ;
+    sem:watches rdf:type , c:hosts , c:open , c:tileLayout , c:columns , c:minWidth ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?frames , ?other .
-  ?frames a rdfhtml:Div ; rdfhtml:class "sem-frames" ; sem:orderKey "" ; rdfhtml:hasChild ?frame .
+  ?frames a rdfhtml:Div ; rdfhtml:class "sem-frames" ; sem:orderKey "" ; rdfhtml:style ?tracks ; rdfhtml:attribute ?colsAttr ; rdfhtml:hasChild ?frame .
+  ?colsAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-columns" ; rdfhtml:attributeValue ?columns .
   ?frame sem:orderKey ?key .
   ?other sem:orderKey ?key .
 }
@@ -850,6 +873,17 @@ WHERE {
   $this a c:Desktop .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~frames")) AS ?frames)
+  # Tiled, the frames' layer takes c:Grid's parameters (as c:GridRendering-sparql-screen does).
+  BIND(EXISTS { $this c:tileLayout c:DesktopGridLayout } AS ?grid)
+  OPTIONAL { FILTER(?grid) $this c:columns ?columns0 }
+  BIND(ROUND(xsd:double(?columns0)) AS ?columns1)
+  BIND(IF(?columns1 >= 1 && ?columns1 <= 24, STR(xsd:integer(?columns1)), ?none) AS ?columns)
+  OPTIONAL { FILTER(?grid) $this c:minWidth ?min0 }
+  BIND(REPLACE(STR(?min0), "^[ \\t\\n\\r]+|[ \\t\\n\\r]+$", "") AS ?min1)
+  BIND(IF(REGEX(?min1, "^[0-9]+([.][0-9]+)?(px|rem|em|ch|vw|%)$"), CONCAT("--grid-min: ", ?min1), ?none) AS ?minVar)
+  BIND(IF(BOUND(?columns), CONCAT("--grid-columns: ", ?columns), ?none) AS ?columnsVar)
+  BIND(IF(BOUND(?minVar) && BOUND(?columnsVar), CONCAT(?minVar, "; ", ?columnsVar), COALESCE(?minVar, ?columnsVar)) AS ?tracks)
+  BIND(IF(BOUND(?columns), IRI(CONCAT(STR($this), "/~frames-data-columns")), ?none) AS ?colsAttr)
   OPTIONAL {
     $this c:hosts ?hosted . FILTER(isIRI(?hosted))
     BIND(EXISTS { ?hosted a/rdfs:subClassOf* c:Raisable } AS ?raisable)

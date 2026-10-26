@@ -264,6 +264,15 @@ the window there; dragged back over the list it stays a tab. A window let go ove
 came from (`c:gathers`) is a `beh:Move` onto it, which docks it. Shift+Enter on a tab detaches it.
 Dialogs, drawers, lightboxes and toast regions are hosted there too.
 
+A desktop may set `c:tileLayout c:DesktopGridLayout` to arrange its open, normal, floating
+windows as tiles, with `c:Grid`'s parameters: as many columns as fit at `c:minWidth` (320px by
+default), at most `c:columns`. Docked, maximized and minimized windows keep their state, and a
+tiled window has no move or resize gesture. Tiling does not write to a window's `c:x`, `c:y`,
+`c:width` or `c:height`: remove the layout or set `c:DesktopFloatingLayout` to restore the same
+floating geometry. The layout is a style hook (`data-sem-tile-layout`), so any control that sets
+a property (`c:Segmented`, `c:Setter`) can switch it. A tree of panes the user splits and
+rearranges is a `c:TiledWorkspace` instead.
+
 **Live examples** (`c:LiveExample`, `ontology/components/live.ttl`) put the Turtle of a small app
 in a code editor beside what it renders. Each runs in a sandbox of its own - its own store, rules,
 projection and event bus, mounted in a host-owned slot - so an edit that does not parse, or a rule

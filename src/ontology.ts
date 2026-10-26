@@ -80,6 +80,7 @@ export const ONTOLOGY_FILES = [
   'shapes/components.ttl',
   'shapes/grid.ttl',
   'shapes/panes.ttl',
+  'shapes/desktop.ttl',
   'shapes/payload.ttl',
   'shapes/toolbar.ttl',
   'shapes/messages.ttl',
