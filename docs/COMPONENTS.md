@@ -342,6 +342,30 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   (`Runtime.dispose()`, `GraphStore.dispose()`); `dispose()` stops them all, cancelling the
   rebuilds waiting for typing to pause, so nothing runs against a released store.
 
+### Message bodies
+
+`c:MessageList` reads ActivityStreams notes through `c:item`. A note's `as:content` is plain
+text. To show a component in the message body, point `c:content` at its IRI:
+
+```turtle
+ex:thread a c:MessageList ; c:label "Review" ; c:item ex:note .
+ex:note a as:Note ; as:attributedTo ex:author ;
+    as:published "2024-05-14T10:06:00Z"^^xsd:dateTime ;
+    as:content "Review the attached item." ; c:content ex:body .
+ex:body a c:Stack ; c:children ( ex:text ex:reviewed ) .
+ex:text a c:Text ; c:label "Review the attached item." .
+ex:reviewed a c:ToggleSwitch ; c:label "Reviewed" ; c:checked false .
+```
+
+Screen prefers the component body when both properties are present. Text prefers `as:content`
+as a summary; without it, Text renders the component after the author and timestamp. A pending
+message keeps its typing indicator until publication, even if a component body is already set.
+
+A body can also be a `c:HostSlot`. Put the existing application's rich content into the named
+slot through `renderer.slot(name)`. Stable message and body IRIs let the renderer retain that
+content, including drafts and focus, when other messages are inserted. Keep those IRIs stable
+when updating the graph with `runtime.apply`.
+
 ### When the page is busy
 
 A *turn* is everything one input causes: an event's reactions, the tick's maintained views and
