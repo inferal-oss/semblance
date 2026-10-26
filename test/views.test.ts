@@ -138,21 +138,21 @@ describe('maintained views', () => {
 
   it('fall back to recomputing what they cannot maintain, and say so', () => {
     const store = loadStore('oxigraph', views, `@prefix v: <${V}> . @prefix iv: <https://semblance.dev/ns/view#> . @prefix sem: <https://semblance.dev/ns/core#> .
-v:top a iv:View ; sem:select """SELECT ?m (GROUP_CONCAT(?x) AS ?xs) WHERE { v:s tree:member ?m . ?m v:x ?x } GROUP BY ?m""" .`)
+v:top a iv:View ; sem:select """SELECT ?m (COUNT(?x) AS ?n) WHERE { v:s tree:member ?m . ?m v:x ?x FILTER(?x < STRLEN(STR(NOW()))) } GROUP BY ?m""" .`)
     const runtime = new Runtime(store)
     runtime.views.start('sparql')
     const top = runtime.views.view(V + 'top')!
     expect(top.strategy).toBe('recompute')
-    expect(top.fallback).toMatch(/GROUP_CONCAT/)
+    expect(top.fallback).toMatch(/NOW\(\)/)
     const f = store.factory
     const note = store.match(f.namedNode(V + 'top'), f.namedNode(NS.iv + 'fallback'), null, f.namedNode(VIEW_GRAPH))
-    expect(note[0]?.object.value).toMatch(/GROUP_CONCAT/)
+    expect(note[0]?.object.value).toMatch(/NOW\(\)/)
     // Still correct: recomputed when its input changes.
     runtime.apply({ add: [f.quad(f.namedNode(V + 's'), f.namedNode(LDES.member), f.namedNode(V + 'q')), f.quad(f.namedNode(V + 'q'), f.namedNode(V + 'x'), f.literal('5', f.namedNode(NS.xsd + 'integer')))], remove: [] })
     expect(top.rows().map((r) => r.get('m')!.value)).toEqual([V + 'q'])
     // Strict (tests, or iv:strategy iv:Incremental): a fallback is an error.
     const strict = new Runtime(loadStore('oxigraph', views, `@prefix v: <${V}> . @prefix iv: <https://semblance.dev/ns/view#> . @prefix sem: <https://semblance.dev/ns/core#> .
-v:top a iv:View ; sem:select """SELECT (SAMPLE(?m) AS ?one) WHERE { v:s tree:member ?m }""" .`))
+v:top a iv:View ; sem:select """SELECT (COUNT(*) AS ?n) WHERE { v:s tree:member ?m BIND(RAND() AS ?r) }""" .`))
     strict.views.strict = true
     expect(() => strict.views.start('sparql')).toThrow(/recomputed from scratch/)
   })
