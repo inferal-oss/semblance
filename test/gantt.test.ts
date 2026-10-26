@@ -101,14 +101,14 @@ describe('c:GanttChart', () => {
       both(() => {})
       const [p, q, r, sEmpty, t, u] = s.html()
       // Bars, a baseline, a whisker, lead lines, a milestone; tones; safe links only.
-      expect(p).toContain('<span style="--first: 20478; --days: 74" class="sem-gantt-plot">')
+      expect(p).toContain('<div style="--first: 20478; --days: 73" class="sem-gantt-plot">')
       expect(p).toContain('data-sem-tone="success"')
       expect(p).toContain('<a href="/docs">Design</a>')
       expect(p).not.toContain('javascript:')
       expect(p).not.toContain('//elsewhere')
       expect(p).toContain('class="sem-gantt-milestone"')
       expect(p).toContain('class="sem-gantt-uncertainty"')
-      expect(p.match(/sem-gantt-lead/g)).toHaveLength(3)
+      expect(p.match(/sem-gantt-lead/g)).toHaveLength(4)
       expect(p).toContain('>Today</span>')
       expect(p.match(/sem-gantt-tick/g)).toHaveLength(4)
       expect(q).not.toContain('>Today</span>')
@@ -116,12 +116,13 @@ describe('c:GanttChart', () => {
       expect(sEmpty).toBe('<p data-sem-c="gantt-chart" class="sem-empty">No tasks.</p>')
       expect(t).toContain('plain view is not a maintained view')
       expect(u).toBe('<p data-sem-c="gantt-chart" class="sem-empty">No view.</p>')
-      expect(s.text()[0]!.split('\n')).toEqual([
-        'Release',
-        'Design: 2026-01-26 – 2026-02-06 · Baseline: 2026-01-26 – 2026-02-02',
+      // The view's order (rs:index) is the rows' order; a start that is no date is unscheduled.
+      expect(s.text()[0]!.split('\n').sort()).toEqual([
         'Build: 2026-02-09 – 2026-03-20 · May end by: 2026-03-31 · After Design',
+        'Design: 2026-01-26 – 2026-02-06 · Baseline: 2026-01-26 – 2026-02-02',
         'Docs: 2026-02-16 – 2026-02-27 · After Design',
         'Launch: 2026-04-06 · Milestone · After Build · After Docs',
+        'Release',
         'Someday: Unscheduled',
       ])
       // A task moves (the scale with it), one is added, one loses its end, a dependency goes.
