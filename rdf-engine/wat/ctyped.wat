@@ -947,7 +947,7 @@
   (global.set $txd (i32.const 0))
   (local.set $g (call $tx_used_global))
   (local.set $u (call $local (local.get $f)))
-  (call $em2 (local.get $f) (@str "Rava<{") (local.get $g) (local.get $u))
+  (call $em2 (local.get $f) (@str "Ravb<{") (local.get $g) (local.get $u))
   (local.set $v (call $tx (local.get $f) (local.get $e)))
   (if (local.get $cond) (then (call $to_bool (local.get $f) (local.get $v))) (else (call $to_id (local.get $f) (local.get $v))))
   (call $em2 (local.get $f) (@str "gaWbb1}gaWb") (local.get $u) (local.get $g))

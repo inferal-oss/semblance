@@ -328,6 +328,11 @@ export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {
   ChangeLog: beh + 'ChangeLog',
+  undoable: beh + 'undoable',
+  asserted: beh + 'asserted',
+  retracted: beh + 'retracted',
+  undone: beh + 'undone',
+  log: beh + 'log',
   recorded: beh + 'recorded',
   Hover: beh + 'Hover',
   Move: beh + 'Move',

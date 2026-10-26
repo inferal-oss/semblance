@@ -114,11 +114,21 @@ A pair is dirty when the focus's own triples change, and also:
 
 - `sem:follows c:of` — when the triples of the node the focus points at through `c:of` change
   (for components that show another node's data);
-- `sem:watches c:value` — narrows it: only these predicates make the focus dirty;
+- `sem:watches c:value` — narrows it: only these predicates make the focus dirty. It applies to
+  the followed nodes' triples as well as the focus's own: a rule with both `sem:follows` and
+  `sem:watches` must list every predicate of the followed node it reads (the workbench's result
+  views watch only their query's text and run count, so the runtime's figures on that query
+  node do not re-run them). A function rule's traced reads are not filtered: what it reads
+  through the context re-runs it either way;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so
   adding or re-sorting one item touches only that item.
+
+Strata only run upward: a rule that a higher stratum's output would make dirty again throws
+"Stratification violation". A rule at a low stratum (say -15) targeting a component onto which a
+higher layer (the dependency layer, -12) writes derived triples needs `sem:inputOnly true`, so
+that those derived triples do not re-trigger it; otherwise move it to a stratum above the layer.
 
 A SPARQL rule pending for many foci runs once with `VALUES ?this { … }` when everything it
 constructs hangs off `$this` or IRIs minted from it, so keep templates attributable.

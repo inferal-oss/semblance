@@ -126,6 +126,21 @@ who recommends which survives and asks the user before closing any. PRs from out
 reviewed without running their code, and merged only with the user's approval. Record each reviewer
 as a "review PR #N" row.
 
+## 5c. Tests and the shared machine
+
+- Workers' briefs say: run **targeted tests only** (the files the change affects), then merge;
+  never the full suite on a branch or PR (AGENTS.md).
+- **You** run the full suite on `main` after a batch of merges (`npm run test:full`, in the
+  background), and file an issue for each failure with its owner or a card.
+- Watch the machine: `uptime`, the queue (`ls /tmp/semblance-vitest.queue`), stuck waiters (a queue
+  process with no ticket). When the CPU is too high, hold test slot 2 yourself
+  (`lockf -s /tmp/semblance-vitest.lock.2 sleep 86400`, in the background) so one run goes at a time,
+  and ask lower-priority workers to hold their runs. Record holds in #8 and lift them when the
+  priority work has landed.
+- Messages to sessions are capped at about ten per message from the user, and messages the user
+  sends during your turn don't reset the count: send the most important first, put broadcasts in #8
+  and AGENTS.md, and ask the user to say "go on" for the rest.
+
 ## 6. When a worker reports
 
 - A report is not proof. Check the result: the branch or `main` (`git log origin/main`), the PR's
