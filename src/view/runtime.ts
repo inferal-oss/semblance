@@ -1787,7 +1787,21 @@ export class MaintainedView implements ViewHandle {
     return out
   }
 
-  private notify(rows: ZSet<Row>, quads: ZSet<Quad>) {
+  /** How many of the view's solutions give each output triple: what is a triple of the output (a set). */
+  private quadCounts = new Map<string, number>()
+
+  private notify(rows: ZSet<Row>, weighted: ZSet<Quad>, set = false) {
+    // Readers get the output's change as a set: a triple comes when its first solution does, goes with its last.
+    const quads = set ? weighted : new ZSet<Quad>()
+    if (!set)
+      for (const [k, q, w] of weighted.entries()) {
+        const before = this.quadCounts.get(k) ?? 0
+        const after = before + w
+        if (after > 0) this.quadCounts.set(k, after)
+        else this.quadCounts.delete(k)
+        if (before <= 0 && after > 0) quads.add(k, q, 1)
+        else if (before > 0 && after <= 0) quads.add(k, q, -1)
+      }
     if (!rows.size && !quads.size) return
     if (this.historyKeep) {
       const tick = this.rt.tickNo
@@ -1838,7 +1852,8 @@ export class MaintainedView implements ViewHandle {
   /** What leaves when the view is emptied (a rebuild, a redefinition): the current output, negated. */
   private retractAll() {
     const now = this.snapshot()
-    this.notify(now.rows.negate(), now.quads.negate())
+    this.quadCounts.clear()
+    this.notify(now.rows.negate(), now.quads.negate(), true)
   }
 
   /** Evaluate again from the inputs (after a suspension): the change is the difference. */
