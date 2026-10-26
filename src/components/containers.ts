@@ -7,6 +7,7 @@ import { BEH, C, DND, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_S
 import { mint, type Delta } from '../rdf.ts'
 import { md5 } from './data.ts'
 import { FB, hitMarks, phrase } from './feedback.ts'
+import { gridTracks } from './layout.ts'
 import { encodeForUri, named, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
@@ -119,12 +120,9 @@ function originTab(ctx: RuleContext, frame: Term): Term | undefined {
   return origin && ctx.objects(origin, RDF_TYPE).some((t) => t.value === WIN.Tab) ? origin : undefined
 }
 
-/** Only normal floating windows join a desktop's tile grid. Docked and maximized frames keep their state. */
-function tiledOn(ctx: RuleContext, frame: NamedNode): boolean {
-  if (ctx.object(frame, WIN.windowState)?.value === WIN.Maximized || ctx.object(frame, WIN.windowState)?.value === WIN.Minimized) return false
-  const edge = ctx.object(frame, WIN.attachedTo)?.value
-  if (edge && edge !== WIN.NoEdge) return false
-  if (!classesOf(ctx, frame).has(WIN.Window)) return false
+/** A normal floating window on a desktop that tiles (c:DesktopGridLayout): the grid places it, not its geometry. */
+function tiledOn(ctx: RuleContext, frame: NamedNode, caps: Set<string>, minimized: boolean, maximized: boolean, docked: boolean): boolean {
+  if (!caps.has(WIN.Window) || minimized || maximized || docked) return false
   return ctx.match(null, C.hosts, frame).some(({ subject }) => ctx.object(subject, C.tileLayout)?.value === C.DesktopGridLayout)
 }
 
@@ -144,7 +142,6 @@ export const frame: FnRule = (ctx, focus) => {
   const caps = classesOf(ctx, focus)
   const title = titleOf(ctx, focus)
   const { state, edge, edgeNode, minimized, maximized } = stateOf(ctx, focus)
-  const tiled = tiledOn(ctx, focus)
   const body = ctx.object(focus, C.body)
   const content = named(body) ? [body] : []
   if (text) {
@@ -156,6 +153,7 @@ export const frame: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `┌ ${title}${mark ? ' ' + mark : ''} ┐`)]), ...content]))
     return o.quads
   }
+  const tiled = tiledOn(ctx, focus, caps, minimized, maximized, !!edge)
   const tab = originTab(ctx, focus)
   const hidden = minimized || coveredByMaximized(ctx, focus)
   const control = (local: string, glyph: string, label: string, marker: string) => {
@@ -273,17 +271,15 @@ export const desktop: FnRule = (ctx, focus) => {
   const raisable = hosted.filter((n) => classesOf(ctx, n).has(WIN.Raisable))
   const frames = raisable.filter((n) => !isFalse(ctx.object(n, FB.open)))
   const others = hosted.filter((n) => !raisable.includes(n))
-  const grid = ctx.object(focus, C.tileLayout)?.value === C.DesktopGridLayout
   if (ctx.modality === MOD.Text) {
     o.renders(o.el('root', 'Div', {}, hosted.filter((n) => !raisable.includes(n) || frames.includes(n))))
     return o.quads
   }
-  const tileCount = frames.filter((n) => tiledOn(ctx, n)).length
-  const rawColumns = Number(ctx.object(focus, C.tileColumns)?.value)
-  const columns = Number.isInteger(rawColumns) && rawColumns > 0 ? Math.min(12, rawColumns) : Math.max(1, Math.ceil(Math.sqrt(tileCount)))
-  const layer = o.el('frames', 'Div', { class: 'sem-frames', style: grid ? `--sem-tile-columns: ${columns}` : undefined }, frames)
+  // Tiled, the frames' layer takes c:Grid's parameters; the layout itself is a style hook (data-sem-tile-layout).
+  const { style, columns } = ctx.object(focus, C.tileLayout)?.value === C.DesktopGridLayout ? gridTracks(ctx, focus) : {}
+  const layer = o.el('frames', 'Div', { class: 'sem-frames', style }, frames)
+  if (columns) o.attr(layer, 'data-columns', columns)
   const root = o.el('root', 'Div', {}, [layer, ...others])
-  if (grid) o.attr(root, 'data-sem-layout', 'grid')
   o.renders(root)
   return o.quads
 }

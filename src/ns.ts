@@ -187,7 +187,6 @@ export const C = {
   BottomEdge: c + 'BottomEdge',
   tileLayout: c + 'tileLayout',
   DesktopGridLayout: c + 'DesktopGridLayout',
-  tileColumns: c + 'tileColumns',
   hosts: c + 'hosts',
   windowsOn: c + 'windowsOn',
   Switch: c + 'Switch',

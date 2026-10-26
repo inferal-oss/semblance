@@ -108,7 +108,7 @@ ui:wn-open-log-grid a c:Button ; c:label "Open change log" ; c:opens ui:win-log 
 ui:wn-open-activity-grid a c:Button ; c:label "Open activity" ; c:opens ui:win-activity .
 ui:wn-grid a c:Flippable ; c:front ui:wn-grid-spec .
 ui:wn-grid-spec a c:Specimen ; c:demonstrates c:Desktop , c:DesktopLayout ; c:label "Tile desktop windows" ;
-    c:help "Open windows, then set the desktop to Grid. Normal floating windows fill a responsive grid; their saved positions and sizes remain in the graph. Set Floating to return them to the same geometry. c:tileColumns can request 1–12 columns." ;
+    c:help "Open windows, then set the desktop to Grid. Normal floating windows fill a responsive grid; their saved positions and sizes remain in the graph. Set Floating to return them to the same geometry. The grid takes c:Grid's parameters: as many columns as fit at c:minWidth, at most c:columns." ;
     c:children ( ui:wn-grid-controls ) .
 
 ui:wn-state-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:windowState .

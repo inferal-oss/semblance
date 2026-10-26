@@ -44,22 +44,68 @@ describe('windows', () => {
     expect(saved).toContain('left: 140px')
     runtime.apply({ add: [f.quad(desktop, layout, f.namedNode(c + 'DesktopGridLayout'))], remove: store.match(desktop, layout, null) })
     shell.flush()
-    expect(root('desktop').getAttribute('data-sem-layout')).toBe('grid')
-    expect(root('desktop').querySelector('.sem-frames')!.getAttribute('style')).toBe('--sem-tile-columns: 2')
+    expect(root('desktop').getAttribute('data-sem-tile-layout')).toBe('desktop-grid')
+    // As many columns as fit: no cap until c:columns says one.
+    expect(root('desktop').querySelector('.sem-frames')!.hasAttribute('data-columns')).toBe(false)
     expect(root('win-checklist').getAttribute('data-sem-tiled')).toBe('true')
     expect(root('win-checklist').getAttribute('style')).toBeNull()
     expect(root('win-checklist').querySelector('.sem-window-bar')!.hasAttribute('data-sem-gesture')).toBe(false)
     expect(root('win-checklist').querySelector('.sem-window-grip')).toBeNull()
     expect(fact('win-checklist', 'x')).toBe('140')
-    const columns = f.namedNode(c + 'tileColumns')
-    runtime.apply({ add: [f.quad(desktop, columns, f.literal('1'))], remove: [] })
+    // c:Grid's parameters: c:columns caps the columns, c:minWidth sets the least tile width.
+    runtime.apply({ add: [f.quad(desktop, f.namedNode(c + 'columns'), f.literal('1', f.namedNode(NS.xsd + 'integer'))), f.quad(desktop, f.namedNode(c + 'minWidth'), f.literal('24rem'))], remove: [] })
     shell.flush()
-    expect(root('desktop').querySelector('.sem-frames')!.getAttribute('style')).toBe('--sem-tile-columns: 1')
+    const layer = root('desktop').querySelector('.sem-frames')!
+    expect(layer.getAttribute('data-columns')).toBe('1')
+    expect(layer.getAttribute('style')).toBe('--grid-min: 24rem; --grid-columns: 1')
     runtime.apply({ add: [], remove: store.match(desktop, layout, null) })
     shell.flush()
-    expect(root('desktop').hasAttribute('data-sem-layout')).toBe(false)
+    expect(root('desktop').hasAttribute('data-sem-tile-layout')).toBe(false)
+    expect(root('desktop').querySelector('.sem-frames')!.hasAttribute('style')).toBe(false)
     expect(root('win-checklist').getAttribute('style')).toBe(saved)
     expect(root('win-checklist').querySelector('.sem-window-bar')!.getAttribute('data-sem-gesture')).toBe('move')
+  })
+
+  it('tiles the same way in SPARQL and in functions, after every step', () => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'oxigraph', prefer)
+      const f = h.store.factory
+      const set = (s: string, p: string, o: string | undefined) => {
+        const add = o === undefined ? [] : [f.quad(f.namedNode(UI + s), f.namedNode(c + p), o.startsWith('"') ? f.literal(o.slice(1, -1)) : f.namedNode(o))]
+        h.runtime.apply({ remove: h.store.match(f.namedNode(UI + s), f.namedNode(c + p), null), add })
+        h.shell.flush()
+      }
+      h.showPage('Components')
+      h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'app'), f.namedNode(UI + 'galleryGroup'), null), add: [f.quad(f.namedNode(UI + 'app'), f.namedNode(UI + 'galleryGroup'), f.namedNode(UI + 'GroupWindows'))] })
+      h.shell.flush()
+      return { ...h, set, html: () => h.document.getElementById('app')!.innerHTML }
+    })
+    const steps: [string, string, string | undefined][] = [
+      ['win-checklist', 'open', '"true"'],
+      ['win-log', 'open', '"true"'],
+      ['win-activity', 'open', '"true"'],
+      ['desktop', 'tileLayout', c + 'DesktopGridLayout'],
+      ['desktop', 'columns', '"2"'],
+      ['desktop', 'minWidth', '"18rem"'],
+      ['win-log', 'windowState', c + 'Maximized'],
+      ['win-log', 'windowState', c + 'Normal'],
+      ['win-activity', 'attachedTo', c + 'EndEdge'],
+      ['win-checklist', 'windowState', c + 'Minimized'],
+      ['desktop', 'columns', undefined],
+      ['desktop', 'tileLayout', c + 'DesktopFloatingLayout'],
+    ]
+    for (const [s, p, o] of steps) {
+      for (const h of shells) h.set(s, p, o)
+      const [a, b] = shells.map((h) => h.html()) as [string, string]
+      if (o === c + 'DesktopGridLayout') expect(a).toContain('data-sem-tiled')
+      if (a !== b) {
+        let i = 0
+        while (i < a.length && a[i] === b[i]) i++
+        expect(a.slice(Math.max(0, i - 300), i + 300), `after ${s} ${p} ${o}`).toBe(b.slice(Math.max(0, i - 300), i + 300))
+      }
+    }
+    const tiled = shells[0]!.document.querySelectorAll('[data-sem-tiled]')
+    expect(tiled.length).toBe(0)
   })
 
   it('offers a desktop layout control above the frames and returns to floating through its event', () => {
