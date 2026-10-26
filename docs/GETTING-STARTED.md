@@ -79,6 +79,28 @@ stylesheet, projects `root` on screen, patches it into the element and routes th
 events to reactions. It returns the pieces (`store`, `runtime`, `projection`, `renderer`, `bus`)
 for when you need more.
 
+If a page mounts many regions, the host can compile the stylesheet at build time and load it
+before the page renders. Use `compileStyles` from the package root with `loadStore` from its
+Node entry point and the same theme graphs that the mounted regions use:
+
+```ts
+const css = compileStyles(loadStore('n3', ...themeGraphs))
+// Write css to a file served with the page.
+```
+
+Load that file with a normal stylesheet link, then pass `styles: false` to each `mount` call:
+
+```html
+<link rel="stylesheet" href="/semblance.css">
+```
+
+```ts
+await mount(element, { root, graphs: [app], styles: false })
+```
+
+The host owns this stylesheet and its cleanup. Include any custom styles from mounted graphs in
+the build-time stylesheet; `styles: false` skips compilation and injection for that mount.
+
 The components you can use, with live specimens and their ontology, are on the site's
 [Components](https://semblance.dev/#components) page; [Reference](https://semblance.dev/#reference)
 has every term.
