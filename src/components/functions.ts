@@ -55,7 +55,7 @@ import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
-import { encodeForUri, labelOf, RDFS_LABEL, text } from './util.ts'
+import { encodeForUri, isA, labelOf, nodes, RDFS_LABEL, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
 const str = (t: Term | undefined) => t?.value
@@ -592,6 +592,15 @@ const watchControlled: FnRule['watches'] = (ctx, focus) => {
   return new Set([C.controls, C.property, C.label, C.options, ...(property ? [property.value] : [])])
 }
 
+/** A choice among a toolbar's children or an app bar's actions is placed inline (twin of c:ChoicesInlineInBars). */
+const choicesInlineInBars: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  for (const p of [C.children, NS.c + 'actions', NS.c + 'moreActions'])
+    for (const item of nodes(ctx, ctx.object(focus, p)))
+      if (isA(ctx, item, NS.c + 'Choice')) o.t(item, NS.c + 'labelPlacement', ctx.nn(NS.c + 'LabelInline'))
+  return o.quads
+}
+
 const choice: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)
   const property = ctx.object(focus, C.property)
@@ -892,6 +901,7 @@ export const functions: Record<string, FnRule> = {
   'flippable:source': flippableSource,
   'source-back': sourceBack,
   choice,
+  'choice:inline-in-bars': choicesInlineInBars,
   chips,
   'chips:counts': chipCounts,
   'style:hooks': styleHooks,

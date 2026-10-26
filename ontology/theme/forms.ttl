@@ -33,11 +33,25 @@
                  [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.05em" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+# Fields side by side line up part by part, as in a pos:FieldRow: each field takes four of the grid's
+# rows (label, control, help, error), so a help line or an error under one field never moves the
+# controls beside it. The parts are spaced by their own margins (an empty track adds nothing), and
+# each line of fields by the margin under it.
 [] a sty:StyleRule ; sty:appliesTo c:ShapeForm ; sty:part ".sem-shape-fields" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, 220px), 1fr))" ] ,
-                 [ sty:property "gap" ; sty:tokens ( tok:space-3 tok:space-4 ) ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-4 ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] ,
                  [ sty:property "align-items" ; sty:raw "start" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeForm ; sty:part ".sem-shape-fields > [data-sem-c=shape-field]" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "span 4" ] ,
+                 [ sty:property "grid-template-rows" ; sty:raw "subgrid" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] ,
+                 [ sty:property "margin-block-end" ; sty:token tok:space-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeForm ; sty:part ".sem-shape-fields > [data-sem-c=shape-field] > :not(:first-child)" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeForm ; sty:part ".sem-shape-fields > [data-sem-c=shape-field] > :nth-child(n+3)" ;
+    sty:declares [ sty:property "contain" ; sty:raw "inline-size" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:ShapeField ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,

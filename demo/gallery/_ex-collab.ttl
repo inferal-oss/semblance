@@ -115,7 +115,7 @@ ui:ex-collab-doc a c:Outline ; c:label "Offsite agenda" ;
     c:sortBy ag:rank ; c:entryTitle ag:text ; c:levelProperty ag:level ;
     c:presenceProperty ag:here ; c:typingProperty ag:typingBy ; c:noteProperty ag:edited ; c:flagProperty ag:conflict ;
     c:controls ag:ada ; c:property ag:cursor .
-ui:ex-collab-editor a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+ui:ex-collab-editor a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:ex-collab-field ui:ex-collab-save ) .
 ui:ex-collab-field a c:TextField ; c:label "Your edit" ; c:placeholder "Pick a point above to rewrite it" .
 ui:ex-collab-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; key:shortcut "mod+enter" .

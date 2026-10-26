@@ -2,7 +2,7 @@
 // localization layer (ctx.languages) applies to every component alike.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { RuleContext } from '../engine/context.ts'
-import { C, RDF_FIRST, RDF_NIL, RDF_REST } from '../ns.ts'
+import { C, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS } from '../ns.ts'
 
 export const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label'
 export const RDFS_COMMENT = 'http://www.w3.org/2000/01/rdf-schema#comment'
@@ -54,3 +54,17 @@ export const labelOf = (ctx: RuleContext, t: Term): string =>
 
 /** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
 export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+
+/** Is `node` an instance of `cls`, or of a subclass of it? */
+export function isA(ctx: RuleContext, node: Term, cls: string): boolean {
+  const seen = new Set<string>()
+  const todo = ctx.objects(node, RDF_TYPE)
+  while (todo.length) {
+    const t = todo.pop()!
+    if (t.value === cls) return true
+    if (seen.has(t.value)) continue
+    seen.add(t.value)
+    todo.push(...ctx.objects(t, RDFS_SUBCLASS))
+  }
+  return false
+}

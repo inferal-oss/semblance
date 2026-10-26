@@ -384,6 +384,7 @@ export const POS = {
   Layer: NS.pos + 'Layer',
   layout: NS.pos + 'layout',
   AlignedColumns: NS.pos + 'AlignedColumns',
+  FieldRow: NS.pos + 'FieldRow',
   rows: NS.pos + 'rows',
   RowSubgrid: NS.pos + 'RowSubgrid',
   rowParts: NS.pos + 'rowParts',

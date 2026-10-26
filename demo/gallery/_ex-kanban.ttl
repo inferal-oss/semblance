@@ -87,7 +87,7 @@ ui:ex-kanban-board a c:Board , dnd:Sortable ; c:label "Sprint 14" ;
 # Adding a card: a field whose shape says what a title is, and a button gated on it (val:requires).
 kb:TitleShape a sh:PropertyShape ; sh:path kb:title ; sh:minCount 1 ; sh:maxLength 80 ;
     sh:message "A title of up to 80 characters." .
-ui:ex-kanban-add-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+ui:ex-kanban-add-row a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ui:ex-kanban-undo ) .
 ui:ex-kanban-new a c:TextField ; c:label "New card" ; c:placeholder "What needs doing?" ; val:validates kb:TitleShape .
 
