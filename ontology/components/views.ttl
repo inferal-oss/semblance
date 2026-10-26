@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix fs: <https://semblance.dev/ns/fullscreen#> .
@@ -58,15 +59,18 @@ WHERE {
   $this a/rdfs:subClassOf* c:Card .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { ?badge0_uAt l10n:of $this ; l10n:badge ?badge0_u }
   OPTIONAL { $this c:badge ?badge0_u FILTER(isLiteral(?badge0_u) && lang(?badge0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?badge0_u)) $this c:badge ?badge0_en FILTER(langMatches(lang(?badge0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?badge0_u) && !BOUND(?badge0_en)) $this c:badge ?badge0_any FILTER(isLiteral(?badge0_any)) }
   BIND(STR(COALESCE(?badge0_u, ?badge0_en, ?badge0_any)) AS ?badge0)
+  OPTIONAL { ?note0_uAt l10n:of $this ; l10n:note ?note0_u }
   OPTIONAL { $this c:note ?note0_u FILTER(isLiteral(?note0_u) && lang(?note0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?note0_u)) $this c:note ?note0_en FILTER(langMatches(lang(?note0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?note0_u) && !BOUND(?note0_en)) $this c:note ?note0_any FILTER(isLiteral(?note0_any)) }
@@ -100,6 +104,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:Card .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -169,12 +174,14 @@ WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
   BIND(COALESCE(?label0, "") AS ?label)
+  OPTIONAL { ?subtitle0_uAt l10n:of $this ; l10n:subtitle ?subtitle0_u }
   OPTIONAL { $this c:subtitle ?subtitle0_u FILTER(isLiteral(?subtitle0_u) && lang(?subtitle0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u)) $this c:subtitle ?subtitle0_en FILTER(langMatches(lang(?subtitle0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u) && !BOUND(?subtitle0_en)) $this c:subtitle ?subtitle0_any FILTER(isLiteral(?subtitle0_any)) }
@@ -207,6 +214,7 @@ WHERE {
   OPTIONAL { FILTER(BOUND(?firstMore)) $this c:actions/rdf:rest* ?lastCell . ?lastCell rdf:first ?lastAction0 ; rdf:rest rdf:nil FILTER(isIRI(?lastAction0)) }
   BIND(IF(BOUND(?firstMore), ?lastAction0, ?none) AS ?lastAction)
   BIND(STR(EXISTS { $this c:expanded ?expanded FILTER(STR(?expanded) = "true") }) AS ?openText0)
+  OPTIONAL { ?moreLabel_uAt l10n:of $this ; l10n:moreLabel ?moreLabel_u }
   OPTIONAL { $this c:moreLabel ?moreLabel_u FILTER(isLiteral(?moreLabel_u) && lang(?moreLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?moreLabel_u)) $this c:moreLabel ?moreLabel_en FILTER(langMatches(lang(?moreLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?moreLabel_u) && !BOUND(?moreLabel_en)) $this c:moreLabel ?moreLabel_any FILTER(isLiteral(?moreLabel_any)) }
@@ -251,11 +259,13 @@ WHERE {
   $this a/rdfs:subClassOf* c:AppBar .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { ?subtitle0_uAt l10n:of $this ; l10n:subtitle ?subtitle0_u }
   OPTIONAL { $this c:subtitle ?subtitle0_u FILTER(isLiteral(?subtitle0_u) && lang(?subtitle0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u)) $this c:subtitle ?subtitle0_en FILTER(langMatches(lang(?subtitle0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?subtitle0_u) && !BOUND(?subtitle0_en)) $this c:subtitle ?subtitle0_any FILTER(isLiteral(?subtitle0_any)) }
@@ -340,11 +350,13 @@ WHERE {
     $this a/rdfs:subClassOf* c:GraphMark .
     c:GraphMark c:markPath ?d ; c:markEcho ?offset .
     BIND(CONCAT("translate(", STR(?offset), " ", STR(?offset), ")") AS ?shift)
-    OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
+    OPTIONAL { ?labelC_uAt l10n:of $this ; l10n:label ?labelC_u }
+  OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
     OPTIONAL { FILTER(!BOUND(?labelC_u)) $this c:label ?labelC_en FILTER(langMatches(lang(?labelC_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?labelC_u) && !BOUND(?labelC_en)) $this c:label ?labelC_any FILTER(isLiteral(?labelC_any)) }
     BIND(STR(COALESCE(?labelC_u, ?labelC_en, ?labelC_any)) AS ?labelC)
-    OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
+    OPTIONAL { ?labelR_uAt l10n:of $this ; l10n:name ?labelR_u }
+  OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
     OPTIONAL { FILTER(!BOUND(?labelR_u)) $this rdfs:label ?labelR_en FILTER(langMatches(lang(?labelR_en), "en")) }
     OPTIONAL { FILTER(!BOUND(?labelR_u) && !BOUND(?labelR_en)) $this rdfs:label ?labelR_any FILTER(isLiteral(?labelR_any)) }
     BIND(STR(COALESCE(?labelR_u, ?labelR_en, ?labelR_any)) AS ?labelR)
@@ -416,7 +428,8 @@ c:SourceViewRendering a sem:Rendering ;
     sem:stratum 0 ;
     sem:follows c:of ;
     sem:watches rdf:type , c:of , c:label , c:emptyText ;
-    sem:functionOnly """It splits the text into lexical tokens for coloring, which needs a tokenizer; SPARQL cannot split a string into tokens.""" .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it splits the text into lexical tokens for coloring." ;
+    sem:needsExtension sx:Matches .
 c:SourceViewRendering-fn a sem:Rule ; sem:implements c:SourceViewRendering ; sem:function "source-view" .
 
 # --- Emblem ---------------------------------------------------------------------------------------
@@ -455,10 +468,12 @@ WHERE {
   OPTIONAL { $this c:color ?color0 } BIND(COALESCE(STR(?color0), "currentColor") AS ?fill)
   OPTIONAL { $this c:fillRule ?rule0 } BIND(COALESCE(STR(?rule0), "nonzero") AS ?rule)
   BIND(EXISTS { $this c:decorative ?dec FILTER(STR(?dec) = "true") } AS ?decorative)
+  OPTIONAL { ?labelC_uAt l10n:of $this ; l10n:label ?labelC_u }
   OPTIONAL { $this c:label ?labelC_u FILTER(isLiteral(?labelC_u) && lang(?labelC_u) = "") }
   OPTIONAL { FILTER(!BOUND(?labelC_u)) $this c:label ?labelC_en FILTER(langMatches(lang(?labelC_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?labelC_u) && !BOUND(?labelC_en)) $this c:label ?labelC_any FILTER(isLiteral(?labelC_any)) }
   BIND(STR(COALESCE(?labelC_u, ?labelC_en, ?labelC_any)) AS ?labelC)
+  OPTIONAL { ?labelR_uAt l10n:of $this ; l10n:name ?labelR_u }
   OPTIONAL { $this rdfs:label ?labelR_u FILTER(isLiteral(?labelR_u) && lang(?labelR_u) = "") }
   OPTIONAL { FILTER(!BOUND(?labelR_u)) $this rdfs:label ?labelR_en FILTER(langMatches(lang(?labelR_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?labelR_u) && !BOUND(?labelR_en)) $this rdfs:label ?labelR_any FILTER(isLiteral(?labelR_any)) }
@@ -484,7 +499,8 @@ c:Metrics a owl:Class ;
     rdfs:comment "Chips showing c:fields of one node (c:of), labelled by the properties' rdfs:label and c:unit."@en ;
     sem:slug "metrics" .
 c:MetricsRendering a sem:Rendering ; sem:targets c:Metrics ; sem:stratum 0 ; sem:follows c:of ;
-    sem:functionOnly """It shows IRIs compacted with the graph's declared prefixes and percent-decoded (decodeURIComponent); SPARQL has no percent-decoding (nothing turns code points back into a string).""" .
+    sem:functionOnly "awaits sx:Text (sx:decodeURI): it shows IRIs compacted with the declared prefixes and percent-decoded." ;
+    sem:needsExtension sx:Text .
 c:MetricsRendering-fn a sem:Rule ; sem:implements c:MetricsRendering ; sem:function "metrics" .
 
 # --- Toggle ------------------------------------------------------------------------------------
@@ -507,6 +523,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Toggle ; c:controls ?target ; c:property ?property .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -516,12 +533,14 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?propertyLabelC_u)) ?property c:label ?propertyLabelC_en FILTER(langMatches(lang(?propertyLabelC_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?propertyLabelC_u) && !BOUND(?propertyLabelC_en)) ?property c:label ?propertyLabelC_any FILTER(isLiteral(?propertyLabelC_any)) }
   BIND(STR(COALESCE(?propertyLabelC_u, ?propertyLabelC_en, ?propertyLabelC_any)) AS ?propertyLabelC)
+  OPTIONAL { ?propertyLabelR_uAt l10n:of ?property ; l10n:name ?propertyLabelR_u }
   OPTIONAL { ?property rdfs:label ?propertyLabelR_u FILTER(isLiteral(?propertyLabelR_u) && lang(?propertyLabelR_u) = "") }
   OPTIONAL { FILTER(!BOUND(?propertyLabelR_u)) ?property rdfs:label ?propertyLabelR_en FILTER(langMatches(lang(?propertyLabelR_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?propertyLabelR_u) && !BOUND(?propertyLabelR_en)) ?property rdfs:label ?propertyLabelR_any FILTER(isLiteral(?propertyLabelR_any)) }
   BIND(STR(COALESCE(?propertyLabelR_u, ?propertyLabelR_en, ?propertyLabelR_any)) AS ?propertyLabelR)
   BIND(COALESCE(?propertyLabelC, ?propertyLabelR, REPLACE(STR(?property), "^.*[#/]", "")) AS ?propertyLabel) }
   BIND(COALESCE(?ownLabel2, ?propertyLabel) AS ?label)
+  OPTIONAL { ?note0_uAt l10n:of $this ; l10n:note ?note0_u }
   OPTIONAL { $this c:note ?note0_u FILTER(isLiteral(?note0_u) && lang(?note0_u) = "") }
   OPTIONAL { FILTER(!BOUND(?note0_u)) $this c:note ?note0_en FILTER(langMatches(lang(?note0_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?note0_u) && !BOUND(?note0_en)) $this c:note ?note0_any FILTER(isLiteral(?note0_any)) }
@@ -563,7 +582,8 @@ c:QueryViewRendering a sem:Rendering ;
     sem:targets c:QueryView ;
     sem:stratum 0 ;
     sem:follows c:bindFrom, c:of ;
-    sem:functionOnly """It runs queries whose text is stored in the data (c:queries), which SPARQL cannot evaluate, and prints the results as colored Turtle tokens, which needs a tokenizer.""" .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the results of the queries in the data (c:queries) as colored Turtle tokens. (The results would be rows written as graph data.)" ;
+    sem:needsExtension sx:Matches .
 c:QueryViewRendering-fn a sem:Rule ; sem:implements c:QueryViewRendering ; sem:function "queryview" .
 
 # A rule may show the queries it runs on its back side (c:Flippable lists them).
@@ -586,7 +606,8 @@ c:ElementMarkupRendering a sem:Rendering ;
     sem:modality mod:Screen ;
     sem:stratum 40 ;
     sem:follows c:bindFrom ;
-    sem:functionOnly """It orders each element's children (ord:immediatelyPrecedes, ord:precedes, sem:orderKey) and resolves nested components, as the HTML index does; SPARQL cannot linearize a partial order or serialize a tree in document order.""" .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it prints the component's triples as Turtle and the element as HTML, colored token by token; the HTML's order is the HTML index's (a building block could state it)." ;
+    sem:needsExtension sx:Matches .
 c:ElementMarkupRendering-fn a sem:Rule ; sem:implements c:ElementMarkupRendering ; sem:function "element-markup" .
 
 # --- Highlight ------------------------------------------------------------------------------------
@@ -700,15 +721,77 @@ c:StreamMembers a owl:Class ;
 ordered by the stream's own ldes:sequencePath; one c:TriplesView per member. LDES members are
 immutable, so a member's view is rendered once and never again."""@en ;
     sem:slug "stream-members" .
-c:limit a owl:DatatypeProperty ; rdfs:range xsd:integer .
-c:StreamMembersRendering a sem:Rendering ; sem:targets c:StreamMembers ; sem:stratum 0 ;
-    sem:functionOnly """It walks the stream from its head (beh:latest, beh:previous) a data-driven number of steps (c:limit), which a property path cannot bound, and keys each member's view by a hash (FNV-1a) of its IRI.""" .
+c:limit a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "How many members a c:StreamMembers shows (at most 16)."@en .
+c:StreamMembersRendering a sem:Rendering ; sem:targets c:StreamMembers ; sem:stratum 0 .
 c:StreamMembersRendering-fn a sem:Rule ; sem:implements c:StreamMembersRendering ; sem:function "streammembers" .
+# The newest c:limit members, newest first: from the head, beh:previous at most 16 steps (the
+# walk is unrolled; c:limit is capped at 16, as the function caps it), stopping at a member
+# that has retired. A stream without a head is ranked by its sequence path instead. Each
+# member's view is keyed by an MD5 of its IRI.
+c:StreamMembersRendering-sparql a sem:Rule ;
+    sem:implements c:StreamMembersRendering ;
+    sem:follows c:of ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?emptyClass ; rdfhtml:hasChild ?view , ?emptyText .
+  ?view a c:TriplesView ; c:of ?member ; sem:orderKey ?rank .
+  ?emptyText a rdfhtml:Text ; rdfhtml:data ?empty .
+}
+WHERE {
+  $this c:of ?stream . FILTER(isIRI(?stream))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    {
+      $this c:of ?stream .
+      OPTIONAL { $this c:limit ?limitRawA }
+      BIND(COALESCE(xsd:double(?limitRawA), 8) AS ?wantedA)
+      BIND(IF(?wantedA > 16, 16, ?wantedA) AS ?limitA)
+      ?stream beh:latest ?m1 . FILTER(isIRI(?m1) && EXISTS { ?m1 a ?t1 })
+      LATERAL { OPTIONAL { ?m1 beh:previous ?m2 . FILTER EXISTS { ?m2 a ?t2 } LATERAL { OPTIONAL { ?m2 beh:previous ?m3 . FILTER EXISTS { ?m3 a ?t3 } LATERAL { OPTIONAL { ?m3 beh:previous ?m4 . FILTER EXISTS { ?m4 a ?t4 } LATERAL { OPTIONAL { ?m4 beh:previous ?m5 . FILTER EXISTS { ?m5 a ?t5 } LATERAL { OPTIONAL { ?m5 beh:previous ?m6 . FILTER EXISTS { ?m6 a ?t6 } LATERAL { OPTIONAL { ?m6 beh:previous ?m7 . FILTER EXISTS { ?m7 a ?t7 } LATERAL { OPTIONAL { ?m7 beh:previous ?m8 . FILTER EXISTS { ?m8 a ?t8 } LATERAL { OPTIONAL { ?m8 beh:previous ?m9 . FILTER EXISTS { ?m9 a ?t9 } LATERAL { OPTIONAL { ?m9 beh:previous ?m10 . FILTER EXISTS { ?m10 a ?t10 } LATERAL { OPTIONAL { ?m10 beh:previous ?m11 . FILTER EXISTS { ?m11 a ?t11 } LATERAL { OPTIONAL { ?m11 beh:previous ?m12 . FILTER EXISTS { ?m12 a ?t12 } LATERAL { OPTIONAL { ?m12 beh:previous ?m13 . FILTER EXISTS { ?m13 a ?t13 } LATERAL { OPTIONAL { ?m13 beh:previous ?m14 . FILTER EXISTS { ?m14 a ?t14 } LATERAL { OPTIONAL { ?m14 beh:previous ?m15 . FILTER EXISTS { ?m15 a ?t15 } LATERAL { OPTIONAL { ?m15 beh:previous ?m16 . FILTER EXISTS { ?m16 a ?t16 } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } 
+      VALUES ?i { 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 }
+      BIND(COALESCE(IF(?i = 1, ?m1, ?none), IF(?i = 2, ?m2, ?none), IF(?i = 3, ?m3, ?none), IF(?i = 4, ?m4, ?none), IF(?i = 5, ?m5, ?none), IF(?i = 6, ?m6, ?none), IF(?i = 7, ?m7, ?none), IF(?i = 8, ?m8, ?none), IF(?i = 9, ?m9, ?none), IF(?i = 10, ?m10, ?none), IF(?i = 11, ?m11, ?none), IF(?i = 12, ?m12, ?none), IF(?i = 13, ?m13, ?none), IF(?i = 14, ?m14, ?none), IF(?i = 15, ?m15, ?none), IF(?i = 16, ?m16, ?none)) AS ?headMember)
+      FILTER(BOUND(?headMember) && ?i <= ?limitA)
+      BIND(?headMember AS ?member)
+      BIND(?i AS ?rank)
+    } UNION {
+      $this c:of ?stream .
+      OPTIONAL { $this c:limit ?limitRawB }
+      BIND(COALESCE(xsd:double(?limitRawB), 8) AS ?wantedB)
+      BIND(IF(?wantedB > 16, 16, ?wantedB) AS ?limitB)
+      FILTER NOT EXISTS { ?stream beh:latest ?head FILTER(isIRI(?head)) }
+      # The 16 newest by sequence (ties by IRI), and each one's rank among them: a sort, then
+      # 16 x 16 comparisons, not a comparison of every member with every other.
+      { SELECT ?member (SUM(IF(?otherSeq > ?memberSeq || (?otherSeq = ?memberSeq && STR(?other) < STR(?member)), 1, 0)) AS ?ahead) WHERE {
+        { SELECT ?member ?memberSeq WHERE {
+          $this c:of ?topStream . ?topStream tree:member ?member . FILTER(isIRI(?member))
+          OPTIONAL { ?topStream ldes:sequencePath ?topPath . ?member ?topPath ?memberSeqRaw }
+          BIND(COALESCE(xsd:double(?memberSeqRaw), 0) AS ?memberSeq)
+        } ORDER BY DESC(?memberSeq) ?member LIMIT 16 }
+        { SELECT ?other ?otherSeq WHERE {
+          $this c:of ?topStream . ?topStream tree:member ?other . FILTER(isIRI(?other))
+          OPTIONAL { ?topStream ldes:sequencePath ?topPath . ?other ?topPath ?otherSeqRaw }
+          BIND(COALESCE(xsd:double(?otherSeqRaw), 0) AS ?otherSeq)
+        } ORDER BY DESC(?otherSeq) ?other LIMIT 16 }
+      } GROUP BY ?member }
+      FILTER(?ahead < ?limitB)
+      BIND(?ahead + 1 AS ?rank)
+    }
+    BIND(IRI(CONCAT(STR($this), "/~m-", SUBSTR(MD5(STR(?member)), 1, 8))) AS ?view)
+  }
+  BIND(IF(BOUND(?view), ?none, "sem-empty") AS ?emptyClass)
+  OPTIONAL { ?pickeAt l10n:of $this ; l10n:emptyText ?picke }
+  OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
+  BIND(STR(COALESCE(?picke, ?anye)) AS ?ownEmpty)
+  BIND(IF(BOUND(?view), ?none, COALESCE(?ownEmpty, "No members yet.")) AS ?empty)
+  BIND(IF(BOUND(?view), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?emptyText)
+}""" .
 
 c:TriplesView a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "The triples about one node (c:of) as syntax-colored Turtle."@en ;
     sem:slug "triples-view" .
 c:TriplesViewRendering a sem:Rendering ; sem:targets c:TriplesView ; sem:stratum 0 ;
-    sem:functionOnly """It prints the node's triples as Turtle and colors the tokens, which needs a tokenizer; SPARQL cannot split text into tokens.""" .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it colors the Turtle it prints for the node's triples, token by token." ;
+    sem:needsExtension sx:Matches .
 c:TriplesViewRendering-fn a sem:Rule ; sem:implements c:TriplesViewRendering ; sem:function "triplesview" .

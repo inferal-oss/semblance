@@ -5,7 +5,9 @@
 // sees the example's graph. What happened is written back to the site's graph, as data the example's
 // rendering shows: c:sandboxState, c:problem, c:renderTime, c:edited. A sandbox is built when its
 // example is first shown, and rebuilt when its sources change (after typing pauses); a hidden example
-// costs nothing.
+// costs nothing. With c:dataPreview, the example's data (that CONSTRUCT over its graph) is written
+// back too, as lines of Turtle (c:dataLine), after the build and after every interaction that
+// changed it, with what changed marked (c:lineChange, c:changedLine, c:triplesAdded/Removed).
 import { Parser } from 'n3'
 import type { Quad, Term } from '@rdfjs/types'
 import { EventBus } from './behaviour/events.ts'
@@ -25,6 +27,23 @@ export const LIVE = {
   sources: c + 'sources',
   exampleRoot: c + 'exampleRoot',
   textPreview: c + 'textPreview',
+  dataPreview: c + 'dataPreview',
+  dataLine: c + 'dataLine',
+  DataLine: c + 'DataLine',
+  lineSubject: c + 'lineSubject',
+  lineNode: c + 'lineNode',
+  linePredicate: c + 'linePredicate',
+  lineObject: c + 'lineObject',
+  subjectToken: c + 'subjectToken',
+  predicateToken: c + 'predicateToken',
+  objectToken: c + 'objectToken',
+  lineKey: c + 'lineKey',
+  lineChange: c + 'lineChange',
+  LineAdded: c + 'LineAdded',
+  LineRemoved: c + 'LineRemoved',
+  changedLine: c + 'changedLine',
+  triplesAdded: c + 'triplesAdded',
+  triplesRemoved: c + 'triplesRemoved',
   original: c + 'original',
   value: c + 'value',
   label: c + 'label',
@@ -39,6 +58,7 @@ export const LIVE = {
   sourceLine: c + 'sourceLine',
   renderTime: c + 'renderTime',
   edited: c + 'edited',
+  interacted: c + 'interacted',
   copied: c + 'copied',
 } as const
 
@@ -258,6 +278,8 @@ interface Mounted {
   builds: number
   /** When it was last seen shown (a count of syncs). */
   shownAt: number
+  /** The data the example shows (c:dataPreview) as last found: its triples by key. */
+  data?: Map<string, Quad>
 }
 
 let sandboxes = 0
@@ -286,6 +308,8 @@ export class Sandboxes {
   /** Timers that are not a sandbox's own (withdrawing a copy request). */
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
   private disposed = false
+  /** While the host writes what happened to the site's graph (its own removals ask for nothing). */
+  private writing = false
   /** Builds done, for tests and cost checks. */
   builds = 0
 
@@ -389,7 +413,11 @@ export class Sandboxes {
   }
 
   private changed(delta: Delta) {
-    for (const q of delta.remove) this.touched(q)
+    for (const q of delta.remove) {
+      this.touched(q)
+      // Reset withdrew c:interacted: build the example again as written (at once, not after typing pauses).
+      if (q.predicate.value === LIVE.interacted && !this.writing) this.rebuild(q.subject.value, 0)
+    }
     for (const q of delta.add) {
       this.touched(q)
       if (q.predicate.value === LIVE.copied) void this.copy(q.subject.value, q.object.value)
@@ -400,13 +428,19 @@ export class Sandboxes {
     const p = q.predicate.value
     if (p !== LIVE.value && p !== LIVE.original) return
     const example = this.editorOf.get(q.subject.value)
-    const m = example && this.mounted.get(example)
+    if (example) this.rebuild(example, this.opts.delayMs ?? 300)
+  }
+
+  /** Build an example again after `ms` (a later request replaces a waiting one); with 0, even if its sources are the same. */
+  private rebuild(example: string, ms: number) {
+    const m = this.mounted.get(example)
     if (!m) return
     if (m.timer !== undefined) clearTimeout(m.timer)
+    if (ms === 0) m.key = undefined
     m.timer = setTimeout(() => {
       m.timer = undefined
       if (!this.disposed && this.mounted.get(m.iri) === m) this.build(m)
-    }, this.opts.delayMs ?? 300)
+    }, ms)
   }
 
   /** The example's sources from the site's graph: each editor's text as edited, else as written. */
@@ -461,7 +495,7 @@ export class Sandboxes {
     if (built.sandbox) this.mount(m, built.sandbox)
     const ms = Math.max(0, Math.round(now() - t0))
     const state = built.sandbox ? LIVE.Live : m.sandbox ? LIVE.Stale : LIVE.Broken
-    this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited })
+    this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited, interacted: built.sandbox ? false : undefined })
   }
 
   /** Put a built sandbox in the slot, in place of the one there (whose bus and styles go with it). */
@@ -485,7 +519,16 @@ export class Sandboxes {
     flush()
     const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
     const failed = (e: Error) => this.write(m.iri, { problems: [{ message: e.message, severity: 'error' }] })
-    const detachBus = bus.attach(renderer, () => flush(), failed)
+    const detachBus = bus.attach(
+      renderer,
+      (h) => {
+        flush()
+        if (!h.delta.add.length && !h.delta.remove.length) return
+        this.followData(m, sandbox, true)
+        this.write(m.iri, { interacted: true })
+      },
+      failed,
+    )
     // What the example asserts full screen is shown over the page (or full screen, if allowed).
     const detachFullscreen = new Fullscreen(bus, {
       element: (iri) => {
@@ -518,6 +561,7 @@ export class Sandboxes {
     m.renderer = renderer
     m.textRenderer = textRenderer
     m.sheet = sheet
+    this.followData(m, sandbox, false)
     m.detach = () => {
       detachStall()
       detachBus()
@@ -554,7 +598,7 @@ export class Sandboxes {
   }
 
   /** Write what a build found to the site's graph (only what changed; what is not given stays), and patch the site. */
-  private write(example: string, status: { state?: string; problems?: SandboxProblem[]; ms?: number; edited?: boolean }) {
+  private write(example: string, status: { state?: string; problems?: SandboxProblem[]; ms?: number; edited?: boolean; interacted?: boolean }) {
     const store = this.runtime.store
     const f = store.factory
     const dg = f.defaultGraph()
@@ -567,6 +611,7 @@ export class Sandboxes {
       [LIVE.problem, status.problems],
       [LIVE.renderTime, status.ms],
       [LIVE.edited, status.edited],
+      [LIVE.interacted, status.interacted],
     ] as const
     for (const [p, v] of given) {
       if (v === undefined) continue
@@ -579,6 +624,7 @@ export class Sandboxes {
     if (status.state) desired.push(f.quad(s, nn(LIVE.sandboxState), nn(status.state)))
     if (status.ms !== undefined) desired.push(f.quad(s, nn(LIVE.renderTime), integer(status.ms)))
     if (status.edited) desired.push(f.quad(s, nn(LIVE.edited), f.literal('true', nn(XSD_BOOLEAN))))
+    if (status.interacted) desired.push(f.quad(s, nn(LIVE.interacted), f.literal('true', nn(XSD_BOOLEAN))))
     ;(status.problems ?? []).slice(0, 20).forEach((p, i) => {
       const node = nn(`${example}/problem-${i}`)
       desired.push(
@@ -591,6 +637,74 @@ export class Sandboxes {
       if (p.source) desired.push(f.quad(node, nn(LIVE.inSource), nn(p.source)))
       if (p.line !== undefined) desired.push(f.quad(node, nn(LIVE.sourceLine), integer(p.line)))
     })
+    const keys = new Set(desired.map(quadKey))
+    const had = new Set(current.map(quadKey))
+    const delta: Delta = { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
+    if (!delta.add.length && !delta.remove.length) return
+    this.writing = true
+    try {
+      this.runtime.apply(delta)
+    } finally {
+      this.writing = false
+    }
+    this.opts.flush()
+  }
+
+  /**
+   * The example's data (c:dataPreview) as it is now in its sandbox, written to the site's graph as
+   * lines of Turtle: after a build all of it as it is; after an interaction (`changed`) with the
+   * triples it added and removed marked, and nothing written when it changed none of them.
+   */
+  private followData(m: Mounted, sandbox: Sandbox, changed: boolean) {
+    const site = this.runtime.store
+    const sf = site.factory
+    const query = site.match(sf.namedNode(m.iri), sf.namedNode(LIVE.dataPreview), null, sf.defaultGraph())[0]?.object.value
+    if (!query) return
+    const sources = this.sources(m.iri)
+    const prefixes = { ...NS, ...declared(sources.map((s) => s.text).join('\n')) }
+    const head = Object.entries(prefixes).map(([p, ns]) => `PREFIX ${p}: <${ns}>`).join('\n')
+    let quads: Quad[]
+    try {
+      quads = sandbox.store.construct(head + '\n' + query, [sandbox.store.factory.defaultGraph()])
+    } catch (e) {
+      console.warn('[semblance] the data of a live example could not be read', e)
+      return
+    }
+    const now = new Map(quads.map((q) => [quadKey(q), q]))
+    const before = m.data
+    m.data = now
+    const added = changed && before ? [...now.keys()].filter((k) => !before.has(k)) : []
+    const removed = changed && before ? [...before.keys()].filter((k) => !now.has(k)) : []
+    if (changed && before && !added.length && !removed.length) return
+    const lines = dataLines(now, removed.map((k) => before!.get(k)!), new Set(added), prefixes)
+    const s = sf.namedNode(m.iri)
+    const nn = (iri: string) => sf.namedNode(iri)
+    const integer = (n: number) => sf.literal(String(n), nn(XSD_INTEGER))
+    const desired: Quad[] = []
+    // The arrows point at the first line added, else the first removed.
+    const target = lines.find((l) => l.change === 'added') ?? lines.find((l) => l.change === 'removed')
+    for (const l of lines) {
+      const node = nn(`${m.iri}/data-${hash(l.key)}`)
+      desired.push(
+        sf.quad(s, nn(LIVE.dataLine), node),
+        sf.quad(node, nn(RDF_TYPE), nn(LIVE.DataLine)),
+        sf.quad(node, nn(LIVE.lineSubject), sf.literal(l.subject.text)),
+        sf.quad(node, nn(LIVE.subjectToken), sf.literal(l.subject.token)),
+        sf.quad(node, nn(LIVE.lineNode), sf.literal(hash(l.subject.text))),
+        sf.quad(node, nn(LIVE.linePredicate), sf.literal(l.predicate.text)),
+        sf.quad(node, nn(LIVE.predicateToken), sf.literal(l.predicate.token)),
+        sf.quad(node, nn(LIVE.lineObject), sf.literal(l.object.text)),
+        sf.quad(node, nn(LIVE.objectToken), sf.literal(l.object.token)),
+        sf.quad(node, nn(LIVE.lineKey), sf.literal(l.sort)),
+      )
+      if (l.change) desired.push(sf.quad(node, nn(LIVE.lineChange), nn(l.change === 'added' ? LIVE.LineAdded : LIVE.LineRemoved)))
+      if (l === target) desired.push(sf.quad(s, nn(LIVE.changedLine), node))
+    }
+    if (changed) desired.push(sf.quad(s, nn(LIVE.triplesAdded), integer(added.length)), sf.quad(s, nn(LIVE.triplesRemoved), integer(removed.length)))
+    const dg = sf.defaultGraph()
+    const current: Quad[] = []
+    for (const p of [LIVE.changedLine, LIVE.triplesAdded, LIVE.triplesRemoved]) current.push(...site.match(s, nn(p), null, dg))
+    for (const q of site.match(s, nn(LIVE.dataLine), null, dg)) current.push(q, ...site.match(q.object, null, null, dg))
     const keys = new Set(desired.map(quadKey))
     const had = new Set(current.map(quadKey))
     const delta: Delta = { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
@@ -622,6 +736,65 @@ export class Sandboxes {
     }, this.opts.copiedMs ?? 1500)
     this.timers.add(t)
   }
+}
+
+/** A term as Turtle writes it, and the kind of token it is (pname, iri, string, number, keyword), as code colours them. */
+export interface DataTerm {
+  text: string
+  token: string
+}
+
+/** A line of a live example's data: its triple's terms, where it sorts, and what the last interaction did to it. */
+export interface DataLine {
+  key: string
+  sort: string
+  subject: DataTerm
+  predicate: DataTerm
+  object: DataTerm
+  change?: 'added' | 'removed'
+}
+
+/**
+ * The data, a line per triple: by subject, then rdf:type, rdfs:label and the other predicates,
+ * then object; a removed triple (marked) in its place, beside what replaced it.
+ */
+export function dataLines(present: Map<string, Quad>, removed: Quad[], added: Set<string>, prefixes: Record<string, string>): DataLine[] {
+  const rank = (p: string) => (p === RDF_TYPE ? '0' : p === NS.rdfs + 'label' ? '1' : '2')
+  const rows = [
+    ...[...present].map(([key, q]) => ({ key, q, change: added.has(key) ? ('added' as const) : undefined })),
+    ...removed.map((q) => ({ key: quadKey(q), q, change: 'removed' as const })),
+  ].map((r) => {
+    const subject = dataTerm(r.q.subject, prefixes)
+    const predicate = r.q.predicate.value === RDF_TYPE ? { text: 'a', token: 'keyword' } : dataTerm(r.q.predicate, prefixes)
+    const object = dataTerm(r.q.object, prefixes)
+    const sort = `${subject.text} ${rank(r.q.predicate.value)}${predicate.text} ${r.change === 'removed' ? 0 : 1}${object.text}`
+    return { key: r.key, sort, subject, predicate, object, change: r.change }
+  })
+  return rows.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0))
+}
+
+/** A term as Turtle writes it, with the given prefixes, and its kind of token. */
+function dataTerm(t: Term, prefixes: Record<string, string>): DataTerm {
+  if (t.termType === 'NamedNode') {
+    const short = compactIri(t.value, prefixes)
+    return short === t.value ? { text: `<${t.value}>`, token: 'iri' } : { text: short, token: 'pname' }
+  }
+  if (t.termType === 'BlankNode') return { text: `_:${t.value}`, token: 'pname' }
+  if (t.termType !== 'Literal') return { text: t.value, token: 'string' }
+  const dt = t.datatype?.value
+  if (dt === XSD_BOOLEAN && /^(true|false)$/.test(t.value)) return { text: t.value, token: 'keyword' }
+  if (dt === XSD_INTEGER && /^[+-]?\d+$/.test(t.value)) return { text: t.value, token: 'number' }
+  const quoted = JSON.stringify(t.value)
+  if (t.language) return { text: `${quoted}@${t.language}`, token: 'string' }
+  if (!dt || dt === NS.xsd + 'string') return { text: quoted, token: 'string' }
+  return { text: `${quoted}^^${dataTerm(t.datatype, prefixes).text}`, token: 'string' }
+}
+
+/** A short, stable name for a line's triple (FNV-1a, hex). */
+function hash(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(16).padStart(8, '0')
 }
 
 /**

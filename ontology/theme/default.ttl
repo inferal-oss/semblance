@@ -639,13 +639,6 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
                  [ sty:property "white-space" ; sty:raw "pre" ] ,
                  [ sty:property "overflow-x" ; sty:raw "auto" ] .
 
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-keyword" ; sty:declares [ sty:property "color" ; sty:token tok:code-keyword ] , [ sty:property "font-weight" ; sty:raw "600" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-var" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-string" ; sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-pname" ; sty:declares [ sty:property "color" ; sty:token tok:code-name ] .
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-iri" ; sty:declares [ sty:property "color" ; sty:token tok:code-iri ] .
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-number" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
-[] a sty:StyleRule ; sty:appliesTo c:Flippable ; sty:part ".tok-comment" ; sty:declares [ sty:property "color" ; sty:token tok:code-comment ] , [ sty:property "font-style" ; sty:raw "italic" ] .
 
 # --- choice (dropdown) and chips (pills) ---------------------------------------------------
 
@@ -682,6 +675,11 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
                  [ sty:property "padding-block" ; sty:raw "0" ] ,
                  [ sty:property "padding-inline" ; sty:raw "8px var(--sem-chevron-space)" ] ,
                  [ sty:property "background-color" ; sty:token tok:surface-sunken ] .
+[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:state ":has(select:disabled)" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
+                 [ sty:property "cursor" ; sty:raw "not-allowed" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "select:disabled" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "not-allowed" ] .
 
 # Narrower than its options, the select gives way (its text is cut, not the page).
 [] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "select" ; sty:atWidth sty:CompactWidth ;

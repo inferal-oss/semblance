@@ -3008,7 +3008,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding-block" ; sty:raw "0" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=choice] select:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part "[data-sem-c=choice] select:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill-hover)" ] .
 
 # Check boxes and radios: a strong hairline at rest, an accent fill when on; the radio dot grows on hover.

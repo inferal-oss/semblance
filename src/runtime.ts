@@ -1,5 +1,5 @@
 import type { Quad } from '@rdfjs/types'
-import { type Delta, quadKey } from './rdf.ts'
+import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
@@ -226,8 +226,11 @@ export class Runtime {
   }
 
   private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+    const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
+      // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
+      maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })

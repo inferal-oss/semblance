@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { Islands } from '../src/foreign.ts'
 import { loadStore } from '../src/node/load.ts'
-import { BEH, C, EVENTS_GRAPH, LDES, MOD, NS } from '../src/ns.ts'
+import { BEH, C, EVENTS_GRAPH, LDES, MOD, NS, OL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
@@ -175,16 +175,22 @@ describe('foreign components', () => {
     expect(fri()).toBe('Fri: 3')
   })
 
-  it('marks each island with what it mounts, and outlines them inside a component that says ext:outlines', () => {
+  it('names each island by what it mounts, outlined inside a component that ol:shows, unless it has a name of its own', () => {
     for (const prefer of ['sparql', 'function'] as const) {
       const h = mount('wat', prefer)
-      expect(h.document.querySelector('[data-sem-c=ex-rating]')!.getAttribute('data-sem-island')).toBe('star-rating')
-      expect(h.document.querySelector('[data-sem-c=ex-spark]')!.getAttribute('data-sem-island')).toBe('spark')
-      expect(h.document.querySelector('[data-sem-c=stack]')!.getAttribute('data-sem-islands')).toBe('outlined')
       const f = h.store.factory
-      h.runtime.apply({ remove: h.store.match(f.namedNode(EX + 'page'), f.namedNode(NS.ext + 'outlines'), null), add: [] })
+      const rating = () => h.document.querySelector('[data-sem-c=ex-rating]')!
+      expect(rating().getAttribute('data-sem-outline')).toBe('star-rating')
+      expect(h.document.querySelector('[data-sem-c=ex-spark]')!.getAttribute('data-sem-outline')).toBe('spark')
+      expect(h.document.querySelector('[data-sem-c=stack]')!.getAttribute('data-sem-outlines')).toBe('shown')
+      h.runtime.apply({ remove: [], add: [f.quad(f.namedNode(EX + 'rating'), f.namedNode(OL.label), f.literal('stars'))] })
       h.renderer.flush()
-      expect(h.document.querySelector('[data-sem-islands]')).toBeNull()
+      expect(rating().getAttribute('data-sem-outline')).toBe('stars')
+      h.runtime.apply({ remove: h.store.match(f.namedNode(EX + 'rating'), f.namedNode(OL.label), null), add: [] })
+      h.runtime.apply({ remove: h.store.match(f.namedNode(EX + 'page'), f.namedNode(OL.shows), null), add: [] })
+      h.renderer.flush()
+      expect(rating().getAttribute('data-sem-outline')).toBe('star-rating')
+      expect(h.document.querySelector('[data-sem-outlines]')).toBeNull()
     }
   })
 

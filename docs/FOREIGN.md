@@ -106,7 +106,7 @@ ex:Pointed rdfs:subClassOf ext:Output ; beh:recorded false .  # state, but not i
 | `ext:output` | class or instance | binding: `ext:on` (DOM event type or callback name), `ext:emits` (event class), `ext:path` (into the payload, giving `beh:value`), `ext:field` (`ext:path` → `ext:predicate`) |
 | `ext:Output` | class | superclass of output events (`rdfs:subClassOf beh:Event`) |
 | `ext:summary` | class | the property the text modality shows after the label |
-| `ext:outlines` | any component | `true`: outline every island inside it, dashed, each named by what it mounts (each island's root says `data-sem-island="<tag or widget>"`), for showing which parts of a page are foreign; a `c:ToggleSwitch` can flip it |
+| `ol:defaultLabel` | the island (derived) | its outline name ([Outlines](COMPONENTS.md#outlines)): its tag or its widget's name, shown unless it has an `ol:label` of its own. `ol:shows true` on a component around islands outlines them, for showing which parts of a page are foreign; a `c:ToggleSwitch` can flip it |
 
 ### Why inputs are projected and not read by the effect
 
@@ -407,8 +407,8 @@ Filed as issues of their own:
 - **#54 `sem:watches` also filters `sem:follows`**: a rule that follows a link and narrows its own
   triples must list the followed node's predicates it reads too (the example's `ui:FxPointAtChosen`
   watches `cf:chosen`).
-- **#59 outlines for any component**: the example's island outlines (`ext:outlines`,
-  `data-sem-island`) move onto that general layer once it lands.
+- **#59 outlines for any component**: the example's island outlines moved onto that general layer
+  (`ol:shows`; an island is named by `ol:defaultLabel`).
 
 ## Still open
 

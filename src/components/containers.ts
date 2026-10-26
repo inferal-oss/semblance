@@ -3,10 +3,11 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
-import type { Delta } from '../rdf.ts'
+import { BEH, C, DND, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { mint, type Delta } from '../rdf.ts'
+import { md5 } from './data.ts'
 import { FB, hitMarks, phrase } from './feedback.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { encodeForUri, named, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
 /** Frame vocabulary (window.ttl) not in ns.ts. */
@@ -310,7 +311,7 @@ export const taskbar: FnRule = (ctx, focus) => {
     const symbol = (s.minimized || s.maximized ? symbolOf(ctx, s.state) : s.edge ? symbolOf(ctx, s.edgeNode) : undefined) ?? '▭'
     const slug = s.minimized ? 'minimized' : s.maximized ? 'maximized' : s.edge ? 'docked' : 'normal'
     const stateLabel = s.state ? (text(ctx, s.state, RDFS_LABEL) ?? slug) : undefined
-    return { w, key: encodeURIComponent(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
+    return { w, key: encodeForUri(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
   })
   const edgeNode = ctx.object(focus, WIN.attachedTo)
   const edge = EDGES.find((e) => e.iri === edgeNode?.value)
@@ -432,7 +433,7 @@ const setState = (ctx: ReactionContext, w: Term, state: string) => put(ctx, w, W
 const stateControl = (marker: string, state: string): ReactionFn => (ctx) => (hitMarks(ctx, marker) ? setState(ctx, ctx.target, state) : none())
 
 /** The c:Tabs whose c:tabs list holds `tab`. */
-function tabsOf(ctx: ReactionContext, tab: Term): Term[] {
+export function tabsOf(ctx: ReactionContext, tab: Term): Term[] {
   const out: Term[] = []
   for (const q of ctx.match(null, RDF_FIRST, tab)) {
     let head: Term = q.subject
@@ -446,7 +447,70 @@ function tabsOf(ctx: ReactionContext, tab: Term): Term[] {
   return out
 }
 
+/** The cells of an RDF list from its head (rdf:nil ends it). */
+export function cellsOf(ctx: ReactionContext, head: Term | undefined): Term[] {
+  const cells: Term[] = []
+  const seen = new Set<string>()
+  for (let cell = head; cell && cell.value !== RDF_NIL && !seen.has(cell.value); cell = ctx.object(cell, RDF_REST)) seen.add(cell.value), cells.push(cell)
+  return cells
+}
+
+/** Whether tabs hold a tab other than `tab`. */
+export const holdsOther = (ctx: ReactionContext, tabs: Term, tab: Term) =>
+  ctx.match(tabs, WIN.tabs, null).some((h) => cellsOf(ctx, h.object).some((cell) => ctx.match(cell, RDF_FIRST, null).some((q) => !q.object.equals(tab))))
+
+/** The tab a drop carries, if it is one. */
+const droppedTab = (ctx: ReactionContext) => {
+  const tab = ctx.object(ctx.event, DND.carrying)
+  return tab && ctx.match(tab, RDF_TYPE, nn(ctx, WIN.Tab)).length ? tab : undefined
+}
+
+/** Into these tabs: the tab, last (a new cell, <tabs>/~cell-<md5 of the tab>), and selected. */
+const receive: ReactionFn = (ctx) => {
+  const tab = droppedTab(ctx)
+  if (!tab || !ctx.object(ctx.event, DND.into)?.equals(ctx.target)) return none()
+  if (!tabsOf(ctx, tab).some((src) => !src.equals(ctx.target))) return none()
+  const cell = nn(ctx, mint(ctx.target.value, 'cell-' + md5(tab.value)))
+  const delta: Delta = { remove: ctx.match(ctx.target, WIN.selected, null), add: [quad(ctx, ctx.target, WIN.selected, tab)] }
+  for (const h of ctx.match(ctx.target, WIN.tabs, null)) {
+    if (h.object.value === RDF_NIL) delta.remove.push(h), delta.add.push(quad(ctx, ctx.target, WIN.tabs, cell))
+    for (const c of cellsOf(ctx, h.object)) for (const q of ctx.match(c, RDF_REST, nn(ctx, RDF_NIL))) delta.remove.push(q), delta.add.push(quad(ctx, c, RDF_REST, cell))
+  }
+  delta.add.push(quad(ctx, cell, RDF_FIRST, tab), quad(ctx, cell, RDF_REST, nn(ctx, RDF_NIL)))
+  return delta
+}
+
+/**
+ * Out of the tabs it was in, when it goes into others or beside these (a zone that c:splitsAt an
+ * edge), unless it is these tabs' only one: its cell unlinked, its selection there dropped, and
+ * emptied tabs asked to close (c:CloseTile).
+ */
+const take: ReactionFn = (ctx) => {
+  const tab = droppedTab(ctx)
+  const into = ctx.object(ctx.event, DND.into)
+  if (!tab || !into) return none()
+  const beside = ctx.match(into, C.splitsAt, null).length > 0
+  const delta = none()
+  for (const first of ctx.match(null, RDF_FIRST, tab)) {
+    const cell = first.subject
+    const next = ctx.object(cell, RDF_REST)
+    if (!next) continue
+    for (const src of tabsOf(ctx, tab)) {
+      if (!ctx.match(src, WIN.tabs, null).some((h) => cellsOf(ctx, h.object).some((c) => c.equals(cell)))) continue
+      const only = !holdsOther(ctx, src, tab)
+      if (!(beside ? !src.equals(ctx.target) || !only : into.equals(ctx.target) && !src.equals(ctx.target))) continue
+      delta.remove.push(...ctx.match(cell, RDF_FIRST, tab), ...ctx.match(cell, RDF_REST, null), ...ctx.match(src, WIN.selected, tab))
+      for (const h of ctx.match(src, WIN.tabs, cell)) delta.remove.push(h), delta.add.push(quad(ctx, src, WIN.tabs, next))
+      for (const prev of ctx.match(null, RDF_REST, cell)) delta.remove.push(prev), delta.add.push(quad(ctx, prev.subject, RDF_REST, next))
+      if (only) delta.add.push(quad(ctx, src, BEH.raise, nn(ctx, C.CloseTile)))
+    }
+  }
+  return delta
+}
+
 export const reactions: Record<string, ReactionFn> = {
+  'tabs:receive': receive,
+  'tabs:take': take,
   'tabs:detach': (ctx) => {
     const tab = hitObject(ctx, WIN.detaches)
     return tab ? detach(ctx, tab) : none()

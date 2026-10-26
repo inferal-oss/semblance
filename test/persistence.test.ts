@@ -80,4 +80,15 @@ describe('persistence (per:Policy)', () => {
     expect(await storage[PER + 'Session']!.get(key)).toBeUndefined()
     expect(a.store.match(f.namedNode(UI + 'rememberInspector'), f.namedNode(PER + 'request'), null)).toHaveLength(0)
   })
+
+  it('restores a remembered subject that is not an IRI (a blank node)', async () => {
+    const storage = browser()
+    const nt = `_:run <${NS.c}recentOf> <${UI}palette> .\n_:run <${NS.rdfs}label> "Blank" .\n<${UI}knownRun> <${NS.c}recentOf> <${UI}palette> .\n`
+    await storage[PER + 'Device']!.set('semblance:' + UI + 'rememberPalette', JSON.stringify({ version: '1', savedAt: Date.now(), nt }))
+    const a = await mountRemembering(storage)
+    const f = a.store.factory
+    expect(a.persistence.restored(UI + 'rememberPalette')).toBe(true)
+    expect(a.store.match(f.namedNode(UI + 'knownRun'), f.namedNode(NS.c + 'recentOf'), f.namedNode(UI + 'palette'))).toHaveLength(1)
+    expect(a.store.match(null, f.namedNode(NS.rdfs + 'label'), f.literal('Blank'))).toHaveLength(1)
+  })
 })
