@@ -682,7 +682,7 @@ tok:mono a sty:Token ; sty:scale sty:Font ; sem:slug "mono" ; sty:value "'JetBra
                  [ sty:property "padding-block" ; sty:raw "0" ] ,
                  [ sty:property "padding-inline" ; sty:raw "8px var(--sem-chevron-space)" ] ,
                  [ sty:property "background-color" ; sty:token tok:surface-sunken ] .
-[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:state ":has(> select:disabled)" ;
+[] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:state ":has(select:disabled)" ;
     sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
                  [ sty:property "cursor" ; sty:raw "not-allowed" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Choice ; sty:part "select:disabled" ;
