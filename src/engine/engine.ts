@@ -956,6 +956,7 @@ export class Engine {
         return this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
       } finally {
         this.ctx.trace = this.ctx.queryReads = undefined
+        this.traceLists(rule, focus, trace)
         this.recordReads(rule, focus, trace)
         if (reads.length || this.queryFollowers.has(rule)) this.recordFollowing(rule, focus, reads)
       }
@@ -963,6 +964,25 @@ export class Engine {
     this.stats.queries++
     if (this.store.constructFor) return this.constructFor(rule, [focus])
     return this.construct(rule, rule.queryParts!.join('<' + focus + '>'))
+  }
+
+  /** Explicit list dependencies apply equally to SPARQL and function implementations. */
+  private traceLists(rule: Rule, focus: string, trace: Map<string, Set<string>>) {
+    for (const property of rule.followsLists) {
+      for (let cell of this.ctx.objects(focusOf(focus), property)) {
+        const seen = new Set<string>()
+        while (cell.value !== NS.rdf + 'nil' && !seen.has(cell.value) && seen.size < 10_000) {
+          seen.add(cell.value)
+          let predicates = trace.get(cell.value)
+          if (!predicates) trace.set(cell.value, (predicates = new Set()))
+          predicates.add(NS.rdf + 'first')
+          predicates.add(NS.rdf + 'rest')
+          const next = this.ctx.object(cell, NS.rdf + 'rest')
+          if (!next) break
+          cell = next
+        }
+      }
+    }
   }
 
   /** Drop a (rule, focus) pair's traced reads. */
@@ -1048,6 +1068,12 @@ export class Engine {
   }
 
   private commit(rule: Rule, focus: string, quads: Quad[]) {
+    // Bulk SPARQL evaluations pass here too; watch just this focus's reachable list cells.
+    if (rule.kind === 'sparql' && rule.followsLists.length) {
+      const trace = new Map<string, Set<string>>()
+      this.traceLists(rule, focus, trace)
+      this.recordReads(rule, focus, trace)
+    }
     for (const l of this.evaluationListeners) l(rule.slot, focus)
     let counts = this.evaluations.get(rule)
     if (!counts) this.evaluations.set(rule, (counts = new Map()))

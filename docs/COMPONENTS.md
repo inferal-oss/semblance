@@ -17,6 +17,30 @@ property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true
 one link around the component; the text rendering gives the address after the content. Keep
 buttons and other links outside that card.
 
+## Highlighting code in another language
+
+`c:Code` owns the code container and token palette. For languages beyond its built-in Turtle
+and SPARQL tokenizers, give it `c:codeTokens`, an ordered RDF list of distinct `c:CodeToken`
+resources. An external highlighter supplies text and semantic roles; it supplies no HTML or
+CSS. Keep `c:label` as the complete source for the text modality.
+
+```turtle
+ex:sample a c:Code ; c:block true ; c:language "json" ; c:label '{"ok":true}'  ;
+    c:codeTokens ( ex:open ex:key ex:colon ex:value ex:close ) .
+ex:open a c:CodeToken ; c:label "{" .
+ex:key a c:CodeToken ; c:label '"ok"'  ; c:tokenKind "string" .
+ex:colon a c:CodeToken ; c:label ":" .
+ex:value a c:CodeToken ; c:label "true" ; c:tokenKind "keyword" .
+ex:close a c:CodeToken ; c:label "}" .
+```
+
+The palette roles are `keyword`, `var`, `string`, `pname` (names), `iri`, `number`, `comment`
+and `text`. Missing or unknown roles show plain text. Token labels are always escaped and
+preserve whitespace. Supply a separate resource for every occurrence, including repeated words.
+An empty list deliberately shows empty code; omitting the property keeps the built-in tokenizer
+or plain source rendering. A changed token updates independently of the other tokens. The
+existing Code styles handle themes, phone widths and left-to-right code in RTL documents.
+
 ## SPARQL first; functions are the escape hatch
 
 Every rendering is implemented by one or more `sem:Rule`s. A rule is either a SPARQL `CONSTRUCT`
@@ -160,6 +184,8 @@ A pair is dirty when the focus's own triples change, and also:
 
 - `sem:follows c:of` — when the triples of the node the focus points at through `c:of` change
   (for components that show another node's data);
+- `sem:followsList c:items` — when `rdf:first` or `rdf:rest` changes on any cell of the RDF list
+  named by `c:items`; applies equally to SPARQL and function rules, including bulk evaluations;
 - `sem:watches c:value` — narrows it: only these predicates make the focus dirty;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;

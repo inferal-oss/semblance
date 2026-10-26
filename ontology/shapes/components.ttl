@@ -144,3 +144,11 @@ c:FlippableShape a sh:NodeShape ; sh:targetClass c:Flippable ;
 c:SpecimenShape a sh:NodeShape ; sh:targetClass c:Specimen ;
     sh:property [ sh:path c:label ; sh:minCount 1 ] ,
                 [ sh:path c:demonstrates ; sh:nodeKind sh:IRI ; sh:message "A specimen demonstrates classes (c:demonstrates): IRIs." ] .
+
+# External code tokens keep syntax data separate from HTML and stylesheet input.
+c:CodeTokensShape a sh:NodeShape ; sh:targetClass c:Code ;
+    sh:property [ sh:path c:codeTokens ; sh:maxCount 1 ; sh:nodeKind sh:BlankNodeOrIRI ] ,
+                [ sh:path ( c:codeTokens [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ; sh:class c:CodeToken ; sh:nodeKind sh:IRI ] .
+c:CodeTokenShape a sh:NodeShape ; sh:targetClass c:CodeToken ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ,
+                [ sh:path c:tokenKind ; sh:maxCount 1 ; sh:in ( "text" "keyword" "var" "string" "pname" "iri" "number" "comment" ) ] .
