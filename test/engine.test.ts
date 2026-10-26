@@ -101,17 +101,20 @@ describe('incremental updates', () => {
     ['remove a component from its stack', t.set('actions', C.children, undefined)],
   ]
 
-  for (const [kind, prefer] of [
-    ['oxigraph', 'sparql'],
-    ['n3', 'function'],
-    ['wat', 'sparql'],
-    ['rust', 'sparql'],
+  // Exact dependencies (docs/IVM.md, phase 3): SPARQL rules re-run from their own patterns, what they
+  // declare (sem:follows, sem:watches, sem:readsMinted) ignored - and still match a from-scratch run.
+  for (const [kind, prefer, exact] of [
+    ['oxigraph', 'sparql', false],
+    ['n3', 'function', false],
+    ['wat', 'sparql', false],
+    ['rust', 'sparql', false],
+    ['wat', 'sparql', true],
   ] as const) {
-    it(`matches a from-scratch projection after every step (${kind} + ${prefer})`, () => {
-      const opts = { modality: MOD.Screen, layers: ALL_LAYERS, prefer, provenance: kind !== 'n3' }
+    it(`matches a from-scratch projection after every step (${kind} + ${prefer}${exact ? ', exact dependencies' : ''})`, () => {
+      const opts = { modality: MOD.Screen, layers: ALL_LAYERS, prefer, provenance: kind !== 'n3', exactDependencies: exact }
       const layers = kind === 'n3' ? SCREEN_LAYERS : ALL_LAYERS
       const { store, runtime, screen } = setup(kind, { ...opts, layers })
-      const text = runtime.project({ modality: MOD.Text, prefer, name: 'text' })
+      const text = runtime.project({ modality: MOD.Text, prefer, name: 'text', exactDependencies: exact })
       for (const [name, delta] of steps(todo(store))) {
         runtime.apply(delta)
         const expected = fresh(kind, inputQuads(store), { ...opts, layers })
@@ -145,6 +148,21 @@ describe('incremental updates', () => {
     runtime.apply(t.set('t7', 'priority', 1000))
     expect(screen.engine.stats.ruleRuns - reorder.ruleRuns).toBe(2)
     expect(screen.engine.stats.derivedAdded - added).toBeLessThanOrEqual(2)
+  })
+
+  it('re-renders only what changed, exactly: a sort-key change re-runs nothing that does not read it', () => {
+    const { store, runtime, screen } = setup('oxigraph', { prefer: 'sparql', exactDependencies: true }, 200)
+    const t = todo(store)
+    const ran = (change: Delta) => {
+      const before = screen.engine.stats.ruleRuns
+      runtime.apply(change)
+      return screen.engine.stats.ruleRuns - before
+    }
+    // As with what the rules declare: the item's rendering for done, it and the member-wise list for a label.
+    expect(ran(t.set('t7', 'done', true))).toBe(1)
+    expect(ran(t.set('t7', NS.rdfs + 'label', 'x'))).toBe(2)
+    // The item's rendering never reads ex:priority (its patterns say so): only the list, which places the item by it.
+    expect(ran(t.set('t7', 'priority', 1000))).toBe(1)
   })
 })
 

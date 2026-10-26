@@ -130,6 +130,23 @@ Strata only run upward: a rule that a higher stratum's output would make dirty a
 higher layer (the dependency layer, -12) writes derived triples needs `sem:inputOnly true`, so
 that those derived triples do not re-trigger it; otherwise move it to a stratum above the layer.
 
+**Exact dependencies** (an engine option, `exactDependencies`, off by default; `SEMBLANCE_EXACT_DEPS=1`
+turns it on for a test run): a SPARQL rule is re-run from its own patterns instead of what it
+declares. Every triple pattern of its WHERE is a dependency; a changed triple is bound to the
+patterns it matches and joined through the store toward `$this`, so the rule re-runs for exactly the
+foci a solution can change for, and `sem:follows`, `sem:watches` and `sem:readsMinted` are ignored
+for it (`sem:requires`, `sem:unless`, `sem:inputOnly` and `sem:forEach` still apply). A todo's
+`ex:priority` changing then re-runs the list that sorts by it, not the item's rendering, which never
+reads it. It costs a probe per rule a changed triple can reach (about 50 µs each today), which is
+why it is not yet the default. Function rules keep their traced reads and the declarations above.
+
+**A rule maintained as a view**: `iv:strategy iv:Incremental` on a SPARQL rule (or its rendering)
+makes its query a maintained view partitioned by `$this` (docs/IVM.md): the engine reads each focus's
+output from the view and is told which foci changed, so a change runs no query - for a rule that
+aggregates over a collection per focus (a count, a ranking). The view is checked once against an
+evaluation; a rule that reads a projection's derived graph (views cannot see it) is evaluated as
+usual, with a warning.
+
 A SPARQL rule pending for many foci runs once with `VALUES ?this { … }` when everything it
 constructs hangs off `$this` or IRIs minted from it, so keep templates attributable.
 

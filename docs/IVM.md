@@ -1,12 +1,13 @@
 # Views over changes: incremental view maintenance for Semblance
 
-Status: **phases 0, 1, 2, 4 and 5 landed** (October 2026), the rest of phase 2 too (but for the
-rdf-engine's parser, which main does not export yet); phases 3 and 6 pending. Below the status, the
+Status: **phases 0 to 5 landed** (October 2026), but for the rdf-engine's parser (main does not export
+its algebra yet) and exact dependencies being the engine's default (an option for now, §25); phase 6
+pending. Below the status, the
 document is the design: what a maintained view is, how it is declared and inspected, how it relates to
 the rule engine, the operator set and each operator's incremental form, time and windows, correctness,
 cost, and the phased plan. The decisions taken are at the end; what was built, and where it differs
-from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2), §23 (phase 4) and
-§24 (phase 5).
+from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2), §23 (phase 4),
+§24 (phase 5) and §25 (phase 3).
 
 ## Status
 
@@ -30,6 +31,7 @@ from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of pha
 
 | **Phase 4, time** (§23): tumbling windows (`iv:TumblingWindow`, `iv:size`, `iv:keep`, a bucket column `iv:bucketVariable`) and count windows (`iv:CountWindow`, `ldes:amount`) beside sliding ones, every window an edge over the stream's members ordered by time, moved at the cost of the members it flips; event time (`iv:clock iv:EventTime`, `iv:lateness`): the watermark is the greatest timestamp less the lateness, no timer, numeric timestamps as well as dates - the network inspector counts the last five seconds of `net:Capture` that way; the oracle writes each window out as SPARQL. | `src/view/window.ts`, `compile.ts`, `runtime.ts`, `ontology/layers/view.ttl`, `demo/gallery/_network.ttl`, `test/view-time.test.ts` | |
 | **Changes as a stream**: `ViewHandle.since(tick)` and `keepHistory`; replicas (`src/view/replica.ts`: messages, catch-up, a reset after a redefinition, BroadcastChannel adapters); `iv:recordsChanges` puts the triples on a delta log's members; **undo** over the change log (`beh:undoable` reactions record their effective change as `rdf:Statement`s on the member, `beh:Undoer` / `beh:UndoLatest` applies the opposite of the latest one that still applies), in the Kanban example. | `src/view/runtime.ts`, `replica.ts`, `src/behaviour/events.ts`, `undo.ts`, `ontology/layers/behaviour.ttl`, `test/view-delta.test.ts`, `test/ex-kanban.test.ts` | |
+| **Phase 3, views and rules together** (§25): **exact dependencies for SPARQL rules** from their own patterns (the view compiler's dependencies, `$this` the partition key), replacing `sem:follows` / `sem:watches` / `sem:readsMinted` behind an engine option (`exactDependencies`); probes walk sibling groups and prune by partly bound patterns (views gain too); `ctx.rows(view)` for function rules; **persistence policies as views** (dirty from their view, a write stores the change: one change of a 2,000-triple policy writes three triples); **`iv:strategy iv:Incremental` for rules** (a hosted view per rule, partitioned by `$this`, feeding each focus's output). | `src/engine/exact.ts`, `engine.ts`, `context.ts`, `rules.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`, `test/engine.test.ts`, `test/persistence-cost.test.ts`, `test/rules-incremental.test.ts` | |
 | **The workbench on views**: Follow updates (the Live switch) types the query as an `iv:View` (`c:FollowAsView`; `iv:materialize iv:ResultSet`, `iv:strategy iv:Auto`, measured), the table reads its maintained rows (followed at the next frame), and a **Plan** tab shows its strategy or fallback, the last change's work against a re-run, the from-scratch check and its operators. Recomputed views re-run only for changes their patterns see. | `ontology/components/workbench.ttl`, `src/components/workbench.ts`, `demo/gallery/_workbench.ttl`, `test/follow-updates.test.ts` | |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
@@ -46,12 +48,13 @@ dependencies, the workbench "Live switch" of phase 4 without a circuit.
 | phase | what | replaces or enables |
 |---|---|---|
 | 2, the rest | SPARQL renderings of charts and tables over the result-set rows (with the SPARQL coverage work); the rdf-engine's parser behind `ViewCompiler` once main has its algebra (its ABI is v1: no algebra export) | no function-only chart; one algebra |
-| 3: views and rules together | view graphs as projection inputs (done for the views graph); exact dependencies for SPARQL rules from their algebra, replacing `sem:follows`; `iv:strategy iv:Incremental` for rules; persistence policies as views | a count row changing alone re-runs nothing it does not feed |
+| 3, the rest | exact dependencies as the engine's default, once the full suite passes with `SEMBLANCE_EXACT_DEPS=1` and their probes are cheaper (compiled per pattern, or in the engine, phase 6); then `sem:follows` / `sem:watches` / `sem:readsMinted` deleted from SPARQL rules | one way to say what a rule reads |
 | 6: into the engine | the operators in Rust inside rdf-engine (ABI v2), the TypeScript runtime as the reference | only if profiling shows the JS runtime or the boundary dominating |
 
-Known gaps in what landed (§20-§24): SPARQL views evaluate partitions and expressions with a few
+Known gaps in what landed (§20-§25): SPARQL views evaluate partitions and expressions with a few
 store queries per tick (a Rust circuit removes them, phase 6); SPARQL rules find view output through
-`sem:follows` or `sem:readsMinted` (exact dependencies are phase 3); `NOW()`, `RAND()`, `UUID()`,
+`sem:follows` or `sem:readsMinted` unless the engine's exact dependencies are on (§25: an option until
+their probes are cheaper); `NOW()`, `RAND()`, `UUID()`,
 `BNODE()` and `SERVICE` fall back to recompute; so do RDF 1.2 triple terms and directional language
 tags (the views' parser does not read them yet), a blank node in a CONSTRUCT template,
 GROUP_CONCAT inside a larger expression, a property path inside `GRAPH ?g`, and a `GRAPH <g>` outside
@@ -1747,6 +1750,64 @@ Where this differs from the design:
   events cost the stream statistics 138 partitions and 645 rows at 200 members and at 2,000, no
   rebuild. (The grid rule is one partition per grid: maintained and exact, but its body is the store's
   each time - the grid's own views, §21, are what makes it cheap.)
+
+## 25. Phase 3, as built
+
+What exists (`src/engine/exact.ts`, `engine.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`):
+
+- **Exact dependencies for SPARQL rules** (§10.1 step 2). A SPARQL rule is a view partitioned by its
+  focus: its WHERE with `$this` as `?this` (a member-wise rule's `$member` as `?member`, the key
+  `[this, member]`) is read by the view compiler's `Dependencies`; every one of the site's 291 SPARQL
+  rules is read without a problem. `ExactIndex` indexes the active rules by the predicates their
+  patterns can match; for a changed triple, each rule it routes to is probed - the triple bound to the
+  pattern, joined through the store toward `?this`, with the batch's removals put back (indexed) so the
+  old state is seen too - and the foci it reaches are dirty. For those rules the engine no longer uses
+  "every triple about the focus", `sem:follows` (paths too), `sem:watches`, `sem:readsMinted` or the
+  member reads of member-wise rules; the instance index, `sem:requires` / `sem:unless`, `sem:inputOnly`
+  and member links stay. Not probed: a rule below the stratum running, one with no instance (counted as
+  types come and go), one whose foci all wait to run anyway (the mount, a reconfiguration).
+- **Probes, better for views too.** A walk now goes through the groups beside a pattern's - a sibling
+  LATERAL, a UNION branch, an OPTIONAL - entering by any variable and leaving only by what they
+  certainly bind, without pruning by them; and it prunes by patterns only partly bound (some triple must
+  agree with what is bound), also when the change binds the key itself. Before, `dep:Facets` (a LATERAL
+  after a LATERAL of UNIONs) answered "every focus" to every change, and `sty:HookAttributes` (`$this ?p
+  ?v . ?p sty:hookAttribute ?name`) re-ran for every triple about its focus.
+- **The measure.** `engine.test.ts`: the from-scratch test passes with exact dependencies (every step,
+  screen and text, against a fresh projection), and "re-renders only what changed" is tightened in its
+  exact twin: a todo's `ex:priority` changing re-runs one rule (the list's member placement), not two.
+- **The cost**, why it is an option for now (Node, the todo app):
+
+  | | declared | exact |
+  |---|---:|---:|
+  | mount, Oxigraph, 5 items | 474-558 ms | 682-714 ms |
+  | a change (done, priority): rule runs | 3 | 2 |
+  | 120 changes on WAT, 20 items | 13 ms | 126 ms (2,420 probes) |
+
+  About 20 probes a change, ~50 µs each: the walk is generic JavaScript over store lookups. Compiling
+  each pattern's walk once (a probe plan), or running it in the engine (phase 6), is what makes it the
+  default; so is a full-suite run with `SEMBLANCE_EXACT_DEPS=1`.
+- **`ctx.rows(view)`**: a materialized view's rows, read and traced row by row (`viewRows` delegates).
+- **Persistence policies as views** (§15). A `per:construct` policy is a hosted view (`ViewRuntime.host`:
+  defined by a host effect, ephemeral, a fallback expected), kept when its result equals a run of the
+  query - a policy over a projection's derived graph stays a run. Its view's changes make it dirty
+  (exactly what its patterns read, not "a predicate it mentions"), and a write stores what changed since
+  the last one as a chunk of its own beside the base, compacted when the chunks outgrow it; restore
+  applies them, forget removes them. `test/persistence-cost.test.ts`: one change of a 2,000-triple policy
+  writes two entries and three triples, as of a 200-triple one; a restore after fifty chunked writes
+  equals the graph.
+- **`iv:strategy iv:Incremental` for rules** (§10.1 step 3). The runtime hosts the rule's query
+  (`ViewRuntime.hostRule`, `?this` the partition key, each output row attributed to its focus); the
+  engine reads a focus's output from the view and is told which foci changed. Checked once against an
+  evaluation; a mismatch (the rule reads what views cannot see) falls back with a warning.
+  `test/rules-incremental.test.ts`: a per-focus COUNT and MAX over a list agree with the rule evaluated
+  with exact dependencies after every change, run no query, and an added item costs the same over 200
+  items as over 2,000. (The same rule with only declared dependencies is stale: it follows nothing.)
+- **`sem:watches` through `sem:follows`** (#54): documented as it is (it narrows followed nodes' changes
+  too) and pinned by a test; with exact dependencies it does not apply to SPARQL rules at all.
+
+Where this differs from the design: exact dependencies are an option, not yet the default (above);
+rules as views are opt-in per rule and must read only input graphs (views step before projections);
+persistence keeps one blob per policy plus chunks, not per-triple keys (the backends have no key listing).
 
 ## Decisions
 
