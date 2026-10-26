@@ -67,15 +67,17 @@ const message: FnRule = (ctx, focus) => {
   const item = ctx.object(focus, C.of)
   if (!named(item)) return []
   const content = str(ctx.object(item, AS + 'content'))
+  const component = ctx.object(item, C.content)
+  const rich = named(component) ? component : undefined
   const published = str(ctx.object(item, AS + 'published'))
   // Being written: started, not yet published.
   const pending = published === undefined && ctx.object(item, STARTED) !== undefined
-  if (!pending && content === undefined) return []
+  if (!pending && content === undefined && !rich) return []
   const { person, name, image } = authorOf(ctx, item)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    const line = pending ? `  ${name} is typing…` : `  ${published !== undefined ? `[${published.slice(11, 16)}] ` : ''}${name}: ${content}`
-    o.renders(o.el('root', 'Div', {}, [o.text('text', line)]))
+    const line = pending ? `  ${name} is typing…` : `  ${published !== undefined ? `[${published.slice(11, 16)}] ` : ''}${name}: ${content ?? ''}`
+    o.renders(o.el('root', 'Div', {}, [o.text('text', line), ...(!pending && content === undefined && rich ? [rich] : [])]))
     return o.quads
   }
   const list = ctx.object(focus, C.inList)
@@ -94,7 +96,8 @@ const message: FnRule = (ctx, focus) => {
         el(o, 'dots', 'Span', { class: 'sem-dots', 'aria-hidden': 'true' }, [1, 2, 3].map((k) => o.el(`dot-${k}`, 'Span'))),
         el(o, 'typing-say', 'Span', { class: 'sem-visually-hidden' }, [o.text('typing-say-text', 'is typing…')]),
       ])
-    : el(o, 'body', 'P', { class: 'sem-message-body' }, [o.text('body-text', content!)])
+    : rich ? el(o, 'body', 'Div', { class: 'sem-message-body' }, [rich])
+      : el(o, 'body', 'P', { class: 'sem-message-body' }, [o.text('body-text', content!)])
   const main = el(o, 'main', 'Div', { class: 'sem-message-main' }, [el(o, 'meta', 'Div', { class: 'sem-message-meta' }, meta), body])
   const classes = [mine ? 'sem-mine' : '', pending ? 'sem-pending' : ''].filter(Boolean).join(' ')
   o.renders(el(o, 'root', 'Li', { class: classes || undefined }, [avatar, main]))
