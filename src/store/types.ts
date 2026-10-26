@@ -15,6 +15,12 @@ export interface GraphStore {
   readonly kind: string
   readonly factory: Factory
   readonly sparql: boolean
+  /**
+   * Whether one match across all graphs costs about what a match in one graph does (each call
+   * crosses into WebAssembly, so the call is the cost): the engine then asks across graphs once
+   * rather than graph by graph. Optional; stores whose matches are cheap calls omit it.
+   */
+  readonly crossGraphMatch?: boolean
   add(q: Quad): void
   delete(q: Quad): void
   has(q: Quad): boolean
