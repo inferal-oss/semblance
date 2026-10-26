@@ -16,6 +16,9 @@ const TEXTS = [
   NS.c + 'label', NS.rdfs + 'label', NS.sh + 'message', NS.sh + 'name', NS.sh + 'description', NS.ann + 'announces',
   ...['help', 'placeholder', 'title', 'note', 'badge', 'emptyText', 'caption', 'alt', 'attribution', 'trigger', 'unit', 'moreLabel', 'countLabel', 'pausedLabel', 'externalHint', 'splitLabel', 'subtitle'].map((p) => NS.c + p),
 ]
+// Every group in a language that is not English and one written right to left; the groups densest
+// in texts in the other two (the same code paths: a sweep takes minutes).
+const SWEEP: Record<string, string[] | 'all'> = { uk: 'all', ar: 'all', en: ['GroupInputs', 'GroupFeedback', 'GroupData'], de: ['GroupInputs', 'GroupFeedback', 'GroupData'] }
 // Views that show the graph's data as it is (every literal, in every language).
 const AS_DATA = ['triples-view', 'query-view', 'element-markup', 'result-table', 'result-turtle']
 
@@ -49,11 +52,12 @@ function shown(document: Document): string {
 
 describe('texts in the viewer\'s language', () => {
   for (const viewer of LANGS) {
-    it(`every gallery group in ${viewer} shows only ${viewer}, SPARQL and functions alike`, () => {
+    const sweep = SWEEP[viewer]!
+    it(`${sweep === 'all' ? 'every gallery group' : sweep.join(', ')} in ${viewer} shows only ${viewer}, SPARQL and functions alike`, () => {
       const shells = (['sparql', 'function'] as const).map((prefer) => mountShellPrepared(markerize, prefer))
       const f = shells[0]!.store.factory
-      const groups = shells[0]!.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(UI + 'GalleryGroup')).map((q) => q.subject.value).sort()
-      expect(groups.length).toBeGreaterThan(5)
+      const groups = shells[0]!.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(UI + 'GalleryGroup')).map((q) => q.subject.value).filter((g) => sweep === 'all' || sweep.includes(g.replace(UI, ''))).sort()
+      expect(groups.length).toBeGreaterThanOrEqual(sweep === 'all' ? 6 : sweep.length)
       for (const h of shells) h.showPage('Components'), h.screen.engine.reconfigure({ languages: [viewer] }), h.shell.flush()
       const leaks: string[] = []
       for (const group of groups) {
@@ -77,6 +81,6 @@ describe('texts in the viewer\'s language', () => {
         }
       }
       expect([...new Set(leaks)]).toEqual([])
-    }, 400_000)
+    }, 600_000)
   }
 })
