@@ -70,6 +70,8 @@ export interface Post {
   inputs: string[]
   /** The query's own PREFIX declarations. */
   prologue?: string
+  /** A VALUES clause after an aggregating query: joined with the groups (a row may become several). */
+  values?: string
 }
 
 export interface Part {
@@ -140,6 +142,8 @@ export interface MaintainedPlan {
    * CONSTRUCT the predicates they are the objects of, with the separator. Compared as parts.
    */
   unordered?: Map<string, string>
+  /** SELECT REDUCED: maintained as DISTINCT; a store may keep duplicates, so the oracle compares sets. */
+  reduced?: boolean
   algebra: { topk?: string; post?: string; output?: string }
   /**
    * What decides whether a parameter change can retune the plan in place: everything but the

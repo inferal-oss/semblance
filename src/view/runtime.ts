@@ -1048,6 +1048,8 @@ class PartState {
     let evaluated: Map<string, Row[]>
     let visit: Set<string>
     const derived = this.derivedRows()
+    // A key VALUES cannot hold (a blank node): every partition, once.
+    if (keys && [...keys.values()].some((k) => k.some((t) => t?.termType === 'BlankNode'))) keys = undefined
     if (keys === undefined) {
       evaluated = p.local(undefined, derived)
       visit = new Set([...this.partitions.keys(), ...evaluated.keys()])
@@ -1248,7 +1250,7 @@ class PartState {
  * query, and cached while the row is in (so its retraction is exact).
  */
 class PostCache {
-  private cache = new Map<string, { out?: Row; n: number }>()
+  private cache = new Map<string, { out: Row[]; n: number }>()
 
   constructor(
     private readonly view: MaintainedView,
@@ -1276,7 +1278,7 @@ class PostCache {
       const c = this.cache.get(k)
       if (!c) throw new Error(`view <${this.view.iri}>: a row left that never came in`)
       c.n += w
-      if (c.out) out.add(mapKey(c.out), c.out, w)
+      for (const r of c.out) out.add(mapKey(r), r, w)
       if (c.n <= 0) this.cache.delete(k)
     }
     return out
@@ -1287,7 +1289,7 @@ class PostCache {
     const out = new ZSet<Row>()
     for (const [k, , w] of z.entries()) {
       const c = this.cache.get(k)
-      if (c?.out) out.add(mapKey(c.out), c.out, w)
+      for (const r of c?.out ?? []) out.add(mapKey(r), r, w)
     }
     return out
   }
@@ -1658,15 +1660,24 @@ export class MaintainedView implements ViewHandle {
   }
 
   /** Evaluate expressions (BIND, FILTER) over rows with the store: one query for all of them. */
-  evaluate(post: Post, rows: Row[]): (Row | undefined)[] {
+  evaluate(post: Post, rows: Row[]): Row[][] {
     const vars = post.inputs
-    const values = rows.map((r, i) => `(${i} ${vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`).join(' ')
-    const query = `${post.prologue ?? ''}SELECT * WHERE {\n  VALUES (?__i ${vars.map((v) => '?' + v).join(' ')}) { ${values} }\n${post.binds.map((b) => `  BIND(${b.expr} AS ?${b.as})`).join('\n')}\n${post.filters.map((x) => `  FILTER(${x})`).join('\n')}\n}`
-    const out: (Row | undefined)[] = rows.map(() => undefined)
+    // Blank nodes (VALUES cannot hold them) go in as IRIs of their own and come back.
+    const blanks = new Map<string, Term>()
+    const term = (t: Term | undefined) => {
+      if (t?.termType !== 'BlankNode') return sparqlTerm(t)
+      const iri = `urn:semblance:blank:${encodeURIComponent(t.value)}`
+      blanks.set(iri, t)
+      return `<${iri}>`
+    }
+    const values = rows.map((r, i) => `(${i} ${vars.map((v) => term(r.get(v))).join(' ')})`).join(' ')
+    const query = `${post.prologue ?? ''}SELECT * WHERE {\n  VALUES (?__i ${vars.map((v) => '?' + v).join(' ')}) { ${values} }\n${post.values ? `  ${post.values}\n` : ''}${post.binds.map((b) => `  BIND(${b.expr} AS ?${b.as})`).join('\n')}\n${post.filters.map((x) => `  FILTER(${x})`).join('\n')}\n}`
+    const out: Row[][] = rows.map(() => [])
     for (const r of this.rt.runner(this.readsViews).select(query)) {
       const i = Number(r.get('__i')!.value)
       r.delete('__i')
-      out[i] = r
+      if (blanks.size) for (const [k, t] of r) if (t.termType === 'NamedNode' && blanks.has(t.value)) r.set(k, blanks.get(t.value)!)
+      out[i]!.push(r)
     }
     return out
   }
@@ -1955,7 +1966,8 @@ export class MaintainedView implements ViewHandle {
       for (const k of new Set(this.quads().filter((q) => !isProv(q)).map(normQuad))) actual.add(k, '', 1)
     } else {
       const scratch = this.fromScratch(now) as Row[]
-      for (const r of scratch) expected.add(normRow(r), '', 1)
+      const reduced = this.plan.kind === 'maintained' && this.plan.reduced
+      for (const r of reduced ? [...new Map(scratch.map((x) => [normRow(x), x])).values()] : scratch) expected.add(normRow(r), '', 1)
       for (const r of this.rows()) actual.add(normRow(r), '', 1)
       // Ordered views: positions too, where the order is total (no ties among the expected rows).
       const plan = this.plan

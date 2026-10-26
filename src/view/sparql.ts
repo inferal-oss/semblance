@@ -87,6 +87,8 @@ export interface Select {
   orderBy: { e: Expr; desc: boolean }[]
   limit?: number
   offset?: number
+  /** A VALUES clause after the query (joined with its pattern's solutions). */
+  values?: Extract<Item, { k: 'values' }>
   at: number
   end: number
 }
@@ -153,7 +155,8 @@ function tokenize(text: string): Tok[] {
 }
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#'
-const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+const RDF_TYPE = RDF + 'type'
 const AGGREGATES = new Set(['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'SAMPLE', 'GROUP_CONCAT'])
 const GROUP_WORDS = new Set(['OPTIONAL', 'MINUS', 'UNION', 'LATERAL', 'GRAPH', 'SERVICE', 'FILTER', 'BIND', 'VALUES', 'SELECT'])
 
@@ -212,6 +215,9 @@ class Parser {
     return this.toks[this.i - 1]!.end
   }
 
+  /** BASE: relative IRIs resolve against it (the store reads the same prologue). */
+  private base?: string
+
   prologue() {
     for (;;) {
       if (this.is('PREFIX')) {
@@ -219,15 +225,29 @@ class Parser {
         const name = this.peek()
         const iri = this.peek(1)
         if (name?.k !== 'pname' || !name.v.endsWith(':') || iri?.k !== 'iri') this.fail('PREFIX')
-        this.prefixes.set(name.v.slice(0, -1), iri.v.slice(1, -1))
+        this.prefixes.set(name.v.slice(0, -1), this.resolve(iri.v.slice(1, -1)))
         this.i += 2
-      } else if (this.is('BASE')) this.fail('BASE (not supported)')
-      else return
+      } else if (this.is('BASE')) {
+        this.i++
+        const iri = this.peek()
+        if (iri?.k !== 'iri') this.fail('BASE')
+        this.base = this.resolve(iri.v.slice(1, -1))
+        this.i++
+      } else return
+    }
+  }
+
+  private resolve(iri: string): string {
+    if (!this.base || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(iri)) return iri
+    try {
+      return new URL(iri, this.base).href
+    } catch {
+      return iri
     }
   }
 
   iri(t: Tok): string {
-    if (t.k === 'iri') return t.v.slice(1, -1)
+    if (t.k === 'iri') return this.resolve(t.v.slice(1, -1))
     const c = t.v.indexOf(':')
     const ns = this.prefixes.get(t.v.slice(0, c))
     if (ns === undefined) throw new SparqlSyntaxError(`unknown prefix ${t.v.slice(0, c)}:`)
@@ -253,17 +273,33 @@ class Parser {
     if (this.is('CONSTRUCT')) {
       const at = this.pos
       this.i++
-      if (!this.is('{')) this.fail('CONSTRUCT WHERE shorthand (not supported)')
-      const tAt = this.pos
-      this.expect('{')
-      const template = this.triplesBlock('}')
-      this.expect('}')
-      const templateText = this.text.slice(tAt + 1, this.last - 1)
-      this.eat('WHERE')
-      const where = this.group()
+      let template: Triple[]
+      let templateText: string
+      let where: Group
+      if (this.eat('WHERE')) {
+        // CONSTRUCT WHERE { triples }: the pattern is the template.
+        const tAt = this.pos
+        const save = this.i
+        this.expect('{')
+        template = this.triplesBlock('}')
+        this.expect('}')
+        templateText = this.text.slice(tAt + 1, this.last - 1)
+        this.i = save
+        where = this.group()
+        if (where.items.some((it) => it.k !== 'triples')) this.fail('CONSTRUCT WHERE with more than triples')
+      } else {
+        const tAt = this.pos
+        this.expect('{')
+        template = this.triplesBlock('}')
+        this.expect('}')
+        templateText = this.text.slice(tAt + 1, this.last - 1)
+        this.eat('WHERE')
+        where = this.group()
+      }
       const select: Select = { distinct: false, reduced: false, star: true, projection: [], where, groupBy: [], having: [], orderBy: [], at, end: 0 }
       this.modifiers(select)
       select.end = this.last
+      this.valuesClause(select)
       if (!this.done) this.fail('trailing text')
       return { text: this.text, form: 'construct', prefixes: this.prefixes, bodyAt, select, template, templateText }
     }
@@ -347,8 +383,9 @@ class Parser {
   }
 
   private valuesClause(s: Select) {
-    if (this.is('VALUES')) this.fail('a VALUES clause after the query (not supported; put it in the WHERE)')
-    void s
+    if (!this.is('VALUES')) return
+    s.values = this.values() as Extract<Item, { k: 'values' }>
+    s.end = this.last
   }
 
   private integer(): number {
@@ -452,6 +489,7 @@ class Parser {
     const items: Item[] = []
     if (this.is('SELECT')) {
       const q = this.select()
+      this.valuesClause(q)
       items.push({ k: 'select', q })
       this.expect('}')
       return { items, at, end: this.last }
@@ -541,8 +579,10 @@ class Parser {
       if (this.is(close) || this.done) return out
       const t = this.peek()!
       if ((t.k === 'word' && GROUP_WORDS.has(t.v)) || this.is('{')) return out
+      // A blank node property list or a collection may stand alone (its own triples).
+      const node = this.is('[') || this.is('(')
       const s = this.subject(out)
-      this.predicateObjects(s, out)
+      if (!(node && (this.is('.') || this.is(close) || this.is('}')))) this.predicateObjects(s, out)
       if (!this.eat('.')) return out
     }
   }
@@ -555,7 +595,22 @@ class Parser {
       this.expect(']')
       return b
     }
-    if (this.is('(')) this.fail('RDF collections (not supported)')
+    if (this.eat('(')) {
+      // A collection: rdf:first / rdf:rest through fresh (blank) variables, () is rdf:nil.
+      const items: Node[] = []
+      while (!this.eat(')')) {
+        if (this.done) this.fail('an unclosed collection')
+        items.push(this.subject(out))
+      }
+      const nil: Node = { k: 'iri', v: RDF + 'nil' }
+      if (!items.length) return nil
+      const cells: Node[] = items.map(() => ({ k: 'var', v: `__b${this.fresh++}` }))
+      items.forEach((item, i) => {
+        out.push({ s: cells[i]!, p: { k: 'link', iri: RDF + 'first' }, o: item })
+        out.push({ s: cells[i]!, p: { k: 'link', iri: RDF + 'rest' }, o: cells[i + 1] ?? nil })
+      })
+      return cells[0]!
+    }
     return this.node()
   }
 
@@ -740,6 +795,14 @@ export function certainVars(g: Group): Set<string> {
       for (const v of sets[0] ?? []) if (sets.every((s) => s.has(v))) out.add(v)
     } else if (it.k === 'values') it.vars.forEach((v, i) => it.rows.every((r) => r[i]) && out.add(v))
     else if (it.k === 'select' && !it.q.groupBy.length && !it.q.projection.some((p) => p.e)) for (const v of certainVars(it.q.where)) if (projectedVars(it.q).includes(v)) out.add(v)
+    else if (it.k === 'select' && it.q.groupBy.length) {
+      // Grouped: a group variable bound in every solution is bound in every group.
+      const inner = certainVars(it.q.where)
+      for (const e of it.q.groupBy) {
+        const v = /^[?$](\w+)$/.exec(e.text.trim())?.[1]
+        if (v && !e.as && inner.has(v) && projectedVars(it.q).includes(v)) out.add(v)
+      }
+    }
   }
   for (const v of [...out]) if (v.startsWith('__b')) out.delete(v)
   return out

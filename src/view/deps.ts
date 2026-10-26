@@ -26,6 +26,12 @@ interface Scope {
   global: boolean
   pats: Pat[]
   aliases: Alias[]
+  /**
+   * The variables its group certainly binds (OPTIONAL, MINUS, a UNION branch, a subquery): only
+   * through these does a walk leave it - one it may leave unbound is compatible with any value
+   * outside. Undefined: any (the body; EXISTS, which sees its outer row bound).
+   */
+  certain?: Set<string>
 }
 
 export interface Pat {
@@ -36,6 +42,11 @@ export interface Pat {
   o: Pos
   /** Inside GRAPH: the graph (a variable or a named graph); else the union default graph. */
   g?: Pos
+  /**
+   * p* or p?, whose zero-length solutions are a node of the graph with itself: any triple bringing
+   * a node in is its input - unless another pattern of the solution already holds that node.
+   */
+  zero?: boolean
   scope: Scope
 }
 
@@ -80,8 +91,17 @@ export class Dependencies {
       this.problem = (e as Error).message
     }
     for (const p of this.patterns) {
+      if (!('path' in p.p) || p.p.path.k !== 'mod' || p.p.path.mod === '+') continue
+      const held = (x: Pos) => {
+        if ('t' in x) return false
+        for (let sc: Scope | undefined = p.scope; sc; sc = sc.parent) if (sc.pats.some((y) => y !== p && !('path' in y.p) && [y.s, y.p as Pos, y.o].some((z) => 'v' in z && z.v === x.v))) return true
+        return false
+      }
+      p.zero = !held(p.s) && !held(p.o)
+    }
+    for (const p of this.patterns) {
       const iris = 'path' in p.p ? pathIris(p.p.path) : 't' in p.p ? [p.p.t.value] : undefined
-      if (!iris) this.anyPredicate.push(p)
+      if (!iris || zeroLength(p)) this.anyPredicate.push(p)
       else for (const iri of iris) this.byPredicate.set(iri, [...(this.byPredicate.get(iri) ?? []), p])
     }
   }
@@ -95,13 +115,13 @@ export class Dependencies {
   route(q: Quad): Pat[] {
     const out: Pat[] = []
     for (const p of [...(this.byPredicate.get(q.predicate.value) ?? []), ...this.anyPredicate]) {
-      if ('t' in p.s && !p.s.t.equals(q.subject)) {
+      if ('t' in p.s && !same(p.s.t, q.subject)) {
         if (!('path' in p.p)) continue
       }
-      if ('t' in p.o && !p.o.t.equals(q.object)) {
+      if ('t' in p.o && !same(p.o.t, q.object)) {
         if (!('path' in p.p)) continue
       }
-      if ('path' in p.p && p.p.path.k === 'nps' && p.p.path.iris.some((x) => x.iri === q.predicate.value)) continue
+      if ('path' in p.p && p.p.path.k === 'nps' && npsSides(p.p.path).every((side) => side.exclude.has(q.predicate.value))) continue
       if (p.g && (q.graph.termType !== 'NamedNode' || ('t' in p.g && !p.g.t.equals(q.graph)))) continue
       out.push(p)
     }
@@ -157,7 +177,7 @@ export class Dependencies {
   private bind(p: Pat, q: Quad, lookup: Lookup): Map<string, Term>[] | 'global' {
     const row = new Map<string, Term>()
     const put = (pos: Pos, t: Term) => {
-      if ('t' in pos) return pos.t.equals(t)
+      if ('t' in pos) return same(pos.t, t)
       const had = row.get(pos.v)
       if (had) return had.equals(t)
       row.set(pos.v, t)
@@ -165,15 +185,36 @@ export class Dependencies {
     }
     if (p.g && !put(p.g, q.graph)) return []
     if (!('path' in p.p)) return put(p.s, q.subject) && put(p.p, q.predicate) && put(p.o, q.object) ? [row] : []
-    const path = p.p.path
+    // p* and p? also hold of every node of the graph with itself: a triple's nodes (a constant end, once it is one).
+    const zero: Map<string, Term>[] = []
+    if (zeroLength(p))
+      for (const n of [q.subject, q.object]) {
+        const r = new Map(row)
+        if ([p.s, p.o].every((x) => ('t' in x ? same(x.t, n) : (r.set(x.v, n), true)))) zero.push(r)
+      }
+    const steps = this.steps(p, q, lookup, row)
+    return steps === 'global' ? steps : [...zero, ...steps]
+  }
+
+  /** Bindings of a path pattern to a changed triple that is a step of it. */
+  private steps(p: Pat, q: Quad, lookup: Lookup, row: Map<string, Term>): Map<string, Term>[] | 'global' {
+    const put = (pos: Pos, t: Term) => {
+      if ('t' in pos) return same(pos.t, t)
+      const had = row.get(pos.v)
+      if (had) return had.equals(t)
+      row.set(pos.v, t)
+      return true
+    }
+    const path = (p.p as { path: Path }).path
     // A path inside GRAPH walks that graph.
     if (p.g) lookup = inGraph(lookup, q.graph)
     // A link, an alternative of links, a negated set: the triple is one step.
     const direct = linkSteps(path)
     if (direct) {
       const out: Map<string, Term>[] = []
-      for (const { iri, inv } of direct) {
+      for (const { iri, inv, exclude } of direct) {
         if (iri !== undefined && iri !== q.predicate.value) continue
+        if (exclude?.has(q.predicate.value)) continue
         row.clear()
         if (p.g) put(p.g, q.graph)
         if (inv ? put(p.s, q.object) && put(p.o, q.subject) : put(p.s, q.subject) && put(p.o, q.object)) out.push(new Map(row))
@@ -204,10 +245,10 @@ export class Dependencies {
         const steps = linkSteps(segments[i]!)
         if (!steps) return 'global'
         // The triple is a step from its subject to its object, or (an inverse step) back.
-        for (const inv of new Set(steps.filter((x) => x.iri === q.predicate.value || x.iri === undefined).map((x) => x.inv))) {
+        for (const inv of new Set(steps.filter((x) => (x.iri === q.predicate.value || x.iri === undefined) && !x.exclude?.has(q.predicate.value)).map((x) => x.inv))) {
           const [from, to] = inv ? [q.object, q.subject] : [q.subject, q.object]
-          const starts = many(through([from], segments.slice(0, i), true), true).filter((n) => !('t' in p.s) || p.s.t.equals(n))
-          const ends = many(through([to], segments.slice(i + 1), false), false).filter((n) => !('t' in p.o) || p.o.t.equals(n))
+          const starts = many(through([from], segments.slice(0, i), true), true).filter((n) => !('t' in p.s) || same(p.s.t, n))
+          const ends = many(through([to], segments.slice(i + 1), false), false).filter((n) => !('t' in p.o) || same(p.o.t, n))
           if (!starts.length || !ends.length) continue
           // A solution through this step has its start among the starts and its end among the ends:
           // both bound (while there are few pairs), else each end on its own.
@@ -256,26 +297,44 @@ export class Dependencies {
     const via = new Map<string, Edge>()
     const queue = [...bound]
     const reached = new Set(bound)
+    // Where each variable is bound: a walk leaves a scope only through what it certainly binds.
+    const level = new Map<string, Scope>([...bound].map((v) => [v, scope]))
+    const leaves = (v: string, to: Scope) => {
+      let s: Scope | undefined = level.get(v)
+      const inside = (x: Scope | undefined) => {
+        for (; x; x = x.parent) if (x === to) return true
+        return false
+      }
+      if (!inside(s)) return true
+      for (; s && s !== to; s = s.parent) if (s.certain && !s.certain.has(v)) return false
+      return true
+    }
+    const reach = (w: string, edge: Edge, at: Scope) => {
+      if (reached.has(w)) return
+      reached.add(w), via.set(w, edge), queue.push(w), level.set(w, at)
+    }
     const varsOf = (x: Pat) => [x.s, 'path' in x.p ? undefined : x.p, x.o, x.g].filter((y): y is { v: string } => !!y && 'v' in y).map((y) => y.v)
     while (queue.length && !this.keys.every((k) => reached.has(k))) {
       const v = queue.shift()!
       for (const x of pats) {
         const vs = varsOf(x)
-        if (!vs.includes(v)) continue
+        if (!vs.includes(v) || !leaves(v, x.scope)) continue
         // Path connectors need a bound end to walk from.
-        for (const w of vs) if (!reached.has(w)) reached.add(w), via.set(w, { pat: x, from: v }), queue.push(w)
+        for (const w of vs) reach(w, { pat: x, from: v }, x.scope)
       }
       for (const a of aliases) {
-        if (a.to === v) for (const w of a.from) if (!reached.has(w)) reached.add(w), via.set(w, { alias: a, dir: 'out', from: v }), queue.push(w)
-        if (a.first && a.from[0] === v && !reached.has(a.to)) reached.add(a.to), via.set(a.to, { alias: a, dir: 'in', from: v }), queue.push(a.to)
+        if (!leaves(v, a.scope)) continue
+        if (a.to === v) for (const w of a.from) reach(w, { alias: a, dir: 'out', from: v }, a.scope)
+        if (a.first && a.from[0] === v) reach(a.to, { alias: a, dir: 'in', from: v }, a.scope)
       }
     }
-    // No part of the key reached: any partition. Part of it: the slice it binds.
-    if (this.keys.length && !this.keys.some((k) => reached.has(k))) return 'global'
-    // The edges on the way to each key, in the order they were found.
-    const needed: Edge[] = []
+    // No part of the key reached: any partition - unless the change joins with nothing around it
+    // (then it is in no solution). Part of it: the slice it binds.
+    const unreachable = this.keys.length > 0 && !this.keys.some((k) => reached.has(k))
+    // The edges on the way to each key, in the order they were found (unreachable: all of them).
+    const needed: Edge[] = unreachable ? [...via.values()] : []
     const seen = new Set<Edge>()
-    for (const k of this.keys) {
+    for (const k of unreachable ? [] : this.keys) {
       if (!reached.has(k)) continue
       const chain: Edge[] = []
       for (let w = k; via.has(w); w = via.get(w)!.from) chain.push(via.get(w)!)
@@ -287,6 +346,8 @@ export class Dependencies {
     const checks = pats.filter((x) => !('path' in x.p) && x !== p)
     const holds = (r: Map<string, Term>) =>
       checks.every((x) => {
+        // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
+        if (!varsOf(x).every((v) => !r.has(v) || leaves(v, x.scope))) return true
         const val = (pos: Pos) => ('t' in pos ? pos.t : r.get(pos.v))
         const s = val(x.s)
         const pp = val(x.p as Pos)
@@ -323,7 +384,9 @@ export class Dependencies {
         if (next.length > 50_000) return 'global'
       }
       rows = dedupe(next).filter(holds)
+      if (!rows.length) return []
     }
+    if (unreachable) return rows.length ? 'global' : []
     return rows.filter((r) => this.keys.every((k) => r.has(k) || !reached.has(k)))
   }
 
@@ -334,7 +397,7 @@ export class Dependencies {
     const o = val(x.o)
     const out: Map<string, Term>[] = []
     const set = (row: Map<string, Term>, pos: Pos, t: Term) => {
-      if ('t' in pos) return pos.t.equals(t)
+      if ('t' in pos) return same(pos.t, t)
       const had = row.get(pos.v)
       if (had) return had.equals(t)
       row.set(pos.v, t)
@@ -430,16 +493,19 @@ export class Dependencies {
         case 'graph': {
           const outer = this.graph
           this.graph = this.pos(it.name, rename)
+          // A graph's solutions can need no triple of it (GRAPH ?g {}, a FILTER, an OPTIONAL): that the
+          // graph has any quad is a dependency too.
+          if (!it.g.items.some((x) => x.k === 'triples')) this.add(scope, { v: `__q${this.fresh++}` }, { v: `__q${this.fresh++}` }, { v: `__q${this.fresh++}` })
           this.group(it.g, scope, rename, left)
           this.graph = outer
           break
         }
         case 'optional':
         case 'minus':
-          this.group(it.g, this.child(scope), rename, left)
+          this.group(it.g, this.child(scope, false, this.certainIn(it.g, rename)), rename, left)
           break
         case 'union':
-          for (const b of it.gs) this.group(b, this.child(scope), rename, left)
+          for (const b of it.gs) this.group(b, this.child(scope, false, this.certainIn(b, rename)), rename, left)
           break
         case 'service':
           throw new Error('SERVICE')
@@ -458,8 +524,12 @@ export class Dependencies {
     })
   }
 
-  private child(parent: Scope, global = false): Scope {
-    return { parent, global, pats: [], aliases: [] }
+  private child(parent: Scope, global = false, certain?: Set<string>): Scope {
+    return { parent, global, pats: [], aliases: [], certain }
+  }
+
+  private certainIn(g: Group, rename: (v: string) => string): Set<string> {
+    return new Set([...certainVars(g)].map(rename))
   }
 
   private expr(e: Expr, scope: Scope, rename: (v: string) => string) {
@@ -491,7 +561,8 @@ export class Dependencies {
       return
     }
     const correlated = [...projected].some((v) => left.has(rename(v)))
-    const s = this.child(scope, (q.limit !== undefined || q.offset !== undefined) && !correlated)
+    const certain = new Set([...certainVars(q.where), ...q.projection.filter((x) => x.e).map((x) => x.v)].filter((v) => projected.has(v)).map(inner))
+    const s = this.child(scope, (q.limit !== undefined || q.offset !== undefined) && !correlated, certain)
     // Projected expressions alias their variables.
     for (const p of q.projection) if (p.e) this.alias(p.e, inner(p.v), s, inner)
     this.group(q.where, s, inner, left)
@@ -502,6 +573,16 @@ export class Dependencies {
       if (e.as) this.alias(e, inner(e.as), s, inner)
     }
   }
+}
+
+const NUMERIC = /#(integer|decimal|double|float|int|long|short|byte|nonNegativeInteger|positiveInteger|nonPositiveInteger|negativeInteger|unsignedInt|unsignedLong|unsignedShort|unsignedByte)$/
+/**
+ * A query's constant and a stored term: equal, or the same number (a store may keep "01" and "+1"
+ * as 1, and a query may write either): matching more is safe, a dependency missed is not.
+ */
+function same(constant: Term, t: Term): boolean {
+  if (constant.equals(t)) return true
+  return constant.termType === 'Literal' && t.termType === 'Literal' && NUMERIC.test(constant.datatype.value) && constant.datatype.equals(t.datatype) && Number(constant.value) === Number(t.value)
 }
 
 /** A lookup confined to one named graph (paths inside GRAPH). */
@@ -562,8 +643,21 @@ function pathIris(p: Path): string[] | undefined {
   }
 }
 
+/** A p* or p?: true of every node of the graph with itself, so any triple is its input. */
+const zeroLength = (p: Pat) => !!p.zero
+
+/** A negated property set's directions: forward (not these), and inverse (not those), as written. */
+function npsSides(p: Extract<Path, { k: 'nps' }>): { inv: boolean; exclude: Set<string> }[] {
+  const fwd = p.iris.filter((x) => !x.inv).map((x) => x.iri)
+  const back = p.iris.filter((x) => x.inv).map((x) => x.iri)
+  const out: { inv: boolean; exclude: Set<string> }[] = []
+  if (fwd.length || !back.length) out.push({ inv: false, exclude: new Set(fwd) })
+  if (back.length) out.push({ inv: true, exclude: new Set(back) })
+  return out
+}
+
 /** A path that is one step (a link, an inverse, an alternative of those, a negated set): its steps. */
-function linkSteps(p: Path, inv = false): { iri?: string; inv: boolean }[] | undefined {
+function linkSteps(p: Path, inv = false): { iri?: string; inv: boolean; exclude?: Set<string> }[] | undefined {
   switch (p.k) {
     case 'link':
       return [{ iri: p.iri, inv }]
@@ -571,10 +665,10 @@ function linkSteps(p: Path, inv = false): { iri?: string; inv: boolean }[] | und
       return linkSteps(p.p, !inv)
     case 'alt': {
       const all = p.ps.map((x) => linkSteps(x, inv))
-      return all.some((x) => !x) ? undefined : all.flat() as { iri?: string; inv: boolean }[]
+      return all.some((x) => !x) ? undefined : all.flat() as { iri?: string; inv: boolean; exclude?: Set<string> }[]
     }
     case 'nps':
-      return [{ iri: undefined, inv }]
+      return npsSides(p).map((side) => ({ iri: undefined, inv: side.inv !== inv, exclude: side.exclude }))
     default:
       return undefined
   }
@@ -627,9 +721,9 @@ export function walkPath(nn: (iri: string) => NamedNode, p: Path, n: Term, back:
       break
     }
     case 'nps':
-      for (const q of back ? lookup(null, null, n) : lookup(n, null, null)) {
-        if (p.iris.some((x) => x.iri === q.predicate.value && !x.inv)) continue
-        put(back ? q.subject : q.object)
+      for (const side of npsSides(p)) {
+        const reverse = back !== side.inv
+        for (const q of reverse ? lookup(null, null, n) : lookup(n, null, null)) if (!side.exclude.has(q.predicate.value)) put(reverse ? q.subject : q.object)
       }
       break
   }

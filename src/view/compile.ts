@@ -66,14 +66,17 @@ export const compiler: ViewCompiler = {
 const flat = (s: string) => s.trim().replace(/\s+/g, ' ')
 
 function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
-  const q = withGraphs(parseQuery(source.query, prefixMap(source.prefixes)), source)
+  // The oracle reads the query as the view means it (its graphs); the plan, a body of one group.
+  const asMeant = withGraphs(parseQuery(source.query, prefixMap(source.prefixes)), source)
+  const q = withValues(asMeant)
   if (q.form === 'ask') throw new Unsupported('ASK')
   if (q.form !== source.form) throw new Unsupported(`${q.form.toUpperCase()} text in sem:${source.form}`)
   const text = q.text
   const prologue = text.slice(0, q.bodyAt)
   if (q.form === 'construct') {
     for (const t of q.template!) {
-      if (t.s.k === 'bnode' || t.o.k === 'bnode') throw new Unsupported('a blank node in the template')
+      const blank = (n: import('./sparql.ts').Node) => n.k === 'bnode' || (n.k === 'var' && n.v.startsWith('__b'))
+      if (blank(t.s) || blank(t.o)) throw new Unsupported('a blank node in the template')
       if (t.p.k !== 'var' && t.p.k !== 'link') throw new Unsupported('a path in the template')
     }
     const sel = q.select
@@ -89,28 +92,31 @@ function compile(source: ViewSource, run: SparqlRunner): MaintainedPlan {
       const sub = subqueries.length === 1 ? subqueries[0]! : undefined
       const topk = sub && (sub.limit !== undefined || sub.offset !== undefined) ? topkOf(sub, parts[0]!, text) : undefined
       if (!topk && subqueries.some((s) => s.limit !== undefined || s.offset !== undefined)) throw new Unsupported('LIMIT in one branch of a UNION')
-      return plan(source, q, parts, topk, post, run)
+      return plan(source, q, asMeant, parts, topk, post)
     }
     // CONSTRUCT { … } WHERE { body } [ORDER BY …] [LIMIT …]: the template over the body's solutions (the first ones).
-    const p = part({ ...sel, star: true, projection: [] }, source, run, text, prologue)
-    return plan(source, q, [p], modified ? topkOf(sel, p, text) : undefined, undefined, run)
+    // (Grouped: the template reads the groups - their keys, and a VALUES clause's variables after them.)
+    const grouped = sel.groupBy.length > 0 || sel.having.length > 0
+    const projection = grouped ? [...new Set([...sel.groupBy.map((e) => e.as ?? /^[?$](\w+)$/.exec(e.text.trim())?.[1]).filter((v): v is string => !!v), ...(sel.values?.vars ?? [])])].map((v) => ({ v })) : []
+    const p = part({ ...sel, star: !grouped, projection }, source, run, text, prologue)
+    return plan(source, q, asMeant, [p], modified ? topkOf(sel, p, text) : undefined, undefined, run)
   }
   const sel = q.select
   const p = part(sel, source, run, text, prologue)
   const topk = sel.limit !== undefined || sel.offset !== undefined || sel.orderBy.length ? topkOf(sel, p, text) : undefined
-  return plan(source, q, [p], topk, undefined, run)
+  return plan(source, q, asMeant, [p], topk, undefined, run)
 }
 
-function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: MaintainedPlan['topk']; orderPost?: Post } | undefined, post: Post | undefined, run: SparqlRunner): MaintainedPlan {
+function plan(source: ViewSource, q: Query, asMeant: Query, parts: Part[], topk: { topk: MaintainedPlan['topk']; orderPost?: Post } | undefined, post: Post | undefined, run: SparqlRunner): MaintainedPlan {
   const vars = q.form === 'select' ? (q.select.star ? [...groupVars(q.select.where)].filter((v) => !v.startsWith('__')) : q.select.projection.map((p) => p.v)) : []
   // The oracle: the query itself, with the window written out at the clock's time.
   const windowed = parts.find((p) => p.window)
   // SAMPLE may be any value; ours is the least, so the oracle asks for MIN (same length: offsets hold).
-  let oracle = q.text
-  for (const a of allAggregates(q.select)) if (a.fn === 'SAMPLE') oracle = oracle.slice(0, a.at) + 'MIN   ' + oracle.slice(a.at + 6)
+  let oracle = asMeant.text
+  for (const a of allAggregates(asMeant.select)) if (a.fn === 'SAMPLE') oracle = oracle.slice(0, a.at) + 'MIN   ' + oracle.slice(a.at + 6)
   const reference = (now: number) => {
     if (!windowed?.window) return oracle
-    const at = windowAt(q)
+    const at = windowAt(asMeant)
     return oracle.slice(0, at) + '\n' + windowText(windowed.window, windowed.stream!.memberVar, now, run) + '\n' + oracle.slice(at)
   }
   // GROUP_CONCAT's order is ours (term order), the store's its own: the oracle compares the parts.
@@ -129,6 +135,7 @@ function plan(source: ViewSource, q: Query, parts: Part[], topk: { topk: Maintai
     template: q.template,
     reference,
     unordered: unordered.size ? unordered : undefined,
+    reduced: q.form === 'select' && q.select.reduced ? true : undefined,
     signature,
     algebra: {
       topk: topk?.topk ? `TopK((${topk.topk.order.map((o) => (o.desc ? `DESC(?${o.slot})` : `?${o.slot}`)).join(' ')}), offset ${topk.topk.offset}${topk.topk.limit === undefined ? '' : `, limit ${topk.topk.limit}`})` : undefined,
@@ -164,6 +171,77 @@ function withGraphs(q: Query, source: ViewSource): Query {
   let text = q.text
   for (const { at, text: t } of inserts.sort((a, b) => b.at - a.at)) text = text.slice(0, at) + t + text.slice(at)
   return parseQuery(text, q.prefixes)
+}
+
+/**
+ * A VALUES clause after the query joins its pattern's solutions: written as a join inside the
+ * WHERE (`{ { pattern } VALUES … }`, the same solutions), so the body is one group. After an
+ * aggregation it would join the groups instead: a fallback.
+ */
+function withValues(q: Query): Query {
+  const v = q.select.values
+  if (!v) return q
+  const sel = q.select
+  // After an aggregation it joins the groups: the part's expressions do that (Post.values).
+  if (sel.groupBy.length || sel.having.length || sel.projection.some((p) => p.e?.aggregates.length)) return q
+  const w = sel.where
+  const text = q.text
+  const inner = text.slice(w.at, w.end)
+  const rewritten = text.slice(0, w.at) + `{ ${inner} ${text.slice(v.at, v.end)} }` + text.slice(w.end, v.at) + text.slice(v.end)
+  return parseQuery(rewritten, q.prefixes)
+}
+
+/**
+ * Whether binding the partition key into the body (VALUES, then LATERAL: SPARQL 1.2 substitutes it
+ * everywhere) could change what the body means, so a partition is evaluated as a join instead. The
+ * body is evaluated bottom-up: a part that reads a key before it is bound would see it unbound, and
+ * with it substituted sees its value - an OPTIONAL, MINUS or LATERAL that mentions a key its left
+ * side does not bind, a nested group that mentions one it does not bind, a FILTER there reading
+ * one; and LATERAL forbids a VALUES or BIND that binds a key, and a subquery with LIMIT that projects
+ * one would be limited per key. (EXISTS substitutes anyway.) And a MINUS that may leave a
+ * variable unbound, which two engines get wrong under LATERAL.
+ */
+function substitutionChanges(where: Group, keys: string[]): boolean {
+  const ks = new Set(keys)
+  const mentions = (g: Group) => [...groupVars(g)].some((v) => ks.has(v))
+  const open = (g: Group, bound: Set<string>) => [...groupVars(g)].some((v) => ks.has(v) && !bound.has(v))
+  const group = (g: Group, nested: boolean, left: Set<string>, lateral: boolean): boolean => {
+    const certain = certainVars(g)
+    for (let i = 0; i < g.items.length; i++) {
+      const it = g.items[i]!
+      const before = new Set([...left, ...certainVars({ ...g, items: g.items.slice(0, i) })])
+      if (it.k === 'values' && it.vars.some((v) => ks.has(v))) return true
+      if (it.k === 'bind' && ks.has(it.as)) return true
+      if ((it.k === 'filter' || it.k === 'bind') && nested && it.e.vars.some((v) => ks.has(v) && !certain.has(v) && !left.has(v))) return true
+      if (it.k === 'filter' || it.k === 'bind') for (const x of it.e.exists) if (group(x.g, false, new Set(keys), lateral)) return true
+      if (it.k === 'select') {
+        const projected = projectedVars(it.q).filter((v) => ks.has(v))
+        if (!projected.length) continue
+        if (it.q.projection.some((p) => p.e && ks.has(p.v))) return true
+        if ((it.q.limit !== undefined || it.q.offset !== undefined) && !lateral) return true
+        if (nested && projected.some((v) => !certain.has(v))) return true
+        if (group(it.q.where, true, new Set(), lateral)) return true
+      } else if (it.k === 'minus' && [...groupVars(it.g)].some((v) => !certainVars(it.g).has(v))) {
+        // A MINUS whose rows may leave a variable unbound: Oxigraph and the Rust engine remove
+        // rows under LATERAL that SPARQL keeps (reported on #9).
+        return true
+      } else if (it.k === 'optional' || it.k === 'minus') {
+        // Its own FILTERs see the left side (OPTIONAL's condition); what it binds joins after.
+        if (open(it.g, before)) return true
+        if (group(it.g, true, it.k === 'optional' ? before : new Set(), lateral)) return true
+      } else if (it.k === 'lateral') {
+        if (open(it.g, before)) return true
+        if (group(it.g, true, before, true)) return true
+      } else if (it.k === 'union') {
+        for (const b of it.gs) if (open(b, certainVars(b)) || group(b, true, new Set(), lateral)) return true
+      } else if (it.k === 'group' || it.k === 'graph' || it.k === 'service') {
+        if (mentions(it.g) && open(it.g, certainVars(it.g))) return true
+        if (group(it.g, true, new Set(), lateral)) return true
+      }
+    }
+    return false
+  }
+  return keys.length > 0 && group(where, false, new Set(), false)
 }
 
 /** The expressions (among the slot expressions' texts) that have EXISTS in them, parsed from the SELECT. */
@@ -352,7 +430,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     if (sel.star) throw new Unsupported('SELECT * with GROUP BY')
     for (const p of sel.projection) {
       if (!p.e) {
-        if (!groupBy.includes(p.v)) throw new Unsupported(`?${p.v} is projected but not grouped`)
+        if (!groupBy.includes(p.v) && !sel.values?.vars.includes(p.v)) throw new Unsupported(`?${p.v} is projected but not grouped`)
         continue
       }
       const a = p.e.aggregates
@@ -362,6 +440,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
       if (NONDETERMINISTIC.test(p.e.text)) throw new Unsupported('a non-deterministic expression')
     }
     for (const h of sel.having) post.filters.push(overAggregates(h))
+    if (sel.values) post.values = text.slice(sel.values.at, sel.values.end)
     op = { k: 'group', groupBy, aggregates }
     vars = [...groupBy, ...aggregates.map((a) => a.as)]
   } else {
@@ -397,9 +476,11 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
   const withSlots: Group = { ...sel.where, items: [...sel.where.items, ...slotExists(sel, evaluated, text).map((e) => ({ k: 'filter' as const, e, at: e.at, end: e.end }))] }
   const deps = new Dependencies(run.factory, withSlots, keys, subs)
   if (deps.problem) throw new Unsupported(deps.problem)
+  const join = substitutionChanges(sel.where, keys)
   if (NONDETERMINISTIC.test(body)) throw new Unsupported('NOW(), RAND() or similar in the body')
   const slotNames = [...slots.keys()]
-  const head = `${prologue}SELECT ${slotNames.map((s) => (slots.get(s) === undefined ? '?' + s : `(${slots.get(s)} AS ?${s})`)).join(' ')} WHERE {`
+  // (No variables at all: each solution is an empty row.)
+  const head = `${prologue}SELECT ${slotNames.map((s) => (slots.get(s) === undefined ? '?' + s : `(${slots.get(s)} AS ?${s})`)).join(' ') || '*'} WHERE {`
   // Slices (keys with UNDEF parts) may overlap in one batch: each VALUES row is numbered (?__k), and
   // a partition takes its rows from the first row that covers it - all of its solutions, once.
   const headK = head.replace(/ WHERE \{$/, ' ?__k WHERE {')
@@ -415,7 +496,10 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
         if (k >= 0 && batch && batch.every((b) => b[k])) allowed.set(v, new Set(batch.map((b) => termKey(b[k]!))))
       }
       const fits = (r: Map<string, Term>) => [...allowed].every(([v, set]) => r.has(v) && set.has(termKey(r.get(v)!)))
-      const values = (rows?.[i - 1] ?? []).filter(fits).map((r) => `(${d.vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`)
+      const fitting = (rows?.[i - 1] ?? []).filter(fits)
+      // Rows VALUES cannot hold (a blank node): the subquery itself, for the store to evaluate.
+      if (fitting.some((r) => [...r.values()].some((t) => t.termType === 'BlankNode'))) return acc + text.slice(subs[i - 1]!.at, subs[i - 1]!.end) + piece
+      const values = fitting.map((r) => `(${d.vars.map((v) => sparqlTerm(r.get(v))).join(' ')})`)
       return acc + inline(i - 1, left, values.join(' ')) + piece
     }, '')
   }
@@ -423,16 +507,18 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     const out = new Map<string, Map<string, Term>[]>()
     if (batch0 && !batch0.length) return out
     // The keys the batch correlates: all but those a derived subquery binds where the batch leaves them open.
-    const leftKeys = batch0 ? keys.filter((k, i) => !projectedKeys.has(k) || batch0.every((b) => b[i])) : []
-    const body = bodyWith(batch0, rows, new Set(leftKeys.filter((k) => projectedKeys.has(k))))
+    const leftKeys = batch0 ? (join ? keys : keys.filter((k, i) => !projectedKeys.has(k) || batch0.every((b) => b[i]))) : []
+    const body = bodyWith(batch0, rows, join ? new Set() : new Set(leftKeys.filter((k) => projectedKeys.has(k))))
+    // Joined (not correlated) where binding the key inside would change what the body means.
+    const wrap = join ? (b: string) => `  {\n${b}\n  }` : (b: string) => `  LATERAL {\n${b}\n  }`
     const at = leftKeys.map((k) => keys.indexOf(k))
     const batch = batch0 && [...new Map(batch0.map((b) => at.map((i) => b[i])).map((b) => [keyString(b), b])).values()]
     const sliced = !!batch && leftKeys.length > 0 && batch.some((b) => b.some((t) => !t))
     const query = !batch || !leftKeys.length
       ? `${head}\n${body}\n}`
       : sliced
-        ? `${headK}\n  VALUES (?__k ${leftKeys.map((k) => '?' + k).join(' ')}) { ${batch.map((b, i) => `(${i} ${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n  LATERAL {\n${body}\n  }\n}`
-        : `${head}\n  VALUES (${leftKeys.map((k) => '?' + k).join(' ')}) { ${batch.map((b) => `(${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n  LATERAL {\n${body}\n  }\n}`
+        ? `${headK}\n  VALUES (?__k ${leftKeys.map((k) => '?' + k).join(' ')}) { ${batch.map((b, i) => `(${i} ${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n${wrap(body)}\n}`
+        : `${head}\n  VALUES (${leftKeys.map((k) => '?' + k).join(' ')}) { ${batch.map((b) => `(${b.map(sparqlTerm).join(' ')})`).join(' ')} }\n${wrap(body)}\n}`
     const from = new Map<string, string>()
     const result = run.select(query)
     for (const row of result) {
@@ -466,12 +552,12 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
     window,
     op,
     vars,
-    post: post.binds.length || post.filters.length ? post : undefined,
+    post: post.binds.length || post.filters.length || post.values ? post : undefined,
     derived: derived.length ? derived : undefined,
     patternless: withoutTriples(sel.where, text),
     head: head.slice(prologue.length),
     algebra: {
-      local: keys.length ? `LATERAL(VALUES ${keyText}, {${flat(body)}})` : `{${flat(body)}}`,
+      local: keys.length ? `${join ? 'Join' : 'LATERAL'}(VALUES ${keyText}, {${flat(body)}})` : `{${flat(body)}}`,
       op:
         op.k === 'group'
           ? `Group((${op.groupBy.map((v) => '?' + v).join(' ')}), ${op.aggregates.filter((a) => !a.as.startsWith('__g') || true).map((a) => `${a.fn}(${a.distinct ? 'DISTINCT ' : ''}${a.slot === '*' ? '*' : '…'}) AS ?${a.as}`).join(', ')})`
@@ -487,7 +573,7 @@ function part(sel: Select, source: ViewSource, run: SparqlRunner, text: string, 
 function topkOf(sel: Select, p: Part, text: string): { topk: MaintainedPlan['topk']; orderPost?: Post } {
   const order: Order[] = []
   const binds: Post['binds'] = []
-  const available = new Set([...p.vars, ...(p.post?.binds.map((b) => b.as) ?? [])])
+  const available = new Set([...p.vars, ...(p.post?.binds.map((b) => b.as) ?? []), ...(p.post?.values && sel.values ? sel.values.vars : [])])
   sel.orderBy.forEach((o, i) => {
     const v = /^[?$](\w+)$/.exec(o.e.text.trim())?.[1]
     if (v && available.has(v)) return void order.push({ slot: v, desc: o.desc })

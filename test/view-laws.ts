@@ -64,6 +64,10 @@ export const LAW_VIEWS: Record<string, string> = {
   perfNotes: `SELECT ?t (COUNT(?n) AS ?c) WHERE { GRAPH <${PERF_GRAPH}> { ?t v:note ?n } } GROUP BY ?t`,
   bothGraphs: `SELECT ?t WHERE { GRAPH <${PERF_GRAPH}> { ?t v:note ?a } GRAPH <${NETWORK_GRAPH}> { ?t v:note ?b } FILTER NOT EXISTS { GRAPH ?any { ?t v:hidden true } } }`,
   anyNote: `SELECT DISTINCT ?t ?n WHERE { ?t v:note ?n }`,
+  // VALUES after the query (a join; after an aggregation, with its groups); an RDF collection pattern.
+  afterValues: `SELECT ?m ?x ?w WHERE { v:s tree:member ?m . ?m v:x ?x } VALUES (?x ?w) { (1 "one") (2 "two") (2 "deux") }`,
+  groupedValues: `SELECT ?t (COUNT(?i) AS ?n) ?tag WHERE { ?i a v:Item ; v:owner ?t } GROUP BY ?t VALUES (?t ?tag) { (v:T1 "first") (v:T2 "second") (v:T2 "zweite") }`,
+  firstTwoListed: `SELECT ?x ?y WHERE { v:list v:items (?x ?y) }`,
   // A cross product: partitions by (item, kind); a new kind reaches every item's slice.
   cross: `SELECT ?i ?k ?s WHERE { ?i a v:Item . v:cfg v:showKind ?k OPTIONAL { ?i v:score ?s } }`,
 }
@@ -71,6 +75,7 @@ export const LAW_VIEWS: Record<string, string> = {
 const CONSTRUCTS: Record<string, string> = {
   labelled: `CONSTRUCT { ?m v:labelled ?label } WHERE { v:s tree:member ?m . ?m v:target ?t . ?t rdfs:label ?label }`,
   unionParts: `CONSTRUCT { ?row v:n ?n } WHERE { { SELECT ?row (COUNT(?m) AS ?n) WHERE { v:s tree:member ?m . ?m v:kind ?row } GROUP BY ?row } UNION { SELECT ?row (COUNT(?i) AS ?n) WHERE { ?i a v:Item ; v:owner ?row } GROUP BY ?row } }`,
+  owners: `CONSTRUCT WHERE { ?i v:owner ?t . ?t rdfs:label ?l }`,
   firstTwo: `CONSTRUCT { ?m v:early ?x } WHERE { v:s tree:member ?m . ?m v:x ?x } ORDER BY ?x ?m LIMIT 2`,
   labelsOf: `CONSTRUCT { ?t v:labels ?labels ; v:kinds ?kinds } WHERE { { SELECT ?t (GROUP_CONCAT(?l) AS ?labels) (GROUP_CONCAT(DISTINCT STR(?k); SEPARATOR = ",") AS ?kinds) WHERE { v:s tree:member ?m . ?m v:target ?t ; v:kind ?k . ?t rdfs:label ?l } GROUP BY ?t } }`,
   busiest: `CONSTRUCT { ?t v:busiest ?label } WHERE { { SELECT (MAX(?n) AS ?max) WHERE { { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } } } { SELECT ?t (COUNT(?i) AS ?n) WHERE { ?i v:owner ?t } GROUP BY ?t } FILTER(?n = ?max) ?t rdfs:label ?label }`,
@@ -206,6 +211,17 @@ export function runLaws(seed: number, steps: number, kind: 'oxigraph' | 'wat' = 
       const qs = [f.quad(nn(i), p(NS.rdf + 'type'), nn('Item')), f.quad(nn(i), p('owner'), nn(pick(T)))]
       if (r() < 0.8) qs.push(f.quad(nn(i), p('score'), int(Math.floor(r() * 7))))
       return [[], qs]
+    }],
+    ['blank item', 0.3, () => {
+      // An item that is a blank node (a partition key VALUES cannot hold), or one gone.
+      const old = store.match(null, p(NS.rdf + 'type'), nn('Item')).filter((q) => q.subject.termType === 'BlankNode')
+      if (old.length && r() < 0.4) return [store.match(old[0]!.subject as never, null, null), []]
+      // (The factory makes no blank nodes: one comes from the store, then goes in as a change.)
+      const tag = f.literal(`blank ${++n}`)
+      store.loadTurtle(`[] <${V}tag> ${JSON.stringify(tag.value)} .`)
+      const b = store.match(null, p('tag'), tag)[0]!
+      store.delete(b)
+      return [[], [b, f.quad(b.subject, p(NS.rdf + 'type'), nn('Item')), f.quad(b.subject, p('owner'), nn(pick(T))), f.quad(b.subject, p('score'), int(Math.floor(r() * 7)))]]
     }],
     ['item gone', 0.6, () => {
       const i = items.splice(Math.floor(r() * items.length), 1)[0]
