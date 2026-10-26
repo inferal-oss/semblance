@@ -10,7 +10,7 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
   const document = host.ownerDocument
   const window = document.defaultView!
   type Popup = {
-    trigger: HTMLElement; stretch: boolean; style: string | null; popover: string | null
+    trigger: HTMLElement; stretch: boolean; anchoredWidth: number; style: string | null; popover: string | null
     sizing: { width: string; minWidth: string; maxWidth: string; maxHeight: string }
   }
   const lifted = new Map<HTMLElement, Popup>()
@@ -28,8 +28,10 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
     const viewportHeight = document.documentElement.clientHeight
     const trigger = entry.trigger.getBoundingClientRect()
     // Content can arrive after the panel opens (a lazy calendar or host-owned body).
-    // Measure its own sizing again instead of retaining an empty panel's first width.
-    Object.assign(popup.style, { position: 'fixed', inset: 'auto', margin: '0', left: '0', top: '0', ...entry.sizing })
+    // Measure again so an empty panel can grow. Keep its original anchored width as
+    // a minimum: percentage minimums would otherwise resolve against the viewport
+    // after the panel moves to the fixed top layer.
+    Object.assign(popup.style, { position: 'fixed', inset: 'auto', margin: '0', left: '0', top: '0', ...entry.sizing, minWidth: `${entry.anchoredWidth}px` })
     if (typeof popup.showPopover === 'function' && !popup.matches(':popover-open')) popup.showPopover()
     const naturalWidth = popup.getBoundingClientRect().width
     const heightLimit = window.getComputedStyle(popup).maxHeight
@@ -61,7 +63,7 @@ export function attachAnchoredPopups(host: Element, owns?: (element: Element) =>
     if (!config) return
     const trigger = config[1] ? popup.parentElement?.querySelector<HTMLElement>(config[1]) : popup.parentElement
     if (!trigger || !popup.isConnected) return
-    lifted.set(popup, { trigger, stretch: config[1] === null, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'), sizing: { width: popup.style.width, minWidth: popup.style.minWidth, maxWidth: popup.style.maxWidth, maxHeight: popup.style.maxHeight } })
+    lifted.set(popup, { trigger, stretch: config[1] === null, anchoredWidth: popup.getBoundingClientRect().width, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'), sizing: { width: popup.style.width, minWidth: popup.style.minWidth, maxWidth: popup.style.maxWidth, maxHeight: popup.style.maxHeight } })
     if (typeof popup.showPopover === 'function') popup.setAttribute('popover', 'manual')
   }
   // Scan only inserted or revealed subtrees. A keystroke elsewhere must not search the whole app.
