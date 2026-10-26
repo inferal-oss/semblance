@@ -44,13 +44,36 @@ describe('the photo post example', () => {
       expect(s.document.getElementById(s.part('ph-viewer', 'panel').getAttribute('aria-labelledby')!)!.textContent).toBe('Sea, sand and pines')
       expect(s.part('ph-viewer', 'caption').textContent).toBe('Walking the dunes')
       expect(s.part('ph-viewer', 'strip').querySelectorAll('.sem-thumb')).toHaveLength(4)
-      // The loop switch: past the last photo is the first.
+      // The loop switch is the gallery's: past the last photo is the first, in the viewer too.
       s.click(s.part('ph-viewer', 'close'))
       s.click(s.root('ph-loop').querySelector('[role=switch]')!)
-      expect(s.fact('ph-viewer', 'loops')).toEqual(['true'])
+      expect(s.fact('ph-gallery', 'loops')).toEqual(['true'])
       s.click(s.part('ph-gallery', 'photo-4'))
       s.click(s.part('ph-viewer', 'next'))
       expect(s.fact('ph-gallery', 'current')).toEqual([UI.replace('#', '/photos#') + 'harbour'])
+      s.click(s.part('ph-viewer', 'close'))
+    })
+
+    it(`reorders the photos by dragging them in the order list: the gallery follows (${prefer})`, () => {
+      const s = post(prefer)
+      const key = (el: Element, k: string) => {
+        const e = new s.window.Event('keydown', { bubbles: true, cancelable: true })
+        Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+        el.dispatchEvent(e)
+        s.shell.flush()
+      }
+      const order = () => [...s.root('ph-order').querySelectorAll('[data-sem-drag]')].map((d) => d.textContent!.trim())
+      const alts = () => [...s.root('ph-gallery').querySelectorAll('.sem-slide img')].map((i) => i.getAttribute('src'))
+      expect(order()).toEqual(['The harbour at dusk', 'The lighthouse on the point', 'Walking the dunes', 'Back through the forest'])
+      // Space lifts the lighthouse, the arrows carry it past the last photo, Enter drops it.
+      const lighthouse = () => [...s.root('ph-order').querySelectorAll('[data-sem-drag]')].find((d) => d.textContent!.includes('lighthouse'))!
+      key(lighthouse(), ' ')
+      key(lighthouse(), 'ArrowDown')
+      key(lighthouse(), 'ArrowDown')
+      key(lighthouse(), 'Enter')
+      expect(order()).toEqual(['The harbour at dusk', 'Walking the dunes', 'Back through the forest', 'The lighthouse on the point'])
+      expect(alts()).toEqual(['photos/harbour.jpg', 'photos/dunes.webp', 'photos/forest.jpg', 'photos/lighthouse.jpg'])
+      expect(s.part('ph-gallery', 'slide-4').getAttribute('aria-label')).toBe('4 of 4')
     })
   }
 })

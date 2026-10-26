@@ -16,7 +16,9 @@ c:sortBy a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "Property of the items to order by (ascending); ties break on item IRI. On a c:List or a c:Outline."@en .
 c:itemLabel a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:range rdf:Property .
 c:itemChecked a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:range rdf:Property ;
-    rdfs:comment "Boolean property of the items rendered as a checkbox."@en .
+    rdfs:comment "Boolean property of the items rendered as a checkbox. Without one, the items have none."@en .
+c:itemImage a owl:ObjectProperty ; rdfs:domain c:List ; rdfs:range rdf:Property ;
+    rdfs:comment "Property of the items whose value is an image URL, shown as a thumbnail beside the label (c:image on photos, a person's picture)."@en .
 
 # One component instance is minted per data item, so a change to one item only
 # re-renders that item.
@@ -28,6 +30,7 @@ c:of a owl:ObjectProperty ; rdfs:domain c:ListItem ; rdfs:comment "The data item
 c:inList a owl:ObjectProperty ; rdfs:domain c:ListItem .
 c:labelFrom a owl:ObjectProperty ; rdfs:domain c:ListItem .
 c:checkedFrom a owl:ObjectProperty ; rdfs:domain c:ListItem .
+c:imageFrom a owl:ObjectProperty ; rdfs:domain c:ListItem .
 
 # --- list: the container, and its items member-wise ------------------------------
 # The container rule renders the list element only. The items are placed by a
@@ -66,11 +69,34 @@ c:ListMembers a sem:Rendering ;
     sem:targets c:List ;
     sem:stratum 0 ;
     sem:forEach c:item ;
-    sem:functionOnly "Member-wise (sem:forEach): the engine evaluates it once per (list, item) and hands the item to the rule as an argument, which it does for function rules only (a SPARQL rule would need the member bound like $this)." .
+    sem:watches rdf:type , c:sortBy , c:itemLabel , c:itemChecked .
 
 c:ListMembers-fn a sem:Rule ;
     sem:implements c:ListMembers ;
     sem:function "list:member" .
+
+# $member is the item. Missing sort keys sort last.
+c:ListMembers-sparql a sem:Rule ;
+    sem:implements c:ListMembers ;
+    sem:memberWatchesVia c:sortBy , c:itemLabel ;
+    sem:construct """
+CONSTRUCT {
+  ?inst a c:ListItem ; c:of $member ; c:inList $this ; c:labelFrom ?labelFrom ; c:checkedFrom ?checkedFrom ; sem:orderKey ?key .
+  ?drag a dnd:Draggable ; dnd:carries $member ; dnd:name ?name .
+  ?root rdfhtml:hasChild ?inst .
+}
+WHERE {
+  $this a c:List .
+  OPTIONAL { $this c:itemLabel ?labelFrom }
+  OPTIONAL { $this c:itemChecked ?checkedFrom }
+  OPTIONAL { $this c:sortBy ?sortBy . $member ?sortBy ?rawKey }
+  BIND(COALESCE(STR(?rawKey), "\\uFFFF") AS ?key)
+  BIND(IRI(CONCAT(STR($this), "/~i-", ENCODE_FOR_URI(STR($member)))) AS ?inst)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { $this a dnd:Sortable }, ?inst, ?none) AS ?drag)
+  OPTIONAL { $this c:itemLabel ?nameFrom . $member ?nameFrom ?rawName }
+  BIND(IF(BOUND(?drag), STR(?rawName), ?none) AS ?name)
+}""" .
 
 # --- items: screen -----------------------------------------------------------------
 
@@ -84,8 +110,10 @@ c:ListItemOnScreen-sparql a sem:Rule ;
     sem:implements c:ListItemOnScreen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:hasChild ?check, ?label .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:hasChild ?check, ?image, ?label .
   ?check a rdfhtml:Input ; rdfhtml:type "checkbox" ; rdfhtml:id ?checkId ; rdfhtml:checked ?checked ;
+         ord:immediatelyPrecedes ?afterCheck .
+  ?image a rdfhtml:Img ; rdfhtml:class "sem-thumb" ; rdfhtml:src ?src ; rdfhtml:alt "" ; rdfhtml:loading "lazy" ; rdfhtml:draggable "false" ;
          ord:immediatelyPrecedes ?label .
   ?label a rdfhtml:Label ; rdfhtml:for ?checkId ; rdfhtml:hasChild ?labelText .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?text .
@@ -93,12 +121,19 @@ CONSTRUCT {
 WHERE {
   $this a c:ListItem ; c:of ?item ; c:labelFrom ?labelProp .
   ?item ?labelProp ?text .
+  # Only a list that says what checks its items (c:itemChecked) has checkboxes.
+  BIND(EXISTS { $this c:checkedFrom ?anyChecked } AS ?checkable)
   # EXISTS rather than OPTIONAL: Oxigraph evaluates this correlated OPTIONAL
   # uncorrelated in bulk mode (~30x slower).
   BIND(IF(EXISTS { $this c:checkedFrom ?checkedProp . ?item ?checkedProp true }, "", ?none) AS ?checked)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IRI(CONCAT(STR($this), "/~check")) AS ?check)
-  BIND(STR(?check) AS ?checkId)
+  BIND(IF(?checkable, IRI(CONCAT(STR($this), "/~check")), ?none) AS ?check)
+  BIND(IF(?checkable, STR(?check), ?none) AS ?checkId)
+  # A thumbnail of the item (c:itemImage): decoration, the label names it.
+  OPTIONAL { $this c:imageFrom ?imageProp . ?item ?imageProp ?url }
+  BIND(STR(?url) AS ?src)
+  BIND(IF(BOUND(?src), IRI(CONCAT(STR($this), "/~image")), ?none) AS ?image)
+  BIND(COALESCE(?image, IRI(CONCAT(STR($this), "/~label"))) AS ?afterCheck)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
 }""" .
@@ -126,7 +161,7 @@ WHERE {
   $this a c:ListItem ; c:of ?item ; c:labelFrom ?labelProp .
   ?item ?labelProp ?label .
   BIND(EXISTS { $this c:checkedFrom ?checkedProp . ?item ?checkedProp true } AS ?done)
-  BIND(CONCAT(IF(?done, "  [x] ", "  [ ] "), STR(?label)) AS ?line)
+  BIND(CONCAT(IF(EXISTS { $this c:checkedFrom ?anyChecked }, IF(?done, "  [x] ", "  [ ] "), "  - "), STR(?label)) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?text)
 }""" .

@@ -61,6 +61,14 @@ pos:Aside a pos:Layout ; sem:slug "aside" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "align-items" ; sty:raw "flex-start" ] .
+# Two things set against each other: equal columns, as tall as each other, with something narrow
+# between them (a "vs.", an arrow) centered across; one above the other on a phone. The middle
+# child's place is in the theme (theme/layout.ttl).
+pos:Versus a pos:Layout ; sem:slug "versus" ;
+    rdfs:comment "Two equal columns of the same height with a narrow third child between them (a \"vs.\", an arrow); one above the other on a phone."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(0, 1fr)" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] .
 pos:Grid a pos:Layout ; sem:slug "grid" ;
     rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,

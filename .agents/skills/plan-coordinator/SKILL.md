@@ -131,7 +131,9 @@ as a "review PR #N" row.
 - Workers' briefs say: run **targeted tests only** (the files the change affects), then merge;
   never the full suite on a branch or PR (AGENTS.md).
 - **You** run the full suite on `main` after a batch of merges (`npm run test:full`, in the
-  background), and file an issue for each failure with its owner or a card.
+  background), file an issue for each failure, and **get each fixed**: start a worker (or hand it
+  to the worker whose code it is). Never leave a failure labelled "known" or "flaky under load";
+  a test that only passes on an idle machine gets made fast enough to pass with margin.
 - Watch the machine: `uptime`, the queue (`ls /tmp/semblance-vitest.queue`), stuck waiters (a queue
   process with no ticket). When the CPU is too high, hold test slot 2 yourself
   (`lockf -s /tmp/semblance-vitest.lock.2 sleep 86400`, in the background) so one run goes at a time,

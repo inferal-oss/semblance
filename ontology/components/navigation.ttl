@@ -43,11 +43,49 @@ c:SegmentedCounts a sem:Rendering ;
     sem:targets c:Segmented ;
     sem:requires c:countProperty ;
     sem:modality mod:Screen ;
-    sem:stratum 0 ;
-    sem:functionOnly """The counts are properties of the options, which are not linked from the component (they are the
-individuals of the property's range): SPARQL rules re-run only for changes one sem:follows hop away, so a
-count changing would not reach them. The function's reads are traced, so it hears each option's count.""" .
+    sem:stratum 0 .
 c:SegmentedCounts-fn a sem:Rule ; sem:implements c:SegmentedCounts ; sem:function "nav:counts" .
+# The options are the members of c:options or the individuals of the property's range; their counts
+# are theirs, so the rule follows both ways to them (the range's instances: [ sem:inverse rdf:type ]).
+c:SegmentedCounts-sparql a sem:Rule ;
+    sem:implements c:SegmentedCounts ;
+    sem:follows ( c:property rdfs:range [ sem:inverse rdf:type ] ) , ( c:options [ sem:zeroOrMore rdf:rest ] rdf:first ) ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?button rdfhtml:hasChild ?count .
+  ?label ord:immediatelyPrecedes ?count .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:hasChild ?figure , ?spoken .
+  ?figure a rdfhtml:Span ; rdfhtml:attribute ?figureHidden ; rdfhtml:hasChild ?figureText ; ord:immediatelyPrecedes ?spoken .
+  ?figureHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?spoken a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?spokenText .
+  ?spokenText a rdfhtml:Text ; rdfhtml:data ?spokenLine .
+}
+WHERE {
+  $this c:property ?property ; c:countProperty ?countProperty . FILTER(isIRI(?property) && isIRI(?countProperty))
+  { $this c:options/rdf:rest*/rdf:first ?opt . FILTER(isIRI(?opt)) }
+  UNION
+  { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range . FILTER(isIRI(?opt)) }
+  ?opt ?countProperty ?raw .
+  BIND(xsd:double(?raw) AS ?n)
+  FILTER(?n > 0)
+  BIND(IF(?n = FLOOR(?n), STR(xsd:integer(?n)), STR(?raw)) AS ?figureValue)
+  BIND(IF(?n > 99, "99+", ?figureValue) AS ?shown)
+  OPTIONAL { ?pickAt l10n:of $this ; l10n:countLabel ?pick }
+  OPTIONAL { FILTER(!BOUND(?pick)) $this c:countLabel ?any FILTER(isLiteral(?any)) }
+  BIND(STR(COALESCE(?pick, ?any)) AS ?spokenWord)
+  BIND(CONCAT(", ", ?figureValue, IF(COALESCE(?spokenWord, "") != "", CONCAT(" ", ?spokenWord), "")) AS ?spokenLine)
+  BIND(CONCAT("opt-", ENCODE_FOR_URI(STR(?opt))) AS ?key)
+  BIND(IRI(CONCAT(STR($this), "/~", ?key)) AS ?button)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-label"))) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count"))) AS ?count)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-figure"))) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-figure-aria-hidden"))) AS ?figureHidden)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-text"))) AS ?figureText)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-spoken"))) AS ?spoken)
+  BIND(IRI(CONCAT(STR($this), "/~", CONCAT(?key, "-count-spoken-text"))) AS ?spokenText)
+}""" .
 
 # --- Breadcrumbs: where you are in a hierarchy ----------------------------------------------------
 # The trail is c:items (nodes, labelled), or derived: from an end node up through c:parentProperty
@@ -64,9 +102,199 @@ aria-current=page. With c:controls and c:property, earlier crumbs select a graph
 an earlier crumb with nav:href (where the navigation layer resolved a c:Link's c:to) or c:href is
 a link to that address."""@en ;
     sem:slug "breadcrumbs" .
-c:BreadcrumbsRendering a sem:Rendering ; sem:targets c:Breadcrumbs ; sem:stratum 0 ;
-    sem:functionOnly "The derived trail follows c:parentProperty, a predicate named in the data, up to any depth: SPARQL 1.1 property paths need a fixed predicate." .
+# It reads the trail the building blocks below mint under it (sem:readsMinted).
+c:BreadcrumbsRendering a sem:Rendering ; sem:targets c:Breadcrumbs ; sem:stratum 0 ; sem:readsMinted true .
 c:BreadcrumbsRendering-fn a sem:Rule ; sem:implements c:BreadcrumbsRendering ; sem:function "nav:breadcrumbs" .
+# SPARQL twins of "nav:breadcrumbs" (src/components/navigation.ts), over the building blocks below.
+c:BreadcrumbsRendering-sparql-screen a sem:Rule ;
+    sem:implements c:BreadcrumbsRendering ;
+    sem:modality mod:Screen ;
+    sem:follows c:controls ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Nav ; sem:renders $this ; rdfhtml:attribute ?nameAttr ; rdfhtml:hasChild ?list .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?name .
+  ?list a rdfhtml:Ol ; rdfhtml:hasChild ?li .
+  ?li a rdfhtml:Li ; sem:orderKey ?pos ; rdfhtml:hasChild ?content , ?sep .
+  ?content a ?contentClass ; rdfhtml:type ?buttonType ; rdfhtml:href ?href ; rdfhtml:class ?contentStyle ; rdfhtml:attribute ?currentAttr ;
+           c:selects ?selects ; rdfhtml:hasChild ?text ; ord:immediatelyPrecedes ?sep .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
+  ?text a rdfhtml:Text ; rdfhtml:data ?label .
+  ?sep a rdfhtml:Span ; rdfhtml:class "sem-sep" ; rdfhtml:attribute ?sepHidden ; rdfhtml:hasChild ?sepText .
+  ?sepHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?sepText a rdfhtml:Text ; rdfhtml:data "/" .
+}
+WHERE {
+  # The crumbs: c:items, else the trail from the end node (c:of, or what c:property of
+  # c:controls holds) up, ordered top first; ?last is the end.
+  {
+    $this c:items/rdf:rest* ?cell . ?cell rdf:first ?crumb . FILTER(isIRI(?crumb))
+    { SELECT ?cell (COUNT(?before) AS ?pos) WHERE { $this c:items/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    BIND(NOT EXISTS { ?cell rdf:rest+ ?later . ?later rdf:first ?laterCrumb FILTER(isIRI(?laterCrumb)) } AS ?last)
+  } UNION {
+    FILTER NOT EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) }
+    $this c:parentProperty ?prop . FILTER(isIRI(?prop))
+    OPTIONAL { $this c:of ?of }
+    OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target) && isIRI(?property)) ?target ?property ?selectedEnd }
+    BIND(COALESCE(?of, ?selectedEnd) AS ?end)
+    FILTER(isIRI(?end))
+    BIND(IRI(CONCAT(STR($this), "/~at-", ENCODE_FOR_URI(STR(?end)))) AS ?endAt)
+    # LATERAL: the walk starts from the bound end (a zero-length path from an unbound one is every node).
+    LATERAL { ?endAt c:trailUp* ?crumbAt }
+    OPTIONAL { ?crumbAt c:stepOf ?stepNode }
+    BIND(COALESCE(?stepNode, ?end) AS ?crumb)
+    LATERAL { SELECT ?crumbAt (COUNT(?up) AS ?pos) WHERE { ?crumbAt c:trailUp* ?up } GROUP BY ?crumbAt }
+    BIND(?crumbAt = ?endAt AS ?last)
+  }
+  BIND(EXISTS { $this c:controls ?t ; c:property ?p . FILTER(isIRI(?t) && isIRI(?p)) } AS ?navigates)
+  OPTIONAL { $this l10n:label ?pickn }
+  OPTIONAL { FILTER(!BOUND(?pickn)) ?picknAt l10n:of $this ; l10n:label ?picknT }
+  OPTIONAL { FILTER(!BOUND(?pickn) && !BOUND(?picknT)) $this c:label ?anyn FILTER(isLiteral(?anyn)) }
+  BIND(STR(COALESCE(?pickn, ?picknT, ?anyn)) AS ?ownName)
+  BIND(COALESCE(?ownName, "Breadcrumb") AS ?name)
+  LATERAL { SELECT ?crumb ?label WHERE {
+    LATERAL { OPTIONAL { SELECT ?crumb ?c WHERE {
+  
+  OPTIONAL { ?crumb l10n:label ?pickc }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?pickcAt l10n:of ?crumb ; l10n:label ?pickcT }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?crumb c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?pickcT, ?anyc)) AS ?c)
+  } } }
+    LATERAL { OPTIONAL { SELECT ?crumb ?r WHERE {
+  
+  OPTIONAL { ?pickrAt l10n:of ?crumb ; l10n:name ?pickr }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?crumb rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?anyr)) AS ?r)
+  } } }
+    BIND(COALESCE(?c, ?r, REPLACE(STR(?crumb), "^.*[#/]", "")) AS ?label)
+    } }
+  BIND(CONCAT("c", SUBSTR(MD5(STR(?crumb)), 1, 8)) AS ?id)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?nameAttr)
+  BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
+  BIND(IRI(CONCAT(STR($this), "/~", ?id)) AS ?li)
+  # A crumb that neither is the end nor selects: a link where the navigation layer resolved it
+  # (a c:Link with c:to: nav:href), else its c:href; a plain span without either.
+  OPTIONAL { FILTER(!?last && !?navigates) ?crumb nav:href ?navHref }
+  OPTIONAL { FILTER(!?last && !?navigates && !BOUND(?navHref)) ?crumb c:href ?ownHref }
+  BIND(STR(COALESCE(?navHref, ?ownHref)) AS ?href)
+  BIND(IRI(CONCAT(STR($this), "/~", ?id, IF(?last, "-current", IF(?navigates || BOUND(?href), "-link", "-crumb")))) AS ?content)
+  BIND(IF(!?last && ?navigates, rdfhtml:Button, IF(BOUND(?href), rdfhtml:A, rdfhtml:Span)) AS ?contentClass)
+  BIND(IF(!?last && ?navigates, "button", ?none) AS ?buttonType)
+  BIND(IF(?last, "sem-current", "sem-crumb") AS ?contentStyle)
+  BIND(IF(?last, IRI(CONCAT(STR($this), "/~", ?id, "-current-aria-current")), ?none) AS ?currentAttr)
+  BIND(IF(!?last && ?navigates, ?crumb, ?none) AS ?selects)
+  BIND(IRI(CONCAT(STR($this), "/~", ?id, "-text")) AS ?text)
+  BIND(IF(?last, ?none, IRI(CONCAT(STR($this), "/~", ?id, "-sep"))) AS ?sep)
+  BIND(IF(?last, ?none, IRI(CONCAT(STR($this), "/~", ?id, "-sep-aria-hidden"))) AS ?sepHidden)
+  BIND(IF(?last, ?none, IRI(CONCAT(STR($this), "/~", ?id, "-sep-text"))) AS ?sepText)
+}""" .
+c:BreadcrumbsRendering-sparql-text a sem:Rule ;
+    sem:implements c:BreadcrumbsRendering ;
+    sem:modality mod:Text ;
+    sem:follows c:controls ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?trail .
+}
+WHERE {
+  { SELECT (GROUP_CONCAT(?label; separator=" \\u203A ") AS ?trail) WHERE {
+    { SELECT DISTINCT ?pos ?crumb ?label WHERE {
+      # The crumbs: c:items, else the trail from the end node (c:of, or what c:property of
+  # c:controls holds) up, ordered top first; ?last is the end.
+  {
+    $this c:items/rdf:rest* ?cell . ?cell rdf:first ?crumb . FILTER(isIRI(?crumb))
+    { SELECT ?cell (COUNT(?before) AS ?pos) WHERE { $this c:items/rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    BIND(NOT EXISTS { ?cell rdf:rest+ ?later . ?later rdf:first ?laterCrumb FILTER(isIRI(?laterCrumb)) } AS ?last)
+  } UNION {
+    FILTER NOT EXISTS { $this c:items/rdf:rest*/rdf:first ?anyItem FILTER(isIRI(?anyItem)) }
+    $this c:parentProperty ?prop . FILTER(isIRI(?prop))
+    OPTIONAL { $this c:of ?of }
+    OPTIONAL { $this c:controls ?target ; c:property ?property . FILTER(isIRI(?target) && isIRI(?property)) ?target ?property ?selectedEnd }
+    BIND(COALESCE(?of, ?selectedEnd) AS ?end)
+    FILTER(isIRI(?end))
+    BIND(IRI(CONCAT(STR($this), "/~at-", ENCODE_FOR_URI(STR(?end)))) AS ?endAt)
+    # LATERAL: the walk starts from the bound end (a zero-length path from an unbound one is every node).
+    LATERAL { ?endAt c:trailUp* ?crumbAt }
+    OPTIONAL { ?crumbAt c:stepOf ?stepNode }
+    BIND(COALESCE(?stepNode, ?end) AS ?crumb)
+    LATERAL { SELECT ?crumbAt (COUNT(?up) AS ?pos) WHERE { ?crumbAt c:trailUp* ?up } GROUP BY ?crumbAt }
+    BIND(?crumbAt = ?endAt AS ?last)
+  }
+      LATERAL { SELECT ?crumb ?label WHERE {
+    LATERAL { OPTIONAL { SELECT ?crumb ?c WHERE {
+  
+  OPTIONAL { ?crumb l10n:label ?pickc }
+  OPTIONAL { FILTER(!BOUND(?pickc)) ?pickcAt l10n:of ?crumb ; l10n:label ?pickcT }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?crumb c:label ?anyc FILTER(isLiteral(?anyc)) }
+  BIND(STR(COALESCE(?pickc, ?pickcT, ?anyc)) AS ?c)
+  } } }
+    LATERAL { OPTIONAL { SELECT ?crumb ?r WHERE {
+  
+  OPTIONAL { ?pickrAt l10n:of ?crumb ; l10n:name ?pickr }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?crumb rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  BIND(STR(COALESCE(?pickr, ?anyr)) AS ?r)
+  } } }
+    BIND(COALESCE(?c, ?r, REPLACE(STR(?crumb), "^.*[#/]", "")) AS ?label)
+    } }
+    } ORDER BY ?pos }
+  } HAVING (COUNT(?label) > 0) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
+
+# --- building blocks: the hierarchy as fixed-predicate edges, per breadcrumbs ---------------------
+# A property path needs a fixed predicate, and c:parentProperty is named in the data. So the
+# breadcrumbs first mint their own copy of the hierarchy: a step node per node
+# (<crumbs>/~at-<node>, c:stepOf it), joined by c:stepUp along the parent property - one hop
+# over a predicate in a variable is a plain triple pattern. Minted per breadcrumbs, so two with
+# different parent properties never mix. Then the step each node's trail takes (c:trailUp): to
+# its least parent (by IRI) that reaches c:upTo, never up from c:upTo itself. The rendering
+# walks c:trailUp*. Only the hierarchy's own predicate is read, so they re-run when the
+# breadcrumbs' c:parentProperty or c:upTo change, not when the data's hierarchy does.
+c:stepOf a owl:ObjectProperty ; rdfs:comment "On a breadcrumbs' step node: the node it stands for."@en .
+c:hasStep a owl:ObjectProperty ; rdfs:comment "From breadcrumbs to their step nodes."@en .
+c:stepUp a owl:ObjectProperty ; rdfs:comment "From a step node to the step node of a parent (along c:parentProperty)."@en .
+c:trailUp a owl:ObjectProperty ; rdfs:comment "From a step node to the step its trail takes up (the least parent reaching c:upTo)."@en .
+
+c:BreadcrumbSteps a sem:BuildingBlock ; sem:targets c:Breadcrumbs ; sem:stratum -6 ;
+    sem:requires c:parentProperty ; sem:watches rdf:type , c:parentProperty .
+c:BreadcrumbSteps-fn a sem:Rule ; sem:implements c:BreadcrumbSteps ; sem:function "nav:breadcrumb-steps" .
+c:BreadcrumbSteps-sparql a sem:Rule ;
+    sem:implements c:BreadcrumbSteps ;
+    sem:construct """
+CONSTRUCT { $this c:hasStep ?at , ?parentAt . ?at c:stepOf ?node ; c:stepUp ?parentAt . ?parentAt c:stepOf ?parent . }
+WHERE {
+  $this c:parentProperty ?prop . FILTER(isIRI(?prop))
+  ?node ?prop ?parent . FILTER(isIRI(?node) && isIRI(?parent))
+  BIND(IRI(CONCAT(STR($this), "/~at-", ENCODE_FOR_URI(STR(?node)))) AS ?at)
+  BIND(IRI(CONCAT(STR($this), "/~at-", ENCODE_FOR_URI(STR(?parent)))) AS ?parentAt)
+}""" .
+
+c:BreadcrumbTrail a sem:BuildingBlock ; sem:targets c:Breadcrumbs ; sem:stratum -5 ;
+    sem:requires c:parentProperty ; sem:readsMinted true ; sem:watches rdf:type , c:parentProperty , c:upTo .
+c:BreadcrumbTrail-fn a sem:Rule ; sem:implements c:BreadcrumbTrail ; sem:function "nav:breadcrumb-trail" .
+c:BreadcrumbTrail-sparql a sem:Rule ;
+    sem:implements c:BreadcrumbTrail ;
+    sem:construct """
+CONSTRUCT { ?at c:trailUp ?parentAt }
+WHERE {
+  $this c:hasStep ?at . ?at c:stepOf ?node ; c:stepUp ?parentAt . ?parentAt c:stepOf ?parent .
+  FILTER(?parent != ?node)
+  OPTIONAL { $this c:upTo ?upTo }
+  FILTER(!BOUND(?upTo) || ?node != ?upTo)
+  BIND(IRI(CONCAT(STR($this), "/~at-", ENCODE_FOR_URI(STR(?upTo)))) AS ?upToAt)
+  FILTER(!BOUND(?upTo) || ?parent = ?upTo || EXISTS { ?parentAt c:stepUp+ ?upToAt })
+  FILTER NOT EXISTS {
+    ?at c:stepUp ?otherAt . ?otherAt c:stepOf ?other .
+    FILTER(?other != ?node && STR(?other) < STR(?parent))
+    FILTER(!BOUND(?upTo) || ?other = ?upTo || EXISTS { ?otherAt c:stepUp+ ?upToAt })
+  }
+}""" .
+
 c:BreadcrumbsSelect a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Breadcrumbs ;
@@ -127,7 +355,8 @@ WHERE {
       # The nav, and the previous / next steps.
       BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
       OPTIONAL { $this l10n:label ?localLabel }
-      OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+      OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
       BIND(STR(COALESCE(?localLabel, ?rawLabel, "Pagination")) AS ?label)
       VALUES (?step ?glyph ?buttonLabel ?delta) { ("prev" "‹" "Previous page" -1) ("next" "›" "Next page" 1) }
       BIND(?page + ?delta AS ?target)
@@ -291,6 +520,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, "Progress")) AS ?label)
   LATERAL {

@@ -128,7 +128,8 @@ function dated(ctx: RuleContext, focus: Term, shapes: Term[], target: Term, prop
 }
 
 const check: FnRule = (ctx, focus) => {
-  const shapes = ctx.objects(focus, VAL.validates)
+  // In IRI order, so the first violated shape is well defined (as the SPARQL twin reads them).
+  const shapes = ctx.objects(focus, VAL.validates).sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))
   const requires = ctx.object(focus, VAL.requires)
   const datedField = !!ctx.object(focus, NS.l10n + 'datePattern')
   if (!shapes.length && !requires && !datedField) return []

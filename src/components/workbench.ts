@@ -2,7 +2,7 @@
 import type { BlankNode, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { turtleTokens } from '../turtle.ts'
@@ -46,6 +46,7 @@ const W = {
   neighbourhood: c + 'neighbourhood',
   term: c + 'term',
   row: c + 'row',
+  column: c + 'column',
   markdown: c + 'markdown',
   edgeFrom: c + 'edgeFrom',
   edgeTo: c + 'edgeTo',
@@ -772,7 +773,9 @@ const table: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [summary(o, count), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
-  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)])))])
+  // Each cell says which column it is in (c:column), as each row which row (c:row).
+  const at = (n: NamedNode, i: number) => (o.t(n, W.column, int(ctx, i)), n)
+  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => at(o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)]), i)))])
   const seen = new Map<string, number>()
   const body = o.el(
     'body',
@@ -784,7 +787,7 @@ const table: FnRule = (ctx, focus) => {
       const n = seen.get(base) ?? 0
       seen.set(base, n + 1)
       const id = n ? `${base}-${n}` : base
-      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => cell(ctx, o, `${id}-c${ci}`, t)))
+      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => at(cell(ctx, o, `${id}-c${ci}`, t), ci)))
       o.t(tr, W.row, int(ctx, ri))
       return tr
     }),
@@ -797,7 +800,7 @@ const table: FnRule = (ctx, focus) => {
 
 // --- results: the table as Markdown ----------------------------------------------------------------
 // The function variant of c:ResultTableMarkdown-sparql (workbench.ttl): it reads what the table
-// rendered - its header cells, its rows (c:row), each row's cells in order (ord:), the IRIs cells
+// rendered - its header cells and its rows (c:row), each row's cells in order (c:column), the IRIs cells
 // say they show (c:term), the rest as shown - and names IRIs with the prefixes the graph declares
 // (sh:declare), as the SPARQL does.
 
@@ -825,20 +828,19 @@ const markdownCell = (s: string) => s.replace(/[|]/g, '&#124;').replace(/\r?\n/g
 const isA = (ctx: RuleContext, n: Term, cls: string) => ctx.match(n, RDF_TYPE, H.ns + cls).length > 0
 /** The data of a node's text children. */
 const dataOf = (ctx: RuleContext, n: Term) => ctx.objects(n, H.hasChild).flatMap((t) => ctx.objects(t, H.data)).map((d) => d.value)
-/** A node's children in their order: by how many siblings precede each (ord:immediatelyPrecedes). */
-function ordered(ctx: RuleContext, n: Term): Term[] {
-  const before = (c: Term) => {
-    let k = 0
-    for (let p = ctx.match(null, ORD.immediatelyPrecedes, c)[0]?.subject; p && k < 10_000; p = ctx.match(null, ORD.immediatelyPrecedes, p)[0]?.subject) k++
-    return k
-  }
-  return ctx.objects(n, H.hasChild).map((c): [number, Term] => [before(c), c]).sort((a, b) => a[0] - b[0]).map(([, c]) => c)
-}
+/** A row's cells in their order (c:column); one without a column is not shown. */
+const cellsOf = (ctx: RuleContext, n: Term): Term[] =>
+  ctx
+    .objects(n, H.hasChild)
+    .map((c): [number, Term] => [Number(ctx.object(c, W.column)?.value ?? NaN), c])
+    .filter(([i]) => Number.isFinite(i))
+    .sort((a, b) => a[0] - b[0])
+    .map(([, c]) => c)
 
 const tableMarkdown: FnRule = (ctx, focus) => {
   const head = ctx.nn(mint(focus.value, 'head-row'))
   if (!isA(ctx, head, 'Tr')) return []
-  const names = ordered(ctx, head).flatMap((th) => dataOf(ctx, th).map(markdownCell))
+  const names = cellsOf(ctx, head).flatMap((th) => dataOf(ctx, th).map(markdownCell))
   if (!names.length) return []
   const shown = (td: Term): string => {
     const iri = ctx.object(td, W.term)
@@ -855,7 +857,7 @@ const tableMarkdown: FnRule = (ctx, focus) => {
   const body = ctx.nn(mint(focus.value, 'body'))
   const rows = ctx
     .objects(body, H.hasChild)
-    .map((tr): [number, string] => [Number(ctx.object(tr, W.row)?.value ?? NaN), `| ${ordered(ctx, tr).map(shown).join(' | ')} |`])
+    .map((tr): [number, string] => [Number(ctx.object(tr, W.row)?.value ?? NaN), `| ${cellsOf(ctx, tr).map(shown).join(' | ')} |`])
     .filter(([i]) => Number.isFinite(i))
     .sort((a, b) => a[0] - b[0])
     .map(([, line]) => line)

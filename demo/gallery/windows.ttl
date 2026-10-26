@@ -22,12 +22,13 @@
 # is, is remembered for the tab like the tools window.
 
 ui:gallery-windows a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ui:wn-fullscreen ) .
+    c:children ( ui:gallery-windows-intro ui:gallery-windows-lede ui:wn-windows ui:wn-grid ui:wn-state ui:wn-dock ui:wn-stack ui:wn-taskbar ui:wn-palette ui:wn-fullscreen ) .
 ui:gallery-windows-intro a c:Heading ; c:label "Windows" .
 ui:gallery-windows-lede a c:Text ;
     c:label "A window is not one behaviour but several. Each capability is a mixin class with its own reactions (c:Draggable, c:Resizable, c:Raisable, c:Minimizable, c:Maximizable, c:Dockable); c:Window has them all, c:Palette only some, and a frame's title bar shows the controls of the capabilities its instance has. Window state is two hookable axes, so the theme styles each value once and any control that sets a property can drive it." .
 
 ui:desktop c:hosts ui:win-checklist , ui:win-log , ui:win-activity , ui:win-display , ui:taskbar .
+ui:desktop c:tileLayout c:DesktopFloatingLayout .
 ui:taskbar a c:Taskbar , c:Draggable , c:Dockable ; c:of ui:desktop .
 ui:rememberTaskbar a per:Policy ; per:scope per:Session ;
     rdfs:label "Where the taskbar is" , "Де панель вікон"@uk , "Wo die Fensterleiste ist"@de , "مكان شريط النوافذ"@ar ;
@@ -78,6 +79,37 @@ ui:wn-windows a c:Flippable ; c:front ui:wn-windows-spec .
 ui:wn-windows-spec a c:Specimen ; c:demonstrates c:Window ; c:label "Window" ;
     c:help "Three windows on the desktop, closed until a button c:opens them (c:Window is a c:Overlay: c:open, c:opens, c:closes). Opening one also restores it if it was minimized and brings it to the front. The title bar shows minimize, maximize and close because a c:Window is c:Minimizable and c:Maximizable; a window detached from a tab adds a control that returns it there." ;
     c:children ( ui:wn-open-checklist ui:wn-open-log ui:wn-open-activity ) .
+
+ui:wn-grid-control a c:Segmented ; c:label "Desktop layout" ; c:controls ui:desktop ; c:property c:tileLayout .
+# Keep only a small layout control above the tiled frames. Raising the whole specimen
+# above the desktop would cover the windows that it demonstrates.
+ui:desktop c:hosts ui:wn-layout-switch .
+ui:wn-layout-switch a c:Switch ; c:controls ui:desktop ; c:property c:tileLayout ;
+    c:cases ( ui:wn-layout-grid-case ) .
+ui:wn-layout-grid-case c:when c:DesktopGridLayout ; c:content ui:wn-layout-toolbar .
+ui:GridLayoutToolbar a owl:Class ; rdfs:subClassOf c:Toolbar ; sem:slug "ex-grid-layout-toolbar" .
+ui:wn-layout-toolbar a ui:GridLayoutToolbar ;
+    c:label "Desktop layout", "Розкладка стільниці"@uk, "Desktop-Anordnung"@de, "تخطيط سطح المكتب"@ar ;
+    c:children ( ui:wn-layout-floating-control ) .
+ui:wn-layout-floating-control a c:Segmented ;
+    c:label "Desktop layout", "Розкладка стільниці"@uk, "Desktop-Anordnung"@de, "تخطيط سطح المكتب"@ar ;
+    c:controls ui:desktop ; c:property c:tileLayout .
+[] a sty:StyleRule ; sty:appliesTo ui:GridLayoutToolbar ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "inset-block-end" ; sty:raw "40px" ] ,
+                 [ sty:property "inset-inline-end" ; sty:raw "24px" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "calc(100vw - 48px)" ] ,
+                 [ sty:property "z-index" ; sty:raw "55" ] .
+ui:wn-grid-controls a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:wn-open-all-grid ui:wn-open-checklist-grid ui:wn-open-log-grid ui:wn-open-activity-grid ui:wn-grid-control ) .
+ui:wn-open-all-grid a c:Button ; c:label "Open all windows" ; c:opens ui:win-checklist , ui:win-log , ui:win-activity .
+ui:wn-open-checklist-grid a c:Button ; c:label "Open checklist" ; c:opens ui:win-checklist .
+ui:wn-open-log-grid a c:Button ; c:label "Open change log" ; c:opens ui:win-log .
+ui:wn-open-activity-grid a c:Button ; c:label "Open activity" ; c:opens ui:win-activity .
+ui:wn-grid a c:Flippable ; c:front ui:wn-grid-spec .
+ui:wn-grid-spec a c:Specimen ; c:demonstrates c:Desktop , c:DesktopLayout ; c:label "Tile desktop windows" ;
+    c:help "Open windows, then set the desktop to Grid. Normal floating windows fill a responsive grid; their saved positions and sizes remain in the graph. Set Floating to return them to the same geometry. The grid takes c:Grid's parameters: as many columns as fit at c:minWidth, at most c:columns." ;
+    c:children ( ui:wn-grid-controls ) .
 
 ui:wn-state-control a c:Segmented ; c:label "Checklist" ; c:controls ui:win-checklist ; c:property c:windowState .
 ui:wn-state a c:Flippable ; c:front ui:wn-state-spec .

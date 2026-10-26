@@ -93,13 +93,6 @@ tok:editor-pad a sty:Token ; sem:slug "editor-pad" ; sty:value "10px" .
                  [ sty:property "font-size" ; sty:token tok:text-xs ] ,
                  [ sty:property "color" ; sty:token tok:faint ] .
 
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-keyword" ; sty:declares [ sty:property "color" ; sty:token tok:code-keyword ] , [ sty:property "font-weight" ; sty:raw "600" ] .
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-var" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-string" ; sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-pname" ; sty:declares [ sty:property "color" ; sty:token tok:code-name ] .
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-iri" ; sty:declares [ sty:property "color" ; sty:token tok:code-iri ] .
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-number" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
-[] a sty:StyleRule ; sty:appliesTo c:CodeEditor ; sty:part ".tok-comment" ; sty:declares [ sty:property "color" ; sty:token tok:code-comment ] , [ sty:property "font-style" ; sty:raw "italic" ] .
 
 # Suggestions open below the word they complete (--line, --col: its line and column; --digits: the
 # width of the line numbers). The editor grows with its text, so only the column can be scrolled away.

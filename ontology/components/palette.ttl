@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -135,7 +136,8 @@ c:PaletteTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries ;
-    sem:functionOnly "It folds labels for matching (NFD, combining marks removed), which SPARQL has no function for, and picks the labels of commands, places and sections - nodes that are not components - in the viewer's language, a projection setting no query can see." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed), as c:TypeaheadTexts does; the labels themselves are picked from the viewer's languages in the graph." ;
+    sem:needsExtension sx:Locale .
 c:PaletteTexts-fn a sem:Rule ; sem:implements c:PaletteTexts ; sem:function "palette:texts" .
 
 # --- the options: minted once, when the palette opens ------------------------------------------------

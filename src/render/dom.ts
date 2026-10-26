@@ -24,6 +24,10 @@ export class DomRenderer {
   /** DOM operations performed, for benchmarks. */
   ops = 0
   private readonly patched = new Set<() => void>()
+  /** New, still detached containers that live nodes move into: reconciled once connected. */
+  private deferred: Node[] = []
+  /** Parents reconciled in this patch, with the children they keep: the rest leave at its end. */
+  private pendingPrune = new Map<Node, Set<Node>>()
   /**
    * The element the last flush gave the focus to because the focused one was removed (refocus):
    * a guess, not a choice, so a modal overlay that closed may still give the focus back.
@@ -106,10 +110,15 @@ export class DomRenderer {
 
   private patch(): void {
     const d = this.takeDirty()
+    this.deferred = []
+    this.pendingPrune.clear()
+    const retired: Node[] = []
     for (const k of d.recreate) {
       const el = this.els.get(k)
       if (!el) continue
-      el.parentNode?.removeChild(el)
+      // A removed or replaced ancestor can still contain a retained host slot. Keep it
+      // connected until that slot has moved to its new parent.
+      retired.push(el)
       this.els.delete(k)
       this.applied.delete(k)
     }
@@ -130,6 +139,50 @@ export class DomRenderer {
     for (const k of d.children) if (this.els.has(k)) this.syncChildren(k)
     const root = this.index.resolve(this.rootFocus)
     this.reconcile(this.host, root ? [this.element(root)] : [])
+    // New subtrees are built detached and attached whole; a live node (an iframe in a host slot)
+    // moving into one waits until it is connected, since a detour through a detached parent resets
+    // its document. Children were deferred before their parents: the parents go first.
+    for (let i = this.deferred.length - 1; i >= 0; i--) this.reconcile(this.deferred[i]!, this.desired(this.keys.get(this.deferred[i]!)!), true)
+    // A retained child can move out of a parent reconciled before its new one: what a parent no
+    // longer has leaves only once every move is done.
+    const removed: Node[] = []
+    this.prune(removed)
+    for (const old of retired) if (old.parentNode) old.parentNode.removeChild(old), removed.push(old)
+    this.reattach(removed)
+    this.pendingPrune.clear()
+    this.deferred = []
+  }
+
+  /** What a reconciled parent no longer has leaves it (collected in `removed`). */
+  private prune(removed: Node[]) {
+    for (const [parent, wanted] of this.pendingPrune) {
+      for (const child of Array.from(parent.childNodes)) if (!wanted.has(child)) parent.removeChild(child), removed.push(child), this.ops++
+    }
+    this.pendingPrune.clear()
+  }
+
+  /**
+   * A node that moved to another parent within one change may still sit in its old parent's
+   * element when that leaves the page (both parents listed it while the rules that place it
+   * settled, and the old one was reconciled last): every keyed element inside what was removed,
+   * and still placed by the index under a connected parent, goes back there. It costs what was
+   * removed.
+   */
+  private reattach(removed: Node[]) {
+    for (let round = 0; round < 4 && removed.length; round++) {
+      const parents = new Set<string>()
+      for (const top of removed) {
+        if (top.isConnected || top.nodeType !== 1) continue
+        for (const el of [top as Element, ...(top as Element).querySelectorAll('*')]) {
+          const k = this.keys.get(el)
+          if (k === undefined || !this.index.nodes.get(k)?.cls) continue
+          for (const p of this.index.placedUnder(k)) if (this.els.get(p)?.isConnected) parents.add(p)
+        }
+      }
+      removed = []
+      for (const p of parents) this.reconcile(this.els.get(p)!, this.desired(p), true)
+      this.prune(removed)
+    }
   }
 
   private element(k: string): Node {
@@ -175,29 +228,54 @@ export class DomRenderer {
   private syncChildren(k: string) {
     const el = this.els.get(k)!
     if (el.nodeType !== 1 || this.index.isVoid(k) || this.index.nodes.get(k)?.slot !== undefined) return
+    this.reconcile(el, this.desired(k))
+  }
+
+  /** The DOM nodes of an element's children, in order (created as needed). */
+  private desired(k: string): Node[] {
     const desired: Node[] = []
     for (const slot of this.index.childrenOf(k)) {
       const r = this.index.resolve(slot)
       if (r) desired.push(this.element(r))
     }
-    this.reconcile(el, desired)
+    return desired
   }
 
-  /** Keyed reconciliation: nodes on a longest increasing subsequence stay put. */
-  private reconcile(parent: Node, desired: Node[]) {
+  /**
+   * Keyed reconciliation: nodes on a longest increasing subsequence stay put. A detached parent
+   * that a connected node moves into is deferred (see patch), unless `connected` says it is its turn.
+   */
+  private reconcile(parent: Node, desired: Node[], connected = false) {
     const current = parent.childNodes
     if (current.length === desired.length && desired.every((n, i) => current[i] === n)) return
+    if (!connected && !parent.isConnected && desired.some((n) => n.isConnected)) return void this.deferred.push(parent)
     const wanted = new Set(desired)
-    for (const c of Array.from(current)) if (!wanted.has(c)) parent.removeChild(c), this.ops++
+    this.pendingPrune.set(parent, wanted)
     const index = new Map(desired.map((n, i) => [n, i]))
-    const stay = new Set<Node>(longestIncreasing<Node>(Array.from(current), (n) => index.get(n)!))
+    const stay = new Set<Node>(longestIncreasing<Node>(Array.from(current).filter((n) => wanted.has(n)), (n) => index.get(n)!))
     let anchor: Node | null = null
     for (let i = desired.length - 1; i >= 0; i--) {
       const n = desired[i]!
-      if (!stay.has(n)) parent.insertBefore(n, anchor), this.ops++
+      if (!stay.has(n)) move(parent, n, anchor), this.ops++
       anchor = n
     }
   }
+}
+
+/**
+ * Insert `n` before `anchor`: with moveBefore where both are connected, which keeps an iframe's
+ * document, the focus and running animations; else (older browsers, detached trees) insertBefore.
+ */
+function move(parent: Node, n: Node, anchor: Node | null) {
+  const p = parent as Node & { moveBefore?: (node: Node, child: Node | null) => void }
+  if (p.moveBefore && parent.isConnected && n.isConnected) {
+    try {
+      return p.moveBefore(n, anchor)
+    } catch {
+      // Across shadow roots or documents moveBefore refuses: an ordinary insertion still moves it.
+    }
+  }
+  parent.insertBefore(n, anchor)
 }
 
 /** Items forming a longest increasing subsequence of `rank(item)`. */

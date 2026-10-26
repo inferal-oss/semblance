@@ -236,6 +236,377 @@ c:WindowRendering-fn a sem:Rule ;
     sem:function "window" .
 c:PaletteRendering a sem:Rendering ; sem:targets c:Palette ; sem:stratum 0 .
 c:PaletteRendering-fn a sem:Rule ; sem:implements c:PaletteRendering ; sem:function "window" .
+# SPARQL twins of the "window" function (src/components/containers.ts).
+c:WindowRendering-sparql-screen a sem:Rule ;
+    sem:implements c:WindowRendering ;
+    sem:modality mod:Screen ;
+    # It also reads the other frames on its desktops (one maximized in front covers it).
+    sem:follows ( [ sem:inverse c:hosts ] c:hosts ) ;
+    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts , c:tileLayout ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
+        rdfhtml:attribute ?roleAttr , ?nameAttr , ?tiledAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+  ?tiledAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-tiled" ; rdfhtml:attributeValue "true" .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
+  ?bar a rdfhtml:Header ; rdfhtml:class "sem-window-bar" ; rdfhtml:attribute ?moveAttr ; rdfhtml:hasChild ?titleEl ;
+       ord:immediatelyPrecedes ?body .
+  ?barNode rdfhtml:hasChild ?control .
+  ?moveAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "move" .
+  ?titleEl a rdfhtml:Strong ; rdfhtml:hasChild ?titleText ; sem:orderKey "0" .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?title .
+  ?control a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-window-control" ; rdfhtml:attribute ?controlAttr , ?controlLabelAttr ;
+           rdfhtml:hasChild ?controlText ; sem:tooltip ?controlLabel ; ?marker $this ; sem:orderKey ?controlKey .
+  ?controlAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-control" ; rdfhtml:attributeValue ?controlName .
+  ?controlLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?controlLabel .
+  ?controlText a rdfhtml:Text ; rdfhtml:data ?glyph .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip .
+  ?grip a rdfhtml:Div ; rdfhtml:class "sem-window-grip" ; rdfhtml:attribute ?gripGesture , ?gripHidden .
+  ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "resize" .
+  ?gripHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+}
+WHERE {
+  $this a c:Window .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Window } AS ?isWindow)
+  # A normal floating window on a desktop that tiles: the grid places it, not its geometry.
+  BIND(?isWindow && !?minimized && !?maximized && !BOUND(?edge)
+       && EXISTS { ?tiler c:hosts $this ; c:tileLayout c:DesktopGridLayout } AS ?tiled)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Draggable } AS ?draggable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Resizable } AS ?resizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Maximizable } AS ?maximizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
+  BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
+  OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
+  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
+  OPTIONAL { $this l10n:label ?pickl }
+  OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {
+    # The frame itself (or, closed, its empty hidden root).
+    BIND("frame" AS ?part)
+  } UNION {
+    # Its controls, in order: dock (a window from a tab), minimize, maximize or restore, undock, close.
+    VALUES (?controlName ?glyph ?phraseNode ?fallback ?controlKey ?separator) {
+      ("dock" "\u21F2" c:ReturnToTabCommand "Return to its tab" "1" ": ")
+      ("minimize" "\u2013" c:MinimizeCommand "Minimize" "2" " ")
+      ("restore" "\u2750" c:RestoreCommand "Restore" "3" " ")
+      ("maximize" "\u25A1" c:MaximizeCommand "Maximize" "3" " ")
+      ("undock" "\u25F3" c:UndockCommand "Float" "4" " ")
+      ("close" "\u2715" c:CloseCommand "Close" "5" " ")
+    }
+    LATERAL { OPTIONAL { SELECT ?phraseNode ?phrase WHERE {
+  
+  OPTIONAL { ?pickpAt l10n:of ?phraseNode ; l10n:name ?pickp }
+  OPTIONAL { FILTER(!BOUND(?pickp)) ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
+  } } }
+  }
+  FILTER(!?closed || BOUND(?part))
+  FILTER(!BOUND(?controlName)
+    || (?controlName = "dock" && ?fromTab)
+    || (?controlName = "minimize" && ?minimizable)
+    || (?controlName = "restore" && ?maximizable && ?maximized)
+    || (?controlName = "maximize" && ?maximizable && !?maximized)
+    || (?controlName = "undock" && BOUND(?edge) && ?dockable)
+    || ?controlName = "close")
+  BIND(CONCAT(COALESCE(?phrase, ?fallback), ?separator, ?title) AS ?controlLabel)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName)), ?none) AS ?control)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?barNode)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-data-sem-control")), ?none) AS ?controlAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-aria-label")), ?none) AS ?controlLabelAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-text")), ?none) AS ?controlText)
+  BIND(IF(?controlName = "close" && !?fromTab, c:closes,
+       IF(?controlName = "close" || ?controlName = "dock", c:docks,
+       IF(?controlName = "minimize", c:minimizes, IF(?controlName = "maximize", c:maximizes,
+       IF(?controlName = "restore", c:restores, IF(?controlName = "undock", c:undocks, ?none)))))) AS ?marker)
+  # The frame's parts (not for a control row, nor for a closed frame).
+  BIND(BOUND(?part) && !?closed AS ?shown)
+  # A maximized frame in front of it on a desktop (a higher c:z, or the same and placed after it) covers it.
+  BIND(EXISTS {
+    ?desktop c:hosts $this , ?other . FILTER(?other != $this)
+    ?other c:windowState c:Maximized .
+    FILTER NOT EXISTS { ?other c:open ?otherOpen FILTER(STR(?otherOpen) = "false") }
+    OPTIONAL { ?other c:z ?otherZ }
+    OPTIONAL { $this c:z ?ownZ }
+    BIND(COALESCE(xsd:integer(ROUND(xsd:double(?otherZ))), 0) AS ?mz)
+    BIND(COALESCE(xsd:integer(ROUND(xsd:double(?ownZ))), 0) AS ?fz)
+    FILTER(?mz > ?fz || (?mz = ?fz && STR(?other) > STR($this)))
+  } AS ?covered)
+  BIND(IF(?closed || (?shown && (?minimized || ?covered)), "", ?none) AS ?hidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?bar)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar-data-sem-gesture")), ?none) AS ?barGesture)
+  BIND(IF(?draggable && !?maximized && !?tiled, ?barGesture, ?none) AS ?moveAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~body")), ?none) AS ?body)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IF(?shown, ?bodyNode, ?none) AS ?content)
+  BIND(IF(?shown && ?resizable && !?maximized && !BOUND(?edge) && !?tiled, IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-data-sem-gesture")), ?none) AS ?gripGesture)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-aria-hidden")), ?none) AS ?gripHidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-role")), ?none) AS ?roleAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?nameAttr)
+  BIND(IF(?shown && ?tiled, IRI(CONCAT(STR($this), "/~root-data-sem-tiled")), ?none) AS ?tiledAttr)
+  # Geometry: all of it floating, the docked dimension docked, none maximized; then the stacking order.
+  OPTIONAL { $this c:index ?indexRaw }
+  OPTIONAL { $this c:width ?widthRaw }
+  OPTIONAL { $this c:height ?heightRaw }
+  OPTIONAL { $this c:x ?xRaw }
+  OPTIONAL { $this c:y ?yRaw }
+  OPTIONAL { $this c:z ?zRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?indexRaw))), 0) AS ?index)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?width)
+  BIND(IF(BOUND(?heightRaw) || ?isWindow, COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), 440), ?none) AS ?height)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 96 + ?index * 28) AS ?x)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 120 + ?index * 28) AS ?y)
+  BIND(CONCAT("width: ", STR(?width), "px;") AS ?widthDecl)
+  BIND(IF(BOUND(?height), CONCAT("height: ", STR(?height), "px;"), "") AS ?heightDecl)
+  BIND(IF(?maximized, "",
+       IF(?edge = "start" || ?edge = "end", ?widthDecl,
+       IF(?edge = "top" || ?edge = "bottom", ?heightDecl,
+       CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))))) AS ?placed)
+  BIND(COALESCE(?placed, CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))) AS ?decls)
+  BIND(IF(BOUND(?zRaw), CONCAT("z-index: ", STR(COALESCE(xsd:integer(ROUND(xsd:double(?zRaw))), 0)), ";"), "") AS ?zDecl)
+  BIND(IF(?decls = "", ?zDecl, IF(?zDecl = "", ?decls, CONCAT(?decls, " ", ?zDecl))) AS ?allDecls)
+  BIND(IF(?shown && !?tiled && ?allDecls != "", ?allDecls, ?none) AS ?style)
+}""" .
+c:WindowRendering-sparql-text a sem:Rule ;
+    sem:implements c:WindowRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?titleEl , ?content .
+  ?titleEl a rdfhtml:Div ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?content .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Window .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
+  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
+  OPTIONAL { $this l10n:label ?pickl }
+  OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  OPTIONAL { $this c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+  OPTIONAL { $this c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+  BIND(IF(?maximized, ?stateSymbol, IF(BOUND(?edge), ?edgeSymbol, ?none)) AS ?mark)
+  BIND(IF(?minimized, CONCAT(COALESCE(?stateSymbol, "\u2581"), " ", ?title),
+       CONCAT("\u250C ", ?title, IF(BOUND(?mark), CONCAT(" ", ?mark), ""), " \u2510")) AS ?frameLine)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?closed, "", ?none) AS ?hidden)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title"))) AS ?titleEl)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title-text"))) AS ?titleText)
+  BIND(IF(?closed, ?none, ?frameLine) AS ?line)
+  BIND(IF(?closed || ?minimized, ?none, ?bodyNode) AS ?content)
+}""" .
+# SPARQL twins of the "window" function (src/components/containers.ts).
+c:PaletteRendering-sparql-screen a sem:Rule ;
+    sem:implements c:PaletteRendering ;
+    sem:modality mod:Screen ;
+    # It also reads the other frames on its desktops (one maximized in front covers it).
+    sem:follows ( [ sem:inverse c:hosts ] c:hosts ) ;
+    sem:watches rdf:type , c:open , c:windowState , c:attachedTo , c:title , c:label , c:body , c:index , c:width , c:height , c:x , c:y , c:z , prov:wasDerivedFrom , c:hosts ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ;
+        rdfhtml:attribute ?roleAttr , ?nameAttr ; rdfhtml:hasChild ?bar , ?body , ?grip .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?title .
+  ?bar a rdfhtml:Header ; rdfhtml:class "sem-window-bar" ; rdfhtml:attribute ?moveAttr ; rdfhtml:hasChild ?titleEl ;
+       ord:immediatelyPrecedes ?body .
+  ?barNode rdfhtml:hasChild ?control .
+  ?moveAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "move" .
+  ?titleEl a rdfhtml:Strong ; rdfhtml:hasChild ?titleText ; sem:orderKey "0" .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?title .
+  ?control a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-window-control" ; rdfhtml:attribute ?controlAttr , ?controlLabelAttr ;
+           rdfhtml:hasChild ?controlText ; sem:tooltip ?controlLabel ; ?marker $this ; sem:orderKey ?controlKey .
+  ?controlAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-control" ; rdfhtml:attributeValue ?controlName .
+  ?controlLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?controlLabel .
+  ?controlText a rdfhtml:Text ; rdfhtml:data ?glyph .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-window-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?grip .
+  ?grip a rdfhtml:Div ; rdfhtml:class "sem-window-grip" ; rdfhtml:attribute ?gripGesture , ?gripHidden .
+  ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "resize" .
+  ?gripHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+}
+WHERE {
+  $this a c:Palette .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Window } AS ?isWindow)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Draggable } AS ?draggable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Resizable } AS ?resizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Minimizable } AS ?minimizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Maximizable } AS ?maximizable)
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Dockable } AS ?dockable)
+  BIND(EXISTS { $this prov:wasDerivedFrom ?origin . ?origin a c:Tab } AS ?fromTab)
+  OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
+  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
+  OPTIONAL { $this l10n:label ?pickl }
+  OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  {
+    # The frame itself (or, closed, its empty hidden root).
+    BIND("frame" AS ?part)
+  } UNION {
+    # Its controls, in order: dock (a window from a tab), minimize, maximize or restore, undock, close.
+    VALUES (?controlName ?glyph ?phraseNode ?fallback ?controlKey ?separator) {
+      ("dock" "\u21F2" c:ReturnToTabCommand "Return to its tab" "1" ": ")
+      ("minimize" "\u2013" c:MinimizeCommand "Minimize" "2" " ")
+      ("restore" "\u2750" c:RestoreCommand "Restore" "3" " ")
+      ("maximize" "\u25A1" c:MaximizeCommand "Maximize" "3" " ")
+      ("undock" "\u25F3" c:UndockCommand "Float" "4" " ")
+      ("close" "\u2715" c:CloseCommand "Close" "5" " ")
+    }
+    LATERAL { OPTIONAL { SELECT ?phraseNode ?phrase WHERE {
+  
+  OPTIONAL { ?pickpAt l10n:of ?phraseNode ; l10n:name ?pickp }
+  OPTIONAL { FILTER(!BOUND(?pickp)) ?phraseNode rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
+  } } }
+  }
+  FILTER(!?closed || BOUND(?part))
+  FILTER(!BOUND(?controlName)
+    || (?controlName = "dock" && ?fromTab)
+    || (?controlName = "minimize" && ?minimizable)
+    || (?controlName = "restore" && ?maximizable && ?maximized)
+    || (?controlName = "maximize" && ?maximizable && !?maximized)
+    || (?controlName = "undock" && BOUND(?edge) && ?dockable)
+    || ?controlName = "close")
+  BIND(CONCAT(COALESCE(?phrase, ?fallback), ?separator, ?title) AS ?controlLabel)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName)), ?none) AS ?control)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?barNode)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-data-sem-control")), ?none) AS ?controlAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-aria-label")), ?none) AS ?controlLabelAttr)
+  BIND(IF(BOUND(?controlName), IRI(CONCAT(STR($this), "/~", ?controlName, "-text")), ?none) AS ?controlText)
+  BIND(IF(?controlName = "close" && !?fromTab, c:closes,
+       IF(?controlName = "close" || ?controlName = "dock", c:docks,
+       IF(?controlName = "minimize", c:minimizes, IF(?controlName = "maximize", c:maximizes,
+       IF(?controlName = "restore", c:restores, IF(?controlName = "undock", c:undocks, ?none)))))) AS ?marker)
+  # The frame's parts (not for a control row, nor for a closed frame).
+  BIND(BOUND(?part) && !?closed AS ?shown)
+  # A maximized frame in front of it on a desktop (a higher c:z, or the same and placed after it) covers it.
+  BIND(EXISTS {
+    ?desktop c:hosts $this , ?other . FILTER(?other != $this)
+    ?other c:windowState c:Maximized .
+    FILTER NOT EXISTS { ?other c:open ?otherOpen FILTER(STR(?otherOpen) = "false") }
+    OPTIONAL { ?other c:z ?otherZ }
+    OPTIONAL { $this c:z ?ownZ }
+    BIND(COALESCE(xsd:integer(ROUND(xsd:double(?otherZ))), 0) AS ?mz)
+    BIND(COALESCE(xsd:integer(ROUND(xsd:double(?ownZ))), 0) AS ?fz)
+    FILTER(?mz > ?fz || (?mz = ?fz && STR(?other) > STR($this)))
+  } AS ?covered)
+  BIND(IF(?closed || (?shown && (?minimized || ?covered)), "", ?none) AS ?hidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar")), ?none) AS ?bar)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~bar-data-sem-gesture")), ?none) AS ?barGesture)
+  BIND(IF(?draggable && !?maximized, ?barGesture, ?none) AS ?moveAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title")), ?none) AS ?titleEl)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~body")), ?none) AS ?body)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IF(?shown, ?bodyNode, ?none) AS ?content)
+  BIND(IF(?shown && ?resizable && !?maximized && !BOUND(?edge), IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-data-sem-gesture")), ?none) AS ?gripGesture)
+  BIND(IF(BOUND(?grip), IRI(CONCAT(STR($this), "/~grip-aria-hidden")), ?none) AS ?gripHidden)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-role")), ?none) AS ?roleAttr)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?nameAttr)
+  # Geometry: all of it floating, the docked dimension docked, none maximized; then the stacking order.
+  OPTIONAL { $this c:index ?indexRaw }
+  OPTIONAL { $this c:width ?widthRaw }
+  OPTIONAL { $this c:height ?heightRaw }
+  OPTIONAL { $this c:x ?xRaw }
+  OPTIONAL { $this c:y ?yRaw }
+  OPTIONAL { $this c:z ?zRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?indexRaw))), 0) AS ?index)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?widthRaw))), IF(?isWindow, 520, 240)) AS ?width)
+  BIND(IF(BOUND(?heightRaw) || ?isWindow, COALESCE(xsd:integer(ROUND(xsd:double(?heightRaw))), 440), ?none) AS ?height)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 96 + ?index * 28) AS ?x)
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 120 + ?index * 28) AS ?y)
+  BIND(CONCAT("width: ", STR(?width), "px;") AS ?widthDecl)
+  BIND(IF(BOUND(?height), CONCAT("height: ", STR(?height), "px;"), "") AS ?heightDecl)
+  BIND(IF(?maximized, "",
+       IF(?edge = "start" || ?edge = "end", ?widthDecl,
+       IF(?edge = "top" || ?edge = "bottom", ?heightDecl,
+       CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))))) AS ?placed)
+  BIND(COALESCE(?placed, CONCAT("left: ", STR(?x), "px; top: ", STR(?y), "px; ", ?widthDecl, IF(BOUND(?height), CONCAT(" ", ?heightDecl), ""))) AS ?decls)
+  BIND(IF(BOUND(?zRaw), CONCAT("z-index: ", STR(COALESCE(xsd:integer(ROUND(xsd:double(?zRaw))), 0)), ";"), "") AS ?zDecl)
+  BIND(IF(?decls = "", ?zDecl, IF(?zDecl = "", ?decls, CONCAT(?decls, " ", ?zDecl))) AS ?allDecls)
+  BIND(IF(?shown && ?allDecls != "", ?allDecls, ?none) AS ?style)
+}""" .
+c:PaletteRendering-sparql-text a sem:Rule ;
+    sem:implements c:PaletteRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?titleEl , ?content .
+  ?titleEl a rdfhtml:Div ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?content .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Palette .
+  OPTIONAL { $this c:open ?openRaw }
+  BIND(BOUND(?openRaw) && STR(?openRaw) = "false" AS ?closed)
+  OPTIONAL { $this c:windowState ?state }
+  BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+  BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+  OPTIONAL { $this c:attachedTo ?attached .
+    VALUES (?attached ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(IF(?maximized, ?none, ?edgeSlug) AS ?edge)
+  OPTIONAL { ?picktAt l10n:of $this ; l10n:title ?pickt }
+  OPTIONAL { FILTER(!BOUND(?pickt)) $this c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?anyt)) AS ?ownTitle)
+  OPTIONAL { $this l10n:label ?pickl }
+  OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of $this ; l10n:label ?picklT }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) $this c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?ownLabel)
+  BIND(COALESCE(?ownTitle, ?ownLabel, "Window") AS ?title)
+  OPTIONAL { $this c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+  OPTIONAL { $this c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+  BIND(IF(?maximized, ?stateSymbol, IF(BOUND(?edge), ?edgeSymbol, ?none)) AS ?mark)
+  BIND(IF(?minimized, CONCAT(COALESCE(?stateSymbol, "\u2581"), " ", ?title),
+       CONCAT("\u250C ", ?title, IF(BOUND(?mark), CONCAT(" ", ?mark), ""), " \u2510")) AS ?frameLine)
+  OPTIONAL { $this c:body ?bodyNode FILTER(isIRI(?bodyNode)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?closed, "", ?none) AS ?hidden)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title"))) AS ?titleEl)
+  BIND(IF(?closed, ?none, IRI(CONCAT(STR($this), "/~title-text"))) AS ?titleText)
+  BIND(IF(?closed, ?none, ?frameLine) AS ?line)
+  BIND(IF(?closed || ?minimized, ?none, ?bodyNode) AS ?content)
+}""" .
 
 # --- behaviour: tabs and their windows --------------------------------------------------------
 
@@ -461,11 +832,87 @@ c:hosts. Components that open windows say where with c:windowsOn, so a detached 
 survives navigation between pages that would hide its origin. Raisable frames go in one
 stacking layer, ordered by their c:z; other hosted overlays (dialogs, toasts) stay above it."""@en ;
     sem:slug "desktop" .
+# Tiling. A desktop whose c:tileLayout is c:DesktopGridLayout lays its open, normal, floating
+# c:Window s out as tiles, with c:Grid's parameters: as many columns as fit at c:minWidth (default
+# 320px here), capped at c:columns. It is an arrangement the desktop derives, not state of the
+# windows: their c:x, c:y, c:width and c:height stay as they were, so c:DesktopFloatingLayout (or no
+# layout) puts them back. Maximized, minimized and docked windows keep their state; a tiled window
+# has no move or resize gesture. (A tree of panes the user splits and rearranges is a
+# c:TiledWorkspace; this one has no structure of its own.) The layout is a style hook, so the theme
+# keys on data-sem-tile-layout.
+c:tileLayout a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range c:DesktopLayout ;
+    sty:hookAttribute "data-sem-tile-layout" ;
+    rdfs:comment "How a desktop arranges its open floating windows. Absent or c:DesktopFloatingLayout keeps their saved geometry; c:DesktopGridLayout tiles them (c:columns, c:minWidth) without changing it."@en .
+c:DesktopLayout a owl:Class ;
+    rdfs:label "Desktop layout"@en , "Розкладка стільниці"@uk , "Desktop-Anordnung"@de , "تخطيط سطح المكتب"@ar .
+c:DesktopFloatingLayout a c:DesktopLayout ; sem:slug "desktop-floating" ; sem:order 1 ;
+    rdfs:label "Floating"@en , "Вільне розміщення"@uk , "Frei schwebend"@de , "عائم"@ar .
+c:DesktopGridLayout a c:DesktopLayout ; sem:slug "desktop-grid" ; sem:order 2 ; sem:symbol "▦" ;
+    rdfs:label "Grid"@en , "Сітка"@uk , "Raster"@de , "شبكة"@ar .
 c:hosts a owl:ObjectProperty ; rdfs:domain c:Desktop ; rdfs:range sem:Component .
 c:windowsOn a owl:ObjectProperty ; rdfs:range c:Desktop ;
     rdfs:comment "Where a component's windows are placed (else: inside the component)."@en .
 c:DesktopRendering a sem:Rendering ; sem:targets c:Desktop ; sem:stratum 0 .
 c:DesktopRendering-fn a sem:Rule ; sem:implements c:DesktopRendering ; sem:function "desktop" .
+# SPARQL twins of the "desktop" function (src/components/containers.ts). Hosted nodes are placed
+# in IRI order (sem:orderKey); the frames' stacking layer comes first.
+c:DesktopRendering-sparql-screen a sem:Rule ;
+    sem:implements c:DesktopRendering ;
+    sem:modality mod:Screen ;
+    sem:follows c:hosts ;
+    sem:watches rdf:type , c:hosts , c:open , c:tileLayout , c:columns , c:minWidth ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?frames , ?other .
+  ?frames a rdfhtml:Div ; rdfhtml:class "sem-frames" ; sem:orderKey "" ; rdfhtml:style ?tracks ; rdfhtml:attribute ?colsAttr ; rdfhtml:hasChild ?frame .
+  ?colsAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-columns" ; rdfhtml:attributeValue ?columns .
+  ?frame sem:orderKey ?key .
+  ?other sem:orderKey ?key .
+}
+WHERE {
+  $this a c:Desktop .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~frames")) AS ?frames)
+  # Tiled, the frames' layer takes c:Grid's parameters (as c:GridRendering-sparql-screen does).
+  BIND(EXISTS { $this c:tileLayout c:DesktopGridLayout } AS ?grid)
+  OPTIONAL { FILTER(?grid) $this c:columns ?columns0 }
+  BIND(ROUND(xsd:double(?columns0)) AS ?columns1)
+  BIND(IF(?columns1 >= 1 && ?columns1 <= 24, STR(xsd:integer(?columns1)), ?none) AS ?columns)
+  OPTIONAL { FILTER(?grid) $this c:minWidth ?min0 }
+  BIND(REPLACE(STR(?min0), "^[ \\t\\n\\r]+|[ \\t\\n\\r]+$", "") AS ?min1)
+  BIND(IF(REGEX(?min1, "^[0-9]+([.][0-9]+)?(px|rem|em|ch|vw|%)$"), CONCAT("--grid-min: ", ?min1), ?none) AS ?minVar)
+  BIND(IF(BOUND(?columns), CONCAT("--grid-columns: ", ?columns), ?none) AS ?columnsVar)
+  BIND(IF(BOUND(?minVar) && BOUND(?columnsVar), CONCAT(?minVar, "; ", ?columnsVar), COALESCE(?minVar, ?columnsVar)) AS ?tracks)
+  BIND(IF(BOUND(?columns), IRI(CONCAT(STR($this), "/~frames-data-columns")), ?none) AS ?colsAttr)
+  OPTIONAL {
+    $this c:hosts ?hosted . FILTER(isIRI(?hosted))
+    BIND(EXISTS { ?hosted a/rdfs:subClassOf* c:Raisable } AS ?raisable)
+    BIND(EXISTS { ?hosted c:open ?open FILTER(STR(?open) = "false") } AS ?closed)
+    BIND(IF(?raisable && !?closed, ?hosted, ?none) AS ?frame)
+    BIND(IF(?raisable, ?none, ?hosted) AS ?other)
+    BIND(STR(?hosted) AS ?key)
+  }
+}""" .
+c:DesktopRendering-sparql-text a sem:Rule ;
+    sem:implements c:DesktopRendering ;
+    sem:modality mod:Text ;
+    sem:follows c:hosts ;
+    sem:watches rdf:type , c:hosts , c:open ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?shown .
+  ?shown sem:orderKey ?key .
+}
+WHERE {
+  $this a c:Desktop .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    $this c:hosts ?hosted . FILTER(isIRI(?hosted))
+    FILTER(NOT EXISTS { ?hosted a/rdfs:subClassOf* c:Raisable } || NOT EXISTS { ?hosted c:open ?open FILTER(STR(?open) = "false") })
+    BIND(?hosted AS ?shown)
+    BIND(STR(?hosted) AS ?key)
+  }
+}""" .
 
 # --- the taskbar: a desktop's open frames -----------------------------------------------------------
 
@@ -481,6 +928,196 @@ end it stands upright, and the page keeps that edge clear."""@en ;
     sem:slug "taskbar" .
 c:TaskbarRendering a sem:Rendering ; sem:targets c:Taskbar ; sem:stratum 0 .
 c:TaskbarRendering-fn a sem:Rule ; sem:implements c:TaskbarRendering ; sem:function "taskbar" .
+# SPARQL twins of the "taskbar" function (src/components/containers.ts). It reads its desktop's
+# frames, two steps away: it follows the path ( c:of c:hosts ), watching what an entry shows.
+c:TaskbarRendering-sparql-screen a sem:Rule ;
+    sem:implements c:TaskbarRendering ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:follows ( c:of c:hosts ) ;
+    sem:watches rdf:type , c:of , c:label , c:hosts , c:topmost , c:open , c:windowState , c:attachedTo , c:title , c:x , c:y ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:style ?style ; rdfhtml:attribute ?roleAttr , ?nameAttr , ?edgeAttr , ?orientationAttr ;
+        rdfhtml:hasChild ?task , ?grip .
+  ?edgeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-edge" ; rdfhtml:attributeValue "none" .
+  ?orientationAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-orientation" ; rdfhtml:attributeValue "vertical" .
+  ?grip a rdfhtml:Span ; rdfhtml:class "sem-grip" ; sem:orderKey "" ; sem:tooltip ?moveHint ;
+        rdfhtml:attribute ?gripTabindex , ?gripRole , ?gripGesture , ?gripSize , ?gripLabel , ?gripKeys .
+  ?gripTabindex a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
+  ?gripRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "button" .
+  ?gripGesture a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-gesture" ; rdfhtml:attributeValue "move" .
+  ?gripSize a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-move-size" ; rdfhtml:attributeValue "content" .
+  ?gripLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?moveLabel .
+  ?gripKeys a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue "ArrowUp ArrowDown ArrowLeft ArrowRight" .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "toolbar" .
+  ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?task a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-task" ; sem:orderKey ?key ; c:activates ?w ;
+        rdfhtml:attribute ?stateAttr , ?currentAttr ; sem:tooltip ?tip ; rdfhtml:hasChild ?icon , ?labelEl .
+  ?stateAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-state" ; rdfhtml:attributeValue ?slug .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "true" .
+  ?icon a rdfhtml:Span ; rdfhtml:class "sem-icon" ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText ; ord:immediatelyPrecedes ?labelEl .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data ?symbol .
+  ?labelEl a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?title .
+}
+WHERE {
+  $this a c:Taskbar .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
+  OPTIONAL { ?pickpAt l10n:of c:WindowsRegion ; l10n:name ?pickp }
+  OPTIONAL { FILTER(!BOUND(?pickp)) c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
+  BIND(COALESCE(?ownLabel, ?phrase, "Windows") AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?nameAttr)
+  # Hidden while no frame is open. (A subquery: Oxigraph evaluates this as an EXISTS slowly.)
+  OPTIONAL { SELECT ?openFrame WHERE {
+    $this c:of ?d . ?d c:hosts ?openFrame . ?openFrame a ?frameType . ?frameType rdfs:subClassOf* c:Frame .
+    FILTER NOT EXISTS { ?openFrame c:open ?o FILTER(STR(?o) = "false") }
+  } LIMIT 1 }
+  BIND(IF(BOUND(?openFrame), ?none, "") AS ?hidden)
+  # Draggable: a grip leads (the move handle); placed by it, it floats where it was put, kept on screen.
+  OPTIONAL { $this c:attachedTo ?ownEdge .
+    VALUES (?ownEdge ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  BIND(EXISTS { $this a/rdfs:subClassOf* c:Draggable } AS ?draggable)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip")), ?none) AS ?grip)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-tabindex")), ?none) AS ?gripTabindex)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-role")), ?none) AS ?gripRole)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-data-sem-gesture")), ?none) AS ?gripGesture)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-data-sem-move-size")), ?none) AS ?gripSize)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-aria-label")), ?none) AS ?gripLabel)
+  BIND(IF(?draggable, IRI(CONCAT(STR($this), "/~grip-aria-keyshortcuts")), ?none) AS ?gripKeys)
+  OPTIONAL { ?pickmAt l10n:of c:MoveHandle ; l10n:name ?pickm }
+  OPTIONAL { FILTER(!BOUND(?pickm)) c:MoveHandle rdfs:label ?anym FILTER(isLiteral(?anym)) }
+  BIND(STR(COALESCE(?pickm, ?anym)) AS ?movePhrase)
+  OPTIONAL { ?pickhAt l10n:of c:MoveHint ; l10n:name ?pickh }
+  OPTIONAL { FILTER(!BOUND(?pickh)) c:MoveHint rdfs:label ?anyh FILTER(isLiteral(?anyh)) }
+  BIND(STR(COALESCE(?pickh, ?anyh)) AS ?hintPhrase)
+  BIND(CONCAT(COALESCE(?movePhrase, "Move"), " ", ?label) AS ?moveLabel)
+  BIND(COALESCE(?hintPhrase, "Drag, or use the arrow keys; at an edge it docks") AS ?moveHint)
+  OPTIONAL { $this c:x ?xRaw }
+  OPTIONAL { $this c:y ?yRaw }
+  BIND(!BOUND(?edgeSlug) && ?draggable && BOUND(?xRaw) && BOUND(?yRaw) AS ?placed)
+  BIND(IF(?placed, CONCAT("left: clamp(0px, ", STR(COALESCE(xsd:integer(ROUND(xsd:double(?xRaw))), 0)), "px, calc(100vw - 56px)); top: clamp(0px, ",
+       STR(COALESCE(xsd:integer(ROUND(xsd:double(?yRaw))), 0)), "px, calc(100dvh - 48px));"), ?none) AS ?style)
+  BIND(IF(?placed, IRI(CONCAT(STR($this), "/~root-data-sem-edge")), ?none) AS ?edgeAttr)
+  BIND(IF(?edgeSlug = "start" || ?edgeSlug = "end", IRI(CONCAT(STR($this), "/~root-aria-orientation")), ?none) AS ?orientationAttr)
+  OPTIONAL {
+      $this c:of ?desktop . FILTER(isIRI(?desktop))
+      ?desktop c:hosts ?w . FILTER(isIRI(?w))
+      FILTER EXISTS { ?w a/rdfs:subClassOf* c:Frame }
+      FILTER NOT EXISTS { ?w c:open ?open FILTER(STR(?open) = "false") }
+      OPTIONAL { ?w c:windowState ?state }
+      BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+      BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+      OPTIONAL { ?w c:attachedTo ?edgeNode . VALUES ?edgeNode { c:StartEdge c:EndEdge c:TopEdge c:BottomEdge } }
+      BIND(!?maximized && BOUND(?edgeNode) AS ?docked)
+      OPTIONAL { ?w c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+      OPTIONAL { ?w c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+      BIND(COALESCE(IF(?minimized || ?maximized, ?stateSymbol, IF(?docked, ?edgeSymbol, ?none)), "\u25AD") AS ?symbol)
+      BIND(IF(?minimized, "minimized", IF(?maximized, "maximized", IF(?docked, "docked", "normal"))) AS ?slug)
+      LATERAL { OPTIONAL { SELECT ?w ?wTitle WHERE {
+  
+  OPTIONAL { ?picktAt l10n:of ?w ; l10n:title ?pickt }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?w c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?anyt)) AS ?wTitle)
+  } } }
+      LATERAL { OPTIONAL { SELECT ?w ?wLabel WHERE {
+  
+  OPTIONAL { ?w l10n:label ?pickl }
+  OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of ?w ; l10n:label ?picklT }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) ?w c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?wLabel)
+  } } }
+      BIND(COALESCE(?wTitle, ?wLabel, "Window") AS ?title)
+      BIND(EXISTS { ?desktop c:topmost ?w } && !?minimized AS ?active)
+      OPTIONAL { ?w c:windowState ?state . ?picksAt l10n:of ?state ; l10n:name ?picks }
+  OPTIONAL { FILTER(!BOUND(?picks)) ?w c:windowState ?state . ?state rdfs:label ?anys FILTER(isLiteral(?anys)) }
+  BIND(STR(COALESCE(?picks, ?anys)) AS ?stateName)
+      BIND(IF(BOUND(?state), COALESCE(?stateName, ?slug), ?none) AS ?stateLabel)
+      BIND(IF(BOUND(?stateLabel), CONCAT(?title, " \u00B7 ", ?stateLabel), ?none) AS ?tip)
+      BIND(CONCAT("task-", ENCODE_FOR_URI(STR(?w))) AS ?local)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local)) AS ?task)
+      BIND(STR(?w) AS ?key)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-data-state")) AS ?stateAttr)
+      BIND(IF(?active, IRI(CONCAT(STR($this), "/~", ?local, "-aria-current")), ?none) AS ?currentAttr)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-icon")) AS ?icon)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-icon-aria-hidden")) AS ?iconHidden)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-icon-text")) AS ?iconText)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-label")) AS ?labelEl)
+      BIND(IRI(CONCAT(STR($this), "/~", ?local, "-label-text")) AS ?labelText)
+  }
+}""" .
+c:TaskbarRendering-sparql-text a sem:Rule ;
+    sem:implements c:TaskbarRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:follows ( c:of c:hosts ) ;
+    sem:watches rdf:type , c:of , c:label , c:hosts , c:topmost , c:open , c:windowState , c:attachedTo , c:title , c:x , c:y ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a c:Taskbar .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?ownLabel)
+  OPTIONAL { ?pickpAt l10n:of c:WindowsRegion ; l10n:name ?pickp }
+  OPTIONAL { FILTER(!BOUND(?pickp)) c:WindowsRegion rdfs:label ?anyp FILTER(isLiteral(?anyp)) }
+  BIND(STR(COALESCE(?pickp, ?anyp)) AS ?phrase)
+  BIND(COALESCE(?ownLabel, ?phrase, "Windows") AS ?label)
+  OPTIONAL {
+    SELECT (GROUP_CONCAT(?entry; separator=" ") AS ?entries) (COUNT(?entry) AS ?n) WHERE {
+      { SELECT ?entry WHERE {
+        $this c:of ?desktop . FILTER(isIRI(?desktop))
+      ?desktop c:hosts ?w . FILTER(isIRI(?w))
+      FILTER EXISTS { ?w a/rdfs:subClassOf* c:Frame }
+      FILTER NOT EXISTS { ?w c:open ?open FILTER(STR(?open) = "false") }
+      OPTIONAL { ?w c:windowState ?state }
+      BIND(COALESCE(?state = c:Minimized, false) AS ?minimized)
+      BIND(COALESCE(?state = c:Maximized, false) AS ?maximized)
+      OPTIONAL { ?w c:attachedTo ?edgeNode . VALUES ?edgeNode { c:StartEdge c:EndEdge c:TopEdge c:BottomEdge } }
+      BIND(!?maximized && BOUND(?edgeNode) AS ?docked)
+      OPTIONAL { ?w c:windowState ?symbolState . ?symbolState sem:symbol ?stateSymbol }
+      OPTIONAL { ?w c:attachedTo ?symbolEdge . ?symbolEdge sem:symbol ?edgeSymbol }
+      BIND(COALESCE(IF(?minimized || ?maximized, ?stateSymbol, IF(?docked, ?edgeSymbol, ?none)), "\u25AD") AS ?symbol)
+      BIND(IF(?minimized, "minimized", IF(?maximized, "maximized", IF(?docked, "docked", "normal"))) AS ?slug)
+      LATERAL { OPTIONAL { SELECT ?w ?wTitle WHERE {
+  
+  OPTIONAL { ?picktAt l10n:of ?w ; l10n:title ?pickt }
+  OPTIONAL { FILTER(!BOUND(?pickt)) ?w c:title ?anyt FILTER(isLiteral(?anyt)) }
+  BIND(STR(COALESCE(?pickt, ?anyt)) AS ?wTitle)
+  } } }
+      LATERAL { OPTIONAL { SELECT ?w ?wLabel WHERE {
+  
+  OPTIONAL { ?w l10n:label ?pickl }
+  OPTIONAL { FILTER(!BOUND(?pickl)) ?picklAt l10n:of ?w ; l10n:label ?picklT }
+  OPTIONAL { FILTER(!BOUND(?pickl) && !BOUND(?picklT)) ?w c:label ?anyl FILTER(isLiteral(?anyl)) }
+  BIND(STR(COALESCE(?pickl, ?picklT, ?anyl)) AS ?wLabel)
+  } } }
+      BIND(COALESCE(?wTitle, ?wLabel, "Window") AS ?title)
+      BIND(EXISTS { ?desktop c:topmost ?w } && !?minimized AS ?active)
+        BIND(CONCAT("[", ?symbol, " ", ?title, IF(?active, "*", ""), "]") AS ?entry)
+      } ORDER BY STR(?w) }
+    }
+  }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
+  BIND(IF(COALESCE(?n, 0) > 0, ?none, "") AS ?hidden)
+  OPTIONAL { $this c:attachedTo ?ownEdge .
+    VALUES (?ownEdge ?edgeSlug) { (c:StartEdge "start") (c:EndEdge "end") (c:TopEdge "top") (c:BottomEdge "bottom") } }
+  OPTIONAL { $this c:attachedTo ?markEdge . ?markEdge sem:symbol ?edgeSymbol }
+  BIND(IF(BOUND(?edgeSlug), IF(BOUND(?edgeSymbol), CONCAT(" ", ?edgeSymbol), ""), "") AS ?mark)
+  BIND(CONCAT("\u25A4 ", ?label, ?mark, ": ", COALESCE(?entries, "")) AS ?line)
+}""" .
 
 # Three reactions that all see the state before the click, so the right ones act.
 c:TaskbarRestore a beh:Reaction ;

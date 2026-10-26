@@ -108,6 +108,30 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('inputs components (%s
     expect(select.querySelector('[selected]')!.textContent).toBe('Team')
   })
 
+  it('keeps a disabled choice inert and enables it when the graph changes', () => {
+    const { root, fire, value, store, runtime, shell } = inputs()
+    expect(root('inp-sel-choice-locked')!.querySelector('select')!.hasAttribute('disabled')).toBe(true)
+    const f = store.factory
+    const choice = f.namedNode(UI + 'inp-rg-choice')
+    const disabled = f.quad(choice, f.namedNode(C + 'disabled'),
+      f.literal('true', f.namedNode('http://www.w3.org/2001/XMLSchema#boolean')))
+    runtime.apply({ add: [disabled], remove: [] })
+    shell.flush()
+    let select = root('inp-rg-choice')!.querySelector('select')!
+    expect(select.hasAttribute('disabled')).toBe(true)
+    Object.defineProperty(select, 'value', { value: UI + 'inp-plan-free', configurable: true })
+    fire(select, 'change')
+    expect(value('inputsDemo', UI + 'inp-plan')).toEqual([UI + 'inp-plan-pro'])
+
+    runtime.apply({ add: [], remove: [disabled] })
+    shell.flush()
+    select = root('inp-rg-choice')!.querySelector('select')!
+    expect(select.hasAttribute('disabled')).toBe(false)
+    Object.defineProperty(select, 'value', { value: UI + 'inp-plan-free', configurable: true })
+    fire(select, 'change')
+    expect(value('inputsDemo', UI + 'inp-plan')).toEqual([UI + 'inp-plan-free'])
+  })
+
   it('flips a switch: its own c:checked, or a property it controls (shared with c:Toggle)', () => {
     const { root, fire, value } = inputs()
     const wifi = root('inp-sw-wifi')!

@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix c: <https://semblance.dev/ns/component#> .
@@ -80,7 +81,8 @@ c:PolicyList a owl:Class ;
     rdfs:comment "Every per:Policy: where it remembers, whether it is on, what is stored, and a Forget button."@en ;
     sem:slug "policy-list" .
 c:PolicyListRendering a sem:Rendering ; sem:targets c:PolicyList ; sem:stratum 0 ;
-    sem:functionOnly "It formats sizes and times for display (no locale formatting in SPARQL)." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber, sx:formatDateTime): sizes and times formatted for display." ;
+    sem:needsExtension sx:Locale .
 c:PolicyListRendering-fn a sem:Rule ; sem:implements c:PolicyListRendering ; sem:function "policy-list" .
 per:toggles a owl:ObjectProperty ; rdfs:comment "On a rendered element: the policy whose per:enabled activating it flips."@en .
 per:forgets a owl:ObjectProperty ; rdfs:comment "On a rendered element: the policy whose stored state activating it drops."@en .

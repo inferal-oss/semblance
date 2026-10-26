@@ -37,6 +37,7 @@ export const NS = {
   skos: 'http://www.w3.org/2004/02/skos/core#',
   schema: 'https://schema.org/',
   as: 'https://www.w3.org/ns/activitystreams#',
+  sx: 'https://semblance.dev/ns/sparql#',
   foaf: 'http://xmlns.com/foaf/0.1/',
   vann: 'http://purl.org/vocab/vann/',
   iv: 'https://semblance.dev/ns/view#',
@@ -45,6 +46,7 @@ export const NS = {
   ext: 'https://semblance.dev/ns/foreign#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
+  ol: 'https://semblance.dev/ns/outline#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -115,8 +117,14 @@ export const SEM = {
   tooltip: sem + 'tooltip',
   readsMinted: sem + 'readsMinted',
   forEach: sem + 'forEach',
-  inputOnly: sem + 'inputOnly',
+  memberWatches: sem + 'memberWatches',
+  zeroOrMore: sem + 'zeroOrMore',
   always: sem + 'always',
+  prefixName: sem + 'prefixName',
+  namespace: sem + 'namespace',
+  inverse: sem + 'inverse',
+  memberWatchesVia: sem + 'memberWatchesVia',
+  inputOnly: sem + 'inputOnly',
   bulk: sem + 'bulk',
   requires: sem + 'requires',
   unless: sem + 'unless',
@@ -177,6 +185,8 @@ export const C = {
   EndEdge: c + 'EndEdge',
   TopEdge: c + 'TopEdge',
   BottomEdge: c + 'BottomEdge',
+  tileLayout: c + 'tileLayout',
+  DesktopGridLayout: c + 'DesktopGridLayout',
   hosts: c + 'hosts',
   windowsOn: c + 'windowsOn',
   Switch: c + 'Switch',
@@ -264,6 +274,8 @@ export const C = {
   sortBy: c + 'sortBy',
   itemLabel: c + 'itemLabel',
   itemChecked: c + 'itemChecked',
+  itemImage: c + 'itemImage',
+  imageFrom: c + 'imageFrom',
   of: c + 'of',
   inList: c + 'inList',
   labelFrom: c + 'labelFrom',
@@ -399,7 +411,7 @@ export const DND = {
   Accepted: NS.dnd + 'Accepted', Refused: NS.dnd + 'Refused', Start: NS.dnd + 'Start', Over: NS.dnd + 'Over', Drop: NS.dnd + 'Drop', Refusal: NS.dnd + 'Refusal',
   Cancel: NS.dnd + 'Cancel', End: NS.dnd + 'End', count: NS.dnd + 'count',
 } as const
-export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL' } as const
+export const L10N = { label: NS.l10n + 'label', language: NS.l10n + 'language', code: NS.l10n + 'code', direction: NS.l10n + 'direction', RTL: NS.l10n + 'RTL', Viewer: NS.l10n + 'Viewer', prefers: NS.l10n + 'prefers', pickedAs: NS.l10n + 'pickedAs', of: NS.l10n + 'of', Preference: NS.l10n + 'Preference' } as const
 export const ANN = { Layer: NS.ann + 'Layer', announces: NS.ann + 'announces', announcesFrom: NS.ann + 'announcesFrom', tone: NS.ann + 'tone', from: NS.ann + 'from' } as const
 export const ST = { Layer: NS.st + 'Layer', busy: NS.st + 'busy' } as const
 /** Copying to the clipboard (ontology/layers/clipboard.ttl, src/clipboard.ts). */
@@ -432,9 +444,11 @@ export const EXT = {
   Island: NS.ext + 'Island', island: NS.ext + 'island', tag: NS.ext + 'tag', widget: NS.ext + 'widget', adapter: NS.ext + 'adapter',
   input: NS.ext + 'input', output: NS.ext + 'output', name: NS.ext + 'name', from: NS.ext + 'from', value: NS.ext + 'value',
   as: NS.ext + 'as', Property: NS.ext + 'Property', Attribute: NS.ext + 'Attribute', on: NS.ext + 'on', emits: NS.ext + 'emits',
-  path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module', outlines: NS.ext + 'outlines',
+  path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module',
   CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
 } as const
+/** The outlines layer (ontology/layers/outline.ttl). */
+export const OL = { label: NS.ol + 'label', defaultLabel: NS.ol + 'defaultLabel', shows: NS.ol + 'shows' } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',

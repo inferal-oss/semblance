@@ -270,6 +270,35 @@ describe('tiled workspace', () => {
     })
   }
 
+  it('keeps a moved tab\'s content in the document while panes split and close (an iframe there would not reload)', () => {
+    const w = workspace('sparql')
+    w.click(w.tab('Preview'))
+    const content = w.root('ly-tiled-preview')
+    // Every DOM insertion and removal: a detour through a detached pane would disconnect the content.
+    const proto = Object.getPrototypeOf(Object.getPrototypeOf(content)) as Node
+    const at = (['insertBefore', 'removeChild'] as const).map((name) => {
+      let owner: object = proto
+      while (!Object.prototype.hasOwnProperty.call(owner, name)) owner = Object.getPrototypeOf(owner)
+      return [owner as Record<string, unknown>, name, (owner as Record<string, unknown>)[name]] as const
+    })
+    const detached: string[] = []
+    for (const [owner, name, original] of at) {
+      owner[name] = function (this: Node, ...args: unknown[]) {
+        const out = (original as (...a: unknown[]) => unknown).apply(this, args)
+        if (!content.isConnected) detached.push(name)
+        return out
+      }
+    }
+    try {
+      for (const [name, zone] of WALK) w.carry(name, UI + zone)
+    } finally {
+      for (const [owner, name, original] of at) owner[name] = original
+    }
+    expect(w.tree()).toBe('row(main/~split(main/~pane[Notes], main[Editor Properties]), notes/~pane[Preview])')
+    expect(w.root('ly-tiled-preview')).toBe(content)
+    expect(detached).toEqual([])
+  })
+
   it('renders the same with SPARQL rules and reactions as with functions, after every drop', () => {
     const both = (['sparql', 'function'] as const).map(workspace)
     expect(html(both[0]!)).toBe(html(both[1]!))

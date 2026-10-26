@@ -7,7 +7,8 @@ import { BEH, C, DND, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_S
 import { mint, type Delta } from '../rdf.ts'
 import { md5 } from './data.ts'
 import { FB, hitMarks, phrase } from './feedback.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { gridTracks } from './layout.ts'
+import { encodeForUri, named, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
 /** Frame vocabulary (window.ttl) not in ns.ts. */
@@ -119,6 +120,12 @@ function originTab(ctx: RuleContext, frame: Term): Term | undefined {
   return origin && ctx.objects(origin, RDF_TYPE).some((t) => t.value === WIN.Tab) ? origin : undefined
 }
 
+/** A normal floating window on a desktop that tiles (c:DesktopGridLayout): the grid places it, not its geometry. */
+function tiledOn(ctx: RuleContext, frame: NamedNode, caps: Set<string>, minimized: boolean, maximized: boolean, docked: boolean): boolean {
+  if (!caps.has(WIN.Window) || minimized || maximized || docked) return false
+  return ctx.match(null, C.hosts, frame).some(({ subject }) => ctx.object(subject, C.tileLayout)?.value === C.DesktopGridLayout)
+}
+
 /**
  * A frame: a title bar over a body, with the controls of the capabilities its instance has.
  * Closed (c:open false) it is an empty hidden root, and its body is not evaluated; minimized,
@@ -146,6 +153,7 @@ export const frame: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `┌ ${title}${mark ? ' ' + mark : ''} ┐`)]), ...content]))
     return o.quads
   }
+  const tiled = tiledOn(ctx, focus, caps, minimized, maximized, !!edge)
   const tab = originTab(ctx, focus)
   const hidden = minimized || coveredByMaximized(ctx, focus)
   const control = (local: string, glyph: string, label: string, marker: string) => {
@@ -168,16 +176,17 @@ export const frame: FnRule = (ctx, focus) => {
   controls.push(control('close', '✕', `${phrase(ctx, FB.Close, 'Close')} ${title}`, tab ? C.docks : FB.closes))
 
   const bar = o.el('bar', 'Header', { class: 'sem-window-bar' }, [o.el('title', 'Strong', {}, [o.text('title-text', title)]), ...controls])
-  if (caps.has(WIN.Draggable) && !maximized) o.attr(bar, 'data-sem-gesture', 'move')
+  if (caps.has(WIN.Draggable) && !maximized && !tiled) o.attr(bar, 'data-sem-gesture', 'move')
   const parts = [bar, o.el('body', 'Div', { class: 'sem-window-body' }, content)]
-  if (caps.has(WIN.Resizable) && !maximized && !edge) {
+  if (caps.has(WIN.Resizable) && !maximized && !edge && !tiled) {
     const grip = o.el('grip', 'Div', { class: 'sem-window-grip' })
     o.attr(grip, 'data-sem-gesture', 'resize').attr(grip, 'aria-hidden', 'true')
     parts.push(grip)
   }
-  o.renders(o.el('root', 'Section', { style: geometry(ctx, focus, caps, maximized, edge?.slug), hidden: hidden ? '' : undefined }, parts))
+  o.renders(o.el('root', 'Section', { style: tiled ? undefined : geometry(ctx, focus, caps, maximized, edge?.slug), hidden: hidden ? '' : undefined }, parts))
   const root = o.node('root')
   o.attr(root, 'role', 'dialog').attr(root, 'aria-label', title)
+  if (tiled) o.attr(root, 'data-sem-tiled', 'true')
   return o.quads
 }
 
@@ -266,7 +275,12 @@ export const desktop: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, hosted.filter((n) => !raisable.includes(n) || frames.includes(n))))
     return o.quads
   }
-  o.renders(o.el('root', 'Div', {}, [o.el('frames', 'Div', { class: 'sem-frames' }, frames), ...others]))
+  // Tiled, the frames' layer takes c:Grid's parameters; the layout itself is a style hook (data-sem-tile-layout).
+  const { style, columns } = ctx.object(focus, C.tileLayout)?.value === C.DesktopGridLayout ? gridTracks(ctx, focus) : {}
+  const layer = o.el('frames', 'Div', { class: 'sem-frames', style }, frames)
+  if (columns) o.attr(layer, 'data-columns', columns)
+  const root = o.el('root', 'Div', {}, [layer, ...others])
+  o.renders(root)
   return o.quads
 }
 
@@ -293,7 +307,7 @@ export const taskbar: FnRule = (ctx, focus) => {
     const symbol = (s.minimized || s.maximized ? symbolOf(ctx, s.state) : s.edge ? symbolOf(ctx, s.edgeNode) : undefined) ?? '▭'
     const slug = s.minimized ? 'minimized' : s.maximized ? 'maximized' : s.edge ? 'docked' : 'normal'
     const stateLabel = s.state ? (text(ctx, s.state, RDFS_LABEL) ?? slug) : undefined
-    return { w, key: encodeURIComponent(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
+    return { w, key: encodeForUri(w.value), title: titleOf(ctx, w), symbol, slug, stateLabel, active: w.value === top && !s.minimized }
   })
   const edgeNode = ctx.object(focus, WIN.attachedTo)
   const edge = EDGES.find((e) => e.iri === edgeNode?.value)

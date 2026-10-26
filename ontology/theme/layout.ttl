@@ -284,6 +284,13 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:appliesTo c:StatusBar ; sty:atWidth sty:CompactWidth , sty:MediumWidth ; sty:part "> .sem-fold" ;
     sty:declares [ sty:property "min-height" ; sty:raw "36px" ] .
 
+# --- pos:Versus: the middle child centered between the two; stacked on a phone --------------------
+[] a sty:StyleRule ; sty:part "[data-sem-layout=versus] > :nth-child(2)" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "center" ] ,
+                 [ sty:property "justify-self" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-layout=versus]" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] .
+
 # --- pos:Aside: the navigation and the main column's shares --------------------------------------
 # The first child is the navigation; everything else is the main column - also content a c:Switch
 # shows, since a switch takes no part in layout (its root and shown case are display: contents).

@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix c: <https://semblance.dev/ns/component#> .
@@ -177,9 +178,7 @@ c:ShapeReport a owl:Class ;
     rdfs:comment "Every SHACL result the shapes layer recorded, by component."@en ;
     sem:slug "shape-report" .
 c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 ;
-    sem:functionOnly """It lists results from anywhere in the graph. SPARQL can (it ranks them by pairs), but a SPARQL
-rule is re-run only for changes on its focus, one sem:follows hop away, or under it (sem:readsMinted); the
-function hears a result go through the reads it traced. A report that SPARQL keeps current needs the
-engine to re-run a rule on changes to a predicate anywhere.""" .
+    sem:functionOnly "awaits sx:Locale (sx:collated): results are listed in collation order of their components and messages (localeCompare). They come from anywhere in the graph, so its SPARQL rule will also follow the results (val:violation) it lists." ;
+    sem:needsExtension sx:Locale .
 c:ShapeReportRendering-fn a sem:Rule ; sem:implements c:ShapeReportRendering ; sem:function "shape-report" .
 
