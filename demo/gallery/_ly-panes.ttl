@@ -11,7 +11,30 @@
 # graph state, and dock panels attached to an edge of their container.
 
 ui:ly-panes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:ly-split ui:ly-split-stacked ui:ly-dock ui:ly-dock-end ) .
+    c:children ( ui:ly-split ui:ly-split-stacked ui:ly-tiled ui:ly-dock ui:ly-dock-end ) .
+
+# --- A workspace tree: split views own layout, tabs own each pane's content ----------------------
+
+ui:ly-tiled-workspace a c:TiledWorkspace ; c:label "Research workspace" ; c:rootTile ui:ly-tiled-row .
+ui:ly-tiled-row a c:SplitView ; c:label "the workspace columns" ; c:ratio 0.55 ;
+    c:primary ui:ly-tiled-main ; c:secondary ui:ly-tiled-column .
+ui:ly-tiled-column a c:SplitView ; pos:direction pos:Column ; c:label "the workspace details" ; c:ratio 0.5 ;
+    c:primary ui:ly-tiled-inspector ; c:secondary ui:ly-tiled-notes .
+ui:ly-tiled-main a c:Tabs ; c:tabs ( ui:ly-tiled-tab-editor ui:ly-tiled-tab-preview ) ; c:selected ui:ly-tiled-tab-editor .
+ui:ly-tiled-tab-editor a c:Tab ; c:label "Editor" ; c:content ui:ly-tiled-editor .
+ui:ly-tiled-tab-preview a c:Tab ; c:label "Preview" ; c:content ui:ly-tiled-preview .
+ui:ly-tiled-editor a c:Text ; c:label "Edit the document here." .
+ui:ly-tiled-preview a c:Text ; c:label "Preview the document here." .
+ui:ly-tiled-inspector a c:Tabs ; c:tabs ( ui:ly-tiled-tab-properties ) ; c:selected ui:ly-tiled-tab-properties .
+ui:ly-tiled-tab-properties a c:Tab ; c:label "Properties" ; c:content ui:ly-tiled-properties .
+ui:ly-tiled-properties a c:Text ; c:label "Inspect the selected item." .
+ui:ly-tiled-notes a c:Tabs ; c:tabs ( ui:ly-tiled-tab-notes ) ; c:selected ui:ly-tiled-tab-notes .
+ui:ly-tiled-tab-notes a c:Tab ; c:label "Notes" ; c:content ui:ly-tiled-note-content .
+ui:ly-tiled-note-content a c:Text ; c:label "Keep notes beside the editor." .
+ui:ly-tiled a c:Flippable ; c:front ui:ly-tiled-spec .
+ui:ly-tiled-spec a c:Specimen ; c:demonstrates c:TiledWorkspace ; c:label "Tiled workspace" ;
+    c:help "A persistent tree of nested c:SplitView nodes with c:Tabs leaves. Each divider resizes its own split, and each tab keeps its IRI and content when a pane is split, closed or moved by TiledWorkspace graph edits." ;
+    c:children ( ui:ly-tiled-workspace ) .
 
 # --- SplitView: a list beside its details ---------------------------------------------------------
 

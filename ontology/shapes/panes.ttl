@@ -5,6 +5,10 @@
 
 # What well-formed panes look like (validated by the component shapes layer).
 
+c:TiledWorkspaceShape a sh:NodeShape ; sh:targetClass c:TiledWorkspace ;
+    sh:property [ sh:path c:rootTile ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                  sh:message "A tiled workspace needs one root component (c:rootTile)." ] .
+
 c:SplitViewShape a sh:NodeShape ; sh:targetClass c:SplitView ;
     sh:property [ sh:path c:primary ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
                   sh:message "A split view needs its first pane (c:primary): the one its divider sizes." ] ,

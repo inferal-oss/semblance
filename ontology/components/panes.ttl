@@ -20,6 +20,36 @@
 c:minSize a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "The least a pane or panel may be sized to along its axis, in CSS px (default 120)."@en .
 
+# A tiled workspace owns one persistent tree. Internal nodes are c:SplitView; leaves may be
+# c:Tabs or any other component. The workspace keeps the root reference while split, close and
+# tab moves change graph edges. Leaf and tab IRIs do not change, so their host content survives.
+c:TiledWorkspace a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "tiled-workspace" ;
+    rdfs:label "Tiled workspace"@en , "Мозаїчний робочий простір"@uk , "Gekachelter Arbeitsbereich"@de , "مساحة عمل متجانبة"@ar ;
+    rdfs:comment "A persistent tree of nested c:SplitView components and content leaves, including c:Tabs. c:rootTile is the current root; each node and tab keeps its own stable IRI when the tree changes."@en .
+c:rootTile a owl:ObjectProperty ; rdfs:domain c:TiledWorkspace ; rdfs:range sem:Component ;
+    rdfs:comment "The root component of the tiled tree."@en .
+c:TiledWorkspaceRendering a sem:Rendering ; sem:targets c:TiledWorkspace ; sem:stratum 0 .
+c:TiledWorkspaceRendering-fn a sem:Rule ; sem:implements c:TiledWorkspaceRendering ; sem:function "panes:tiled-workspace" .
+c:TiledWorkspaceRendering-screen a sem:Rule ; sem:implements c:TiledWorkspaceRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hasChild ?tile ; rdfhtml:attribute ?labelAttr .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:TiledWorkspace ; c:rootTile ?tile .
+  FILTER(isIRI(?tile))
+  OPTIONAL { $this c:label ?rawLabel FILTER(isLiteral(?rawLabel)) }
+  BIND(IF(BOUND(?rawLabel), STR(?rawLabel), ?none) AS ?label)
+  BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?labelAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
+c:TiledWorkspaceRendering-text a sem:Rule ; sem:implements c:TiledWorkspaceRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?tile }
+WHERE { $this a/rdfs:subClassOf* c:TiledWorkspace ; c:rootTile ?tile FILTER(isIRI(?tile))
+        BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root) }""" .
+
 # --- SplitView ---------------------------------------------------------------------------------
 # The primary pane takes c:ratio of the room (a fraction, 0.5 by default); the divider between
 # the panes sizes it. Side by side by default; pos:direction pos:Column stacks them. With
