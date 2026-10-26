@@ -279,7 +279,7 @@ export class EventBus {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
-    const handled = this.record(type, target, event, quads, delta, reactions, forget)
+    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable)
     this.raise(raised, event)
     return handled
   }
@@ -307,7 +307,7 @@ export class EventBus {
   }
 
   /** Apply an event's change and append it to the change log, as one tick. */
-  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void): Handled {
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
