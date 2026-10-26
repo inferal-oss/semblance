@@ -24,6 +24,8 @@ export class DomRenderer {
   /** DOM operations performed, for benchmarks. */
   ops = 0
   private readonly patched = new Set<() => void>()
+  private newChildren: string[] = []
+  private pendingPrune = new Map<Node, Set<Node>>()
   /**
    * The element the last flush gave the focus to because the focused one was removed (refocus):
    * a guess, not a choice, so a modal overlay that closed may still give the focus back.
@@ -106,10 +108,15 @@ export class DomRenderer {
 
   private patch(): void {
     const d = this.takeDirty()
+    this.newChildren = []
+    this.pendingPrune.clear()
+    const retired: Node[] = []
     for (const k of d.recreate) {
       const el = this.els.get(k)
       if (!el) continue
-      el.parentNode?.removeChild(el)
+      // A removed or replaced ancestor can still contain a retained host slot. Keep it
+      // connected until that slot has moved to its new parent.
+      retired.push(el)
       this.els.delete(k)
       this.applied.delete(k)
     }
@@ -127,9 +134,22 @@ export class DomRenderer {
       }
     }
     for (const k of d.attrs) if (this.els.has(k)) this.syncAttrs(k)
-    for (const k of d.children) if (this.els.has(k)) this.syncChildren(k)
     const root = this.index.resolve(this.rootFocus)
     this.reconcile(this.host, root ? [this.element(root)] : [])
+    for (const k of d.children) if (this.els.has(k)) this.syncChildren(k)
+    // Connect new containers before populating them. Moving a live iframe into a detached
+    // container resets its browsing context even if its DOM node has the same identity.
+    for (let i = 0; i < this.newChildren.length; i++) this.syncChildren(this.newChildren[i]!)
+    // A retained child can move out of an obsolete container later in this patch. Remove
+    // leftovers only once every destination is connected and populated.
+    for (const [parent, wanted] of this.pendingPrune) {
+      for (const child of Array.from(parent.childNodes)) {
+        if (!wanted.has(child)) parent.removeChild(child), this.ops++
+      }
+    }
+    for (const old of retired) old.parentNode?.removeChild(old)
+    this.pendingPrune.clear()
+    this.newChildren = []
   }
 
   private element(k: string): Node {
@@ -144,7 +164,7 @@ export class DomRenderer {
     this.keys.set(el, k)
     if (n.cls !== 'Text') {
       this.syncAttrs(k)
-      this.syncChildren(k)
+      this.newChildren.push(k)
     }
     return el
   }
@@ -188,13 +208,20 @@ export class DomRenderer {
     const current = parent.childNodes
     if (current.length === desired.length && desired.every((n, i) => current[i] === n)) return
     const wanted = new Set(desired)
-    for (const c of Array.from(current)) if (!wanted.has(c)) parent.removeChild(c), this.ops++
+    this.pendingPrune.set(parent, wanted)
     const index = new Map(desired.map((n, i) => [n, i]))
-    const stay = new Set<Node>(longestIncreasing<Node>(Array.from(current), (n) => index.get(n)!))
+    const stay = new Set<Node>(longestIncreasing<Node>(Array.from(current).filter(n => wanted.has(n)), (n) => index.get(n)!))
     let anchor: Node | null = null
     for (let i = desired.length - 1; i >= 0; i--) {
       const n = desired[i]!
-      if (!stay.has(n)) parent.insertBefore(n, anchor), this.ops++
+      if (!stay.has(n)) {
+        // moveBefore keeps iframe documents, focus, animations and other live browser state.
+        // Older browsers retain keyed node identity through the insertBefore fallback.
+        const target = parent as Element & { moveBefore?: (node: Node, before: Node | null) => void }
+        if (target.moveBefore && parent.isConnected && n.isConnected) target.moveBefore(n, anchor)
+        else parent.insertBefore(n, anchor)
+        this.ops++
+      }
       anchor = n
     }
   }
