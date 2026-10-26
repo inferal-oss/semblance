@@ -17,7 +17,7 @@ ui:hero a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align p
     c:children ( ui:heroMark ui:heroClaim ui:heroTitle ui:heroLead ui:heroActions ) .
 ui:heroMark a c:GraphMark ; sty:size sty:Large ; rdfs:label "Semblance" .
 ui:heroClaim a c:Badge ; sty:tone sty:Accent ; sty:emphasis sty:Soft ; sty:size sty:Large ;
-    c:label "RDF-native" , "RDF-нативний"@uk , "RDF-nativ"@de , "أصلي في RDF"@ar .
+    c:label "RDF-native UI" , "RDF-нативний UI"@uk , "RDF-natives UI"@de , "واجهة أصلية في RDF"@ar .
 ui:heroTitle a c:Text ; sty:textStyle sty:Display ; pos:textAlign pos:TextCenter ;
     c:label "The UI is data." , "Інтерфейс — це дані."@uk , "Die Oberfläche ist Daten."@de , "الواجهة بيانات."@ar .
 ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ; pos:measure pos:ReadingMeasure ;
