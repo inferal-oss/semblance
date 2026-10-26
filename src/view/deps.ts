@@ -83,6 +83,11 @@ export class Dependencies {
     where: Group,
     readonly keys: string[],
     private readonly derived: readonly Select[] = [],
+    /**
+     * Prune also by patterns only partly bound (some triple must agree with what is bound), and when
+     * the change binds the key itself: fewer partitions for a rule (its focus), at a lookup per check.
+     */
+    private readonly semiJoin = false,
   ) {
     const root: Scope = { global: false, pats: [], aliases: [] }
     try {
@@ -359,6 +364,7 @@ export class Dependencies {
         // No triple has a literal subject (and the store would refuse to look).
         if (s && s.termType === 'Literal') return false
         if (!s || !pp || !o) {
+          if (!this.semiJoin) return true
           // (Only through an index of a bound node: a predicate alone would read all of it.)
           if (!varsOf(x).some((v) => r.has(v)) || (!s && !o)) return true
           if (pp && pp.termType !== 'NamedNode') return true
@@ -366,8 +372,8 @@ export class Dependencies {
         if (!x.g) return lookup(s ?? null, pp ?? null, o ?? null).length > 0
         return lookup(s ?? null, pp ?? null, o ?? null, val(x.g) ?? null).length > 0
       })
-    // Bound already: the key is the change's own, if the patterns around it hold.
-    if (this.keys.every((k) => bound.has(k))) return [start].filter(holds)
+    // Bound already: the key is the change's own (with semiJoin, if the patterns around it hold).
+    if (this.keys.every((k) => bound.has(k))) return this.semiJoin ? [start].filter(holds) : [start]
     let rows = [start].filter(holds)
     const done = new Set<Pat | Alias>()
     for (const e of needed) {
