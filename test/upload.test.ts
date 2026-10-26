@@ -293,6 +293,57 @@ describe('a file drop', () => {
     expect(h.root('inp-files-attach').querySelector('[aria-label="Hochladen von bericht.pdf abbrechen"]')).not.toBeNull()
   })
 
+  for (const [kind, prefer] of [['oxigraph', 'sparql'], ['wat', 'sparql'], ['oxigraph', 'function']] as const) {
+    it(`refuses in the viewer's language: the reception, the toast and each file's reason (${kind}, ${prefer})`, async () => {
+      const h = inputs(kind, prefer)
+      h.screen.engine.reconfigure({ languages: ['ar'] })
+      h.shell.flush()
+      const attach = h.zone('inp-files-attach')
+      const picture = h.zone('inp-files-picture')
+      // Two images over the page: the picture takes one (its capacity's message), a text file is not an attachment.
+      drag(h, h.document.body, 'dragenter', ['image/png', 'image/png'])
+      expect(picture.getAttribute('data-sem-drop-reason')).toBe('صورة واحدة.')
+      expect(h.store.match(null, h.store.factory.namedNode(DND.reason), null).map((q) => q.object.value)).toEqual(['صورة واحدة.'])
+      drag(h, h.document.body, 'dragleave', ['image/png', 'image/png'])
+      drag(h, h.document.body, 'dragenter', ['text/plain'])
+      expect(attach.getAttribute('data-sem-drop-reason')).toBe('الصور وملفات PDF فقط.')
+      drag(h, h.document.body, 'dragleave', ['text/plain'])
+      // A picture too large, dropped on the attachments: listed as refused, with the shape's Arabic message, and announced.
+      drag(h, h.document.body, 'dragenter', ['image/png'])
+      drag(h, attach, 'dragover', ['image/png'])
+      drag(h, attach, 'drop', ['image/png'], [file('big.png', 'image/png', 3_000_000)])
+      await h.files.settled()
+      h.shell.flush()
+      expect(h.rows('inp-files-attach')[0]).toMatch(/2 ميغابايت على الأكثر لكل ملف\.$/)
+      expect(h.toasts().filter(Boolean)).toEqual(['!2 ميغابايت على الأكثر لكل ملف.✕'])
+      // Back in English, the next refusal is in English.
+      h.screen.engine.reconfigure({ languages: ['en'] })
+      h.shell.flush()
+      drag(h, h.document.body, 'dragenter', ['text/plain'])
+      expect(attach.getAttribute('data-sem-drop-reason')).toBe('Only images and PDFs.')
+    })
+  }
+
+  it('refuses with the same HTML from SPARQL rules and their function twins in another language, after every step', async () => {
+    const [a, b] = [inputs('oxigraph', 'sparql'), inputs('oxigraph', 'function')]
+    const same = () => {
+      for (const id of ['inp-files-attach', 'inp-files-picture']) expect(b.html(id), id).toBe(a.html(id))
+    }
+    for (const h of [a, b]) h.screen.engine.reconfigure({ languages: ['uk'] }), h.shell.flush()
+    same()
+    for (const h of [a, b]) drag(h, h.document.body, 'dragenter', ['image/png', 'image/png'])
+    same()
+    expect(a.zone('inp-files-picture').getAttribute('data-sem-drop-reason')).toBe('Одне зображення.')
+    for (const h of [a, b]) drag(h, h.document.body, 'dragleave', ['image/png', 'image/png']), drag(h, h.document.body, 'dragenter', ['text/plain'])
+    same()
+    expect(a.zone('inp-files-attach').getAttribute('data-sem-drop-reason')).toBe('Лише зображення та PDF.')
+    for (const h of [a, b]) drag(h, h.document.body, 'dragleave', ['text/plain'])
+    for (const h of [a, b]) await pick(h, 'inp-files-attach', [file('movie.mov', 'video/quicktime', 900_000), file('big.png', 'image/png', 3_000_000)])
+    same()
+    expect(a.rows('inp-files-attach').map((r) => r.split(' | ')[0])).toEqual(['refused', 'refused'])
+    expect(a.html('inp-files-attach')).toContain('Не більше 2 МБ на файл.')
+  })
+
   it('reads as text', async () => {
     const h = inputs()
     await pick(h, 'inp-files-attach', [file('report.pdf', 'application/pdf', 120_000), file('movie.mov', 'video/quicktime', 900_000)])

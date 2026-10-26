@@ -315,15 +315,19 @@ ui:inp-attachment a rdf:Property ; rdfs:label "Attachments" ; rdfs:range file:Fi
 ui:inp-picture a rdf:Property ; rdfs:label "Profile picture" ; rdfs:range file:File .
 ui:AttachmentsShape a sh:PropertyShape ; sh:path ui:inp-attachment ; sh:maxCount 3 ; sh:node ui:Attachable ;
     sh:message "At most three files." , "Не більше трьох файлів."@uk , "Höchstens drei Dateien."@de , "ثلاثة ملفات على الأكثر."@ar .
-ui:Attachable a sh:NodeShape ;
-    sh:property [ sh:path file:mediaType ; sh:pattern "^(image/|application/pdf$)" ;
-                  sh:message "Only images and PDFs." , "Лише зображення та PDF."@uk , "Nur Bilder und PDFs."@de , "الصور وملفات PDF فقط."@ar ] ,
-                [ sh:path file:size ; sh:maxInclusive 2000000 ;
-                  sh:message "At most 2 MB per file." , "Не більше 2 МБ на файл."@uk , "Höchstens 2 MB pro Datei."@de , "2 ميغابايت على الأكثر لكل ملف."@ar ] .
+# The shapes whose messages are translated have IRIs: a SPARQL rule reads a message in the viewer's
+# language from its l10n:Terms twin, which only named nodes get.
+ui:Attachable a sh:NodeShape ; sh:property ui:AttachableType , ui:AttachableSize .
+ui:AttachableType a sh:PropertyShape ; sh:path file:mediaType ; sh:pattern "^(image/|application/pdf$)" ;
+    sh:message "Only images and PDFs." , "Лише зображення та PDF."@uk , "Nur Bilder und PDFs."@de , "الصور وملفات PDF فقط."@ar .
+ui:AttachableSize a sh:PropertyShape ; sh:path file:size ; sh:maxInclusive 2000000 ;
+    sh:message "At most 2 MB per file." , "Не більше 2 МБ на файл."@uk , "Höchstens 2 MB pro Datei."@de , "2 ميغابايت على الأكثر لكل ملف."@ar .
 ui:PictureShape a sh:PropertyShape ; sh:path ui:inp-picture ; sh:maxCount 1 ;
     sh:message "One picture." , "Одне зображення."@uk , "Ein Bild."@de , "صورة واحدة."@ar ;
-    sh:node [ a sh:NodeShape ; sh:property [ sh:path file:mediaType ; sh:in ( "image/png" "image/jpeg" ) ;
-              sh:message "A PNG or JPEG picture." , "Зображення PNG або JPEG."@uk , "Ein PNG- oder JPEG-Bild."@de , "صورة PNG أو JPEG."@ar ] ] .
+    sh:node ui:Picture .
+ui:Picture a sh:NodeShape ; sh:property ui:PictureType .
+ui:PictureType a sh:PropertyShape ; sh:path file:mediaType ; sh:in ( "image/png" "image/jpeg" ) ;
+    sh:message "A PNG or JPEG picture." , "Зображення PNG або JPEG."@uk , "Ein PNG- oder JPEG-Bild."@de , "صورة PNG أو JPEG."@ar .
 
 ui:inp-files-attach a c:FileDrop ; c:controls ui:inputsDemo ; c:property ui:inp-attachment ;
     val:validates ui:AttachmentsShape ; file:accept "image/*,application/pdf" ; file:handler "demo" ;

@@ -107,10 +107,12 @@ ui:dndBugs a c:List , dnd:Sortable , ui:Shelf ; c:label "Bugs" ; c:itemLabel rdf
 
 # Where a task may go. Today's capacity is a shape on the list (one more item must still conform);
 # Bugs takes only what conforms to ui:BugShape.
-ui:TodayLimit a sh:NodeShape ; sh:targetNode ui:dndToday ;
-    sh:property [ sh:path c:item ; sh:maxCount 2 ; sh:message "Today holds two tasks at most." ] .
-ui:BugShape a sh:NodeShape ;
-    sh:property [ sh:path ui:kind ; sh:hasValue ui:Bug ; sh:message "Only bugs go here." ] .
+ui:TodayLimit a sh:NodeShape ; sh:targetNode ui:dndToday ; sh:property ui:TodayCapacity .
+ui:TodayCapacity a sh:PropertyShape ; sh:path c:item ; sh:maxCount 2 ;
+    sh:message "Today holds two tasks at most." , "На сьогодні не більше двох завдань."@uk , "Heute höchstens zwei Aufgaben."@de , "اليوم يتسع لمهمتين على الأكثر."@ar .
+ui:BugShape a sh:NodeShape ; sh:property ui:BugKind .
+ui:BugKind a sh:PropertyShape ; sh:path ui:kind ; sh:hasValue ui:Bug ;
+    sh:message "Only bugs go here." , "Сюди лише вади."@uk , "Hier nur Fehler."@de , "الأخطاء فقط هنا."@ar .
 
 ui:Bug a ui:Kind ; rdfs:label "bug" .
 ui:Feature a ui:Kind ; rdfs:label "feature" .
