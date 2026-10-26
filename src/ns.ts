@@ -124,7 +124,6 @@ export const SEM = {
   inverse: sem + 'inverse',
   memberWatchesVia: sem + 'memberWatchesVia',
   inputOnly: sem + 'inputOnly',
-  always: sem + 'always',
   bulk: sem + 'bulk',
   requires: sem + 'requires',
   unless: sem + 'unless',

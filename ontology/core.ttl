@@ -158,10 +158,6 @@ them in its derived graph, <agent>/~prefix-<p> sem:prefixName "p" ; sem:namespac
 can spell an IRI as a prefixed name."""@en .
 sem:namespace a owl:DatatypeProperty ; rdfs:comment "The namespace a sem:prefixName stands for."@en .
 
-sem:always a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
-    rdfs:comment """On a rendering or building block: evaluated whether or not its focus is shown (demand does
-not park it). For building blocks over nodes that are never shown themselves, such as phrases."""@en .
-
 sem:requires a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment """On a rendering or rule: the focus must have at least one of these properties for the
 rule to run at all (checked with a pattern match before any query). Layer rules that target
@@ -215,9 +211,9 @@ sem:BuildingBlock a owl:Class ;
 Rules implement it with sem:implements, as they implement a sem:Rendering."""@en .
 
 sem:always a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
-    rdfs:comment """On a rendering: its rules are evaluated whether or not their focus is shown. Projections
-evaluate only what is shown; a rule about a node no projection shows (a nav:Location), whose output
-shown components read, says this. Its focus should be one node, or few, so it costs what it changes."""@en .
+    rdfs:comment """On a rendering or building block: its rules are evaluated whether or not their focus is
+shown. Projections evaluate only what is shown; a rule about a node no projection shows (a
+nav:Location, the viewer, a containment property), whose output shown components read, says this. Its focus should be one node, or few, so it costs what it changes."""@en .
 
 sem:inputOnly a owl:DatatypeProperty ;
     rdfs:comment """On a rendering: it applies only to instances typed in the input graphs, not to
