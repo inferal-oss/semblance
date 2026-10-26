@@ -32,7 +32,7 @@ c:hideLabel a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On a
 
 c:Card a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment "A titled surface (c:label, c:badge, c:note, header c:actions) around one component (c:content)."@en ;
+    rdfs:comment "A titled surface (c:label, optional c:href or nav:href for a linked title, c:badge, c:note, header c:actions) around one component (c:content)."@en ;
     sem:slug "card" ;
     # Two parts, its header over its body: cards side by side in pos:AlignedColumns share a header
     # row and a body row, so their bodies start on one line however their titles wrap.
@@ -47,7 +47,8 @@ c:CardRendering-sparql-screen a sem:Rule ;
 CONSTRUCT {
   ?root a rdfhtml:Article ; sem:renders $this ; rdfhtml:hasChild ?head, ?body .
   ?head a rdfhtml:Header ; rdfhtml:hasChild ?title, ?badge, ?actions, ?note ; ord:immediatelyPrecedes ?body .
-  ?title a rdfhtml:H2 ; rdfhtml:hasChild ?titleText ; ord:precedes ?badge, ?actions, ?note .
+  ?title a rdfhtml:H2 ; rdfhtml:hasChild ?titleContent ; ord:precedes ?badge, ?actions, ?note .
+  ?titleLink a rdfhtml:A ; rdfhtml:href ?href ; rdfhtml:hasChild ?titleText .
   ?titleText a rdfhtml:Text ; rdfhtml:data ?label .
   ?badge a rdfhtml:Span ; rdfhtml:class "sem-badge" ; rdfhtml:hasChild ?badgeText ; ord:precedes ?actions, ?note .
   ?badgeText a rdfhtml:Text ; rdfhtml:data ?badgeData .
@@ -67,6 +68,8 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label0)
+  OPTIONAL { { $this nav:href ?destination } UNION { FILTER NOT EXISTS { $this nav:href ?resolved } $this c:href ?destination } }
+  BIND(STR(?destination) AS ?href)
   OPTIONAL { ?badge0_uAt l10n:of $this ; l10n:badge ?badge0_u }
   OPTIONAL { $this c:badge ?badge0_u FILTER(isLiteral(?badge0_u) && lang(?badge0_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick }) }
   OPTIONAL { FILTER(!BOUND(?badge0_u)) ?l10nAt_badge0_en l10n:of $this ; l10n:badge ?badge0_en } OPTIONAL { FILTER(!BOUND(?badge0_u)) $this c:badge ?badge0_en FILTER(langMatches(lang(?badge0_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick }) }
@@ -82,6 +85,8 @@ WHERE {
   BIND(IF(?label0 != "", ?label0, ?none) AS ?label)
   BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~title")), ?none) AS ?title)
   BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
+  BIND(IF(BOUND(?label) && BOUND(?href), IRI(CONCAT(STR($this), "/~title-link")), ?none) AS ?titleLink)
+  BIND(COALESCE(?titleLink, ?titleText) AS ?titleContent)
   BIND(IF(?badge0 != "", ?badge0, ?none) AS ?badgeData)
   BIND(IF(BOUND(?badgeData), IRI(CONCAT(STR($this), "/~badge")), ?none) AS ?badge)
   BIND(IF(BOUND(?badgeData), IRI(CONCAT(STR($this), "/~badge-text")), ?none) AS ?badgeText)
@@ -112,7 +117,9 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label)
-  BIND(CONCAT("── ", COALESCE(?label, ""), " ──") AS ?line)
+  OPTIONAL { { $this nav:href ?destination } UNION { FILTER NOT EXISTS { $this nav:href ?resolved } $this c:href ?destination } }
+  BIND(STR(?destination) AS ?href)
+  BIND(CONCAT("── ", COALESCE(?label, ""), " ──", IF(BOUND(?href), CONCAT(" <", ?href, ">"), "")) AS ?line)
   OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
