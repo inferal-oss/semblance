@@ -149,7 +149,7 @@ export function compileStyles(store: GraphStore): string {
   const variantRules: Ranked[] = []
   const intentRules: Ranked[] = []
   for (const r of subjects(RDF_TYPE, STY.StyleRule)) {
-    const cls = object(r, STY.appliesTo)
+    const classes = objects(r, STY.appliesTo)
     const intent = object(r, STY.intent)
     const state = object(r, STY.state)?.value
     const part = object(r, STY.part)?.value
@@ -162,18 +162,22 @@ export function compileStyles(store: GraphStore): string {
       .join(', ')
     // Without sty:appliesTo, a rule styles its part wherever it appears (e.g. a mark any layer
     // may add), or every element carrying its sty:when value.
-    if (!cls) {
+    if (!classes.length) {
       if (when) variantRules.push([0, block(when + (state ?? '') + (part ? ' ' + part : ''), declarations(r)), media])
       else if (part) componentRules.push([0, block(part, declarations(r)), media])
       continue
     }
     // A rule for a class also styles its subclasses (data-sem-c names only the direct class).
-    // A part listing several selectors (a, b) is scoped to the component in each.
+    // A part listing several selectors (a, b) is scoped to the component in each. A rule for
+    // several classes (one style a family shares) styles each, ranked with the most general
+    // of them, so each class's own refinements still come after it.
     const parts = part ? splitSelectors(part) : ['']
-    const selector = withSubclasses(cls)
+    const selector = [...new Set(classes.flatMap(withSubclasses).map((c) => c.value))]
+      .map((c) => nn(c))
       .flatMap((c) => parts.map((p) => sel(typeAttr, slug(c)) + when + (intent ? sel(intentAttr, slug(intent)) : '') + (state ?? '') + (p ? ' ' + p : '')))
       .join(', ')
-    ;(intent ? intentRules : when ? variantRules : componentRules).push([classDepth(cls), block(selector, declarations(r)), media])
+    const classRank = Math.min(...classes.map(classDepth))
+    ;(intent ? intentRules : when ? variantRules : componentRules).push([classRank, block(selector, declarations(r)), media])
   }
 
   // Animations: sty:Keyframes with sty:name and sty:step [ sty:at "50%" ; sty:declares ... ].

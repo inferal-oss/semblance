@@ -643,9 +643,12 @@ const optionLabels: FnRule = (ctx, focus) => {
 const linkHint: FnRule = (ctx, focus) => {
   if (!ctx.languages.length) return []
   const hint = text(ctx, ctx.nn(NS.c + 'Link'), NS.c + 'externalHint')
-  if (hint === undefined) return []
+  // What a link's count counts (c:countLabel), in the viewer's language.
+  const countLabel = text(ctx, focus, NS.c + 'countLabel')
+  if (hint === undefined && countLabel === undefined) return []
   const o = ctx.out(focus)
-  o.t(o.node('l10n-hint'), L10N.label, hint)
+  if (hint !== undefined) o.t(o.node('l10n-hint'), L10N.label, hint)
+  if (countLabel !== undefined) o.t(o.node('l10n-count'), L10N.label, countLabel)
   return o.quads
 }
 

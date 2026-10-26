@@ -149,8 +149,10 @@ location that shows it, nav:href) or c:href (an address, also the fallback), aft
 e.g. a c:Emblem). With c:content (a component) the link's body is that component instead of the label, and
 c:label, if any, is its accessible name. Absolute http(s) addresses, or
 c:external true, open in a new tab with rel=noopener and an ↗ mark, and say so to assistive
-technology (c:externalHint). c:currentPage true marks the current destination (aria-current=page).
-Accent by default; sty:tone recolors it."""@en ;
+technology (c:externalHint). c:currentPage true marks the current destination (aria-current=page); a link
+to the address the location shows now is marked too (nav:current), unless c:currentPage is false.
+c:count (above zero) follows the label as a number, spelled out with c:countLabel for assistive
+technology (", 3 unread"). Accent by default; sty:tone recolors it."""@en ;
     sem:slug "link" ;
     c:externalHint "opens in a new tab"@en , "відкривається в новій вкладці"@uk , "öffnet in einem neuen Tab"@de , "يفتح في علامة تبويب جديدة"@ar .
 c:href a owl:DatatypeProperty ; rdfs:comment "The address a link goes to."@en .
@@ -172,12 +174,18 @@ c:LinkRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:A ; sem:renders $this ; rdfhtml:href ?href ; rdfhtml:target ?target ; rdfhtml:rel ?rel ;
-        rdfhtml:hasChild ?logo, ?body, ?mark, ?hint ; rdfhtml:attribute ?nameAttr, ?currentAttr .
+        rdfhtml:hasChild ?logo, ?body, ?count, ?mark, ?hint ; rdfhtml:attribute ?nameAttr, ?currentAttr .
   ?logo ord:immediatelyPrecedes ?body .
-  ?body ord:immediatelyPrecedes ?mark .
+  ?body ord:immediatelyPrecedes ?afterLabel .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
   ?nameAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?name .
   ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "page" .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:hasChild ?figure, ?spoken ; ord:immediatelyPrecedes ?mark .
+  ?figure a rdfhtml:Span ; rdfhtml:attribute ?figureHidden ; rdfhtml:hasChild ?figureText ; ord:immediatelyPrecedes ?spoken .
+  ?figureHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?spoken a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?spokenText .
+  ?spokenText a rdfhtml:Text ; rdfhtml:data ?said .
   ?mark a rdfhtml:Span ; rdfhtml:class "sem-external" ; rdfhtml:hasChild ?markText ; ord:immediatelyPrecedes ?hint .
   ?mark rdfhtml:attribute ?markHidden . ?markHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?markText a rdfhtml:Text ; rdfhtml:data "↗" .
@@ -204,7 +212,26 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IF(BOUND(?content), ?none, IRI(CONCAT(STR($this), "/~label"))) AS ?labelText)
   BIND(COALESCE(?content, ?labelText) AS ?body)
-  BIND(IF(EXISTS { $this c:currentPage true }, IRI(CONCAT(STR($this), "/~aria-current")), ?none) AS ?currentAttr)
+  # The current page: said (c:currentPage), or derived from the address (nav:current) unless it says otherwise.
+  BIND(EXISTS { $this c:currentPage true } || (EXISTS { $this nav:current true } && NOT EXISTS { $this c:currentPage false }) AS ?isCurrent)
+  BIND(IF(?isCurrent, IRI(CONCAT(STR($this), "/~aria-current")), ?none) AS ?currentAttr)
+  # A count above zero: the figure (99+ past 99) shown, the number and c:countLabel (in the viewer's
+  # language when c:LinkTexts put it here) said.
+  OPTIONAL { $this c:count ?n FILTER(?n > 0) }
+  OPTIONAL { $this c:countLabel ?countLabel_u FILTER(isLiteral(?countLabel_u) && lang(?countLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?countLabel_u)) $this c:countLabel ?countLabel_en FILTER(langMatches(lang(?countLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?countLabel_u) && !BOUND(?countLabel_en)) $this c:countLabel ?countLabel_any FILTER(isLiteral(?countLabel_any)) }
+  BIND(IRI(CONCAT(STR($this), "/~l10n-count")) AS ?countLabelNode)
+  LATERAL { OPTIONAL { ?countLabelNode l10n:label ?localCountLabel } }
+  BIND(STR(COALESCE(?localCountLabel, ?countLabel_u, ?countLabel_en, ?countLabel_any)) AS ?countLabel)
+  BIND(IF(?n > 99, "99+", STR(?n)) AS ?shown)
+  BIND(CONCAT(", ", STR(?n), IF(BOUND(?countLabel), CONCAT(" ", ?countLabel), "")) AS ?said)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count")), ?none) AS ?count)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-figure")), ?none) AS ?figure)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-figure-aria-hidden")), ?none) AS ?figureHidden)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-text")), ?none) AS ?figureText)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-spoken")), ?none) AS ?spoken)
+  BIND(IF(BOUND(?n), IRI(CONCAT(STR($this), "/~count-spoken-text")), ?none) AS ?spokenText)
   BIND(IF(?external, "_blank", ?none) AS ?target)
   BIND(IF(?external, "noopener noreferrer", ?none) AS ?rel)
   # The hint is the class's (c:externalHint on c:Link), in the viewer's language when c:LinkTexts put it here.
@@ -216,13 +243,14 @@ WHERE {
   LATERAL { OPTIONAL { ?hintNode l10n:label ?localHint } }
   BIND(CONCAT(" (", COALESCE(?localHint, ?hint0, "opens in a new tab"), ")") AS ?hintData)
   # Around a component, a label names the link (with the hint, which the name would otherwise hide).
-  BIND(IF(BOUND(?content) && BOUND(?label0), CONCAT(?label0, IF(?external, ?hintData, "")), ?none) AS ?name)
+  BIND(IF(BOUND(?content) && BOUND(?label0), CONCAT(?label0, COALESCE(?said, ""), IF(?external, ?hintData, "")), ?none) AS ?name)
   BIND(IF(BOUND(?name), IRI(CONCAT(STR($this), "/~aria-label")), ?none) AS ?nameAttr)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external")), ?none) AS ?mark)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external-text")), ?none) AS ?markText)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~external-aria-hidden")), ?none) AS ?markHidden)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~hint")), ?none) AS ?hint)
   BIND(IF(?external, IRI(CONCAT(STR($this), "/~hint-text")), ?none) AS ?hintText)
+  BIND(COALESCE(?count, ?mark) AS ?afterLabel)
 }""" .
 
 c:LinkRendering-sparql-text a sem:Rule ;
@@ -252,8 +280,11 @@ WHERE {
   OPTIONAL { $this c:external ?external0 }
   BIND(IF(BOUND(?external0), STR(?external0) = "true", REGEX(?href, "^https?://", "i")) AS ?external)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IF(BOUND(?content), CONCAT(" <", ?href, ">", IF(?external, " ↗", "")),
-          IF(?label = ?href, CONCAT("<", ?href, ">"), CONCAT(?label, " <", ?href, ">", IF(?external, " ↗", "")))) AS ?line)
+  # A count above zero follows the label (or the body) in parentheses.
+  OPTIONAL { $this c:count ?n FILTER(?n > 0) }
+  BIND(IF(BOUND(?n), CONCAT(" (", STR(?n), ")"), "") AS ?countPart)
+  BIND(IF(BOUND(?content), CONCAT(?countPart, " <", ?href, ">", IF(?external, " ↗", "")),
+          IF(?label = ?href, CONCAT("<", ?href, ">", ?countPart), CONCAT(?label, ?countPart, " <", ?href, ">", IF(?external, " ↗", "")))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
 

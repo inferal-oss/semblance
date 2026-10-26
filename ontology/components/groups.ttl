@@ -94,7 +94,7 @@ c:CodeEditor sem:group c:InputsGroup . c:QueryEditor sem:group c:InputsGroup . c
 c:CodeWord sem:group c:InputsGroup . c:CodeKeyword sem:group c:InputsGroup . c:CodeFunction sem:group c:InputsGroup .
 c:TurtleKeyword sem:group c:InputsGroup .
 c:SparqlWord sem:group c:InputsGroup . c:SparqlKeyword sem:group c:InputsGroup . c:SparqlFunction sem:group c:InputsGroup .
-c:Sheet sem:group c:DataGroup . c:SheetCell sem:group c:DataGroup . c:SheetFunction sem:group c:DataGroup .
+c:Sheet sem:group c:DataGroup . c:SheetCell sem:group c:DataGroup . c:SheetFunction sem:group c:DataGroup . c:SheetKey sem:group c:DataGroup .
 
 # --- Feedback ---
 c:Alert sem:group c:FeedbackGroup . c:Badge sem:group c:FeedbackGroup . c:Tag sem:group c:FeedbackGroup .
@@ -127,7 +127,7 @@ c:BoardKey sem:group c:DataGroup .
 c:ShortcutList sem:group c:DataGroup . c:PolicyList sem:group c:DataGroup .
 
 # --- Navigation ---
-c:Tabs sem:group c:NavigationGroup . c:Tab sem:group c:NavigationGroup . c:NavList sem:group c:NavigationGroup .
+c:Tabs sem:group c:NavigationGroup . c:Tab sem:group c:NavigationGroup . c:NavList sem:group c:NavigationGroup . c:NavLink sem:group c:NavigationGroup .
 c:Breadcrumbs sem:group c:NavigationGroup . c:Pagination sem:group c:NavigationGroup . c:Stepper sem:group c:NavigationGroup .
 c:AppBar sem:group c:NavigationGroup . c:TabsDetachKey sem:group c:NavigationGroup .
 

@@ -4,10 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { pageWindow } from '../src/components/navigation.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
-import { A11Y, MOD, NS, SEM, STY } from '../src/ns.ts'
+import { A11Y, MOD, NAV_GRAPH, NS, SEM, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import { compileStyles } from '../src/style/compile.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -40,6 +41,120 @@ const sketch = (ttl: string, focus: string) => {
   const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix rdfs: <${NS.rdfs}> . @prefix ex: <https://example.org/> .\n${ttl}`)
   return toText(new Runtime(store).project({ modality: MOD.Text, name: 'text' }).index, 'https://example.org/' + focus)
 }
+
+describe('c:NavLink', () => {
+  it('is a c:Link: logo, current page and a spoken count, the same from SPARQL and the function', () => {
+    const html: string[] = []
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { root } = gallery('oxigraph', prefer)
+      const home = root('nv-link-home')
+      expect(home.localName).toBe('a')
+      expect(home.getAttribute('data-sem-c')).toBe('nav-link')
+      expect(home.getAttribute('href')).toBe('#home')
+      expect(home.getAttribute('aria-current')).toBeNull()
+      expect(home.querySelector('[data-sem-c=emblem]')).not.toBeNull()
+      // Current only once the address says so (the next test); nothing reports one here.
+      expect(root('nv-link-navigation').getAttribute('aria-current')).toBeNull()
+      const components = root('nv-link-components')
+      // The figure is hidden from assistive technology; the number and what it counts are said.
+      expect(components.querySelector('.sem-count > [aria-hidden=true]')?.textContent).toBe('3')
+      expect(components.querySelector('.sem-count > .sem-visually-hidden')?.textContent).toBe(', 3 new')
+      expect(components.textContent).toBe('Components3, 3 new')
+      expect(root('nv-link-home').querySelector('.sem-count')).toBeNull()
+      html.push(root('nv-links-list').outerHTML)
+    }
+    expect(html[1]).toBe(html[0])
+  })
+
+  it('says the count in the viewer\'s language', () => {
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { root, screen, dom } = gallery('oxigraph', prefer)
+      screen.engine.reconfigure({ languages: ['uk'] })
+      dom.flush()
+      const components = root('nv-link-components')
+      expect(components.querySelector('.sem-visually-hidden')?.textContent).toBe(', 3 нові')
+    }
+  })
+
+  it('is the current page while the address is its own, unless it says otherwise', () => {
+    const root = 'https://example.org/list'
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+      const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix nav: <${NS.nav}> . @prefix ex: <https://example.org/> .
+        ex:loc a nav:Location .
+        ex:a a c:NavLink ; c:href "#a" ; c:label "A" .
+        ex:b a c:Link ; c:href "#b" ; c:label "B" .
+        ex:never a c:Link ; c:href "#b" ; c:label "Not this one" ; c:currentPage false .
+        <${root}> a c:Stack ; c:children ( ex:a ex:b ex:never ) .`)
+      const runtime = new Runtime(store)
+      const screen = runtime.project({ modality: MOD.Screen, prefer, roots: [root], name: 'links' })
+      const dom = new DomRenderer(screen.index, document.getElementById('app')!, root)
+      const f = store.factory
+      const address = (a: string) => f.quad(f.namedNode('https://example.org/loc'), f.namedNode(NS.nav + 'address'), f.literal(a))
+      const current = () => {
+        dom.flush()
+        return [...document.querySelectorAll('a[aria-current=page]')].map((a) => a.textContent)
+      }
+      expect(current()).toEqual([])
+      // The effect reports the query too; links spell only the fragment.
+      runtime.write(NAV_GRAPH, { add: [address('?q=1#b')], remove: [] })
+      expect(current(), prefer).toEqual(['B'])
+      runtime.write(NAV_GRAPH, { add: [address('#a')], remove: [address('?q=1#b')] })
+      expect(current(), prefer).toEqual(['A'])
+    }
+  })
+
+  it('shows 99+ past 99 and nothing for zero, on any c:Link', () => {
+    const root = 'https://example.org/list'
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+      const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix ex: <https://example.org/> .
+        ex:many a c:Link ; c:href "/a" ; c:label "A" ; c:count 120 ; c:currentPage true .
+        ex:none a c:Link ; c:href "/b" ; c:label "B" ; c:count 0 .
+        <${root}> a c:Stack ; c:children ( ex:many ex:none ) .`)
+      const screen = new Runtime(store).project({ modality: MOD.Screen, prefer, roots: [root], name: 'links' })
+      new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+      const [many, none] = [...document.querySelectorAll('a')]
+      expect(many.getAttribute('aria-current')).toBe('page')
+      expect(many.querySelector('[aria-hidden=true]')?.textContent).toBe('99+')
+      expect(many.querySelector('.sem-visually-hidden')?.textContent).toBe(', 120')
+      expect(none.querySelector('.sem-count')).toBeNull()
+    }
+  })
+
+  it('names a link around a component with its count (c:content and c:count together)', () => {
+    const root = 'https://example.org/list'
+    const html: string[] = []
+    for (const prefer of ['sparql', 'function'] as const) {
+      const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
+      const store = loadStore('oxigraph', `@prefix c: <${NS.c}> . @prefix ex: <https://example.org/> .
+        ex:card a c:Link ; c:href "/inbox" ; c:label "Inbox" ; c:count 3 ; c:countLabel "unread" ; c:content ex:body .
+        ex:body a c:Text ; c:text "Inbox" .
+        <${root}> a c:Stack ; c:children ( ex:card ) .`)
+      const screen = new Runtime(store).project({ modality: MOD.Screen, prefer, roots: [root], name: 'links' })
+      new DomRenderer(screen.index, document.getElementById('app')!, root).flush()
+      const a = document.querySelector('a')!
+      expect(a.getAttribute('aria-label')).toBe('Inbox, 3 unread')
+      expect(a.querySelector('[aria-hidden=true]')?.textContent).toBe('3')
+      html.push(a.outerHTML)
+    }
+    expect(html[0]).toBe(html[1])
+    expect(sketch('ex:n a c:Link ; c:href "/inbox" ; c:count 3 ; c:content ex:b . ex:b a c:Text ; c:text "Inbox" .', 'n')).toContain(' (3) </inbox>')
+  })
+
+  it('shares one count pill with the nav list (a style rule for several classes)', () => {
+    const css = compileStyles(loadStore('n3'))
+    const pills = css.split('\n').filter((line) => line.includes('.sem-count > [aria-hidden]') && line.includes('{'))
+    const shared = pills.filter((line) => line.includes('[data-sem-c="nav-list"] .sem-count') && line.includes('[data-sem-c="nav-link"] .sem-count'))
+    expect(shared).toHaveLength(1)
+    expect(shared[0]).toContain('[data-sem-c="link"] .sem-count')
+    expect(shared[0]).toContain('[data-sem-c="segmented"] .sem-count')
+  })
+
+  it('sketches the link and count as text', () => {
+    expect(sketch('ex:n a c:NavLink ; c:href "/inbox" ; c:label "Inbox" ; c:count 3 .', 'n')).toBe('Inbox (3) </inbox>')
+  })
+})
 
 describe('c:Breadcrumbs', () => {
   it('renders a labelled nav with an ordered trail, the last crumb current', () => {

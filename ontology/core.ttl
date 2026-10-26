@@ -152,6 +152,11 @@ sem:functionOnly a owl:DatatypeProperty ;
 logarithm, none of which SPARQL 1.1 can do). Every other rendering has both a SPARQL and a
 function implementation (test/implementations.ts checks)."""@en .
 
+sem:always a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a rendering: its rules are evaluated whether or not their focus is shown. Projections
+evaluate only what is shown; a rule about a node no projection shows (a nav:Location), whose output
+shown components read, says this. Its focus should be one node, or few, so it costs what it changes."""@en .
+
 sem:inputOnly a owl:DatatypeProperty ;
     rdfs:comment """On a rendering: it applies only to instances typed in the input graphs, not to
 instances other rules mint. Pre-render rules (strata below the components, e.g. localization

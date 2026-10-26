@@ -736,6 +736,25 @@ const linkDestination: FnRule = (ctx, focus) => {
   return href === undefined ? [] : ctx.out(focus).t(focus, NAV + 'href', href).quads
 }
 
+/**
+ * c:LinkCurrent: the links that go to the address the location shows now (its fragment, as links
+ * spell it) are nav:current. Found by their address, so a step costs the links it changes.
+ */
+const linkCurrent: FnRule = (ctx, focus) => {
+  const address = ctx.object(focus, NAV + 'address')?.value
+  if (address === undefined) return []
+  const fragment = address.includes('#') ? address.slice(address.indexOf('#')) : '#'
+  const r = ruleReader(ctx)
+  const links = [
+    ...ctx.match(null, NAV + 'href', ctx.f.literal(fragment)).map((q) => q.subject),
+    ...ctx.match(null, C + 'href', ctx.f.literal(fragment)).map((q) => q.subject).filter((s) => !ctx.object(s, NAV + 'href')),
+  ].filter((s) => isA(r, s, C + 'Link'))
+  const o = ctx.out(focus)
+  const yes = ctx.f.literal('true', ctx.nn(XSD_BOOLEAN))
+  for (const link of new Set(links)) o.t(link, NAV + 'current', yes)
+  return o.quads
+}
+
 /** nav:Follow: what the URL in the event says, written into the graph. */
 const follow: ReactionFn = (ctx) => {
   const r = storeReader(ctx.runtime.store)
@@ -744,5 +763,5 @@ const follow: ReactionFn = (ctx) => {
   return loc && address !== undefined ? followDelta(r, loc, address) : { add: [], remove: [] }
 }
 
-export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination }
+export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent }
 export const locationReactions: Record<string, ReactionFn> = { 'navigation:follow': follow }

@@ -9,7 +9,18 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# Navigation components (DESIGN.md §3): NavList, Breadcrumbs, Pagination and Stepper.
+# Navigation components (DESIGN.md §3): NavLink, NavList, Breadcrumbs, Pagination and Stepper.
+
+# --- NavLink: a link as a row of a site's navigation -------------------------------------------
+# A c:Link (one rule and its twin: c:href or c:to, c:label, c:logo, c:currentPage, c:count with
+# c:countLabel, external links) under its own slug, so every theme draws it as a nav list's row:
+# full width, the count at the end, the current page marked as a nav list marks its choice.
+
+c:NavLink a owl:Class ;
+    rdfs:subClassOf c:Link ;
+    rdfs:label "Navigation link"@en , "Навігаційне посилання"@uk , "Navigationslink"@de , "رابط تنقل"@ar ;
+    rdfs:comment "A link in a site's navigation, drawn as a nav list's row: a c:Link with c:currentPage for the page being shown and c:count for what waits there."@en ;
+    sem:slug "nav-link" .
 
 # --- NavList: vertical navigation over one property's values -----------------------------------
 # A c:Segmented laid out as a list: the same graph contract (c:controls,
@@ -27,7 +38,7 @@ c:NavList a owl:Class ;
 c:countProperty a owl:ObjectProperty ; rdfs:domain c:Segmented ; rdfs:range rdf:Property ;
     rdfs:comment "A numeric property of each option, shown as a count after its label when above zero."@en .
 c:countLabel a owl:DatatypeProperty ;
-    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\"): on a c:Segmented with c:countProperty, or c:Chips with c:countQuery."@en .
+    rdfs:comment "What the count counts, read after it by assistive technology (\"unread\"): on a c:Link (c:count), c:Segmented with c:countProperty, or c:Chips with c:countQuery."@en .
 c:SegmentedCounts a sem:Rendering ;
     sem:targets c:Segmented ;
     sem:requires c:countProperty ;
