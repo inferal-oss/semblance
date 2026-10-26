@@ -31,6 +31,18 @@ export interface EngineOptions {
    * the environment's SEMBLANCE_EXACT_DEPS ("1" on), else off.
    */
   exactDependencies?: boolean
+  /**
+   * Maintain a rule as a view (iv:strategy iv:Incremental): the runtime hosts its query, partitioned
+   * by ?this, and hands back its output per focus. Undefined (or no view): it is evaluated as usual.
+   */
+  maintain?: (rule: Rule, query: string) => MaintainedRule | undefined
+}
+
+/** A rule maintained as a view (EngineOptions.maintain). */
+export interface MaintainedRule {
+  quads(focus: string): Quad[]
+  onChange(fn: (foci: Set<string>) => void): () => void
+  dispose(): void
 }
 
 export interface EngineStats {
@@ -42,6 +54,8 @@ export interface EngineStats {
   fnCalls: number
   derivedAdded: number
   derivedRemoved: number
+  /** (rule, focus) outputs read from a maintained rule's view instead of evaluated. */
+  maintained?: number
   /** Exact dependencies: probes run (one per rule a changed triple routes to), and foci they dirtied. */
   probes?: number
   probed?: number
@@ -133,6 +147,10 @@ export class Engine {
   private exact?: ExactIndex
   private readonly exactOn: boolean
   private removedBatch: Quad[] = []
+  /** Rules maintained as views (iv:strategy iv:Incremental), and those whose view was checked against an evaluation. */
+  private readonly maintain?: EngineOptions['maintain']
+  private maintained = new Map<Rule, MaintainedRule & { stop: () => void }>()
+  private checked = new Set<Rule>()
   /** The batch's removals by subject, predicate and object (term keys), for lookups. */
   private removedBy = new Map<string, Quad[]>()
   /** Exact dependencies: instances per rule (by (focus, class)), and the rules none of whose foci was evaluated since all were marked. */
@@ -228,6 +246,7 @@ export class Engine {
     this.provenance = opts.provenance ?? false
     this.bulkThreshold = opts.bulkThreshold ?? 2
     this.exactOn = opts.exactDependencies ?? (typeof process !== 'undefined' && process.env?.SEMBLANCE_EXACT_DEPS === '1')
+    this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
     this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
@@ -442,6 +461,8 @@ export class Engine {
 
   /** Remove everything this engine derived from the store. */
   dispose(): void {
+    for (const m of this.maintained.values()) m.stop(), m.dispose()
+    this.maintained.clear()
     for (const { q } of this.refs.values()) this.store.delete(q)
     this.refs.clear()
     this.outputs.clear()
@@ -504,9 +525,27 @@ export class Engine {
     this.followers.clear()
     this.pathFollowers.clear()
     this.inverseFollowers = []
-    this.exact = this.exactOn ? new ExactIndex(this.store.factory, rules) : undefined
+    // Rules maintained as views: their view says which foci changed; nothing else makes them dirty.
+    for (const [r, m] of this.maintained) if (!rules.includes(r)) m.stop(), m.dispose(), this.maintained.delete(r), this.checked.delete(r)
+    if (this.maintain) {
+      for (const r of rules) {
+        if (!r.incremental || r.kind !== 'sparql' || r.forEach || this.maintained.has(r)) continue
+        const m = this.maintain(r, r.queryParts!.join('?this'))
+        if (!m) {
+          warn(`<${r.iri}> asks to be maintained (iv:strategy iv:Incremental), but its query cannot be: evaluated as usual`)
+          continue
+        }
+        const stop = m.onChange((foci) => {
+          for (const focus of foci) if (this.isInstance(focus, r)) this.markFocus(r, focus)
+          // Views step before projections: their dirt is evaluated in the run that follows.
+        })
+        this.maintained.set(r, { ...m, stop })
+      }
+    }
+    const fed = rules.filter((r) => !this.maintained.has(r))
+    this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed) : undefined
     // What a rule with exact dependencies declares is not used: its patterns say what it reads.
-    const declaring = this.exact ? rules.filter((r) => !this.exact!.has(r)) : rules
+    const declaring = this.exact ? fed.filter((r) => !this.exact!.has(r)) : fed
     for (const r of declaring) for (const p of r.follows) this.followers.set(p, [...(this.followers.get(p) ?? []), r])
     // A path's first step is followed like a single predicate; every longer prefix by its last step.
     for (const r of declaring) {
@@ -555,7 +594,7 @@ export class Engine {
 
   private mintReadersFor(cls: string): Rule[] {
     let rs = this.mintReadersByClass.get(cls)
-    if (!rs) this.mintReadersByClass.set(cls, (rs = this.rulesFor(cls).filter((r) => r.readsMinted && !this.exact?.has(r))))
+    if (!rs) this.mintReadersByClass.set(cls, (rs = this.rulesFor(cls).filter((r) => r.readsMinted && !this.exact?.has(r) && !this.maintained.has(r))))
     return rs
   }
 
@@ -709,7 +748,7 @@ export class Engine {
           // A member link touches only that member's evaluation.
           if (r.forEach === p) {
             if (q.object.termType === 'NamedNode') this.markDirty(r, s + SEP + q.object.value)
-          } else if (this.exact?.has(r)) {
+          } else if (this.exact?.has(r) || this.maintained.has(r)) {
             // Its patterns say which of the focus's triples it reads (below); what decides whether it runs at all, here.
             if (r.requires.includes(p) || r.unless.includes(p)) this.markFocus(r, s)
           } else if (this.watched(r, s, p)) this.markFocus(r, s)
@@ -1107,6 +1146,31 @@ export class Engine {
         }
       }
       if (!foci.size) return
+    }
+    // A rule maintained as a view: each focus's output is the view's (checked once against an evaluation).
+    const m = this.maintained.get(rule)
+    if (m) {
+      const live = [...foci].filter((focus) => this.isInstance(focus, rule))
+      if (!this.checked.has(rule) && live.length) {
+        this.checked.add(rule)
+        const key = (q: Quad) => quadKey(q)
+        const differs = live.find((focus) => {
+          const mine = new Set(m.quads(focus).map(key))
+          const theirs = this.evaluateOne(rule, focus).map(key)
+          return theirs.length !== mine.size || theirs.some((k) => !mine.has(k))
+        })
+        if (differs) {
+          warn(`<${rule.iri}>'s view differs from its evaluation for <${differs}> (it reads what views cannot see, a projection's derived graph): evaluated as usual`)
+          m.stop(), m.dispose(), this.maintained.delete(rule)
+          this.activate(this.rules)
+          this.reindex()
+          for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) && this.linked(rule, focus) ? this.evaluateOne(rule, focus) : [])
+          return
+        }
+      }
+      for (const focus of foci) this.commit(rule, focus, this.isInstance(focus, rule) ? m.quads(focus) : [])
+      this.stats.maintained = (this.stats.maintained ?? 0) + live.length
+      return
     }
     // Several foci of an attributable SPARQL rule: one query, restricted to them (VALUES).
     if (rule.kind === 'sparql' && rule.bulk && foci.size >= this.bulkThreshold) {
