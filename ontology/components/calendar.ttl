@@ -5,6 +5,7 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -389,6 +390,11 @@ WHERE {
 # that property it would overlap one in where it is now (another room, booked then), object to it
 # with the shape's message. The drag and drop layer refuses a drop on what objects.
 
+# Why a slot objects when the c:exclusiveBy shape gives no message.
+c:OverlapPhrase a c:Phrase ;
+    rdfs:label "It would overlap another booking."@en , "Це перетнеться з іншим бронюванням."@uk ,
+               "Das würde sich mit einer anderen Buchung überschneiden."@de , "سيتداخل مع حجز آخر."@ar .
+
 c:CalendarObjections a sem:Rendering ;
     sem:targets c:Calendar ;
     sem:modality mod:Screen ;
@@ -411,8 +417,10 @@ WHERE {
   ?shape c:exclusiveBy ?ex ; sh:targetClass ?cls .
   ?x a ?cls ; ?ex ?held ; ?dayP ?xDay ; ?startP ?xStart0 .
   OPTIONAL { ?message0At l10n:of ?shape ; l10n:message ?message0 }
+  OPTIONAL { ?messageAt l10n:of ?shape ; l10n:message ?message0 }
   OPTIONAL { ?shape sh:message ?message0 FILTER(lang(?message0) = "") }
-  BIND(STR(COALESCE(?message0, "It would overlap another booking.")) AS ?reason)
+  OPTIONAL { ?overlapAt l10n:of c:OverlapPhrase ; l10n:name ?overlap0 }
+  BIND(STR(COALESCE(?message0, ?overlap0, "It would overlap another booking.")) AS ?reason)
   OPTIONAL { $this c:durationProperty ?durP . ?x ?durP ?xDur0 }
   BIND(xsd:integer(ROUND(xsd:decimal(?xStart0) * 60)) AS ?xsm)
   BIND(xsd:integer(ROUND(COALESCE(xsd:decimal(?xDur0), 1) * 60)) AS ?xdm)

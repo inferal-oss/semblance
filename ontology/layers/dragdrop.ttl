@@ -171,6 +171,11 @@ dnd:PickedUpPhrase a c:Phrase ;
 dnd:BeforePhrase a c:Phrase ; rdfs:label "before"@en , "перед"@uk , "vor"@de , "قبل"@ar .
 dnd:AfterPhrase a c:Phrase ; rdfs:label "after"@en , "після"@uk , "nach"@de , "بعد"@ar .
 dnd:RefusedPhrase a c:Phrase ; rdfs:label "refuses it:"@en , "не приймає:"@uk , "nimmt es nicht:"@de , "يرفضه:"@ar .
+# Why a target refuses what is carried when its shape gives no message.
+dnd:UnfitPhrase a c:Phrase ;
+    rdfs:label "It does not belong here."@en , "Цьому тут не місце."@uk , "Das gehört nicht hierher."@de , "لا مكان لهذا هنا."@ar .
+dnd:NoRoomPhrase a c:Phrase ;
+    rdfs:label "There is no room for it here."@en , "Тут для цього немає місця."@uk , "Hier ist kein Platz dafür."@de , "لا يوجد متسع له هنا."@ar .
 
 # --- events ----------------------------------------------------------------------------------------
 # Recorded by the host's gestures (not from a DOM event). beh:key names the keys of the keyboard
@@ -301,8 +306,9 @@ WHERE {
 # While there is a drag: each zone's reception of what is carried. Refused if it does not conform
 # to a dnd:accepts shape (or the sh:node of the target's val:validates shape), or if one more member
 # (dnd:count more) would exceed a sh:maxCount on the receptacle (or of that shape); the
-# reason is the (lexically first) violated shape's untagged sh:message - or an objection's reason
-# (dnd:Objection), whichever is first. The zone it came from accepts it back (a reorder adds no
+# reason is the (lexically first) violated shape's sh:message in the viewer's language (its
+# l10n:message twin, else its untagged one; dnd:UnfitPhrase or dnd:NoRoomPhrase when it has none) -
+# or an objection's reason (dnd:Objection), whichever is first. The zone it came from accepts it back (a reorder adds no
 # member), and a receptacle already holding it is not objected to.
 dnd:Receive a sem:Rendering ;
     sem:targets dnd:DropTarget ;
@@ -346,10 +352,11 @@ WHERE {
             FILTER(!COALESCE(IF(?rangeBound = sh:minInclusive, ?v >= ?limit, IF(?rangeBound = sh:maxInclusive, ?v <= ?limit, IF(?rangeBound = sh:minExclusive, ?v > ?limit, ?v < ?limit))), false))
             BIND(?ps AS ?violated) }
     OPTIONAL { ?ownAt l10n:of ?violated ; l10n:message ?own }
-  OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
     OPTIONAL { ?generalAt l10n:of ?shape ; l10n:message ?general }
-  OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
-    BIND(STR(COALESCE(?own, ?general, "It does not belong here.")) AS ?said)
+    OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
+    OPTIONAL { ?unfitAt l10n:of dnd:UnfitPhrase ; l10n:name ?unfit0 }
+    BIND(STR(COALESCE(?own, ?general, ?unfit0, "It does not belong here.")) AS ?said)
   } GROUP BY ?this ?x ?r } }
   # How many members the receptacle has, whether this is one already, and its capacity.
   LATERAL { OPTIONAL { SELECT ?this ?r (COUNT(?o) AS ?pointing) WHERE { $this dnd:memberOf ?m . ?o ?m ?r } GROUP BY ?this ?r } }
@@ -358,17 +365,20 @@ WHERE {
     ?capacity sh:targetNode ?r ; sh:property ?ps . ?ps sh:maxCount ?bound .
     { $this dnd:memberOf ?m . ?ps sh:path/sh:inversePath ?m } UNION { $this dnd:members ?m . ?ps sh:path ?m }
     OPTIONAL { ?ownAt l10n:of ?ps ; l10n:message ?own }
-  OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
     OPTIONAL { ?generalAt l10n:of ?capacity ; l10n:message ?general }
-  OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
-    BIND(STR(COALESCE(?own, ?general, "There is no room for it here.")) AS ?said)
+    OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
+    OPTIONAL { ?noRoomAt l10n:of dnd:NoRoomPhrase ; l10n:name ?noRoom0 }
+    BIND(STR(COALESCE(?own, ?general, ?noRoom0, "There is no room for it here.")) AS ?said)
   } GROUP BY ?this ?r } }
   # A target that is a field over its membership property: that shape's sh:maxCount too.
   LATERAL { OPTIONAL { SELECT ?this (MIN(?fieldBound) AS ?fieldMax) (MIN(?fieldSaid) AS ?fieldFull) WHERE {
     $this val:validates ?field . ?field sh:maxCount ?fieldBound .
     { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm }
+    OPTIONAL { ?fieldOwnAt l10n:of ?field ; l10n:message ?fieldOwn }
     OPTIONAL { ?field sh:message ?fieldOwn FILTER(lang(?fieldOwn) = "") }
-    BIND(STR(COALESCE(?fieldOwn, "There is no room for it here.")) AS ?fieldSaid)
+    OPTIONAL { ?fieldNoRoomAt l10n:of dnd:NoRoomPhrase ; l10n:name ?fieldNoRoom }
+    BIND(STR(COALESCE(?fieldOwn, ?fieldNoRoom, "There is no room for it here.")) AS ?fieldSaid)
   } GROUP BY ?this } }
   # How many it carries at once.
   LATERAL { OPTIONAL { ?drag dnd:count ?declaredCount } }
