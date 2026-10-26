@@ -5,6 +5,7 @@
 @prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 # Formulas: a component's value as a query. Any component that shows a c:value (a Stat's
@@ -26,13 +27,32 @@ c:valueQuery a owl:ObjectProperty ; rdfs:range sem:View ; rdfs:subPropertyOf c:d
 c:value and ?tone, ?max and ?label, when bound, its sty:tone, c:max and c:label. Maintained as a view (iv:View), or
 else re-run when c:dataset changes; $this is the component."""@en .
 
+# Which of the two takes a component (they take turns, sem:requires / sem:unless): c:runsQuery
+# true when its query is not a view. Re-run only when the query or its type changes.
+c:runsQuery a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Derived: the component's c:valueQuery is not a maintained view, so c:QueryFormula runs it."@en .
+c:FormulaKind a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:requires c:valueQuery ;
+    sem:stratum -2 ;
+    sem:inputOnly true ;
+    sem:watches c:valueQuery , rdf:type ;
+    sem:follows c:valueQuery .
+c:FormulaKind-fn a sem:Rule ; sem:implements c:FormulaKind ; sem:function "formula:kind" .
+c:FormulaKind-sparql a sem:Rule ;
+    sem:implements c:FormulaKind ;
+    sem:construct """
+CONSTRUCT { $this c:runsQuery true }
+WHERE { $this c:valueQuery ?view . FILTER NOT EXISTS { ?view a iv:View } }""" .
+
 c:Formula a sem:Rendering ;
     sem:targets sem:Component ;
     sem:requires c:valueQuery ;
+    sem:unless c:runsQuery ;
     sem:stratum -1 ;
     sem:inputOnly true ;
     sem:readsMinted true ;
-    sem:follows c:dataset , ( c:valueQuery rs:solution rs:binding ) .
+    sem:follows ( c:valueQuery rs:solution rs:binding ) .
 c:Formula-fn a sem:Rule ; sem:implements c:Formula ; sem:function "formula:value" .
 c:Formula-sparql a sem:Rule ;
     sem:implements c:Formula ;
@@ -58,7 +78,7 @@ WHERE {
 
 c:QueryFormula a sem:Rendering ;
     sem:targets sem:Component ;
-    sem:requires c:valueQuery ;
+    sem:requires c:runsQuery ;
     sem:stratum -1 ;
     sem:inputOnly true ;
     sem:follows c:dataset ;

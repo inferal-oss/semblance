@@ -44,4 +44,11 @@ const formulaQuery: FnRule = (ctx, focus) => {
   return row ? write(ctx.out(focus), focus, row) : []
 }
 
-export const formulaFunctions: Record<string, FnRule> = { 'formula:value': formulaValue, 'formula:query': formulaQuery }
+/** c:FormulaKind: c:runsQuery true when the component's c:valueQuery is not a maintained view. */
+const formulaKind: FnRule = (ctx, focus) => {
+  const view = ctx.object(focus, VALUE_QUERY)
+  if (!view || ctx.match(view, RDF_TYPE, NS.iv + 'View').length) return []
+  return ctx.out(focus).t(focus, NS.c + 'runsQuery', ctx.f.literal('true', ctx.nn(NS.xsd + 'boolean'))).quads
+}
+
+export const formulaFunctions: Record<string, FnRule> = { 'formula:kind': formulaKind, 'formula:value': formulaValue, 'formula:query': formulaQuery }
