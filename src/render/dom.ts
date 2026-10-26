@@ -145,12 +145,44 @@ export class DomRenderer {
     for (let i = this.deferred.length - 1; i >= 0; i--) this.reconcile(this.deferred[i]!, this.desired(this.keys.get(this.deferred[i]!)!), true)
     // A retained child can move out of a parent reconciled before its new one: what a parent no
     // longer has leaves only once every move is done.
-    for (const [parent, wanted] of this.pendingPrune) {
-      for (const child of Array.from(parent.childNodes)) if (!wanted.has(child)) parent.removeChild(child), this.ops++
-    }
-    for (const old of retired) old.parentNode?.removeChild(old)
+    const removed: Node[] = []
+    this.prune(removed)
+    for (const old of retired) if (old.parentNode) old.parentNode.removeChild(old), removed.push(old)
+    this.reattach(removed)
     this.pendingPrune.clear()
     this.deferred = []
+  }
+
+  /** What a reconciled parent no longer has leaves it (collected in `removed`). */
+  private prune(removed: Node[]) {
+    for (const [parent, wanted] of this.pendingPrune) {
+      for (const child of Array.from(parent.childNodes)) if (!wanted.has(child)) parent.removeChild(child), removed.push(child), this.ops++
+    }
+    this.pendingPrune.clear()
+  }
+
+  /**
+   * A node that moved to another parent within one change may still sit in its old parent's
+   * element when that leaves the page (both parents listed it while the rules that place it
+   * settled, and the old one was reconciled last): every keyed element inside what was removed,
+   * and still placed by the index under a connected parent, goes back there. It costs what was
+   * removed.
+   */
+  private reattach(removed: Node[]) {
+    for (let round = 0; round < 4 && removed.length; round++) {
+      const parents = new Set<string>()
+      for (const top of removed) {
+        if (top.isConnected || top.nodeType !== 1) continue
+        for (const el of [top as Element, ...(top as Element).querySelectorAll('*')]) {
+          const k = this.keys.get(el)
+          if (k === undefined || !this.index.nodes.get(k)?.cls) continue
+          for (const p of this.index.placedUnder(k)) if (this.els.get(p)?.isConnected) parents.add(p)
+        }
+      }
+      removed = []
+      for (const p of parents) this.reconcile(this.els.get(p)!, this.desired(p), true)
+      this.prune(removed)
+    }
   }
 
   private element(k: string): Node {

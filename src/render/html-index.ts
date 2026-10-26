@@ -192,6 +192,19 @@ export class HtmlIndex {
   }
 
   /** The renderable node for a child slot: component instances resolve to their root. */
+  /**
+   * The nodes that list this one as a child: its own parents and, for a component's root, the
+   * parents of the component it renders (and of what renders that, up a chain of roots).
+   */
+  placedUnder(key: string): string[] {
+    const out: string[] = []
+    for (let k: string | undefined = key, hops = 0; k !== undefined && hops < 64; hops++, k = this.focusByRoot.get(k)) {
+      const n = this.nodes.get(k)
+      if (n) out.push(...n.parents)
+    }
+    return out
+  }
+
   resolve(key: string): string | undefined {
     for (let k: string | undefined = key, hops = 0; k !== undefined && hops < 64; hops++) {
       if (this.nodes.get(k)?.cls) return k
