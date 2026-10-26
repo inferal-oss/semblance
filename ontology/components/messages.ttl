@@ -223,7 +223,7 @@ WHERE {
   OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(IF(?pending, CONCAT("  ", ?author, " is typing…"),
-          CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ": ", COALESCE(STR(?content), ""))) AS ?line)
+          CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ":", IF(BOUND(?content), CONCAT(" ", STR(?content)), ""))) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~text")) AS ?text)
 }""" .

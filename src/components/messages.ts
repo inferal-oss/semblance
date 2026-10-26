@@ -77,7 +77,7 @@ const message: FnRule = (ctx, focus) => {
   const { person, name, image } = authorOf(ctx, item)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    const line = pending ? `  ${name} is typing…` : `  ${published !== undefined ? `[${published.slice(11, 16)}] ` : ''}${name}: ${content ?? ''}`
+    const line = pending ? `  ${name} is typing…` : `  ${published !== undefined ? `[${published.slice(11, 16)}] ` : ''}${name}:${content !== undefined ? ` ${content}` : ''}`
     o.renders(o.el('root', 'Div', {}, [o.text('text', line), ...(!pending && content === undefined && rich ? [rich] : [])]))
     return o.quads
   }

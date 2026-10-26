@@ -204,7 +204,7 @@ ui:dt-msg-2 a as:Note ; as:attributedTo ui:dt-msg-ada ; as:published "2024-05-14
 ui:dt-msg-3 a as:Note ; as:attributedTo ui:dt-msg-alan ; as:published "2024-05-14T10:05:00Z"^^xsd:dateTime ;
     as:content "And this one is sensitive: private mode (⌘⇧H) hides it." ; <https://semblance.dev/ns/privacy#sensitive> true .
 ui:dt-msg-4 a as:Note ; as:attributedTo ui:dt-msg-ada ; as:published "2024-05-14T10:06:00Z"^^xsd:dateTime ;
-    as:content "A message can contain components too. Review this example." ; c:content ui:dt-msg-review .
+    c:content ui:dt-msg-review .
 ui:dt-msg-review a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
     c:children ( ui:dt-msg-review-text ui:dt-msg-review-toggle ) .
 ui:dt-msg-review-text a c:Text ; c:label "A message can contain components too."@en ,
