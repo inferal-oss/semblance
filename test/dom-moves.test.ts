@@ -74,6 +74,20 @@ ui:slot a h:Div ; sem:slot "page" .`, true)
     } finally { app.dispose() }
   })
 
+  it('keeps a live slot when the container around it is recreated', () => {
+    const app = mount(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:wrapper .
+ui:wrapper a h:Div ; h:hasChild ui:slot .
+ui:slot a h:Div ; sem:slot "page" .`, true)
+    try {
+      const old = app.slot.parentElement!
+      app.apply('ui:wrapper a h:Div .', 'ui:wrapper a h:Article .')
+      expect(app.slot.parentElement!.localName).toBe('article')
+      expect(old.isConnected).toBe(false)
+      expect(app.host.querySelectorAll('div')).toHaveLength(1)
+      expect(app.moves).toContain(app.slot)
+    } finally { app.dispose() }
+  })
+
   it('builds a new subtree detached and attaches it whole', () => {
     const app = mount(`ui:root a h:Section ; sem:renders ui:workspace ; h:hasChild ui:slot .
 ui:slot a h:Div ; sem:slot "page" .`, true)
