@@ -3,6 +3,7 @@
 // `@inferal-oss/semblance/node`, then project it here.
 
 export { Runtime, type Projection } from './runtime.ts'
+export { TiledWorkspace } from './layout/tiled-workspace.ts'
 export type { EngineOptions, EngineStats } from './engine/engine.ts'
 export type { FnRule, RuleContext } from './engine/context.ts'
 export type { GraphStore, Factory } from './store/types.ts'
