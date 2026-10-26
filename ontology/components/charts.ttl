@@ -8,6 +8,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 
 # Charts. A chart projects a sem:View (a SPARQL SELECT, sem:select) in "long"
 # form: each solution is one value (c:valueVariable) of one series
@@ -41,10 +42,418 @@ c:BarChart a owl:Class ;
     rdfs:subClassOf c:Chart ;
     rdfs:comment "Horizontal stacked bars: one bar per category, one segment per series, totals at the end. With no rows, its c:emptyText (when it has one)."@en ;
     sem:slug "bar-chart" .
-c:BarChartRendering a sem:Rendering ; sem:targets c:BarChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "awaits #1 (query results as graph rows): it runs the SELECT named in the data (c:view, a sem:View), which SPARQL 1.1 cannot do from inside a query." ;
-    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
+# A bar chart reads its view's rows where the views runtime keeps them (a maintained SELECT: the view
+# is an iv:View with iv:materialize iv:Graph, its rows a result set in the views graph, view.ttl): a
+# row's value of ?v is the node <row>-v, read by its IRI; rs:index (ORDER BY) is the order the facets,
+# categories and series are first seen in (else the rows' IRIs). A view that is not maintained is
+# named in a message instead.
+c:BarChartRendering a sem:Rendering ; sem:targets c:BarChart ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows c:dataset , ( c:view rs:solution rs:binding ) , ( c:legend [ sem:zeroOrMore rdf:rest ] rdf:first ) .
 c:BarChartRendering-fn a sem:Rule ; sem:implements c:BarChartRendering ; sem:function "barchart" .
+c:BarChartRendering-sparql a sem:Rule ;
+    sem:implements c:BarChartRendering ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:BarChart .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  BIND(IRI(CONCAT(?me, "/~panels")) AS ?panels)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  OPTIONAL { $this c:unit ?u0 } BIND(COALESCE(STR(?u0), "") AS ?unit)
+  # What it shows instead of a chart: no view, a view whose rows are not in the graph, or no rows
+  # and an empty text of its own.
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabelAt0 l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabelAt2 l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1)), ?unset))) AS ?message)
+  # The parts, each a branch that reads what is bound above.
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    # The figure: the panels, and the legend when there are series to tell apart.
+    FILTER(!BOUND(?message))
+    { SELECT (COUNT(?sk) AS ?seriesCount) WHERE { { SELECT (?skey AS ?sk) WHERE {
+      {
+        # A declared legend (c:legend): its series in order, by c:key (else the node).
+        $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
+        OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+      } UNION {
+        # Else the values of the series variable, in the order they are first seen.
+        FILTER NOT EXISTS { $this c:legend ?anyList }
+        { SELECT ?skey (COUNT(DISTINCT ?ser2) AS ?si) WHERE {
+          { SELECT ?skey (MIN(?pos) AS ?spos) WHERE {
+            $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+            FILTER(BOUND(?ser)) BIND(?ser AS ?skey)
+          } GROUP BY ?skey }
+          OPTIONAL {
+            $this c:view ?view2 ; c:seriesVariable ?sv2 . ?view2 rs:solution ?r2 . ?r2 rs:binding ?b2 . ?b2 rs:variable ?svs2 ; rs:value ?s2 .
+            FILTER(?svs2 = STR(?sv2)) OPTIONAL { ?r2 rs:index ?i2 } BIND(STR(?s2) AS ?ser2)
+            FILTER(COALESCE(?i2, STR(?r2)) < ?spos)
+          }
+        } GROUP BY ?skey }
+        BIND(?skey AS ?slabel)
+      } UNION {
+        # Without a series variable, every value is one series, named by the chart.
+        FILTER NOT EXISTS { $this c:legend ?anyList } FILTER NOT EXISTS { $this c:seriesVariable ?anySv }
+        BIND("" AS ?skey) BIND(0 AS ?si)
+        OPTIONAL { $this l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) $this c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of $this ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) $this rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?slabel)
+      }
+    } } } }
+    BIND(EXISTS { $this c:seriesVariable ?anySeries } && ?seriesCount > 1 AS ?legend)
+    VALUES (?local ?tag0 ?cls0 ?key0) { ("root" rdfhtml:Div UNDEF UNDEF) ("panels" rdfhtml:Div "sem-panels" "0") ("legend" rdfhtml:Ul "sem-legend" "1") }
+    FILTER(?local != "legend" || ?legend)
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(?local = "root", ?unset, ?root) AS ?parent)
+  } UNION {
+    # A figure per facet, in the order the facets are first seen; captioned when faceted.
+    FILTER(!BOUND(?message))
+    { SELECT ?fac (MIN(?bpos) AS ?fpos) (MAX(?total) AS ?fmax0) WHERE {
+    { SELECT ?fac ?cat (MIN(?pos) AS ?bpos) (SUM(COALESCE(xsd:double(?v0), 0e0) * ?mult) AS ?total) (MAX(IF(BOUND(?v0), 1, 0)) AS ?measuredRows) WHERE {
+      $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+    } GROUP BY ?fac ?cat }
+  } GROUP BY ?fac }
+    BIND(CONCAT(?me, "/~f-", SUBSTR(MD5(?fac), 1, 8)) AS ?fid)
+    OPTIONAL { $this c:facetVariable ?faceted }
+    OPTIONAL { $this c:facetLabel ?fl0 } BIND(COALESCE(STR(?fl0), "{value}") AS ?fl)
+    # The facet's value: a whole number with thousands separators, else as it is.
+    BIND(REGEX(?fac, "^(0|[1-9][0-9]{0,14})$") AS ?whole)
+    BIND(STRLEN(?fac) AS ?n) BIND(xsd:integer(?n - FLOOR((?n - 1) / 3) * 3) AS ?g)
+    BIND(IF(?whole, CONCAT(SUBSTR(?fac, 1, ?g), IF(?n > ?g, CONCAT(",", SUBSTR(?fac, ?g + 1, 3)), ""), IF(?n > ?g + 3, CONCAT(",", SUBSTR(?fac, ?g + 4, 3)), ""),
+         IF(?n > ?g + 6, CONCAT(",", SUBSTR(?fac, ?g + 7, 3)), ""), IF(?n > ?g + 9, CONCAT(",", SUBSTR(?fac, ?g + 10, 3)), "")), ?fac) AS ?facShown)
+    BIND(IF(CONTAINS(?fl, "{value}"), CONCAT(STRBEFORE(?fl, "{value}"), ?facShown, STRAFTER(?fl, "{value}")), ?fl) AS ?caption)
+    VALUES ?part { "figure" "caption" }
+    FILTER(?part = "figure" || BOUND(?faceted))
+    BIND(IRI(IF(?part = "figure", ?fid, CONCAT(?fid, "-caption"))) AS ?el)
+    BIND(IF(?part = "figure", rdfhtml:Figure, rdfhtml:Figcaption) AS ?tag)
+    BIND(IF(?part = "figure", ?panels, IRI(?fid)) AS ?parent)
+    BIND(IF(?part = "figure", CONCAT("\\u0001", IF(isNumeric(?fpos), "n", "s"), STR(?fpos)), "\\u0001n0") AS ?key)
+    BIND(IF(?part = "caption", IRI(CONCAT(?fid, "-caption-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "caption", ?caption, ?unset) AS ?data)
+  } UNION {
+    # A bar per category, in the order first seen: its label, its track, its total.
+    FILTER(!BOUND(?message))
+    { SELECT ?fac ?cat (MIN(?pos) AS ?bpos) (SUM(COALESCE(xsd:double(?v0), 0e0) * ?mult) AS ?total) (MAX(IF(BOUND(?v0), 1, 0)) AS ?measuredRows) WHERE {
+      $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+    } GROUP BY ?fac ?cat }
+    BIND(CONCAT(?me, "/~b-", SUBSTR(MD5(?fac), 1, 8), "-", SUBSTR(MD5(?cat), 1, 8)) AS ?id)
+    BIND(?total AS ?x) BIND(?measuredRows = 1 AS ?measured)
+    # fmtIn (charts.ts): 0 to 3 decimals by size, ROUND(x × 10^k) with the point put in. ROUND's double
+    # may be a hair below the whole number (Oxigraph), so + 0.5 before the cast to xsd:integer.
+    BIND(IF(?x >= 100, 0, IF(?x >= 10, 1, IF(?x >= 1, 2, 3))) AS ?xK)
+    BIND(STR(xsd:integer(ROUND(?x * IF(?xK = 0, 1, IF(?xK = 1, 10, IF(?xK = 2, 100, 1000)))) + 0.5)) AS ?xD)
+    BIND(IF(STRLEN(?xD) <= ?xK, CONCAT(SUBSTR("000", 1, ?xK + 1 - STRLEN(?xD)), ?xD), ?xD) AS ?xP)
+    BIND(IF(?xK = 0, ?xP, CONCAT(SUBSTR(?xP, 1, STRLEN(?xP) - ?xK), ".", SUBSTR(?xP, STRLEN(?xP) - ?xK + 1))) AS ?xF)
+    BIND(IF(?unit = "" && FLOOR(?x) = ?x, STR(xsd:integer(?x)), IF(?x >= 0.01, ?xF, "<0.01")) AS ?xN)
+    BIND(IF(?unit = "", ?xN, CONCAT(?xN, " ", ?unit)) AS ?totalText)
+    VALUES (?part ?suffix ?tag0 ?key0) { ("bar" "" rdfhtml:Div UNDEF) ("label" "-label" rdfhtml:Span "0") ("track" "-track" rdfhtml:Span "1") ("total" "-total" rdfhtml:Span "2") }
+    BIND(IRI(CONCAT(?id, ?suffix)) AS ?el) BIND(?tag0 AS ?tag)
+    BIND(IF(?part = "bar", IRI(CONCAT(?me, "/~f-", SUBSTR(MD5(?fac), 1, 8))), IRI(?id)) AS ?parent)
+    BIND(IF(?part = "bar", CONCAT("\\u0001n1\\u0001", IF(isNumeric(?bpos), "n", "s"), STR(?bpos)), ?key0) AS ?key)
+    BIND(IF(?part = "bar", "sem-bar", IF(?part = "label", "sem-category", IF(?part = "track", "sem-track", IF(?measured, "sem-total", "sem-total sem-pending")))) AS ?cls)
+    BIND(IF(?part = "label" || ?part = "total", IRI(CONCAT(?id, ?suffix, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "label", ?cat, IF(?part = "total", IF(?measured, ?totalText, "running…"), ?unset)) AS ?data)
+  } UNION {
+    # A segment per series with a value above zero: the first row of the category in that series,
+    # as wide as its share of the facet's longest bar.
+    FILTER(!BOUND(?message))
+    { SELECT ?fac ?cat ?ser (MIN(?pos) AS ?cpos) WHERE {
+      $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+    } GROUP BY ?fac ?cat ?ser }
+    { SELECT ?fac (MIN(?bpos) AS ?fpos) (MAX(?total) AS ?fmax0) WHERE {
+    { SELECT ?fac ?cat (MIN(?pos) AS ?bpos) (SUM(COALESCE(xsd:double(?v0), 0e0) * ?mult) AS ?total) (MAX(IF(BOUND(?v0), 1, 0)) AS ?measuredRows) WHERE {
+      $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+    } GROUP BY ?fac ?cat }
+  } GROUP BY ?fac }
+    BIND(IF(?fmax0 > 1e-9, ?fmax0, 1e-9) AS ?fmax)
+    { SELECT ?skey ?si ?slabel WHERE {
+      {
+        # A declared legend (c:legend): its series in order, by c:key (else the node).
+        $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
+        OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+      } UNION {
+        # Else the values of the series variable, in the order they are first seen.
+        FILTER NOT EXISTS { $this c:legend ?anyList }
+        { SELECT ?skey (COUNT(DISTINCT ?ser2) AS ?si) WHERE {
+          { SELECT ?skey (MIN(?pos) AS ?spos) WHERE {
+            $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+            FILTER(BOUND(?ser)) BIND(?ser AS ?skey)
+          } GROUP BY ?skey }
+          OPTIONAL {
+            $this c:view ?view2 ; c:seriesVariable ?sv2 . ?view2 rs:solution ?r2 . ?r2 rs:binding ?b2 . ?b2 rs:variable ?svs2 ; rs:value ?s2 .
+            FILTER(?svs2 = STR(?sv2)) OPTIONAL { ?r2 rs:index ?i2 } BIND(STR(?s2) AS ?ser2)
+            FILTER(COALESCE(?i2, STR(?r2)) < ?spos)
+          }
+        } GROUP BY ?skey }
+        BIND(?skey AS ?slabel)
+      } UNION {
+        # Without a series variable, every value is one series, named by the chart.
+        FILTER NOT EXISTS { $this c:legend ?anyList } FILTER NOT EXISTS { $this c:seriesVariable ?anySv }
+        BIND("" AS ?skey) BIND(0 AS ?si)
+        OPTIONAL { $this l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) $this c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of $this ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) $this rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?slabel)
+      }
+    } }
+    FILTER(IF(EXISTS { $this c:seriesVariable ?anySeries }, ?ser = ?skey, true))
+    BIND(IF(isNumeric(?cpos), ?unset, IRI(?cpos)) AS ?byKey)
+    LATERAL { { FILTER(isNumeric(?cpos)) $this c:view ?fview . ?fview rs:solution ?first . ?first rs:index ?cpos } UNION { FILTER(!isNumeric(?cpos)) BIND(?byKey AS ?first) } }
+    OPTIONAL { $this c:valueVariable ?vvar }
+    BIND(IRI(CONCAT(STR(?first), "-", COALESCE(STR(?vvar), "value"))) AS ?firstValue)
+    LATERAL { ?firstValue rs:value ?fv0 }
+    BIND(xsd:double(?fv0) AS ?x) FILTER(?x > 0)
+    # fmtIn (charts.ts): 0 to 3 decimals by size, ROUND(x × 10^k) with the point put in. ROUND's double
+    # may be a hair below the whole number (Oxigraph), so + 0.5 before the cast to xsd:integer.
+    BIND(IF(?x >= 100, 0, IF(?x >= 10, 1, IF(?x >= 1, 2, 3))) AS ?xK)
+    BIND(STR(xsd:integer(ROUND(?x * IF(?xK = 0, 1, IF(?xK = 1, 10, IF(?xK = 2, 100, 1000)))) + 0.5)) AS ?xD)
+    BIND(IF(STRLEN(?xD) <= ?xK, CONCAT(SUBSTR("000", 1, ?xK + 1 - STRLEN(?xD)), ?xD), ?xD) AS ?xP)
+    BIND(IF(?xK = 0, ?xP, CONCAT(SUBSTR(?xP, 1, STRLEN(?xP) - ?xK), ".", SUBSTR(?xP, STRLEN(?xP) - ?xK + 1))) AS ?xF)
+    BIND(IF(?unit = "" && FLOOR(?x) = ?x, STR(xsd:integer(?x)), IF(?x >= 0.01, ?xF, "<0.01")) AS ?xN)
+    BIND(IF(?unit = "", ?xN, CONCAT(?xN, " ", ?unit)) AS ?valueText)
+    BIND((?x / ?fmax) * 100 AS ?w)
+    BIND(STR(xsd:integer(ROUND(?w * 100) + 0.5)) AS ?wD)
+    BIND(IF(STRLEN(?wD) <= 2, CONCAT(SUBSTR("000", 1, 3 - STRLEN(?wD)), ?wD), ?wD) AS ?wP)
+    BIND(CONCAT(SUBSTR(?wP, 1, STRLEN(?wP) - 2), ".", SUBSTR(?wP, STRLEN(?wP) - 1)) AS ?width)
+    BIND(CONCAT(?me, "/~b-", SUBSTR(MD5(?fac), 1, 8), "-", SUBSTR(MD5(?cat), 1, 8)) AS ?id)
+    BIND(IRI(CONCAT(?id, "-s", STR(?si))) AS ?el) BIND(IRI(CONCAT(?id, "-track")) AS ?parent)
+    BIND(rdfhtml:Span AS ?tag) BIND("sem-seg" AS ?cls) BIND(STR(?si) AS ?key)
+    BIND(CONCAT("width: ", ?width, "%; background: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")") AS ?style)
+    # As the function writes it: trimmed (an empty category leaves no space).
+    BIND(REPLACE(CONCAT(?cat, " · ", ?slabel, ": ", ?valueText), "^ +| +$", "") AS ?tip)
+  } UNION {
+    # The legend: a swatch and a label per series.
+    FILTER(!BOUND(?message))
+    FILTER EXISTS { $this c:seriesVariable ?anySeries }
+    { SELECT ?skey ?si ?slabel WHERE {
+      {
+        # A declared legend (c:legend): its series in order, by c:key (else the node).
+        $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
+        OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+      } UNION {
+        # Else the values of the series variable, in the order they are first seen.
+        FILTER NOT EXISTS { $this c:legend ?anyList }
+        { SELECT ?skey (COUNT(DISTINCT ?ser2) AS ?si) WHERE {
+          { SELECT ?skey (MIN(?pos) AS ?spos) WHERE {
+            $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+            FILTER(BOUND(?ser)) BIND(?ser AS ?skey)
+          } GROUP BY ?skey }
+          OPTIONAL {
+            $this c:view ?view2 ; c:seriesVariable ?sv2 . ?view2 rs:solution ?r2 . ?r2 rs:binding ?b2 . ?b2 rs:variable ?svs2 ; rs:value ?s2 .
+            FILTER(?svs2 = STR(?sv2)) OPTIONAL { ?r2 rs:index ?i2 } BIND(STR(?s2) AS ?ser2)
+            FILTER(COALESCE(?i2, STR(?r2)) < ?spos)
+          }
+        } GROUP BY ?skey }
+        BIND(?skey AS ?slabel)
+      } UNION {
+        # Without a series variable, every value is one series, named by the chart.
+        FILTER NOT EXISTS { $this c:legend ?anyList } FILTER NOT EXISTS { $this c:seriesVariable ?anySv }
+        BIND("" AS ?skey) BIND(0 AS ?si)
+        OPTIONAL { $this l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) $this c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of $this ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) $this rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?slabel)
+      }
+    } }
+    { SELECT (COUNT(?sk) AS ?seriesCount) WHERE { { SELECT (?skey AS ?sk) WHERE {
+      {
+        # A declared legend (c:legend): its series in order, by c:key (else the node).
+        $this c:legend ?list . ?list rdf:rest* ?cell . ?cell rdf:first ?sn .
+        { SELECT ?cell (COUNT(?before) AS ?si) WHERE { $this c:legend ?l2 . ?l2 rdf:rest* ?cell . ?cell rdf:first ?any . OPTIONAL { ?l2 rdf:rest* ?before . ?before rdf:rest/rdf:rest* ?cell } } GROUP BY ?cell }
+        OPTIONAL { ?sn c:key ?k0 } BIND(COALESCE(STR(?k0), STR(?sn)) AS ?skey)
+        OPTIONAL { ?slabelAt0 l10n:of ?sn ; l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) ?sn c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of ?sn ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) ?sn rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR(?sn), "^.*[#/]", ""))) AS ?slabel)
+      } UNION {
+        # Else the values of the series variable, in the order they are first seen.
+        FILTER NOT EXISTS { $this c:legend ?anyList }
+        { SELECT ?skey (COUNT(DISTINCT ?ser2) AS ?si) WHERE {
+          { SELECT ?skey (MIN(?pos) AS ?spos) WHERE {
+            $this c:view ?view . ?view rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx } OPTIONAL { ?r iv:multiplicity ?m }
+      OPTIONAL { $this c:categoryVariable ?cv } OPTIONAL { $this c:valueVariable ?vv } OPTIONAL { $this c:seriesVariable ?sv } OPTIONAL { $this c:facetVariable ?fv }
+      BIND(STR(?r) AS ?rs)
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(COALESCE(xsd:double(?m), 1e0) AS ?mult)
+      # A binding is <row>-<variable> (view.ttl); "~" is in no variable's name.
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?cv), "category"))) AS ?cb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?vv), "value"))) AS ?vb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?sv), "~"))) AS ?sb)
+      BIND(IRI(CONCAT(?rs, "-", COALESCE(STR(?fv), "~"))) AS ?fb)
+      LATERAL { OPTIONAL { ?cb rs:value ?c0 } } LATERAL { OPTIONAL { ?vb rs:value ?v0 } }
+      LATERAL { OPTIONAL { ?sb rs:value ?s0 } } LATERAL { OPTIONAL { ?fb rs:value ?f0 } }
+      BIND(COALESCE(STR(?f0), "") AS ?fac) BIND(COALESCE(STR(?c0), "") AS ?cat) BIND(STR(?s0) AS ?ser)
+            FILTER(BOUND(?ser)) BIND(?ser AS ?skey)
+          } GROUP BY ?skey }
+          OPTIONAL {
+            $this c:view ?view2 ; c:seriesVariable ?sv2 . ?view2 rs:solution ?r2 . ?r2 rs:binding ?b2 . ?b2 rs:variable ?svs2 ; rs:value ?s2 .
+            FILTER(?svs2 = STR(?sv2)) OPTIONAL { ?r2 rs:index ?i2 } BIND(STR(?s2) AS ?ser2)
+            FILTER(COALESCE(?i2, STR(?r2)) < ?spos)
+          }
+        } GROUP BY ?skey }
+        BIND(?skey AS ?slabel)
+      } UNION {
+        # Without a series variable, every value is one series, named by the chart.
+        FILTER NOT EXISTS { $this c:legend ?anyList } FILTER NOT EXISTS { $this c:seriesVariable ?anySv }
+        BIND("" AS ?skey) BIND(0 AS ?si)
+        OPTIONAL { $this l10n:label ?slabel0 }
+    OPTIONAL { FILTER(!BOUND(?slabel0)) $this c:label ?slabel1 FILTER(isLiteral(?slabel1)) }
+    OPTIONAL { ?slabelAt2 l10n:of $this ; l10n:name ?slabel2 }
+    OPTIONAL { FILTER(!BOUND(?slabel2)) $this rdfs:label ?slabel3 FILTER(isLiteral(?slabel3)) }
+    BIND(STR(COALESCE(?slabel0, ?slabel1, ?slabel2, ?slabel3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?slabel)
+      }
+    } } } }
+    FILTER(?seriesCount > 1)
+    BIND(CONCAT(?me, "/~legend-", STR(?si)) AS ?li)
+    VALUES ?part { "item" "swatch" }
+    BIND(IRI(IF(?part = "item", ?li, CONCAT(?li, "-swatch"))) AS ?el)
+    BIND(IF(?part = "item", rdfhtml:Li, rdfhtml:I) AS ?tag)
+    BIND(IF(?part = "item", IRI(CONCAT(?me, "/~legend")), IRI(?li)) AS ?parent)
+    BIND(IF(?part = "item", STR(?si), "0") AS ?key)
+    BIND(IF(?part = "swatch", CONCAT("background: var(--sem-series-", STR(xsd:integer(?si - FLOOR(?si / 6) * 6 + 1)), ")"), ?unset) AS ?style)
+    BIND(IF(?part = "item", IRI(CONCAT(?li, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "item", ?slabel, ?unset) AS ?data)
+    BIND(IF(?part = "item", "1", ?unset) AS ?textKey)
+  }
+  }
+}""" .
 
 c:Heatmap a owl:Class ;
     rdfs:subClassOf c:Chart ;
@@ -70,10 +479,93 @@ c:FindingList a owl:Class ;
 the findings they write, grouped by judgement, each with its verdict (label and sem:symbol)."""@en ;
     sem:slug "finding-list" .
 c:judgementClass a owl:ObjectProperty .
-c:FindingListRendering a sem:Rendering ; sem:targets c:FindingList ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "awaits #1 (query results as graph rows): it runs the CONSTRUCT of every judgement of a class (sem:construct in the data), which SPARQL 1.1 cannot do from inside a query." ;
-    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
+# Each judgement is a maintained view (iv:View), so its findings are in the views graph: the list reads
+# them there, by their perf:judgement; a judgement that is not one is named in a message instead.
+c:FindingListRendering a sem:Rendering ; sem:targets c:FindingList ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows c:dataset , ( c:judgementClass [ sem:inverse rdf:type ] [ sem:inverse <https://semblance.dev/ns/perf#judgement> ] ) .
 c:FindingListRendering-fn a sem:Rule ; sem:implements c:FindingListRendering ; sem:function "findings" .
+c:FindingListRendering-sparql a sem:Rule ;
+    sem:implements c:FindingListRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; sem:orderKey ?key ; rdfhtml:hasChild ?textNode ; rdfhtml:attribute ?hidden .
+  ?hidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this c:judgementClass ?class .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  # Whether any judgement has something to show: findings, or a message that it is not maintained.
+  BIND(EXISTS { ?anyJ a ?class . FILTER(isIRI(?anyJ)) FILTER(NOT EXISTS { ?anyJ a iv:View } || EXISTS { ?anyF <https://semblance.dev/ns/perf#judgement> ?anyJ FILTER(isIRI(?anyF)) }) } AS ?any)
+  # The parts, each a branch that reads what is bound above.
+  LATERAL {
+  {
+    # Nothing yet: the list's own empty text.
+    FILTER(!?any)
+    OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, "No findings yet.")) AS ?data)
+  } UNION {
+    FILTER(?any)
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # A section per judgement with findings, in sem:order; a judgement that is not a maintained view
+    # says so instead.
+    FILTER(?any)
+    ?j a ?class . FILTER(isIRI(?j))
+    BIND(EXISTS { ?j a iv:View } AS ?maintained)
+    FILTER(!?maintained || EXISTS { ?someF <https://semblance.dev/ns/perf#judgement> ?j FILTER(isIRI(?someF)) })
+    OPTIONAL { ?j sem:order ?order0 }
+    BIND(CONCAT("\\u0001n", STR(COALESCE(?order0, 99)), "\\u0001s", STR(?j)) AS ?sectionKey)
+    BIND(CONCAT(?me, "/~j", SUBSTR(MD5(STR(?j)), 1, 8)) AS ?jid)
+    OPTIONAL { ?jLabelAt0 l10n:of ?j ; l10n:label ?jLabel0 }
+    OPTIONAL { FILTER(!BOUND(?jLabel0)) ?j c:label ?jLabel1 FILTER(isLiteral(?jLabel1)) }
+    OPTIONAL { ?jLabelAt2 l10n:of ?j ; l10n:name ?jLabel2 }
+    OPTIONAL { FILTER(!BOUND(?jLabel2)) ?j rdfs:label ?jLabel3 FILTER(isLiteral(?jLabel3)) }
+    BIND(STR(COALESCE(?jLabel0, ?jLabel1, ?jLabel2, ?jLabel3, REPLACE(STR(?j), "^.*[#/]", ""))) AS ?jLabel)
+    VALUES (?part ?suffix ?tag0 ?key0) { ("section" "" rdfhtml:Section UNDEF) ("heading" "-h" rdfhtml:H3 "0") ("list" "-ul" rdfhtml:Ul "1") ("error" "-error" rdfhtml:P UNDEF) }
+    FILTER(IF(?maintained, ?part != "error", ?part = "error"))
+    BIND(IRI(CONCAT(?jid, ?suffix)) AS ?el) BIND(?tag0 AS ?tag)
+    BIND(IF(?part = "section" || ?part = "error", ?root, IRI(?jid)) AS ?parent)
+    BIND(COALESCE(?key0, ?sectionKey) AS ?key)
+    BIND(IF(?part = "error", "sem-empty", ?unset) AS ?cls)
+    BIND(IF(?part = "heading", IRI(CONCAT(?jid, "-h-t")), IF(?part = "error", IRI(CONCAT(?jid, "-error-t")), ?unset)) AS ?textNode)
+    BIND(IF(?part = "heading", ?jLabel, IF(?part = "error", CONCAT(?jLabel, " is not a maintained view (iv:View)."), ?unset)) AS ?data)
+  } UNION {
+    # A finding: its verdict (symbol and label) and its text, by sem:sortKey (numbers as numbers),
+    # then text.
+    FILTER(?any)
+    ?j a ?class ; a iv:View . FILTER(isIRI(?j))
+    ?f <https://semblance.dev/ns/perf#judgement> ?j . FILTER(isIRI(?f))
+    OPTIONAL { ?f sem:text ?text0 } BIND(COALESCE(STR(?text0), "") AS ?text)
+    OPTIONAL { ?f sem:sortKey ?sort0 }
+    BIND(CONCAT("\\u0001", IF(COALESCE(isNumeric(?sort0), false), CONCAT("n", STR(?sort0)), CONCAT("s", COALESCE(STR(?sort0), ""))), "\\u0001s", ?text) AS ?findingKey)
+    OPTIONAL { ?f sem:verdict ?verdict }
+    BIND(COALESCE(?verdict, c:none) AS ?vNode)
+    LATERAL { OPTIONAL { ?vNode sem:slug ?slug0 } } LATERAL { OPTIONAL { ?vNode sem:symbol ?symbol0 } }
+    LATERAL { OPTIONAL { ?vLabelAt0 l10n:of ?vNode ; l10n:label ?vLabel0 }
+    OPTIONAL { FILTER(!BOUND(?vLabel0)) ?vNode c:label ?vLabel1 FILTER(isLiteral(?vLabel1)) }
+    OPTIONAL { ?vLabelAt2 l10n:of ?vNode ; l10n:name ?vLabel2 }
+    OPTIONAL { FILTER(!BOUND(?vLabel2)) ?vNode rdfs:label ?vLabel3 FILTER(isLiteral(?vLabel3)) }
+    BIND(STR(COALESCE(?vLabel0, ?vLabel1, ?vLabel2, ?vLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?vLabel) }
+    BIND(CONCAT(?me, "/~j", SUBSTR(MD5(STR(?j)), 1, 8)) AS ?jid)
+    BIND(CONCAT(?jid, "-f", SUBSTR(MD5(STR(?f)), 1, 8)) AS ?id)
+    VALUES (?part ?suffix ?tag0 ?key0) { ("item" "" rdfhtml:Li UNDEF) ("verdict" "-v" rdfhtml:Span "0") ("icon" "-v-icon" rdfhtml:B "0") ("text" "-p" rdfhtml:P "1") }
+    BIND(IRI(CONCAT(?id, ?suffix)) AS ?el) BIND(?tag0 AS ?tag)
+    BIND(IRI(IF(?part = "item", CONCAT(?jid, "-ul"), IF(?part = "icon", CONCAT(?id, "-v"), ?id))) AS ?parent)
+    BIND(COALESCE(?key0, ?findingKey) AS ?key)
+    BIND(IF(?part = "verdict", CONCAT("sem-verdict sem-", COALESCE(STR(?slug0), "insight")), ?unset) AS ?cls)
+    BIND(IF(?part = "icon", IRI(CONCAT(?id, "-v-icon-aria-hidden")), ?unset) AS ?hidden)
+    BIND(IF(?part = "verdict", IRI(CONCAT(?id, "-v-t")), IF(?part = "icon", IRI(CONCAT(?id, "-v-icon-t")), IF(?part = "text", IRI(CONCAT(?id, "-p-t")), ?unset))) AS ?textNode)
+    BIND(IF(?part = "verdict", IF(BOUND(?verdict), ?vLabel, "insight"), IF(?part = "icon", IF(BOUND(?verdict), COALESCE(STR(?symbol0), "·"), "·"), IF(?part = "text", ?text, ?unset))) AS ?data)
+    BIND(IF(?part = "verdict", "1", ?unset) AS ?textKey)
+  }
+  }
+}""" .
 
 # --- encodings (theme tokens) ------------------------------------------------------------------
 # Categorical slots follow a validated palette (adjacent-pair CVD separation);

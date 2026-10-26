@@ -775,7 +775,7 @@ export class Engine {
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
         if (r.watches && !r.watches.has(p)) continue
-        for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
       }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
@@ -1373,7 +1373,8 @@ export class Engine {
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
-  private walkBack(nodes: Set<string>, steps: string[]): Set<string> {
+  /** Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there. */
+  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad): Set<string> {
     const f = this.store.factory
     for (let i = steps.length - 1; i >= 0 && nodes.size; i--) {
       const step = steps[i]!
@@ -1389,6 +1390,8 @@ export class Engine {
           // (A list cell on the way is a blank node, never the subject of a named step.)
           if (!IRI_LIKE.test(n)) continue
           for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+          // A link that is going away still led here: what it linked to read it.
+          if (removed && removed.subject.value === n && removed.predicate.value === p.value && removed.object.termType === 'NamedNode') next.add(removed.object.value)
         }
       } else for (const n of nodes) for (const x of this.links.get(n)?.get(step) ?? []) next.add(x)
       nodes = next
