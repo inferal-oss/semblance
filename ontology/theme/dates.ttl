@@ -68,7 +68,7 @@
                  [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "4px" ] ,
-                 [ sty:property "min-height" ; sty:raw "var(--control-h, 38px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "padding" ; sty:raw "2px 3px 2px var(--control-px, 12px)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
@@ -95,7 +95,7 @@
     sty:part "> .sem-date-row > input" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 10ch" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
-                 [ sty:property "min-height" ; sty:raw "calc(var(--control-h, 38px) - 8px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 8px)" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "outline" ; sty:raw "none" ] ,
@@ -108,9 +108,13 @@
 [] a sty:StyleRule ; sty:appliesTo c:DateField ;
     sty:part "> .sem-date-row > input::placeholder" ;
     sty:declares [ sty:property "color" ; sty:token tok:faint ] .
+# The picker button fits inside the row's border and padding (2px and 1px each way), so the row is
+# as tall as any single-line control, not a button's height plus its own frame.
 [] a sty:StyleRule ; sty:appliesTo c:DateField ;
     sty:part "> .sem-date-row > [data-sem-c=icon-button]" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "width" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 6px)" ] ,
+                 [ sty:property "height" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 6px)" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:TimeField ;
     sty:part "> .sem-time-row" ;
@@ -118,7 +122,7 @@
                  [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "4px" ] ,
-                 [ sty:property "min-height" ; sty:raw "var(--control-h, 38px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "padding" ; sty:raw "2px 3px 2px var(--control-px, 12px)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
@@ -145,7 +149,7 @@
     sty:part "> .sem-time-row > input" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 10ch" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
-                 [ sty:property "min-height" ; sty:raw "calc(var(--control-h, 38px) - 8px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 8px)" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "outline" ; sty:raw "none" ] ,
@@ -161,6 +165,8 @@
 [] a sty:StyleRule ; sty:appliesTo c:TimeField ;
     sty:part "> .sem-time-row > [data-sem-c=icon-button]" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "width" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 6px)" ] ,
+                 [ sty:property "height" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 6px)" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
 # The button draws a calendar leaf in the current colour (the glyph is for text and assistive tools).
 [] a sty:StyleRule ; sty:appliesTo c:DateField ;

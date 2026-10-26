@@ -17,7 +17,7 @@ Every value is a `sty:Token` on a named scale, emitted as `--sem-<slug>`.
 | **Type** | `text-xs` 11 · `text-sm` 13 · `text-md` 15 · `text-lg` 17 · `text-xl` 20 · `text-2xl` 24 · `text-3xl` 30 | Plus `font`, `font-mono`, `leading-tight/normal`. |
 | **Space** | `space-1` … `space-8` (4 → 48px) | Densities re-value these per subtree. |
 | **Radius** | `radius-sm` 6 · `radius-md` 10 · `radius-lg` 14 · `radius-xl` 20 · `radius-full` | |
-| **Size** | `control-sm` 28 · `control-md` 36 · `control-lg` 44 | Height of every control at each size. |
+| **Size** | `control-sm` 28 · `control-md` 36 · `control-lg` 44 · `control-height` 38 (32 compact) | Height of every control at each size; `control-height` where no size is set. A single-line control (text, date, number, select) is one box: that block size, inline padding only, the line centred. A select draws the theme's `chevron` (text colour, mirrored right to left), not the engine's menulist. |
 | **Elevation** | `shadow-1` … `shadow-4` | Flat, raised, overlay, floating. |
 | **Motion** | `duration-fast` 120ms · `duration` 180ms · `duration-slow` 320ms · `ease` / `ease-out` / `spring`; `duration-move` 700ms · `ease-move` for long movements (a 3D turn), `move-fade` for what replaces them; `duration-loop` 320ms, the beat of repeating animations | Every transition and animation is timed by these (a test checks no literal time is left). The motion layer re-values them: Reduced shortens, makes long movements instant with a fade instead, and slows loops; None makes all of it instant. |
 

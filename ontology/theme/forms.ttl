@@ -49,18 +49,24 @@
 [] a sty:StyleRule ; sty:appliesTo c:ShapeField ; sty:part "label" ;
     sty:declares [ sty:property "font-size" ; sty:token tok:font-size-small ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
+# Single-line controls take their block size from the shared control box (default.ttl); a text
+# area has padding all round. Colours are background-color, so a select keeps its chevron.
 [] a sty:StyleRule ; sty:appliesTo c:ShapeField ; sty:part ":is(input:not([type=checkbox]), select, textarea)" ;
-    sty:declares [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+    sty:declares [ sty:property "padding-inline" ; sty:token tok:space-3 ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-control ] ,
-                 [ sty:property "background" ; sty:token tok:surface-sunken ] ,
+                 [ sty:property "background-color" ; sty:token tok:surface-sunken ] ,
                  [ sty:property "color" ; sty:token tok:text ] ,
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
-                 [ sty:property "transition" ; sty:raw "border-color var(--sem-motion), box-shadow var(--sem-motion), background var(--sem-motion)" ] .
+                 [ sty:property "transition" ; sty:raw "border-color var(--sem-motion), box-shadow var(--sem-motion), background-color var(--sem-motion)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeField ; sty:part "textarea" ;
+    sty:declares [ sty:property "padding-block" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:ShapeField ; sty:part "select:not([multiple]):not([size])" ;
+    sty:declares [ sty:property "padding-inline-end" ; sty:token tok:chevron-space ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShapeField ; sty:part ":is(input, select, textarea):focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
-                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "background-color" ; sty:token tok:surface ] ,
                  [ sty:property "border-color" ; sty:token tok:accent ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:ShapeField ; sty:part "input[type=checkbox]" ;
