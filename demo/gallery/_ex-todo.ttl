@@ -68,3 +68,52 @@ ui:ex-todo-m-todoCard a c:Mention ; c:label "screen card" ; c:mentions ui:todoCa
 ui:ex-todo-m-textCard a c:Mention ; c:label "The text card" ; c:mentions ui:textProjectionCard ; c:to ui:textProjectionCard .
 ui:ex-todo-m-density a c:Mention ; c:label "The density button" ; c:mentions ex:density .
 ui:ex-todo-m-toggle a c:Mention ; c:label "its reaction" ; c:mentions ex:ToggleDensity .
+
+# --- The todo, live: on screen, its data as Turtle and as text ----------------------------------
+# The same app in a sandbox of its own (c:LiveExample, ontology/components/live.ttl), with its data
+# (c:dataPreview: the todos and the new todo's field) shown as Turtle that follows every
+# interaction, and the text projection beside it. The home page shows it.
+
+ui:todoLive a c:LiveExample ;
+    c:label "A todo app: on screen, as data, as text" , "Застосунок справ: на екрані, як дані, як текст"@uk ,
+            "Eine Todo-App: auf dem Bildschirm, als Daten, als Text"@de , "تطبيق مهام: على الشاشة، كبيانات، كنص"@ar ;
+    c:exampleRoot <https://example.org/todo#page> ;
+    c:sources ( ui:todoLive-app ) ;
+    c:showSources false ;
+    c:textPreview true ;
+    c:dataPreview """CONSTRUCT { ?s ?p ?o }
+WHERE {
+  { ex:todos c:item ?s . ?s ?p ?o }
+  UNION
+  { BIND(ex:newTodo AS ?s) ex:newTodo ?p ?o FILTER(?p IN (c:value, c:error)) }
+}""" .
+ui:todoLive-app a c:CodeEditor ; c:language "turtle" ; c:label "todo.ttl" ; c:original '''@prefix ex: <https://example.org/todo#> .
+
+ex:page a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ex:newTodo ex:add ex:todos ) .
+ex:newTodo a c:TextField ; c:label "New todo" ; c:placeholder "What needs doing?" .
+ex:add a c:Button ; c:label "Add" ; sty:intent sty:Primary .
+ex:todos a c:List ; c:label "Todos" ;
+    c:sortBy ex:priority ; c:itemLabel rdfs:label ; c:itemChecked ex:done ;
+    c:item ex:t1 , ex:t2 , ex:t3 .
+
+ex:t1 rdfs:label "Write the core ontology" ; ex:priority 1 ; ex:done true .
+ex:t2 rdfs:label "Sketch the style layer" ; ex:priority 2 ; ex:done false .
+ex:t3 rdfs:label "Wire up behaviour" ; ex:priority 3 ; ex:done false .
+
+# A click on Add with an empty field is an error; with text, a new todo.
+ex:RequireText a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ;
+    beh:inserts """PREFIX ex: <https://example.org/todo#>
+CONSTRUCT { ex:newTodo c:error "Please describe the todo first." }
+WHERE { FILTER NOT EXISTS { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) } }""" .
+ex:AddTodo a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ;
+    beh:deletes """PREFIX ex: <https://example.org/todo#>
+CONSTRUCT { ex:newTodo c:value ?v ; c:error ?e }
+WHERE { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) OPTIONAL { ex:newTodo c:error ?e } }""" ;
+    beh:inserts """PREFIX ex: <https://example.org/todo#>
+CONSTRUCT { ?item rdfs:label ?v ; ex:priority ?next ; ex:done false . ex:todos c:item ?item . }
+WHERE {
+  ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0)
+  { SELECT (COALESCE(MAX(?p) + 1, 1) AS ?next) WHERE { ?any ex:priority ?p } }
+  BIND(IRI(CONCAT(STR(ex:), "t", STR(?next))) AS ?item)
+}""" .''' .

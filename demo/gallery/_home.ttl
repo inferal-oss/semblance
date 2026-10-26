@@ -6,18 +6,20 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
-# The landing page: what Semblance is, in a few claims, each with a way in.
-# Its buttons are c:Setter: they write the page (or the docs section) into the graph.
+# The landing page: what Semblance is, shown working, why it matters, then its claims, each with a
+# way in. Its buttons are c:Setter: they write the page (or the docs section) into the graph.
 
 ui:home a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-7 ; pos:inset tok:space-6 ; pos:measure pos:PageMeasure ;
-    c:children ( ui:hero ui:pillars ui:howItWorks ) .
+    c:children ( ui:hero ui:todoLive ui:why ui:pillars ui:howItWorks ) .
 
 # --- hero ---
 ui:hero a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:align pos:Center ;
-    c:children ( ui:heroMark ui:heroTitle ui:heroLead ui:heroActions ) .
+    c:children ( ui:heroMark ui:heroClaim ui:heroTitle ui:heroLead ui:heroActions ) .
 ui:heroMark a c:GraphMark ; sty:size sty:Large ; rdfs:label "Semblance" .
+ui:heroClaim a c:Badge ; sty:tone sty:Accent ; sty:emphasis sty:Soft ; sty:size sty:Large ;
+    c:label "RDF-native UI" , "RDF-нативний UI"@uk , "RDF-natives UI"@de , "واجهة أصلية في RDF"@ar .
 ui:heroTitle a c:Text ; sty:textStyle sty:Display ; pos:textAlign pos:TextCenter ;
-    c:label "The interface is a graph." , "Інтерфейс — це граф."@uk , "Die Oberfläche ist ein Graph."@de , "الواجهة رسم بياني."@ar .
+    c:label "The UI is data." , "Інтерфейс — це дані."@uk , "Die Oberfläche ist Daten."@de , "الواجهة بيانات."@ar .
 ui:heroLead a c:Text ; sty:textStyle sty:Subtitle ; sty:tone sty:Neutral ; pos:textAlign pos:TextCenter ; pos:measure pos:ReadingMeasure ;
     c:label "Semblance is a web UI framework where components, layers, themes and behaviour are RDF ontologies. Rules - SPARQL queries or functions - project one graph to the screen, to text, to anything; every interaction is an event in the graph." ,
             "Semblance — вебфреймворк, де компоненти, шари, теми й поведінка є онтологіями RDF. Правила — запити SPARQL або функції — проєктують один граф на екран, у текст, будь-куди; кожна взаємодія — подія в графі."@uk ,
@@ -34,6 +36,78 @@ ui:goExamples a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ; c
 ui:goComponents a c:Button , c:Setter ; c:controls ui:app ; c:property ui:page ; c:value ui:Components ;
     c:label "Browse components" , "Компоненти"@uk , "Komponenten"@de , "تصفح المكونات"@ar ;
     sty:emphasis sty:Ghost ; sty:size sty:Large .
+
+# --- why it matters: a live data system, not a program driven by events ---
+ui:why a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
+    c:children ( ui:whyHead ui:whyLead ui:whyContrast ui:whyFollows ) .
+ui:whyHead a c:Heading ; c:level 2 ;
+    c:label "Why it matters" , "Чому це важливо"@uk , "Warum das zählt"@de , "لماذا يهم ذلك"@ar .
+ui:whyLead a c:Text ; sty:textStyle sty:Subtitle ; pos:measure pos:ReadingMeasure ;
+    c:label "Semblance is a live data system, not a program driven by events. The interface is data, and rules over that data." ,
+            "Semblance — жива система даних, а не програма, яку ведуть події. Інтерфейс — це дані й правила над ними."@uk ,
+            "Semblance ist ein lebendiges Datensystem, kein von Ereignissen getriebenes Programm. Die Oberfläche ist Daten und Regeln über diesen Daten."@de ,
+            "Semblance نظام بيانات حي، لا برنامج تقوده الأحداث. الواجهة بيانات، وقواعد تعمل على تلك البيانات."@ar .
+ui:whyContrast a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-5 ; c:children ( ui:whyUsual ui:whySemblance ) .
+ui:whyUsual a c:Card ; c:content ui:whyUsualText ;
+    c:label "The usual way: handlers and component state" , "Звичний спосіб: обробники й стан компонентів"@uk ,
+            "Der übliche Weg: Handler und Komponentenzustand"@de , "الطريقة المعتادة: معالجات وحالة مكونات"@ar .
+ui:whyUsualText a c:Text ;
+    c:label "An event handler mutates state kept inside components, and the screen is whatever the handlers last left. The state is scattered across objects, out of reach of tools, and each feature wires its own updates." ,
+            "Обробник подій змінює стан, схований у компонентах, а екран — те, що лишили останні обробники. Стан розкиданий по об’єктах, недосяжний для інструментів, і кожна функція сама прокладає свої оновлення."@uk ,
+            "Ein Event-Handler verändert Zustand in Komponenten, und der Bildschirm ist, was die Handler zuletzt hinterließen. Der Zustand ist über Objekte verstreut, für Werkzeuge unerreichbar, und jede Funktion verdrahtet ihre Updates selbst."@de ,
+            "يغيّر معالج الأحداث حالةً مخبأة داخل المكونات، والشاشة هي ما تركته المعالجات آخر مرة. الحالة مبعثرة بين الكائنات، بعيدة عن متناول الأدوات، وكل ميزة توصل تحديثاتها بنفسها."@ar .
+ui:whySemblance a c:Card ; c:content ui:whySemblanceText ; sty:tone sty:Accent ;
+    c:label "Semblance: data and rules over it" , "Semblance: дані й правила над ними"@uk ,
+            "Semblance: Daten und Regeln darüber"@de , "Semblance: بيانات وقواعد عليها"@ar .
+ui:whySemblanceText a c:Text ;
+    c:label "State is triples. Rendering is a projection of them that stays current, incrementally. An interaction is data too: an event in a change log, which reactions turn into one change. The same graph projects to the screen, to text and to anything else." ,
+            "Стан — це трійки. Відображення — їхня проєкція, що лишається актуальною, інкрементно. Взаємодія — теж дані: подія в журналі змін, яку реакції перетворюють на одну зміну. Той самий граф проєктується на екран, у текст і будь-куди."@uk ,
+            "Zustand sind Tripel. Darstellung ist eine Projektion davon, die inkrementell aktuell bleibt. Auch eine Interaktion ist Daten: ein Ereignis im Änderungsprotokoll, das Reaktionen in eine Änderung verwandeln. Derselbe Graph projiziert auf den Bildschirm, in Text und überallhin."@de ,
+            "الحالة ثلاثيات. والعرض إسقاط لها يبقى محدَّثًا تدريجيًا. والتفاعل بيانات أيضًا: حدث في سجل التغييرات تحوّله التفاعلات إلى تغيير واحد. والرسم البياني نفسه يُسقَط على الشاشة وفي النص وفي أي مكان."@ar .
+ui:whyFollows a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-4 ; pos:layout pos:AlignedColumns ;
+    c:children ( ui:whyInspect ui:whyQuery ui:whyPersist ui:whyReplay ui:whyOneTruth ui:whyCost ) .
+ui:whyInspect a c:Card ; c:content ui:whyInspectText ;
+    c:label "Inspectable" , "Видимий"@uk , "Einsehbar"@de , "قابل للفحص"@ar .
+ui:whyInspectText a c:Text ; sty:tone sty:Neutral ;
+    c:label "Every piece of state, every rendered node and the rule that made it can be looked at." ,
+            "Кожен шматок стану, кожен відображений вузол і правило, що його створило, можна роздивитися."@uk ,
+            "Jeder Zustand, jeder dargestellte Knoten und die Regel, die ihn erzeugte, lässt sich ansehen."@de ,
+            "يمكن النظر في كل جزء من الحالة، وفي كل عقدة معروضة والقاعدة التي صنعتها."@ar .
+ui:whyQuery a c:Card ; c:content ui:whyQueryText ;
+    c:label "Queryable" , "Запитуваний"@uk , "Abfragbar"@de , "قابل للاستعلام"@ar .
+ui:whyQueryText a c:Text ; sty:tone sty:Neutral ;
+    c:label "Ask the interface anything in SPARQL: what is shown, what changed, what is invalid." ,
+            "Запитайте інтерфейс про будь-що мовою SPARQL: що показано, що змінилося, що недійсне."@uk ,
+            "Fragen Sie die Oberfläche alles in SPARQL: was gezeigt wird, was sich änderte, was ungültig ist."@de ,
+            "اسأل الواجهة أي شيء بلغة SPARQL: ما المعروض، وما الذي تغيّر، وما غير الصالح."@ar .
+ui:whyPersist a c:Card ; c:content ui:whyPersistText ;
+    c:label "Persistable" , "Зберігуваний"@uk , "Speicherbar"@de , "قابل للحفظ"@ar .
+ui:whyPersistText a c:Text ; sty:tone sty:Neutral ;
+    c:label "State is triples, so keeping it is writing them down: policies say what, where and for how long." ,
+            "Стан — це трійки, тож зберегти його — значить записати їх: політики кажуть що, де й як довго."@uk ,
+            "Zustand sind Tripel; ihn behalten heißt sie aufschreiben: Richtlinien sagen was, wo und wie lange."@de ,
+            "الحالة ثلاثيات، فحفظها يعني تدوينها: السياسات تحدد ماذا وأين وإلى متى."@ar .
+ui:whyReplay a c:Card ; c:content ui:whyReplayText ;
+    c:label "Replayable" , "Відтворюваний"@uk , "Wiederholbar"@de , "قابل لإعادة التشغيل"@ar .
+ui:whyReplayText a c:Text ; sty:tone sty:Neutral ;
+    c:label "Every interaction is an event in a change log with the change it made: replay it, undo it, audit it." ,
+            "Кожна взаємодія — подія в журналі змін разом зі зміною, яку вона зробила: відтворіть, скасуйте, перевірте."@uk ,
+            "Jede Interaktion ist ein Ereignis im Änderungsprotokoll samt ihrer Änderung: wiederholen, rückgängig machen, prüfen."@de ,
+            "كل تفاعل حدث في سجل التغييرات مع التغيير الذي أحدثه: أعد تشغيله أو تراجع عنه أو دقّق فيه."@ar .
+ui:whyOneTruth a c:Card ; c:content ui:whyOneTruthText ;
+    c:label "One source of truth" , "Одне джерело правди"@uk , "Eine Quelle der Wahrheit"@de , "مصدر واحد للحقيقة"@ar .
+ui:whyOneTruthText a c:Text ; sty:tone sty:Neutral ;
+    c:label "The screen, the text and every other view are projections of one graph, so they cannot disagree." ,
+            "Екран, текст і будь-яке інше подання — проєкції одного графа, тож вони не можуть розійтися."@uk ,
+            "Bildschirm, Text und jede andere Ansicht sind Projektionen eines Graphen und können sich nicht widersprechen."@de ,
+            "الشاشة والنص وكل عرض آخر إسقاطات لرسم بياني واحد، فلا يمكن أن تختلف."@ar .
+ui:whyCost a c:Card ; c:content ui:whyCostText ;
+    c:label "Cost follows the change" , "Ціна — за зміну"@uk , "Kosten folgen der Änderung"@de , "الكلفة على قدر التغيير"@ar .
+ui:whyCostText a c:Text ; sty:tone sty:Neutral ;
+    c:label "Only the rules a change touches run again: an interaction costs what it changes, not the size of the app." ,
+            "Знову виконуються лише правила, яких торкнулася зміна: взаємодія коштує стільки, скільки змінює, а не скільки важить застосунок."@uk ,
+            "Nur die Regeln, die eine Änderung berührt, laufen erneut: eine Interaktion kostet, was sie ändert, nicht die Größe der App."@de ,
+            "لا تعمل من جديد إلا القواعد التي يمسها التغيير: كلفة التفاعل بقدر ما يغيّره، لا بحجم التطبيق."@ar .
 
 # --- what it is, in six claims ---
 ui:pillars a c:Grid ; c:minWidth "260px" ; pos:gap tok:space-5 ; pos:layout pos:AlignedColumns ;

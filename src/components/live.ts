@@ -14,6 +14,14 @@ const L = {
   sources: c + 'sources',
   selectedSource: c + 'selectedSource',
   textPreview: c + 'textPreview',
+  showSources: c + 'showSources',
+  dataPreview: c + 'dataPreview',
+  lineText: c + 'lineText',
+  lineKey: c + 'lineKey',
+  lineChange: c + 'lineChange',
+  changedLine: c + 'changedLine',
+  triplesAdded: c + 'triplesAdded',
+  triplesRemoved: c + 'triplesRemoved',
   sandboxState: c + 'sandboxState',
   problem: c + 'problem',
   message: c + 'message',
@@ -42,6 +50,12 @@ const P = {
   stale: c + 'LiveStalePhrase',
   broken: c + 'LiveBrokenPhrase',
   line: c + 'LiveLinePhrase',
+  screen: c + 'LiveScreenPhrase',
+  data: c + 'LiveDataPhrase',
+  hint: c + 'LiveFlowHintPhrase',
+  flow: c + 'LiveFlowPhrase',
+  cause: c + 'LiveCausePhrase',
+  follow: c + 'LiveFollowPhrase',
 } as const
 
 const phrase = (ctx: RuleContext, iri: string) => text(ctx, ctx.nn(iri), RDFS_LABEL) ?? ''
@@ -71,11 +85,14 @@ const liveExample: FnRule = (ctx, focus) => {
   const state = ctx.object(focus, L.sandboxState)
   const stateSlug = (state && str(ctx.object(state, SEM.slug))) ?? 'pending'
   const chosen = ctx.object(focus, L.selectedSource) ?? editors[0]
+  const withSources = str(ctx.object(focus, L.showSources)) !== 'false'
+  const withData = !!ctx.object(focus, L.dataPreview)
+  const withText = isTrue(ctx.object(focus, L.textPreview))
 
-  // The tabs and their panels, keyed by place.
+  // The tabs and their panels, keyed by place (none with c:showSources false).
   const tabs: NamedNode[] = []
   const panels: NamedNode[] = []
-  editors.forEach((editor, i) => {
+  if (withSources) editors.forEach((editor, i) => {
     const on = !!chosen && chosen.equals(editor)
     const tab = o.node(`tab-${i}`)
     const panel = o.node(`panel-${i}`)
@@ -131,29 +148,96 @@ const liveExample: FnRule = (ctx, focus) => {
     if (items.length) parts.push(o.el('problems', 'Ul', { class: 'sem-live-problems' }, items))
     preview.push(o.el('status', 'Div', { class: 'sem-live-status', role: 'status' }, parts))
   }
+  // With the data, the rendering has a head like the other panes.
+  if (withData) preview.push(o.el('screen-head', 'P', { class: 'sem-live-modality' }, [o.text('screen-head-text', phrase(ctx, P.screen))]))
   const screen = o.el('screen', 'Div', { class: 'sem-live-screen' })
   o.t(screen, SEM.slot, focus.value)
   preview.push(screen)
-  if (isTrue(ctx.object(focus, L.textPreview))) {
-    preview.push(o.el('text-head', 'P', { class: 'sem-live-modality' }, [o.text('text-head-text', phrase(ctx, P.text))]))
+  const textParts: NamedNode[] = []
+  if (withText) {
+    textParts.push(o.el('text-head', 'P', { class: 'sem-live-modality' }, [o.text('text-head-text', phrase(ctx, P.text))]))
     const slot = o.el('text', 'Div', { class: 'sem-live-text' })
     o.t(slot, SEM.slot, `${focus.value} text`)
-    preview.push(slot)
+    textParts.push(slot)
   }
+  if (!withData) preview.push(...textParts)
 
   const bar = o.el('bar', 'Div', { class: 'sem-live-bar' }, [
-    o.el('tabs', 'Div', { class: 'sem-live-tabs', role: 'tablist', 'aria-label': phrase(ctx, P.sources) }, tabs),
+    ...(withSources ? [o.el('tabs', 'Div', { class: 'sem-live-tabs', role: 'tablist', 'aria-label': phrase(ctx, P.sources) }, tabs)] : []),
     o.el('actions', 'Div', { class: 'sem-live-actions' }, actions),
   ])
-  const body = o.el('body', 'Div', { class: 'sem-live-body' }, [
-    o.el('sources', 'Div', { class: 'sem-live-sources' }, panels),
-    o.el('preview', 'Div', { class: 'sem-live-preview', role: 'region', 'aria-label': phrase(ctx, P.rendering) }, preview),
-  ])
-  o.renders(o.el('root', 'Div', { role: 'group', 'aria-label': caption || undefined, 'data-sem-state': stateSlug }, [bar, body]))
+  // The body: the caption of what happened, the sources, the rendering, the data, the text and
+  // the layer of arrows (the flow and the data's lines are renderings of their own).
+  const parts: NamedNode[] = []
+  if (withData) parts.push(o.el('flow', 'P', { class: 'sem-live-flow', role: 'status' }))
+  if (withSources) parts.push(o.el('sources', 'Div', { class: 'sem-live-sources' }, panels))
+  parts.push(o.el('preview', 'Div', { class: 'sem-live-preview', role: 'region', 'aria-label': phrase(ctx, P.rendering) }, preview))
+  if (withData) {
+    const dataPhrase = phrase(ctx, P.data)
+    parts.push(
+      o.el('data-pane', 'Div', { class: 'sem-live-pane', role: 'region', 'aria-label': dataPhrase }, [
+        o.el('data-head', 'P', { class: 'sem-live-modality' }, [o.text('data-head-text', dataPhrase)]),
+        o.el('data', 'Div', { class: 'sem-live-data' }),
+      ]),
+    )
+    if (withText) parts.push(o.el('text-pane', 'Div', { class: 'sem-live-pane' }, textParts))
+    parts.push(o.el('links', 'Div', { class: 'sem-live-links' }))
+  }
+  const body = o.el('body', 'Div', { class: 'sem-live-body' }, parts)
+  o.renders(o.el('root', 'Div', { role: 'group', 'aria-label': caption || undefined, 'data-sem-state': stateSlug, 'data-sem-sources': withSources ? undefined : 'hidden' }, [bar, body]))
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { 'live-example': liveExample }
+/** c:LiveExampleData: one line of the example's data, placed in the data pane by its key. */
+const dataLine: FnRule = (ctx, focus, member) => {
+  if (!member || !ctx.object(focus, L.dataPreview)) return []
+  const o = ctx.out(focus)
+  const text = str(ctx.object(member, L.lineText))
+  const key = str(ctx.object(member, L.lineKey))
+  if (text === undefined || key === undefined) return []
+  const change = ctx.object(member, L.lineChange)
+  const local = 'line-' + member.value.replace(/^.*\//, '')
+  const line = o.el(local, 'Div', { class: 'sem-live-line', 'data-sem-change': (change && str(ctx.object(change, SEM.slug))) || undefined }, [o.text(local + '-text', text)])
+  o.t(line, SEM.orderKey, key)
+  o.t(o.node('data'), H.hasChild, line)
+  return o.quads
+}
+
+/** c:LiveExampleFlow: the caption of what happened, and the arrows from the rendering to the changed line and on to the text. */
+const flow: FnRule = (ctx, focus) => {
+  if (!ctx.object(focus, L.dataPreview)) return []
+  const o = ctx.out(focus)
+  const added = str(ctx.object(focus, L.triplesAdded))
+  const removed = str(ctx.object(focus, L.triplesRemoved))
+  const happened = added !== undefined || removed !== undefined
+  const caption = happened
+    ? fill(fill(phrase(ctx, P.flow), 'added', added ?? '0'), 'removed', removed ?? '0')
+    : phrase(ctx, P.hint)
+  o.t(o.node('flow'), H.hasChild, o.text('flow-text', caption))
+  const changed = ctx.object(focus, L.changedLine)
+  if (!changed) return o.quads
+  const line = o.node('line-' + changed.value.replace(/^.*\//, ''))
+  const links = o.node('links')
+  const connector = (local: string, from: NamedNode, to: NamedNode, label: string, tone: string, key: string) => {
+    const n = o.node(local)
+    o.t(links, H.hasChild, n)
+      .t(n, RDF_TYPE, ctx.nn(NS.c + 'Connector'))
+      .t(n, NS.c + 'from', from)
+      .t(n, NS.c + 'to', to)
+      .t(n, C.label, label)
+      .t(n, STY.tone, ctx.nn(NS.sty + tone))
+      .t(n, SEM.orderKey, key)
+    return n
+  }
+  connector('cause', o.node('screen'), line, phrase(ctx, P.cause), 'Accent', '1')
+  if (isTrue(ctx.object(focus, L.textPreview))) {
+    const follow = connector('follow', line, o.node('text'), phrase(ctx, P.follow), 'Success', '2')
+    o.t(follow, NS.c + 'line', ctx.nn(NS.c + 'DashedLine'))
+  }
+  return o.quads
+}
+
+export const functions: Record<string, FnRule> = { 'live-example': liveExample, 'live-example:line': dataLine, 'live-example:flow': flow }
 
 // --- reactions (for stores without SPARQL) ---------------------------------------------------------
 

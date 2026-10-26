@@ -5,7 +5,9 @@
 // sees the example's graph. What happened is written back to the site's graph, as data the example's
 // rendering shows: c:sandboxState, c:problem, c:renderTime, c:edited. A sandbox is built when its
 // example is first shown, and rebuilt when its sources change (after typing pauses); a hidden example
-// costs nothing.
+// costs nothing. With c:dataPreview, the example's data (that CONSTRUCT over its graph) is written
+// back too, as lines of Turtle (c:dataLine), after the build and after every interaction that
+// changed it, with what changed marked (c:lineChange, c:changedLine, c:triplesAdded/Removed).
 import { Parser } from 'n3'
 import type { Quad, Term } from '@rdfjs/types'
 import { EventBus } from './behaviour/events.ts'
@@ -25,6 +27,17 @@ export const LIVE = {
   sources: c + 'sources',
   exampleRoot: c + 'exampleRoot',
   textPreview: c + 'textPreview',
+  dataPreview: c + 'dataPreview',
+  dataLine: c + 'dataLine',
+  DataLine: c + 'DataLine',
+  lineText: c + 'lineText',
+  lineKey: c + 'lineKey',
+  lineChange: c + 'lineChange',
+  LineAdded: c + 'LineAdded',
+  LineRemoved: c + 'LineRemoved',
+  changedLine: c + 'changedLine',
+  triplesAdded: c + 'triplesAdded',
+  triplesRemoved: c + 'triplesRemoved',
   original: c + 'original',
   value: c + 'value',
   label: c + 'label',
@@ -258,6 +271,8 @@ interface Mounted {
   builds: number
   /** When it was last seen shown (a count of syncs). */
   shownAt: number
+  /** The data the example shows (c:dataPreview) as last found: its triples by key. */
+  data?: Map<string, Quad>
 }
 
 let sandboxes = 0
@@ -485,7 +500,14 @@ export class Sandboxes {
     flush()
     const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
     const failed = (e: Error) => this.write(m.iri, { problems: [{ message: e.message, severity: 'error' }] })
-    const detachBus = bus.attach(renderer, () => flush(), failed)
+    const detachBus = bus.attach(
+      renderer,
+      (h) => {
+        flush()
+        if (h.delta.add.length || h.delta.remove.length) this.followData(m, sandbox, true)
+      },
+      failed,
+    )
     // What the example asserts full screen is shown over the page (or full screen, if allowed).
     const detachFullscreen = new Fullscreen(bus, {
       element: (iri) => {
@@ -518,6 +540,7 @@ export class Sandboxes {
     m.renderer = renderer
     m.textRenderer = textRenderer
     m.sheet = sheet
+    this.followData(m, sandbox, false)
     m.detach = () => {
       detachStall()
       detachBus()
@@ -599,6 +622,63 @@ export class Sandboxes {
     this.opts.flush()
   }
 
+  /**
+   * The example's data (c:dataPreview) as it is now in its sandbox, written to the site's graph as
+   * lines of Turtle: after a build all of it as it is; after an interaction (`changed`) with the
+   * triples it added and removed marked, and nothing written when it changed none of them.
+   */
+  private followData(m: Mounted, sandbox: Sandbox, changed: boolean) {
+    const site = this.runtime.store
+    const sf = site.factory
+    const query = site.match(sf.namedNode(m.iri), sf.namedNode(LIVE.dataPreview), null, sf.defaultGraph())[0]?.object.value
+    if (!query) return
+    const sources = this.sources(m.iri)
+    const prefixes = { ...NS, ...declared(sources.map((s) => s.text).join('\n')) }
+    const head = Object.entries(prefixes).map(([p, ns]) => `PREFIX ${p}: <${ns}>`).join('\n')
+    let quads: Quad[]
+    try {
+      quads = sandbox.store.construct(head + '\n' + query, [sandbox.store.factory.defaultGraph()])
+    } catch (e) {
+      console.warn('[semblance] the data of a live example could not be read', e)
+      return
+    }
+    const now = new Map(quads.map((q) => [quadKey(q), q]))
+    const before = m.data
+    m.data = now
+    const added = changed && before ? [...now.keys()].filter((k) => !before.has(k)) : []
+    const removed = changed && before ? [...before.keys()].filter((k) => !now.has(k)) : []
+    if (changed && before && !added.length && !removed.length) return
+    const lines = dataLines(now, removed.map((k) => before!.get(k)!), new Set(added), prefixes)
+    const s = sf.namedNode(m.iri)
+    const nn = (iri: string) => sf.namedNode(iri)
+    const integer = (n: number) => sf.literal(String(n), nn(XSD_INTEGER))
+    const desired: Quad[] = []
+    // The arrows point at the first line added, else the first removed.
+    const target = lines.find((l) => l.change === 'added') ?? lines.find((l) => l.change === 'removed')
+    for (const l of lines) {
+      const node = nn(`${m.iri}/data-${hash(l.key)}`)
+      desired.push(
+        sf.quad(s, nn(LIVE.dataLine), node),
+        sf.quad(node, nn(RDF_TYPE), nn(LIVE.DataLine)),
+        sf.quad(node, nn(LIVE.lineText), sf.literal(l.text)),
+        sf.quad(node, nn(LIVE.lineKey), sf.literal(l.sort)),
+      )
+      if (l.change) desired.push(sf.quad(node, nn(LIVE.lineChange), nn(l.change === 'added' ? LIVE.LineAdded : LIVE.LineRemoved)))
+      if (l === target) desired.push(sf.quad(s, nn(LIVE.changedLine), node))
+    }
+    if (changed) desired.push(sf.quad(s, nn(LIVE.triplesAdded), integer(added.length)), sf.quad(s, nn(LIVE.triplesRemoved), integer(removed.length)))
+    const dg = sf.defaultGraph()
+    const current: Quad[] = []
+    for (const p of [LIVE.changedLine, LIVE.triplesAdded, LIVE.triplesRemoved]) current.push(...site.match(s, nn(p), null, dg))
+    for (const q of site.match(s, nn(LIVE.dataLine), null, dg)) current.push(q, ...site.match(q.object, null, null, dg))
+    const keys = new Set(desired.map(quadKey))
+    const had = new Set(current.map(quadKey))
+    const delta: Delta = { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
+    if (!delta.add.length && !delta.remove.length) return
+    this.runtime.apply(delta)
+    this.opts.flush()
+  }
+
   /** Carry out a copy request: the source shown, with the prefixes it uses; then withdraw the request. */
   private async copy(example: string, editor: string) {
     const source = this.sources(example).find((s) => s.editor === editor)
@@ -622,6 +702,65 @@ export class Sandboxes {
     }, this.opts.copiedMs ?? 1500)
     this.timers.add(t)
   }
+}
+
+/** A line of a live example's data: its text, where it sorts, and what the last interaction did to its triple. */
+export interface DataLine {
+  key: string
+  sort: string
+  text: string
+  change?: 'added' | 'removed'
+}
+
+/**
+ * The data as Turtle, a line per triple: by subject, then rdf:type, rdfs:label and the other
+ * predicates, then object. A subject's first line names it; the others are indented. The lines of
+ * present triples end in ";" or "." as Turtle has them; a removed triple (marked) stays in its
+ * place, without punctuation, beside what replaced it.
+ */
+export function dataLines(present: Map<string, Quad>, removed: Quad[], added: Set<string>, prefixes: Record<string, string>): DataLine[] {
+  const term = (t: Term) => termText(t, prefixes)
+  const rank = (p: string) => (p === RDF_TYPE ? '0' : p === NS.rdfs + 'label' ? '1' : '2')
+  const rows = [
+    ...[...present].map(([key, q]) => ({ key, q, change: added.has(key) ? ('added' as const) : undefined })),
+    ...removed.map((q) => ({ key: quadKey(q), q, change: 'removed' as const })),
+  ].map((r) => {
+    const subject = term(r.q.subject)
+    const predicate = r.q.predicate.value === RDF_TYPE ? 'a' : term(r.q.predicate)
+    const object = term(r.q.object)
+    return { ...r, subject, predicate, object, sort: `${subject} ${rank(r.q.predicate.value)}${predicate} ${r.change === 'removed' ? 0 : 1}${object}` }
+  })
+  rows.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0))
+  const lastPresent = new Map<string, number>()
+  rows.forEach((r, i) => r.change !== 'removed' && lastPresent.set(r.subject, i))
+  return rows.map((r, i) => {
+    const lead = i === 0 || rows[i - 1]!.subject !== r.subject ? r.subject : '    '
+    const end = r.change === 'removed' ? '' : lastPresent.get(r.subject) === i ? ' .' : ' ;'
+    return { key: r.key, sort: r.sort, text: `${lead} ${r.predicate} ${r.object}${end}`.replace(/^ {5}/, '    '), change: r.change }
+  })
+}
+
+/** A term as Turtle writes it, with the given prefixes. */
+function termText(t: Term, prefixes: Record<string, string>): string {
+  if (t.termType === 'NamedNode') {
+    const short = compactIri(t.value, prefixes)
+    return short === t.value ? `<${t.value}>` : short
+  }
+  if (t.termType === 'BlankNode') return `_:${t.value}`
+  if (t.termType !== 'Literal') return t.value
+  const dt = t.datatype?.value
+  if ((dt === XSD_BOOLEAN && /^(true|false)$/.test(t.value)) || (dt === XSD_INTEGER && /^[+-]?\d+$/.test(t.value))) return t.value
+  const quoted = JSON.stringify(t.value)
+  if (t.language) return `${quoted}@${t.language}`
+  if (!dt || dt === NS.xsd + 'string') return quoted
+  return `${quoted}^^${termText(t.datatype, prefixes)}`
+}
+
+/** A short, stable name for a line's triple (FNV-1a, hex). */
+function hash(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(16).padStart(8, '0')
 }
 
 /**
