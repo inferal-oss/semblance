@@ -1,11 +1,13 @@
-// Function rules and reactions for the panes (ontology/components/panes.ttl): c:SplitView and
-// c:DockPanel. Both are sized by one-axis size handles whose beh:Size events the reactions
+// Function rules and reactions for the panes (ontology/components/panes.ttl): c:TiledWorkspace,
+// c:SplitView and c:DockPanel. Both are sized by one-axis size handles whose beh:Size events the reactions
 // turn into graph state (c:ratio; c:height or c:width).
-import type { NamedNode, Term } from '@rdfjs/types'
-import type { ReactionFn } from '../behaviour/events.ts'
+import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
-import { MOD, NS, SEM, XSD_INTEGER } from '../ns.ts'
-import { el } from './data.ts'
+import { MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_INTEGER } from '../ns.ts'
+import { mint } from '../rdf.ts'
+import { holdsOther, tabsOf } from './containers.ts'
+import { el, md5 } from './data.ts'
 import { isTrue, named, nodes, str, text } from './util.ts'
 
 const C = NS.c
@@ -13,16 +15,103 @@ const XSD_DECIMAL = NS.xsd + 'decimal'
 const DEFAULT_MIN = 120
 const DEFAULT_DOCK = 280
 
-/** A stable root around a graph-owned tree of nested split views and tab groups. */
+// --- TiledWorkspace -------------------------------------------------------------------------------
+
+/** The workspace's region (named by c:label), holding its tree's root. */
 const tiledWorkspace: FnRule = (ctx, focus) => {
   const tile = ctx.object(focus, C + 'rootTile')
-  if (!named(tile)) return []
   const o = ctx.out(focus)
-  const root = el(o, 'root', ctx.modality === MOD.Text ? 'Div' : 'Section', {}, [tile])
+  const root = el(o, 'root', ctx.modality === MOD.Text ? 'Div' : 'Section', {}, named(tile) ? [tile] : [])
   const label = text(ctx, focus, C + 'label')
   if (label && ctx.modality !== MOD.Text) o.attr(root, 'aria-label', label)
   o.renders(root)
   return o.quads
+}
+
+const SIDES = [C + 'primary', C + 'secondary']
+
+/** Whether a node is in a c:TiledWorkspace's tree: its c:rootTile, or below it through split views' panes. */
+function inTree(ctx: ReactionContext, node: Term): boolean {
+  const ws = ctx.runtime.store.factory.namedNode(C + 'TiledWorkspace')
+  for (let hops = 0; hops < 64; hops++) {
+    if (ctx.match(null, C + 'rootTile', node).some((q) => ctx.match(q.subject, RDF_TYPE, ws).length)) return true
+    const parent = SIDES.flatMap((p) => ctx.match(null, p, node))[0]?.subject
+    if (!parent) return false
+    node = parent
+  }
+  return false
+}
+
+/** The edges that hold a pane in a workspace's tree: the workspace's c:rootTile, or a split view's side. */
+function edgesTo(ctx: ReactionContext, pane: Term): Quad[] {
+  const ws = ctx.runtime.store.factory.namedNode(C + 'TiledWorkspace')
+  return [
+    ...ctx.match(null, C + 'rootTile', pane).filter((q) => ctx.match(q.subject, RDF_TYPE, ws).length),
+    ...SIDES.flatMap((p) => ctx.match(null, p, pane)).filter((q) => inTree(ctx, q.subject)),
+  ]
+}
+
+/**
+ * Dropped on an edge of these tabs: a new split view (minted from the drop) takes their place,
+ * with them on one side and new sortable tabs holding the tab on the other.
+ */
+const tileSplit: ReactionFn = (ctx) => {
+  const none = { add: [], remove: [] }
+  const f = ctx.runtime.store.factory
+  const nn = (iri: string) => f.namedNode(iri)
+  const tab = ctx.object(ctx.event, NS.dnd + 'carrying')
+  const zone = ctx.object(ctx.event, NS.dnd + 'into')
+  const edge = zone && ctx.object(zone, C + 'splitsAt')
+  if (!tab || !edge || !ctx.match(tab, RDF_TYPE, nn(C + 'Tab')).length) return none
+  const target = ctx.target
+  if (!tabsOf(ctx, tab).some((src) => !src.equals(target) || holdsOther(ctx, target, tab))) return none
+  const links = edgesTo(ctx, target)
+  if (!links.length) return none
+  const n = md5(ctx.event.value).slice(0, 12)
+  const split = nn(mint(target.value, 'split-' + n))
+  const pane = nn(mint(target.value, 'pane-' + n))
+  const cell = nn(mint(pane.value, 'cell-' + md5(tab.value)))
+  const before = edge.value === C + 'StartEdge' || edge.value === C + 'TopEdge'
+  const q = (s: Term, p: string, o: Term) => f.quad(s as NamedNode, nn(p), o as NamedNode)
+  const add = [
+    ...links.map((l) => q(l.subject, l.predicate.value, split)),
+    q(split, RDF_TYPE, nn(C + 'SplitView')),
+    q(split, C + 'primary', before ? pane : target),
+    q(split, C + 'secondary', before ? target : pane),
+    q(pane, RDF_TYPE, nn(C + 'Tabs')),
+    q(pane, RDF_TYPE, nn(NS.dnd + 'Sortable')),
+    q(pane, C + 'tabs', cell),
+    q(pane, C + 'selected', tab),
+    q(cell, RDF_FIRST, tab),
+    q(cell, RDF_REST, nn(RDF_NIL)),
+    ...[C + 'detachable', C + 'windowsOn'].flatMap((p) => ctx.match(target, p, null).map((x) => q(pane, p, x.object))),
+  ]
+  if (edge.value === C + 'TopEdge' || edge.value === C + 'BottomEdge') add.push(q(split, NS.pos + 'direction', nn(NS.pos + 'Column')))
+  return { remove: links, add }
+}
+
+/**
+ * Tabs with none left, in a workspace: their split view goes, its other pane taking its place;
+ * tabs a split minted (an IRI with "/~") go with it.
+ */
+const tileClose: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const target = ctx.target
+  if (!ctx.match(target, C + 'tabs', f.namedNode(RDF_NIL)).length) return { add: [], remove: [] }
+  const remove: Quad[] = []
+  const add: Quad[] = []
+  for (const side of SIDES.flatMap((p) => ctx.match(null, p, target))) {
+    const split = side.subject
+    if (!inTree(ctx, split)) continue
+    const siblings = SIDES.filter((p) => p !== side.predicate.value).flatMap((p) => ctx.match(split, p, null))
+    for (const up of [C + 'rootTile', ...SIDES].flatMap((p) => ctx.match(null, p, split))) {
+      remove.push(up)
+      for (const s of siblings) add.push(f.quad(up.subject as NamedNode, up.predicate as NamedNode, s.object as NamedNode))
+    }
+    remove.push(...ctx.match(split, null, null))
+    if (target.value.includes('/~')) remove.push(...ctx.match(target, null, null))
+  }
+  return { remove, add }
 }
 
 /** An integer-valued property, or `fallback` (truncated, as SPARQL's xsd:integer cast does). */
@@ -192,6 +281,8 @@ export const functions: Record<string, FnRule> = {
 }
 
 export const reactions: Record<string, ReactionFn> = {
+  'panes:tile-split': tileSplit,
+  'panes:tile-close': tileClose,
   'panes:split-resize': splitResize,
   'panes:dock-resize': dockResize,
 }

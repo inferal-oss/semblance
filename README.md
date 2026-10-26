@@ -247,9 +247,10 @@ page of their group. The whole demo
 (`demo/app.ttl`) is built from these; the host only mounts it and performs
 effects of graph state.
 
-Nested split panes with tab groups use `c:TiledWorkspace` and stable graph
-identities. See [Tiled workspaces](docs/TILED-WORKSPACES.md) for the graph model
-and split, close and tab-move operations.
+A `c:TiledWorkspace` is a tree of split views whose panes are sortable tabs: a tab
+dragged onto other tabs moves there, onto an edge of a pane splits that pane, and tabs
+left with none close, each a reaction to one drop. See
+[Tiled workspaces](docs/TILED-WORKSPACES.md).
 
 A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 (`prov:wasDerivedFrom`), and hosted on a `c:Desktop` that is not part of any

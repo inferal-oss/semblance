@@ -238,7 +238,9 @@ const handle: FnRule = (ctx, focus) => {
     let status: string
     if (!r || !t) status = `${name} ${phrase('PickedUpPhrase')}`
     else {
-      const zone = plain(ctx, r, RDFS_LABEL)[0] ?? plain(ctx, r, C.label)[0] ?? local(r)
+      // A zone that names itself (a workspace pane, by its tabs) says so first.
+      const own = ctx.objects(t, DND.zone).filter((z) => ctx.match(z, DND.receptacle, r).length).flatMap((z) => plain(ctx, z, C.label))[0]
+      const zone = own ?? plain(ctx, r, RDFS_LABEL)[0] ?? plain(ctx, r, C.label)[0] ?? local(r)
       const reception = ctx.nn(receptionOf(t.value, r.value))
       const why = ctx.match(reception, DND.verdict, ctx.nn(DND.Refused)).length ? ctx.object(reception, DND.reason)?.value : undefined
       const neighbour = (p: string) => {

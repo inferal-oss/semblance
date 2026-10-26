@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
-import { TiledWorkspace } from '../src/layout/tiled-workspace.ts'
 import { mountShell } from './harness.ts'
 import { expectSameRendering, implementationGaps } from './implementations.ts'
 
@@ -54,47 +53,6 @@ describe('panes', () => {
 
   for (const prefer of ['sparql', 'function'] as const) {
     describe(`(${prefer})`, () => {
-      it('keeps tab content stable while panes split, move and close', () => {
-        const h = showPanes(prefer)
-        const { store, runtime, shell, root, click } = h
-        const f = store.factory
-        const node = (local: string) => f.namedNode(UI + local)
-        const manager = new TiledWorkspace(store, node('ly-tiled-workspace'))
-        const workspace = root('ly-tiled-workspace')
-        expect(workspace.tagName).toBe('SECTION')
-        expect(workspace.getAttribute('aria-label')).toBe('Research workspace')
-        expect(workspace.querySelectorAll('[data-sem-c="split-view"]')).toHaveLength(2)
-        expect(root('ly-tiled-main').querySelectorAll('[role=tab]')).toHaveLength(2)
-        click(root('ly-tiled-main').querySelectorAll('[role=tab]')[1]!)
-        const previewElement = root('ly-tiled-preview')
-
-        const extra = node('ly-tiled-extra')
-        runtime.apply({ add: [
-          f.quad(extra, f.namedNode(NS.rdf + 'type'), f.namedNode(c + 'Tabs')),
-          f.quad(extra, f.namedNode(c + 'tabs'), f.namedNode(NS.rdf + 'nil')),
-        ], remove: [] })
-        runtime.apply(manager.split(node('ly-tiled-notes'), extra, 'column'))
-        shell.flush()
-        expect(workspace.querySelectorAll('[data-sem-c="split-view"]')).toHaveLength(3)
-        expect(root('ly-tiled-notes').querySelector('[role=tab]')?.textContent).toBe('Notes')
-
-        const preview = node('ly-tiled-tab-preview')
-        runtime.apply(manager.moveTab(preview, node('ly-tiled-main'), extra))
-        shell.flush()
-        expect(root('ly-tiled-main').querySelectorAll('[role=tab]')).toHaveLength(1)
-        expect(root('ly-tiled-extra').querySelector('[role=tab]')?.textContent).toBe('Preview')
-        expect(root('ly-tiled-extra').textContent).toContain('Preview the document here.')
-        expect(root('ly-tiled-preview')).toBe(previewElement)
-        expect(store.match(extra, f.namedNode(c + 'selected'), preview)).toHaveLength(1)
-
-        runtime.apply(manager.close(node('ly-tiled-notes')))
-        shell.flush()
-        expect(workspace.querySelectorAll('[data-sem-c="split-view"]')).toHaveLength(2)
-        expect(root('ly-tiled-extra').textContent).toContain('Preview the document here.')
-        expect(root('ly-tiled-preview')).toBe(previewElement)
-        expect(store.match(node('ly-tiled-tab-preview'), f.namedNode(c + 'content'), null)).toHaveLength(1)
-      })
-
       it('a split view: two panes, a separator between them, its share as a style property', () => {
         const { root, part } = showPanes(prefer)
         const split = root('ly-split-view')
@@ -212,3 +170,110 @@ describe('panes', () => {
     })
   }
 })
+
+// --- tiled workspace: tabs moved and panes split and closed by dragging tabs (here by keyboard) ----
+
+/** The Layout gallery's workspace, and a keyboard drag of its tabs. */
+function workspace(prefer: 'sparql' | 'function') {
+  const h = showPanes(prefer)
+  const f = h.store.factory
+  const ws = () => h.root('ly-tiled-workspace')
+  const tab = (name: string) => [...ws().querySelectorAll('[role=tab]')].find((t) => t.textContent!.trim() === name) as HTMLElement
+  const status = () => h.document.querySelector('[data-sem-drag-live]')?.textContent ?? ''
+  const over = () => h.shell.keyOf(ws().querySelector('[data-sem-drop-over]')!)
+  /** Pick a tab up (Space), carry it with the arrow keys to a zone (`<pane>/~root` or `<pane>/~split-<edge>`), put it down. */
+  const carry = (name: string, zone: string) => {
+    const el = tab(name)
+    el.focus()
+    h.key(el, ' ')
+    // The zones are in document order, Right after Left before: along to the end, then back.
+    for (const arrow of ['ArrowRight', 'ArrowLeft']) for (let i = 0; i < 40 && over() !== zone; i++) h.key(h.document.activeElement ?? el, arrow)
+    expect(over(), `${name} carried to ${zone}`).toBe(zone)
+    const said = status()
+    h.key(h.document.activeElement ?? el, ' ')
+    return said
+  }
+  const obj = (s: string, p: string) => h.store.match(f.namedNode(s), f.namedNode(c + p), null).map((q) => q.object.value)
+  /** The tree under the workspace, by local names: split(primary, secondary) and tabs[their tabs]. */
+  const tree = (node = obj(UI + 'ly-tiled-workspace', 'rootTile')[0]!): string => {
+    const [p] = obj(node, 'primary')
+    const [s] = obj(node, 'secondary')
+    const name = node.replace(UI + 'ly-tiled-', '').replace(/~(split|pane)-[0-9a-f]{12}/, '~$1')
+    if (p || s) return `${name}(${p ? tree(p) : '-'}, ${s ? tree(s) : '-'})`
+    const labels = [...(h.shell.nodeOf(node + '/~root') as HTMLElement).querySelectorAll('[role=tab]')].map((t) => t.textContent!.trim())
+    return `${name}[${labels.join(' ')}]`
+  }
+  return { ...h, ws, tab, carry, tree, obj, status }
+}
+
+/** The workspace's HTML, its minted pane and split IRIs (from the drop event, which differs per run) made alike. */
+const html = (w: ReturnType<typeof workspace>) => w.ws().outerHTML.replace(/~(split|pane)-[0-9a-f]{12}/g, '~$1')
+
+/** The walk both implementations take: split a pane, move a tab into another (closing the one it left), split by the top. */
+const WALK: [string, string][] = [
+  ['Preview', 'ly-tiled-notes/~split-end'],
+  ['Properties', 'ly-tiled-main/~root'],
+  ['Notes', 'ly-tiled-main/~split-top'],
+]
+
+describe('tiled workspace', () => {
+  for (const prefer of ['sparql', 'function'] as const) {
+    it(`(${prefer}) a tab dragged onto an edge splits that pane, onto tabs moves there; emptied panes close`, () => {
+      const w = workspace(prefer)
+      expect(w.ws().tagName).toBe('SECTION')
+      expect(w.ws().getAttribute('aria-label')).toBe('Research workspace')
+      expect(w.tree()).toBe('row(main[Editor Preview], column(inspector[Properties], notes[Notes]))')
+      // Each tab is a draggable carrying itself; the tab list keeps its one roving tab stop.
+      const preview = w.tab('Preview')
+      expect([preview.getAttribute('data-sem-gesture'), preview.getAttribute('data-sem-drag'), preview.getAttribute('tabindex')]).toEqual(['drag', UI + 'ly-tiled-tab-preview', '-1'])
+      // Every pane takes a tab as a whole and splits at its four edges.
+      expect([...w.ws().querySelectorAll('[data-sem-drop-zone]')].map((z) => w.shell.keyOf(z)!.replace(UI + 'ly-tiled-', '')).slice(0, 5)).toEqual([
+        'main/~root', 'main/~split-start', 'main/~split-end', 'main/~split-top', 'main/~split-bottom',
+      ])
+      w.click(preview)
+      const content = w.root('ly-tiled-preview')
+
+      // Beside Notes: the notes pane splits, Preview in new tabs after it, selected there.
+      expect(w.carry('Preview', UI + 'ly-tiled-notes/~split-end')).toBe('Preview: Split right.')
+      expect(w.tree()).toBe('row(main[Editor], column(inspector[Properties], notes/~split(notes[Notes], notes/~pane[Preview])))')
+      const split = w.obj(UI + 'ly-tiled-column', 'secondary')[0]!
+      expect(w.obj(split, 'ratio')).toEqual([])
+      expect(w.obj(w.obj(split, 'secondary')[0]!, 'selected')).toEqual([UI + 'ly-tiled-tab-preview'])
+      // The same tab, the same content, the same element.
+      expect(w.root('ly-tiled-preview')).toBe(content)
+      expect(w.root('ly-tiled-preview').closest('[role=tabpanel]')!.hasAttribute('hidden')).toBe(false)
+
+      // Onto the main tabs: Properties moves there (last, selected) and the inspector, now empty, closes.
+      expect(w.carry('Properties', UI + 'ly-tiled-main/~root')).toBe('Properties: Editor.')
+      expect(w.tree()).toBe('row(main[Editor Properties], notes/~split(notes[Notes], notes/~pane[Preview]))')
+      expect(w.obj(UI + 'ly-tiled-main', 'selected')).toEqual([UI + 'ly-tiled-tab-properties'])
+      expect(w.obj(UI + 'ly-tiled-inspector', 'tabs')).toEqual([NS.rdf + 'nil'])
+
+      // Above the main tabs: Notes leaves its pane (which closes, its sibling taking its split's place).
+      w.carry('Notes', UI + 'ly-tiled-main/~split-top')
+      expect(w.tree()).toBe('row(main/~split(main/~pane[Notes], main[Editor Properties]), notes/~pane[Preview])')
+      expect(w.store.match(w.store.factory.namedNode(w.obj(UI + 'ly-tiled-row', 'primary')[0]!), w.store.factory.namedNode(NS.pos + 'direction'), null).map((q) => q.object.value)).toEqual([NS.pos + 'Column'])
+      expect(w.root('ly-tiled-preview')).toBe(content)
+    })
+
+    it(`(${prefer}) a pane's only tab dropped beside itself changes nothing`, () => {
+      const w = workspace(prefer)
+      const before = w.tree()
+      const recorded = w.bus.recent(100).length
+      w.carry('Notes', UI + 'ly-tiled-notes/~split-start')
+      expect(w.tree()).toBe(before)
+      expect(w.bus.recent(100).length).toBe(recorded)
+    })
+  }
+
+  it('renders the same with SPARQL rules and reactions as with functions, after every drop', () => {
+    const both = (['sparql', 'function'] as const).map(workspace)
+    expect(html(both[0]!)).toBe(html(both[1]!))
+    for (const [name, zone] of WALK) {
+      for (const w of both) w.carry(name, UI + zone)
+      expect(both[0]!.tree()).toBe(both[1]!.tree())
+      expect(html(both[0]!), `after ${name} onto ${zone}`).toBe(html(both[1]!))
+    }
+  })
+})
+
