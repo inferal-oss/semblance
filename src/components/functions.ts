@@ -232,6 +232,8 @@ const tabs: FnRule = (ctx, focus) => {
   const chosen = ctx.object(focus, C.selected)?.value
   const selected = attached.some((t) => t.value === chosen) ? chosen : attached[0]?.value
   const text = ctx.modality === MOD.Text
+  // Sortable tabs: each attached tab is dragged by its button, the root of a c:TabHandle carrying it.
+  const sortable = !text && ctx.match(focus, RDF_TYPE, DND.Sortable).length > 0
   const buttons: NamedNode[] = []
   const panels: NamedNode[] = []
   const windows: NamedNode[] = []
@@ -269,13 +271,20 @@ const tabs: FnRule = (ctx, focus) => {
     // The label is its own element, so a tab that can open in a window keeps room inside its own
     // frame for that control (the theme reserves it), whatever the theme draws around the tab.
     const tabLabel = o.el('tab-' + key + '-name', 'Span', { class: 'sem-tab-label' }, [o.text('tab-' + key + '-label', name)])
-    const button = o.el('tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [tabLabel])
+    const handle = sortable ? o.node('drag-' + key) : undefined
+    const button = o.el(handle ? 'drag-' + key + '/~root' : 'tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [tabLabel])
     o.attr(button, 'role', 'tab').attr(button, 'aria-selected', String(on)).attr(button, 'aria-controls', panelId)
     o.t(button, C.selects, tab)
-    buttons.push(button)
+    if (handle) {
+      o.t(handle, RDF_TYPE, ctx.nn(C.TabHandle)).t(handle, RDF_TYPE, ctx.nn(DND.Draggable)).t(handle, C.of, tab).t(handle, DND.carries, tab).t(handle, DND.name, name)
+      o.t(button, SEM.renders, handle)
+    }
+    buttons.push(handle ?? button)
     if (detachable) {
-      // Dragged out of the list it tears off into its window (src/behaviour/tear.ts); Shift+Enter detaches it.
-      o.attr(button, 'data-sem-gesture', 'tear').attr(button, 'aria-keyshortcuts', 'Shift+Enter')
+      // Dragged out of the list it tears off into its window (src/behaviour/tear.ts), unless dragging
+      // it moves it among sortable tabs; Shift+Enter detaches it.
+      if (!handle) o.attr(button, 'data-sem-gesture', 'tear')
+      o.attr(button, 'aria-keyshortcuts', 'Shift+Enter')
       o.t(button, C.tearsOff, tab).t(button, C.tearsInto, o.node('window-' + key))
       const detach = o.el('detach-' + key, 'Button', { type: 'button', class: 'sem-detach' }, [o.text('detach-' + key + '-label', '⧉')])
       o.attr(detach, 'aria-label', `Open ${name} in a window`)
@@ -301,8 +310,40 @@ const tabs: FnRule = (ctx, focus) => {
   // Windows go where the tabs say (a c:Desktop outlives page changes), else inside the tabs.
   const desktop = ctx.object(focus, C.windowsOn)
   if (desktop?.termType === 'NamedNode') for (const w of windows) o.t(desktop, C.hosts, w)
-  o.renders(o.el('root', 'Div', {}, [list, ...panels, ...(desktop ? [] : windows)]))
+  // A pane of a tiled workspace: besides taking tabs, its edges split it (c:splitsAt).
+  const zones = sortable && inWorkspace(ctx, focus) ? splitZones(ctx, o, focus, items.map((t) => label(ctx, t)).join(', ')) : []
+  o.renders(o.el('root', 'Div', {}, [list, ...panels, ...(desktop ? [] : windows), ...zones]))
   return o.quads
+}
+
+/** Whether a component is a pane in a c:TiledWorkspace's tree (below its c:rootTile, through split views). */
+function inWorkspace(ctx: RuleContext, node: Term): boolean {
+  for (let hops = 0; hops < 64; hops++) {
+    if (ctx.match(null, C.rootTile, node).some((q) => ctx.match(q.subject, RDF_TYPE, ctx.nn(C.TiledWorkspace)).length)) return true
+    const parent = [...ctx.match(null, C.primary, node), ...ctx.match(null, C.secondary, node)][0]?.subject
+    if (!parent) return false
+    node = parent
+  }
+  return false
+}
+
+const SPLIT_EDGES = ['StartEdge', 'EndEdge', 'TopEdge', 'BottomEdge'] as const
+
+/** A pane's drop zones: the whole of it takes a tab, and a strip at each edge splits it there. */
+function splitZones(ctx: RuleContext, o: ReturnType<RuleContext['out']>, focus: NamedNode, name: string): NamedNode[] {
+  const root = o.node('root')
+  o.t(focus, DND.zone, root).t(root, DND.receptacle, focus)
+  // The drag's status names the pane by its tabs.
+  if (name) o.t(root, C.label, name)
+  return SPLIT_EDGES.map((name) => {
+    const edge = ctx.nn(C[name])
+    const slug = str(ctx.object(edge, SEM.slug))!
+    const zone = o.el('split-' + slug, 'Div', { class: 'sem-split-zone', 'aria-hidden': 'true', 'data-sem-edge': slug })
+    o.t(focus, DND.zone, zone).t(zone, DND.receptacle, zone).t(zone, C.splitsAt, edge)
+    const said = text(ctx, edge, C.splitLabel)
+    if (said) o.t(zone, C.label, said)
+    return zone
+  })
 }
 
 const segmented: FnRule = (ctx, focus) => {

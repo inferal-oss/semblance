@@ -1,37 +1,72 @@
 # Tiled workspaces
 
-`c:TiledWorkspace` renders one persistent tree. An internal node is a
-`c:SplitView`; a leaf can be any component, including `c:Tabs` with host-owned
-`c:slot` content. Each split has its own `c:ratio` and keyboard-accessible
-separator. Tabs keep their own IRIs when moved between leaves.
+`c:TiledWorkspace` is a tree of panes the user rearranges. Its `c:rootTile` is a `c:SplitView`
+(or a single leaf); each split view's `c:primary` and `c:secondary` are split views again or
+leaves, usually sortable `c:Tabs`. Nothing in it is new layout: the split views size and stack
+their panes (each divider is a `role=separator` with its own `c:ratio`), and the tabs show theirs.
+What the workspace adds is that the tree is the user's to change, by dragging tabs.
 
 ```turtle
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix ui: <https://example.com/ui#> .
 
-ui:workspace a c:TiledWorkspace ; c:label "Workspace" ; c:rootTile ui:main .
-ui:main a c:Tabs ; c:tabs ( ui:editor ) ; c:selected ui:editor .
+ui:workspace a c:TiledWorkspace ; c:label "Workspace" ; c:rootTile ui:columns .
+ui:columns a c:SplitView ; c:primary ui:main ; c:secondary ui:side .
+ui:main a c:Tabs , dnd:Sortable ; c:tabs ( ui:editor ui:preview ) ; c:selected ui:editor .
+ui:side a c:Tabs , dnd:Sortable ; c:tabs ( ui:notes ) .
 ui:editor a c:Tab ; c:label "Editor" ; c:slot "editor" .
+ui:preview a c:Tab ; c:label "Preview" ; c:content ui:previewPane .
+ui:notes a c:Tab ; c:label "Notes" ; c:content ui:notesPane .
 ```
 
-Hosts that manage pane commands can use `TiledWorkspace` from the package root.
-It reads the graph and returns one RDF delta per command. Apply that delta through
-`Runtime.apply` so the projections see a single change:
+## Rearranging
 
-```ts
-const tree = new TiledWorkspace(runtime.store, runtime.store.factory.namedNode('https://example.com/ui#workspace'))
-runtime.apply(tree.split(editorTabs, inspectorTabs, 'row'))
-runtime.apply(tree.moveTab(editorTab, editorTabs, inspectorTabs))
-runtime.apply(tree.close(editorTabs))
+Sortable tabs (`c:Tabs` that are also `dnd:Sortable`) use the drag and drop layer
+([dragdrop.ttl](../ontology/layers/dragdrop.ttl)): each tab's button is the root of a
+`c:TabHandle`, a draggable carrying the tab. By pointer, a tab is dragged; by keyboard, Space picks
+it up, the arrow keys go between the panes and their edges, and Space or Enter puts it down (the
+drag's status, in a live region, names where it would go). In a workspace each pane has five drop
+zones: the whole pane, and a strip along each edge that shows, while the tab is over it, the half
+of the pane the new one would take.
+
+- **Onto tabs**: the tab moves there, last, and is selected (`c:TabsReceive`). The tabs it left
+  drop it from their list and their selection (`c:TabsTake`), so they show their first tab.
+- **Onto an edge of a pane**: a new split view takes the pane's place in the tree, the pane on one
+  side and new sortable tabs holding the tab on the other, before it at the start or top, after it
+  at the end or bottom, stacked for the top and bottom (`c:TiledWorkspaceSplit`). Both are minted
+  under the pane from the drop event (`<pane>/~split-<n>`, `<pane>/~pane-<n>`), so splitting
+  twice never reuses a node, and the new tabs open their windows where the pane's do. Dropping a
+  pane's only tab beside it changes nothing.
+- **Away from tabs that then have none**: `c:TabsTake` raises `c:CloseTile` on them, and
+  `c:TiledWorkspaceClose` removes their split view, its other pane taking its place. Tabs a split
+  minted go with it; the application's own keep their facts.
+
+Every change is one reaction (a `CONSTRUCT` pair with a function twin) to one recorded event, and
+each tab keeps its IRI, its content node and its slot throughout, so whatever a tab shows keeps
+its state and its DOM.
+
+## Keeping an arrangement
+
+The tree is graph state, so a `per:Policy` over it keeps an arrangement. The gallery's example
+keeps its for the browser tab:
+
+```turtle
+ui:rememberWorkspace a per:Policy ; per:scope per:Session ;
+    per:construct """
+CONSTRUCT { ui:workspace c:rootTile ?root . ?n ?p ?o . ?cell rdf:first ?tab ; rdf:rest ?rest }
+WHERE {
+  { ui:workspace c:rootTile ?root }
+  UNION { ui:workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n ?p ?o
+          FILTER(?p IN (rdf:type, c:primary, c:secondary, c:ratio, pos:direction, c:tabs, c:selected)) }
+  UNION { ui:workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?rest }
+}""" .
 ```
 
-`split` accepts `row` or `column` and can put the new pane before or after the
-target. `close` promotes the sibling and retains the removed pane's own graph
-facts. `moveTab` rewrites the two RDF lists and selects the moved tab in its new
-group. It leaves the tab IRI, its content node and its host slot intact. The
-caller decides whether an empty source pane should then close. All operations
-reject targets outside the workspace and malformed tab lists.
+Restored, each subject's properties replace what the application starts with.
 
-For a named input graph, pass it as the third constructor argument. Pane and
-tab identities should come from application data and remain stable across
-re-rendering and persistence restore.
+## On a phone
+
+At compact width each split view stacks its panes, so the workspace is a column of panes, each
+about half a screen tall, and the dividers go. Tabs still move between panes and split them by
+dragging (a long press picks a tab up) or by keyboard.

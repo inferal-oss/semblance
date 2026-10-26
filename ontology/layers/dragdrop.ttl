@@ -457,7 +457,9 @@ WHERE {
   # Where it would go: the zone's name, the verdict there, and the neighbour it would precede or follow.
   OPTIONAL { $this dnd:lifted ?drag . ?drag dnd:into ?r ; dnd:dropTarget ?t .
              OPTIONAL { ?r rdfs:label ?zoneName FILTER(lang(?zoneName) = "") }
-             OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") } }
+             OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") }
+             # A zone that names itself (a workspace pane, by its tabs) says so first.
+             OPTIONAL { ?t dnd:zone ?namedZone . ?namedZone dnd:receptacle ?r ; c:label ?zoneOwn FILTER(lang(?zoneOwn) = "") } }
   OPTIONAL { $this dnd:lifted ?drag2 . ?drag2 dnd:into ?r2 ; dnd:dropTarget ?t2 .
              BIND(IRI(CONCAT(STR(?t2), "/~drop-", ENCODE_FOR_URI(STR(?r2)))) AS ?reception)
              ?reception dnd:verdict dnd:Refused ; dnd:reason ?why }
@@ -469,7 +471,7 @@ WHERE {
   OPTIONAL { dnd:BeforePhrase rdfs:label ?beforeWord FILTER(langMatches(lang(?beforeWord), "en")) }
   OPTIONAL { dnd:AfterPhrase rdfs:label ?afterWord FILTER(langMatches(lang(?afterWord), "en")) }
   OPTIONAL { dnd:RefusedPhrase rdfs:label ?refusedWord FILTER(langMatches(lang(?refusedWord), "en")) }
-  BIND(STR(COALESCE(?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
+  BIND(STR(COALESCE(?zoneOwn, ?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
   BIND(IF(!?lifted, ?none,
        IF(!BOUND(?r), CONCAT(?name, " ", STR(?pickedUp)),
        IF(BOUND(?why), CONCAT(?name, ": ", ?zone, " ", STR(?refusedWord), " ", STR(?why)),
