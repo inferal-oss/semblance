@@ -13,10 +13,11 @@ const PER = NS.per
 const turtle = (n: number) => `
 @prefix x: <${X}> .
 @prefix per: <${PER}> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 x:prefixes sh:declare [ sh:prefix "x" ; sh:namespace "${X}"^^xsd:anyURI ] .
-x:remember a per:Policy ; per:scope per:Session ;
+x:remember a per:Policy ; per:scope per:Session ; iv:strategy iv:Incremental ;
     per:construct """CONSTRUCT { ?i x:score ?s ; x:tag ?t } WHERE { x:list x:item ?i . { ?i x:score ?s } UNION { ?i x:tag ?t } }""" .
 ${Array.from({ length: n }, (_, i) => `x:list x:item x:i${i} . x:i${i} x:score ${i} .`).join('\n')}
 `

@@ -356,8 +356,11 @@ export class Dependencies {
         const o = val(x.o)
         // With a part unbound, it still needs some triple that agrees with what is bound (a
         // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
+        // No triple has a literal subject (and the store would refuse to look).
+        if (s && s.termType === 'Literal') return false
         if (!s || !pp || !o) {
-          if (!varsOf(x).some((v) => r.has(v))) return true
+          // (Only through an index of a bound node: a predicate alone would read all of it.)
+          if (!varsOf(x).some((v) => r.has(v)) || (!s && !o)) return true
           if (pp && pp.termType !== 'NamedNode') return true
         }
         if (!x.g) return lookup(s ?? null, pp ?? null, o ?? null).length > 0
@@ -403,10 +406,9 @@ export class Dependencies {
 
   /**
    * What a walk from pattern `p` (or from a derived row in `scope`) may go through: the patterns of
-   * its scope and the scopes around it, which hold in every solution p takes part in (they prune:
-   * `around`, without paths), and the groups beside them - a sibling LATERAL, a UNION branch, an
-   * OPTIONAL - which join where they share a variable: a walk may go through them (entering by any
-   * variable, leaving only by what they certainly bind), not prune. By variable; cached.
+   * its scope and the scopes around it, which hold in every solution p takes part in (so they also
+   * prune: `around`, without paths). Not the groups beside them: an OPTIONAL or a UNION branch need
+   * not match where a solution does, so a walk through one could miss it. By variable; cached.
    */
   private neighbours(scope: Scope, p: Pat | undefined) {
     const key = p ?? scope
@@ -416,7 +418,6 @@ export class Dependencies {
     const aliases: Alias[] = []
     for (let s: Scope | undefined = scope; s; s = s.parent) pats.push(...s.pats.filter((x) => x !== p)), aliases.push(...s.aliases)
     const inner = new Set(pats)
-    for (const x of this.patterns) if (x !== p && !inner.has(x) && !this.inGlobal(x.scope)) pats.push(x)
     const byVar = new Map<string, Pat[]>()
     for (const x of pats) for (const v of new Set(patVars(x))) byVar.set(v, [...(byVar.get(v) ?? []), x])
     n = { around: [...inner].filter((x) => !('path' in x.p)), aliases, byVar }

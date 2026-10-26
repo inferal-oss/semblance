@@ -4,11 +4,13 @@
 // time after input changes they cover. Writes, restores and forgets are
 // members of per:StateLog, in the persistence graph projections read.
 //
-// A policy's CONSTRUCT is a maintained view (docs/IVM.md, phase 3): the view's
-// changes say when it is dirty (exactly what its patterns read), and a write
-// stores only what changed since the last one - a chunk of its own beside the
-// stored base, compacted into the base when the chunks outgrow it - so writing
-// costs the change, not the policy's size.
+// A policy marked iv:strategy iv:Incremental keeps its CONSTRUCT as a maintained
+// view (docs/IVM.md, phase 3): the view's changes say when it is dirty (exactly
+// what its patterns read), and a write stores only what changed since the last
+// one - a chunk of its own beside the stored base, compacted into the base when
+// the chunks outgrow it - so writing costs the change, not the policy's size. A
+// view reads the input graphs only (views step before projections), so a policy
+// opts in when that is all it reads.
 import type { Quad, Term } from '@rdfjs/types'
 import { Parser, Writer } from 'n3'
 import type { ReactionFn } from './behaviour/events.ts'
@@ -78,6 +80,8 @@ interface Policy {
   subject?: Term
   properties: string[]
   construct?: string
+  /** iv:strategy iv:Incremental: kept as a view (it reads input graphs only). */
+  incremental: boolean
   /** Predicates whose changes make the policy dirty. */
   watches: Set<string>
   /** A storage-carried nav:Dimension rather than a declared policy (no switch of its own). */
@@ -166,6 +170,7 @@ export class Persistence {
         subject: one(p, PER + 'subject'),
         properties,
         construct,
+        incremental: one(p, NS.iv + 'strategy')?.value === NS.iv + 'Incremental',
         watches: new Set([...properties, ...(construct ? this.mentioned(construct) : [])]),
       }
     })
@@ -175,7 +180,7 @@ export class Persistence {
       const subject = one(d, NS.nav + 'subject')
       const property = one(d, NS.nav + 'property')?.value
       if (!subject || !property || !s.match(scope, nn(RDF_TYPE), nn(PER + 'Scope')).length) return []
-      return [{ iri: d.value, scope: scope.value, enabled: true, version: '1', subject, properties: [property], watches: new Set([property]), dimension: true }]
+      return [{ iri: d.value, scope: scope.value, enabled: true, version: '1', subject, properties: [property], incremental: false, watches: new Set([property]), dimension: true }]
     })
     return [...policies, ...dimensions]
   }
@@ -275,15 +280,14 @@ export class Persistence {
   }
 
   /**
-   * Each enabled CONSTRUCT policy as a view, if the view sees what the policy stores: it reads the
-   * input graphs (views step before projections), so a policy over a projection's derived graph,
-   * where the view's result and a run of the query differ, stays a query run at each write.
+   * Each CONSTRUCT policy marked iv:strategy iv:Incremental as a view, checked against a run of its
+   * query (a policy that reads a projection's derived graph after all stays a run at each write).
    */
   private keep() {
     const runtime = this.runtime
     if (!runtime || !this.store.sparql) return
     for (const policy of this.policies()) {
-      if (!policy.construct || policy.subject || this.kept.has(policy.iri)) continue
+      if (!policy.construct || !policy.incremental || policy.subject || this.kept.has(policy.iri)) continue
       const iri = mint(policy.iri, 'view')
       const view = runtime.views.host(iri, policy.construct)
       if (!view) continue
@@ -311,7 +315,7 @@ export class Persistence {
       // A policy's view follows its query (and its switch: a kept policy that is turned on is written whole).
       for (const [iri, k] of [...this.kept]) {
         const p = this.policies().find((x) => x.iri === iri)
-        if (p && p.construct && p.enabled) continue
+        if (p && p.construct && p.incremental) continue
         k.stop()
         this.runtime?.views.unhost(mint(iri, 'view'))
         this.kept.delete(iri)
