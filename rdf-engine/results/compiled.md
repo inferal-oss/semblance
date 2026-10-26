@@ -95,6 +95,10 @@ The list-position and rank-by-COUNT patterns as single linear walks (the
 optional item) are not worth it now: the swatch scale is under 1 ms on WAT and
 no other call site of the profile is one of them.
 
+**The site's default since then:** in idle time on the Rust engine, off on WAT
+(`demo/main.ts`; `?compile=` overrides it). The engine store itself still
+compiles nothing unless asked (`compile` option).
+
 Correctness with these changes: W3C with `RDF_ENGINE_COMPILE=1` 0 differences
 on both engines (503 of 594 compiled), `conformance/results/*.json` unchanged;
 replay 0 mismatches on both; `test/rdf-engine-budget.test.ts` (and numbers,

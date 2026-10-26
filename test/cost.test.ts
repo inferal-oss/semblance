@@ -54,6 +54,12 @@ function costHarness() {
   let hovered = 0
   let moved = 0
   const field = () => $('[data-sem-c=text-field] input') as HTMLInputElement
+  const key = (k: string, mods: object, target: EventTarget) => {
+    const e = new window.Event('keydown', { bubbles: true, cancelable: true })
+    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods })
+    target.dispatchEvent(e)
+    shell.shell.flush()
+  }
   const type = (value: string) => {
     field().value = value
     fire(field(), 'input')
@@ -92,6 +98,17 @@ function costHarness() {
     add: () => {
       type('another')
       fire(button('Add'), 'click')
+    },
+    // The command palette: opened with its key, searched (it lists every command, shortcut and
+    // place, none of which grow with the list or the log), closed with Escape.
+    palette: () => {
+      key('k', { ctrlKey: true }, document.body)
+      const search = $('[data-sem-c=command-palette] input') as HTMLInputElement
+      search.value = 'in'
+      fire(search, 'input')
+      shell.shell.flush()
+      key('ArrowDown', {}, search)
+      key('Escape', {}, search)
     },
   }
 

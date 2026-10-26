@@ -42,6 +42,7 @@ export const NS = {
   iv: 'https://semblance.dev/ns/view#',
   clip: 'https://semblance.dev/ns/clipboard#',
   fs: 'https://semblance.dev/ns/fullscreen#',
+  ext: 'https://semblance.dev/ns/foreign#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
 } as const
@@ -115,6 +116,7 @@ export const SEM = {
   readsMinted: sem + 'readsMinted',
   forEach: sem + 'forEach',
   inputOnly: sem + 'inputOnly',
+  always: sem + 'always',
   bulk: sem + 'bulk',
   requires: sem + 'requires',
   unless: sem + 'unless',
@@ -353,6 +355,9 @@ export const BEH = {
   sourceClass: beh + 'sourceClass',
   deletes: beh + 'deletes',
   inserts: beh + 'inserts',
+  Click: beh + 'Click',
+  raise: beh + 'raise',
+  raisedBy: beh + 'raisedBy',
 } as const
 
 export const A11Y = { Layer: NS.a11y + 'Layer' } as const
@@ -416,6 +421,14 @@ export const FS = {
   toggles: NS.fs + 'toggles', property: NS.fs + 'property', part: NS.fs + 'part', presentation: NS.fs + 'presentation', says: NS.fs + 'says',
   Native: NS.fs + 'Native', Maximized: NS.fs + 'Maximized', Viewport: NS.fs + 'Viewport', Entered: NS.fs + 'Entered', Exited: NS.fs + 'Exited',
   ToggleCommand: NS.fs + 'ToggleCommand', ViewportCommand: NS.fs + 'ViewportCommand',
+} as const
+/** Foreign components (ontology/layers/foreign.ttl, src/foreign.ts). */
+export const EXT = {
+  Island: NS.ext + 'Island', island: NS.ext + 'island', tag: NS.ext + 'tag', widget: NS.ext + 'widget', adapter: NS.ext + 'adapter',
+  input: NS.ext + 'input', output: NS.ext + 'output', name: NS.ext + 'name', from: NS.ext + 'from', value: NS.ext + 'value',
+  as: NS.ext + 'as', Property: NS.ext + 'Property', Attribute: NS.ext + 'Attribute', on: NS.ext + 'on', emits: NS.ext + 'emits',
+  path: NS.ext + 'path', field: NS.ext + 'field', predicate: NS.ext + 'predicate', summary: NS.ext + 'summary', through: NS.ext + 'through', module: NS.ext + 'module', outlines: NS.ext + 'outlines',
+  CustomElement: NS.ext + 'CustomElement', Widget: NS.ext + 'Widget',
 } as const
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {

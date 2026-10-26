@@ -118,13 +118,18 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
 - **Keyboard**: `key:shortcut "mod+k"` on any component gives
   `aria-keyshortcuts`, a hint (on the root, or the part its class names:
   `key:hintPart`), and activation by key press (through the component's own
-  click reactions). A component whose control is a text field is focused
+  click reactions); `key:hint` shows and announces a key the same way without
+  binding it (a button that opens what a command opens). A component whose control is a text field is focused
   instead, its text selected, and an Escape nothing else uses gives the focus
   back ("/" goes to the Reference page's search). `key:Command` is a shortcut that belongs to
   no component: its press is an event its reactions handle (Z pauses the
-  inspector). Component classes declare arrow-key navigation patterns
+  inspector); one that `c:opens` an overlay opens it (⌘K opens the command
+  palette). Component classes declare arrow-key navigation patterns
   (`key:navigation`: roving focus for menus, tabs, trees, accordions).
-  `c:ShortcutList` lists every shortcut.
+  `c:ShortcutList` lists every shortcut; a `c:CommandPalette` lists every
+  command, every component with a shortcut and every place of the app,
+  filtered as one types, and runs the one picked (its key press, its click,
+  or going there), the recent ones first.
 - **Component shapes**: SHACL node shapes on component classes
   (`ontology/shapes/components.ttl`); the shapes layer validates every
   component, records `sh:ValidationResult`s, outlines offenders and
@@ -162,6 +167,11 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
   Paper, Terminal, Blueprint, Sunset; contrast and motion compose with them.
+- **Foreign components** (`ext:`): web components, framework components and vanilla widgets are
+  islands - a host-owned slot whose inputs are derived from the graph by a rule and whose outputs come
+  back as events. A host effect (`src/foreign.ts`) mounts each through the adapter of its kind (custom
+  element, widget, or one an app registers), loads its code on demand, pushes only changed inputs and
+  suppresses echoes. See [docs/FOREIGN.md](docs/FOREIGN.md).
 - **Network capture**: a host effect (`src/network.ts`) records the page's own
   fetches, WebSockets and the events and spans it reports as members of
   `net:Capture`, a bounded LDES in the network graph
@@ -181,7 +191,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   Forward and typed addresses as `nav:Navigate` events. A `c:Link` with `c:to` a
   resource goes to the location that shows it, found by walking up the component
   tree to the switches that show it (`#components/inputs/inp-codes-spec`), and the
-  target is brought into view once rendered.
+  target is brought into view once rendered. A reaction goes somewhere the same
+  way by asking for it (`?x nav:goTo ?resource`): the effect makes it a step
+  and follows it.
 
 Our vocabularies are aligned with DCMI, SKOS, schema.org, ActivityStreams,
 PROV-O and others in `ontology/alignments.ttl`, with the strength of each link
@@ -197,7 +209,11 @@ the component set. The demo's **Components** page shows all of it.
   node, the value, and whether the control is checked.
 - Reactions are `beh:deletes` / `beh:inserts` CONSTRUCTs over `$event` / `$this`,
   with function fallbacks for stores without SPARQL. All matching reactions see
-  the pre-event state, and their union is applied as one delta.
+  the pre-event state, and their union is applied as one delta. A reaction may
+  raise a further event on another node (`?node beh:raise key:Press`): the bus
+  records it after this one (`beh:raisedBy`), for that node's own reactions.
+- A modal overlay (`aria-modal`) takes the focus when it opens (its `autofocus`
+  element), keeps Tab inside, and gives the focus back when it closes.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member
@@ -300,8 +316,9 @@ or its history is:
 - correlated sub-patterns in SPARQL use `EXISTS` / `LATERAL`, not `OPTIONAL` /
   `UNION`, which Oxigraph plans as scans.
 
-Two tests guard this. `test/cost.test.ts` measures ten interactions (toggle,
-type, hover, density, theme, tabs, page, source flip, window move, add) in
+Two tests guard this. `test/cost.test.ts` measures eleven interactions (toggle,
+type, hover, density, theme, tabs, page, source flip, window move, add, the
+command palette) in
 work counters: rule runs, derived triples written, triples matched, SPARQL
 result rows and DOM operations. They must not grow when the list grows by 300
 items and the history by 250 events. `test/soak.test.ts` runs 3,600 events on
@@ -327,7 +344,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard and fullscreen layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, drawing connectors where their ends are |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

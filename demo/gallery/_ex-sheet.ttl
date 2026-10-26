@@ -20,7 +20,8 @@
 # that read it follow, and so on - so the dependency graph is the data's own. Select a cell to
 # see its formula and arrows to and from the cells it depends on; change a number to see which
 # formulas re-ran (and only those), counted under the sheet; type a formula into a cell, or add a
-# row or a column, with the buttons above the grid.
+# row or a column, with the buttons above the grid; Shift+click or Shift+arrows select a range,
+# summed up under the sheet.
 # =================================================================================================
 
 ui:ex-sheet-prefixes sh:declare [ sh:prefix "ss" ; sh:namespace "https://semblance.dev/demo/sheet#"^^xsd:anyURI ] .
@@ -269,14 +270,14 @@ ss:sales c:cell ss:A20 , ss:B20 , ss:C20 , ss:D20 , ss:E20 , ss:F20 .
 ui:ex-sheet a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
     c:children ( ui:ex-sheet-intro ui:ex-sheet-card ) .
 ui:ex-sheet-intro a c:Text ;
-    c:label "A spreadsheet in the graph: cells are resources, formulas are queries over the cells they read. Change a quarter's sales - the formulas that read it recalculate, and only those, as the line under the sheet counts. Click a cell to see what it reads and what reads it; type a formula such as =AVERAGE(B2:B17) into an empty cell, or add a row." .
+    c:label "A spreadsheet in the graph: cells are resources, formulas are queries over the cells they read. Change a quarter's sales - the formulas that read it recalculate, and only those, as the line under the sheet counts. Click a cell to see what it reads and what reads it; type a formula such as =AVERAGE(B2:B17) into an empty cell, or add a row. Shift+click another cell, or press Shift with the arrow keys, to select a range: the line under the sheet sums it up." .
 ui:ex-sheet-card a c:Card ; c:label "Café sales" ; c:badge "81 formulas" ; c:content ss:sales .
 
 # --- how it works -----------------------------------------------------------------------------------
 
 ui:ex-sheet-how a c:Walkthrough ; c:label "How it works" ;
     c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
-    c:steps ( ui:ex-sheet-w1 ui:ex-sheet-w2 ui:ex-sheet-w3 ui:ex-sheet-w4 ui:ex-sheet-w5 ui:ex-sheet-w6 ui:ex-sheet-w7 ) .
+    c:steps ( ui:ex-sheet-w1 ui:ex-sheet-w2 ui:ex-sheet-w3 ui:ex-sheet-w4 ui:ex-sheet-w5 ui:ex-sheet-w6 ui:ex-sheet-w8 ui:ex-sheet-w7 ) .
 
 ui:ex-sheet-w1 a c:WalkthroughStep ; rdfs:label "Cells are resources" ;
     c:children ( ui:ex-sheet-m-sales " is a " ui:ex-sheet-m-Sheet " that places its cells: each is a " ui:ex-sheet-m-SheetCell " with a row and a column - " ui:ex-sheet-m-b4 ", the cappuccinos sold in the first quarter, is row 4, column 2. A cell like it holds a number (c:value), and editing it is " ui:ex-sheet-m-edit ": one triple, typed as a number when it reads as one." ) .
@@ -290,6 +291,8 @@ ui:ex-sheet-w5 a c:WalkthroughStep ; rdfs:label "Only what depends on a change r
     c:children ( "Change one quarter and 26 of 81 formulas run: its row's year, average, share and gap, its column's total, best and average, the year's total, best and average, and the sixteen shares that read the total - not the other rows' sums. With " ui:ex-sheet-m-trace ", the host hears the engine evaluate formulas and writes them on the sheet (" ui:ex-sheet-m-recalculated "); the cells flash, and the line under the sheet counts them." ) .
 ui:ex-sheet-w6 a c:WalkthroughStep ; rdfs:label "Dependencies, drawn as connectors" ;
     c:children ( "Click a cell: " ui:ex-sheet-m-connectors " derives a " ui:ex-sheet-m-Connector " for each of its dependencies - solid ones from the cells it reads, dashed ones to the cells that read it, an arc to the side within a column - straight from the c:dataset triples. The host draws each where its cells are, and keeps it there as the grid scrolls." ) .
+ui:ex-sheet-w8 a c:WalkthroughStep ; rdfs:label "A range, summed up" ;
+    c:children ( "Shift+click a cell, or press Shift with an arrow key: " ui:ex-sheet-m-extend " moves the range's far corner, " ui:ex-sheet-m-selectionEnd ", and the selected cell stays where it was. " ui:ex-sheet-m-selection " derives the cells between them (" ui:ex-sheet-m-selects "), so the line under the sheet - their sum, average and count - follows their values as they change, and each cell of the range knows which of its edges it is on. The click says Shift was held as data on the event (beh:modifiers), like the key a key press names." ) .
 ui:ex-sheet-w7 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
     c:children ( "An edit is one triple. The formulas that read it run - each one query over its own inputs - and so do the ones that read them; a sheet twice as big costs the same edit the same. Each cell renders on its own, so only the cells whose value changed render again, and the arrows are redrawn only when a cell they join moves. Every rule here is SPARQL with a function twin that renders the same." ) .
 
@@ -316,4 +319,8 @@ ui:ex-sheet-m-j18 a c:Mention ; c:label "ss:J18" ; c:mentions ss:J18 .
 ui:ex-sheet-m-trace a c:Mention ; c:label "c:traceRecalculation" ; c:mentions c:traceRecalculation ; c:to c:traceRecalculation .
 ui:ex-sheet-m-recalculated a c:Mention ; c:label "c:recalculated" ; c:mentions c:recalculated ; c:to c:recalculated .
 ui:ex-sheet-m-connectors a c:Mention ; c:label "c:SheetConnectors" ; c:mentions c:SheetConnectors ; c:to c:SheetConnectors .
+ui:ex-sheet-m-extend a c:Mention ; c:label "c:ExtendSheetSelection" ; c:mentions c:ExtendSheetSelection ; c:to c:ExtendSheetSelection .
+ui:ex-sheet-m-selectionEnd a c:Mention ; c:label "c:selectionEnd" ; c:mentions c:selectionEnd ; c:to c:selectionEnd .
+ui:ex-sheet-m-selection a c:Mention ; c:label "c:SheetSelection" ; c:mentions c:SheetSelection ; c:to c:SheetSelection .
+ui:ex-sheet-m-selects a c:Mention ; c:label "c:selects" ; c:mentions c:selects ; c:to c:selects .
 ui:ex-sheet-m-Connector a c:Mention ; c:label "c:Connector" ; c:mentions c:Connector ; c:to c:Connector .

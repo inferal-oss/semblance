@@ -10,6 +10,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix a11y: <https://semblance.dev/ns/a11y#> .
+@prefix key: <https://semblance.dev/ns/keyboard#> .
 
 # Overlays components (DESIGN.md §3): Dialog, Drawer and Popover.
 #
@@ -31,8 +32,8 @@ c:Overlay a owl:Class ;
 c:dismissible a owl:DatatypeProperty ; rdfs:domain c:Overlay ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a dialog or drawer can be dismissed with its close button, scrim or Escape key. Defaults to true; false keeps explicit actions available."@en .
 
-c:opens a owl:ObjectProperty ; rdfs:domain c:Button ; rdfs:range c:Overlay ;
-    rdfs:comment "The overlay this button opens (sets its c:open true). The button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
+c:opens a owl:ObjectProperty ; rdfs:range c:Overlay ;
+    rdfs:comment "The overlay this button (or keyboard command, key:Command) opens: sets its c:open true. A button also says so to assistive technology (aria-controls, aria-expanded, aria-haspopup)."@en .
 
 # --- Dialog ----------------------------------------------------------------------------------------
 
@@ -449,6 +450,16 @@ c:Opens a beh:Reaction ;
     beh:inserts """CONSTRUCT { ?overlay c:open true } WHERE { $this c:opens ?overlay }""" ;
     sem:function "overlay:open" .
 
+# A keyboard command opens an overlay the same way (`ui:openPalette a key:Command ; key:shortcut
+# "mod+k" ; c:opens ui:palette`): its key:Press sets c:open.
+c:CommandOpens a beh:Reaction ;
+    rdfs:label "Open"@en , "Відкрити"@uk , "Öffnen"@de , "فتح"@ar ;
+    beh:when key:Press ;
+    beh:sourceClass key:Command ;
+    beh:deletes """CONSTRUCT { ?overlay c:open ?old } WHERE { $this c:opens ?overlay . ?overlay c:open ?old }""" ;
+    beh:inserts """CONSTRUCT { ?overlay c:open true } WHERE { $this c:opens ?overlay }""" ;
+    sem:function "overlay:open" .
+
 c:Closes a beh:Reaction ;
     beh:when beh:Click ;
     beh:sourceClass c:Button ;
@@ -486,5 +497,5 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-controls")) AS ?controls)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-expanded")) AS ?expanded)
-  BIND(IF(EXISTS { ?target a ?kind FILTER(?kind IN (c:Dialog, c:Drawer, c:Popover, c:Lightbox)) }, IRI(CONCAT(STR($this), "/~root-aria-haspopup")), ?none) AS ?hasPopup)
+  BIND(IF(EXISTS { ?target a ?kind FILTER(?kind IN (c:Dialog, c:Drawer, c:Popover, c:Lightbox, c:CommandPalette)) }, IRI(CONCAT(STR($this), "/~root-aria-haspopup")), ?none) AS ?hasPopup)
 }""" .

@@ -1,0 +1,128 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ext: <https://semblance.dev/ns/foreign#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://example.org/foreign#> .
+
+ex:prefixes sh:declare [ sh:prefix "ex" ; sh:namespace "https://example.org/foreign#"^^xsd:anyURI ] .
+
+# --- a custom element: <star-rating> -----------------------------------------------------------------
+# Its value is the island's c:value (a property, typed: a number arrives as a number); its maximum and
+# its accessible name are attributes. A pick is an ex:Rated event, recorded; the reaction is the graph
+# deciding: it clamps the value, and a clamped value goes back to the element.
+
+ex:Rating a owl:Class ;
+    rdfs:subClassOf ext:Island ;
+    rdfs:label "Star rating"@en , "Зірковий рейтинг"@uk , "Sternebewertung"@de , "تقييم بالنجوم"@ar ;
+    rdfs:comment "A <star-rating> web component: c:value stars of ex:max, picked by click or arrow keys."@en ;
+    sem:slug "ex-rating" ;
+    ext:adapter ext:CustomElement ;
+    ext:tag "star-rating" ;
+    ext:summary c:value ;
+    ext:input [ ext:name "value" ; ext:from c:value ] ,
+              [ ext:name "max" ; ext:from ex:max ; ext:as ext:Attribute ] ,
+              [ ext:name "aria-label" ; ext:from l10n:label ; ext:as ext:Attribute ] ;
+    ext:output [ ext:on "change" ; ext:emits ex:Rated ; ext:path "detail.value" ] .
+ex:max a owl:DatatypeProperty ; rdfs:domain ex:Rating ; rdfs:range xsd:integer .
+
+ex:Rated a owl:Class ; rdfs:subClassOf ext:Output ;
+    rdfs:label "Rated"@en , "Оцінено"@uk , "Bewertet"@de , "تم التقييم"@ar .
+
+ex:Rate a beh:Reaction ;
+    rdfs:label "Take the rating"@en ;
+    beh:when ex:Rated ;
+    beh:sourceClass ex:Rating ;
+    beh:deletes """CONSTRUCT { $this c:value ?old } WHERE { $this c:value ?old }""" ;
+    beh:inserts """
+CONSTRUCT { $this c:value ?clamped }
+WHERE {
+  $event beh:value ?raw .
+  OPTIONAL { $this ex:max ?max0 }
+  BIND(COALESCE(?max0, 5) AS ?max)
+  BIND(xsd:integer(?raw) AS ?n)
+  BIND(IF(?n < 0, 0, IF(?n > ?max, ?max, ?n)) AS ?clamped)
+}""" .
+
+ex:ShapeRating a sh:NodeShape ; sh:targetClass ex:Rating ;
+    sh:property [ sh:path c:value ; sh:maxCount 1 ; sh:datatype xsd:integer ] .
+
+# Theme tokens onto the component's own custom properties: it follows every theme and dark mode.
+[] a sty:StyleRule ; sty:appliesTo ex:Rating ;
+    sty:declares [ sty:property "--star-rating-on" ; sty:token tok:accent ] ,
+                 [ sty:property "--star-rating-off" ; sty:token tok:border ] .
+# A part it exposes (::part(on), its lit stars): a glow in the theme's accent.
+[] a sty:StyleRule ; sty:appliesTo ex:Rating ; sty:part "star-rating::part(on)" ;
+    sty:declares [ sty:property "text-shadow" ; sty:raw "0 0 .25em color-mix(in srgb, var(--sem-accent) 40%, transparent)" ] .
+
+# --- a vanilla widget: the spark chart ----------------------------------------------------------------
+# Its points are the island's ex:point nodes as one rdf:JSON value (derived below, before the island
+# renders); its selection is c:value. Choosing a bar is a recorded ex:Picked; pointing at one is an
+# unrecorded ex:Pointed, which keeps where the pointer is as state without growing the change log.
+
+ex:Spark a owl:Class ;
+    rdfs:subClassOf ext:Island ;
+    rdfs:label "Spark chart"@en , "Мінідіаграма"@uk , "Minidiagramm"@de , "مخطط مصغّر"@ar ;
+    rdfs:comment "A bar chart widget over ex:point nodes (c:label, ex:amount, ex:order); c:value is the chosen bar's label."@en ;
+    sem:slug "ex-spark" ;
+    ext:adapter ext:Widget ;
+    ext:widget "spark" ;
+    ext:summary c:value ;
+    ext:input [ ext:name "points" ; ext:from ex:pointsJson ] ,
+              [ ext:name "selected" ; ext:from c:value ] ,
+              [ ext:name "label" ; ext:from l10n:label ] ;
+    ext:output [ ext:on "select" ; ext:emits ex:Picked ; ext:path "label" ;
+                 ext:field [ ext:path "index" ; ext:predicate ex:index ] ] ,
+               [ ext:on "point" ; ext:emits ex:Pointed ; ext:path "label" ] .
+ex:point a owl:ObjectProperty ; rdfs:domain ex:Spark .
+ex:amount a owl:DatatypeProperty .
+ex:order a owl:DatatypeProperty .
+ex:index a owl:DatatypeProperty .
+ex:pointing a owl:DatatypeProperty ; rdfs:comment "The label of the bar the pointer or focus is on (unrecorded state)."@en .
+ex:pointsJson a owl:DatatypeProperty ; rdfs:comment "Derived: the points as rdf:JSON, in ex:order."@en .
+
+ex:Picked a owl:Class ; rdfs:subClassOf ext:Output ;
+    rdfs:label "Picked"@en , "Вибрано"@uk , "Ausgewählt"@de , "تم الاختيار"@ar .
+ex:Pointed a owl:Class ; rdfs:subClassOf ext:Output ; beh:recorded false ;
+    rdfs:label "Pointed at"@en , "Наведено"@uk , "Gezeigt"@de , "تمت الإشارة"@ar .
+
+ex:Pick a beh:Reaction ;
+    beh:when ex:Picked ;
+    beh:sourceClass ex:Spark ;
+    beh:deletes """CONSTRUCT { $this c:value ?old } WHERE { $this c:value ?old }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?label } WHERE { $event beh:value ?label }""" .
+ex:Point a beh:Reaction ;
+    beh:when ex:Pointed ;
+    beh:sourceClass ex:Spark ;
+    beh:deletes """CONSTRUCT { $this ex:pointing ?old } WHERE { $this ex:pointing ?old }""" ;
+    beh:inserts """CONSTRUCT { $this ex:pointing ?label } WHERE { $event beh:value ?label }""" .
+
+# The points as JSON, in order (GROUP_CONCAT over an ordered sub-select), with a function twin.
+ex:SparkPoints a sem:Rendering ; sem:targets ex:Spark ; sem:stratum -5 ; sem:follows ex:point .
+ex:SparkPoints-fn a sem:Rule ; sem:implements ex:SparkPoints ; sem:function "ex:spark-points" .
+ex:SparkPoints-sparql a sem:Rule ;
+    sem:implements ex:SparkPoints ;
+    sem:construct """
+CONSTRUCT { $this ex:pointsJson ?json }
+WHERE {
+  $this a ex:Spark .
+  BIND($this AS ?self)
+  LATERAL { OPTIONAL { SELECT ?self (GROUP_CONCAT(?item; separator=",") AS ?items) WHERE {
+    { SELECT ?self ?item WHERE {
+        ?self ex:point ?p . ?p c:label ?l ; ex:amount ?v ; ex:order ?o .
+        BIND(CONCAT('{"label":"', STR(?l), '","order":', STR(?o), ',"value":', STR(?v), '}') AS ?item)
+      } ORDER BY ?o }
+  } GROUP BY ?self } }
+  BIND(STRDT(CONCAT("[", COALESCE(?items, ""), "]"), rdf:JSON) AS ?json)
+}""" .
+
+[] a sty:StyleRule ; sty:appliesTo ex:Spark ;
+    sty:declares [ sty:property "--spark-bar" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "--spark-bar-selected" ; sty:token tok:accent ] ,
+                 [ sty:property "--spark-text" ; sty:token tok:muted ] .

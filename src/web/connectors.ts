@@ -13,8 +13,10 @@
 //   - An end that is not rendered, hidden, out of view or covered (a sticky bar, a diagram that
 //     stays on top) hides its connector.
 //   - Colours are the theme's (classes, the connector's tone); a new connector draws itself in
-//     unless motion is calmed (mot:preference, the system's reduced-motion setting); routes that
+//     unless motion is calmed (mot:preference, src/layers/motion.ts); routes that
 //     go out to a side (c:Arc) go to the inline end, mirrored right to left.
+
+import { motionCalmedAt } from '../layers/motion.ts'
 
 const LAYOUT_PROPERTIES = /^(transform|translate|scale|rotate|top|left|right|bottom|inset|width|height|max-|min-|margin|padding|flex|grid|font|line-height|letter-spacing|border-width|all)/
 
@@ -163,10 +165,7 @@ export function attachConnectors(host: HTMLElement, opts: ConnectorOptions = {})
       return false
     }
   }
-  const reduced = (el: Element) => {
-    const pref = el.closest('[data-sem-motion]')?.getAttribute('data-sem-motion')
-    return pref === 'reduced' || pref === 'none' || !!win.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  }
+  const reduced = motionCalmedAt
   const rtl = (el: Element) => {
     const dir = el.closest('[dir]')?.getAttribute('dir')
     if (dir) return dir === 'rtl'

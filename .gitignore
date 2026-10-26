@@ -6,3 +6,4 @@ dist-single/
 rdf-engine/conformance/rdf-tests/
 rdf-engine/build/
 rdf-engine/rust/target/
+.test-full/

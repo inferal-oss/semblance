@@ -11,6 +11,7 @@ import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
 import { typeaheadFunctions } from './typeahead.ts'
 import { uploadFunctions } from './upload.ts'
+import { paletteFunctions } from './palette.ts'
 import { functions as calendarFunctions } from './calendar.ts'
 import { datesFunctions } from './dates.ts'
 import { functions as outlineFunctions } from './outline.ts'
@@ -22,6 +23,7 @@ import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
 import { clipboardFunctions } from '../layers/clipboard.ts'
 import { fullscreenFunctions } from '../layers/fullscreen.ts'
+import { foreignFunctions } from '../layers/foreign.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
 import { dragdropFunctions } from '../layers/dragdrop.ts'
 import { dependencyFunctions } from '../layers/dependency.ts'
@@ -682,9 +684,12 @@ const optionLabels: FnRule = (ctx, focus) => {
 const linkHint: FnRule = (ctx, focus) => {
   if (!ctx.languages.length) return []
   const hint = text(ctx, ctx.nn(NS.c + 'Link'), NS.c + 'externalHint')
-  if (hint === undefined) return []
+  // What a link's count counts (c:countLabel), in the viewer's language.
+  const countLabel = text(ctx, focus, NS.c + 'countLabel')
+  if (hint === undefined && countLabel === undefined) return []
   const o = ctx.out(focus)
-  o.t(o.node('l10n-hint'), L10N.label, hint)
+  if (hint !== undefined) o.t(o.node('l10n-hint'), L10N.label, hint)
+  if (countLabel !== undefined) o.t(o.node('l10n-count'), L10N.label, countLabel)
   return o.quads
 }
 
@@ -816,6 +821,7 @@ export const functions: Record<string, FnRule> = {
   ...boardFunctions,
   ...typeaheadFunctions,
   ...uploadFunctions,
+  ...paletteFunctions,
   ...calendarFunctions,
   ...datesFunctions,
   ...outlineFunctions,
@@ -827,6 +833,7 @@ export const functions: Record<string, FnRule> = {
   ...announceFunctions,
   ...clipboardFunctions,
   ...fullscreenFunctions,
+  ...foreignFunctions,
   ...shapeFunctions,
   ...dragdropFunctions,
   ...dependencyFunctions,

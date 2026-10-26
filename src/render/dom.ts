@@ -25,6 +25,12 @@ export class DomRenderer {
   ops = 0
   private newChildren: string[] = []
   private pendingPrune = new Map<Node, Set<Node>>()
+  private readonly patched = new Set<() => void>()
+  /**
+   * The element the last flush gave the focus to because the focused one was removed (refocus):
+   * a guess, not a choice, so a modal overlay that closed may still give the focus back.
+   */
+  refocused: Element | null = null
 
   constructor(
     readonly index: HtmlIndex,
@@ -54,7 +60,14 @@ export class DomRenderer {
     return false
   }
 
+  /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
+  onPatched(listener: () => void): () => void {
+    this.patched.add(listener)
+    return () => this.patched.delete(listener)
+  }
+
   flush(): void {
+    this.refocused = null
     // A focused node that moves to another parent (a card to another lane) is detached on the
     // way, which blurs it: it gets its focus back once it is in place.
     const focused = this.doc.activeElement as HTMLElement | null
@@ -68,6 +81,7 @@ export class DomRenderer {
     this.patch()
     if (focused && focused !== this.doc.activeElement && focused.isConnected && this.host.contains(focused)) focused.focus?.({ preventScroll: true })
     else if (focused && !focused.isConnected && ancestors.length) this.refocus(ancestors)
+    for (const l of this.patched) l()
   }
 
   /**
@@ -88,7 +102,7 @@ export class DomRenderer {
     for (const { at, next, previous } of ancestors) {
       if (!at.isConnected) continue
       const target = first(next) ?? first(previous, true) ?? first(at)
-      if (target) return target.focus?.({ preventScroll: true })
+      if (target) return (this.refocused = target), target.focus?.({ preventScroll: true })
     }
   }
 

@@ -105,3 +105,23 @@
                  [ sty:property "padding-inline-start" ; sty:raw "6px" ] ,
                  [ sty:property "font-size" ; sty:raw "10px" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] .
+# A selected range (more than one cell): its cells tinted, a line along its edges (logical, so its
+# start follows the reading direction), over the cells' own borders.
+[] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-range]" ;
+    sty:declares [ sty:property "background" ; sty:raw "color-mix(in oklab, var(--sem-accent) 14%, transparent)" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-range]::after" ;
+    sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
+                 [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "border" ; sty:raw "0 solid var(--sem-accent)" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] ,
+                 [ sty:property "z-index" ; sty:raw "2" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-range~=top]::after" ;
+    sty:declares [ sty:property "border-top-width" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-range~=bottom]::after" ;
+    sty:declares [ sty:property "border-bottom-width" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-range~=start]::after" ;
+    sty:declares [ sty:property "border-inline-start-width" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SheetCell ; sty:state "[data-sem-range~=end]::after" ;
+    sty:declares [ sty:property "border-inline-end-width" ; sty:raw "2px" ] .

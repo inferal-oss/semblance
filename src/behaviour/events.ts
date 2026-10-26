@@ -4,7 +4,7 @@ import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.t
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
-import { comboOf, mirrored, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
+import { comboOf, mirrored, modifiersOf, navigate, normalizeShortcut, rightToLeft, rove, trapTab } from '../layers/keyboard.ts'
 import { reactions as builtinReactions } from './reactions.ts'
 import { DragHost } from './drag.ts'
 import { returnPlaces, tearGesture } from './tear.ts'
@@ -40,6 +40,8 @@ export interface EventDetail {
   caret?: number
   /** The key combination of a key press, normalized as key:shortcut is ("tab", "mod+enter"; beh:key). */
   key?: string
+  /** The modifier keys held during a pointer interaction, or the press that moved the focus ("shift", "mod+shift"; beh:modifiers). */
+  modifiers?: string
   /** Further statements about the event, by predicate (a drop carries the drag's: what, from, where). */
   about?: [predicate: string, object: Term][]
 }
@@ -238,6 +240,7 @@ export class EventBus {
     if (detail.checked !== undefined) quads.push(f.quad(event, nn(BEH.checked), f.literal(String(detail.checked), nn(XSD_BOOLEAN))))
     if (detail.caret !== undefined) quads.push(f.quad(event, nn(NS.beh + 'caret'), f.literal(String(detail.caret), nn(XSD_INTEGER))))
     if (detail.key !== undefined) quads.push(f.quad(event, nn(NS.beh + 'key'), f.literal(detail.key)))
+    if (detail.modifiers) quads.push(f.quad(event, nn(NS.beh + 'modifiers'), f.literal(detail.modifiers)))
     for (const [p, o] of detail.about ?? []) quads.push(f.quad(event, nn(p), o as NamedNode))
     for (const [name, v] of Object.entries(detail.numbers ?? {})) quads.push(f.quad(event, nn(NS.beh + name), f.literal(String(Math.round(v)), nn(XSD_INTEGER))))
     // The event is readable by reactions before it is a member of the stream.
@@ -262,10 +265,45 @@ export class EventBus {
     const forget = () => {
       for (const q of quads) this.runtime.store.delete(f.quad(q.subject, q.predicate, q.object, this.graph))
     }
-    if (!delta.add.length && !delta.remove.length) {
+    // Events the reactions raise (`?node beh:raise ?class`) are requests, not state: taken out of
+    // the change and raised once this event is applied and recorded.
+    const raised = delta.add.filter((q) => q.predicate.value === BEH.raise && q.subject.termType === 'NamedNode' && q.object.termType === 'NamedNode')
+    if (raised.length) delta.add = delta.add.filter((q) => q.predicate.value !== BEH.raise)
+    if (!delta.add.length && !delta.remove.length && !raised.length) {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
+    const handled = this.record(type, target, event, quads, delta, reactions, forget)
+    this.raise(raised, event)
+    return handled
+  }
+
+  /** How deep raised events may raise further ones (a reaction raising itself stops here). */
+  private raising = 0
+
+  /** Raise each requested event once, in a stable order: a click on a component is addressed to its root. */
+  private raise(requests: Quad[], by: NamedNode) {
+    if (!requests.length || this.raising >= 8) return
+    const seen = new Set<string>()
+    const todo = requests
+      .filter((q) => !seen.has(q.subject.value + ' ' + q.object.value) && seen.add(q.subject.value + ' ' + q.object.value))
+      .sort((a, b) => (a.subject.value + a.object.value < b.subject.value + b.object.value ? -1 : 1))
+    this.raising++
+    try {
+      for (const q of todo) {
+        const detail: EventDetail = { about: [[BEH.raisedBy, by]] }
+        if (q.object.value === BEH.Click) detail.node = q.subject.value + MINT_SEPARATOR + 'root'
+        this.emit(q.object.value, q.subject.value, detail)
+      }
+    } finally {
+      this.raising--
+    }
+  }
+
+  /** Apply an event's change and append it to the change log, as one tick. */
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void): Handled {
+    const { f } = this
+    const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
     // over the state agree after every event (docs/IVM.md, decision 8).
     return this.runtime.transaction(() => {
@@ -387,12 +425,21 @@ export class EventBus {
    * throws while an event is handled is reported there instead of thrown (a sandbox
    * keeps its failures to itself).
    */
-  attach(renderer: DomRenderer, onHandled: (h: Handled) => void = () => {}, onError?: (e: Error) => void): () => void {
+  attach(renderer: DomRenderer, handledBy: (h: Handled) => void = () => {}, onError?: (e: Error) => void): () => void {
     const domTypes = new Set(this.runtime.store.match(null, this.f.namedNode(BEH.domEvent), null).map((q) => q.object.value))
     const doc = renderer.host.ownerDocument
+    // After every handled event (and the host's flush), the focus follows the modal overlays.
+    const modals = new ModalFocus(renderer)
+    const onHandled = (h: Handled) => {
+      handledBy(h)
+      modals.settle()
+    }
     const apple = /Mac|iPhone|iPad/.test(doc.defaultView?.navigator?.platform ?? '')
     // Key presses a reaction handled are not also the keyboard layer's (nor the browser's).
     const consumed = new WeakSet<Event>()
+    // The modifiers of the press under way: a focus it moves carries them (Shift+click extends).
+    let pressed: string | undefined
+    const press = (e: Event) => void (pressed = e.type === 'pointerdown' ? modifiersOf(e as PointerEvent, apple) : undefined)
     const guarded =
       <E extends Event>(handle: (e: E) => void) =>
       (e: E) => {
@@ -424,6 +471,8 @@ export class EventBus {
           if (control.type === 'checkbox') detail.checked = control.checked
           if (detail.value !== undefined && typeof control.selectionStart === 'number') detail.caret = control.selectionStart
           if (combo !== undefined) detail.key = combo
+          if (e.type === 'focusin') detail.modifiers = pressed
+          else if (combo === undefined && 'shiftKey' in e) detail.modifiers = modifiersOf(e as MouseEvent, apple)
           const custom = (e as CustomEvent).detail
           if (custom && typeof custom === 'object') {
             // Numbers are beh:* integers (a measure the host could not take is left out); a string names a
@@ -475,6 +524,8 @@ export class EventBus {
     renderer.host.addEventListener('input', controlled)
     const gestures = (e: Event) => renderer.inSlot(e.target as Node) || this.gesture(e as PointerEvent, renderer, drags)
     renderer.host.addEventListener('pointerdown', gestures)
+    renderer.host.addEventListener('pointerdown', press, true)
+    renderer.host.addEventListener('pointerup', press, true)
     // Keyboard layer: a key combination activates the element that declares it. A field it focuses
     // remembers where the focus was, to give it back on an Escape nothing else uses.
     const cameFrom = new WeakMap<Element, HTMLElement | null>()
@@ -485,6 +536,8 @@ export class EventBus {
       if (trapTab(k, renderer.host)) return k.preventDefault()
       // Keys in slot content are the mounted projection's own (its bus navigates it).
       if (renderer.host.contains(k.target as Node) && !renderer.inSlot(k.target as Node) && (sizeByKey(k, renderer) || moveByKey(k, renderer) || navigate(k))) return k.preventDefault()
+      // Tab stays inside an open modal overlay.
+      if (modals.tab(k)) return k.preventDefault()
       const combo = comboOf(k, apple)
       const typing = (k.target as Element | null)?.closest?.('input, textarea, select, [contenteditable]')
       if (typing && !combo.startsWith('mod+') && k.key !== 'Escape') return
@@ -569,6 +622,8 @@ export class EventBus {
       for (const t of domTypes) renderer.host.removeEventListener(t, listener)
       renderer.host.removeEventListener('input', controlled)
       renderer.host.removeEventListener('pointerdown', gestures)
+      renderer.host.removeEventListener('pointerdown', press, true)
+      renderer.host.removeEventListener('pointerup', press, true)
       renderer.host.removeEventListener('keydown', dragKeys)
       doc.removeEventListener('keydown', dragKeys)
       renderer.host.removeEventListener('dragstart', native)
@@ -781,6 +836,58 @@ export class EventBus {
     handle.addEventListener('pointermove', move)
     handle.addEventListener('pointerup', up)
     handle.addEventListener('pointercancel', up)
+  }
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * The WAI-ARIA dialog pattern's focus, as view state: when a modal overlay (aria-modal="true")
+ * opens, the focus moves into it (to its [autofocus] element, else the panel itself) and Tab keeps
+ * it there; when it closes, the focus goes back to where it was before it opened, unless something
+ * else took it meanwhile (the renderer moving it off a removed panel does not count). Nested modals stack. Nothing here is graph state.
+ */
+class ModalFocus {
+  private readonly open: { panel: HTMLElement; back: Element | null }[] = []
+
+  constructor(private readonly renderer: DomRenderer) {}
+
+  private shown = (el: Element) => el.isConnected && !el.closest('[hidden], [inert]') && !this.renderer.inSlot(el)
+
+  /** Follow what the last flush opened and closed. */
+  settle(): void {
+    const host = this.renderer.host
+    const doc = host.ownerDocument
+    const now = [...host.querySelectorAll<HTMLElement>('[aria-modal="true"]')].filter(this.shown)
+    for (let i = this.open.length - 1; i >= 0; i--) {
+      const { panel, back } = this.open[i]!
+      if (now.includes(panel)) continue
+      this.open.splice(i, 1)
+      const active = doc.activeElement
+      // The renderer's guess at a nearby control, when the panel went with the focus in it, is not a choice.
+      const lost = !active || active === doc.body || !active.isConnected || panel.contains(active) || active === this.renderer.refocused
+      if (lost && back?.isConnected && this.shown(back)) (back as HTMLElement).focus?.({ preventScroll: true })
+    }
+    for (const panel of now) {
+      if (this.open.some((m) => m.panel === panel)) continue
+      this.open.push({ panel, back: doc.activeElement })
+      const first = panel.querySelector<HTMLElement>('[autofocus]') ?? panel
+      if (!panel.contains(doc.activeElement)) first.focus?.({ preventScroll: true })
+    }
+  }
+
+  /** Tab and Shift+Tab cycle through the topmost modal's controls. Returns whether the key was used. */
+  tab(k: KeyboardEvent): boolean {
+    const top = this.open.at(-1)?.panel
+    if (k.key !== 'Tab' || !top || k.altKey || k.ctrlKey || k.metaKey || !this.shown(top)) return false
+    const parts = [...top.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(this.shown)
+    const active = top.ownerDocument.activeElement
+    if (!parts.length) return top.focus?.(), true
+    const at = parts.indexOf(active as HTMLElement)
+    if (at < 0) return parts[0]!.focus?.(), true
+    if (k.shiftKey && at === 0) return parts.at(-1)!.focus?.(), true
+    if (!k.shiftKey && at === parts.length - 1) return parts[0]!.focus?.(), true
+    return false
   }
 }
 

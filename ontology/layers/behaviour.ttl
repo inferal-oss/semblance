@@ -76,6 +76,22 @@ beh:dueWhileShown a owl:ObjectProperty ; rdfs:range sem:Component ;
 beh:Due a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:comment "A node's beh:dueAt time came (the event's target is the node; beh:at is when it fired)."@en .
 
+# --- Raising an event: one reaction asking for another -------------------------------------------
+# A reaction may ask for a further event, addressed to another node, by inserting
+# `?node beh:raise ?eventClass`: running a command from a list raises its key:Press, activating a
+# component raises its beh:Click. The statement is a request, never stated in the graph: the event
+# bus takes it out of the reaction's change, applies the rest, records the event, and then records
+# the raised one (beh:raisedBy the first), handled by the node's own reactions like any other. A
+# raised click is addressed to the component's root (beh:node), so reactions that ask which part was
+# hit do not take it for one of theirs.
+
+beh:raise a owl:ObjectProperty ; rdfs:range owl:Class ;
+    rdfs:label "Raises"@en , "Викликає"@uk , "Löst aus"@de , "يُطلق"@ar ;
+    rdfs:comment "In a reaction's inserts: raise an event of this class on the subject once this event is applied (a request, not a statement)."@en .
+beh:raisedBy a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range beh:Event ;
+    rdfs:label "Raised by"@en , "Викликано"@uk , "Ausgelöst von"@de , "أطلقه"@ar ;
+    rdfs:comment "On a raised event: the event whose reaction raised it."@en .
+
 beh:recorded a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "On an event class: false means its events are not appended to the change log."@en .
 beh:gesture a owl:DatatypeProperty ;
@@ -96,6 +112,8 @@ beh:target a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:comment "The comp
 beh:node a owl:ObjectProperty ; rdfs:domain beh:Event ;
     rdfs:comment "The RDF/HTML node the interaction hit (nearest rendered element), for reactions that care where inside a component it happened."@en .
 beh:value a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:comment "The control's value after the interaction."@en .
+beh:modifiers a owl:DatatypeProperty ; rdfs:domain beh:Event ;
+    rdfs:comment "The modifier keys held during a click, or during the press that moved the focus, ordered as in a key combination (\"shift\", \"mod+shift\"); absent when none was."@en .
 beh:checked a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:boolean .
 beh:sequence a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:integer .
 beh:at a owl:DatatypeProperty ; rdfs:domain beh:Event ; rdfs:range xsd:dateTime .
@@ -158,6 +176,7 @@ beh:EventShape a sh:NodeShape ;
                 [ sh:path beh:extent ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:handledBy ; sh:class beh:Reaction ] ,
                 [ sh:path beh:previous ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+                [ sh:path beh:raisedBy ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
                 [ sh:path beh:added ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ,
                 [ sh:path beh:removed ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] .
 

@@ -4,6 +4,7 @@ import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard } from '../src/clipboard.ts'
 import { Files, type Uploader } from '../src/files.ts'
 import { Fullscreen } from '../src/fullscreen.ts'
+import { Islands } from '../src/foreign.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -25,6 +26,7 @@ import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
+import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
 
 // The host: a mount point, the effects of graph state (theme on <html>,
 // engine layers, store choice, URL, benchmark runs) and nothing else. The
@@ -39,8 +41,13 @@ const kind = (params.get('store') ?? (hasStore('wat') ? 'wat' : 'hybrid')) as St
 // HTML, faster in the browser (Rules menu, ?prefer=function); a store without SPARQL (N3) needs them.
 const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql')) as 'sparql' | 'function'
 // Compiled queries (Semblance's engines only; rdf-engine/results/compiled.md): off, on a query's
-// second run, or in idle time (?compile=run|idle; Tools › Engine).
-const compile = (['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? params.get('compile') : 'off') as 'off' | 'run' | 'idle'
+// second run, or in idle time (?compile=off|run|idle; Tools › Engine). By default in idle time on
+// the Rust engine, where it pays on whole pages, and off on WAT, where queries are too small a part
+// of a page for it to.
+type CompileMode = 'off' | 'run' | 'idle'
+const defaultCompile = (store: string): CompileMode => (store === 'rust' ? 'idle' : 'off')
+const compileParam = ['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? (params.get('compile') as CompileMode) : undefined
+const compile = compileParam ?? defaultCompile(kind)
 const COMPILES = { off: 'CompileOff', run: 'CompileOnRun', idle: 'CompileIdle' } as const
 const STORES: Record<StoreKind, string> = { wat: 'SemblanceWasm', rust: 'SemblanceRust', hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
 const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
@@ -109,7 +116,8 @@ function focusModal() {
     const open = [...document.querySelectorAll(p.selector)].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
     if (open === p.open) continue
     if (open && !p.open) p.opener = document.activeElement as HTMLElement | null
-    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body)
+    // Inside, or moved off it by the renderer when it went away (shell.refocused): either way, it comes back.
+    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body || document.activeElement === shell.refocused)
     p.open = open
     if (open) {
       if (!open.contains(document.activeElement)) ((open.querySelector(p.first) as HTMLElement | null) ?? (open as HTMLElement)).focus?.()
@@ -118,6 +126,20 @@ function focusModal() {
       p.opener = null
     }
   }
+}
+
+// The Layout page's c:HostSlot specimen: content the host owns (a native slider), mounted once.
+function hostSlotDemo(slot: Element | undefined) {
+  if (!slot || slot.firstChild) return
+  const input = Object.assign(document.createElement('input'), { type: 'range', min: '0', max: '100', value: '40' })
+  input.setAttribute('aria-label', 'A slider the host owns')
+  const output = document.createElement('output')
+  output.textContent = input.value
+  input.addEventListener('input', () => (output.textContent = input.value))
+  const row = document.createElement('div')
+  row.style.cssText = 'display: flex; gap: 0.75em; align-items: center'
+  row.append(input, output)
+  slot.append(row)
 }
 
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
@@ -129,6 +151,7 @@ const patch = () => {
   shell.flush()
   sandboxes?.sync()
   focusModal()
+  hostSlotDemo(shell.slot('gallery-host'))
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
   textDom?.flush()
@@ -207,10 +230,12 @@ function syncSettings() {
 
   const nextStore = key(UI + 'store') ?? kind
   const nextRules = key(UI + 'rules') ?? prefer
-  const nextCompile = key(UI + 'compile') ?? compile
-  if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3') || nextCompile !== compile) {
+  const chosenCompile = (key(UI + 'compile') ?? compile) as CompileMode
+  // Another store keeps a mode chosen here (in the menu or the address), else takes its own default.
+  const nextCompile = chosenCompile !== compile || compileParam ? chosenCompile : defaultCompile(nextStore)
+  if (nextStore !== kind || (nextRules !== prefer && nextStore !== 'n3') || chosenCompile !== compile) {
     const search = new URLSearchParams({ store: nextStore, prefer: nextRules })
-    if (nextCompile !== 'off') search.set('compile', nextCompile)
+    if (nextCompile !== defaultCompile(nextStore)) search.set('compile', nextCompile)
     location.search = search.toString()
   }
   checkPerf()
@@ -345,6 +370,16 @@ new Fullscreen(bus, {
     const n = shell.nodeOf(iri)
     return n?.nodeType === 1 ? (n as Element) : undefined
   },
+  onHandled: () => {
+    syncSettings()
+    flush()
+  },
+}).attach()
+// Foreign components (ext:Island): Shoelace, Chart.js, Leaflet and flatpickr from a CDN, loaded when an island first shows,
+// mounted in their slots after each patch; what they report comes back as events.
+new Islands(bus, shell, {
+  modules,
+  widgets: { 'chart.js': chartJs, leaflet, flatpickr },
   onHandled: () => {
     syncSettings()
     flush()

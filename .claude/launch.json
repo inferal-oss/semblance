@@ -4,8 +4,26 @@
     {
       "name": "demo",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5179", "--strictPort"],
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5179",
+        "--strictPort"
+      ],
       "port": 5179
+    },
+    {
+      "name": "foreign",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--config",
+        "examples/foreign/vite.config.ts",
+        "--port",
+        "5181",
+        "--strictPort"
+      ],
+      "port": 5181
     }
   ]
 }

@@ -9,6 +9,14 @@ built that way.
 Start with [Getting started](GETTING-STARTED.md) for the smallest complete example. On the site (<https://semblance.dev>, Docs → Building components) a component of this
 shape, `ex:Avatar`, is live: edit its rule, shape or style rules and it renders again as you type.
 
+Use `c:LinkedCard` when an entire non-interactive card should open a destination. It is a
+`c:Link` whose body is a component: give it `c:to` or `c:href` and the card as `c:content`, and
+optionally a `c:label` to name the link (otherwise its name is the card's text). Every link
+property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true` for
+`aria-current="page"`), and every theme styles the card inside as a card. The screen rendering is
+one link around the component; the text rendering gives the address after the content. Keep
+buttons and other links outside that card.
+
 ## SPARQL first; functions are the escape hatch
 
 Every rendering is implemented by one or more `sem:Rule`s. A rule is either a SPARQL `CONSTRUCT`
@@ -58,6 +66,12 @@ Reuse the shared properties where they fit — `c:label`, `c:value`, `c:help`, `
 `c:disabled`, `c:children`, `c:content`, `c:controls` / `c:property` (a control bound to a
 property of another node) — and the shared variant axes (`sty:tone`, `sty:emphasis`, `sty:size`),
 which the style layer already turns into `data-sem-*` hooks for every component that has them.
+
+A link (`c:Link`) goes to `c:href`, or to `c:to` (a resource; the navigation layer finds its
+address). `c:currentPage true` marks the page being shown (`aria-current="page"`), and `c:count`
+puts a number after the label, which `c:countLabel` spells out for screen readers. `c:NavLink` is
+the same link drawn as a row of a site's navigation, like a `c:NavList` option; `c:NavList` itself
+chooses a graph value rather than a page.
 
 Capabilities are mixin classes: an instance that is also `c:Draggable`, `c:Flippable` or
 `dnd:Draggable` gets that behaviour without its component knowing.
@@ -333,6 +347,18 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   `fs:fullscreen true` is shown with the document's Fullscreen API (the window filled where it is
   refused), `fs:fullViewport true` fills the window; pass `host` (a stand-in in tests, `null` for
   no Fullscreen API at all).
+- **Foreign components.** A web component, a framework component or a vanilla widget (a chart, a map,
+  an editor) is an island: a subclass of `ext:Island` that says what to mount (`ext:adapter`, with
+  `ext:tag` or `ext:widget`, and `ext:module` for a loader the host registered), which of an instance's
+  properties are its inputs (`ext:input`: a name, `ext:from`, optionally `ext:through c:of` and
+  `ext:as ext:Attribute`) and which of its events are outputs (`ext:output`: `ext:on`, `ext:emits` an
+  event class, `ext:path` into the payload). The island's rendering puts the inputs' current values on a
+  host-owned slot, so an input changes only when its triples do; `mount` attaches the islands effect,
+  which mounts the component there, pushes changed inputs (a value the component already has is not
+  written again) and emits its outputs as events for ordinary reactions. Register what the graph names:
+  `mount(el, { widgets: { chart }, modules: { 'shoelace/rating': () => import(url) } })`. Theme it by
+  mapping tokens onto its documented custom properties with a style rule. See [FOREIGN.md](FOREIGN.md)
+  and the site's Coffee tasting example (Shoelace, Chart.js, Leaflet and flatpickr from a CDN).
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
   `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no
@@ -412,6 +438,6 @@ slowest, for which focus, how much is done and waiting, the event that started t
 | `ontology/components/groups.ttl` | the component groups, and each class's group (`sem:group`; parts with their component) |
 | `ontology/shapes/components.ttl` | component shapes |
 | `ontology/theme/*.ttl` | tokens, styles, themes |
-| `ontology/layers/*.ttl` | the layers |
+| `ontology/layers/*.ttl` | the layers (`foreign.ttl`: islands for foreign components, mounted by `src/foreign.ts`) |
 | `src/components/<group>.ts` | function twins and reaction functions |
 | `demo/gallery/<group>.ttl` | the Components page's specimens; each says which classes it demonstrates (`c:demonstrates`) and sits on their group's page (`test/gallery.test.ts`) |

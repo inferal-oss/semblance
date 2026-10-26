@@ -576,7 +576,7 @@ export class Engine {
       if (!f.reads.some((r) => matchesRead(r, s, p, q.object))) continue
       if (f.rule.refresh === 'now') {
         if (f.rule.stratum >= this.current) this.markDirty(f.rule, f.focus)
-      } else if (this.demand && !this.warming && !this.demand(focus)) {
+      } else if (this.demand && !this.warming && !f.rule.always && !this.demand(focus)) {
         // Not shown: it waits, parked, until it is (no frame needed).
         let parked = this.deferred.get(f.rule)
         if (!parked) this.deferred.set(f.rule, (parked = new Set()))
@@ -818,7 +818,7 @@ export class Engine {
   private evaluateAll(rule: Rule, foci: Set<string>): Leftover | undefined {
     const wd = this.watchdog
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
-    if (this.demand && !this.warming) {
+    if (this.demand && !this.warming && !rule.always) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       let parked = this.deferred.get(rule)
       for (const focus of [...foci]) {

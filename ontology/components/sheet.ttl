@@ -20,7 +20,9 @@
 # draws its dependencies: arrows from the cells it reads, and to the cells that read it. With
 # c:traceRecalculation, the host writes which formulas the last change re-ran (c:recalculated), and
 # the sheet marks them. Typing a formula into a cell and committing it makes it a formula cell
-# (c:EnterSheetFormula); the controls above the grid add a row or a column.
+# (c:EnterSheetFormula); the controls above the grid add a row or a column. Shift with a click or an
+# arrow key selects a range from the selected cell (c:selectionEnd): its cells are marked, and the
+# line under the sheet sums them up.
 
 c:Sheet a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -28,7 +30,8 @@ c:Sheet a owl:Class ;
 them) and numbered rows. Formula cells (c:valueQuery, reading c:dataset, or c:formulaText as people write it)
 recompute through the graph; a formula typed into a cell makes it one, and a row or a column can be added.
 The selected cell (c:selectedCell) shows its formula (c:formulaText) above the grid, and arrows draw
-what it reads and what reads it. With c:traceRecalculation true, the cells the last change re-ran
+what it reads and what reads it; Shift with a click or an arrow key selects a range from it (c:selectionEnd),
+whose sum, average and count are shown under the grid. With c:traceRecalculation true, the cells the last change re-ran
 (c:recalculated) are marked, and counted."""@en ;
     sem:slug "sheet" .
 c:SheetCell a owl:Class ;
@@ -43,7 +46,11 @@ c:column a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "A cell'
 c:formulaText a owl:DatatypeProperty ; rdfs:domain c:SheetCell ;
     rdfs:comment "A cell's formula as people write it (\"=SUM(D2:D5)\", \"=B2*C2\"): c:SheetFormula reads it into the cell's query and inputs; on a cell with a query of its own, only how it reads."@en .
 c:selectedCell a owl:ObjectProperty ; rdfs:domain c:Sheet ; rdfs:range c:SheetCell ;
-    rdfs:comment "The cell whose formula and dependencies the sheet shows."@en .
+    rdfs:comment "The cell whose formula and dependencies the sheet shows; a range is selected from it."@en .
+c:selectionEnd a owl:ObjectProperty ; rdfs:domain c:Sheet ; rdfs:range c:SheetCell ;
+    rdfs:comment "The far corner of the selected range (Shift with a click or an arrow key); the range spans it and c:selectedCell. Absent: only the selected cell."@en .
+c:selects a owl:ObjectProperty ; rdfs:domain c:Sheet ; rdfs:range c:SheetCell ;
+    rdfs:comment "Derived (c:SheetSelection): a cell of the selected range, the selected cell included."@en .
 c:traceRecalculation a owl:DatatypeProperty ; rdfs:domain c:Sheet ; rdfs:range xsd:boolean ;
     rdfs:comment "Asks the host to write which formulas each change re-ran (c:recalculated, c:recalculationTick)."@en .
 c:recalculated a owl:ObjectProperty ; rdfs:domain c:Sheet ; rdfs:range c:SheetCell ;
@@ -261,13 +268,38 @@ WHERE {
   FILTER NOT EXISTS { ?cell c:valueQuery ?own . FILTER NOT EXISTS { ?own a c:SheetFunction } }
 }""" .
 
+# --- the selected range ------------------------------------------------------------------------------
+# The cells between the selected cell and the selection's far corner (c:selectionEnd), or the
+# selected cell alone: derived as c:selects, so what shows the range follows the values of its cells.
+# It re-runs when the selection changes or a cell comes or goes, never on a value.
+
+c:SheetSelection a sem:Rendering ; sem:targets c:Sheet ; sem:stratum -2 ;
+    sem:watches rdf:type , c:selectedCell , c:selectionEnd , c:cell .
+c:SheetSelection-fn a sem:Rule ; sem:implements c:SheetSelection ; sem:function "sheet:selection" .
+c:SheetSelection-sparql a sem:Rule ;
+    sem:implements c:SheetSelection ;
+    sem:construct """
+CONSTRUCT { $this c:selects ?cell }
+WHERE {
+  $this a/rdfs:subClassOf* c:Sheet ; c:selectedCell ?a .
+  $this c:cell ?a . ?a c:row ?ra ; c:column ?ca .
+  OPTIONAL { $this c:selectionEnd ?b0 . $this c:cell ?b0 }
+  BIND(COALESCE(?b0, ?a) AS ?b)
+  ?b c:row ?rb ; c:column ?cb .
+  $this c:cell ?cell . ?cell c:row ?r ; c:column ?c .
+  FILTER(?r >= IF(?ra < ?rb, ?ra, ?rb) && ?r <= IF(?ra < ?rb, ?rb, ?ra) && ?c >= IF(?ca < ?cb, ?ca, ?cb) && ?c <= IF(?ca < ?cb, ?cb, ?ca))
+}""" .
+
 # --- what is selected, what the last change re-ran ---------------------------------------------------
 # Above the components (it decorates the grid's nodes and the cells'). It follows the selected cell
-# (its value, its formula); a formula is a cell with a formula's text or a query of its own.
+# (its value, its formula) and the cells of a range (their values); a formula is a cell with a
+# formula's text or a query of its own. A range of more than one cell is marked on its cells (which
+# of its edges each is on, logical: start and end follow the reading direction), and the line under
+# the sheet says it, with the sum and average of its numbers and how many cells hold something.
 
 c:SheetFocus a sem:Rendering ; sem:targets c:Sheet ; sem:modality mod:Screen ; sem:stratum 40 ;
-    sem:readsMinted true ; sem:watches rdf:type , c:selectedCell , c:recalculated , c:recalculationTick , c:cell , c:value , c:formulaText ;
-    sem:follows c:selectedCell .
+    sem:readsMinted true ; sem:watches rdf:type , c:selectedCell , c:selects , c:recalculated , c:recalculationTick , c:cell , c:value , c:formulaText ;
+    sem:follows c:selectedCell , c:selects .
 c:SheetFocus-fn a sem:Rule ; sem:implements c:SheetFocus ; sem:function "sheet:focus" .
 c:SheetFocus-sparql a sem:Rule ;
     sem:implements c:SheetFocus ;
@@ -277,6 +309,7 @@ CONSTRUCT {
   ?status rdfhtml:hasChild ?statusText . ?statusText a rdfhtml:Text ; rdfhtml:data ?statusData .
   ?selRoot rdfhtml:attribute ?selAttr . ?selAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-selected" ; rdfhtml:attributeValue "true" .
   ?recRoot rdfhtml:attribute ?recAttr . ?recAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-recalculated" ; rdfhtml:attributeValue ?parity .
+  ?inRoot rdfhtml:attribute ?inAttr . ?inAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-range" ; rdfhtml:attributeValue ?edges .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:Sheet .
@@ -297,13 +330,30 @@ WHERE {
          IF(BOUND(?ft), CONCAT(STR(?ft), "  →  ", COALESCE(STR(?sv), "…")), COALESCE(STR(?sv), ""))),
          "Select a cell to see its formula, what it reads and what reads it.") AS ?barData)
   } UNION {
-    # How much the last change re-ran.
+    # The range selected, summed up; else how much the last change re-ran.
     BIND(IRI(CONCAT(STR($this), "/~status-text")) AS ?statusText)
     { SELECT (COUNT(DISTINCT ?f) AS ?formulas) WHERE { $this c:cell ?f . ?f c:formulaText|c:valueQuery ?anyQuery } }
     OPTIONAL { SELECT (COUNT(DISTINCT ?rc) AS ?ran) WHERE { $this c:recalculated ?rc } }
     OPTIONAL { $this c:recalculationTick ?tick }
-    BIND(IF(BOUND(?tick), CONCAT("The last change recalculated ", STR(COALESCE(?ran, 0)), " of ", STR(?formulas), " formulas."),
-         CONCAT(STR(?formulas), " formulas. Change a number: only the formulas that read it recalculate.")) AS ?statusData)
+    OPTIONAL { SELECT (COUNT(?x) AS ?span) (MIN(?xr) AS ?r0) (MAX(?xr) AS ?r1) (MIN(?xc) AS ?c0) (MAX(?xc) AS ?c1) WHERE { $this c:selects ?x . ?x c:row ?xr ; c:column ?xc } }
+    OPTIONAL { SELECT (COUNT(?fv) AS ?filled) WHERE { $this c:selects ?fx . ?fx c:value ?fv } }
+    OPTIONAL { SELECT (COUNT(?d) AS ?numbers) (SUM(?d) AS ?sum) ((ROUND(AVG(?d) * 100) / 100) AS ?mean) WHERE {
+      $this c:selects ?dx . ?dx c:value ?dv FILTER(REGEX(STR(?dv), "^-?[0-9]+([.][0-9]+)?$")) BIND(xsd:decimal(STR(?dv)) AS ?d)
+    } }
+    BIND(CONCAT(SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c0, 1), STR(?r0), ":", SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c1, 1), STR(?r1)) AS ?rangeName)
+    BIND(IF(COALESCE(?span, 0) > 1,
+         CONCAT(?rangeName, IF(COALESCE(?numbers, 0) > 0, CONCAT("  ·  Sum ", STR(?sum), "  ·  Average ", STR(?mean)), ""), "  ·  Count ", STR(COALESCE(?filled, 0))),
+         IF(BOUND(?tick), CONCAT("The last change recalculated ", STR(COALESCE(?ran, 0)), " of ", STR(?formulas), " formulas."),
+            CONCAT(STR(?formulas), " formulas. Change a number: only the formulas that read it recalculate."))) AS ?statusData)
+  } UNION {
+    # The cells of a range: the edges of the range each is on (\"inside\" for none).
+    { SELECT (COUNT(?x) AS ?span) (MIN(?xr) AS ?r0) (MAX(?xr) AS ?r1) (MIN(?xc) AS ?c0) (MAX(?xc) AS ?c1) WHERE { $this c:selects ?x . ?x c:row ?xr ; c:column ?xc } }
+    FILTER(?span > 1)
+    $this c:selects ?in . ?in c:row ?ir ; c:column ?ic .
+    BIND(CONCAT(IF(?ir = ?r0, " top", ""), IF(?ir = ?r1, " bottom", ""), IF(?ic = ?c0, " start", ""), IF(?ic = ?c1, " end", "")) AS ?sides)
+    BIND(IF(?sides = "", "inside", SUBSTR(?sides, 2)) AS ?edges)
+    BIND(IRI(CONCAT(STR(?in), "/~root")) AS ?inRoot)
+    BIND(IRI(CONCAT(STR($this), "/~range-", REPLACE(STR(?in), "^.*[#/]", ""))) AS ?inAttr)
   } UNION {
     FILTER(?selected)
     BIND(IRI(CONCAT(STR(?sel), "/~root")) AS ?selRoot)
@@ -363,21 +413,99 @@ WHERE {
 }""" ;
     sem:function "sheet:edit" .
 
-# Clicking or focusing a cell selects it.
+# Clicking or focusing a cell selects it, and only it. With Shift held (beh:modifiers) it does not:
+# the range is extended instead.
 c:SelectSheetCell a beh:Reaction ;
     rdfs:label "Select a cell"@en ;
     beh:when beh:Click ;
     beh:sourceClass c:SheetCell ;
-    beh:deletes """CONSTRUCT { ?sheet c:selectedCell ?old } WHERE { ?sheet c:cell $this ; c:selectedCell ?old FILTER(?old != $this) }""" ;
-    beh:inserts """CONSTRUCT { ?sheet c:selectedCell $this } WHERE { ?sheet c:cell $this FILTER NOT EXISTS { ?sheet c:selectedCell $this } }""" ;
+    beh:deletes """CONSTRUCT { ?sheet c:selectedCell ?old ; c:selectionEnd ?end }
+WHERE {
+  FILTER NOT EXISTS { $event beh:modifiers ?m FILTER(CONTAINS(CONCAT("+", ?m, "+"), "+shift+")) }
+  ?sheet c:cell $this .
+  { ?sheet c:selectedCell ?old FILTER(?old != $this) } UNION { ?sheet c:selectionEnd ?end }
+}""" ;
+    beh:inserts """CONSTRUCT { ?sheet c:selectedCell $this }
+WHERE {
+  FILTER NOT EXISTS { $event beh:modifiers ?m FILTER(CONTAINS(CONCAT("+", ?m, "+"), "+shift+")) }
+  ?sheet c:cell $this FILTER NOT EXISTS { ?sheet c:selectedCell $this }
+}""" ;
     sem:function "sheet:select" .
 c:FocusSheetCell a beh:Reaction ;
     rdfs:label "Select a cell"@en ;
     beh:when beh:Focus ;
     beh:sourceClass c:SheetCell ;
-    beh:deletes """CONSTRUCT { ?sheet c:selectedCell ?old } WHERE { ?sheet c:cell $this ; c:selectedCell ?old FILTER(?old != $this) }""" ;
-    beh:inserts """CONSTRUCT { ?sheet c:selectedCell $this } WHERE { ?sheet c:cell $this FILTER NOT EXISTS { ?sheet c:selectedCell $this } }""" ;
+    beh:deletes """CONSTRUCT { ?sheet c:selectedCell ?old ; c:selectionEnd ?end }
+WHERE {
+  FILTER NOT EXISTS { $event beh:modifiers ?m FILTER(CONTAINS(CONCAT("+", ?m, "+"), "+shift+")) }
+  ?sheet c:cell $this .
+  { ?sheet c:selectedCell ?old FILTER(?old != $this) } UNION { ?sheet c:selectionEnd ?end }
+}""" ;
+    beh:inserts """CONSTRUCT { ?sheet c:selectedCell $this }
+WHERE {
+  FILTER NOT EXISTS { $event beh:modifiers ?m FILTER(CONTAINS(CONCAT("+", ?m, "+"), "+shift+")) }
+  ?sheet c:cell $this FILTER NOT EXISTS { ?sheet c:selectedCell $this }
+}""" ;
     sem:function "sheet:select" .
+
+# Shift+click: the range runs from the selected cell to this one (back to the selected cell alone
+# when it is the one clicked). With nothing selected, this cell is.
+c:ExtendSheetSelection a beh:Reaction ;
+    rdfs:label "Select a range"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { ?sheet c:selectionEnd ?end }
+WHERE {
+  $event beh:modifiers ?m FILTER(CONTAINS(CONCAT("+", ?m, "+"), "+shift+"))
+  ?sheet c:cell $this ; c:selectionEnd ?end FILTER(?end != $this)
+}""" ;
+    beh:inserts """CONSTRUCT { ?sheet c:selectionEnd ?new ; c:selectedCell ?first }
+WHERE {
+  $event beh:modifiers ?m FILTER(CONTAINS(CONCAT("+", ?m, "+"), "+shift+"))
+  ?sheet c:cell $this FILTER NOT EXISTS { ?sheet c:selectionEnd $this }
+  OPTIONAL { ?sheet c:selectedCell ?a FILTER EXISTS { ?sheet c:cell ?a } }
+  BIND(IF(BOUND(?a), ?none, $this) AS ?first)
+  BIND(IF(BOUND(?a) && ?a != $this, $this, ?none) AS ?new)
+}""" ;
+    sem:function "sheet:extend" .
+
+# Shift with an arrow key: the range's far corner moves a cell (left and right swap in a
+# right-to-left page), if there is a cell there; back on the selected cell, the range is that cell.
+c:SheetKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
+    beh:key "shift+arrowup" , "shift+arrowdown" , "shift+arrowleft" , "shift+arrowright" ;
+    rdfs:comment "Shift with an arrow key in a sheet's cell: extends the selected range (beh:key)."@en .
+c:ExtendSheetSelectionByKey a beh:Reaction ;
+    rdfs:label "Select a range"@en ;
+    beh:when c:SheetKey ;
+    beh:sourceClass c:SheetCell ;
+    beh:deletes """CONSTRUCT { ?sheet c:selectionEnd ?e0 }
+WHERE {
+  $event beh:key ?key .
+  VALUES (?key ?dr ?dc) { ("shift+arrowup" -1 0) ("shift+arrowdown" 1 0) ("shift+arrowleft" 0 -1) ("shift+arrowright" 0 1) }
+  ?sheet c:cell $this ; c:selectionEnd ?e0 . ?sheet c:cell ?e0 . ?e0 c:row ?fr ; c:column ?fc .
+  BIND(EXISTS { ?app l10n:language/l10n:direction l10n:RTL } AS ?rtl)
+  BIND(?fr + ?dr AS ?tr)
+  BIND(IF(?rtl, ?fc - ?dc, ?fc + ?dc) AS ?tc)
+  ?to c:row ?tr ; c:column ?tc . ?sheet c:cell ?to .
+}""" ;
+    beh:inserts """CONSTRUCT { ?sheet c:selectionEnd ?new ; c:selectedCell ?first }
+WHERE {
+  $event beh:key ?key .
+  VALUES (?key ?dr ?dc) { ("shift+arrowup" -1 0) ("shift+arrowdown" 1 0) ("shift+arrowleft" 0 -1) ("shift+arrowright" 0 1) }
+  ?sheet c:cell $this .
+  OPTIONAL { ?sheet c:selectedCell ?a0 FILTER EXISTS { ?sheet c:cell ?a0 } }
+  BIND(COALESCE(?a0, $this) AS ?a)
+  OPTIONAL { ?sheet c:selectionEnd ?e0 FILTER EXISTS { ?sheet c:cell ?e0 } }
+  BIND(COALESCE(?e0, ?a) AS ?from)
+  ?from c:row ?fr ; c:column ?fc .
+  BIND(EXISTS { ?app l10n:language/l10n:direction l10n:RTL } AS ?rtl)
+  BIND(?fr + ?dr AS ?tr)
+  BIND(IF(?rtl, ?fc - ?dc, ?fc + ?dc) AS ?tc)
+  ?to c:row ?tr ; c:column ?tc . ?sheet c:cell ?to .
+  BIND(IF(?to != ?a, ?to, ?none) AS ?new)
+  BIND(IF(BOUND(?a0), ?none, ?a) AS ?first)
+}""" ;
+    sem:function "sheet:extend-by-key" .
 
 # Committing a formula (Enter, or leaving the cell) in a value cell: its text becomes the cell's
 # formula (c:formulaText; c:SheetFormula does the rest) and its typed value goes. Text that is not

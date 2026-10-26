@@ -26,8 +26,9 @@ npm run engine:speed                          # WAT at least as fast as Rust (--
 SEMBLANCE_ENGINE_COMPILE=idle npx tsx rdf-engine/host/compiled-pages.ts wat pages  # whole pages: 0, 2 or idle; pages, warehouse or grid
 ```
 
-Compiled queries are off by default. The site's Tools › Engine › "Compiled queries"
-(`?compile=run|idle`) compiles a prepared query on its second run, or in idle time
+The site compiles queries in idle time on the Rust engine and not on WAT by default (where
+each pays, on whole pages: results/compiled.md). Tools › Engine › "Compiled queries"
+(`?compile=off|run|idle`) compiles a prepared query on its second run, or in idle time
 (`Engine.compileIdle`, called from the store's `maintain`): the queries whose timed
 runs say a module pays for itself, the most time first, a bounded number per idle
 slice; a module that then runs slower than the interpreter did is dropped.

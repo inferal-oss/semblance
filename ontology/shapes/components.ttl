@@ -72,7 +72,19 @@ c:EmblemShape a sh:NodeShape ; sh:targetClass c:Emblem ;
                 [ sh:path c:fillRule ; sh:maxCount 1 ; sh:in ( "nonzero" "evenodd" ) ] .
 c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
     sh:property [ sh:path c:href ; sh:minCount 1 ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
-                  sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] .
+                  sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] ,
+                [ sh:path c:content ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                  sh:message "A link's body (c:content) is one component." ] ,
+                [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path c:count ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ;
+                  sh:message "A link's c:count is one whole number, zero or more." ] .
+c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
+    sh:property [ sh:path c:slot ; sh:maxCount 1 ; sh:datatype xsd:string ;
+                  sh:message "A host slot has one name (c:slot), a plain string." ] .
+# A linked card is a c:Link (its shape applies) around a component.
+c:LinkedCardShape a sh:NodeShape ; sh:targetClass c:LinkedCard ;
+    sh:property [ sh:path c:content ; sh:minCount 1 ;
+                  sh:message "A linked card wraps one component (c:content)." ] .
 c:ProgressShape a sh:NodeShape ; sh:targetClass c:Progress ;
     sh:property [ sh:path c:value ; sh:minInclusive 0 ; sh:lessThanOrEquals c:max ;
                   sh:message "Progress can't exceed its c:max or go below zero." ] .
