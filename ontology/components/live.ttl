@@ -125,7 +125,7 @@ c:LiveBrokenPhrase a c:Phrase ;
                "Die Quelle hat einen Fehler, und noch wurde nichts dargestellt."@de ,
                "في المصدر خطأ، ولم يُعرض شيء بعد."@ar .
 c:LiveScreenPhrase a c:Phrase ; rdfs:label "On screen"@en , "На екрані"@uk , "Auf dem Bildschirm"@de , "على الشاشة"@ar .
-c:LiveDataPhrase a c:Phrase ; rdfs:label "Its data, as Turtle"@en , "Його дані в Turtle"@uk , "Seine Daten als Turtle"@de , "بياناته بصيغة Turtle"@ar .
+c:LiveDataPhrase a c:Phrase ; rdfs:label "RDF (Turtle)"@en , "RDF (Turtle)"@uk , "RDF (Turtle)"@de , "RDF (Turtle)"@ar .
 c:LiveFlowHintPhrase a c:Phrase ;
     rdfs:label "Use the example: what you do changes its data, and the screen and the text follow."@en ,
                "Скористайтеся прикладом: ваші дії змінюють його дані, а екран і текст ідуть за ними."@uk ,

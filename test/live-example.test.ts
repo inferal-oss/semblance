@@ -421,7 +421,7 @@ describe('a live example with its data (c:dataPreview): the todo of the home pag
     const t = todo('sparql')
     expect(t.ex.getAttribute('data-sem-sources')).toBe('hidden')
     expect(t.ex.querySelector('.sem-live-sources, [role=tab]')).toBeNull()
-    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'Its data, as Turtle', 'As text'])
+    expect([...t.ex.querySelectorAll('.sem-live-modality')].map((p) => p.textContent)).toEqual(['On screen', 'RDF (Turtle)', 'As text'])
     expect(t.lines()).toEqual([
       'ex:t1 rdfs:label "Write the core ontology" ;',
       '    ex:done true ;',
