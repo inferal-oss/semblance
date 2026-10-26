@@ -36,6 +36,27 @@ export function galleryPage(file: string, root: string, kind: StoreKind = 'oxigr
 
 const gallery = (kind: StoreKind = 'oxigraph', prefer?: 'sparql' | 'function') => galleryPage('data', 'gallery-data', kind, prefer)
 
+describe('c:GanttChart', () => {
+  it('renders dated rows, baselines, uncertainty, milestones, dependencies and a text table', () => {
+    const { root } = gallery()
+    const chart = root('dt-gantt-chart')
+    expect(chart.getAttribute('data-sem-c')).toBe('gantt-chart')
+    expect(chart.querySelector('.sem-gantt-scroll')?.getAttribute('role')).toBe('region')
+    expect(chart.querySelectorAll('svg .sem-gantt-bar')).toHaveLength(2)
+    expect(chart.querySelectorAll('svg .sem-gantt-baseline')).toHaveLength(1)
+    expect(chart.querySelectorAll('svg .sem-gantt-tone-success')).toHaveLength(1)
+    expect(chart.querySelectorAll('svg .sem-gantt-uncertainty')).toHaveLength(2)
+    expect(chart.querySelectorAll('svg .sem-gantt-milestone')).toHaveLength(1)
+    expect(chart.querySelectorAll('svg .sem-gantt-dependency')).toHaveLength(2)
+    expect(chart.querySelector('svg a')?.getAttribute('href')).toBe('/docs')
+    expect(chart.querySelectorAll('a[href^="javascript:"]')).toHaveLength(0)
+    expect([...chart.querySelectorAll('tbody th')].map((th) => th.textContent)).toEqual(['Sketch the interface', 'Build the component', 'Review'])
+    expect(chart.querySelectorAll('tbody tr')[1]?.textContent).toContain('Uncertainty end: 2026-11-11')
+    expect(chart.querySelectorAll('tbody tr')[1]?.textContent).toContain('After Sketch the interface')
+    expect(chart.querySelector('details summary')?.textContent).toBe('As a table')
+  })
+})
+
 describe('c:Table', () => {
   it('renders the rows of its SELECT with table semantics and a sticky, sortable header', () => {
     const { root, document } = gallery()
@@ -238,7 +259,7 @@ describe('c:Tree', () => {
     click(twisty)
     expect(objects(UI + 'dt-tree-classes', NS.c + 'expandedNode')).toContain(NS.c + 'Chart')
     expect(item('Chart').getAttribute('aria-expanded')).toBe('true')
-    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Heatmap', 'LineChart'])
+    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Gantt chart', 'Heatmap', 'LineChart'])
     expect(item('BarChart').getAttribute('aria-level')).toBe('3')
     click(item('Chart').querySelector('.sem-twisty')!)
     expect(item('Chart').getAttribute('aria-expanded')).toBe('false')

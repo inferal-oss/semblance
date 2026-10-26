@@ -17,6 +17,22 @@ property works on it (`c:external`, the spoken new-tab hint, `c:currentPage true
 one link around the component; the text rendering gives the address after the content. Keep
 buttons and other links outside that card.
 
+`c:GanttChart` draws dated rows returned by a `sem:View` SELECT. Each solution may bind `?task`,
+`?label`, `?start`, `?end`, `?baselineStart`, `?baselineEnd`, `?uncertainty`, `?dependsOn`,
+`?milestone`, `?tone` and `?href`. Dates are ISO calendar days. A task may occur in several
+solutions, one per dependency; the chart joins them by `?task`. `?tone` may be `sty:Accent`,
+`sty:Neutral`, `sty:Info`, `sty:Success`, `sty:Warning`, or `sty:Danger`. The chart shows a horizontally scrollable plot
+and an accessible table; task links work in both. Variable names can be mapped with the matching
+`c:…Variable` properties. Set `c:dataset` to the node whose changes should refresh the view.
+
+```turtle
+ex:planView a sem:View ; sem:select """PREFIX ex: <https://example.org/>
+SELECT ?task ?label ?start ?end WHERE {
+  ?task ex:start ?start ; ex:end ?end ; rdfs:label ?label
+}""" .
+ex:plan a c:GanttChart ; rdfs:label "Plan" ; c:view ex:planView ; c:dataset ex:planData .
+```
+
 ## SPARQL first; functions are the escape hatch
 
 Every rendering is implemented by one or more `sem:Rule`s. A rule is either a SPARQL `CONSTRUCT`

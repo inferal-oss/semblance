@@ -473,6 +473,41 @@ c:LineChartRendering a sem:Rendering ; sem:targets c:LineChart ; sem:modality mo
     sem:needsExtension sx:Math .
 c:LineChartRendering-fn a sem:Rule ; sem:implements c:LineChartRendering ; sem:function "linechart" .
 
+# A dated-row chart. Its SELECT returns one task per row, or repeats a task for
+# each dependency. Variable names can be changed to fit an existing view.
+c:GanttChart a owl:Class ; rdfs:subClassOf c:Chart ;
+    rdfs:label "Gantt chart"@en , "Діаграма Ганта"@uk , "Gantt-Diagramm"@de , "مخطط غانت"@ar ;
+    rdfs:comment "Dated tasks, milestones, baselines, uncertainty dates and dependencies from a sem:View."@en ;
+    sem:slug "gantt-chart" .
+c:taskVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable identifying a task (default task)."@en .
+c:labelVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable naming a task (default label)."@en .
+c:startVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for an ISO start date (default start)."@en .
+c:endVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for an inclusive ISO end date (default end)."@en .
+c:baselineStartVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a baseline start date (default baselineStart)."@en .
+c:baselineEndVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a baseline end date (default baselineEnd)."@en .
+c:uncertaintyVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for an uncertainty end date (default uncertainty)."@en .
+c:dependencyVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a predecessor task identifier (default dependsOn)."@en .
+c:milestoneVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a boolean milestone flag (default milestone)."@en .
+c:toneVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a theme tone (default tone)."@en .
+c:hrefVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a task link (default href)."@en .
+c:GanttChartRendering a sem:Rendering ; sem:targets c:GanttChart ; sem:modality mod:Screen ; sem:stratum 0 ; sem:follows c:dataset ;
+    sem:functionOnly "awaits #1 (query results as graph rows): it runs the SELECT named by c:view, which SPARQL 1.1 cannot execute from inside a query." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
+c:GanttChartRendering-fn a sem:Rule ; sem:implements c:GanttChartRendering ; sem:function "ganttchart" .
+c:GanttToday a c:Phrase ; rdfs:label "Today"@en , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar .
+c:GanttAsTable a c:Phrase ; rdfs:label "As a table"@en , "Як таблиця"@uk , "Als Tabelle"@de , "كجدول"@ar .
+c:GanttTask a c:Phrase ; rdfs:label "Task"@en , "Завдання"@uk , "Aufgabe"@de , "مهمة"@ar .
+c:GanttStart a c:Phrase ; rdfs:label "Start"@en , "Початок"@uk , "Beginn"@de , "البداية"@ar .
+c:GanttEnd a c:Phrase ; rdfs:label "End"@en , "Кінець"@uk , "Ende"@de , "النهاية"@ar .
+c:GanttBaseline a c:Phrase ; rdfs:label "Baseline"@en , "Базовий план"@uk , "Basisplan"@de , "الخطة الأساسية"@ar .
+c:GanttDetails a c:Phrase ; rdfs:label "Details"@en , "Деталі"@uk , "Details"@de , "تفاصيل"@ar .
+c:GanttMilestone a c:Phrase ; rdfs:label "Milestone"@en , "Віха"@uk , "Meilenstein"@de , "مرحلة"@ar .
+c:GanttUncertainty a c:Phrase ; rdfs:label "Uncertainty end"@en , "Можливий кінець"@uk , "Mögliches Ende"@de , "نهاية محتملة"@ar .
+c:GanttAfter a c:Phrase ; rdfs:label "After"@en , "Після"@uk , "Nach"@de , "بعد"@ar .
+c:GanttUnscheduled a c:Phrase ; rdfs:label "Unscheduled"@en , "Без дати"@uk , "Ohne Termin"@de , "دون موعد"@ar .
+c:GanttRangeTooWide a c:Phrase ; rdfs:label "Date range exceeds ten years."@en , "Період перевищує десять років."@uk , "Der Zeitraum überschreitet zehn Jahre."@de , "يتجاوز النطاق الزمني عشر سنوات."@ar .
+c:GanttNoRows a c:Phrase ; rdfs:label "No dated rows."@en , "Немає датованих рядків."@uk , "Keine Zeilen mit Datum."@de , "لا توجد صفوف مؤرخة."@ar .
+
 c:FindingList a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """Runs every judgement of a class (c:judgementClass, each with a CONSTRUCT body) and lists

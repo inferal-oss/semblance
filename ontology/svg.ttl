@@ -14,7 +14,9 @@
 svg:Element a owl:Class .
 svg:Svg a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "svg" .
 svg:G a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "g" .
+svg:A a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "a" .
 svg:Defs a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "defs" .
+svg:Marker a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "marker" .
 svg:LinearGradient a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "linearGradient" .
 svg:Stop a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "stop" .
 svg:Rect a owl:Class ; rdfs:subClassOf svg:Element ; svg:tagName "rect" .
