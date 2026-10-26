@@ -147,6 +147,8 @@ interface Definition {
   node: string
   /** For an instance of a template: the instance ($this). */
   focus?: string
+  /** A view a host effect defines (ViewRuntime.host): its query, not read from the graph. */
+  hosted?: { query: string; form: 'select' | 'construct' }
 }
 
 /** A parameter, resolved: what it reads, so a change to that re-resolves it. */
@@ -234,6 +236,7 @@ export class ViewRuntime {
     for (const q of this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(IV + 'View'))) {
       if (q.subject.termType === 'NamedNode') for (const d of this.definitions(q.subject.value)) this.define(d, out)
     }
+    for (const d of this.hosted.values()) this.define(d, out)
     this.sort()
     const now = this.clock.now()
     const applied: Delta = { add: [], remove: [] }
@@ -401,6 +404,39 @@ export class ViewRuntime {
     return (instances.length ? instances.map((q) => q.subject.value) : [v.whileShown]).some((c) => this.shown!(c))
   }
 
+  private hosted = new Map<string, Definition>()
+
+  /**
+   * A view a host effect defines rather than the graph (a persistence policy's CONSTRUCT): maintained
+   * like any other, ephemeral (its output goes to subscribers and since(), never to the views graph),
+   * a fallback to recompute expected. Defined now if the runtime has started, else when it starts.
+   */
+  host(iri: string, query: string, form: 'select' | 'construct' = 'construct'): ViewHandle | undefined {
+    const def: Definition = { iri, node: iri, hosted: { query, form } }
+    this.hosted.set(iri, def)
+    if (!this.started) return undefined
+    const out = new ZSet<Quad>()
+    this.views.get(iri)?.drop(out)
+    this.define(def, out)
+    this.sort()
+    const v = this.views.get(iri)
+    if (v) out.plus(v.initial(this.clock.now()))
+    this.sink(out)
+    return v
+  }
+
+  /** Stop maintaining a hosted view. */
+  unhost(iri: string): void {
+    this.hosted.delete(iri)
+    const v = this.views.get(iri)
+    if (!v) return
+    const out = new ZSet<Quad>()
+    v.drop(out)
+    this.views.delete(iri)
+    this.sort()
+    this.sink(out)
+  }
+
   /** Called after every tick (and start, and a resume) once every view has settled: replication pumps here. */
   afterTick(fn: (tick: number) => void): () => void {
     this.afterTicks.push(fn)
@@ -509,8 +545,8 @@ export class ViewRuntime {
     if (!this.store.sparql) return undefined
     const f = this.store.factory
     const s = f.namedNode(def.node)
-    const select = this.one(s, SEM.select)?.value
-    const construct = this.one(s, SEM.construct)?.value
+    const select = def.hosted ? (def.hosted.form === 'select' ? def.hosted.query : undefined) : this.one(s, SEM.select)?.value
+    const construct = def.hosted ? (def.hosted.form === 'construct' ? def.hosted.query : undefined) : this.one(s, SEM.construct)?.value
     let query = construct ?? select ?? ''
     if (def.focus) query = query.replaceAll('$this', `<${def.focus}>`)
     for (const p of [...params].sort((a, b) => b.name.length - a.name.length)) {
@@ -573,13 +609,14 @@ export class ViewRuntime {
     const f = this.store.factory
     const s = f.namedNode(def.node)
     const fn = this.one(s, SEM.function)?.value
-    const strategy = this.one(s, IV + 'strategy')?.value
+    // A hosted view is expected to fall back now and then (its query is someone else's): iv:Auto.
+    const strategy = def.hosted ? IV + 'Auto' : this.one(s, IV + 'strategy')?.value
     const windowNode = this.one(s, IV + 'window')
     const paramNodes = this.store.match(s, f.namedNode(IV + 'parameter'), null).map((q) => q.object)
     const params = this.resolve(def, paramNodes)
     const fnView = fn ? this.opts.functions?.[fn] : undefined
     if (fn && !fnView) throw new Error(`No view function registered for "${fn}" (<${def.iri}>)`)
-    const hasQuery = !!(this.one(s, SEM.construct) ?? this.one(s, SEM.select))
+    const hasQuery = !!def.hosted || !!(this.one(s, SEM.construct) ?? this.one(s, SEM.select))
     const sparqlPlan = this.compileFor(def, params)
     const useFn = fnView && (!this.store.sparql || this.prefer === 'function' || !hasQuery)
     let plan: ViewPlan
@@ -604,7 +641,7 @@ export class ViewRuntime {
     // iv:ResultSet: a SELECT's rows in the views graph, a CONSTRUCT's triples nowhere (a query typed into the workbench).
     const materialize = this.one(s, IV + 'materialize')?.value
     view.materialize = materialize === IV + 'Graph' || materialize === IV + 'ResultSet'
-    view.ephemeral = materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
+    view.ephemeral = !!def.hosted || materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
     view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
     view.readsViews = view.reads.length > 0
     this.views.set(def.iri, view)
@@ -1742,6 +1779,8 @@ export class MaintainedView implements ViewHandle {
 
   /** Subjects the view types were generated by its activity; others it decorates were influenced. */
   private withProvenance(quads: Quad[]): Quad[] {
+    // A hosted view's output is someone else's data (what a policy stores), not the views graph's.
+    if (this.def.hosted) return quads
     const f = this.rt.store.factory
     const typed = new Set(quads.filter((q) => q.predicate.value === RDF_TYPE).map((q) => q.subject.value))
     const subjects = new Map(quads.map((q) => [q.subject.value, q.subject]))
