@@ -9,6 +9,7 @@
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix bud: <https://semblance.dev/demo/budget#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
@@ -96,7 +97,7 @@ SELECT ?category ?kind (SUM(?a) AS ?total) (COUNT(?e) AS ?entries) (SAMPLE(?o) A
 GROUP BY ?category ?kind
 ORDER BY ?order""" .
 
-bud:Spending a sem:View ; rdfs:label "spending by category" ;
+bud:Spending a sem:View , iv:View ; rdfs:label "spending by category" ; iv:materialize iv:Graph ; iv:whileShown ui:ex-budget-chart ;
     sem:select """
 SELECT ?label (SUM(?a) AS ?value) (SAMPLE(?o) AS ?order) WHERE {
   bud:sheet bud:entry ?e . ?e bud:category ?category ; bud:amount ?a .
