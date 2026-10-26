@@ -12,6 +12,8 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix ui: <https://semblance.dev/demo#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 
 # The Playground's SPARQL workbench (the Query tab): its instance, sample queries and remembered state.
 # The editor starts with the first sample, already run, so the tab opens on results.
@@ -46,7 +48,8 @@ ui:queryCopy a c:IconButton , clip:Copier ; clip:copies ui:queryEditor ; clip:pr
     c:label "Copy the query" , "Копіювати запит"@uk , "Abfrage kopieren"@de , "نسخ الاستعلام"@ar ;
     sty:emphasis sty:Ghost .
 
-# Whether the results follow the graph (c:followUpdates): off, they stay as of the last run.
+# Whether the results follow the graph (c:followUpdates): off, they stay as of the last run. On, the
+# query is also a maintained view (c:FollowAsView): the table reads its rows, the Plan tab its plan.
 ui:queryFollow a c:ToggleSwitch ; c:controls ui:workbench ; c:property c:followUpdates ;
     c:label "Follow updates" , "Стежити за змінами"@uk , "Änderungen folgen"@de , "متابعة التحديثات"@ar .
 
@@ -66,7 +69,7 @@ ORDER BY DESC(?rules) ?component""" .
 
 ui:queryResults a c:Tabs ;
     c:label "Results" , "Результати"@uk , "Ergebnisse"@de , "النتائج"@ar ;
-    c:tabs ( ui:queryTableTab ui:queryGraphTab ui:queryTurtleTab ) ;
+    c:tabs ( ui:queryTableTab ui:queryGraphTab ui:queryTurtleTab ui:queryPlanTab ) ;
     c:selected ui:queryTableTab .
 ui:queryTableTab a c:Tab ; c:label "Table" , "Таблиця"@uk , "Tabelle"@de , "جدول"@ar ; c:content ui:queryTable .
 ui:queryGraphTab a c:Tab ; c:label "Graph" , "Граф"@uk , "Graph"@de , "رسم بياني"@ar ; c:content ui:queryGraph .
@@ -78,6 +81,37 @@ ui:queryTableCopy a c:IconButton , clip:Copier ; clip:copies ui:queryTable ; cli
     sty:size sty:Small ; sty:emphasis sty:Ghost .
 ui:queryGraph a c:ResultGraph ; c:of ui:currentQuery .
 ui:queryTurtle a c:ResultTurtle ; c:of ui:currentQuery .
+
+# The Plan tab: how the query is maintained while it follows updates - what the runtime writes about
+# it in the views graph (docs/IVM.md §8.4): its strategy, or why it is recomputed, the work of its
+# last change against what a re-run reads, the check against a from-scratch run, and its operators.
+ui:queryPlanTab a c:Tab ; c:label "Plan" , "План"@uk , "Plan"@de , "الخطة"@ar ; c:content ui:queryPlan .
+ui:queryPlan a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; c:children ( ui:queryPlanSummary ui:queryPlanTable ) .
+ui:queryPlanSummary a c:Text ; c:valueQuery ui:qPlanSummary ; c:dataset ui:currentQuery .
+ui:qPlanSummary a sem:View ; sem:select """
+SELECT ?label WHERE {
+  BIND(EXISTS { ui:currentQuery a iv:View } AS ?live)
+  OPTIONAL { ui:currentQuery iv:strategy ?s FILTER(?s IN (iv:Incremental, iv:Recompute)) }
+  OPTIONAL { ui:currentQuery iv:fallback ?why }
+  OPTIONAL { ui:currentQuery iv:lastRows ?last ; iv:inputRows ?reads ; iv:stateRows ?state }
+  OPTIONAL { ui:currentQuery iv:matches ?ok }
+  BIND(COALESCE(?s = iv:Recompute, false) AS ?recomputed)
+  BIND(IF(BOUND(?last), CONCAT(" Last change: ", STR(?last), " rows of work; a re-run reads ", STR(?reads), "; ", STR(?state), " rows of state."), "") AS ?work)
+  BIND(IF(BOUND(?ok), IF(STR(?ok) = "true", " ✓ Matches a from-scratch run.", " ✕ Differs from a from-scratch run."), "") AS ?check)
+  BIND(IF(!?live, "Not maintained. Switch on Follow updates: the query becomes a maintained view, and its plan and the work of each change show here.",
+       IF(?recomputed, CONCAT("Recomputed from scratch when a triple it reads changes: ", STR(?why), ".", ?check),
+          CONCAT("Maintained incrementally: each change costs what it changes.", ?work, ?check))) AS ?label)
+}""" .
+ui:queryPlanTable a c:ResultTable ; c:of ui:qPlanOperators ; c:followUpdates true .
+ui:qPlanOperators a sem:Query ;
+    rdfs:label "The query's operators" , "Оператори запиту"@uk , "Die Operatoren der Abfrage"@de , "عوامل الاستعلام"@ar ;
+    sem:select """
+SELECT ?step ?operator ?algebra ?key WHERE {
+  ui:currentQuery iv:operator ?op . ?op iv:kind ?operator ; iv:algebra ?algebra .
+  OPTIONAL { ?op iv:partitionKey ?key }
+  BIND(xsd:integer(STRAFTER(STR(?op), "/~op-")) AS ?step)
+}
+ORDER BY ?step""" .
 
 # --- sample queries: the ontology, asked about itself -----------------------------------------------------
 
@@ -250,6 +284,7 @@ CONSTRUCT {
   ui:queryEditor c:value ?text ; c:caret ?caret .
   ui:workbench c:followUpdates ?follow .
   ui:currentQuery sem:select ?select ; sem:construct ?construct ; c:runCount ?runs .
+  ui:currentQuery a ?asView ; iv:materialize ?materialize ; iv:strategy ?strategy ; iv:measured ?measured .
   ui:queryResults c:selected ?view .
   ui:queryGraph c:selectedTerm ?node .
   ui:queryTab c:detached ?detached .
@@ -262,6 +297,7 @@ WHERE {
   UNION { OPTIONAL { ui:currentQuery sem:select ?s } BIND(COALESCE(?s, "") AS ?select) }
   UNION { OPTIONAL { ui:currentQuery sem:construct ?c } BIND(COALESCE(?c, "") AS ?construct) }
   UNION { ui:currentQuery c:runCount ?runs }
+  UNION { ui:currentQuery a iv:View ; iv:materialize ?materialize ; iv:strategy iv:Auto ; iv:measured ?measured BIND(iv:View AS ?asView) BIND(iv:Auto AS ?strategy) }
   UNION { ui:queryResults c:selected ?view }
   UNION { ui:queryGraph c:selectedTerm ?node }
   UNION { ui:queryTab c:detached ?detached }

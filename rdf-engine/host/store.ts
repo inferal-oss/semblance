@@ -250,10 +250,30 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     prepared.set(text, q)
     return q
   }
+  /**
+   * IRIs the engine did not know when looked up. Every term a quad is added with is tagged
+   * first, so an IRI that is still untagged is in no quad, unless Turtle loaded since: for
+   * matching (and graph lists) it stays unknown without asking the engine again.
+   */
+  const unknown = new Set<string>()
+  /** The engine id of a term to find quads by, or 0 if no quad can contain it. */
+  function known(t: Term): number {
+    if (t.termType !== 'NamedNode' || (t as Term & Tagged)[ID] !== undefined) return idOf(t, false)
+    const shared = namedNode(t.value)
+    if (shared[ID] !== undefined) return shared[ID]
+    if (unknown.has(t.value)) return 0
+    const id = idOf(t, false)
+    if (!id) {
+      if (unknown.size >= 4096) unknown.clear()
+      unknown.add(t.value)
+    }
+    return id
+  }
+
   const graphIds = (graphs: Term[]) => {
     const out: number[] = []
     for (const g of graphs) {
-      const id = idOf(g, false)
+      const id = known(g)
       if (id) out.push(id)
     }
     // Every requested graph unknown to the engine: an empty default graph.
@@ -290,8 +310,6 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     liveAfterCollect = e.termCount()
   }
 
-  const ids = (q: Quad, intern: boolean) => [idOf(q.subject, intern), idOf(q.predicate, intern), idOf(q.object, intern), idOf(q.graph, intern)]
-
   const factory: Factory = {
     namedNode,
     literal: literal as Factory['literal'],
@@ -303,23 +321,32 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     kind,
     factory,
     sparql,
+    crossGraphMatch: true,
     add(q) {
-      const [s, p, o, g] = ids(q, true)
-      e.add(s!, p!, o!, g!)
+      e.add(idOf(q.subject, true), idOf(q.predicate, true), idOf(q.object, true), idOf(q.graph, true))
     },
     delete(q) {
-      const [s, p, o, g] = ids(q, false)
+      const s = known(q.subject)
+      const p = known(q.predicate)
+      const o = known(q.object)
+      const g = known(q.graph)
       if (s && p && o && g) e.remove(s, p, o, g)
     },
     has(q) {
-      const [s, p, o, g] = ids(q, false)
+      const s = known(q.subject)
+      const p = known(q.predicate)
+      const o = known(q.object)
+      const g = known(q.graph)
       return !!(s && p && o && g) && e.has(s, p, o, g)
     },
     match(s, p, o, g) {
-      const pat = [s, p, o, g].map((t) => (t ? idOf(t, false) : 0))
+      const a = s ? known(s) : 0
+      const b = p ? known(p) : 0
+      const c = o ? known(o) : 0
+      const d = g ? known(g) : 0
       // A bound term the engine has never seen matches nothing (0 would mean "any").
-      for (let i = 0; i < 4; i++) if ([s, p, o, g][i] && !pat[i]) return []
-      const r = e.match(pat[0], pat[1], pat[2], pat[3])
+      if ((s && !a) || (p && !b) || (o && !c) || (g && !d)) return []
+      const r = e.match(a, b, c, d)
       const out: Quad[] = new Array(r.length / 4)
       for (let i = 0, k = 0; i < r.length; i += 4, k++) out[k] = quad(termOf(r[i]!), termOf(r[i + 1]!), termOf(r[i + 2]!), termOf(r[i + 3]!))
       return out
@@ -358,6 +385,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       return triplesOf(prepare(query).run(graphIds(graphs as Term[])))
     },
     loadTurtle(text) {
+      unknown.clear()
       e.load(Format.Turtle, text)
     },
     termCount: () => e.termCount(),
@@ -368,6 +396,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       byId.length = 0
       iris.clear()
       literals.clear()
+      unknown.clear()
       e.dispose()
     },
     setDeadline: (at) => e.setDeadline(at),

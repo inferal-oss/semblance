@@ -7,6 +7,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 
 # Selection controls. Their state lives in the graph (c:selected, or the
 # controlled property itself); selecting is an RDF event handled by a reaction.
@@ -46,6 +47,73 @@ c:TabsSelect a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:selected ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?tab . $this c:selected ?old }""" ;
     beh:inserts """CONSTRUCT { $this c:selected ?tab } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?tab }""" ;
     sem:function "tabs:select" .
+
+# Sortable tabs (a c:Tabs that is also a dnd:Sortable): each attached tab's button is the root of
+# a c:TabHandle the tabs mint, a draggable carrying the tab, and the tabs are a drop target receiving
+# into themselves. A tab dropped on other tabs moves there, last, and is selected; the tabs it left
+# drop it from their list (and their selection, which then falls back to their first tab). Its IRI,
+# its content and its slot stay, so whatever it shows keeps its state. A drop that empties the tabs
+# it came from asks them to close (c:CloseTile), which a tiled workspace does (panes.ttl). Such a tab
+# is not torn off by dragging (that gesture is the drag's); its window control and Shift+Enter still
+# open it in a window.
+c:TabHandle a owl:Class ; rdfs:subClassOf dnd:Draggable ;
+    rdfs:comment "Minted by sortable c:Tabs: one attached tab's button, as a draggable carrying the tab (c:of)."@en .
+# The tabs keep their roving tab stop: the drag layer gives a handle none of its own.
+c:TabHandle dnd:keepsFocus true .
+c:CloseTile a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:comment "Raised on a component that no longer has anything to show (tabs whose last tab moved away): its container may close it."@en .
+
+# Into these tabs: the tab, last in the list (a new cell, <tabs>/~cell-<md5 of the tab>), selected.
+c:TabsReceive a beh:Reaction ;
+    beh:when dnd:Drop ;
+    beh:sourceClass c:Tabs ;
+    beh:deletes """CONSTRUCT { $this c:tabs ?empty . ?last rdf:rest rdf:nil . $this c:selected ?old }
+WHERE {
+  $event dnd:into $this ; dnd:carrying ?tab . ?tab a c:Tab .
+  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab FILTER(?src != $this) }
+  BIND(IF(EXISTS { $this c:tabs rdf:nil }, rdf:nil, ?none) AS ?empty)
+  OPTIONAL { $this c:tabs/rdf:rest* ?last . ?last rdf:rest rdf:nil }
+  OPTIONAL { $this c:selected ?old }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:tabs ?head . ?last rdf:rest ?cell . ?cell rdf:first ?tab ; rdf:rest rdf:nil . $this c:selected ?tab }
+WHERE {
+  $event dnd:into $this ; dnd:carrying ?tab . ?tab a c:Tab .
+  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab FILTER(?src != $this) }
+  BIND(IRI(CONCAT(STR($this), "/~cell-", MD5(STR(?tab)))) AS ?cell)
+  BIND(IF(EXISTS { $this c:tabs rdf:nil }, ?cell, ?none) AS ?head)
+  OPTIONAL { $this c:tabs/rdf:rest* ?last . ?last rdf:rest rdf:nil }
+}""" ;
+    sem:function "tabs:receive" .
+
+# Out of the tabs it was in: its cell is unlinked (and its selection there dropped), whenever it
+# goes elsewhere - into other tabs, or beside these ones (a drop on an edge of a tiled workspace's
+# pane, ?zone c:splitsAt an edge), unless it is these tabs' only one. Emptied tabs are asked to close.
+c:TabsTake a beh:Reaction ;
+    beh:when dnd:Drop ;
+    beh:sourceClass c:Tabs ;
+    beh:deletes """CONSTRUCT { ?cell rdf:first ?tab ; rdf:rest ?next . ?src c:tabs ?head . ?prev rdf:rest ?cell . ?src c:selected ?selected }
+WHERE {
+  $event dnd:carrying ?tab ; dnd:into ?into . ?tab a c:Tab .
+  ?src c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?next .
+  BIND(EXISTS { ?into c:splitsAt ?edge } AS ?beside)
+  BIND(NOT EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) } AS ?only)
+  FILTER(IF(?beside, ?src != $this || !?only, ?into = $this && ?src != $this))
+  BIND(IF(EXISTS { ?src c:tabs ?cell }, ?cell, ?none) AS ?head)
+  BIND(IF(EXISTS { ?src c:selected ?tab }, ?tab, ?none) AS ?selected)
+  OPTIONAL { ?prev rdf:rest ?cell }
+}""" ;
+    beh:inserts """CONSTRUCT { ?src c:tabs ?head . ?prev rdf:rest ?next . ?src beh:raise ?close }
+WHERE {
+  $event dnd:carrying ?tab ; dnd:into ?into . ?tab a c:Tab .
+  ?src c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?next .
+  BIND(EXISTS { ?into c:splitsAt ?edge } AS ?beside)
+  BIND(NOT EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) } AS ?only)
+  FILTER(IF(?beside, ?src != $this || !?only, ?into = $this && ?src != $this))
+  BIND(IF(EXISTS { ?src c:tabs ?cell }, ?next, ?none) AS ?head)
+  BIND(IF(?only, c:CloseTile, ?none) AS ?close)
+  OPTIONAL { ?prev rdf:rest ?cell }
+}""" ;
+    sem:function "tabs:take" .
 
 # --- Segmented control -------------------------------------------------------------------
 

@@ -5,13 +5,54 @@
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix per: <https://semblance.dev/ns/persistence#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
 # Layout gallery: panes. A split view (side by side and stacked) whose divider position is
 # graph state, and dock panels attached to an edge of their container.
 
 ui:ly-panes a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:ly-split ui:ly-split-stacked ui:ly-dock ui:ly-dock-end ) .
+    c:children ( ui:ly-split ui:ly-split-stacked ui:ly-tiled ui:ly-dock ui:ly-dock-end ) .
+
+# --- TiledWorkspace: panes one rearranges by dragging tabs ---------------------------------------
+
+ui:ly-tiled-workspace a c:TiledWorkspace ; c:label "Research workspace" ; c:rootTile ui:ly-tiled-row .
+ui:ly-tiled-row a c:SplitView ; c:label "the workspace columns" ; c:ratio 0.55 ;
+    c:primary ui:ly-tiled-main ; c:secondary ui:ly-tiled-column .
+ui:ly-tiled-column a c:SplitView ; pos:direction pos:Column ; c:label "the workspace details" ; c:ratio 0.5 ;
+    c:primary ui:ly-tiled-inspector ; c:secondary ui:ly-tiled-notes .
+ui:ly-tiled-main a c:Tabs , dnd:Sortable ; c:tabs ( ui:ly-tiled-tab-editor ui:ly-tiled-tab-preview ) ; c:selected ui:ly-tiled-tab-editor .
+ui:ly-tiled-tab-editor a c:Tab ; c:label "Editor" ; c:content ui:ly-tiled-editor .
+ui:ly-tiled-tab-preview a c:Tab ; c:label "Preview" ; c:content ui:ly-tiled-preview .
+ui:ly-tiled-editor a c:Text ; c:label "Edit the document here." .
+ui:ly-tiled-preview a c:Text ; c:label "Preview the document here." .
+ui:ly-tiled-inspector a c:Tabs , dnd:Sortable ; c:tabs ( ui:ly-tiled-tab-properties ) ; c:selected ui:ly-tiled-tab-properties .
+ui:ly-tiled-tab-properties a c:Tab ; c:label "Properties" ; c:content ui:ly-tiled-properties .
+ui:ly-tiled-properties a c:Text ; c:label "Inspect the selected item." .
+ui:ly-tiled-notes a c:Tabs , dnd:Sortable ; c:tabs ( ui:ly-tiled-tab-notes ) ; c:selected ui:ly-tiled-tab-notes .
+ui:ly-tiled-tab-notes a c:Tab ; c:label "Notes" ; c:content ui:ly-tiled-note-content .
+ui:ly-tiled-note-content a c:Text ; c:label "Keep notes beside the editor." .
+ui:ly-tiled a c:Flippable ; c:front ui:ly-tiled-spec .
+ui:ly-tiled-spec a c:Specimen ; c:demonstrates c:TiledWorkspace ; c:label "Tiled workspace" ;
+    c:help "A tree of split views whose panes are sortable tabs. Drag a tab onto other tabs to move it there, or onto an edge of a pane to split that pane; tabs left with none close. With the keyboard: Space picks a tab up, the arrow keys go between the panes and their edges, Space puts it down. Each tab keeps its IRI and content, and the arrangement is graph state, kept for this tab of the browser." ;
+    c:children ( ui:ly-tiled-workspace ) .
+
+# The arrangement: the tree's edges, its split views' ratios and directions, its tabs' lists and
+# selections - and the lists of the example's own tabs that closed (empty now), so a restore does
+# not bring back what they held. Restored, each replaces what the example starts with.
+ui:rememberWorkspace a per:Policy ; per:scope per:Session ;
+    rdfs:label "The workspace's panes" , "Панелі робочого простору"@uk , "Die Bereiche des Arbeitsbereichs"@de , "أجزاء مساحة العمل"@ar ;
+    per:construct """
+CONSTRUCT { ui:ly-tiled-workspace c:rootTile ?root . ?n ?p ?o . ?cell rdf:first ?tab ; rdf:rest ?rest }
+WHERE {
+  { ui:ly-tiled-workspace c:rootTile ?root }
+  UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n ?p ?o
+          FILTER(?p IN (rdf:type, c:primary, c:secondary, c:ratio, pos:direction, c:tabs, c:selected)) }
+  UNION { ui:ly-tiled-workspace c:rootTile/(c:primary|c:secondary)* ?n . ?n c:tabs/rdf:rest* ?cell . ?cell rdf:first ?tab ; rdf:rest ?rest }
+  UNION { VALUES ?n { ui:ly-tiled-main ui:ly-tiled-inspector ui:ly-tiled-notes } ?n c:tabs rdf:nil BIND(c:tabs AS ?p) BIND(rdf:nil AS ?o) }
+}""" .
 
 # --- SplitView: a list beside its details ---------------------------------------------------------
 

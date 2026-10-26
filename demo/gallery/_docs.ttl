@@ -727,6 +727,7 @@ ui:doc-views a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
                  ui:doc-iv-top-h ui:doc-iv-top-1 ui:iv-live-top ui:doc-iv-top-2
                  ui:doc-iv-param-h ui:doc-iv-param-1 ui:doc-iv-param-code
                  ui:doc-iv-time-h ui:doc-iv-time-1 ui:doc-iv-time-code ui:doc-iv-time-2
+                 ui:doc-iv-delta-h ui:doc-iv-delta-1 ui:doc-iv-delta-2
                  ui:doc-iv-show-h ui:doc-iv-show-1
                  ui:doc-iv-see-h ui:doc-iv-see-1 ui:doc-iv-see-code ui:doc-iv-see-2
                  ui:doc-iv-cost-h ui:doc-iv-cost-1 ui:doc-iv-cost
@@ -771,7 +772,7 @@ ex:qEvents a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:events ?va
 ex:qChanged a sem:View ; sem:select """SELECT ?value WHERE { ex:log ex:changed ?value }""" .
 ex:events a c:Stat ; c:label "In the log" ; c:unit "events" ; c:valueQuery ex:qEvents ; c:dataset ex:log .
 ex:changed a c:Stat ; c:label "Triples changed" ; c:valueQuery ex:qChanged ; c:dataset ex:log .''' .
-ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX, DISTINCT, HAVING and arithmetic over aggregates are maintained, and so are joins, OPTIONAL, EXISTS, NOT EXISTS, MINUS, UNION, VALUES and ORDER BY with LIMIT (below). A query of another shape (GROUP_CONCAT, NOW()) still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
+ui:doc-iv-decl-2 a c:Text ; c:label "COUNT, SUM, AVG, MIN, MAX, DISTINCT, HAVING and arithmetic over aggregates are maintained, and so are joins, OPTIONAL, EXISTS, NOT EXISTS, MINUS, UNION, VALUES and ORDER BY with LIMIT (below). An aggregate subquery - the busiest per kind, then the largest of those; the best time per size, joined to the run that made it - is a view inside the view: maintained group by group, its rows joined to the rest of the query, so a change reaches only the rows its group's new value touches. So are LATERAL and correlated subqueries, property paths (closures and zero-length ones included), GRAPH over the view's graphs, GROUP_CONCAT, SAMPLE and GROUP BY an expression: the W3C test suites' queries, 484 of them, are kept equal to a from-scratch run as their data arrives triple by triple. A query of another shape (NOW(), RAND(), RDF 1.2 triple terms) still works: it is recomputed, and the view says why (iv:fallback). iv:strategy iv:Incremental makes that an error instead, which is how the tests run." .
 
 ui:doc-iv-group-h a c:Heading ; c:level 2 ; c:label "Groups" .
 ui:doc-iv-group-1 a c:Text ; c:label "With GROUP BY, only the groups an event touched change - one row of output, not all of them. Mint each group's node from a key, as rules do, so a row keeps its identity and its DOM element." .
@@ -831,16 +832,28 @@ ex:colVotes a c:Column ; c:variable "votes" ; c:label "Votes" ; c:align "end" .'
 ui:doc-iv-top-2 a c:Text ; c:label "The data grid's window works this way: three views per grid keep its members in capture order, and the window shows at most three pages of their rows, so a response arriving for an old request re-sorts its row at once, whatever the size of the capture. Each row carries a tuple order key (sem:orderKey: has a value, the value, capture order), so one row's key changing moves only that row." .
 
 ui:doc-iv-param-h a c:Heading ; c:level 2 ; c:label "Parameters and a view per instance" .
-ui:doc-iv-param-1 a c:Text ; c:label "iv:parameter binds a $name in the query to a value in the graph; when it changes the view is evaluated again once - or, for a LIMIT, its window just moves. iv:targets makes a view per instance of a class, with $this bound, maintained while that instance is shown; its rows are minted under the instance, so the instance's own rules read them (sem:readsMinted)." .
+ui:doc-iv-param-1 a c:Text ; c:label "iv:parameter binds a $name in the query to a value in the graph. When it changes, the view is retuned in place: a constant in a triple pattern re-evaluates the partitions that match its old or new value, one in a FILTER every partition (once), and for a LIMIT the window just moves. iv:targets makes a view per instance of a class, with $this bound, maintained while that instance is shown; its rows are minted under the instance, so the instance's own rules read them (sem:readsMinted)." .
 ui:doc-iv-param-code a c:Code ; c:block true ; c:language "turtle" ; c:label """c:GridWindowCounts a iv:View ; iv:targets c:DataGrid ; iv:materialize iv:Graph ;
     iv:parameter [ iv:variable "collection" ; iv:property c:collection ; iv:default c:none ] ;
     sem:select \"\"\"SELECT (COUNT(*) AS ?total) WHERE { $collection tree:member ?m . … $this c:filteredBy … }\"\"\" .""" .
 
 ui:doc-iv-time-h a c:Heading ; c:level 2 ; c:label "Windows and time" .
-ui:doc-iv-time-1 a c:Text ; c:label "A sliding window keeps only the members of the last stretch of time. Members leave it as time passes - on one timer, set for the next expiry - even when nothing else happens, and each that leaves counts -1." .
+ui:doc-iv-time-1 a c:Text ; c:label "A window keeps only some of a stream's members. A sliding window keeps the last stretch of time; a tumbling window cuts time into buckets (a minute each, say) and keeps the newest few, with each member's bucket start as a column the view can group by - counts per minute of the last ten; a count window keeps the latest n members. Members leave a window as time passes - on one timer, set for the next expiry - even when nothing else happens, and each that leaves counts -1." .
 ui:doc-iv-time-code a c:Code ; c:block true ; c:language "turtle" ; c:label """vx:window a iv:SlidingWindow ; iv:range "PT30S"^^xsd:dayTimeDuration .
-vx:Recent a iv:View ; iv:window vx:window ; sem:construct \"\"\" … \"\"\" .""" .
-ui:doc-iv-time-2 a c:Text ; c:label "Time is the event bus's clock, which tests replace with one they move by hand. Retention works the same way: when the change log's policy retires a member (ldes:amount), the views see -1." .
+vx:Recent a iv:View ; iv:window vx:window ; sem:construct \"\"\" … \"\"\" .
+
+vx:minutes a iv:TumblingWindow ; iv:size "PT1M"^^xsd:dayTimeDuration ; iv:keep 10 ; iv:bucketVariable "minute" .
+vx:PerMinute a iv:View ; iv:window vx:minutes ;
+    sem:select \"\"\"SELECT ?minute (COUNT(?m) AS ?n) WHERE { beh:ChangeLog tree:member ?m } GROUP BY ?minute\"\"\" .
+
+vx:last20 a iv:CountWindow ; ldes:amount 20 .
+vx:capture a iv:SlidingWindow ; iv:range "PT5S"^^xsd:dayTimeDuration ;
+    iv:clock iv:EventTime ; iv:lateness "PT1S"^^xsd:dayTimeDuration .""" .
+ui:doc-iv-time-2 a c:Text ; c:label "Time is the event bus's clock, which tests replace with one they move by hand. With iv:EventTime it is the data's own: the watermark, the greatest timestamp among the stream's members less a lateness, so the window moves only when a member arrives and its timestamps need not be dates - the network inspector counts the last five seconds of the capture that way, in the page's milliseconds. A member behind the watermark still counts while it is inside the window. Retention works the same way: when the change log's policy retires a member (ldes:amount), the views see -1. Whatever the window, an event and an expiry cost what they change." .
+ui:doc-iv-delta-h a c:Heading ; c:level 2 ; c:label "Changes as a stream: since, replicas, undo" .
+ui:doc-iv-delta-1 a c:Text ; c:label "A view's changes are a stream too. ViewHandle.since(tick) gives everything that changed after a tick, consolidated (\"since you opened this page\"), for as long as the view keeps its changes; src/view/replica.ts sends them to another store - another tab over a BroadcastChannel, a worker - which then holds the view's output without evaluating anything, and catches up (or gets the whole result once) when it joins late or misses a message. With iv:recordsChanges on a view's iv:deltaLog, each member of the log carries the triples themselves (iv:added, iv:removed), so a reader catches up with SPARQL alone." .
+ui:doc-iv-delta-2 a c:Text ; c:children ( "The change log records changes the same way for undo: a reaction marked beh:undoable has its effective change recorded on its event's member, and a beh:Undoer applies the opposite of the latest one that still applies - one that later changes overlapped is skipped, not forced. The " ui:doc-iv-kanban " board's moves, drops, additions and removals are undoable." ) .
+ui:doc-iv-kanban a c:Link ; c:label "Kanban" ; c:to ui:exp-kanban .
 
 ui:doc-iv-show-h a c:Heading ; c:level 2 ; c:label "Only while shown" .
 ui:doc-iv-show-1 a c:Text ; c:label "iv:whileShown names a component (or a class: any instance). While it is hidden the view does nothing per event; when it is shown again it is rebuilt once from the stream's members, and kept from then on." .
@@ -851,7 +864,7 @@ ui:doc-iv-see-code a c:Code ; c:block true ; c:language "turtle" ; c:label """vx
                                     # and a from-scratch run to compare (iv:matches)
     iv:deltaLog vx:steps .          # each step as a stream member: what came in (+1 / -1),
                                     # which groups changed, rows of work""" .
-ui:doc-iv-see-2 a c:Text ; c:label "The status bar counts view rows beside rule runs, and the SPARQL workbench reads the views graph like any other: its sample \"Maintained views: their work, and a check\" lists every view with its last step's work, what a from-scratch run reads, and whether it matched." .
+ui:doc-iv-see-2 a c:Text ; c:label "The status bar counts view rows beside rule runs, and the SPARQL workbench reads the views graph like any other: its sample \"Maintained views: their work, and a check\" lists every view with its last step's work, what a from-scratch run reads, and whether it matched. Switch on Follow updates and the query in the workbench becomes a maintained view itself: its table reads the view's rows, and the Plan tab shows how it is kept - its operators, the work of its last change against a re-run, and the check - or why it is recomputed." .
 
 ui:doc-iv-cost-h a c:Heading ; c:level 2 ; c:label "What it costs" .
 ui:doc-iv-cost-1 a c:Text ; c:label "The Activity tool and the count badges read maintained views. A todo toggle with Activity shown, with the change log keeping 200 or 2,000 events - and the network inspector, sorted by duration, when a response arrives for an old request, over 200 or 2,000 captured entries:" .
@@ -863,31 +876,37 @@ ui:doc-iv-cost-items ui:ivc-fn "1.0 ms either way (before: 8.3 ms and 52.4 ms)" 
 ui:ivc-fn rdfs:label "Function rules" . ui:ivc-sparql rdfs:label "SPARQL rules" . ui:ivc-work rdfs:label "Work" . ui:ivc-grid rdfs:label "Data grid" .
 
 ui:doc-iv-status-h a c:Heading ; c:level 2 ; c:label "Status" .
-ui:doc-iv-landed-h a c:Heading ; c:level 3 ; c:label "Landed: phases 0, 1 and 2" .
-ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ui:ivl-example ui:ivl-joins ui:ivl-grid ui:ivl-charts ) .
+ui:doc-iv-landed-h a c:Heading ; c:level 3 ; c:label "Landed: phases 0, 1, 2, 4 and 5" .
+ui:doc-iv-landed a c:DescriptionList ; c:of ui:doc-iv-landed-items ; c:fields ( ui:ivl-ticks ui:ivl-agg ui:ivl-uses ui:ivl-window ui:ivl-demand ui:ivl-see ui:ivl-example ui:ivl-joins ui:ivl-grid ui:ivl-charts ui:ivl-rest ui:ivl-time ui:ivl-delta ui:ivl-bench ui:ivl-sparql ) .
 ui:doc-iv-landed-items ui:ivl-ticks "Every change is a tick; Runtime.transaction makes several one, consolidated. An event's reaction and its change-log entry are one tick." ;
     ui:ivl-agg "Aggregates over a stream's members, maintained member by member; other shapes recomputed, with the reason (iv:fallback)." ;
     ui:ivl-uses "The Activity tool and count badges, at constant cost per event." ;
     ui:ivl-window "Sliding windows on one timer, ahead of phase 4 because the example needed one." ;
+    ui:ivl-time "Phase 4: tumbling and count windows; event time with a watermark (the network inspector's last five seconds); every window an edge that moves, so an event and an expiry cost what they change." ;
+    ui:ivl-delta "Changes as a stream: since(tick), replicas in another store, delta logs that carry their triples; undo over the change log." ;
+    ui:ivl-bench "The workbench's Follow updates maintains its query as a view; a Plan tab shows how." ;
     ui:ivl-demand "iv:whileShown: hidden views idle, rebuilt when shown." ;
     ui:ivl-see "Plans, figures, per-step logs and from-scratch checks, as graph data." ;
     ui:ivl-example "The Warehouse example: stock, a reorder list (HAVING) and best sellers of the last hour (a window and a top five), each tile with what its last change cost against a recount." ;
     ui:ivl-joins "Phase 2: a SPARQL parser; partitions with exact dependencies (joins outside the member, OPTIONAL, EXISTS, MINUS, UNION, VALUES); DISTINCT, HAVING, top-k; parameters, a view per instance, views over views; rows as a result set." ;
     ui:ivl-grid "The data grid's window as three views per grid." ;
-    ui:ivl-charts "Charts, tables, stats and facet counts read maintained views' rows: the dashboard, the activity example, the performance page." .
+    ui:ivl-charts "Charts, tables, stats and facet counts read maintained views' rows: the dashboard, the activity example, the performance page." ;
+    ui:ivl-rest "The rest of phase 2: aggregate subqueries as views inside the view; the performance page's judgements as maintained findings, live during a run; the toast region's newest announcements as a top-k over the change log; MIN and MAX in an ordered tree; parameters retuned in place." .
+ui:ivl-rest rdfs:label "Subqueries and findings" .
+ui:ivl-time rdfs:label "Time" . ui:ivl-delta rdfs:label "Delta logs" . ui:ivl-bench rdfs:label "Workbench" .
+ui:doc-iv-landed-items ui:ivl-sparql "Phase 5, the rest of SPARQL: correlated subqueries and LATERAL, anchored and zero-length paths, GRAPH, GROUP_CONCAT, SAMPLE, GROUP BY an expression, EXISTS and aggregates in any expression; incremental W3C conformance (484 tests, every fallback listed); the Activity tool's and the data grid's full SPARQL rules run as views and match from scratch." .
+ui:ivl-sparql rdfs:label "All of SPARQL" .
 ui:ivl-joins rdfs:label "Joins and order" . ui:ivl-grid rdfs:label "Data grid" . ui:ivl-charts rdfs:label "Charts and tables" .
 ui:ivl-ticks rdfs:label "Ticks" . ui:ivl-agg rdfs:label "Aggregates" . ui:ivl-uses rdfs:label "In use" .
 ui:ivl-window rdfs:label "Windows" . ui:ivl-demand rdfs:label "Demand" . ui:ivl-see rdfs:label "Inspection" . ui:ivl-example rdfs:label "Example" .
 ui:doc-iv-pending-h a c:Heading ; c:level 3 ; c:label "Pending" .
-ui:doc-iv-pending a c:DescriptionList ; c:of ui:doc-iv-pending-items ; c:fields ( ui:ivp-2 ui:ivp-3 ui:ivp-4 ui:ivp-5 ui:ivp-6 ) .
-ui:doc-iv-pending-items ui:ivp-2 "Judgements and the toast region as views; charts' and tables' renderings in SPARQL over the rows; the engine's parser when main has its algebra." ;
+ui:doc-iv-pending a c:DescriptionList ; c:of ui:doc-iv-pending-items ; c:fields ( ui:ivp-2 ui:ivp-3 ui:ivp-6 ) .
+ui:doc-iv-pending-items ui:ivp-2 "Charts' and tables' renderings in SPARQL over the rows (with the SPARQL coverage work); the engine's parser behind the view compiler once main has its algebra." ;
     ui:ivp-3 "Exact dependencies for SPARQL rules from their algebra, in place of sem:follows; rules that are themselves maintained." ;
-    ui:ivp-4 "Tumbling and count windows, event time with watermarks, delta logs for replication, \"since\" and undo." ;
-    ui:ivp-5 "The rest of SPARQL incrementally: LATERAL, correlated subqueries, paths, GROUP_CONCAT." ;
     ui:ivp-6 "The operators in Rust inside Semblance's engine, if profiling shows the runtime dominating." .
-ui:ivp-2 rdfs:label "Phase 2: the rest" . ui:ivp-3 rdfs:label "Phase 3: rules" . ui:ivp-4 rdfs:label "Phase 4: time" .
-ui:ivp-5 rdfs:label "Phase 5: SPARQL" . ui:ivp-6 rdfs:label "Phase 6: engine" .
-ui:doc-iv-gaps a c:Text ; sty:tone sty:Neutral ; c:label "Known gaps today: GROUP_CONCAT, SAMPLE, GROUP BY an expression and NOW() are recomputed; SPARQL views still run a few store queries per step (a partition's evaluation); rules find a view's output through sem:follows or sem:readsMinted." .
+ui:ivp-2 rdfs:label "Phase 2: the rest" . ui:ivp-3 rdfs:label "Phase 3: rules" .
+ui:ivp-6 rdfs:label "Phase 6: engine" .
+ui:doc-iv-gaps a c:Text ; sty:tone sty:Neutral ; c:label "Known gaps today: NOW(), RAND() and RDF 1.2 triple terms are recomputed (docs/IVM-CONFORMANCE.md lists every fallback); SPARQL views still run a few store queries per step (a partition's evaluation); rules find a view's output through sem:follows or sem:readsMinted." .
 ui:doc-iv-more a c:Text ; c:label "docs/IVM.md in the repository has the full design, the decisions taken, what was built and where it differs, and the measurements." .
 
 # --- Tools ---
