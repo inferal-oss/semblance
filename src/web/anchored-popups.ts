@@ -1,8 +1,19 @@
 /** Keep anchored panels visible outside scrolling containers without moving their DOM. */
-export function attachAnchoredPopups(host: Element) {
+export function attachAnchoredPopups(host: Element, owns?: (element: Element) => boolean) {
+  const ownsNode = owns ?? ((element: Element) => {
+    if (element === host) return true
+    for (let parent = element.parentElement; parent && parent !== host; parent = parent.parentElement) {
+      if (parent.matches('[data-sem-c="host-slot"], [data-sem-c="sem-island"]')) return false
+    }
+    return true
+  })
   const document = host.ownerDocument
   const window = document.defaultView!
-  const lifted = new Map<HTMLElement, { trigger: HTMLElement; width: number; stretch: boolean; style: string | null; popover: string | null }>()
+  type Popup = {
+    trigger: HTMLElement; stretch: boolean; style: string | null; popover: string | null
+    sizing: { width: string; minWidth: string; maxWidth: string; maxHeight: string }
+  }
+  const lifted = new Map<HTMLElement, Popup>()
   let frame: number | undefined
   const restore = (popup: HTMLElement, entry: { style: string | null; popover: string | null }) => {
     if (typeof popup.hidePopover === 'function' && popup.matches(':popover-open')) popup.hidePopover()
@@ -12,13 +23,19 @@ export function attachAnchoredPopups(host: Element) {
     else popup.setAttribute('popover', entry.popover)
   }
 
-  const position = (popup: HTMLElement, entry: { trigger: HTMLElement; width: number; stretch: boolean }) => {
+  const position = (popup: HTMLElement, entry: Popup) => {
     const viewportWidth = document.documentElement.clientWidth
     const viewportHeight = document.documentElement.clientHeight
     const trigger = entry.trigger.getBoundingClientRect()
-    const width = Math.min(entry.stretch ? trigger.width : entry.width, Math.max(0, viewportWidth - 16))
-    Object.assign(popup.style, { position: 'fixed', inset: 'auto', margin: '0', width: `${width}px`, minWidth: '0', maxWidth: `${Math.max(0, viewportWidth - 16)}px`, maxHeight: `${Math.max(0, viewportHeight - 16)}px`, overflowY: 'auto' })
+    // Content can arrive after the panel opens (a lazy calendar or host-owned body).
+    // Measure its own sizing again instead of retaining an empty panel's first width.
+    Object.assign(popup.style, { position: 'fixed', inset: 'auto', margin: '0', left: '0', top: '0', ...entry.sizing })
     if (typeof popup.showPopover === 'function' && !popup.matches(':popover-open')) popup.showPopover()
+    const naturalWidth = popup.getBoundingClientRect().width
+    const heightLimit = window.getComputedStyle(popup).maxHeight
+    const ownMaxHeight = heightLimit?.endsWith('px') ? Number.parseFloat(heightLimit) : Number.NaN
+    const width = Math.min(entry.stretch ? trigger.width : naturalWidth, Math.max(0, viewportWidth - 16))
+    Object.assign(popup.style, { width: `${width}px`, minWidth: '0', maxWidth: `${Math.max(0, viewportWidth - 16)}px`, overflowY: 'auto' })
     const bounds = popup.getBoundingClientRect()
     const height = bounds.height
     const below = Math.max(0, viewportHeight - trigger.bottom - 14)
@@ -28,7 +45,7 @@ export function attachAnchoredPopups(host: Element) {
     const rtl = window.getComputedStyle(entry.trigger).direction === 'rtl'
     const left = Math.min(Math.max(8, rtl ? trigger.right - width : trigger.left), Math.max(8, viewportWidth - width - 8))
     const top = placeAbove ? Math.max(8, trigger.top - Math.min(height, room) - 6) : trigger.bottom + 6
-    Object.assign(popup.style, { left: `${left}px`, top: `${top}px`, maxHeight: `${room}px` })
+    Object.assign(popup.style, { left: `${left}px`, top: `${top}px`, maxHeight: `${Number.isFinite(ownMaxHeight) ? Math.min(room, ownMaxHeight) : room}px` })
   }
 
   const candidates = [
@@ -39,22 +56,23 @@ export function attachAnchoredPopups(host: Element) {
   ] as const
   const selector = candidates.map(([selector]) => selector).join(', ')
   const discover = (popup: HTMLElement) => {
-    if (lifted.has(popup) || popup.hidden || popup.closest('[hidden], [inert]')) return
+    if (!ownsNode(popup) || lifted.has(popup) || popup.hidden || popup.closest('[hidden], [inert]')) return
     const config = candidates.find(([selector]) => popup.matches(selector))
     if (!config) return
     const trigger = config[1] ? popup.parentElement?.querySelector<HTMLElement>(config[1]) : popup.parentElement
     if (!trigger || !popup.isConnected) return
-    lifted.set(popup, { trigger, width: popup.getBoundingClientRect().width, stretch: config[1] === null, style: popup.getAttribute('style'), popover: popup.getAttribute('popover') })
+    lifted.set(popup, { trigger, stretch: config[1] === null, style: popup.getAttribute('style'), popover: popup.getAttribute('popover'), sizing: { width: popup.style.width, minWidth: popup.style.minWidth, maxWidth: popup.style.maxWidth, maxHeight: popup.style.maxHeight } })
     if (typeof popup.showPopover === 'function') popup.setAttribute('popover', 'manual')
   }
   // Scan only inserted or revealed subtrees. A keystroke elsewhere must not search the whole app.
   const scan = (node: Element) => {
+    if (!ownsNode(node)) return
     if (node.matches(selector)) discover(node as HTMLElement)
     for (const popup of node.querySelectorAll<HTMLElement>(selector)) discover(popup)
   }
   const update = () => {
     for (const [popup, entry] of lifted) {
-      if (!host.contains(popup) || popup.hidden || popup.closest('[hidden], [inert]')) {
+      if (!host.contains(popup) || !ownsNode(popup) || popup.hidden || popup.closest('[hidden], [inert]')) {
         restore(popup, entry)
         lifted.delete(popup)
       } else position(popup, entry)
