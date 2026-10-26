@@ -107,6 +107,7 @@ export const SEM = {
   construct: sem + 'construct',
   function: sem + 'function',
   follows: sem + 'follows',
+  followsList: sem + 'followsList',
   watches: sem + 'watches',
   renders: sem + 'renders',
   slug: sem + 'slug',

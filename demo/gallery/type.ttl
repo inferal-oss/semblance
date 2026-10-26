@@ -108,11 +108,20 @@ ui:save a c:Button ;
     c:label "Save" ;
     sty:tone sty:Accent ; sty:emphasis sty:Solid ."""  .
 ui:ty-code-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
-    c:children ( ui:ty-code-inline ui:ty-code-sparql ui:ty-code-turtle ) .
+    c:children ( ui:ty-code-inline ui:ty-code-sparql ui:ty-code-turtle ui:ty-code-external ) .
 ui:ty-code a c:Flippable ; c:front ui:ty-code-spec .
 ui:ty-code-spec a c:Specimen ; c:demonstrates c:Code ; c:label "Code" ;
     c:help "Inline <code>, or with c:block true a <pre><code> block. c:language \"sparql\" or \"turtle\" colors the tokens with the palette of the rule sources on the back of every card." ;
     c:children ( ui:ty-code-col ) .
+
+# An external JSON highlighter supplies roles, not markup or colors.
+ui:ty-code-external a c:Code ; c:block true ; c:language "json" ;
+    c:label "{\"ok\": true}" ; c:codeTokens ( ui:ty-json-open ui:ty-json-key ui:ty-json-colon ui:ty-json-value ui:ty-json-close ) .
+ui:ty-json-open a c:CodeToken ; c:label "{" .
+ui:ty-json-key a c:CodeToken ; c:label "\"ok\"" ; c:tokenKind "string" .
+ui:ty-json-colon a c:CodeToken ; c:label ": " .
+ui:ty-json-value a c:CodeToken ; c:label "true" ; c:tokenKind "keyword" .
+ui:ty-json-close a c:CodeToken ; c:label "}" .
 
 # --- quotation ---
 ui:ty-quote-1 a c:Blockquote ;

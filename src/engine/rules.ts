@@ -16,6 +16,7 @@ export interface Rule {
   queryParts?: string[]
   fn?: string
   follows: string[]
+  followsLists: string[]
   watches?: Set<string>
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
@@ -101,6 +102,7 @@ export function loadRules(store: GraphStore): Rule[] {
       queryParts: query ? (prefixes + '\n' + query).split('$this') : undefined,
       fn,
       follows: getAll(SEM.follows),
+      followsLists: getAll(SEM.followsList),
       watches: watches.length ? new Set(watches) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach: get(SEM.forEach)?.value,

@@ -442,7 +442,8 @@ c:Code a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """Code: inline (<code>) or, with c:block true, a block (<pre><code>). With c:language
 "sparql" or "turtle" its tokens are colored with the same palette as the rule sources on the
-back of every card. c:label is the code."""@en ;
+back of every card. c:label is the code. An optional c:codeTokens list supplies external
+highlighting while retaining this widget and palette; c:label remains the text projection."""@en ;
     sem:slug "code" .
 c:block a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Render as a block rather than inline."@en .
 c:language a owl:DatatypeProperty ; rdfs:comment "The language of a code sample (\"sparql\", \"turtle\"), for coloring."@en .
@@ -480,6 +481,7 @@ WHERE {
   OPTIONAL { $this c:language ?language0 }
   BIND(LCASE(STR(?language0)) AS ?language)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  FILTER NOT EXISTS { $this c:codeTokens ?externalTokens }
   # SPARQL and Turtle samples are colored token by token: c:CodeColoredRendering, a function.
   FILTER(!BOUND(?language) || !(?language IN ("sparql", "turtle")))
   BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
@@ -524,6 +526,66 @@ WHERE {
 c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 ;
     sem:functionOnly "It splits a SPARQL or Turtle sample into tokens and colors each, which needs a tokenizer; SPARQL cannot split text into tokens." .
 c:CodeColoredRendering-fn a sem:Rule ; sem:implements c:CodeColoredRendering ; sem:function "code:colored" .
+
+# External highlighters supply semantic tokens rather than HTML or CSS. Token resources are
+# independent components, so updating one token does not re-render its siblings or container.
+c:codeTokens a owl:ObjectProperty ; rdfs:domain c:Code ; rdfs:range rdf:List ;
+    rdfs:comment "An ordered RDF list of distinct c:CodeToken resources. Overrides built-in coloring on screen, preserves token whitespace. c:label remains the source for the text modality."@en .
+c:CodeToken a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "code-token" ;
+    rdfs:comment "One external syntax token: c:label is literal text, c:tokenKind is a role from Code's existing palette. Give each occurrence its own IRI."@en .
+c:tokenKind a owl:DatatypeProperty ; rdfs:domain c:CodeToken ; rdfs:range xsd:string ;
+    rdfs:comment "A Code palette role: keyword, var, string, pname, iri, number, comment, or text. Unknown roles render as plain text."@en .
+c:CodeTokensRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:followsList c:codeTokens .
+c:CodeTokensRendering-fn a sem:Rule ; sem:implements c:CodeTokensRendering ; sem:function "code:tokens" .
+c:CodeTokensRendering-sparql a sem:Rule ; sem:implements c:CodeTokensRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:hasChild ?tag, ?code .
+  ?root rdfhtml:attribute ?tabAttr . ?tabAttr a rdfhtml:Attribute ; rdfhtml:attributeName "tabindex" ; rdfhtml:attributeValue "0" .
+  ?tag a rdfhtml:Span ; rdfhtml:class "sem-language" ; rdfhtml:hasChild ?tagText ; ord:immediatelyPrecedes ?code .
+  ?tag rdfhtml:attribute ?tagHidden . ?tagHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?tagText a rdfhtml:Text ; rdfhtml:data ?language .
+  ?code a rdfhtml:Code .
+  ?body rdfhtml:hasChild ?part . ?part ord:immediatelyPrecedes ?nextPart .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Code ; c:codeTokens ?head .
+  BIND(EXISTS { $this c:block ?block0 FILTER(STR(?block0) = "true") } AS ?block)
+  OPTIONAL { $this c:language ?language0 }
+  BIND(LCASE(STR(?language0)) AS ?language)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?block, rdfhtml:Pre, rdfhtml:Code) AS ?element)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~root-tabindex")), ?none) AS ?tabAttr)
+  BIND(IF(?block, IRI(CONCAT(STR($this), "/~code")), ?none) AS ?code)
+  BIND(IF(?block, ?code, ?root) AS ?body)
+  BIND(IF(?block && BOUND(?language) && ?language != "", IRI(CONCAT(STR($this), "/~language")), ?none) AS ?tag)
+  BIND(IF(?block && BOUND(?language) && ?language != "", IRI(CONCAT(STR($this), "/~language-text")), ?none) AS ?tagText)
+  BIND(IF(?block && BOUND(?language) && ?language != "", IRI(CONCAT(STR($this), "/~language-aria-hidden")), ?none) AS ?tagHidden)
+  {} UNION {
+    ?head rdf:rest* ?cell . ?cell rdf:first ?part . FILTER(isIRI(?part))
+    OPTIONAL { ?cell rdf:rest/rdf:first ?nextPart FILTER(isIRI(?nextPart)) }
+  }
+}""" .
+c:CodeTokenRendering a sem:Rendering ; sem:targets c:CodeToken ; sem:modality mod:Screen ; sem:stratum 0 .
+c:CodeTokenRendering-fn a sem:Rule ; sem:implements c:CodeTokenRendering ; sem:function "code:token" .
+c:CodeTokenRendering-sparql a sem:Rule ; sem:implements c:CodeTokenRendering ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?element ; sem:renders $this ; rdfhtml:class ?class ; rdfhtml:data ?plain ; rdfhtml:hasChild ?label .
+  ?label a rdfhtml:Text ; rdfhtml:data ?source .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:CodeToken ; c:label ?source0 .
+  BIND(STR(?source0) AS ?source)
+  OPTIONAL { $this c:tokenKind ?kind }
+  BIND(COALESCE(?kind IN ("keyword", "var", "string", "pname", "iri", "number", "comment"), false) AS ?colored)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?colored, rdfhtml:Span, rdfhtml:Text) AS ?element)
+  BIND(IF(?colored, CONCAT("tok-", STR(?kind)), ?none) AS ?class)
+  BIND(IF(?colored, ?none, ?source) AS ?plain)
+  BIND(IF(?colored, IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
+}""" .
 
 # --- Blockquote --------------------------------------------------------------------------------
 

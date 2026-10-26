@@ -62,6 +62,8 @@ sem:construct a owl:DatatypeProperty ;
 sem:function a owl:DatatypeProperty ; rdfs:comment "Identifier of a registered function implementation."@en .
 sem:follows a owl:ObjectProperty ;
     rdfs:comment "Predicate from the focus to nodes the rule reads; changes on those nodes make the focus dirty."@en .
+sem:followsList a owl:ObjectProperty ;
+    rdfs:comment "Predicate from the focus to an RDF list it reads. Changes to rdf:first or rdf:rest on any reachable cell re-run this focus. Token or item contents remain independent dependencies."@en .
 sem:watches a owl:ObjectProperty ;
     rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
 

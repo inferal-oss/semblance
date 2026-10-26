@@ -17,6 +17,8 @@ const C_EXTERNAL_HINT = NS.c + 'externalHint'
 const C_KEYS = NS.c + 'keys'
 const C_BLOCK = NS.c + 'block'
 const C_LANGUAGE = NS.c + 'language'
+const C_CODE_TOKENS = NS.c + 'codeTokens'
+const C_TOKEN_KIND = NS.c + 'tokenKind'
 const C_ATTRIBUTION = NS.c + 'attribution'
 
 /**
@@ -142,6 +144,7 @@ const codeRun = (coloredSample: boolean): FnRule => (ctx, focus) => {
   if (source === undefined) return []
   const block = isTrue(ctx.object(focus, C_BLOCK))
   const language = str(ctx.object(focus, C_LANGUAGE))?.toLowerCase()
+  if (ctx.modality !== MOD.Text && ctx.object(focus, C_CODE_TOKENS)) return []
   if ((ctx.modality !== MOD.Text && tokens("", language) !== undefined) !== coloredSample) return []
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
@@ -165,6 +168,40 @@ const codeRun = (coloredSample: boolean): FnRule => (ctx, focus) => {
   return o.quads
 }
 
+/** An externally tokenized sample keeps the same Code container and palette. */
+const codeTokens: FnRule = (ctx, focus) => {
+  const head = ctx.object(focus, C_CODE_TOKENS)
+  if (!head) return []
+  const block = isTrue(ctx.object(focus, C_BLOCK))
+  const language = str(ctx.object(focus, C_LANGUAGE))?.toLowerCase()
+  const o = ctx.out(focus)
+  const parts = rdfList(ctx, head).filter(named)
+  if (!block) {
+    o.renders(o.el('root', 'Code', {}, parts))
+    return o.quads
+  }
+  const children = [o.el('code', 'Code', {}, parts)]
+  if (language) {
+    const tag = o.el('language', 'Span', { class: 'sem-language' }, [o.text('language-text', language)])
+    o.attr(tag, 'aria-hidden', 'true')
+    children.unshift(tag)
+  }
+  o.renders(o.el('root', 'Pre', { tabindex: '0' }, children))
+  return o.quads
+}
+
+const tokenKinds = new Set(['keyword', 'var', 'string', 'pname', 'iri', 'number', 'comment'])
+const codeToken: FnRule = (ctx, focus) => {
+  const source = str(ctx.object(focus, C.label))
+  if (source === undefined) return []
+  const kind = str(ctx.object(focus, C_TOKEN_KIND)) ?? 'text'
+  const o = ctx.out(focus)
+  o.renders(tokenKinds.has(kind)
+    ? o.el('root', 'Span', { class: 'tok-' + kind }, [o.text('label', source)])
+    : o.text('root', source))
+  return o.quads
+}
+
 const blockquote: FnRule = (ctx, focus) => {
   const quote = labelOf(ctx, focus)
   const by = text(ctx, focus, C_ATTRIBUTION)
@@ -179,6 +216,6 @@ const blockquote: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { text: textRun, link, kbd, code: codeRun(false), 'code:colored': codeRun(true), blockquote }
+export const functions: Record<string, FnRule> = { text: textRun, link, kbd, code: codeRun(false), 'code:colored': codeRun(true), 'code:tokens': codeTokens, 'code:token': codeToken, blockquote }
 
 export const reactions: Record<string, ReactionFn> = {}

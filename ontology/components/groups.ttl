@@ -56,7 +56,7 @@ c:Route sem:group c:LayoutGroup . c:Arrowheads sem:group c:LayoutGroup . c:LineS
 
 # --- Type ---
 c:Heading sem:group c:TypeGroup . c:Text sem:group c:TypeGroup . c:Link sem:group c:TypeGroup .
-c:Kbd sem:group c:TypeGroup . c:Code sem:group c:TypeGroup . c:Blockquote sem:group c:TypeGroup .
+c:Kbd sem:group c:TypeGroup . c:Code sem:group c:TypeGroup . c:CodeToken sem:group c:TypeGroup . c:Blockquote sem:group c:TypeGroup .
 c:GraphMark sem:group c:TypeGroup . c:MarkNode sem:group c:TypeGroup . c:Emblem sem:group c:TypeGroup .
 c:Walkthrough sem:group c:TypeGroup . c:WalkthroughStep sem:group c:TypeGroup . c:Mention sem:group c:TypeGroup .
 c:SourceSpan sem:group c:TypeGroup . c:StepInView sem:group c:TypeGroup .
