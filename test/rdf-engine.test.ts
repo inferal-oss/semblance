@@ -37,6 +37,9 @@ describe.skipIf(!built.length).each(built)('%s engine store', (kind) => {
     const [engine, n3] = [keys(kind), keys('n3')]
     expect(engine.count).toBe(n3.count)
     expect(engine.ground).toEqual(n3.ground)
+    // Counted without listing them (the site's status bar counts them every few seconds).
+    expect(loadStore(kind).size?.()).toBe(engine.count)
+    expect(loadStore('oxigraph').size?.()).toBe(engine.count)
   })
 
   // A nested group that binds a variable the row joined with binds already, with BIND:

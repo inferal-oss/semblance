@@ -389,6 +389,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       e.load(Format.Turtle, text)
     },
     termCount: () => e.termCount(),
+    size: () => e.quadCount(),
     dispose() {
       // Each store has its own instance and memory; drop them and the term caches,
       // so they go as soon as the engine object does, not when the store's last holder does.

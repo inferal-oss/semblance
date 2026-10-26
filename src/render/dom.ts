@@ -49,7 +49,10 @@ export class DomRenderer {
 
   /** The element of a host-owned slot (see sem:slot), once rendered. */
   slot(name: string): Element | undefined {
-    for (const [k, el] of this.els) if (this.index.nodes.get(k)?.slot === name) return el as Element
+    for (const k of this.index.slots.get(name) ?? []) {
+      const el = this.els.get(k)
+      if (el) return el as Element
+    }
     return undefined
   }
 
