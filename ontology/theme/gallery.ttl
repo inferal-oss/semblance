@@ -238,6 +238,13 @@ tok:print-lift a sty:Token ; sty:scale sty:Shadow ; sem:slug "print-lift" ;
                  [ sty:property "padding" ; sty:token tok:space-3 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part "> .sem-panel > .sem-head" ;
     sty:declares [ sty:property "align-items" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-panel > .sem-head" ;
+    sty:declares [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "row-gap" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-panel > .sem-head h2" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 calc(100% - 56px)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:atWidth sty:CompactWidth ; sty:part "> .sem-panel > .sem-head > .sem-close" ;
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part "> .sem-panel > .sem-head h2" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "overflow" ; sty:raw "hidden" ] ,
