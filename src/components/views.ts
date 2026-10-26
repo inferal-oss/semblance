@@ -55,14 +55,18 @@ const card: FnRule = (ctx, focus) => {
   const label = text(ctx, focus, C.label)
   const badge = text(ctx, focus, C.badge)
   const note = text(ctx, focus, C.note)
+  const href = (ctx.object(focus, NAV_HREF) ?? ctx.object(focus, C_HREF))?.value
   const content = ctx.object(focus, C.content)
   const actions = rdfList(ctx, ctx.object(focus, C.actions)).filter(named)
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `── ${label ?? ''} ──`)]), ...(named(content) ? [content] : [])]))
+    o.renders(o.el('root', 'Div', {}, [o.el('title', 'Div', {}, [o.text('title-text', `── ${label ?? ''} ──${href !== undefined ? ` <${href}>` : ''}`)]), ...(named(content) ? [content] : [])]))
     return o.quads
   }
   const head: NamedNode[] = []
-  if (label) head.push(o.el('title', 'H2', {}, [o.text('title-text', label)]))
+  if (label) {
+    const title = o.text('title-text', label)
+    head.push(o.el('title', 'H2', {}, [href !== undefined ? o.el('title-link', 'A', { href }, [title]) : title]))
+  }
   if (badge) head.push(o.el('badge', 'Span', { class: 'sem-badge' }, [o.text('badge-text', badge)]))
   if (actions.length) head.push(o.el('actions', 'Div', { class: 'sem-actions' }, actions))
   if (note) head.push(o.el('note', 'P', {}, [o.text('note-text', note)]))

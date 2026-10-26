@@ -5,7 +5,7 @@ import { EventBus } from '../src/behaviour/events.ts'
 import { loadStore } from '../src/node/load.ts'
 import { A11Y, MOD, SEM, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
-import { toText } from '../src/render/serialize.ts'
+import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { compileStyles } from '../src/style/compile.ts'
 
@@ -100,6 +100,47 @@ describe('the Type page', () => {
     expect([...turtle.querySelectorAll('.tok-keyword')].map((k) => k.textContent)).toContain('@prefix')
     expect([...kinds(turtle)]).toEqual(expect.arrayContaining(['tok-iri', 'tok-string', 'tok-pname']))
     expect(root('ty-code-inline-1').localName).toBe('code')
+  })
+})
+
+describe('linked Card titles', () => {
+  it('links the title without enclosing its independent actions', () => {
+    const { root } = showPage('layout')
+    const card = root('ly-linked-card-example')
+    expect(card.localName).toBe('article')
+    expect(card.querySelector('header h2 > a')?.getAttribute('href')).toBe('#docs')
+    expect(card.querySelector('header .sem-actions > a')?.getAttribute('href')).toBe('#components')
+    expect(card.querySelector('header h2 > a')?.contains(card.querySelector('.sem-actions'))).toBe(false)
+  })
+
+  it('keeps linked card screen and text renderings equal across engines', () => {
+    const root = 'https://example.org/report-card'
+    const data = `@prefix c: <https://semblance.dev/ns/component#> .
+      @prefix nav: <https://semblance.dev/ns/navigation#> .
+      <${root}> a c:Card ; c:label "Report" ; c:href "/fallback" ; nav:href "/report" ;
+        c:note "Quarterly figures" ; c:actions ( <${root}/action> ) .
+      <${root}/action> a c:Link ; c:label "Download" ; c:href "/report.csv" .`
+    const runtime = new Runtime(loadStore('oxigraph', data))
+    for (const modality of [MOD.Screen, MOD.Text]) {
+      const sparql = runtime.project({ modality, prefer: 'sparql', name: `linked-card-sparql-${modality}`, roots: [root] })
+      const fn = runtime.project({ modality, prefer: 'function', name: `linked-card-function-${modality}`, roots: [root] })
+      expect(toHTML(fn.index, root)).toBe(toHTML(sparql.index, root))
+      if (modality === MOD.Screen) {
+        expect(toHTML(fn.index, root)).toContain('href="/report"')
+        expect(toHTML(fn.index, root)).not.toContain('href="/fallback"')
+      } else {
+        expect(toText(fn.index, root)).toContain('Report ── </report>')
+      }
+    }
+  })
+
+  it('keeps an unlinked card title as plain text', () => {
+    const root = 'https://example.org/plain-card'
+    const runtime = new Runtime(loadStore('n3', `@prefix c: <https://semblance.dev/ns/component#> .
+      <${root}> a c:Card ; c:label "Plain card" .`))
+    const screen = runtime.project({ modality: MOD.Screen, prefer: 'function', name: 'plain-card', roots: [root] })
+    expect(toHTML(screen.index, root)).toContain('<h2>Plain card</h2>')
+    expect(toHTML(screen.index, root)).not.toContain('<h2><a')
   })
 })
 

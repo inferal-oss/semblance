@@ -170,6 +170,10 @@ ex:window a c:Toggle ; c:controls ex:chartCard ; c:property fs:fullViewport ; ke
 ex:full a c:Toggle ; c:controls ex:chartCard ; c:property fs:fullscreen ; key:shortcut "f" .
 ```
 
+Give a card `c:href` to link its title while keeping the rest of the card and its actions
+independent. A resolved `nav:href` takes precedence when the navigation layer provides one.
+The text rendering includes the destination after the title.
+
 Put the toggles inside what they show, so they are still there. The fullscreen effect
 (`Fullscreen`, below) asks the browser for full screen in the same task as the click or key press
 (browsers want the person's activation); where it cannot (a sandbox, a refusal, no activation), it

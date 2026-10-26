@@ -83,6 +83,9 @@ c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
 c:LinkedCardShape a sh:NodeShape ; sh:targetClass c:LinkedCard ;
     sh:property [ sh:path c:content ; sh:minCount 1 ;
                   sh:message "A linked card wraps one component (c:content)." ] .
+c:CardShape a sh:NodeShape ; sh:targetClass c:Card ;
+    sh:property [ sh:path c:href ; sh:maxCount 1 ; sh:pattern "^(https?:|mailto:|/|#|\\./|\\.\\./)" ;
+                  sh:message "A card title link needs a safe web, mail, or relative address." ] .
 c:ProgressShape a sh:NodeShape ; sh:targetClass c:Progress ;
     sh:property [ sh:path c:value ; sh:minInclusive 0 ; sh:lessThanOrEquals c:max ;
                   sh:message "Progress can't exceed its c:max or go below zero." ] .
