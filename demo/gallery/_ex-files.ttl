@@ -265,7 +265,7 @@ ui:ex-files-m-previewCol a c:Mention ; c:label "the preview column" ; c:mentions
 ui:ex-files-m-Receiver a c:Mention ; c:label "file:Receiver" ; c:mentions file:Receiver ; c:to file:Receiver .
 ui:ex-files-m-add a c:Mention ; c:label "Add files" ; c:mentions ui:fx-add .
 ui:ex-files-m-FileDrop a c:Mention ; c:label "c:FileDrop" ; c:mentions c:FileDrop ; c:to c:FileDrop .
-ui:ex-files-m-Add a c:Mention ; c:label "file:Add" ; c:mentions file:Add .
+ui:ex-files-m-Add a c:Mention ; c:label "file:Add" ; c:mentions file:Add ; c:to file:Add .
 ui:ex-files-m-keepIn a c:Mention ; c:label "file:keepIn" ; c:mentions file:keepIn ; c:to file:keepIn .
 ui:ex-files-m-store a c:Mention ; c:label "fx:store" ; c:mentions fx:store .
 ui:ex-files-m-usage a c:Mention ; c:label "file:usedBytes and file:usedFiles" ; c:mentions ui:fx-usage .
