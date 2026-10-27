@@ -425,12 +425,26 @@ function wouldBreak(ctx: RuleContext, ts: Term, np: Term, o: Term): string[] {
   return out
 }
 
+/** The row of the list a member's row is in. */
+const listRowOf = (row: Term) => row.value.replace(/\/~i-[0-9]+$/, '')
+
 /** While a statement is dragged, a row objects (dnd:Objection) where the value would not conform. */
 const objections: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   for (const drag of ctx.objects(focus, DND + 'offered')) {
     const dragged = ctx.object(drag, DND + 'carrying')
     if (!dragged || !ctx.match(dragged, RDF_TYPE, ctx.nn(C_RDF_TERM)).length) continue
+    // A list member goes only to another member's place in the same list, and only a member goes there.
+    const tc = ctx.object(focus, C_LIST_CELL)
+    const dc = ctx.object(dragged, C_LIST_CELL)
+    if (tc || dc) {
+      if (!(tc && dc && listRowOf(dragged) === listRowOf(focus))) {
+        const objection = o.node('objection')
+        o.t(objection, RDF_TYPE, ctx.nn(DND + 'Objection')).t(objection, DND + 'receptacle', focus).t(objection, DND + 'against', drag)
+          .t(objection, DND + 'reason', dc ? 'a list member moves within its list' : "only this list's members go here")
+      }
+      continue
+    }
     const s = ctx.object(dragged, C_SUBJECT)
     const p = ctx.object(dragged, C_PREDICATE)
     const v = ctx.object(dragged, C_TERM)
@@ -565,6 +579,8 @@ function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): Nam
       const child = o.node('i-' + i)
       common(child, C_RDF_TERM, `${TUPLE}n0${TUPLE}n${i}`)
       o.t(child, C_TERM, first).t(child, C_LIST_CELL, cell).t(child, C_LIST_INDEX, int(ctx, i))
+      // In an editor a member is dragged to another member's place (c:RdfReorderMember).
+      if (ctx.modality !== MOD.Text && f.editable.value === 'true') o.t(child, RDF_TYPE, ctx.nn(C_DROP_ROW)).t(child, RDF_TYPE, ctx.nn(C_DRAGGABLE_ROW))
     }
   } else if (f.nest) {
     const seen = new Set<string>()
@@ -1160,6 +1176,37 @@ const drop: ReactionFn = (ctx) => {
   return { remove: [f.quad(s, p, o)], add: [f.quad(ts, np, o)] }
 }
 
+/** A list member dropped on another member of its list takes its place; the members between move up or down one. */
+const reorder: ReactionFn = (ctx) => {
+  const dragged = ctx.object(ctx.event, NS.dnd + 'carrying')
+  if (!dragged || !ctx.object(ctx.event, NS.dnd + 'into')?.equals(ctx.target)) return NONE
+  const from = ctx.object(dragged, C_LIST_CELL)
+  const to = ctx.object(ctx.target, C_LIST_CELL)
+  if (!from || !to || from.equals(to) || listRowOf(dragged) !== listRowOf(ctx.target)) return NONE
+  // The cells from the earlier of the two to the later.
+  const walk = (start: Term, end: Term) => {
+    const cells: Term[] = []
+    for (let c: Term | undefined = start; c && c.value !== RDF_NIL && cells.length < 10_000; c = ctx.object(c, RDF_REST)) {
+      cells.push(c)
+      if (c.equals(end)) return cells
+    }
+    return undefined
+  }
+  const down = walk(from, to)
+  const cells = down ?? walk(to, from)
+  if (!cells) return NONE
+  const values = cells.map((c) => ctx.object(c, RDF_FIRST))
+  if (values.some((v) => !v)) return NONE
+  const f = ctx.runtime.store.factory
+  const first = f.namedNode(RDF_FIRST)
+  // Dragged down: each cell from it takes the next one's member; dragged up, the previous one's.
+  const moved = down ? [...values.slice(1), values[0]!] : [values[values.length - 1]!, ...values.slice(0, -1)]
+  return {
+    remove: cells.map((c, k) => f.quad(c, first, values[k]!)),
+    add: [...cells.map((c, k) => f.quad(c, first, moved[k]!)), f.quad(ctx.target as NamedNode, f.namedNode(C_FOCUSED), yes(ctx))],
+  }
+}
+
 /** Typing a character on a row: its field, holding the character (a value or predicate edited, a statement started on a resource). */
 const typeToEdit: ReactionFn = (ctx) => {
   const ch = ctx.object(ctx.event, NS.beh + 'text')?.value
@@ -1280,6 +1327,7 @@ export const reactions: Record<string, ReactionFn> = {
   'rdf-editor:outdent': outdent,
   'rdf-editor:move-member': moveMember,
   'rdf-editor:drop': drop,
+  'rdf-editor:reorder': reorder,
   'rdf-editor:highlight': highlight,
   'rdf-editor:type': typeToEdit,
   'rdf-editor:open-menu': openMenu,

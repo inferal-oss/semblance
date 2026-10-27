@@ -88,7 +88,7 @@ c:RdfDraggableRow a owl:Class ; rdfs:subClassOf dnd:Draggable ;
 # The tree keeps its roving tab stop: the drag layer gives a row none of its own.
 c:RdfDraggableRow dnd:keepsFocus true .
 c:RdfDropRow a owl:Class ; rdfs:subClassOf dnd:DropTarget ;
-    rdfs:comment "Minted on a predicate's or a resource's row of an editable RDF editor: a statement dropped on it moves there."@en .
+    rdfs:comment "Minted on a predicate's or a resource's row of an editable RDF editor: a statement dropped on it moves there; and on a list member's row: a member of the same list dropped on it takes its place."@en .
 c:inEditor a owl:ObjectProperty ; rdfs:domain c:RdfRow ; rdfs:range c:RdfEditor .
 c:startsClosed a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Derived on a resource's row of an RDF editor whose c:expandDepth is 0: it is closed until opened."@en .
@@ -393,7 +393,7 @@ CONSTRUCT {
   ?itemKbd a rdfhtml:Kbd ; rdfhtml:attribute ?itemKbdHidden ; rdfhtml:hasChild ?itemKbdText .
   ?itemKbdHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?itemKbdText a rdfhtml:Text ; rdfhtml:data ?itemKbdShown .
-  ?child a ?childClass , ?childDrop ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
+  ?child a ?childClass , ?childDrop , ?childDrag ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
          c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?childKey .
 }
 WHERE {
@@ -561,6 +561,9 @@ WHERE {
     ?t rdf:rest* ?childCell . ?childCell rdf:first ?childTerm .
     { SELECT ?childCell (COUNT(?mid) AS ?childIndex) WHERE { $this c:term ?h1 . ?h1 rdf:rest* ?mid . ?mid rdf:rest* ?childCell . ?childCell rdf:first ?m1 } GROUP BY ?childCell }
     BIND(c:RdfTerm AS ?childClass)
+    # In an editor a member is dragged to another member's place (c:RdfReorderMember).
+    BIND(?dropType AS ?childDrop)
+    BIND(IF(?editable, c:RdfDraggableRow, ?none) AS ?childDrag)
     BIND(CONCAT("\\u0001n0\\u0001n", STR(?childIndex)) AS ?childKey)
     BIND(IRI(CONCAT(STR($this), "/~i-", STR(?childIndex))) AS ?child)
   } UNION {
@@ -1649,6 +1652,39 @@ WHERE {
 }""" ;
     sem:function "rdf-editor:drop" .
 
+# A list member dropped on another member of its list takes that member's place; the members between
+# move up or down one. One undoable change, the cells kept (only their rdf:first change).
+c:RdfReorderMember a beh:Reaction ;
+    rdfs:label "Reorder a list"@en ;
+    beh:when dnd:Drop ;
+    beh:sourceClass c:RdfDropRow ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?cell rdf:first ?v }
+WHERE {
+  $event dnd:into $this ; dnd:carrying ?dragged .
+  ?dragged c:listCell ?from . $this c:listCell ?to .
+  FILTER(!sameTerm(?from, ?to) && REPLACE(STR(?dragged), "/~i-[0-9]+$", "") = REPLACE(STR($this), "/~i-[0-9]+$", ""))
+  LATERAL { { ?from rdf:rest+ ?to . ?from rdf:rest* ?cell . ?cell rdf:rest* ?to } UNION { ?to rdf:rest+ ?from . ?to rdf:rest* ?cell . ?cell rdf:rest* ?from } }
+  ?cell rdf:first ?v .
+}""" ;
+    beh:inserts """CONSTRUCT { ?cell rdf:first ?nv . $this c:focused true }
+WHERE {
+  $event dnd:into $this ; dnd:carrying ?dragged .
+  ?dragged c:listCell ?from . $this c:listCell ?to .
+  FILTER(!sameTerm(?from, ?to) && REPLACE(STR(?dragged), "/~i-[0-9]+$", "") = REPLACE(STR($this), "/~i-[0-9]+$", ""))
+  ?from rdf:first ?a .
+  LATERAL {
+    # Dragged down: each cell from it takes the next one's member; dragged up, the previous one's.
+    { ?from rdf:rest+ ?to . ?from rdf:rest* ?cell . ?cell rdf:rest* ?to .
+      OPTIONAL { FILTER(!sameTerm(?cell, ?to)) ?cell rdf:rest ?nx . ?nx rdf:first ?near } }
+    UNION
+    { ?to rdf:rest+ ?from . ?to rdf:rest* ?cell . ?cell rdf:rest* ?from .
+      OPTIONAL { FILTER(!sameTerm(?cell, ?to)) ?pv rdf:rest ?cell . ?pv rdf:first ?near } }
+  }
+  BIND(IF(sameTerm(?cell, ?to), ?a, ?near) AS ?nv)
+}""" ;
+    sem:function "rdf-editor:reorder" .
+
 # Down and Up in an adding field move the highlight through the suggestions (in their order; Up from
 # the first leaves none); Enter takes the highlighted one, as a click would.
 c:RdfMoveHighlight a beh:Reaction ;
@@ -1738,11 +1774,11 @@ c:RdfDropObjections-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT { ?objection a dnd:Objection ; dnd:receptacle $this ; dnd:against ?drag ; dnd:reason ?reason . }
 WHERE {
-  { SELECT ?drag (MIN(?why) AS ?reason) WHERE {
+  { SELECT ?drag (MIN(?why) AS ?reason) WHERE { {
     $this dnd:offered ?drag . ?drag dnd:carrying ?dragged .
     ?dragged a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
     { $this a c:RdfProperty ; c:subjectTerm ?ts ; c:predicateTerm ?np } UNION { $this a c:RdfTerm ; c:term ?ts . FILTER(!isLiteral(?ts)) ?dragged c:predicateTerm ?np }
-    FILTER(!(sameTerm(?ts, ?s) && sameTerm(?np, ?p)))
+    FILTER(!(sameTerm(?ts, ?s) && sameTerm(?np, ?p)) && NOT EXISTS { $this c:listCell ?anyCell })
     ?ts a ?ty . ?ty rdfs:subClassOf* ?cl . ?shape sh:targetClass ?cl ; sh:property ?ps . ?ps sh:path ?np ; ?constraint ?param .
     FILTER(?constraint IN (sh:datatype, sh:class, sh:nodeKind, sh:in, sh:maxCount, sh:pattern, sh:minLength, sh:maxLength))
     LATERAL { OPTIONAL { SELECT ?ts ?np (COUNT(?held) AS ?count) WHERE { ?ts ?np ?held } GROUP BY ?ts ?np } }
@@ -1765,7 +1801,13 @@ WHERE {
          IF(?constraint = sh:pattern, "does not match the expected format",
          IF(?constraint = sh:minLength, CONCAT("at least ", STR(?param), " characters"), CONCAT("at most ", STR(?param), " characters")))))))) AS ?fallback)
     BIND(STR(COALESCE(?said, ?saidEn, CONCAT(?name, ": ", ?fallback))) AS ?why)
-  } GROUP BY ?drag }
+  } UNION {
+    # A list member goes only to another member's place in the same list, and only a member goes there.
+    $this dnd:offered ?drag . ?drag dnd:carrying ?dragged . ?dragged a c:RdfTerm .
+    OPTIONAL { $this c:listCell ?tc } OPTIONAL { ?dragged c:listCell ?dc }
+    FILTER((BOUND(?tc) || BOUND(?dc)) && !(BOUND(?tc) && BOUND(?dc) && REPLACE(STR(?dragged), "/~i-[0-9]+$", "") = REPLACE(STR($this), "/~i-[0-9]+$", "")))
+    BIND(IF(BOUND(?dc), "a list member moves within its list", "only this list's members go here") AS ?why)
+  } } GROUP BY ?drag }
   BIND(IRI(CONCAT(STR($this), "/~objection")) AS ?objection)
 }""" .
 

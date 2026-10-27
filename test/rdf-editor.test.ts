@@ -524,6 +524,60 @@ ui:dt-rdf-editor c:editable true .`
     })
   }
 
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`reorders a list by dragging a member to another's place, and refuses other drops there; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', EDITABLE, [], UI + 'rdf-edit'), mount(kind, 'function', EDITABLE, [], UI + 'rdf-edit')]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+        expect(both[1]!.outline(), step).toBe(m.outline())
+      }
+      const keywords = () => m.outline().split('\n').filter((l) => l.includes('lib:keywords'))
+      const row = (x: ReturnType<typeof mount>, word: string) => x.item('lib:dispossessed', 'lib:keywords', '( 3 )', word).getAttribute('data-sem-drop-zone')!
+      const drop = (x: ReturnType<typeof mount>, dragged: string, target: string) => {
+        x.bus.emit(NS.dnd + 'Drop', target, { about: [[NS.dnd + 'into', x.nn(target)], [NS.dnd + 'carrying', x.nn(dragged)]] })
+        x.dom.flush()
+      }
+      // Members are draggable, and drop targets, in an editor.
+      const member = m.item('lib:dispossessed', 'lib:keywords', '( 3 )', '"utopia"')
+      expect(member.hasAttribute('data-sem-drop-zone')).toBe(true)
+      expect(member.hasAttribute('data-sem-drag')).toBe(true)
+      // Up: the last to the first's place, the others down one.
+      each((x) => drop(x, row(x, '"utopia"'), row(x, '"anarchism"')), 'utopia onto anarchism')
+      expect(keywords()).toEqual(['  lib:keywords ( "utopia" "anarchism" "physics" )'])
+      expect(m.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"utopia"').hasAttribute('data-sem-takes-focus')).toBe(true)
+      // Down: the second to the last place.
+      each((x) => drop(x, row(x, '"anarchism"'), row(x, '"physics"')), 'anarchism onto physics')
+      expect(keywords()).toEqual(['  lib:keywords ( "utopia" "physics" "anarchism" )'])
+      // One undoable change each.
+      each((x) => x.click(x.document.querySelector('[data-sem-c=button]')!), 'Undo')
+      expect(keywords()).toEqual(['  lib:keywords ( "utopia" "anarchism" "physics" )'])
+    })
+  }
+
+  it('refuses a statement on a list member\'s place, and a member anywhere but its list', () => {
+    const m = mount('oxigraph', 'sparql', EDITABLE)
+    const k12 = (v: string) => md5(v).slice(0, 12)
+    const reception = (target: string) => {
+      const r = m.store.match(null, m.nn(NS.dnd + 'receptacle'), m.nn(target)).map((q) => q.subject).find((x) => m.store.match(x, m.nn(NS.dnd + 'verdict'), null).length)
+      return r && [m.store.match(r, m.nn(NS.dnd + 'verdict'), null)[0]!.object.value.replace(/^.*#/, ''), m.store.match(r, m.nn(NS.dnd + 'reason'), null)[0]?.object.value]
+    }
+    const member = (word: string) => m.item('lib:dispossessed', 'lib:keywords', '( 3 )', word).getAttribute('data-sem-drop-zone')!
+    const pages = `${EDITOR}/~t-${k12(LIB + 'dispossessed')}/~p-${k12(LIB + 'pages')}`
+    // A statement carried over a member: refused.
+    m.bus.emit(NS.dnd + 'Start', `${pages}/~t-${k12('"387"^^http://www.w3.org/2001/XMLSchema#integer')}`, { about: [] })
+    m.dom.flush()
+    expect(reception(member('"physics"'))).toEqual(['Refused', "only this list's members go here"])
+    m.bus.emit(NS.dnd + 'End', `${pages}/~t-${k12('"387"^^http://www.w3.org/2001/XMLSchema#integer')}`, { about: [] })
+    m.dom.flush()
+    // A member carried over a predicate: refused; over another member of its list: accepted.
+    m.bus.emit(NS.dnd + 'Start', member('"utopia"'), { about: [] })
+    m.dom.flush()
+    expect(reception(pages)).toEqual(['Refused', 'a list member moves within its list'])
+    expect(reception(member('"anarchism"'))).toEqual(['Accepted', undefined])
+  })
+
   it('keeps a large document light: closed resources cost a row each, an edit what it changes', () => {
     const big = (n: number) =>
       '@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .\nui:dt-rdf-editor c:expandDepth 0 .\n' +
