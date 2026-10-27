@@ -28,27 +28,24 @@
                  [ sty:property "min-block-size" ; sty:raw "8rem" ] .
 
 # Tabs in a pane fill it, so the whole pane takes a dropped tab: their list on top, the panel below.
-[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs]" ;
-    sty:declares [ sty:property "gap" ; sty:raw "0" ] ,
+# These rules style the workspace's own tiles (a pane's tabs, or a single leaf), never tabs inside
+# a document a pane shows: those are ordinary section tabs.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs]:not(:where([data-sem-c=tiled-workspace] [role=tabpanel] *))" ;
+    sty:declares [ sty:property "min-block-size" ; sty:raw "100%" ] ,
+                 [ sty:property "gap" ; sty:raw "0" ] ,
                  [ sty:property "grid-template-rows" ; sty:raw "auto minmax(0, 1fr)" ] ,
                  [ sty:property "align-content" ; sty:raw "start" ] .
-[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs] > [role=tablist]" ;
+# Document tabs fit their labels, up to a bound (never wider than the strip) past which the label
+# ellipsizes (c:Tabs lets a bounded tab's label do so; its accessible name stays whole); more
+# than fit scroll sideways.
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs]:not(:where([data-sem-c=tiled-workspace] [role=tabpanel] *)) > [role=tablist]" ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "scrollbar-width" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs] > [role=tablist] > [role=tab]" ;
+[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs]:not(:where([data-sem-c=tiled-workspace] [role=tabpanel] *)) > [role=tablist] > [role=tab]" ;
     sty:declares [ sty:property "flex" ; sty:raw "0 0 auto" ] ,
                  [ sty:property "min-inline-size" ; sty:raw "0" ] ,
-                 [ sty:property "max-inline-size" ; sty:raw "18rem" ] .
-[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part "[data-sem-c=tabs] > [role=tablist] .sem-tab-label" ;
-    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
-                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
-                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
-                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:TiledWorkspace ; sty:part ".sem-pane > [data-sem-c=tabs]" ;
-    sty:declares [ sty:property "min-block-size" ; sty:raw "100%" ] ,
-                 [ sty:property "grid-template-rows" ; sty:raw "auto 1fr" ] ,
-                 [ sty:property "align-content" ; sty:raw "start" ] .
+                 [ sty:property "max-inline-size" ; sty:raw "min(18rem, 100%)" ] .
 
 # A pane's edge zones (sortable c:Tabs in a workspace): strips along its edges, a quarter of it
 # deep, there only while something is carried (or the keyboard drag is at one). The one it is over
@@ -365,14 +362,14 @@
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:token tok:text-xs ] .
 
-# Structural themes wrap ordinary section tabs. A workspace keeps a single scrolling document row.
+# Structural themes wrap section tabs; a workspace keeps its documents in one scrolling row.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=tiled-workspace] [data-sem-c=tabs] > [role=tablist]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part "[data-sem-c=tiled-workspace] [data-sem-c=tabs]:not(:where([data-sem-c=tiled-workspace] [role=tabpanel] *)) > [role=tablist]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "overflow-y" ; sty:raw "hidden" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=tiled-workspace] [data-sem-c=tabs] > [role=tablist]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part "[data-sem-c=tiled-workspace] [data-sem-c=tabs]:not(:where([data-sem-c=tiled-workspace] [role=tabpanel] *)) > [role=tablist]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "overflow-y" ; sty:raw "hidden" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .

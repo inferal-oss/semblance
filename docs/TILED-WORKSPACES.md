@@ -46,6 +46,11 @@ Every change is one reaction (a `CONSTRUCT` pair with a function twin) to one re
 each tab keeps its IRI, its content node and its slot throughout, so whatever a tab shows keeps
 its state and its DOM.
 
+A pane's tabs fit their document labels rather than spreading across it, up to a bound past which
+a label is ellipsized (its tab's accessible name stays whole); when the documents do not fit, the
+strip scrolls sideways, in every theme. Section tabs elsewhere, including inside a document a pane
+shows, keep their own sizing.
+
 ## Keeping an arrangement
 
 The tree is graph state, so a `per:Policy` over it keeps an arrangement. The gallery's example
@@ -66,10 +71,6 @@ WHERE {
 Restored, each subject's properties replace what the application starts with.
 
 ## On a phone
-
-Workspace tabs fit their document labels rather than spreading across the pane. Long labels are
-ellipsized visually, with their complete accessible names retained; the strip scrolls when the
-documents do not fit. Ordinary section tabs outside a workspace keep their existing sizing.
 
 At compact width each split view stacks its panes, so the workspace is a column of panes, each as
 tall as what it shows (a few lines at least), and the dividers go. Tabs still move between panes and split them by
