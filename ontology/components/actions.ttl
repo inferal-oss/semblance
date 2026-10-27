@@ -185,8 +185,9 @@ CONSTRUCT {
   ?caretText a rdfhtml:Text ; rdfhtml:data "▾" .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?popup a rdfhtml:Div ; rdfhtml:id ?popupId ; rdfhtml:class "sem-menu-popup" ; rdfhtml:hasChild ?item ;
-         rdfhtml:attribute ?popupRole, ?popupLabelledBy .
+         rdfhtml:attribute ?popupRole, ?popupLabelledBy, ?popupAnchor .
   ?popupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menu" .
+  ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?triggerId .
   ?popupLabelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
   ?a ord:immediatelyPrecedes ?b .
 }
@@ -228,6 +229,7 @@ WHERE {
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~trigger-data-sem-shortcut-other")), ?none) AS ?shortcutOther)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-role")), ?none) AS ?popupRole)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-aria-labelledby")), ?none) AS ?popupLabelledBy)
+    BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-data-sem-anchor")), ?none) AS ?popupAnchor)
   } UNION {
     # Open: the items, in list order.
     $this a c:Menu .

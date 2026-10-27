@@ -82,6 +82,9 @@ describe.each(['oxigraph', 'wat'] as const)('combobox (%s)', (kind) => {
     type('inp-combo-country', 'CURA')
     expect(input('inp-combo-country').getAttribute('aria-expanded')).toBe('true')
     expect(popup('inp-combo-country').hidden).toBe(false)
+    // The list is anchored to its field, as wide as it.
+    expect(popup('inp-combo-country').parentElement!.id).toBe(popup('inp-combo-country').getAttribute('data-sem-anchor'))
+    expect(popup('inp-combo-country').getAttribute('data-sem-anchor-width')).toBe('match')
     expect(shown('inp-combo-country')).toEqual(['Curaçao'])
     expect(marks('inp-combo-country')).toEqual(['Cura'])
     type('inp-combo-country', 'reu')

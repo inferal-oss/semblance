@@ -11,6 +11,7 @@ import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
 import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
+import { attachAnchoredPopups } from './anchored-popups.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
 export { DEFAULT_LAYERS }
@@ -156,6 +157,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const snaps = attachSnaps(element)
   // Lightboxes grow from their image and give it back, slide between images, zoom and pan.
   const lightboxes = attachLightboxes(element)
+  const popups = attachAnchoredPopups(element, node => !renderer.inSlot(node))
   // Foreign components are mounted in their islands' slots after each patch (nothing to do while there is none).
   const islands = new Islands(bus, renderer, {
     widgets: opts.widgets,
@@ -187,6 +189,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       connectors.dispose()
       snaps.dispose()
       lightboxes.dispose()
+      popups()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
     },
   }
