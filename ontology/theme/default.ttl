@@ -431,6 +431,13 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "cursor" ; sty:raw "pointer" ] ,
                  [ sty:property "transition" ; sty:raw "color var(--sem-motion), background var(--sem-motion), box-shadow var(--sem-motion)" ] .
 
+# A tab's label ellipsizes when something bounds its tab (a workspace's document tabs); the tab's
+# accessible name is still the whole label. Unbounded tabs, the default, never cut it.
+[] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tab] > .sem-tab-label" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] .
+
 [] a sty:StyleRule ; sty:appliesTo c:Tabs ; sty:part "[role=tab]:hover" ;
     sty:declares [ sty:property "color" ; sty:token tok:text ] .
 

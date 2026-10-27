@@ -48,6 +48,11 @@ Every change is one reaction (a `CONSTRUCT` pair with a function twin) to one re
 each tab keeps its IRI, its content node and its slot throughout, so whatever a tab shows keeps
 its state and its DOM.
 
+A pane's tabs fit their document labels rather than spreading across it, up to a bound past which
+a label is ellipsized (its tab's accessible name stays whole); when the documents do not fit, the
+strip scrolls sideways, in every theme. Section tabs elsewhere, including inside a document a pane
+shows, keep their own sizing.
+
 ## Keeping an arrangement
 
 The tree is graph state, so a `per:Policy` over it keeps an arrangement. The gallery's example
