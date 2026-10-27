@@ -573,7 +573,7 @@ ui:doc-ru-w2 a c:WalkthroughStep ; rdfs:label "A rendering and its rules" ;
 ui:doc-ru-w3 a c:WalkthroughStep ; rdfs:label "Layers around it" ;
     c:children ( ui:doc-ru-m-Check " runs before the components (stratum -10): it checks the field's value against the shape the field points at and derives c:error, which the field's own rule renders. Later strata decorate what the rules made - ARIA relationships, style hooks - without the field knowing." ) .
 ui:doc-ru-w4 a c:WalkthroughStep ; rdfs:label "Typing is an event" ;
-    c:children ( "A keystroke becomes a " ui:doc-ru-m-Input " event addressed to the field. " ui:doc-ru-m-TextFieldInput " deletes its old c:value and inserts the typed one: one change, after which only the field's pairs of rule and focus are dirty, and only their DOM is patched." ) .
+    c:children ( "A keystroke becomes a " ui:doc-ru-m-Input " event addressed to the field. " ui:doc-ru-m-TypeText ", the reaction of every text entry (c:TextEntry), deletes its old c:value and inserts the typed one: one change, after which only the field's pairs of rule and focus are dirty, and only their DOM is patched." ) .
 ui:doc-ru-w5 a c:WalkthroughStep ; rdfs:label "Recorded" ;
     c:children ( "The event, with the size of its change, is a member of " ui:doc-ru-m-ChangeLog ", an LDES stream bounded by its retention policy - which the Change log and Activity tools read." ) .
 ui:doc-ru-m-TextField a c:Mention ; c:label "c:TextField" ; c:mentions c:TextField ; c:to c:TextField .
@@ -584,7 +584,7 @@ ui:doc-ru-m-sparql a c:Mention ; c:label "c:TextFieldOnScreen-sparql" ; c:mentio
 ui:doc-ru-m-fn a c:Mention ; c:label "c:TextFieldOnScreen-fn" ; c:mentions c:TextFieldOnScreen-fn ; c:to c:TextFieldOnScreen-fn .
 ui:doc-ru-m-Check a c:Mention ; c:label "val:Check" ; c:mentions val:Check ; c:to val:Check .
 ui:doc-ru-m-Input a c:Mention ; c:label "beh:Input" ; c:mentions beh:Input ; c:to beh:Input .
-ui:doc-ru-m-TextFieldInput a c:Mention ; c:label "c:TextFieldInput" ; c:mentions c:TextFieldInput ; c:to c:TextFieldInput .
+ui:doc-ru-m-TypeText a c:Mention ; c:label "c:TypeText" ; c:mentions c:TypeText ; c:to c:TypeText .
 ui:doc-ru-m-ChangeLog a c:Mention ; c:label "beh:ChangeLog" ; c:mentions beh:ChangeLog ; c:to beh:ChangeLog .
 ui:doc-ru-arrows a c:Text ; c:label "The arrows from the phrases to the diagram are connectors (c:Connector): a rule derives one from each mention being read to its node, and the host draws it where both are, hiding it while its phrase is out of view. Any two components can be joined the same way; a sheet's dependency arrows are too. Here the walk of a field is three cards and two connectors: drag a card, or resize the canvas from its corner, and the arrows stay attached." .
 ui:doc-ru-canvas a c:Canvas , c:Resizable ; c:label "A field, its rule and what it builds" ; c:height 220 ;

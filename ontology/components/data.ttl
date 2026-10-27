@@ -24,7 +24,7 @@ c:parentProperty a owl:ObjectProperty ; rdfs:range rdf:Property ;
 # elements are keyed by its content, so re-sorting moves rows without re-rendering them.
 
 c:Table a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Sortable ;
     rdfs:comment """Rows of a SPARQL SELECT (c:query, a sem:View with sem:select) under declared columns
 (c:tableColumns, an rdf:List of c:Column). Headers sort: clicking one writes c:sortColumn (and toggles
 c:sortDescending on a second click). c:label names the table; c:emptyText shows when there are no rows;
@@ -49,9 +49,15 @@ c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:fol
     sem:needsExtension sx:Locale .
 c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .
 
-c:TableSort a beh:Reaction ;
+# --- Sortable: a header sorts by its column --------------------------------------------------------
+
+c:Sortable a owl:Class ;
+    rdfs:label "Sortable"@en , "Сортується"@uk , "Sortierbar"@de , "قابل للفرز"@ar ;
+    rdfs:comment "Mixin: a click on a header (a rendered element that c:sorts a column) sorts by that column (c:sortColumn); again, the other way (c:sortDescending)."@en .
+c:Sort a beh:Reaction ;
+    rdfs:label "Sort"@en ;
     beh:when beh:Click ;
-    beh:sourceClass c:Table ;
+    beh:sourceClass c:Sortable ;
     beh:deletes """CONSTRUCT { $this c:sortColumn ?old . $this c:sortDescending ?desc }
 WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
         { $this c:sortColumn ?old } UNION { $this c:sortDescending ?desc } }""" ;
@@ -450,7 +456,7 @@ c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ;
 # selects it: clicking writes `<controls> <property> <node>`, and that node is aria-selected.
 
 c:Tree a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """An expandable tree (role=tree) of a hierarchy: c:of is the root; children are the subjects
 pointing at a node through c:parentProperty. c:expandedNode lists the open nodes; the twisty toggles one.
 c:detailProperty is shown beside each label. With c:controls and c:property, clicking a label selects it.
@@ -478,10 +484,3 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?node . 
     beh:inserts """CONSTRUCT { $this c:expandedNode ?node }
 WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?node . FILTER NOT EXISTS { $this c:expandedNode ?node } }""" ;
     sem:function "data:tree-toggle" .
-
-c:TreeSelect a beh:Reaction ;
-    beh:when beh:Click ;
-    beh:sourceClass c:Tree ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?node } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .

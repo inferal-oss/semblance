@@ -6,7 +6,7 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 c:TextField a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TextEntry ;
     rdfs:comment """A labelled single-line text input with optional help and error text. Without a c:label it
 renders the input alone, to be labelled by a c:Field."""@en ;
     sem:slug "text-field" .
@@ -114,11 +114,15 @@ c:TextFieldAsText-fn a sem:Rule ;
     sem:function "textfield:text" .
 
 # --- behaviour ----------------------------------------------------------------------
-# Typing sets the value (the graph holds input state) and clears a stale error.
+# Typing sets the value (the graph holds input state) and clears a stale error: in any c:TextEntry.
 
-c:TextFieldInput a beh:Reaction ;
+c:TextEntry a owl:Class ;
+    rdfs:label "Text entry"@en , "Введення тексту"@uk , "Texteingabe"@de , "إدخال نص"@ar ;
+    rdfs:comment "Mixin: typing in it (beh:Input) writes c:value and clears c:error."@en .
+c:TypeText a beh:Reaction ;
+    rdfs:label "Type"@en ;
     beh:when beh:Input ;
-    beh:sourceClass c:TextField ;
+    beh:sourceClass c:TextEntry ;
     beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
     beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?value }""" ;
     sem:function "textfield:input" .

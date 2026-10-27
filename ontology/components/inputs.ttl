@@ -30,7 +30,7 @@ c:Choice c:labelPart "select" .
 # --- TextArea --------------------------------------------------------------------------------------
 
 c:TextArea a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:TextEntry ;
     rdfs:comment """A multi-line text input: c:label, c:value, c:placeholder, c:help, c:error, c:rows (default 3),
 c:disabled. Typing sets c:value (and clears a stale c:error). Without a c:label it renders the
 input alone, to be labelled by a c:Field."""@en ;
@@ -147,12 +147,6 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~line-", STR(?i), "-text")) AS ?lineText)
   BIND(IF(?i < ?breaks && ?i < 99, IRI(CONCAT(STR($this), "/~line-", STR(?i + 1))), ?afterDescribed) AS ?nextLine)
 }""" .
-c:TextAreaInput a beh:Reaction ;
-    beh:when beh:Input ;
-    beh:sourceClass c:TextArea ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?value }""" ;
-    sem:function "inputs:text-area-input" .
 
 # --- Checkbox --------------------------------------------------------------------------------------
 
@@ -284,7 +278,7 @@ WHERE {
 # --- RadioGroup ------------------------------------------------------------------------------------
 
 c:RadioGroup a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Chooser ;
     rdfs:comment """Sets one property (c:property) of one node (c:controls), like c:Segmented and c:Choice:
 the options are c:options, else the individuals in the property's rdfs:range (ordered by
 sem:order, labelled by rdfs:label, described by rdfs:comment). Native radio inputs, so arrow keys
@@ -478,12 +472,6 @@ WHERE {
   BIND(IF(BOUND(?prev), ?none, ?optLine) AS ?firstLine)
   }
 }""" .
-c:RadioGroupSelect a beh:Reaction ;
-    beh:when beh:Change ;
-    beh:sourceClass c:RadioGroup ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?option } WHERE { $this c:controls ?target ; c:property ?p . $event beh:value ?v . BIND(IRI(?v) AS ?option) }""" ;
-    sem:function "inputs:radio-group-select" .
 
 # --- ToggleSwitch ------------------------------------------------------------------------------------
 # (c:Switch, in views.ttl, is the case switcher the demo shell is built from.)
