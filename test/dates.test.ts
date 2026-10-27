@@ -181,6 +181,9 @@ describe.each(['wat', 'oxigraph'] as const)('dates and times (%s)', (kind) => {
     act('open', (x) => x.fire(opener(x, 'departs'), 'click'))
     expect(opener(h, 'departs').getAttribute('aria-expanded')).toBe('true')
     expect(h.root('departs').querySelector<HTMLElement>('.sem-date-popup')!.hidden).toBe(false)
+    // The calendar is anchored to its row (the host lifts it out of a clipping container).
+    const anchor = h.root('departs').querySelector<HTMLElement>('.sem-date-popup')!.getAttribute('data-sem-anchor')!
+    expect(h.document.getElementById(anchor)!.classList.contains('sem-date-row')).toBe(true)
     // Escape and a press outside click the button; the grid's day takes the focus.
     expect(opener(h, 'departs').hasAttribute('data-sem-escape')).toBe(true)
     expect(opener(h, 'departs').hasAttribute('data-sem-dismiss-outside')).toBe(true)

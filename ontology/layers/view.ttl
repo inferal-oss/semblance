@@ -100,6 +100,11 @@ iv:targets a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range owl:Class ;
     rdfs:comment """A view per instance of the class, with $this bound to it (as sem:targets does for rules): its
 IRI is <instance>/~view-<local name>, its output and rows are minted under the instance, and it is
 maintained while the instance is shown (unless iv:whileShown says otherwise)."""@en .
+iv:perReferrer a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Property ;
+    rdfs:comment """A view per node that names it by this property (`?node <property> <view>`), with $this bound to that
+node: as iv:targets, its IRI is <node>/~view-<local name>, its rows are minted under the node, and it is
+maintained while the node is shown. A formula whose query reads $this (c:valueQuery) is one view per
+component that asks it, not one per instance of a class."""@en .
 iv:instanceOf a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: the view it is an instance of."@en .
 iv:focus a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: its instance ($this)."@en .
 iv:parameter a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Parameter ;

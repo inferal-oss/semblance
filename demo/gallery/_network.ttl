@@ -112,7 +112,7 @@ ui:net-last5s a iv:SlidingWindow ; iv:range "PT5S"^^xsd:dayTimeDuration ;
 ui:net-recentView a sem:View , iv:View ; rdfs:label "entries in the last 5 s of the capture" ;
     iv:window ui:net-last5s ; iv:materialize iv:Graph ; iv:whileShown ui:net-inspector ;
     sem:select """SELECT (COUNT(?e) AS ?value) WHERE { net:Capture tree:member ?e }""" .
-ui:net-qRecent a sem:View ; sem:select """
+ui:net-qRecent a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:net-recentView ; iv:whileShown ui:net-recent ; sem:select """
 SELECT ?label WHERE {
   OPTIONAL { ui:net-recentView <http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution>/<http://www.w3.org/2001/sw/DataAccess/tests/result-set#binding> [ <http://www.w3.org/2001/sw/DataAccess/tests/result-set#variable> "value" ; <http://www.w3.org/2001/sw/DataAccess/tests/result-set#value> ?n ] }
   BIND(COALESCE(?n, 0) AS ?count)

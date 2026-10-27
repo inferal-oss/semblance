@@ -12,7 +12,7 @@ import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { el, marked, md5Key } from './data.ts'
 import { compareKeys } from '../render/order-key.ts'
-import { isTrue, labelOf, named, nodes, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, labelOf, named, nodes, RDFS_LABEL, str, text, isA } from './util.ts'
 
 const C = NS.c
 const TREE_MEMBER = NS.tree + 'member'
@@ -75,6 +75,8 @@ export const GRID = {
   BadgeCell: C + 'BadgeCell',
   CodeCell: C + 'CodeCell',
   BytesCell: C + 'BytesCell',
+  DateCell: C + 'DateCell',
+  ImageCell: C + 'ImageCell',
   DurationCell: C + 'DurationCell',
   TimeBarCell: C + 'TimeBarCell',
 } as const
@@ -85,6 +87,9 @@ export const GRID = {
 const num = (n: number) => String(n)
 /** A literal's number, or undefined. */
 const numberOf = (t: Term | undefined) => (t?.termType === 'Literal' && t.value.trim() !== '' && Number.isFinite(Number(t.value)) ? Number(t.value) : undefined)
+
+/** A date or a date and time, as its date ("2026-10-25"): its first ten characters, as SUBSTR(STR(?v), 1, 10). */
+const dateOf = (v: string) => v.slice(0, 10)
 
 /** Bytes: "512 B", "4.6 KiB", "1.2 MiB" (one decimal). */
 export function formatBytes(n: number): string {
@@ -254,20 +259,6 @@ const frame: FnRule = (ctx, focus) => {
 }
 
 // --- the window ------------------------------------------------------------------------------------
-
-/** Whether a node is an instance of a class or of one of its subclasses. */
-function isA(ctx: RuleContext, node: NamedNode, cls: NamedNode): boolean {
-  const seen = new Set<string>()
-  const todo = ctx.objects(node, RDF_TYPE)
-  while (todo.length) {
-    const t = todo.pop()!
-    if (t.equals(cls)) return true
-    if (seen.has(t.value) || seen.size > 64) continue
-    seen.add(t.value)
-    todo.push(...ctx.objects(t, NS.rdfs + 'subClassOf'))
-  }
-  return false
-}
 
 /** The grid's filters (read once per evaluation): a test each member must pass. */
 function filtersOf(ctx: RuleContext, grid: NamedNode): ((m: NamedNode) => boolean)[] {
@@ -541,6 +532,14 @@ function cell(ctx: RuleContext, o: Out, id: string, row: NamedNode, c: Column): 
       const v = c.property ? ctx.object(s, c.property) : undefined
       return v ? [el(o, `${id}-code`, 'Code', {}, [o.text(`${id}-text`, shown(ctx, v))])] : []
     }
+    case GRID.DateCell: {
+      const v = c.property ? ctx.object(s, c.property) : undefined
+      return v ? [o.text(`${id}-text`, dateOf(v.value))] : []
+    }
+    case GRID.ImageCell: {
+      const v = c.property ? ctx.object(s, c.property) : undefined
+      return v ? [el(o, `${id}-image`, 'Img', { class: 'sem-cell-image', src: v.value, alt: '', loading: 'lazy' })] : []
+    }
   }
   const v = c.property ? ctx.object(s, c.property) : undefined
   const d = c.detail ? ctx.object(s, c.detail) : undefined
@@ -570,6 +569,8 @@ const row: FnRule = (ctx, focus) => {
         const s = subjectOf(ctx, member, c)
         if (!s) return ''
         if (c.kind === GRID.BytesCell) return formatBytes(numberOf(c.property && ctx.object(s, c.property)) ?? 0)
+        if (c.kind === GRID.ImageCell) return ''
+        if (c.kind === GRID.DateCell) return dateOf(c.property ? (ctx.object(s, c.property)?.value ?? '') : '')
         if (c.kind === GRID.DurationCell) {
           const a = c.start && numberOf(ctx.object(s, c.start))
           const b = c.end && numberOf(ctx.object(s, c.end))

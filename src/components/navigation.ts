@@ -4,7 +4,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out } from '../engine/context.ts'
 import { C, MOD, NS, RDF_TYPE, XSD_INTEGER } from '../ns.ts'
 import { el, marked, md5Key } from './data.ts'
-import { isTrue, labelOf, named, nodes, num, text } from './util.ts'
+import { isTrue, labelOf, named, nodes, num, text, encodeForUri } from './util.ts'
 
 const C_ITEMS = NS.c + 'items'
 const C_PARENT_PROPERTY = NS.c + 'parentProperty'
@@ -269,8 +269,6 @@ const stepperGo: ReactionFn = (ctx) => {
 // --- Counts beside the options of a c:Segmented / c:NavList ---------------------------------------
 
 const H_HAS_CHILD = NS.rdfhtml + 'hasChild'
-/** SPARQL's ENCODE_FOR_URI, so the option keys match the segmented rule's (functions.ts encodeForUri; not imported, which would be a cycle). */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 
 /**
  * After each option's label, its c:countProperty value when above zero, with c:countLabel

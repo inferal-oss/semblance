@@ -164,15 +164,15 @@ WHERE {
   BIND(IF(BOUND(?while0) && ?while0 != "always", ?while0, ?none) AS ?whileSlug)
   # What it joins, in words: each end's name, then the connector's label.
   OPTIONAL { ?from l10n:label ?fromL10n }
-  OPTIONAL { ?from c:label ?fromPlain FILTER(isLiteral(?fromPlain) && lang(?fromPlain) = "") }
-  OPTIONAL { ?from rdfs:label ?fromRdfs FILTER(isLiteral(?fromRdfs) && lang(?fromRdfs) = "") }
+  OPTIONAL { { ?from l10n:label ?fromPlain } UNION { ?l10nAt_fromPlain l10n:of ?from ; l10n:label ?fromPlain } } OPTIONAL { ?from c:label ?fromPlain FILTER(isLiteral(?fromPlain) && lang(?fromPlain) = "") FILTER(NOT EXISTS { ?from l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?from ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_fromRdfs l10n:of ?from ; l10n:name ?fromRdfs } OPTIONAL { ?from rdfs:label ?fromRdfs FILTER(isLiteral(?fromRdfs) && lang(?fromRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?from ; l10n:name ?l10nPick }) }
   OPTIONAL { ?from c:term ?fromTerm }
   OPTIONAL { ?to l10n:label ?toL10n }
-  OPTIONAL { ?to c:label ?toPlain FILTER(isLiteral(?toPlain) && lang(?toPlain) = "") }
-  OPTIONAL { ?to rdfs:label ?toRdfs FILTER(isLiteral(?toRdfs) && lang(?toRdfs) = "") }
+  OPTIONAL { { ?to l10n:label ?toPlain } UNION { ?l10nAt_toPlain l10n:of ?to ; l10n:label ?toPlain } } OPTIONAL { ?to c:label ?toPlain FILTER(isLiteral(?toPlain) && lang(?toPlain) = "") FILTER(NOT EXISTS { ?to l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?to ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_toRdfs l10n:of ?to ; l10n:name ?toRdfs } OPTIONAL { ?to rdfs:label ?toRdfs FILTER(isLiteral(?toRdfs) && lang(?toRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?to ; l10n:name ?l10nPick }) }
   OPTIONAL { ?to c:term ?toTerm }
   OPTIONAL { $this l10n:label ?ownL10n }
-  OPTIONAL { $this c:label ?ownPlain FILTER(isLiteral(?ownPlain) && lang(?ownPlain) = "") }
+  OPTIONAL { { $this l10n:label ?ownPlain } UNION { ?l10nAt_ownPlain l10n:of $this ; l10n:label ?ownPlain } } OPTIONAL { $this c:label ?ownPlain FILTER(isLiteral(?ownPlain) && lang(?ownPlain) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?fromL10n, ?fromPlain, ?fromRdfs, REPLACE(STR(COALESCE(?fromTerm, ?from)), "^.*[#/]", ""))) AS ?fromName)
   BIND(STR(COALESCE(?toL10n, ?toPlain, ?toRdfs, REPLACE(STR(COALESCE(?toTerm, ?to)), "^.*[#/]", ""))) AS ?toName)
   BIND(COALESCE(?ownL10n, ?ownPlain) AS ?own)
@@ -209,15 +209,15 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~alt")) AS ?altText)
   OPTIONAL { ?from l10n:label ?fromL10n }
-  OPTIONAL { ?from c:label ?fromPlain FILTER(isLiteral(?fromPlain) && lang(?fromPlain) = "") }
-  OPTIONAL { ?from rdfs:label ?fromRdfs FILTER(isLiteral(?fromRdfs) && lang(?fromRdfs) = "") }
+  OPTIONAL { { ?from l10n:label ?fromPlain } UNION { ?l10nAt_fromPlain l10n:of ?from ; l10n:label ?fromPlain } } OPTIONAL { ?from c:label ?fromPlain FILTER(isLiteral(?fromPlain) && lang(?fromPlain) = "") FILTER(NOT EXISTS { ?from l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?from ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_fromRdfs l10n:of ?from ; l10n:name ?fromRdfs } OPTIONAL { ?from rdfs:label ?fromRdfs FILTER(isLiteral(?fromRdfs) && lang(?fromRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?from ; l10n:name ?l10nPick }) }
   OPTIONAL { ?from c:term ?fromTerm }
   OPTIONAL { ?to l10n:label ?toL10n }
-  OPTIONAL { ?to c:label ?toPlain FILTER(isLiteral(?toPlain) && lang(?toPlain) = "") }
-  OPTIONAL { ?to rdfs:label ?toRdfs FILTER(isLiteral(?toRdfs) && lang(?toRdfs) = "") }
+  OPTIONAL { { ?to l10n:label ?toPlain } UNION { ?l10nAt_toPlain l10n:of ?to ; l10n:label ?toPlain } } OPTIONAL { ?to c:label ?toPlain FILTER(isLiteral(?toPlain) && lang(?toPlain) = "") FILTER(NOT EXISTS { ?to l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?to ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_toRdfs l10n:of ?to ; l10n:name ?toRdfs } OPTIONAL { ?to rdfs:label ?toRdfs FILTER(isLiteral(?toRdfs) && lang(?toRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?to ; l10n:name ?l10nPick }) }
   OPTIONAL { ?to c:term ?toTerm }
   OPTIONAL { $this l10n:label ?ownL10n }
-  OPTIONAL { $this c:label ?ownPlain FILTER(isLiteral(?ownPlain) && lang(?ownPlain) = "") }
+  OPTIONAL { { $this l10n:label ?ownPlain } UNION { ?l10nAt_ownPlain l10n:of $this ; l10n:label ?ownPlain } } OPTIONAL { $this c:label ?ownPlain FILTER(isLiteral(?ownPlain) && lang(?ownPlain) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?fromL10n, ?fromPlain, ?fromRdfs, REPLACE(STR(COALESCE(?fromTerm, ?from)), "^.*[#/]", ""))) AS ?fromName)
   BIND(STR(COALESCE(?toL10n, ?toPlain, ?toRdfs, REPLACE(STR(COALESCE(?toTerm, ?to)), "^.*[#/]", ""))) AS ?toName)
   BIND(COALESCE(?ownL10n, ?ownPlain) AS ?own)
@@ -252,7 +252,7 @@ WHERE {
     OPTIONAL { $this c:width ?w }
     OPTIONAL { $this c:height ?h }
     BIND(IF(BOUND(?w) || BOUND(?h), CONCAT(IF(BOUND(?w), CONCAT("width: ", STR(?w), "px"), ""), IF(BOUND(?w) && BOUND(?h), "; ", ""), IF(BOUND(?h), CONCAT("height: ", STR(?h), "px"), "")), ?none) AS ?style)
-    OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0) && lang(?label0) = "") }
+    OPTIONAL { { $this l10n:label ?label0 } UNION { ?l10nAt_label0 l10n:of $this ; l10n:label ?label0 } } OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0) && lang(?label0) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     BIND(IF(BOUND(?label0), STR(?label0), ?none) AS ?label)
     BIND(IF(BOUND(?label0), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?labelAttr)
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)

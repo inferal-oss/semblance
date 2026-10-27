@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
@@ -150,7 +151,7 @@ SELECT ?day ?time ?title ?room ?people ?conflict WHERE {
 ORDER BY ?dayOrder ?sm ?title""" .
 
 # The double bookings: how many pairs, and the first of them in words.
-cal:qConflicts a sem:View ; sem:select """
+cal:qConflicts a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-calendar-conflicts ; sem:select """
 SELECT ?label ?tone WHERE {
   { SELECT (COUNT(*) AS ?n) (MIN(?pair) AS ?first) WHERE {
       ?a a cal:Meeting ; cal:room ?r ; cal:day ?d ; cal:start ?as ; cal:hours ?alen ; cal:title ?at .

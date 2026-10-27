@@ -304,6 +304,19 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child:not(:only-child)" ;
     sty:declares [ sty:property "max-width" ; sty:raw "min(100%, 240px)" ] .
 
+# --- pos:AsideEnd: the main column and, after it, the narrow one --------------------------------------
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside-end] > :last-child:not(:only-child)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 200px" ] ,
+                 [ sty:property "max-width" ; sty:raw "min(100%, 260px)" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside-end] > :not(:last-child)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "999 1 0" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(100%, 55%)" ] .
+# On a compact screen the narrow column goes below, as wide as the page.
+[] a sty:StyleRule ; sty:part "[data-sem-layout=aside-end] > :last-child:not(:only-child)" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
+
 # Components whose size is their content - a badge, a tag, a count, a key cap - stay that size in a
 # grid cell. A grid stretches its items to the track by default, so in rows that share columns
 # (pos:Subgrid) a short badge would grow to the width of the longest one in its column; they sit at
@@ -335,3 +348,35 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 [] a sty:StyleRule ; sty:part "[data-sem-layout=aside] > :first-child:not(:only-child)" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] .
+
+# --- fields side by side (pos:FieldRow) ------------------------------------------------------------
+# Each field's parts sit in the row's tracks: label, control, help, error. A field's own gap would put
+# space under the tracks it leaves empty (no help, no error), so in a row the parts are spaced by
+# their own margins instead: an empty track is no taller than nothing. Popups (a date's month grid, a
+# time list) are out of the flow and take no track.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span]" ;
+    sty:declares [ sty:property "row-gap" ; sty:raw "0" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :not(:first-child, [role=dialog], [role=listbox])" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
+# Help and errors wrap to their column: they never size it, so an error that appears does not move
+# the columns.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :nth-child(n+3):not([role=dialog], [role=listbox])" ;
+    sty:declares [ sty:property "contain" ; sty:raw "inline-size" ] .
+# What is not a field (a button acting on the fields) sits beside the controls, at its own width.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
+                 [ sty:property "justify-self" ; sty:raw "start" ] ,
+                 [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
+# On a phone the fields wrap, two or one to a line (each line with rows of its own).
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "grid-auto-flow" ; sty:raw "row" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 9rem), 1fr))" ] .
+# Placed as it comes, a button may start in a line's label row: it takes that row and the control
+# row and sits at their foot, beside the controls of the line it lands in.
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> :not([data-sem-row-span])" ;
+    sty:declares [ sty:property "grid-row" ; sty:raw "span 2" ] ,
+                 [ sty:property "align-self" ; sty:raw "end" ] .
+# Lines of wrapped fields are spaced by the margin under each field (the tracks have no gap).
+[] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ; sty:part "> [data-sem-row-span]:not(:last-child)" ;
+    sty:declares [ sty:property "margin-block-end" ; sty:token tok:space-3 ] .

@@ -299,8 +299,8 @@ c:ResultTable a owl:Class ;
     sem:slug "result-table" .
 c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
     sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "awaits #1 (query results as graph rows): it runs the query held in the data (sem:select / sem:construct of c:of); SPARQL cannot evaluate a query given as a string." ;
-    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/1> .
+    sem:functionOnly "awaits #148 (query runs as graph data): it runs the query held in the data (sem:select / sem:construct of c:of) when asked, not as the graph changes, and shows triples, an answer or an error, none of which a view keeps in the graph yet." ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/148> .
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
 
 # --- the table as Markdown ----------------------------------------------------------------------------
@@ -500,8 +500,8 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~selection-text")) AS ?line)
       OPTIONAL { ?hint0At l10n:of c:GraphHintPhrase ; l10n:name ?hint0 }
   OPTIONAL { ?hint0At l10n:of c:GraphHintPhrase ; l10n:name ?hint0 }
-  OPTIONAL { c:GraphHintPhrase rdfs:label ?hint0 FILTER(lang(?hint0) = "") }
-      OPTIONAL { c:GraphHintPhrase rdfs:label ?hint1 FILTER(langMatches(lang(?hint1), "en")) }
+  OPTIONAL { c:GraphHintPhrase rdfs:label ?hint0 FILTER(lang(?hint0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:GraphHintPhrase ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_hint1 l10n:of c:GraphHintPhrase ; l10n:name ?hint1 } OPTIONAL { c:GraphHintPhrase rdfs:label ?hint1 FILTER(langMatches(lang(?hint1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:GraphHintPhrase ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?hint0, ?hint1, "Select a node to highlight its connections: click it, or press Enter on it.")) AS ?text)
     } UNION {
       FILTER(?selected)
@@ -515,12 +515,12 @@ WHERE {
       ?nameAttribute rdfhtml:attributeValue ?name .
       OPTIONAL { ?many0At l10n:of c:GraphSelectionPhrase ; l10n:name ?many0 }
   OPTIONAL { ?many0At l10n:of c:GraphSelectionPhrase ; l10n:name ?many0 }
-  OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") }
-      OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) }
+  OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many0 FILTER(lang(?many0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:GraphSelectionPhrase ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_many1 l10n:of c:GraphSelectionPhrase ; l10n:name ?many1 } OPTIONAL { c:GraphSelectionPhrase rdfs:label ?many1 FILTER(langMatches(lang(?many1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:GraphSelectionPhrase ; l10n:name ?l10nPick }) }
       OPTIONAL { ?one0At l10n:of c:GraphSelectionOnePhrase ; l10n:name ?one0 }
   OPTIONAL { ?one0At l10n:of c:GraphSelectionOnePhrase ; l10n:name ?one0 }
-  OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") }
-      OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) }
+  OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one0 FILTER(lang(?one0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:GraphSelectionOnePhrase ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_one1 l10n:of c:GraphSelectionOnePhrase ; l10n:name ?one1 } OPTIONAL { c:GraphSelectionOnePhrase rdfs:label ?one1 FILTER(langMatches(lang(?one1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:GraphSelectionOnePhrase ; l10n:name ?l10nPick }) }
       BIND(IF(?links = 1, STR(COALESCE(?one0, ?one1, "{name} — 1 connection")), STR(COALESCE(?many0, ?many1, "{name} — {n} connections"))) AS ?pattern)
       BIND(IF(CONTAINS(?pattern, "{name}"), CONCAT(STRBEFORE(?pattern, "{name}"), ?name, STRAFTER(?pattern, "{name}")), ?pattern) AS ?named)
       BIND(IF(CONTAINS(?named, "{n}"), CONCAT(STRBEFORE(?named, "{n}"), STR(?links), STRAFTER(?named, "{n}")), ?named) AS ?text)
@@ -531,8 +531,8 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~selection-clear-data-sem-escape")) AS ?escape)
       OPTIONAL { ?clear0At l10n:of c:ClearSelectionPhrase ; l10n:name ?clear0 }
   OPTIONAL { ?clear0At l10n:of c:ClearSelectionPhrase ; l10n:name ?clear0 }
-  OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear0 FILTER(lang(?clear0) = "") }
-      OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear1 FILTER(langMatches(lang(?clear1), "en")) }
+  OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear0 FILTER(lang(?clear0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:ClearSelectionPhrase ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_clear1 l10n:of c:ClearSelectionPhrase ; l10n:name ?clear1 } OPTIONAL { c:ClearSelectionPhrase rdfs:label ?clear1 FILTER(langMatches(lang(?clear1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:ClearSelectionPhrase ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?clear0, ?clear1, "Clear the selection")) AS ?clearWord)
     }
   }

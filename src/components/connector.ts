@@ -2,9 +2,9 @@
 // SPARQL there, rendering the same HTML. The paths are the host's (src/web/connectors.ts).
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, H, L10N, MOD, NS, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
+import { C, H, L10N, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { RDFS_LABEL, named, rdfList, str } from './util.ts'
+import { RDFS_LABEL, named, rdfList, str, isA, encodeForUri, picked } from './util.ts'
 
 const c = NS.c
 export const CONNECTOR = {
@@ -24,24 +24,10 @@ export const CONNECTOR = {
 }
 const COMPONENT = SEM.Component
 
-/** Whether a node is an instance of a class (through rdfs:subClassOf). */
-function isA(ctx: RuleContext, node: Term, cls: string): boolean {
-  const seen = new Set<string>()
-  const todo = ctx.objects(node, RDF_TYPE)
-  while (todo.length) {
-    const t = todo.pop()!
-    if (t.value === cls) return true
-    if (seen.has(t.value) || seen.size > 64) continue
-    seen.add(t.value)
-    todo.push(...ctx.objects(t, RDFS_SUBCLASS))
-  }
-  return false
-}
-
 /** An end's element: a component's root (as the style hooks have it), else the rendered node itself. */
 const anchorOf = (ctx: RuleContext, end: NamedNode) => (isA(ctx, end, COMPONENT) ? ctx.nn(mint(end.value, 'root')) : end)
 
-const plain = (ctx: RuleContext, s: Term, p: string) => ctx.objects(s, p).find((t) => t.termType === 'Literal' && t.language === '')?.value
+const plain = (ctx: RuleContext, s: Term, p: string) => picked(ctx, s, p) ?? ctx.objects(s, p).find((t) => t.termType === 'Literal' && t.language === '')?.value
 const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
 
 /** What an end is called, as the SPARQL rule has it: its localized label, plain label, rdfs:label, or (its term's) local name. */
@@ -101,8 +87,6 @@ const connector: FnRule = (ctx, focus) => {
 }
 
 const pad3 = (n: number) => String(n).padStart(3, '0').slice(-3)
-/** SPARQL's ENCODE_FOR_URI, so minted keys match the SPARQL rule's. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 
 const canvas: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)

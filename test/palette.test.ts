@@ -5,19 +5,11 @@ import { describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { memoryBackend } from '../src/persistence.ts'
+import { trackFocus } from './focus.ts'
 import { mountNavigating, mountRemembering, mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = NS.c
-
-/** A focus the DOM can say it has: linkedom keeps none, so focus() records it here. */
-function trackFocus(window: Window & typeof globalThis, document: Document) {
-  let current: Element | null = null
-  Object.defineProperty(document, 'activeElement', { configurable: true, get: () => current ?? document.body })
-  ;(window.HTMLElement.prototype as HTMLElement).focus = function (this: HTMLElement) {
-    current = this
-  }
-}
 
 type Shell = ReturnType<typeof mountShell>
 
@@ -164,6 +156,24 @@ describe.each(['oxigraph', 'wat'] as const)('command palette (%s)', (kind) => {
     ])
     const [press, run] = p.bus.recent(2)
     expect(press!.find((q) => q.predicate.value === NS.beh + 'raisedBy')!.object.value).toBe(run![0]!.subject.value)
+    expect(p.document.activeElement).toBe(before)
+  })
+
+  it('opened by the graph rather than an event, it still takes the focus to its field and gives it back', () => {
+    const p = drive(mountShell(5, kind))
+    const before = p.document.querySelector('[data-sem-c=app-bar] button') as HTMLElement
+    before.focus()
+    const f = p.store.factory
+    const palette = f.namedNode(UI + 'palette')
+    const open = f.namedNode(C + 'open')
+    const set = (v: boolean) => {
+      p.runtime.apply({ remove: p.store.match(palette, open, null), add: [f.quad(palette, open, f.literal(String(v), f.namedNode(NS.xsd + 'boolean')))] })
+      p.shell.flush()
+    }
+    set(true)
+    expect(p.document.activeElement).toBe(p.input())
+    set(false)
+    expect(p.root().hidden).toBe(true)
     expect(p.document.activeElement).toBe(before)
   })
 

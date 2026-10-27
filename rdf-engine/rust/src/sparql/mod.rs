@@ -5,6 +5,7 @@
 pub mod compile;
 pub mod eval;
 pub mod expr;
+pub mod ext;
 pub mod md5;
 pub mod num;
 pub mod parse;
@@ -64,6 +65,16 @@ pub enum Pattern {
     Lateral(Box<Pattern>, Box<Pattern>),
     Sub(Box<Select>),
     Service(bool),
+    /// A magic relation (EXTENSIONS.md): evaluated per row once its inputs are bound.
+    Magic(Box<Magic>),
+}
+
+/// `(inputs) rel (outputs)`.
+#[derive(Clone)]
+pub struct Magic {
+    pub rel: ext::Rel,
+    pub ins: Vec<Tv>,
+    pub outs: Vec<Tv>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -73,6 +84,8 @@ pub enum Func {
     Year, Month, Day, Hours, Minutes, Seconds, Timezone, Tz, Now, Uuid, StrUuid, Md5, Sha1, Sha256,
     Sha384, Sha512, StrLang, StrDt, SameTerm, IsIri, IsBlank, IsLiteral, IsNumeric, Regex, Triple,
     Subject, Predicate, Object, IsTriple, LangDir, HasLang, HasLangDir, StrLangDir,
+    /// An extension function (EXTENSIONS.md).
+    X(ext::Fx),
 }
 
 #[derive(Clone)]
@@ -410,6 +423,7 @@ pub fn query_terms(q: &Query, f: &mut dyn FnMut(u32)) {
             }
             Pattern::Values(_, rows) => rows.iter().flatten().for_each(|&i| f(i)),
             Pattern::Sub(s) => select(s, f),
+            Pattern::Magic(m) => m.ins.iter().chain(&m.outs).for_each(|x| tv(x, f)),
         }
     }
     fn select(s: &Select, f: &mut dyn FnMut(u32)) {

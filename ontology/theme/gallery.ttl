@@ -290,6 +290,9 @@ tok:print-lift a sty:Token ; sty:scale sty:Shadow ; sem:slug "print-lift" ;
                  [ sty:property "overscroll-behavior" ; sty:raw "contain" ] ,
                  [ sty:property "scroll-snap-type" ; sty:raw "x mandatory" ] ,
                  [ sty:property "scrollbar-width" ; sty:raw "none" ] .
+# Fingers swipe and pan the frames; a pinch is the lightbox's zoom, not the page's.
+[] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part ".sem-frames" ;
+    sty:declares [ sty:property "touch-action" ; sty:raw "pan-x pan-y" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part ".sem-frames::-webkit-scrollbar" ;
     sty:declares [ sty:property "display" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Lightbox ; sty:part ".sem-frame" ;

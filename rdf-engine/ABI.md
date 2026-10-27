@@ -1,4 +1,4 @@
-# Engine ABI (version 1)
+# Engine ABI (version 2)
 
 The contract every engine build implements: Rust (`rust/`) and hand-written
 WebAssembly (`wat/`). One host adapter (`host/`) drives any of them, so the
@@ -30,6 +30,11 @@ quads are never purged. So:
 - Imports nothing except, from module `env`:
   - `now() -> f64`: milliseconds since the Unix epoch (`NOW()`).
   - `random() -> f64`: uniform in [0, 1) (`RAND()`, `UUID()`, `STRUUID()`, fresh blank nodes).
+  - `math(op, x: f64, y: f64) -> f64`: the host's `Math` function `op` of `x`
+    (and `y`), for the `sx:Math` extension (EXTENSIONS.md).
+  - `intl(op, in_ptr, in_len, out_ptr, out_cap) -> i32`: the host's `Intl`,
+    for the `sx:Locale` extension (EXTENSIONS.md). The pointers are into the
+    engine's `memory`.
 
 ## Conventions
 
@@ -124,7 +129,8 @@ blank nodes) are interned and appear in results like any other term.
 
 | export | |
 |---|---|
-| `abi_version() -> 1` | |
+| `abi_version() -> 2` | Version 2 added the `math` and `intl` imports and `extensions`. |
+| `extensions() -> bits` | Optional: the SPARQL extension groups the engine implements (EXTENSIONS.md, "Capabilities"); absent means none. |
 | `input(len) -> ptr` | |
 | `result_ptr() -> ptr` | |
 | `error_ptr() -> ptr`, `error_len() -> n` | |

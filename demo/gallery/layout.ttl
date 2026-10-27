@@ -14,7 +14,7 @@
 # Gallery page: Layout.
 
 ui:gallery-layout a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-linked ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
+    c:children ( ui:gallery-layout-intro ui:ly-surfaces ui:ly-linked ui:ly-tinted ui:ly-dividers ui:ly-grids ui:ly-rows ui:ly-columns ui:ly-fields ui:ly-spacer ui:ly-host-slot ui:ly-panes ui:ly-connect ) .
 ui:gallery-layout-intro a c:Heading ; c:label "Layout" .
 
 # --- surfaces and elevation ---
@@ -179,6 +179,39 @@ ui:ly-columns-spec a c:Specimen ; c:demonstrates c:Grid ;
     c:label "Columns whose parts line up" , "Стовпці, чиї частини вирівняні"@uk , "Spalten, deren Teile fluchten"@de , "أعمدة تتحاذى أجزاؤها"@ar ;
     c:help "The same three plans, twice; the dashed boxes are the parts. On the left each column stacks its own parts, so a name that wraps pushes the rest of its column down. On the right the grid is pos:AlignedColumns: every column takes its rows from it and spans as many as it has parts (derived from its children; a c:Card is a header and a body), so part N of each column is in row N. Where the columns wrap, as on a phone, each line has rows of its own, and a column alone on its line is a stack again." ;
     c:children ( ui:ly-columns-stage ) .
+
+# --- fields side by side --------------------------------------------------------------------------
+# A row of form fields, twice: a dialling code (a c:Choice), a number with a help line and a city with
+# an error. On the left the row aligns its children's ends (pos:align pos:End), and the end of a field
+# with help is its help line, so the code's select sits beside the help and the city's input rides
+# up. On the right the row is pos:FieldRow: each field takes its rows from it (label, control, help,
+# error), so the labels share a row and the controls the next, whatever is under them.
+ui:LyfCode a owl:Class ; rdfs:label "Dialling code" .
+ui:lyf-code-1 a ui:LyfCode ; rdfs:label "+1" . ui:lyf-code-44 a ui:LyfCode ; rdfs:label "+44" . ui:lyf-code-380 a ui:LyfCode ; rdfs:label "+380" .
+ui:lyf-code a rdf:Property ; rdfs:range ui:LyfCode .
+ui:lyf-draft ui:lyf-code ui:lyf-code-44 .
+ui:lyf-ends-code a c:Choice ; c:controls ui:lyf-draft ; c:property ui:lyf-code ; c:label "Code" , "Код"@uk , "Vorwahl"@de , "الرمز"@ar .
+ui:lyf-ends-phone a c:TextField ; c:inputType "tel" ; c:placeholder "20 7946 0958" ;
+    c:label "Phone" , "Телефон"@uk , "Telefon"@de , "الهاتف"@ar ;
+    c:help "For the courier." .
+ui:lyf-ends-city a c:TextField ; c:label "City" , "Місто"@uk , "Stadt"@de , "المدينة"@ar ;
+    c:error "Enter a city." .
+ui:lyf-ends a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ; c:children ( ui:lyf-ends-code ui:lyf-ends-phone ui:lyf-ends-city ) .
+ui:lyf-row-code a c:Choice ; c:controls ui:lyf-draft ; c:property ui:lyf-code ; c:label "Code" , "Код"@uk , "Vorwahl"@de , "الرمز"@ar .
+ui:lyf-row-phone a c:TextField ; c:inputType "tel" ; c:placeholder "20 7946 0958" ;
+    c:label "Phone" , "Телефон"@uk , "Telefon"@de , "الهاتف"@ar ;
+    c:help "For the courier." .
+ui:lyf-row-city a c:TextField ; c:label "City" , "Місто"@uk , "Stadt"@de , "المدينة"@ar ;
+    c:error "Enter a city." .
+ui:lyf-row a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ; c:children ( ui:lyf-row-code ui:lyf-row-phone ui:lyf-row-city ) .
+ui:lyf-ends-card a c:Card ; c:label "Aligned by their ends" ; c:badge "pos:align pos:End" ; c:content ui:lyf-ends .
+ui:lyf-row-card a c:Card ; c:label "Fields side by side" ; c:badge "pos:FieldRow" ; c:content ui:lyf-row .
+ui:ly-fields-body a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ; c:children ( ui:lyf-ends-card ui:lyf-row-card ) .
+ui:ly-fields a c:Flippable ; c:front ui:ly-fields-spec .
+ui:ly-fields-spec a c:Specimen ; c:demonstrates c:Stack ;
+    c:label "Fields side by side" , "Поля поруч"@uk , "Felder nebeneinander"@de , "حقول متجاورة"@ar ;
+    c:help "The same three fields, twice. Aligned by their ends, a field's end is its help line or its error, so the controls do not line up. In a pos:FieldRow every field takes its rows from the row - label, control, help, error - so the labels share one line and the controls the next, and a help line or an error under one field moves nothing beside it." ;
+    c:children ( ui:ly-fields-body ) .
 
 # --- spacer ---
 ui:ly-sp-title a c:Text ; c:inline true ; sty:textStyle sty:Subtitle ; c:label "Projection" .

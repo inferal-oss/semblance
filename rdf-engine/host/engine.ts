@@ -1,7 +1,9 @@
 // The one host adapter for every engine build (see ../ABI.md): strings in and
 // out of linear memory, errors to exceptions, results copied out as ids.
 
-export const ABI_VERSION = 1
+import { intlImport, MATH_OPS } from './intl.ts'
+
+export const ABI_VERSION = 2
 
 export enum Kind {
   Free = 0,
@@ -79,6 +81,8 @@ interface Exports {
   release(h: number): number
   parse_update(textLen: number, baseLen: number): number
   update(textLen: number, baseLen: number): number
+  /** Optional: the SPARQL extension groups implemented, a bit set (EXTENSIONS.md). */
+  extensions?(): number
   /** Optional (compiled queries): module bytes for query h, at result_ptr(). */
   compile?(h: number): number
 }
@@ -143,12 +147,10 @@ export const IDLE_COMPILE = {
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
-const imports = {
-  env: {
-    now: () => Date.now(),
-    random: () => Math.random(),
-  },
-}
+/** The SPARQL extension groups (EXTENSIONS.md, "Capabilities"), in bit order. */
+export const EXTENSION_GROUPS = ['Math', 'Text', 'Locale', 'Matches', 'Json'].map((g) => `https://semblance.dev/ns/sparql#${g}`)
+
+const math = (op: number, x: number, y: number): number => MATH_OPS[op]?.(x, y) ?? NaN
 
 /** Compile an engine build once; each `Engine` is a fresh instance (a fresh store). */
 export async function compile(bytes: BufferSource): Promise<WebAssembly.Module> {
@@ -183,10 +185,21 @@ export class Engine {
   readonly idleCompiledProfiles: Profile[] = []
   private modules = 0
 
+  /** The time zone `sx:formatDateTime` uses when its options name none (undefined: the host's own). */
+  timeZone: string | undefined
+
   /** `now` replaces the clock (`env.now`), for tests of the query budget. */
   constructor(module: WebAssembly.Module, now?: () => number) {
-    const env = now ? { ...imports, env: { ...imports.env, now } } : imports
-    this.x = new WebAssembly.Instance(module, env).exports as unknown as Exports
+    const env = {
+      now: now ?? (() => Date.now()),
+      random: () => Math.random(),
+      math,
+      intl: intlImport(
+        () => this.x.memory,
+        () => this.timeZone,
+      ),
+    }
+    this.x = new WebAssembly.Instance(module, { env }).exports as unknown as Exports
     const v = this.x.abi_version()
     if (v !== ABI_VERSION) throw new Error(`engine ABI ${v}, host expects ${ABI_VERSION}`)
   }
@@ -228,6 +241,12 @@ export class Engine {
   private check(r: number): number {
     if (r < 0) throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || `engine error ${r}`, r === -2)
     return r
+  }
+
+  /** The SPARQL extension groups this build implements, as IRIs (EXTENSIONS.md). */
+  get extensions(): ReadonlySet<string> {
+    const bits = this.x.extensions?.() ?? 0
+    return new Set(EXTENSION_GROUPS.filter((_, i) => bits & (1 << i)))
   }
 
   // --- query budget ------------------------------------------------------------

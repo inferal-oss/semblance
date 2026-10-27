@@ -20,6 +20,7 @@ import { DomRenderer } from './render/dom.ts'
 import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
+import { attachAnchoredPopups } from './web/anchored-popups.ts'
 
 const c = NS.c
 export const LIVE = {
@@ -556,6 +557,7 @@ export class Sandboxes {
     // The new rendering replaces the old in one step.
     this.unmountSandbox(m)
     m.slot.replaceChildren(host)
+    const detachPopups = attachAnchoredPopups(host, node => !renderer.inSlot(node))
     if (textSlot && textHost) textSlot.replaceChildren(textHost)
     m.sandbox = sandbox
     m.renderer = renderer
@@ -566,6 +568,7 @@ export class Sandboxes {
       detachStall()
       detachBus()
       detachFullscreen()
+      detachPopups()
       detachRefresh()
       detachTimer()
     }

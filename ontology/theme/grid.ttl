@@ -177,6 +177,17 @@
                  [ sty:property "background" ; sty:raw "var(--tone-soft)" ] ,
                  [ sty:property "color" ; sty:raw "var(--tone-text)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--tone-border)" ] .
+# A small picture (an image cell): a square thumbnail cropped to fill, overhanging the cell's padding
+# so a row with one is as tall as a row without.
+[] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part ".sem-cell-image" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "inline-size" ; sty:raw "1.5rem" ] ,
+                 [ sty:property "block-size" ; sty:raw "1.5rem" ] ,
+                 [ sty:property "margin-block" ; sty:raw "-0.25rem" ] ,
+                 [ sty:property "object-fit" ; sty:raw "cover" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "background" ; sty:token tok:gray-3 ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DataGrid ; sty:part "td.sem-empty" ;
     sty:declares [ sty:property "padding" ; sty:token tok:space-6 ] ,
                  [ sty:property "text-align" ; sty:raw "center" ] ,

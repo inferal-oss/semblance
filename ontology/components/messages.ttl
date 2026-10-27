@@ -62,7 +62,7 @@ WHERE {
   $this a c:MessageList .
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, "Messages")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
@@ -168,9 +168,9 @@ WHERE {
   BIND(SUBSTR(STR(?published), 12, 5) AS ?clock)
   OPTIONAL { ?message as:attributedTo ?person
     OPTIONAL { ?personCAt l10n:of ?person ; l10n:label ?personC }
-  OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
+  OPTIONAL { { ?person l10n:label ?personC } UNION { ?l10nAt_personC l10n:of ?person ; l10n:label ?personC } } OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") FILTER(NOT EXISTS { ?person l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?person ; l10n:label ?l10nPick }) }
     OPTIONAL { ?personRAt l10n:of ?person ; l10n:name ?personR }
-  OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") }
+  OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?person ; l10n:name ?l10nPick }) }
     OPTIONAL { ?person c:image ?img } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(STR(?img) AS ?image)
@@ -218,9 +218,9 @@ WHERE {
   BIND(IF(!?pending && !BOUND(?content), ?rawComponent, ?none) AS ?componentContent)
   OPTIONAL { ?message as:attributedTo ?person
     OPTIONAL { ?personCAt l10n:of ?person ; l10n:label ?personC }
-  OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") }
+  OPTIONAL { { ?person l10n:label ?personC } UNION { ?l10nAt_personC l10n:of ?person ; l10n:label ?personC } } OPTIONAL { ?person c:label ?personC FILTER(lang(?personC) = "") FILTER(NOT EXISTS { ?person l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?person ; l10n:label ?l10nPick }) }
     OPTIONAL { ?personRAt l10n:of ?person ; l10n:name ?personR }
-  OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") } }
+  OPTIONAL { ?person rdfs:label ?personR FILTER(lang(?personR) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?person ; l10n:name ?l10nPick }) } }
   BIND(STR(COALESCE(?personC, ?personR, REPLACE(STR(?person), "^.*[#/]", ""), "Someone")) AS ?author)
   BIND(IF(?pending, CONCAT("  ", ?author, " is typing…"),
           CONCAT("  ", IF(BOUND(?published), CONCAT("[", SUBSTR(STR(?published), 12, 5), "] "), ""), ?author, ":", IF(BOUND(?content), CONCAT(" ", STR(?content)), ""))) AS ?line)

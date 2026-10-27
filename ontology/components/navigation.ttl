@@ -73,7 +73,7 @@ WHERE {
   BIND(IF(?n = FLOOR(?n), STR(xsd:integer(?n)), STR(?raw)) AS ?figureValue)
   BIND(IF(?n > 99, "99+", ?figureValue) AS ?shown)
   OPTIONAL { ?pickAt l10n:of $this ; l10n:countLabel ?pick }
-  OPTIONAL { FILTER(!BOUND(?pick)) $this c:countLabel ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) ?l10nAt_any l10n:of $this ; l10n:countLabel ?any } OPTIONAL { FILTER(!BOUND(?pick)) $this c:countLabel ?any FILTER(isLiteral(?any)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:countLabel ?l10nPick }) }
   BIND(STR(COALESCE(?pick, ?any)) AS ?spokenWord)
   BIND(CONCAT(", ", ?figureValue, IF(COALESCE(?spokenWord, "") != "", CONCAT(" ", ?spokenWord), "")) AS ?spokenLine)
   BIND(CONCAT("opt-", ENCODE_FOR_URI(STR(?opt))) AS ?key)
@@ -95,7 +95,7 @@ WHERE {
 # is the current page (aria-current=page).
 
 c:Breadcrumbs a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """A trail of nodes in a <nav> (c:label names it, default "Breadcrumb"): c:items, or the path
 from the root down to c:of (or to c:property of c:controls) through c:parentProperty. The last is
 aria-current=page. With c:controls and c:property, earlier crumbs select a graph node. Otherwise,
@@ -150,7 +150,7 @@ WHERE {
   BIND(EXISTS { $this c:controls ?t ; c:property ?p . FILTER(isIRI(?t) && isIRI(?p)) } AS ?navigates)
   OPTIONAL { $this l10n:label ?pickn }
   OPTIONAL { FILTER(!BOUND(?pickn)) ?picknAt l10n:of $this ; l10n:label ?picknT }
-  OPTIONAL { FILTER(!BOUND(?pickn) && !BOUND(?picknT)) $this c:label ?anyn FILTER(isLiteral(?anyn)) }
+  OPTIONAL { FILTER(!BOUND(?pickn) && !BOUND(?picknT)) { $this l10n:label ?anyn } UNION { ?l10nAt_anyn l10n:of $this ; l10n:label ?anyn } } OPTIONAL { FILTER(!BOUND(?pickn) && !BOUND(?picknT)) $this c:label ?anyn FILTER(isLiteral(?anyn)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickn, ?picknT, ?anyn)) AS ?ownName)
   BIND(COALESCE(?ownName, "Breadcrumb") AS ?name)
   LATERAL { SELECT ?crumb ?label WHERE {
@@ -158,13 +158,13 @@ WHERE {
   
   OPTIONAL { ?crumb l10n:label ?pickc }
   OPTIONAL { FILTER(!BOUND(?pickc)) ?pickcAt l10n:of ?crumb ; l10n:label ?pickcT }
-  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?crumb c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) { ?crumb l10n:label ?anyc } UNION { ?l10nAt_anyc l10n:of ?crumb ; l10n:label ?anyc } } OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?crumb c:label ?anyc FILTER(isLiteral(?anyc)) FILTER(NOT EXISTS { ?crumb l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?crumb ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickc, ?pickcT, ?anyc)) AS ?c)
   } } }
     LATERAL { OPTIONAL { SELECT ?crumb ?r WHERE {
   
   OPTIONAL { ?pickrAt l10n:of ?crumb ; l10n:name ?pickr }
-  OPTIONAL { FILTER(!BOUND(?pickr)) ?crumb rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?l10nAt_anyr l10n:of ?crumb ; l10n:name ?anyr } OPTIONAL { FILTER(!BOUND(?pickr)) ?crumb rdfs:label ?anyr FILTER(isLiteral(?anyr)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?crumb ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickr, ?anyr)) AS ?r)
   } } }
     BIND(COALESCE(?c, ?r, REPLACE(STR(?crumb), "^.*[#/]", "")) AS ?label)
@@ -229,13 +229,13 @@ WHERE {
   
   OPTIONAL { ?crumb l10n:label ?pickc }
   OPTIONAL { FILTER(!BOUND(?pickc)) ?pickcAt l10n:of ?crumb ; l10n:label ?pickcT }
-  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?crumb c:label ?anyc FILTER(isLiteral(?anyc)) }
+  OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) { ?crumb l10n:label ?anyc } UNION { ?l10nAt_anyc l10n:of ?crumb ; l10n:label ?anyc } } OPTIONAL { FILTER(!BOUND(?pickc) && !BOUND(?pickcT)) ?crumb c:label ?anyc FILTER(isLiteral(?anyc)) FILTER(NOT EXISTS { ?crumb l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?crumb ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?pickc, ?pickcT, ?anyc)) AS ?c)
   } } }
     LATERAL { OPTIONAL { SELECT ?crumb ?r WHERE {
   
   OPTIONAL { ?pickrAt l10n:of ?crumb ; l10n:name ?pickr }
-  OPTIONAL { FILTER(!BOUND(?pickr)) ?crumb rdfs:label ?anyr FILTER(isLiteral(?anyr)) }
+  OPTIONAL { FILTER(!BOUND(?pickr)) ?l10nAt_anyr l10n:of ?crumb ; l10n:name ?anyr } OPTIONAL { FILTER(!BOUND(?pickr)) ?crumb rdfs:label ?anyr FILTER(isLiteral(?anyr)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?crumb ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pickr, ?anyr)) AS ?r)
   } } }
     BIND(COALESCE(?c, ?r, REPLACE(STR(?crumb), "^.*[#/]", "")) AS ?label)
@@ -295,13 +295,6 @@ WHERE {
   }
 }""" .
 
-c:BreadcrumbsSelect a beh:Reaction ;
-    beh:when beh:Click ;
-    beh:sourceClass c:Breadcrumbs ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?node } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .
-
 # --- Pagination ------------------------------------------------------------------------------------
 
 c:Pagination a owl:Class ;
@@ -356,7 +349,7 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
       OPTIONAL { $this l10n:label ?localLabel }
       OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
       BIND(STR(COALESCE(?localLabel, ?rawLabel, "Pagination")) AS ?label)
       VALUES (?step ?glyph ?buttonLabel ?delta) { ("prev" "‹" "Previous page" -1) ("next" "›" "Next page" 1) }
       BIND(?page + ?delta AS ?target)
@@ -521,7 +514,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, "Progress")) AS ?label)
   LATERAL {
     {
@@ -545,10 +538,10 @@ WHERE {
       BIND(IRI(CONCAT(?id, "-body")) AS ?body)
       BIND(IRI(CONCAT(?id, "-label")) AS ?stepLabel)
       BIND(IRI(CONCAT(?id, "-label-text")) AS ?stepLabelText)
-      LATERAL { OPTIONAL { SELECT ?step ?stepName WHERE { { ?step c:label ?stepName BIND(0 AS ?source) } UNION { ?step rdfs:label ?stepName BIND(1 AS ?source) } }
+      LATERAL { OPTIONAL { SELECT ?step ?stepName WHERE { { ?step c:label ?stepName FILTER((NOT EXISTS { ?step l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?step ; l10n:label ?l10nPick }) || EXISTS { { ?step l10n:label ?l10nPick } UNION { ?l10nAt l10n:of ?step ; l10n:label ?l10nPick } FILTER(STR(?l10nPick) = STR(?stepName)) }) BIND(0 AS ?source) } UNION { ?step rdfs:label ?stepName FILTER(NOT EXISTS { ?l10nAt l10n:of ?step ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?step ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?stepName)) }) BIND(1 AS ?source) } }
                            ORDER BY ?source (lang(?stepName) != "") (!langMatches(lang(?stepName), "en")) LIMIT 1 } }
       BIND(STR(COALESCE(?stepName, REPLACE(STR(?step), "^.*[#/]", ""))) AS ?labelData)
-      LATERAL { OPTIONAL { SELECT ?step ?helpValue WHERE { ?step c:help ?helpValue }
+      LATERAL { OPTIONAL { SELECT ?step ?helpValue WHERE { ?step c:help ?helpValue FILTER(NOT EXISTS { ?l10nAt l10n:of ?step ; l10n:help ?l10nPick } || EXISTS { ?l10nAt l10n:of ?step ; l10n:help ?l10nPick FILTER(STR(?l10nPick) = STR(?helpValue)) }) }
                            ORDER BY (lang(?helpValue) != "") (!langMatches(lang(?helpValue), "en")) LIMIT 1 } }
       BIND(IF(BOUND(?helpValue), IRI(CONCAT(?id, "-help")), ?none) AS ?help)
       BIND(IF(BOUND(?helpValue), IRI(CONCAT(?id, "-help-text")), ?none) AS ?helpText)
@@ -599,7 +592,7 @@ WHERE {
               ?list rdf:rest* ?cell . ?cell rdf:first ?step FILTER(isIRI(?step))
               ?list rdf:rest* ?before . ?before rdf:rest* ?cell . ?before rdf:first ?x FILTER(isIRI(?x))
             } GROUP BY ?list ?cell ?step }
-          LATERAL { OPTIONAL { SELECT ?step ?stepName WHERE { { ?step c:label ?stepName BIND(0 AS ?source) } UNION { ?step rdfs:label ?stepName BIND(1 AS ?source) } }
+          LATERAL { OPTIONAL { SELECT ?step ?stepName WHERE { { ?step c:label ?stepName FILTER((NOT EXISTS { ?step l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?step ; l10n:label ?l10nPick }) || EXISTS { { ?step l10n:label ?l10nPick } UNION { ?l10nAt l10n:of ?step ; l10n:label ?l10nPick } FILTER(STR(?l10nPick) = STR(?stepName)) }) BIND(0 AS ?source) } UNION { ?step rdfs:label ?stepName FILTER(NOT EXISTS { ?l10nAt l10n:of ?step ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?step ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?stepName)) }) BIND(1 AS ?source) } }
                                ORDER BY ?source (lang(?stepName) != "") (!langMatches(lang(?stepName), "en")) LIMIT 1 } }
           BIND(CONCAT(IF(?pos < ?at, "✓", IF(?pos = ?at, "●", "○")), " ",
                       STR(COALESCE(?stepName, REPLACE(STR(?step), "^.*[#/]", "")))) AS ?entry)

@@ -18,10 +18,11 @@
 @prefix ldes: <https://w3id.org/ldes#> .
 
 # Data gallery: payloads. A message body as a JSON tree, as hex, and in a viewer that
-# switches between text, hex and JSON - one over a fixed sample, one following a choice.
+# switches between text, hex and JSON - one over a fixed sample, one following a choice; and an
+# image whose address is data.
 
 ui:dt-payload a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:dt-json ui:dt-hex ui:dt-body ) .
+    c:children ( ui:dt-json ui:dt-hex ui:dt-body ui:dt-image ) .
 
 # --- JsonTree ------------------------------------------------------------------------------------
 
@@ -82,3 +83,25 @@ ui:dt-body a c:Flippable ; c:front ui:dt-body-spec .
 ui:dt-body-spec a c:Specimen ; c:demonstrates c:BodyViewer ; c:label "Body viewer" ;
     c:help "One payload as text, hex or a JSON tree; the representation is graph state on the viewer (c:representation), and JSON is offered only for a payload that looks like JSON. The header shows the media type and the size in bytes. The second viewer follows a choice (c:bindFrom / c:bindProperty), as an inspector's follows the selected entry." ;
     c:children ( ui:dt-body-fixed ui:dt-body-picker ui:dt-body-bound ) .
+
+# --- ImageView -------------------------------------------------------------------------------------
+# Pictures as data: each sample says where its image is (an address, here a small inline SVG; a kept
+# file's file:url in the file explorer), and the view follows the choice.
+
+ui:PictureSample a owl:Class ; rdfs:label "Picture"@en .
+ui:pictureAddress a owl:DatatypeProperty ; rdfs:label "Address"@en .
+ui:pictureSays a owl:DatatypeProperty ; rdfs:label "Shows"@en .
+ui:picture-dawn a ui:PictureSample ; rdfs:label "Dawn" ; sem:order 1 ; ui:pictureSays "An orange sun over a violet horizon" ;
+    ui:pictureAddress "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23463a8c'/%3E%3Ccircle cx='160' cy='150' r='60' fill='%23f59e42'/%3E%3C/svg%3E" .
+ui:picture-sea a ui:PictureSample ; rdfs:label "Sea" ; sem:order 2 ; ui:pictureSays "Blue waves under a pale sky" ;
+    ui:pictureAddress "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23cfe8f7'/%3E%3Cpath d='M0 110 Q40 90 80 110 T160 110 T240 110 T320 110 V180 H0Z' fill='%232a6fb0'/%3E%3C/svg%3E" .
+ui:pickedPicture a owl:ObjectProperty ; rdfs:label "Picture"@en ; rdfs:range ui:PictureSample .
+ui:dt-image-pick ui:pickedPicture ui:picture-dawn .
+
+ui:dt-image-picker a c:Segmented ; c:controls ui:dt-image-pick ; c:property ui:pickedPicture .
+ui:dt-image-view a c:ImageView ; c:bindFrom ui:dt-image-pick ; c:bindProperty ui:pickedPicture ;
+    c:payloadProperty ui:pictureAddress ; c:altProperty ui:pictureSays ; c:emptyText "Pick a picture." .
+ui:dt-image a c:Flippable ; c:front ui:dt-image-spec .
+ui:dt-image-spec a c:Specimen ; c:demonstrates c:ImageView ; c:label "Image view" ;
+    c:help "One image whose address is data - c:payloadProperty of the node it follows (here a choice; in the file explorer, the selected file's file:url) - fitted to its box, with its alt text from c:altProperty." ;
+    c:children ( ui:dt-image-picker ui:dt-image-view ) .

@@ -10,6 +10,7 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix ui: <https://semblance.dev/demo#> .
 
 # Gallery page: Windows.
@@ -30,6 +31,12 @@ ui:gallery-windows-lede a c:Text ;
 ui:desktop c:hosts ui:win-checklist , ui:win-log , ui:win-activity , ui:win-display , ui:taskbar .
 ui:desktop c:tileLayout c:DesktopFloatingLayout .
 ui:taskbar a c:Taskbar , c:Draggable , c:Dockable ; c:of ui:desktop .
+# Where the frames are and whether they overlap, as the Query tool's samples show (rnd:Overlap).
+ui:win-checklist rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:win-log rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:win-activity rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:win-display rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:taskbar rnd:observesSelf rnd:Overlap , rnd:Visibility .
 ui:rememberTaskbar a per:Policy ; per:scope per:Session ;
     rdfs:label "Where the taskbar is" , "Де панель вікон"@uk , "Wo die Fensterleiste ist"@de , "مكان شريط النوافذ"@ar ;
     per:subject ui:taskbar ; per:properties ( c:x c:y c:attachedTo ) .

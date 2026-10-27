@@ -82,6 +82,8 @@ export class HtmlIndex {
   private inputNodes = new Map<string, InputNode>()
   /** Slots that have an island mounted in them. */
   readonly islandSlots = new Set<string>()
+  /** The nodes of each host-owned slot name (sem:slot), so a host finds its slot without a scan. */
+  readonly slots = new Map<string, Set<string>>()
   private immediate = new Map<string, Set<string>>()
   private strict = new Map<string, Set<string>>()
   private rootByFocus = new Map<string, string>()
@@ -382,10 +384,18 @@ export class HtmlIndex {
         for (const owner of a.owners) this.mark('attrs', owner)
         return
       }
-      case SEM.slot:
-        this.node(s).slot = sign > 0 ? o : undefined
+      case SEM.slot: {
+        const n = this.node(s)
+        if (n.slot !== undefined) {
+          const named = this.slots.get(n.slot)
+          named?.delete(s)
+          if (named && !named.size) this.slots.delete(n.slot)
+        }
+        n.slot = sign > 0 ? o : undefined
+        if (n.slot !== undefined) (this.slots.get(n.slot) ?? this.slots.set(n.slot, new Set()).get(n.slot)!).add(s)
         this.mark('children', s)
         return
+      }
       case EXT.island: {
         const n = this.node(s)
         n.island = sign > 0 ? o : n.island === o ? undefined : n.island

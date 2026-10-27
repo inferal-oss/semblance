@@ -96,6 +96,8 @@ export interface EngineStoreOptions {
    * (Engine.compileIdle).
    */
   compile?: number | 'idle'
+  /** The time zone `sx:formatDateTime` uses when its options name none (default: the host's own). */
+  timeZone?: string
 }
 
 /** Called with every engine store made (benchmarks use it to watch queries). */
@@ -105,6 +107,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
   const e = new Engine(module)
   e.autoCompile = typeof options.compile === 'number' ? options.compile : 0
   e.idleCompile = options.compile === 'idle'
+  e.timeZone = options.timeZone
   // This store's tag: term objects of another store (another engine) carry ids that mean nothing here.
   const ID = Symbol('engine id')
   const defaultGraph = new Default()
@@ -321,6 +324,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     kind,
     factory,
     sparql,
+    extensions: e.extensions,
     crossGraphMatch: true,
     add(q) {
       e.add(idOf(q.subject, true), idOf(q.predicate, true), idOf(q.object, true), idOf(q.graph, true))
@@ -389,6 +393,7 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
       e.load(Format.Turtle, text)
     },
     termCount: () => e.termCount(),
+    size: () => e.quadCount(),
     dispose() {
       // Each store has its own instance and memory; drop them and the term caches,
       // so they go as soon as the engine object does, not when the store's last holder does.

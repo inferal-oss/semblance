@@ -7,7 +7,10 @@
 //   - slides the next image in from the side it comes from (but not after a swipe, which already
 //     brought it) - mirrored right to left;
 //   - zooms from the image's place to its own size, keeping a double-clicked point under the
-//     pointer, and pans a zoomed image by dragging it.
+//     pointer, and pans a zoomed image by dragging it;
+//   - takes a pinch (two fingers, or a trackpad's, which browsers send as Ctrl+wheel) and Ctrl+wheel
+//     as the zoom button: spreading zooms in at the fingers, pinching fits the image again. The
+//     zoom itself is the graph's (c:zoomed): the gesture presses the lightbox's zoom button.
 // Every movement is timed by the motion tokens on the element (--sem-duration-move for the long
 // ones, --sem-duration-slow for a slide): reduced motion turns the long movements into a short fade,
 // none turns them off. It never writes the graph.
@@ -187,11 +190,71 @@ export function attachLightboxes(host: HTMLElement): LightboxHost {
   }
   const onUp = () => void (pan = undefined)
 
+  /** A zoom gesture over the current image: press the zoom button if it goes the other way. */
+  const gesture = (img: Element, zoomIn: boolean, x: number, y: number) => {
+    const stage = img.closest('.sem-stage')
+    const zoomed = !!stage?.hasAttribute('data-zoomed')
+    if (zoomIn === zoomed) return
+    if (zoomIn) {
+      const r = img.getBoundingClientRect()
+      aim = { img: img as HTMLImageElement, fx: (x - r.left) / r.width, fy: (y - r.top) / r.height, x, y }
+    }
+    ;(stage?.closest('[data-sem-c]')?.querySelector('.sem-zoom') as HTMLElement | null)?.click()
+  }
+  // Ctrl+wheel and a trackpad's pinch: past a notch, one way or the other.
+  let wheeled = 0
+  let wheelAt = 0
+  const onWheel = (e: WheelEvent) => {
+    const img = (e.target as Element).closest?.('[data-sem-current] > img[data-sem-origin]')
+    if (!img || !(e.ctrlKey || e.metaKey)) return
+    e.preventDefault()
+    if (e.timeStamp - wheelAt > 300) wheeled = 0
+    wheelAt = e.timeStamp
+    wheeled += e.deltaY
+    if (Math.abs(wheeled) < 40) return
+    gesture(img, wheeled < 0, e.clientX, e.clientY)
+    wheeled = 0
+  }
+  // Two fingers on the stage: their distance growing or shrinking by a quarter.
+  const touches = new Map<number, { x: number; y: number }>()
+  let spread: { start: number; img: Element } | undefined
+  const distance = () => {
+    const [a, b] = [...touches.values()]
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0
+  }
+  const onTouchDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') return
+    const img = (e.target as Element).closest?.('.sem-stage')?.querySelector('[data-sem-current] > img[data-sem-origin]')
+    if (!img) return
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (touches.size === 2) spread = { start: distance(), img }
+  }
+  const onTouchMove = (e: PointerEvent) => {
+    if (!touches.has(e.pointerId)) return
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (!spread || !spread.start) return
+    const ratio = distance() / spread.start
+    if (ratio > 1.25 || ratio < 0.8) {
+      const [a, b] = [...touches.values()]
+      gesture(spread.img, ratio > 1, (a!.x + b!.x) / 2, (a!.y + b!.y) / 2)
+      spread = undefined
+    }
+  }
+  const onTouchUp = (e: PointerEvent) => {
+    touches.delete(e.pointerId)
+    if (touches.size < 2) spread = undefined
+  }
+
   const observer = new win.MutationObserver(schedule)
   observer.observe(host, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-sem-current', 'data-zoomed', 'hidden'] })
   host.addEventListener('sem-snap', onSnap, true)
   host.addEventListener('dblclick', onDoubleClick, true)
   host.addEventListener('pointerdown', onDown, true)
+  host.addEventListener('pointerdown', onTouchDown, true)
+  host.addEventListener('wheel', onWheel, { capture: true, passive: false })
+  doc.addEventListener('pointermove', onTouchMove)
+  doc.addEventListener('pointerup', onTouchUp)
+  doc.addEventListener('pointercancel', onTouchUp)
   doc.addEventListener('pointermove', onMove)
   doc.addEventListener('pointerup', onUp)
   doc.addEventListener('pointercancel', onUp)
@@ -205,6 +268,11 @@ export function attachLightboxes(host: HTMLElement): LightboxHost {
       host.removeEventListener('sem-snap', onSnap, true)
       host.removeEventListener('dblclick', onDoubleClick, true)
       host.removeEventListener('pointerdown', onDown, true)
+      host.removeEventListener('pointerdown', onTouchDown, true)
+      host.removeEventListener('wheel', onWheel, true)
+      doc.removeEventListener('pointermove', onTouchMove)
+      doc.removeEventListener('pointerup', onTouchUp)
+      doc.removeEventListener('pointercancel', onTouchUp)
       doc.removeEventListener('pointermove', onMove)
       doc.removeEventListener('pointerup', onUp)
       doc.removeEventListener('pointercancel', onUp)

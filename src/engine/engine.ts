@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
-import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
+import { createContext, type FnRule, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
@@ -249,7 +249,7 @@ export class Engine {
     this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
-    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
+    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
     this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
   }
@@ -332,11 +332,21 @@ export class Engine {
    */
   warm(budgetMs: number, slice = 4, only?: (focus: string) => boolean): boolean {
     if (!this.demand) return false
-    const allowed = only ?? this.warmable
+    const test = only ?? this.warmable
+    // Asked once per focus (many parked pairs share one), afresh after each run, which may move it.
+    const known = new Map<string, boolean>()
+    const allowed =
+      test &&
+      ((focus: string) => {
+        let v = known.get(focus)
+        if (v === undefined) known.set(focus, (v = test(focus)))
+        return v
+      })
     const until = performance.now() + budgetMs
     this.warming = true
     try {
-      while (performance.now() < until) {
+      // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
+      while (performance.now() < until && this.hasWarmable(allowed)) {
         let picked = 0
         for (const [rule, foci] of this.deferred) {
           for (const focus of foci) {
@@ -348,8 +358,8 @@ export class Engine {
           }
           if (picked >= slice) break
         }
-        if (!picked) break
         this.run()
+        known.clear()
       }
     } finally {
       this.warming = false
@@ -359,7 +369,8 @@ export class Engine {
 
   /** Whether parked work remains that idle time may evaluate. */
   private hasWarmable(allowed = this.warmable): boolean {
-    for (const [, foci] of this.deferred) for (const focus of foci) if (!allowed || allowed(focusOf(focus))) return true
+    if (!allowed) return this.deferred.size > 0
+    for (const focus of this.deferred.foci()) if (allowed(focus)) return true
     return false
   }
 
@@ -485,7 +496,7 @@ export class Engine {
     const g = this.graph
     const next = new Map<string, Quad>()
     const put = (q: Quad) => next.set(quadKey(q), q)
-    const languages = this.selection.languages ?? []
+    const languages = languageChain(this.selection.languages ?? [])
     // Always a viewer (its texts are picked even without a preference: untagged, then English).
     put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
     languages.forEach((code, i) => {
@@ -658,6 +669,9 @@ export class Engine {
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
   private markFocus(rule: Rule, focus: string) {
     if (!rule.forEach) return this.markDirty(rule, focus)
+    // Its own writes never re-dirty it: one member's output about the focus (a result it records
+    // there) does not re-run the other members.
+    if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
     for (const g of this.graphs) {
       for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
@@ -775,7 +789,7 @@ export class Engine {
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
         if (r.watches && !r.watches.has(p)) continue
-        for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
       }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
@@ -1323,6 +1337,11 @@ export class Engine {
     }
   }
 
+  /** Whether the store has a statement about (or pointing at) a blank node. */
+  private inStore(b: Quad["object"]): boolean {
+    return this.store.match(b, null, null).length > 0 || this.store.match(null, null, b).length > 0
+  }
+
   private commit(rule: Rule, focus: string, quads: Quad[]) {
     for (const l of this.evaluationListeners) l(rule.slot, focus)
     let counts = this.evaluations.get(rule)
@@ -1336,7 +1355,10 @@ export class Engine {
     const next = new Map<string, Quad>()
     const f = this.store.factory
     for (const q of quads) {
-      if (q.subject.termType === 'BlankNode' || q.object.termType === 'BlankNode') {
+      // A rule mints IRIs, never blank nodes. It may point at a blank node the data already has (an
+      // RDF editor's row naming the nested resource it shows): as an object, and only one the store
+      // holds, so a fresh blank node from a CONSTRUCT template is still refused.
+      if (q.subject.termType === 'BlankNode' || (q.object.termType === 'BlankNode' && !this.inStore(q.object))) {
         throw new Error(`Rule <${rule.iri}> emitted a blank node for <${focus}>; mint IRIs instead`)
       }
       next.set(quadKey(q), q)
@@ -1373,7 +1395,8 @@ export class Engine {
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
-  private walkBack(nodes: Set<string>, steps: string[]): Set<string> {
+  /** Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there. */
+  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad): Set<string> {
     const f = this.store.factory
     for (let i = steps.length - 1; i >= 0 && nodes.size; i--) {
       const step = steps[i]!
@@ -1389,6 +1412,8 @@ export class Engine {
           // (A list cell on the way is a blank node, never the subject of a named step.)
           if (!IRI_LIKE.test(n)) continue
           for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+          // A link that is going away still led here: what it linked to read it.
+          if (removed && removed.subject.value === n && removed.predicate.value === p.value && removed.object.termType === 'NamedNode') next.add(removed.object.value)
         }
       } else for (const n of nodes) for (const x of this.links.get(n)?.get(step) ?? []) next.add(x)
       nodes = next

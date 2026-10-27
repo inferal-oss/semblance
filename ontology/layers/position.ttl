@@ -69,6 +69,15 @@ pos:Versus a pos:Layout ; sem:slug "versus" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(0, 1fr)" ] ,
                  [ sty:property "align-items" ; sty:raw "stretch" ] .
+
+# The mirror of pos:Aside: the main column first, then a narrow column after it (on the right, or on
+# the left right to left) - a minimap, a summary, tools - which goes below the main column when narrow.
+pos:AsideEnd a pos:Layout ; sem:slug "aside-end" ;
+    rdfs:label "aside at the end"@en , "бічна колонка в кінці"@uk , "Seitenspalte am Ende"@de , "عمود جانبي في النهاية"@ar ;
+    rdfs:comment "A main column and a narrow column after it; the narrow one goes below when narrow. Each column is as tall as its content."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "align-items" ; sty:raw "flex-start" ] .
 pos:Grid a pos:Layout ; sem:slug "grid" ;
     rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -115,6 +124,24 @@ pos:AlignedColumns a pos:Layout ; sem:slug "aligned-columns" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" ] ,
                  [ sty:property "align-items" ; sty:raw "stretch" ] .
+
+# Fields side by side: the same tracks, for a row of form fields. A field is a label over a control
+# over its help and its error (its class says pos:rowParts), and fields beside each other line up
+# part by part: every label in the label row, every control in the control row, so a help line or
+# an error under one field never moves its neighbours' controls (aligning the row's ends did: the
+# end of a field with help is its help line). Each field that declares its parts takes its rows from
+# the row (pos:RowSubgrid, derived); anything else in it - a button that acts on the fields - sits
+# in the control row. The columns share the line as flex items would: each as wide as its content,
+# the space left shared out, so a button stays a button's width. On a phone they wrap, two or one
+# to a line, and each line has rows of its own.
+pos:FieldRow a pos:Layout ; sem:slug "field-row" ;
+    rdfs:label "Fields side by side"@en , "Поля поруч"@uk , "Felder nebeneinander"@de , "حقول متجاورة"@ar ;
+    rdfs:comment "A row of form fields that line up part by part: labels in one row, controls in the next, help and errors below; other children (a button) beside the controls."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-auto-flow" ; sty:raw "column" ] ,
+                 [ sty:property "grid-auto-columns" ; sty:raw "auto" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] .
 
 pos:rows a owl:ObjectProperty ;
     rdfs:range pos:Rows ;
@@ -175,7 +202,7 @@ pos:RowSpan8 a pos:RowSpan ; pos:count 8 ; sem:slug "8" ;
 # hooks, so they run with the style layer. The first says which
 # children of an aligned container take rows; the second counts the parts of anything that does.
 pos:AlignedColumnRows a sem:Rendering ;
-    rdfs:comment "Children of a pos:AlignedColumns container take their rows from it (pos:rows pos:RowSubgrid)."@en ;
+    rdfs:comment "Children of a pos:AlignedColumns container, and the fields (a class with pos:rowParts) of a pos:FieldRow, take their rows from it (pos:rows pos:RowSubgrid)."@en ;
     sem:targets sem:Component ;
     sem:layer sty:Layer ;
     sem:requires pos:layout ;
@@ -187,7 +214,10 @@ pos:AlignedColumnRows-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT { ?column pos:rows pos:RowSubgrid }
 WHERE {
-  $this pos:layout pos:AlignedColumns ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column))
+  { $this pos:layout pos:AlignedColumns ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column)) }
+  UNION
+  { $this pos:layout pos:FieldRow ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column))
+    FILTER EXISTS { ?column a/rdfs:subClassOf* ?class . ?class pos:rowParts ?parts } }
 }""" .
 
 pos:RowSpans a sem:Rendering ;
@@ -265,6 +295,37 @@ pos:WideMeasure a pos:Measure ; sem:slug "wide" ;
                  [ sty:property "margin-inline" ; sty:raw "auto" ] ,
                  [ sty:property "box-sizing" ; sty:raw "border-box" ] .
 
+pos:scroll a owl:ObjectProperty ;
+    rdfs:range pos:Scroll ;
+    rdfs:label "scroll"@en , "прокручування"@uk , "Bildlauf"@de , "التمرير"@ar ;
+    rdfs:comment """Whether a component scrolls its own content: pos:ScrollPane bounds its height and scrolls what
+does not fit, so what is around it (a table of contents, a toolbar) stays in place. The rendered-state
+layer can say how far it is scrolled (rnd:Scroll)."""@en ;
+    sty:hookAttribute "data-sem-scroll" .
+pos:Scroll a owl:Class .
+pos:ScrollPane a pos:Scroll ; sem:slug "pane" ;
+    rdfs:label "scroll pane"@en , "панель прокручування"@uk , "Bildlaufbereich"@de , "لوحة تمرير"@ar ;
+    rdfs:comment "At most 70% of the viewport tall (and 36rem), scrolling vertically, without passing its scroll on to the page."@en ;
+    sty:declares [ sty:property "max-block-size" ; sty:raw "min(70vh, 36rem)" ] ,
+                 [ sty:property "overflow-y" ; sty:raw "auto" ] ,
+                 [ sty:property "overscroll-behavior" ; sty:raw "contain" ] .
+
+pos:sticky a owl:ObjectProperty ;
+    rdfs:range pos:Sticky ;
+    rdfs:label "sticky"@en , "липкий"@uk , "haftend"@de , "مثبّت عند التمرير"@ar ;
+    rdfs:comment """Whether a component stays in view while what holds it scrolls past: pos:StickToTop keeps it
+just below the app bar until the end of its container. Give it a container
+taller than itself, such as a column of pos:AsideEnd."""@en ;
+    sty:hookAttribute "data-sem-sticky" .
+pos:Sticky a owl:Class .
+pos:StickToTop a pos:Sticky ; sem:slug "top" ;
+    rdfs:label "to the top"@en , "до верху"@uk , "oben"@de , "إلى الأعلى"@ar ;
+    rdfs:comment "Sticks below the app bar (116px from the top of the viewport, enough for a bar of two rows), and below a taskbar docked there too."@en ;
+    sty:declares [ sty:property "position" ; sty:raw "sticky" ] ,
+                 [ sty:property "top" ; sty:raw "calc(var(--sem-dock-top, 0px) + 116px)" ] ,
+                 [ sty:property "align-self" ; sty:raw "flex-start" ] ,
+                 [ sty:property "z-index" ; sty:raw "1" ] .
+
 pos:textAlign a owl:ObjectProperty ;
     rdfs:range pos:TextAlignment ;
     rdfs:comment "How lines of text line up within a component (logical: start and end follow the writing direction)."@en ;
@@ -295,3 +356,26 @@ pos:NoGuides a pos:Guides ; sem:slug "none" ; sem:order 1 ;
 pos:CellGuides a pos:Guides ; sem:slug "cells" ; sem:order 2 ;
     rdfs:label "Show cells"@en , "Показати клітинки"@uk , "Zellen zeigen"@de , "إظهار الخلايا"@ar ;
     rdfs:comment "Every cell of a row, and every part of a column, is outlined."@en .
+
+# Anchored panels. A panel that opens from a control (a menu's items, a popover's panel, a date
+# field's calendar, a typeahead's suggestions) is placed by the page next to that control, not in
+# the flow of its container: a scrolling table or a dialog would clip it otherwise. Its rendering
+# says so in the markup it mints: data-sem-anchor on the panel names its anchor's id (a minted
+# IRI), and data-sem-anchor-width="match" makes it exactly as wide as the anchor (a suggestion
+# list under its field); without it the panel keeps its own width, at least the anchor's. The
+# graph still decides whether the panel is shown (hidden, or not rendered while closed); the
+# browser host's anchored-panel effect (src/web/anchored-popups.ts) lifts a shown one into the top
+# layer (a manual popover: no light dismiss, no focus move, its DOM and tab order unchanged), puts
+# it below the anchor or, without room there, above it, at the anchor's inline start (its end in
+# right-to-left), within the viewport, and follows scrolling and resizing.
+#
+# The browser's own popover style (a border, padding, Canvas colours) is reset for these panels at
+# no specificity, before every component rule, so each panel looks as its component and theme say.
+[] a sty:StyleRule ; sty:part ":where([data-sem-anchor][popover])" ;
+    sty:declares [ sty:property "border" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "overflow" ; sty:raw "visible" ] ,
+                 [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] .

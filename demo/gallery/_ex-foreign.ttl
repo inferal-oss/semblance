@@ -278,7 +278,7 @@ ui:ex-foreign-triples a c:TriplesView , ui:FxOnChosen ; ui:fxTasting cf:tasting 
 # A text field and a button. The reaction mints a coffee from the event's IRI, unrated, last in order,
 # adds it to every view that compares coffees (the chart, the map, the average), and chooses it: the chart grows a bar, the
 # average counts it, and the card - Shoelace's stars too - turns to it, "Not rated yet".
-ui:ex-foreign-add-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+ui:ex-foreign-add-row a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:ex-foreign-new ui:ex-foreign-add ) .
 ui:ex-foreign-new a c:TextField ;
     c:label "Another coffee" , "Ще одна кава"@uk , "Ein weiterer Kaffee"@de , "قهوة أخرى"@ar ;

@@ -107,13 +107,16 @@ that decides what may start must be written there, not just held in your briefs:
   whenever you start a worker, a worker reports, something lands, or a wait clears; remove rows
   for work that landed. Read it first when you take over, and don't start anything a row owns.
 - **A `Coordination:` comment on each issue that waits**, naming what it waits on and who owns
-  it: another PR or issue landing ("starts after PR #31 merges"), the user's approval ("stays
-  uncommitted until the user approves"; "the design needs approval before implementation"), or
-  the user's go-ahead for costly work. Post it when the wait is decided, and comment again when it
-  clears.
+  it: another PR or issue landing ("starts after PR #31 merges"), an approval ("stays uncommitted
+  until approved"; "implementation waits for design approval"), or a go-ahead for costly work. Post
+  it when the wait is decided, and comment again when it clears.
 - **Gates the user sets are recorded verbatim in spirit** (approve each refactor first, don't
   commit until approved): they bind every coordinator and worker, not just the session that heard
   them.
+- **Write in the project's voice** (AGENTS.md): everything you post goes out under the maintainer's
+  account, so never "the user" or "the user's approval" on GitHub, in issues, comments, the
+  Coordination table, PRs or commits. Write "waits for design approval", "Decided: …", "Wanted: …".
+  Briefs to workers say the same.
 
 ## 5b. PRs opened by others
 

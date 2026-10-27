@@ -2,10 +2,11 @@
 // by a segmented control, and the lightbox, driven through events on the Data and Overlays pages as a
 // person would, with the DOM and the graph checked after each step, and the SPARQL rules and
 // their function twins compared after each step.
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { ManualClock } from '../src/behaviour/clock.ts'
+import { trackFocus } from './focus.ts'
 import { mountShell } from './harness.ts'
 import { implementationGaps } from './implementations.ts'
 
@@ -190,21 +191,23 @@ describe('gallery and lightbox', () => {
   it('gives the focus back to the image that opened it when it closes, though its panel goes away', () => {
     const s = photos()
     s.layout('grid')
-    // linkedom has no focus: a minimal one, which a removed element loses (as a browser's does).
-    let active: Element | null = null
-    Object.defineProperty(s.document, 'activeElement', { configurable: true, get: () => (active?.isConnected ? active : s.document.body) })
-    const proto = s.window.HTMLElement.prototype
-    const own = Object.getOwnPropertyDescriptor(proto, 'focus')
-    Object.defineProperty(proto, 'focus', { configurable: true, writable: true, value(this: Element) { active = this } })
-    onTestFinished(() => void (own ? Object.defineProperty(proto, 'focus', own) : delete (proto as { focus?: unknown }).focus))
+    trackFocus(s.window, s.document)
     const cell = s.part('dt-photos', 'cell-2')
     cell.focus()
     s.click(cell)
-    const panel = s.part('dt-lightbox', 'panel')
-    expect(panel.contains(s.document.activeElement)).toBe(true)
+    // Opened, the focus is on the next arrow.
+    expect(s.document.activeElement).toBe(s.part('dt-lightbox', 'next'))
     s.key('Escape', s.document.activeElement!)
     expect(s.root('dt-lightbox').children).toHaveLength(0)
     expect(s.document.activeElement).toBe(s.part('dt-photos', 'cell-2'))
+    // On the last image (it does not loop) the next arrow is disabled: the previous one has it.
+    const last = s.part('dt-photos', 'cell-6')
+    last.focus()
+    s.click(last)
+    expect(s.part('dt-lightbox', 'next').hasAttribute('disabled')).toBe(true)
+    expect(s.document.activeElement).toBe(s.part('dt-lightbox', 'prev'))
+    s.key('Escape', s.document.activeElement!)
+    expect(s.document.activeElement).toBe(last)
   })
 
   it('moves through the images by arrow keys, mirrored in a right-to-left page, and closes with Escape', () => {
@@ -265,6 +268,24 @@ describe('gallery and lightbox', () => {
     // Full screen asks the host for the panel.
     s.click(s.part('dt-lightbox', 'fullscreen-toggle'))
     expect(s.fullscreen.requests.at(-1)).toBe(s.part('dt-lightbox', 'panel'))
+  })
+
+  it("says its own words in the viewer's language, from SPARQL as from functions, and follows a change of language", () => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => photos('GroupData', prefer))
+    for (const s of shells) {
+      s.screen.engine.reconfigure({ languages: ['uk'] })
+      s.shell.flush()
+      s.click(s.part('dt-photos', 'photo-2'))
+    }
+    const words = (s: ReturnType<typeof photos>) => [s.part('dt-lightbox', 'prev'), s.part('dt-lightbox', 'next'), s.part('dt-lightbox', 'close')].map((b) => b.getAttribute('aria-label'))
+    for (const s of shells) expect(words(s)).toEqual(['Попереднє зображення', 'Наступне зображення', 'Закрити'])
+    expect(shells[0]!.part('dt-lightbox', 'live').textContent).toContain('Зображення 2 з 6')
+    for (const s of shells) {
+      s.screen.engine.reconfigure({ languages: ['de'] })
+      s.shell.flush()
+    }
+    for (const s of shells) expect(words(s)).toEqual(['Vorheriges Bild', 'Nächstes Bild', 'Schließen'])
+    expect(shells[0]!.root('dt-lightbox').outerHTML).toBe(shells[1]!.root('dt-lightbox').outerHTML)
   })
 
   it('loops, shows thumbnails and links to the original when the lightbox says so', () => {

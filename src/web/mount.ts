@@ -3,6 +3,7 @@ import type { FnRule } from '../engine/context.ts'
 import { DEFAULT_LAYERS, MOD } from '../ns.ts'
 import { Islands, type IslandAdapter, type WidgetLike } from '../foreign.ts'
 import { DomRenderer } from '../render/dom.ts'
+import { RenderedState } from '../rendered.ts'
 import { type Projection, Runtime } from '../runtime.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
@@ -11,6 +12,7 @@ import { Fullscreen, type FullscreenOptions } from '../fullscreen.ts'
 import { attachConnectors } from './connectors.ts'
 import { attachSnaps } from './snap.ts'
 import { attachLightboxes } from './lightbox.ts'
+import { attachAnchoredPopups } from './anchored-popups.ts'
 import { hasStore, initWeb, loadStore, type StoreKind } from './load.ts'
 
 export { DEFAULT_LAYERS }
@@ -56,9 +58,11 @@ export interface MountedApp {
   files?: Files
   /** The islands effect: foreign components mounted in the slots islands render. */
   islands: Islands
+  /** The rendered state of the components that ask for it (rnd:observes; ontology/layers/rendered.ttl). */
+  rendered: RenderedState
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
-  /** Detach events and idle work, and remove the styles. The DOM is left as it is. */
+  /** Detach effects, release the owned runtime and store, and remove injected styles. The DOM is left as it is. Safe to call again; the runtime and store must not be used afterwards. */
   unmount(): void
 }
 
@@ -67,7 +71,7 @@ export interface MountedApp {
  * root on screen, patch it into `element` and route the element's events to reactions.
  * Hidden parts are evaluated in idle time; connectors (c:Connector) are drawn where their ends
  * are; picked, dropped and uploaded files go through the files effect (opts.files), and what is
- * asserted full screen or filling the window through the fullscreen effect (opts.fullscreen); foreign components (ext:Island) are mounted in their slots. Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
+ * asserted full screen or filling the window through the fullscreen effect (opts.fullscreen); foreign components (ext:Island) are mounted in their slots; the components that ask (rnd:observes) have their rendered state measured into the graph. Persistence, navigation and the other host effects are opt-in: attach them to `runtime` (see docs/GETTING-STARTED.md).
  */
 export async function mount(element: HTMLElement, opts: MountOptions): Promise<MountedApp> {
   const kind = opts.store ?? (hasStore('wat') ? 'wat' : 'hybrid')
@@ -156,6 +160,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
   const snaps = attachSnaps(element)
   // Lightboxes grow from their image and give it back, slide between images, zoom and pan.
   const lightboxes = attachLightboxes(element)
+  const popups = attachAnchoredPopups(element, node => !renderer.inSlot(node))
   // Foreign components are mounted in their islands' slots after each patch (nothing to do while there is none).
   const islands = new Islands(bus, renderer, {
     widgets: opts.widgets,
@@ -168,6 +173,17 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     },
   })
   const detachIslands = islands.attach()
+  // Where the components that ask for it are, and in what state (nothing is measured while none asks).
+  // The page is patched only when a rule that reads the state derived something from it.
+  const derived = () => projection.engine.stats.derivedAdded + projection.engine.stats.derivedRemoved
+  let derivedBefore = derived()
+  const rendered = new RenderedState(runtime, renderer, {
+    onWrite: () => {
+      if (derived() !== derivedBefore) flush()
+      derivedBefore = derived()
+    },
+  })
+  const detachRendered = rendered.attach()
 
   return {
     store,
@@ -177,8 +193,10 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     bus,
     files,
     islands,
+    rendered,
     flush,
     unmount() {
+      if (stopped) return
       stopped = true
       detach()
       detachFiles?.()
@@ -187,7 +205,10 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       connectors.dispose()
       snaps.dispose()
       lightboxes.dispose()
+      popups()
+      detachRendered()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
+      runtime.dispose()
     },
   }
 }

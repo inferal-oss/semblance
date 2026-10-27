@@ -45,11 +45,27 @@ describe('SPARQL coverage', () => {
   it('what awaits tracked work (sem:awaitsWork) is this list, which only shrinks', () => {
     const awaiting = rows(`SELECT ?rendering ?issue WHERE { ?rendering sem:awaitsWork ?issue } ORDER BY ?issue ?rendering`)
     expect(awaiting).toEqual([
-      // Query results as graph rows (#1): a query held in data, read as rows SPARQL can join.
-      ...['BarChartRendering', 'ChipsCounts', 'FindingListRendering', 'Formula', 'ResultTableRendering'].map((rendering) => ({ rendering, issue: '1' })),
       // The combobox work (#14) brings the typeahead's function twins.
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
+      // Views over derived triples (#147): formulas over a sheet's derived inputs or a view's figures.
+      { rendering: 'QueryFormula', issue: '147' },
+      // Query runs as graph data (#148): the result table, of a query run when asked.
+      { rendering: 'ResultTableRendering', issue: '148' },
     ])
+  })
+
+  it('a SPARQL rule that needs an extension has a function twin, for stores without it', () => {
+    const loose = rows(`SELECT ?rule WHERE {
+  ?rule sem:needsExtension ?extension ; sem:construct ?text ; sem:implements ?rendering .
+  FILTER NOT EXISTS { ?fn sem:implements ?rendering ; sem:function ?name }
+} ORDER BY ?rule`)
+    expect(loose).toEqual([])
+    const reactions = rows(`SELECT ?reaction WHERE {
+  ?reaction a beh:Reaction ; sem:needsExtension ?extension .
+  FILTER(EXISTS { ?reaction beh:inserts ?i } || EXISTS { ?reaction beh:deletes ?d })
+  FILTER NOT EXISTS { ?reaction sem:function ?name }
+} ORDER BY ?reaction`)
+    expect(reactions).toEqual([])
   })
 
   it('every reaction has SPARQL (beh:deletes / beh:inserts), unless it awaits an extension', () => {
