@@ -1,0 +1,121 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+
+# Default theme for the RDF editor (components/rdf-editor.ttl). It reads like Turtle: a predicate
+# beside its objects (two columns), a nested resource indented under its row, terms coloured with
+# the code tokens (prefixed names, strings, IRIs, keywords), so every theme that re-values those
+# recolours it. The twisty, leaf and focus ring are the tree family's (payload.ttl). On a phone the
+# objects go under their predicate.
+
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "flex" ; sty:raw "1 1 100%" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-height" ; sty:raw "32rem" ] ,
+                 [ sty:property "overflow" ; sty:raw "auto" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-2 ] ,
+                 [ sty:property "background" ; sty:token tok:code-bg ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-xs ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ":is(.sem-tree, [role=group])" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "list-style" ; sty:raw "none" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-resource + .sem-resource" ;
+    sty:declares [ sty:property "margin-block-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "padding-block-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "border-block-start" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-row" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "baseline" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "22px" ] ,
+                 [ sty:property "padding-inline-end" ; sty:token tok:space-1 ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-row:hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-row > :is(.sem-twisty, .sem-leaf)" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "center" ] .
+# A resource's (and a nested resource's) predicates, indented under it.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-term > [role=group]" ;
+    sty:declares [ sty:property "padding-inline-start" ; sty:raw "18px" ] .
+# A predicate and its objects, side by side.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(7rem, max-content) minmax(0, 1fr)" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property[aria-expanded=false]" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property > [role=group]" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "padding-inline-start" ; sty:raw "22px" ] .
+# Terms, coloured as code.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-label" ;
+    sty:declares [ sty:property "padding" ; sty:raw "1px 4px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "break-word" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-predicate" ;
+    sty:declares [ sty:property "color" ; sty:token tok:code-keyword ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-iri" ;
+    sty:declares [ sty:property "color" ; sty:token tok:code-name ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-resource > .sem-row > .sem-iri" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-literal" ;
+    sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ":is(.sem-blank, .sem-list, .sem-triple)" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-link]" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "underline" ] ,
+                 [ sty:property "text-decoration-color" ; sty:raw "color-mix(in srgb, currentColor 35%, transparent)" ] ,
+                 [ sty:property "text-underline-offset" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-link=term]" ;
+    sty:declares [ sty:property "text-decoration-style" ; sty:raw "dotted" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-link]:hover" ;
+    sty:declares [ sty:property "text-decoration-color" ; sty:raw "currentColor" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-datatype" ;
+    sty:declares [ sty:property "color" ; sty:token tok:code-iri ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-note" ;
+    sty:declares [ sty:property "color" ; sty:token tok:code-comment ] ,
+                 [ sty:property "flex" ; sty:raw "0 1000 auto" ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] .
+# Names and IRIs read left to right in any page; a literal takes the direction of its own text.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ":is(.sem-iri, .sem-predicate, .sem-blank, .sem-list, .sem-triple, .sem-datatype)" ;
+    sty:declares [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-literal" ;
+    sty:declares [ sty:property "unicode-bidi" ; sty:raw "plaintext" ] .
+# A field in a row (editing a term, adding a statement): the row's own type, a thin frame, as wide as its text.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-edit" ;
+    sty:declares [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "padding" ; sty:raw "0 4px" ] ,
+                 [ sty:property "min-width" ; sty:raw "12ch" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "field-sizing" ; sty:raw "content" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-edit:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-adding" ;
+    sty:declares [ sty:property "padding-block" ; sty:raw "2px" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "22px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-adding > .sem-edit" ;
+    sty:declares [ sty:property "min-width" ; sty:raw "min(28ch, 100%)" ] .

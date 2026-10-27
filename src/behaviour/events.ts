@@ -172,6 +172,13 @@ export class EventBus {
     return out
   }
 
+  /** Whether a property is view state (beh:viewState true): an undoable reaction's change of it is not recorded. */
+  private viewStates?: Set<string>
+  private viewState(p: string): boolean {
+    this.viewStates ??= new Set(this.runtime.store.match(null, this.f.namedNode(BEH.viewState), null).filter((q) => q.object.value === 'true').map((q) => q.subject.value))
+    return this.viewStates.has(p)
+  }
+
   /** Reactions for an event class on a component instance. */
   reactionsFor(type: string, target: string): Reaction[] {
     const candidates = this.reactionsByEvent().get(type)
@@ -267,7 +274,7 @@ export class EventBus {
       acted.push(r)
       delta.remove.push(...d.remove)
       delta.add.push(...d.add)
-      if (r.undoable) for (const [k, qs] of [['add', d.add], ['remove', d.remove]] as const) for (const q of qs) undoable[k].add(quadKey(q))
+      if (r.undoable) for (const [k, qs] of [['add', d.add], ['remove', d.remove]] as const) for (const q of qs) if (!this.viewState(q.predicate.value)) undoable[k].add(quadKey(q))
     }
     reactions = acted
     for (const r of acted) quads.push(f.quad(event, nn(BEH.handledBy), nn(r.iri)))

@@ -1334,6 +1334,11 @@ export class Engine {
     }
   }
 
+  /** Whether the store has a statement about (or pointing at) a blank node. */
+  private inStore(b: Quad["object"]): boolean {
+    return this.store.match(b, null, null).length > 0 || this.store.match(null, null, b).length > 0
+  }
+
   private commit(rule: Rule, focus: string, quads: Quad[]) {
     for (const l of this.evaluationListeners) l(rule.slot, focus)
     let counts = this.evaluations.get(rule)
@@ -1347,7 +1352,10 @@ export class Engine {
     const next = new Map<string, Quad>()
     const f = this.store.factory
     for (const q of quads) {
-      if (q.subject.termType === 'BlankNode' || q.object.termType === 'BlankNode') {
+      // A rule mints IRIs, never blank nodes. It may point at a blank node the data already has (an
+      // RDF editor's row naming the nested resource it shows): as an object, and only one the store
+      // holds, so a fresh blank node from a CONSTRUCT template is still refused.
+      if (q.subject.termType === 'BlankNode' || (q.object.termType === 'BlankNode' && !this.inStore(q.object))) {
         throw new Error(`Rule <${rule.iri}> emitted a blank node for <${focus}>; mint IRIs instead`)
       }
       next.set(quadKey(q), q)

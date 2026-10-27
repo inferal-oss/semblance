@@ -37,6 +37,26 @@ SELECT ?task ?label ?start ?end WHERE {
 ex:plan a c:GanttChart ; c:label "Plan" ; c:view ex:planView .
 ```
 
+`c:RdfEditor` shows an RDF document as structure, and edits it when `c:editable true`. The document
+is the resources it lists (`c:entry`); each is a tree item with its predicates beside their objects,
+and what nests is nested under where it is used: a blank node, a list, the reifiers of a statement
+(RDF 1.2, `~ r {| … |}`), and any other IRI on its twisty. An object that is a resource of the
+document jumps to it (`c:current`, so a `nav:Dimension` over it gives Back and Forward); a class or a
+property goes to the Reference. `c:arrows` draws a `c:Connector` from links to their resources:
+`c:ArrowsOff`, `c:ArrowsOn`, or `c:ArrowsCurrent`. A `c:Combobox` with `c:optionsFrom` the editor and
+`c:property c:current` jumps among its resources; a `c:Segmented` over `c:arrows` switches the arrows.
+Rows are components the rows above them mint, so an edit re-renders the rows of its subject, not the
+document. Editing is reactions over the document, each one undoable change: Enter (or a double click)
+puts a term in a field in its place, in Turtle (`"text"@uk`, `"1974"^^xsd:gYear`, `42`, `<iri>`,
+`lib:term`; text without quotes keeps the literal's datatype and language), Shift+Enter adds an object
+or a `predicate value` statement, Delete removes, Escape leaves a field. Which field is open is view
+state (`beh:viewState`), which undo leaves alone. The Text modality is a Turtle-like outline.
+
+```turtle
+ex:editor a c:RdfEditor ; c:label "Library" ; c:entry ex:book , ex:author ; c:editable true ; c:arrows c:ArrowsCurrent .
+ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
+```
+
 ## SPARQL first; functions are the escape hatch
 
 Every rendering is implemented by one or more `sem:Rule`s. A rule is either a SPARQL `CONSTRUCT`

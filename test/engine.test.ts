@@ -303,6 +303,19 @@ describe('reconfiguration and layers', () => {
     expect(() => new Runtime(store).project({ modality: MOD.Screen })).toThrow(/blank node/)
   })
 
+  it('lets a rule point at a blank node the data has (as an object), not mint one', () => {
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix c: <${NS.c}> .
+      <urn:x:held> sem:note [ sem:x 1 ] .
+      <urn:x:Names> a sem:Rule ; sem:targets c:Button ; sem:stratum 1 ;
+        sem:construct """CONSTRUCT { $this sem:names ?b } WHERE { $this a c:Button . <urn:x:held> sem:note ?b }""" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    expect(() => new Runtime(store).project({ modality: MOD.Screen })).not.toThrow()
+    const named = store.match(null, store.factory.namedNode(NS.sem + 'names'), null)
+    expect(named.length).toBeGreaterThan(0)
+    expect(named.every((q) => q.object.termType === 'BlankNode')).toBe(true)
+  })
+
   it('treats the debug layer as optional', () => {
     const { screen } = setup('oxigraph', { layers: [SEM.DebugLayer] })
     expect(toHTML(screen.index, page)).not.toContain('data-sem-c')
