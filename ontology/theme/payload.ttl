@@ -56,6 +56,9 @@
     sty:declares [ sty:property "transition" ; sty:raw "transform var(--sem-duration-fast) var(--sem-ease)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part "[aria-expanded=true] > .sem-row > .sem-twisty > span" ;
     sty:declares [ sty:property "transform" ; sty:raw "rotate(90deg)" ] .
+# Right to left a closed twisty points left, the way the text goes: in every tree of the family.
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor , c:Tree , c:TermTree ; sty:part "[aria-expanded=false] > .sem-row > .sem-twisty > span:dir(rtl)" ;
+    sty:declares [ sty:property "transform" ; sty:raw "scaleX(-1)" ] .
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part ".sem-leaf" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "width" ; sty:raw "18px" ] .
