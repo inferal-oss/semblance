@@ -131,7 +131,10 @@ export function loadRules(store: GraphStore): Rule[] {
     }
     const target = get(SEM.targets)
     if (!target) throw new Error(`Rule <${r.value}> has no sem:targets`)
-    const query = one(r, SEM.construct)?.value
+    // A rule may take its query from another (sem:constructFrom): one check for several renderings
+    // (a component's own shapes, and its entries' member-wise).
+    const from = one(r, SEM.constructFrom)
+    const query = one(r, SEM.construct)?.value ?? (from ? one(from, SEM.construct)?.value : undefined)
     const fn = one(r, SEM.function)?.value
     if (!query === !fn) throw new Error(`Rule <${r.value}> needs exactly one of sem:construct / sem:function`)
     const watches = getAll(SEM.watches)

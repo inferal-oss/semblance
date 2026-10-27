@@ -3,7 +3,7 @@
 // swapped per rule and compared head-to-head.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
@@ -11,7 +11,7 @@ import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
 import { typeaheadFunctions } from './typeahead.ts'
-import { uploadFunctions } from './upload.ts'
+import { filesFunctions, uploadFunctions } from './upload.ts'
 import { paletteFunctions } from './palette.ts'
 import { functions as calendarFunctions } from './calendar.ts'
 import { datesFunctions } from './dates.ts'
@@ -55,21 +55,8 @@ import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
-import { encodeForUri, isA, labelOf, nodes, RDFS_LABEL, text } from './util.ts'
+import { encodeForUri, isA, isTrue, labelOf, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
-
-const str = (t: Term | undefined) => t?.value
-export { encodeForUri } from './util.ts'
-const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
-
-function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
 
 // --- components ----------------------------------------------------------------
 
@@ -187,8 +174,8 @@ const listMember: FnRule = (ctx, focus, item) => {
   // A sortable list's items can be picked up, carrying the data item (the drag and drop layer).
   if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
     o.t(inst, RDF_TYPE, ctx.nn(DND.Draggable)).t(inst, DND.carries, item)
-    const name = labelFrom && ctx.object(item, labelFrom)
-    if (name) o.t(inst, DND.name, name.value)
+    const name = labelFrom && text(ctx, item, labelFrom.value)
+    if (name !== undefined && name !== null) o.t(inst, DND.name, name)
   }
   // Missing keys sort last.
   o.t(inst, SEM.orderKey, key?.value ?? '\uffff')
@@ -201,7 +188,7 @@ function itemData(ctx: RuleContext, focus: NamedNode) {
   const item = ctx.object(focus, C.of)
   const labelFrom = ctx.object(focus, C.labelFrom)
   if (!item || !labelFrom) return undefined
-  const label = str(ctx.object(item, labelFrom))
+  const label = text(ctx, item, labelFrom.value)
   if (label === undefined) return undefined
   const checkedFrom = ctx.object(focus, C.checkedFrom)
   const imageFrom = ctx.object(focus, C.imageFrom)
@@ -847,6 +834,7 @@ export const functions: Record<string, FnRule> = {
   ...typeaheadFunctions,
   ...uploadFunctions,
   ...paletteFunctions,
+  ...filesFunctions,
   ...calendarFunctions,
   ...datesFunctions,
   ...outlineFunctions,

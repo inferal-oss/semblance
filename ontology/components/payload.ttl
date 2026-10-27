@@ -45,7 +45,7 @@ c:collapsedPath; a twisty (or the container's key) toggles it. Invalid JSON is s
 a note. c:label names the root (default "root")."""@en ;
     sem:slug "json-tree" ;
     key:navigation key:TreeNavigation .
-c:expandDepth a owl:DatatypeProperty ; rdfs:domain c:JsonTree ; rdfs:range xsd:integer ;
+c:expandDepth a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "Containers shallower than this are open unless collapsed (default 1: the root only)."@en .
 c:expandedPath a owl:DatatypeProperty ; rdfs:domain c:JsonTree ;
     rdfs:comment "The JSON Pointer of a container the person opened (\"\" is the root, \"/items/0\" the first item)."@en .
@@ -267,7 +267,7 @@ WHERE {
       BIND("sem-empty" AS ?rootClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
-  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No payload.")) AS ?emptyText)
     } UNION {
       # The header and the chosen view.
@@ -310,9 +310,9 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~l10n-", ?optSlug)) AS ?optLabelNode)
       OPTIONAL { ?optLabelNode l10n:label ?optLabelLocal }
       OPTIONAL { ?optLabel_uAt l10n:of ?opt ; l10n:name ?optLabel_u }
-  OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") }
-      OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) }
-      OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) }
+  OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?l10nAt_optLabel_en l10n:of ?opt ; l10n:name ?optLabel_en } OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?l10nAt_optLabel_any l10n:of ?opt ; l10n:name ?optLabel_any } OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?optLabelLocal, ?optLabel_u, ?optLabel_en, ?optLabel_any, ?optSlug)) AS ?optLabel)
     }
   }
@@ -344,7 +344,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   # No payload: a muted line.
   OPTIONAL { ?pickeAt l10n:of $this ; l10n:emptyText ?picke }
-  OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) }
+  OPTIONAL { FILTER(!BOUND(?picke)) ?l10nAt_anye l10n:of $this ; l10n:emptyText ?anye } OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
   BIND(STR(COALESCE(?picke, ?anye)) AS ?ownEmpty)
   BIND(IF(BOUND(?payload), ?none, "sem-empty") AS ?rootClass)
   BIND(IF(BOUND(?payload), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
@@ -367,7 +367,7 @@ WHERE {
         LATERAL { OPTIONAL { SELECT ?opt ?optName WHERE {
   
   OPTIONAL { ?pickoAt l10n:of ?opt ; l10n:name ?picko }
-  OPTIONAL { FILTER(!BOUND(?picko)) ?opt rdfs:label ?anyo FILTER(isLiteral(?anyo)) }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?l10nAt_anyo l10n:of ?opt ; l10n:name ?anyo } OPTIONAL { FILTER(!BOUND(?picko)) ?opt rdfs:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?picko, ?anyo)) AS ?optName)
   } } }
         BIND(COALESCE(?optName, ?optSlug) AS ?optLabel)
@@ -402,16 +402,95 @@ WHERE {
   $this a ?type .
   FILTER EXISTS { ?viewer l10n:prefers ?preference }
   ?representation a c:Representation . FILTER(isIRI(?representation))
-  FILTER EXISTS { ?representation rdfs:label ?some FILTER(isLiteral(?some)) }
+  FILTER EXISTS { ?representation rdfs:label ?some FILTER(NOT EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?some)) }) FILTER(isLiteral(?some)) }
   OPTIONAL { ?representation sem:slug ?declared }
   BIND(COALESCE(STR(?declared), REPLACE(STR(?representation), "^.*[#/]", "")) AS ?slug)
   LATERAL { OPTIONAL { SELECT ?representation ?label WHERE {
   
   OPTIONAL { ?pickAt l10n:of ?representation ; l10n:name ?pick }
-  OPTIONAL { FILTER(!BOUND(?pick)) ?representation rdfs:label ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(!BOUND(?pick)) ?l10nAt_any l10n:of ?representation ; l10n:name ?any } OPTIONAL { FILTER(!BOUND(?pick)) ?representation rdfs:label ?any FILTER(isLiteral(?any)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?pick, ?any)) AS ?label)
   } } }
   BIND(IRI(CONCAT(STR($this), "/~l10n-", ?slug)) AS ?node)
+}""" .
+
+# --- ImageView: one image, from a property of its subject ---------------------------------------
+# An image whose address is data (a kept file's file:url or file:preview): the viewer finds it the way
+# the other viewers find a payload, so bound to a grid's selection it shows the selected file.
+
+c:ImageView a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:label "Image view"@en , "Перегляд зображення"@uk , "Bildansicht"@de , "عرض الصورة"@ar ;
+    rdfs:comment """One image, fitted to its box (never wider than it, never taller than the viewport). Its address is
+c:value, or c:payloadProperty of its subject - c:of, or the value of c:bindProperty on c:bindFrom,
+after one hop through c:via - such as a kept file's file:url (the image itself) or file:preview
+(its small picture). What it shows, in words (the alt text), is c:altProperty of the same node
+(a file's file:name); without one the image is decorative. c:emptyText shows when there is no image;
+without it, nothing does."""@en ;
+    sem:slug "image-view" .
+c:altProperty a owl:ObjectProperty ; rdfs:domain c:ImageView ; rdfs:range rdf:Property ;
+    rdfs:comment "The property of the node the image is read from whose value says what the image shows (its alt text)."@en .
+
+c:ImageViewRendering a sem:Rendering ; sem:targets c:ImageView ; sem:stratum 0 ; sem:follows c:of , c:bindFrom .
+c:ImageViewRendering-fn a sem:Rule ; sem:implements c:ImageViewRendering ; sem:function "payload:image-view" .
+c:ImageViewRendering-sparql a sem:Rule ;
+    sem:implements c:ImageViewRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?image , ?empty .
+  ?image a rdfhtml:Img ; rdfhtml:src ?src ; rdfhtml:alt ?alt ; rdfhtml:decoding "async" .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+}
+WHERE {
+  $this a c:ImageView .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  # Unbound nodes would match anything below: a missing subject or holder is a node with no triples.
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  LATERAL { OPTIONAL { $this c:altProperty ?altProperty . ?holder ?altProperty ?alt0 FILTER(isLiteral(?alt0)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?src)
+  BIND(BOUND(?src) AS ?shown)
+  # No image: its c:emptyText, or - without one - nothing at all (a hidden root).
+  OPTIONAL { FILTER(!?shown) $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+  BIND(IF(BOUND(?rawEmpty), rdfhtml:P, rdfhtml:Div) AS ?rootTag)
+  BIND(IF(BOUND(?rawEmpty), "sem-empty", ?none) AS ?rootClass)
+  BIND(IF(!?shown && !BOUND(?rawEmpty), "", ?none) AS ?hidden)
+  BIND(IF(?shown, STR(COALESCE(?alt0, "")), ?none) AS ?alt)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?shown, IRI(CONCAT(STR($this), "/~image")), ?none) AS ?image)
+  BIND(STR(?rawEmpty) AS ?emptyText)
+  BIND(IF(BOUND(?rawEmpty), IRI(CONCAT(STR($this), "/~empty")), ?none) AS ?empty)
+}""" .
+c:ImageViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:ImageViewRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?line . ?line a rdfhtml:Text ; rdfhtml:data ?data . }
+WHERE {
+  $this a c:ImageView .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  LATERAL { OPTIONAL { $this c:altProperty ?altProperty . ?holder ?altProperty ?alt0 FILTER(isLiteral(?alt0)) } }
+  BIND(BOUND(?own) || BOUND(?raw) AS ?shown)
+  OPTIONAL { FILTER(!?shown) $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+  BIND(IF(?shown, CONCAT("[image", IF(BOUND(?alt0), CONCAT(": ", STR(?alt0)), ""), "]"), STR(?rawEmpty)) AS ?data)
+  BIND(IF(BOUND(?rawEmpty), "sem-empty", ?none) AS ?rootClass)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?shown || BOUND(?rawEmpty), IRI(CONCAT(STR($this), IF(?shown, "/~line", "/~empty"))), ?none) AS ?line)
 }""" .
 
 c:BodyViewerSelect a beh:Reaction ;

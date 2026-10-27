@@ -17,6 +17,7 @@ export { Navigation, rendererReveal, type NavigationOptions } from './navigation
 export { Clipboard, type ClipboardLike, type ClipboardOptions } from './clipboard.ts'
 export { type FileLike, Files, type FilesOptions, type Picker, type PickOptions, type UploadContext, type Uploader, xhrSend } from './files.ts'
 export { Fullscreen, type FullscreenOptions } from './fullscreen.ts'
+export { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, type KeptFile, memoryFileStore, PREVIEW_SIZE, type Thumbnailer, workerThumbnails } from './file-store.ts'
 export { Scheduler } from './behaviour/schedule.ts'
 export { Islands, applyInputs, customElementAdapter, widgetAdapter, inputValue, type IslandAdapter, type IslandContext, type IslandHandle, type IslandsOptions, type Input, type Widget, type WidgetLike } from './foreign.ts'
 export { labelOf, text, rdfList, nodes } from './components/util.ts'

@@ -2,15 +2,13 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
-import { rdfList } from './views.ts'
-import { labelOf, text } from './util.ts'
+import { labelOf, rdfList, str, text } from './util.ts'
 import { maintainedRows, viewRows } from '../view/rows.ts'
 import { md5Key } from './data.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
 
 const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
 
-const str = (t: Term | undefined) => t?.value
 type Row = Map<string, Term>
 
 /** v to k decimals, as the charts' SPARQL rules write it: ROUND(v × 10^k), the point put in its digits. */
@@ -37,7 +35,7 @@ function encoding(ctx: RuleContext, focus: NamedNode) {
     value: v(C.valueVariable) ?? 'value',
     flag: v(C.flagVariable),
     flagLabel: v(C.flagLabel),
-    unit: v(C.unit) ?? '',
+    unit: text(ctx, focus, C.unit) ?? '',
     log: v(C.logScale) === 'true',
     reference: v(C.referenceLine),
   }

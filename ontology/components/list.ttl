@@ -94,7 +94,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~i-", ENCODE_FOR_URI(STR($member)))) AS ?inst)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IF(EXISTS { $this a dnd:Sortable }, ?inst, ?none) AS ?drag)
-  OPTIONAL { $this c:itemLabel ?nameFrom . $member ?nameFrom ?rawName }
+  OPTIONAL { $this c:itemLabel ?nameFrom . $member ?nameFrom ?rawName FILTER(NOT EXISTS { { ?nameFrom l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of $member ; ?l10nTwin ?l10nPick } UNION { FILTER(?nameFrom = c:label) $member l10n:label ?l10nPick } } || EXISTS { { { ?nameFrom l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of $member ; ?l10nTwin ?l10nPick } UNION { FILTER(?nameFrom = c:label) $member l10n:label ?l10nPick } } FILTER(STR(?l10nPick) = STR(?rawName)) }) }
   BIND(IF(BOUND(?drag), STR(?rawName), ?none) AS ?name)
 }""" .
 
@@ -120,7 +120,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:ListItem ; c:of ?item ; c:labelFrom ?labelProp .
-  ?item ?labelProp ?text .
+  ?item ?labelProp ?text . FILTER(NOT EXISTS { { ?labelProp l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of ?item ; ?l10nTwin ?l10nPick } UNION { FILTER(?labelProp = c:label) ?item l10n:label ?l10nPick } } || EXISTS { { { ?labelProp l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of ?item ; ?l10nTwin ?l10nPick } UNION { FILTER(?labelProp = c:label) ?item l10n:label ?l10nPick } } FILTER(STR(?l10nPick) = STR(?text)) })
   # Only a list that says what checks its items (c:itemChecked) has checkboxes.
   BIND(EXISTS { $this c:checkedFrom ?anyChecked } AS ?checkable)
   # EXISTS rather than OPTIONAL: Oxigraph evaluates this correlated OPTIONAL
@@ -159,7 +159,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:ListItem ; c:of ?item ; c:labelFrom ?labelProp .
-  ?item ?labelProp ?label .
+  ?item ?labelProp ?label . FILTER(NOT EXISTS { { ?labelProp l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of ?item ; ?l10nTwin ?l10nPick } UNION { FILTER(?labelProp = c:label) ?item l10n:label ?l10nPick } } || EXISTS { { { ?labelProp l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of ?item ; ?l10nTwin ?l10nPick } UNION { FILTER(?labelProp = c:label) ?item l10n:label ?l10nPick } } FILTER(STR(?l10nPick) = STR(?label)) })
   BIND(EXISTS { $this c:checkedFrom ?checkedProp . ?item ?checkedProp true } AS ?done)
   BIND(CONCAT(IF(EXISTS { $this c:checkedFrom ?anyChecked }, IF(?done, "  [x] ", "  [ ] "), "  - "), STR(?label)) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)

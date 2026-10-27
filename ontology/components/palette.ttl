@@ -224,7 +224,7 @@ WHERE {
   BIND(STR(?hint0) AS ?hint)
   # Its label, search key and help, in the viewer's language (the texts layer).
   BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?item)))) AS ?textNode)
-  LATERAL { OPTIONAL { ?textNode l10n:label ?localLabel } OPTIONAL { ?textNode c:searchKey ?foldedKey } OPTIONAL { ?textNode c:help ?help0 } }
+  LATERAL { OPTIONAL { ?textNode l10n:label ?localLabel } OPTIONAL { ?textNode c:searchKey ?foldedKey } OPTIONAL { ?l10nAt_help0 l10n:of ?textNode ; l10n:help ?help0 } OPTIONAL { ?textNode c:help ?help0 FILTER(NOT EXISTS { ?l10nAt l10n:of ?textNode ; l10n:help ?l10nPick }) } }
   BIND(STR(COALESCE(?localLabel, REPLACE(STR(?item), "^.*[#/]", ""))) AS ?label)
   BIND(COALESCE(STR(?foldedKey), LCASE(?label)) AS ?key)
   BIND(STR(?help0) AS ?help)
@@ -351,12 +351,12 @@ WHERE {
     LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } OPTIONAL { ?placeholderNode l10n:label ?placeholder0 } OPTIONAL { ?closeNode l10n:label ?closeWord0 }
               OPTIONAL { ?noMatchesNode l10n:label ?noMatches0 } OPTIONAL { ?moveNode l10n:label ?move0 } OPTIONAL { ?runNode l10n:label ?run0 }
               OPTIONAL { ?dismissNode l10n:label ?dismiss0 } }
-    OPTIONAL { c:CommandPalette rdfs:label ?caption1 FILTER(langMatches(lang(?caption1), "en")) }
-    OPTIONAL { c:PalettePlaceholder rdfs:label ?placeholder1 FILTER(langMatches(lang(?placeholder1), "en")) }
-    OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) }
-    OPTIONAL { c:PaletteMovePhrase rdfs:label ?move1 FILTER(langMatches(lang(?move1), "en")) }
-    OPTIONAL { c:PaletteRunPhrase rdfs:label ?run1 FILTER(langMatches(lang(?run1), "en")) }
-    OPTIONAL { c:PaletteClosePhrase rdfs:label ?dismiss1 FILTER(langMatches(lang(?dismiss1), "en")) }
+    OPTIONAL { ?l10nAt_caption1 l10n:of c:CommandPalette ; l10n:name ?caption1 } OPTIONAL { c:CommandPalette rdfs:label ?caption1 FILTER(langMatches(lang(?caption1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CommandPalette ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_placeholder1 l10n:of c:PalettePlaceholder ; l10n:name ?placeholder1 } OPTIONAL { c:PalettePlaceholder rdfs:label ?placeholder1 FILTER(langMatches(lang(?placeholder1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:PalettePlaceholder ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_noMatches1 l10n:of c:NoMatches ; l10n:name ?noMatches1 } OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoMatches ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_move1 l10n:of c:PaletteMovePhrase ; l10n:name ?move1 } OPTIONAL { c:PaletteMovePhrase rdfs:label ?move1 FILTER(langMatches(lang(?move1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:PaletteMovePhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_run1 l10n:of c:PaletteRunPhrase ; l10n:name ?run1 } OPTIONAL { c:PaletteRunPhrase rdfs:label ?run1 FILTER(langMatches(lang(?run1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:PaletteRunPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_dismiss1 l10n:of c:PaletteClosePhrase ; l10n:name ?dismiss1 } OPTIONAL { c:PaletteClosePhrase rdfs:label ?dismiss1 FILTER(langMatches(lang(?dismiss1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:PaletteClosePhrase ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?caption0, ?caption1, "Command palette")) AS ?caption)
     BIND(STR(COALESCE(?placeholder0, ?placeholder1)) AS ?placeholder)
     BIND(STR(COALESCE(?closeWord0, "Close")) AS ?closeWord)
@@ -474,7 +474,7 @@ WHERE {
   BIND(IF(?open, ?none, "") AS ?hidden)
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
-  OPTIONAL { c:CommandPalette rdfs:label ?caption1 FILTER(langMatches(lang(?caption1), "en")) }
+  OPTIONAL { ?l10nAt_caption1 l10n:of c:CommandPalette ; l10n:name ?caption1 } OPTIONAL { c:CommandPalette rdfs:label ?caption1 FILTER(langMatches(lang(?caption1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CommandPalette ; l10n:name ?l10nPick }) }
   OPTIONAL { $this c:value ?typed0 }
   BIND(IF(?open, CONCAT("⌘ ", STR(COALESCE(?caption0, ?caption1, "Command palette")), ": [", COALESCE(STR(?typed0), ""), "_]"), ?none) AS ?lineData)
   BIND(IF(BOUND(?lineData), IRI(CONCAT(STR($this), "/~line")), ?none) AS ?line)

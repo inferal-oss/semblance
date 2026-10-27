@@ -311,13 +311,13 @@ WHERE {
   BIND(REPLACE(COALESCE(?typed, ""), "^\\\\s+|\\\\s+$", "") AS ?entry0)
   OPTIONAL { $this c:foldedQuery ?query0 }
   BIND(COALESCE(STR(?query0), "") AS ?q)
-  OPTIONAL { $this c:placeholder ?placeholder0 }
+  OPTIONAL { ?l10nAt_placeholder0 l10n:of $this ; l10n:placeholder ?placeholder0 } OPTIONAL { $this c:placeholder ?placeholder0 FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:placeholder ?l10nPick }) }
   BIND(STR(?placeholder0) AS ?placeholder)
   # The caption: the texts layer's (c:label, else the property's label, in the viewer's language).
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
   OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
-  OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
+  OPTIONAL { { $this l10n:label ?caption1 } UNION { ?l10nAt_caption1 l10n:of $this ; l10n:label ?caption1 } } OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   # A combobox shows its chosen option's label until something is typed.
   LATERAL { OPTIONAL { ?target ?property ?current FILTER(!?multi) } }
@@ -335,14 +335,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-already-added")) AS ?addedNode)
   LATERAL { OPTIONAL { ?noMatchesNode l10n:label ?noMatches0 } OPTIONAL { ?createNode l10n:label ?createPhrase0 } OPTIONAL { ?addedNode l10n:label ?addedPhrase0 } }
   OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
-  OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
-  OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) }
+  OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoMatches ; l10n:name ?l10nPick }) }
   OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
-  OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
-  OPTIONAL { c:CreatePhrase rdfs:label ?createPhrase1 FILTER(langMatches(lang(?createPhrase1), "en")) }
+  OPTIONAL { c:CreatePhrase rdfs:label ?createPhrase1 FILTER(langMatches(lang(?createPhrase1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CreatePhrase ; l10n:name ?l10nPick }) }
   OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
-  OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
-  OPTIONAL { c:AlreadyAdded rdfs:label ?addedPhrase1 FILTER(langMatches(lang(?addedPhrase1), "en")) }
+  OPTIONAL { c:AlreadyAdded rdfs:label ?addedPhrase1 FILTER(langMatches(lang(?addedPhrase1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlreadyAdded ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?noMatches0, ?noMatches1)) AS ?noMatchesPhrase)
   BIND(STR(COALESCE(?createPhrase0, ?createPhrase1)) AS ?createPhrase)
   BIND(STR(COALESCE(?addedPhrase0, ?addedPhrase1)) AS ?addedPhrase)
@@ -400,7 +397,7 @@ WHERE {
   BIND(IF(BOUND(?caret0), STR(IF(BOUND(?shownActive) || !BOUND(?typed), STRLEN(?shown), xsd:integer(?caret0))), ?none) AS ?caretValue)
   BIND(IF(BOUND(?caretValue), IRI(CONCAT(STR($this), "/~input-data-sem-caret")), ?none) AS ?caretAttr)
   # Help, the note at the maximum, the error; the field is described by those there are.
-  OPTIONAL { $this c:help ?help0 }
+  OPTIONAL { ?l10nAt_help0 l10n:of $this ; l10n:help ?help0 } OPTIONAL { $this c:help ?help0 FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   OPTIONAL { $this c:error ?error0 }
   BIND(STR(?help0) AS ?helpData)
   BIND(STR(?error0) AS ?errorData)
@@ -477,7 +474,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
   OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
-  OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
+  OPTIONAL { { $this l10n:label ?caption1 } UNION { ?l10nAt_caption1 l10n:of $this ; l10n:label ?caption1 } } OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   OPTIONAL { $this c:value ?typed0 }
   LATERAL { OPTIONAL { ?target ?property ?current FILTER(!?multi) } }
@@ -556,7 +553,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?opt)))) AS ?textNode)
   LATERAL { OPTIONAL { ?textNode l10n:label ?localLabel } OPTIONAL { ?textNode c:searchKey ?foldedKey } OPTIONAL { ?textNode c:matchKey ?foldedMatch }
             OPTIONAL { ?textNode c:detail ?detail0 } }
-  LATERAL { OPTIONAL { ?opt rdfs:label ?plain FILTER(isLiteral(?plain) && lang(?plain) = "") } }
+  LATERAL { OPTIONAL { ?l10nAt_plain l10n:of ?opt ; l10n:name ?plain } OPTIONAL { ?opt rdfs:label ?plain FILTER(isLiteral(?plain) && lang(?plain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) } }
   BIND(STR(COALESCE(?localLabel, IF(isLiteral(?opt), STR(?opt), ?plain), REPLACE(STR(?opt), "^.*[#/]", ""))) AS ?label)
   BIND(COALESCE(STR(?foldedKey), LCASE(?label)) AS ?key)
   BIND(COALESCE(STR(?foldedMatch), ?key) AS ?matchKey)
@@ -734,7 +731,7 @@ WHERE {
   BIND(IF(BOUND(?dpostText), IRI(CONCAT(STR($this), "/~dpost")), ?none) AS ?dpost)
   BIND(COALESCE(?dhit, ?dpost) AS ?dafterPre)
   # What it does, and its keys (normalized and spelled as the keyboard layer's key:Shortcuts-sparql does).
-  OPTIONAL { $this c:help ?help0 FILTER(STR(?help0) != "") }
+  OPTIONAL { ?l10nAt_help0 l10n:of $this ; l10n:help ?help0 } OPTIONAL { $this c:help ?help0 FILTER(STR(?help0) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   BIND(STR(?help0) AS ?help)
   OPTIONAL { $this key:hint ?hint0 FILTER(STR(?hint0) != "") }
   VALUES (?pluses ?ends ?modifiers) { ("(\\\\s*\\\\+\\\\s*)+" "^[\\\\s+]+|[\\\\s+]+$" "\\\\+(?:(?:mod|ctrl|alt|shift|meta)\\\\+)+") }
@@ -789,7 +786,7 @@ WHERE {
   ?target ?property ?value .
   BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?value)))) AS ?textNode)
   LATERAL { OPTIONAL { ?textNode l10n:label ?localLabel } OPTIONAL { ?textNode c:searchKey ?foldedKey } }
-  LATERAL { OPTIONAL { ?value rdfs:label ?plain FILTER(isLiteral(?plain) && lang(?plain) = "") } OPTIONAL { ?value sty:tone ?tone } }
+  LATERAL { OPTIONAL { ?l10nAt_plain l10n:of ?value ; l10n:name ?plain } OPTIONAL { ?value rdfs:label ?plain FILTER(isLiteral(?plain) && lang(?plain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?value ; l10n:name ?l10nPick }) } OPTIONAL { ?value sty:tone ?tone } }
   BIND(STR(COALESCE(?localLabel, IF(isLiteral(?value), STR(?value), ?plain), REPLACE(STR(?value), "^.*[#/]", ""))) AS ?label)
   BIND(CONCAT(COALESCE(STR(?foldedKey), LCASE(?label)), " ", STR(?value)) AS ?rank)
   BIND(IF(EXISTS { $this c:disabled ?disabled FILTER(STR(?disabled) = "true") }, ?none, true) AS ?removable)

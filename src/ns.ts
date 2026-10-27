@@ -107,6 +107,7 @@ export const SEM = {
   layer: sem + 'layer',
   implements: sem + 'implements',
   construct: sem + 'construct',
+  constructFrom: sem + 'constructFrom',
   function: sem + 'function',
   follows: sem + 'follows',
   watches: sem + 'watches',
@@ -335,6 +336,8 @@ export const PERF_GRAPH = 'urn:semblance:perf'
 export const PERSIST_GRAPH = 'urn:semblance:persistence'
 /** What the navigation effect reports: each location's address as the URL last spelled it. */
 export const NAV_GRAPH = 'urn:semblance:navigation'
+/** What the files effect knows that holds only in this page (src/files.ts): previews and contents as object URLs, how full each file store is. */
+export const FILES_GRAPH = 'urn:semblance:files'
 /** Captured network activity (net:Capture), written by the capture effect (src/network.ts). */
 export const NETWORK_GRAPH = 'urn:semblance:network'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -434,6 +437,10 @@ export const FILE = {
   uploadTo: NS.file + 'uploadTo', handler: NS.file + 'handler', file: NS.file + 'file', removes: NS.file + 'removes', retries: NS.file + 'retries',
   DragIn: NS.file + 'DragIn', Arrive: NS.file + 'Arrive', Added: NS.file + 'Added', Refusal: NS.file + 'Refusal', PickCancelled: NS.file + 'PickCancelled',
   Progress: NS.file + 'Progress', Done: NS.file + 'Done', Failure: NS.file + 'Failure',
+  Receiver: NS.file + 'Receiver', keepsRefusals: NS.file + 'keepsRefusals', listsHeld: NS.file + 'listsHeld',
+  Store: NS.file + 'Store', keepIn: NS.file + 'keepIn', keptIn: NS.file + 'keptIn', usedBytes: NS.file + 'usedBytes', usedFiles: NS.file + 'usedFiles',
+  preview: NS.file + 'preview', url: NS.file + 'url', Saving: NS.file + 'Saving', Saved: NS.file + 'Saved',
+  Stored: NS.file + 'Stored', StoreFailure: NS.file + 'StoreFailure',
 } as const
 /** Full screen as a fact (ontology/layers/fullscreen.ttl, src/fullscreen.ts). */
 export const FS = {

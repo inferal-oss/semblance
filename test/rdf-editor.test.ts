@@ -13,6 +13,7 @@ import { MOD, NS, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import { md5 } from '../src/components/data.ts'
 import { implementationGaps } from './implementations.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -56,9 +57,9 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const item = (...path: string[]) => label(...path).closest('[role=treeitem]') as HTMLElement
   const twisty = (...path: string[]) => item(...path).querySelector(':scope > .sem-row > .sem-twisty') as HTMLElement
   const click = (el: Element) => el.dispatchEvent(new window.Event('click', { bubbles: true }))
-  const key = (el: Element, k: string, shiftKey = false) => {
+  const key = (el: Element, k: string, shiftKey = false, altKey = false) => {
     const e = new window.Event('keydown', { bubbles: true, cancelable: true })
-    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey })
+    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey, shiftKey })
     el.dispatchEvent(e)
   }
   /** The field open in the editor (editing a row, or adding to one). */
@@ -76,8 +77,8 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   }
   const outline = () => toText(text.index, EDITOR)
   const html = () => app.innerHTML
-  const runs = (prefix: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(C + prefix)).reduce((n, [, s]) => n + s.runs, 0)
-  return { store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
+  const runs = (prefix: string, ns: string = C) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(ns + prefix)).reduce((n, [, s]) => n + s.runs, 0)
+  return { bus, store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
 }
 
 const LIBRARY = [
@@ -305,4 +306,175 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
       expect(m.outline()).toContain('lib:keywords ( "utopia" )')
     })
   }
+
+  const VALIDATED = `@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .
+ui:dt-rdf-editor c:validated true ; c:editable true .
+lib:earthsea lib:pages "many" .`
+  const problemsOf = (m: ReturnType<typeof mount>, ...path: string[]) =>
+    [...(m.item(...path).querySelector(':scope > .sem-row > .sem-problems')?.children ?? [])].map((p) => p.textContent)
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`shows what does not conform inline, and lets go of it once fixed; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', VALIDATED), mount(kind, 'function', VALIDATED)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+      }
+      each(() => {}, 'initial')
+      // A required predicate the resource lacks: on the resource's row, its label described by it.
+      expect(problemsOf(m, 'lib:earthsea')).toEqual(['When was it published?'])
+      const label = m.label('lib:earthsea')
+      expect(label.getAttribute('aria-invalid')).toBe('true')
+      expect(m.document.getElementById(label.getAttribute('aria-describedby')!)?.textContent).toContain('When was it published?')
+      // A value's own problems: on its row.
+      expect(problemsOf(m, 'lib:earthsea', 'lib:pages', '"many"')).toEqual(['pages: at least 1', 'pages: expected xsd:integer'])
+      expect(problemsOf(m, 'lib:earthsea', 'lib:pages', '183')).toEqual([])
+      expect(m.editor().querySelectorAll('.sem-invalid')).toHaveLength(2)
+      // Fixed by editing: the problems go.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '"many"'), 'Delete'), 'deleting the bad value')
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter')
+      each((x) => x.enter('lib:published "1968"^^xsd:gYear'), 'adding what was missing')
+      expect(m.editor().querySelectorAll('.sem-invalid')).toHaveLength(0)
+      // Switched off, nothing is checked or shown.
+      each((x) => x.apply({ add: [x.f.quad(x.nn(LIB + 'ursula'), x.nn(LIB + 'born'), x.f.literal('long ago'))] }), 'a bad date')
+      expect(problemsOf(m, 'lib:ursula', 'lib:born', '"long ago"')).toEqual(['born: expected xsd:date'])
+      each((x) => x.apply({ remove: x.store.match(x.nn(EDITOR), x.nn(C + 'validated'), null) }), 'validation off')
+      expect(m.editor().querySelectorAll('.sem-problems')).toHaveLength(0)
+    })
+  }
+
+  it('checks what an edit changed: one entry, however many the document has', () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => `lib:extra${i} a lib:Book ; lib:title "Extra ${i}" ; lib:pages ${i + 1} ; lib:author lib:ursula ; lib:published "1970"^^<http://www.w3.org/2001/XMLSchema#gYear> .\nui:dt-rdf-editor c:entry lib:extra${i} .`).join('\n')
+    const editRuns = (n: number) => {
+      const m = mount('oxigraph', 'sparql', VALIDATED + '\n' + many(n))
+      const before = m.runs('EntryShapes', 'https://semblance.dev/ns/validation#')
+      m.apply({ add: [m.f.quad(m.nn(LIB + 'earthsea'), m.nn(LIB + 'published'), m.f.literal('1968'))] })
+      return m.runs('EntryShapes', 'https://semblance.dev/ns/validation#') - before
+    }
+    expect(editRuns(2)).toBe(1)
+    expect(editRuns(40)).toBe(1)
+  })
+
+  const SUGGESTING = `@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix sh: <http://www.w3.org/ns/shacl#> .
+ui:dt-rdf-editor c:editable true ; c:entry lib:loose .
+lib:Format a owl:Class . lib:Hardcover a lib:Format . lib:Paperback a lib:Format .
+lib:FormatShape a sh:NodeShape ; sh:targetClass lib:Book ; sh:property [ sh:path lib:format ; sh:class lib:Format ] , [ sh:path lib:language ; sh:in ( "en" "uk" ) ] .
+lib:loose lib:title "Untyped" .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`completes from the shapes: what is required first, whole statements in one pick; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', SUGGESTING), mount(kind, 'function', SUGGESTING)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+      }
+      const options = () => [...m.editor().querySelectorAll('.sem-suggestions > button')].map((b) => b.textContent + (b.classList.contains('sem-required') ? ' *' : ''))
+      const option = (x: ReturnType<typeof mount>, text: string) => [...x.editor().querySelectorAll('.sem-suggestions > button')].find((b) => b.textContent === text)!
+      const type = (x: ReturnType<typeof mount>, text: string) => {
+        const input = x.field()!
+        input.value = text
+        input.dispatchEvent(new x.document.defaultView!.Event('input', { bubbles: true }))
+      }
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter on a book')
+      expect(m.editor().querySelector('.sem-suggestions')!.getAttribute('aria-label')).toBe('What the shapes expect')
+      expect(options()).toEqual(['lib:published *', 'lib:author', 'lib:format', 'lib:language', 'lib:language "en"', 'lib:language "uk"', 'lib:pages', 'lib:title'])
+      // Typing narrows them.
+      each((x) => type(x, 'lang'), 'typing')
+      expect(options()).toEqual(['lib:language', 'lib:language "en"', 'lib:language "uk"'])
+      // A predicate with its value: the whole statement, at once.
+      each((x) => x.click(option(x, 'lib:language "uk"')), 'a whole statement')
+      expect(m.objects(LIB + 'earthsea', LIB + 'language')).toEqual(['uk|string'])
+      expect(m.field()).toBeNull()
+      // A predicate alone goes into the field; the value follows.
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter again')
+      each((x) => x.click(option(x, 'lib:format')), 'a predicate')
+      expect(m.field()!.value).toBe('lib:format ')
+      each((x) => x.enter(x.field()!.value + 'lib:Paperback'), 'its value')
+      // A predicate's values: instances of its sh:class not yet there.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:format', 'lib:Paperback'), 'Enter', true), 'Shift+Enter beside a value')
+      expect(options()).toEqual(['lib:Hardcover'])
+      each((x) => x.click(option(x, 'lib:Hardcover')), 'another value')
+      expect(m.objects(LIB + 'earthsea', LIB + 'format').sort()).toEqual([LIB + 'Hardcover', LIB + 'Paperback'])
+      // A resource with no class: the classes shapes target that the document uses.
+      each((x) => x.key(x.label('lib:loose'), 'Enter', true), 'Shift+Enter on an untyped resource')
+      expect(options()).toEqual(['a lib:Book', 'a lib:Person'])
+    })
+  }
+
+  const STRUCTURE = `@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> .
+ui:dt-rdf-editor c:editable true .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`nests, outdents, moves and appends list members, and moves statements by drag; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', STRUCTURE), mount(kind, 'function', STRUCTURE)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+        expect(both[1]!.outline(), step).toBe(m.outline())
+      }
+      const line = (word: string) => m.outline().split('\n').filter((l) => l.includes(word))
+      // Tab: the value becomes a nested resource's rdf:value, and keeps the focus.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '183'), 'Tab'), 'Tab')
+      expect(m.outline()).toContain('  lib:pages [\n    rdf:value 183\n  ]')
+      expect(m.label('lib:earthsea', 'lib:pages', '[ ]', 'rdf:value', '183').hasAttribute('data-sem-takes-focus')).toBe(true)
+      // Shift+Tab: back up; the nested resource, left with nothing, goes.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '[ ]', 'rdf:value', '183'), 'Tab', true), 'Shift+Tab')
+      expect(line('lib:pages')).toEqual(['  lib:pages 387', '  lib:pages 183'])
+      expect(m.outline()).not.toContain('rdf:value')
+      // Shift+Tab on a statement of a nested resource that says more: it moves up, the rest stays.
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:edition', '[ ]', 'lib:year', '1974'), 'Tab', true), 'Shift+Tab out of the edition')
+      expect(m.outline()).toContain('  lib:edition [\n    lib:publisher "Harper & Row"\n  ]')
+      expect(m.objects(LIB + 'dispossessed', LIB + 'year')).toEqual(['1974|integer'])
+      // Alt+Down and Alt+Up move a list member; Shift+Enter on one appends to its list.
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"'), 'ArrowDown', false, true), 'Alt+Down')
+      expect(line('lib:keywords')).toEqual(['  lib:keywords ( "anarchism" "utopia" "physics" )'])
+      expect(m.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"').hasAttribute('data-sem-takes-focus')).toBe(true)
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"'), 'ArrowUp', false, true), 'Alt+Up')
+      expect(line('lib:keywords')).toEqual(['  lib:keywords ( "anarchism" "physics" "utopia" )'])
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"utopia"'), 'Enter', true), 'Shift+Enter on a member')
+      expect(m.field()!.getAttribute('aria-label')).toBe('New member')
+      each((x) => x.enter('ecology'), 'a new member')
+      expect(line('lib:keywords')).toEqual(['  lib:keywords ( "anarchism" "physics" "utopia" "ecology" )'])
+      // A drop on a predicate's row moves the statement there (the drag layer raises dnd:Drop).
+      expect(m.item('lib:earthsea', 'lib:author', 'lib:ursula').getAttribute('data-sem-c')).toBe('rdf-term')
+      each((x) => {
+        const E = EDITOR
+        const k12 = (v: string) => md5(v).slice(0, 12)
+        const target = `${E}/~t-${k12(LIB + 'ursula')}/~p-${k12(LIB + 'born')}`
+        const dragged = `${E}/~t-${k12(LIB + 'earthsea')}/~p-${k12(LIB + 'pages')}/~t-${k12('"183"^^http://www.w3.org/2001/XMLSchema#integer')}`
+        x.bus.emit(NS.dnd + 'Drop', target, { about: [[NS.dnd + 'into', x.nn(target)], [NS.dnd + 'carrying', x.nn(dragged)]] })
+        x.dom.flush()
+      }, 'a drop')
+      expect(m.objects(LIB + 'ursula', LIB + 'born').sort()).toEqual(['183|integer', '1929-10-21|date'])
+      expect(line('lib:pages')).toEqual(['  lib:pages 387'])
+    })
+  }
+
+  it('keeps a large document light: closed resources cost a row each, an edit what it changes', () => {
+    const big = (n: number) =>
+      '@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .\nui:dt-rdf-editor c:expandDepth 0 .\n' +
+      Array.from({ length: n }, (_, i) => `lib:b${i} a lib:Book ; lib:title "Book ${i}" ; lib:pages ${i + 1} ; lib:edition [ lib:year ${1900 + i} ] .\nui:dt-rdf-editor c:entry lib:b${i} .`).join('\n')
+    const measure = (n: number) => {
+      const m = mount('oxigraph', 'sparql', big(n))
+      const rows = m.editor().querySelectorAll('[role=treeitem]').length
+      const before = m.runs('Rdf')
+      m.apply({ add: [m.f.quad(m.nn(LIB + 'b1'), m.nn(LIB + 'pages'), m.f.literal('7', m.nn(NS.xsd + 'integer')))] })
+      const edit = m.runs('Rdf') - before
+      m.click(m.twisty('lib:b1'))
+      const opened = m.editor().querySelectorAll('[role=treeitem]').length - rows
+      return { rows, edit, opened }
+    }
+    const small = measure(10)
+    const large = measure(300)
+    expect(small.rows).toBe(13)
+    expect(large.rows).toBe(303)
+    expect(large.edit).toBe(small.edit)
+    expect(large.opened).toBe(small.opened)
+    expect(large.opened).toBeGreaterThan(0)
+  })
 })

@@ -1,14 +1,14 @@
 // Function rules for general view components and the tooltip layer.
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
+import { BEH, C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { MINT_SEPARATOR, owningFocus } from '../rdf.ts'
 import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
-import { labelOf as textLabelOf, text } from './util.ts'
+import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
 import { md5Key } from './data.ts'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
@@ -33,21 +33,9 @@ const C_CY = NS.c + 'cy'
 const C_R = NS.c + 'r'
 
 const RDFS_LABEL = NS.rdfs + 'label'
-const SH = 'http://www.w3.org/ns/shacl#'
-const str = (t: Term | undefined) => t?.value
-const named = (t: Term | undefined): t is NamedNode => t?.termType === 'NamedNode'
-
-export function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
 
 export const labelOf = (ctx: RuleContext, t: Term) =>
-  text(ctx, t, C.label) ?? str(ctx.object(t, RDFS_LABEL)) ?? t.value.replace(/^.*[#/]/, '')
+  text(ctx, t, C.label) ?? text(ctx, t, RDFS_LABEL) ?? t.value.replace(/^.*[#/]/, '')
 
 // --- Card ----------------------------------------------------------------------------------
 
@@ -166,7 +154,7 @@ const emblem: FnRule = (ctx, focus) => {
 
 /** An IRI as prefix:local when a declared prefix fits, else its last segments. */
 function compact(ctx: RuleContext, iri: string): string {
-  for (const [p, ns] of Object.entries(prefixes(ctx))) if (iri.startsWith(ns)) return `${p}:${decodeURIComponent(iri.slice(ns.length))}`
+  for (const [p, ns] of Object.entries(declaredPrefixes(ctx))) if (iri.startsWith(ns)) return `${p}:${decodeURIComponent(iri.slice(ns.length))}`
   return iri.length > 48 ? '…' + iri.slice(-46) : iri
 }
 
@@ -187,7 +175,7 @@ const metrics: FnRule = (ctx, focus) => {
         : v.termType === 'Literal' && /^-?\d+(\.\d+)?$/.test(v.value) && v.value.includes('.')
           ? Number(v.value).toFixed(2)
           : v.value
-    const label = str(ctx.object(p, RDFS_LABEL))
+    const label = text(ctx, p, RDFS_LABEL)
     // Presentation is declared on the property: c:emphasis, c:hideLabel.
     const emphasis = str(ctx.object(p, C.emphasis)) === 'true'
     const showLabel = label && str(ctx.object(p, C.hideLabel)) !== 'true'
@@ -218,18 +206,6 @@ const toggle: FnRule = (ctx, focus) => {
 }
 
 // --- Query views -----------------------------------------------------------------------------
-
-/** Prefixes declared in the graph (sh:declare style: sh:prefix + sh:namespace), plus the framework's. */
-function prefixes(ctx: RuleContext): Record<string, string> {
-  return ctx.memo('prefixes', () => {
-    const out: Record<string, string> = {}
-    for (const q of ctx.match(null, SH + 'prefix', null)) {
-      const ns = str(ctx.object(q.subject, SH + 'namespace'))
-      if (ns) out[q.object.value] = ns
-    }
-    return { ...out, ...NS }
-  })
-}
 
 /**
  * Turtle tokens as RDF/HTML nodes. Nodes are keyed by the content of their line
@@ -270,13 +246,6 @@ function turtleNodes(o: ReturnType<RuleContext['out']>, tokens: ReturnType<typeo
   return nodes
 }
 
-/** FNV-1a, base 36: short, stable keys for content-addressed nodes. */
-function fnv(text: string): string {
-  let h = 0x811c9dc5
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
-  return (h >>> 0).toString(36)
-}
-
 const queryview: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const queries = rdfList(ctx, ctx.object(focus, C.queries)).filter(named)
@@ -292,11 +261,11 @@ const queryview: FnRule = (ctx, focus) => {
   if (variable && !named(value)) return message(text(ctx, focus, C.emptyText) ?? 'Nothing selected.')
   const sections: TurtleSection[] = []
   for (const q of queries) {
-    let text = str(ctx.object(q, SEM.construct)) ?? ''
-    if (variable && named(value)) text = text.replaceAll('$' + variable, `<${value.value}>`)
+    let query = str(ctx.object(q, SEM.construct)) ?? ''
+    if (variable && named(value)) query = query.replaceAll('$' + variable, `<${value.value}>`)
     let quads: Quad[]
     try {
-      quads = ctx.construct(text)
+      quads = ctx.construct(query)
     } catch (e) {
       return message(`Query ${labelOf(ctx, q)} failed: ${(e as Error).message}`)
     }
@@ -307,10 +276,10 @@ const queryview: FnRule = (ctx, focus) => {
       const order = (s: string) => (rank.has(s) ? rank.get(s)! * sign : -Infinity * sign)
       quads = [...quads].sort((a, b) => order(a.subject.value) - order(b.subject.value))
     }
-    if (quads.length) sections.push({ title: str(ctx.object(q, RDFS_LABEL)), quads })
+    if (quads.length) sections.push({ title: text(ctx, q, RDFS_LABEL), quads })
   }
   if (!sections.length) return message(text(ctx, focus, C.emptyText) ?? 'No results.')
-  const nodes = turtleNodes(o, turtleTokens(sections, prefixes(ctx), str(ctx.object(focus, C.baseIri))))
+  const nodes = turtleNodes(o, turtleTokens(sections, declaredPrefixes(ctx), str(ctx.object(focus, C.baseIri))))
   o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, nodes))
   return o.quads
 }
@@ -461,7 +430,7 @@ const elementMarkup: FnRule = (ctx, focus) => {
   index.apply({ add: quads.filter((q) => !marks.has(q.subject.value) && !marks.has(q.object.value)), remove: [] })
   const markup = toIndentedHTML(index, node.value)
   const tokens: Token[] = [
-    ...(own.length ? turtleTokens([{ title: 'the component', quads: own }], prefixes(ctx), str(ctx.object(focus, C.baseIri))) : []),
+    ...(own.length ? turtleTokens([{ title: 'the component', quads: own }], declaredPrefixes(ctx), str(ctx.object(focus, C.baseIri))) : []),
     ...(markup ? [...(own.length ? [{ kind: 'space' as const, text: '\n\n' }] : []), { kind: 'comment' as const, text: '# the element as HTML' }, { kind: 'space' as const, text: '\n' }, ...htmlTokens(markup)] : []),
   ]
   o.renders(o.el('root', 'Pre', { class: 'sem-turtle sem-markup' }, turtleNodes(o, tokens)))
@@ -554,7 +523,7 @@ const triplesview: FnRule = (ctx, focus) => {
   if (!named(subject)) return []
   const quads = ctx.match(subject, null, null)
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, turtleNodes(o, turtleTokens([{ quads }], prefixes(ctx), undefined, false))))
+  o.renders(o.el('root', 'Pre', { class: 'sem-turtle' }, turtleNodes(o, turtleTokens([{ quads }], declaredPrefixes(ctx), undefined, false))))
   return o.quads
 }
 

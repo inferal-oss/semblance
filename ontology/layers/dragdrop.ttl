@@ -281,6 +281,8 @@ dnd:Zones a sem:Rendering ;
     sem:targets dnd:DropTarget ;
     sem:modality mod:Screen ;
     sem:stratum 10 ;
+    # A zone's receptacle can change (a file drop that follows the folder shown).
+    sem:follows dnd:zone ;
     sem:watches rdf:type , dnd:zone , dnd:receptacle , dnd:orderBy .
 dnd:Zones-fn a sem:Rule ; sem:implements dnd:Zones ; sem:function "dnd:zones" .
 dnd:Zones-sparql a sem:Rule ;
@@ -315,7 +317,7 @@ dnd:Receive a sem:Rendering ;
     sem:modality mod:Screen ;
     sem:stratum 10 ;
     sem:requires dnd:offered ;
-    sem:follows dnd:offered ;
+    sem:follows dnd:offered , dnd:zone ;
     sem:watches dnd:offered , dnd:carrying , dnd:count , dnd:from , dnd:zone , dnd:receptacle , dnd:accepts , dnd:memberOf , dnd:members , val:validates .
 dnd:Receive-fn a sem:Rule ; sem:implements dnd:Receive ; sem:function "dnd:receive" .
 dnd:Receive-sparql a sem:Rule ;
@@ -352,9 +354,9 @@ WHERE {
             FILTER(!COALESCE(IF(?rangeBound = sh:minInclusive, ?v >= ?limit, IF(?rangeBound = sh:maxInclusive, ?v <= ?limit, IF(?rangeBound = sh:minExclusive, ?v > ?limit, ?v < ?limit))), false))
             BIND(?ps AS ?violated) }
     OPTIONAL { ?ownAt l10n:of ?violated ; l10n:message ?own }
-    OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?violated sh:message ?own FILTER(lang(?own) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?violated ; l10n:message ?l10nPick }) }
     OPTIONAL { ?generalAt l10n:of ?shape ; l10n:message ?general }
-    OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
+    OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
     OPTIONAL { ?unfitAt l10n:of dnd:UnfitPhrase ; l10n:name ?unfit0 }
     BIND(STR(COALESCE(?own, ?general, ?unfit0, "It does not belong here.")) AS ?said)
   } GROUP BY ?this ?x ?r } }
@@ -365,9 +367,9 @@ WHERE {
     ?capacity sh:targetNode ?r ; sh:property ?ps . ?ps sh:maxCount ?bound .
     { $this dnd:memberOf ?m . ?ps sh:path/sh:inversePath ?m } UNION { $this dnd:members ?m . ?ps sh:path ?m }
     OPTIONAL { ?ownAt l10n:of ?ps ; l10n:message ?own }
-    OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick }) }
     OPTIONAL { ?generalAt l10n:of ?capacity ; l10n:message ?general }
-    OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") }
+    OPTIONAL { ?capacity sh:message ?general FILTER(lang(?general) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?capacity ; l10n:message ?l10nPick }) }
     OPTIONAL { ?noRoomAt l10n:of dnd:NoRoomPhrase ; l10n:name ?noRoom0 }
     BIND(STR(COALESCE(?own, ?general, ?noRoom0, "There is no room for it here.")) AS ?said)
   } GROUP BY ?this ?r } }
@@ -376,7 +378,7 @@ WHERE {
     $this val:validates ?field . ?field sh:maxCount ?fieldBound .
     { $this dnd:members ?fm . ?field sh:path ?fm } UNION { $this dnd:memberOf ?fm . ?field sh:path/sh:inversePath ?fm }
     OPTIONAL { ?fieldOwnAt l10n:of ?field ; l10n:message ?fieldOwn }
-    OPTIONAL { ?field sh:message ?fieldOwn FILTER(lang(?fieldOwn) = "") }
+    OPTIONAL { ?field sh:message ?fieldOwn FILTER(lang(?fieldOwn) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?field ; l10n:message ?l10nPick }) }
     OPTIONAL { ?fieldNoRoomAt l10n:of dnd:NoRoomPhrase ; l10n:name ?fieldNoRoom }
     BIND(STR(COALESCE(?fieldOwn, ?fieldNoRoom, "There is no room for it here.")) AS ?fieldSaid)
   } GROUP BY ?this } }
@@ -463,9 +465,9 @@ WHERE {
   OPTIONAL { $this dnd:carries ?declared }
   OPTIONAL { $this dnd:name ?ownName FILTER(isLiteral(?ownName) && lang(?ownName) = "") }
   OPTIONAL { ?ownLabelAt l10n:of $this ; l10n:label ?ownLabel }
-  OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { ?draggablePhraseAt l10n:of dnd:DraggablePhrase ; l10n:name ?draggablePhrase }
-  OPTIONAL { dnd:DraggablePhrase rdfs:label ?draggablePhrase FILTER(langMatches(lang(?draggablePhrase), "en")) }
+  OPTIONAL { dnd:DraggablePhrase rdfs:label ?draggablePhrase FILTER(langMatches(lang(?draggablePhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of dnd:DraggablePhrase ; l10n:name ?l10nPick }) }
   BIND(COALESCE(?declared, $this) AS ?x)
   BIND(STR(?x) AS ?carriedId)
   BIND(STR(COALESCE(?ownName, ?ownLabel, REPLACE(STR(?x), "^.*[#/]", ""))) AS ?name)
@@ -473,9 +475,9 @@ WHERE {
   # Where it would go: the zone's name, the verdict there, and the neighbour it would precede or follow.
   OPTIONAL { $this dnd:lifted ?drag . ?drag dnd:into ?r ; dnd:dropTarget ?t .
              OPTIONAL { ?zoneNameAt l10n:of ?r ; l10n:name ?zoneName }
-             OPTIONAL { ?r rdfs:label ?zoneName FILTER(lang(?zoneName) = "") }
+             OPTIONAL { ?r rdfs:label ?zoneName FILTER(lang(?zoneName) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?r ; l10n:name ?l10nPick }) }
              OPTIONAL { ?zoneLabelAt l10n:of ?r ; l10n:label ?zoneLabel }
-             OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") }
+             OPTIONAL { { ?r l10n:label ?zoneLabel } UNION { ?l10nAt_zoneLabel l10n:of ?r ; l10n:label ?zoneLabel } } OPTIONAL { ?r c:label ?zoneLabel FILTER(lang(?zoneLabel) = "") FILTER(NOT EXISTS { ?r l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?r ; l10n:label ?l10nPick }) }
              # A zone that names itself (a workspace pane, by its tabs) says so first.
              OPTIONAL { ?t dnd:zone ?namedZone . ?namedZone dnd:receptacle ?r ; c:label ?zoneOwn FILTER(lang(?zoneOwn) = "") } }
   OPTIONAL { $this dnd:lifted ?drag2 . ?drag2 dnd:into ?r2 ; dnd:dropTarget ?t2 .
@@ -486,13 +488,13 @@ WHERE {
   OPTIONAL { $this dnd:lifted ?drag4 . ?drag4 dnd:after ?a ; dnd:dropTarget ?t4 . ?ad dnd:carries ?a ; dnd:name ?afterName
              FILTER(STRSTARTS(STR(?ad), CONCAT(STR(?t4), "/~"))) }
   OPTIONAL { ?pickedUpAt l10n:of dnd:PickedUpPhrase ; l10n:name ?pickedUp }
-  OPTIONAL { dnd:PickedUpPhrase rdfs:label ?pickedUp FILTER(langMatches(lang(?pickedUp), "en")) }
+  OPTIONAL { dnd:PickedUpPhrase rdfs:label ?pickedUp FILTER(langMatches(lang(?pickedUp), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of dnd:PickedUpPhrase ; l10n:name ?l10nPick }) }
   OPTIONAL { ?beforeWordAt l10n:of dnd:BeforePhrase ; l10n:name ?beforeWord }
-  OPTIONAL { dnd:BeforePhrase rdfs:label ?beforeWord FILTER(langMatches(lang(?beforeWord), "en")) }
+  OPTIONAL { dnd:BeforePhrase rdfs:label ?beforeWord FILTER(langMatches(lang(?beforeWord), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of dnd:BeforePhrase ; l10n:name ?l10nPick }) }
   OPTIONAL { ?afterWordAt l10n:of dnd:AfterPhrase ; l10n:name ?afterWord }
-  OPTIONAL { dnd:AfterPhrase rdfs:label ?afterWord FILTER(langMatches(lang(?afterWord), "en")) }
+  OPTIONAL { dnd:AfterPhrase rdfs:label ?afterWord FILTER(langMatches(lang(?afterWord), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of dnd:AfterPhrase ; l10n:name ?l10nPick }) }
   OPTIONAL { ?refusedWordAt l10n:of dnd:RefusedPhrase ; l10n:name ?refusedWord }
-  OPTIONAL { dnd:RefusedPhrase rdfs:label ?refusedWord FILTER(langMatches(lang(?refusedWord), "en")) }
+  OPTIONAL { dnd:RefusedPhrase rdfs:label ?refusedWord FILTER(langMatches(lang(?refusedWord), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of dnd:RefusedPhrase ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?zoneOwn, ?zoneName, ?zoneLabel, REPLACE(STR(?r), "^.*[#/]", ""))) AS ?zone)
   BIND(IF(!?lifted, ?none,
        IF(!BOUND(?r), CONCAT(?name, " ", STR(?pickedUp)),

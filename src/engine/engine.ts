@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
-import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
+import { createContext, type FnRule, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
@@ -496,7 +496,7 @@ export class Engine {
     const g = this.graph
     const next = new Map<string, Quad>()
     const put = (q: Quad) => next.set(quadKey(q), q)
-    const languages = this.selection.languages ?? []
+    const languages = languageChain(this.selection.languages ?? [])
     // Always a viewer (its texts are picked even without a preference: untagged, then English).
     put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
     languages.forEach((code, i) => {
@@ -669,6 +669,9 @@ export class Engine {
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
   private markFocus(rule: Rule, focus: string) {
     if (!rule.forEach) return this.markDirty(rule, focus)
+    // Its own writes never re-dirty it: one member's output about the focus (a result it records
+    // there) does not re-run the other members.
+    if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
     for (const g of this.graphs) {
       for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {

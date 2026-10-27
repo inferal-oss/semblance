@@ -74,7 +74,7 @@ WHERE {
   {
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { ?ownLabelAt l10n:of $this ; l10n:label ?ownLabel }
-  OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label)
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
     BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?name)
@@ -133,9 +133,9 @@ WHERE {
     OPTIONAL { ?outline c:levelProperty ?levelP . ?item ?levelP ?level0 }
     BIND(CONCAT("--sem-level: ", STR(COALESCE(xsd:integer(?level0), 0))) AS ?style)
     OPTIONAL { ?outline c:noteProperty ?noteP . ?item ?noteP ?noteValue . OPTIONAL { ?notePlainAt l10n:of ?noteValue ; l10n:name ?notePlain }
-  OPTIONAL { ?noteValue rdfs:label ?notePlain FILTER(lang(?notePlain) = "") } }
+  OPTIONAL { ?noteValue rdfs:label ?notePlain FILTER(lang(?notePlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?noteValue ; l10n:name ?l10nPick }) } }
     OPTIONAL { ?outline c:flagProperty ?flagP . ?item ?flagP ?flagValue . OPTIONAL { ?flagPlainAt l10n:of ?flagValue ; l10n:name ?flagPlain }
-  OPTIONAL { ?flagValue rdfs:label ?flagPlain FILTER(lang(?flagPlain) = "") } }
+  OPTIONAL { ?flagValue rdfs:label ?flagPlain FILTER(lang(?flagPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?flagValue ; l10n:name ?l10nPick }) } }
     BIND(IF(isLiteral(?noteValue), STR(?noteValue), STR(COALESCE(?notePlain, REPLACE(STR(?noteValue), "^.*[#/]", "")))) AS ?noteData)
     BIND(IF(isLiteral(?flagValue), STR(?flagValue), STR(COALESCE(?flagPlain, REPLACE(STR(?flagValue), "^.*[#/]", "")))) AS ?flagData)
     BIND(IF(BOUND(?noteValue), IRI(CONCAT(STR($this), "/~note")), ?none) AS ?note)
@@ -159,11 +159,11 @@ WHERE {
     $this c:of ?item ; c:inOutline ?outline .
     ?outline c:presenceProperty ?presenceP . ?item ?presenceP ?agent .
     OPTIONAL { ?agentPlainAt l10n:of ?agent ; l10n:name ?agentPlain }
-  OPTIONAL { ?agent rdfs:label ?agentPlain FILTER(lang(?agentPlain) = "") }
+  OPTIONAL { ?agent rdfs:label ?agentPlain FILTER(lang(?agentPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?agent ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?agentPlain, REPLACE(STR(?agent), "^.*[#/]", ""))) AS ?whoName)
     BIND(EXISTS { ?outline c:typingProperty ?typingP2 . ?item ?typingP2 ?agent } AS ?writing)
     OPTIONAL { ?typingWordAt l10n:of c:TypingPhrase ; l10n:name ?typingWord }
-  OPTIONAL { c:TypingPhrase rdfs:label ?typingWord FILTER(langMatches(lang(?typingWord), "en")) }
+  OPTIONAL { c:TypingPhrase rdfs:label ?typingWord FILTER(langMatches(lang(?typingWord), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:TypingPhrase ; l10n:name ?l10nPick }) }
     BIND(CONCAT("who-", ENCODE_FOR_URI(STR(?agent))) AS ?whoKey)
     BIND(IRI(CONCAT(STR($this), "/~", ?whoKey)) AS ?who)
     BIND(IF(?writing, "sem-who sem-typing", "sem-who") AS ?whoClass)
@@ -186,9 +186,9 @@ WHERE {
   OPTIONAL { ?outline c:entryTitle ?titleP . ?item ?titleP ?title0 }
   OPTIONAL { ?outline c:levelProperty ?levelP . ?item ?levelP ?level0 }
   OPTIONAL { ?outline c:noteProperty ?noteP . ?item ?noteP ?noteValue . OPTIONAL { ?notePlainAt l10n:of ?noteValue ; l10n:name ?notePlain }
-  OPTIONAL { ?noteValue rdfs:label ?notePlain FILTER(lang(?notePlain) = "") } }
+  OPTIONAL { ?noteValue rdfs:label ?notePlain FILTER(lang(?notePlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?noteValue ; l10n:name ?l10nPick }) } }
   OPTIONAL { ?outline c:flagProperty ?flagP . ?item ?flagP ?flagValue . OPTIONAL { ?flagPlainAt l10n:of ?flagValue ; l10n:name ?flagPlain }
-  OPTIONAL { ?flagValue rdfs:label ?flagPlain FILTER(lang(?flagPlain) = "") } }
+  OPTIONAL { ?flagValue rdfs:label ?flagPlain FILTER(lang(?flagPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?flagValue ; l10n:name ?l10nPick }) } }
   BIND(STR(COALESCE(?title0, REPLACE(STR(?item), "^.*[#/]", ""))) AS ?label)
   BIND(COALESCE(xsd:integer(?level0), 0) AS ?level)
   BIND(SUBSTR("                ", 1, 2 * ?level) AS ?indent)

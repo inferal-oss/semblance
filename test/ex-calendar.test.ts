@@ -99,6 +99,21 @@ describe('the room bookings example', () => {
     expect(implementationGaps(['components/calendar.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 
+  // #149: the conflict note ("Overlaps …") and every other text in the viewer's language, the same
+  // with SPARQL rules as with their function twins.
+  for (const language of ['uk', 'de', 'ar']) {
+    it(`renders the same with SPARQL and functions in ${language}, conflict notes included`, () => {
+      const [a, b] = (['sparql', 'function'] as const).map((prefer) => {
+        const h = bookings(prefer)
+        h.screen.engine.reconfigure({ languages: [language] })
+        h.shell.flush()
+        return h
+      })
+      expect(a!.root().outerHTML).toBe(b!.root().outerHTML)
+      if (language === 'uk') expect(a!.where('Planning')).toContain('Перетинається з')
+    })
+  }
+
   it('lays out the week, marks the double booking, and lists the same meetings as an agenda', () => {
     const h = bookings()
     const days = [...h.week().querySelectorAll('[role=columnheader]')].map((d) => d.textContent)

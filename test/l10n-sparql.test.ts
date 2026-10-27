@@ -39,4 +39,31 @@ describe('labels in the viewer language, SPARQL and function rules alike', () =>
     expect(html[0]).toEqual(html[1])
     expect(html[0]![0]).toContain('Ласкаво просимо')
   })
+
+  // #52: a regional viewer (en-US) reads a text tagged with its language (en), and a component
+  // whose labels are all tagged still renders, on both rule kinds.
+  const tagged = `
+    @prefix c: <${NS.c}> . @prefix x: <${X}> .
+    x:t-heading a c:Heading ; c:label "Welcome"@en , "Ласкаво просимо"@uk , "Willkommen"@de , "أهلاً"@ar .
+    x:t-button a c:Button ; c:label "Save"@en , "Зберегти"@uk , "Speichern"@de , "حفظ"@ar .
+    x:t-text a c:Text ; c:label "Hello"@en , "Привіт"@uk , "Hallo"@de , "مرحبا"@ar .
+    x:t-field a c:TextField ; c:label "Name"@en , "Ім'я"@uk , "Name"@de , "الاسم"@ar ;
+      c:placeholder "Ada"@en , "Олена"@uk , "Erika"@de , "ليلى"@ar .
+  `
+  const expected: Record<string, string[]> = {
+    'en-US': ['Welcome', 'Save', 'Hello', 'Ada'],
+    'uk-UA': ['Ласкаво просимо', 'Зберегти', 'Привіт', 'Олена'],
+    'de-AT': ['Willkommen', 'Speichern', 'Hallo', 'Erika'],
+    'ar-EG': ['أهلاً', 'حفظ', 'مرحبا', 'ليلى'],
+  }
+  for (const [viewer, words] of Object.entries(expected)) {
+    it(`a ${viewer} viewer reads the ${viewer.slice(0, 2)} texts of all-tagged components`, () => {
+      const html = (['sparql', 'function'] as const).map((prefer) => {
+        const { screen } = setup('oxigraph', { modality: MOD.Screen, layers: SCREEN_LAYERS, prefer, languages: [viewer] }, 1, [tagged])
+        return ['t-heading', 't-button', 't-text', 't-field'].map((p) => toHTML(screen.index, X + p))
+      })
+      expect(html[0]).toEqual(html[1])
+      html[0]!.forEach((h, i) => expect(h, `${viewer}: ${words[i]}`).toContain(words[i]!))
+    })
+  }
 })

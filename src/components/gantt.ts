@@ -7,10 +7,9 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, L10N, NS, RDF_TYPE, SEM, XSD_INTEGER } from '../ns.ts'
 import { tupleKey } from '../render/order-key.ts'
 import { md5 } from './data.ts'
-import { labelOf, RDFS_LABEL, text } from './util.ts'
+import { labelOf, RDFS_LABEL, str, text } from './util.ts'
 
 const RS = NS.rs
-const str = (t: Term | undefined) => t?.value
 const c = (local: string) => NS.c + local
 
 /** An ISO date (a date, or a date-time's date part) as days since 1970-01-01, by the civil calendar; the SPARQL rule computes the same. */

@@ -6,10 +6,9 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'
 import { aria, shortcutLabels } from '../layers/keyboard.ts'
 import { compact } from './reference.ts'
-import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text } from './util.ts'
+import { isTrue, labelOf, RDFS_LABEL, rdfList, str, text, encodeForUri } from './util.ts'
 
 const c = (local: string) => NS.c + local
-export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 
 /**
  * Case- and diacritic-insensitive form of a text that keeps its length in code points: each
@@ -190,7 +189,7 @@ const option: FnRule = (ctx, focus) => {
   }
   const parts = [o.el('text', 'Span', { class: 'sem-ta-label' }, cut(label, at, (part) => part))]
   if (detail !== undefined) parts.push(o.text('gap', ' '), o.el('detail', 'Span', { class: 'sem-ta-detail' }, cut(detail, dat, (part) => 'd' + part)))
-  const help = ctx.objects(focus, C.help).find((t) => t.value !== '')?.value
+  const help = text(ctx, focus, C.help) || undefined
   if (help !== undefined) parts.push(o.el('help', 'Span', { class: 'sem-ta-help' }, [o.text('help-text', help)]))
   const hint = ctx.objects(focus, NS.key + 'hint').find((t) => t.value !== '')?.value
   if (hint !== undefined) {
