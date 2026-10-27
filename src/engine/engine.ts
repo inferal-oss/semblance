@@ -249,7 +249,7 @@ export class Engine {
     this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
-    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
+    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
     this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
   }

@@ -54,6 +54,20 @@ describe('SPARQL coverage', () => {
     ])
   })
 
+  it('a SPARQL rule that needs an extension has a function twin, for stores without it', () => {
+    const loose = rows(`SELECT ?rule WHERE {
+  ?rule sem:needsExtension ?extension ; sem:construct ?text ; sem:implements ?rendering .
+  FILTER NOT EXISTS { ?fn sem:implements ?rendering ; sem:function ?name }
+} ORDER BY ?rule`)
+    expect(loose).toEqual([])
+    const reactions = rows(`SELECT ?reaction WHERE {
+  ?reaction a beh:Reaction ; sem:needsExtension ?extension .
+  FILTER(EXISTS { ?reaction beh:inserts ?i } || EXISTS { ?reaction beh:deletes ?d })
+  FILTER NOT EXISTS { ?reaction sem:function ?name }
+} ORDER BY ?reaction`)
+    expect(reactions).toEqual([])
+  })
+
   it('every reaction has SPARQL (beh:deletes / beh:inserts), unless it awaits an extension', () => {
     const loose = rows(`SELECT ?reaction WHERE {
   ?reaction a beh:Reaction .
