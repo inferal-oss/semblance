@@ -355,4 +355,52 @@ lib:earthsea lib:pages "many" .`
     expect(editRuns(2)).toBe(1)
     expect(editRuns(40)).toBe(1)
   })
+
+  const SUGGESTING = `@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix sh: <http://www.w3.org/ns/shacl#> .
+ui:dt-rdf-editor c:editable true ; c:entry lib:loose .
+lib:Format a owl:Class . lib:Hardcover a lib:Format . lib:Paperback a lib:Format .
+lib:FormatShape a sh:NodeShape ; sh:targetClass lib:Book ; sh:property [ sh:path lib:format ; sh:class lib:Format ] , [ sh:path lib:language ; sh:in ( "en" "uk" ) ] .
+lib:loose lib:title "Untyped" .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`completes from the shapes: what is required first, whole statements in one pick; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', SUGGESTING), mount(kind, 'function', SUGGESTING)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+      }
+      const options = () => [...m.editor().querySelectorAll('.sem-suggestions > button')].map((b) => b.textContent + (b.classList.contains('sem-required') ? ' *' : ''))
+      const option = (x: ReturnType<typeof mount>, text: string) => [...x.editor().querySelectorAll('.sem-suggestions > button')].find((b) => b.textContent === text)!
+      const type = (x: ReturnType<typeof mount>, text: string) => {
+        const input = x.field()!
+        input.value = text
+        input.dispatchEvent(new x.document.defaultView!.Event('input', { bubbles: true }))
+      }
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter on a book')
+      expect(m.editor().querySelector('.sem-suggestions')!.getAttribute('aria-label')).toBe('What the shapes expect')
+      expect(options()).toEqual(['lib:published *', 'lib:author', 'lib:format', 'lib:language', 'lib:language "en"', 'lib:language "uk"', 'lib:pages', 'lib:title'])
+      // Typing narrows them.
+      each((x) => type(x, 'lang'), 'typing')
+      expect(options()).toEqual(['lib:language', 'lib:language "en"', 'lib:language "uk"'])
+      // A predicate with its value: the whole statement, at once.
+      each((x) => x.click(option(x, 'lib:language "uk"')), 'a whole statement')
+      expect(m.objects(LIB + 'earthsea', LIB + 'language')).toEqual(['uk|string'])
+      expect(m.field()).toBeNull()
+      // A predicate alone goes into the field; the value follows.
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter again')
+      each((x) => x.click(option(x, 'lib:format')), 'a predicate')
+      expect(m.field()!.value).toBe('lib:format ')
+      each((x) => x.enter(x.field()!.value + 'lib:Paperback'), 'its value')
+      // A predicate's values: instances of its sh:class not yet there.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:format', 'lib:Paperback'), 'Enter', true), 'Shift+Enter beside a value')
+      expect(options()).toEqual(['lib:Hardcover'])
+      each((x) => x.click(option(x, 'lib:Hardcover')), 'another value')
+      expect(m.objects(LIB + 'earthsea', LIB + 'format').sort()).toEqual([LIB + 'Hardcover', LIB + 'Paperback'])
+      // A resource with no class: the classes shapes target that the document uses.
+      each((x) => x.key(x.label('lib:loose'), 'Enter', true), 'Shift+Enter on an untyped resource')
+      expect(options()).toEqual(['a lib:Book', 'a lib:Person'])
+    })
+  }
 })
