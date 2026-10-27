@@ -1790,7 +1790,7 @@ c:RdfEditorStatus-sparql a sem:Rule ;
 CONSTRUCT {
   ?root rdfhtml:hasChild ?status . ?arrows ord:immediatelyPrecedes ?status .
   ?status a rdfhtml:Div ; rdfhtml:class "sem-status" ; rdfhtml:hasChild ?mode , ?where , ?keys .
-  ?mode a rdfhtml:Span ; rdfhtml:class ?modeClass ; rdfhtml:hasChild ?modeText ; ord:immediatelyPrecedes ?where , ?keys .
+  ?mode a rdfhtml:Span ; rdfhtml:class ?modeClass ; rdfhtml:hasChild ?modeText ; ord:immediatelyPrecedes ?beside .
   ?modeText a rdfhtml:Text ; rdfhtml:data ?modeLabel .
   ?where a rdfhtml:Span ; rdfhtml:class "sem-where" ; rdfhtml:hasChild ?whereText ; ord:immediatelyPrecedes ?keys .
   ?whereText a rdfhtml:Text ; rdfhtml:data ?path .
@@ -1839,6 +1839,7 @@ WHERE {
   BIND(IF(BOUND(?wp) && sameTerm(?wp, rdf:type), "a", ?wpShort) AS ?wpText)
   BIND(IF(!BOUND(?cur), ?none, IF(BOUND(?ws), CONCAT(?wsShort, " › ", ?wpText, IF(BOUND(?wt), CONCAT(" › ", ?wtShort), "")), ?wtShort)) AS ?path)
   BIND(IF(BOUND(?path), IRI(CONCAT(STR($this), "/~status-where")), ?none) AS ?where)
+  BIND(COALESCE(?where, ?keys) AS ?beside)
   BIND(IF(BOUND(?path), IRI(CONCAT(STR($this), "/~status-where-text")), ?none) AS ?whereText)
   # The keys that apply now.
   LATERAL { {} UNION {
