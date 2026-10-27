@@ -139,10 +139,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 export async function settle(cdp: Cdp): Promise<void> {
   let last = -1
   let still = 0
-  for (let i = 0; i < 120 && still < 4; i++) {
+  for (let i = 0; i < 240 && still < 4; i++) {
     await sleep(250)
+    // On a loaded machine an update can outrun its turn budget: the site then suspends it behind
+    // "The page is busy" until Continue. Measuring then would record the page before the update.
+    const resumed = await cdp.evaluate<boolean>(`(() => {
+      const b = [...document.querySelectorAll('dialog button, [role=dialog] button, [role=alertdialog] button')].find((b) => b.textContent.trim() === 'Continue' && b.getClientRects().length)
+      b?.click(); return !!b })()`)
     const n = await cdp.evaluate<number>(`document.querySelectorAll('[data-sem-c]').length + document.body.innerHTML.length`)
-    still = n === last && n > 1000 ? still + 1 : 0
+    if (resumed) console.error("layout-check: resumed a suspended update (the page is busy)")
+    still = n === last && n > 1000 && !resumed ? still + 1 : 0
     last = n
   }
 }

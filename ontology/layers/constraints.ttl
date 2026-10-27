@@ -71,14 +71,15 @@ lc:Descendants a sem:Value ; rdfs:label "Everything inside"@en , "Усе все�
 
 lc:SingleLineControl a lc:Role ;
     rdfs:label "Single-line control"@en , "Однорядковий елемент"@uk , "Einzeiliges Steuerelement"@de , "عنصر بسطر واحد"@ar ;
-    rdfs:comment "A Choice draws its control as the pill around its select (its root), so for a Choice the role is the root."@en ;
-    lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]):not([data-sem-c=choice] *), select:not([data-sem-c=choice] *), [data-sem-c=choice]" ;
+    rdfs:comment "An inline Choice (its caption inside, data-sem-label-placement=inline) draws its control as the pill around its select, so for it the role is the root; a Choice with its label above is a label and a select, like any field (#57)."@en ;
+    lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]):not([data-sem-label-placement=inline] *), select:not([data-sem-label-placement=inline] *), [data-sem-c=choice][data-sem-label-placement=inline]" ;
     # On a compact screen a Choice puts its caption above its select, and the select is the control.
     lc:pick [ lc:atWidth sty:CompactWidth ;
         lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]), select" ] .
 lc:FieldLabel a lc:Role ;
     rdfs:label "Field label"@en , "Мітка поля"@uk , "Feldbeschriftung"@de , "تسمية الحقل"@ar ;
-    lc:selector "label" .
+    rdfs:comment "A field's label; a Choice with its label above is itself a label element, its caption the span inside."@en ;
+    lc:selector "label:not([data-sem-c=choice]), [data-sem-c=choice]:not([data-sem-label-placement=inline]) > span" .
 lc:NavItem a lc:Role ;
     rdfs:label "Navigation item"@en , "Пункт навігації"@uk , "Navigationseintrag"@de , "عنصر التنقل"@ar ;
     lc:selector "[data-sem-c=nav-list] > button, [data-sem-c=nav-list] > a, [data-sem-c=nav-list] > li > button, [data-sem-c=nav-list] > li > a" .
@@ -99,11 +100,12 @@ lc:Field a owl:Class ;
 
 lc:FieldRow a owl:Class ;
     rdfs:label "Row of fields"@en , "Ряд полів"@uk , "Feldzeile"@de , "صف حقول"@ar ;
-    rdfs:comment "A row (pos:direction pos:Row) with two fields or more side by side (#57: the checkout's code and phone)."@en ;
+    rdfs:comment "A row (pos:direction pos:Row, or the pos:FieldRow layout) with two fields or more side by side (#57: the checkout's code and phone)."@en ;
     lc:derive """
 CONSTRUCT { ?row a lc:FieldRow }
 WHERE {
-  ?row pos:direction pos:Row ; c:children ?list .
+  { ?row pos:direction pos:Row } UNION { ?row pos:layout pos:FieldRow }
+  ?row c:children ?list .
   ?list rdf:rest*/rdf:first ?a . ?list rdf:rest*/rdf:first ?b . FILTER(?a != ?b)
   ?a a ?ka . lc:Field lc:includes ?ka . ?b a ?kb . lc:Field lc:includes ?kb .
 }""" .

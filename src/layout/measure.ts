@@ -84,7 +84,7 @@ export function measurePage(parts: PartSelectors): MeasuredPage {
   }
   // the lines of each row: a child starts a new line when it begins below the line so far
   nodes.forEach((row, r) => {
-    if (row.direction !== 'row') return
+    if (row.direction !== 'row' && row.layout !== 'field-row') return
     const kids = nodes.filter((n) => n.parent === r).sort((a, b) => a.y - b.y)
     let line = -1
     let bottom = -Infinity

@@ -118,7 +118,7 @@ function childrenOf(nodes: readonly MeasuredNode[]): number[][] {
 }
 
 function isFieldRow(nodes: readonly MeasuredNode[], i: number, kids: number[][], d: Declarations): boolean {
-  if (nodes[i].direction !== 'row') return false
+  if (nodes[i].direction !== 'row' && nodes[i].layout !== 'field-row') return false
   const fields = kids[i].filter((k) => (d.directTypes.get(nodes[k].slug) ?? []).some((c) => d.fields.has(c)))
   return fields.length >= 2
 }
@@ -258,6 +258,7 @@ export function toTurtle(page: MeasuredPage, d: Declarations): string {
     } else {
       const c = [`${comp(i)} a sem:Component`, ...(d.directTypes.get(n.slug) ?? []).map((cls) => `a <${cls}>`)]
       if (n.direction === 'row') c.push('pos:direction pos:Row')
+      if (n.layout === 'field-row') c.push('pos:layout pos:FieldRow')
       if (kids[i].length) c.push(`c:children ( ${kids[i].map(comp).join(' ')} )`)
       lines.push(c.join(' ; ') + ' .')
     }
