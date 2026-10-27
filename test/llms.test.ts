@@ -65,7 +65,7 @@ describe('llms.txt', () => {
     expect(button).toMatch(/^# Button\n\n> An actionable control/)
     expect(button).toContain('c:Button a owl:Class ;\n')
     expect(button).toContain('```turtle\n@prefix c: <https://semblance.dev/ns/component#> .')
-    expect(button).toContain(`- Reference: ${SITE}reference/#c:Button`)
+    expect(button).toContain(`- Reference: ${SITE}reference/c:Button/`)
   })
 
   it('has a page per doc section and per example, from the text projection', () => {

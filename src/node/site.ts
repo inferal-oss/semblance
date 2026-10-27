@@ -6,7 +6,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { readLocations, routesOf, setBase } from '../navigation.ts'
+import { followDelta, inPlaceKey, readLocations, routesOf, setBase } from '../navigation.ts'
+import { toHTML } from '../render/serialize.ts'
 import { renderDocument, type DocumentOptions } from '../server/document.ts'
 import { type Rendered, renderToString } from '../server/render.ts'
 import type { Site } from '../server/site.ts'
@@ -52,6 +53,29 @@ export async function siteRoutes(site: Site, opts: RenderSiteOptions = {}): Prom
   const found = loc?.paths ? routesOf(r, loc) : [opts.base ?? '/']
   store.dispose?.()
   return site.routes ? site.routes(found) : found
+}
+
+/**
+ * The addresses, grouped: those that differ only in a dimension shown in place
+ * (nav:rendersInPlace: a reference's terms) are one group, rendered one after another in one
+ * runtime; every other address is a group of its own.
+ */
+export async function siteRouteGroups(site: Site, opts: RenderSiteOptions = {}): Promise<string[][]> {
+  const routes = await siteRoutes(site, opts)
+  if (opts.single) return routes.map((r) => [r])
+  const store = await siteStore(site, opts)
+  const f = store.factory
+  const r = { f, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? f.namedNode(p) : null, o, f.defaultGraph()) }
+  const loc = readLocations(r).find((l) => l.root === site.root)
+  const groups = new Map<string, string[]>()
+  for (const route of routes) {
+    const key = (loc && inPlaceKey(r, loc, route)) ?? route
+    let g = groups.get(key)
+    if (!g) groups.set(key, (g = []))
+    g.push(route)
+  }
+  store.dispose?.()
+  return [...groups.values()]
 }
 
 /** Load a site description: a module whose default export is a Site (semblance.config.ts). */
@@ -101,15 +125,23 @@ export async function buildSite(opts: BuildOptions): Promise<{ pages: number; ms
   const templatePath = opts.template ?? join(opts.outDir, 'index.html')
   const template = readFileSync(templatePath, 'utf8')
   const site = await loadSite(opts.config)
-  const routes = await siteRoutes(site, opts)
+  const groups = await siteRouteGroups(site, opts)
+  const routes = groups.flat()
   if (!opts.single) writeFileSync(join(opts.outDir, '404.html'), template.replace(/<\/head>/i, `${opts.head ?? ''}</head>`))
   const want = opts.workers ?? (Number(process.env.SEMBLANCE_BUILD_WORKERS) || Math.max(1, Math.min(4, availableParallelism() - 1)))
   const workers = Math.max(1, Math.min(want, Math.ceil(routes.length / 8)))
   log(`semblance: rendering ${routes.length} page${routes.length === 1 ? '' : 's'} with ${workers} worker${workers === 1 ? '' : 's'}`)
   const job = { config: resolve(opts.config), outDir: resolve(opts.outDir), template, head: opts.head ?? '', single: !!opts.single, base }
-  const chunks = Array.from({ length: workers }, (_, i) => routes.filter((_, j) => j % workers === i))
+  // The largest groups first, each to the worker with the least to do.
+  const chunks: string[][][] = Array.from({ length: workers }, () => [])
+  const load = new Array<number>(workers).fill(0)
+  for (const g of [...groups].sort((a, b) => b.length - a.length)) {
+    const i = load.indexOf(Math.min(...load))
+    chunks[i]!.push(g)
+    load[i]! += g.length > 1 ? 1 + (g.length - 1) / 4 : 1 // a page rendered in place costs about a quarter
+  }
   let bytes = 0
-  const results = await Promise.all(chunks.map((chunk, i) => (workers === 1 ? renderPages({ ...job, routes: chunk, styles: i === 0 }) : inWorker({ ...job, routes: chunk, styles: i === 0 }))))
+  const results = await Promise.all(chunks.filter((c) => c.length).map((chunk, i) => (workers === 1 ? renderPages({ ...job, routes: chunk, styles: i === 0 }) : inWorker({ ...job, routes: chunk, styles: i === 0 }))))
   for (const r of results) bytes += r.bytes
   const css = results.find((r) => r.css !== undefined)?.css
   if (css !== undefined && !opts.single) writeFileSync(join(opts.outDir, 'semblance.css'), css)
@@ -125,7 +157,8 @@ export interface PagesJob {
   head: string
   single: boolean
   base: string
-  routes: string[]
+  /** Groups of addresses: the first of each rendered from a fresh store, the rest in place after it. */
+  routes: string[][]
   /** This worker compiles the stylesheet (one does). */
   styles: boolean
 }
@@ -135,15 +168,28 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
   const site = await loadSite(job.config)
   let bytes = 0
   let css: string | undefined
-  for (const route of job.routes) {
-    const rendered = await renderSite(site, route, { single: job.single, base: job.base, styles: job.single || (job.styles && css === undefined) })
-    css ??= rendered.css
-    const stylesheet: DocumentOptions['stylesheet'] = job.single ? 'inline' : { href: job.base + 'semblance.css' }
-    const page = renderDocument(job.template, { ...rendered, css: job.single ? rendered.css : undefined }, { mount: site.mount, stylesheet, attributes: rendered.attributes, head: job.head })
+  const stylesheet: DocumentOptions['stylesheet'] = job.single ? 'inline' : { href: job.base + 'semblance.css' }
+  const write = (route: string, html: string, rendered: Awaited<ReturnType<typeof renderSite>>) => {
+    const page = renderDocument(job.template, { ...rendered, html, css: job.single ? rendered.css : undefined }, { mount: site.mount, stylesheet, attributes: rendered.attributes, head: job.head })
     const file = job.single ? join(job.outDir, 'index.html') : pageFile(job.outDir, job.base, route)
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, page)
     bytes += page.length
+  }
+  for (const group of job.routes) {
+    const [first, ...rest] = group
+    const rendered = await renderSite(site, first!, { single: job.single, base: job.base, styles: job.single || (job.styles && css === undefined) })
+    css ??= rendered.css
+    write(first!, rendered.html, rendered)
+    // The rest of the group: the same runtime, moved to each address as a followed link moves it.
+    const store = rendered.runtime.store
+    const f = store.factory
+    const r = { f, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? f.namedNode(p) : null, o, f.defaultGraph()) }
+    const loc = readLocations(r).find((l) => l.root === site.root)
+    for (const route of rest) {
+      rendered.runtime.apply(followDelta(r, loc!, route))
+      write(route, toHTML(rendered.projection.index, site.root), rendered)
+    }
     rendered.runtime.dispose()
   }
   return { bytes, css }

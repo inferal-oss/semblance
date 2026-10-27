@@ -55,6 +55,8 @@ export interface Dimension {
   spelledIn?: string
   /** The value the address leaves unspelled (nav:implicit: the language a site is in by default). */
   implicit?: Term
+  /** Its values are shown one at a time in one place (nav:rendersInPlace): a build renders them in one runtime. */
+  inPlace: boolean
 }
 
 export interface Location {
@@ -108,6 +110,7 @@ export function readLocations(r: Reader): Location[] {
             target: types.includes(NAV + 'TargetDimension'),
             terms: one(r, d, NAV + 'showsTerms')?.value === 'true',
             implicit: one(r, d, NAV + 'implicit'),
+            inPlace: one(r, d, NAV + 'rendersInPlace')?.value === 'true',
           },
         ]
       })
@@ -457,6 +460,19 @@ function kept(r: Reader, loc: Location, values: Values): Values {
   return values
 }
 
+/**
+ * The pages a build may render one after another in one runtime: an address with the values of
+ * the dimensions shown in place (nav:rendersInPlace) left out. Addresses with the same key differ
+ * only in those.
+ */
+export function inPlaceKey(r: Reader, loc: Location, address: string): string | undefined {
+  const values = readAddress(r, loc, address)
+  const inPlace = loc.dimensions.filter((d) => d.inPlace && values.has(d.iri))
+  if (!inPlace.length) return undefined
+  for (const d of inPlace) values.delete(d.iri)
+  return spellAddress(r, loc, values).path
+}
+
 /** Where every location's paths start (nav:base): an app served under a path ("/docs/app/"). */
 export function setBase(store: GraphStore, base: string): void {
   const f = store.factory
@@ -487,6 +503,13 @@ export function routesOf(r: Reader, loc: Location): string[] {
         return v ? [v as Term] : []
       })
     if (cases.length) return [...new Map(cases.map((v) => [v.value, v])).values()]
+    // A dimension of terms (nav:showsTerms): the vocabulary's classes and properties a prefixed name spells.
+    if (d.terms) {
+      const kinds = new Set([NS.owl + 'Class', NS.rdfs + 'Class', NS.rdf + 'Property', NS.owl + 'ObjectProperty', NS.owl + 'DatatypeProperty', NS.owl + 'AnnotationProperty'])
+      const terms = new Map<string, Term>()
+      for (const q of r.match(null, RDF_TYPE, null)) if (q.subject.termType === 'NamedNode' && kinds.has(q.object.value)) terms.set(q.subject.value, q.subject)
+      return [...terms.values()].filter((t) => /^[A-Za-z][\w-]*:[\w-]+$/.test(spell(r, d, t)))
+    }
     const range = one(r, f.namedNode(d.property), RDFS_RANGE)
     return r
       .match(null, d.keyProperty, null)

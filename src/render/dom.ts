@@ -122,6 +122,9 @@ export class DomRenderer {
       }
       return el
     }
+    // Adjacent text nodes are joined first (a parser may split text at a character reference, which
+    // browsers do not): adopting splits them again where the index has two.
+    this.host.normalize?.()
     const root = this.index.resolve(this.rootFocus)
     if (root) take(root, this.host.firstElementChild, this.host)
     return { nodes, mismatches }

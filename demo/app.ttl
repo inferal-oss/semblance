@@ -80,10 +80,11 @@ ui:inspecting rdfs:label "inspecting" .
 # --- where we are (nav:Location; ontology/layers/navigation.ttl) ----------------------------------
 # The page, and on it the docs section, the example, the component group or the reference term,
 # is a location in the address: /docs/rules/, /examples/kanban/, /components/inputs/,
-# /reference/#c:Window. The page and its section are the path, so each is a page of its own that
-# the build renders (npm run build) and a link reaches without scripts; the reference term is
-# the fragment. Changing one is a step Back returns to; reloads and shared links open where they
-# point (old #docs/rules links too). A section applies only on its page (out of it, it is left
+# /reference/c:Window/. The page and its section are the path, so each is a page of its own that
+# the build renders (npm run build) and a link reaches without scripts; the Reference shows one
+# term at a time in one place, so the build renders its terms one after another
+# (nav:rendersInPlace). Changing one is a step Back returns to; reloads and shared links open
+# where they point (old #docs/rules links too). A section applies only on its page (out of it, it is left
 # out of the address), and is also kept for this tab, so a page is found where it was left. A link
 # to a resource (c:to) adds what it points at, brought into view: /components/inputs/#inp-codes-spec.
 ui:location a nav:Location ; nav:root ui:shell ;
@@ -102,7 +103,7 @@ ui:atGalleryGroup a nav:Dimension ; nav:subject ui:app ; nav:property ui:gallery
     nav:parent ui:atPage ; nav:when ui:Components ; nav:carriedBy nav:Path , per:Session ; nav:history nav:MakesHistory .
 # The Reference's selected term, as a prefixed name (its other state is ui:rememberReference's).
 ui:atReferenceTerm a nav:Dimension ; nav:subject ui:app ; nav:property ui:referenceSubject ; nav:spelling nav:PrefixedName ; nav:showsTerms true ;
-    nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
+    nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Path ; nav:rendersInPlace true ; nav:history nav:MakesHistory .
 # What a followed link points at: where to look, not a place of its own.
 ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ;
     nav:carriedBy nav:Fragment ; nav:history nav:NoHistory .

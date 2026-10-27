@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
@@ -65,7 +65,11 @@ describe('server-side rendering: the site', () => {
     const site = await loadSite(new URL('semblance.config.ts', root).pathname)
     const routes = await siteRoutes(site)
     const english = routes.filter((r) => !/^\/(uk|de|ar)\//.test(r))
-    expect(routes.length).toBe(english.length * 4)
+    // Every place in every language, the Reference's terms in English only (semblance.config.ts).
+    const terms = english.filter((r) => /^\/reference\/[^/]+\/$/.test(r))
+    expect(terms.length).toBeGreaterThan(1000)
+    expect(routes.length).toBe((english.length - terms.length) * 4 + terms.length)
+    expect(english).toContain('/reference/c:Window/')
     expect(english).toContain('/')
     expect(english).toContain('/docs/')
     expect(english).toContain('/docs/rules/')
@@ -103,6 +107,21 @@ describe('server-side rendering: the site', () => {
     expect(adopt(renderDocument(TEMPLATE, server), client).mismatches).toBe(0)
     server.runtime.dispose()
     client.runtime.dispose()
+  })
+
+  it('renders the pages of a dimension shown in place one after another as each renders alone (nav:rendersInPlace)', async () => {
+    const site = await loadSite(new URL('semblance.config.ts', root).pathname)
+    const { renderPages } = await import('../src/node/site.ts')
+    const { mkdtempSync, readFileSync: read } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const out = mkdtempSync(tmpdir() + '/sem-ssr-')
+    const group = ['/reference/', '/reference/c:List/', '/reference/sem:Rule/', '/reference/nav:Path/']
+    await renderPages({ config: new URL('semblance.config.ts', root).pathname, outDir: out, template: TEMPLATE, head: '', single: false, base: '/', routes: [group], styles: false })
+    for (const url of group.slice(1)) {
+      const alone = await renderSite(site, url)
+      expect(read(out + url + 'index.html', 'utf8'), url).toContain('<div id="app" data-sem-ssr>' + alone.html + '</div>')
+      alone.runtime.dispose()
+    }
   })
 
   it('says 404 for a place no location names, and renders the default', async () => {
@@ -181,7 +200,7 @@ describe('server-side rendering: documents', () => {
 describe('provenance on demand', () => {
   it('is recorded from when a rendering that reads it first runs, for what was derived before too', () => {
     const app = readFileSync(new URL('demo/app.ttl', root), 'utf8')
-    const gallery = Object.fromEntries(['_home.ttl'].map((f) => ['demo/gallery/' + f, readFileSync(new URL('demo/gallery/' + f, root), 'utf8')]))
+    const gallery = Object.fromEntries(readdirSync(new URL('demo/gallery/', root)).filter((f) => f.endsWith('.ttl')).map((f) => ['demo/gallery/' + f, readFileSync(new URL('demo/gallery/' + f, root), 'utf8')]))
     const project = (provenance: boolean | 'onDemand') => {
       const store = loadStore('wat', ...siteGraphs(app, gallery))
       recordSiteSources(store, gallery)

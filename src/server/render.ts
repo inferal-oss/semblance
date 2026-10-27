@@ -5,7 +5,7 @@
 // Platform-neutral: the caller loads the store (src/node/load.ts, src/web/load.ts or its own
 // engine module), so this runs in Node, Deno and workers alike.
 import type { FnRule } from '../engine/context.ts'
-import { Navigation, readLocations, spellAddress, currentValues } from '../navigation.ts'
+import { Navigation, readAddress, readLocations, spellAddress } from '../navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
 import { toHTML } from '../render/serialize.ts'
 import { type Projection, Runtime } from '../runtime.ts'
@@ -67,11 +67,10 @@ export async function readUrl(store: GraphStore, root: string, url: string): Pro
   const loc = navigation.location()
   if (!loc) return { found: location.pathname === '/' || location.pathname.endsWith('/index.html'), address: undefined }
   const r = { f: store.factory, match: (s: Parameters<GraphStore['match']>[0], p: string | null, o: Parameters<GraphStore['match']>[2]) => store.match(s, p ? store.factory.namedNode(p) : null, o, store.factory.defaultGraph()) }
-  const spelled = spellAddress(r, loc, currentValues(r, loc))
   const path = location.pathname.replace(/\/index\.html?$/, '/')
   const want = path.endsWith('/') ? path : path + '/'
-  // The base alone is the location's default place; anything else must spell itself back.
-  const found = !loc.paths || want === loc.base || spelled.path === want
+  // A place is found when what the address says spells it back: every segment was read.
+  const found = !loc.paths || want === loc.base || spellAddress(r, loc, readAddress(r, loc, want)).path === want
   return { found, address: navigation.href() }
 }
 

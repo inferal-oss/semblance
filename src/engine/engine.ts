@@ -260,6 +260,7 @@ export class Engine {
     this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
+    this.locationReaders = new Set(store.match(null, f.namedNode(NS.sem + 'readsLocation'), null).filter((q) => q.object.value === 'true').map((q) => q.subject.value))
     if (opts.provenance === 'onDemand') {
       // A rendering reads provenance when any of its implementations' queries names PROV-O.
       // Only what the engine writes (provenanceOf); prov:wasDerivedFrom and the like are the app's own data.
@@ -343,7 +344,37 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.locationChanged(delta)
     this.run()
+  }
+
+  /** The renderings that read where we are (sem:readsLocation): their slots. */
+  private readonly locationReaders: Set<string>
+  /** "subject property" of each nav:Dimension's value, while some rendering reads them. */
+  private locationValues?: Set<string>
+
+  /**
+   * A dimension's value changed (the page, the language): every rendering that reads where we are
+   * (sem:readsLocation: link destinations, which keep the language) is due again for each focus it
+   * has output for. Such a value is a property of a node the focus need not reach.
+   */
+  private locationChanged(delta: Delta) {
+    if (!this.locationReaders.size) return
+    if (delta.add.some((q) => q.predicate.value.startsWith(NS.nav)) || delta.remove.some((q) => q.predicate.value.startsWith(NS.nav))) this.locationValues = undefined
+    const f = this.store.factory
+    if (!this.locationValues) {
+      this.locationValues = new Set()
+      for (const q of this.store.match(null, f.namedNode(NS.nav + 'subject'), null, f.defaultGraph())) {
+        const p = this.store.match(q.subject, f.namedNode(NS.nav + 'property'), null, f.defaultGraph())[0]?.object.value
+        if (p) this.locationValues.add(q.object.value + ' ' + p)
+      }
+    }
+    const values = this.locationValues
+    if (![...delta.add, ...delta.remove].some((q) => values.has(q.subject.value + ' ' + q.predicate.value))) return
+    for (const rule of this.rules) {
+      if (!this.locationReaders.has(rule.slot)) continue
+      for (const focus of this.outputs.get(rule)?.keys() ?? []) this.markDirty(rule, focus)
+    }
   }
 
   /** Whether any undemanded work is parked. */

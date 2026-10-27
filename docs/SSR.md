@@ -94,8 +94,10 @@ The path starts at the location's `nav:base` (`setBase`; Vite's `base`). A value
 what shows its resource, and keeps where we are for the rest: the language, and the page for what
 is on every page. The navigation effect takes over clicks on links to the location's own paths
 (a step in the history, not a page load). A fragment that spells path dimensions, as links did
-before paths, is still read, and the address is rewritten as a path. The reference term and the
-target stay in the fragment: `/reference/#c:Window`, `/components/inputs/#inp-codes-spec`.
+before paths, is still read, and the address is rewritten as a path. The
+target stays in the fragment: `/components/inputs/#inp-codes-spec`. The Reference's term is a
+path too (`/reference/c:Window/`); it is shown in place (`nav:rendersInPlace`), so the build
+renders a language's terms one after another in one runtime rather than each from a fresh store.
 
 ## Serving per request
 
@@ -156,11 +158,31 @@ interactive. Two things make it cheaper:
   was about 40% of its first rule run.
 - **Deferred sandboxes:** a live example's store is built when its slot comes near the view.
 
-## Not yet
+## Without scripts
 
-- The app bar's page buttons are setters (buttons), so without scripts they do nothing. The
-  pages' links work, and so do the links in the content.
-- The Reference's terms (about 1,500) are not rendered beforehand: `/reference/` is, and a term
-  opens from its fragment once the client is ready.
-- The bundles still carry the whole ontology and every example's graph; loading them per page is
-  the next step for time to interactive on a phone.
+The pages work without scripts:
+- **Links** are real links to pages of their own.
+- **Choosers of a place:** a segmented control or a nav list over a dimension the path carries
+  (the app bar's pages, the docs' sections) renders as a GET form of submit buttons. Each option
+  has the address it sets as its `formaction` (`c:SegmentedDestination`), keeping where we are for
+  the rest: the language, and the section the page remembers. With scripts, the navigation effect
+  cancels the submit and the option's reaction sets the value, as for any click.
+- **The Reference's terms** are pages too (`/reference/c:Window/`). They are rendered beforehand
+  in English (about 1,600 pages; all four languages would be 650 MB). A term page in another
+  language is rendered by the client, from `404.html`, like any address the build did not render.
+
+What still needs the client: a choice made in a picker (the phone's compact form of those
+choosers, a `<select>`), every control that changes the graph rather than the address, and
+announcements.
+
+## Bytes
+
+The client still loads the whole ontology and every example's graph before it is interactive.
+That is most of a phone's wait, since the page itself paints from the HTML. The Vite plugin bundles
+the framework's ontology without its comments and indentation: the same triples, 846 to 735 KiB
+gzipped. The examples' own Turtle is kept as written, because the site shows it as their source.
+
+Loading graphs per page would have the client project a page from part of the graph. A page that
+links to a resource in another page's graph (a docs page linking to a specimen) would then render
+differently from the server until that graph arrived. Doing it without breaking parity needs a
+build-time manifest of what each page needs, checked page by page. That is the next step.

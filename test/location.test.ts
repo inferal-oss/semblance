@@ -118,10 +118,10 @@ describe('navigation: where we are, in the address', () => {
     expect(s.tab.url).toBe('/components/foundations/')
     s.set(UI + 'page', UI + 'Reference')
     await tick()
-    expect(s.tab.url).toBe('/reference/#c:Window') // a term, as a prefixed name, in the fragment
+    expect(s.tab.url).toBe('/reference/c:Window/') // a term, as a prefixed name
     s.set(NS.l10n + 'language', NS.l10n + 'German')
     await tick()
-    expect(s.tab.url).toBe('/de/reference/#c:Window')
+    expect(s.tab.url).toBe('/de/reference/c:Window/')
   })
 
   it('makes one step per interaction, through the graph; Back and Forward walk it', async () => {

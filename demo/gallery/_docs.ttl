@@ -538,10 +538,10 @@ ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav r
 ui:doc-in-stall-h a c:Heading ; c:level 2 ; c:label "When the page is busy" .
 ui:doc-in-stall-1 a c:Text ;
     c:children ( "A turn - an event, its reactions, the maintained views and every projection's rules - has a budget. The engine checks it between evaluations; over it, the turn is suspended at a consistent point and what is left is held, not lost. The stall effect records a " ui:doc-in-m-Stall ", raises an event on your " ui:doc-in-m-Watchdog " and its reaction opens your dialog, a " ui:doc-in-m-Report " in an ordinary c:Dialog. Hangs nothing could interrupt are noticed by a heartbeat worker and the browser's long-task observers, and logged to " ui:doc-in-m-Log " (Tools › Engine)." ) .
-ui:doc-in-m-Stall a c:Link ; c:label "sem:Stall" ; c:to sem:Stall ; c:href "/reference/#sem:Stall" .
-ui:doc-in-m-Watchdog a c:Link ; c:label "sem:Watchdog" ; c:to sem:Watchdog ; c:href "/reference/#sem:Watchdog" .
-ui:doc-in-m-Report a c:Link ; c:label "c:StallReport" ; c:to c:StallReport ; c:href "/reference/#c:StallReport" .
-ui:doc-in-m-Log a c:Link ; c:label "sem:StallLog" ; c:to sem:StallLog ; c:href "/reference/#sem:StallLog" .
+ui:doc-in-m-Stall a c:Link ; c:label "sem:Stall" ; c:to sem:Stall ; c:href "/reference/sem:Stall/" .
+ui:doc-in-m-Watchdog a c:Link ; c:label "sem:Watchdog" ; c:to sem:Watchdog ; c:href "/reference/sem:Watchdog/" .
+ui:doc-in-m-Report a c:Link ; c:label "c:StallReport" ; c:to c:StallReport ; c:href "/reference/c:StallReport/" .
+ui:doc-in-m-Log a c:Link ; c:label "sem:StallLog" ; c:to sem:StallLog ; c:href "/reference/sem:StallLog/" .
 ui:doc-in-stall-code a c:Code ; c:block true ; c:label """ui:watchdog a sem:Watchdog ; sem:budget "PT1.5S"^^xsd:duration ; sem:stallDialog ui:busy .
 ui:busy a c:Dialog ; c:label "The page is busy" ; c:content ui:busyReport ; c:actions ( ui:stop ui:continue ) .
 ui:busyReport a c:StallReport ; c:of ui:watchdog .

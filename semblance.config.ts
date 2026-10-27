@@ -23,4 +23,8 @@ export default defineSite({
   prepare: (store) => prepareSite(store, { kind: 'wat', prefer: 'sparql', compile: 'off' }),
   layers: siteLayers,
   documentAttributes,
+  // Every place in every language, but the Reference's 1,600 terms in English only: a term's page
+  // is about 100 KB, and all four languages would make the site 650 MB. A term in another language
+  // is rendered by the client (404.html), as any address the build did not render.
+  routes: (found) => found.filter((r) => !/^\/(uk|de|ar)\/reference\/[^/]+\/$/.test(r)),
 })
