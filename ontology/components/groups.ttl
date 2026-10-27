@@ -78,7 +78,7 @@ c:RadioGroup sem:group c:InputsGroup . c:ToggleSwitch sem:group c:InputsGroup . 
 c:Field sem:group c:InputsGroup . c:Selector sem:group c:InputsGroup . c:Chooser sem:group c:InputsGroup .
 c:TextEntry sem:group c:InputsGroup . c:Choice sem:group c:InputsGroup . c:Segmented sem:group c:InputsGroup .
 c:Chips sem:group c:InputsGroup . c:CodeInput sem:group c:InputsGroup . c:ThemeSwitcher sem:group c:InputsGroup .
-c:SearchField sem:group c:InputsGroup .
+c:SearchField sem:group c:InputsGroup . c:LabelPlacement sem:group c:InputsGroup .
 c:Typeahead sem:group c:InputsGroup . c:Combobox sem:group c:InputsGroup . c:TagInput sem:group c:InputsGroup .
 c:TypeaheadOption sem:group c:InputsGroup . c:CustomValueKind sem:group c:InputsGroup . c:OptionNaming sem:group c:InputsGroup .
 c:TypeaheadKey sem:group c:InputsGroup . c:TypeaheadLeave sem:group c:InputsGroup .
@@ -124,6 +124,9 @@ c:Calendar sem:group c:DataGroup . c:CalendarEntry sem:group c:DataGroup .
 c:Outline sem:group c:DataGroup . c:OutlineItem sem:group c:DataGroup .
 c:RdfEditor sem:group c:DataGroup . c:RdfRow sem:group c:DataGroup . c:RdfTerm sem:group c:DataGroup . c:RdfProperty sem:group c:DataGroup .
 c:ArrowsMode sem:group c:DataGroup . c:RdfEditorKey sem:group c:DataGroup .
+c:RdfEditorAddKey sem:group c:DataGroup . c:RdfEditorEscapeKey sem:group c:DataGroup . c:RdfEditorDeleteKey sem:group c:DataGroup .
+c:RdfEditorNestKey sem:group c:DataGroup . c:RdfEditorOutdentKey sem:group c:DataGroup . c:RdfEditorMoveKey sem:group c:DataGroup .
+c:RdfDraggableRow sem:group c:DataGroup . c:RdfDropRow sem:group c:DataGroup .
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 c:BoardKey sem:group c:DataGroup .
 # Lists an app shows its people, read from the graph: its keyboard shortcuts, and what it remembers.
