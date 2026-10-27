@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount, type MountedApp } from '../src/web/mount.ts'
+import { memoryBackend, Persistence } from '../src/persistence.ts'
+import { NS } from '../src/ns.ts'
 
 const root = 'https://example.org/ui#message'
 const graph = `
@@ -70,5 +72,25 @@ describe('web mount lifecycle', () => {
     }
     expect(apps).toHaveLength(3)
     for (const dispose of disposed) expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('ends the effects that follow its runtime before the store is released', async () => {
+    const { element } = host()
+    const app = await mount(element, { root, graphs: [graph], store: 'wat', files: false, fullscreen: false })
+    apps.push(app)
+    const persistence = new Persistence(app.store, { [NS.per + 'Session']: memoryBackend() }, { delayMs: 60_000 })
+    persistence.attach(app.runtime)
+    const stop = vi.spyOn(persistence, 'stop')
+    app.unmount()
+    expect(app.runtime.ended).toBe(true)
+    expect(stop).toHaveBeenCalledTimes(1)
+    // A late answer (an upload, the host's full screen, a widget) is no event, and writes nothing.
+    const match = vi.spyOn(app.store, 'match')
+    expect(app.bus.emit(NS.beh + 'Activate', root).recorded).toBe(false)
+    const f = app.store.factory
+    const has = vi.spyOn(app.store, 'has')
+    expect(app.runtime.apply({ add: [f.quad(f.namedNode(root), f.namedNode(NS.rdfs + 'label'), f.literal('late'))], remove: [] })).toEqual({ add: [], remove: [] })
+    expect(has).not.toHaveBeenCalled()
+    expect(match).not.toHaveBeenCalled()
   })
 })

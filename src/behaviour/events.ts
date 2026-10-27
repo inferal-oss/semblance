@@ -226,7 +226,10 @@ export class EventBus {
   }
 
   /** Record an event on `target`, apply its reactions, and append it to the change log. */
-  emit(type: string, target: string, detail: EventDetail = {}, reactions = this.reactionsFor(type, target)): Handled {
+  emit(type: string, target: string, detail: EventDetail = {}, reactions?: Reaction[]): Handled {
+    // An effect's late answer (an upload, the host's full screen, a widget) after the runtime ended.
+    if (this.runtime.ended) return { recorded: false, event: this.f.namedNode(BEH.ChangeLog), type, target: this.f.namedNode(target), reactions: [], delta: { add: [], remove: [] } }
+    reactions ??= this.reactionsFor(type, target)
     // An event, its reactions and the tick they cause are one turn of the watchdog's budget.
     return this.runtime.watchdog.turn(() => this.emitWatched(type, target, detail, reactions))
   }
