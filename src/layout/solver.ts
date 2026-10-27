@@ -4,8 +4,19 @@
 // variables take suggested values and re-solve by dual simplex, so a change (a new viewport width,
 // one label measured wider) costs the pivots it causes, not a solve from scratch.
 //
-// layout-solver/rust/src/solver.rs is the same algorithm, step for step: both iterate rows and cells
-// in insertion order, so the twins pivot identically and their values agree (layout-solver.test.ts).
+// Unlike kiwi, the symbol entering the basis is the one that improves the objective most (Dantzig's
+// rule), not the first that improves it: with the first, adding the k-th of many constraints that
+// share a variable re-pivots the k before it (pivots grow as n²). Dantzig's rule can cycle on a
+// degenerate tableau, so after a run of pivots that make no progress the solve falls back to
+// Bland's rule (the lowest symbol enters and leaves), which cannot.
+//
+// The tableau also keeps a column index (symbol → the rows that use it), so a pivot visits
+// only the rows its entering symbol appears in, not every row: kiwi's full scan makes building n
+// constraints grow about as n³, the index about as the fill-in. Rows touched together are taken in
+// the order they became basic, which is the order kiwi's scan would meet them in.
+//
+// layout-solver/rust/src/solver.rs is the same algorithm, step for step: both order rows and cells
+// the same way, so the twins pivot identically and their values agree (layout-solver.test.ts).
 
 export const enum Op {
   Le = 0,
@@ -29,6 +40,8 @@ export const Strength = {
 }
 
 const EPS = 1.0e-8
+/** degenerate pivots in a row before optimize falls back to Bland's rule */
+const STALL = 64
 const nearZero = (n: number) => (n < 0 ? -n < EPS : n < EPS)
 
 const enum Kind {
@@ -111,6 +124,11 @@ export class Solver {
   /** variable index → its external symbol */
   private varSymbols: number[] = []
   private rows = new Map<number, Row>()
+  /** symbol → the basic symbols whose rows use it (the column index) */
+  private cols = new Map<number, Set<number>>()
+  /** basic symbol → when it became basic: rows touched together are visited in this order */
+  private seq = new Map<number, number>()
+  private stamp = 0
   private constraints = new Map<number, { tag: Tag; strength: number }>()
   private edits = new Map<number, Edit>()
   private infeasible: number[] = []
@@ -145,7 +163,7 @@ export class Solver {
     } else {
       row.solveFor(subject)
       this.substitute(subject, row)
-      this.rows.set(subject, row)
+      this.attach(subject, row)
     }
     const id = this.nextConstraint++
     this.constraints.set(id, { tag, strength })
@@ -160,11 +178,10 @@ export class Solver {
     const { tag, strength } = c
     if (this.kinds[tag.marker] === Kind.Error) this.removeMarkerEffects(tag.marker, strength)
     if (tag.other !== INVALID && this.kinds[tag.other] === Kind.Error) this.removeMarkerEffects(tag.other, strength)
-    if (!this.rows.delete(tag.marker)) {
+    if (!this.detach(tag.marker)) {
       const leaving = this.markerLeavingRow(tag.marker)
       if (leaving === INVALID) throw new Error('failed to find leaving row')
-      const row = this.rows.get(leaving)!
-      this.rows.delete(leaving)
+      const row = this.detach(leaving)!
       row.solveForPair(leaving, tag.marker)
       this.substitute(tag.marker, row)
     }
@@ -200,9 +217,9 @@ export class Solver {
       if (orow) {
         if (orow.add(delta) < 0) this.infeasible.push(other)
       } else {
-        for (const [s, row] of this.rows) {
-          const c = row.coefficientFor(marker)
-          if (c !== 0 && row.add(delta * c) < 0 && this.kinds[s] !== Kind.External) this.infeasible.push(s)
+        for (const s of this.users(marker)) {
+          const row = this.rows.get(s)!
+          if (row.add(delta * row.coefficientFor(marker)) < 0 && this.kinds[s] !== Kind.External) this.infeasible.push(s)
         }
       }
     }
@@ -274,29 +291,71 @@ export class Solver {
 
   private addWithArtificialVariable(row: Row): boolean {
     const art = this.symbol(Kind.Slack)
-    this.rows.set(art, row.copy())
+    this.attach(art, row.copy())
     this.artificial = row.copy()
     this.optimize(this.artificial)
     const success = nearZero(this.artificial.constant)
     this.artificial = null
-    const r = this.rows.get(art)
+    const r = this.detach(art)
     if (r) {
-      this.rows.delete(art)
       if (r.cells.size === 0) return success
       const entering = this.anyPivotableSymbol(r)
       if (entering === INVALID) return false
       r.solveForPair(art, entering)
       this.substitute(entering, r)
-      this.rows.set(entering, r)
+      this.attach(entering, r)
     }
-    for (const row of this.rows.values()) row.remove(art)
+    for (const s of this.users(art)) this.rows.get(s)!.remove(art)
+    this.cols.delete(art)
     this.objective.remove(art)
     return success
   }
 
+  /** A row becomes basic for `sym`: index its cells. */
+  private attach(sym: number, row: Row): void {
+    this.rows.set(sym, row)
+    this.seq.set(sym, this.stamp++)
+    for (const s of row.cells.keys()) this.link(s, sym)
+  }
+
+  /** `sym` stops being basic: its row, unindexed (undefined if it was not basic). */
+  private detach(sym: number): Row | undefined {
+    const row = this.rows.get(sym)
+    if (!row) return undefined
+    this.rows.delete(sym)
+    this.seq.delete(sym)
+    for (const s of row.cells.keys()) this.cols.get(s)!.delete(sym)
+    return row
+  }
+
+  private link(sym: number, basic: number): void {
+    const c = this.cols.get(sym)
+    if (c) c.add(basic)
+    else this.cols.set(sym, new Set([basic]))
+  }
+
+  /** The basic symbols whose rows use `sym`, in the order they became basic. */
+  private users(sym: number): number[] {
+    const c = this.cols.get(sym)
+    if (!c || c.size === 0) return []
+    const seq = this.seq
+    return [...c].sort((a, b) => seq.get(a)! - seq.get(b)!)
+  }
+
+  /** Replace `sym` by `row` in the rows that use it (and the objectives), keeping the index. */
   private substitute(sym: number, row: Row): void {
-    for (const [s, r] of this.rows) {
-      r.substitute(sym, row)
+    const users = this.users(sym)
+    this.cols.delete(sym)
+    for (const s of users) {
+      const r = this.rows.get(s)!
+      const c = r.cells.get(sym)!
+      r.cells.delete(sym)
+      r.constant += row.constant * c
+      for (const [t, d] of row.cells) {
+        r.insert(t, d * c)
+        if (r.cells.has(t)) this.link(t, s)
+        else this.cols.get(t)?.delete(s)
+      }
       if (this.kinds[s] !== Kind.External && r.constant < 0) this.infeasible.push(s)
     }
     this.objective.substitute(sym, row)
@@ -304,16 +363,18 @@ export class Solver {
   }
 
   private optimize(objective: Row): void {
+    let stalled = 0
     for (;;) {
-      const entering = this.enteringSymbol(objective)
+      const bland = stalled > STALL
+      const entering = this.enteringSymbol(objective, bland)
       if (entering === INVALID) return
-      const leaving = this.leavingRow(entering)
+      const leaving = this.leavingRow(entering, bland)
       if (leaving === INVALID) throw new Error('the objective is unbounded')
-      const row = this.rows.get(leaving)!
-      this.rows.delete(leaving)
+      const row = this.detach(leaving)!
+      stalled = nearZero(row.constant) ? stalled + 1 : 0
       row.solveForPair(leaving, entering)
       this.substitute(entering, row)
-      this.rows.set(entering, row)
+      this.attach(entering, row)
       this.pivots++
     }
   }
@@ -325,17 +386,26 @@ export class Solver {
       if (!row || row.constant >= 0) continue
       const entering = this.dualEnteringSymbol(row)
       if (entering === INVALID) throw new Error('dual optimize failed')
-      this.rows.delete(leaving)
+      this.detach(leaving)
       row.solveForPair(leaving, entering)
       this.substitute(entering, row)
-      this.rows.set(entering, row)
+      this.attach(entering, row)
       this.pivots++
     }
   }
 
-  private enteringSymbol(objective: Row): number {
-    for (const [s, c] of objective.cells) if (this.kinds[s] !== Kind.Dummy && c < 0) return s
-    return INVALID
+  /** The symbol with the most negative objective coefficient (Bland: the lowest negative one). */
+  private enteringSymbol(objective: Row, bland: boolean): number {
+    let entering = INVALID
+    let most = 0
+    for (const [s, c] of objective.cells) {
+      if (c >= 0 || this.kinds[s] === Kind.Dummy) continue
+      if (bland ? entering === INVALID || s < entering : c < most) {
+        most = c
+        entering = s
+      }
+    }
+    return entering
   }
 
   private dualEnteringSymbol(row: Row): number {
@@ -358,15 +428,17 @@ export class Solver {
     return INVALID
   }
 
-  private leavingRow(entering: number): number {
+  /** The row the entering symbol replaces: the lowest ratio, ties to the first (Bland: lowest) row. */
+  private leavingRow(entering: number, bland: boolean): number {
     let ratio = Number.MAX_VALUE
     let found = INVALID
-    for (const [s, row] of this.rows) {
+    for (const s of this.users(entering)) {
       if (this.kinds[s] === Kind.External) continue
+      const row = this.rows.get(s)!
       const c = row.coefficientFor(entering)
       if (c < 0) {
         const r = -row.constant / c
-        if (r < ratio) {
+        if (r < ratio || (bland && r === ratio && s < found)) {
           ratio = r
           found = s
         }
@@ -381,9 +453,9 @@ export class Solver {
     let first = INVALID
     let second = INVALID
     let third = INVALID
-    for (const [s, row] of this.rows) {
+    for (const s of this.users(marker)) {
+      const row = this.rows.get(s)!
       const c = row.coefficientFor(marker)
-      if (c === 0) continue
       if (this.kinds[s] === Kind.External) third = s
       else if (c < 0) {
         const r = -row.constant / c
