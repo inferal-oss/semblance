@@ -74,8 +74,14 @@ ui:dt-rdf-validate a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c
     c:label "Check against shapes"@en , "Перевіряти за формами"@uk , "Gegen Formen prüfen"@de , "تحقّق وفق الأشكال"@ar .
 ui:dt-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Ghost ;
     c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
-ui:dt-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:dt-rdf-arrows-field ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-validate ui:dt-rdf-undo ) .
+# The fields line up on their controls (pos:FieldRow); the switches and Undo, which have no label
+# above them, are a row of their own under them.
+ui:dt-rdf-controls a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-rdf-fields ui:dt-rdf-switches ) .
+ui:dt-rdf-fields a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-rdf-jump ui:dt-rdf-arrows-field ) .
+ui:dt-rdf-switches a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-4 ;
+    c:children ( ui:dt-rdf-editable ui:dt-rdf-validate ui:dt-rdf-undo ) .
 
 ui:dt-rdf a c:Flippable ; c:front ui:dt-rdf-spec .
 ui:dt-rdf-spec a c:Specimen ; c:demonstrates c:RdfEditor ; c:label "RDF editor" ;

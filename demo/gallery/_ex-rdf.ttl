@@ -94,8 +94,14 @@ ui:ex-rdf-editor a c:RdfEditor ;
     c:validated true ;
     c:arrows c:ArrowsCurrent ;
     c:current rcp:borscht .
-ui:ex-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-rdf-jump ui:ex-rdf-arrows-field ui:ex-rdf-validate ui:ex-rdf-undo ) .
+# The fields line up on their controls (pos:FieldRow); the switch and Undo, which have no label above
+# them, are a row of their own under them.
+ui:ex-rdf-controls a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-rdf-fields ui:ex-rdf-switches ) .
+ui:ex-rdf-fields a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-rdf-jump ui:ex-rdf-arrows-field ) .
+ui:ex-rdf-switches a c:Stack ; pos:direction pos:Row ; pos:align pos:Center ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-rdf-validate ui:ex-rdf-undo ) .
 ui:ex-rdf-jump a c:Combobox ; c:controls ui:ex-rdf-editor ; c:property c:current ; c:optionsFrom ui:ex-rdf-editor ;
     c:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar .
 ui:ex-rdf-arrows-field a c:Field ; c:content ui:ex-rdf-arrows ;
