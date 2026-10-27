@@ -1,6 +1,7 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
@@ -861,8 +862,58 @@ c:options a owl:ObjectProperty ; rdfs:range rdf:List ;
 
 c:Choice a owl:Class ;
     rdfs:subClassOf sem:Component , c:Chooser ;
-    rdfs:comment "A dropdown setting a single-valued property."@en ;
-    sem:slug "choice" .
+    rdfs:comment "A dropdown setting a single-valued property: a form field (its caption over the select), or, placed inline (c:labelPlacement c:LabelInline), a compact caption-and-select pill for a toolbar."@en ;
+    sem:slug "choice" ;
+    pos:rowParts 2 .
+
+# Where a field's label goes. Above its control by default, as every field's does, so a choice lines up
+# with the text fields beside it (pos:FieldRow); inline, the caption sits in one outline with the
+# select, a compact setting for a toolbar or an app bar.
+c:labelPlacement a owl:ObjectProperty ;
+    rdfs:range c:LabelPlacement ;
+    rdfs:comment "Where a field's label goes: above its control (the default) or inline beside it, in one outline."@en ;
+    sty:hookAttribute "data-sem-label-placement" .
+c:LabelPlacement a owl:Class .
+c:LabelAbove a c:LabelPlacement ; sem:slug "above" ; sem:order 1 ;
+    rdfs:label "Above"@en , "Згори"@uk , "Darüber"@de , "في الأعلى"@ar .
+c:LabelInline a c:LabelPlacement ; sem:slug "inline" ; sem:order 2 ;
+    rdfs:label "Inline"@en , "В рядку"@uk , "In der Zeile"@de , "في السطر"@ar .
+
+# A choice in a toolbar (among its c:children) or an app bar (among its c:actions or c:moreActions)
+# is a compact setting, not a form field: it is placed inline. Derived before the components, as the
+# style layer's other derivations are, so the hook carries it.
+c:ChoicesInlineInToolbars a sem:Rendering ;
+    rdfs:comment "A c:Choice among a c:Toolbar's children or actions is placed inline (c:labelPlacement c:LabelInline)."@en ;
+    sem:targets c:Toolbar ;
+    sem:layer sty:Layer ;
+    sem:inputOnly true ;
+    sem:stratum -16 .
+c:ChoicesInlineInToolbars-fn a sem:Rule ; sem:implements c:ChoicesInlineInToolbars ; sem:function "choice:inline-in-bars" .
+c:ChoicesInlineInToolbars-sparql a sem:Rule ;
+    sem:implements c:ChoicesInlineInToolbars ;
+    sem:construct """
+CONSTRUCT { ?choice c:labelPlacement c:LabelInline }
+WHERE {
+  { $this c:children/rdf:rest*/rdf:first ?choice } UNION { $this c:actions/rdf:rest*/rdf:first ?choice } UNION { $this c:moreActions/rdf:rest*/rdf:first ?choice }
+  FILTER(isIRI(?choice))
+  ?choice a/rdfs:subClassOf* c:Choice .
+}""" .
+c:ChoicesInlineInAppBars a sem:Rendering ;
+    rdfs:comment "A c:Choice among a c:AppBar's children or actions is placed inline (c:labelPlacement c:LabelInline)."@en ;
+    sem:targets c:AppBar ;
+    sem:layer sty:Layer ;
+    sem:inputOnly true ;
+    sem:stratum -16 .
+c:ChoicesInlineInAppBars-fn a sem:Rule ; sem:implements c:ChoicesInlineInAppBars ; sem:function "choice:inline-in-bars" .
+c:ChoicesInlineInAppBars-sparql a sem:Rule ;
+    sem:implements c:ChoicesInlineInAppBars ;
+    sem:construct """
+CONSTRUCT { ?choice c:labelPlacement c:LabelInline }
+WHERE {
+  { $this c:children/rdf:rest*/rdf:first ?choice } UNION { $this c:actions/rdf:rest*/rdf:first ?choice } UNION { $this c:moreActions/rdf:rest*/rdf:first ?choice }
+  FILTER(isIRI(?choice))
+  ?choice a/rdfs:subClassOf* c:Choice .
+}""" .
 c:ChoiceRendering a sem:Rendering ;
     sem:targets c:Choice ;
     sem:stratum 0 ;

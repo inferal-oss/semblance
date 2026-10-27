@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -35,6 +36,7 @@ c:TextArea a owl:Class ;
 c:disabled. Typing sets c:value (and clears a stale c:error). Without a c:label it renders the
 input alone, to be labelled by a c:Field."""@en ;
     sem:slug "text-area" ;
+    pos:rowParts 4 ;
     c:labelPart "input" .
 c:TextAreaRendering a sem:Rendering ; sem:targets c:TextArea ; sem:stratum 0 .
 c:TextAreaRendering-fn a sem:Rule ; sem:implements c:TextAreaRendering ; sem:function "inputs:text-area" .
@@ -791,7 +793,8 @@ c:Field a owl:Class ;
 (c:error, announced with role=alert). The label points at the content's c:labelPart element,
 or labels the content's root (aria-labelledby) when its class names none; help and error
 describe it (aria-describedby, aria-invalid) unless the content has its own."""@en ;
-    sem:slug "field" .
+    sem:slug "field" ;
+    pos:rowParts 4 .
 c:FieldRendering a sem:Rendering ; sem:targets c:Field ; sem:stratum 0 .
 c:FieldRendering-fn a sem:Rule ; sem:implements c:FieldRendering ; sem:function "inputs:field" .
 # The field decorates its content's elements (label for, aria-describedby, aria-labelledby), so it

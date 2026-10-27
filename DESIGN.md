@@ -50,6 +50,14 @@ and the theme styles it once for every component that has it.
   the bar is `c:expanded`; Escape or a press outside closes it). On a compact screen a segmented control or nav list with
   `c:compactAs c:Picker` becomes a native select of its options, the status bar is one
   scrolling line, a split view stacks and a bottom-docked frame keeps to half the screen.
+- **Fields** — every labelled field has one anatomy: its label, its control (the single-line
+  box), its help, its error, one below the other; a field class says how many parts it lays out
+  (`pos:rowParts`). A `c:Choice` is such a field (caption over select); `c:labelPlacement
+  c:LabelInline` makes it the compact caption-and-select pill, which a choice in a `c:Toolbar` or
+  an app bar's actions gets by derivation. Fields side by side go in a `pos:FieldRow`: each takes
+  the row's tracks (label, control, help, error), so the controls line up whatever is under them
+  and an error moves nothing beside it; a button in the row sits beside the controls. Don't align
+  a row of fields by its ends (`pos:align pos:End`): a field's end is its help line.
 
 ## 3. Components
 

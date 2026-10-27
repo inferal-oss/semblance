@@ -125,6 +125,24 @@ pos:AlignedColumns a pos:Layout ; sem:slug "aligned-columns" ;
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" ] ,
                  [ sty:property "align-items" ; sty:raw "stretch" ] .
 
+# Fields side by side: the same tracks, for a row of form fields. A field is a label over a control
+# over its help and its error (its class says pos:rowParts), and fields beside each other line up
+# part by part: every label in the label row, every control in the control row, so a help line or
+# an error under one field never moves its neighbours' controls (aligning the row's ends did: the
+# end of a field with help is its help line). Each field that declares its parts takes its rows from
+# the row (pos:RowSubgrid, derived); anything else in it - a button that acts on the fields - sits
+# in the control row. The columns share the line as flex items would: each as wide as its content,
+# the space left shared out, so a button stays a button's width. On a phone they wrap, two or one
+# to a line, and each line has rows of its own.
+pos:FieldRow a pos:Layout ; sem:slug "field-row" ;
+    rdfs:label "Fields side by side"@en , "Поля поруч"@uk , "Felder nebeneinander"@de , "حقول متجاورة"@ar ;
+    rdfs:comment "A row of form fields that line up part by part: labels in one row, controls in the next, help and errors below; other children (a button) beside the controls."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-auto-flow" ; sty:raw "column" ] ,
+                 [ sty:property "grid-auto-columns" ; sty:raw "auto" ] ,
+                 [ sty:property "align-items" ; sty:raw "start" ] ,
+                 [ sty:property "row-gap" ; sty:raw "0" ] .
+
 pos:rows a owl:ObjectProperty ;
     rdfs:range pos:Rows ;
     rdfs:comment """Where a component's rows come from. pos:RowSubgrid: from the grid it is in, spanning
@@ -184,7 +202,7 @@ pos:RowSpan8 a pos:RowSpan ; pos:count 8 ; sem:slug "8" ;
 # hooks, so they run with the style layer. The first says which
 # children of an aligned container take rows; the second counts the parts of anything that does.
 pos:AlignedColumnRows a sem:Rendering ;
-    rdfs:comment "Children of a pos:AlignedColumns container take their rows from it (pos:rows pos:RowSubgrid)."@en ;
+    rdfs:comment "Children of a pos:AlignedColumns container, and the fields (a class with pos:rowParts) of a pos:FieldRow, take their rows from it (pos:rows pos:RowSubgrid)."@en ;
     sem:targets sem:Component ;
     sem:layer sty:Layer ;
     sem:requires pos:layout ;
@@ -196,7 +214,10 @@ pos:AlignedColumnRows-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT { ?column pos:rows pos:RowSubgrid }
 WHERE {
-  $this pos:layout pos:AlignedColumns ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column))
+  { $this pos:layout pos:AlignedColumns ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column)) }
+  UNION
+  { $this pos:layout pos:FieldRow ; c:children/rdf:rest*/rdf:first ?column FILTER(isIRI(?column))
+    FILTER EXISTS { ?column a/rdfs:subClassOf* ?class . ?class pos:rowParts ?parts } }
 }""" .
 
 pos:RowSpans a sem:Rendering ;
