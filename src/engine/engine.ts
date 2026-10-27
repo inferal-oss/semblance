@@ -356,8 +356,8 @@ export class Engine {
 
   /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
   private readonly locationReaders: Map<string, 'all' | 'top'>
-  /** "subject property" of each nav:Dimension's value: whether it is a top-level one (no nav:parent). */
-  private locationValues?: Map<string, boolean>
+  /** "subject property" of each nav:Dimension's value: the dimensions it is the value of, and whether one is top-level (no nav:parent). */
+  private locationValues?: Map<string, { dims: string[]; top: boolean }>
 
   /**
    * A dimension's value changed (the page, the language): every rendering that reads where we are
@@ -372,25 +372,28 @@ export class Engine {
       this.locationValues = new Map()
       for (const q of this.store.match(null, f.namedNode(NS.nav + 'subject'), null, f.defaultGraph())) {
         const p = this.store.match(q.subject, f.namedNode(NS.nav + 'property'), null, f.defaultGraph())[0]?.object.value
+        if (!p) continue
         const top = this.store.match(q.subject, f.namedNode(NS.nav + 'parent'), null, f.defaultGraph()).length === 0
         const key = q.object.value + ' ' + p
-        if (p) this.locationValues.set(key, top || this.locationValues.get(key) === true)
+        const entry = this.locationValues.get(key) ?? { dims: [], top: false }
+        entry.dims.push(q.subject.value)
+        entry.top ||= top
+        this.locationValues.set(key, entry)
       }
     }
     const values = this.locationValues
-    let any = false
-    let top = false
-    for (const q of [...delta.add, ...delta.remove]) {
-      const v = values.get(q.subject.value + ' ' + q.predicate.value)
-      if (v === undefined) continue
-      any = true
-      top ||= v
-    }
-    if (!any) return
+    const changed = new Set<string>()
+    for (const q of [...delta.add, ...delta.remove]) for (const d of values.get(q.subject.value + ' ' + q.predicate.value)?.dims ?? []) changed.add(d)
+    if (!changed.size) return
+    const keeps = NS.nav + 'keeps'
     for (const rule of this.rules) {
       const reads = this.locationReaders.get(rule.slot)
-      if (!reads || (reads === 'top' && !top)) continue
-      for (const focus of this.outputs.get(rule)?.keys() ?? []) this.markDirty(rule, focus)
+      if (!reads) continue
+      for (const [focus, out] of this.outputs.get(rule) ?? []) {
+        // nav:TopDimensions: only the foci whose output says they keep a dimension that changed (nav:keeps).
+        if (reads === 'top' && ![...out.values()].some((q) => q.predicate.value === keeps && changed.has(q.object.value))) continue
+        this.markDirty(rule, focus)
+      }
     }
   }
 

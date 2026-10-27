@@ -157,7 +157,7 @@ c:MentionDestination-sparql a sem:Rule ;
     sem:implements c:MentionDestination ;
     sem:bulk false ;
     sem:construct """
-CONSTRUCT { $this nav:href ?href }
+CONSTRUCT { $this nav:href ?href . $this nav:keeps ?keptDim }
 WHERE {
   $this c:to ?to . FILTER(isIRI(?to))
   ?loc a nav:Location ; nav:root ?root .
@@ -257,6 +257,17 @@ WHERE {
   OPTIONAL { ?loc nav:base ?base0 }
   BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
   BIND(IF(?paths, CONCAT(?base, ?pathParts, IF(CONTAINS(?all, "#"), CONCAT("#", ?fragmentParts), "")), CONCAT("#", ?fragmentParts)) AS ?href)
+  # The dimensions it keeps (nav:keeps), whatever their value: a change of one of them re-runs it (sem:readsLocation).
+  OPTIONAL {
+    ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
+    ?keptDim nav:carriedBy nav:Path ; nav:subject ?ks2 ; nav:property ?kp2 .
+    FILTER NOT EXISTS { ?keptDim nav:parent ?kpar2 }
+    FILTER NOT EXISTS { ?keptDim a nav:TargetDimension }
+    FILTER(IF(?shown,
+      NOT EXISTS { ?to (^nav:from/nav:to)* ?casek2 . ?casek2 c:when ?wk2 . ?edgek2 nav:from ?casek2 ; nav:to ?switchk2 .
+        ?switchk2 c:cases ?casesk2 ; c:controls ?ks2 ; c:property ?kp2 },
+      NOT EXISTS { ?td2 nav:showsTerms true ; nav:parent* ?keptDim }))
+  }
 }""" .
 
 # --- the reading state: what stands out ---------------------------------------------------------------

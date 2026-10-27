@@ -89,10 +89,18 @@ export class DomRenderer {
           this.keys.set(dom, k)
           return dom
         }
-        if (data) mismatches++
-        const text = this.element(k)
-        parent.insertBefore(text, dom)
-        return text
+        if (data) {
+          mismatches++
+          const text = this.element(k)
+          parent.insertBefore(text, dom)
+          return text
+        }
+        // An empty text node: HTML has no way to write one, so it is the parser's shape, not a change.
+        const empty = this.doc.createTextNode('')
+        this.els.set(k, empty)
+        this.keys.set(empty, k)
+        parent.insertBefore(empty, dom)
+        return empty
       }
       const tag = this.index.tagName(k) ?? 'sem-unknown'
       // Case-blind: an HTML parser may lower an SVG element's name (linearGradient) that a browser keeps.

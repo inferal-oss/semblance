@@ -420,7 +420,7 @@ export function opening(r: Reader, loc: Location, resource: Term): Delta {
 }
 
 /** The address (path and fragment) of the location that shows `resource`, with it as the target. */
-export function addressOf(r: Reader, resource: Term): string | undefined {
+export function addressOf(r: Reader, resource: Term, keeps?: Set<string>): string | undefined {
   const locations = readLocations(r)
   for (const loc of locations) {
     const needs = shows(r, loc, resource)
@@ -431,7 +431,7 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
     const whole = !!last && !!one(r, last.parent, C + 'when')
     const target = loc.dimensions.find((d) => d.target && d.carriers.includes(NAV + 'Fragment'))
     if (target && !whole) needs.set(target.iri, resource)
-    return linkAddress(spellAddress(r, loc, kept(r, loc, needs)))
+    return linkAddress(spellAddress(r, loc, kept(r, loc, needs, keeps)))
   }
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
   // with the values its parents need (nav:when), e.g. #reference/c:List.
@@ -445,15 +445,19 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
       if (parent && at.when[0]) values.set(parent.iri, at.when[0])
       at = parent
     }
-    return linkAddress(spellAddress(r, loc, kept(r, loc, values)))
+    return linkAddress(spellAddress(r, loc, kept(r, loc, values, keeps)))
   }
   return undefined
 }
 
-/** The values a link needs, and where we are for the rest: the current value of each top-level path dimension they leave open. */
-function kept(r: Reader, loc: Location, values: Values): Values {
+/**
+ * The values a link needs, and where we are for the rest: the current value of each top-level
+ * path dimension they leave open. Those dimensions go into `keeps` (whether they have a value).
+ */
+function kept(r: Reader, loc: Location, values: Values, keeps?: Set<string>): Values {
   for (const d of loc.dimensions) {
-    if (d.spelledIn !== PATH || d.parent || values.has(d.iri)) continue
+    if (d.spelledIn !== PATH || d.parent || d.target || values.has(d.iri)) continue
+    keeps?.add(d.iri)
     const v = one(r, d.subject, d.property)
     if (v) values.set(d.iri, v)
   }
@@ -900,8 +904,12 @@ export function rendererReveal(renderer: { nodeOf(key: string): Node | undefined
 const linkDestination: FnRule = (ctx, focus) => {
   const to = ctx.object(focus, C + 'to')
   if (to?.termType !== 'NamedNode') return []
-  const href = addressOf(ruleReader(ctx), to)
-  return href === undefined ? [] : ctx.out(focus).t(focus, NAV + 'href', href).quads
+  const keeps = new Set<string>()
+  const href = addressOf(ruleReader(ctx), to, keeps)
+  if (href === undefined) return []
+  const o = ctx.out(focus).t(focus, NAV + 'href', href)
+  for (const d of keeps) o.t(focus, NAV + 'keeps', ctx.nn(d))
+  return o.quads
 }
 
 /**

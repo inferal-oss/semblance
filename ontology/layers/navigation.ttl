@@ -96,6 +96,8 @@ nav:implicit a owl:ObjectProperty ; rdfs:domain nav:Dimension ;
 nav:rendersInPlace a owl:DatatypeProperty ; rdfs:domain nav:Dimension ; rdfs:range xsd:boolean ;
     rdfs:comment "The dimension's values are shown one at a time in one place that re-renders in place (a reference's term): a static build renders the pages that differ only in it one after another in one runtime, rather than each from a fresh store. Its pages are the same either way (test/ssr.test.ts checks the site's)."@en .
 
+nav:keeps a owl:ObjectProperty ;
+    rdfs:comment "Derived, on a link: a dimension whose current value its address keeps (the language; the page, for what is on every page). A change of that dimension's value re-runs the link's destination, and only then (sem:readsLocation)."@en .
 nav:TopDimensions a owl:NamedIndividual ;
     rdfs:comment "As the object of sem:readsLocation: the rendering reads only the top-level dimensions (no nav:parent: the language, the page), as a link keeps them."@en .
 
@@ -229,7 +231,7 @@ c:LinkDestination-sparql a sem:Rule ;
     sem:implements c:LinkDestination ;
     sem:bulk false ;
     sem:construct """
-CONSTRUCT { $this nav:href ?href }
+CONSTRUCT { $this nav:href ?href . $this nav:keeps ?keptDim }
 WHERE {
   $this c:to ?to . FILTER(isIRI(?to))
   ?loc a nav:Location ; nav:root ?root .
@@ -329,6 +331,17 @@ WHERE {
   OPTIONAL { ?loc nav:base ?base0 }
   BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
   BIND(IF(?paths, CONCAT(?base, ?pathParts, IF(CONTAINS(?all, "#"), CONCAT("#", ?fragmentParts), "")), CONCAT("#", ?fragmentParts)) AS ?href)
+  # The dimensions it keeps (nav:keeps), whatever their value: a change of one of them re-runs it (sem:readsLocation).
+  OPTIONAL {
+    ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
+    ?keptDim nav:carriedBy nav:Path ; nav:subject ?ks2 ; nav:property ?kp2 .
+    FILTER NOT EXISTS { ?keptDim nav:parent ?kpar2 }
+    FILTER NOT EXISTS { ?keptDim a nav:TargetDimension }
+    FILTER(IF(?shown,
+      NOT EXISTS { ?to (^nav:from/nav:to)* ?casek2 . ?casek2 c:when ?wk2 . ?edgek2 nav:from ?casek2 ; nav:to ?switchk2 .
+        ?switchk2 c:cases ?casesk2 ; c:controls ?ks2 ; c:property ?kp2 },
+      NOT EXISTS { ?td2 nav:showsTerms true ; nav:parent* ?keptDim }))
+  }
 }""" .
 # A chooser of a place the path carries (a c:Segmented or c:NavList over a site's pages, its docs
 # sections): each option submits to the address it sets, the rest of where we are kept (the
@@ -416,7 +429,7 @@ c:AppBarDestination-sparql a sem:Rule ;
     sem:implements c:AppBarDestination ;
     sem:bulk false ;
     sem:construct """
-CONSTRUCT { $this nav:href ?href }
+CONSTRUCT { $this nav:href ?href . $this nav:keeps ?keptDim }
 WHERE {
   $this c:to ?to . FILTER(isIRI(?to))
   ?loc a nav:Location ; nav:root ?root .
@@ -516,4 +529,15 @@ WHERE {
   OPTIONAL { ?loc nav:base ?base0 }
   BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
   BIND(IF(?paths, CONCAT(?base, ?pathParts, IF(CONTAINS(?all, "#"), CONCAT("#", ?fragmentParts), "")), CONCAT("#", ?fragmentParts)) AS ?href)
+  # The dimensions it keeps (nav:keeps), whatever their value: a change of one of them re-runs it (sem:readsLocation).
+  OPTIONAL {
+    ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
+    ?keptDim nav:carriedBy nav:Path ; nav:subject ?ks2 ; nav:property ?kp2 .
+    FILTER NOT EXISTS { ?keptDim nav:parent ?kpar2 }
+    FILTER NOT EXISTS { ?keptDim a nav:TargetDimension }
+    FILTER(IF(?shown,
+      NOT EXISTS { ?to (^nav:from/nav:to)* ?casek2 . ?casek2 c:when ?wk2 . ?edgek2 nav:from ?casek2 ; nav:to ?switchk2 .
+        ?switchk2 c:cases ?casesk2 ; c:controls ?ks2 ; c:property ?kp2 },
+      NOT EXISTS { ?td2 nav:showsTerms true ; nav:parent* ?keptDim }))
+  }
 }""" .
