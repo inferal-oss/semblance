@@ -669,6 +669,9 @@ export class Engine {
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
   private markFocus(rule: Rule, focus: string) {
     if (!rule.forEach) return this.markDirty(rule, focus)
+    // Its own writes never re-dirty it: one member's output about the focus (a result it records
+    // there) does not re-run the other members.
+    if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
     for (const g of this.graphs) {
       for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
