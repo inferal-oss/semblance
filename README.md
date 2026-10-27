@@ -165,7 +165,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   contents. A host effect (`src/files.ts`) opens the system picker for a `file:Pick`, turns files
   dragged in from outside the page into a drag of the dnd: layer (each zone shows its reception),
   offers each arriving file to its target so its SHACL decides, and uploads accepted files with
-  progress, as events. `c:FileDrop` (Inputs) is built on it.
+  progress, as events. `c:FileDrop` (Inputs) is built on it; any drop target can take files
+  (`file:Receiver`). Files can be kept in the browser (`file:keepIn` a `file:Store`, IndexedDB)
+  up to a cap that is SHACL, with image previews made off the main thread (`file:preview`).
 - **Outlines** (`ol:`): `ol:label` names any component; a component whose `ol:shows` is true
   outlines the named components inside it, dashed, with the name in a tag (in the viewer's
   language), as overlays that move nothing. A switch on `ol:shows` turns them on and off.

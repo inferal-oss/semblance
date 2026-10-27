@@ -94,6 +94,8 @@ c:TextCell a c:CellKind ; rdfs:comment "The value as text (an IRI by its label),
 c:BadgeCell a c:CellKind ; rdfs:comment "The value (an individual) as a small badge in its sty:tone."@en .
 c:CodeCell a c:CellKind ; rdfs:comment "The value in monospace."@en .
 c:BytesCell a c:CellKind ; rdfs:comment "A number of bytes: B, KiB, MiB."@en .
+c:DateCell a c:CellKind ; rdfs:comment "A date, or a date and time, as its date (2026-10-25)."@en .
+c:ImageCell a c:CellKind ; rdfs:comment "The value (an image's address: a file's file:preview) as a small picture; nothing without one. Decorative (alt=\"\"): the row's other cells name it."@en .
 c:DurationCell a c:CellKind ; rdfs:comment "c:endProperty minus c:startProperty, in ms or s; … while it has no end."@en .
 c:TimeBarCell a c:CellKind ;
     rdfs:comment "A bar from c:startProperty to c:endProperty on the grid's scale (open-ended: still running, to the scale's end); its header holds the c:TimeAxis."@en .
@@ -898,7 +900,8 @@ c:GridRowRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?el a ?tag ; sem:renders ?renders ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabIndex ; sem:orderKey ?orderKey ; c:selectsRow ?selects .
+  ?el a ?tag ; sem:renders ?renders ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:tabIndex ?tabIndex ; sem:orderKey ?orderKey ; c:selectsRow ?selects ;
+      rdfhtml:src ?src ; rdfhtml:alt ?alt ; rdfhtml:loading ?loading .
   ?parent rdfhtml:hasChild ?el .
   ?prev ord:immediatelyPrecedes ?el .
   ?owner rdfhtml:attribute ?attr . ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?name ; rdfhtml:attributeValue ?value .
@@ -964,7 +967,7 @@ WHERE {
       BIND(IF(?a < 1000, CONCAT(STR(ROUND(?a)), " ms"), CONCAT(STR(ROUND(?a / 10) / 100), " s")) AS ?aText)
       BIND(?b - ?a AS ?span)
       BIND(IF(?span < 1000, CONCAT(STR(ROUND(?span)), " ms"), CONCAT(STR(ROUND(?span / 10) / 100), " s")) AS ?spanText)
-      VALUES ?part { "td" "bar" "a-bar" "text" "badge" "a-badge" "code" "value" "detail" }
+      VALUES ?part { "td" "bar" "a-bar" "text" "badge" "a-badge" "code" "image" "value" "detail" }
       LATERAL {
         {
           FILTER(?part = "td")
@@ -983,12 +986,12 @@ WHERE {
                IF(BOUND(?b), CONCAT("from ", ?aText, " for ", ?spanText), CONCAT("from ", ?aText, ", still running")))) AS ?value)
           BIND(IRI(CONCAT(?id, "-bar")) AS ?owner) BIND(IRI(CONCAT(?id, "-bar-", ?name)) AS ?attr)
         } UNION {
-          FILTER(?part = "text" && ((?kind = c:DurationCell && BOUND(?a)) || (?kind = c:BytesCell && isNumeric(?v))))
+          FILTER(?part = "text" && ((?kind = c:DurationCell && BOUND(?a)) || (?kind = c:BytesCell && isNumeric(?v)) || (?kind = c:DateCell && ?hasValue)))
           BIND(IRI(?id) AS ?txtParent) BIND(IRI(CONCAT(?id, "-text")) AS ?txt)
           BIND(xsd:double(?v) AS ?n)
-          BIND(IF(?kind = c:DurationCell, IF(BOUND(?b), ?spanText, "…"),
+          BIND(IF(?kind = c:DateCell, SUBSTR(STR(?v), 1, 10), IF(?kind = c:DurationCell, IF(BOUND(?b), ?spanText, "…"),
                IF(?n < 1024, CONCAT(STR(?v), " B"),
-               IF(?n < 1048576, CONCAT(STR(ROUND(?v * 10 / 1024) / 10), " KiB"), CONCAT(STR(ROUND(?v * 10 / 1048576) / 10), " MiB")))) AS ?data)
+               IF(?n < 1048576, CONCAT(STR(ROUND(?v * 10 / 1024) / 10), " KiB"), CONCAT(STR(ROUND(?v * 10 / 1048576) / 10), " MiB"))))) AS ?data)
         } UNION {
           FILTER(?part = "badge" && ?kind = c:BadgeCell && ?hasValue)
           BIND(IRI(CONCAT(?id, "-badge")) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND("sem-cell-badge" AS ?cls) BIND(IRI(?id) AS ?parent)
@@ -1001,6 +1004,10 @@ WHERE {
           FILTER(?part = "code" && ?kind = c:CodeCell && ?hasValue)
           BIND(IRI(CONCAT(?id, "-code")) AS ?el) BIND(rdfhtml:Code AS ?tag) BIND(IRI(?id) AS ?parent)
           BIND(?el AS ?txtParent) BIND(IRI(CONCAT(?id, "-text")) AS ?txt) BIND(?shown AS ?data)
+        } UNION {
+          FILTER(?part = "image" && ?kind = c:ImageCell && ?hasValue)
+          BIND(IRI(CONCAT(?id, "-image")) AS ?el) BIND(rdfhtml:Img AS ?tag) BIND("sem-cell-image" AS ?cls) BIND(IRI(?id) AS ?parent)
+          BIND(STR(?v) AS ?src) BIND("" AS ?alt) BIND("lazy" AS ?loading)
         } UNION {
           FILTER(?part = "value" && ?kind = c:TextCell && ?hasValue)
           BIND(IRI(CONCAT(?id, "-value")) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND("sem-value" AS ?cls) BIND(IRI(?id) AS ?parent)

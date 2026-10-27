@@ -16,14 +16,24 @@
 //     (file:Progress, a few a second), and how it ended (file:Done, file:Failure); taking the state
 //     away (removing the file) cancels it.
 //
+//   - a file that is to be kept (file:keptIn a file:Store, set when a receiver that keeps files took
+//     it) is written to the browser's storage (IndexedDB, src/file-store.ts) with a small preview if
+//     it is an image (made off the main thread when given a worker), and reported (file:Stored, or
+//     file:StoreFailure with the browser's reason); a file that stops being kept (deleted) has its
+//     bytes freed. What holds only in this page - each kept file's contents and preview as object
+//     URLs (file:url, file:preview) and each store's totals (file:usedBytes, file:usedFiles, which
+//     its cap's shapes read) - the effect writes to the files graph (FILES_GRAPH), rebuilding it
+//     from storage when it attaches.
+//
 // The contents never enter the graph: the effect keeps each file under a handle (file:handle), and
-// the app reads them with fileOf. Requests and uploads already in the graph when it attaches (a
-// restored session) are stale: not performed.
+// the app reads them with fileOf (or contentsOf, for kept files after a reload). Requests and
+// uploads already in the graph when it attaches (a restored session) are stale: not performed.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
 import { receptionOf } from './layers/dragdrop.ts'
 import { arrivalOf } from './components/upload.ts'
-import { DND, FILE, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
+import { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, PREVIEW_SIZE, type Thumbnailer } from './file-store.ts'
+import { DND, FILE, FILES_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import { mint, owningFocus, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
 
@@ -76,6 +86,12 @@ export interface FilesOptions {
   send?: Uploader
   /** At least this many milliseconds between two progress events of one upload (default 100). */
   progressEvery?: number
+  /** Where kept files go (file:keepIn): IndexedDB by default where there is one; null: nothing can be kept. */
+  keep?: FileStoreBackend | null
+  /** How image previews are made (default: in this thread, decoded small; workerThumbnails for a worker); null: none. */
+  thumbnail?: Thumbnailer | null
+  /** How contents become addresses in this page (default URL.createObjectURL and revokeObjectURL); a stand-in for tests. */
+  urls?: { create(contents: Blob | FileLike): string | undefined; revoke(url: string): void }
   /** After each event a reaction handled (e.g. to patch the DOM). */
   onHandled?: (h: Handled) => void
 }
@@ -85,8 +101,36 @@ interface Zone {
   receptacle: string
 }
 
+/** A file the effect keeps: under which handle, for which store, how big, and the addresses it gave out. */
+interface Kept {
+  handle: string
+  store: string
+  size: number
+  urls: string[]
+}
+
+const objectUrls = {
+  create(contents: Blob | FileLike) {
+    const U = globalThis.URL as { createObjectURL?: (b: Blob) => string }
+    return contents instanceof Blob && U.createObjectURL ? U.createObjectURL(contents) : undefined
+  },
+  revoke(url: string) {
+    ;(globalThis.URL as { revokeObjectURL?: (u: string) => void }).revokeObjectURL?.(url)
+  },
+}
+
 export class Files {
   private readonly handles = new Map<string, FileLike>()
+  /** Kept files by node, and how full each store is. */
+  private readonly kept = new Map<string, Kept>()
+  private readonly usage = new Map<string, { bytes: number; files: number }>()
+  private readonly usageChanged = new Set<string>()
+  /** What to write to the files graph next (outside the input listener). */
+  private pendingGraph: Delta = { add: [], remove: [] }
+  private graphQueued = false
+  private backend?: FileStoreBackend | null
+  /** Resolves once the kept files are back from storage (after attach). */
+  ready: Promise<void> = Promise.resolve()
   private readonly uploads = new Map<string, AbortController>()
   private readonly pending = new Set<Promise<unknown>>()
   private next = 0
@@ -107,14 +151,21 @@ export class Files {
     const off = this.bus.runtime.onInput((graph, delta) => this.changed(graph, delta))
     const unlisten = renderer ? this.listen(renderer) : () => {}
     this.doc = renderer?.host.ownerDocument
+    this.backend = this.opts.keep !== undefined ? this.opts.keep : (globalThis as { indexedDB?: unknown }).indexedDB ? indexedDbFileStore() : null
     this.detach = () => {
       off()
       unlisten()
       for (const c of this.uploads.values()) c.abort()
       this.uploads.clear()
+      for (const k of this.kept.values()) for (const u of k.urls) this.urls.revoke(u)
       this.detach = undefined
     }
+    this.ready = this.track(this.restoreKept())
     return this.detach
+  }
+
+  private get urls() {
+    return this.opts.urls ?? objectUrls
   }
 
   /** Resolves once every pick so far, and every upload whose handler has answered, has been reported (for tests). */
@@ -124,6 +175,14 @@ export class Files {
       // An answered upload reports in a later microtask; one task later it has.
       await new Promise((resolve) => setTimeout(resolve, 0))
     } while (this.pending.size)
+  }
+
+  /** The contents of a file node: in this page, or kept in the browser (after a reload). */
+  async contentsOf(file: string): Promise<Blob | FileLike | undefined> {
+    const here = this.fileOf(file)
+    if (here) return here
+    const k = this.kept.get(file)
+    return k && this.backend ? (await this.backend.get(k.handle))?.contents : undefined
   }
 
   /** The contents of a file node (its file:handle), while this page has them. */
@@ -139,11 +198,16 @@ export class Files {
    * added or refused as its reception says (the shape decides, with the file's name and size known).
    * The picker and drops call this; an app may too (files pasted, or made).
    */
-  receive(target: string, files: Iterable<FileLike>): void {
+  receive(target: string, files: Iterable<FileLike>, into?: string): void {
     const store = this.bus.runtime.store
     const f = store.factory
     const nn = (iri: string) => f.namedNode(iri)
     const graph = this.bus.projection.engine.graph
+    // Where they go: the zone they were dropped on, else the target's own zone (a file drop's button).
+    const receptacle =
+      (into !== undefined ? nn(into) : undefined) ??
+      store.match(nn(mint(target, 'zone')), nn(DND.receptacle), null, graph)[0]?.object ??
+      store.match(nn(target), nn(DND.receptacle), null, graph)[0]?.object
     for (const file of files) {
       const handle = `${RUN}-${++this.next}`
       this.handles.set(handle, file)
@@ -154,6 +218,7 @@ export class Files {
       ]
       if (file.type) about.push([FILE.mediaType, f.literal(file.type)])
       if (file.lastModified) about.push([FILE.modified, f.literal(new Date(file.lastModified).toISOString(), nn(XSD_DATETIME))])
+      if (receptacle) about.push([DND.into, receptacle])
       this.emit(FILE.Arrive, target, about)
       const node = store.match(nn(arrivalOf(target)), nn(DND.carrying), null, f.defaultGraph())[0]?.object
       if (!node) {
@@ -161,7 +226,6 @@ export class Files {
         continue
       }
       // Its reception by the target's zone (none while the target is not shown: then it is taken).
-      const receptacle = store.match(nn(mint(target, 'zone')), nn(DND.receptacle), null, graph)[0]?.object
       const reception = receptacle && nn(receptionOf(target, receptacle.value))
       const refused = reception && store.match(reception, nn(DND.verdict), nn(DND.Refused), graph).length > 0
       const said: [string, Term][] = [
@@ -172,7 +236,11 @@ export class Files {
         this.handles.delete(handle)
         const reason = store.match(reception, nn(DND.reason), null, graph)[0]?.object ?? f.literal('It does not belong here.')
         this.emit(FILE.Refusal, target, [...said, [FILE.reason, reason]])
-      } else this.emit(FILE.Added, target, said)
+      } else {
+        this.emit(FILE.Added, target, receptacle ? [...said, [DND.into, receptacle]] : said)
+        // A file to keep counts against its store at once, so the next one's reception sees it.
+        this.flushGraph()
+      }
     }
   }
 
@@ -199,11 +267,166 @@ export class Files {
         c.abort()
       }
     }
+    // A file no longer kept (deleted, or let go) is freed; a file to keep is kept.
+    for (const q of delta.remove) {
+      if (q.predicate.value === FILE.keptIn && !delta.add.some((a) => a.subject.equals(q.subject) && a.predicate.value === FILE.keptIn)) this.free(q.subject.value)
+    }
     for (const q of delta.add) {
       if (q.subject.termType !== 'NamedNode') continue
       if (q.predicate.value === RDF_TYPE && q.object.value === FILE.Pick) this.pick(q.subject)
       else if (q.predicate.value === FILE.state && q.object.value === FILE.Uploading && !this.uploads.has(q.subject.value)) this.upload(q.subject)
+      else if (q.predicate.value === FILE.keptIn && q.object.termType === 'NamedNode' && !this.kept.has(q.subject.value)) this.keep(q.subject, q.object.value)
     }
+  }
+
+  // --- keeping ------------------------------------------------------------------------------------------
+
+  /** Count a file against its store (or not), and say so in the files graph soon. */
+  private count(store: string, bytes: number, files: number) {
+    const u = this.usage.get(store) ?? { bytes: 0, files: 0 }
+    u.bytes = Math.max(0, u.bytes + bytes)
+    u.files = Math.max(0, u.files + files)
+    this.usage.set(store, u)
+    this.usageChanged.add(store)
+    this.queueGraph()
+  }
+
+  private queueGraph() {
+    if (this.graphQueued) return
+    this.graphQueued = true
+    queueMicrotask(() => this.flushGraph())
+  }
+
+  /** Write what changed to the files graph: addresses given out or revoked, and the stores' totals. */
+  private flushGraph() {
+    this.graphQueued = false
+    const runtime = this.bus.runtime
+    const f = runtime.store.factory
+    const nn = (iri: string) => f.namedNode(iri)
+    const g = nn(FILES_GRAPH)
+    const delta = this.pendingGraph
+    this.pendingGraph = { add: [], remove: [] }
+    for (const store of this.usageChanged) {
+      const s = nn(store)
+      const u = this.usage.get(store) ?? { bytes: 0, files: 0 }
+      delta.remove.push(...runtime.store.match(s, nn(FILE.usedBytes), null, g), ...runtime.store.match(s, nn(FILE.usedFiles), null, g))
+      delta.add.push(f.quad(s, nn(FILE.usedBytes), f.literal(String(u.bytes), nn(XSD_INTEGER))), f.quad(s, nn(FILE.usedFiles), f.literal(String(u.files), nn(XSD_INTEGER))))
+    }
+    this.usageChanged.clear()
+    if (this.detach && (delta.add.length || delta.remove.length)) runtime.write(FILES_GRAPH, delta)
+  }
+
+  /** The addresses of a kept file (its contents, its preview) into the files graph. */
+  private publish(file: string, k: Kept, contents: Blob | FileLike | undefined, preview: Blob | undefined) {
+    const f = this.bus.runtime.store.factory
+    const nn = (iri: string) => f.namedNode(iri)
+    const at = (p: string, b: Blob | FileLike | undefined) => {
+      const url = b && this.urls.create(b)
+      if (!url) return
+      k.urls.push(url)
+      this.pendingGraph.add.push(f.quad(nn(file), nn(p), f.literal(url, nn(XSD_ANYURI))))
+    }
+    at(FILE.url, contents)
+    at(FILE.preview, preview)
+    this.queueGraph()
+  }
+
+  /** Who listed the file (the receiver that took it): where its keeping is reported. */
+  private listerOf(file: string): string | undefined {
+    const store = this.bus.runtime.store
+    const f = store.factory
+    const by = store.match(null, f.namedNode(FILE.file), f.namedNode(file), f.defaultGraph())[0]?.subject
+    return by?.termType === 'NamedNode' ? by.value : undefined
+  }
+
+  private keep(file: NamedNode, storeIri: string) {
+    const store = this.bus.runtime.store
+    const f = store.factory
+    const handle = store.match(file, f.namedNode(FILE.handle), null, f.defaultGraph())[0]?.object.value
+    const contents = handle === undefined ? undefined : this.handles.get(handle)
+    if (handle === undefined || !contents) return
+    const k: Kept = { handle, store: storeIri, size: Math.max(0, Math.round(contents.size)), urls: [] }
+    this.kept.set(file.value, k)
+    this.count(storeIri, k.size, 1)
+    const backend = this.backend
+    const thumbnail = this.opts.thumbnail !== undefined ? this.opts.thumbnail : decodeThumbnail
+    const still = () => this.detach && this.kept.get(file.value) === k
+    // After the change that asked has been applied: its report is an event of its own.
+    const work = Promise.resolve().then(async () => {
+      if (!backend) throw new Error('This browser cannot keep files.')
+      const preview = contents.type.startsWith('image/') && thumbnail ? await thumbnail(contents, PREVIEW_SIZE).catch(() => undefined) : undefined
+      await backend.put(handle, { store: storeIri, name: contents.name, type: contents.type, size: k.size, contents, preview })
+      return preview
+    })
+    this.track(
+      work.then(
+        (preview) => {
+          // Deleted while it was written: it goes again.
+          if (!still()) return void backend?.remove(handle).catch(() => {})
+          this.publish(file.value, k, contents, preview)
+          this.flushGraph()
+          const by = this.listerOf(file.value)
+          if (by) this.emit(FILE.Stored, by, [[FILE.file, file]])
+        },
+        (e: unknown) => {
+          if (!still()) return
+          this.kept.delete(file.value)
+          this.count(storeIri, -k.size, -1)
+          this.flushGraph()
+          const by = this.listerOf(file.value)
+          const why = e instanceof DOMException && e.name === 'QuotaExceededError' ? 'The browser has no more room for files.' : String((e as Error)?.message ?? e)
+          if (by) this.emit(FILE.StoreFailure, by, [[FILE.file, file], [FILE.reason, f.literal(why)]])
+        },
+      ),
+    )
+  }
+
+  /** A file no longer kept: its bytes are freed, its addresses revoked, its store has room again. */
+  private free(file: string) {
+    const k = this.kept.get(file)
+    if (!k) return
+    this.kept.delete(file)
+    this.handles.delete(k.handle)
+    for (const u of k.urls) this.urls.revoke(u)
+    const store = this.bus.runtime.store
+    const g = store.factory.namedNode(FILES_GRAPH)
+    const node = store.factory.namedNode(file)
+    this.pendingGraph.remove.push(...store.match(node, store.factory.namedNode(FILE.url), null, g), ...store.match(node, store.factory.namedNode(FILE.preview), null, g))
+    this.count(k.store, -k.size, -1)
+    void this.backend?.remove(k.handle).catch(() => {})
+  }
+
+  /** The files kept by an earlier page, back: counted, given addresses; those whose node is gone (never remembered) are freed. */
+  private async restoreKept() {
+    // Every store is counted from the start, empty or not, so its cap's shapes have totals to read.
+    const graph = this.bus.runtime.store
+    for (const q of graph.match(null, graph.factory.namedNode(RDF_TYPE), graph.factory.namedNode(FILE.Store), graph.factory.defaultGraph())) this.count(q.subject.value, 0, 0)
+    this.flushGraph()
+    const backend = this.backend
+    if (!backend) return
+    let all: Awaited<ReturnType<FileStoreBackend['all']>>
+    try {
+      all = await backend.all()
+    } catch {
+      return
+    }
+    if (!this.detach) return
+    const store = this.bus.runtime.store
+    const f = store.factory
+    for (const [handle, record] of all) {
+      const node = store.match(null, f.namedNode(FILE.handle), f.literal(handle), f.defaultGraph())[0]?.subject
+      const keptIn = node && store.match(node, f.namedNode(FILE.keptIn), null, f.defaultGraph())[0]?.object.value
+      if (!node || !keptIn) {
+        void backend.remove(handle).catch(() => {})
+        continue
+      }
+      if (this.kept.has(node.value)) continue
+      const k: Kept = { handle, store: keptIn, size: record.size, urls: [] }
+      this.kept.set(node.value, k)
+      this.count(keptIn, k.size, 1)
+      this.publish(node.value, k, record.contents, record.preview)
+    }
+    this.flushGraph()
   }
 
   // --- picking ------------------------------------------------------------------------------------------
@@ -315,7 +538,7 @@ export class Files {
 
   // --- dropping -------------------------------------------------------------------------------------------
 
-  /** The zone of a target that takes files (one with a reaction to file:Arrive) an event is over. */
+  /** The zone of a target that takes files (a file:Receiver: one with a reaction to file:Arrive) an event is over. */
   private zoneOf(renderer: DomRenderer, at: EventTarget | null): Zone | undefined {
     const el = (at as Element | null)?.closest?.('[data-sem-drop-zone]')
     if (!el || !renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
@@ -393,7 +616,7 @@ export class Files {
         return end()
       }
       end()
-      this.receive(zone.drop, files)
+      this.receive(zone.drop, files, zone.receptacle)
     }
     doc.addEventListener('dragenter', enter)
     doc.addEventListener('dragover', over)

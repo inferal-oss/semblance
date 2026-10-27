@@ -68,7 +68,7 @@ Thin vocabularies. Every component
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
-| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · RdfEditor · Board · Calendar · GanttChart · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
+| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · RdfEditor · Board · Calendar · GanttChart · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · ImageView · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavLink · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Lightbox · CommandPalette · Tooltip (layer) |
 | **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
@@ -145,8 +145,12 @@ or `file:name`, `sh:maxInclusive` on `file:size`), and its `sh:maxCount` says ho
 `file:File` node with its metadata, never its contents (`ontology/layers/files.ttl`); each arrives on
 its own and is offered to the zone, so the shape decides with its size known, and a refused one is
 listed (`c:FileItem`) with the reason. With `file:uploadTo` or `file:handler` each accepted file is
-uploaded at once, with a `c:Progress`, and its remove button cancels the upload. The picker, the
-drop's `DataTransfer` and the uploads are a host effect (`Files`, `src/files.ts`).
+uploaded at once, with a `c:Progress`, and its remove button cancels the upload; with `file:keepIn`
+each is kept in the browser (states Saving, then "Saved in this browser"). The picker, the
+drop's `DataTransfer`, the uploads and the keeping are a host effect (`Files`, `src/files.ts`).
+An **image view** (`c:ImageView`, `ontology/components/payload.ttl`) shows one image whose address is
+data (a kept file's `file:url` or `file:preview`), fitted to its box; a grid column shows small ones
+with `c:cellAs c:ImageCell`, and dates with `c:DateCell`.
 
 A **command palette** (`c:CommandPalette`, `ontology/components/palette.ttl`; ⌘K / Ctrl+K) is a
 typeahead in a modal overlay whose options are things to run: every `key:Command`, every component
