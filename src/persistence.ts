@@ -293,8 +293,11 @@ export class Persistence {
     if (this.dirty.size) this.schedule()
     this.keep()
     const stop = runtime.onInput((graph, delta) => this.changed(graph, delta))
+    // The runtime ending (a web mount's unmount) releases the store: a waiting write must not run.
+    const unend = runtime.onEnd(() => this.stop())
     this.detachInput = () => {
       stop()
+      unend()
       for (const [iri, k] of this.kept) k.stop(), runtime.views.unhost(mint(iri, 'view'))
       this.kept.clear()
     }

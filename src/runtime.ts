@@ -101,15 +101,44 @@ export class Runtime {
   }
 
   private disposed = false
+  private readonly endListeners: (() => void)[] = []
+
+  /** Whether the runtime has ended (end, dispose): it no longer ticks, applies or writes. */
+  get ended(): boolean {
+    return this.disposed
+  }
 
   /**
-   * Let the runtime and its store go: no timer or queued refresh touches the store afterwards,
-   * and the store releases what it holds outside the JavaScript heap (GraphStore.dispose).
+   * Hear once that the runtime ends, before its store is released: host effects that follow it
+   * (persistence's delayed write, a pending report) finish what they can and stop. Returns a
+   * function that stops listening.
+   */
+  onEnd(listener: () => void): () => void {
+    this.endListeners.push(listener)
+    return () => {
+      const i = this.endListeners.indexOf(listener)
+      if (i >= 0) this.endListeners.splice(i, 1)
+    }
+  }
+
+  /**
+   * End the runtime but keep its store: the effects that follow it stop (onEnd), its views'
+   * timers are cancelled, and no tick, refresh, change or event touches the store afterwards.
+   */
+  end(): void {
+    if (this.disposed) return
+    for (const l of this.endListeners.splice(0)) l()
+    this.disposed = true
+    this.views.dispose()
+  }
+
+  /**
+   * Let the runtime and its store go: it ends (end), and the store releases what it holds
+   * outside the JavaScript heap (GraphStore.dispose).
    */
   dispose(): void {
     if (this.disposed) return
-    this.disposed = true
-    this.views.dispose()
+    this.end()
     this.store.dispose?.()
   }
 
@@ -293,6 +322,7 @@ export class Runtime {
    * and update the projections that read it.
    */
   write(graph: string, delta: Delta): Delta {
+    if (this.disposed) return { add: [], remove: [] }
     const f = this.store.factory
     const g = f.namedNode(graph)
     const effective: Delta = { add: [], remove: [] }
@@ -385,6 +415,7 @@ export class Runtime {
    * turn that was never suspended. Returns whether work is still held.
    */
   continueStall(sliceMs = 50): boolean {
+    if (this.disposed) return false
     const more = this.watchdog.turn(
       () => {
         let more = false
@@ -411,6 +442,7 @@ export class Runtime {
    * Returns how many pairs are out of date.
    */
   stopStall(): number {
+    if (this.disposed) return 0
     for (const p of this.projections) if (p.engine.heldCount) p.engine.stopHeld()
     this.watchdog.resolve()
     for (const l of this.refreshListeners) l()
@@ -419,6 +451,7 @@ export class Runtime {
 
   /** Evaluate what a stopped stall left out of date, as a turn of its own (it may stall again). */
   retryStopped(): void {
+    if (this.disposed) return
     this.watchdog.turn(() => {
       for (const p of this.projections) p.engine.retryStopped(), settle(p)
     })
@@ -428,6 +461,7 @@ export class Runtime {
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
     const effective: Delta = { add: [], remove: [] }
+    if (this.disposed) return effective
     const f = this.store.factory
     const dg = f.defaultGraph()
     for (const q of delta.remove) {

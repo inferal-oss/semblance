@@ -62,7 +62,7 @@ export interface MountedApp {
   rendered: RenderedState
   /** Patch the DOM with whatever changed since (after changing the store through runtime.apply). */
   flush(): void
-  /** Detach events and idle work, and remove the styles. The DOM is left as it is. */
+  /** Detach effects, release the owned runtime and store, and remove injected styles. The DOM is left as it is. Safe to call again; the runtime and store must not be used afterwards. */
   unmount(): void
 }
 
@@ -196,6 +196,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
     rendered,
     flush,
     unmount() {
+      if (stopped) return
       stopped = true
       detach()
       detachFiles?.()
@@ -207,6 +208,7 @@ export async function mount(element: HTMLElement, opts: MountOptions): Promise<M
       popups()
       detachRendered()
       doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter((s) => s !== sheet)
+      runtime.dispose()
     },
   }
 }
