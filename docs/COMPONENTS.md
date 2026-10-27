@@ -559,9 +559,12 @@ replacing `c:entries`. The existing locale text stage (`c:PaletteTexts`) records
 this input dependency and is still function-only pending `sx:Locale`; both
 SPARQL and function option/rendering rules consume the same derived key. No
 host search filter is involved. Oversized literals index only their first
-32,768 characters and violate the declared shape. Keywords are ordinary RDF
-data, including derived graph keys, and must never contain credentials or other
-secrets. Applications remain responsible for bounding their entry inventory.
+32,768 characters. The supplied shape validates component entries (`sem:Component`);
+commands and other entry nodes need an application shape with their own SHACL
+target. The indexing cap applies to every entry, including those without that
+validation target. Keywords are ordinary RDF data, including derived graph keys,
+and must never contain credentials or other secrets. Applications remain
+responsible for bounding their entry inventory.
 
 
 The metadata bound follows SHACL/SPARQL character length (Unicode code points,
