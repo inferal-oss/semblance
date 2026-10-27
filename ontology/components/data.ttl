@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -44,7 +45,8 @@ c:sortDescending a owl:DatatypeProperty ; rdfs:domain c:Table ; rdfs:range xsd:b
 c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column that activating it sorts by."@en .
 
 c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:follows c:dataset ;
-    sem:functionOnly "It runs the SELECT named in the data (c:query), and writes numbers and times in the viewer's locale (Intl); SPARQL 1.1 can do neither." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber, sx:formatDateTime): numbers and times in the viewer's locale. (Its rows, the result of the SELECT named in c:query, become graph data with the views runtime.)" ;
+    sem:needsExtension sx:Locale .
 c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .
 
 c:TableSort a beh:Reaction ;
@@ -72,7 +74,8 @@ c:entryProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A
 c:keyProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's key (e.g. http:fieldName)."@en .
 c:valueProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's value (e.g. http:fieldValue)."@en .
 c:DescriptionListRendering a sem:Rendering ; sem:targets c:DescriptionList ; sem:stratum 0 ;
-    sem:functionOnly "Numeric values are written in the viewer's locale (Intl.NumberFormat: grouping, separators, digits), which SPARQL 1.1 cannot do." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): numeric values are written in the viewer's locale (Intl.NumberFormat)." ;
+    sem:needsExtension sx:Locale .
 c:DescriptionListRendering-fn a sem:Rule ; sem:implements c:DescriptionListRendering ; sem:function "data:description-list" .
 
 # --- Stat: a KPI tile -------------------------------------------------------------------------------
@@ -88,7 +91,8 @@ c:deltaUnit a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:comment "Unit of 
 c:lowerIsBetter a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:boolean ;
     rdfs:comment "A falling value is good news (latency, errors): the trend's tone flips."@en .
 c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 ;
-    sem:functionOnly "The value and its change are numbers written in the viewer's locale (Intl.NumberFormat: grouping, separators, rounding), which SPARQL 1.1 cannot do." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): the value and its change are written in the viewer's locale." ;
+    sem:needsExtension sx:Locale .
 c:StatRendering-fn a sem:Rule ; sem:implements c:StatRendering ; sem:function "data:stat" .
 
 # --- Avatar and AvatarGroup ---------------------------------------------------------------------
@@ -121,8 +125,10 @@ CONSTRUCT {
 WHERE {
   $this a c:Avatar .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:image ?img }
   BIND(MD5(?label) AS ?h)
@@ -155,8 +161,10 @@ CONSTRUCT {
 WHERE {
   $this a c:Avatar .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   BIND(REPLACE(?label, "[\\\\s_.·-]+", " ") AS ?spaced)
   BIND(IF(STRSTARTS(?spaced, " "), SUBSTR(?spaced, 2), ?spaced) AS ?trimmed)
@@ -205,7 +213,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~more")) AS ?moreNode)
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, CONCAT(STR(?count), IF(?count = 1, " member", " members")))) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
@@ -251,8 +260,10 @@ WHERE {
         } GROUP BY ?list ?cell ?member }
               FILTER(?pos >= ?max)
               OPTIONAL { ?member l10n:label ?memberLocal }
-              OPTIONAL { ?member c:label ?memberRaw FILTER(lang(?memberRaw) = "") }
-              OPTIONAL { ?member rdfs:label ?memberRdfs FILTER(lang(?memberRdfs) = "") }
+              OPTIONAL { ?memberRawAt l10n:of ?member ; l10n:label ?memberRaw }
+  OPTIONAL { { ?member l10n:label ?memberRaw } UNION { ?l10nAt_memberRaw l10n:of ?member ; l10n:label ?memberRaw } } OPTIONAL { ?member c:label ?memberRaw FILTER(lang(?memberRaw) = "") FILTER(NOT EXISTS { ?member l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?member ; l10n:label ?l10nPick }) }
+              OPTIONAL { ?memberRdfsAt l10n:of ?member ; l10n:name ?memberRdfs }
+  OPTIONAL { ?member rdfs:label ?memberRdfs FILTER(lang(?memberRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?member ; l10n:name ?l10nPick }) }
               BIND(STR(COALESCE(?memberLocal, ?memberRaw, ?memberRdfs, REPLACE(STR(?member), "^.*[#/]", ""))) AS ?memberLabel)
             } ORDER BY ?pos }
         } GROUP BY ?list ?max }
@@ -354,16 +365,20 @@ WHERE {
       BIND("sem-empty" AS ?emptyClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       BIND(?empty AS ?child)
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No events yet.")) AS ?emptyText)
     } UNION {
       FILTER(?any)
       BIND(rdfhtml:Ol AS ?tag)
       BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
       OPTIONAL { $this l10n:label ?localLabel }
-      OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
-      OPTIONAL { ?stream c:label ?streamLabel FILTER(lang(?streamLabel) = "") }
-      OPTIONAL { ?stream rdfs:label ?streamRdfs FILTER(lang(?streamRdfs) = "") }
+      OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+      OPTIONAL { ?streamLabelAt l10n:of ?stream ; l10n:label ?streamLabel }
+  OPTIONAL { { ?stream l10n:label ?streamLabel } UNION { ?l10nAt_streamLabel l10n:of ?stream ; l10n:label ?streamLabel } } OPTIONAL { ?stream c:label ?streamLabel FILTER(lang(?streamLabel) = "") FILTER(NOT EXISTS { ?stream l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?stream ; l10n:label ?l10nPick }) }
+      OPTIONAL { ?streamRdfsAt l10n:of ?stream ; l10n:name ?streamRdfs }
+  OPTIONAL { ?stream rdfs:label ?streamRdfs FILTER(lang(?streamRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?stream ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?localLabel, ?rawLabel, ?streamLabel, ?streamRdfs, REPLACE(STR(?stream), "^.*[#/]", ""))) AS ?label)
     } UNION {
       FILTER(?any)
@@ -404,7 +419,8 @@ WHERE {
       BIND("sem-empty" AS ?emptyClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       BIND(?empty AS ?child)
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No events yet.")) AS ?emptyText)
     } UNION {
       FILTER(?any)
@@ -423,7 +439,8 @@ WHERE {
   }
 }""" .
 c:TimelineItemRendering a sem:Rendering ; sem:targets c:TimelineItem ; sem:stratum 0 ;
-    sem:functionOnly "It writes the event's clock time in the viewer's time zone and locale (toLocaleTimeString); SPARQL 1.1 sees only the time zone of the literal." .
+    sem:functionOnly "awaits sx:Locale (sx:formatDateTime): the event's clock time in the viewer's time zone and locale." ;
+    sem:needsExtension sx:Locale .
 c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ; sem:function "data:timeline-item" .
 
 # --- Tree: an expandable hierarchy ----------------------------------------------------------------
@@ -446,7 +463,11 @@ c:detailProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "
 c:expands a owl:ObjectProperty ; rdfs:comment "On a rendered twisty: the tree node that activating it opens or closes."@en .
 
 c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 ;
-    sem:functionOnly "A node's children are the subjects of c:parentProperty, a predicate named in the data, to any depth: SPARQL 1.1 property paths need a fixed predicate. Siblings sort in the viewer's collation (localeCompare)." .
+    sem:needsExtension sx:Locale ;
+    sem:functionOnly """awaits sx:Locale (sx:collated, or sx:sortKey for sem:orderKey): siblings sort in the viewer's collation
+(localeCompare), which no SPARQL (1.1 or 1.2) function gives. The walk itself needs no extension: per-tree step edges
+along c:parentProperty, as c:BreadcrumbSteps mints them, and items keyed by their path, which a building block can mint
+level by level for the open nodes.""" .
 c:TreeRendering-fn a sem:Rule ; sem:implements c:TreeRendering ; sem:function "data:tree" .
 
 c:TreeToggle a beh:Reaction ;

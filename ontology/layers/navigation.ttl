@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
@@ -120,6 +121,8 @@ nav:Navigate a owl:Class ; rdfs:subClassOf beh:Event ;
 to the nav:Location, with the URL's query and fragment as beh:value; recorded in the change log."""@en .
 nav:Follow a beh:Reaction ; beh:when nav:Navigate ; beh:sourceClass nav:Location ;
     rdfs:comment "Writes the dimensions the URL carries (and the target's) into the graph."@en ;
+    sem:functionOnly "awaits sx:Text (sx:decodeURI): it reads the address, whose keys are percent-encoded." ;
+    sem:needsExtension sx:Text ;
     sem:function "navigation:follow" .
 
 # What the effect reports (in the navigation graph, urn:semblance:navigation).
@@ -174,10 +177,209 @@ nav:goTo a owl:ObjectProperty ;
 nav:href a owl:DatatypeProperty ;
     rdfs:comment "Derived, on a c:Link with c:to: the URL fragment of the location that shows its target."@en .
 # In the components' stratum, so links that other components mint (a reference's facets) get it too.
-c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to ;
-    sem:functionOnly "It walks the component tree up to any depth through containment properties named in the data, and spells the location as URL text exactly as the navigation effect parses it (key order, escaping, prefixed names); SPARQL 1.1 paths cannot have variable predicates." .
+# --- the component tree, as edges (a building block for the destinations' SPARQL) -------------
+# Each containment property (nav:ContainmentProperty) links a container to what it holds: directly,
+# or through an RDF list of them. nav:Containment states each such link as an edge of its own
+# (minted under the property: nav:from the part, nav:to the container), so a fixed property path
+# (^nav:from/nav:to)* walks up the tree. Evaluated whether shown or not (sem:always): the tree is
+# what the page is built from, read when the page loads.
+nav:Containment a sem:BuildingBlock ;
+    sem:targets nav:ContainmentProperty ;
+    sem:stratum -30 ;
+    sem:always true .
+nav:Containment-fn a sem:Rule ; sem:implements nav:Containment ; sem:function "navigation:containment" .
+nav:Containment-sparql a sem:Rule ;
+    sem:implements nav:Containment ;
+    sem:construct """
+CONSTRUCT { ?edge nav:from ?child ; nav:to ?parent }
+WHERE {
+  $this a nav:ContainmentProperty .
+  { ?parent $this ?child . FILTER(isIRI(?parent) && isIRI(?child)) }
+  UNION
+  { ?parent $this ?list . FILTER(isIRI(?parent) && !isIRI(?list)) ?list rdf:rest*/rdf:first ?child . FILTER(isIRI(?child)) }
+  BIND(IRI(CONCAT(STR($this), "/~up-", MD5(CONCAT(STR(?parent), " ", STR(?child))))) AS ?edge)
+}""" .
+nav:from a owl:ObjectProperty ; rdfs:comment "A containment edge's part."@en .
+nav:to a owl:ObjectProperty ; rdfs:comment "A containment edge's container."@en .
+
+c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to .
 c:LinkDestination-fn a sem:Rule ; sem:implements c:LinkDestination ; sem:function "navigation:link-destination" .
+c:LinkDestination-sparql a sem:Rule ;
+    sem:implements c:LinkDestination ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { $this nav:href ?href }
+WHERE {
+  $this c:to ?to . FILTER(isIRI(?to))
+  ?loc a nav:Location ; nav:root ?root .
+  BIND(EXISTS { ?to (^nav:from/nav:to)* ?root } AS ?shown)
+  # A term no component shows: a class, a property, or named in an owl:Ontology's namespace.
+  BIND(REPLACE(STR(?to), "[^#/]*$", "") AS ?ns)
+  BIND(!?shown && (EXISTS { ?anyOf a ?to } || EXISTS { ?anyS ?to ?anyO }
+       || EXISTS { ?onto a owl:Ontology FILTER(STR(?onto) = ?ns || STR(?onto) = SUBSTR(?ns, 1, STRLEN(?ns) - 1)) }) AS ?term)
+  FILTER(?shown || ?term)
+  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(?part; separator="/") AS ?parts) WHERE {
+    { SELECT DISTINCT ?to ?loc ?d ?part ?order WHERE {
+      { SELECT ?to ?loc ?d ?v WHERE {
+        $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+        {
+          # Shown: the cases of the switches on the way down, and the target - unless it is a whole case.
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          ?to (^nav:from/nav:to)* ?root .
+          ?to (^nav:from/nav:to)* ?casea .
+      LATERAL { ?casea c:when ?v . ?edgea nav:from ?casea ; nav:to ?switcha .
+        ?switcha c:cases ?casesa ; c:controls ?controlsa ; c:property ?propertya .
+        ?d nav:subject ?controlsa ; nav:property ?propertya . FILTER NOT EXISTS { ?d a nav:TargetDimension } }
+          # It applies: its parent dimension's value, from a case further up, is one it is shown under.
+          OPTIONAL { ?d nav:parent ?pa }
+          FILTER(!BOUND(?pa) || EXISTS { ?d nav:when ?pw . ?to (^nav:from/nav:to)* ?casec .
+      LATERAL { ?casec c:when ?pw . ?edgec nav:from ?casec ; nav:to ?switchc .
+        ?switchc c:cases ?casesc ; c:controls ?controlsc ; c:property ?propertyc .
+        ?pa nav:subject ?controlsc ; nav:property ?propertyc . FILTER NOT EXISTS { ?pa a nav:TargetDimension } } })
+        } UNION {
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          ?to (^nav:from/nav:to)* ?root .
+          ?d a nav:TargetDimension ; nav:carriedBy nav:Fragment .
+          FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
+          BIND(?to AS ?v)
+        } UNION {
+          # A term: the dimension whose values are terms, and what its parents need for it to apply.
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
+          ?loc nav:dimensions ?termHead . ?termHead rdf:rest* ?termCell . ?termCell rdf:first ?termDim .
+          ?termDim nav:showsTerms true ; nav:carriedBy nav:Fragment .
+          { ?termDim nav:showsTerms true . BIND(?termDim AS ?d) } UNION { ?termDim nav:showsTerms true ; nav:parent* ?x . ?x nav:parent ?d ; nav:when ?when }
+          BIND(IF(?d = ?termDim, ?to, ?when) AS ?v)
+        }
+      } }
+      ?d nav:carriedBy nav:Fragment .
+      OPTIONAL { ?d nav:keyProperty ?keyPropertys }
+      BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
+      OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
+      OPTIONAL { FILTER(!?prefixeds) ?v sem:slug ?slugKeys }
+      OPTIONAL { ?v nav:anchor ?anchors }
+      BIND(COALESCE(IF(isLiteral(?ownKeys), STR(?ownKeys), ?none), IF(isLiteral(?slugKeys), STR(?slugKeys), ?none)) AS ?keys)
+      # The longest namespace an IRI starts with (and that leaves a plain local name) spells it.
+      LATERAL { OPTIONAL { SELECT ?v (MAX(CONCAT(SUBSTR("0000", STRLEN(STR(STRLEN(?pnss)))), STR(STRLEN(?pnss)), " ", ?pps, ":", STRAFTER(STR(?v), ?pnss))) AS ?bests) WHERE {
+        { ?pnodes sem:prefixName ?pp0s ; sem:namespace ?pns0s } UNION { ?pnodes sh:prefix ?pp0s ; sh:namespace ?pns0s }
+        BIND(STR(?pp0s) AS ?pps) BIND(STR(?pns0s) AS ?pnss)
+        FILTER(isIRI(?v) && STRSTARTS(STR(?v), ?pnss) && REGEX(STRAFTER(STR(?v), ?pnss), "^[A-Za-z0-9_-]+$"))
+      } GROUP BY ?v } }
+      BIND(IF(isLiteral(?v), STR(?v),
+           IF(EXISTS { ?d a nav:TargetDimension }, COALESCE(STR(?anchors), REPLACE(STR(?v), "^.*[#/]", "")),
+           COALESCE(?keys, STRAFTER(?bests, " "), STR(?v)))) AS ?texts)
+      # As encodeURIComponent writes it, with ':' and '@' kept readable.
+      BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+      # Parents before their children, in the location's order; a parent not carried here after; the target last.
+      # (From the location's list head forward: Oxigraph walks a list path from its far end slowly.)
+      {{ SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d }} GROUP BY ?d }}
+      OPTIONAL {{ ?d nav:parent ?p1 . {{ SELECT ?p1 (COUNT(DISTINCT ?before1) AS ?at1) WHERE {{ ?l1 a nav:Location ; nav:dimensions ?h1 . ?h1 rdf:rest* ?before1 . ?before1 rdf:rest* ?c1 . ?c1 rdf:first ?p1 }} GROUP BY ?p1 }} }}
+      BIND(SUBSTR(CONCAT("000", STR(?at)), STRLEN(STR(?at)) + 1) AS ?own)
+      BIND(IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
+           IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
+           IF(EXISTS {{ ?p1 nav:carriedBy nav:Fragment }}, CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own)))) AS ?order)
+    } ORDER BY ?order }
+  } GROUP BY ?to ?loc }
+  BIND(CONCAT("#", COALESCE(?parts, "")) AS ?href)
+}""" .
+# The current page: a link that goes to the address the location shows now (nav:address, as the
+# navigation effect reports it; its fragment, which is what links spell) is nav:current, and its
+# rendering marks it aria-current=page as if it said c:currentPage (unless it says c:currentPage
+# false). The rule is focused on the location: a step costs the links to the old and the new
+# address, found by their address, not every link.
+nav:current a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Derived, on a c:Link: it goes to the address the location shows now."@en .
+c:LinkCurrent a sem:Rendering ; sem:targets nav:Location ; sem:stratum 0 ; sem:always true .
+c:LinkCurrent-fn a sem:Rule ; sem:implements c:LinkCurrent ; sem:function "navigation:link-current" .
+c:LinkCurrent-sparql a sem:Rule ; sem:implements c:LinkCurrent ;
+    sem:construct """
+CONSTRUCT { ?link nav:current true }
+WHERE {
+  $this a nav:Location ; nav:address ?address .
+  BIND(IF(CONTAINS(?address, "#"), CONCAT("#", STRAFTER(?address, "#")), "#") AS ?fragment)
+  { ?link nav:href ?fragment } UNION { ?link c:href ?fragment FILTER NOT EXISTS { ?link nav:href ?any } }
+  ?link a/rdfs:subClassOf* c:Link .
+}""" .
 # An app bar's c:to (its home) is resolved the same way, for the link its logo and name make.
-c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to ;
-    sem:functionOnly "As c:LinkDestination: it walks the component tree up to any depth through containment properties named in the data." .
+c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to .
 c:AppBarDestination-fn a sem:Rule ; sem:implements c:AppBarDestination ; sem:function "navigation:link-destination" .
+c:AppBarDestination-sparql a sem:Rule ;
+    sem:implements c:AppBarDestination ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { $this nav:href ?href }
+WHERE {
+  $this c:to ?to . FILTER(isIRI(?to))
+  ?loc a nav:Location ; nav:root ?root .
+  BIND(EXISTS { ?to (^nav:from/nav:to)* ?root } AS ?shown)
+  # A term no component shows: a class, a property, or named in an owl:Ontology's namespace.
+  BIND(REPLACE(STR(?to), "[^#/]*$", "") AS ?ns)
+  BIND(!?shown && (EXISTS { ?anyOf a ?to } || EXISTS { ?anyS ?to ?anyO }
+       || EXISTS { ?onto a owl:Ontology FILTER(STR(?onto) = ?ns || STR(?onto) = SUBSTR(?ns, 1, STRLEN(?ns) - 1)) }) AS ?term)
+  FILTER(?shown || ?term)
+  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(?part; separator="/") AS ?parts) WHERE {
+    { SELECT DISTINCT ?to ?loc ?d ?part ?order WHERE {
+      { SELECT ?to ?loc ?d ?v WHERE {
+        $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+        {
+          # Shown: the cases of the switches on the way down, and the target - unless it is a whole case.
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          ?to (^nav:from/nav:to)* ?root .
+          ?to (^nav:from/nav:to)* ?casea .
+      LATERAL { ?casea c:when ?v . ?edgea nav:from ?casea ; nav:to ?switcha .
+        ?switcha c:cases ?casesa ; c:controls ?controlsa ; c:property ?propertya .
+        ?d nav:subject ?controlsa ; nav:property ?propertya . FILTER NOT EXISTS { ?d a nav:TargetDimension } }
+          # It applies: its parent dimension's value, from a case further up, is one it is shown under.
+          OPTIONAL { ?d nav:parent ?pa }
+          FILTER(!BOUND(?pa) || EXISTS { ?d nav:when ?pw . ?to (^nav:from/nav:to)* ?casec .
+      LATERAL { ?casec c:when ?pw . ?edgec nav:from ?casec ; nav:to ?switchc .
+        ?switchc c:cases ?casesc ; c:controls ?controlsc ; c:property ?propertyc .
+        ?pa nav:subject ?controlsc ; nav:property ?propertyc . FILTER NOT EXISTS { ?pa a nav:TargetDimension } } })
+        } UNION {
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          ?to (^nav:from/nav:to)* ?root .
+          ?d a nav:TargetDimension ; nav:carriedBy nav:Fragment .
+          FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
+          BIND(?to AS ?v)
+        } UNION {
+          # A term: the dimension whose values are terms, and what its parents need for it to apply.
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
+          ?loc nav:dimensions ?termHead . ?termHead rdf:rest* ?termCell . ?termCell rdf:first ?termDim .
+          ?termDim nav:showsTerms true ; nav:carriedBy nav:Fragment .
+          { ?termDim nav:showsTerms true . BIND(?termDim AS ?d) } UNION { ?termDim nav:showsTerms true ; nav:parent* ?x . ?x nav:parent ?d ; nav:when ?when }
+          BIND(IF(?d = ?termDim, ?to, ?when) AS ?v)
+        }
+      } }
+      ?d nav:carriedBy nav:Fragment .
+      OPTIONAL { ?d nav:keyProperty ?keyPropertys }
+      BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
+      OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
+      OPTIONAL { FILTER(!?prefixeds) ?v sem:slug ?slugKeys }
+      OPTIONAL { ?v nav:anchor ?anchors }
+      BIND(COALESCE(IF(isLiteral(?ownKeys), STR(?ownKeys), ?none), IF(isLiteral(?slugKeys), STR(?slugKeys), ?none)) AS ?keys)
+      # The longest namespace an IRI starts with (and that leaves a plain local name) spells it.
+      LATERAL { OPTIONAL { SELECT ?v (MAX(CONCAT(SUBSTR("0000", STRLEN(STR(STRLEN(?pnss)))), STR(STRLEN(?pnss)), " ", ?pps, ":", STRAFTER(STR(?v), ?pnss))) AS ?bests) WHERE {
+        { ?pnodes sem:prefixName ?pp0s ; sem:namespace ?pns0s } UNION { ?pnodes sh:prefix ?pp0s ; sh:namespace ?pns0s }
+        BIND(STR(?pp0s) AS ?pps) BIND(STR(?pns0s) AS ?pnss)
+        FILTER(isIRI(?v) && STRSTARTS(STR(?v), ?pnss) && REGEX(STRAFTER(STR(?v), ?pnss), "^[A-Za-z0-9_-]+$"))
+      } GROUP BY ?v } }
+      BIND(IF(isLiteral(?v), STR(?v),
+           IF(EXISTS { ?d a nav:TargetDimension }, COALESCE(STR(?anchors), REPLACE(STR(?v), "^.*[#/]", "")),
+           COALESCE(?keys, STRAFTER(?bests, " "), STR(?v)))) AS ?texts)
+      # As encodeURIComponent writes it, with ':' and '@' kept readable.
+      BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+      # Parents before their children, in the location's order; a parent not carried here after; the target last.
+      # (From the location's list head forward: Oxigraph walks a list path from its far end slowly.)
+      {{ SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d }} GROUP BY ?d }}
+      OPTIONAL {{ ?d nav:parent ?p1 . {{ SELECT ?p1 (COUNT(DISTINCT ?before1) AS ?at1) WHERE {{ ?l1 a nav:Location ; nav:dimensions ?h1 . ?h1 rdf:rest* ?before1 . ?before1 rdf:rest* ?c1 . ?c1 rdf:first ?p1 }} GROUP BY ?p1 }} }}
+      BIND(SUBSTR(CONCAT("000", STR(?at)), STRLEN(STR(?at)) + 1) AS ?own)
+      BIND(IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
+           IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
+           IF(EXISTS {{ ?p1 nav:carriedBy nav:Fragment }}, CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own)))) AS ?order)
+    } ORDER BY ?order }
+  } GROUP BY ?to ?loc }
+  BIND(CONCAT("#", COALESCE(?parts, "")) AS ?href)
+}""" .

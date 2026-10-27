@@ -5,7 +5,8 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import type { Delta } from '../rdf.ts'
 import { C, DND, H, L10N, MOD, NS, RDF_TYPE, SEM, STY } from '../ns.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { messageOf } from '../layers/dragdrop.ts'
+import { named, picked, RDFS_LABEL, str, text } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const SH = NS.sh
@@ -34,10 +35,10 @@ const XSD_INTEGER = NS.xsd + 'integer'
 /** SPARQL's ENCODE_FOR_URI, so minted keys match the SPARQL rules'. */
 const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 const localName = (t: Term) => t.value.replace(/^.*[#/]/, '')
-/** As the SPARQL rules read a label: the untagged rdfs:label, else the IRI's local name (a literal is itself). */
-function plainLabel(ctx: { objects(s: Term, p: string): Term[] }, t: Term): string {
+/** As the SPARQL rules read a label: in the viewer's language when translated, else the untagged rdfs:label, else the IRI's local name (a literal is itself). */
+function plainLabel(ctx: RuleContext, t: Term): string {
   if (t.termType === 'Literal') return t.value
-  return ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')?.value ?? localName(t)
+  return picked(ctx, t, RDFS_LABEL) ?? ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')?.value ?? localName(t)
 }
 /** Hours as whole minutes (SPARQL: xsd:integer(ROUND(x * 60))). */
 const minutes = (t: Term | undefined, fallback: number) => {
@@ -96,19 +97,19 @@ const overlap = (a: Placed, b: Placed) => a.day.equals(b.day) && b.start < a.sta
 const isA = (ctx: Reader, x: Term, cls: Term) => ctx.match(x, RDF_TYPE, cls).length > 0
 
 /** The c:exclusiveBy shapes: their class, the property held one at a time, and their message. */
-function exclusive(ctx: Reader) {
+function exclusive(ctx: RuleContext) {
   return ctx.match(null, P.exclusiveBy, null).flatMap((q) =>
     objectsOf(ctx, q.subject, SH + 'targetClass').map((cls) => ({
       shape: q.subject,
       cls,
       by: q.object,
-      message: objectsOf(ctx, q.subject, SH + 'message').find((m) => m.termType === 'Literal' && m.language === '')?.value ?? 'It would overlap another booking.',
+      message: messageOf(ctx, q.subject) ?? text(ctx, ctx.nn(NS.c + 'OverlapPhrase'), RDFS_LABEL) ?? 'It would overlap another booking.',
     })),
   )
 }
 
 /** Pairs of items that overlap while sharing an exclusive value: item -> its rivals. */
-function conflicts(ctx: Reader, items: Placed[]): Map<string, NamedNode[]> {
+function conflicts(ctx: RuleContext, items: Placed[]): Map<string, NamedNode[]> {
   const out = new Map<string, NamedNode[]>()
   for (const { cls, by } of exclusive(ctx)) {
     if (!named(by)) continue

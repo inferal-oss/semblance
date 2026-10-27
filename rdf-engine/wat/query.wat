@@ -47,6 +47,8 @@
             (local.set $i (i32.add (local.get $i) (i32.const 4)))
             (br $words))))))
       (if (i32.eq (local.get $k) (i32.const P_UNION)) (then (call $an_union (local.get $el))))
+      ;; a magic relation's inputs are bound wherever it joins (else it has no rows)
+      (if (i32.eq (local.get $k) (i32.const P_MAGIC)) (then (call $refs_bits (local.get $b) (i32.load offset=8 (local.get $el)))))
       (if (i32.or (i32.or (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (i32.eq (local.get $k) (i32.const P_MINUS)))
                   (i32.eq (local.get $k) (i32.const P_LATERAL)))
         (then (drop (call $an_group (i32.load offset=4 (local.get $el))))))
@@ -87,6 +89,10 @@
     (call $an_ref (local.get $m) (i32.load offset=12 (local.get $el)))
     (return)))
   (if (i32.eq (local.get $k) (i32.const P_GROUP)) (then (call $mention_group (local.get $el) (local.get $m)) (return)))
+  (if (i32.eq (local.get $k) (i32.const P_MAGIC)) (then
+    (call $refs_bits (local.get $m) (i32.load offset=8 (local.get $el)))
+    (call $refs_bits (local.get $m) (i32.load offset=12 (local.get $el)))
+    (return)))
   (if (i32.eq (local.get $k) (i32.const P_UNION)) (then
     (call $mention_elem (i32.load offset=4 (local.get $el)) (local.get $m))
     (call $mention_elem (i32.load offset=8 (local.get $el)) (local.get $m))
@@ -409,14 +415,31 @@
 (global $o_keys (mut i32) (i32.const 0))
 (global $o_nc (mut i32) (i32.const 0))
 (global $o_desc (mut i32) (i32.const 0))   ;; a byte per condition
+;; sx:collated(s, lang) keys (EXTENSIONS.md): a byte per condition (0: none
+;; collated), and each row's lang per condition, as $o_keys
+(global $o_coll (mut i32) (i32.const 0))
+(global $o_langs (mut i32) (i32.const 0))
 
 (func $o_cmp (param $a i32) (param $b i32) (result i32)
-  (local $c i32) (local $r i32)
+  (local $c i32) (local $r i32) (local $ia i32) (local $ib i32) (local $ka i32) (local $kb i32) (local $la i32) (local $lb i32)
   (loop $conds
     (if (i32.lt_u (local.get $c) (global.get $o_nc)) (then
-      (local.set $r (call $order_cmp
-        (i32.load (i32.add (global.get $o_keys) (i32.shl (i32.add (i32.mul (local.get $a) (global.get $o_nc)) (local.get $c)) (i32.const 2))))
-        (i32.load (i32.add (global.get $o_keys) (i32.shl (i32.add (i32.mul (local.get $b) (global.get $o_nc)) (local.get $c)) (i32.const 2))))))
+      (local.set $ia (i32.shl (i32.add (i32.mul (local.get $a) (global.get $o_nc)) (local.get $c)) (i32.const 2)))
+      (local.set $ib (i32.shl (i32.add (i32.mul (local.get $b) (global.get $o_nc)) (local.get $c)) (i32.const 2)))
+      (local.set $ka (i32.load (i32.add (global.get $o_keys) (local.get $ia))))
+      (local.set $kb (i32.load (i32.add (global.get $o_keys) (local.get $ib))))
+      (local.set $r (i32.const 2))
+      (if (global.get $o_coll) (then
+        (if (i32.load8_u (i32.add (global.get $o_coll) (local.get $c))) (then
+          (local.set $la (i32.load (i32.add (global.get $o_langs) (local.get $ia))))
+          (local.set $lb (i32.load (i32.add (global.get $o_langs) (local.get $ib))))
+          ;; both strings with string langs: the left one's Intl.Collator
+          (if (i32.and (i32.and (i32.ne (local.get $ka) (i32.const 0)) (i32.ne (local.get $kb) (i32.const 0)))
+                       (i32.and (i32.ne (local.get $la) (i32.const 0)) (i32.ne (local.get $lb) (i32.const 0)))) (then
+            (if (i32.and (i32.and (call $is_str (local.get $ka)) (call $is_str (local.get $kb)))
+                         (i32.and (call $is_str (local.get $la)) (call $is_str (local.get $lb))))
+              (then (local.set $r (call $sx_collate (local.get $la) (local.get $ka) (local.get $kb)))))))))))
+      (if (i32.eq (local.get $r) (i32.const 2)) (then (local.set $r (call $order_cmp (local.get $ka) (local.get $kb)))))
       (if (local.get $r) (then
         (return (select (i32.sub (i32.const 0) (local.get $r)) (local.get $r) (i32.load8_u (i32.add (global.get $o_desc) (local.get $c)))))))
       (local.set $c (i32.add (local.get $c) (i32.const 1)))
@@ -427,6 +450,7 @@
 (func $sort (param $t i32) (param $conds i32)
   (local $n i32) (local $nc i32) (local $c i32) (local $i i32) (local $l i32) (local $idx i32) (local $tmp i32)
   (local $w i32) (local $lo i32) (local $mid i32) (local $hi i32) (local $a i32) (local $b i32) (local $k i32) (local $out i32)
+  (local $x i32) (local $at i32)
   (local.set $n (i32.load offset=4 (local.get $t)))
   (if (i32.lt_u (local.get $n) (i32.const 2)) (then (return)))
   (local.set $l (local.get $conds))
@@ -434,17 +458,37 @@
   (global.set $o_nc (local.get $nc))
   (global.set $o_keys (call $alloc (i32.shl (i32.mul (local.get $n) (local.get $nc)) (i32.const 2))))
   (global.set $o_desc (call $alloc (local.get $nc)))
+  (global.set $o_coll (i32.const 0))
   (local.set $l (local.get $conds))
   (loop $cond
     (if (local.get $l) (then
       (i32.store8 (i32.add (global.get $o_desc) (local.get $c)) (i32.load offset=8 (local.get $l)))
+      (local.set $x (i32.load offset=4 (local.get $l)))
+      (if (i32.and (i32.eq (i32.load (local.get $x)) (i32.const E_CALL)) (i32.eq (i32.load offset=4 (local.get $x)) (i32.const F_SX_COLLATED)))
+        (then
+          ;; the key is s; each row's lang beside it
+          (if (i32.eqz (global.get $o_coll)) (then
+            (global.set $o_coll (call $alloc0 (local.get $nc)))
+            (global.set $o_langs (call $alloc (i32.shl (i32.mul (local.get $n) (local.get $nc)) (i32.const 2))))))
+          (i32.store8 (i32.add (global.get $o_coll) (local.get $c)) (i32.const 1))
+          (local.set $i (i32.const 0))
+          (loop $rows
+            (if (i32.lt_u (local.get $i) (local.get $n)) (then
+              (local.set $at (i32.shl (i32.add (i32.mul (local.get $i) (local.get $nc)) (local.get $c)) (i32.const 2)))
+              (i32.store (i32.add (global.get $o_keys) (local.get $at))
+                (call $ev (i32.load offset=8 (local.get $x)) (call $t_row (local.get $t) (local.get $i))))
+              (i32.store (i32.add (global.get $o_langs) (local.get $at))
+                (call $ev (i32.load offset=28 (i32.load offset=8 (local.get $x))) (call $t_row (local.get $t) (local.get $i))))
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (br $rows)))))
+        (else
       (local.set $i (i32.const 0))
       (loop $rows
         (if (i32.lt_u (local.get $i) (local.get $n)) (then
           (i32.store (i32.add (global.get $o_keys) (i32.shl (i32.add (i32.mul (local.get $i) (local.get $nc)) (local.get $c)) (i32.const 2)))
             (call $ev (i32.load offset=4 (local.get $l)) (call $t_row (local.get $t) (local.get $i))))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
-          (br $rows))))
+          (br $rows))))))
       (local.set $c (i32.add (local.get $c) (i32.const 1)))
       (local.set $l (i32.load offset=28 (local.get $l)))
       (br $cond))))
@@ -502,7 +546,11 @@
   (call $free (local.get $idx) (i32.shl (local.get $n) (i32.const 2)))
   (call $free (local.get $tmp) (i32.shl (local.get $n) (i32.const 2)))
   (call $free (global.get $o_keys) (i32.shl (i32.mul (local.get $n) (local.get $nc)) (i32.const 2)))
-  (call $free (global.get $o_desc) (local.get $nc)))
+  (call $free (global.get $o_desc) (local.get $nc))
+  (if (global.get $o_coll) (then
+    (call $free (global.get $o_coll) (local.get $nc))
+    (call $free (global.get $o_langs) (i32.shl (i32.mul (local.get $n) (local.get $nc)) (i32.const 2)))
+    (global.set $o_coll (i32.const 0)))))
 
 ;; --- grouping and aggregates -------------------------------------------------------
 

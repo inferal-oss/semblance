@@ -42,7 +42,7 @@ describe('maintained views: operator laws', () => {
     expect(rows()).toEqual(['1 b', '2 e', '3 d'])
   })
 
-  it('a parameter on LIMIT moves the window in place; a parameter elsewhere builds the view again', () => {
+  it('a parameter on LIMIT moves the window in place', () => {
     const { store, runtime } = lawRuntime()
     const f = store.factory
     const nn = (s: string) => f.namedNode(V + s)
@@ -60,6 +60,28 @@ describe('maintained views: operator laws', () => {
     expect(runtime.views.view(V + 'paged')).toBe(paged)
   })
 
+  it('a parameter in the body retunes in place: a pattern’s constant re-evaluates what it matches, a FILTER’s every partition', () => {
+    const { store, runtime } = lawRuntime()
+    const f = store.factory
+    const nn = (s: string) => f.namedNode(V + s)
+    const int = (n: number) => f.literal(String(n), f.namedNode(NS.xsd + 'integer'))
+    runtime.transaction(() => {
+      for (let i = 0; i < 40; i++) runtime.apply({ remove: [], add: [f.quad(nn('s'), f.namedNode(LDES.member), nn('m' + i)), f.quad(nn('m' + i), nn('x'), int(i % 10)), f.quad(nn('m' + i), nn('kind'), nn('K' + (1 + (i % 4))))] })
+    })
+    const kinded = runtime.views.view(V + 'kinded')!
+    const atLeast = runtime.views.view(V + 'atLeast')!
+    expect(kinded.rows()).toHaveLength(10)
+    const before = kinded.figures.partitions
+    runtime.apply({ remove: [], add: [f.quad(nn('cfg'), nn('kind'), nn('K2'))] })
+    // The same view, its K1 and K2 members evaluated again (and the strict check passed).
+    expect(runtime.views.view(V + 'kinded')).toBe(kinded)
+    expect(kinded.rows().map((r) => r.get('m')!.value.replace(V, '')).sort()).toEqual(['m1', 'm13', 'm17', 'm21', 'm25', 'm29', 'm33', 'm37', 'm5', 'm9'])
+    expect(kinded.figures.partitions - before).toBeLessThanOrEqual(21)
+    runtime.apply({ remove: [], add: [f.quad(nn('cfg'), nn('min'), int(7))] })
+    expect(runtime.views.view(V + 'atLeast')).toBe(atLeast)
+    expect(atLeast.rows().map((r) => r.get('x')!.value)).toEqual(['7', '7'])
+  })
+
   it('a view per instance (iv:targets) comes and goes with its instance', () => {
     const { store, runtime } = lawRuntime()
     const f = store.factory
@@ -70,6 +92,34 @@ describe('maintained views: operator laws', () => {
     expect(instance('T7')!.rows().map((r) => r.get('n')!.value)).toEqual(['1'])
     runtime.apply({ add: [], remove: [f.quad(nn('T7'), f.namedNode(NS.rdf + 'type'), nn('Target'))] })
     expect(instance('T7')).toBeUndefined()
+  })
+
+  it('a view per referrer (iv:perReferrer) comes and goes with the node naming it, its rows under that node', () => {
+    const { store, runtime } = lawRuntime()
+    const f = store.factory
+    const nn = (s: string) => f.namedNode(V + s)
+    const instance = (a: string) => runtime.views.view(runtime.views.instanceOf(V + 'perAsker', V + a))
+    runtime.transaction(() => {
+      for (const [m, t] of [['p', 'T1'], ['q', 'T1'], ['r', 'T2']]) runtime.apply({ remove: [], add: [f.quad(nn('s'), f.namedNode(LDES.member), nn(m!)), f.quad(nn(m!), nn('target'), nn(t!))] })
+    })
+    expect(instance('B1')).toBeUndefined()
+    runtime.apply({ remove: [], add: [f.quad(nn('B1'), nn('asks'), nn('perAsker')), f.quad(nn('B1'), nn('about'), nn('T1'))] })
+    expect(instance('B1')!.rows().map((r) => r.get('n')!.value)).toEqual(['2'])
+    // Its rows are a result set minted under the node that asks.
+    const RS = 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#'
+    const rows = store.match(f.namedNode(runtime.views.instanceOf(V + 'perAsker', V + 'B1')), f.namedNode(RS + 'solution'), null)
+    expect(rows.map((q) => q.object.value.startsWith(V + 'B1/~'))).toEqual([true])
+    // A second asker is a view of its own; the first is not rebuilt.
+    const rebuilds = runtime.views.totals.rebuilds
+    runtime.apply({ remove: [], add: [f.quad(nn('B2'), nn('asks'), nn('perAsker')), f.quad(nn('B2'), nn('about'), nn('T2'))] })
+    expect(instance('B2')!.rows().map((r) => r.get('n')!.value)).toEqual(['1'])
+    expect(runtime.views.totals.rebuilds).toBe(rebuilds)
+    // What it asks about is a triple its query reads: maintained, not redefined.
+    runtime.apply({ remove: store.match(nn('B1'), nn('about'), null), add: [f.quad(nn('B1'), nn('about'), nn('T2'))] })
+    expect(instance('B1')!.rows().map((r) => r.get('n')!.value)).toEqual(['1'])
+    runtime.apply({ add: [], remove: [f.quad(nn('B1'), nn('asks'), nn('perAsker'))] })
+    expect(instance('B1')).toBeUndefined()
+    expect(instance('B2')).toBeDefined()
   })
 })
 

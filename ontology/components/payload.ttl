@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -44,7 +45,7 @@ c:collapsedPath; a twisty (or the container's key) toggles it. Invalid JSON is s
 a note. c:label names the root (default "root")."""@en ;
     sem:slug "json-tree" ;
     key:navigation key:TreeNavigation .
-c:expandDepth a owl:DatatypeProperty ; rdfs:domain c:JsonTree ; rdfs:range xsd:integer ;
+c:expandDepth a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "Containers shallower than this are open unless collapsed (default 1: the root only)."@en .
 c:expandedPath a owl:DatatypeProperty ; rdfs:domain c:JsonTree ;
     rdfs:comment "The JSON Pointer of a container the person opened (\"\" is the root, \"/items/0\" the first item)."@en .
@@ -67,7 +68,8 @@ c:jsonParent a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonNo
 # among its siblings (its position in its parent).
 
 c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ;
-    sem:functionOnly "It parses the payload as JSON, which needs a tokenizer; SPARQL cannot split text into tokens. What it mints, the c:JsonNode structure, is rendered by a rule with both a SPARQL and a function implementation." .
+    sem:functionOnly "awaits sx:Json (sx:json): it parses the payload as JSON. What it mints, the c:JsonNode structure, is rendered by SPARQL." ;
+    sem:needsExtension sx:Json .
 c:JsonTreeRendering-fn a sem:Rule ; sem:implements c:JsonTreeRendering ; sem:function "payload:json-tree" .
 
 c:JsonNodeRendering a sem:Rendering ; sem:targets c:JsonNode ; sem:stratum 0 .
@@ -139,6 +141,38 @@ WHERE {
   BIND(IF(BOUND(?group), IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
   LATERAL { {} UNION { FILTER(BOUND(?group)) ?child c:jsonParent $this } }
 }""" .
+c:JsonNodeRendering-sparql-text a sem:Rule ;
+    sem:implements c:JsonNodeRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line , ?group .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?group .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?data .
+  ?group a rdfhtml:Div ; rdfhtml:hasChild ?child .
+}
+WHERE {
+  $this a c:JsonNode ; c:jsonPath ?path ; c:jsonType ?type0 .
+  BIND(STR(?type0) AS ?type)
+  OPTIONAL { $this c:jsonKey ?key0 }
+  BIND(COALESCE(STR(?key0), "") AS ?key)
+  OPTIONAL { $this c:jsonDepth ?depth0 }
+  BIND(COALESCE(xsd:integer(STR(?depth0)), 0) AS ?depth)
+  OPTIONAL { $this c:jsonCount ?count0 }
+  BIND(COALESCE(xsd:integer(STR(?count0)), 0) AS ?count)
+  OPTIONAL { $this c:jsonValue ?value0 }
+  BIND(?type IN ("object", "array") AS ?container)
+  BIND(?container && EXISTS { $this c:expanded true } AS ?open)
+  BIND(IF(?type = "object", CONCAT("{", STR(?count), "}"), IF(?type = "array", CONCAT("[", STR(?count), "]"), COALESCE(STR(?value0), ""))) AS ?shown)
+  # Two spaces per level (a JSON tree is not deeper than this in practice).
+  BIND(SUBSTR("                                                                                                                                ", 1, 2 * ?depth) AS ?indent)
+  BIND(CONCAT(?indent, IF(?container, IF(?open, "\u25BE ", "\u25B8 "), "  "), ?key, ": ", ?shown) AS ?data)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  BIND(IF(?open && ?count > 0, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
+  LATERAL { {} UNION { FILTER(BOUND(?group)) ?child c:jsonParent $this } }
+}""" .
 
 c:JsonTreeToggle a beh:Reaction ;
     beh:when beh:Click ;
@@ -160,7 +194,8 @@ ASCII characters ('.' for the rest), in a scrolling region. At most c:limit byte
 are shown; a note counts the rest."""@en ;
     sem:slug "hex-view" .
 c:HexViewRendering a sem:Rendering ; sem:targets c:HexView ; sem:stratum 0 ;
-    sem:functionOnly "It encodes the text as UTF-8 and writes each byte in hex, which needs a character's code point: SPARQL has no function from a character to its code (or bytes), and no way to count through a string's positions." .
+    sem:functionOnly "awaits sx:Text (sx:codepoint): it writes each UTF-8 byte of the text in hex, which needs a character's code point." ;
+    sem:needsExtension sx:Text .
 c:HexViewRendering-fn a sem:Rule ; sem:implements c:HexViewRendering ; sem:function "payload:hex-view" .
 
 # --- BodyViewer: one payload as text, hex or JSON ------------------------------------------------
@@ -231,7 +266,8 @@ WHERE {
       BIND(rdfhtml:P AS ?rootTag)
       BIND("sem-empty" AS ?rootClass)
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No payload.")) AS ?emptyText)
     } UNION {
       # The header and the chosen view.
@@ -273,12 +309,83 @@ WHERE {
       BIND(IF(?opt = ?chosen, "true", "false") AS ?pressed)
       BIND(IRI(CONCAT(STR($this), "/~l10n-", ?optSlug)) AS ?optLabelNode)
       OPTIONAL { ?optLabelNode l10n:label ?optLabelLocal }
-      OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") }
-      OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) }
-      OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) }
+      OPTIONAL { ?optLabel_uAt l10n:of ?opt ; l10n:name ?optLabel_u }
+  OPTIONAL { ?opt rdfs:label ?optLabel_u FILTER(isLiteral(?optLabel_u) && lang(?optLabel_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?l10nAt_optLabel_en l10n:of ?opt ; l10n:name ?optLabel_en } OPTIONAL { FILTER(!BOUND(?optLabel_u)) ?opt rdfs:label ?optLabel_en FILTER(langMatches(lang(?optLabel_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?l10nAt_optLabel_any l10n:of ?opt ; l10n:name ?optLabel_any } OPTIONAL { FILTER(!BOUND(?optLabel_u) && !BOUND(?optLabel_en)) ?opt rdfs:label ?optLabel_any FILTER(isLiteral(?optLabel_any)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?optLabelLocal, ?optLabel_u, ?optLabel_en, ?optLabel_any, ?optSlug)) AS ?optLabel)
     }
   }
+}""" .
+c:BodyViewerRendering-sparql-text a sem:Rule ;
+    sem:implements c:BodyViewerRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?head , ?view .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?head a rdfhtml:Div ; rdfhtml:hasChild ?headText ; ord:immediatelyPrecedes ?view .
+  ?headText a rdfhtml:Text ; rdfhtml:data ?line .
+  ?view a ?viewClass ; c:value ?payload ; c:block ?block .
+}
+WHERE {
+  $this a c:BodyViewer .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  # No payload: a muted line.
+  OPTIONAL { ?pickeAt l10n:of $this ; l10n:emptyText ?picke }
+  OPTIONAL { FILTER(!BOUND(?picke)) ?l10nAt_anye l10n:of $this ; l10n:emptyText ?anye } OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+  BIND(STR(COALESCE(?picke, ?anye)) AS ?ownEmpty)
+  BIND(IF(BOUND(?payload), ?none, "sem-empty") AS ?rootClass)
+  BIND(IF(BOUND(?payload), ?none, IRI(CONCAT(STR($this), "/~empty"))) AS ?empty)
+  BIND(IF(BOUND(?payload), ?none, COALESCE(?ownEmpty, "No payload.")) AS ?emptyText)
+  # Else the offered representations (the chosen one in brackets) and the size, then the view.
+  BIND(REGEX(?payload, "^\\\\s*[\\\\[{]") AS ?json)
+  OPTIONAL { $this c:representation ?stated FILTER(?json || ?stated != c:AsJson) ?stated a c:Representation }
+  BIND(IF(BOUND(?payload), COALESCE(?stated, IF(?json, c:AsJson, c:AsText)), ?none) AS ?chosen)
+  # (An unbound node would match anything: no payload, no representation.)
+  BIND(COALESCE(?chosen, sem:Nothing) AS ?chosenNode)
+  OPTIONAL { ?chosenNode sem:slug ?chosenSlug0 }
+  BIND(STR(?chosenSlug0) AS ?chosenSlug)
+  LATERAL { OPTIONAL {
+    SELECT ?chosen ?json (GROUP_CONCAT(?entry; separator=" ") AS ?options) WHERE {
+      { SELECT DISTINCT ?chosen ?json ?opt ?entry ?k WHERE {
+        ?opt a c:Representation FILTER(isIRI(?opt) && (?json || ?opt != c:AsJson))
+        OPTIONAL { ?opt sem:slug ?optSlug0 }
+        OPTIONAL { ?opt sem:order ?optOrder0 }
+        BIND(COALESCE(STR(?optSlug0), REPLACE(STR(?opt), "^.*[#/]", "")) AS ?optSlug)
+        LATERAL { OPTIONAL { SELECT ?opt ?optName WHERE {
+  
+  OPTIONAL { ?pickoAt l10n:of ?opt ; l10n:name ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?l10nAt_anyo l10n:of ?opt ; l10n:name ?anyo } OPTIONAL { FILTER(!BOUND(?picko)) ?opt rdfs:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?opt ; l10n:name ?l10nPick }) }
+  BIND(STR(COALESCE(?picko, ?anyo)) AS ?optName)
+  } } }
+        BIND(COALESCE(?optName, ?optSlug) AS ?optLabel)
+        BIND(IF(?opt = ?chosen, CONCAT("[", ?optLabel, "]"), ?optLabel) AS ?entry)
+        BIND(COALESCE(xsd:double(?optOrder0), 0) AS ?k)
+      } ORDER BY ?k STR(?opt) }
+    } GROUP BY ?chosen ?json
+  } }
+  OPTIONAL { $this c:typeProperty ?typeProperty . ?holder ?typeProperty ?type0 }
+  BIND(STRLEN(REPLACE(ENCODE_FOR_URI(?payload), "%[0-9A-F]{2}", "x")) AS ?bytes)
+  BIND(IF(?bytes < 1024, CONCAT(STR(?bytes), " B"), CONCAT(STR(ROUND(?bytes * 10 / 1024) / 10), " KiB")) AS ?size)
+  BIND(CONCAT(IF(BOUND(?type0), CONCAT(STR(?type0), " \u00B7 "), ""), ?size) AS ?metaData)
+  BIND(CONCAT(COALESCE(?options, ""), "  ", ?metaData) AS ?line)
+  BIND(IF(BOUND(?chosenSlug), IRI(CONCAT(STR($this), "/~head")), ?none) AS ?head)
+  BIND(IF(BOUND(?chosenSlug), IRI(CONCAT(STR($this), "/~head-text")), ?none) AS ?headText)
+  BIND(IF(BOUND(?chosenSlug), IRI(CONCAT(STR($this), "/~", IF(?chosenSlug = "json", CONCAT("json-", SUBSTR(MD5(COALESCE(STR(?subject), "")), 1, 8)), ?chosenSlug))), ?none) AS ?view)
+  BIND(IF(?chosenSlug = "json", c:JsonTree, IF(?chosenSlug = "hex", c:HexView, c:Code)) AS ?viewClass)
+  BIND(IF(?chosenSlug = "text", true, ?none) AS ?block)
 }""" .
 
 # The localization layer for c:BodyViewer: the representations' labels in the viewer's language,
@@ -286,9 +393,26 @@ WHERE {
 c:BodyViewerTexts a sem:Rendering ;
     sem:targets c:BodyViewer ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rule: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:BodyViewerTexts-fn a sem:Rule ; sem:implements c:BodyViewerTexts ; sem:function "payload:body-viewer-texts" .
+c:BodyViewerTexts-sparql a sem:Rule ; sem:implements c:BodyViewerTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?label }
+WHERE {
+  $this a ?type .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  ?representation a c:Representation . FILTER(isIRI(?representation))
+  FILTER EXISTS { ?representation rdfs:label ?some FILTER(NOT EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?some)) }) FILTER(isLiteral(?some)) }
+  OPTIONAL { ?representation sem:slug ?declared }
+  BIND(COALESCE(STR(?declared), REPLACE(STR(?representation), "^.*[#/]", "")) AS ?slug)
+  LATERAL { OPTIONAL { SELECT ?representation ?label WHERE {
+  
+  OPTIONAL { ?pickAt l10n:of ?representation ; l10n:name ?pick }
+  OPTIONAL { FILTER(!BOUND(?pick)) ?l10nAt_any l10n:of ?representation ; l10n:name ?any } OPTIONAL { FILTER(!BOUND(?pick)) ?representation rdfs:label ?any FILTER(isLiteral(?any)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?representation ; l10n:name ?l10nPick }) }
+  BIND(STR(COALESCE(?pick, ?any)) AS ?label)
+  } } }
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ?slug)) AS ?node)
+}""" .
 
 c:BodyViewerSelect a beh:Reaction ;
     beh:when beh:Click ;

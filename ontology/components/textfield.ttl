@@ -36,11 +36,12 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextField .
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?labelData)
   OPTIONAL { $this c:value ?value }
-  OPTIONAL { $this c:placeholder ?placeholder }
+  OPTIONAL { ?l10nAt_placeholder l10n:of $this ; l10n:placeholder ?placeholder } OPTIONAL { $this c:placeholder ?placeholder FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:placeholder ?l10nPick }) }
   OPTIONAL { $this c:inputType ?declaredType }
   BIND(COALESCE(?declaredType, "text") AS ?inputType)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -49,7 +50,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
   BIND(STR(?input) AS ?inputId)
   OPTIONAL {
-    $this c:help ?helpData .
+    $this c:help ?helpData FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick FILTER(STR(?l10nPick) = STR(?helpData)) }) .
     BIND(IRI(CONCAT(STR($this), "/~help")) AS ?help)
     BIND(IRI(CONCAT(STR($this), "/~help-text")) AS ?helpText)
   }
@@ -85,7 +86,8 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:TextField .
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:value ?value }
@@ -94,7 +96,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
   OPTIONAL {
-    $this c:help ?h .
+    $this c:help ?h FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick FILTER(STR(?l10nPick) = STR(?h)) }) .
     BIND(CONCAT("  ", STR(?h)) AS ?helpData)
     BIND(IRI(CONCAT(STR($this), "/~help")) AS ?help)
     BIND(IRI(CONCAT(STR($this), "/~help-text")) AS ?helpText)

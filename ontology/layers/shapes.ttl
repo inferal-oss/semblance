@@ -1,3 +1,5 @@
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix val: <https://semblance.dev/ns/validation#> .
 @prefix c: <https://semblance.dev/ns/component#> .
@@ -46,14 +48,16 @@ val:Shapes-sparql a sem:Rule ;
     sem:implements val:Shapes ;
     sem:construct """
 CONSTRUCT {
-  ?result a sh:ValidationResult ; sh:focusNode $this ; sh:resultPath ?path ; sh:resultMessage ?message ;
+  ?result a sh:ValidationResult ; sh:focusNode ?focus ; sh:resultPath ?path ; sh:resultMessage ?message ;
           sh:sourceShape ?source ; sh:resultSeverity sh:Violation ; sh:value ?value .
   $this val:violation ?result .
 }
 WHERE {
+  # The component itself, or (member-wise, val:EntryShapes) the entry of it being checked.
+  BIND(COALESCE($member, $this) AS ?focus)
   ?shape sh:targetClass ?class .
   ?type rdfs:subClassOf* ?class .
-  $this a ?type .
+  ?focus a ?type .
   {
     ?shape sh:property ?ps .
     ?ps sh:path ?path ; ?constraint ?param .
@@ -65,7 +69,6 @@ WHERE {
     BIND(sh:or AS ?constraint)
     BIND(?shape AS ?ps)
   }
-  BIND($this AS ?focus)
   VALUES ?localName { "^.*[#/]" }
   LATERAL {
     {
@@ -132,13 +135,30 @@ WHERE {
       BIND("no alternative holds" AS ?fallback)
     }
   }
-  LATERAL { OPTIONAL { SELECT ?ps ?custom WHERE { ?ps sh:message ?custom }
+  LATERAL { OPTIONAL { SELECT ?ps ?custom WHERE { ?ps sh:message ?custom FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick } || EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick FILTER(STR(?l10nPick) = STR(?custom)) }) }
                        ORDER BY (lang(?custom) != "") (!langMatches(lang(?custom), "en")) LIMIT 1 } }
   BIND(STR(COALESCE(?custom, CONCAT(REPLACE(STR(COALESCE(?path, ?shape)), ?localName, ""), ": ", ?fallback))) AS ?message)
   BIND(IF(isIRI(?ps), ?ps, ?shape) AS ?source)
-  BIND(IRI(CONCAT(STR($this), "/~shape-", SUBSTR(MD5(CONCAT(COALESCE(STR(?path), ""), " ", STR(?source), " ", STRAFTER(STR(?constraint), "#"), " ",
+  BIND(IRI(CONCAT(STR($this), "/~shape-", SUBSTR(MD5(CONCAT(IF(sameTerm(?focus, $this), "", CONCAT(STR(?focus), " ")), COALESCE(STR(?path), ""), " ", STR(?source), " ", STRAFTER(STR(?constraint), "#"), " ",
        ?fallback, " ", COALESCE(STR(?value), ""))), 1, 8))) AS ?result)
 }""" .
+
+# The entries of a component that says c:validated true (an RDF editor's resources): each checked
+# against the shapes of its classes by the same query (sem:constructFrom), member-wise, so an edit
+# re-checks the entry it changed. The results are about the entry (sh:focusNode) and on the
+# component (val:violation); the component shows them where it shows the entry. Not a layer: the
+# component asks for it.
+val:EntryShapes a sem:Rendering ;
+    sem:targets sem:Component ;
+    sem:forEach c:entry ;
+    sem:requires c:validated ;
+    sem:stratum -9 ;
+    sem:inputOnly true .
+val:EntryShapes-fn a sem:Rule ; sem:implements val:EntryShapes ; sem:function "shapes:validate" .
+val:EntryShapes-sparql a sem:Rule ; sem:implements val:EntryShapes ; sem:constructFrom val:Shapes-sparql .
+c:validated a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "Validated"@en , "Перевіряється"@uk , "Geprüft"@de , "مُتحقَّق منه"@ar ;
+    rdfs:comment "true: a component's entries (c:entry) are checked against the SHACL shapes of their classes, and it shows what does not conform (an RDF editor, inline)."@en .
 
 # After the components (and before tooltips, stratum 30): outline and explain.
 val:ShapeMarks a sem:Rendering ;
@@ -158,12 +178,12 @@ CONSTRUCT {
   ?count a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shape-invalid" ; rdfhtml:attributeValue ?n .
 }
 WHERE {
-  # One row per marked component: its first result.
-  $this val:violation ?first .
-  FILTER NOT EXISTS { $this val:violation ?earlier FILTER(STR(?earlier) < STR(?first)) }
+  # One row per marked component: its first result about itself (its entries' are shown where it shows them).
+  $this val:violation ?first . ?first sh:focusNode $this .
+  FILTER NOT EXISTS { $this val:violation ?earlier . ?earlier sh:focusNode $this FILTER(STR(?earlier) < STR(?first)) }
   BIND($this AS ?self)
   LATERAL { OPTIONAL { SELECT ?self (COUNT(?message) AS ?c) (GROUP_CONCAT(?message; separator=" · ") AS ?all) WHERE {
-    { SELECT ?self ?message WHERE { ?self val:violation ?result . ?result sh:resultMessage ?raw BIND(STR(?raw) AS ?message) FILTER(?message != "") }
+    { SELECT ?self ?message WHERE { ?self val:violation ?result . ?result sh:focusNode ?self ; sh:resultMessage ?raw BIND(STR(?raw) AS ?message) FILTER(?message != "") }
       ORDER BY ?message }
   } GROUP BY ?self } }
   BIND(STR(COALESCE(?c, 0)) AS ?n)
@@ -177,9 +197,7 @@ c:ShapeReport a owl:Class ;
     rdfs:comment "Every SHACL result the shapes layer recorded, by component."@en ;
     sem:slug "shape-report" .
 c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 ;
-    sem:functionOnly """It lists results from anywhere in the graph. SPARQL can (it ranks them by pairs), but a SPARQL
-rule is re-run only for changes on its focus, one sem:follows hop away, or under it (sem:readsMinted); the
-function hears a result go through the reads it traced. A report that SPARQL keeps current needs the
-engine to re-run a rule on changes to a predicate anywhere.""" .
+    sem:functionOnly "awaits sx:Locale (sx:collated): results are listed in collation order of their components and messages (localeCompare). They come from anywhere in the graph, so its SPARQL rule will also follow the results (val:violation) it lists." ;
+    sem:needsExtension sx:Locale .
 c:ShapeReportRendering-fn a sem:Rule ; sem:implements c:ShapeReportRendering ; sem:function "shape-report" .
 

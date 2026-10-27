@@ -191,7 +191,8 @@ WHERE {
   $this a/rdfs:subClassOf* c:DataGrid .
   BIND(STR($this) AS ?g)
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?caption)
   LATERAL {
     {
@@ -217,8 +218,10 @@ WHERE {
       LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
       FILTER(isIRI(?col))
       FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
-      OPTIONAL { ?col c:label ?colLabel0 FILTER(lang(?colLabel0) = "") }
-      OPTIONAL { ?col rdfs:label ?colLabel1 FILTER(lang(?colLabel1) = "") }
+      OPTIONAL { ?colLabel0At l10n:of ?col ; l10n:label ?colLabel0 }
+  OPTIONAL { { ?col l10n:label ?colLabel0 } UNION { ?l10nAt_colLabel0 l10n:of ?col ; l10n:label ?colLabel0 } } OPTIONAL { ?col c:label ?colLabel0 FILTER(lang(?colLabel0) = "") FILTER(NOT EXISTS { ?col l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?col ; l10n:label ?l10nPick }) }
+      OPTIONAL { ?colLabel1At l10n:of ?col ; l10n:name ?colLabel1 }
+  OPTIONAL { ?col rdfs:label ?colLabel1 FILTER(lang(?colLabel1) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?col ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?colLabel0, ?colLabel1, REPLACE(STR(?col), "^.*[#/]", ""))) AS ?label)
       BIND(SUBSTR(MD5(STR(?col)), 1, 8) AS ?key)
       BIND(CONCAT(?g, "/~h-", ?key) AS ?id)
@@ -291,6 +294,70 @@ WHERE {
       }
     }
   }
+}""" .
+c:DataGridRendering-sparql-text a sem:Rule ;
+    sem:implements c:DataGridRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?cols c:visibleColumn ?col .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?head , ?body , ?footer .
+  ?caption a rdfhtml:Text ; rdfhtml:data ?captionText ; ord:immediatelyPrecedes ?head .
+  ?root rdfhtml:hasChild ?caption .
+  ?head a rdfhtml:Div ; rdfhtml:hasChild ?headText ; ord:immediatelyPrecedes ?body .
+  ?headText a rdfhtml:Text ; rdfhtml:data ?headLine .
+  ?body a rdfhtml:Div ; ord:immediatelyPrecedes ?footer .
+  ?footer a rdfhtml:Div .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DataGrid .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) { $this l10n:label ?anyo } UNION { ?l10nAt_anyo l10n:of $this ; l10n:label ?anyo } } OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
+  BIND(?label AS ?captionText)
+  {
+    # The frame: the caption (if any), the header line, the body and the footer (the window fills them).
+    BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+    BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
+    BIND(IRI(CONCAT(STR($this), "/~head-text")) AS ?headText)
+    BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+    BIND(IRI(CONCAT(STR($this), "/~footer")) AS ?footer)
+    OPTIONAL {
+      SELECT (GROUP_CONCAT(?colLabel; separator=" \u2502 ") AS ?labels) WHERE {
+        { SELECT DISTINCT ?col ?colLabel ?at WHERE {
+          $this c:gridColumns ?list .
+      LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
+      FILTER(isIRI(?col))
+          FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
+          LATERAL { OPTIONAL { SELECT ?col ?lcc WHERE {
+  
+  OPTIONAL { ?col l10n:label ?picklcc }
+  OPTIONAL { FILTER(!BOUND(?picklcc)) ?picklccAt l10n:of ?col ; l10n:label ?picklccT }
+  OPTIONAL { FILTER(!BOUND(?picklcc) && !BOUND(?picklccT)) { ?col l10n:label ?anylcc } UNION { ?l10nAt_anylcc l10n:of ?col ; l10n:label ?anylcc } } OPTIONAL { FILTER(!BOUND(?picklcc) && !BOUND(?picklccT)) ?col c:label ?anylcc FILTER(isLiteral(?anylcc)) FILTER(NOT EXISTS { ?col l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?col ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?picklcc, ?picklccT, ?anylcc)) AS ?lcc)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?col ?lrc WHERE {
+  
+  OPTIONAL { ?picklrcAt l10n:of ?col ; l10n:name ?picklrc }
+  OPTIONAL { FILTER(!BOUND(?picklrc)) ?l10nAt_anylrc l10n:of ?col ; l10n:name ?anylrc } OPTIONAL { FILTER(!BOUND(?picklrc)) ?col rdfs:label ?anylrc FILTER(isLiteral(?anylrc)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?col ; l10n:name ?l10nPick }) }
+  BIND(STR(COALESCE(?picklrc, ?anylrc)) AS ?lrc)
+  } } }
+  BIND(COALESCE(?lcc, ?lrc, REPLACE(STR(?col), "^.*[#/]", "")) AS ?colLabel)
+        } ORDER BY ?at }
+      }
+    }
+    BIND(COALESCE(?labels, "") AS ?headLine)
+  } UNION {
+    # The columns shown, which the rows read (only a change of them re-renders rows).
+    $this c:gridColumns ?list .
+      LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
+      FILTER(isIRI(?col))
+    FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
+    BIND(IRI(CONCAT(STR($this), "/~cols")) AS ?cols)
+  }
+  BIND(IF(BOUND(?root) && COALESCE(?label, "") != "", IRI(CONCAT(STR($this), "/~caption")), ?none) AS ?caption)
 }""" .
 
 # --- the window ---------------------------------------------------------------------------------------
@@ -529,7 +596,8 @@ WHERE {
           $this c:gridColumns ?cl . ?cl rdf:rest*/rdf:first ?col . FILTER(isIRI(?col))
           FILTER(NOT EXISTS { $this c:shows ?anyShown } || EXISTS { $this c:shows ?col })
       } }
-      OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+      OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       VALUES (?local ?tag ?parentLocal) { ("empty-row" rdfhtml:Tr "body") ("empty-cell" rdfhtml:Td "empty-row") }
       BIND(IRI(CONCAT(?g, "/~", ?local)) AS ?el)
       BIND(IRI(CONCAT(?g, "/~", ?parentLocal)) AS ?parent)
@@ -576,6 +644,244 @@ WHERE {
       BIND(IRI(CONCAT(?g, "/~follow-aria-pressed")) AS ?attr)
       BIND("aria-pressed" AS ?name)
       BIND(STR(!?pinned) AS ?value)
+    }
+  }
+}""" .
+c:DataGridWindow-sparql-text a sem:Rule ;
+    sem:implements c:DataGridWindow ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?row a c:GridRow ; c:of ?m ; c:inGrid $this ; c:columnsFrom ?cols ; sem:orderKey ?orderKey ; c:isSelected ?isSelected ; c:tabStop ?tabStop .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:type ?type ; rdfhtml:disabled ?disabled ; rdfhtml:colSpan ?colSpan ; sem:orderKey ?elKey ;
+      c:windowTo ?windowTo ; c:followsLatest ?followsLatest .
+  ?parent rdfhtml:hasChild ?el .
+  ?owner rdfhtml:attribute ?attr . ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?name ; rdfhtml:attributeValue ?value .
+  ?txtParent rdfhtml:hasChild ?txt . ?txt a rdfhtml:Text ; rdfhtml:data ?data .
+  ?body rdfhtml:hasChild ?row ; rdfhtml:style ?scaleStyle .
+  ?scale c:start ?lo ; c:end ?hi .
+  ?window c:shownEnd ?shownEnd .
+}
+WHERE {
+  BIND(STR($this) AS ?g)
+  BIND(IRI(CONCAT(?g, "/~body")) AS ?bodyNode)
+  OPTIONAL { $this c:pageSize ?pageRaw }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(STR(?pageRaw)))), 50) AS ?p0)
+  BIND(IF(?p0 < 1, 1, ?p0) AS ?P)
+  OPTIONAL { $this c:selectedRow ?sel0 }
+  BIND(COALESCE(?sel0, c:none) AS ?sel)
+  # How many members match, and how many of them a pinned window reaches.
+  {
+    SELECT (COUNT(?m) AS ?total) (SUM(IF(?pinned && ?sn <= ?pinAt, 1, 0)) AS ?upTo) (MAX(IF(?pinned, 1, 0)) AS ?pinFlag) WHERE {
+      $this c:collection ?coll .
+      OPTIONAL { $this c:memberProperty ?mp } BIND(COALESCE(?mp, tree:member) AS ?via)
+      OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
+      ?coll ?via ?m . FILTER(isIRI(?m))
+      ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
+      FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+      FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
+                          FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
+      FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
+      FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
+      OPTIONAL { $this c:windowEnd ?pinRaw }
+      BIND(EXISTS { $this c:followTail false } && isNumeric(?pinRaw) AS ?pinned0)
+      BIND(COALESCE(?pinned0, false) AS ?pinned)
+      BIND(IF(?pinned, xsd:double(?pinRaw), 0) AS ?pinAt)
+    }
+  }
+  OPTIONAL { $this c:windowEnd ?pinRaw2 }
+  BIND(COALESCE(EXISTS { $this c:followTail false } && isNumeric(?pinRaw2), false) AS ?pinned)
+  BIND(IF(?pinned, IF(?upTo = 0, IF(?total < ?P, ?total, ?P), ?upTo), ?total) AS ?E)
+  BIND(IF(?E - ?P + 1 < 1, 1, ?E - ?P + 1) AS ?first)
+  # Positions in capture order: the window's bounds, whether the selection is in it, its scale.
+  LATERAL {
+    OPTIONAL {
+      SELECT ?E ?first ?P ?sel
+             (MAX(IF(?pos <= ?E, ?sn, -1e300)) AS ?shownEnd) (MAX(IF(?pos < ?first, ?sn, -1e300)) AS ?olderEnd)
+             (MAX(IF(?pos <= ?E + ?P, ?sn, -1e300)) AS ?newerEnd)
+             (MAX(IF(?pos >= ?first && ?pos <= ?E && ?m = ?sel, 1, 0)) AS ?selShown)
+             (MIN(IF(?pos >= ?first && ?pos <= ?E && BOUND(?ba), ?ba, 1e300)) AS ?lo0)
+             (MAX(IF(?pos >= ?first && ?pos <= ?E && BOUND(?ba), COALESCE(?bb, ?ba), -1e300)) AS ?hi0)
+      WHERE {
+        {
+          SELECT ?m ?sn ?ba ?bb (COUNT(?n) AS ?pos) WHERE {
+            {
+              SELECT ?m ?sn ?ba ?bb WHERE {
+                $this c:collection ?coll .
+                OPTIONAL { $this c:memberProperty ?mp } BIND(COALESCE(?mp, tree:member) AS ?via)
+                OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
+                ?coll ?via ?m . FILTER(isIRI(?m))
+                ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
+                FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+                FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
+                                    FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
+                FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
+                FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
+                OPTIONAL { { SELECT ?bars WHERE { { SELECT ?bars (COUNT(?before) AS ?bpos) WHERE {
+                    $this c:gridColumns ?bl . ?bl rdf:rest* ?bcell . ?bcell rdf:first ?bars . ?bars c:cellAs c:TimeBarCell . ?bl rdf:rest* ?before . ?before rdf:rest* ?bcell
+                  } GROUP BY ?bars } } ORDER BY ?bpos LIMIT 1 } }
+                BIND(COALESCE(?bars, c:none) AS ?bc)
+                OPTIONAL { ?bc c:via ?bv0 } BIND(COALESCE(?bv0, c:none) AS ?bvia)
+                OPTIONAL { ?bc c:startProperty ?bs0 } BIND(COALESCE(?bs0, c:none) AS ?bsp)
+                OPTIONAL { ?bc c:endProperty ?be0 } BIND(COALESCE(?be0, c:none) AS ?bep)
+                LATERAL { OPTIONAL { ?m ?bvia ?bhop } }
+                BIND(COALESCE(IF(?bvia = c:none, ?m, ?bhop), c:none) AS ?bsubj)
+                LATERAL { OPTIONAL { ?bsubj ?bsp ?ba0 FILTER(isNumeric(?ba0)) } }
+                LATERAL { OPTIONAL { ?bsubj ?bep ?bb0 FILTER(isNumeric(?bb0)) } }
+                BIND(xsd:double(?ba0) AS ?ba) BIND(xsd:double(?bb0) AS ?bb)
+              }
+            }
+            {
+              SELECT (?m AS ?n) (?sn AS ?nsn) WHERE {
+                $this c:collection ?coll .
+                OPTIONAL { $this c:memberProperty ?mp } BIND(COALESCE(?mp, tree:member) AS ?via)
+                OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
+                ?coll ?via ?m . FILTER(isIRI(?m))
+                ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
+                FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+                FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
+                                    FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
+                FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
+                FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
+              }
+            }
+            FILTER(?nsn < ?sn || (?nsn = ?sn && STR(?n) <= STR(?m)))
+          } GROUP BY ?m ?sn ?ba ?bb
+        }
+      } GROUP BY ?E ?first ?P ?sel
+    }
+  }
+  BIND(?total > 0 AS ?any)
+  BIND(IF(?first > 1, ?olderEnd, -1e300) AS ?low)
+  BIND(COALESCE(?selShown = 1, false) AS ?selectionShown)
+  LATERAL {
+    {
+      # The rows: the matching members in the window, ranked by the sort (pairs within the window).
+      FILTER(?any)
+      {
+        SELECT ?low ?shownEnd ?m (COUNT(?n) AS ?rank) WHERE {
+          {
+            SELECT ?m ?sn ?hv ?isNum ?vn ?vs ?desc WHERE {
+              $this c:collection ?coll .
+              OPTIONAL { $this c:memberProperty ?mp } BIND(COALESCE(?mp, tree:member) AS ?via)
+              OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
+              ?coll ?via ?m . FILTER(isIRI(?m))
+              ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
+              FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+              FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
+                                  FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
+              FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
+              FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
+              OPTIONAL { $this c:sortColumn ?sc0 } BIND(COALESCE(?sc0, c:none) AS ?sc) BIND(EXISTS { $this c:sortDescending true } AS ?desc)
+              OPTIONAL { ?sc c:cellAs ?sk0 } BIND(COALESCE(?sk0, c:TextCell) AS ?sk)
+              OPTIONAL { ?sc c:via ?sv0 } BIND(COALESCE(?sv0, c:none) AS ?svia)
+              OPTIONAL { ?sc c:cellProperty ?scp0 } BIND(COALESCE(?scp0, c:none) AS ?scp)
+              OPTIONAL { ?sc c:startProperty ?sst0 } BIND(COALESCE(?sst0, c:none) AS ?sst)
+              OPTIONAL { ?sc c:endProperty ?sen0 } BIND(COALESCE(?sen0, c:none) AS ?sen)
+              LATERAL { OPTIONAL { ?m ?svia ?shop } }
+              BIND(COALESCE(IF(?svia = c:none, ?m, ?shop), c:none) AS ?ss)
+              LATERAL { OPTIONAL { ?ss ?scp ?sval0 } }
+              LATERAL { OPTIONAL { ?ss ?sst ?sa FILTER(isNumeric(?sa)) } }
+              LATERAL { OPTIONAL { ?ss ?sen ?sb FILTER(isNumeric(?sb)) } }
+              BIND(COALESCE(?sval0, c:none) AS ?sval)
+              LATERAL { OPTIONAL { ?sval sem:order ?sord FILTER(isNumeric(?sord)) } }
+              LATERAL {
+                OPTIONAL { ?svl0At l10n:of ?sval ; l10n:label ?svl0 }
+  OPTIONAL { { ?sval l10n:label ?svl0 } UNION { ?l10nAt_svl0 l10n:of ?sval ; l10n:label ?svl0 } } OPTIONAL { ?sval c:label ?svl0 FILTER(lang(?svl0) = "") FILTER(NOT EXISTS { ?sval l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:label ?l10nPick }) } OPTIONAL { { ?sval l10n:label ?svl1 } UNION { ?l10nAt_svl1 l10n:of ?sval ; l10n:label ?svl1 } } OPTIONAL { ?sval c:label ?svl1 FILTER(langMatches(lang(?svl1), "en")) FILTER(NOT EXISTS { ?sval l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:label ?l10nPick }) }
+                OPTIONAL { ?svl2At l10n:of ?sval ; l10n:name ?svl2 }
+  OPTIONAL { ?sval rdfs:label ?svl2 FILTER(lang(?svl2) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:name ?l10nPick }) } OPTIONAL { ?l10nAt_svl3 l10n:of ?sval ; l10n:name ?svl3 } OPTIONAL { ?sval rdfs:label ?svl3 FILTER(langMatches(lang(?svl3), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:name ?l10nPick }) }
+              }
+              BIND(IF(?sc = c:none, ?unset, IF(?sk = c:TimeBarCell, xsd:double(?sa), IF(?sk = c:DurationCell, xsd:double(?sb) - xsd:double(?sa),
+                   IF(?sval = c:none, ?unset, IF(isIRI(?sval), xsd:double(?sord), IF(isNumeric(?sval), xsd:double(?sval), ?unset)))))) AS ?vnum)
+              BIND(IF(?sc = c:none || ?sk IN (c:TimeBarCell, c:DurationCell) || ?sval = c:none, ?unset,
+                   IF(isIRI(?sval), IF(BOUND(?sord), ?unset, STR(COALESCE(?svl0, ?svl1, ?svl2, ?svl3, REPLACE(STR(?sval), "^.*[#/]", "")))),
+                   IF(isNumeric(?sval), ?unset, STR(?sval)))) AS ?vstr)
+              BIND(BOUND(?vnum) AS ?isNum) BIND(?isNum || BOUND(?vstr) AS ?hv)
+              BIND(COALESCE(?vnum, 0) AS ?vn) BIND(COALESCE(?vstr, STR(?vnum), "") AS ?vs)
+            }
+          }
+          FILTER(?sn > ?low && ?sn <= ?shownEnd)
+          {
+            SELECT (?m AS ?n) (?sn AS ?nsn) (?hv AS ?nhv) (?isNum AS ?nIsNum) (?vn AS ?nvn) (?vs AS ?nvs) WHERE {
+              $this c:collection ?coll .
+              OPTIONAL { $this c:memberProperty ?mp } BIND(COALESCE(?mp, tree:member) AS ?via)
+              OPTIONAL { $this c:sequenceProperty ?sp1 } OPTIONAL { ?coll ldes:sequencePath ?sp2 } BIND(COALESCE(?sp1, ?sp2, c:none) AS ?seqP)
+              ?coll ?via ?m . FILTER(isIRI(?m))
+              ?m ?seqP ?seqV . FILTER(isNumeric(?seqV)) BIND(xsd:double(?seqV) AS ?sn)
+              FILTER(NOT EXISTS { $this c:memberClass ?anyClass } || EXISTS { $this c:memberClass ?mc . ?m a/rdfs:subClassOf* ?mc })
+              FILTER NOT EXISTS { $this c:filteredBy ?tf . ?tf a c:TextFilter ; c:filterText ?text . FILTER(STRLEN(STR(?text)) > 0)
+                                  FILTER NOT EXISTS { ?tf c:searches ?sp . ?m ?sp ?sv FILTER(CONTAINS(LCASE(STR(?sv)), LCASE(STR(?text)))) } }
+              FILTER NOT EXISTS { $this c:filteredBy ?vf . ?vf a c:ValueFilter ; c:filterProperty ?vp ; c:filterValue ?vv . FILTER(?vv != c:AnyValue) FILTER NOT EXISTS { ?m ?vp ?vv } }
+              FILTER NOT EXISTS { $this c:filteredBy ?ff . ?ff a c:FlagFilter ; c:filterProperty ?fp ; c:filterValue ?fv ; c:included false . ?m ?fp ?fv }
+              OPTIONAL { $this c:sortColumn ?sc0 } BIND(COALESCE(?sc0, c:none) AS ?sc) BIND(EXISTS { $this c:sortDescending true } AS ?desc)
+              OPTIONAL { ?sc c:cellAs ?sk0 } BIND(COALESCE(?sk0, c:TextCell) AS ?sk)
+              OPTIONAL { ?sc c:via ?sv0 } BIND(COALESCE(?sv0, c:none) AS ?svia)
+              OPTIONAL { ?sc c:cellProperty ?scp0 } BIND(COALESCE(?scp0, c:none) AS ?scp)
+              OPTIONAL { ?sc c:startProperty ?sst0 } BIND(COALESCE(?sst0, c:none) AS ?sst)
+              OPTIONAL { ?sc c:endProperty ?sen0 } BIND(COALESCE(?sen0, c:none) AS ?sen)
+              LATERAL { OPTIONAL { ?m ?svia ?shop } }
+              BIND(COALESCE(IF(?svia = c:none, ?m, ?shop), c:none) AS ?ss)
+              LATERAL { OPTIONAL { ?ss ?scp ?sval0 } }
+              LATERAL { OPTIONAL { ?ss ?sst ?sa FILTER(isNumeric(?sa)) } }
+              LATERAL { OPTIONAL { ?ss ?sen ?sb FILTER(isNumeric(?sb)) } }
+              BIND(COALESCE(?sval0, c:none) AS ?sval)
+              LATERAL { OPTIONAL { ?sval sem:order ?sord FILTER(isNumeric(?sord)) } }
+              LATERAL {
+                OPTIONAL { { ?sval l10n:label ?svl0 } UNION { ?l10nAt_svl0 l10n:of ?sval ; l10n:label ?svl0 } } OPTIONAL { ?sval c:label ?svl0 FILTER(lang(?svl0) = "") FILTER(NOT EXISTS { ?sval l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:label ?l10nPick }) } OPTIONAL { { ?sval l10n:label ?svl1 } UNION { ?l10nAt_svl1 l10n:of ?sval ; l10n:label ?svl1 } } OPTIONAL { ?sval c:label ?svl1 FILTER(langMatches(lang(?svl1), "en")) FILTER(NOT EXISTS { ?sval l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:label ?l10nPick }) }
+                OPTIONAL { ?l10nAt_svl2 l10n:of ?sval ; l10n:name ?svl2 } OPTIONAL { ?sval rdfs:label ?svl2 FILTER(lang(?svl2) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:name ?l10nPick }) } OPTIONAL { ?l10nAt_svl3 l10n:of ?sval ; l10n:name ?svl3 } OPTIONAL { ?sval rdfs:label ?svl3 FILTER(langMatches(lang(?svl3), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?sval ; l10n:name ?l10nPick }) }
+              }
+              BIND(IF(?sc = c:none, ?unset, IF(?sk = c:TimeBarCell, xsd:double(?sa), IF(?sk = c:DurationCell, xsd:double(?sb) - xsd:double(?sa),
+                   IF(?sval = c:none, ?unset, IF(isIRI(?sval), xsd:double(?sord), IF(isNumeric(?sval), xsd:double(?sval), ?unset)))))) AS ?vnum)
+              BIND(IF(?sc = c:none || ?sk IN (c:TimeBarCell, c:DurationCell) || ?sval = c:none, ?unset,
+                   IF(isIRI(?sval), IF(BOUND(?sord), ?unset, STR(COALESCE(?svl0, ?svl1, ?svl2, ?svl3, REPLACE(STR(?sval), "^.*[#/]", "")))),
+                   IF(isNumeric(?sval), ?unset, STR(?sval)))) AS ?vstr)
+              BIND(BOUND(?vnum) AS ?isNum) BIND(?isNum || BOUND(?vstr) AS ?hv)
+              BIND(COALESCE(?vnum, 0) AS ?vn) BIND(COALESCE(?vstr, STR(?vnum), "") AS ?vs)
+            }
+          }
+          FILTER(?nsn > ?low && ?nsn <= ?shownEnd)
+          FILTER(?n = ?m || IF(?nhv && ?hv,
+             IF(?nIsNum && ?isNum, IF(?nvn = ?vn, ?nsn < ?sn, IF(?desc, ?nvn > ?vn, ?nvn < ?vn)),
+                                   IF(?nvs = ?vs, ?nsn < ?sn, IF(?desc, ?nvs > ?vs, ?nvs < ?vs))),
+             IF(?nhv != ?hv, ?nhv, ?nsn < ?sn)))
+        } GROUP BY ?low ?shownEnd ?m
+      }
+      BIND(IRI(CONCAT(?g, "/~r-", SUBSTR(MD5(STR(?m)), 1, 8))) AS ?row)
+      BIND(IRI(CONCAT(?g, "/~cols")) AS ?cols)
+      BIND(?bodyNode AS ?body)
+      BIND(STR(?rank) AS ?orderKey)
+      BIND(IF(?m = ?sel, true, ?unset) AS ?isSelected)
+      BIND(IF(IF(?selectionShown, ?m = ?sel, ?rank = 1), true, ?unset) AS ?tabStop)
+    } UNION {
+      # No matching member: a line saying so.
+      FILTER(!?any)
+      OPTIONAL {     ?pickeAt l10n:of $this ; l10n:emptyText ?picke }
+  OPTIONAL { FILTER(!BOUND(?picke)) ?l10nAt_anye l10n:of $this ; l10n:emptyText ?anye } OPTIONAL { FILTER(!BOUND(?picke)) $this c:emptyText ?anye FILTER(isLiteral(?anye)) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+  BIND(STR(COALESCE(?picke, ?anye)) AS ?ownEmpty)
+      VALUES (?local ?tag ?parentLocal) { ("empty-row" rdfhtml:Div "body") }
+      BIND(IRI(CONCAT(?g, "/~", ?local)) AS ?el)
+      BIND(IRI(CONCAT(?g, "/~", ?parentLocal)) AS ?parent)
+      BIND(?el AS ?txtParent)
+      BIND(IRI(CONCAT(?g, "/~empty-text")) AS ?txt)
+      BIND(COALESCE(?ownEmpty, "No rows.") AS ?data)
+    } UNION {
+      # The waterfall's scale: from the earliest start to the latest end of the rows shown.
+      FILTER(?any && ?lo0 < 1e300)
+      BIND(?lo0 AS ?lo)
+      BIND(IF(?hi0 < ?lo0 + 1, ?lo0 + 1, ?hi0) AS ?hi)
+      BIND(IRI(CONCAT(?g, "/~scale")) AS ?scale)
+      BIND(?bodyNode AS ?body)
+      BIND(CONCAT("--scale-start: ", STR(?lo), "; --scale-end: ", STR(?hi)) AS ?scaleStyle)
+    } UNION {
+      FILTER(?any)
+      BIND(IRI(CONCAT(?g, "/~window")) AS ?window)
+    } UNION {
+      # The footer: what matches and what is shown, and (pinned) how many are new.
+      BIND(IRI(CONCAT(?g, "/~footer")) AS ?txtParent)
+      BIND(IRI(CONCAT(?g, "/~footer-text")) AS ?txt)
+      BIND(CONCAT(STR(?total), " matching · ", IF(?any, CONCAT("showing ", STR(?first), "–", STR(?E)), "none shown"),
+           IF(?pinned, CONCAT(" · ", STR(?total - ?E), " new"), "")) AS ?data)
     }
   }
 }""" .
@@ -639,12 +945,16 @@ WHERE {
       LATERAL { OPTIONAL { ?k sty:tone/sem:slug ?barTone } }
       LATERAL { OPTIONAL { ?v sty:tone/sem:slug ?valueTone } }
       LATERAL {
-        OPTIONAL { ?v c:label ?vl0 FILTER(lang(?vl0) = "") } OPTIONAL { ?v c:label ?vl1 FILTER(langMatches(lang(?vl1), "en")) }
-        OPTIONAL { ?v rdfs:label ?vl2 FILTER(lang(?vl2) = "") } OPTIONAL { ?v rdfs:label ?vl3 FILTER(langMatches(lang(?vl3), "en")) }
+        OPTIONAL { ?vl0At l10n:of ?v ; l10n:label ?vl0 }
+  OPTIONAL { { ?v l10n:label ?vl0 } UNION { ?l10nAt_vl0 l10n:of ?v ; l10n:label ?vl0 } } OPTIONAL { ?v c:label ?vl0 FILTER(lang(?vl0) = "") FILTER(NOT EXISTS { ?v l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:label ?l10nPick }) } OPTIONAL { { ?v l10n:label ?vl1 } UNION { ?l10nAt_vl1 l10n:of ?v ; l10n:label ?vl1 } } OPTIONAL { ?v c:label ?vl1 FILTER(langMatches(lang(?vl1), "en")) FILTER(NOT EXISTS { ?v l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:label ?l10nPick }) }
+        OPTIONAL { ?vl2At l10n:of ?v ; l10n:name ?vl2 }
+  OPTIONAL { ?v rdfs:label ?vl2 FILTER(lang(?vl2) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:name ?l10nPick }) } OPTIONAL { ?l10nAt_vl3 l10n:of ?v ; l10n:name ?vl3 } OPTIONAL { ?v rdfs:label ?vl3 FILTER(langMatches(lang(?vl3), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:name ?l10nPick }) }
       }
       LATERAL {
-        OPTIONAL { ?d c:label ?dl0 FILTER(lang(?dl0) = "") } OPTIONAL { ?d c:label ?dl1 FILTER(langMatches(lang(?dl1), "en")) }
-        OPTIONAL { ?d rdfs:label ?dl2 FILTER(lang(?dl2) = "") } OPTIONAL { ?d rdfs:label ?dl3 FILTER(langMatches(lang(?dl3), "en")) }
+        OPTIONAL { ?dl0At l10n:of ?d ; l10n:label ?dl0 }
+  OPTIONAL { { ?d l10n:label ?dl0 } UNION { ?l10nAt_dl0 l10n:of ?d ; l10n:label ?dl0 } } OPTIONAL { ?d c:label ?dl0 FILTER(lang(?dl0) = "") FILTER(NOT EXISTS { ?d l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?d ; l10n:label ?l10nPick }) } OPTIONAL { { ?d l10n:label ?dl1 } UNION { ?l10nAt_dl1 l10n:of ?d ; l10n:label ?dl1 } } OPTIONAL { ?d c:label ?dl1 FILTER(langMatches(lang(?dl1), "en")) FILTER(NOT EXISTS { ?d l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?d ; l10n:label ?l10nPick }) }
+        OPTIONAL { ?dl2At l10n:of ?d ; l10n:name ?dl2 }
+  OPTIONAL { ?d rdfs:label ?dl2 FILTER(lang(?dl2) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?d ; l10n:name ?l10nPick }) } OPTIONAL { ?l10nAt_dl3 l10n:of ?d ; l10n:name ?dl3 } OPTIONAL { ?d rdfs:label ?dl3 FILTER(langMatches(lang(?dl3), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?d ; l10n:name ?l10nPick }) }
       }
       BIND(?v != c:none AS ?hasValue)
       BIND(?d != c:none AS ?hasDetail)
@@ -705,6 +1015,68 @@ WHERE {
     }
   }
 }""" .
+c:GridRowRendering-sparql-text a sem:Rule ;
+    sem:implements c:GridRowRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:GridRow ; c:of ?m ; c:inGrid ?grid ; c:columnsFrom ?cols .
+  BIND(EXISTS { $this c:isSelected true } AS ?selected)
+  LATERAL { OPTIONAL {
+    SELECT ?m ?grid ?cols (GROUP_CONCAT(?cellText; separator=" \u2502 ") AS ?cells) WHERE {
+      { SELECT DISTINCT ?m ?grid ?cols ?col ?cellText ?at WHERE {
+        ?grid c:gridColumns ?list .
+      LATERAL { SELECT ?list ?col (COUNT(?before) AS ?at) WHERE { ?list rdf:rest* ?cell . ?cell rdf:first ?col . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?list ?cell ?col }
+      FILTER(isIRI(?col))
+        ?cols c:visibleColumn ?col .
+        OPTIONAL { ?col c:cellAs ?kindRaw } BIND(COALESCE(?kindRaw, c:TextCell) AS ?kind)
+        FILTER(?kind != c:TimeBarCell)
+        OPTIONAL { ?col c:via ?viaRaw } BIND(COALESCE(?viaRaw, c:none) AS ?viaP)
+        OPTIONAL { ?col c:cellProperty ?cpRaw } BIND(COALESCE(?cpRaw, c:none) AS ?cp)
+        OPTIONAL { ?col c:startProperty ?spRaw } BIND(COALESCE(?spRaw, c:none) AS ?sp)
+        OPTIONAL { ?col c:endProperty ?epRaw } BIND(COALESCE(?epRaw, c:none) AS ?ep)
+        LATERAL { OPTIONAL { ?m ?viaP ?hop } }
+        BIND(COALESCE(IF(?viaP = c:none, ?m, ?hop), c:none) AS ?s)
+        LATERAL { OPTIONAL { ?s ?cp ?v0 } }
+        LATERAL { OPTIONAL { ?s ?sp ?a0 FILTER(isNumeric(?a0)) } }
+        LATERAL { OPTIONAL { ?s ?ep ?b0 FILTER(isNumeric(?b0)) } }
+        BIND(COALESCE(?v0, c:none) AS ?v)
+        BIND(xsd:double(?a0) AS ?a) BIND(xsd:double(?b0) AS ?b)
+        LATERAL { OPTIONAL { SELECT ?v ?lcv WHERE {
+  
+  OPTIONAL { ?v l10n:label ?picklcv }
+  OPTIONAL { FILTER(!BOUND(?picklcv)) ?picklcvAt l10n:of ?v ; l10n:label ?picklcvT }
+  OPTIONAL { FILTER(!BOUND(?picklcv) && !BOUND(?picklcvT)) { ?v l10n:label ?anylcv } UNION { ?l10nAt_anylcv l10n:of ?v ; l10n:label ?anylcv } } OPTIONAL { FILTER(!BOUND(?picklcv) && !BOUND(?picklcvT)) ?v c:label ?anylcv FILTER(isLiteral(?anylcv)) FILTER(NOT EXISTS { ?v l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?picklcv, ?picklcvT, ?anylcv)) AS ?lcv)
+  } } }
+  LATERAL { OPTIONAL { SELECT ?v ?lrv WHERE {
+  
+  OPTIONAL { ?picklrvAt l10n:of ?v ; l10n:name ?picklrv }
+  OPTIONAL { FILTER(!BOUND(?picklrv)) ?l10nAt_anylrv l10n:of ?v ; l10n:name ?anylrv } OPTIONAL { FILTER(!BOUND(?picklrv)) ?v rdfs:label ?anylrv FILTER(isLiteral(?anylrv)) FILTER(NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:name ?l10nPick }) }
+  BIND(STR(COALESCE(?picklrv, ?anylrv)) AS ?lrv)
+  } } }
+  BIND(COALESCE(?lcv, ?lrv, REPLACE(STR(?v), "^.*[#/]", "")) AS ?valueLabel)
+        BIND(IF(?v = c:none, "", IF(isIRI(?v), ?valueLabel, STR(?v))) AS ?shown)
+        BIND(?b - ?a AS ?span)
+        BIND(IF(?span < 1000, CONCAT(STR(ROUND(?span)), " ms"), CONCAT(STR(ROUND(?span / 10) / 100), " s")) AS ?spanText)
+        BIND(IF(isNumeric(?v), xsd:double(?v), 0) AS ?n)
+        BIND(IF(isNumeric(?v), STR(?v), "0") AS ?nText)
+        BIND(IF(?s = c:none, "",
+             IF(?kind = c:BytesCell, IF(?n < 1024, CONCAT(?nText, " B"), IF(?n < 1048576, CONCAT(STR(ROUND(?n * 10 / 1024) / 10), " KiB"), CONCAT(STR(ROUND(?n * 10 / 1048576) / 10), " MiB"))),
+             IF(?kind = c:DurationCell, IF(!BOUND(?a), "", IF(!BOUND(?b), "\u2026", ?spanText)),
+             ?shown))) AS ?cellText)
+      } ORDER BY ?at }
+    } GROUP BY ?m ?grid ?cols
+  } }
+  BIND(CONCAT(IF(?selected, "\u25B8 ", "  "), COALESCE(?cells, "")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
+}""" .
 
 # --- the time axis ------------------------------------------------------------------------------------
 
@@ -748,6 +1120,43 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~t", STR(?k), "-text")) AS ?tickText)
   BIND(IF(?t < 1000, CONCAT(STR(?t), " ms"), CONCAT(STR(?t / 1000), " s")) AS ?label)
   BIND(IF(?k > 0, IRI(CONCAT(STR($this), "/~t", STR(?k - 1))), ?none) AS ?previous)
+}""" .
+c:TimeAxisRendering-sparql-text a sem:Rule ;
+    sem:implements c:TimeAxisRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?text .
+  ?text a rdfhtml:Text ; rdfhtml:data ?line .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:TimeAxis .
+  OPTIONAL { $this c:scale ?scale }
+  BIND(COALESCE(?scale, $this) AS ?from)
+  ?from c:start ?a ; c:end ?b .
+  FILTER(isNumeric(?a) && isNumeric(?b))
+  BIND(xsd:double(?b) - xsd:double(?a) AS ?d)
+  BIND(ROUND(IF(?d < 1, 1, ?d) * 1000) / 1000 AS ?span)
+  LATERAL {
+    SELECT ?span (MIN(?candidate) AS ?smallest) WHERE {
+      VALUES ?candidate { 1 2 5 10 20 50 100 200 500 1000 2000 5000 10000 20000 50000 100000 200000 500000 1000000 2000000 5000000 }
+      FILTER(?span / ?candidate <= 5)
+    } GROUP BY ?span
+  }
+  BIND(COALESCE(?smallest, 5000000) AS ?interval)
+  LATERAL {
+    SELECT ?span ?interval (GROUP_CONCAT(?label; separator="  \u00B7  ") AS ?line) WHERE {
+      { SELECT ?span ?interval ?label WHERE {
+        VALUES ?k { 0 1 2 3 4 5 }
+        BIND(?k * ?interval AS ?t)
+        FILTER(?t <= ?span)
+        BIND(IF(?t < 1000, CONCAT(STR(?t), " ms"), CONCAT(STR(?t / 1000), " s")) AS ?label)
+      } ORDER BY ?k }
+    } GROUP BY ?span ?interval
+  }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?text)
 }""" .
 
 # --- behaviour ----------------------------------------------------------------------------------------

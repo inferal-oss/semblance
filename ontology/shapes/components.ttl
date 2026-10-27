@@ -50,7 +50,7 @@ c:TextFieldShape a sh:NodeShape ; sh:targetClass c:TextField ;
     sh:or ( c:OwnLabelShape c:FieldContentShape ) ;
     sh:message "A text field needs a label (c:label), or a c:Field around it: placeholders are not labels." ;
     sh:property [ sh:path c:value ; sh:maxCount 1 ] ,
-                [ sh:path c:inputType ; sh:maxCount 1 ; sh:in ( "text" "password" "email" "number" "search" "tel" "url" ) ] .
+                [ sh:path c:inputType ; sh:maxCount 1 ; sh:in ( "text" "password" "email" "number" "search" "tel" "url" "date" ) ] .
 c:CodeInputShape a sh:NodeShape ; sh:targetClass c:CodeInput ;
     sh:or ( c:OwnLabelShape c:FieldContentShape ) ;
     sh:message "A code input needs a label (c:label), or a c:Field around it: say what the code is for." ;
@@ -75,7 +75,9 @@ c:LinkShape a sh:NodeShape ; sh:targetClass c:Link ;
                   sh:message "A link's c:href is a web, mail, or relative address (no javascript: or data: URLs)." ] ,
                 [ sh:path c:content ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
                   sh:message "A link's body (c:content) is one component." ] ,
-                [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+                [ sh:path c:currentPage ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ,
+                [ sh:path c:count ; sh:maxCount 1 ; sh:datatype xsd:integer ; sh:minInclusive 0 ;
+                  sh:message "A link's c:count is one whole number, zero or more." ] .
 c:HostSlotShape a sh:NodeShape ; sh:targetClass c:HostSlot ;
     sh:property [ sh:path c:slot ; sh:maxCount 1 ; sh:datatype xsd:string ;
                   sh:message "A host slot has one name (c:slot), a plain string." ] .

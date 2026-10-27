@@ -11,6 +11,42 @@
 
 # Default theme for the navigation components.
 
+# --- nav link ---
+# A nav list's row (its button rule below), as a link: full width, the label wrapping, the count at
+# the end, the current page marked as the nav list marks its choice. It undoes c:Link's running-text
+# look (accent colour, underline, the brand-mark layout a logo gives a link).
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
+                 [ sty:property "box-sizing" ; sty:raw "border-box" ] ,
+                 [ sty:property "padding" ; sty:tokens ( tok:space-2 tok:space-3 ) ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state ":has(> [data-sem-c=emblem], > [data-sem-c=graph-mark])" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "align-items" ; sty:raw "center" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "font-weight" ; sty:raw "550" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:part "> [data-sem-c=emblem]" ;
+    sty:declares [ sty:property "height" ; sty:raw "1em" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
+                 [ sty:property "align-self" ; sty:raw "center" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state ":hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state "[aria-current=page]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
+                 [ sty:property "color" ; sty:token tok:accent-strong ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavLink ; sty:state "[aria-current=page]:dir(rtl)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-accent)" ] .
+
 # --- nav list ---
 [] a sty:StyleRule ; sty:appliesTo c:NavList ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -39,6 +75,8 @@
     sty:declares [ sty:property "background" ; sty:token tok:accent-soft ] ,
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-accent)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:NavList ; sty:part "button[aria-pressed=true]:dir(rtl)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-accent)" ] .
 
 # A nav list presenting itself as a picker on a compact screen (c:compactAs c:Picker; the picker's
 # own look is c:Segmented's) sheds its card.
@@ -47,11 +85,13 @@
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:raw "none" ] .
 
-# Counts after an option's label (c:countProperty): a small solid pill at the end of the row.
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count" ;
+# Counts after a label (an option's c:countProperty, a link's c:count): a small solid pill at the
+# end of the row (a nav list's option, a c:NavLink).
+[] a sty:StyleRule ; sty:appliesTo c:Segmented , c:Link ; sty:part ".sem-count" ;
     sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
-                 [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] .
-[] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:part ".sem-count > [aria-hidden]" ;
+                 [ sty:property "padding-inline-start" ; sty:token tok:space-2 ] ,
+                 [ sty:property "text-decoration" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Segmented , c:Link ; sty:part ".sem-count > [aria-hidden]" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-block" ] ,
                  [ sty:property "min-width" ; sty:raw "1.5em" ] ,
                  [ sty:property "padding" ; sty:raw "1px 6px" ] ,

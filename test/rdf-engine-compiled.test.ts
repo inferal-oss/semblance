@@ -49,6 +49,9 @@ const QUERIES = [
   'SELECT ?a ?o ?n WHERE { ?a :slug ?s OPTIONAL { { ?a :order ?o FILTER(STRSTARTS(?s, "s-1")) } UNION { { SELECT ?n WHERE { ?n a :R } } FILTER(?n = ?a) } } }',
   // a BIND onto a variable the joined row binds keeps the row only when they agree
   'SELECT ?a ?b ?c WHERE { ?a :next ?b BIND(STR(?b) AS ?c) { BIND(:c AS ?b) } }',
+  // a typed expression in the rest after an OPTIONAL (a function of its own, the stack top its
+  // parameter) keeps that parameter: the walk after it puts its nodes above the first walk's (#101)
+  'SELECT ?l ?m WHERE { OPTIONAL { :list :items/rdf:rest* ?l } BIND(?u = 1 AS ?d) { :a :next* ?m } }',
 ]
 
 describe.skipIf(!built.length).each(built)('%s compiled queries', (kind) => {

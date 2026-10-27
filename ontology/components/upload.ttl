@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -113,7 +114,8 @@ c:FileDropTexts a sem:Rendering ;
     sem:targets c:FileDrop ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:functionOnly "It writes the words in the viewer's language and the sizes and percentages in its locale (Intl.NumberFormat): the language is a projection setting no query can see, and SPARQL has no locale-aware number formatting." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): it writes the sizes and percentages in the viewer's locale (Intl.NumberFormat)." ;
+    sem:needsExtension sx:Locale .
 c:FileDropTexts-fn a sem:Rule ; sem:implements c:FileDropTexts ; sem:function "upload:texts" .
 
 # --- rendering ------------------------------------------------------------------------------------------
@@ -157,7 +159,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+  OPTIONAL { { $this l10n:label ?plainLabel } UNION { ?l10nAt_plainLabel l10n:of $this ; l10n:label ?plainLabel } } OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?plainLabel, "")) AS ?label)
   OPTIONAL { $this c:icon ?ownIcon }
   BIND(STR(COALESCE(?ownIcon, "⤒")) AS ?icon)
@@ -208,7 +210,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+  OPTIONAL { { $this l10n:label ?plainLabel } UNION { ?l10nAt_plainLabel l10n:of $this ; l10n:label ?plainLabel } } OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?plainLabel, "")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~l10n-prompt")) AS ?promptNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-help")) AS ?helpNode)

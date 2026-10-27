@@ -7,7 +7,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { mint, type Delta } from '../rdf.ts'
 import { BEH, C, DND, FILE, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { md5Key } from './data.ts'
-import { isTrue, named, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, named, picked, RDFS_LABEL, str, text } from './util.ts'
 
 const SH = NS.sh
 const FILE_DROP = NS.c + 'FileDrop'
@@ -23,7 +23,7 @@ export const itemOf = (drop: string, file: string) => mint(drop, 'item-' + md5Ke
 export const arrivalOf = (drop: string) => mint(drop, 'arrival')
 
 /** The untagged literal values of a property (what the SPARQL rules read with lang() = ""). */
-const plain = (ctx: RuleContext, s: Term, p: string) => ctx.objects(s, p).find((t) => t.termType === 'Literal' && t.language === '')?.value
+const plain = (ctx: RuleContext, s: Term, p: string) => picked(ctx, s, p) ?? ctx.objects(s, p).find((t) => t.termType === 'Literal' && t.language === '')?.value
 
 /** A component's label as the SPARQL rules read it: l10n:label, else the untagged c:label. */
 const labelOf = (ctx: RuleContext, focus: Term) => str(ctx.object(focus, L10N.label)) ?? plain(ctx, focus, C.label) ?? ''

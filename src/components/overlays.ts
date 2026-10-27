@@ -116,7 +116,7 @@ const popover: FnRule = (ctx, focus) => {
   if (body) inner.push(o.el('desc', 'P', { class: 'sem-desc' }, [o.text('desc-text', body)]))
   if (named(content)) inner.push(content)
   const panel = o.el('panel', 'Div', { class: 'sem-panel', id: panelNode.value, hidden: open ? undefined : '' }, inner)
-  o.attr(panel, 'role', 'dialog').attr(panel, 'aria-labelledby', triggerNode.value)
+  o.attr(panel, 'role', 'dialog').attr(panel, 'aria-labelledby', triggerNode.value).attr(panel, 'data-sem-anchor', triggerNode.value)
   if (open) o.attr(panel, 'data-sem-takes-focus', '')
   const root = o.el('root', 'Span', {}, [trigger, panel])
   o.renders(root)

@@ -797,19 +797,19 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "gap" ; sty:raw "1px" ] ,
                  [ sty:property "border-radius" ; sty:raw "12px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "6px" ] ,
                  [ sty:property "padding" ; sty:raw "4px 10px" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "font-weight" ; sty:raw "500" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "color" ; sty:raw "#ffffff" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:focus-visible:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):focus-visible:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--sem-ring)" ] .
 
 # Menus, popovers, palettes, toasts and the dock are vibrant glass.
@@ -1038,13 +1038,17 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields: a white well with a hairline; check boxes and radios are small and blue; sliders thin with a round knob.
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface)" ] ,
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--sem-surface)" ] ,
                  [ sty:property "border" ; sty:raw "0.5px solid var(--sem-border-strong)" ] ,
                  [ sty:property "padding" ; sty:raw "5px 8px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0.5px 1px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4))" ] .
+# A select padded all round keeps room for its chevron.
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part "[data-sem-c=shape-field] select:not([multiple]):not([size]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:declares [ sty:property "padding-inline-end" ; sty:raw "var(--sem-chevron-space)" ] .
+[] a sty:StyleRule ; sty:when sty:Cupertino ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--sem-ring)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
@@ -1251,8 +1255,8 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields are wells: white (or ink, by night), sunken two pixels.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll, [data-sem-c=code-editor] .sem-scroll):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll, [data-sem-c=code-editor] .sem-scroll):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-sunken)" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
@@ -1262,9 +1266,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
-                 [ sty:property "padding-inline-start" ; sty:raw "0" ] .
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=text-field] input:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), textarea)):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "padding" ; sty:raw "4px 6px" ] .
 
 # Check boxes: a sunken well and a check drawn in the text colour; radios stay round.
@@ -1379,19 +1384,19 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding" ; sty:raw "3px" ] ,
                  [ sty:property "gap" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "padding" ; sty:raw "3px 8px" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-select-bg)" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-select-fg)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=nav-list] button:focus-visible:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):focus-visible:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "-2px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
@@ -1736,7 +1741,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Text inputs carry the keyboard focus as a blue frame, as the system draws it.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "var(--bv-sunken), inset 0 0 0 2px var(--sem-accent-9)" ] ,
                  [ sty:property "outline" ; sty:raw "none" ] .
 
@@ -1911,8 +1916,8 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields are wells: white (or ink, by night), sunken two pixels.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll, [data-sem-c=code-editor] .sem-scroll):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--sem-surface-sunken)" ] ,
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea, [data-sem-c=choice] select, [data-sem-c=slider] > .sem-head > .sem-value, [data-sem-c=query-editor] .sem-scroll, [data-sem-c=code-editor] .sem-scroll):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--sem-surface-sunken)" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--bv-sunken)" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
@@ -1922,9 +1927,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
-                 [ sty:property "padding-inline-start" ; sty:raw "0" ] .
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=text-field] input:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), textarea)):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "padding" ; sty:raw "4px 6px" ] .
 
 # Check boxes: a sunken well and a check drawn in the text colour; radios stay round.
@@ -2039,19 +2045,19 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding" ; sty:raw "3px" ] ,
                  [ sty:property "gap" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "padding" ; sty:raw "3px 8px" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "background" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-select-bg)" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-select-fg)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=nav-list] button:focus-visible:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):focus-visible:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "-2px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
@@ -2366,7 +2372,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Small, crisp type on controls, as on a 640x480 screen.
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=menu], :is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button, [data-sem-c=tabs] [role=tab], [data-sem-c=nav-list] button, [data-sem-c=menu-item], [data-sem-c=chips] button, [data-sem-c=taskbar] .sem-task):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=menu], :is([data-sem-c=segmented], [data-sem-c=theme-switcher]) button, [data-sem-c=tabs] [role=tab], :is([data-sem-c=nav-list] button, [data-sem-c=nav-link]), [data-sem-c=menu-item], [data-sem-c=chips] button, [data-sem-c=taskbar] .sem-task):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0" ] .
 
@@ -2465,17 +2471,21 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields are written on a line; a text area is a dashed box; selects are circled.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=text-field] input:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select)):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "transparent" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-bottom" ; sty:raw "2px solid var(--ink)" ] ,
                  [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "padding" ; sty:raw "4px 2px" ] ,
                  [ sty:property "font-size" ; sty:raw "17px" ] .
+# A select padded all round keeps room for its chevron.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=text-field] input:focus:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--hl)" ] ,
+    sty:part "[data-sem-c=shape-field] select:not([multiple]):not([size]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:declares [ sty:property "padding-inline-end" ; sty:raw "var(--sem-chevron-space)" ] .
+[] a sty:StyleRule ; sty:when sty:Doodle ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select)):focus:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--hl)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--ink)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
@@ -2492,11 +2502,11 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
     sty:part "[data-sem-c=choice] select:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+    sty:declares [ sty:property "background-color" ; sty:raw "transparent" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-b)" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is(input, select, textarea, [role=tab], [data-sem-c=nav-list] button, [data-sem-c=segmented] button, [data-sem-c=menu-item], .sem-window-control, [data-sem-c=tree] .sem-label, [data-sem-c=table]):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is(input, select, textarea, [role=tab], :is([data-sem-c=nav-list] button, [data-sem-c=nav-link]), [data-sem-c=segmented] button, [data-sem-c=menu-item], .sem-window-control, [data-sem-c=tree] .sem-label, [data-sem-c=table]):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "2px" ] .
 
@@ -2600,14 +2610,14 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "box-shadow" ; sty:raw "var(--sem-shadow-2)" ] ,
                  [ sty:property "rotate" ; sty:raw "-0.4deg" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "0" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] ,
                  [ sty:property "font-size" ; sty:raw "15px" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "border-bottom" ; sty:raw "1px dashed var(--sem-border)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "linear-gradient(100deg, transparent 1%, var(--hl-strong) 3% 94%, transparent 98%)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
@@ -2955,45 +2965,51 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # Text fields: a hairline box with a darker bottom stroke that turns into a two-pixel accent
 # underline while focused; combo boxes look like buttons.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-strong)" ] ,
                  [ sty:property "border-radius" ; sty:raw "4px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
                  [ sty:property "padding" ; sty:raw "6px 11px" ] .
+# A select padded all round keeps room for its chevron.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-hover)" ] ,
+    sty:part "[data-sem-c=shape-field] select:not([multiple]):not([size]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "padding-inline-end" ; sty:raw "var(--sem-chevron-space)" ] .
+[] a sty:StyleRule ; sty:when sty:Fluent ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill-hover)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-strong)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-input)" ] ,
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill-input)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--fl-stroke)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 -1px 0 var(--sem-accent-9)" ] ,
                  [ sty:property "outline" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=text-area] > textarea)[aria-invalid=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea)[aria-invalid=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "border-bottom-color" ; sty:raw "var(--sem-danger)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
     sty:part "[data-sem-c=choice]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] ,
-                 [ sty:property "padding-inline-start" ; sty:raw "0" ] .
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
     sty:part "[data-sem-c=choice] select:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill)" ] ,
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--fl-stroke)" ] ,
                  [ sty:property "border-bottom-color" ; sty:raw "var(--fl-stroke-bottom)" ] ,
                  [ sty:property "border-radius" ; sty:raw "4px" ] ,
-                 [ sty:property "padding" ; sty:raw "5px 10px" ] ,
+                 [ sty:property "padding-inline" ; sty:raw "10px var(--sem-chevron-space)" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=choice] select:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
-    sty:declares [ sty:property "background" ; sty:raw "var(--fl-fill-hover)" ] .
+    sty:part "[data-sem-c=choice] select:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill-hover)" ] .
 
 # Check boxes and radios: a strong hairline at rest, an accent fill when on; the radio dot grows on hover.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
@@ -3195,7 +3211,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "border-radius" ; sty:raw "8px" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=nav-list] button:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "border-radius" ; sty:raw "4px" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
@@ -3203,15 +3219,15 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding" ; sty:raw "8px 12px 8px 16px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=nav-list] button:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button, [data-sem-c=nav-link]):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
                  [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=nav-list] button[aria-pressed=true]:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
+    sty:part ":is([data-sem-c=nav-list] button[aria-pressed=true], [data-sem-c=nav-link][aria-current=page]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "left" ; sty:raw "0" ] ,

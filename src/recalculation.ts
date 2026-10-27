@@ -1,5 +1,5 @@
 // What a change re-ran, as data: for sheets that ask (c:traceRecalculation true), the host hears
-// the engine evaluate formulas (c:Formula, ontology/components/formula.ttl) and, after each
+// the engine evaluate formulas (c:Formula and c:QueryFormula, ontology/components/formula.ttl) and, after each
 // handled event that re-ran some, writes them on the sheet (c:recalculated) with a tick
 // (c:recalculationTick), so the sheet can mark them and count them. Only the engine knows which
 // (rule, focus) pairs it evaluated; this effect turns that into graph state.
@@ -8,7 +8,7 @@ import { NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import type { Projection, Runtime } from './runtime.ts'
 
 const C = NS.c
-const FORMULA = C + 'Formula'
+const FORMULAS = new Set([C + 'Formula', C + 'QueryFormula'])
 
 export class RecalculationTrace {
   private ran = new Set<string>()
@@ -19,7 +19,7 @@ export class RecalculationTrace {
     projection: Projection,
   ) {
     this.stop = projection.engine.onEvaluate((slot, focus) => {
-      if (slot === FORMULA) this.ran.add(focus)
+      if (FORMULAS.has(slot)) this.ran.add(focus)
     })
   }
 

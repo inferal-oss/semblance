@@ -61,6 +61,14 @@ pos:Aside a pos:Layout ; sem:slug "aside" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "align-items" ; sty:raw "flex-start" ] .
+# Two things set against each other: equal columns, as tall as each other, with something narrow
+# between them (a "vs.", an arrow) centered across; one above the other on a phone. The middle
+# child's place is in the theme (theme/layout.ttl).
+pos:Versus a pos:Layout ; sem:slug "versus" ;
+    rdfs:comment "Two equal columns of the same height with a narrow third child between them (a \"vs.\", an arrow); one above the other on a phone."@en ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr) auto minmax(0, 1fr)" ] ,
+                 [ sty:property "align-items" ; sty:raw "stretch" ] .
 pos:Grid a pos:Layout ; sem:slug "grid" ;
     rdfs:comment "Tiles of equal width that fill the row (minimum 240px)."@en ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
@@ -287,3 +295,26 @@ pos:NoGuides a pos:Guides ; sem:slug "none" ; sem:order 1 ;
 pos:CellGuides a pos:Guides ; sem:slug "cells" ; sem:order 2 ;
     rdfs:label "Show cells"@en , "Показати клітинки"@uk , "Zellen zeigen"@de , "إظهار الخلايا"@ar ;
     rdfs:comment "Every cell of a row, and every part of a column, is outlined."@en .
+
+# Anchored panels. A panel that opens from a control (a menu's items, a popover's panel, a date
+# field's calendar, a typeahead's suggestions) is placed by the page next to that control, not in
+# the flow of its container: a scrolling table or a dialog would clip it otherwise. Its rendering
+# says so in the markup it mints: data-sem-anchor on the panel names its anchor's id (a minted
+# IRI), and data-sem-anchor-width="match" makes it exactly as wide as the anchor (a suggestion
+# list under its field); without it the panel keeps its own width, at least the anchor's. The
+# graph still decides whether the panel is shown (hidden, or not rendered while closed); the
+# browser host's anchored-panel effect (src/web/anchored-popups.ts) lifts a shown one into the top
+# layer (a manual popover: no light dismiss, no focus move, its DOM and tab order unchanged), puts
+# it below the anchor or, without room there, above it, at the anchor's inline start (its end in
+# right-to-left), within the viewport, and follows scrolling and resizing.
+#
+# The browser's own popover style (a border, padding, Canvas colours) is reset for these panels at
+# no specificity, before every component rule, so each panel looks as its component and theme say.
+[] a sty:StyleRule ; sty:part ":where([data-sem-anchor][popover])" ;
+    sty:declares [ sty:property "border" ; sty:raw "none" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:raw "inherit" ] ,
+                 [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "overflow" ; sty:raw "visible" ] ,
+                 [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] .

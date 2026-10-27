@@ -5,7 +5,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { RDFS_LABEL, named, rdfList, str } from './util.ts'
+import { RDFS_LABEL, named, picked, rdfList, str } from './util.ts'
 
 const SH = NS.sh
 const XSD = NS.xsd
@@ -20,6 +20,8 @@ const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c
 
 /** A literal of `s` in English or untagged (untagged first), as the SPARQL rules read them. */
 function plain(ctx: RuleContext, s: Term, p: string): string | undefined {
+  const translated = picked(ctx, s, p)
+  if (translated !== undefined) return translated
   const values = ctx.objects(s, p).filter((t) => t.termType === 'Literal')
   const lang = (t: Term) => (t.termType === 'Literal' ? t.language.toLowerCase() : '')
   return (values.find((t) => lang(t) === '') ?? values.find((t) => lang(t) === 'en' || lang(t).startsWith('en-')))?.value
@@ -34,7 +36,7 @@ const form: FnRule = (ctx, focus) => {
   const resource = ctx.object(focus, C.of)
   if (!shape || !resource) return []
   const o = ctx.out(focus)
-  const label = ctx.objects(focus, C.label).find((t) => t.termType === 'Literal')?.value
+  const label = (picked(ctx, focus, C.label) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal')?.value)
   // Sections by group (the ungrouped first), fields in sh:order.
   const sections = new Map<string, { group?: Term; order: number; fields: NamedNode[] }>()
   for (const ps of ctx.objects(shape, SH + 'property')) {

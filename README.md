@@ -15,6 +15,9 @@ a Linked Data Event Stream, and declarative reactions turn events into state.
 benchmark matrix, running in your browser, itself a Semblance app. GitHub Pages cannot send
 COOP/COEP headers, so the page is not cross-origin isolated: timings are coarser (~100 µs) and the
 heap meter may read n/a. For precise numbers run `npm run dev`.
+For language models, <https://semblance.dev/llms.txt> lists the docs, every component and the
+examples, each with a Markdown page of the site's own text projection (generated at build by
+`scripts/gen-llms.ts`).
 
 **Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
@@ -163,6 +166,9 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   dragged in from outside the page into a drag of the dnd: layer (each zone shows its reception),
   offers each arriving file to its target so its SHACL decides, and uploads accepted files with
   progress, as events. `c:FileDrop` (Inputs) is built on it.
+- **Outlines** (`ol:`): `ol:label` names any component; a component whose `ol:shows` is true
+  outlines the named components inside it, dashed, with the name in a tag (in the viewer's
+  language), as overlays that move nothing. A switch on `ol:shows` turns them on and off.
 - **Announcements**: reactions say what they mean (`ann:announces`); a
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
@@ -253,6 +259,11 @@ page of their group. The whole demo
 (`demo/app.ttl`) is built from these; the host only mounts it and performs
 effects of graph state.
 
+A `c:TiledWorkspace` is a tree of split views whose panes are sortable tabs: a tab
+dragged onto other tabs moves there, onto an edge of a pane splits that pane, and tabs
+left with none close, each a reaction to one drop. See
+[Tiled workspaces](docs/TILED-WORKSPACES.md).
+
 A detached tab becomes a `c:Window` minted by its `c:Tabs`, derived from the tab
 (`prov:wasDerivedFrom`), and hosted on a `c:Desktop` that is not part of any
 page, so it survives navigation. Dock and close follow the provenance back. A tab also tears
@@ -261,6 +272,15 @@ window follows the pointer, and letting go is one `beh:TearOff` event that detac
 the window there; dragged back over the list it stays a tab. A window let go over the tab list it
 came from (`c:gathers`) is a `beh:Move` onto it, which docks it. Shift+Enter on a tab detaches it.
 Dialogs, drawers, lightboxes and toast regions are hosted there too.
+
+A desktop may set `c:tileLayout c:DesktopGridLayout` to arrange its open, normal, floating
+windows as tiles, with `c:Grid`'s parameters: as many columns as fit at `c:minWidth` (320px by
+default), at most `c:columns`. Docked, maximized and minimized windows keep their state, and a
+tiled window has no move or resize gesture. Tiling does not write to a window's `c:x`, `c:y`,
+`c:width` or `c:height`: remove the layout or set `c:DesktopFloatingLayout` to restore the same
+floating geometry. The layout is a style hook (`data-sem-tile-layout`), so any control that sets
+a property (`c:Segmented`, `c:Setter`) can switch it. A tree of panes the user splits and
+rearranges is a `c:TiledWorkspace` instead.
 
 **Live examples** (`c:LiveExample`, `ontology/components/live.ttl`) put the Turtle of a small app
 in a code editor beside what it renders. Each runs in a sandbox of its own - its own store, rules,
@@ -333,7 +353,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen, outline |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -343,7 +363,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
 | `src/components/` | function rules and reactions, one module per group |
-| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard and fullscreen layers |
+| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard, fullscreen and outlines layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
 | `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |

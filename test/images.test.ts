@@ -270,6 +270,24 @@ describe('gallery and lightbox', () => {
     expect(s.fullscreen.requests.at(-1)).toBe(s.part('dt-lightbox', 'panel'))
   })
 
+  it("says its own words in the viewer's language, from SPARQL as from functions, and follows a change of language", () => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => photos('GroupData', prefer))
+    for (const s of shells) {
+      s.screen.engine.reconfigure({ languages: ['uk'] })
+      s.shell.flush()
+      s.click(s.part('dt-photos', 'photo-2'))
+    }
+    const words = (s: ReturnType<typeof photos>) => [s.part('dt-lightbox', 'prev'), s.part('dt-lightbox', 'next'), s.part('dt-lightbox', 'close')].map((b) => b.getAttribute('aria-label'))
+    for (const s of shells) expect(words(s)).toEqual(['Попереднє зображення', 'Наступне зображення', 'Закрити'])
+    expect(shells[0]!.part('dt-lightbox', 'live').textContent).toContain('Зображення 2 з 6')
+    for (const s of shells) {
+      s.screen.engine.reconfigure({ languages: ['de'] })
+      s.shell.flush()
+    }
+    for (const s of shells) expect(words(s)).toEqual(['Vorheriges Bild', 'Nächstes Bild', 'Schließen'])
+    expect(shells[0]!.root('dt-lightbox').outerHTML).toBe(shells[1]!.root('dt-lightbox').outerHTML)
+  })
+
   it('loops, shows thumbnails and links to the original when the lightbox says so', () => {
     const s = photos('GroupOverlays')
     const cells = [...s.root('ov-photos').querySelectorAll('.sem-cell')]

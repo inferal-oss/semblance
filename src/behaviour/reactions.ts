@@ -13,6 +13,7 @@ import { reactions as overlaysReactions } from '../components/overlays.ts'
 import { reactions as workbenchReactions } from '../components/workbench.ts'
 import { reactions as referenceReactions } from '../components/reference.ts'
 import { docsReactions } from '../layers/docs.ts'
+import { undoReactions } from './undo.ts'
 import { dragdropReactions } from '../layers/dragdrop.ts'
 import { dependencyReactions } from '../layers/dependency.ts'
 import { clipboardReactions } from '../layers/clipboard.ts'
@@ -25,6 +26,7 @@ import { reactions as windowReactions } from '../components/containers.ts'
 import { reactions as gridReactions } from '../components/grid.ts'
 import { reactions as panesReactions } from '../components/panes.ts'
 import { reactions as payloadReactions } from '../components/payload.ts'
+import { reactions as rdfEditorReactions } from '../components/rdf-editor.ts'
 import { reactions as toolbarReactions } from '../components/toolbar.ts'
 import { reactions as boardReactions } from '../components/board.ts'
 import { reactions as calendarReactions } from '../components/calendar.ts'
@@ -101,6 +103,7 @@ const flippableFlip: ReactionFn = (ctx) => {
 }
 
 const choiceSelect: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, C.disabled)?.value === 'true') return { add: [], remove: [] }
   const f = ctx.runtime.store.factory
   const target = ctx.object(ctx.target, C.controls)
   const p = ctx.object(ctx.target, C.property)
@@ -131,6 +134,7 @@ const toggleFlip: ReactionFn = (ctx) => {
 }
 
 export const reactions: Record<string, ReactionFn> = {
+  ...undoReactions,
   'toggle:flip': toggleFlip,
   'choice:select': choiceSelect,
   'chips:toggle': chipsToggle,
@@ -164,6 +168,7 @@ export const reactions: Record<string, ReactionFn> = {
   ...gridReactions,
   ...panesReactions,
   ...payloadReactions,
+  ...rdfEditorReactions,
   ...toolbarReactions,
   ...boardReactions,
   ...calendarReactions,

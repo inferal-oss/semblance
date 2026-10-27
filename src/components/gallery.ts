@@ -266,7 +266,8 @@ const lightbox: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', { id }, [o.text('line', line)]))
     return o.quads
   }
-  const loops = isTrue(ctx.object(focus, G.loops))
+  // It loops if it says so, or its gallery does.
+  const loops = isTrue(ctx.object(focus, G.loops)) || isTrue(ctx.object(g, G.loops))
   const zoomed = isTrue(ctx.object(focus, G.zoomed))
   const thumbs = isTrue(ctx.object(focus, G.thumbnails))
   const src = str(ctx.object(cur, G.image))
@@ -408,7 +409,7 @@ const step: ReactionFn = (ctx) => {
   const at = currentOf(r, g)
   if (!at) return out
   const n = countOf(r, g)
-  const loops = isTrue(ctx.object(ctx.target, G.loops))
+  const loops = isTrue(ctx.object(ctx.target, G.loops)) || isTrue(ctx.object(g, G.loops))
   const j0 = at.i + Number(h.value.value)
   const j = loops ? (j0 < 1 ? n : j0 > n ? 1 : j0) : Math.min(n, Math.max(1, j0))
   const next = imageAt(r, g, j)

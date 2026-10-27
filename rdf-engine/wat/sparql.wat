@@ -23,6 +23,7 @@
 (@define P_LATERAL 11)  ;; a group
 (@define P_FILTER 12)   ;; a expression
 (@define P_TT 13)       ;; triple term pattern: a s, b p, c o (refs)
+(@define P_MAGIC 14)    ;; magic relation (EXTENSIONS.md): a relation (MR_*), b inputs, c outputs (+0 count, then refs)
 ;; property paths
 (@define X_LINK 20)     ;; a IRI
 (@define X_INV 21)      ;; a path
@@ -62,6 +63,11 @@
 (@define FN_OBJECT 86) (@define F_LANGDIR 87) (@define F_HASLANG 88) (@define F_HASLANGDIR 89)
 (@define F_STRLANGDIR 90)
 (@define F_LAST 90)
+;; extension functions (EXTENSIONS.md, ext.wat): sx:log ... sx:atan2 are 100 + the host's Math op
+(@define F_SX_LOG 100) (@define F_SX_LOG2 102) (@define F_SX_POW 104) (@define F_SX_ATAN2 111)
+(@define F_SX_SQRT 112) (@define F_SX_PI 113) (@define F_SX_CODEPOINT 114) (@define F_SX_CHAR 115)
+(@define F_SX_UTF8HEX 116) (@define F_SX_DECODEURI 117) (@define F_SX_FNV1A 118) (@define F_SX_FORMATNUMBER 119)
+(@define F_SX_FORMATDATETIME 120) (@define F_SX_COLLATED 121) (@define F_SX_SORTKEY 122)
 ;; aggregates (E_AGG a)
 (@define A_COUNT 1) (@define A_SUM 2) (@define A_MIN 3) (@define A_MAX 4) (@define A_AVG 5)
 (@define A_SAMPLE 6) (@define A_CONCAT 7)
@@ -145,6 +151,11 @@
 ;; A group's element and filter lists use $append with heads at +4 and +8 and
 ;; tails at +16 and +20.
 (func $add_elem (param $g i32) (param $n i32)
+  ;; anything but a triple or path pattern ends the basic graph pattern: its
+  ;; magic relations (held at +24 while parsing) go first
+  (if (i32.and (i32.ne (i32.load offset=24 (local.get $g)) (i32.const 0))
+               (i32.gt_u (i32.sub (i32.load (local.get $n)) (i32.const P_TRIPLE)) (i32.const 1)))
+    (then (call $magic_flush (local.get $g))))
   (call $append (i32.add (local.get $g) (i32.const 4)) (i32.add (local.get $g) (i32.const 16)) (local.get $n)))
 (func $add_filter (param $g i32) (param $e i32)
   (call $append (i32.add (local.get $g) (i32.const 8)) (i32.add (local.get $g) (i32.const 20)) (call $node2 (i32.const P_FILTER) (local.get $e) (i32.const 0))))
@@ -503,6 +514,9 @@
     (if (i32.ne (global.get $tok) (i32.const '(')) (then (return (call $node2 (i32.const E_CONST) (local.get $id) (i32.const 0)))))
     (if (i32.eqz (local.tee $c (call $arg_list (i32.const 0)))) (then (return (i32.const 0))))
     (i32.store offset=4 (local.get $c) (select (i32.const F_CAST) (i32.const F_CUSTOM) (call $is_cast (local.get $id))))
+    ;; an extension function (an unknown one, or a wrong number of arguments: F_CUSTOM, an error)
+    (if (local.tee $n (call $sx_fn_code (local.get $id) (i32.load offset=12 (local.get $c))))
+      (then (i32.store offset=4 (local.get $c) (local.get $n))))
     (i32.store offset=16 (local.get $c) (local.get $id))
     (return (local.get $c))))
   (if (i32.eq (global.get $tok) (i32.const T_TT_OPEN)) (then (return (call $tt_expr))))
@@ -626,7 +640,9 @@
   (local $n i32) (local $e i32) (local $s i32) (local $t i32) (local $need_dot i32)
   (loop $elements
     (local.set $t (global.get $tok))
-    (if (i32.eq (local.get $t) (i32.const '}')) (then (return (i32.const 1))))
+    (if (i32.eq (local.get $t) (i32.const '}')) (then
+      (if (i32.load offset=24 (local.get $g)) (then (call $magic_flush (local.get $g))))
+      (return (i32.const 1))))
     (block $next
       (if (i32.eq (local.get $t) (i32.const '{')) (then
         ;; a group, or groups joined by UNION
@@ -693,7 +709,12 @@
           (br $next)))))
       ;; triples: then '.', '}', or a pattern that is not triples
       (if (local.get $need_dot) (then (return (call $expected (@str "expected '.'")))))
-      (if (i32.eqz (call $ptriples (local.get $g))) (then (return (i32.const 0))))
+      ;; magic relations are recognised in a pattern's triples (not in templates)
+      (global.set $colls (i32.const 0))
+      (global.set $fold (i32.eq (global.get $bscope) (i32.const -2)))
+      (local.set $n (call $ptriples (local.get $g)))
+      (global.set $fold (i32.const 0))
+      (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
       (br_if $elements (i32.eq (global.get $tok) (i32.const '}')))
       (if (i32.ne (global.get $tok) (i32.const '.')) (then
         (local.set $need_dot (i32.const 1))
@@ -919,8 +940,11 @@
 (func $reifier_var (result i32)
   (call $new_var (i32.const 0) (i32.const 0) (i32.const -1) (i32.or (global.get $bflags) (global.get $reif_flags))))
 
-;; Add triple pattern (s, p, o) to g.
+;; Add triple pattern (s, p, o) to g; in a pattern, a magic relation between
+;; two collections written in it is folded into one P_MAGIC (ext.wat).
 (func $ptriple (param $g i32) (param $s i32) (param $p i32) (param $o i32)
+  (if (global.get $fold) (then
+    (if (call $magic_fold (local.get $g) (local.get $s) (local.get $p) (local.get $o)) (then (return)))))
   (call $add_elem (local.get $g) (call $node3 (i32.const P_TRIPLE) (local.get $s) (local.get $p) (local.get $o))))
 
 ;; Add (s, path, o) to g: plain triples for IRIs, inverses and sequences of them.
@@ -999,20 +1023,33 @@
       (br $more))))
   (i32.const 1))
 
-;; collection (on '('): its head, or rdf:nil.
+;; collection (on '('): its head, or rdf:nil. In a pattern, recorded (items and
+;; the triples it expanded to) for a magic relation (ext.wat, $coll_add).
 (func $pcollection (param $g i32) (result i32)
-  (local $head i32) (local $cell i32) (local $next i32) (local $o i32)
+  (local $head i32) (local $cell i32) (local $next i32) (local $o i32) (local $items i32) (local $tps i32)
   (call $lex)
   (if (i32.eq (global.get $tok) (i32.const ')')) (then (call $lex) (return (call $known (i32.const K_NIL)))))
   (local.set $cell (local.tee $head (call $vref (call $blank_var))))
+  (if (global.get $fold) (then
+    (local.set $items (call $v_new))
+    (local.set $tps (call $v_new))))
   (loop $items
-    (if (i32.eqz (local.tee $o (call $pterm (local.get $g) (i32.const F_OBJECT)))) (then (return (i32.const 0))))
+    (if (i32.eqz (local.tee $o (call $pterm (local.get $g) (i32.const F_OBJECT)))) (then
+      (if (local.get $items) (then (call $v_free (local.get $items)) (call $v_free (local.get $tps))))
+      (return (i32.const 0))))
     (call $ptriple (local.get $g) (local.get $cell) (call $known (i32.const K_FIRST)) (local.get $o))
+    (if (local.get $items) (then
+      (call $v_push1 (local.get $items) (local.get $o))
+      (call $v_push1 (local.get $tps) (i32.load offset=16 (local.get $g)))))
     (if (i32.eq (global.get $tok) (i32.const ')')) (then
       (call $ptriple (local.get $g) (local.get $cell) (call $known (i32.const K_REST)) (call $known (i32.const K_NIL)))
+      (if (local.get $items) (then
+        (call $v_push1 (local.get $tps) (i32.load offset=16 (local.get $g)))
+        (call $coll_add (local.get $head) (local.get $items) (local.get $tps))))
       (call $lex)
       (return (local.get $head))))
     (call $ptriple (local.get $g) (local.get $cell) (call $known (i32.const K_REST)) (local.tee $next (call $vref (call $blank_var))))
+    (if (local.get $items) (then (call $v_push1 (local.get $tps) (i32.load offset=16 (local.get $g)))))
     (local.set $cell (local.get $next))
     (br $items))
   (unreachable))
@@ -1328,6 +1365,8 @@
   (if (i32.eq (local.get $k) (i32.const P_GRAPH)) (then
     (return (i32.or (call $ref_has (i32.load offset=4 (local.get $el)) (local.get $slot)) (call $group_binds (i32.load offset=8 (local.get $el)) (local.get $slot))))))
   (if (i32.eq (local.get $k) (i32.const P_BIND)) (then (return (i32.eq (i32.load offset=8 (local.get $el)) (local.get $slot)))))
+  (if (i32.eq (local.get $k) (i32.const P_MAGIC)) (then
+    (return (i32.or (call $refs_have (i32.load offset=8 (local.get $el)) (local.get $slot)) (call $refs_have (i32.load offset=12 (local.get $el)) (local.get $slot))))))
   (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then
     (loop $vars (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $el))) (then
       (if (i32.eq (i32.load (i32.add (i32.load offset=8 (local.get $el)) (i32.shl (local.get $i) (i32.const 2)))) (local.get $slot)) (then (return (i32.const 1))))

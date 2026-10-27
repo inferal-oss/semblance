@@ -6,6 +6,7 @@
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 
 # Behaviour layer: interaction is data.
 #
@@ -193,3 +194,64 @@ beh:source a owl:ObjectProperty ; rdfs:domain beh:Reaction .
 beh:sourceClass a owl:ObjectProperty ; rdfs:domain beh:Reaction .
 beh:deletes a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
 beh:inserts a owl:DatatypeProperty ; rdfs:domain beh:Reaction .
+
+# --- Undo (docs/IVM.md §16) ------------------------------------------------------------
+# A reaction marked beh:undoable has its effective change recorded on the event's member:
+# beh:asserted and beh:retracted name rdf:Statement nodes minted under it (retired with it).
+# Activating a beh:Undoer applies the opposite of the latest recorded change that is not undone
+# and still applies (what it added is all there, what it removed all absent): a change later ones
+# overlapped is skipped rather than forced. The undone member is remembered as state on the log
+# (beh:undone), forgotten once the log retires it.
+
+beh:undoable a owl:DatatypeProperty ; rdfs:domain beh:Reaction ; rdfs:range xsd:boolean ;
+    rdfs:comment "True: what this reaction changes is recorded on the event's log member, so a beh:Undoer can undo it."@en .
+beh:asserted a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range rdf:Statement ;
+    rdfs:comment "A triple an undoable reaction of this event added (the effective change only)."@en .
+beh:retracted a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range rdf:Statement ;
+    rdfs:comment "A triple an undoable reaction of this event removed."@en .
+beh:undone a owl:ObjectProperty ; rdfs:domain ldes:EventStream ; rdfs:range beh:Event ;
+    rdfs:comment "A member of the log whose recorded change was undone (state, in the input graph)."@en .
+beh:viewState a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a property: true when it is view state (which field is open, where the focus goes next), not data: an undoable reaction's change of it is not recorded, so undoing the change does not bring it back."@en .
+beh:Undoer a owl:Class ;
+    rdfs:label "undo"@en , "скасувати"@uk , "rückgängig"@de , "تراجع"@ar ;
+    rdfs:comment "A component (e.g. a c:Button that is also a beh:Undoer, with key:shortcut \"mod+z\") that undoes, when clicked, the latest undoable change of its beh:log (default beh:ChangeLog)."@en .
+beh:log a owl:ObjectProperty ; rdfs:domain beh:Undoer ; rdfs:range ldes:EventStream .
+
+beh:UndoLatest a beh:Reaction ;
+    rdfs:label "Undo the latest change"@en ;
+    beh:when beh:Click ;
+    beh:sourceClass beh:Undoer ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?log beh:undone ?gone } WHERE {
+  {
+    { SELECT ?log (MAX(?n) AS ?latest) WHERE {
+      $this a beh:Undoer .
+      OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+      ?log tree:member ?m . ?m beh:sequence ?n .
+      FILTER EXISTS { ?m beh:asserted|beh:retracted ?anything }
+      FILTER NOT EXISTS { ?log beh:undone ?m }
+      FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . FILTER NOT EXISTS { ?as ?ap ?ao } }
+      FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . ?rs ?rp ?ro }
+    } GROUP BY ?log }
+    ?log tree:member ?m . ?m beh:sequence ?latest ; beh:asserted ?st .
+    ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o .
+  } UNION {
+    $this a beh:Undoer .
+    OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+    ?log beh:undone ?gone FILTER NOT EXISTS { ?log tree:member ?gone }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?o . ?log beh:undone ?m } WHERE {
+  { SELECT ?log (MAX(?n) AS ?latest) WHERE {
+      $this a beh:Undoer .
+      OPTIONAL { $this beh:log ?own } BIND(COALESCE(?own, beh:ChangeLog) AS ?log)
+      ?log tree:member ?m . ?m beh:sequence ?n .
+      FILTER EXISTS { ?m beh:asserted|beh:retracted ?anything }
+      FILTER NOT EXISTS { ?log beh:undone ?m }
+      FILTER NOT EXISTS { ?m beh:asserted ?a . ?a rdf:subject ?as ; rdf:predicate ?ap ; rdf:object ?ao . FILTER NOT EXISTS { ?as ?ap ?ao } }
+      FILTER NOT EXISTS { ?m beh:retracted ?r . ?r rdf:subject ?rs ; rdf:predicate ?rp ; rdf:object ?ro . ?rs ?rp ?ro }
+  } GROUP BY ?log }
+  ?log tree:member ?m . ?m beh:sequence ?latest .
+  OPTIONAL { ?m beh:retracted ?st . ?st rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o }
+}""" ;
+    sem:function "beh:undo-latest" .

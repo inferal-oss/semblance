@@ -109,6 +109,7 @@ describe('overlay components', () => {
     expect(panel().hasAttribute('hidden')).toBe(false)
     expect(panel().getAttribute('role')).toBe('dialog')
     expect(panel().getAttribute('aria-labelledby')).toBe(trigger().id)
+    expect(panel().getAttribute('data-sem-anchor')).toBe(trigger().id)
     expect(panel().querySelectorAll('[data-sem-c=badge]')).toHaveLength(3)
     click(trigger())
     expect(fact('ov-pop-status', 'open')).toBe('false')

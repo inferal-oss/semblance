@@ -11,7 +11,7 @@
 
 c:MessageListShape a sh:NodeShape ; sh:targetClass c:MessageList ;
     sh:property [ sh:path c:item ; sh:nodeKind sh:IRI ;
-                  sh:message "A thread's messages (c:item) are nodes with as:attributedTo, as:content and as:published." ] ,
+                  sh:message "A thread's messages (c:item) are nodes; use as:content for text or c:content for a component body." ] ,
                 [ sh:path c:viewer ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
                   sh:message "A thread is read by one person (c:viewer)." ] .
 

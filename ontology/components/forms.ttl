@@ -64,7 +64,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
   {
-    OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) }
+    OPTIONAL { { $this l10n:label ?label0 } UNION { ?l10nAt_label0 l10n:of $this ; l10n:label ?label0 } } OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     BIND(STR(?label0) AS ?label)
     BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~title")), ?none) AS ?title)
     BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~title-text")), ?none) AS ?titleText)
@@ -81,7 +81,8 @@ WHERE {
     OPTIONAL { ?group sh:order ?groupOrder0 }
     BIND(IF(BOUND(?group), COALESCE(xsd:decimal(?groupOrder0), 0), -1) AS ?sectionOrder)
     BIND(IF(BOUND(?group), rdfhtml:Fieldset, rdfhtml:Div) AS ?sectionElement)
-    OPTIONAL { ?group rdfs:label ?groupLabel0 FILTER(lang(?groupLabel0) = "" || langMatches(lang(?groupLabel0), "en")) }
+    OPTIONAL { ?groupLabel0At l10n:of ?group ; l10n:name ?groupLabel0 }
+  OPTIONAL { ?group rdfs:label ?groupLabel0 FILTER(lang(?groupLabel0) = "" || langMatches(lang(?groupLabel0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?group ; l10n:name ?l10nPick }) }
     BIND(IF(BOUND(?group), STR(COALESCE(?groupLabel0, ?groupKey)), ?none) AS ?groupLabel)
     BIND(IF(BOUND(?group), IRI(CONCAT(STR($this), "/~s-", ENCODE_FOR_URI(?groupKey), "-legend")), ?none) AS ?legend)
     BIND(IF(BOUND(?group), IRI(CONCAT(STR($this), "/~s-", ENCODE_FOR_URI(?groupKey), "-legend-text")), ?none) AS ?legendText)
@@ -121,12 +122,13 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~control")) AS ?control)
   BIND(STR(?control) AS ?controlId)
   # What the shape says, and the resource's value as text ("" when it has none).
-  OPTIONAL { ?ps sh:name ?name_u FILTER(lang(?name_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?name_u)) ?ps sh:name ?name_en FILTER(langMatches(lang(?name_en), "en")) }
-  OPTIONAL { ?ps sh:description ?desc_u FILTER(lang(?desc_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?desc_u)) ?ps sh:description ?desc_en FILTER(langMatches(lang(?desc_en), "en")) }
-  OPTIONAL { ?ps sh:message ?msg_u FILTER(lang(?msg_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?msg_u)) ?ps sh:message ?msg_en FILTER(langMatches(lang(?msg_en), "en")) }
+  OPTIONAL { ?l10nAt_name_u l10n:of ?ps ; l10n:shapeName ?name_u } OPTIONAL { ?ps sh:name ?name_u FILTER(lang(?name_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:shapeName ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?name_u)) ?l10nAt_name_en l10n:of ?ps ; l10n:shapeName ?name_en } OPTIONAL { FILTER(!BOUND(?name_u)) ?ps sh:name ?name_en FILTER(langMatches(lang(?name_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:shapeName ?l10nPick }) }
+  OPTIONAL { ?l10nAt_desc_u l10n:of ?ps ; l10n:description ?desc_u } OPTIONAL { ?ps sh:description ?desc_u FILTER(lang(?desc_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:description ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?desc_u)) ?l10nAt_desc_en l10n:of ?ps ; l10n:description ?desc_en } OPTIONAL { FILTER(!BOUND(?desc_u)) ?ps sh:description ?desc_en FILTER(langMatches(lang(?desc_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:description ?l10nPick }) }
+  OPTIONAL { ?msg_uAt l10n:of ?ps ; l10n:message ?msg_u }
+  OPTIONAL { ?ps sh:message ?msg_u FILTER(lang(?msg_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?msg_u)) ?l10nAt_msg_en l10n:of ?ps ; l10n:message ?msg_en } OPTIONAL { FILTER(!BOUND(?msg_u)) ?ps sh:message ?msg_en FILTER(langMatches(lang(?msg_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick }) }
   OPTIONAL { ?ps sh:datatype ?datatype }
   OPTIONAL { ?ps sh:in ?allowed }
   OPTIONAL { ?ps sh:minCount ?minCount }
@@ -185,8 +187,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(?optValue))) AS ?option)
     BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(?optValue), "-text")) AS ?optText)
     BIND(IF(?optValue = ?lex, "", ?none) AS ?selected)
-    OPTIONAL { ?choice rdfs:label ?choiceLabel_u FILTER(lang(?choiceLabel_u) = "") }
-    OPTIONAL { FILTER(!BOUND(?choiceLabel_u)) ?choice rdfs:label ?choiceLabel_en FILTER(langMatches(lang(?choiceLabel_en), "en")) }
+    OPTIONAL { ?choiceLabel_uAt l10n:of ?choice ; l10n:name ?choiceLabel_u }
+  OPTIONAL { ?choice rdfs:label ?choiceLabel_u FILTER(lang(?choiceLabel_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?choice ; l10n:name ?l10nPick }) }
+    OPTIONAL { FILTER(!BOUND(?choiceLabel_u)) ?l10nAt_choiceLabel_en l10n:of ?choice ; l10n:name ?choiceLabel_en } OPTIONAL { FILTER(!BOUND(?choiceLabel_u)) ?choice rdfs:label ?choiceLabel_en FILTER(langMatches(lang(?choiceLabel_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?choice ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?choiceLabel_u, ?choiceLabel_en, IF(isIRI(?choice), REPLACE(STR(?choice), "^.*[#/]", ""), STR(?choice)))) AS ?optLabel)
   } }
 }""" .
@@ -201,8 +204,8 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:ShapeField ; c:propertyShape ?ps ; c:of ?resource .
   ?ps sh:path ?path FILTER(isIRI(?path))
-  OPTIONAL { ?ps sh:name ?name_u FILTER(lang(?name_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?name_u)) ?ps sh:name ?name_en FILTER(langMatches(lang(?name_en), "en")) }
+  OPTIONAL { ?l10nAt_name_u l10n:of ?ps ; l10n:shapeName ?name_u } OPTIONAL { ?ps sh:name ?name_u FILTER(lang(?name_u) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:shapeName ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?name_u)) ?l10nAt_name_en l10n:of ?ps ; l10n:shapeName ?name_en } OPTIONAL { FILTER(!BOUND(?name_u)) ?ps sh:name ?name_en FILTER(langMatches(lang(?name_en), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:shapeName ?l10nPick }) }
   LATERAL { OPTIONAL { SELECT ?resource ?path (MIN(STR(?v)) AS ?lex0) WHERE { ?resource ?path ?v } GROUP BY ?resource ?path } }
   BIND(CONCAT(STR(COALESCE(?name_u, ?name_en, REPLACE(STR(?path), "^.*[#/]", ""))), ": [", COALESCE(?lex0, ""), "_]") AS ?data)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)

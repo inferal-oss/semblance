@@ -5,6 +5,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
@@ -27,6 +28,7 @@ import { foreignFunctions } from '../layers/foreign.ts'
 import { shapeFunctions } from '../layers/shapes.ts'
 import { dragdropFunctions } from '../layers/dragdrop.ts'
 import { dependencyFunctions } from '../layers/dependency.ts'
+import { olFunctions } from '../layers/outline.ts'
 import { functions as layoutFunctions } from './layout.ts'
 import { functions as typeFunctions } from './type.ts'
 import { functions as actionsFunctions } from './actions.ts'
@@ -39,6 +41,7 @@ import { functions as disclosureFunctions } from './disclosure.ts'
 import { functions as gridFunctions } from './grid.ts'
 import { functions as panesFunctions } from './panes.ts'
 import { functions as payloadFunctions } from './payload.ts'
+import { functions as rdfEditorFunctions } from './rdf-editor.ts'
 import { functions as toolbarFunctions } from './toolbar.ts'
 import { functions as messagesFunctions } from './messages.ts'
 import { containerFunctions } from './containers.ts'
@@ -52,12 +55,11 @@ import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
-import { labelOf, RDFS_LABEL, text } from './util.ts'
+import { encodeForUri, labelOf, RDFS_LABEL, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
 
 const str = (t: Term | undefined) => t?.value
-/** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
-export const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+export { encodeForUri } from './util.ts'
 const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
 
 function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
@@ -173,44 +175,56 @@ const listMember: FnRule = (ctx, focus, item) => {
   const sortBy = ctx.object(focus, C.sortBy)
   const labelFrom = ctx.object(focus, C.itemLabel)
   const checkedFrom = ctx.object(focus, C.itemChecked)
+  const imageFrom = ctx.object(focus, C.itemImage)
   const key = sortBy ? ctx.object(item, sortBy) : undefined
-  const inst = o.node('i-' + encodeURIComponent(item.value))
+  const inst = o.node('i-' + encodeForUri(item.value))
   o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
   o.t(inst, C.of, item)
   o.t(inst, C.inList, focus)
   if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
   if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
+  if (imageFrom) o.t(inst, C.imageFrom, imageFrom)
   // A sortable list's items can be picked up, carrying the data item (the drag and drop layer).
   if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
     o.t(inst, RDF_TYPE, ctx.nn(DND.Draggable)).t(inst, DND.carries, item)
-    const name = labelFrom && ctx.object(item, labelFrom)
-    if (name) o.t(inst, DND.name, name.value)
+    const name = labelFrom && text(ctx, item, labelFrom.value)
+    if (name !== undefined && name !== null) o.t(inst, DND.name, name)
   }
   // Missing keys sort last.
   o.t(inst, SEM.orderKey, key?.value ?? '\uffff')
   o.t(o.node('root'), H.hasChild, inst)
   return o.quads
 }
-listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked])
+listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked, C.itemImage])
 
 function itemData(ctx: RuleContext, focus: NamedNode) {
   const item = ctx.object(focus, C.of)
   const labelFrom = ctx.object(focus, C.labelFrom)
   if (!item || !labelFrom) return undefined
-  const label = str(ctx.object(item, labelFrom))
+  const label = text(ctx, item, labelFrom.value)
   if (label === undefined) return undefined
   const checkedFrom = ctx.object(focus, C.checkedFrom)
-  return { label, checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false }
+  const imageFrom = ctx.object(focus, C.imageFrom)
+  return {
+    label,
+    // Only a list that says what checks its items (c:itemChecked) has checkboxes.
+    checkable: !!checkedFrom,
+    checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false,
+    image: imageFrom ? str(ctx.object(item, imageFrom)) : undefined,
+  }
 }
 
 const listItemScreen: FnRule = (ctx, focus) => {
   const d = itemData(ctx, focus)
   if (!d) return []
   const o = ctx.out(focus)
+  const parts: NamedNode[] = []
   const checkId = mint(focus.value, 'check')
-  const check = o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined })
-  const label = o.el('label', 'Label', { for: checkId }, [o.text('label-text', d.label)])
-  o.renders(o.el('root', 'Li', {}, [check, label]))
+  if (d.checkable) parts.push(o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined }))
+  // A thumbnail of the item (c:itemImage), beside its label: decoration, the label names it.
+  if (d.image !== undefined) parts.push(o.el('image', 'Img', { class: 'sem-thumb', src: d.image, alt: '', loading: 'lazy', draggable: 'false' }))
+  parts.push(o.el('label', 'Label', { for: d.checkable ? checkId : undefined }, [o.text('label-text', d.label)]))
+  o.renders(o.el('root', 'Li', {}, parts))
   return o.quads
 }
 
@@ -218,7 +232,7 @@ const listItemText: FnRule = (ctx, focus) => {
   const d = itemData(ctx, focus)
   if (!d) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checked ? '  [x] ' : '  [ ] '}${d.label}`)]))
+  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checkable ? (d.checked ? '  [x] ' : '  [ ] ') : '  - '}${d.label}`)]))
   return o.quads
 }
 
@@ -234,11 +248,13 @@ const tabs: FnRule = (ctx, focus) => {
   const chosen = ctx.object(focus, C.selected)?.value
   const selected = attached.some((t) => t.value === chosen) ? chosen : attached[0]?.value
   const text = ctx.modality === MOD.Text
+  // Sortable tabs: each attached tab is dragged by its button, the root of a c:TabHandle carrying it.
+  const sortable = !text && ctx.match(focus, RDF_TYPE, DND.Sortable).length > 0
   const buttons: NamedNode[] = []
   const panels: NamedNode[] = []
   const windows: NamedNode[] = []
   items.forEach((tab, index) => {
-    const key = encodeURIComponent(tab.value)
+    const key = encodeForUri(tab.value)
     const name = label(ctx, tab)
     const detached = isDetached(tab)
     if (text) {
@@ -271,13 +287,20 @@ const tabs: FnRule = (ctx, focus) => {
     // The label is its own element, so a tab that can open in a window keeps room inside its own
     // frame for that control (the theme reserves it), whatever the theme draws around the tab.
     const tabLabel = o.el('tab-' + key + '-name', 'Span', { class: 'sem-tab-label' }, [o.text('tab-' + key + '-label', name)])
-    const button = o.el('tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [tabLabel])
+    const handle = sortable ? o.node('drag-' + key) : undefined
+    const button = o.el(handle ? 'drag-' + key + '/~root' : 'tab-' + key, 'Button', { type: 'button', id: tabId, tabIndex: on ? '0' : '-1' }, [tabLabel])
     o.attr(button, 'role', 'tab').attr(button, 'aria-selected', String(on)).attr(button, 'aria-controls', panelId)
     o.t(button, C.selects, tab)
-    buttons.push(button)
+    if (handle) {
+      o.t(handle, RDF_TYPE, ctx.nn(C.TabHandle)).t(handle, RDF_TYPE, ctx.nn(DND.Draggable)).t(handle, C.of, tab).t(handle, DND.carries, tab).t(handle, DND.name, name)
+      o.t(button, SEM.renders, handle)
+    }
+    buttons.push(handle ?? button)
     if (detachable) {
-      // Dragged out of the list it tears off into its window (src/behaviour/tear.ts); Shift+Enter detaches it.
-      o.attr(button, 'data-sem-gesture', 'tear').attr(button, 'aria-keyshortcuts', 'Shift+Enter')
+      // Dragged out of the list it tears off into its window (src/behaviour/tear.ts), unless dragging
+      // it moves it among sortable tabs; Shift+Enter detaches it.
+      if (!handle) o.attr(button, 'data-sem-gesture', 'tear')
+      o.attr(button, 'aria-keyshortcuts', 'Shift+Enter')
       o.t(button, C.tearsOff, tab).t(button, C.tearsInto, o.node('window-' + key))
       const detach = o.el('detach-' + key, 'Button', { type: 'button', class: 'sem-detach' }, [o.text('detach-' + key + '-label', '⧉')])
       o.attr(detach, 'aria-label', `Open ${name} in a window`)
@@ -303,8 +326,40 @@ const tabs: FnRule = (ctx, focus) => {
   // Windows go where the tabs say (a c:Desktop outlives page changes), else inside the tabs.
   const desktop = ctx.object(focus, C.windowsOn)
   if (desktop?.termType === 'NamedNode') for (const w of windows) o.t(desktop, C.hosts, w)
-  o.renders(o.el('root', 'Div', {}, [list, ...panels, ...(desktop ? [] : windows)]))
+  // A pane of a tiled workspace: besides taking tabs, its edges split it (c:splitsAt).
+  const zones = sortable && inWorkspace(ctx, focus) ? splitZones(ctx, o, focus, attached.map((t) => label(ctx, t)).join(', ')) : []
+  o.renders(o.el('root', 'Div', {}, [list, ...panels, ...(desktop ? [] : windows), ...zones]))
   return o.quads
+}
+
+/** Whether a component is a pane in a c:TiledWorkspace's tree (below its c:rootTile, through split views). */
+function inWorkspace(ctx: RuleContext, node: Term): boolean {
+  for (let hops = 0; hops < 64; hops++) {
+    if (ctx.match(null, C.rootTile, node).some((q) => ctx.match(q.subject, RDF_TYPE, ctx.nn(C.TiledWorkspace)).length)) return true
+    const parent = [...ctx.match(null, C.primary, node), ...ctx.match(null, C.secondary, node)][0]?.subject
+    if (!parent) return false
+    node = parent
+  }
+  return false
+}
+
+const SPLIT_EDGES = ['StartEdge', 'EndEdge', 'TopEdge', 'BottomEdge'] as const
+
+/** A pane's drop zones: the whole of it takes a tab, and a strip at each edge splits it there. */
+function splitZones(ctx: RuleContext, o: ReturnType<RuleContext['out']>, focus: NamedNode, name: string): NamedNode[] {
+  const root = o.node('root')
+  o.t(focus, DND.zone, root).t(root, DND.receptacle, focus)
+  // The drag's status names the pane by its tabs.
+  if (name) o.t(root, C.label, name)
+  return SPLIT_EDGES.map((name) => {
+    const edge = ctx.nn(C[name])
+    const slug = str(ctx.object(edge, SEM.slug))!
+    const zone = o.el('split-' + slug, 'Div', { class: 'sem-split-zone', 'aria-hidden': 'true', 'data-sem-edge': slug })
+    o.t(focus, DND.zone, zone).t(zone, DND.receptacle, zone).t(zone, C.splitsAt, edge)
+    const said = text(ctx, edge, C.splitLabel)
+    if (said) o.t(zone, C.label, said)
+    return zone
+  })
 }
 
 const segmented: FnRule = (ctx, focus) => {
@@ -551,14 +606,15 @@ const choice: FnRule = (ctx, focus) => {
     return o.quads
   }
   const selectId = mint(focus.value, 'select')
-  const select = o.el('select', 'Select', { id: selectId }, opts.map((opt) => {
+  const disabled = ctx.object(focus, C.disabled)?.value === 'true'
+  const select = o.el('select', 'Select', { id: selectId, disabled: disabled ? '' : undefined }, opts.map((opt) => {
     const key = encodeForUri(opt.value)
     return o.el('opt-' + key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text('opt-' + key + '-text', label(ctx, opt))])
   }))
   o.renders(o.el('root', 'Label', { for: selectId }, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), select]))
   return o.quads
 }
-choice.watches = watchControlled
+choice.watches = (ctx, focus) => new Set([...watchControlled(ctx, focus), C.disabled])
 
 const chips: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)
@@ -643,9 +699,12 @@ const optionLabels: FnRule = (ctx, focus) => {
 const linkHint: FnRule = (ctx, focus) => {
   if (!ctx.languages.length) return []
   const hint = text(ctx, ctx.nn(NS.c + 'Link'), NS.c + 'externalHint')
-  if (hint === undefined) return []
+  // What a link's count counts (c:countLabel), in the viewer's language.
+  const countLabel = text(ctx, focus, NS.c + 'countLabel')
+  if (hint === undefined && countLabel === undefined) return []
   const o = ctx.out(focus)
-  o.t(o.node('l10n-hint'), L10N.label, hint)
+  if (hint !== undefined) o.t(o.node('l10n-hint'), L10N.label, hint)
+  if (countLabel !== undefined) o.t(o.node('l10n-count'), L10N.label, countLabel)
   return o.quads
 }
 
@@ -772,6 +831,7 @@ export const functions: Record<string, FnRule> = {
   ...containerFunctions,
   ...viewFunctions,
   ...chartFunctions,
+  ...ganttFunctions,
   ...formulaFunctions,
   ...moneyFunctions,
   ...boardFunctions,
@@ -793,6 +853,7 @@ export const functions: Record<string, FnRule> = {
   ...shapeFunctions,
   ...dragdropFunctions,
   ...dependencyFunctions,
+  ...olFunctions,
   ...layoutFunctions,
   ...typeFunctions,
   ...actionsFunctions,
@@ -805,6 +866,7 @@ export const functions: Record<string, FnRule> = {
   ...gridFunctions,
   ...panesFunctions,
   ...payloadFunctions,
+  ...rdfEditorFunctions,
   ...toolbarFunctions,
   ...messagesFunctions,
   ...walkthroughFunctions,

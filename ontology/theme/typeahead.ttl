@@ -31,7 +31,7 @@
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
                  [ sty:property "gap" ; sty:raw "4px 6px" ] ,
-                 [ sty:property "min-height" ; sty:raw "var(--control-h, 38px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "var(--control-h, var(--sem-control-height))" ] ,
                  [ sty:property "padding" ; sty:raw "3px 6px 3px var(--control-px, 12px)" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--control-radius, var(--sem-radius-control))" ] ,
@@ -56,7 +56,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:Typeahead ; sty:part "> .sem-ta-field > input" ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 6ch" ] ,
                  [ sty:property "min-width" ; sty:raw "6ch" ] ,
-                 [ sty:property "min-height" ; sty:raw "calc(var(--control-h, 38px) - 8px)" ] ,
+                 [ sty:property "min-height" ; sty:raw "calc(var(--control-h, var(--sem-control-height)) - 8px)" ] ,
                  [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "outline" ; sty:raw "none" ] ,

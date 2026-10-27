@@ -1,0 +1,138 @@
+# c:StreamStatsOnScreen-sparql as it was before maintained views took its aggregates
+# (git show e32a8bf^:ontology/components/stream-stats.ttl): the phase 5 measure, test/view-measure.test.ts.
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hasChild ?title, ?metrics, ?kindsTitle, ?kinds, ?targetsTitle, ?targets .
+  ?title a rdfhtml:H2 ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?metrics .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?metrics a rdfhtml:Dl ; rdfhtml:hasChild ?mEvents, ?mChanges, ?mComponents ; ord:immediatelyPrecedes ?kindsTitle .
+  ?mEvents a rdfhtml:Div ; rdfhtml:hasChild ?mEventsDt, ?mEventsDd .
+  ?mEventsDt a rdfhtml:Dt ; rdfhtml:hasChild ?mEventsDtText ; ord:immediatelyPrecedes ?mEventsDd .
+  ?mEventsDtText a rdfhtml:Text ; rdfhtml:data "events" .
+  ?mEventsDd a rdfhtml:Dd ; rdfhtml:hasChild ?mEventsDdText .
+  ?mEventsDdText a rdfhtml:Text ; rdfhtml:data ?events .
+  ?mEvents ord:immediatelyPrecedes ?mChanges .
+  ?mChanges a rdfhtml:Div ; rdfhtml:hasChild ?mChangesDt, ?mChangesDd ; ord:immediatelyPrecedes ?mComponents .
+  ?mChangesDt a rdfhtml:Dt ; rdfhtml:hasChild ?mChangesDtText ; ord:immediatelyPrecedes ?mChangesDd .
+  ?mChangesDtText a rdfhtml:Text ; rdfhtml:data "triples changed" .
+  ?mChangesDd a rdfhtml:Dd ; rdfhtml:hasChild ?mChangesDdText .
+  ?mChangesDdText a rdfhtml:Text ; rdfhtml:data ?changes .
+  ?mComponents a rdfhtml:Div ; rdfhtml:hasChild ?mComponentsDt, ?mComponentsDd .
+  ?mComponentsDt a rdfhtml:Dt ; rdfhtml:hasChild ?mComponentsDtText ; ord:immediatelyPrecedes ?mComponentsDd .
+  ?mComponentsDtText a rdfhtml:Text ; rdfhtml:data "components" .
+  ?mComponentsDd a rdfhtml:Dd ; rdfhtml:hasChild ?mComponentsDdText .
+  ?mComponentsDdText a rdfhtml:Text ; rdfhtml:data ?components .
+  ?kindsTitle a rdfhtml:H3 ; rdfhtml:hasChild ?kindsTitleText ; ord:immediatelyPrecedes ?kinds .
+  ?kindsTitleText a rdfhtml:Text ; rdfhtml:data "by kind" .
+  ?kinds a rdfhtml:Ul ; rdfhtml:hasChild ?kindRow ; ord:immediatelyPrecedes ?targetsTitle .
+  ?targetsTitle a rdfhtml:H3 ; rdfhtml:hasChild ?targetsTitleText ; ord:immediatelyPrecedes ?targets .
+  ?targetsTitleText a rdfhtml:Text ; rdfhtml:data "by component" .
+  ?targets a rdfhtml:Ul ; rdfhtml:hasChild ?targetRow .
+  ?row a rdfhtml:Li ; rdfhtml:style ?share ; rdfhtml:hasChild ?rowName, ?rowCount .
+  ?rowName a rdfhtml:Span ; rdfhtml:hasChild ?rowNameText ; ord:immediatelyPrecedes ?rowCount .
+  ?rowNameText a rdfhtml:Text ; rdfhtml:data ?name .
+  ?rowCount a rdfhtml:Span ; rdfhtml:hasChild ?rowCountText .
+  ?rowCountText a rdfhtml:Text ; rdfhtml:data ?countText .
+  ?rowA ord:precedes ?rowB .
+}
+WHERE {
+  $this a c:StreamStats ; c:of ?stream .
+  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  OPTIONAL { $this l10n:label ?localLabel }
+  BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
+  BIND(IRI(CONCAT(STR($this), "/~metrics")) AS ?metrics)
+  BIND(IRI(CONCAT(STR($this), "/~kinds-title")) AS ?kindsTitle)
+  BIND(IRI(CONCAT(STR($this), "/~kinds-title-text")) AS ?kindsTitleText)
+  BIND(IRI(CONCAT(STR($this), "/~kinds")) AS ?kinds)
+  BIND(IRI(CONCAT(STR($this), "/~targets-title")) AS ?targetsTitle)
+  BIND(IRI(CONCAT(STR($this), "/~targets-title-text")) AS ?targetsTitleText)
+  BIND(IRI(CONCAT(STR($this), "/~targets")) AS ?targets)
+  # Each branch binds $this itself, so the minted IRIs are right in bulk evaluation too
+  # (where a union branch sees no outer bindings).
+  {
+    # Headline metrics.
+    $this c:of ?stream .
+    OPTIONAL {
+      SELECT ?stream (COUNT(?m) AS ?n) (SUM(?a) AS ?added) (SUM(?r) AS ?removed) (COUNT(DISTINCT ?t) AS ?c)
+      WHERE { ?stream tree:member ?m . ?m beh:added ?a ; beh:removed ?r ; beh:target ?t }
+      GROUP BY ?stream
+    }
+    BIND(STR(COALESCE(?n, 0)) AS ?events)
+    BIND(CONCAT("+", STR(COALESCE(?added, 0)), " / −", STR(COALESCE(?removed, 0))) AS ?changes)
+    BIND(STR(COALESCE(?c, 0)) AS ?components)
+    BIND(IRI(CONCAT(STR($this), "/~m-events")) AS ?mEvents)
+    BIND(IRI(CONCAT(STR($this), "/~m-events-dt")) AS ?mEventsDt)
+    BIND(IRI(CONCAT(STR($this), "/~m-events-dt-text")) AS ?mEventsDtText)
+    BIND(IRI(CONCAT(STR($this), "/~m-events-dd")) AS ?mEventsDd)
+    BIND(IRI(CONCAT(STR($this), "/~m-events-dd-text")) AS ?mEventsDdText)
+    BIND(IRI(CONCAT(STR($this), "/~m-changes")) AS ?mChanges)
+    BIND(IRI(CONCAT(STR($this), "/~m-changes-dt")) AS ?mChangesDt)
+    BIND(IRI(CONCAT(STR($this), "/~m-changes-dt-text")) AS ?mChangesDtText)
+    BIND(IRI(CONCAT(STR($this), "/~m-changes-dd")) AS ?mChangesDd)
+    BIND(IRI(CONCAT(STR($this), "/~m-changes-dd-text")) AS ?mChangesDdText)
+    BIND(IRI(CONCAT(STR($this), "/~m-components")) AS ?mComponents)
+    BIND(IRI(CONCAT(STR($this), "/~m-components-dt")) AS ?mComponentsDt)
+    BIND(IRI(CONCAT(STR($this), "/~m-components-dt-text")) AS ?mComponentsDtText)
+    BIND(IRI(CONCAT(STR($this), "/~m-components-dd")) AS ?mComponentsDd)
+    BIND(IRI(CONCAT(STR($this), "/~m-components-dd-text")) AS ?mComponentsDdText)
+  } UNION {
+    # One row per event kind / per component, with its share of the busiest.
+    $this c:of ?stream .
+    {
+      SELECT ?stream ?dim ?key (COUNT(?m) AS ?count)
+      WHERE { ?stream tree:member ?m . { ?m a ?key BIND("kind" AS ?dim) } UNION { ?m beh:target ?key BIND("component" AS ?dim) } }
+      GROUP BY ?stream ?dim ?key
+    }
+    {
+      SELECT ?stream ?dim (MAX(?n) AS ?max)
+      WHERE {
+        { SELECT ?stream ?dim ?k (COUNT(?m) AS ?n)
+          WHERE { ?stream tree:member ?m . { ?m a ?k BIND("kind" AS ?dim) } UNION { ?m beh:target ?k BIND("component" AS ?dim) } }
+          GROUP BY ?stream ?dim ?k }
+      }
+      GROUP BY ?stream ?dim
+    }
+    # The component's c:label (untagged, else English, else any), else its item's label.
+    LATERAL {
+      OPTIONAL { ?key c:label ?componentLabel0 FILTER(isLiteral(?componentLabel0) && lang(?componentLabel0) = "") }
+      OPTIONAL { FILTER(!BOUND(?componentLabel0)) ?key c:label ?componentLabel1 FILTER(langMatches(lang(?componentLabel1), "en")) }
+      OPTIONAL { FILTER(!BOUND(?componentLabel0) && !BOUND(?componentLabel1)) ?key c:label ?componentLabel2 FILTER(isLiteral(?componentLabel2)) }
+      BIND(COALESCE(?componentLabel0, ?componentLabel1, ?componentLabel2) AS ?componentLabel)
+      OPTIONAL {
+        ?key c:of ?item ; c:labelFrom ?labelProp .
+        LATERAL { OPTIONAL { ?item ?labelProp ?itemLabel0 FILTER(isLiteral(?itemLabel0) && lang(?itemLabel0) = "") }
+        OPTIONAL { FILTER(!BOUND(?itemLabel0)) ?item ?labelProp ?itemLabel1 FILTER(langMatches(lang(?itemLabel1), "en")) }
+        OPTIONAL { FILTER(!BOUND(?itemLabel0) && !BOUND(?itemLabel1)) ?item ?labelProp ?itemLabel2 FILTER(isLiteral(?itemLabel2)) }
+        BIND(COALESCE(?itemLabel0, ?itemLabel1, ?itemLabel2) AS ?itemLabel) }
+      }
+    }
+    BIND(COALESCE(?componentLabel, ?itemLabel, REPLACE(STR(?key), "^.*[#/]", "")) AS ?name)
+    BIND(STR(?count) AS ?countText)
+    BIND(CONCAT("--sem-share: ", STR(xsd:integer(ROUND(100 * ?count / ?max))), "%") AS ?share)
+    BIND(IRI(CONCAT(STR($this), "/~", ?dim, "-", ENCODE_FOR_URI(STR(?key)))) AS ?row)
+    BIND(IRI(CONCAT(STR(?row), "-name")) AS ?rowName)
+    BIND(IRI(CONCAT(STR(?row), "-name-text")) AS ?rowNameText)
+    BIND(IRI(CONCAT(STR(?row), "-count")) AS ?rowCount)
+    BIND(IRI(CONCAT(STR(?row), "-count-text")) AS ?rowCountText)
+    BIND(IF(?dim = "kind", ?row, ?none) AS ?kindRow)
+    BIND(IF(?dim = "component", ?row, ?none) AS ?targetRow)
+  } UNION {
+    # Rank order: busier rows first, ties broken by IRI.
+    $this c:of ?stream .
+    {
+      SELECT ?stream ?dim ?keyA (COUNT(?m) AS ?countA)
+      WHERE { ?stream tree:member ?m . { ?m a ?keyA BIND("kind" AS ?dim) } UNION { ?m beh:target ?keyA BIND("component" AS ?dim) } }
+      GROUP BY ?stream ?dim ?keyA
+    }
+    {
+      SELECT ?stream ?dim ?keyB (COUNT(?m) AS ?countB)
+      WHERE { ?stream tree:member ?m . { ?m a ?keyB BIND("kind" AS ?dim) } UNION { ?m beh:target ?keyB BIND("component" AS ?dim) } }
+      GROUP BY ?stream ?dim ?keyB
+    }
+    FILTER(?countA > ?countB || (?countA = ?countB && STR(?keyA) < STR(?keyB)))
+    BIND(IRI(CONCAT(STR($this), "/~", ?dim, "-", ENCODE_FOR_URI(STR(?keyA)))) AS ?rowA)
+    BIND(IRI(CONCAT(STR($this), "/~", ?dim, "-", ENCODE_FOR_URI(STR(?keyB)))) AS ?rowB)
+  }
+}

@@ -145,7 +145,10 @@ function checkOr(ctx: RuleContext, focus: NamedNode, shape: NamedNode): Violatio
     .map(() => ({ path: '', shape, value: focus, kind: 'or', fallback, message: text(ctx, shape, SH + 'message') ?? `${shape.value.replace(/^.*[#/]/, '')}: ${fallback}` }))
 }
 
-const validate: FnRule = (ctx, focus) => {
+const validate: FnRule = (ctx, component, member) => {
+  // The component itself, or (member-wise, val:EntryShapes) the entry of it being checked.
+  const focus = member ?? component
+  if (member && !ctx.match(component, NS.c + 'entry', member).length) return []
   const shapes = ctx.objects(focus, RDF_TYPE).flatMap((t) => shapesFor(ctx, t.value))
   if (!shapes.length) return []
   // sh:sourceShape names the node shape (property shapes are usually blank nodes,
@@ -155,16 +158,16 @@ const validate: FnRule = (ctx, focus) => {
     ...checkOr(ctx, focus, ctx.nn(s)),
   ])
   if (!violations.length) return []
-  const o = ctx.out(focus)
+  const o = ctx.out(component)
   for (const v of violations) {
     // Keyed by what it says (as the SPARQL rule keys it): the same violation keeps its IRI.
-    const r = o.node('shape-' + md5Key(`${v.path} ${v.shape.value} ${v.kind} ${v.fallback} ${v.value?.value ?? ''}`))
+    const r = o.node('shape-' + md5Key(`${member ? member.value + ' ' : ''}${v.path} ${v.shape.value} ${v.kind} ${v.fallback} ${v.value?.value ?? ''}`))
     o.t(r, RDF_TYPE, ctx.nn(SH + 'ValidationResult'))
       .t(r, SH + 'focusNode', focus)
       .t(r, SH + 'resultMessage', v.message)
       .t(r, SH + 'sourceShape', v.shape)
       .t(r, SH + 'resultSeverity', ctx.nn(SH + 'Violation'))
-      .t(focus, VAL.violation, r)
+      .t(component, VAL.violation, r)
     // A node shape's own constraint (sh:or) is about the focus itself: no path.
     if (v.path) o.t(r, SH + 'resultPath', ctx.nn(v.path))
     if (v.value) o.t(r, SH + 'value', v.value)
@@ -174,7 +177,8 @@ const validate: FnRule = (ctx, focus) => {
 
 /** Outlines a component with violations and explains them in its tooltip. */
 const mark: FnRule = (ctx, focus) => {
-  const results = ctx.objects(focus, VAL.violation)
+  // Only results about the component itself (its entries' are shown where it shows them).
+  const results = ctx.objects(focus, VAL.violation).filter((r) => ctx.match(r, SH + 'focusNode', focus).length > 0)
   if (!results.length) return []
   const o = ctx.out(focus)
   const root = ctx.nn(mint(focus.value, 'root'))

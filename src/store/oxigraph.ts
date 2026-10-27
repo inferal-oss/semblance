@@ -36,6 +36,7 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
     kind: 'oxigraph',
     factory,
     sparql: true,
+    crossGraphMatch: true,
     add: (q) => store.add(q as Ox.Quad),
     delete: (q) => {
       store.delete(q as Ox.Quad)
@@ -50,6 +51,7 @@ export function oxigraphStore(ox: typeof Ox): GraphStore {
       return store.query(query, { default_graph: graphs as Ox.NamedNode[] }) as unknown as Quad[]
     },
     loadTurtle: (text) => store.load(text, { format: 'text/turtle' }),
+    size: () => store.size,
     dispose() {
       // Once only: freeing twice would hand Oxigraph a dangling pointer.
       if (disposed) return
