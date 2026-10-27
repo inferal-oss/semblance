@@ -6,6 +6,7 @@
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix l10n: <https://semblance.dev/ns/l10n#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -79,6 +80,12 @@ c:RdfProperty a owl:Class ;
     rdfs:subClassOf c:RdfRow ;
     rdfs:comment "Internal: one predicate (c:predicateTerm) of a resource (c:subjectTerm) in an RDF editor, with a c:RdfTerm per object."@en ;
     sem:slug "rdf-property" .
+c:RdfDraggableRow a owl:Class ; rdfs:subClassOf dnd:Draggable ;
+    rdfs:comment "Minted on a value's row of an editable RDF editor: dragging it (pointer, or Space and the arrows) carries its statement."@en .
+# The tree keeps its roving tab stop: the drag layer gives a row none of its own.
+c:RdfDraggableRow dnd:keepsFocus true .
+c:RdfDropRow a owl:Class ; rdfs:subClassOf dnd:DropTarget ;
+    rdfs:comment "Minted on a predicate's or a resource's row of an editable RDF editor: a statement dropped on it moves there."@en .
 c:inEditor a owl:ObjectProperty ; rdfs:domain c:RdfRow ; rdfs:range c:RdfEditor .
 c:depth a owl:DatatypeProperty ; rdfs:domain c:RdfRow ; rdfs:range xsd:integer ;
     rdfs:comment "How deep a row is: 0 for a resource of the document, one more per row it is under."@en .
@@ -102,6 +109,12 @@ c:RdfEditorEscapeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "key
     rdfs:comment "Escape in a row's field of an RDF editor: leaves it unchanged."@en .
 c:RdfEditorDeleteKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "delete" , "backspace" ;
     rdfs:comment "Delete or Backspace on a row of an RDF editor: removes its statement, its predicate's statements, a list member or a resource."@en .
+c:RdfEditorNestKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "tab" ;
+    rdfs:comment "Tab on a value of an RDF editor: wraps it into a new nested resource, as its rdf:value."@en .
+c:RdfEditorOutdentKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "shift+tab" ;
+    rdfs:comment "Shift+Tab on a statement of a nested resource: moves it up to the resource the nested one belongs to."@en .
+c:RdfEditorMoveKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "alt+arrowup" , "alt+arrowdown" ;
+    rdfs:comment "Alt+Up or Alt+Down on a list member of an RDF editor: moves it one place up or down its list."@en .
 c:editing a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: its term is being edited, in a field in its place."@en .
 c:adding a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: a field under it takes a new object (a predicate's row) or a new statement (a resource's)."@en .
 c:editing beh:viewState true . c:adding beh:viewState true . c:focused beh:viewState true .
@@ -119,6 +132,7 @@ c:RdfListPhrase a c:Phrase ; rdfs:label "list of {n}"@en , "список із {n
 c:RdfEditPhrase a c:Phrase ; rdfs:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
 c:RdfNewObjectPhrase a c:Phrase ; rdfs:label "New value"@en , "Нове значення"@uk , "Neuer Wert"@de , "قيمة جديدة"@ar .
 c:RdfNewStatementPhrase a c:Phrase ; rdfs:label "New statement: predicate value"@en , "Нове твердження: предикат значення"@uk , "Neue Aussage: Prädikat Wert"@de , "عبارة جديدة: خاصية قيمة"@ar .
+c:RdfNewMemberPhrase a c:Phrase ; rdfs:label "New member"@en , "Новий елемент"@uk , "Neues Element"@de , "عنصر جديد"@ar .
 c:RdfSuggestionsPhrase a c:Phrase ; rdfs:label "What the shapes expect"@en , "Чого очікують форми"@uk , "Was die Formen erwarten"@de , "ما تتوقعه الأشكال"@ar .
 c:RdfReifierPhrase a c:Phrase ; rdfs:label "said about this statement"@en , "сказане про це твердження"@uk , "über diese Aussage gesagt"@de , "ما قيل عن هذه العبارة"@ar .
 
@@ -180,7 +194,7 @@ c:RdfEditorEntries-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?tree rdfhtml:hasChild ?row .
-  ?row a c:RdfTerm ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
+  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor .
@@ -188,6 +202,7 @@ WHERE {
   BIND(STR($member) AS ?key)
   BIND(EXISTS { $this c:editable true } AS ?editable)
   BIND(EXISTS { $this c:validated true } AS ?validated)
+  BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
   BIND(IRI(CONCAT(STR($this), "/~tree")) AS ?tree)
   BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?key), 1, 12))) AS ?row)
 }""" .
@@ -296,7 +311,7 @@ CONSTRUCT {
   ?option a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?optionClass ; sem:orderKey ?optionKey ; c:suggestsFor $this ;
           c:suggestsPredicate ?optP ; c:suggestsValue ?optV ; c:fillsWith ?fill ; rdfhtml:hasChild ?optionText .
   ?optionText a rdfhtml:Text ; rdfhtml:data ?optionLabel .
-  ?child a ?childClass ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
+  ?child a ?childClass , ?childDrop ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
          c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?childKey .
 }
 WHERE {
@@ -392,7 +407,7 @@ WHERE {
   BIND(IF(?expandable, IRI(CONCAT(STR($this), "/~twisty-text")), ?none) AS ?iconText)
   # Editing: the term in a field in its place (a literal's text; a name as written), or a field for a new statement.
   BIND(?editable && (?lit || (isIRI(?t) && !?blank)) && EXISTS { $this c:editing true } AS ?editing)
-  BIND(?editable && ?nest && !?list && EXISTS { $this c:adding true } AS ?adding)
+  BIND(?editable && (?nest && !?list || ?list) && EXISTS { $this c:adding true } AS ?adding)
   BIND(IF(?editable && !?editing, $this, ?none) AS ?editsRow)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit")), ?none) AS ?edit)
   BIND(IF(?editing, IF(?lit, STR(?t), ?compact), ?none) AS ?editText)
@@ -405,8 +420,9 @@ WHERE {
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add")), ?none) AS ?add)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-label")), ?none) AS ?addName)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-data-sem-takes-focus")), ?none) AS ?addFocus)
-  OPTIONAL { FILTER(?adding) ?addAt l10n:of c:RdfNewStatementPhrase ; l10n:name ?add0 }
-  OPTIONAL { FILTER(?adding) c:RdfNewStatementPhrase rdfs:label ?add0 FILTER(langMatches(lang(?add0), "en")) }
+  BIND(IF(?list, c:RdfNewMemberPhrase, c:RdfNewStatementPhrase) AS ?addWords)
+  OPTIONAL { FILTER(?adding) ?addAt l10n:of ?addWords ; l10n:name ?add0 }
+  OPTIONAL { FILTER(?adding) ?addWords rdfs:label ?add0 FILTER(langMatches(lang(?add0), "en")) }
   BIND(STR(?add0) AS ?addPhrase)
   # What the shapes expect, as buttons under the field (filtered by what is typed, c:draft).
   OPTIONAL { FILTER(?adding) $this c:draft ?draft0 }
@@ -427,10 +443,11 @@ WHERE {
   BIND(IF(BOUND(?badgeData), IRI(CONCAT(STR($this), "/~badge-text")), ?none) AS ?badgeText)
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note")), ?none) AS ?note)
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note-text")), ?none) AS ?noteText)
-  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
-  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
+  BIND(IF(?open || ?adding, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
+  BIND(IF(?open || ?adding, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-invalid")), ?none) AS ?invalidAttr)
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-describedby")), ?none) AS ?describedAttr)
+  BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
   BIND(?depth + 1 AS ?childDepth)
   # The rows under it, when it is open.
   LATERAL { {} UNION {
@@ -448,6 +465,7 @@ WHERE {
         FILTER(!sameTerm(?childPredicate, rdf:reifies) || NOT EXISTS { $this c:reifierOf ?of2 }) } }
     BIND(?t AS ?childSubject)
     BIND(c:RdfProperty AS ?childClass)
+    BIND(?dropType AS ?childDrop)
     BIND(REPLACE(STR(?childPredicate), "[^#/]*$", "") AS ?pns)
     BIND(REPLACE(STR(?childPredicate), "^.*[#/]", "") AS ?plocal)
     OPTIONAL { { SELECT ?pns (MIN(?pprefix0) AS ?pprefix) WHERE { ?pdecl sh:prefix ?pprefix0 ; sh:namespace ?pns0 BIND(STR(?pns0) AS ?pns) } GROUP BY ?pns } }
@@ -468,7 +486,7 @@ WHERE {
   } UNION {
     # The shapes' predicates (and values they fix: one pick, the whole statement), a missing required
     # one first; for a resource with no class yet, the classes shapes target that the document uses.
-    FILTER(?adding)
+    FILTER(?adding && !?list)
     { SELECT ?optP ?optV (MAX(?req) AS ?reqN) WHERE {
       { $this c:term ?t5 . ?t5 a ?ty5 . ?ty5 rdfs:subClassOf* ?c5 . ?sh5 sh:targetClass ?c5 ; sh:property ?ps5 . ?ps5 sh:path ?optP . FILTER(isIRI(?optP))
         OPTIONAL { ?ps5 sh:maxCount ?max5 }
@@ -657,7 +675,7 @@ CONSTRUCT {
   ?option a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?optionClass ; sem:orderKey ?optionKey ; c:suggestsFor $this ;
           c:suggestsPredicate ?optP ; c:suggestsValue ?optV ; c:fillsWith ?fill ; rdfhtml:hasChild ?optionText .
   ?optionText a rdfhtml:Text ; rdfhtml:data ?optionLabel .
-  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?okey .
+  ?child a c:RdfTerm , ?dragType ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?okey .
 }
 WHERE {
   $this a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor .
@@ -735,6 +753,7 @@ WHERE {
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-invalid")), ?none) AS ?invalidAttr)
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-describedby")), ?none) AS ?describedAttr)
+  BIND(IF(?editable, c:RdfDraggableRow, ?none) AS ?dragType)
   BIND(?depth + 1 AS ?childDepth)
   LATERAL { {} UNION {
     FILTER(?open)
@@ -901,7 +920,8 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . 
     sem:function "rdf-editor:start-edit" .
 
 # Shift+Enter: beside an object, a new object of its predicate; on a predicate, a new statement of its
-# resource; on a resource (or a nested one), a new statement in it.
+# resource; on a resource (or a nested one), a new statement in it; on a list or a member of it, a new
+# member at its end.
 c:RdfStartAdd a beh:Reaction ;
     rdfs:label "Add a statement"@en ;
     beh:when c:RdfEditorAddKey ;
@@ -913,7 +933,8 @@ WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
   BIND(EXISTS { ?row a c:RdfTerm ; c:subjectTerm ?anyS } AS ?object)
   BIND(EXISTS { ?row a c:RdfProperty } AS ?predicate)
-  BIND(IF(?object || ?predicate, IRI(REPLACE(STR(?row), "/~[tp]-[0-9a-f]{12}$", "")), ?row) AS ?to)
+  BIND(EXISTS { ?row c:listCell ?anyCell } AS ?member)
+  BIND(IF(?member, IRI(REPLACE(STR(?row), "/~i-[0-9]+$", "")), IF(?object || ?predicate, IRI(REPLACE(STR(?row), "/~[tp]-[0-9a-f]{12}$", "")), ?row)) AS ?to)
 }""" ;
     sem:function "rdf-editor:start-add" .
 
@@ -1044,9 +1065,16 @@ c:RdfCommitAdd a beh:Reaction ;
     beh:when c:RdfEditorKey ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
-    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
-WHERE { $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
-    beh:inserts """CONSTRUCT { ?s ?p ?new . ?focus c:focused true }
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark . ?last rdf:rest rdf:nil . ?ls ?lp rdf:nil }
+WHERE {
+  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this .
+  LATERAL {
+    { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+    UNION { ?row a c:RdfTerm ; c:term ?head . FILTER(REGEX(STR(?raw), "[^ ]"))
+      { ?head rdf:rest* ?last . ?last rdf:rest rdf:nil . ?head rdf:first ?anyFirst } UNION { FILTER(sameTerm(?head, rdf:nil)) ?row c:subjectTerm ?ls ; c:predicateTerm ?lp } }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?new . ?focus c:focused true . ?last rdf:rest ?cell . ?cell rdf:first ?new ; rdf:rest rdf:nil . ?ls ?lp ?cell }
 WHERE {
   $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this .
   LATERAL {
@@ -1073,7 +1101,36 @@ WHERE {
          IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
     FILTER(?newText != "")
       BIND(IRI(CONCAT(STR(?row), "/~t-", SUBSTR(MD5(IF(isLiteral(?new), CONCAT("\\"", STR(?new), "\\"", IF(LANG(?new) != "", CONCAT("@", LANG(?new)), CONCAT("^^", STR(DATATYPE(?new))))), STR(?new))), 1, 12))) AS ?focus) }
+    UNION { ?row a c:RdfTerm ; c:term ?head .
+      FILTER(sameTerm(?head, rdf:nil) || EXISTS { ?head rdf:first ?anyFirst })
+    BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?newText)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?newLang)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?newTyped)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"$") AS ?newQuoted)
+    BIND(REPLACE(?newText, "^\\"([^\\"]*)\\".*$", "$1") AS ?newInner)
+    BIND(IF(?newTyped, STRAFTER(?newText, "\\"^^"), ?newText) AS ?newName)
+    BIND(REGEX(?newName, "^<[^<>\\" ]+>$") AS ?newIri)
+    BIND(!?newIri && REGEX(?newName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?newPname)
+    BIND(STRBEFORE(?newName, ":") AS ?newPfx)
+    OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
+    BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
+         IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
+         IF(?newQuoted, ?newInner,
+         IF(!?newTyped && BOUND(?newNamed), ?newNamed,
+         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(!(false) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(false && LANG(?x) != "", STRLANG(?newText, LANG(?x)),
+         IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
+    FILTER(?newText != "")
+      BIND(IRI(CONCAT(STR($this), "/.well-known/genid/", SUBSTR(MD5(CONCAT(STR(?row), " ", STR(?new), " ", COALESCE(STR(DATATYPE(?new)), ""), COALESCE(LANG(?new), ""))), 1, 16))) AS ?cell)
+      OPTIONAL { FILTER(!sameTerm(?head, rdf:nil)) ?head rdf:rest* ?last . ?last rdf:rest rdf:nil }
+      OPTIONAL { FILTER(sameTerm(?head, rdf:nil)) ?row c:subjectTerm ?ls ; c:predicateTerm ?lp }
+      OPTIONAL { { SELECT (COUNT(?mc) AS ?members) WHERE { $event beh:node ?hit2 . ?n2 rdfhtml:hasChild* ?hit2 . ?n2 c:adds ?row2 . ?row2 c:term ?h2 . ?h2 rdf:rest* ?mc . ?mc rdf:first ?mx } } }
+      BIND(IF(sameTerm(?head, rdf:nil), IRI(REPLACE(STR(?row), "/~t-[0-9a-f]{12}$", "")), IRI(CONCAT(STR(?row), "/~i-", STR(COALESCE(?members, 0) + 1)))) AS ?focus) }
     UNION { ?row a c:RdfTerm ; c:term ?s .
+      FILTER(!sameTerm(?s, rdf:nil) && NOT EXISTS { ?s rdf:first ?anyFirst2 })
       BIND(REPLACE(STR(?raw), "^\\\\s+", "") AS ?trimmed)
       BIND(STRBEFORE(CONCAT(?trimmed, " "), " ") AS ?predText)
       BIND(STRAFTER(?trimmed, " ") AS ?objText)
@@ -1211,3 +1268,116 @@ WHERE {
   }
 }""" ;
     sem:function "rdf-editor:pick" .
+
+# --- reactions: structure (nest, outdent, move) ----------------------------------------------------------
+# Tab wraps a value into a new nested resource as its rdf:value (a structured value: then say its
+# unit, its source); Shift+Tab moves a statement of a nested resource up to the resource it belongs to
+# (an rdf:value unwraps), and a nested resource left with nothing to say goes. Alt+Up and Alt+Down move
+# a list member along its list. New nested resources are skolem IRIs under the editor
+# (/.well-known/genid/), shown as [ ] like a blank node. Each is one undoable change; the focus
+# follows the moved value.
+
+c:RdfNest a beh:Reaction ;
+    rdfs:label "Nest a value"@en ;
+    beh:when c:RdfEditorNestKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  LATERAL {
+    { ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?nested . ?nested rdf:value ?o . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
+  BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))), STR(?o)) AS ?okey)
+  BIND(IRI(CONCAT(STR($this), "/.well-known/genid/", SUBSTR(MD5(CONCAT(STR(?s), " ", STR(?p), " ", ?okey)), 1, 16))) AS ?nested)
+  BIND(IRI(CONCAT(REPLACE(STR(?row), "/~t-[0-9a-f]{12}$", ""), "/~t-", SUBSTR(MD5(STR(?nested)), 1, 12), "/~p-", SUBSTR(MD5(STR(rdf:value)), 1, 12), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?focus)
+}""" ;
+    sem:function "rdf-editor:nest" .
+
+c:RdfOutdent a beh:Reaction ;
+    rdfs:label "Outdent a statement"@en ;
+    beh:when c:RdfEditorOutdentKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?gs ?gp ?gone . ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
+  BIND(IRI(REPLACE(STR(?row), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")) AS ?up)
+  ?up c:subjectTerm ?gs ; c:predicateTerm ?gp ; c:term ?s .
+  LATERAL {
+    {}
+    UNION { FILTER NOT EXISTS { ?s ?q ?x FILTER(!(sameTerm(?q, ?p) && sameTerm(?x, ?o))) } BIND(?s AS ?gone) }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?gs ?np ?o . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
+  BIND(IRI(REPLACE(STR(?row), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")) AS ?up)
+  ?up c:subjectTerm ?gs ; c:predicateTerm ?gp ; c:term ?s .
+  BIND(IF(sameTerm(?p, rdf:value), ?gp, ?p) AS ?np)
+  # An rdf:value takes its resource's place (the resource stays while it says more).
+  BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))), STR(?o)) AS ?okey)
+  BIND(IRI(CONCAT(REPLACE(STR(?up), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", ""), "/~p-", SUBSTR(MD5(STR(?np)), 1, 12), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?focus)
+}""" ;
+    sem:function "rdf-editor:outdent" .
+
+c:RdfMoveMember a beh:Reaction ;
+    rdfs:label "Move a list member"@en ;
+    beh:when c:RdfEditorMoveKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?cell rdf:first ?m . ?other rdf:first ?om . ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit ; beh:key ?key . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  ?row c:listCell ?cell . ?cell rdf:first ?m .
+  OPTIONAL { ?prev rdf:rest ?cell . ?prev rdf:first ?pm }
+  OPTIONAL { ?cell rdf:rest ?next . ?next rdf:first ?nm }
+  BIND(IF(?key = "alt+arrowup", ?prev, ?next) AS ?other)
+  BIND(IF(?key = "alt+arrowup", ?pm, ?nm) AS ?om)
+  FILTER(BOUND(?other) && BOUND(?om))
+  OPTIONAL { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+}""" ;
+    beh:inserts """CONSTRUCT { ?cell rdf:first ?om . ?other rdf:first ?m . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit ; beh:key ?key . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  ?row c:listCell ?cell ; c:listIndex ?i . ?cell rdf:first ?m .
+  OPTIONAL { ?prev rdf:rest ?cell . ?prev rdf:first ?pm }
+  OPTIONAL { ?cell rdf:rest ?next . ?next rdf:first ?nm }
+  BIND(IF(?key = "alt+arrowup", ?prev, ?next) AS ?other)
+  BIND(IF(?key = "alt+arrowup", ?pm, ?nm) AS ?om)
+  FILTER(BOUND(?other) && BOUND(?om))
+  BIND(IRI(CONCAT(REPLACE(STR(?row), "/~i-[0-9]+$", ""), "/~i-", STR(IF(?key = "alt+arrowup", ?i - 1, ?i + 1)))) AS ?focus)
+}""" ;
+    sem:function "rdf-editor:move-member" .
+
+# A statement dropped on a predicate's row moves to that resource and predicate; dropped on a
+# resource's row, to that resource, with its own predicate. One undoable change.
+c:RdfDropStatement a beh:Reaction ;
+    rdfs:label "Move a statement"@en ;
+    beh:when dnd:Drop ;
+    beh:sourceClass c:RdfDropRow ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o }
+WHERE {
+  $event dnd:into $this ; dnd:carrying ?dragged .
+  ?dragged a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
+  { $this a c:RdfProperty ; c:subjectTerm ?ts ; c:predicateTerm ?np } UNION { $this a c:RdfTerm ; c:term ?ts . FILTER(!isLiteral(?ts)) ?dragged c:predicateTerm ?np }
+  FILTER(!(sameTerm(?ts, ?s) && sameTerm(?np, ?p)))
+}""" ;
+    beh:inserts """CONSTRUCT { ?ts ?np ?o }
+WHERE {
+  $event dnd:into $this ; dnd:carrying ?dragged .
+  ?dragged a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
+  { $this a c:RdfProperty ; c:subjectTerm ?ts ; c:predicateTerm ?np } UNION { $this a c:RdfTerm ; c:term ?ts . FILTER(!isLiteral(?ts)) ?dragged c:predicateTerm ?np }
+  FILTER(!(sameTerm(?ts, ?s) && sameTerm(?np, ?p)))
+}""" ;
+    sem:function "rdf-editor:drop" .

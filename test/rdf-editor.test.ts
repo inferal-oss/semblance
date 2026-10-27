@@ -13,6 +13,7 @@ import { MOD, NS, STY } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import { md5 } from '../src/components/data.ts'
 import { implementationGaps } from './implementations.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -56,9 +57,9 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const item = (...path: string[]) => label(...path).closest('[role=treeitem]') as HTMLElement
   const twisty = (...path: string[]) => item(...path).querySelector(':scope > .sem-row > .sem-twisty') as HTMLElement
   const click = (el: Element) => el.dispatchEvent(new window.Event('click', { bubbles: true }))
-  const key = (el: Element, k: string, shiftKey = false) => {
+  const key = (el: Element, k: string, shiftKey = false, altKey = false) => {
     const e = new window.Event('keydown', { bubbles: true, cancelable: true })
-    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey })
+    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey, shiftKey })
     el.dispatchEvent(e)
   }
   /** The field open in the editor (editing a row, or adding to one). */
@@ -77,7 +78,7 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const outline = () => toText(text.index, EDITOR)
   const html = () => app.innerHTML
   const runs = (prefix: string, ns: string = C) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(ns + prefix)).reduce((n, [, s]) => n + s.runs, 0)
-  return { store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
+  return { bus, store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
 }
 
 const LIBRARY = [
@@ -401,6 +402,56 @@ lib:loose lib:title "Untyped" .`
       // A resource with no class: the classes shapes target that the document uses.
       each((x) => x.key(x.label('lib:loose'), 'Enter', true), 'Shift+Enter on an untyped resource')
       expect(options()).toEqual(['a lib:Book', 'a lib:Person'])
+    })
+  }
+
+  const STRUCTURE = `@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> .
+ui:dt-rdf-editor c:editable true .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`nests, outdents, moves and appends list members, and moves statements by drag; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', STRUCTURE), mount(kind, 'function', STRUCTURE)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+        expect(both[1]!.outline(), step).toBe(m.outline())
+      }
+      const line = (word: string) => m.outline().split('\n').filter((l) => l.includes(word))
+      // Tab: the value becomes a nested resource's rdf:value, and keeps the focus.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '183'), 'Tab'), 'Tab')
+      expect(m.outline()).toContain('  lib:pages [\n    rdf:value 183\n  ]')
+      expect(m.label('lib:earthsea', 'lib:pages', '[ ]', 'rdf:value', '183').hasAttribute('data-sem-takes-focus')).toBe(true)
+      // Shift+Tab: back up; the nested resource, left with nothing, goes.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '[ ]', 'rdf:value', '183'), 'Tab', true), 'Shift+Tab')
+      expect(line('lib:pages')).toEqual(['  lib:pages 387', '  lib:pages 183'])
+      expect(m.outline()).not.toContain('rdf:value')
+      // Shift+Tab on a statement of a nested resource that says more: it moves up, the rest stays.
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:edition', '[ ]', 'lib:year', '1974'), 'Tab', true), 'Shift+Tab out of the edition')
+      expect(m.outline()).toContain('  lib:edition [\n    lib:publisher "Harper & Row"\n  ]')
+      expect(m.objects(LIB + 'dispossessed', LIB + 'year')).toEqual(['1974|integer'])
+      // Alt+Down and Alt+Up move a list member; Shift+Enter on one appends to its list.
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"'), 'ArrowDown', false, true), 'Alt+Down')
+      expect(line('lib:keywords')).toEqual(['  lib:keywords ( "anarchism" "utopia" "physics" )'])
+      expect(m.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"').hasAttribute('data-sem-takes-focus')).toBe(true)
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"'), 'ArrowUp', false, true), 'Alt+Up')
+      expect(line('lib:keywords')).toEqual(['  lib:keywords ( "anarchism" "physics" "utopia" )'])
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"utopia"'), 'Enter', true), 'Shift+Enter on a member')
+      expect(m.field()!.getAttribute('aria-label')).toBe('New member')
+      each((x) => x.enter('ecology'), 'a new member')
+      expect(line('lib:keywords')).toEqual(['  lib:keywords ( "anarchism" "physics" "utopia" "ecology" )'])
+      // A drop on a predicate's row moves the statement there (the drag layer raises dnd:Drop).
+      expect(m.item('lib:earthsea', 'lib:author', 'lib:ursula').getAttribute('data-sem-c')).toBe('rdf-term')
+      each((x) => {
+        const E = EDITOR
+        const k12 = (v: string) => md5(v).slice(0, 12)
+        const target = `${E}/~t-${k12(LIB + 'ursula')}/~p-${k12(LIB + 'born')}`
+        const dragged = `${E}/~t-${k12(LIB + 'earthsea')}/~p-${k12(LIB + 'pages')}/~t-${k12('"183"^^http://www.w3.org/2001/XMLSchema#integer')}`
+        x.bus.emit(NS.dnd + 'Drop', target, { about: [[NS.dnd + 'into', x.nn(target)], [NS.dnd + 'carrying', x.nn(dragged)]] })
+        x.dom.flush()
+      }, 'a drop')
+      expect(m.objects(LIB + 'ursula', LIB + 'born').sort()).toEqual(['183|integer', '1929-10-21|date'])
+      expect(line('lib:pages')).toEqual(['  lib:pages 387'])
     })
   }
 })
