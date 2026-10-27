@@ -128,8 +128,6 @@ c:activeOption a owl:ObjectProperty ; beh:viewState true ;
     rdfs:comment "State on a row of an RDF editor: the suggestion highlighted under its adding field (Down and Up move it, Enter takes it)."@en .
 c:RdfEditorTypeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
     rdfs:comment "Any key on a row of an RDF editor: one that types a character (beh:text) starts editing the row with it."@en .
-c:RdfMenuClick a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "click" ;
-    rdfs:comment "A click in an RDF editor, as its row menu's items hear it: an item does the reaction it names (c:does) on its row (c:actsOn)."@en .
 c:RdfEditorMenuKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "shift+f10" , "contextmenu" ;
     rdfs:comment "Shift+F10 or the Menu key on a row of an RDF editor: opens its menu."@en .
 c:RdfEditorContextMenu a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "contextmenu" ;
@@ -141,7 +139,7 @@ c:cursorMode a owl:DatatypeProperty ; beh:viewState true ; rdfs:comment "View st
 c:menuOpen a owl:DatatypeProperty ; rdfs:range xsd:boolean ; beh:viewState true ;
     rdfs:comment "State on a row of an RDF editor: its menu is open."@en .
 c:rowOf a owl:ObjectProperty ; rdfs:comment "On a rendered label of an RDF editor: the row it is the label of."@en .
-c:does a owl:ObjectProperty ; rdfs:range beh:Reaction ; rdfs:comment "On a rendered menu item: the reaction choosing it performs (it answers c:RdfMenuClick)."@en .
+c:does a owl:ObjectProperty ; rdfs:range beh:Reaction ; rdfs:comment "On a rendered menu item: the reaction choosing it performs (it answers a click on the item)."@en .
 c:actsOn a owl:ObjectProperty ; rdfs:comment "On a rendered menu item: the row it acts on."@en .
 c:asKey a owl:DatatypeProperty ; rdfs:comment "On a rendered menu item: the key combination it stands for, where its reaction asks which (Alt+Up, Alt+Down)."@en .
 c:RdfEditorChooseKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "arrowdown" , "arrowup" ;
@@ -1140,11 +1138,11 @@ WHERE {
 c:RdfStartEdit a beh:Reaction ;
     rdfs:label "Edit a row"@en ;
     beh:when c:RdfEditorKey ;
-    beh:when c:RdfMenuClick ;
+    beh:when beh:Click ;
     beh:sourceClass c:RdfEditor ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartEdit } . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
-    beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartEdit } . ?row c:inEditor $this . }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfStartEdit } . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+    beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfStartEdit } . ?row c:inEditor $this . }""" ;
     sem:function "rdf-editor:start-edit" .
 
 c:RdfStartEditByDoubleClick a beh:Reaction ;
@@ -1162,13 +1160,13 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . 
 c:RdfStartAdd a beh:Reaction ;
     rdfs:label "Add a statement"@en ;
     beh:when c:RdfEditorAddKey ;
-    beh:when c:RdfMenuClick ;
+    beh:when beh:Click ;
     beh:sourceClass c:RdfEditor ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartAdd } . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfStartAdd } . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
     beh:inserts """CONSTRUCT { ?to c:adding true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartAdd } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfStartAdd } . ?row c:inEditor $this .
   BIND(EXISTS { ?row a c:RdfTerm ; c:subjectTerm ?anyS } AS ?object)
   BIND(EXISTS { ?row a c:RdfProperty } AS ?predicate)
   BIND(EXISTS { ?row c:listCell ?anyCell } AS ?member)
@@ -1437,12 +1435,12 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds ?
 c:RdfDelete a beh:Reaction ;
     rdfs:label "Delete"@en ;
     beh:when c:RdfEditorDeleteKey ;
-    beh:when c:RdfMenuClick ;
+    beh:when beh:Click ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?s ?p ?o . ?prev rdf:rest ?cell . ?cell rdf:first ?m ; rdf:rest ?next . ?holder ?hp ?cell . $this c:entry ?entry . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfDelete } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfDelete } . ?row c:inEditor $this .
   LATERAL {
     { ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o }
     UNION { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p . ?s ?p ?o }
@@ -1455,7 +1453,7 @@ WHERE {
 }""" ;
     beh:inserts """CONSTRUCT { ?prev rdf:rest ?next . ?holder ?hp ?next . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfDelete } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfDelete } . ?row c:inEditor $this .
   BIND(IRI(REPLACE(STR(?row), "/~[tpir]-[^/]*$", "")) AS ?up)
   BIND(IF(STRSTARTS(STR(?up), CONCAT(STR($this), "/~")), ?up, ?none) AS ?focus)
   OPTIONAL { ?row c:listCell ?cell . ?cell rdf:first ?m ; rdf:rest ?next .
@@ -1519,12 +1517,12 @@ WHERE {
 c:RdfNest a beh:Reaction ;
     rdfs:label "Nest a value"@en ;
     beh:when c:RdfEditorNestKey ;
-    beh:when c:RdfMenuClick ;
+    beh:when beh:Click ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?s ?p ?o . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfNest } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfNest } . ?row c:inEditor $this .
   LATERAL {
     { ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o }
     UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
@@ -1532,7 +1530,7 @@ WHERE {
 }""" ;
     beh:inserts """CONSTRUCT { ?s ?p ?nested . ?nested rdf:value ?o . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfNest } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfNest } . ?row c:inEditor $this .
   ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
   BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))), STR(?o)) AS ?okey)
   BIND(IRI(CONCAT(STR($this), "/.well-known/genid/", SUBSTR(MD5(CONCAT(STR(?s), " ", STR(?p), " ", ?okey)), 1, 16))) AS ?nested)
@@ -1543,12 +1541,12 @@ WHERE {
 c:RdfOutdent a beh:Reaction ;
     rdfs:label "Outdent a statement"@en ;
     beh:when c:RdfEditorOutdentKey ;
-    beh:when c:RdfMenuClick ;
+    beh:when beh:Click ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?s ?p ?o . ?gs ?gp ?gone . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfOutdent } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfOutdent } . ?row c:inEditor $this .
   ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
   BIND(IRI(REPLACE(STR(?row), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")) AS ?up)
   ?up c:subjectTerm ?gs ; c:predicateTerm ?gp ; c:term ?s .
@@ -1560,7 +1558,7 @@ WHERE {
 }""" ;
     beh:inserts """CONSTRUCT { ?gs ?np ?o . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfOutdent } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfOutdent } . ?row c:inEditor $this .
   ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
   BIND(IRI(REPLACE(STR(?row), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")) AS ?up)
   ?up c:subjectTerm ?gs ; c:predicateTerm ?gp ; c:term ?s .
@@ -1574,12 +1572,12 @@ WHERE {
 c:RdfMoveMember a beh:Reaction ;
     rdfs:label "Move a list member"@en ;
     beh:when c:RdfEditorMoveKey ;
-    beh:when c:RdfMenuClick ;
+    beh:when beh:Click ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?cell rdf:first ?m . ?other rdf:first ?om . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfMoveMember } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfMoveMember } . ?row c:inEditor $this .
   OPTIONAL { $event beh:key ?k0 } OPTIONAL { ?n c:asKey ?k1 } BIND(COALESCE(?k1, ?k0) AS ?key)
   ?row c:listCell ?cell . ?cell rdf:first ?m .
   OPTIONAL { ?prev rdf:rest ?cell . ?prev rdf:first ?pm }
@@ -1591,7 +1589,7 @@ WHERE {
 }""" ;
     beh:inserts """CONSTRUCT { ?cell rdf:first ?om . ?other rdf:first ?m . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfMoveMember } . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a beh:Click } } UNION { $event a beh:Click . ?n c:actsOn ?row ; c:does c:RdfMoveMember } . ?row c:inEditor $this .
   OPTIONAL { $event beh:key ?k0 } OPTIONAL { ?n c:asKey ?k1 } BIND(COALESCE(?k1, ?k0) AS ?key)
   ?row c:listCell ?cell ; c:listIndex ?i . ?cell rdf:first ?m .
   OPTIONAL { ?prev rdf:rest ?cell . ?prev rdf:first ?pm }
@@ -1748,7 +1746,7 @@ WHERE {
 
 # --- the row menu ------------------------------------------------------------------------------------------
 # A right click, Shift+F10 or the Menu key opens a row's menu (c:menuOpen, view state): what can be done
-# there, each with its key. Its items do the editor's own reactions (c:does, answering c:RdfMenuClick)
+# there, each with its key. Its items do the editor's own reactions (c:does, answering the click)
 # on the row (c:actsOn); following a link is the link's own. Escape or a click elsewhere closes it, and
 # choosing an item closes it too.
 c:RdfOpenMenu a beh:Reaction ;

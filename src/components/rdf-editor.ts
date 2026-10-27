@@ -870,10 +870,10 @@ const valueOf = (ctx: RCtx) => ctx.object(ctx.event, NS.beh + 'value')?.value ??
 
 /**
  * The row a reaction acts on: the labelled row a key was pressed on, or, for a click on a row menu's
- * item (c:RdfMenuClick), the item's row when the item does this reaction (c:does).
+ * item, the item's row when the item does this reaction (c:does).
  */
 function rowActedOn(ctx: RCtx, reaction: string): Term | undefined {
-  const menuClick = ctx.match(ctx.event, RDF_TYPE, ctx.runtime.store.factory.namedNode(C + 'RdfMenuClick')).length > 0
+  const menuClick = ctx.match(ctx.event, RDF_TYPE, ctx.runtime.store.factory.namedNode(NS.beh + 'Click')).length > 0
   if (!menuClick) return marked(ctx, C_EDITS_ROW)
   return marked(ctx, C + 'does')?.value === C + reaction ? marked(ctx, C + 'actsOn') : undefined
 }
