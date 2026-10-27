@@ -78,6 +78,7 @@ export const ONTOLOGY_FILES = [
   'perf/perf.ttl',
   'domain/network.ttl',
   'shapes/components.ttl',
+  'shapes/charts.ttl',
   'shapes/grid.ttl',
   'shapes/panes.ttl',
   'shapes/desktop.ttl',

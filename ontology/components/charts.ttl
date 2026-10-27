@@ -8,6 +8,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 
 # Charts. A chart projects a sem:View (a SPARQL SELECT, sem:select) in "long"
@@ -472,6 +473,515 @@ c:LineChartRendering a sem:Rendering ; sem:targets c:LineChart ; sem:modality mo
     sem:functionOnly "awaits sx:Math (sx:log10): its axes may be logarithmic. (Its rows, the SELECT named in c:view, become graph data with the views runtime.)" ;
     sem:needsExtension sx:Math .
 c:LineChartRendering-fn a sem:Rule ; sem:implements c:LineChartRendering ; sem:function "linechart" .
+
+# --- Gantt ---------------------------------------------------------------------------------------
+# Dated tasks from a maintained SELECT view (as the bar chart reads it): one row per task, or a row
+# per predecessor of a task. c:GanttPlan reads the rows once and mints the chart's tasks
+# (<chart>/~task-<md5 of its id>, c:GanttTask components) with their dates as day numbers (days since
+# 1970-01-01), and its scale (c:scale <chart>/~gantt-scale, a c:TimeScale) with today (c:todayAt) and
+# month ticks (c:tick <chart>/~gantt-tick-k). Rules read them through those links (exact dependencies). The chart's frame writes the scale as custom properties
+# (--first, --days) and each task writes its own days (--from, --to): the theme places the marks
+# (inset-inline-start, so time runs right to left in a right-to-left page), a new scale moves them
+# without re-rendering a task, and a changed row re-renders its task alone. Each task says its dates
+# in words (visually hidden on screen; the line of the Text modality). Month names, today and the
+# phrases come from the localization layer (l10n:Dated).
+
+c:GanttChart a owl:Class ; rdfs:subClassOf c:Chart , l10n:Dated ;
+    rdfs:label "Gantt chart"@en , "Діаграма Ганта"@uk , "Gantt-Diagramm"@de , "مخطط غانت"@ar ;
+    rdfs:comment """Dated tasks from a sem:View that is a maintained iv:View: bars from start to end, milestones,
+baselines, uncertainty ends, and lead lines from predecessors, on a scale of months that scrolls.
+Variable names default to task, label, start, end, baselineStart, baselineEnd, uncertainty,
+dependsOn, milestone, tone (a sty:Tone) and href; c:…Variable maps them to an existing view's.
+Today (c:today, else the viewer's) is marked."""@en ;
+    l10n:phrase c:GanttTodayPhrase , c:GanttBaselinePhrase , c:GanttMilestonePhrase , c:GanttUncertaintyPhrase ,
+        c:GanttAfterPhrase , c:GanttUnscheduledPhrase , c:GanttNoRowsPhrase ;
+    sem:slug "gantt-chart" .
+c:GanttTask a owl:Class ; rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal: one task of a c:GanttChart (c:inChart), minted by c:GanttPlan and placed by sem:orderKey (the view's order)."@en ;
+    sem:slug "gantt-task" .
+c:taskVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable identifying a task (default task; else the label)."@en .
+c:labelVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable naming a task (default label)."@en .
+c:startVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for an ISO start date (default start)."@en .
+c:endVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for an inclusive ISO end date (default end)."@en .
+c:baselineStartVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a baseline start date (default baselineStart)."@en .
+c:baselineEndVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a baseline end date (default baselineEnd)."@en .
+c:uncertaintyVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for the latest date a task may end (default uncertainty)."@en .
+c:dependencyVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a predecessor, by its task value (default dependsOn)."@en .
+c:milestoneVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a boolean milestone flag (default milestone)."@en .
+c:toneVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a task's sty:Tone (default tone)."@en .
+c:hrefVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a task's link, http(s) or a path on the site (default href)."@en .
+# Derived, by c:GanttPlan.
+c:inChart a owl:ObjectProperty ; rdfs:domain c:GanttTask ; rdfs:comment "Derived: the chart a task belongs to."@en .
+c:baselineStart a owl:DatatypeProperty ; rdfs:comment "Derived: a task's baseline start, a day number (c:start and c:end are its own)."@en .
+c:baselineEnd a owl:DatatypeProperty ; rdfs:comment "Derived: a task's baseline end, a day number."@en .
+c:uncertaintyEnd a owl:DatatypeProperty ; rdfs:comment "Derived: the latest day a task may end."@en .
+c:startDate a owl:DatatypeProperty ; rdfs:comment "Derived: c:start as an ISO date (likewise c:endDate, c:baselineStartDate, c:baselineEndDate, c:uncertaintyEndDate)."@en .
+c:endDate a owl:DatatypeProperty . c:baselineStartDate a owl:DatatypeProperty . c:baselineEndDate a owl:DatatypeProperty . c:uncertaintyEndDate a owl:DatatypeProperty .
+c:milestone a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "Derived: a task is a milestone (a point at its start)."@en .
+c:leadFrom a owl:DatatypeProperty ; rdfs:comment "Derived: the day a predecessor of a task ends; a lead line runs from after it to the task's start."@en .
+c:afterLabel a owl:DatatypeProperty ; rdfs:comment "Derived: the name of a predecessor of a task."@en .
+c:tick a owl:ObjectProperty ; rdfs:domain c:TimeScale ; rdfs:comment "Derived: a month tick of a chart's scale (c:at, c:month, c:year)."@en .
+c:todayAt a owl:DatatypeProperty ; rdfs:domain c:TimeScale ; rdfs:comment "Derived: today's day number, on a chart's scale."@en .
+c:at a owl:DatatypeProperty ; rdfs:comment "Derived: a tick's day number."@en .
+c:month a owl:DatatypeProperty ; rdfs:comment "Derived: a tick's month, 1-12."@en .
+c:year a owl:DatatypeProperty ; rdfs:comment "Derived: a tick's year."@en .
+
+c:GanttTodayPhrase a c:Phrase ; rdfs:label "Today"@en , "Сьогодні"@uk , "Heute"@de , "اليوم"@ar .
+c:GanttBaselinePhrase a c:Phrase ; rdfs:label "Baseline"@en , "Базовий план"@uk , "Basisplan"@de , "الخطة الأساسية"@ar .
+c:GanttMilestonePhrase a c:Phrase ; rdfs:label "Milestone"@en , "Віха"@uk , "Meilenstein"@de , "مرحلة"@ar .
+c:GanttUncertaintyPhrase a c:Phrase ; rdfs:label "May end by"@en , "Може завершитися до"@uk , "Endet spätestens"@de , "قد ينتهي بحلول"@ar .
+c:GanttAfterPhrase a c:Phrase ; rdfs:label "After"@en , "Після"@uk , "Nach"@de , "بعد"@ar .
+c:GanttUnscheduledPhrase a c:Phrase ; rdfs:label "Unscheduled"@en , "Без дати"@uk , "Ohne Termin"@de , "دون موعد"@ar .
+c:GanttNoRowsPhrase a c:Phrase ; rdfs:label "No tasks."@en , "Немає завдань."@uk , "Keine Aufgaben."@de , "لا توجد مهام."@ar .
+
+# The plan runs before the components (a stratum below, so a chart typed in the input), and the frame
+# reads what it minted (sem:readsMinted re-runs it when that changes).
+c:GanttPlan a sem:Rendering ; sem:targets c:GanttChart ; sem:stratum -1 ; sem:inputOnly true ;
+    sem:follows c:dataset , ( c:view rs:solution rs:binding ) .
+c:GanttPlan-fn a sem:Rule ; sem:implements c:GanttPlan ; sem:function "gantt:plan" .
+c:GanttPlan-sparql a sem:Rule ; sem:implements c:GanttPlan ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?task a c:GanttTask ; c:inChart $this ; sem:orderKey ?key ; c:label ?label ; c:milestone ?milestone ; sty:tone ?tone ; c:href ?href .
+  ?tasks rdfhtml:hasChild ?task .
+  ?n ?dayP ?day ; ?dateP ?date ; c:month ?tickMonth ; c:year ?tickYear ; c:afterLabel ?afterLabel .
+  ?scale a c:TimeScale . $this c:scale ?scale . ?scaleTick c:tick ?n .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:GanttChart ; c:view ?view .
+  ?view a rs:ResultSet .
+  {
+    # A task per id (its task value, else its label): the least of each value over its rows.
+    { SELECT ?id (MIN(?pos) AS ?p) (MIN(?l) AS ?label0) (MIN(?h) AS ?href0) (MIN(?tn) AS ?tone0) (MAX(?m) AS ?ms0)
+         (MIN(?s) AS ?start0) (MIN(?e) AS ?end0) (MIN(?b1) AS ?bs0) (MIN(?b2) AS ?be0) (MIN(?u) AS ?unc0) WHERE {
+      $this c:view ?v . ?v rs:solution ?r .
+      OPTIONAL { ?r rs:index ?idx }
+      OPTIONAL { $this c:taskVariable ?taskN0 } BIND(COALESCE(STR(?taskN0), "task") AS ?taskN)
+      OPTIONAL { $this c:labelVariable ?labelN0 } BIND(COALESCE(STR(?labelN0), "label") AS ?labelN)
+      OPTIONAL { $this c:startVariable ?startN0 } BIND(COALESCE(STR(?startN0), "start") AS ?startN)
+      OPTIONAL { $this c:endVariable ?endN0 } BIND(COALESCE(STR(?endN0), "end") AS ?endN)
+      OPTIONAL { $this c:baselineStartVariable ?bsN0 } BIND(COALESCE(STR(?bsN0), "baselineStart") AS ?bsN)
+      OPTIONAL { $this c:baselineEndVariable ?beN0 } BIND(COALESCE(STR(?beN0), "baselineEnd") AS ?beN)
+      OPTIONAL { $this c:uncertaintyVariable ?uncN0 } BIND(COALESCE(STR(?uncN0), "uncertainty") AS ?uncN)
+      OPTIONAL { $this c:milestoneVariable ?msN0 } BIND(COALESCE(STR(?msN0), "milestone") AS ?msN)
+      OPTIONAL { $this c:toneVariable ?toneN0 } BIND(COALESCE(STR(?toneN0), "tone") AS ?toneN)
+      OPTIONAL { $this c:hrefVariable ?hrefN0 } BIND(COALESCE(STR(?hrefN0), "href") AS ?hrefN)
+      BIND(STR(?r) AS ?rs)
+      BIND(IRI(CONCAT(?rs, "-", ?taskN)) AS ?taskB) LATERAL { OPTIONAL { ?taskB rs:value ?taskV } }
+      BIND(IRI(CONCAT(?rs, "-", ?labelN)) AS ?labelB) LATERAL { OPTIONAL { ?labelB rs:value ?labelV } }
+      BIND(IRI(CONCAT(?rs, "-", ?startN)) AS ?startB) LATERAL { OPTIONAL { ?startB rs:value ?startV } }
+      BIND(IRI(CONCAT(?rs, "-", ?endN)) AS ?endB) LATERAL { OPTIONAL { ?endB rs:value ?endV } }
+      BIND(IRI(CONCAT(?rs, "-", ?bsN)) AS ?bsB) LATERAL { OPTIONAL { ?bsB rs:value ?bsV } }
+      BIND(IRI(CONCAT(?rs, "-", ?beN)) AS ?beB) LATERAL { OPTIONAL { ?beB rs:value ?beV } }
+      BIND(IRI(CONCAT(?rs, "-", ?uncN)) AS ?uncB) LATERAL { OPTIONAL { ?uncB rs:value ?uncV } }
+      BIND(IRI(CONCAT(?rs, "-", ?msN)) AS ?msB) LATERAL { OPTIONAL { ?msB rs:value ?msV } }
+      BIND(IRI(CONCAT(?rs, "-", ?toneN)) AS ?toneB) LATERAL { OPTIONAL { ?toneB rs:value ?toneV } }
+      BIND(IRI(CONCAT(?rs, "-", ?hrefN)) AS ?hrefB) LATERAL { OPTIONAL { ?hrefB rs:value ?hrefV } }
+      BIND(STR(COALESCE(?taskV, ?labelV)) AS ?id) FILTER(BOUND(?id))
+      BIND(COALESCE(?idx, ?rs) AS ?pos)
+      BIND(STR(?labelV) AS ?l) BIND(STR(?hrefV) AS ?h) BIND(STR(?startV) AS ?s) BIND(STR(?endV) AS ?e)
+      BIND(STR(?bsV) AS ?b1) BIND(STR(?beV) AS ?b2) BIND(STR(?uncV) AS ?u)
+      BIND(IF(STR(?msV) IN ("true", "1"), 1, 0) AS ?m)
+      BIND(COALESCE(?toneV, c:none) AS ?toneNode)
+      LATERAL { OPTIONAL { ?toneNode a sty:Tone BIND(STR(?toneNode) AS ?tn) } }
+    } GROUP BY ?id }
+    BIND(IRI(CONCAT(STR($this), "/~task-", SUBSTR(MD5(?id), 1, 8))) AS ?node)
+    LATERAL {
+      {
+        BIND(?node AS ?task)
+        BIND(IRI(CONCAT(STR($this), "/~tasks")) AS ?tasks)
+        BIND(CONCAT("\\u0001", IF(isNumeric(?p), "n", "s"), STR(?p)) AS ?key)
+        BIND(COALESCE(?label0, ?id) AS ?label)
+        BIND(IF(?ms0 = 1, true, ?unset) AS ?milestone)
+        BIND(IRI(?tone0) AS ?tone)
+        BIND(IF(REGEX(?href0, "^(https?://|/([^/]|$))"), ?href0, ?unset) AS ?href)
+      } UNION {
+        # Its dates, as day numbers and ISO dates.
+        VALUES (?which ?dayP ?dateP) { (1 c:start c:startDate) (2 c:end c:endDate) (3 c:baselineStart c:baselineStartDate) (4 c:baselineEnd c:baselineEndDate) (5 c:uncertaintyEnd c:uncertaintyEndDate) }
+        BIND(?node AS ?n)
+        BIND(IF(?which = 1, ?start0, IF(?which = 2, ?end0, IF(?which = 3, ?bs0, IF(?which = 4, ?be0, ?unc0)))) AS ?iso)
+        BIND(0 AS ?offset)
+      }
+    }
+  } UNION {
+    # Predecessors, by their task value: the name of each, and where it ends (its end, else its start).
+    { SELECT ?id ?dep (MIN(?pl) AS ?predLabel) (MIN(?pe) AS ?predEnd) (MIN(?ps) AS ?predStart) WHERE {
+      $this c:view ?v . ?v rs:solution ?r .
+      OPTIONAL { $this c:taskVariable ?taskN0 } BIND(COALESCE(STR(?taskN0), "task") AS ?taskN)
+      OPTIONAL { $this c:labelVariable ?labelN0 } BIND(COALESCE(STR(?labelN0), "label") AS ?labelN)
+      OPTIONAL { $this c:startVariable ?startN0 } BIND(COALESCE(STR(?startN0), "start") AS ?startN)
+      OPTIONAL { $this c:endVariable ?endN0 } BIND(COALESCE(STR(?endN0), "end") AS ?endN)
+      OPTIONAL { $this c:dependencyVariable ?depN0 } BIND(COALESCE(STR(?depN0), "dependsOn") AS ?depN)
+      BIND(STR(?r) AS ?rs)
+      BIND(IRI(CONCAT(?rs, "-", ?taskN)) AS ?taskB) LATERAL { OPTIONAL { ?taskB rs:value ?taskV } }
+      BIND(IRI(CONCAT(?rs, "-", ?labelN)) AS ?labelB) LATERAL { OPTIONAL { ?labelB rs:value ?labelV } }
+      BIND(IRI(CONCAT(?rs, "-", ?depN)) AS ?depB) LATERAL { OPTIONAL { ?depB rs:value ?depV } }
+      BIND(STR(COALESCE(?taskV, ?labelV)) AS ?id) FILTER(BOUND(?id) && BOUND(?depV))
+      BIND(?depV AS ?dep)
+      LATERAL { ?pb rs:value ?dep ; rs:variable ?pvar . FILTER(?pvar = ?taskN) ?pr rs:binding ?pb . ?v rs:solution ?pr . }
+      BIND(STR(?pr) AS ?rsP)
+      BIND(IRI(CONCAT(?rsP, "-", ?labelN)) AS ?labelBP) LATERAL { OPTIONAL { ?labelBP rs:value ?labelVP } }
+      BIND(IRI(CONCAT(?rsP, "-", ?startN)) AS ?startBP) LATERAL { OPTIONAL { ?startBP rs:value ?startVP } }
+      BIND(IRI(CONCAT(?rsP, "-", ?endN)) AS ?endBP) LATERAL { OPTIONAL { ?endBP rs:value ?endVP } }
+      BIND(STR(?labelVP) AS ?pl) BIND(STR(?startVP) AS ?ps) BIND(STR(?endVP) AS ?pe)
+    } GROUP BY ?id ?dep }
+    FILTER(STR(?dep) != ?id)
+    BIND(IRI(CONCAT(STR($this), "/~task-", SUBSTR(MD5(?id), 1, 8))) AS ?n)
+    LATERAL {
+      { BIND(COALESCE(?predLabel, STR(?dep)) AS ?afterLabel) }
+      UNION { BIND(c:leadFrom AS ?dayP) BIND(IF(REGEX(COALESCE(?predEnd, ""), "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"), ?predEnd, ?predStart) AS ?iso) BIND(0 AS ?offset) }
+    }
+  } UNION {
+    # The scale, from a day before the first date of any row to two after the last; month ticks.
+    { SELECT (MIN(?d) AS ?firstIso) (MAX(?d) AS ?lastIso) WHERE {
+      $this c:view ?v . ?v rs:solution ?r .
+      OPTIONAL { $this c:startVariable ?startN0 } BIND(COALESCE(STR(?startN0), "start") AS ?startN)
+      OPTIONAL { $this c:endVariable ?endN0 } BIND(COALESCE(STR(?endN0), "end") AS ?endN)
+      OPTIONAL { $this c:baselineStartVariable ?bsN0 } BIND(COALESCE(STR(?bsN0), "baselineStart") AS ?bsN)
+      OPTIONAL { $this c:baselineEndVariable ?beN0 } BIND(COALESCE(STR(?beN0), "baselineEnd") AS ?beN)
+      OPTIONAL { $this c:uncertaintyVariable ?uncN0 } BIND(COALESCE(STR(?uncN0), "uncertainty") AS ?uncN)
+      VALUES ?which { 1 2 3 4 5 }
+      BIND(IF(?which = 1, ?startN, IF(?which = 2, ?endN, IF(?which = 3, ?bsN, IF(?which = 4, ?beN, ?uncN)))) AS ?var)
+      BIND(IRI(CONCAT(STR(?r), "-", ?var)) AS ?b) LATERAL { ?b rs:value ?x }
+      BIND(STR(?x) AS ?d) FILTER(REGEX(?d, "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"))
+    } }
+    FILTER(BOUND(?firstIso))
+    BIND(IRI(CONCAT(STR($this), "/~gantt-scale")) AS ?scale0)
+    BIND(xsd:integer(SUBSTR(?firstIso, 1, 4)) * 12 + xsd:integer(SUBSTR(?firstIso, 6, 2)) - 1 AS ?m0)
+    BIND(xsd:integer(SUBSTR(?lastIso, 1, 4)) * 12 + xsd:integer(SUBSTR(?lastIso, 6, 2)) - 1 AS ?m1)
+    LATERAL {
+      { BIND(?scale0 AS ?scale) BIND(?scale0 AS ?n) BIND(c:start AS ?dayP) BIND(?firstIso AS ?iso) BIND(-1 AS ?offset) }
+      UNION { BIND(?scale0 AS ?n) BIND(c:end AS ?dayP) BIND(?lastIso AS ?iso) BIND(2 AS ?offset) }
+      UNION {
+        # Today (c:today, else the viewer's); the frame marks it when it is on the scale.
+        OPTIONAL { $this c:today ?t0 } OPTIONAL { $this l10n:today ?t1 }
+        BIND(STR(COALESCE(?t0, ?t1)) AS ?iso) FILTER(BOUND(?iso))
+        BIND(?scale0 AS ?n) BIND(c:todayAt AS ?dayP) BIND(0 AS ?offset)
+      }
+      UNION {
+        # The smallest step of 1, 2, 3, 6, 12, 24, 60, 120, 240, 600 or 1200 months that needs at most twelve.
+        BIND(?m1 - ?m0 AS ?span)
+        BIND(IF(?span <= 12, 1, IF(?span <= 24, 2, IF(?span <= 36, 3, IF(?span <= 72, 6, IF(?span <= 144, 12, IF(?span <= 288, 24,
+             IF(?span <= 720, 60, IF(?span <= 1440, 120, IF(?span <= 2880, 240, IF(?span <= 7200, 600, 1200)))))))))) AS ?step)
+        VALUES ?k { 0 1 2 3 4 5 6 7 8 9 10 11 12 }
+        BIND(?m0 + ?k * ?step AS ?tm0)
+        BIND(xsd:integer(FLOOR(?tm0 / 12)) AS ?year)
+        BIND(?tm0 - ?year * 12 + 1 AS ?month)
+        BIND(IF(?k = 0, ?firstIso, CONCAT(STR(?year), "-", IF(?month < 10, "0", ""), STR(?month), "-01")) AS ?iso)
+        FILTER(?k = 0 || ?iso <= ?lastIso)
+        BIND(IF(?k = 0, -1, 0) AS ?offset)
+        BIND(IRI(CONCAT(STR($this), "/~gantt-tick-", STR(?k))) AS ?n) BIND(c:at AS ?dayP) BIND(?scale0 AS ?scaleTick0)
+      }
+    }
+  }
+  # A day number: days since 1970-01-01 by the civil calendar (gantt.ts civilDay), and the ISO date.
+  BIND(IF(REGEX(COALESCE(?iso, ""), "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"), ?iso, ?unset) AS ?valid)
+  BIND(xsd:integer(SUBSTR(?valid, 6, 2)) AS ?dm)
+  BIND(xsd:integer(SUBSTR(?valid, 1, 4)) - IF(?dm <= 2, 1, 0) AS ?dy)
+  BIND(xsd:integer(FLOOR(?dy / 400)) AS ?era)
+  BIND(?dy - ?era * 400 AS ?yoe)
+  BIND(xsd:integer(FLOOR((153 * IF(?dm > 2, ?dm - 3, ?dm + 9) + 2) / 5)) + xsd:integer(SUBSTR(?valid, 9, 2)) - 1 AS ?doy)
+  BIND(?era * 146097 + ?yoe * 365 + xsd:integer(FLOOR(?yoe / 4)) - xsd:integer(FLOOR(?yoe / 100)) + ?doy - 719468 + ?offset AS ?day)
+  BIND(IF(BOUND(?dateP) && BOUND(?day), SUBSTR(?valid, 1, 10), ?unset) AS ?date)
+  BIND(IF(BOUND(?day), ?scaleTick0, ?unset) AS ?scaleTick) BIND(IF(BOUND(?day), ?month, ?unset) AS ?tickMonth) BIND(IF(BOUND(?day), ?year, ?unset) AS ?tickYear)
+}""" .
+c:GanttChartRendering a sem:Rendering ; sem:targets c:GanttChart ; sem:stratum 0 ; sem:follows c:dataset , c:view ; sem:readsMinted true .
+c:GanttChartRendering-fn a sem:Rule ; sem:implements c:GanttChartRendering ; sem:modality mod:Screen ; sem:function "gantt:screen" .
+c:GanttChartRendering-fn-text a sem:Rule ; sem:implements c:GanttChartRendering ; sem:modality mod:Text ; sem:function "gantt:text" .
+c:GanttChartRendering-sparql a sem:Rule ; sem:implements c:GanttChartRendering ; sem:modality mod:Screen ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:href ?hrefAttr ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:GanttChart .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabel0At l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabel2At l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IRI(CONCAT(STR($this), "/~l10n-GanttNoRowsPhrase")) AS ?noRowsNode)
+    OPTIONAL { ?noRowsNode l10n:label ?noRows0 }
+    OPTIONAL { c:GanttNoRowsPhrase rdfs:label ?noRows1 FILTER(langMatches(lang(?noRows1), "en")) }
+    BIND(STR(COALESCE(?noRows0, ?noRows1)) AS ?noRows)
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1, ?noRows)), ?unset))) AS ?message)
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    # The frame: a scrolling region (named by the chart) round the plot, whose scale is in custom properties.
+    FILTER(!BOUND(?message))
+    OPTIONAL { $this l10n:label ?label0 }
+    OPTIONAL { FILTER(!BOUND(?label0)) $this c:label ?label1 FILTER(isLiteral(?label1)) }
+    OPTIONAL { ?label2At l10n:of $this ; l10n:name ?label2 }
+    OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
+    BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+    OPTIONAL { $this c:scale ?scaleNode . ?scaleNode a c:TimeScale ; c:start ?first ; c:end ?last }
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("root" rdfhtml:Figure UNDEF UNDEF UNDEF) ("scroll" rdfhtml:Div "sem-gantt-scroll" "root" 0) ("plot" rdfhtml:Div "sem-gantt-plot" "scroll" 0)
+      ("axis" rdfhtml:Div "sem-gantt-axis" "plot" 0) ("tasks" rdfhtml:Ol "sem-gantt-tasks" "plot" 2) }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
+    BIND(IF(?local = "scroll", "0", ?unset) AS ?tabindex)
+    BIND(IF(?local = "plot" && BOUND(?first), CONCAT("--first: ", STR(?first), "; --days: ", STR(?last - ?first)), ?unset) AS ?style)
+    LATERAL { OPTIONAL {
+      VALUES (?forLocal ?an ?av0) { ("scroll" "role" "region") ("scroll" "aria-label" UNDEF) ("axis" "aria-hidden" "true") }
+      FILTER(?forLocal = ?local)
+      BIND(IRI(CONCAT(?me, "/~", ?local, "-", ?an)) AS ?attr) BIND(COALESCE(?av0, ?label) AS ?av)
+    } }
+  } UNION {
+    # A tick a month (or every few), at its day, named "%M %y" in the chart's locale.
+    FILTER(!BOUND(?message))
+    $this c:scale ?scale . ?scale a c:TimeScale ; c:tick ?tick . ?tick c:at ?at ; c:month ?M ; c:year ?Y .
+    BIND(xsd:integer(STRAFTER(STR(?tick), "/~gantt-tick-")) AS ?k)
+    BIND(IRI(CONCAT(?me, "/~tick-", STR(?k))) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND("sem-gantt-tick" AS ?cls) BIND(?k AS ?key)
+    BIND(IRI(CONCAT(?me, "/~axis")) AS ?parent) BIND(CONCAT("--at: ", STR(?at)) AS ?style)
+    BIND(IRI(CONCAT(?me, "/~l10n-month-", STR(?M))) AS ?monthNode)
+    OPTIONAL { ?monthNode l10n:label ?monthName }
+    OPTIONAL { $this l10n:monthYearPattern ?pattern }
+    BIND(IRI(CONCAT(?me, "/~tick-", STR(?k), "-text")) AS ?textNode)
+    BIND(REPLACE(REPLACE(COALESCE(STR(?pattern), "%M %y"), "%M", COALESCE(STR(?monthName), STR(?M))), "%y", STR(?Y)) AS ?data)
+  } UNION {
+    # Today, when it is on the scale.
+    FILTER(!BOUND(?message))
+    $this c:scale ?scale . ?scale a c:TimeScale ; c:todayAt ?at ; c:start ?first ; c:end ?last .
+    FILTER(?at >= ?first && ?at < ?last)
+    BIND(IRI(CONCAT(STR($this), "/~l10n-GanttTodayPhrase")) AS ?todayWordNode)
+    OPTIONAL { ?todayWordNode l10n:label ?todayWord0 }
+    OPTIONAL { c:GanttTodayPhrase rdfs:label ?todayWord1 FILTER(langMatches(lang(?todayWord1), "en")) }
+    BIND(STR(COALESCE(?todayWord0, ?todayWord1)) AS ?todayWord)
+    BIND(IRI(CONCAT(?me, "/~today")) AS ?el) BIND(rdfhtml:Span AS ?tag) BIND("sem-gantt-today" AS ?cls) BIND(1 AS ?key)
+    BIND(IRI(CONCAT(?me, "/~plot")) AS ?parent) BIND(CONCAT("--at: ", STR(?at)) AS ?style)
+    BIND(IRI(CONCAT(?me, "/~today-aria-hidden")) AS ?attr) BIND("aria-hidden" AS ?an) BIND("true" AS ?av)
+    BIND(IRI(CONCAT(?me, "/~today-text")) AS ?textNode) BIND(?todayWord AS ?data)
+  }
+  }
+}""" .
+c:GanttChartRendering-sparql-text a sem:Rule ; sem:implements c:GanttChartRendering ; sem:modality mod:Text ; sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:href ?hrefAttr ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:GanttChart .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
+  BIND(COALESCE(?v, c:none) AS ?vNode)
+  LATERAL { OPTIONAL {
+    FILTER(NOT EXISTS { ?vNode a rs:ResultSet })
+    OPTIONAL { ?viewLabel0At l10n:of ?vNode ; l10n:label ?viewLabel0 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel0)) ?vNode c:label ?viewLabel1 FILTER(isLiteral(?viewLabel1)) }
+    OPTIONAL { ?viewLabel2At l10n:of ?vNode ; l10n:name ?viewLabel2 }
+    OPTIONAL { FILTER(!BOUND(?viewLabel2)) ?vNode rdfs:label ?viewLabel3 FILTER(isLiteral(?viewLabel3)) }
+    BIND(STR(COALESCE(?viewLabel0, ?viewLabel1, ?viewLabel2, ?viewLabel3, REPLACE(STR(?vNode), "^.*[#/]", ""))) AS ?viewLabel)
+  } }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { FILTER(!BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+  BIND(IRI(CONCAT(STR($this), "/~l10n-GanttNoRowsPhrase")) AS ?noRowsNode)
+    OPTIONAL { ?noRowsNode l10n:label ?noRows0 }
+    OPTIONAL { c:GanttNoRowsPhrase rdfs:label ?noRows1 FILTER(langMatches(lang(?noRows1), "en")) }
+    BIND(STR(COALESCE(?noRows0, ?noRows1)) AS ?noRows)
+  BIND(IF(!BOUND(?v), "No view.",
+       IF(BOUND(?viewLabel), CONCAT(?viewLabel, " is not a maintained view (iv:View, iv:materialize iv:Graph)."),
+       IF(NOT EXISTS { ?v rs:solution ?anyRow }, STR(COALESCE(?e0, ?e1, ?noRows)), ?unset))) AS ?message)
+  LATERAL {
+  {
+    FILTER(BOUND(?message))
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls)
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?textNode) BIND(?message AS ?data)
+  } UNION {
+    # Its name, then a line per task.
+    FILTER(!BOUND(?message))
+    OPTIONAL { $this l10n:label ?label0 }
+    OPTIONAL { FILTER(!BOUND(?label0)) $this c:label ?label1 FILTER(isLiteral(?label1)) }
+    OPTIONAL { ?label2At l10n:of $this ; l10n:name ?label2 }
+    OPTIONAL { FILTER(!BOUND(?label2)) $this rdfs:label ?label3 FILTER(isLiteral(?label3)) }
+    BIND(STR(COALESCE(?label0, ?label1, ?label2, ?label3, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
+    VALUES (?local ?tag0 ?parentLocal ?key0) { ("root" rdfhtml:Div UNDEF UNDEF) ("title" rdfhtml:P "root" 0) ("tasks" rdfhtml:Div "root" 1) }
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?key0 AS ?key)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
+    BIND(IF(?local = "title", IRI(CONCAT(?me, "/~title-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "title", ?label, ?unset) AS ?data)
+  }
+  }
+}""" .
+c:GanttTaskRendering a sem:Rendering ; sem:targets c:GanttTask ; sem:stratum 0 ; sem:follows c:inChart .
+c:GanttTaskRendering-fn a sem:Rule ; sem:implements c:GanttTaskRendering ; sem:modality mod:Screen ; sem:function "gantt-task:screen" .
+c:GanttTaskRendering-fn-text a sem:Rule ; sem:implements c:GanttTaskRendering ; sem:modality mod:Text ; sem:function "gantt-task:text" .
+c:GanttTaskRendering-sparql a sem:Rule ; sem:implements c:GanttTaskRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:href ?hrefAttr ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a c:GanttTask ; c:inChart ?chart ; c:label ?label0 .
+  BIND(STR($this) AS ?me) BIND(STR(?label0) AS ?label)
+  OPTIONAL { $this c:startDate ?startDate0 } OPTIONAL { $this c:endDate ?endDate0 }
+  OPTIONAL { $this c:baselineStartDate ?bsDate0 } OPTIONAL { $this c:baselineEndDate ?beDate0 } OPTIONAL { $this c:uncertaintyEndDate ?uDate0 }
+  BIND(STR(?startDate0) AS ?startDate) BIND(STR(?endDate0) AS ?endDate) BIND(STR(?bsDate0) AS ?bsDate) BIND(STR(?beDate0) AS ?beDate) BIND(STR(?uDate0) AS ?uDate)
+  BIND(EXISTS { $this c:milestone true } AS ?milestone)
+  OPTIONAL { $this c:href ?href0 }
+  OPTIONAL { $this c:start ?start } OPTIONAL { $this c:end ?end } OPTIONAL { $this c:baselineStart ?bs } OPTIONAL { $this c:baselineEnd ?be }
+  OPTIONAL { $this c:uncertaintyEnd ?u }
+  BIND(IF(?milestone, ?start, IF(BOUND(?end) && ?end > ?start, ?end, ?start)) AS ?to)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  LATERAL {
+  {
+    # The task's row: its name (a link when it has one), its track, its dates in words.
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("root" rdfhtml:Li UNDEF UNDEF UNDEF) ("label" rdfhtml:Span "sem-gantt-label" "root" 0) ("link" rdfhtml:A UNDEF "label" 0)
+      ("track" rdfhtml:Span "sem-gantt-track" "root" 1) ("dates" rdfhtml:Span "sem-visually-hidden" "root" 2) }
+    FILTER(?local != "link" || BOUND(?href0))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IF(?local = "root", ?root, ?unset) AS ?shownRoot)
+    BIND(IF(BOUND(?parentLocal), IRI(CONCAT(?me, "/~", ?parentLocal)), ?unset) AS ?parent)
+    BIND(IF(?local = "link", STR(?href0), ?unset) AS ?hrefAttr)
+    BIND(IF(?local = "track", IRI(CONCAT(?me, "/~track-aria-hidden")), ?unset) AS ?attr)
+    BIND(IF(?local = "track", "aria-hidden", ?unset) AS ?an) BIND(IF(?local = "track", "true", ?unset) AS ?av)
+    BIND(IF(?local = "link" || (?local = "label" && !BOUND(?href0)), IRI(CONCAT(?me, "/~", ?local, "-text")), ?unset) AS ?textNode)
+    BIND(IF(BOUND(?textNode), ?label, ?unset) AS ?data)
+  } UNION {
+    # The marks on its track, each from --from to --to (days): baseline, lead lines, bar or milestone, uncertainty.
+    FILTER(BOUND(?bs) || BOUND(?be) || BOUND(?start))
+    OPTIONAL { FILTER(BOUND(?start)) $this c:leadFrom ?lead FILTER(?lead + 1 < ?start) }
+    VALUES ?mark { "baseline" "lead" "bar" "uncertainty" }
+    BIND(COALESCE(?bs, ?be) AS ?bFrom)
+    BIND(IF(BOUND(?be) && ?be > ?bFrom, ?be, ?bFrom) AS ?bTo)
+    BIND(IF(?mark = "baseline", ?bFrom, IF(?mark = "lead", ?lead + 1, IF(?mark = "bar", ?start, IF(BOUND(?u) && ?u > ?to, ?to + 1, ?unset)))) AS ?from)
+    BIND(IF(?mark = "baseline", ?bTo, IF(?mark = "lead", ?start - 1, IF(?mark = "bar", ?to, ?u))) AS ?markTo)
+    FILTER(BOUND(?from) && BOUND(?markTo))
+    BIND(IRI(CONCAT(?me, "/~", IF(?mark = "lead", CONCAT("lead-", STR(?lead)), ?mark))) AS ?el)
+    BIND(rdfhtml:Span AS ?tag) BIND(IRI(CONCAT(?me, "/~track")) AS ?parent)
+    BIND(IF(?mark = "bar" && ?milestone, "sem-gantt-milestone", CONCAT("sem-gantt-", ?mark)) AS ?cls)
+    BIND(CONCAT("--from: ", STR(?from), "; --to: ", STR(?markTo)) AS ?style)
+    BIND(IF(?mark = "baseline", "\\u0001n0", IF(?mark = "lead", CONCAT("\\u0001n1\\u0001n", STR(?lead)), IF(?mark = "bar", "\\u0001n2", "\\u0001n3"))) AS ?key)
+    BIND(IF(?mark = "bar", IF(?milestone || ?to = ?start || !BOUND(?endDate), CONCAT(?label, ": ", ?startDate), CONCAT(?label, ": ", ?startDate, " – ", ?endDate)), ?unset) AS ?tip)
+  } UNION {
+    # Its dates in words: when, its baseline, when it may end by, a milestone, what it follows.
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttUnscheduledPhrase")) AS ?unscheduledNode)
+    OPTIONAL { ?unscheduledNode l10n:label ?unscheduled0 }
+    OPTIONAL { c:GanttUnscheduledPhrase rdfs:label ?unscheduled1 FILTER(langMatches(lang(?unscheduled1), "en")) }
+    BIND(STR(COALESCE(?unscheduled0, ?unscheduled1)) AS ?unscheduled)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttBaselinePhrase")) AS ?baselineWordNode)
+    OPTIONAL { ?baselineWordNode l10n:label ?baselineWord0 }
+    OPTIONAL { c:GanttBaselinePhrase rdfs:label ?baselineWord1 FILTER(langMatches(lang(?baselineWord1), "en")) }
+    BIND(STR(COALESCE(?baselineWord0, ?baselineWord1)) AS ?baselineWord)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttUncertaintyPhrase")) AS ?uncertaintyWordNode)
+    OPTIONAL { ?uncertaintyWordNode l10n:label ?uncertaintyWord0 }
+    OPTIONAL { c:GanttUncertaintyPhrase rdfs:label ?uncertaintyWord1 FILTER(langMatches(lang(?uncertaintyWord1), "en")) }
+    BIND(STR(COALESCE(?uncertaintyWord0, ?uncertaintyWord1)) AS ?uncertaintyWord)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttMilestonePhrase")) AS ?milestoneWordNode)
+    OPTIONAL { ?milestoneWordNode l10n:label ?milestoneWord0 }
+    OPTIONAL { c:GanttMilestonePhrase rdfs:label ?milestoneWord1 FILTER(langMatches(lang(?milestoneWord1), "en")) }
+    BIND(STR(COALESCE(?milestoneWord0, ?milestoneWord1)) AS ?milestoneWord)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttAfterPhrase")) AS ?afterWordNode)
+    OPTIONAL { ?afterWordNode l10n:label ?afterWord0 }
+    OPTIONAL { c:GanttAfterPhrase rdfs:label ?afterWord1 FILTER(langMatches(lang(?afterWord1), "en")) }
+    BIND(STR(COALESCE(?afterWord0, ?afterWord1)) AS ?afterWord)
+    VALUES (?part ?partKey) { ("0" 0) ("baseline" 1) ("uncertainty" 2) ("milestone" 3) ("after" 4) }
+    OPTIONAL { FILTER(?part = "after") $this c:afterLabel ?after0 }
+    BIND(STR(?after0) AS ?after)
+    BIND(IF(?part = "0", IF(!BOUND(?startDate), ?unscheduled, IF(!BOUND(?endDate) || ?endDate = ?startDate, ?startDate, CONCAT(?startDate, " – ", ?endDate))),
+         IF(?part = "baseline" && (BOUND(?bsDate) || BOUND(?beDate)), CONCAT(?baselineWord, ": ", COALESCE(?bsDate, ""), " – ", COALESCE(?beDate, "")),
+         IF(?part = "uncertainty" && BOUND(?uDate), CONCAT(?uncertaintyWord, ": ", ?uDate),
+         IF(?part = "milestone" && ?milestone, ?milestoneWord,
+         IF(?part = "after" && BOUND(?after), CONCAT(?afterWord, " ", ?after), ?unset))))) AS ?words)
+    FILTER(BOUND(?words))
+    BIND(IRI(CONCAT(?me, "/~dates-", IF(?part = "after", CONCAT("after-", SUBSTR(MD5(?after), 1, 8)), ?part))) AS ?textNode)
+    BIND(IF(?part = "0", ?words, CONCAT(" · ", ?words)) AS ?data)
+    BIND(IF(?part = "after", CONCAT("\\u0001n4\\u0001s", ?after), CONCAT("\\u0001n", STR(?partKey))) AS ?textKey)
+    BIND(IRI(CONCAT(?me, "/~dates")) AS ?el)
+  }
+  }
+}""" .
+c:GanttTaskRendering-sparql-text a sem:Rule ; sem:implements c:GanttTaskRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:style ?style ; rdfhtml:href ?hrefAttr ; rdfhtml:tabIndex ?tabindex ; rdfhtml:attribute ?attr ; sem:orderKey ?key ; sem:tooltip ?tip ; rdfhtml:hasChild ?textNode .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?parent rdfhtml:hasChild ?el .
+  ?shownRoot sem:renders $this .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+}
+WHERE {
+  $this a c:GanttTask ; c:inChart ?chart ; c:label ?label0 .
+  BIND(STR($this) AS ?me) BIND(STR(?label0) AS ?label)
+  OPTIONAL { $this c:startDate ?startDate0 } OPTIONAL { $this c:endDate ?endDate0 }
+  OPTIONAL { $this c:baselineStartDate ?bsDate0 } OPTIONAL { $this c:baselineEndDate ?beDate0 } OPTIONAL { $this c:uncertaintyEndDate ?uDate0 }
+  BIND(STR(?startDate0) AS ?startDate) BIND(STR(?endDate0) AS ?endDate) BIND(STR(?bsDate0) AS ?bsDate) BIND(STR(?beDate0) AS ?beDate) BIND(STR(?uDate0) AS ?uDate)
+  BIND(EXISTS { $this c:milestone true } AS ?milestone)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  LATERAL {
+  {
+    # "Name:", then its dates in words.
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:P AS ?tag)
+    BIND(IRI(CONCAT(?me, "/~label-text")) AS ?textNode) BIND(CONCAT(?label, ":") AS ?data) BIND("\\u0001n-1" AS ?textKey)
+  } UNION {
+    # Its dates in words: when, its baseline, when it may end by, a milestone, what it follows.
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttUnscheduledPhrase")) AS ?unscheduledNode)
+    OPTIONAL { ?unscheduledNode l10n:label ?unscheduled0 }
+    OPTIONAL { c:GanttUnscheduledPhrase rdfs:label ?unscheduled1 FILTER(langMatches(lang(?unscheduled1), "en")) }
+    BIND(STR(COALESCE(?unscheduled0, ?unscheduled1)) AS ?unscheduled)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttBaselinePhrase")) AS ?baselineWordNode)
+    OPTIONAL { ?baselineWordNode l10n:label ?baselineWord0 }
+    OPTIONAL { c:GanttBaselinePhrase rdfs:label ?baselineWord1 FILTER(langMatches(lang(?baselineWord1), "en")) }
+    BIND(STR(COALESCE(?baselineWord0, ?baselineWord1)) AS ?baselineWord)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttUncertaintyPhrase")) AS ?uncertaintyWordNode)
+    OPTIONAL { ?uncertaintyWordNode l10n:label ?uncertaintyWord0 }
+    OPTIONAL { c:GanttUncertaintyPhrase rdfs:label ?uncertaintyWord1 FILTER(langMatches(lang(?uncertaintyWord1), "en")) }
+    BIND(STR(COALESCE(?uncertaintyWord0, ?uncertaintyWord1)) AS ?uncertaintyWord)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttMilestonePhrase")) AS ?milestoneWordNode)
+    OPTIONAL { ?milestoneWordNode l10n:label ?milestoneWord0 }
+    OPTIONAL { c:GanttMilestonePhrase rdfs:label ?milestoneWord1 FILTER(langMatches(lang(?milestoneWord1), "en")) }
+    BIND(STR(COALESCE(?milestoneWord0, ?milestoneWord1)) AS ?milestoneWord)
+    BIND(IRI(CONCAT(STR(?chart), "/~l10n-GanttAfterPhrase")) AS ?afterWordNode)
+    OPTIONAL { ?afterWordNode l10n:label ?afterWord0 }
+    OPTIONAL { c:GanttAfterPhrase rdfs:label ?afterWord1 FILTER(langMatches(lang(?afterWord1), "en")) }
+    BIND(STR(COALESCE(?afterWord0, ?afterWord1)) AS ?afterWord)
+    VALUES (?part ?partKey) { ("0" 0) ("baseline" 1) ("uncertainty" 2) ("milestone" 3) ("after" 4) }
+    OPTIONAL { FILTER(?part = "after") $this c:afterLabel ?after0 }
+    BIND(STR(?after0) AS ?after)
+    BIND(IF(?part = "0", IF(!BOUND(?startDate), ?unscheduled, IF(!BOUND(?endDate) || ?endDate = ?startDate, ?startDate, CONCAT(?startDate, " – ", ?endDate))),
+         IF(?part = "baseline" && (BOUND(?bsDate) || BOUND(?beDate)), CONCAT(?baselineWord, ": ", COALESCE(?bsDate, ""), " – ", COALESCE(?beDate, "")),
+         IF(?part = "uncertainty" && BOUND(?uDate), CONCAT(?uncertaintyWord, ": ", ?uDate),
+         IF(?part = "milestone" && ?milestone, ?milestoneWord,
+         IF(?part = "after" && BOUND(?after), CONCAT(?afterWord, " ", ?after), ?unset))))) AS ?words)
+    FILTER(BOUND(?words))
+    BIND(IRI(CONCAT(?me, "/~dates-", IF(?part = "after", CONCAT("after-", SUBSTR(MD5(?after), 1, 8)), ?part))) AS ?textNode)
+    BIND(IF(?part = "0", ?words, CONCAT("· ", ?words)) AS ?data)
+    BIND(IF(?part = "after", CONCAT("\\u0001n4\\u0001s", ?after), CONCAT("\\u0001n", STR(?partKey))) AS ?textKey)
+    BIND(?root AS ?el)
+  }
+  }
+}""" .
 
 c:FindingList a owl:Class ;
     rdfs:subClassOf sem:Component ;

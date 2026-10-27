@@ -15,11 +15,12 @@
 @prefix as: <https://www.w3.org/ns/activitystreams#> .
 @prefix net: <https://semblance.dev/ns/network#> .
 @prefix tree: <https://w3id.org/tree#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -219,6 +220,36 @@ ui:dt-messages a c:Flippable ; c:front ui:dt-messages-spec .
 ui:dt-messages-spec a c:Specimen ; c:demonstrates c:MessageList , c:Message ; c:label "Message list" ;
     c:help "Messages as data: as:Note nodes with as:attributedTo and as:published, the thread's c:item. Each becomes a minted c:Message - the author's avatar, name and time - in order of publication; c:viewer's own are at the end. A note can use as:content for text or c:content for a component body, including interactive controls. When both are present, Screen shows the component and Text uses the summary. The list is a log (role=log), and a prv:sensitive note is hidden in private mode. The Chat example is built on it." ;
     c:children ( ui:dt-messages-thread ) .
+
+# --- Gantt: dated tasks from a maintained view ---------------------------------------------------
+
+ui:dt-gantt-prefixes sh:declare [ sh:prefix "ui" ; sh:namespace "https://semblance.dev/demo#"^^xsd:anyURI ] .
+ui:dt-gantt-a rdfs:label "Sketch the interface" ; ui:ganttStart "2026-10-19"^^xsd:date ; ui:ganttEnd "2026-10-27"^^xsd:date ;
+    ui:ganttHref "/docs" ;
+    ui:ganttBaselineStart "2026-10-19"^^xsd:date ; ui:ganttBaselineEnd "2026-10-24"^^xsd:date ; ui:ganttTone sty:Success .
+ui:dt-gantt-b rdfs:label "Build the component" ; ui:ganttStart "2026-10-29"^^xsd:date ; ui:ganttEnd "2026-11-09"^^xsd:date ;
+    ui:ganttUncertainty "2026-11-13"^^xsd:date ; ui:ganttDependsOn ui:dt-gantt-a ; ui:ganttTone sty:Accent .
+ui:dt-gantt-d rdfs:label "Write the docs" ; ui:ganttStart "2026-11-02"^^xsd:date ; ui:ganttEnd "2026-11-12"^^xsd:date ;
+    ui:ganttDependsOn ui:dt-gantt-a ; ui:ganttTone sty:Info .
+ui:dt-gantt-c rdfs:label "Review" ; ui:ganttStart "2026-11-17"^^xsd:date ; ui:ganttEnd "2026-11-17"^^xsd:date ;
+    ui:ganttDependsOn ui:dt-gantt-b , ui:dt-gantt-d ; ui:ganttMilestone true ; ui:ganttTone sty:Warning .
+ui:dt-gantt-view a sem:View , iv:View ; iv:materialize iv:Graph ; rdfs:label "Example plan" ; sem:select """
+SELECT ?task ?label ?start ?end ?baselineStart ?baselineEnd ?uncertainty ?dependsOn ?milestone ?tone ?href WHERE {
+  ?task ui:ganttStart ?start ; ui:ganttEnd ?end ; rdfs:label ?label .
+  OPTIONAL { ?task ui:ganttBaselineStart ?baselineStart }
+  OPTIONAL { ?task ui:ganttBaselineEnd ?baselineEnd }
+  OPTIONAL { ?task ui:ganttUncertainty ?uncertainty }
+  OPTIONAL { ?task ui:ganttDependsOn ?dependsOn }
+  OPTIONAL { ?task ui:ganttMilestone ?milestone }
+  OPTIONAL { ?task ui:ganttTone ?tone }
+  OPTIONAL { ?task ui:ganttHref ?href }
+}
+ORDER BY ?start ?task""" .
+ui:dt-gantt-chart a c:GanttChart ; c:label "Release plan" ; c:view ui:dt-gantt-view .
+ui:dt-gantt a c:Flippable ; c:front ui:dt-gantt-spec .
+ui:dt-gantt-spec a c:Specimen ; c:demonstrates c:GanttChart ; c:label "Gantt chart" ;
+    c:help "Dated tasks from a maintained view (iv:View, iv:materialize iv:Graph): bars, a baseline (dashed), the latest end (a whisker), a milestone, and lead lines from predecessors, on a scale of months that scrolls. Each task says its dates in words, for a screen reader and the Text modality. In a right-to-left language, time runs right to left." ;
+    c:children ( ui:dt-gantt-chart ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------
 

@@ -5,6 +5,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
@@ -829,6 +830,7 @@ export const functions: Record<string, FnRule> = {
   ...containerFunctions,
   ...viewFunctions,
   ...chartFunctions,
+  ...ganttFunctions,
   ...formulaFunctions,
   ...moneyFunctions,
   ...boardFunctions,
