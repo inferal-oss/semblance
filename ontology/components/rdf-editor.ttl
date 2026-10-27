@@ -95,8 +95,8 @@ c:diff a owl:DatatypeProperty ; rdfs:domain c:RdfEditor ; rdfs:range xsd:boolean
     rdfs:comment """True: the editor shows what has changed, from what the change log records (beh:asserted,
 beh:retracted; undone changes left out). A statement whose earliest recorded change added it, and that
 is there, is marked added; one whose earliest recorded change removed it, and that is gone, is still
-shown where it was, marked removed. Beside an editor of the same document it shows what the edits
-there did; copied to its rows."""@en .
+shown where it was, struck, marked removed. Beside an editor of the same document it shows what the
+edits there did. Copied to its rows; the diff renderings run only on rows that have it."""@en .
 c:RdfAddedPhrase a c:Phrase ; rdfs:label "added"@en , "додано"@uk , "hinzugefügt"@de , "مضاف"@ar .
 c:RdfRemovedPhrase a c:Phrase ; rdfs:label "removed"@en , "вилучено"@uk , "entfernt"@de , "محذوف"@ar .
 c:startsClosed a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
@@ -324,16 +324,14 @@ c:RdfTermRendering a sem:Rendering ;
     sem:targets c:RdfTerm ;
     sem:stratum 0 ;
     sem:bulk false ;
-    sem:follows c:term , ( c:term [ sem:zeroOrMore rdf:rest ] ) , ( c:term [ sem:inverse rdf:subject ] ) , ( c:subjectTerm [ sem:inverse rdf:subject ] ) .
+    sem:follows c:term , ( c:term [ sem:zeroOrMore rdf:rest ] ) .
 c:RdfTermRendering-fn a sem:Rule ; sem:implements c:RdfTermRendering ; sem:function "rdf-editor:term" .
 c:RdfTermRendering-sparql-screen a sem:Rule ;
     sem:implements c:RdfTermRendering ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr , ?currentAttr , ?changeAttr , ?changeSaid ; rdfhtml:hasChild ?row , ?group .
-  ?changeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?change .
-  ?changeSaid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-description" ; rdfhtml:attributeValue ?changePhrase .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr , ?currentAttr ; rdfhtml:hasChild ?row , ?group .
   ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "true" .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
@@ -416,8 +414,7 @@ WHERE {
   BIND(COALESCE(?editable0, false) AS ?editable)
   OPTIONAL { $this c:validated ?validated0 }
   BIND(COALESCE(?validated0, false) AS ?validated)
-  BIND(EXISTS { $this c:diff true } AS ?diff)
-  BIND(IF(?diff, true, ?none) AS ?diffOn)
+  OPTIONAL { $this c:diff ?diffOn }
   OPTIONAL { $this c:subjectTerm ?s ; c:predicateTerm ?p }
   BIND(EXISTS { $this c:reifierOf ?of } AS ?reifier)
   # What the term is.
@@ -428,9 +425,7 @@ WHERE {
   BIND(sameTerm(?t, rdf:nil) || (!?lit && EXISTS { ?t rdf:first ?anyFirst }) AS ?list)
   BIND(isBlank(?t) || (isIRI(?t) && CONTAINS(STR(?t), "/.well-known/genid/")) AS ?blank)
   BIND(isIRI(?t) || isBlank(?t) AS ?resource)
-  BIND(?resource && (EXISTS { ?t ?anyP ?anyO } || (EXISTS { $this c:diff true . ?gsth rdf:subject ?t ; rdf:predicate ?hp ; rdf:object ?ho . ?gevh beh:retracted ?gsth ; beh:sequence ?gseqh .
-      FILTER NOT EXISTS { ?t ?hp ?ho } FILTER NOT EXISTS { ?gundoh beh:undone ?gevh }
-      FILTER NOT EXISTS { ?gxsth rdf:subject ?t ; rdf:predicate ?hp ; rdf:object ?ho . ?gxevh beh:asserted|beh:retracted ?gxsth ; beh:sequence ?gxseqh . FILTER(?gxseqh < ?gseqh) FILTER NOT EXISTS { ?gxundoh beh:undone ?gxevh } } })) AS ?hasStatements)
+  BIND(?resource && EXISTS { ?t ?anyP ?anyO } AS ?hasStatements)
   BIND(BOUND(?s) && EXISTS { ?anyR rdf:reifies <<( ?s ?p ?t )>> } AS ?reified)
   # A class or a property is a link to the Reference, not a resource to open in place (unless it is one of the document's).
   BIND(isIRI(?t) && !?blank && EXISTS { ?t a ?kind . VALUES ?kind { rdfs:Class owl:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty } } AS ?vocab)
@@ -489,17 +484,6 @@ WHERE {
   BIND(IF(?expandable, IRI(CONCAT(STR($this), "/~root-aria-expanded")), ?none) AS ?expandedAttr)
   # The current resource (c:current) is marked: the editor says which, on its row.
   BIND(IF(EXISTS { $this c:isCurrent true }, IRI(CONCAT(STR($this), "/~root-aria-current")), ?none) AS ?currentAttr)
-  # In a diff (c:diff): what the change log says happened to its statement.
-  LATERAL { OPTIONAL { $this c:diff true ; c:subjectTerm ?s ; c:predicateTerm ?p . ?stc rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?evc ?kindc ?stc ; beh:sequence ?seqc . VALUES ?kindc { beh:asserted beh:retracted }
-    FILTER NOT EXISTS { ?undoc beh:undone ?evc }
-    FILTER NOT EXISTS { ?xstc rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?xevc beh:asserted|beh:retracted ?xstc ; beh:sequence ?xseqc . FILTER(?xseqc < ?seqc) FILTER NOT EXISTS { ?xundoc beh:undone ?xevc } } } }
-  BIND(IF(sameTerm(?kindc, beh:asserted) && EXISTS { ?s ?p ?t }, "added", IF(sameTerm(?kindc, beh:retracted) && NOT EXISTS { ?s ?p ?t }, "removed", ?none)) AS ?change)
-  BIND(IF(BOUND(?change), IRI(CONCAT(STR($this), "/~root-data-sem-change")), ?none) AS ?changeAttr)
-  BIND(IF(BOUND(?change), IRI(CONCAT(STR($this), "/~root-aria-description")), ?none) AS ?changeSaid)
-  BIND(IF(?change = "added", c:RdfAddedPhrase, IF(?change = "removed", c:RdfRemovedPhrase, ?none)) AS ?changeKind)
-  OPTIONAL { FILTER(BOUND(?changeKind)) ?changeAt l10n:of ?changeKind ; l10n:name ?change0 }
-  OPTIONAL { FILTER(BOUND(?changeKind) && !BOUND(?change0)) ?changeKind rdfs:label ?change1 FILTER(langMatches(lang(?change1), "en")) }
-  BIND(STR(COALESCE(?change0, ?change1)) AS ?changePhrase)
   BIND(IF(?open, "true", "false") AS ?openText)
   BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
   BIND(IRI(CONCAT(STR($this), IF(?expandable, "/~twisty", "/~leaf"))) AS ?lead)
@@ -596,9 +580,7 @@ WHERE {
   } UNION {
     # Its predicates (a reifier's rdf:reifies is the row it is under).
     FILTER(?nest && !?list)
-    { SELECT DISTINCT ?childPredicate WHERE { { $this c:term ?t2 . ?t2 ?childPredicate ?o2 } UNION { $this c:term ?t2 ; c:diff true . ?gstp rdf:subject ?t2 ; rdf:predicate ?childPredicate ; rdf:object ?o2 . ?gevp beh:retracted ?gstp ; beh:sequence ?gseqp .
-      FILTER NOT EXISTS { ?t2 ?childPredicate ?o2 } FILTER NOT EXISTS { ?gundop beh:undone ?gevp }
-      FILTER NOT EXISTS { ?gxstp rdf:subject ?t2 ; rdf:predicate ?childPredicate ; rdf:object ?o2 . ?gxevp beh:asserted|beh:retracted ?gxstp ; beh:sequence ?gxseqp . FILTER(?gxseqp < ?gseqp) FILTER NOT EXISTS { ?gxundop beh:undone ?gxevp } } }
+    { SELECT DISTINCT ?childPredicate WHERE { $this c:term ?t2 . ?t2 ?childPredicate ?o2 .
         FILTER(!sameTerm(?childPredicate, rdf:reifies) || NOT EXISTS { $this c:reifierOf ?of2 }) } }
     BIND(?t AS ?childSubject)
     BIND(c:RdfProperty AS ?childClass)
@@ -816,7 +798,7 @@ c:RdfPropertyRendering a sem:Rendering ;
     sem:targets c:RdfProperty ;
     sem:stratum 0 ;
     sem:bulk false ;
-    sem:follows c:subjectTerm , ( c:subjectTerm [ sem:inverse rdf:subject ] ) .
+    sem:follows c:subjectTerm .
 c:RdfPropertyRendering-fn a sem:Rule ; sem:implements c:RdfPropertyRendering ; sem:function "rdf-editor:property" .
 c:RdfPropertyRendering-sparql-screen a sem:Rule ;
     sem:implements c:RdfPropertyRendering ;
@@ -898,8 +880,7 @@ WHERE {
   BIND(COALESCE(?editable0, false) AS ?editable)
   OPTIONAL { $this c:validated ?validated0 }
   BIND(COALESCE(?validated0, false) AS ?validated)
-  BIND(EXISTS { $this c:diff true } AS ?diff)
-  BIND(IF(?diff, true, ?none) AS ?diffOn)
+  OPTIONAL { $this c:diff ?diffOn }
   OPTIONAL { $this c:expanded ?own }
   BIND(COALESCE(?own, true) AS ?open)
   BIND(REPLACE(STR(?p), "[^#/]*$", "") AS ?ns)
@@ -991,9 +972,7 @@ WHERE {
   BIND(?depth + 1 AS ?childDepth)
   LATERAL { {} UNION {
     FILTER(?open)
-    { ?s ?p ?o } UNION { $this c:diff true . ?gsto rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o . ?gevo beh:retracted ?gsto ; beh:sequence ?gseqo .
-      FILTER NOT EXISTS { ?s ?p ?o } FILTER NOT EXISTS { ?gundoo beh:undone ?gevo }
-      FILTER NOT EXISTS { ?gxsto rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o . ?gxevo beh:asserted|beh:retracted ?gxsto ; beh:sequence ?gxseqo . FILTER(?gxseqo < ?gseqo) FILTER NOT EXISTS { ?gxundoo beh:undone ?gxevo } } }
+    ?s ?p ?o .
     OPTIONAL { { SELECT ?o (MIN(?bpair) AS ?bmin) (MAX(?bpair) AS ?bmax) WHERE {
         $this c:subjectTerm ?s1 ; c:predicateTerm ?p1 . ?s1 ?p1 ?o . FILTER(isBlank(?o)) ?o ?bp ?bo
         BIND(CONCAT(IF(isLiteral(?bo) || isIRI(?bo), "", "~"), STR(?bp), " ", COALESCE(STR(?bo), "_")) AS ?bpair) } GROUP BY ?o } }
@@ -1842,6 +1821,114 @@ WHERE {
     BIND(IF(BOUND(?dc), "a list member moves within its list", "only this list's members go here") AS ?why)
   } } GROUP BY ?drag }
   BIND(IRI(CONCAT(STR($this), "/~objection")) AS ?objection)
+}""" .
+
+# --- the diff (c:diff): what the change log records, on the rows of an editor that shows it ----------------
+# Three renderings that run only on rows with c:diff (sem:requires), so an editor without it pays
+# nothing: a value's row is marked with what happened to its statement; a predicate's row and a
+# resource's row get rows for what was removed (objects, whole predicates), in the places they had.
+# They follow the statements the log records about their subject (( … [ sem:inverse rdf:subject ] )).
+c:RdfDiffMarks a sem:Rendering ;
+    sem:targets c:RdfTerm ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:bulk false ;
+    sem:requires c:diff ;
+    sem:follows ( c:subjectTerm [ sem:inverse rdf:subject ] ) .
+c:RdfDiffMarks-fn a sem:Rule ; sem:implements c:RdfDiffMarks ; sem:function "rdf-editor:diff-marks" .
+c:RdfDiffMarks-sparql a sem:Rule ;
+    sem:implements c:RdfDiffMarks ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?changeAttr , ?changeSaid .
+  ?changeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?change .
+  ?changeSaid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-description" ; rdfhtml:attributeValue ?changePhrase .
+}
+WHERE {
+  $this c:diff true ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?t .
+  { ?sta rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?eva beh:asserted ?sta ; beh:sequence ?seqa .
+    FILTER NOT EXISTS { ?undoa beh:undone ?eva }
+    FILTER NOT EXISTS { ?xsta rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?xeva beh:asserted|beh:retracted ?xsta ; beh:sequence ?xseqa . FILTER(?xseqa < ?seqa) FILTER NOT EXISTS { ?xundoa beh:undone ?xeva } }
+    FILTER EXISTS { ?s ?p ?t } BIND("added" AS ?change) BIND(c:RdfAddedPhrase AS ?changeKind) }
+  UNION
+  { ?str rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?evr beh:retracted ?str ; beh:sequence ?seqr .
+    FILTER NOT EXISTS { ?undor beh:undone ?evr }
+    FILTER NOT EXISTS { ?xstr rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?xevr beh:asserted|beh:retracted ?xstr ; beh:sequence ?xseqr . FILTER(?xseqr < ?seqr) FILTER NOT EXISTS { ?xundor beh:undone ?xevr } }
+    FILTER NOT EXISTS { ?s ?p ?t } BIND("removed" AS ?change) BIND(c:RdfRemovedPhrase AS ?changeKind) }
+  OPTIONAL { ?changeAt l10n:of ?changeKind ; l10n:name ?change0 }
+  OPTIONAL { FILTER(!BOUND(?change0)) ?changeKind rdfs:label ?change1 FILTER(langMatches(lang(?change1), "en")) }
+  BIND(STR(COALESCE(?change0, ?change1)) AS ?changePhrase)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-change")) AS ?changeAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-description")) AS ?changeSaid)
+}""" .
+
+c:RdfDiffRemovedObjects a sem:Rendering ;
+    sem:targets c:RdfProperty ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:bulk false ;
+    sem:requires c:diff ;
+    sem:follows ( c:subjectTerm [ sem:inverse rdf:subject ] ) .
+c:RdfDiffRemovedObjects-fn a sem:Rule ; sem:implements c:RdfDiffRemovedObjects ; sem:function "rdf-editor:diff-removed-objects" .
+c:RdfDiffRemovedObjects-sparql a sem:Rule ;
+    sem:implements c:RdfDiffRemovedObjects ;
+    sem:construct """
+CONSTRUCT {
+  ?group rdfhtml:hasChild ?child .
+  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; c:diff true ; sem:orderKey ?okey .
+}
+WHERE {
+  $this c:diff true ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor .
+  FILTER NOT EXISTS { $this c:expanded false }
+  ?str rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o . ?evr beh:retracted ?str ; beh:sequence ?seqr .
+    FILTER NOT EXISTS { ?undor beh:undone ?evr }
+    FILTER NOT EXISTS { ?xstr rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o . ?xevr beh:asserted|beh:retracted ?xstr ; beh:sequence ?xseqr . FILTER(?xseqr < ?seqr) FILTER NOT EXISTS { ?xundor beh:undone ?xevr } }
+  FILTER NOT EXISTS { ?s ?p ?o } FILTER(isIRI(?o) || isLiteral(?o))
+  OPTIONAL { $this c:depth ?depth0 }
+  BIND(COALESCE(xsd:integer(STR(?depth0)), 1) + 1 AS ?childDepth)
+  OPTIONAL { $this c:editable ?editable0 } BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 } BIND(COALESCE(?validated0, false) AS ?validated)
+  BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))), STR(?o)) AS ?okey)
+  BIND(IRI(CONCAT(STR($this), "/~group")) AS ?group)
+  BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?child)
+}""" .
+
+c:RdfDiffRemovedPredicates a sem:Rendering ;
+    sem:targets c:RdfTerm ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:bulk false ;
+    sem:requires c:diff ;
+    sem:follows c:term , ( c:term [ sem:inverse rdf:subject ] ) .
+c:RdfDiffRemovedPredicates-fn a sem:Rule ; sem:implements c:RdfDiffRemovedPredicates ; sem:function "rdf-editor:diff-removed-predicates" .
+c:RdfDiffRemovedPredicates-sparql a sem:Rule ;
+    sem:implements c:RdfDiffRemovedPredicates ;
+    sem:construct """
+CONSTRUCT {
+  ?group rdfhtml:hasChild ?child .
+  ?child a c:RdfProperty ; c:subjectTerm ?t ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth 1 ; c:editable ?editable ; c:validated ?validated ; c:diff true ; sem:orderKey ?childKey .
+}
+WHERE {
+  # A resource's own row (the top level), open, that still says something: the predicates it said no more.
+  $this c:diff true ; c:term ?t ; c:inEditor ?editor ; c:depth 0 . FILTER(isIRI(?t))
+  FILTER NOT EXISTS { $this c:expanded false } FILTER NOT EXISTS { $this c:startsClosed true }
+  FILTER EXISTS { ?t ?anyP ?anyO }
+  { SELECT DISTINCT ?t ?p WHERE {
+    $this c:term ?t .
+    ?str rdf:subject ?t ; rdf:predicate ?p ; rdf:object ?o . ?evr beh:retracted ?str ; beh:sequence ?seqr .
+    FILTER NOT EXISTS { ?undor beh:undone ?evr }
+    FILTER NOT EXISTS { ?xstr rdf:subject ?t ; rdf:predicate ?p ; rdf:object ?o . ?xevr beh:asserted|beh:retracted ?xstr ; beh:sequence ?xseqr . FILTER(?xseqr < ?seqr) FILTER NOT EXISTS { ?xundor beh:undone ?xevr } }
+    FILTER NOT EXISTS { ?t ?p ?o } FILTER NOT EXISTS { ?t ?p ?other } } }
+  OPTIONAL { $this c:editable ?editable0 } BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 } BIND(COALESCE(?validated0, false) AS ?validated)
+  BIND(REPLACE(STR(?p), "[^#/]*$", "") AS ?pns)
+  BIND(REPLACE(STR(?p), "^.*[#/]", "") AS ?plocal)
+  OPTIONAL { { SELECT ?pns (MIN(?pprefix0) AS ?pprefix) WHERE { ?pdecl sh:prefix ?pprefix0 ; sh:namespace ?pns0 BIND(STR(?pns0) AS ?pns) } GROUP BY ?pns } }
+  BIND(IF(BOUND(?pprefix) && REGEX(?plocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?pprefix, ":", ?plocal), CONCAT("<", STR(?p), ">")) AS ?pcompact)
+  BIND(CONCAT("\\u0001n1\\u0001n", IF(sameTerm(?p, rdf:type), "0", "1"), "\\u0001s", ?pcompact) AS ?childKey)
+  BIND(IRI(CONCAT(STR($this), "/~group")) AS ?group)
+  BIND(IRI(CONCAT(STR($this), "/~p-", SUBSTR(MD5(STR(?p)), 1, 12))) AS ?child)
 }""" .
 
 # --- the row menu ------------------------------------------------------------------------------------------

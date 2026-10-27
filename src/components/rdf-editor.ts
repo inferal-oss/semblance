@@ -102,51 +102,6 @@ const reifiersOf = (ctx: RuleContext, s: Term, p: Term, o: Term): Term[] =>
       .map((q) => q.subject),
   )
 
-// --- the diff (c:diff): what the change log records ------------------------------------------------------
-
-const RDF_SUBJECT = NS.rdf + 'subject'
-const RDF_PREDICATE = NS.rdf + 'predicate'
-const RDF_OBJECT = NS.rdf + 'object'
-const RECORDS = [NS.beh + 'asserted', NS.beh + 'retracted'] as const
-
-/**
- * The changes the log records to statements about a subject (and predicate), undone ones left out:
- * per statement, the kind of the earliest (beh:asserted or beh:retracted) and the statement itself.
- */
-function recorded(ctx: RuleContext, s: Term, p?: Term): Map<string, { kind: string; q: Quad }> {
-  const out = new Map<string, { kind: string; q: Quad; seq: number }>()
-  for (const sq of ctx.match(null, RDF_SUBJECT, s)) {
-    const st = sq.subject
-    const pred = ctx.object(st, RDF_PREDICATE)
-    const obj = ctx.object(st, RDF_OBJECT)
-    if (!pred || !obj || (p && !pred.equals(p))) continue
-    for (const kind of RECORDS)
-      for (const r of ctx.match(null, kind, st)) {
-        const ev = r.subject
-        if (ctx.match(null, NS.beh + 'undone', ev).length) continue
-        const seq = Number(ctx.object(ev, NS.beh + 'sequence')?.value)
-        // The statement as a match would give it (only its terms are read).
-        const q = { subject: s, predicate: pred, object: obj } as Quad
-        const key = `${pred.value} ${objectKeyOf(obj)}`
-        const had = out.get(key)
-        if (!had || seq < had.seq) out.set(key, { kind, q, seq })
-      }
-  }
-  return out
-}
-const objectKeyOf = (o: Term) => (o.termType === 'Literal' ? `"${o.value}"@${o.language}^^${o.datatype.value}` : `${o.termType}:${o.value}`)
-
-/** In a diff: the statements about a subject (and predicate) the log says were there and are gone. */
-const removedAbout = (ctx: RuleContext, s: Term, p?: Term): Quad[] =>
-  [...recorded(ctx, s, p).values()].filter((r) => r.kind === RECORDS[1] && !ctx.match(r.q.subject, r.q.predicate.value, r.q.object).length).map((r) => r.q)
-
-/** In a diff: what the log says happened to a statement, if it shows (added and there, removed and gone). */
-function changeOf(ctx: RuleContext, s: Term, p: Term, o: Term): 'added' | 'removed' | undefined {
-  const r = recorded(ctx, s, p).get(`${p.value} ${objectKeyOf(o)}`)
-  const there = ctx.match(s, p.value, o).length > 0
-  return r?.kind === RECORDS[0] && there ? 'added' : r?.kind === RECORDS[1] && !there ? 'removed' : undefined
-}
-
 /** A label, when it says more than the IRI's local name (ignoring case, spaces, dashes and underscores). */
 function saysMore(label: string | undefined, iri: string): string | undefined {
   const plain = (x: string) => x.replace(/[ _-]/g, '').toLowerCase()
@@ -565,7 +520,6 @@ interface TermFacts {
   list: boolean
   blank: boolean
   hasStatements: boolean
-  diff: boolean
   reified: boolean
   vocab: boolean
   expandable: boolean
@@ -583,7 +537,6 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const depth = Number(str(ctx.object(focus, C_DEPTH)) ?? 0) || 0
   const editable = ctx.object(focus, C_EDITABLE) ?? bool(ctx, false)
   const validated = ctx.object(focus, C_VALIDATED) ?? bool(ctx, false)
-  const diff = ctx.modality !== MOD.Text && ctx.match(focus, C_DIFF, bool(ctx, true)).length > 0
   const s = ctx.object(focus, C_SUBJECT)
   const p = s ? ctx.object(focus, C_PREDICATE) : undefined
   const reifier = !!ctx.object(focus, C_REIFIER_OF)
@@ -594,7 +547,7 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const list = t.value === RDF_NIL || (!lit && ctx.match(t, RDF_FIRST, null).length > 0)
   const blank = isSkolem(t)
   const resource = t.termType === 'NamedNode' || t.termType === 'BlankNode'
-  const hasStatements = resource && (ctx.match(t, null, null).length > 0 || (diff && removedAbout(ctx, t).length > 0))
+  const hasStatements = resource && ctx.match(t, null, null).length > 0
   const reified = !!s && !!p && reifiersOf(ctx, s, p, t).length > 0
   const vocab = t.termType === 'NamedNode' && !blank && typed(ctx, t, KINDS)
   const expandable = (hasStatements && (depth === 0 || !vocab)) || reified
@@ -605,7 +558,7 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const namedIri = t.termType === 'NamedNode' && !blank ? t.value : lit && !bare && lang === '' && dt !== XSD + 'string' ? dt : undefined
   const count = list ? rdfList(ctx, t).length : 0
   return {
-    t, editor, depth, editable, validated, diff, s, p, reifier, lit, bare, lang, list, blank, hasStatements, reified, vocab, expandable, open, nest,
+    t, editor, depth, editable, validated, s, p, reifier, lit, bare, lang, list, blank, hasStatements, reified, vocab, expandable, open, nest,
     named: namedIri, compactName: namedIri === undefined ? undefined : compact(ctx, namedIri), count,
   }
 }
@@ -615,9 +568,10 @@ function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): Nam
   if (!f.open) return []
   const out: NamedNode[] = []
   const depth = int(ctx, f.depth + 1)
+  const diffOn = ctx.modality !== MOD.Text ? ctx.object(focus, C_DIFF) : undefined
   const common = (child: NamedNode, cls: string, key: string) => {
     o.t(child, RDF_TYPE, ctx.nn(cls)).t(child, C_IN_EDITOR, f.editor).t(child, C_DEPTH, depth).t(child, C_EDITABLE, f.editable).t(child, C_VALIDATED, f.validated).t(child, SEM.orderKey, key)
-    if (f.diff) o.t(child, C_DIFF, bool(ctx, true))
+    if (diffOn) o.t(child, C_DIFF, diffOn)
     out.push(child)
   }
   if (f.nest && f.list) {
@@ -634,7 +588,7 @@ function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): Nam
     }
   } else if (f.nest) {
     const seen = new Set<string>()
-    for (const q of [...ctx.match(f.t, null, null), ...(f.diff ? removedAbout(ctx, f.t) : [])]) {
+    for (const q of ctx.match(f.t, null, null)) {
       const p = q.predicate
       if (seen.has(p.value) || (p.value === RDF_REIFIES && f.reifier)) continue
       seen.add(p.value)
@@ -736,9 +690,6 @@ const term: FnRule = (ctx, focus) => {
   o.attr(root, 'role', 'treeitem').attr(root, 'aria-level', String(f.depth + 1))
   if (f.expandable) o.attr(root, 'aria-expanded', String(f.open))
   if (ctx.match(focus, C + 'isCurrent', bool(ctx, true)).length) o.attr(root, 'aria-current', 'true')
-  // In a diff: what the change log says happened to its statement.
-  const change = f.diff && f.s && f.p ? changeOf(ctx, f.s, f.p, t) : undefined
-  if (change) o.attr(root, 'data-sem-change', change).attr(root, 'aria-description', phrase(ctx, change === 'added' ? 'RdfAddedPhrase' : 'RdfRemovedPhrase'))
   o.renders(root)
   return o.quads
 }
@@ -777,21 +728,21 @@ const property: FnRule = (ctx, focus) => {
   const depth = Number(str(ctx.object(focus, C_DEPTH)) ?? 1) || 1
   const editable = ctx.object(focus, C_EDITABLE) ?? bool(ctx, false)
   const validated = ctx.object(focus, C_VALIDATED) ?? bool(ctx, false)
-  const diff = ctx.modality !== MOD.Text && ctx.match(focus, C_DIFF, bool(ctx, true)).length > 0
   const own = ctx.object(focus, C_EXPANDED)
   const open = own ? own.value === 'true' : true
+  const diffOn = ctx.modality !== MOD.Text ? ctx.object(focus, C_DIFF) : undefined
   const name = compact(ctx, p.value)
   const shown = p.value === RDF_TYPE ? 'a' : name
   const kids: NamedNode[] = []
   if (open) {
-    for (const q of [...ctx.match(s, p, null), ...(diff ? removedAbout(ctx, s, p) : [])]) {
+    for (const q of ctx.match(s, p, null)) {
       const okey = objectKey(ctx, q.object)
       if (okey === undefined) continue
       const child = o.node('t-' + key12(okey))
       o.t(child, RDF_TYPE, ctx.nn(C_RDF_TERM)).t(child, C_TERM, q.object).t(child, C_SUBJECT, s).t(child, C_PREDICATE, p).t(child, C_IN_EDITOR, editor)
       o.t(child, C_DEPTH, int(ctx, depth + 1)).t(child, C_EDITABLE, editable).t(child, C_VALIDATED, validated).t(child, SEM.orderKey, okey)
       if (ctx.modality !== MOD.Text && editable.value === 'true') o.t(child, RDF_TYPE, ctx.nn(C_DRAGGABLE_ROW))
-      if (diff) o.t(child, C_DIFF, bool(ctx, true))
+      if (diffOn) o.t(child, C_DIFF, diffOn)
       kids.push(child)
     }
   }
@@ -1354,7 +1305,94 @@ const pick: ReactionFn = (ctx) => {
   return out
 }
 
+// --- the diff (c:diff): what the change log records --------------------------------------------------------
+
+const RDF_SUBJECT = NS.rdf + 'subject'
+const ASSERTED = NS.beh + 'asserted'
+const RETRACTED = NS.beh + 'retracted'
+
+/**
+ * The changes the log records to statements about a subject (and predicate), undone ones left
+ * out: per statement (predicate and object), the kind of the earliest, and its terms.
+ */
+function recorded(ctx: RuleContext, s: Term, p?: Term): Map<string, { kind: string; p: Term; o: Term; seq: number }> {
+  const out = new Map<string, { kind: string; p: Term; o: Term; seq: number }>()
+  for (const sq of ctx.match(null, RDF_SUBJECT, s)) {
+    const st = sq.subject
+    const pred = ctx.object(st, NS.rdf + 'predicate')
+    const obj = ctx.object(st, NS.rdf + 'object')
+    if (!pred || !obj || (p && !pred.equals(p))) continue
+    for (const kind of [ASSERTED, RETRACTED])
+      for (const r of ctx.match(null, kind, st)) {
+        if (ctx.match(null, NS.beh + 'undone', r.subject).length) continue
+        const seq = Number(ctx.object(r.subject, NS.beh + 'sequence')?.value)
+        const key = `${pred.value} ${obj.termType}:${obj.value}:${obj.termType === 'Literal' ? obj.language + '^' + obj.datatype.value : ''}`
+        const had = out.get(key)
+        if (!had || seq < had.seq) out.set(key, { kind, p: pred, o: obj, seq })
+      }
+  }
+  return out
+}
+
+/** A value's row in a diff: marked with what the log says happened to its statement, if it shows. */
+const diffMarks: FnRule = (ctx, focus) => {
+  const s = ctx.object(focus, C_SUBJECT)
+  const p = ctx.object(focus, C_PREDICATE)
+  const t = ctx.object(focus, C_TERM)
+  if (!ctx.match(focus, C_DIFF, bool(ctx, true)).length || !s || !p || !t) return []
+  const there = ctx.match(s, p.value, t).length > 0
+  const r = [...recorded(ctx, s, p).values()].find((x) => x.o.equals(t))
+  const change = r?.kind === ASSERTED && there ? 'added' : r?.kind === RETRACTED && !there ? 'removed' : undefined
+  if (!change) return []
+  const o = ctx.out(focus)
+  o.attr(o.node('root'), 'data-sem-change', change).attr(o.node('root'), 'aria-description', phrase(ctx, change === 'added' ? 'RdfAddedPhrase' : 'RdfRemovedPhrase'))
+  return o.quads
+}
+
+/** A predicate's row in a diff: rows for the objects the log says it had and has no more. */
+const diffRemovedObjects: FnRule = (ctx, focus) => {
+  const s = ctx.object(focus, C_SUBJECT)
+  const p = ctx.object(focus, C_PREDICATE)
+  const editor = ctx.object(focus, C_IN_EDITOR)
+  if (!ctx.match(focus, C_DIFF, bool(ctx, true)).length || !s || !p || !editor || ctx.match(focus, C_EXPANDED, bool(ctx, false)).length) return []
+  const o = ctx.out(focus)
+  const depth = (Number(str(ctx.object(focus, C_DEPTH)) ?? 1) || 1) + 1
+  for (const r of recorded(ctx, s, p).values()) {
+    if (r.kind !== RETRACTED || ctx.match(s, p.value, r.o).length || !(r.o.termType === 'NamedNode' || r.o.termType === 'Literal')) continue
+    const okey = r.o.termType === 'Literal' ? `"${r.o.value}"` + (r.o.language ? '@' + r.o.language : '^^' + r.o.datatype.value) : r.o.value
+    const child = o.node('t-' + key12(okey))
+    o.t(o.node('group'), H.hasChild, child)
+    o.t(child, RDF_TYPE, ctx.nn(C_RDF_TERM)).t(child, C_TERM, r.o).t(child, C_SUBJECT, s).t(child, C_PREDICATE, p).t(child, C_IN_EDITOR, editor)
+    o.t(child, C_DEPTH, int(ctx, depth)).t(child, C_EDITABLE, ctx.object(focus, C_EDITABLE) ?? bool(ctx, false)).t(child, C_VALIDATED, ctx.object(focus, C_VALIDATED) ?? bool(ctx, false))
+    o.t(child, C_DIFF, bool(ctx, true)).t(child, SEM.orderKey, okey)
+  }
+  return o.quads
+}
+
+/** A resource's row in a diff: rows for the predicates the log says it had and has no more. */
+const diffRemovedPredicates: FnRule = (ctx, focus) => {
+  const t = ctx.object(focus, C_TERM)
+  const editor = ctx.object(focus, C_IN_EDITOR)
+  if (!ctx.match(focus, C_DIFF, bool(ctx, true)).length || t?.termType !== 'NamedNode' || !editor || str(ctx.object(focus, C_DEPTH)) !== '0') return []
+  if (ctx.match(focus, C_EXPANDED, bool(ctx, false)).length || ctx.match(focus, C + 'startsClosed', bool(ctx, true)).length || !ctx.match(t, null, null).length) return []
+  const o = ctx.out(focus)
+  const seen = new Set<string>()
+  for (const r of recorded(ctx, t).values()) {
+    if (r.kind !== RETRACTED || seen.has(r.p.value) || ctx.match(t, r.p.value, null).length) continue
+    seen.add(r.p.value)
+    const child = o.node('p-' + key12(r.p.value))
+    o.t(o.node('group'), H.hasChild, child)
+    o.t(child, RDF_TYPE, ctx.nn(C_RDF_PROPERTY)).t(child, C_SUBJECT, t).t(child, C_PREDICATE, r.p).t(child, C_IN_EDITOR, editor).t(child, C_DEPTH, int(ctx, 1))
+    o.t(child, C_EDITABLE, ctx.object(focus, C_EDITABLE) ?? bool(ctx, false)).t(child, C_VALIDATED, ctx.object(focus, C_VALIDATED) ?? bool(ctx, false))
+    o.t(child, C_DIFF, bool(ctx, true)).t(child, SEM.orderKey, predicateKey(ctx, r.p))
+  }
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
+  'rdf-editor:diff-marks': diffMarks,
+  'rdf-editor:diff-removed-objects': diffRemovedObjects,
+  'rdf-editor:diff-removed-predicates': diffRemovedPredicates,
   'rdf-editor': editor,
   'rdf-editor:entry': entry,
   'rdf-editor:listing': listing,
