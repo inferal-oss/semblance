@@ -97,15 +97,27 @@ export function graphLanguages(store: GraphStore, root: string): string[] {
   return []
 }
 
-/** Project `root` at `url` and serialize it: what the client's first render of that address shows. */
-export async function renderToString(opts: RenderOptions): Promise<Rendered> {
+/** Read the address and prepare the store: what decides the document's language, before projecting. */
+export async function readyToRender(opts: RenderOptions): Promise<{ status: number; address?: string; languages: string[]; lang: string; dir: 'ltr' | 'rtl' }> {
   const { store, root } = opts
   const { found, address } = opts.url !== undefined ? await readUrl(store, root, opts.url) : { found: true, address: undefined }
   opts.prepare?.(store)
   const languages = opts.languages ?? graphLanguages(store, root)
+  return { status: found ? 200 : 404, address, languages, ...documentLanguage(store, languages[0] ?? 'en') }
+}
+
+/** Project the prepared store and serialize the root (after readyToRender). */
+export function project(opts: RenderOptions, languages: string[]): Pick<Rendered, 'html' | 'css' | 'runtime' | 'projection'> {
+  const { store, root } = opts
   const runtime = new Runtime(store)
   const projection = runtime.project({ modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root] })
   const html = toHTML(projection.index, root)
   const css = opts.styles === false ? undefined : compileStyles(store)
-  return { html, css, status: found ? 200 : 404, ...documentLanguage(store, languages[0] ?? 'en'), address, runtime, projection }
+  return { html, css, runtime, projection }
+}
+
+/** Project `root` at `url` and serialize it: what the client's first render of that address shows. */
+export async function renderToString(opts: RenderOptions): Promise<Rendered> {
+  const ready = await readyToRender(opts)
+  return { ...ready, ...project(opts, ready.languages) }
 }

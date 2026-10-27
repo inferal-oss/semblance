@@ -457,6 +457,55 @@ function kept(r: Reader, loc: Location, values: Values): Values {
   return values
 }
 
+/** Where every location's paths start (nav:base): an app served under a path ("/docs/app/"). */
+export function setBase(store: GraphStore, base: string): void {
+  const f = store.factory
+  const value = base.endsWith('/') ? base : base + '/'
+  for (const { subject } of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(NAV + 'Location'), f.defaultGraph())) {
+    for (const q of store.match(subject, f.namedNode(NAV + 'base'), null, f.defaultGraph())) store.delete(q)
+    if (value !== '/') store.add(f.quad(subject, f.namedNode(NAV + 'base'), f.literal(value), f.defaultGraph()))
+  }
+}
+
+/**
+ * Every place a location's path names (nav:Path), as paths: each combination of its path
+ * dimensions' values that applies, and each with its children left out (/docs/ as well as
+ * /docs/rules/). A dimension's values are the c:when of the cases of the switches that follow it,
+ * else the nodes its key spells that its property's range types. What a static build renders.
+ */
+export function routesOf(r: Reader, loc: Location): string[] {
+  const f = r.f
+  const dims = ordered(loc, PATH)
+  const candidates = (d: Dimension): Term[] => {
+    const cases = r
+      .match(null, C + 'controls', d.subject)
+      .map((q) => q.subject)
+      .filter((sw) => one(r, sw, C + 'property')?.value === d.property)
+      .flatMap((sw) => list(r, one(r, sw, C + 'cases')))
+      .flatMap((c) => {
+        const v = one(r, c, C + 'when')
+        return v ? [v as Term] : []
+      })
+    if (cases.length) return [...new Map(cases.map((v) => [v.value, v])).values()]
+    const range = one(r, f.namedNode(d.property), RDFS_RANGE)
+    return r
+      .match(null, d.keyProperty, null)
+      .map((q) => q.subject)
+      .filter((s) => !range || r.match(s, RDF_TYPE, range).length > 0)
+  }
+  const out = new Set<string>()
+  const walk = (i: number, values: Values) => {
+    if (i === dims.length) return void out.add(spellAddress(r, loc, values).path)
+    const d = dims[i]!
+    if (!inScope(r, loc, d, values)) return walk(i + 1, values)
+    // A child dimension may be left out: its parent's page shows its default.
+    if (d.parent) walk(i + 1, values)
+    for (const v of candidates(d)) walk(i + 1, new Map([...values, [d.iri, v]]))
+  }
+  walk(0, new Map())
+  return [...out].sort()
+}
+
 /**
  * Whether a resource is a term of a vocabulary: used as a class or as a property, or named in the
  * namespace of an owl:Ontology the graph has (a framework class, a reaction it declares).

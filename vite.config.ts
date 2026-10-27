@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { defineConfig } from 'vitest/config'
+import { semblance } from './src/node/vite.ts'
 
 const here = import.meta.dirname
 
@@ -35,9 +36,10 @@ function llms(): Plugin {
 // ontologies and the Oxigraph WASM inlined) in dist-single/.
 export default defineConfig(({ command, mode }) => ({
   root: 'demo',
-  // Relative asset URLs, so a build works from any path (GitHub Pages serves it under
-  // /semblance/ until a domain is set). The app routes by fragment only, so this is safe.
-  base: command === 'build' ? './' : '/',
+  // The site is served from its domain's root (semblance.dev): its pages are paths (/docs/rules/),
+  // so assets are addressed from the root (SEMBLANCE_BASE for another path). The single file
+  // routes by fragment, so its URLs stay relative.
+  base: command === 'build' && mode === 'single' ? './' : (process.env.SEMBLANCE_BASE ?? '/'),
   // Cross-origin isolation gives performance.now() microsecond resolution
   // (otherwise browsers coarsen it to ~100µs), which the benchmarks need.
   server: {
@@ -46,7 +48,9 @@ export default defineConfig(({ command, mode }) => ({
   },
   // Pre-bundling would break Oxigraph's wasm-bindgen glue.
   optimizeDeps: { exclude: ['oxigraph'] },
-  plugins: [llms(), ...(mode === 'single' ? [viteSingleFile({ removeViteModuleLoader: true })] : [])],
+  // Every page of the site is rendered at build time (semblance.config.ts) and taken over by the
+  // client; the single file is rendered too, with everything inline.
+  plugins: [llms(), ...(mode === 'single' ? [viteSingleFile({ removeViteModuleLoader: true })] : []), semblance({ config: resolve(here, 'semblance.config.ts') })],
   build: {
     outDir: resolve(here, mode === 'single' ? 'dist-single' : 'dist'),
     emptyOutDir: true,
