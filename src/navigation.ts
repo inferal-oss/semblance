@@ -955,12 +955,34 @@ const segmentedDestination: FnRule = (ctx, focus) => {
           if (!x.parent) return true
           return x.when.some((w) => same(w, values.get(x.parent!)))
         })
-        .map((x) => segment(spell(r, x, values.get(x.iri)!)) + '/')
+        .map((x) => segment(x === d ? optionKey(r, d, q.object) : spell(r, x, values.get(x.iri)!)) + '/')
       o.attr(q.subject as NamedNode, 'formaction', loc.base + parts.join(''))
     }
     return o.quads
   }
   return []
+}
+
+/** An option of a chooser, spelled by its key (nav:keyProperty, else sem:slug, else as it is). */
+function optionKey(r: Reader, d: Dimension, v: Term): string {
+  if (v.termType === 'Literal') return v.value
+  const key = [one(r, v, d.keyProperty), one(r, v, SEM.slug)].find((k) => k?.termType === 'Literal')
+  return key?.value ?? v.value
+}
+
+/** nav:LocationSpelling: each path dimension's current value as the path spells it (nav:currentPart). */
+const locationSpelling: FnRule = (ctx, focus) => {
+  const r = ruleReader(ctx)
+  const loc = readLocations(r).find((l) => l.iri === focus.value)
+  if (!loc) return []
+  const o = ctx.out(focus)
+  const values = currentValues(r, loc)
+  for (const d of loc.dimensions) {
+    const v = values.get(d.iri)
+    if (d.target || d.spelledIn !== PATH || !v || same(d.implicit, v)) continue
+    o.t(ctx.nn(d.iri), NAV + 'currentPart', segment(spell(r, d, v)))
+  }
+  return o.quads
 }
 
 /** The link address of a reported address: a path and its fragment (no query), else the fragment, else '#'. */
@@ -995,5 +1017,5 @@ const containment: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const navigationFunctions: Record<string, FnRule> = { 'navigation:segmented-destination': segmentedDestination, 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
+export const navigationFunctions: Record<string, FnRule> = { 'navigation:location-spelling': locationSpelling, 'navigation:segmented-destination': segmentedDestination, 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
 export const locationReactions: Record<string, ReactionFn> = { 'navigation:follow': follow }

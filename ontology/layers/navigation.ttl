@@ -343,12 +343,44 @@ WHERE {
       NOT EXISTS { ?td2 nav:showsTerms true ; nav:parent* ?keptDim }))
   }
 }""" .
+# How each path dimension's current value is spelled (nav:currentPart), once per change of where
+# we are, for the choosers' destinations below to join instead of spelling every value again.
+nav:currentPart a owl:DatatypeProperty ; rdfs:domain nav:Dimension ;
+    rdfs:comment "Derived: the path segment the dimension's current value is spelled as (absent when it is nav:implicit or has none)."@en .
+nav:LocationSpelling a sem:Rendering ; sem:targets nav:Location ; sem:stratum 4 ; sem:always true ; sem:readsLocation true .
+nav:LocationSpelling-fn a sem:Rule ; sem:implements nav:LocationSpelling ; sem:function "navigation:location-spelling" .
+nav:LocationSpelling-sparql a sem:Rule ;
+    sem:implements nav:LocationSpelling ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?d nav:currentPart ?part }
+WHERE {
+  $this a nav:Location ; nav:dimensions ?h . ?h rdf:rest* ?c . ?c rdf:first ?d .
+  ?d nav:carriedBy nav:Path ; nav:subject ?s ; nav:property ?p . FILTER NOT EXISTS { ?d a nav:TargetDimension }
+  ?s ?p ?v .
+  FILTER NOT EXISTS { ?d nav:implicit ?v }
+  OPTIONAL { ?d nav:keyProperty ?keyPropertys }
+  BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
+  OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
+  OPTIONAL { FILTER(!?prefixeds) ?v sem:slug ?slugKeys }
+  BIND(COALESCE(IF(isLiteral(?ownKeys), STR(?ownKeys), ?none), IF(isLiteral(?slugKeys), STR(?slugKeys), ?none)) AS ?keys)
+  LATERAL { OPTIONAL { SELECT ?v (MAX(CONCAT(SUBSTR("0000", STRLEN(STR(STRLEN(?pnss)))), STR(STRLEN(?pnss)), " ", ?pps, ":", STRAFTER(STR(?v), ?pnss))) AS ?bests) WHERE {
+    { ?pnodes sem:prefixName ?pp0s ; sem:namespace ?pns0s } UNION { ?pnodes sh:prefix ?pp0s ; sh:namespace ?pns0s }
+    BIND(STR(?pp0s) AS ?pps) BIND(STR(?pns0s) AS ?pnss)
+    FILTER(isIRI(?v) && STRSTARTS(STR(?v), ?pnss) && REGEX(STRAFTER(STR(?v), ?pnss), "^[A-Za-z0-9_-]+$"))
+  } GROUP BY ?v } }
+  BIND(IF(isLiteral(?v), STR(?v), COALESCE(?keys, STRAFTER(?bests, " "), STR(?v))) AS ?texts)
+  BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+       "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+}""" .
+
 # A chooser of a place the path carries (a c:Segmented or c:NavList over a site's pages, its docs
 # sections): each option submits to the address it sets, the rest of where we are kept (the
 # language, the sections the page remembers). The chooser renders a form of submit buttons over
 # such a dimension (c:SegmentedRendering), so the options go there before and without scripts.
 # One level of nav:parent is followed for what applies (a section under the page it sets). Above
-# the chooser's rendering (0): it decorates the options that rendering made.
+# the chooser's rendering (0) and the location's spelling (4). An option is spelled by its key
+# (nav:keyProperty, else sem:slug).
 c:SegmentedDestination a sem:Rendering ; sem:targets c:Segmented ; sem:stratum 5 ; sem:requires c:controls ; sem:readsLocation true ;
     sem:watches c:controls , c:property , c:selects ; sem:readsMinted true .
 c:SegmentedDestination-fn a sem:Rule ; sem:implements c:SegmentedDestination ; sem:function "navigation:segmented-destination" .
@@ -361,39 +393,35 @@ WHERE {
   $this c:controls ?target ; c:property ?property .
   ?loc a nav:Location ; nav:dimensions ?h . ?h rdf:rest* ?hc . ?hc rdf:first ?d .
   ?d nav:subject ?target ; nav:property ?property ; nav:carriedBy nav:Path . FILTER NOT EXISTS { ?d a nav:TargetDimension }
-  ?button c:selects ?opt . FILTER(STRSTARTS(STR(?button), CONCAT(STR($this), "/~opt-")))
+  # The options as the chooser's rendering finds them, and the button it mints for each (looked up, not scanned).
+  { $this c:options/rdf:rest*/rdf:first ?opt } UNION { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range }
+  BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?button)
+  ?button c:selects ?opt .
   OPTIONAL { SELECT ?button (GROUP_CONCAT(?part; separator="") AS ?parts) WHERE {
     { SELECT DISTINCT ?button ?d2 ?part ?at WHERE {
       $this c:controls ?target ; c:property ?property .
       ?loc a nav:Location ; nav:dimensions ?h . ?h rdf:rest* ?hc . ?hc rdf:first ?d .
       ?d nav:subject ?target ; nav:property ?property ; nav:carriedBy nav:Path . FILTER NOT EXISTS { ?d a nav:TargetDimension }
-      ?button c:selects ?opt . FILTER(STRSTARTS(STR(?button), CONCAT(STR($this), "/~opt-")))
-      # Each path dimension: the option for its own, the current value for the others.
+      { $this c:options/rdf:rest*/rdf:first ?opt } UNION { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range }
+      BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?button)
+      ?button c:selects ?opt .
+      # Each path dimension: the option, spelled by its key, for its own; its current part for the others.
       ?loc nav:dimensions ?h2 . ?h2 rdf:rest* ?c2 . ?c2 rdf:first ?d2 .
-      ?d2 nav:carriedBy nav:Path ; nav:subject ?s2 ; nav:property ?p2 . FILTER NOT EXISTS { ?d2 a nav:TargetDimension }
-      # (Each OPTIONAL starts from what it is about, so it never reads the whole store.)
-      OPTIONAL { ?d2 nav:subject ?cs ; nav:property ?cp . ?cs ?cp ?cur }
-      BIND(IF(?d2 = ?d, ?opt, ?cur) AS ?v)
-      FILTER(BOUND(?v))
-      FILTER NOT EXISTS { ?d2 nav:implicit ?v }
+      ?d2 nav:carriedBy nav:Path . FILTER NOT EXISTS { ?d2 a nav:TargetDimension }
+      OPTIONAL { ?d2 nav:currentPart ?curPart }
+      OPTIONAL { ?d nav:keyProperty ?optKeyProperty }
+      OPTIONAL { ?opt ?optKeyProperty ?optKey0 FILTER(isLiteral(?optKey0)) }
+      OPTIONAL { ?opt sem:slug ?optSlug FILTER(isLiteral(?optSlug)) }
+      BIND(IF(EXISTS { ?d nav:implicit ?opt }, ?none, REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(COALESCE(?optKey0, ?optSlug, ?opt))),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?optPart)
+      BIND(IF(?d2 = ?d, ?optPart, ?curPart) AS ?part0)
+      FILTER(BOUND(?part0))
       # It applies: no parent, or its parent's value (the option, or the parent's current one) is one it applies under.
       OPTIONAL { ?d2 nav:parent ?par }
       OPTIONAL { ?d2 nav:parent ?par . ?par nav:subject ?ps ; nav:property ?pp . ?ps ?pp ?parCur }
       BIND(IF(BOUND(?par), IF(?par = ?d, ?opt, ?parCur), ?none) AS ?parV)
       FILTER(!BOUND(?par) || EXISTS { ?d2 nav:when ?parV })
-      OPTIONAL { ?d2 nav:keyProperty ?keyPropertys }
-      BIND(EXISTS { ?d2 nav:spelling nav:PrefixedName } AS ?prefixeds)
-      OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
-      OPTIONAL { FILTER(!?prefixeds) ?v sem:slug ?slugKeys }
-      BIND(COALESCE(IF(isLiteral(?ownKeys), STR(?ownKeys), ?none), IF(isLiteral(?slugKeys), STR(?slugKeys), ?none)) AS ?keys)
-      LATERAL { OPTIONAL { SELECT ?v (MAX(CONCAT(SUBSTR("0000", STRLEN(STR(STRLEN(?pnss)))), STR(STRLEN(?pnss)), " ", ?pps, ":", STRAFTER(STR(?v), ?pnss))) AS ?bests) WHERE {
-        { ?pnodes sem:prefixName ?pp0s ; sem:namespace ?pns0s } UNION { ?pnodes sh:prefix ?pp0s ; sh:namespace ?pns0s }
-        BIND(STR(?pp0s) AS ?pps) BIND(STR(?pns0s) AS ?pnss)
-        FILTER(isIRI(?v) && STRSTARTS(STR(?v), ?pnss) && REGEX(STRAFTER(STR(?v), ?pnss), "^[A-Za-z0-9_-]+$"))
-      } GROUP BY ?v } }
-      BIND(IF(isLiteral(?v), STR(?v), COALESCE(?keys, STRAFTER(?bests, " "), STR(?v))) AS ?texts)
-      BIND(CONCAT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
-           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*"), "/") AS ?part)
+      BIND(CONCAT(?part0, "/") AS ?part)
       {{ SELECT ?d2 (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d2 }} GROUP BY ?d2 }}
     } ORDER BY ?at }
   } GROUP BY ?button }
@@ -402,6 +430,7 @@ WHERE {
   BIND(CONCAT(?base, COALESCE(?parts, "")) AS ?href)
   BIND(IRI(CONCAT(STR(?button), "-formaction")) AS ?attr)
 }""" .
+
 # The current page: a link that goes to the address the location shows now (nav:address, as the
 # navigation effect reports it; its fragment, which is what links spell) is nav:current, and its
 # rendering marks it aria-current=page as if it said c:currentPage (unless it says c:currentPage
