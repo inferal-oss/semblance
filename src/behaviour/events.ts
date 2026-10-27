@@ -40,6 +40,8 @@ export interface EventDetail {
   caret?: number
   /** The key combination of a key press, normalized as key:shortcut is ("tab", "mod+enter"; beh:key). */
   key?: string
+  /** The character a key press types, when it types one ("A", "ж"; beh:text). */
+  text?: string
   /** The modifier keys held during a pointer interaction, or the press that moved the focus ("shift", "mod+shift"; beh:modifiers). */
   modifiers?: string
   /** Further statements about the event, by predicate (a drop carries the drag's: what, from, where). */
@@ -59,6 +61,8 @@ export interface Handled {
 interface Reaction {
   iri: string
   when: string
+  /** Every event class it answers (beh:when may be given more than once). */
+  whens: string[]
   source?: string
   sourceClass?: string
   deletes?: string
@@ -133,9 +137,12 @@ export class EventBus {
     if (this.cachedReactions) return this.cachedReactions
     const byEvent = new Map<string, Reaction[]>()
     for (const r of this.reactions()) {
-      let list = byEvent.get(r.when)
-      if (!list) byEvent.set(r.when, (list = []))
-      list.push(r)
+      // A reaction may answer several event classes (beh:when, more than once): a key and a menu item, say.
+      for (const when of r.whens) {
+        let list = byEvent.get(when)
+        if (!list) byEvent.set(when, (list = []))
+        list.push(r)
+      }
     }
     for (const list of byEvent.values()) list.sort((a, b) => a.iri.localeCompare(b.iri))
     return (this.cachedReactions = byEvent)
@@ -146,6 +153,7 @@ export class EventBus {
     return this.runtime.store.match(null, nn(RDF_TYPE), nn(BEH.Reaction), this.f.defaultGraph()).map(({ subject: r }) => ({
       iri: r.value,
       when: this.value(r, BEH.when)?.value ?? '',
+      whens: this.runtime.store.match(r, nn(BEH.when), null, this.f.defaultGraph()).map((q) => q.object.value),
       source: this.value(r, BEH.source)?.value,
       sourceClass: this.value(r, BEH.sourceClass)?.value,
       deletes: this.value(r, BEH.deletes)?.value,
@@ -256,6 +264,7 @@ export class EventBus {
     if (detail.checked !== undefined) quads.push(f.quad(event, nn(BEH.checked), f.literal(String(detail.checked), nn(XSD_BOOLEAN))))
     if (detail.caret !== undefined) quads.push(f.quad(event, nn(NS.beh + 'caret'), f.literal(String(detail.caret), nn(XSD_INTEGER))))
     if (detail.key !== undefined) quads.push(f.quad(event, nn(NS.beh + 'key'), f.literal(detail.key)))
+    if (detail.text !== undefined) quads.push(f.quad(event, nn(NS.beh + 'text'), f.literal(detail.text)))
     if (detail.modifiers) quads.push(f.quad(event, nn(NS.beh + 'modifiers'), f.literal(detail.modifiers)))
     for (const [p, o] of detail.about ?? []) quads.push(f.quad(event, nn(p), o as NamedNode))
     for (const [name, v] of Object.entries(detail.numbers ?? {})) quads.push(f.quad(event, nn(NS.beh + name), f.literal(String(Math.round(v)), nn(XSD_INTEGER))))
@@ -522,6 +531,9 @@ export class EventBus {
           if (control.type === 'checkbox') detail.checked = control.checked
           if (detail.value !== undefined && typeof control.selectionStart === 'number') detail.caret = control.selectionStart
           if (combo !== undefined) detail.key = combo
+          // A press that types a character (no Mod or Alt held) says which, as typed.
+          const typed = e as KeyboardEvent
+          if (combo !== undefined && typed.key.length === 1 && !typed.ctrlKey && !typed.metaKey && !typed.altKey) detail.text = typed.key
           if (e.type === 'focusin') detail.modifiers = pressed
           else if (combo === undefined && 'shiftKey' in e) detail.modifiers = modifiersOf(e as MouseEvent, apple)
           const custom = (e as CustomEvent).detail
@@ -539,7 +551,8 @@ export class EventBus {
           // Reactions that changed nothing let the event reach the enclosing components
           // (a generic reaction on c:Button must not swallow its container's click).
           if (!handled.recorded && !handled.delta.add.length && !handled.delta.remove.length) continue
-          if (combo !== undefined) e.preventDefault(), consumed.add(e)
+          // A key or a right click a reaction used is not also the browser's (its shortcut, its context menu).
+          if (combo !== undefined || e.type === 'contextmenu') e.preventDefault(), consumed.add(e)
           onHandled(handled)
           this.placeCaret(renderer, focus)
           this.placeFocus(renderer, focus, before)
