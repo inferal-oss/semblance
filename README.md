@@ -15,6 +15,9 @@ a Linked Data Event Stream, and declarative reactions turn events into state.
 benchmark matrix, running in your browser, itself a Semblance app. GitHub Pages cannot send
 COOP/COEP headers, so the page is not cross-origin isolated: timings are coarser (~100 µs) and the
 heap meter may read n/a. For precise numbers run `npm run dev`.
+For language models, <https://semblance.dev/llms.txt> lists the docs, every component and the
+examples, each with a Markdown page of the site's own text projection (generated at build by
+`scripts/gen-llms.ts`).
 
 **Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
