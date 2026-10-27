@@ -107,6 +107,7 @@ export const SEM = {
   layer: sem + 'layer',
   implements: sem + 'implements',
   construct: sem + 'construct',
+  constructFrom: sem + 'constructFrom',
   function: sem + 'function',
   follows: sem + 'follows',
   watches: sem + 'watches',

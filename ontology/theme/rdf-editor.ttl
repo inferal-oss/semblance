@@ -119,3 +119,13 @@
                  [ sty:property "padding-inline-start" ; sty:raw "22px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-adding > .sem-edit" ;
     sty:declares [ sty:property "min-width" ; sty:raw "min(28ch, 100%)" ] .
+# What does not conform (c:validated): the term underlined in the danger tone, the problems after it.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-invalid > .sem-row > .sem-label" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "underline wavy var(--sem-danger-9)" ] ,
+                 [ sty:property "text-underline-offset" ; sty:raw "3px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-problems" ;
+    sty:declares [ sty:property "color" ; sty:token tok:danger-11 ] ,
+                 [ sty:property "font-family" ; sty:token tok:font ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-problem + .sem-problem::before" ;
+    sty:declares [ sty:property "content" ; sty:raw "\" · \"" ] .

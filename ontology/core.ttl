@@ -60,6 +60,8 @@ sem:stratum a owl:DatatypeProperty ; rdfs:range xsd:integer ;
 sem:layer a owl:ObjectProperty ; rdfs:range sem:Layer .
 sem:construct a owl:DatatypeProperty ;
     rdfs:comment "SPARQL CONSTRUCT body. $this is substituted with the focus IRI, or with ?this for bulk evaluation, so the WHERE clause must bind $this through a triple pattern."@en .
+sem:constructFrom a owl:ObjectProperty ; rdfs:domain sem:Rule ; rdfs:range sem:Rule ;
+    rdfs:comment "A rule whose sem:construct this rule runs as its own, for its own rendering: one query serving several renderings (a member-wise one reads $member, unbound in the other)."@en .
 sem:function a owl:DatatypeProperty ; rdfs:comment "Identifier of a registered function implementation."@en .
 sem:follows a owl:ObjectProperty ;
     rdfs:comment """Predicate from the focus to nodes the rule reads; changes on those nodes make the focus dirty.
