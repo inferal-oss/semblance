@@ -370,3 +370,21 @@
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-status" ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "scrollbar-width" ; sty:raw "none" ] .
+
+# --- the diff (c:added, c:removed): a changed statement's row, as a diff marks a line --------------------------
+# Added: success, with a bar at the row's start; removed: danger, struck through, still in its place.
+# The bar is logical (inset-inline-start), so it is on the right in a right-to-left page.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change] > .sem-row" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-change-bar)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change] > .sem-row:dir(rtl)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-change-bar)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change=added] > .sem-row" ;
+    sty:declares [ sty:property "--sem-change-bar" ; sty:raw "var(--sem-success-9)" ] ,
+                 [ sty:property "background" ; sty:token tok:success-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change=removed] > .sem-row" ;
+    sty:declares [ sty:property "--sem-change-bar" ; sty:raw "var(--sem-danger-9)" ] ,
+                 [ sty:property "background" ; sty:token tok:danger-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change=removed] > .sem-row > :is(.sem-label, .sem-datatype)" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "line-through" ] ,
+                 [ sty:property "text-decoration-color" ; sty:raw "var(--sem-danger-9)" ] ,
+                 [ sty:property "opacity" ; sty:raw "0.8" ] .
