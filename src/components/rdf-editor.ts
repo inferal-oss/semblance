@@ -40,7 +40,12 @@ const C_ADDING = C + 'adding'
 const C_EDITS_ROW = C + 'editsRow'
 const C_COMMITS = C + 'commits'
 const C_ADDS = C + 'adds'
-const MARKS = [C_EDITING, C_ADDING, C_FOCUSED]
+const C_DRAFT = C + 'draft'
+const C_SUGGESTS_FOR = C + 'suggestsFor'
+const C_SUGGESTS_PREDICATE = C + 'suggestsPredicate'
+const C_SUGGESTS_VALUE = C + 'suggestsValue'
+const C_FILLS_WITH = C + 'fillsWith'
+const MARKS = [C_EDITING, C_ADDING, C_FOCUSED, C_DRAFT]
 const TUPLE = '\u0001'
 const BARE = new Set([XSD + 'integer', XSD + 'decimal', XSD + 'double', XSD + 'boolean'])
 const KINDS = [NS.rdfs + 'Class', NS.owl + 'Class', NS.rdf + 'Property', NS.owl + 'ObjectProperty', NS.owl + 'DatatypeProperty', NS.owl + 'AnnotationProperty']
@@ -182,6 +187,105 @@ function problemList(ctx: RuleContext, o: Out, focus: NamedNode, label: NamedNod
   return list
 }
 
+// --- what the shapes expect (suggestions under an adding field) ----------------------------------------
+
+interface Suggestion {
+  label: string
+  key: string
+  required: boolean
+  p?: Term
+  v?: Term
+}
+
+/** A suggested value as it is written: a name, a number or boolean bare, other literals quoted. */
+const valueText = (ctx: RuleContext, v: Term) =>
+  v.termType === 'NamedNode' ? compact(ctx, v.value) : v.termType === 'Literal' && BARE.has(v.datatype.value) ? v.value : `"${v.value}"`
+
+/** The property shapes of a node's classes (sh:targetClass, through rdfs:subClassOf). */
+function propertyShapes(ctx: RuleContext, node: Term): Term[] {
+  const classes = new Set<string>()
+  const todo = ctx.objects(node, RDF_TYPE).map((t) => t.value)
+  while (todo.length) {
+    const c = todo.pop()!
+    if (classes.has(c)) continue
+    classes.add(c)
+    for (const sup of ctx.objects(c, NS.rdfs + 'subClassOf')) todo.push(sup.value)
+  }
+  return [...classes].flatMap((c) => ctx.match(null, SH + 'targetClass', ctx.nn(c)).flatMap((q) => ctx.objects(q.subject, SH + 'property')))
+}
+
+/** Values a property shape names: fixed (sh:hasValue, sh:defaultValue) or allowed (sh:in). */
+const namedValues = (ctx: RuleContext, ps: Term): Term[] => [
+  ...ctx.objects(ps, SH + 'hasValue'),
+  ...ctx.objects(ps, SH + 'defaultValue'),
+  ...ctx.objects(ps, SH + 'in').flatMap((l) => rdfList(ctx, l)),
+]
+
+/** For a new statement of a resource: its shapes' predicates, alone and with the values they name; if it has no class, the classes shapes target that the document uses. */
+function statementSuggestions(ctx: RuleContext, t: Term, editor: Term): Suggestion[] {
+  return ctx.untraced(() => {
+    const byLabel = new Map<string, Suggestion>()
+    const add = (p: Term, v: Term | undefined, required: boolean) => {
+      const pText = p.value === RDF_TYPE ? 'a' : compact(ctx, p.value)
+      const label = v ? `${pText} ${valueText(ctx, v)}` : pText
+      const had = byLabel.get(label)
+      const req = required || !!had?.required
+      byLabel.set(label, { label, p, v, required: req, key: `${TUPLE}n${req ? 0 : 1}${TUPLE}s${label}` })
+    }
+    for (const ps of propertyShapes(ctx, t)) {
+      const path = ctx.object(ps, SH + 'path')
+      if (!named(path)) continue
+      const used = ctx.match(t, path.value, null).length > 0
+      const max = Number(ctx.object(ps, SH + 'maxCount')?.value)
+      if (Number.isFinite(max) && max <= 1 && used) continue
+      const required = !used && ctx.objects(ps, SH + 'minCount').some((m) => Number(m.value) >= 1)
+      add(path, undefined, required)
+      for (const v of namedValues(ctx, ps)) if (!ctx.match(t, path.value, v).length) add(path, v, required)
+    }
+    if (!ctx.objects(t, RDF_TYPE).length) {
+      const used = new Set(ctx.objects(editor, C_ENTRY).flatMap((e) => ctx.objects(e, RDF_TYPE)).map((c) => c.value))
+      for (const q of ctx.match(null, SH + 'targetClass', null)) if (named(q.object) && used.has(q.object.value)) add(ctx.nn(RDF_TYPE), q.object, false)
+    }
+    return [...byLabel.values()]
+  })
+}
+
+/** For a new object of a predicate: the values its shapes name, and instances of their sh:class (the first 20 by IRI). */
+function valueSuggestions(ctx: RuleContext, s: Term, p: Term): Suggestion[] {
+  return ctx.untraced(() => {
+    const values = new Map<string, Term>()
+    for (const ps of propertyShapes(ctx, s)) {
+      if (!ctx.object(ps, SH + 'path')?.equals(p)) continue
+      for (const v of namedValues(ctx, ps)) values.set(objectKey(ctx, v) ?? v.value, v)
+      for (const cls of ctx.objects(ps, SH + 'class'))
+        for (const q of ctx.match(null, RDF_TYPE, null))
+          if (named(q.subject) && instanceOf(ctx, q.subject, cls.value)) values.set(q.subject.value, q.subject)
+    }
+    return [...values.values()]
+      .filter((v) => !ctx.match(s, p.value, v).length)
+      .sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))
+      .slice(0, 20)
+      .map((v) => {
+        const label = valueText(ctx, v)
+        return { label, v, required: false, key: label }
+      })
+  })
+}
+
+/** Whether a node is an instance of a class, through rdfs:subClassOf. */
+function instanceOf(ctx: RuleContext, node: Term, cls: string): boolean {
+  const seen = new Set<string>()
+  const todo = ctx.objects(node, RDF_TYPE).map((t) => t.value)
+  while (todo.length) {
+    const c = todo.pop()!
+    if (c === cls) return true
+    if (seen.has(c)) continue
+    seen.add(c)
+    for (const sup of ctx.objects(c, NS.rdfs + 'subClassOf')) todo.push(sup.value)
+  }
+  return false
+}
+
 // --- fields: editing a term, adding a statement ---------------------------------------------------------
 
 /** A row's term in a field in its place: it takes the focus; Enter commits it (c:commits). */
@@ -191,12 +295,24 @@ function field(ctx: RuleContext, o: Out, focus: NamedNode, local: string, marker
   return input
 }
 
-/** The last item of a row's group: a field for a new object or statement (c:adds). */
-function addItem(ctx: RuleContext, o: Out, focus: NamedNode, key: string, phraseName: string): NamedNode {
+/** The last item of a row's group: a field for a new object or statement (c:adds), and what the shapes expect under it. */
+function addItem(ctx: RuleContext, o: Out, focus: NamedNode, key: string, phraseName: string, options: Suggestion[]): NamedNode {
   const words = phrase(ctx, phraseName)
-  const input = el(o, 'add', 'Input', { type: 'text', class: 'sem-edit', placeholder: words, 'aria-label': words, 'data-sem-takes-focus': '' })
+  const draft = ctx.object(focus, C_DRAFT)?.value
+  const input = el(o, 'add', 'Input', { type: 'text', class: 'sem-edit', value: draft, placeholder: words, 'aria-label': words, 'data-sem-takes-focus': '' })
   o.t(input, C_ADDS, focus)
-  const item = el(o, 'add-item', 'Li', { class: 'sem-adding' }, [input])
+  const list = el(o, 'suggestions', 'Div', { class: 'sem-suggestions', role: 'group', 'aria-label': phrase(ctx, 'RdfSuggestionsPhrase') })
+  const wanted = draft?.toLowerCase() ?? ''
+  for (const s of options) {
+    if (wanted && !s.label.toLowerCase().includes(wanted)) continue
+    const local = 'opt-' + key12(s.label)
+    const button = el(o, local, 'Button', { type: 'button', class: s.required ? 'sem-option sem-required' : 'sem-option' }, [o.text(local + '-text', s.label)])
+    o.t(button, SEM.orderKey, s.key).t(button, C_SUGGESTS_FOR, focus).t(list, H.hasChild, button)
+    if (s.p) o.t(button, C_SUGGESTS_PREDICATE, s.p)
+    if (s.v) o.t(button, C_SUGGESTS_VALUE, s.v)
+    else o.t(button, C_FILLS_WITH, s.label + ' ')
+  }
+  const item = el(o, 'add-item', 'Li', { class: 'sem-adding' }, [input, list])
   o.t(item, SEM.orderKey, key)
   return item
 }
@@ -361,7 +477,7 @@ const term: FnRule = (ctx, focus) => {
   if (f.open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
     for (const k of kids) o.t(group, H.hasChild, k)
-    if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, `${TUPLE}n9`, 'RdfNewStatementPhrase'))
+    if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, `${TUPLE}n9`, 'RdfNewStatementPhrase', statementSuggestions(ctx, t, f.editor)))
     rows.push(group)
   }
   const root = el(o, 'root', 'Li', { class: 'sem-term' + (f.depth === 0 ? ' sem-resource' : '') + (problems.length ? ' sem-invalid' : '') }, rows)
@@ -456,7 +572,7 @@ const property: FnRule = (ctx, focus) => {
   if (open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
     for (const k of kids) o.t(group, H.hasChild, k)
-    if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, '\uffff', 'RdfNewObjectPhrase'))
+    if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, '\uffff', 'RdfNewObjectPhrase', valueSuggestions(ctx, s, p)))
     rows.push(group)
   }
   const root = el(o, 'root', 'Li', { class: 'sem-property' + (problems.length ? ' sem-invalid' : '') }, rows)
@@ -646,7 +762,7 @@ const cancel: ReactionFn = (ctx) => {
   const row = edited ?? marked(ctx, C_ADDS)
   if (!inThisEditor(ctx, row)) return NONE
   return {
-    remove: [...ctx.match(row, C_EDITING, null), ...ctx.match(row, C_ADDING, null)],
+    remove: [...ctx.match(row, C_EDITING, null), ...ctx.match(row, C_ADDING, null), ...ctx.match(row, C_DRAFT, null)],
     add: edited ? [f.quad(row, f.namedNode(C_FOCUSED), yes(ctx))] : [],
   }
 }
@@ -679,6 +795,42 @@ const remove: ReactionFn = (ctx) => {
   return out
 }
 
+/** Typing in an adding field narrows its suggestions. */
+const draft: ReactionFn = (ctx) => {
+  const row = marked(ctx, C_ADDS)
+  if (!inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  return { remove: ctx.match(row, C_DRAFT, null), add: [f.quad(row, f.namedNode(C_DRAFT), f.literal(valueOf(ctx)))] }
+}
+
+/** A suggested predicate alone goes into the field, for the value to follow. */
+const fill: ReactionFn = (ctx) => {
+  const text = marked(ctx, C_FILLS_WITH)
+  const row = marked(ctx, C_SUGGESTS_FOR)
+  if (!text || !inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  return { remove: ctx.match(row, C_DRAFT, null), add: [f.quad(row, f.namedNode(C_DRAFT), f.literal(text.value))] }
+}
+
+/** A suggestion with its value adds the whole statement. */
+const pick: ReactionFn = (ctx) => {
+  const v = marked(ctx, C_SUGGESTS_VALUE)
+  const row = marked(ctx, C_SUGGESTS_FOR)
+  if (!v || !inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  const out = { remove: marks(ctx), add: [] as Quad[] }
+  if (isA(ctx, row, C_RDF_PROPERTY)) {
+    const s = ctx.object(row, C_SUBJECT)
+    const p = ctx.object(row, C_PREDICATE)
+    if (s && p) out.add.push(f.quad(s, p, v), f.quad(row, f.namedNode(C_FOCUSED), yes(ctx)))
+  } else {
+    const s = ctx.object(row, C_TERM)
+    const p = marked(ctx, C_SUGGESTS_PREDICATE)
+    if (s && p) out.add.push(f.quad(s, p, v), f.quad(f.namedNode(`${row.value}/~p-${key12(p.value)}`), f.namedNode(C_FOCUSED), yes(ctx)))
+  }
+  return out
+}
+
 export const functions: Record<string, FnRule> = {
   'rdf-editor': editor,
   'rdf-editor:entry': entry,
@@ -698,4 +850,7 @@ export const reactions: Record<string, ReactionFn> = {
   'rdf-editor:commit-add': commitAdd,
   'rdf-editor:cancel': cancel,
   'rdf-editor:delete': remove,
+  'rdf-editor:draft': draft,
+  'rdf-editor:fill': fill,
+  'rdf-editor:pick': pick,
 }

@@ -129,3 +129,27 @@
                  [ sty:property "min-width" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-problem + .sem-problem::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\" · \"" ] .
+# What the shapes expect, under an adding field: chips, a missing required one marked.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-suggestions" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "gap" ; sty:raw "4px" ] ,
+                 [ sty:property "margin-block-start" ; sty:raw "4px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-option" ;
+    sty:declares [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "background" ; sty:token tok:gray-3 ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
+                 [ sty:property "padding" ; sty:raw "0 8px" ] ,
+                 [ sty:property "cursor" ; sty:raw "pointer" ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-option:hover" ;
+    sty:declares [ sty:property "background" ; sty:token tok:gray-5 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-option:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-required" ;
+    sty:declares [ sty:property "border-color" ; sty:token tok:accent-9 ] ,
+                 [ sty:property "font-weight" ; sty:raw "600" ] .
