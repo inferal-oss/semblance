@@ -534,7 +534,9 @@ c:GanttAfterPhrase a c:Phrase ; rdfs:label "After"@en , "Після"@uk , "Nach"
 c:GanttUnscheduledPhrase a c:Phrase ; rdfs:label "Unscheduled"@en , "Без дати"@uk , "Ohne Termin"@de , "دون موعد"@ar .
 c:GanttNoRowsPhrase a c:Phrase ; rdfs:label "No tasks."@en , "Немає завдань."@uk , "Keine Aufgaben."@de , "لا توجد مهام."@ar .
 
-c:GanttPlan a sem:Rendering ; sem:targets c:GanttChart ; sem:stratum 0 ;
+# The plan runs before the components (a stratum below, so a chart typed in the input), and the frame
+# reads what it minted (sem:readsMinted re-runs it when that changes).
+c:GanttPlan a sem:Rendering ; sem:targets c:GanttChart ; sem:stratum -1 ; sem:inputOnly true ;
     sem:follows c:dataset , ( c:view rs:solution rs:binding ) .
 c:GanttPlan-fn a sem:Rule ; sem:implements c:GanttPlan ; sem:function "gantt:plan" .
 c:GanttPlan-sparql a sem:Rule ; sem:implements c:GanttPlan ; sem:bulk false ;
