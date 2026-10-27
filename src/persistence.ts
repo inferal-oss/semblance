@@ -287,7 +287,8 @@ export class Persistence {
     const runtime = this.runtime
     if (!runtime || !this.store.sparql) return
     for (const policy of this.policies()) {
-      if (!policy.construct || !policy.incremental || policy.subject || this.kept.has(policy.iri)) continue
+      // A policy that is off keeps no view: its query would step on every tick for nothing.
+      if (!policy.enabled || !policy.construct || !policy.incremental || policy.subject || this.kept.has(policy.iri)) continue
       const iri = mint(policy.iri, 'view')
       const view = runtime.views.host(iri, policy.construct)
       if (!view) continue
@@ -312,10 +313,11 @@ export class Persistence {
     if (graph === PERSIST_GRAPH) return
     if (graph === undefined && [...delta.add, ...delta.remove].some((q) => q.predicate.value.startsWith(PER) || q.predicate.value.startsWith(NS.nav) || q.object.value === PER + 'Policy')) {
       this.cachedPolicies = undefined
-      // A policy's view follows its query (and its switch: a kept policy that is turned on is written whole).
+      // A policy's view follows its query and its switch: turned off, it is let go; turned on, it is
+      // kept again and written whole.
       for (const [iri, k] of [...this.kept]) {
         const p = this.policies().find((x) => x.iri === iri)
-        if (p && p.construct && p.incremental) continue
+        if (p && p.enabled && p.construct && p.incremental) continue
         k.stop()
         this.runtime?.views.unhost(mint(iri, 'view'))
         this.kept.delete(iri)
