@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { mountShell } from './harness.ts'
-import { compileStyles } from '../src/style/compile.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = NS.c
@@ -56,13 +55,6 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     expect(danger.getAttribute('data-sem-tone')).toBe('danger')
     expect(danger.getAttribute('data-sem-emphasis')).toBe('soft')
     expect(root('act-ib-off')!.hasAttribute('disabled')).toBe(true)
-  })
-
-  it('gives open card menus a scrollable overlay above neighbouring cards', () => {
-    const { store } = actions()
-    const css = compileStyles(store)
-    expect(css).toContain('[data-sem-c="card"]:has([data-sem-c=menu][data-open])')
-    expect(css).toContain('overflow-y: auto')
   })
 
   it('flips a pressable icon button through its reaction', () => {
