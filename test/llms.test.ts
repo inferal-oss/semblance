@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { generateLlms, REPO, SITE } from '../scripts/gen-llms.ts'
-import { readAddress, readLocations, spellAddress } from '../src/navigation.ts'
+import { linkAddress, readAddress, readLocations, spellAddress } from '../src/navigation.ts'
 import { loadStore } from '../src/node/load.ts'
 import { NS } from '../src/ns.ts'
 import type { GraphStore } from '../src/store/types.ts'
@@ -21,7 +21,7 @@ beforeAll(() => {
 
 /** Markdown links, and the site's own addresses written out (a route, or a generated page). */
 const links = (md: string) =>
-  [...md.matchAll(/\]\((https?:[^)\s]+)\)|(?<![(<`])(https:\/\/semblance\.dev\/(?:#|llms)[^\s)>`]*)/g)].map((m) => (m[1] ?? m[2])!.replace(/[.,:;]$/, ''))
+  [...md.matchAll(/\]\((https?:[^)\s]+)\)|(?<![(<`])(https:\/\/semblance\.dev\/(?:#|llms|(?:uk|de|ar)\/|docs|components|examples|reference)[^\s)>`]*)/g)].map((m) => (m[1] ?? m[2])!.replace(/[.,:;]$/, ''))
 
 describe('llms.txt', () => {
   it('is in the llmstxt.org format: an H1, a blockquote, prose, then H2 file lists', () => {
@@ -65,7 +65,7 @@ describe('llms.txt', () => {
     expect(button).toMatch(/^# Button\n\n> An actionable control/)
     expect(button).toContain('c:Button a owl:Class ;\n')
     expect(button).toContain('```turtle\n@prefix c: <https://semblance.dev/ns/component#> .')
-    expect(button).toContain(`- Reference: ${SITE}#reference/c:Button`)
+    expect(button).toContain(`- Reference: ${SITE}reference/#c:Button`)
   })
 
   it('has a page per doc section and per example, from the text projection', () => {
@@ -83,10 +83,10 @@ describe('llms.txt', () => {
     const bad: string[] = []
     for (const [path, md] of files) {
       for (const url of links(md)) {
-        if (url.startsWith(SITE + '#')) {
+        if (url.startsWith(SITE) && !url.startsWith(SITE + 'llms')) {
           // A route: the site reads it and spells it back the same.
-          const hash = url.slice(SITE.length)
-          if (spellAddress(r, loc, readAddress(r, loc, hash)).fragment !== hash) bad.push(`${path}: ${url}`)
+          const address = url.slice(SITE.length - 1)
+          if (linkAddress(spellAddress(r, loc, readAddress(r, loc, address))) !== address) bad.push(`${path}: ${url}`)
         } else if (url.startsWith(SITE)) {
           if (!files.has(url.slice(SITE.length))) bad.push(`${path}: ${url}`)
         } else if (url.startsWith(`${REPO}/blob/main/`)) {

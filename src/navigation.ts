@@ -53,6 +53,8 @@ export interface Dimension {
   terms: boolean
   /** The part of the address that spells it: the path when it is carried there, else the fragment (else none). */
   spelledIn?: string
+  /** The value the address leaves unspelled (nav:implicit: the language a site is in by default). */
+  implicit?: Term
 }
 
 export interface Location {
@@ -105,6 +107,7 @@ export function readLocations(r: Reader): Location[] {
             when: r.match(d, NAV + 'when', null).map((q) => q.object),
             target: types.includes(NAV + 'TargetDimension'),
             terms: one(r, d, NAV + 'showsTerms')?.value === 'true',
+            implicit: one(r, d, NAV + 'implicit'),
           },
         ]
       })
@@ -222,7 +225,7 @@ function ordered(loc: Location, carrier: string): Dimension[] {
 export function spellAddress(r: Reader, loc: Location, values: Values): { path: string; fragment: string; query: Map<string, string | undefined> } {
   const spelled = (carrier: string) =>
     ordered(loc, carrier)
-      .filter((d) => values.has(d.iri) && inScope(r, loc, d, values))
+      .filter((d) => values.has(d.iri) && !same(d.implicit, values.get(d.iri)) && inScope(r, loc, d, values))
       .map((d) => segment(spell(r, d, values.get(d.iri)!)))
   const parts = spelled(FRAGMENT)
   const query = new Map<string, string | undefined>()
@@ -293,6 +296,8 @@ export function readAddress(r: Reader, loc: Location, address: string): Values {
     if (pathDims.length) read(pathSegments(url.pathname, loc.base), pathDims, values)
     read(fragment, fragmentDims, values)
   }
+  // What the address leaves unspelled, it says by leaving it out (/components/ is in English).
+  for (const d of [...pathDims, ...fragmentDims]) if (d.implicit && !values.has(d.iri) && inScope(r, loc, d, values)) values.set(d.iri, d.implicit)
   for (const d of ordered(loc, NAV + 'Query')) {
     const text = url.searchParams.get(d.key)
     const v = text !== null && !values.has(d.iri) ? unspell(r, loc, d, text) : undefined
@@ -423,7 +428,7 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
     const whole = !!last && !!one(r, last.parent, C + 'when')
     const target = loc.dimensions.find((d) => d.target && d.carriers.includes(NAV + 'Fragment'))
     if (target && !whole) needs.set(target.iri, resource)
-    return linkAddress(spellAddress(r, loc, needs))
+    return linkAddress(spellAddress(r, loc, kept(r, loc, needs)))
   }
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
   // with the values its parents need (nav:when), e.g. #reference/c:List.
@@ -437,9 +442,19 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
       if (parent && at.when[0]) values.set(parent.iri, at.when[0])
       at = parent
     }
-    return linkAddress(spellAddress(r, loc, values))
+    return linkAddress(spellAddress(r, loc, kept(r, loc, values)))
   }
   return undefined
+}
+
+/** The values a link needs, and where we are for the rest: the current value of each top-level path dimension they leave open. */
+function kept(r: Reader, loc: Location, values: Values): Values {
+  for (const d of loc.dimensions) {
+    if (d.spelledIn !== PATH || d.parent || values.has(d.iri)) continue
+    const v = one(r, d.subject, d.property)
+    if (v) values.set(d.iri, v)
+  }
+  return values
 }
 
 /**

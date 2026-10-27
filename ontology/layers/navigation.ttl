@@ -90,6 +90,9 @@ nav:carriedBy a owl:ObjectProperty ; rdfs:domain nav:Dimension ; rdfs:range nav:
 nav:rank a owl:DatatypeProperty ; rdfs:domain nav:Carrier ; rdfs:range xsd:integer ;
     rdfs:comment "Precedence on load: lower wins."@en .
 
+nav:implicit a owl:ObjectProperty ; rdfs:domain nav:Dimension ;
+    rdfs:comment "A value the address leaves unspelled: the place is the same with or without it (the language a site is in by default: /components/, not /en/components/)."@en .
+
 nav:Path a nav:Carrier ; nav:rank 0 ; sem:order 0 ;
     rdfs:label "The address (/)"@en , "Адреса (/)"@uk , "Die Adresse (/)"@de , "العنوان (/)"@ar ;
     rdfs:comment """The URL's path after the location's nav:base, one segment per dimension and a slash after
@@ -97,7 +100,9 @@ each: /docs/rules/, /components/inputs/. A path is a page of its own, which a se
 build) renders before any script runs, and which a link reaches without scripts. Followed links
 under the base are taken over by the navigation effect (no page load). A fragment that spells a
 dimension the path carries (a link from before) is read too, and the address rewritten as a path.
-The target (nav:TargetDimension) stays in the fragment."""@en .
+The target (nav:TargetDimension) stays in the fragment. A link spells what shows its resource,
+and keeps where we are for the rest: the current value of each top-level path dimension nothing
+on the way to the resource decides (the language; the page, for what is on every page)."""@en .
 nav:Fragment a nav:Carrier ; nav:rank 1 ; sem:order 1 ;
     rdfs:label "The address (#)"@en , "Адреса (#)"@uk , "Die Adresse (#)"@de , "العنوان (#)"@ar ;
     rdfs:comment "The URL's fragment, path style: #docs/rules, #components/inputs/inp-codes-spec."@en .
@@ -254,6 +259,19 @@ WHERE {
           FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
           BIND(?to AS ?v)
         } UNION {
+          # Where we are, for what nothing on the way to it decides: the path's top-level dimensions
+          # keep their current value (the language; the page, for what is on every page).
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          ?loc nav:dimensions ?kh . ?kh rdf:rest* ?kc . ?kc rdf:first ?d .
+          ?d nav:carriedBy nav:Path ; nav:subject ?ks ; nav:property ?kp .
+          FILTER NOT EXISTS { ?d nav:parent ?kpar }
+          FILTER NOT EXISTS { ?d a nav:TargetDimension }
+          ?ks ?kp ?v .
+          FILTER(IF(EXISTS { ?to (^nav:from/nav:to)* ?root },
+            NOT EXISTS { ?to (^nav:from/nav:to)* ?casek . ?casek c:when ?wk . ?edgek nav:from ?casek ; nav:to ?switchk .
+              ?switchk c:cases ?casesk ; c:controls ?ks ; c:property ?kp },
+            NOT EXISTS { ?td nav:showsTerms true ; nav:parent* ?d }))
+        } UNION {
           # A term: the dimension whose values are terms, and what its parents need for it to apply.
           $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
           FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
@@ -267,6 +285,8 @@ WHERE {
       ?d nav:carriedBy ?dc . FILTER(?dc IN (nav:Path, nav:Fragment))
       FILTER(IF(EXISTS { ?d a nav:TargetDimension }, ?dc = nav:Fragment, ?dc = nav:Path || NOT EXISTS { ?d nav:carriedBy nav:Path }))
       BIND(?dc = nav:Path AS ?inPath)
+      # The value the address leaves unspelled (nav:implicit).
+      FILTER NOT EXISTS { ?d nav:implicit ?v }
       OPTIONAL { ?d nav:keyProperty ?keyPropertys }
       BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
       OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
@@ -367,6 +387,19 @@ WHERE {
           FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
           BIND(?to AS ?v)
         } UNION {
+          # Where we are, for what nothing on the way to it decides: the path's top-level dimensions
+          # keep their current value (the language; the page, for what is on every page).
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          ?loc nav:dimensions ?kh . ?kh rdf:rest* ?kc . ?kc rdf:first ?d .
+          ?d nav:carriedBy nav:Path ; nav:subject ?ks ; nav:property ?kp .
+          FILTER NOT EXISTS { ?d nav:parent ?kpar }
+          FILTER NOT EXISTS { ?d a nav:TargetDimension }
+          ?ks ?kp ?v .
+          FILTER(IF(EXISTS { ?to (^nav:from/nav:to)* ?root },
+            NOT EXISTS { ?to (^nav:from/nav:to)* ?casek . ?casek c:when ?wk . ?edgek nav:from ?casek ; nav:to ?switchk .
+              ?switchk c:cases ?casesk ; c:controls ?ks ; c:property ?kp },
+            NOT EXISTS { ?td nav:showsTerms true ; nav:parent* ?d }))
+        } UNION {
           # A term: the dimension whose values are terms, and what its parents need for it to apply.
           $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
           FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
@@ -380,6 +413,8 @@ WHERE {
       ?d nav:carriedBy ?dc . FILTER(?dc IN (nav:Path, nav:Fragment))
       FILTER(IF(EXISTS { ?d a nav:TargetDimension }, ?dc = nav:Fragment, ?dc = nav:Path || NOT EXISTS { ?d nav:carriedBy nav:Path }))
       BIND(?dc = nav:Path AS ?inPath)
+      # The value the address leaves unspelled (nav:implicit).
+      FILTER NOT EXISTS { ?d nav:implicit ?v }
       OPTIONAL { ?d nav:keyProperty ?keyPropertys }
       BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
       OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }

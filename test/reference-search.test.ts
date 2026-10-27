@@ -223,8 +223,8 @@ describe.each(['sparql', 'function'] as const)('the reference search (wat, %s ru
 })
 
 describe('the reference search and the address', () => {
-  it('a pick changes the address (#reference/c:List), as a step Back returns from', async () => {
-    const entries = [new URL('https://semblance.test/#reference/c:Window')]
+  it('a pick changes the address (/reference/#c:List), as a step Back returns from', async () => {
+    const entries = [new URL('https://semblance.test/reference/#c:Window')]
     let at = 0
     const history = {
       pushes: 0,
@@ -256,7 +256,7 @@ describe('the reference search and the address', () => {
     h.press('Enter')
     await new Promise((r) => setTimeout(r, 0))
     expect(h.subject()).toBe(C + 'List')
-    expect(location.hash).toBe('#reference/c:List')
+    expect(location.pathname + location.hash).toBe('/reference/#c:List')
     expect(history.pushes).toBe(1)
   })
 })

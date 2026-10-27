@@ -37,10 +37,10 @@ ui:ly-surfaces-spec a c:Specimen ; c:demonstrates c:Surface ; c:label "Surface" 
     c:children ( ui:ly-surfaces-grid ) .
 
 # --- linked cards ---
-ui:ly-linked-here a c:LinkedCard ; c:to ui:ly-linked-spec ; c:href "#components/layout" ; c:currentPage true ; c:content ui:ly-linked-here-card .
+ui:ly-linked-here a c:LinkedCard ; c:to ui:ly-linked-spec ; c:href "/components/layout/" ; c:currentPage true ; c:content ui:ly-linked-here-card .
 ui:ly-linked-here-card a c:Card ; c:label "Layout" , "Розкладка"@uk , "Layout"@de , "التخطيط"@ar ; c:badge "12" ;
     c:note "This page: aria-current=page." , "Ця сторінка: aria-current=page."@uk , "Diese Seite: aria-current=page."@de , "هذه الصفحة: aria-current=page."@ar .
-ui:ly-linked-to a c:LinkedCard ; c:to ui:ty-links-spec ; c:href "#type" ; c:content ui:ly-linked-to-card .
+ui:ly-linked-to a c:LinkedCard ; c:to ui:ty-links-spec ; c:href "/components/type/" ; c:content ui:ly-linked-to-card .
 ui:ly-linked-to-card a c:Card ; c:label "Links" , "Посилання"@uk , "Links"@de , "الروابط"@ar ;
     c:note "c:to a specimen: goes where it is shown." , "c:to на зразок: веде туди, де його видно."@uk , "c:to auf ein Muster: führt dorthin, wo es zu sehen ist."@de , "c:to إلى نموذج: يذهب حيث يُعرض."@ar .
 ui:ly-linked-out a c:LinkedCard ; c:href "https://ia2.dev/spec/rdf-html" ;

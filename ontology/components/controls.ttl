@@ -758,6 +758,7 @@ kinds of component inside the front, not their count."""@en ;
     sem:slug "source-back" .
 # After the flippable's own source rule (95), so every layer that decorated the front is listed.
 c:SourceBackRendering a sem:Rendering ;
+    sem:readsProvenance true ;
     sem:targets c:SourceBack ;
     sem:modality mod:Screen ;
     sem:layer sem:SourceLayer ;
