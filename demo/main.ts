@@ -265,7 +265,7 @@ async function recordMemory() {
   writeStats({
     heap: f.literal(heap !== undefined ? `${(heap / 1024 / 1024).toFixed(1)} MB` : 'n/a (not reported by this browser)'),
     storage: decimal(storage / 1024),
-    triples: integer(store.match(null, null, null).length),
+    triples: integer(store.size?.() ?? store.match(null, null, null).length),
     domNodes: integer(document.getElementsByTagName('*').length),
   })
   flush()
@@ -341,10 +341,27 @@ bus.attach(shell, (h: Handled) => {
   scheduleWarmup()
   if (h.recorded) {
     const cost = { ms: performance.now() - mark.t, runs: runs() - mark.runs, ops: shell.ops - mark.ops, views: runtime.views.totals.rowsIn - mark.views }
-    recordStats(`${short(h.type)} → ${h.reactions.map(short).join(', ')}`, cost.ms, cost.runs, cost.ops, cost.views)
-    flush()
+    statsAfterPaint(`${short(h.type)} → ${h.reactions.map(short).join(', ')}`, cost.ms, cost.runs, cost.ops, cost.views)
   }
 })
+// The status bar's figures are a change of their own (a tick and a patch): written after the page
+// has painted the interaction they measure, so it does not wait for them; the latest of a burst wins.
+let pendingStats: Parameters<typeof recordStats> | undefined
+function statsAfterPaint(...stats: Parameters<typeof recordStats>) {
+  const scheduled = !!pendingStats
+  pendingStats = stats
+  if (scheduled) return
+  const write = () => {
+    if (!pendingStats) return
+    const latest = pendingStats
+    pendingStats = undefined
+    recordStats(...latest)
+    flush()
+  }
+  // After the next frame; a hidden page has no frames, so a timer stands in.
+  requestAnimationFrame(() => setTimeout(write))
+  setTimeout(write, 100)
+}
 // Things due later (beh:dueAt: the chat example's script) become beh:Due events, on the bus's
 // clock; one that waits for a component to be shown waits while it is hidden.
 const scheduler = new Scheduler(bus, {
