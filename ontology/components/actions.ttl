@@ -51,8 +51,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:IconButton .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:icon ?iconValue }
@@ -112,7 +114,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
   {
     $this a c:ButtonGroup .
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?label)
     BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?ariaLabel)
@@ -184,8 +187,9 @@ CONSTRUCT {
   ?caretText a rdfhtml:Text ; rdfhtml:data "▾" .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?popup a rdfhtml:Div ; rdfhtml:id ?popupId ; rdfhtml:class "sem-menu-popup" ; rdfhtml:hasChild ?item ;
-         rdfhtml:attribute ?popupRole, ?popupLabelledBy .
+         rdfhtml:attribute ?popupRole, ?popupLabelledBy, ?popupAnchor .
   ?popupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menu" .
+  ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?triggerId .
   ?popupLabelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
   ?a ord:immediatelyPrecedes ?b .
 }
@@ -193,9 +197,11 @@ WHERE {
   $this a c:Menu .
   {
     $this a c:Menu .
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+    OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
     BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
     BIND(?label AS ?labelData)
     OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }
@@ -225,6 +231,7 @@ WHERE {
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~trigger-data-sem-shortcut-other")), ?none) AS ?shortcutOther)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-role")), ?none) AS ?popupRole)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-aria-labelledby")), ?none) AS ?popupLabelledBy)
+    BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-data-sem-anchor")), ?none) AS ?popupAnchor)
   } UNION {
     # Open: the items, in list order.
     $this a c:Menu .
@@ -253,9 +260,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   {
     $this a c:Menu .
-    OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+    OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+    OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
     BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
     OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }
     BIND(EXISTS { $this c:open ?o FILTER(STR(?o) = "true") } AS ?open)
@@ -294,8 +303,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:MenuItem .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   BIND(?label AS ?labelData)
@@ -329,8 +340,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:MenuItem .
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
   OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
   OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:icon ?iconValue FILTER(STR(?iconValue) != "") }

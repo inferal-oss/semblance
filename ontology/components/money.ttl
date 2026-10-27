@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
@@ -34,7 +35,8 @@ c:MoneyTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches c:value , c:currency ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rules: the language is a projection setting (an engine option), not graph data, so no query can format by it - and SPARQL 1.1 has no locale-aware number formatting." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): amounts in the viewer's locale and the currency's format (Intl.NumberFormat)." ;
+    sem:needsExtension sx:Locale .
 c:MoneyTexts-fn a sem:Rule ; sem:implements c:MoneyTexts ; sem:function "money:texts" .
 
 # It reads the formatted text minted under the instance, so it re-runs when that changes.

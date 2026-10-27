@@ -49,6 +49,67 @@ function type(h: Shell, text: string) {
   h.fire(ta, 'input')
 }
 
+describe('following updates as a maintained view (the workbench and IVM)', () => {
+  const IV = 'https://semblance.dev/ns/view#'
+  const isView = (h: Shell) => h.store.match(h.store.factory.namedNode(UI + 'currentQuery'), h.store.factory.namedNode(NS.rdf + 'type'), h.store.factory.namedNode(IV + 'View')).length > 0
+  const tab = (h: Shell, label: string) => h.fire([...h.document.querySelectorAll('[data-sem-c=query-workbench] [role=tab]')].find((t) => t.textContent === label)!, 'click')
+  const plan = (h: Shell) => (h.shell.nodeOf(UI + 'queryPlan/~root') as Element | null)
+  const planRows = (h: Shell) => [...(plan(h)?.querySelectorAll('[data-sem-c=result-table] tbody tr') ?? [])].map((tr) => tr.textContent)
+
+  it('on, the query is a view: the table reads its rows, a change updates them, the Plan tab shows its operators', async () => {
+    const h = workbench()
+    sample(h, 'The todo items')
+    expect(isView(h)).toBe(false)
+    tab(h, 'Plan')
+    expect(plan(h)!.textContent).toContain('Not maintained')
+    tab(h, 'Table')
+    h.fire(followSwitch(h), 'click')
+    expect(isView(h)).toBe(true)
+    const view = h.runtime.views.view(UI + 'currentQuery')!
+    expect(view.strategy).toBe('incremental')
+    const t1 = () => rows(h).find((r) => r.includes('Write the core ontology'))!
+    expect(t1()).toMatch(/true$/)
+    // The rows come from the view: a change reaches them through its partitions, and the table shows it.
+    const partitions = h.runtime.views.totals.partitions
+    setDone(h, 't1', false)
+    await frame()
+    h.shell.flush()
+    expect(t1()).toMatch(/false$/)
+    expect(h.runtime.views.totals.partitions - partitions).toBe(1)
+    // The Plan tab: the operators as the runtime wrote them, and a summary.
+    tab(h, 'Plan')
+    await frame()
+    h.shell.flush()
+    expect(plan(h)!.textContent).toContain('Maintained incrementally')
+    expect(planRows(h).some((r) => r.includes('iv:Partition'))).toBe(true)
+    expect(planRows(h).some((r) => r.includes('iv:Sink'))).toBe(true)
+    // Off again: a plain query, no view, no plan.
+    h.fire(followSwitch(h), 'click')
+    expect(isView(h)).toBe(false)
+    expect(h.runtime.views.view(UI + 'currentQuery')).toBeUndefined()
+  })
+
+  it('a query the runtime cannot maintain is recomputed, and the plan says why; a CONSTRUCT writes nothing to the views graph', async () => {
+    const h = workbench()
+    h.fire(followSwitch(h), 'click')
+    type(h, 'SELECT ?s ?l WHERE { ?s rdfs:label ?l FILTER(STRLEN(?l) < STRLEN(STR(NOW()))) } LIMIT 3')
+    h.fire(q(h, '.sem-toolbar button')!, 'click')
+    const view = h.runtime.views.view(UI + 'currentQuery')!
+    expect(view.strategy).toBe('recompute')
+    tab(h, 'Plan')
+    await frame()
+    h.shell.flush()
+    expect(plan(h)!.textContent).toContain('Recomputed from scratch')
+    const views = h.store.factory.namedNode('urn:semblance:views')
+    const before = h.store.match(null, null, null, views).length
+    type(h, 'CONSTRUCT { ?s <urn:test:copied> ?l } WHERE { ?s rdfs:label ?l } LIMIT 5')
+    h.fire(q(h, '.sem-toolbar button')!, 'click')
+    expect(h.runtime.views.view(UI + 'currentQuery')).toBeDefined()
+    expect(h.store.match(null, h.store.factory.namedNode('urn:test:copied'), null).length).toBe(0)
+    expect(h.store.match(null, null, null, views).length).toBeLessThan(before + 40)
+  })
+})
+
 describe('following updates in the SPARQL workbench (c:followUpdates)', () => {
   it('is a switch in the toolbar, off by default; on, a live indicator shows', () => {
     const h = workbench()

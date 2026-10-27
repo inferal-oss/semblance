@@ -114,11 +114,38 @@ A pair is dirty when the focus's own triples change, and also:
 
 - `sem:follows c:of` — when the triples of the node the focus points at through `c:of` change
   (for components that show another node's data);
-- `sem:watches c:value` — narrows it: only these predicates make the focus dirty;
+- `sem:watches c:value` — narrows it: only these predicates make the focus dirty. It applies to
+  the followed nodes' triples as well as the focus's own: a rule with both `sem:follows` and
+  `sem:watches` must list every predicate of the followed node it reads (the workbench's result
+  views watch only their query's text and run count, so the runtime's figures on that query
+  node do not re-run them). A function rule's traced reads are not filtered: what it reads
+  through the context re-runs it either way;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so
   adding or re-sorting one item touches only that item.
+
+Strata only run upward: a rule that a higher stratum's output would make dirty again throws
+"Stratification violation". A rule at a low stratum (say -15) targeting a component onto which a
+higher layer (the dependency layer, -12) writes derived triples needs `sem:inputOnly true`, so
+that those derived triples do not re-trigger it; otherwise move it to a stratum above the layer.
+
+**Exact dependencies** (an engine option, `exactDependencies`, off by default; `SEMBLANCE_EXACT_DEPS=1`
+turns it on for a test run): a SPARQL rule is re-run from its own patterns instead of what it
+declares. Every triple pattern of its WHERE is a dependency; a changed triple is bound to the
+patterns it matches and joined through the store toward `$this`, so the rule re-runs for exactly the
+foci a solution can change for, and `sem:follows`, `sem:watches` and `sem:readsMinted` are ignored
+for it (`sem:requires`, `sem:unless`, `sem:inputOnly` and `sem:forEach` still apply). A todo's
+`ex:priority` changing then re-runs the list that sorts by it, not the item's rendering, which never
+reads it. It costs a probe per rule a changed triple can reach (about 50 µs each today), which is
+why it is not yet the default. Function rules keep their traced reads and the declarations above.
+
+**A rule maintained as a view**: `iv:strategy iv:Incremental` on a SPARQL rule (or its rendering)
+makes its query a maintained view partitioned by `$this` (docs/IVM.md): the engine reads each focus's
+output from the view and is told which foci changed, so a change runs no query - for a rule that
+aggregates over a collection per focus (a count, a ranking). The view is checked once against an
+evaluation; a rule that reads a projection's derived graph (views cannot see it) is evaluated as
+usual, with a warning.
 
 A SPARQL rule pending for many foci runs once with `VALUES ?this { … }` when everything it
 constructs hangs off `$this` or IRIs minted from it, so keep templates attributable.
@@ -229,6 +256,27 @@ Labels are language-tagged literals (`c:label "Save"@en , "Зберегти"@uk`
 picks the viewer's language into `l10n:label`, which rules read before `c:label`. Untagged
 literals are the fallback. RTL languages flip the page.
 
+## Outlines
+
+To show which parts a page is made of, name components and switch outlines on around them
+(`ontology/layers/outline.ttl`). `ol:label` on any component names it (language-tagged like
+`c:label`, and picked in the viewer's language the same way); a component whose `ol:shows` is true outlines every named component inside it, dashed in
+the accent, with the name in a tag on its top edge at the inline start (so it mirrors right to left):
+
+```turtle
+ui:report a c:Stack ; ol:shows true ; c:children ( ui:title ui:figures ) .
+ui:title a c:Heading ; c:label "Weekly report" ; ol:label "title" , "заголовок"@uk .
+ui:outlines a c:ToggleSwitch ; c:label "Show outlines" ; c:controls ui:report ; c:property ol:shows .
+```
+
+The names land on the roots as `data-sem-outline`, the switch as `data-sem-outlines="shown"`, and
+the style does the rest: an `outline` and an absolutely positioned `::before`, so nothing moves
+when outlines turn on, and the tag's text is not part of the component's accessible name. A root
+that is a replaced element (`<input>`, `<img>`) has no `::before`: name a component around it. A
+layer can give a whole class a name to fall back on, `ol:defaultLabel`, derived below the
+components and shown only where there is no `ol:label`: an island is named by what it mounts
+([FOREIGN.md](FOREIGN.md)). The Layers page of the gallery has a specimen.
+
 ## Testing a component
 
 - **Render and interact** through events, as a person would: mount the graph in linkedom (see
@@ -335,6 +383,30 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   drops (rebuilt, unmounted, a build that failed) releases its runtime and store
   (`Runtime.dispose()`, `GraphStore.dispose()`); `dispose()` stops them all, cancelling the
   rebuilds waiting for typing to pause, so nothing runs against a released store.
+
+### Message bodies
+
+`c:MessageList` reads ActivityStreams notes through `c:item`. A note's `as:content` is plain
+text. To show a component in the message body, point `c:content` at its IRI:
+
+```turtle
+ex:thread a c:MessageList ; c:label "Review" ; c:item ex:note .
+ex:note a as:Note ; as:attributedTo ex:author ;
+    as:published "2024-05-14T10:06:00Z"^^xsd:dateTime ;
+    as:content "Review the attached item." ; c:content ex:body .
+ex:body a c:Stack ; c:children ( ex:text ex:reviewed ) .
+ex:text a c:Text ; c:label "Review the attached item." .
+ex:reviewed a c:ToggleSwitch ; c:label "Reviewed" ; c:checked false .
+```
+
+Screen prefers the component body when both properties are present. Text prefers `as:content`
+as a summary; without it, Text renders the component after the author and timestamp. A pending
+message keeps its typing indicator until publication, even if a component body is already set.
+
+A body can also be a `c:HostSlot`. Put the existing application's rich content into the named
+slot through `renderer.slot(name)`. Stable message and body IRIs let the renderer retain that
+content, including drafts and focus, when other messages are inserted. Keep those IRIs stable
+when updating the graph with `runtime.apply`.
 
 ### When the page is busy
 

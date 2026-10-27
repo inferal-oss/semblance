@@ -88,7 +88,7 @@ ui:ex-kanban-board a c:Board , dnd:Sortable ; c:label "Sprint 14" ;
 kb:TitleShape a sh:PropertyShape ; sh:path kb:title ; sh:minCount 1 ; sh:maxLength 80 ;
     sh:message "A title of up to 80 characters." .
 ui:ex-kanban-add-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
-    c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ) .
+    c:children ( ui:ex-kanban-new ui:ex-kanban-who ui:ex-kanban-tag ui:ex-kanban-add ui:ex-kanban-undo ) .
 ui:ex-kanban-new a c:TextField ; c:label "New card" ; c:placeholder "What needs doing?" ; val:validates kb:TitleShape .
 
 # Who and what kind: comboboxes over a draft the new card copies. The assignee is one of the
@@ -102,6 +102,16 @@ ui:ex-kanban-tag a c:Combobox ; c:controls ui:ex-kanban-draft ; c:property kb:ta
     c:allowsCustom true ; c:mintBase "https://semblance.dev/demo/kanban#tag-" ; val:validates kb:NewTagShape .
 ui:ex-kanban-add a c:Button ; c:label "Add to To do" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ;
     val:requires ( ui:ex-kanban-new ) ; key:shortcut "mod+enter" .
+
+# Undo: the board's changes are undoable reactions, so each event records what it changed on its
+# member of the change log; this button (a beh:Undoer) applies the opposite of the latest one that
+# still applies (ontology/layers/behaviour.ttl, beh:UndoLatest).
+ui:ex-kanban-undo a c:Button , beh:Undoer ; c:label "Undo" ; sty:emphasis sty:Ghost .
+kb:AddCard beh:undoable true .
+kb:DropCard beh:undoable true .
+c:BoardMove beh:undoable true .
+c:BoardMoveByKey beh:undoable true .
+c:BoardRemove beh:undoable true .
 
 ui:ex-kanban-keys a c:Text ; sty:textStyle sty:Caption ;
     c:children ( "Tab to a card, then " ui:ex-kanban-key-left " / " ui:ex-kanban-key-right " moves it; " ui:ex-kanban-key-space " picks it up to carry with the arrows, and puts it down again. " ui:ex-kanban-key-add " adds the card you typed." ) .

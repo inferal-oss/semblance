@@ -2,11 +2,13 @@
 import type { BlankNode, NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
 import { turtleTokens } from '../turtle.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { hitToggles } from './actions.ts'
+import { maintainedRows } from '../view/rows.ts'
 
 const c = NS.c
 const W = {
@@ -44,6 +46,7 @@ const W = {
   neighbourhood: c + 'neighbourhood',
   term: c + 'term',
   row: c + 'row',
+  column: c + 'column',
   markdown: c + 'markdown',
   edgeFrom: c + 'edgeFrom',
   edgeTo: c + 'edgeTo',
@@ -294,6 +297,17 @@ function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
     run.text = run.text.replaceAll('$' + variable, `<${value.value}>`)
   }
   if (!ctx.sparql) return { kind: 'nosparql' }
+  // A query maintained as a view (followed, see FollowAsView): its rows, from the views graph, are
+  // read instead of running it again. Followed like a query - its result set's rows and their
+  // multiplicities are the reads - so a burst of changes still costs one run at the next frame.
+  const maintained = !run.graph && !variable ? (follow ? ctx.untraced(() => maintainedRows(ctx, q)) : maintainedRows(ctx, q)) : undefined
+  if (maintained && follow) ctx.queryReads?.push({ s: q.value, p: NS.rs + 'solution' }, { p: NS.iv + 'multiplicity' }, { s: q.value, p: RDF_TYPE })
+  if (maintained) {
+    const declared = selectVariables(run.text)
+    const shown = declared ? [...declared] : []
+    for (const r of maintained) for (const k of r.keys()) if (!shown.includes(k)) shown.push(k)
+    return { kind: 'select', vars: shown, rows: maintained }
+  }
   try {
     const result = (run.graph ? ctx.construct(run.text, { follow }) : ctx.select(run.text, { follow })) as unknown
     if (typeof result === 'boolean') return { kind: 'ask', answer: result }
@@ -759,7 +773,9 @@ const table: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [summary(o, count), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
-  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)])))])
+  // Each cell says which column it is in (c:column), as each row which row (c:row).
+  const at = (n: NamedNode, i: number) => (o.t(n, W.column, int(ctx, i)), n)
+  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => at(o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)]), i)))])
   const seen = new Map<string, number>()
   const body = o.el(
     'body',
@@ -771,7 +787,7 @@ const table: FnRule = (ctx, focus) => {
       const n = seen.get(base) ?? 0
       seen.set(base, n + 1)
       const id = n ? `${base}-${n}` : base
-      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => cell(ctx, o, `${id}-c${ci}`, t)))
+      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => at(cell(ctx, o, `${id}-c${ci}`, t), ci)))
       o.t(tr, W.row, int(ctx, ri))
       return tr
     }),
@@ -784,7 +800,7 @@ const table: FnRule = (ctx, focus) => {
 
 // --- results: the table as Markdown ----------------------------------------------------------------
 // The function variant of c:ResultTableMarkdown-sparql (workbench.ttl): it reads what the table
-// rendered - its header cells, its rows (c:row), each row's cells in order (ord:), the IRIs cells
+// rendered - its header cells and its rows (c:row), each row's cells in order (c:column), the IRIs cells
 // say they show (c:term), the rest as shown - and names IRIs with the prefixes the graph declares
 // (sh:declare), as the SPARQL does.
 
@@ -812,20 +828,19 @@ const markdownCell = (s: string) => s.replace(/[|]/g, '&#124;').replace(/\r?\n/g
 const isA = (ctx: RuleContext, n: Term, cls: string) => ctx.match(n, RDF_TYPE, H.ns + cls).length > 0
 /** The data of a node's text children. */
 const dataOf = (ctx: RuleContext, n: Term) => ctx.objects(n, H.hasChild).flatMap((t) => ctx.objects(t, H.data)).map((d) => d.value)
-/** A node's children in their order: by how many siblings precede each (ord:immediatelyPrecedes). */
-function ordered(ctx: RuleContext, n: Term): Term[] {
-  const before = (c: Term) => {
-    let k = 0
-    for (let p = ctx.match(null, ORD.immediatelyPrecedes, c)[0]?.subject; p && k < 10_000; p = ctx.match(null, ORD.immediatelyPrecedes, p)[0]?.subject) k++
-    return k
-  }
-  return ctx.objects(n, H.hasChild).map((c): [number, Term] => [before(c), c]).sort((a, b) => a[0] - b[0]).map(([, c]) => c)
-}
+/** A row's cells in their order (c:column); one without a column is not shown. */
+const cellsOf = (ctx: RuleContext, n: Term): Term[] =>
+  ctx
+    .objects(n, H.hasChild)
+    .map((c): [number, Term] => [Number(ctx.object(c, W.column)?.value ?? NaN), c])
+    .filter(([i]) => Number.isFinite(i))
+    .sort((a, b) => a[0] - b[0])
+    .map(([, c]) => c)
 
 const tableMarkdown: FnRule = (ctx, focus) => {
   const head = ctx.nn(mint(focus.value, 'head-row'))
   if (!isA(ctx, head, 'Tr')) return []
-  const names = ordered(ctx, head).flatMap((th) => dataOf(ctx, th).map(markdownCell))
+  const names = cellsOf(ctx, head).flatMap((th) => dataOf(ctx, th).map(markdownCell))
   if (!names.length) return []
   const shown = (td: Term): string => {
     const iri = ctx.object(td, W.term)
@@ -842,7 +857,7 @@ const tableMarkdown: FnRule = (ctx, focus) => {
   const body = ctx.nn(mint(focus.value, 'body'))
   const rows = ctx
     .objects(body, H.hasChild)
-    .map((tr): [number, string] => [Number(ctx.object(tr, W.row)?.value ?? NaN), `| ${ordered(ctx, tr).map(shown).join(' | ')} |`])
+    .map((tr): [number, string] => [Number(ctx.object(tr, W.row)?.value ?? NaN), `| ${cellsOf(ctx, tr).map(shown).join(' | ')} |`])
     .filter(([i]) => Number.isFinite(i))
     .sort((a, b) => a[0] - b[0])
     .map(([, line]) => line)
@@ -1384,7 +1399,25 @@ const selectNodeByKey: ReactionFn = (ctx) => (keyIs(ctx, 'enter', 'space') && hi
 
 const clearNode: ReactionFn = (ctx) => (keyIs(ctx, 'escape') ? { remove: own(ctx, ctx.target, W.selectedTerm), add: [] } : none())
 
+/**
+ * The workbench's Follow updates switch also makes the query it runs a maintained view (IVM) while
+ * it is on: iv:View, its rows as a result set (iv:ResultSet: a CONSTRUCT's triples are never
+ * written), measured, a fallback to recompute expected (iv:Auto). Off again, it is a plain query.
+ */
+const followAsView: ReactionFn = (ctx) => {
+  if (!hitToggles(ctx) || isTrue(ctx.object(ctx.target, C.disabled))) return none()
+  const bench = ctx.object(ctx.target, W.controls)
+  if (!bench || ctx.object(ctx.target, W.property)?.value !== W.followUpdates || !ctx.match(bench, RDF_TYPE, ctx.runtime.store.factory.namedNode(c + 'QueryWorkbench')).length) return none()
+  const query = ctx.object(bench, W.runs)
+  if (!query) return none()
+  const f = ctx.runtime.store.factory
+  const IV = NS.iv
+  const triples = [put(ctx, query, RDF_TYPE, f.namedNode(IV + 'View')), put(ctx, query, IV + 'materialize', f.namedNode(IV + 'ResultSet')), put(ctx, query, IV + 'strategy', f.namedNode(IV + 'Auto')), put(ctx, query, IV + 'measured', lit(ctx, true))]
+  return isOn(ctx, bench, W.followUpdates) ? { remove: triples, add: [] } : { remove: [], add: triples }
+}
+
 export const reactions: Record<string, ReactionFn> = {
+  'workbench:follow-as-view': followAsView,
   'workbench:input': input,
   'workbench:click': click,
   'workbench:dismiss': dismiss,

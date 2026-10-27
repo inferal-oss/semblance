@@ -194,6 +194,26 @@ describe('the room bookings example', () => {
     expect(h.refusing()).toContain('hopper: That room is booked then.')
   })
 
+  for (const [kind, prefer] of [['oxigraph', 'sparql'], ['wat', 'sparql'], ['oxigraph', 'function']] as const) {
+    it(`refuses in the viewer's language: the objections, the shapes and the toast (${kind}, ${prefer})`, () => {
+      const h = dragging(prefer, kind)
+      h.screen.engine.reconfigure({ languages: ['de'] })
+      h.shell.flush()
+      h.press(h.entry('Planning'), ' ')
+      expect(h.refusing()).toEqual([
+        'mon-12: Der Raum ist dann belegt.',
+        'mon-13: Der Raum ist dann belegt.',
+        'tue-13: Der Raum ist dann belegt.',
+        'fri-14: Der Raum ist dann belegt.',
+        'fri-15: Der Raum ist dann belegt.',
+        'babbage: Babbage hat 4 Plätze.',
+      ])
+      h.press(h.entry('Planning'), 'Escape')
+      h.drop('Retro', h.slot('mon', 13))
+      expect(h.toasts()).toContain('Der Raum ist dann belegt.')
+    })
+  }
+
   for (const kind of ['oxigraph', 'wat'] as const) {
     it(`renders the same with SPARQL (${kind}) and with function rules, while carrying and after drops`, () => {
       const [a, b] = [dragging('sparql', kind), dragging('function', 'oxigraph')]
@@ -231,7 +251,9 @@ describe('the room bookings example', () => {
 describe('moving a meeting costs what it changes', () => {
   it('the same rule runs and DOM operations with eleven meetings as with fifty more', () => {
     const measure = (grow: number) => {
-      const h = bookings('sparql', 'oxigraph', grow)
+      // The site's store: rule runs and DOM operations are the same on any, and Oxigraph's first
+      // render of the week takes most of a minute.
+      const h = bookings('sparql', 'wat', grow)
       // The week alone, in a projection of its own: its DOM operations are the calendar's.
       const week = h.runtime.project({ modality: MOD.Screen, layers: [A11Y.Layer, STY.Layer], prefer: 'sparql', name: 'week', roots: [WEEK] })
       const el = h.document.createElement('div')

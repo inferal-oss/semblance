@@ -17,6 +17,7 @@
 @prefix tree: <https://w3id.org/tree#> .
 @prefix ldes: <https://w3id.org/ldes#> .
 @prefix per: <https://semblance.dev/ns/persistence#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 
 # =================================================================================================
@@ -101,7 +102,23 @@ ui:net-columns a c:Chips ; c:label "Columns" ; c:controls ui:net-grid ; c:proper
     c:options ( ui:net-col-entry ui:net-col-kind ui:net-col-status ui:net-col-code ui:net-col-size ui:net-col-took ui:net-col-bars ) .
 
 ui:net-footer a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:Center ;
-    c:children ( ui:net-live ui:net-kinds ) .
+    c:children ( ui:net-live ui:net-recent ui:net-kinds ) .
+
+# The last five seconds of the capture, in the capture's own time: net:startedAt is milliseconds of
+# the page, not a date, so the window runs on event time - its now is the latest entry's start, less
+# a second for spans reported after they end - and moves only when an entry arrives.
+ui:net-last5s a iv:SlidingWindow ; iv:range "PT5S"^^xsd:dayTimeDuration ;
+    iv:clock iv:EventTime ; iv:lateness "PT1S"^^xsd:dayTimeDuration .
+ui:net-recentView a sem:View , iv:View ; rdfs:label "entries in the last 5 s of the capture" ;
+    iv:window ui:net-last5s ; iv:materialize iv:Graph ; iv:whileShown ui:net-inspector ;
+    sem:select """SELECT (COUNT(?e) AS ?value) WHERE { net:Capture tree:member ?e }""" .
+ui:net-qRecent a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads ui:net-recentView ; iv:whileShown ui:net-recent ; sem:select """
+SELECT ?label WHERE {
+  OPTIONAL { ui:net-recentView <http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution>/<http://www.w3.org/2001/sw/DataAccess/tests/result-set#binding> [ <http://www.w3.org/2001/sw/DataAccess/tests/result-set#variable> "value" ; <http://www.w3.org/2001/sw/DataAccess/tests/result-set#value> ?n ] }
+  BIND(COALESCE(?n, 0) AS ?count)
+  BIND(IF(?count = 1, "1 entry in the last 5 s of the capture", CONCAT(STR(?count), " entries in the last 5 s of the capture")) AS ?label)
+}""" .
+ui:net-recent a c:Text ; sty:textStyle sty:Caption ; c:valueQuery ui:net-qRecent ; c:dataset ui:net-recentView .
 ui:net-live a c:LiveIndicator ; c:controls net:Capture ; c:property net:recording .
 ui:net-kinds a c:Legend ; c:label "Kinds" ; c:of net:Kind .
 

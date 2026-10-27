@@ -1,6 +1,7 @@
 // Function rules and reactions for the layout components (ontology/components/layout.ttl).
+import type { Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
-import type { FnRule } from '../engine/context.ts'
+import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, MOD, NS, SEM, STY } from '../ns.ts'
 import { hitMarks, setFlag } from './feedback.ts'
 import { labelOf, nodes, str, text } from './util.ts'
@@ -106,16 +107,20 @@ const grid: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, children))
     return o.quads
   }
-  const columns = Math.round(Number(str(ctx.object(focus, C_COLUMNS))))
-  const min = str(ctx.object(focus, C_MIN_WIDTH))?.trim()
-  const vars = [
-    ...(min && CSS_LENGTH.test(min) ? [`--grid-min: ${min}`] : []),
-    ...(columns >= 1 && columns <= 24 ? [`--grid-columns: ${columns}`] : []),
-  ]
-  const root = o.el('root', 'Div', { style: vars.length ? vars.join('; ') : undefined }, children)
-  if (columns >= 1 && columns <= 24) o.attr(root, 'data-columns', String(columns))
+  const { style, columns } = gridTracks(ctx, focus)
+  const root = o.el('root', 'Div', { style }, children)
+  if (columns) o.attr(root, 'data-columns', columns)
   o.renders(root)
   return o.quads
+}
+
+/** A grid's c:columns and c:minWidth as the theme reads them: custom properties, and the column cap (c:Desktop tiles with them too). */
+export function gridTracks(ctx: RuleContext, focus: Term): { style?: string; columns?: string } {
+  const n = Math.round(Number(str(ctx.object(focus, C_COLUMNS))))
+  const min = str(ctx.object(focus, C_MIN_WIDTH))?.trim()
+  const columns = n >= 1 && n <= 24 ? String(n) : undefined
+  const vars = [...(min && CSS_LENGTH.test(min) ? [`--grid-min: ${min}`] : []), ...(columns ? [`--grid-columns: ${columns}`] : [])]
+  return { style: vars.length ? vars.join('; ') : undefined, columns }
 }
 
 /** Space that grows to push its neighbours apart. */

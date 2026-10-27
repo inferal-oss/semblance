@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix ol: <https://semblance.dev/ns/outline#> .
 @prefix ext: <https://semblance.dev/ns/foreign#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix c: <https://semblance.dev/ns/component#> .
@@ -109,8 +110,7 @@ ext:IslandRendering-sparql a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?mount ; rdfhtml:attribute ?mark .
-  ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-island" ; rdfhtml:attributeValue ?kind .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?mount .
   ?mount a rdfhtml:Div ; rdfhtml:class "sem-island-mount" ; sem:slot "island" ; ext:island $this ; ext:tag ?tag ; ext:input ?in .
   ?in ext:name ?name ; ext:value ?value ; ext:as ?as .
 }
@@ -118,10 +118,7 @@ WHERE {
   $this a/rdfs:subClassOf* ext:Island .
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~mount")) AS ?mount)
-  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-island")) AS ?mark)
   OPTIONAL { { $this ext:tag ?tag } UNION { $this a/rdfs:subClassOf* ?tagged . ?tagged ext:tag ?tag } }
-  OPTIONAL { { $this ext:widget ?widget } UNION { $this a/rdfs:subClassOf* ?widgeted . ?widgeted ext:widget ?widget } }
-  BIND(STR(COALESCE(?tag, ?widget, "island")) AS ?kind)
   OPTIONAL {
     { $this ext:input ?binding } UNION { $this a/rdfs:subClassOf* ?declaring . ?declaring ext:input ?binding }
     ?binding ext:name ?name ; ext:from ?from .
@@ -156,52 +153,27 @@ WHERE {
 }""" .
 
 # --- outlines: which parts of a page are islands -----------------------------------------------------
-# ext:outlines true on any component outlines every island inside it, dashed, each named by what it
-# mounts (its root's data-sem-island: the tag or the widget's name). A switch can flip it (a
-# c:ToggleSwitch that c:controls the component, c:property ext:outlines).
+# An island's outline (ontology/layers/outline.ttl) is named by what it mounts, its tag or its widget's
+# name, unless it has an ol:label of its own: a component that ol:shows outlines shows which parts of a
+# page are foreign, and a switch can flip it (a c:ToggleSwitch with c:property ol:shows).
 
-ext:outlines a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
-    rdfs:label "outline islands"@en , "обвести острівці"@uk , "Inseln umranden"@de , "تحديد الجزر"@ar ;
-    rdfs:comment "On any component: outline the islands inside it, each named by what it mounts."@en .
-ext:Outlines a sem:Rendering ;
-    rdfs:comment "Marks a component whose ext:outlines is true (data-sem-islands=\"outlined\"), which the style below outlines its islands by."@en ;
-    sem:targets sem:Component ;
-    sem:requires ext:outlines ;
-    sem:stratum 20 ;
-    sem:watches ext:outlines .
-ext:Outlines-fn a sem:Rule ; sem:implements ext:Outlines ; sem:function "foreign:outlines" .
-ext:Outlines-sparql a sem:Rule ;
-    sem:implements ext:Outlines ;
+ext:IslandName a sem:Rendering ;
+    rdfs:comment "An island's ol:defaultLabel: the tag it creates (ext:tag) or the widget it calls (ext:widget), its own or its class's."@en ;
+    sem:targets ext:Island ;
+    sem:stratum -5 ;
+    sem:inputOnly true ;
+    sem:watches rdf:type , ext:tag , ext:widget .
+ext:IslandName-fn a sem:Rule ; sem:implements ext:IslandName ; sem:function "foreign:island-name" .
+ext:IslandName-sparql a sem:Rule ;
+    sem:implements ext:IslandName ;
     sem:construct """
-CONSTRUCT {
-  ?root rdfhtml:attribute ?mark .
-  ?mark a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-islands" ; rdfhtml:attributeValue "outlined" .
-}
+CONSTRUCT { $this ol:defaultLabel ?name }
 WHERE {
-  $this ext:outlines ?on FILTER(isLiteral(?on) && STR(?on) = "true")
-  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-islands")) AS ?mark)
+  $this a/rdfs:subClassOf* ext:Island .
+  OPTIONAL { { $this ext:tag ?tag } UNION { $this a/rdfs:subClassOf* ?tagged . ?tagged ext:tag ?tag } }
+  OPTIONAL { { $this ext:widget ?widget } UNION { $this a/rdfs:subClassOf* ?widgeted . ?widgeted ext:widget ?widget } }
+  BIND(STR(COALESCE(?tag, ?widget, "island")) AS ?name)
 }""" .
-
-[] a sty:StyleRule ; sty:part "[data-sem-islands=outlined] [data-sem-island]" ;
-    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
-                 [ sty:property "outline" ; sty:raw "2px dashed var(--sem-accent)" ] ,
-                 [ sty:property "outline-offset" ; sty:raw "6px" ] ,
-                 [ sty:property "margin-block-start" ; sty:raw "0.75em" ] .
-[] a sty:StyleRule ; sty:part "[data-sem-islands=outlined] [data-sem-island]::before" ;
-    sty:declares [ sty:property "content" ; sty:raw "attr(data-sem-island)" ] ,
-                 [ sty:property "position" ; sty:raw "absolute" ] ,
-                 [ sty:property "z-index" ; sty:raw "2" ] ,
-                 [ sty:property "inset-block-start" ; sty:raw "calc(-6px - 0.75em)" ] ,
-                 [ sty:property "inset-inline-start" ; sty:raw "0.75em" ] ,
-                 [ sty:property "padding-inline" ; sty:raw "0.45em" ] ,
-                 [ sty:property "border-radius" ; sty:token tok:radius-full ] ,
-                 [ sty:property "background" ; sty:token tok:accent ] ,
-                 [ sty:property "color" ; sty:token tok:on-accent ] ,
-                 [ sty:property "font-family" ; sty:token tok:font-mono ] ,
-                 [ sty:property "font-size" ; sty:raw "0.7rem" ] ,
-                 [ sty:property "line-height" ; sty:raw "1.5" ] ,
-                 [ sty:property "pointer-events" ; sty:raw "none" ] .
 
 # --- style -----------------------------------------------------------------------------------------
 # The wrapper is a block the foreign component fills; theme tokens reach it as inherited custom

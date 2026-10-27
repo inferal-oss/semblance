@@ -45,6 +45,7 @@ WHERE {
   BIND(COALESCE(xsd:double(?value0), 0) AS ?value)
   BIND(COALESCE(xsd:double(?max0), 1) AS ?max1) BIND(IF(?max1 = 0, 1, ?max1) AS ?max)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -83,6 +84,7 @@ WHERE {
   BIND(COALESCE(xsd:double(?value0), 0) AS ?value)
   BIND(COALESCE(xsd:double(?max0), 1) AS ?max1) BIND(IF(?max1 = 0, 1, ?max1) AS ?max)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }

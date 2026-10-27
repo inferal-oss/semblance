@@ -8,6 +8,8 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 
 # Panes: a view split in two by a draggable divider (c:SplitView), and a panel docked to an
 # edge of its container with a header, a toolbar, a body and a footer (c:DockPanel).
@@ -19,6 +21,135 @@
 
 c:minSize a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "The least a pane or panel may be sized to along its axis, in CSS px (default 120)."@en .
+
+# --- TiledWorkspace ----------------------------------------------------------------------------
+# A tree of panes: c:rootTile is a c:SplitView whose panes are split views or leaves (any
+# component; sortable c:Tabs make it a workspace one rearranges). Nothing here is new layout: the
+# split views size and stack their panes, and the tabs show theirs. What the workspace adds is that
+# the tree is the user's to change, by dragging tabs (the drag and drop layer):
+#   - onto other tabs: the tab moves there (c:TabsReceive, c:TabsTake in controls.ttl);
+#   - onto an edge of a pane's tabs (a zone the tabs render while in a workspace, c:splitsAt that
+#     edge): the pane splits there, a new split view minted around it, the tab in new tabs beside
+#     it (c:TiledWorkspaceSplit);
+#   - away from tabs that then have none: those tabs close, their sibling taking their split's
+#     place (c:CloseTile, c:TiledWorkspaceClose).
+# The tree is graph state, so a per: policy over its edges keeps an arrangement, and each tab
+# keeps its IRI, its content and its slot through every change.
+c:TiledWorkspace a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "tiled-workspace" ;
+    rdfs:label "Tiled workspace"@en , "Мозаїчний робочий простір"@uk , "Gekachelter Arbeitsbereich"@de , "مساحة عمل متجانبة"@ar ;
+    rdfs:comment """A tree of panes the user rearranges: c:rootTile is a c:SplitView (or one leaf) whose panes
+are split views or leaves, usually sortable c:Tabs (a dnd:Sortable). A tab dragged onto other tabs
+moves there; onto an edge of a pane, it splits that pane; tabs left with none close. c:label names
+the workspace (a region)."""@en .
+c:rootTile a owl:ObjectProperty ; rdfs:domain c:TiledWorkspace ; rdfs:range sem:Component ;
+    rdfs:comment "The root of the workspace's tree: a c:SplitView, or a single leaf."@en .
+c:splitsAt a owl:ObjectProperty ; rdfs:range c:Edge ;
+    rdfs:comment "On a rendered drop zone of a workspace pane: the edge of the pane a tab dropped there opens beside."@en .
+c:splitLabel a owl:DatatypeProperty ; rdfs:domain c:Edge ;
+    rdfs:comment "What a pane's drop zone at this edge is called (the drag's status names it)."@en .
+c:StartEdge c:splitLabel "Split left"@en , "Розділити ліворуч"@uk , "Links teilen"@de , "تقسيم إلى اليمين"@ar .
+c:EndEdge c:splitLabel "Split right"@en , "Розділити праворуч"@uk , "Rechts teilen"@de , "تقسيم إلى اليسار"@ar .
+c:TopEdge c:splitLabel "Split up"@en , "Розділити вгору"@uk , "Oben teilen"@de , "تقسيم إلى الأعلى"@ar .
+c:BottomEdge c:splitLabel "Split down"@en , "Розділити вниз"@uk , "Unten teilen"@de , "تقسيم إلى الأسفل"@ar .
+
+c:TiledWorkspaceRendering a sem:Rendering ; sem:targets c:TiledWorkspace ; sem:stratum 0 .
+c:TiledWorkspaceRendering-fn a sem:Rule ; sem:implements c:TiledWorkspaceRendering ; sem:function "panes:tiled-workspace" .
+c:TiledWorkspaceRendering-screen a sem:Rule ; sem:implements c:TiledWorkspaceRendering ; sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Section ; sem:renders $this ; rdfhtml:hasChild ?tile ; rdfhtml:attribute ?labelAttr .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:TiledWorkspace .
+  OPTIONAL { $this c:rootTile ?tile FILTER(isIRI(?tile)) }
+  OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?label)
+  BIND(IF(BOUND(?label) && ?label != "", ?label, ?none) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(BOUND(?caption), IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?labelAttr)
+}""" .
+c:TiledWorkspaceRendering-text a sem:Rule ; sem:implements c:TiledWorkspaceRendering ; sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT { ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?tile }
+WHERE {
+  $this a/rdfs:subClassOf* c:TiledWorkspace .
+  OPTIONAL { $this c:rootTile ?tile FILTER(isIRI(?tile)) }
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
+
+# Dropped on an edge of these tabs (a pane of a workspace): a new split view takes their place in
+# the tree, with them on one side and new sortable tabs holding the dropped tab on the other - before
+# them at the start or top, after them at the end or bottom, stacked for the top and bottom. Both are
+# minted from the drop (<tabs>/~split-<n>, <tabs>/~pane-<n>, n from the event), so splitting twice
+# never reuses a node. The new tabs open their windows where these do. Taking the tab out of the
+# tabs it was in is c:TabsTake's; moving a pane's only tab beside itself changes nothing.
+c:TiledWorkspaceSplit a beh:Reaction ;
+    beh:when dnd:Drop ;
+    beh:sourceClass c:Tabs ;
+    beh:deletes """CONSTRUCT { ?parent ?link $this }
+WHERE {
+  $event dnd:carrying ?tab ; dnd:into ?zone . ?tab a c:Tab . ?zone c:splitsAt ?edge .
+  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab
+                  FILTER(?src != $this || EXISTS { $this c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) }) }
+  ?ws a c:TiledWorkspace .
+  { ?ws c:rootTile $this BIND(?ws AS ?parent) BIND(c:rootTile AS ?link) }
+  UNION { ?ws c:rootTile/(c:primary|c:secondary)* ?parent . ?parent ?link $this FILTER(?link IN (c:primary, c:secondary)) }
+}""" ;
+    beh:inserts """CONSTRUCT {
+  ?parent ?link ?split .
+  ?split a c:SplitView ; c:primary ?first ; c:secondary ?second ; pos:direction ?direction .
+  ?pane a c:Tabs , dnd:Sortable ; c:tabs ?cell ; c:selected ?tab ; c:detachable ?detachable ; c:windowsOn ?desktop .
+  ?cell rdf:first ?tab ; rdf:rest rdf:nil .
+}
+WHERE {
+  $event dnd:carrying ?tab ; dnd:into ?zone . ?tab a c:Tab . ?zone c:splitsAt ?edge .
+  FILTER EXISTS { ?src c:tabs/rdf:rest*/rdf:first ?tab
+                  FILTER(?src != $this || EXISTS { $this c:tabs/rdf:rest*/rdf:first ?other FILTER(?other != ?tab) }) }
+  ?ws a c:TiledWorkspace .
+  { ?ws c:rootTile $this BIND(?ws AS ?parent) BIND(c:rootTile AS ?link) }
+  UNION { ?ws c:rootTile/(c:primary|c:secondary)* ?parent . ?parent ?link $this FILTER(?link IN (c:primary, c:secondary)) }
+  BIND(SUBSTR(MD5(STR($event)), 1, 12) AS ?n)
+  BIND(IRI(CONCAT(STR($this), "/~split-", ?n)) AS ?split)
+  BIND(IRI(CONCAT(STR($this), "/~pane-", ?n)) AS ?pane)
+  BIND(IRI(CONCAT(STR($this), "/~pane-", ?n, "/~cell-", MD5(STR(?tab)))) AS ?cell)
+  BIND(?edge IN (c:StartEdge, c:TopEdge) AS ?before)
+  BIND(IF(?before, ?pane, $this) AS ?first)
+  BIND(IF(?before, $this, ?pane) AS ?second)
+  BIND(IF(?edge IN (c:TopEdge, c:BottomEdge), pos:Column, ?none) AS ?direction)
+  OPTIONAL { $this c:detachable ?detachable }
+  OPTIONAL { $this c:windowsOn ?desktop }
+}""" ;
+    sem:function "panes:tile-split" .
+
+# Tabs with none left, in a workspace: their split view goes, its other pane taking its place (a
+# split with no other pane is left as it is). Tabs a split minted (an IRI with "/~") go with it; the
+# application's own keep their facts.
+c:TiledWorkspaceClose a beh:Reaction ;
+    beh:when c:CloseTile ;
+    beh:sourceClass c:Tabs ;
+    beh:deletes """CONSTRUCT { ?up ?upLink ?split . ?split ?sp ?so . $this ?tp ?to }
+WHERE {
+  $this c:tabs rdf:nil .
+  ?split ?side $this FILTER(?side IN (c:primary, c:secondary))
+  FILTER EXISTS { ?ws a c:TiledWorkspace ; c:rootTile/(c:primary|c:secondary)* ?split }
+  FILTER EXISTS { ?split ?other ?sibling FILTER(?other IN (c:primary, c:secondary) && ?other != ?side) }
+  OPTIONAL { ?up ?upLink ?split FILTER(?upLink IN (c:rootTile, c:primary, c:secondary)) }
+  OPTIONAL { ?split ?sp ?so }
+  OPTIONAL { FILTER(CONTAINS(STR($this), "/~")) $this ?tp ?to }
+}""" ;
+    beh:inserts """CONSTRUCT { ?up ?upLink ?sibling }
+WHERE {
+  $this c:tabs rdf:nil .
+  ?split ?side $this FILTER(?side IN (c:primary, c:secondary))
+  FILTER EXISTS { ?ws a c:TiledWorkspace ; c:rootTile/(c:primary|c:secondary)* ?split }
+  ?split ?other ?sibling FILTER(?other IN (c:primary, c:secondary) && ?other != ?side)
+  ?up ?upLink ?split FILTER(?upLink IN (c:rootTile, c:primary, c:secondary))
+}""" ;
+    sem:function "panes:tile-close" .
 
 # --- SplitView ---------------------------------------------------------------------------------
 # The primary pane takes c:ratio of the room (a fraction, 0.5 by default); the divider between
@@ -76,6 +207,7 @@ WHERE {
   OPTIONAL { $this c:primary ?primary FILTER(isIRI(?primary)) }
   OPTIONAL { $this c:secondary ?secondaryChild FILTER(isIRI(?secondaryChild)) }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -110,6 +242,25 @@ WHERE {
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-sizes"))) AS ?dSizes)
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-min"))) AS ?dMinPx)
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-step"))) AS ?dStep)
+}""" .
+c:SplitViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:SplitViewRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?primary , ?divider , ?secondary .
+  ?primary ord:precedes ?divider , ?secondary .
+  ?divider a rdfhtml:Text ; rdfhtml:data "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500" ; ord:precedes ?secondary .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SplitView .
+  BIND(EXISTS { $this c:collapsed ?flag FILTER(STR(?flag) = "true") } AS ?collapsed)
+  OPTIONAL { $this c:primary ?primary0 FILTER(isIRI(?primary0)) }
+  OPTIONAL { $this c:secondary ?secondary0 FILTER(isIRI(?secondary0)) }
+  BIND(?primary0 AS ?primary)
+  BIND(IF(?collapsed, ?none, ?secondary0) AS ?secondary)
+  BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider"))) AS ?divider)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
 }""" .
 
 # Dragging the divider (or an arrow key on it) sets the ratio: the new size over the room
@@ -201,6 +352,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:DockPanel .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -268,6 +420,33 @@ WHERE {
     $this c:footer ?footer FILTER(isIRI(?footer))
     BIND(IRI(CONCAT(STR($this), "/~footer")) AS ?footerWrap)
   }
+}""" .
+c:DockPanelRendering-sparql-text a sem:Rule ;
+    sem:implements c:DockPanelRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?caption , ?toolbar , ?content , ?footer .
+  ?caption a rdfhtml:Text ; rdfhtml:data ?line ; ord:precedes ?toolbar , ?content , ?footer .
+  ?toolbar ord:precedes ?content , ?footer .
+  ?content ord:precedes ?footer .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DockPanel .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
+  BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
+  BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)
+  OPTIONAL { $this c:toolbar ?toolbar0 FILTER(isIRI(?toolbar0)) }
+  OPTIONAL { $this c:content ?content0 FILTER(isIRI(?content0)) }
+  OPTIONAL { $this c:footer ?footer0 FILTER(isIRI(?footer0)) }
+  BIND(IF(?open, ?toolbar0, ?none) AS ?toolbar)
+  BIND(IF(?open, ?content0, ?none) AS ?content)
+  BIND(IF(?open, ?footer0, ?none) AS ?footer)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~caption")) AS ?caption)
 }""" .
 
 # Dragging the free edge (or an arrow key on it) sets the panel's size along its axis: c:width

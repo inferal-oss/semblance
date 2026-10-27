@@ -512,6 +512,15 @@ ui:insightsPanel a c:Card ; c:label "Insights" ; c:badge "SPARQL judgements" ;
     c:note "Results are sosa:Observations in the graph; each judgement is a CONSTRUCT that writes findings." ;
     c:content ui:insights .
 ui:insights a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ; c:children ( ui:findings ui:observations ) .
+# The judgements are maintained views too: their findings change as the observations they read arrive.
+perf:FastestInitialRender a iv:View ; iv:whileShown ui:findings .
+perf:FrameBudget a iv:View ; iv:whileShown ui:findings .
+perf:StoreEffect a iv:View ; iv:whileShown ui:findings .
+perf:RulesEffect a iv:View ; iv:whileShown ui:findings .
+perf:BulkEffect a iv:View ; iv:whileShown ui:findings .
+perf:Scaling a iv:View ; iv:whileShown ui:findings .
+perf:DomShare a iv:View ; iv:whileShown ui:findings .
+perf:CompiledEffect a iv:View ; iv:whileShown ui:findings .
 ui:findings a c:FindingList ; c:judgementClass perf:Judgement ; c:dataset perf:run ;
     c:emptyText "Findings appear once there are observations." .
 ui:observations a c:QueryView ; c:of perf:run ; c:queries ( perf:ObservationsQuery ) ;
@@ -623,7 +632,8 @@ ui:rememberPalette a per:Policy ; per:scope per:Device ;
     per:construct """CONSTRUCT { ?run ?p ?o } WHERE { ?run c:recentOf ui:palette ; ?p ?o }""" .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
-ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ;
+# It reads the change log only (an input graph): kept as a view, a write stores the members that came and went.
+ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ; iv:strategy iv:Incremental ;
     rdfs:label "The change log" , "Журнал змін"@uk , "Das Änderungsprotokoll"@de , "سجل التغييرات"@ar ;
     per:construct """
 CONSTRUCT { beh:ChangeLog tree:member ?m ; beh:latest ?latest . ?m ?p ?o }

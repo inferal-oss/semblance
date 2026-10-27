@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
@@ -67,9 +68,9 @@ ui:dt-stats-spec a c:Specimen ; c:demonstrates c:Stat ; c:label "Stat" ;
 
 # --- Formula: a Stat whose value is a query -------------------------------------------------------
 
-ui:q-component-count a sem:View ; rdfs:label "number of component classes" ;
+ui:q-component-count a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:dt-formula-classes ; rdfs:label "number of component classes" ;
     sem:select """SELECT (COUNT(DISTINCT ?class) AS ?value) WHERE { ?class rdfs:subClassOf+ sem:Component ; sem:slug ?slug }""" .
-ui:q-reactionless a sem:View ; rdfs:label "component classes without a reaction" ;
+ui:q-reactionless a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:dt-formula-quiet ; rdfs:label "component classes without a reaction" ;
     sem:select """
 SELECT ?value ?tone WHERE {
   { SELECT (COUNT(DISTINCT ?class) AS ?value) WHERE {
@@ -203,11 +204,20 @@ ui:dt-msg-2 a as:Note ; as:attributedTo ui:dt-msg-ada ; as:published "2024-05-14
     as:content "Yes: each note is one c:item, evaluated on its own. A new note costs one message, however long the thread." .
 ui:dt-msg-3 a as:Note ; as:attributedTo ui:dt-msg-alan ; as:published "2024-05-14T10:05:00Z"^^xsd:dateTime ;
     as:content "And this one is sensitive: private mode (⌘⇧H) hides it." ; <https://semblance.dev/ns/privacy#sensitive> true .
+ui:dt-msg-4 a as:Note ; as:attributedTo ui:dt-msg-ada ; as:published "2024-05-14T10:06:00Z"^^xsd:dateTime ;
+    c:content ui:dt-msg-review .
+ui:dt-msg-review a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-msg-review-text ui:dt-msg-review-toggle ) .
+ui:dt-msg-review-text a c:Text ; c:label "A message can contain components too."@en ,
+    "Повідомлення також може містити компоненти."@uk , "Eine Nachricht kann auch Komponenten enthalten."@de ,
+    "يمكن أن تحتوي الرسالة على مكونات أيضًا."@ar .
+ui:dt-msg-review-toggle a c:ToggleSwitch ; c:checked false ; c:label "Reviewed"@en ,
+    "Переглянуто"@uk , "Geprüft"@de , "تمت المراجعة"@ar .
 ui:dt-messages-thread a c:MessageList ; c:label "A thread" ; c:viewer ui:dt-msg-ada ;
-    c:item ui:dt-msg-1 , ui:dt-msg-2 , ui:dt-msg-3 .
+    c:item ui:dt-msg-1 , ui:dt-msg-2 , ui:dt-msg-3 , ui:dt-msg-4 .
 ui:dt-messages a c:Flippable ; c:front ui:dt-messages-spec .
 ui:dt-messages-spec a c:Specimen ; c:demonstrates c:MessageList , c:Message ; c:label "Message list" ;
-    c:help "Messages as data: as:Note nodes with as:attributedTo, as:content and as:published, the thread's c:item. Each becomes a minted c:Message - the author's avatar, name and time - in order of publication; c:viewer's own are at the end. The list is a log (role=log), and a prv:sensitive note is hidden in private mode. The Chat example is built on it." ;
+    c:help "Messages as data: as:Note nodes with as:attributedTo and as:published, the thread's c:item. Each becomes a minted c:Message - the author's avatar, name and time - in order of publication; c:viewer's own are at the end. A note can use as:content for text or c:content for a component body, including interactive controls. When both are present, Screen shows the component and Text uses the summary. The list is a log (role=log), and a prv:sensitive note is hidden in private mode. The Chat example is built on it." ;
     c:children ( ui:dt-messages-thread ) .
 
 # --- Timeline: the change log -------------------------------------------------------------------

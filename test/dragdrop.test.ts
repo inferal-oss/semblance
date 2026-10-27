@@ -56,6 +56,13 @@ const rank = (s: ReturnType<typeof shelves>, task: string) =>
 /** Where the fake layout puts the slot before the i-th item of the z-th zone (its top half). */
 const at = (z: number, i: number) => [z * 200 + 90, 100 + i * 30 + 5] as const
 
+/** Where two renderings first differ (empty when they are the same), for a readable parity failure. */
+const firstDifference = (a: string, b: string) => {
+  let i = 0
+  while (i < a.length && a[i] === b[i]) i++
+  return a === b ? '' : `SPARQL …${a.slice(Math.max(0, i - 160), i + 160)}…\nfunction …${b.slice(Math.max(0, i - 160), i + 160)}…`
+}
+
 describe('drag and drop', () => {
   it('has SPARQL and function implementations', () => {
     expect(implementationGaps(['layers/dragdrop.ttl'])).toEqual({ noSparql: [], noFunction: [] })
@@ -173,6 +180,20 @@ describe('drag and drop', () => {
     s.drag('Dark mode', ...at(1, 1))
     expect(s.labels('dndToday')).toEqual(['Bug: login loops on Safari', 'Dark mode for the editor'])
     expect(s.item('Dark mode').hasAttribute('data-sem-refused')).toBe(false)
+  })
+
+  it('refuses in the viewer\'s language, and says it the same with SPARQL and with function rules', () => {
+    const [a, b] = (['sparql', 'function'] as const).map((prefer) => shelves(prefer))
+    const html = (h: ReturnType<typeof shelves>) => h.root().outerHTML
+    for (const h of [a!, b!]) h.screen.engine.reconfigure({ languages: ['uk'] }), h.shell.flush()
+    expect(firstDifference(html(a!), html(b!))).toBe('')
+    for (const h of [a!, b!]) h.drag('Dark mode', ...at(2, 0), true)
+    expect(attr(a!.list('dndBugs'), 'data-sem-drop-reason')).toBe('Сюди лише вади.')
+    expect(attr(a!.list('dndToday'), 'data-sem-drop-reason')).toBe('На сьогодні не більше двох завдань.')
+    expect(firstDifference(html(a!), html(b!))).toBe('')
+    for (const h of [a!, b!]) h.pointer(h.document, 'pointerup', ...at(2, 0)), h.shell.flush()
+    for (const h of [a!, b!]) expect(h.toasts()).toContain('Сюди лише вади.')
+    expect(firstDifference(html(a!), html(b!))).toBe('')
   })
 
   it('Escape, or letting go away from every list, puts it back', () => {

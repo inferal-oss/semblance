@@ -1,5 +1,5 @@
 import type { Quad } from '@rdfjs/types'
-import { type Delta, quadKey } from './rdf.ts'
+import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
@@ -31,6 +31,9 @@ export class Runtime {
   readonly projections: Projection[] = []
   private readonly inputListeners: ((graph: string | undefined, delta: Delta) => void)[] = []
   private readonly warmth = new WeakMap<Engine, (focus: string) => string | undefined>()
+  /** Bumped when a sem:warm triple changes; each node's own sem:warm until then. */
+  private warmDeclared = 0
+  private readonly ownWarmth = new Map<string, string | undefined>()
   private readonly refreshListeners: (() => void)[] = []
   private refreshQueued = false
   /** When the next refresh may run: a slow one waits longer, so following never takes over. */
@@ -153,6 +156,7 @@ export class Runtime {
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
+    if (all.add.some(declaresWarmth) || all.remove.some(declaresWarmth)) this.warmDeclared++
     for (const p of this.projections) p.engine.process(all), settle(p)
     this.resumeViews()
     for (const [graph, d] of byGraph) for (const l of this.inputListeners) l(graph, d)
@@ -226,8 +230,11 @@ export class Runtime {
   }
 
   private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+    const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
+      // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
+      maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
@@ -250,7 +257,26 @@ export class Runtime {
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).
       const f = this.store.factory
       const warm = f.namedNode(SEM.warm)
-      const warmth = (focus: string) => index.nearest(focus, (key) => (key.includes(' ') ? undefined : this.store.match(f.namedNode(key), warm, null)[0]?.object.value))
+      // Remembered until the projection's structure (index.visibility) or a sem:warm triple
+      // changes: idle time asks it of every focus with parked work, every slice.
+      let structure = -1
+      let declared = -1
+      let nearest = new Map<string, string | undefined>()
+      const own = (key: string) => {
+        if (key.includes(' ')) return undefined
+        if (declared !== this.warmDeclared) (declared = this.warmDeclared), this.ownWarmth.clear()
+        if (this.ownWarmth.has(key)) return this.ownWarmth.get(key)
+        const v = this.store.match(f.namedNode(key), warm, null)[0]?.object.value
+        this.ownWarmth.set(key, v)
+        return v
+      }
+      const warmth = (focus: string) => {
+        if (structure !== index.visibility || declared !== this.warmDeclared) (structure = index.visibility), (nearest = new Map())
+        if (nearest.has(focus)) return nearest.get(focus)
+        const v = index.nearest(focus, own)
+        nearest.set(focus, v)
+        return v
+      }
       engine.warmable = (focus) => warmth(focus) === SEM.Eager
       this.warmth.set(engine, warmth)
     }
@@ -430,3 +456,5 @@ function settle(p: Projection) {
     if (!p.engine.resume()) return
   }
 }
+
+const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm

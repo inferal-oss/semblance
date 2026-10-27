@@ -1,9 +1,12 @@
 // The announcements layer (ontology/layers/announce.ttl): toasts from the change log.
+import type { Term } from '@rdfjs/types'
 import type { FnRule } from '../engine/context.ts'
 import { ANN, BEH, C, RDF_TYPE, STY } from '../ns.ts'
+import { mint } from '../rdf.ts'
 import { named, num, str, text } from '../components/util.ts'
+import { maintainedRows } from '../view/rows.ts'
 
-/** How far back the layer looks for announcing events, and how many it shows. */
+/** Without the view: how far back the layer looks for announcing events. */
 const WINDOW = 50
 
 const toasts: FnRule = (ctx, focus) => {
@@ -12,8 +15,14 @@ const toasts: FnRule = (ctx, focus) => {
   const limit = num(ctx, focus, C.limit, 3)
   const o = ctx.out(focus)
   const found: { seq: number; text: string; tone?: string }[] = []
-  let m = ctx.object(stream, BEH.latest)
-  for (let seen = 0; named(m) && seen < WINDOW && found.length < limit; seen++, m = ctx.object(m, BEH.previous)) {
+  // The announcing members, newest first: the region's maintained view (ann:RecentAnnouncements),
+  // else a walk back from the log's head.
+  const rows = maintainedRows(ctx, ctx.nn(mint(focus.value, 'view-RecentAnnouncements')))
+  const members: Term[] = []
+  if (rows) members.push(...rows.map((r) => r.get('m')!).filter(named))
+  else for (let seen = 0, m = ctx.object(stream, BEH.latest); named(m) && seen < WINDOW; seen++, m = ctx.object(m, BEH.previous)) members.push(m)
+  for (const m of members) {
+    if (found.length >= limit) break
     for (const reaction of ctx.objects(m, BEH.handledBy)) {
       // An event may say it itself (ann:announcesFrom: e.g. a refusal's reason).
       const from = ctx.object(reaction, ANN.announcesFrom)

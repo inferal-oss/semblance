@@ -9,6 +9,7 @@ import { tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { labelOf as textLabelOf, text } from './util.ts'
+import { md5Key } from './data.ts'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
 const C_ACTIVE = NS.c + 'active'
@@ -513,7 +514,8 @@ const TREE_MEMBER = 'https://w3id.org/tree#member'
 const streammembers: FnRule = (ctx, focus) => {
   const stream = ctx.object(focus, C.of)
   if (!named(stream)) return []
-  const limit = Number(str(ctx.object(focus, C.limit)) ?? 8)
+  // At most 16: the SPARQL twin walks an unrolled chain of that length.
+  const limit = Math.min(Number(str(ctx.object(focus, C.limit)) ?? 8), 16)
   const sequence = ctx.object(stream, LDES_NS + 'sequencePath')
   const rank = (m: Term) => (sequence ? Number(str(ctx.object(m, sequence)) ?? 0) : 0)
   // A stream that names its head (beh:latest / beh:previous) is read in `limit` steps;
@@ -534,7 +536,7 @@ const streammembers: FnRule = (ctx, focus) => {
   }
   const o = ctx.out(focus)
   const views = members.map(({ m }) => {
-    const view = o.node('m-' + fnv(m.value))
+    const view = o.node('m-' + md5Key(m.value))
     o.t(view, RDF_TYPE, ctx.nn(C.TriplesView))
     o.t(view, C.of, m)
     return view

@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -205,7 +206,8 @@ c:TypeaheadTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:follows c:controls ;
-    sem:functionOnly "It folds labels for matching: Unicode normalization (NFD) and the removal of combining marks, which SPARQL has no function for; and it picks labels in the viewer's language, a projection setting no query can see." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed, lower-cased); the labels themselves are picked from the viewer's languages in the graph." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadTexts-fn a sem:Rule ; sem:implements c:TypeaheadTexts ; sem:function "typeahead:texts" .
 
 c:TypeaheadValueTexts a sem:Rendering ;
@@ -214,7 +216,8 @@ c:TypeaheadValueTexts a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:follows c:controls ;
-    sem:functionOnly "It folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed), in the viewer's language, which SPARQL cannot." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed, lower-cased)." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadValueTexts-fn a sem:Rule ; sem:implements c:TypeaheadValueTexts ; sem:function "typeahead:values" .
 
 c:TypeaheadQuery a sem:Rendering ;
@@ -222,7 +225,8 @@ c:TypeaheadQuery a sem:Rendering ;
     sem:stratum -20 ;
     sem:inputOnly true ;
     sem:watches c:value ;
-    sem:functionOnly "It folds the typed text as the labels are folded (NFD, combining marks removed), which SPARQL cannot." .
+    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the typed text as the labels are folded (NFD, combining marks removed, lower-cased)." ;
+    sem:needsExtension sx:Locale .
 c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function "typeahead:query" .
 
 # --- the field, the popup and their state ------------------------------------------------------------
@@ -231,6 +235,7 @@ c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function 
 # foot (help, a note, the error).
 
 c:TypeaheadRendering a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:requires c:controls ;
     sem:stratum 0 ;
@@ -244,7 +249,7 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label, ?field, ?foot .
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?field .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
-  ?field a rdfhtml:Div ; rdfhtml:class "sem-ta-field" ; rdfhtml:hasChild ?pills, ?input, ?chevron, ?popup ; ord:immediatelyPrecedes ?foot .
+  ?field a rdfhtml:Div ; rdfhtml:class "sem-ta-field" ; rdfhtml:id ?fieldId ; rdfhtml:hasChild ?pills, ?input, ?chevron, ?popup ; ord:immediatelyPrecedes ?foot .
   ?pills a rdfhtml:Ul ; rdfhtml:class "sem-ta-pills" ; rdfhtml:attribute ?pillsLabel ; ord:immediatelyPrecedes ?input .
   ?pillsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ; rdfhtml:placeholder ?placeholder ;
@@ -263,9 +268,11 @@ CONSTRUCT {
   ?chevronHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?chevronKeep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
   ?chevronText a rdfhtml:Text ; rdfhtml:data "▾" .
-  ?popup a rdfhtml:Div ; rdfhtml:class "sem-ta-popup" ; rdfhtml:hidden ?popupHidden ; rdfhtml:attribute ?popupKeep ;
+  ?popup a rdfhtml:Div ; rdfhtml:class "sem-ta-popup" ; rdfhtml:hidden ?popupHidden ; rdfhtml:attribute ?popupKeep, ?popupAnchor, ?popupWidth ;
          rdfhtml:hasChild ?list, ?status .
   ?popupKeep a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-keep-focus" ; rdfhtml:attributeValue "" .
+  ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?fieldId .
+  ?popupWidth a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor-width" ; rdfhtml:attributeValue "match" .
   ?list a rdfhtml:Ul ; rdfhtml:id ?listId ; rdfhtml:class "sem-ta-list" ; rdfhtml:hidden ?listHidden ;
         rdfhtml:attribute ?listRole, ?listLabel ; rdfhtml:hasChild ?create ; ord:immediatelyPrecedes ?status .
   ?listRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "listbox" .
@@ -307,6 +314,7 @@ WHERE {
   # The caption: the texts layer's (c:label, else the property's label, in the viewer's language).
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
+  OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
   OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   # A combobox shows its chosen option's label until something is typed.
@@ -324,8 +332,14 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~l10n-create")) AS ?createNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-already-added")) AS ?addedNode)
   LATERAL { OPTIONAL { ?noMatchesNode l10n:label ?noMatches0 } OPTIONAL { ?createNode l10n:label ?createPhrase0 } OPTIONAL { ?addedNode l10n:label ?addedPhrase0 } }
+  OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
+  OPTIONAL { ?noMatches1At l10n:of c:NoMatches ; l10n:name ?noMatches1 }
   OPTIONAL { c:NoMatches rdfs:label ?noMatches1 FILTER(langMatches(lang(?noMatches1), "en")) }
+  OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
+  OPTIONAL { ?createPhrase1At l10n:of c:CreatePhrase ; l10n:name ?createPhrase1 }
   OPTIONAL { c:CreatePhrase rdfs:label ?createPhrase1 FILTER(langMatches(lang(?createPhrase1), "en")) }
+  OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
+  OPTIONAL { ?addedPhrase1At l10n:of c:AlreadyAdded ; l10n:name ?addedPhrase1 }
   OPTIONAL { c:AlreadyAdded rdfs:label ?addedPhrase1 FILTER(langMatches(lang(?addedPhrase1), "en")) }
   BIND(STR(COALESCE(?noMatches0, ?noMatches1)) AS ?noMatchesPhrase)
   BIND(STR(COALESCE(?createPhrase0, ?createPhrase1)) AS ?createPhrase)
@@ -410,6 +424,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~field")) AS ?field)
+  BIND(STR(?field) AS ?fieldId)
   BIND(IF(?multi, IRI(CONCAT(STR($this), "/~pills")), ?none) AS ?pills)
   BIND(IF(?multi, IRI(CONCAT(STR($this), "/~pills-aria-label")), ?none) AS ?pillsLabel)
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
@@ -425,6 +440,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~popup")) AS ?popup)
   BIND(COALESCE(?chevron, ?popup) AS ?afterInput)
   BIND(IRI(CONCAT(STR($this), "/~popup-keep")) AS ?popupKeep)
+  BIND(IRI(CONCAT(STR($this), "/~popup-anchor")) AS ?popupAnchor)
+  BIND(IRI(CONCAT(STR($this), "/~popup-anchor-width")) AS ?popupWidth)
   BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
   BIND(STR(?list) AS ?listId)
   BIND(IRI(CONCAT(STR($this), "/~list-role")) AS ?listRole)
@@ -457,6 +474,7 @@ WHERE {
   BIND(EXISTS { $this a/rdfs:subClassOf* c:TagInput } AS ?multi)
   BIND(IRI(CONCAT(STR($this), "/~l10n-caption")) AS ?captionNode)
   LATERAL { OPTIONAL { ?captionNode l10n:label ?caption0 } }
+  OPTIONAL { ?caption1At l10n:of $this ; l10n:label ?caption1 }
   OPTIONAL { $this c:label ?caption1 FILTER(isLiteral(?caption1) && lang(?caption1) = "") }
   BIND(STR(COALESCE(?caption0, ?caption1, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   OPTIONAL { $this c:value ?typed0 }
@@ -488,6 +506,7 @@ WHERE {
 # it is not run: c:TypeaheadMatches mints the best few instead.
 
 c:TypeaheadOptions a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:requires c:controls ;
     sem:stratum 0 ;
@@ -555,6 +574,7 @@ WHERE {
 # writes only the rows that came, went or moved. Closed, it lists nothing.
 
 c:TypeaheadMatches a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:Typeahead ;
     sem:stratum 0 ;
     sem:readsMinted true ;
@@ -633,6 +653,7 @@ WHERE {
 # (key:hint: shown in Apple or other glyphs, as the keyboard layer's hints are, and announced with
 # aria-keyshortcuts) - a command palette's options do.
 c:TypeaheadOptionRendering a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TypeaheadOption ;
     sem:stratum 0 ;
     sem:follows c:of ;
@@ -747,6 +768,7 @@ WHERE {
 # options, it re-runs when the texts layer's nodes change (which it does when the values do).
 
 c:TagInputPills a sem:Rendering ;
+    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/14> ; # its function twin comes with the combobox work
     sem:targets c:TagInput ;
     sem:stratum 0 ;
     sem:readsMinted true ;

@@ -5,6 +5,7 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import type { Delta } from '../rdf.ts'
 import { C, DND, H, L10N, MOD, NS, RDF_TYPE, SEM, STY } from '../ns.ts'
+import { messageOf } from '../layers/dragdrop.ts'
 import { named, RDFS_LABEL, str, text } from './util.ts'
 
 const c = (local: string) => NS.c + local
@@ -96,19 +97,19 @@ const overlap = (a: Placed, b: Placed) => a.day.equals(b.day) && b.start < a.sta
 const isA = (ctx: Reader, x: Term, cls: Term) => ctx.match(x, RDF_TYPE, cls).length > 0
 
 /** The c:exclusiveBy shapes: their class, the property held one at a time, and their message. */
-function exclusive(ctx: Reader) {
+function exclusive(ctx: RuleContext) {
   return ctx.match(null, P.exclusiveBy, null).flatMap((q) =>
     objectsOf(ctx, q.subject, SH + 'targetClass').map((cls) => ({
       shape: q.subject,
       cls,
       by: q.object,
-      message: objectsOf(ctx, q.subject, SH + 'message').find((m) => m.termType === 'Literal' && m.language === '')?.value ?? 'It would overlap another booking.',
+      message: messageOf(ctx, q.subject) ?? text(ctx, ctx.nn(NS.c + 'OverlapPhrase'), RDFS_LABEL) ?? 'It would overlap another booking.',
     })),
   )
 }
 
 /** Pairs of items that overlap while sharing an exclusive value: item -> its rivals. */
-function conflicts(ctx: Reader, items: Placed[]): Map<string, NamedNode[]> {
+function conflicts(ctx: RuleContext, items: Placed[]): Map<string, NamedNode[]> {
   const out = new Map<string, NamedNode[]>()
   for (const { cls, by } of exclusive(ctx)) {
     if (!named(by)) continue

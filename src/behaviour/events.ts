@@ -1,6 +1,6 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { BEH, EVENTS_GRAPH, KEY, LDES, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
-import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration } from '../rdf.ts'
+import { type Delta, MINT_SEPARATOR, owningFocus, parseDuration, quadKey } from '../rdf.ts'
 import { prefixesFor } from '../prefixes.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import type { Projection, Runtime } from '../runtime.ts'
@@ -64,6 +64,8 @@ interface Reaction {
   deletes?: string
   inserts?: string
   fn?: string
+  /** beh:undoable: its effect is recorded on the event's member, for undo. */
+  undoable?: boolean
 }
 
 /**
@@ -147,6 +149,7 @@ export class EventBus {
       deletes: this.value(r, BEH.deletes)?.value,
       inserts: this.value(r, BEH.inserts)?.value,
       fn: this.value(r, SEM.function)?.value,
+      undoable: this.value(r, BEH.undoable)?.value === 'true',
     }))
   }
 
@@ -249,6 +252,8 @@ export class EventBus {
     // Every reaction sees the state before the event. Only those that change
     // something handled it (generic reactions often match and do nothing).
     const delta: Delta = { add: [], remove: [] }
+    // What undoable reactions changed (recorded with the member, for undo).
+    const undoable = { add: new Set<string>(), remove: new Set<string>() }
     const acted: Reaction[] = []
     for (const r of reactions) {
       // Reactions are atomic (they see the state before the event); each is timed, so a slow one is blamed.
@@ -259,6 +264,7 @@ export class EventBus {
       acted.push(r)
       delta.remove.push(...d.remove)
       delta.add.push(...d.add)
+      if (r.undoable) for (const [k, qs] of [['add', d.add], ['remove', d.remove]] as const) for (const q of qs) undoable[k].add(quadKey(q))
     }
     reactions = acted
     for (const r of acted) quads.push(f.quad(event, nn(BEH.handledBy), nn(r.iri)))
@@ -273,7 +279,7 @@ export class EventBus {
       forget()
       return { recorded: false, event, type, target: nn(target), reactions: [], delta }
     }
-    const handled = this.record(type, target, event, quads, delta, reactions, forget)
+    const handled = this.record(type, target, event, quads, delta, reactions, forget, undoable)
     this.raise(raised, event)
     return handled
   }
@@ -301,7 +307,7 @@ export class EventBus {
   }
 
   /** Apply an event's change and append it to the change log, as one tick. */
-  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void): Handled {
+  private record(type: string, target: string, event: NamedNode, quads: Quad[], delta: Delta, reactions: Reaction[], forget: () => void, undoable: { add: Set<string>; remove: Set<string> }): Handled {
     const { f } = this
     const nn = (iri: string) => f.namedNode(iri)
     // The state change and the member that records it are one tick: views over the log and
@@ -323,6 +329,7 @@ export class EventBus {
         remove: [...remove, ...head],
         add: [
           ...quads,
+          ...this.statements(event, applied, undoable),
           f.quad(event, nn(BEH.added), int(applied.add.length)),
           f.quad(event, nn(BEH.removed), int(applied.remove.length)),
           ...head.map((q) => f.quad(event, nn(BEH.previous), q.object)),
@@ -333,6 +340,32 @@ export class EventBus {
       this.members().push({ event, at: Date.now() })
       return { recorded: true, event, type, target: nn(target), reactions: reactions.map((r) => r.iri), delta: applied }
     })
+  }
+
+  /**
+   * The effective change of an event's undoable reactions, as rdf:Statement nodes minted under its
+   * member: beh:asserted (added), beh:retracted (removed). Only what actually changed is recorded.
+   */
+  private statements(event: NamedNode, applied: Delta, undoable: { add: Set<string>; remove: Set<string> }): Quad[] {
+    if (!undoable.add.size && !undoable.remove.size) return []
+    const { f } = this
+    const nn = (iri: string) => f.namedNode(iri)
+    const out: Quad[] = []
+    let i = 0
+    for (const [p, qs, keep] of [[BEH.asserted, applied.add, undoable.add], [BEH.retracted, applied.remove, undoable.remove]] as const) {
+      for (const q of qs) {
+        if (!keep.has(quadKey(q))) continue
+        const st = nn(`${event.value}/~change-${i++}`)
+        out.push(
+          f.quad(event, nn(p), st),
+          f.quad(st, nn(RDF_TYPE), nn(NS.rdf + 'Statement')),
+          f.quad(st, nn(NS.rdf + 'subject'), q.subject as NamedNode),
+          f.quad(st, nn(NS.rdf + 'predicate'), q.predicate as NamedNode),
+          f.quad(st, nn(NS.rdf + 'object'), q.object),
+        )
+      }
+    }
+    return out
   }
 
   /**
@@ -364,6 +397,8 @@ export class EventBus {
     while (n < members.length && !keeps.some((keep) => keep(n, members[n].at, size))) {
       const m = members[n++].event
       out.push(...store.match(this.stream, this.f.namedNode(LDES.member), m, this.graph), ...store.match(m, null, null, this.graph))
+      // Its recorded change (for undo) goes with it.
+      for (const p of [BEH.asserted, BEH.retracted]) for (const q of store.match(m, this.f.namedNode(p), null, this.graph)) out.push(...store.match(q.object as NamedNode, null, null, this.graph))
     }
     members.splice(0, n)
     return out

@@ -157,7 +157,7 @@ wh:Recorded a sem:View , iv:View ; rdfs:label "movements recorded" ;
     sem:select """SELECT (COUNT(?m) AS ?value) WHERE { wh:movements tree:member ?m }""" .
 
 # The reorder alert reads the reorder list's rows (at most one per item), never the movements.
-wh:qReorderAlert a sem:View ; sem:select """
+wh:qReorderAlert a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads wh:Reorder ; iv:whileShown ui:ex-warehouse ; sem:select """
 SELECT ?label ?tone WHERE {
   { SELECT (COUNT(?row) AS ?n) WHERE { wh:Reorder <http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution> ?row } }
   BIND(IF(?n = 0, "Every item is at or above its minimum.",

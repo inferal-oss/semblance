@@ -48,7 +48,7 @@ c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
 c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
 c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup . c:LinkedCard sem:group c:LayoutGroup .
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
-c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup .
+c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup . c:TiledWorkspace sem:group c:LayoutGroup . c:TabHandle sem:group c:LayoutGroup . c:CloseTile sem:group c:LayoutGroup .
 c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Connector sem:group c:LayoutGroup .
 # A foreign component (web component, framework component, widget) is laid out like any other part.
 ext:Island sem:group c:LayoutGroup .
@@ -145,6 +145,7 @@ c:Flippable sem:group c:DisclosureGroup . c:SourceBack sem:group c:DisclosureGro
 # --- Windows ---
 c:Frame sem:group c:WindowsGroup . c:Window sem:group c:WindowsGroup . c:Palette sem:group c:WindowsGroup .
 c:Desktop sem:group c:WindowsGroup . c:Taskbar sem:group c:WindowsGroup .
+c:DesktopLayout sem:group c:WindowsGroup .
 c:Draggable sem:group c:WindowsGroup . c:Resizable sem:group c:WindowsGroup . c:Raisable sem:group c:WindowsGroup .
 c:Restorable sem:group c:WindowsGroup . c:Minimizable sem:group c:WindowsGroup . c:Maximizable sem:group c:WindowsGroup .
 c:Dockable sem:group c:WindowsGroup . fs:Fullscreenable sem:group c:WindowsGroup .

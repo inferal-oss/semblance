@@ -1,19 +1,30 @@
 // Function rules for charts over sem:View SELECTs, and the finding list.
-import type { NamedNode, Quad, Term } from '@rdfjs/types'
+import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
-import { labelOf, rdfList } from './views.ts'
-import { text } from './util.ts'
-import { viewRows } from '../view/rows.ts'
+import { rdfList } from './views.ts'
+import { labelOf, text } from './util.ts'
+import { maintainedRows, viewRows } from '../view/rows.ts'
+import { md5Key } from './data.ts'
+import { compareKeys, tupleKey } from '../render/order-key.ts'
+
+const NUMERIC = new Set(['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((t) => NS.xsd + t))
 
 const str = (t: Term | undefined) => t?.value
 type Row = Map<string, Term>
 
-const fmt = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : '<0.01')
+/** v to k decimals, as the charts' SPARQL rules write it: ROUND(v × 10^k), the point put in its digits. */
+const fixed = (v: number, k: number) => {
+  const d = String(Math.round(v * 10 ** k))
+  const p = d.length <= k ? '0'.repeat(k + 1 - d.length) + d : d
+  return k ? p.slice(0, p.length - k) + '.' + p.slice(p.length - k) : p
+}
+const fmt = (v: number) => (v >= 100 ? fixed(v, 0) : v >= 10 ? fixed(v, 1) : v >= 1 ? fixed(v, 2) : v >= 0.01 ? fixed(v, 3) : '<0.01')
 /** Counts (a chart without a unit) are whole: "5", not "5.00". */
 const fmtIn = (unit: string) => (v: number) => (!unit && Number.isInteger(v) ? String(v) : fmt(v))
 const num = (t: Term | undefined) => (t ? Number(t.value) : undefined)
-const key = (s: string) => encodeURIComponent(s).replace(/%/g, '')
+/** A whole number (up to 15 digits) with thousands separators; anything else as it is. */
+const grouped = (s: string) => (/^(0|[1-9][0-9]{0,14})$/.test(s) ? s.replace(/\B(?=(\d{3})+$)/g, ',') : s)
 
 /** The chart's encoding: which SELECT variables play which role. */
 function encoding(ctx: RuleContext, focus: NamedNode) {
@@ -75,9 +86,13 @@ function legend(o: ReturnType<RuleContext['out']>, series: { label: string }[]) 
 
 // --- bar chart --------------------------------------------------------------------------------
 
+// A bar chart reads its view's rows from the views graph (a maintained SELECT: iv:View with
+// iv:materialize iv:Graph), as its SPARQL rule does; c:BarChartRendering-sparql says the same in SPARQL.
 const barchart: FnRule = (ctx, focus) => {
-  const data = rows(ctx, focus)
-  if (typeof data === 'string') return message(ctx, focus, data)
+  const view = ctx.object(focus, C.view)
+  if (!view || !ctx.object(view, SEM.select)) return message(ctx, focus, 'No view.')
+  const data = maintainedRows(ctx, view)
+  if (!data) return message(ctx, focus, `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`)
   // No rows: the chart's own c:emptyText, when it has one, instead of an empty figure.
   const empty = data.length ? undefined : text(ctx, focus, C.emptyText)
   if (empty) return message(ctx, focus, empty)
@@ -85,19 +100,20 @@ const barchart: FnRule = (ctx, focus) => {
   const series = legendOf(ctx, focus, data, e.series)
   const o = ctx.out(focus)
   const facets = groupBy(data, (r) => (e.facet ? str(r.get(e.facet)) ?? '' : ''))
-  const panels = [...facets].map(([facet, rs], fi) => {
+  const panels = [...facets].map(([facet, rs]) => {
+    const fid = `f-${md5Key(facet)}`
     const categories = groupBy(rs, (r) => str(r.get(e.category)) ?? '')
     const totals = [...categories.values()].map((c) => c.reduce((a, r) => a + (num(r.get(e.value)) ?? 0), 0))
     const max = Math.max(...totals, 1e-9)
-    const bars = [...categories].map(([category, cs], ci) => {
-      const id = `f${fi}-c${key(category)}`
+    const bars = [...categories].map(([category, cs]) => {
+      const id = `b-${md5Key(facet)}-${md5Key(category)}`
       const measured = cs.some((r) => r.get(e.value))
       const total = cs.reduce((a, r) => a + (num(r.get(e.value)) ?? 0), 0)
       const segments = measured
         ? series.flatMap((s, si) => {
             const v = num(cs.find((r) => (e.series ? str(r.get(e.series)) === s.key : true))?.get(e.value))
             if (v === undefined || v <= 0) return []
-            const seg = o.el(`${id}-s${si}`, 'Span', { class: 'sem-seg', style: `width: ${((v / max) * 100).toFixed(2)}%; background: var(--sem-series-${(si % 6) + 1})` })
+            const seg = o.el(`${id}-s${si}`, 'Span', { class: 'sem-seg', style: `width: ${fixed((v / max) * 100, 2)}%; background: var(--sem-series-${(si % 6) + 1})` })
             o.tip(seg, `${category} · ${s.label}: ${fmtIn(e.unit)(v)} ${e.unit}`.trim())
             return [seg]
           })
@@ -109,8 +125,8 @@ const barchart: FnRule = (ctx, focus) => {
       return o.el(id, 'Div', { class: 'sem-bar' }, [o.el(`${id}-label`, 'Span', { class: 'sem-category' }, [o.text(`${id}-label-text`, category)]), track, value])
     })
     // Small multiples are captioned; an unfaceted chart is one figure without one.
-    const caption = e.facet ? [o.el(`f${fi}-caption`, 'Figcaption', {}, [o.text(`f${fi}-caption-text`, e.facetLabel.replace('{value}', Number.isFinite(Number(facet)) ? Number(facet).toLocaleString('en-US') : facet))])] : []
-    return o.el(`f${fi}`, 'Figure', {}, [...caption, ...bars])
+    const caption = e.facet ? [o.el(`${fid}-caption`, 'Figcaption', {}, [o.text(`${fid}-caption-text`, e.facetLabel.replace('{value}', grouped(facet)))])] : []
+    return o.el(fid, 'Figure', {}, [...caption, ...bars])
   })
   const parts = [o.el('panels', 'Div', { class: 'sem-panels' }, panels)]
   if (e.series && series.length > 1) parts.push(legend(o, series))
@@ -219,44 +235,50 @@ const linechart: FnRule = (ctx, focus) => {
 
 // --- findings ----------------------------------------------------------------------------------
 
+const PERF = 'https://semblance.dev/ns/perf#'
+
+// Each judgement is a maintained view (iv:View): its findings are in the views graph, kept up to
+// date as the observations it reads arrive. Judgements are in sem:order (then by IRI), findings by
+// sem:sortKey (numbers as numbers) and text - the order keys c:FindingListRendering-sparql writes.
 const findings: FnRule = (ctx, focus) => {
-  if (!ctx.sparql) return message(ctx, focus, 'Judgements run SPARQL; choose a store with SPARQL.')
   const cls = ctx.object(focus, C.judgementClass)
   if (!cls) return []
+  const order = (j: NamedNode) => tupleKey([Number(str(ctx.object(j, SEM.order)) ?? 99), j.value])
   const judgements = ctx
     .match(null, RDF_TYPE, cls)
     .map((q) => q.subject)
     .filter((t): t is NamedNode => t.termType === 'NamedNode')
-    .sort((a, b) => Number(str(ctx.object(a, SEM.order)) ?? 99) - Number(str(ctx.object(b, SEM.order)) ?? 99))
+    .sort((a, b) => compareKeys(order(a), order(b)) || (a.value < b.value ? -1 : 1))
   const o = ctx.out(focus)
   const sections: NamedNode[] = []
-  judgements.forEach((j, ji) => {
-    let quads: Quad[]
-    try {
-      quads = ctx.construct(str(ctx.object(j, SEM.construct)) ?? '')
-    } catch (e) {
-      quads = []
-      sections.push(o.el(`j${ji}-error`, 'P', { class: 'sem-empty' }, [o.text(`j${ji}-error-t`, `${labelOf(ctx, j)} failed: ${(e as Error).message}`)]))
+  for (const j of judgements) {
+    const jid = `j${md5Key(j.value)}`
+    if (!ctx.match(j, RDF_TYPE, NS.iv + 'View').length) {
+      sections.push(o.el(`${jid}-error`, 'P', { class: 'sem-empty' }, [o.text(`${jid}-error-t`, `${labelOf(ctx, j)} is not a maintained view (iv:View).`)]))
+      continue
     }
-    const items = [...groupBy(quads, (q) => q.subject.value)]
-      .map(([, qs]) => ({
-        text: qs.find((q) => q.predicate.value === SEM.text)?.object.value ?? '',
-        verdict: qs.find((q) => q.predicate.value === SEM.verdict)?.object,
-        sort: qs.find((q) => q.predicate.value === SEM.sortKey)?.object.value ?? '',
-      }))
-      .sort((a, b) => a.sort.localeCompare(b.sort, undefined, { numeric: true }) || a.text.localeCompare(b.text))
-    if (!items.length) return
-    const lis = items.map((f, fi) => {
-      const v = f.verdict
+    const items = ctx
+      .match(null, PERF + 'judgement', j)
+      .map((q) => q.subject)
+      .filter((f): f is NamedNode => f.termType === 'NamedNode')
+      .map((f) => {
+        const sort = ctx.object(f, SEM.sortKey)
+        const text = str(ctx.object(f, SEM.text)) ?? ''
+        const numeric = sort?.termType === 'Literal' && NUMERIC.has(sort.datatype.value)
+        return { id: `${jid}-f${md5Key(f.value)}`, text, verdict: ctx.object(f, SEM.verdict), key: tupleKey([numeric ? Number(sort.value) : sort?.value ?? '', text]) }
+      })
+      .sort((a, b) => compareKeys(a.key, b.key) || (a.id < b.id ? -1 : 1))
+    if (!items.length) continue
+    const lis = items.map(({ id, text, verdict: v }) => {
       const slug = v ? str(ctx.object(v, SEM.slug)) ?? 'insight' : 'insight'
-      const pill = o.el(`j${ji}-f${fi}-v`, 'Span', { class: `sem-verdict sem-${slug}` }, [
-        o.el(`j${ji}-f${fi}-v-icon`, 'B', { 'aria-hidden': 'true' }, [o.text(`j${ji}-f${fi}-v-icon-t`, v ? str(ctx.object(v, SEM.symbol)) ?? '·' : '·')]),
-        o.text(`j${ji}-f${fi}-v-t`, v ? labelOf(ctx, v) : 'insight'),
+      const pill = o.el(`${id}-v`, 'Span', { class: `sem-verdict sem-${slug}` }, [
+        o.el(`${id}-v-icon`, 'B', { 'aria-hidden': 'true' }, [o.text(`${id}-v-icon-t`, v ? str(ctx.object(v, SEM.symbol)) ?? '·' : '·')]),
+        o.text(`${id}-v-t`, v ? labelOf(ctx, v) : 'insight'),
       ])
-      return o.el(`j${ji}-f${fi}`, 'Li', {}, [pill, o.el(`j${ji}-f${fi}-p`, 'P', {}, [o.text(`j${ji}-f${fi}-p-t`, f.text)])])
+      return o.el(id, 'Li', {}, [pill, o.el(`${id}-p`, 'P', {}, [o.text(`${id}-p-t`, text)])])
     })
-    sections.push(o.el(`j${ji}`, 'Section', {}, [o.el(`j${ji}-h`, 'H3', {}, [o.text(`j${ji}-h-t`, labelOf(ctx, j))]), o.el(`j${ji}-ul`, 'Ul', {}, lis)]))
-  })
+    sections.push(o.el(jid, 'Section', {}, [o.el(`${jid}-h`, 'H3', {}, [o.text(`${jid}-h-t`, labelOf(ctx, j))]), o.el(`${jid}-ul`, 'Ul', {}, lis)]))
+  }
   if (!sections.length) return message(ctx, focus, text(ctx, focus, C.emptyText) ?? 'No findings yet.')
   o.renders(o.el('root', 'Div', {}, sections))
   return o.quads

@@ -108,6 +108,7 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     const popup = menu.querySelector('[role=menu]')!
     expect(popup.getAttribute('aria-labelledby')).toBe(trigger.id)
+    expect(popup.getAttribute('data-sem-anchor')).toBe(trigger.id)
     expect(trigger.getAttribute('aria-controls')).toBe(popup.id)
     expect(trigger.getAttribute('data-sem-shortcut')).toBe('escape')
     const items = [...popup.querySelectorAll('[role=menuitem]')]

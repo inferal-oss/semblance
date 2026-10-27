@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -64,6 +65,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Text .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -109,6 +111,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Text .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -200,6 +203,7 @@ WHERE {
   # A component as the link's body (c:content) takes the label's place.
   OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -270,6 +274,7 @@ WHERE {
   OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
   BIND(IF(BOUND(?content), rdfhtml:Div, rdfhtml:Span) AS ?element)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -298,14 +303,29 @@ c:LinkedCard a owl:Class ;
 c:label as the link's name (else the content's text), c:external, c:currentPage, as any c:Link."""@en ;
     sem:slug "linked-card" .
 
-# The localization layer for links: the external hint in the viewer's language, at <focus>/~l10n-hint.
+# The localization layer for links: the external hint in the viewer's language, at <focus>/~l10n-hint,
+# and what a link's count counts (c:countLabel), at <focus>/~l10n-count.
 c:LinkTexts a sem:Rendering ;
     sem:targets c:Link ;
     sem:modality mod:Screen ;
     sem:stratum -20 ;
-    sem:inputOnly true ;
-    sem:functionOnly "It is how the viewer's language reaches the SPARQL rule: the language is a projection setting (an engine option), not graph data, so no query can choose by it." .
+    sem:inputOnly true .
 c:LinkTexts-fn a sem:Rule ; sem:implements c:LinkTexts ; sem:function "l10n:link-hint" .
+c:LinkTexts-sparql a sem:Rule ; sem:implements c:LinkTexts ;
+    sem:construct """
+CONSTRUCT { ?node l10n:label ?text }
+WHERE {
+  $this a ?type .
+  FILTER EXISTS { ?viewer l10n:prefers ?preference }
+  # (One pattern for both texts, not a UNION: the focus is bound outside, where bulk evaluation binds it.)
+  VALUES ?which { "hint" "count" }
+  OPTIONAL { FILTER(?which = "hint") ?pickAt l10n:of c:Link ; l10n:hint ?pick }
+  OPTIONAL { FILTER(?which = "hint" && !BOUND(?pick)) c:Link c:externalHint ?any FILTER(isLiteral(?any)) }
+  OPTIONAL { FILTER(?which = "count") ?countPickAt l10n:of $this ; l10n:countLabel ?countPick }
+  OPTIONAL { FILTER(?which = "count" && !BOUND(?countPick)) $this c:countLabel ?countAny FILTER(isLiteral(?countAny)) }
+  BIND(STR(COALESCE(?pick, ?any, ?countPick, ?countAny)) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-", ?which)) AS ?node)
+}""" .
 
 # --- Kbd ---------------------------------------------------------------------------------------
 
@@ -332,6 +352,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:Kbd .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -413,6 +434,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:Kbd .
   BIND($this AS ?self)
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -468,6 +490,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Code .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -504,6 +527,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Code .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
@@ -522,7 +546,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?text)
 }""" .
 c:CodeColoredRendering a sem:Rendering ; sem:targets c:Code ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:functionOnly "It splits a SPARQL or Turtle sample into tokens and colors each, which needs a tokenizer; SPARQL cannot split text into tokens." .
+    sem:functionOnly "awaits sx:Matches (sx:matches): it splits a SPARQL or Turtle sample into tokens to color each, which needs a regex-match relation." ;
+    sem:needsExtension sx:Matches .
 c:CodeColoredRendering-fn a sem:Rule ; sem:implements c:CodeColoredRendering ; sem:function "code:colored" .
 
 # --- Blockquote --------------------------------------------------------------------------------
@@ -551,11 +576,13 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Blockquote .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?quoteOwn)
+  OPTIONAL { ?quoteRdfs_uAt l10n:of $this ; l10n:name ?quoteRdfs_u }
   OPTIONAL { $this rdfs:label ?quoteRdfs_u FILTER(isLiteral(?quoteRdfs_u) && lang(?quoteRdfs_u) = "") }
   OPTIONAL { FILTER(!BOUND(?quoteRdfs_u)) $this rdfs:label ?quoteRdfs_en FILTER(langMatches(lang(?quoteRdfs_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?quoteRdfs_u) && !BOUND(?quoteRdfs_en)) $this rdfs:label ?quoteRdfs_any FILTER(isLiteral(?quoteRdfs_any)) }
@@ -586,11 +613,13 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Blockquote .
   OPTIONAL { $this l10n:label ?localLabel }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
   BIND(STR(COALESCE(?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?ownLabel)
   BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?quoteOwn)
+  OPTIONAL { ?quoteRdfs_uAt l10n:of $this ; l10n:name ?quoteRdfs_u }
   OPTIONAL { $this rdfs:label ?quoteRdfs_u FILTER(isLiteral(?quoteRdfs_u) && lang(?quoteRdfs_u) = "") }
   OPTIONAL { FILTER(!BOUND(?quoteRdfs_u)) $this rdfs:label ?quoteRdfs_en FILTER(langMatches(lang(?quoteRdfs_en), "en")) }
   OPTIONAL { FILTER(!BOUND(?quoteRdfs_u) && !BOUND(?quoteRdfs_en)) $this rdfs:label ?quoteRdfs_any FILTER(isLiteral(?quoteRdfs_any)) }

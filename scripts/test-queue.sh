@@ -11,8 +11,8 @@
 #
 #   scripts/test-queue.sh npx vitest run --maxWorkers=2 test/foo.test.ts
 #
-# A run holds its slot for at most SEMBLANCE_RUN_LIMIT seconds (default 1800, enough for the full
-# suite with both slots busy): past that it and every process it started are stopped (exit 124), so
+# A run holds its slot for at most SEMBLANCE_RUN_LIMIT seconds (default 1800; the full suite no longer
+# fits in one run, so `npm run test:full` runs it in shards, each its own run): past that it and every process it started are stopped (exit 124), so
 # a stuck run cannot hold a slot for the others. Each test also has its own limit (vite.config.ts).
 #
 # SEMBLANCE_QUEUE / SEMBLANCE_LOCK override the queue directory and lock path (tests of this script).

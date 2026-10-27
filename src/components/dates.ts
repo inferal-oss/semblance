@@ -542,14 +542,15 @@ const dateField: FnRule = (ctx, focus) => {
   attr('aria-controls', popupId)
   if (open) attr('data-sem-escape', ''), attr('data-sem-dismiss-outside', '')
   else attr('data-sem-takes-focus', '')
-  const row = o.el('row', 'Div', { class: 'sem-date-row' }, [input, ...(dash ? [dash, endInput!] : []), opener])
+  const rowId = o.node('row').value
+  const row = o.el('row', 'Div', { class: 'sem-date-row', id: rowId }, [input, ...(dash ? [dash, endInput!] : []), opener])
   let grid: NamedNode | undefined
   if (open) {
     grid = o.node('grid')
     o.t(grid, RDF_TYPE, ctx.nn(c('MonthGrid'))).t(grid, c('pickerFor'), focus).t(grid, C.controls, f.target).t(grid, C.property, f.property)
     if (f.endProperty) o.t(grid, c('endProperty'), f.endProperty)
   }
-  const popup = o.el('popup', 'Div', { class: 'sem-date-popup', id: popupId, hidden: open ? undefined : '', role: 'dialog', 'aria-label': choose }, grid ? [grid] : [])
+  const popup = o.el('popup', 'Div', { class: 'sem-date-popup', id: popupId, hidden: open ? undefined : '', role: 'dialog', 'aria-label': choose, 'data-sem-anchor': rowId }, grid ? [grid] : [])
   const label = o.el('label', 'Label', { for: inputId }, [o.text('label-text', caption)])
   const root = o.el('root', 'Div', {})
   place(o, root, [label, row, popup, help, error])
