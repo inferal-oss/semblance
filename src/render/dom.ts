@@ -66,8 +66,8 @@ export class DomRenderer {
   }
 
   /**
-   * Prototype (#201): take over the host's server-rendered children (toHTML of an index in the same
-   * state) instead of rendering them again: each index node is paired with the DOM node the HTML
+   * Take over the host's server-rendered children (toHTML of an index in the same state; see
+   * src/web/takeover.ts and docs/SSR.md) instead of rendering them again: each index node is paired with the DOM node the HTML
    * parser made for it, in document order. Adjacent text nodes, which the parser joins, are split
    * again; an empty one is created. What does not match (another tag, other attributes) is patched
    * as usual, and counted. Host-owned slots keep their content.
@@ -93,7 +93,8 @@ export class DomRenderer {
         return text
       }
       const tag = this.index.tagName(k) ?? 'sem-unknown'
-      if (dom?.nodeType !== 1 || (dom as Element).localName !== tag) {
+      // Case-blind: an HTML parser may lower an SVG element's name (linearGradient) that a browser keeps.
+      if (dom?.nodeType !== 1 || (dom as Element).localName.toLowerCase() !== tag.toLowerCase()) {
         mismatches++
         const el = this.element(k)
         parent.insertBefore(el, dom)

@@ -55,7 +55,12 @@ export async function siteRoutes(site: Site, opts: RenderSiteOptions = {}): Prom
 }
 
 /** Load a site description: a module whose default export is a Site (semblance.config.ts). */
+let tsx: Promise<unknown> | undefined
+
 export async function loadSite(config: string): Promise<Site> {
+  // The description and what it imports may be TypeScript Node cannot strip alone (Vite loads its
+  // own config its own way): tsx loads them.
+  await (tsx ??= import('tsx/esm/api').then((m) => m.register()))
   const mod = (await import(pathToFileURL(resolve(config)).href)) as { default?: Site; site?: Site }
   const site = mod.default ?? mod.site
   if (!site?.root) throw new Error(`${config} exports no site (export default defineSite({ root, graphs }))`)
@@ -109,7 +114,7 @@ export async function buildSite(opts: BuildOptions): Promise<{ pages: number; ms
   const css = results.find((r) => r.css !== undefined)?.css
   if (css !== undefined && !opts.single) writeFileSync(join(opts.outDir, 'semblance.css'), css)
   const ms = performance.now() - t0
-  log(`semblance: ${routes.length} pages, ${(bytes / 1024).toFixed(0)} KiB of HTML, in ${(ms / 1000).toFixed(1)} s`)
+  log(`semblance: ${routes.length} page${routes.length === 1 ? "" : "s"}, ${(bytes / 1024).toFixed(0)} KiB of HTML, in ${(ms / 1000).toFixed(1)} s`)
   return { pages: routes.length, ms, bytes }
 }
 
