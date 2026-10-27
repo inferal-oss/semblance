@@ -33,5 +33,15 @@ document.getElementById('theme').addEventListener('change',event=>{runtime.trans
 document.getElementById('scheme').addEventListener('change',event=>{runtime.transaction(()=>{for(const name of ['before','after'])set(UI+name,STY+'colorScheme',STY+event.target.value,true);});flush();});
 document.getElementById('direction').addEventListener('change',event=>{document.documentElement.dir=event.target.value;report();});
 document.getElementById('update').addEventListener('click',()=>{runtime.transaction(()=>{set(UI+'p0',C+'value',25);set(UI+'p1',C+'value',25);set(UI+'p0',C+'label','25 percent');set(UI+'p1',C+'label','25 percent');});flush();});
-document.getElementById('clear').addEventListener('click',()=>{const f=store.factory;const remove=store.match(null,f.namedNode(H+'style'),null,projection.engine.graph);projection.index.apply({remove,add:[]});flush();});
+document.getElementById('clear').addEventListener('click',()=>{
+  const f=store.factory,g=projection.engine.graph;
+  const remove=[...store.match(null,f.namedNode(H+'style'),null,g)];
+  // Both RDF/HTML spellings reach the same DOM style: direct properties on
+  // Progress, and explicit Attribute nodes on the SVG chart marks.
+  for(const attribute of store.match(null,f.namedNode(H+'attributeName'),f.literal('style'),g)){
+    remove.push(...store.match(null,f.namedNode(H+'attribute'),attribute.subject,g));
+    remove.push(...store.match(attribute.subject,null,null,g));
+  }
+  projection.index.apply({remove,add:[]});flush();
+});
 flush();

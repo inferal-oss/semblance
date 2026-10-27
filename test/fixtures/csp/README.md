@@ -21,6 +21,9 @@ and color the same stock components, with no additional violations.
   should take one quarter of its track; its keyed graph/DOM nodes persist.
 - Try stock themes, Day/Night, a phone viewport and RTL. The graph values and
   series colors should still apply.
+- Remove dynamic style clears both direct Progress styles and explicit RDF/HTML
+  style Attribute nodes on the SVG chart marks. The fixed view should then lose
+  its progress fill and series color too, without replacing its keyed nodes.
 - The declaration probe starts with a quoted custom value containing `;` and
   `:`, a 70px width and an important color. Its button updates the width/value,
   removes the priority, then removes the style attribute entirely.

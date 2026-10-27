@@ -69,6 +69,16 @@ describe('graph style declaration reflection', () => {
     expect(f.renderer.ops - ops).toBe(1)
     expect(f.element.style.getPropertyValue('--sem-progress')).toBe('75')
   })
+  it('removes SVG style attributes represented by explicit RDF/HTML Attribute nodes', () => {
+    const f = fixture('svg:Svg')
+    const attributes = parse('ui:root h:attribute ui:style . ui:style a h:Attribute ; h:attributeName "style" ; h:attributeValue "stroke: red; fill: none" .')
+    f.index.apply({ remove: [], add: attributes }); f.renderer.flush()
+    expect(f.element.style.getPropertyValue('stroke')).toBe('red')
+    const original = f.element
+    f.index.apply({ remove: attributes, add: [] }); f.renderer.flush()
+    expect(f.element.hasAttribute('style')).toBe(false)
+    expect(f.renderer.nodeOf(root)).toBe(original)
+  })
   it('reflects SVG presentation styles through the same CSSOM path', () => {
     const f = fixture('svg:Svg'), value = 'stroke: var(--sem-series-1); fill: none'
     f.patch('', value)
