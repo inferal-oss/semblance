@@ -320,7 +320,7 @@ describe('the command palette goes to places', () => {
     p.press('Enter')
     await new Promise((r) => setTimeout(r, 0))
     h.shell.flush()
-    expect(t.location.hash).toBe('#docs/rules')
+    expect(t.location.pathname + t.location.hash).toBe('/docs/rules/')
     expect(t.history.pushes).toBe(1)
     expect(p.fact('app', UI + 'page')).toEqual([UI + 'Docs'])
     expect(p.fact('app', UI + 'docSection')).toEqual([UI + 'DocRules'])

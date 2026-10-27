@@ -1,7 +1,7 @@
 // llms.txt (llmstxt.org) for the site, generated from the graph that runs it: the ontology
 // (ONTOLOGY_FILES) and the site (demo/app.ttl, demo/gallery/*.ttl). Besides /llms.txt and
 // /llms-full.txt it writes one Markdown page per component, layer, doc section and example under
-// /llms/, since the site routes by fragment (#components/...) and a crawler cannot render it.
+// /llms/, which a crawler reads as Markdown (the site's own pages are rendered at build time too).
 // Every page body is Semblance's own text projection of that part of the graph (toText of a
 // mod:Text projection); site routes come from the navigation model (addressOf).
 //
@@ -119,7 +119,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
   const page = (path: string) => SITE + path
   const route = (t: Term) => {
     const a = addressOf(g.reader, t)
-    return a && a !== '#' ? SITE + a : undefined
+    return a && a !== '#' && a !== '/' ? new URL(a, SITE).href : undefined
   }
   const repo = (path: string) => `${REPO}/blob/main/${path}`
   const firstSentence = (s: string) => {
@@ -270,7 +270,7 @@ export function generateLlms(options: LlmsOptions = {}): Map<string, string> {
       '',
       'Every component class is listed by its group (sem:group), with its page, its specimen in the gallery and its entry in the Reference; the layers and the complete examples follow.',
       '',
-      `Every page linked below is Markdown generated from the graph that runs ${SITE}: its body is the site's own text projection of that part of the graph. The site itself routes by fragment (\`#components/...\`), so those links need a browser that runs it.`,
+      `Every page linked below is Markdown generated from the graph that runs ${SITE}: its body is the site's own text projection of that part of the graph. The site itself routes by path (\`/components/...\`); each of its pages is rendered at build time, so those links work without scripts too.`,
     ].join('\n'),
   ]
   const docsSection = [

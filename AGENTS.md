@@ -150,7 +150,8 @@ npx tsc --noEmit       # typecheck
 | `src/behaviour/` | event bus, reactions, scheduler, clock |
 | `src/view/` | maintained views (IVM, `docs/IVM.md`) |
 | `src/components/`, `src/layers/` | function twins and reaction functions |
-| `src/web/`, `src/node/` | store loading per platform; `mount` |
+| `src/web/`, `src/node/` | store loading per platform; `mount`; taking over server-rendered HTML (`src/web/takeover.ts`) |
+| `src/server/`, `semblance.config.ts` | server-side rendering (`docs/SSR.md`): `renderToString`, documents, sites; the static build and the request handler are in `src/node/site.ts`, the Vite plugin in `src/node/vite.ts`, the CLI in `bin/` |
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |

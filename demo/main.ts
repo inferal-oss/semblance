@@ -1,3 +1,4 @@
+performance.mark('sem:main')
 import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
@@ -7,14 +8,16 @@ import { Fullscreen } from '../src/fullscreen.ts'
 import { Islands } from '../src/foreign.ts'
 import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
-import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
+import { EX, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
-import { Navigation, rendererReveal } from '../src/navigation.ts'
+import { Navigation, rendererReveal, setBase } from '../src/navigation.ts'
 import { attachIntent } from '../src/intent.ts'
 import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
-import { isExampleSource, recordSources } from '../src/sources.ts'
+import { graphLanguages } from '../src/server/render.ts'
+import { serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
+import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteGraphs, siteLayers } from './site.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -47,26 +50,24 @@ const prefer = (kind === 'n3' ? 'function' : (params.get('prefer') ?? 'sparql'))
 // second run, or in idle time (?compile=off|run|idle; Tools › Engine). By default in idle time on
 // the Rust engine, where it pays on whole pages, and off on WAT, where queries are too small a part
 // of a page for it to.
-type CompileMode = 'off' | 'run' | 'idle'
 const defaultCompile = (store: string): CompileMode => (store === 'rust' ? 'idle' : 'off')
 const compileParam = ['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? (params.get('compile') as CompileMode) : undefined
 const compile = compileParam ?? defaultCompile(kind)
-const COMPILES = { off: 'CompileOff', run: 'CompileOnRun', idle: 'CompileIdle' } as const
-const STORES: Record<StoreKind, string> = { wat: 'SemblanceWasm', rust: 'SemblanceRust', hybrid: 'Hybrid', oxigraph: 'Oxigraph', n3: 'N3' }
-const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 
 // Only the chosen store's code and WASM are loaded.
 await initWeb(kind)
+performance.mark('sem:wasm')
 // The Components page: one graph per component group (demo/gallery/*.ttl).
-const galleryFiles = import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-const gallery = Object.values(galleryFiles)
+const galleryFiles = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>).map(([p, t]) => ['demo/' + p.slice(2), t]))
 const storeOptions = { compiled: compile === 'idle' ? ('idle' as const) : compile === 'run' }
-const store = loadStoreWith(kind, storeOptions, todoApp(5), appGraph, ...gallery)
+const store = loadStoreWith(kind, storeOptions, ...siteGraphs(appGraph, galleryFiles))
+performance.mark('sem:store')
 // The examples show their own source, recorded as data (c:SourceText).
-recordSources(store, {
-  'src/examples/todo.ts': todoApp(5),
-  ...Object.fromEntries(Object.entries(galleryFiles).map(([p, t]) => ['demo/' + p.slice(2), t]).filter(([p]) => isExampleSource(p!))),
-})
+recordSiteSources(store, galleryFiles)
+// One file is one page: where we are goes in the fragment.
+if (import.meta.env.MODE === 'single') carryInFragment(store)
+// Served under a path (SEMBLANCE_BASE): the site's paths start there.
+else if (import.meta.env.BASE_URL.startsWith('/') && import.meta.env.BASE_URL !== '/') setBase(store, import.meta.env.BASE_URL)
 // Remembered state (per:Policy nodes in the graph) is restored before the first projection.
 const persistence = new Persistence(store, {
   [NS.per + 'Session']: webStorageBackend(sessionStorage),
@@ -77,36 +78,45 @@ await persistence.restore().catch((e) => console.warn('[semblance] could not res
 // Where we are (ui:location in app.ttl): the address over what storage kept, before the first projection too.
 const navigation = new Navigation(store, { root: UI + 'shell', persistence })
 await navigation.restore()
+performance.mark('sem:restore')
 const f = store.factory
 const nn = (iri: string) => f.namedNode(iri)
 const app = nn(UI + 'app')
 const dg = f.defaultGraph()
 const appValues = (p: string) => store.match(app, nn(p), null, dg).map((q) => q.object)
-const setApp = (p: string, value: string) => {
-  for (const q of store.match(app, nn(p), null, dg)) store.delete(q)
-  store.add(f.quad(app, nn(p), nn(value), dg))
-}
 
-// Settings that arrive through the URL become graph state before projecting.
-setApp(UI + 'store', UI + STORES[kind])
-setApp(UI + 'rules', UI + RULES[prefer])
-setApp(UI + 'compile', UI + COMPILES[compile])
+// Settings that arrive through the URL become graph state before projecting (as the build does: site.ts).
+prepareSite(store, { kind, prefer, compile })
 
 const runtime = new Runtime(store)
-const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
-// Each projection evaluates only what is shown under its mount root (demand-driven).
-const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] })
-const text = runtime.project({ modality: MOD.Text, prefer, provenance: true, name: 'text', roots: [EX + 'page'] })
+const enabledLayers = () => siteLayers(store)
+// Each projection evaluates only what is shown under its mount root (demand-driven), in the
+// graph's language (the address's): a page rendered beforehand was too. Provenance is recorded
+// from when something reads it (the inspector, a card turned over), not for the first page.
+const languages = graphLanguages(store, ROOT)
+const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, provenance: 'onDemand', languages, name: 'screen', roots: [ROOT] })
+const text = runtime.project({ modality: MOD.Text, prefer, provenance: 'onDemand', languages, name: 'text', roots: [EX + 'page'] })
+performance.mark('sem:rules')
 
 // The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere.
 if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
 
-const sheet = new CSSStyleSheet()
-const css = compileStyles(store)
-sheet.replaceSync(css)
-document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+// A page rendered beforehand links the stylesheet the build compiled from this graph: it is not compiled again.
+let css = serverStyled(document) ? undefined : compileStyles(store)
+const siteCss = () => (css ??= compileStyles(store))
+if (css !== undefined) {
+  const sheet = new CSSStyleSheet()
+  sheet.replaceSync(css)
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+}
+performance.mark('sem:styles')
 
-const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
+const shell = new DomRenderer(screen.index, document.getElementById('app')!, ROOT)
+// A page rendered beforehand (npm run build: every address of the site) is taken over as it is:
+// the projection has the same nodes, so none is created. What the visitor did meanwhile is replayed
+// once everything listens (at the end).
+const takeover = serverRendered(shell.host) ? takeOver(shell) : undefined
+if (takeover) performance.mark('sem:adopted', { detail: { nodes: takeover.nodes, mismatches: takeover.mismatches } })
 // The Text projection mounts into its slot once the slot is shown (it is evaluated on demand).
 let textDom: DomRenderer | undefined
 // The Layout page's c:HostSlot specimen: content the host owns (a native slider), mounted once.
@@ -121,6 +131,20 @@ function hostSlotDemo(slot: Element | undefined) {
   row.style.cssText = 'display: flex; gap: 0.75em; align-items: center'
   row.append(input, output)
   slot.append(row)
+}
+
+/** Build when the slot comes near the view, in idle time (at once where there is no IntersectionObserver). */
+function deferUntilSeen(slot: Element, build: () => void) {
+  if (!('IntersectionObserver' in window)) return build()
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return
+      observer.disconnect()
+      idle(() => build())
+    },
+    { rootMargin: '200px' },
+  )
+  observer.observe(slot)
 }
 
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
@@ -143,10 +167,14 @@ sandboxes = new Sandboxes(runtime, screen, {
   load: (...turtle) => loadStoreWith(kind, storeOptions, ...turtle),
   prefer,
   languages: () => [...screen.engine.languages],
-  siteCss: css,
+  siteCss,
+  // Each example loads the ontology into a store of its own: built once its slot is near the view,
+  // after the page has painted (an example below the fold waits until it is scrolled to).
+  defer: deferUntilSeen,
 })
 sandboxes.attach()
 flush()
+performance.mark('sem:patch', { detail: { ops: shell.ops } })
 // Views that follow their queries (sem:refresh sem:NextFrame) re-run at the next frame.
 runtime.onRefresh(flush)
 
@@ -438,6 +466,9 @@ navigation.attach(runtime, {
 const checkPerf = perfRunner(runtime, flush)
 syncSettings()
 flush()
+// What the visitor did before the client was ready happens now (the page was taken over).
+if (takeover) takeover.replay()
+performance.mark('sem:ready')
 
 // Hidden views are evaluated in idle time, a slice at a time, so navigation finds
 // them ready and interactions never pay for them.

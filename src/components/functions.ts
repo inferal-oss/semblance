@@ -349,6 +349,13 @@ function splitZones(ctx: RuleContext, o: ReturnType<RuleContext['out']>, focus: 
   })
 }
 
+/** Whether a nav:Dimension the path carries (not a target) is `property` of `target`: a chooser of it goes somewhere. */
+function navigatesBy(ctx: RuleContext, target: Term, property: Term): boolean {
+  return ctx.match(null, NS.nav + 'subject', target).some(
+    (q) => ctx.match(q.subject, NS.nav + 'property', property).length > 0 && ctx.match(q.subject, NS.nav + 'carriedBy', ctx.nn(NS.nav + 'Path')).length > 0 && ctx.match(q.subject, RDF_TYPE, ctx.nn(NS.nav + 'TargetDimension')).length === 0,
+  )
+}
+
 const segmented: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)
   const property = ctx.object(focus, C.property)
@@ -361,6 +368,8 @@ const segmented: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${line}`)]))
     return o.quads
   }
+  // Over a place the address's path carries, a form whose buttons submit to the address each sets.
+  const navigates = navigatesBy(ctx, target, property)
   const buttons = options(ctx, focus, property).map((opt) => {
     const key = encodeForUri(opt.value)
     const symbol = str(ctx.object(opt, SEM.symbol))
@@ -368,12 +377,13 @@ const segmented: FnRule = (ctx, focus) => {
       ...(symbol ? [o.el('opt-' + key + '-symbol', 'Span', {}, [o.text('opt-' + key + '-symbol-text', symbol)])] : []),
       o.el('opt-' + key + '-label', 'Span', {}, [o.text('opt-' + key + '-label-text', label(ctx, opt))]),
     ]
-    const b = o.el('opt-' + key, 'Button', { type: 'button' }, parts)
+    const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button' }, parts)
     o.attr(b, 'aria-pressed', String(opt.value === current))
     o.t(b, C.selects, opt)
     return b
   })
-  const root = o.el('root', 'Div', {}, buttons)
+  const root = o.el('root', navigates ? 'Form' : 'Div', {}, buttons)
+  if (navigates) o.attr(root, 'method', 'get')
   o.attr(root, 'role', 'group').attr(root, 'aria-label', caption)
   o.renders(root)
   return o.quads

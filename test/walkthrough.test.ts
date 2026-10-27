@@ -163,7 +163,7 @@ describe('a walkthrough', () => {
     const t = todo()
     const list = t.mention('c:List')
     expect(list.localName).toBe('a')
-    expect(list.getAttribute('href')).toBe('#reference/c:List')
+    expect(list.getAttribute('href')).toBe('/reference/c:List/')
     expect(list.getAttribute('aria-description')).toBe('c:List, in the diagram; opens its page')
     expect(t.node(C + 'List')).toBeDefined()
   })

@@ -20,7 +20,7 @@
 # c:ClassDoc). Only the visible tab is evaluated; a selection re-runs it and the tree's own rule.
 # Above the tree, a combobox finds any term the tree lists (c:optionsFrom), by prefixed name or
 # label, the 20 best matches as you type; "/" goes to it from anywhere on the page, and picking
-# one selects it, so the address follows (#reference/c:List).
+# one selects it, so the address follows (/reference/c:List/).
 
 ui:referenceSubject rdfs:label "Term" , "Термін"@uk , "Begriff"@de , "المصطلح"@ar .
 ui:app ui:referenceSubject c:Window .

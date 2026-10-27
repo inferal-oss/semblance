@@ -77,8 +77,8 @@ ui:doc-ov-pipeline a c:Code ; c:block true ; c:label """component graph  ──�
 DOM interaction ──► RDF event ──► reactions (CONSTRUCT pairs) ──► one delta ──► change log (LDES)""" .
 ui:doc-ov-4 a c:Text ; c:children ( "Everything you see on this site is built that way, including this page and the tools (" ui:doc-ov-kbd " opens them). The " ui:doc-ov-examples " show complete applications; the " ui:doc-ov-components " page shows every component on its own." ) .
 ui:doc-ov-kbd a c:Kbd ; c:keys ( "⌘" "." ) .
-ui:doc-ov-examples a c:Link , c:Setter ; c:label "examples" ; c:href "#examples" ; c:controls ui:app ; c:property ui:page ; c:value ui:Examples .
-ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "#components" ; c:controls ui:app ; c:property ui:page ; c:value ui:Components .
+ui:doc-ov-examples a c:Link , c:Setter ; c:label "examples" ; c:href "/examples/" ; c:controls ui:app ; c:property ui:page ; c:value ui:Examples .
+ui:doc-ov-components a c:Link , c:Setter ; c:label "components" ; c:href "/components/" ; c:controls ui:app ; c:property ui:page ; c:value ui:Components .
 
 # --- Getting started ---
 # Every step that shows Turtle shows it live (c:LiveExample, ontology/components/live.ttl): the
@@ -110,7 +110,7 @@ ui:doc-gs-5 a c:Text ; c:label "A component of your own is an OWL class under se
 ui:doc-gs-5b a c:Text ; c:label "Its shape says what an instance must say: take the label off ex:cups and the shapes layer outlines it and says why. Building components goes further: containers, lists, text output, layers, and when (rarely) to write a rule as a function." .
 ui:doc-gs-6 a c:Text ; c:label "State is triples too, and events change it through reactions: a reaction names the event and its source and says what to delete and what to insert, as CONSTRUCTs over $this and $event. Click Have another: the reaction runs in the example's graph, and only what depends on the change is rendered again." .
 ui:doc-gs-7 a c:Text ; c:children ( "The complete example is examples/hello in the repository, and docs/GETTING-STARTED.md walks through it, including rendering on the server. " ui:doc-gs-recipes " has more small examples, each live." ) .
-ui:doc-gs-recipes a c:Link , c:Setter ; c:label "Recipes" ; c:href "#docs/recipes" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
+ui:doc-gs-recipes a c:Link , c:Setter ; c:label "Recipes" ; c:href "/docs/recipes/" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
 
 ui:gs-page a c:LiveExample ; c:label "A page" ; c:exampleRoot <https://example.org/hello#page> ; c:sources ( ui:gs-page-app ) .
 ui:gs-page-app a c:CodeEditor ; c:language "turtle" ; c:label "app.ttl" ; c:original '''@prefix ex: <https://example.org/hello#> .
@@ -538,10 +538,10 @@ ui:in-ssr rdfs:label "Server" . ui:in-per rdfs:label "Remembering" . ui:in-nav r
 ui:doc-in-stall-h a c:Heading ; c:level 2 ; c:label "When the page is busy" .
 ui:doc-in-stall-1 a c:Text ;
     c:children ( "A turn - an event, its reactions, the maintained views and every projection's rules - has a budget. The engine checks it between evaluations; over it, the turn is suspended at a consistent point and what is left is held, not lost. The stall effect records a " ui:doc-in-m-Stall ", raises an event on your " ui:doc-in-m-Watchdog " and its reaction opens your dialog, a " ui:doc-in-m-Report " in an ordinary c:Dialog. Hangs nothing could interrupt are noticed by a heartbeat worker and the browser's long-task observers, and logged to " ui:doc-in-m-Log " (Tools › Engine)." ) .
-ui:doc-in-m-Stall a c:Link ; c:label "sem:Stall" ; c:to sem:Stall ; c:href "#reference/sem:Stall" .
-ui:doc-in-m-Watchdog a c:Link ; c:label "sem:Watchdog" ; c:to sem:Watchdog ; c:href "#reference/sem:Watchdog" .
-ui:doc-in-m-Report a c:Link ; c:label "c:StallReport" ; c:to c:StallReport ; c:href "#reference/c:StallReport" .
-ui:doc-in-m-Log a c:Link ; c:label "sem:StallLog" ; c:to sem:StallLog ; c:href "#reference/sem:StallLog" .
+ui:doc-in-m-Stall a c:Link ; c:label "sem:Stall" ; c:to sem:Stall ; c:href "/reference/sem:Stall/" .
+ui:doc-in-m-Watchdog a c:Link ; c:label "sem:Watchdog" ; c:to sem:Watchdog ; c:href "/reference/sem:Watchdog/" .
+ui:doc-in-m-Report a c:Link ; c:label "c:StallReport" ; c:to c:StallReport ; c:href "/reference/c:StallReport/" .
+ui:doc-in-m-Log a c:Link ; c:label "sem:StallLog" ; c:to sem:StallLog ; c:href "/reference/sem:StallLog/" .
 ui:doc-in-stall-code a c:Code ; c:block true ; c:label """ui:watchdog a sem:Watchdog ; sem:budget "PT1.5S"^^xsd:duration ; sem:stallDialog ui:busy .
 ui:busy a c:Dialog ; c:label "The page is busy" ; c:content ui:busyReport ; c:actions ( ui:stop ui:continue ) .
 ui:busyReport a c:StallReport ; c:of ui:watchdog .
@@ -684,7 +684,7 @@ ex:ghost a c:Button ; c:label "Ghost" ; sty:tone sty:Accent ; sty:emphasis sty:G
     sty:declares [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.06em" ] .''' .
 ui:doc-st-3 a c:Text ; c:children ( "Themes for part of a page, with a picker, are a " ui:doc-st-recipe "." ) .
-ui:doc-st-recipe a c:Link , c:Setter ; c:label "recipe" ; c:href "#docs/recipes" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
+ui:doc-st-recipe a c:Link , c:Setter ; c:label "recipe" ; c:href "/docs/recipes/" ; c:controls ui:app ; c:property ui:docSection ; c:value ui:DocRecipes .
 ui:doc-st-2 a c:Text ; c:label "A theme (sty:theme on any subtree) re-values every token; structural themes add rules narrowed to themselves that rebuild title bars, controls and docks. Contrast, motion and density compose with every theme." .
 
 # --- Persistence ---

@@ -254,6 +254,11 @@ const screen = new Runtime(store).project({ modality: MOD.Screen, roots: [page] 
 const html = toHTML(screen.index, page)
 ```
 
+To serve an app already rendered, describe it once as a site (`semblance.config.ts`, as in
+`examples/hello`). Then `npx semblance build` renders every address of it into the build, each a
+page the browser paints before any script runs, and `npx semblance serve` renders per request.
+`mount()` takes the rendered page over without rendering it again. See [SSR.md](SSR.md).
+
 ## Stores
 
 `mount` uses Semblance's own WebAssembly engine (`wat`, about 30 KB) when the build has it, else

@@ -31,6 +31,8 @@ them) and the component it belongs to (nav:root, the mount root of its projectio
 one page each have their own location; only one may carry the URL's fragment."""@en .
 nav:root a owl:ObjectProperty ; rdfs:domain nav:Location ;
     rdfs:comment "The component whose projection this location belongs to (its mount root)."@en .
+nav:base a owl:DatatypeProperty ; rdfs:domain nav:Location ; rdfs:range xsd:string ;
+    rdfs:comment "Where the location's paths start (nav:Path): \"/\" (the default) for an app at its origin's root, \"/docs/app/\" for one under a path. Ends with a slash."@en .
 nav:dimensions a owl:ObjectProperty ; rdfs:domain nav:Location ; rdfs:range rdf:List ;
     rdfs:comment "The location's dimensions, in the order a path-style fragment spells them."@en .
 
@@ -88,6 +90,27 @@ nav:carriedBy a owl:ObjectProperty ; rdfs:domain nav:Dimension ; rdfs:range nav:
 nav:rank a owl:DatatypeProperty ; rdfs:domain nav:Carrier ; rdfs:range xsd:integer ;
     rdfs:comment "Precedence on load: lower wins."@en .
 
+nav:implicit a owl:ObjectProperty ; rdfs:domain nav:Dimension ;
+    rdfs:comment "A value the address leaves unspelled: the place is the same with or without it (the language a site is in by default: /components/, not /en/components/)."@en .
+
+nav:rendersInPlace a owl:DatatypeProperty ; rdfs:domain nav:Dimension ; rdfs:range xsd:boolean ;
+    rdfs:comment "The dimension's values are shown one at a time in one place that re-renders in place (a reference's term): a static build renders the pages that differ only in it one after another in one runtime, rather than each from a fresh store. Its pages are the same either way (test/ssr.test.ts checks the site's)."@en .
+
+nav:keeps a owl:ObjectProperty ;
+    rdfs:comment "Derived, on a link: a dimension whose current value its address keeps (the language; the page, for what is on every page). A change of that dimension's value re-runs the link's destination, and only then (sem:readsLocation)."@en .
+nav:TopDimensions a owl:NamedIndividual ;
+    rdfs:comment "As the object of sem:readsLocation: the rendering reads only the top-level dimensions (no nav:parent: the language, the page), as a link keeps them."@en .
+
+nav:Path a nav:Carrier ; nav:rank 0 ; sem:order 0 ;
+    rdfs:label "The address (/)"@en , "Адреса (/)"@uk , "Die Adresse (/)"@de , "العنوان (/)"@ar ;
+    rdfs:comment """The URL's path after the location's nav:base, one segment per dimension and a slash after
+each: /docs/rules/, /components/inputs/. A path is a page of its own, which a server (or a static
+build) renders before any script runs, and which a link reaches without scripts. Followed links
+under the base are taken over by the navigation effect (no page load). A fragment that spells a
+dimension the path carries (a link from before) is read too, and the address rewritten as a path.
+The target (nav:TargetDimension) stays in the fragment. A link spells what shows its resource,
+and keeps where we are for the rest: the current value of each top-level path dimension nothing
+on the way to the resource decides (the language; the page, for what is on every page)."""@en .
 nav:Fragment a nav:Carrier ; nav:rank 1 ; sem:order 1 ;
     rdfs:label "The address (#)"@en , "Адреса (#)"@uk , "Die Adresse (#)"@de , "العنوان (#)"@ar ;
     rdfs:comment "The URL's fragment, path style: #docs/rules, #components/inputs/inp-codes-spec."@en .
@@ -202,13 +225,13 @@ WHERE {
 nav:from a owl:ObjectProperty ; rdfs:comment "A containment edge's part."@en .
 nav:to a owl:ObjectProperty ; rdfs:comment "A containment edge's container."@en .
 
-c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to .
+c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation nav:TopDimensions .
 c:LinkDestination-fn a sem:Rule ; sem:implements c:LinkDestination ; sem:function "navigation:link-destination" .
 c:LinkDestination-sparql a sem:Rule ;
     sem:implements c:LinkDestination ;
     sem:bulk false ;
     sem:construct """
-CONSTRUCT { $this nav:href ?href }
+CONSTRUCT { $this nav:href ?href . $this nav:keeps ?keptDim }
 WHERE {
   $this c:to ?to . FILTER(isIRI(?to))
   ?loc a nav:Location ; nav:root ?root .
@@ -218,13 +241,19 @@ WHERE {
   BIND(!?shown && (EXISTS { ?anyOf a ?to } || EXISTS { ?anyS ?to ?anyO }
        || EXISTS { ?onto a owl:Ontology FILTER(STR(?onto) = ?ns || STR(?onto) = SUBSTR(?ns, 1, STRLEN(?ns) - 1)) }) AS ?term)
   FILTER(?shown || ?term)
-  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(?part; separator="/") AS ?parts) WHERE {
-    { SELECT DISTINCT ?to ?loc ?d ?part ?order WHERE {
-      { SELECT ?to ?loc ?d ?v WHERE {
+  # Path segments end with '/'; fragment ones start with '#' (only the first stays: the rest become '/').
+  # Each dimension once: what shows the resource decides it (rank 0); the rest of where we are is
+  # kept (rank 1: the top-level dimensions, nav:keeps). An implicit value is kept without a part.
+  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(IF(?part = "", "", IF(?inPath, CONCAT(?part, "/"), CONCAT("#", ?part))); separator="") AS ?parts)
+                             (GROUP_CONCAT(IF(?kept, STR(?d), ""); separator=" ") AS ?keptList) (MAX(IF(?inPath, 1, 0)) AS ?pathRows) WHERE {
+   { SELECT ?to ?loc ?d ?part ?kept ?inPath ?order WHERE {
+    { SELECT ?to ?loc ?d (MIN(CONCAT(?prio, ?part0)) AS ?best) (SAMPLE(?inPath0) AS ?inPath) (SAMPLE(?order0) AS ?order) WHERE {
+    { SELECT DISTINCT ?to ?loc ?d ?prio (?part AS ?part0) (?inPath AS ?inPath0) (?order AS ?order0) WHERE {
+      { SELECT ?to ?loc ?d ?v ?prio WHERE {
         $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
         {
           # Shown: the cases of the switches on the way down, and the target - unless it is a whole case.
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           ?to (^nav:from/nav:to)* ?root .
           ?to (^nav:from/nav:to)* ?casea .
       LATERAL { ?casea c:when ?v . ?edgea nav:from ?casea ; nav:to ?switcha .
@@ -237,22 +266,34 @@ WHERE {
         ?switchc c:cases ?casesc ; c:controls ?controlsc ; c:property ?propertyc .
         ?pa nav:subject ?controlsc ; nav:property ?propertyc . FILTER NOT EXISTS { ?pa a nav:TargetDimension } } })
         } UNION {
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           ?to (^nav:from/nav:to)* ?root .
           ?d a nav:TargetDimension ; nav:carriedBy nav:Fragment .
           FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
           BIND(?to AS ?v)
         } UNION {
+          # Where we are, kept for what nothing on the way to it decides (ranked below what does):
+          # the path's top-level dimensions (the language; the page, for what is on every page).
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("1" AS ?prio)
+          ?loc nav:dimensions ?kh . ?kh rdf:rest* ?kc . ?kc rdf:first ?d .
+          ?d nav:carriedBy nav:Path ; nav:subject ?ks ; nav:property ?kp .
+          FILTER NOT EXISTS { ?d nav:parent ?kpar }
+          FILTER NOT EXISTS { ?d a nav:TargetDimension }
+          ?ks ?kp ?v .
+        } UNION {
           # A term: the dimension whose values are terms, and what its parents need for it to apply.
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
           ?loc nav:dimensions ?termHead . ?termHead rdf:rest* ?termCell . ?termCell rdf:first ?termDim .
-          ?termDim nav:showsTerms true ; nav:carriedBy nav:Fragment .
+          ?termDim nav:showsTerms true ; nav:carriedBy ?termCarrier . FILTER(?termCarrier IN (nav:Path, nav:Fragment))
           { ?termDim nav:showsTerms true . BIND(?termDim AS ?d) } UNION { ?termDim nav:showsTerms true ; nav:parent* ?x . ?x nav:parent ?d ; nav:when ?when }
           BIND(IF(?d = ?termDim, ?to, ?when) AS ?v)
         }
       } }
-      ?d nav:carriedBy nav:Fragment .
+      # The part of the address that spells it: the path when it is carried there, else the fragment.
+      ?d nav:carriedBy ?dc . FILTER(?dc IN (nav:Path, nav:Fragment))
+      FILTER(IF(EXISTS { ?d a nav:TargetDimension }, ?dc = nav:Fragment, ?dc = nav:Path || NOT EXISTS { ?d nav:carriedBy nav:Path }))
+      BIND(?dc = nav:Path AS ?inPath)
       OPTIONAL { ?d nav:keyProperty ?keyPropertys }
       BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
       OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
@@ -269,20 +310,125 @@ WHERE {
            IF(EXISTS { ?d a nav:TargetDimension }, COALESCE(STR(?anchors), REPLACE(STR(?v), "^.*[#/]", "")),
            COALESCE(?keys, STRAFTER(?bests, " "), STR(?v)))) AS ?texts)
       # As encodeURIComponent writes it, with ':' and '@' kept readable.
-      BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
-           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+      # The value the address leaves unspelled (nav:implicit) has no part.
+      BIND(IF(EXISTS { ?d nav:implicit ?v }, "", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?part)
       # Parents before their children, in the location's order; a parent not carried here after; the target last.
       # (From the location's list head forward: Oxigraph walks a list path from its far end slowly.)
       {{ SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d }} GROUP BY ?d }}
       OPTIONAL {{ ?d nav:parent ?p1 . {{ SELECT ?p1 (COUNT(DISTINCT ?before1) AS ?at1) WHERE {{ ?l1 a nav:Location ; nav:dimensions ?h1 . ?h1 rdf:rest* ?before1 . ?before1 rdf:rest* ?c1 . ?c1 rdf:first ?p1 }} GROUP BY ?p1 }} }}
       BIND(SUBSTR(CONCAT("000", STR(?at)), STRLEN(STR(?at)) + 1) AS ?own)
-      BIND(IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
+      # The path's dimensions first; a parent counts when the same part spells it.
+      BIND(CONCAT(IF(?inPath, "0", "1"), IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
            IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
-           IF(EXISTS {{ ?p1 nav:carriedBy nav:Fragment }}, CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own)))) AS ?order)
-    } ORDER BY ?order }
+           IF(IF(?inPath, EXISTS {{ ?p1 nav:carriedBy nav:Path }}, EXISTS {{ ?p1 nav:carriedBy nav:Fragment }} && NOT EXISTS {{ ?p1 nav:carriedBy nav:Path }}), CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own))))) AS ?order)
+    } }
+    } GROUP BY ?to ?loc ?d }
+    BIND(SUBSTR(?best, 2) AS ?part)
+    BIND(STRSTARTS(?best, "1") AS ?kept)
+   } ORDER BY ?order }
   } GROUP BY ?to ?loc }
-  BIND(CONCAT("#", COALESCE(?parts, "")) AS ?href)
+  BIND(COALESCE(?parts, "") AS ?all)
+  BIND(IF(CONTAINS(?all, "#"), STRBEFORE(?all, "#"), ?all) AS ?pathParts)
+  BIND(REPLACE(STRAFTER(?all, "#"), "#", "/") AS ?fragmentParts)
+  # The location has paths when a dimension the path spells is among what the address is made of
+  # (the language is, wherever where we are is kept). Read from the rows, not the location's list.
+  BIND(COALESCE(?pathRows, 0) = 1 AS ?paths)
+  OPTIONAL { ?loc nav:base ?base0 }
+  BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+  BIND(IF(?paths, CONCAT(?base, ?pathParts, IF(CONTAINS(?all, "#"), CONCAT("#", ?fragmentParts), "")), CONCAT("#", ?fragmentParts)) AS ?href)
+  # The dimensions it keeps (nav:keeps), whatever their value: a change of one re-runs it (sem:readsLocation).
+  OPTIONAL { ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
+    FILTER(CONTAINS(CONCAT(" ", ?keptList, " "), CONCAT(" ", STR(?keptDim), " "))) }
 }""" .
+# How each path dimension's current value is spelled (nav:currentPart), once per change of where
+# we are, for the choosers' destinations below to join instead of spelling every value again.
+nav:currentPart a owl:DatatypeProperty ; rdfs:domain nav:Dimension ;
+    rdfs:comment "Derived: the path segment the dimension's current value is spelled as (absent when it is nav:implicit or has none)."@en .
+nav:LocationSpelling a sem:Rendering ; sem:targets nav:Location ; sem:stratum 4 ; sem:always true ; sem:readsLocation true .
+nav:LocationSpelling-fn a sem:Rule ; sem:implements nav:LocationSpelling ; sem:function "navigation:location-spelling" .
+nav:LocationSpelling-sparql a sem:Rule ;
+    sem:implements nav:LocationSpelling ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?d nav:currentPart ?part }
+WHERE {
+  $this a nav:Location ; nav:dimensions ?h . ?h rdf:rest* ?c . ?c rdf:first ?d .
+  ?d nav:carriedBy nav:Path ; nav:subject ?s ; nav:property ?p . FILTER NOT EXISTS { ?d a nav:TargetDimension }
+  ?s ?p ?v .
+  FILTER NOT EXISTS { ?d nav:implicit ?v }
+  OPTIONAL { ?d nav:keyProperty ?keyPropertys }
+  BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
+  OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
+  OPTIONAL { FILTER(!?prefixeds) ?v sem:slug ?slugKeys }
+  BIND(COALESCE(IF(isLiteral(?ownKeys), STR(?ownKeys), ?none), IF(isLiteral(?slugKeys), STR(?slugKeys), ?none)) AS ?keys)
+  LATERAL { OPTIONAL { SELECT ?v (MAX(CONCAT(SUBSTR("0000", STRLEN(STR(STRLEN(?pnss)))), STR(STRLEN(?pnss)), " ", ?pps, ":", STRAFTER(STR(?v), ?pnss))) AS ?bests) WHERE {
+    { ?pnodes sem:prefixName ?pp0s ; sem:namespace ?pns0s } UNION { ?pnodes sh:prefix ?pp0s ; sh:namespace ?pns0s }
+    BIND(STR(?pp0s) AS ?pps) BIND(STR(?pns0s) AS ?pnss)
+    FILTER(isIRI(?v) && STRSTARTS(STR(?v), ?pnss) && REGEX(STRAFTER(STR(?v), ?pnss), "^[A-Za-z0-9_-]+$"))
+  } GROUP BY ?v } }
+  BIND(IF(isLiteral(?v), STR(?v), COALESCE(?keys, STRAFTER(?bests, " "), STR(?v))) AS ?texts)
+  BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+       "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+}""" .
+
+# A chooser of a place the path carries (a c:Segmented or c:NavList over a site's pages, its docs
+# sections): each option submits to the address it sets, the rest of where we are kept (the
+# language, the sections the page remembers). The chooser renders a form of submit buttons over
+# such a dimension (c:SegmentedRendering), so the options go there before and without scripts.
+# One level of nav:parent is followed for what applies (a section under the page it sets). Above
+# the chooser's rendering (0) and the location's spelling (4). An option is spelled by its key
+# (nav:keyProperty, else sem:slug).
+c:SegmentedDestination a sem:Rendering ; sem:targets c:Segmented ; sem:stratum 5 ; sem:requires c:controls ; sem:readsLocation true ;
+    sem:watches c:controls , c:property , c:selects ; sem:readsMinted true .
+c:SegmentedDestination-fn a sem:Rule ; sem:implements c:SegmentedDestination ; sem:function "navigation:segmented-destination" .
+c:SegmentedDestination-sparql a sem:Rule ;
+    sem:implements c:SegmentedDestination ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?button rdfhtml:attribute ?attr . ?attr a rdfhtml:Attribute ; rdfhtml:attributeName "formaction" ; rdfhtml:attributeValue ?href }
+WHERE {
+  $this c:controls ?target ; c:property ?property .
+  ?loc a nav:Location ; nav:dimensions ?h . ?h rdf:rest* ?hc . ?hc rdf:first ?d .
+  ?d nav:subject ?target ; nav:property ?property ; nav:carriedBy nav:Path . FILTER NOT EXISTS { ?d a nav:TargetDimension }
+  # The options as the chooser's rendering finds them, and the button it mints for each (looked up, not scanned).
+  { $this c:options/rdf:rest*/rdf:first ?opt } UNION { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range }
+  BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?button)
+  ?button c:selects ?opt .
+  OPTIONAL { SELECT ?button (GROUP_CONCAT(?part; separator="") AS ?parts) WHERE {
+    { SELECT DISTINCT ?button ?d2 ?part ?at WHERE {
+      $this c:controls ?target ; c:property ?property .
+      ?loc a nav:Location ; nav:dimensions ?h . ?h rdf:rest* ?hc . ?hc rdf:first ?d .
+      ?d nav:subject ?target ; nav:property ?property ; nav:carriedBy nav:Path . FILTER NOT EXISTS { ?d a nav:TargetDimension }
+      { $this c:options/rdf:rest*/rdf:first ?opt } UNION { FILTER NOT EXISTS { $this c:options ?explicit } ?property rdfs:range ?range . ?opt a ?range }
+      BIND(IRI(CONCAT(STR($this), "/~opt-", ENCODE_FOR_URI(STR(?opt)))) AS ?button)
+      ?button c:selects ?opt .
+      # Each path dimension: the option, spelled by its key, for its own; its current part for the others.
+      ?loc nav:dimensions ?h2 . ?h2 rdf:rest* ?c2 . ?c2 rdf:first ?d2 .
+      ?d2 nav:carriedBy nav:Path . FILTER NOT EXISTS { ?d2 a nav:TargetDimension }
+      OPTIONAL { ?d2 nav:currentPart ?curPart }
+      OPTIONAL { ?d nav:keyProperty ?optKeyProperty }
+      OPTIONAL { ?opt ?optKeyProperty ?optKey0 FILTER(isLiteral(?optKey0)) }
+      OPTIONAL { ?opt sem:slug ?optSlug FILTER(isLiteral(?optSlug)) }
+      BIND(IF(EXISTS { ?d nav:implicit ?opt }, ?none, REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(STR(COALESCE(?optKey0, ?optSlug, ?opt))),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?optPart)
+      BIND(IF(?d2 = ?d, ?optPart, ?curPart) AS ?part0)
+      FILTER(BOUND(?part0))
+      # It applies: no parent, or its parent's value (the option, or the parent's current one) is one it applies under.
+      OPTIONAL { ?d2 nav:parent ?par }
+      OPTIONAL { ?d2 nav:parent ?par . ?par nav:subject ?ps ; nav:property ?pp . ?ps ?pp ?parCur }
+      BIND(IF(BOUND(?par), IF(?par = ?d, ?opt, ?parCur), ?none) AS ?parV)
+      FILTER(!BOUND(?par) || EXISTS { ?d2 nav:when ?parV })
+      BIND(CONCAT(?part0, "/") AS ?part)
+      {{ SELECT ?d2 (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d2 }} GROUP BY ?d2 }}
+    } ORDER BY ?at }
+  } GROUP BY ?button }
+  OPTIONAL { ?loc nav:base ?base0 }
+  BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+  BIND(CONCAT(?base, COALESCE(?parts, "")) AS ?href)
+  BIND(IRI(CONCAT(STR(?button), "-formaction")) AS ?attr)
+}""" .
+
 # The current page: a link that goes to the address the location shows now (nav:address, as the
 # navigation effect reports it; its fragment, which is what links spell) is nav:current, and its
 # rendering marks it aria-current=page as if it said c:currentPage (unless it says c:currentPage
@@ -297,18 +443,20 @@ c:LinkCurrent-sparql a sem:Rule ; sem:implements c:LinkCurrent ;
 CONSTRUCT { ?link nav:current true }
 WHERE {
   $this a nav:Location ; nav:address ?address .
-  BIND(IF(CONTAINS(?address, "#"), CONCAT("#", STRAFTER(?address, "#")), "#") AS ?fragment)
+  # Links spell a path and its fragment, or the fragment alone: the address without its query.
+  BIND(REPLACE(?address, "[?][^#]*", "") AS ?bare)
+  BIND(IF(STRSTARTS(?bare, "/"), ?bare, IF(CONTAINS(?bare, "#"), CONCAT("#", STRAFTER(?bare, "#")), "#")) AS ?fragment)
   { ?link nav:href ?fragment } UNION { ?link c:href ?fragment FILTER NOT EXISTS { ?link nav:href ?any } }
   ?link a/rdfs:subClassOf* c:Link .
 }""" .
 # An app bar's c:to (its home) is resolved the same way, for the link its logo and name make.
-c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to .
+c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation nav:TopDimensions .
 c:AppBarDestination-fn a sem:Rule ; sem:implements c:AppBarDestination ; sem:function "navigation:link-destination" .
 c:AppBarDestination-sparql a sem:Rule ;
     sem:implements c:AppBarDestination ;
     sem:bulk false ;
     sem:construct """
-CONSTRUCT { $this nav:href ?href }
+CONSTRUCT { $this nav:href ?href . $this nav:keeps ?keptDim }
 WHERE {
   $this c:to ?to . FILTER(isIRI(?to))
   ?loc a nav:Location ; nav:root ?root .
@@ -318,13 +466,19 @@ WHERE {
   BIND(!?shown && (EXISTS { ?anyOf a ?to } || EXISTS { ?anyS ?to ?anyO }
        || EXISTS { ?onto a owl:Ontology FILTER(STR(?onto) = ?ns || STR(?onto) = SUBSTR(?ns, 1, STRLEN(?ns) - 1)) }) AS ?term)
   FILTER(?shown || ?term)
-  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(?part; separator="/") AS ?parts) WHERE {
-    { SELECT DISTINCT ?to ?loc ?d ?part ?order WHERE {
-      { SELECT ?to ?loc ?d ?v WHERE {
+  # Path segments end with '/'; fragment ones start with '#' (only the first stays: the rest become '/').
+  # Each dimension once: what shows the resource decides it (rank 0); the rest of where we are is
+  # kept (rank 1: the top-level dimensions, nav:keeps). An implicit value is kept without a part.
+  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(IF(?part = "", "", IF(?inPath, CONCAT(?part, "/"), CONCAT("#", ?part))); separator="") AS ?parts)
+                             (GROUP_CONCAT(IF(?kept, STR(?d), ""); separator=" ") AS ?keptList) (MAX(IF(?inPath, 1, 0)) AS ?pathRows) WHERE {
+   { SELECT ?to ?loc ?d ?part ?kept ?inPath ?order WHERE {
+    { SELECT ?to ?loc ?d (MIN(CONCAT(?prio, ?part0)) AS ?best) (SAMPLE(?inPath0) AS ?inPath) (SAMPLE(?order0) AS ?order) WHERE {
+    { SELECT DISTINCT ?to ?loc ?d ?prio (?part AS ?part0) (?inPath AS ?inPath0) (?order AS ?order0) WHERE {
+      { SELECT ?to ?loc ?d ?v ?prio WHERE {
         $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
         {
           # Shown: the cases of the switches on the way down, and the target - unless it is a whole case.
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           ?to (^nav:from/nav:to)* ?root .
           ?to (^nav:from/nav:to)* ?casea .
       LATERAL { ?casea c:when ?v . ?edgea nav:from ?casea ; nav:to ?switcha .
@@ -337,22 +491,34 @@ WHERE {
         ?switchc c:cases ?casesc ; c:controls ?controlsc ; c:property ?propertyc .
         ?pa nav:subject ?controlsc ; nav:property ?propertyc . FILTER NOT EXISTS { ?pa a nav:TargetDimension } } })
         } UNION {
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           ?to (^nav:from/nav:to)* ?root .
           ?d a nav:TargetDimension ; nav:carriedBy nav:Fragment .
           FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
           BIND(?to AS ?v)
         } UNION {
+          # Where we are, kept for what nothing on the way to it decides (ranked below what does):
+          # the path's top-level dimensions (the language; the page, for what is on every page).
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("1" AS ?prio)
+          ?loc nav:dimensions ?kh . ?kh rdf:rest* ?kc . ?kc rdf:first ?d .
+          ?d nav:carriedBy nav:Path ; nav:subject ?ks ; nav:property ?kp .
+          FILTER NOT EXISTS { ?d nav:parent ?kpar }
+          FILTER NOT EXISTS { ?d a nav:TargetDimension }
+          ?ks ?kp ?v .
+        } UNION {
           # A term: the dimension whose values are terms, and what its parents need for it to apply.
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
           ?loc nav:dimensions ?termHead . ?termHead rdf:rest* ?termCell . ?termCell rdf:first ?termDim .
-          ?termDim nav:showsTerms true ; nav:carriedBy nav:Fragment .
+          ?termDim nav:showsTerms true ; nav:carriedBy ?termCarrier . FILTER(?termCarrier IN (nav:Path, nav:Fragment))
           { ?termDim nav:showsTerms true . BIND(?termDim AS ?d) } UNION { ?termDim nav:showsTerms true ; nav:parent* ?x . ?x nav:parent ?d ; nav:when ?when }
           BIND(IF(?d = ?termDim, ?to, ?when) AS ?v)
         }
       } }
-      ?d nav:carriedBy nav:Fragment .
+      # The part of the address that spells it: the path when it is carried there, else the fragment.
+      ?d nav:carriedBy ?dc . FILTER(?dc IN (nav:Path, nav:Fragment))
+      FILTER(IF(EXISTS { ?d a nav:TargetDimension }, ?dc = nav:Fragment, ?dc = nav:Path || NOT EXISTS { ?d nav:carriedBy nav:Path }))
+      BIND(?dc = nav:Path AS ?inPath)
       OPTIONAL { ?d nav:keyProperty ?keyPropertys }
       BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
       OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
@@ -369,17 +535,34 @@ WHERE {
            IF(EXISTS { ?d a nav:TargetDimension }, COALESCE(STR(?anchors), REPLACE(STR(?v), "^.*[#/]", "")),
            COALESCE(?keys, STRAFTER(?bests, " "), STR(?v)))) AS ?texts)
       # As encodeURIComponent writes it, with ':' and '@' kept readable.
-      BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
-           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+      # The value the address leaves unspelled (nav:implicit) has no part.
+      BIND(IF(EXISTS { ?d nav:implicit ?v }, "", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?part)
       # Parents before their children, in the location's order; a parent not carried here after; the target last.
       # (From the location's list head forward: Oxigraph walks a list path from its far end slowly.)
       {{ SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d }} GROUP BY ?d }}
       OPTIONAL {{ ?d nav:parent ?p1 . {{ SELECT ?p1 (COUNT(DISTINCT ?before1) AS ?at1) WHERE {{ ?l1 a nav:Location ; nav:dimensions ?h1 . ?h1 rdf:rest* ?before1 . ?before1 rdf:rest* ?c1 . ?c1 rdf:first ?p1 }} GROUP BY ?p1 }} }}
       BIND(SUBSTR(CONCAT("000", STR(?at)), STRLEN(STR(?at)) + 1) AS ?own)
-      BIND(IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
+      # The path's dimensions first; a parent counts when the same part spells it.
+      BIND(CONCAT(IF(?inPath, "0", "1"), IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
            IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
-           IF(EXISTS {{ ?p1 nav:carriedBy nav:Fragment }}, CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own)))) AS ?order)
-    } ORDER BY ?order }
+           IF(IF(?inPath, EXISTS {{ ?p1 nav:carriedBy nav:Path }}, EXISTS {{ ?p1 nav:carriedBy nav:Fragment }} && NOT EXISTS {{ ?p1 nav:carriedBy nav:Path }}), CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own))))) AS ?order)
+    } }
+    } GROUP BY ?to ?loc ?d }
+    BIND(SUBSTR(?best, 2) AS ?part)
+    BIND(STRSTARTS(?best, "1") AS ?kept)
+   } ORDER BY ?order }
   } GROUP BY ?to ?loc }
-  BIND(CONCAT("#", COALESCE(?parts, "")) AS ?href)
+  BIND(COALESCE(?parts, "") AS ?all)
+  BIND(IF(CONTAINS(?all, "#"), STRBEFORE(?all, "#"), ?all) AS ?pathParts)
+  BIND(REPLACE(STRAFTER(?all, "#"), "#", "/") AS ?fragmentParts)
+  # The location has paths when a dimension the path spells is among what the address is made of
+  # (the language is, wherever where we are is kept). Read from the rows, not the location's list.
+  BIND(COALESCE(?pathRows, 0) = 1 AS ?paths)
+  OPTIONAL { ?loc nav:base ?base0 }
+  BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
+  BIND(IF(?paths, CONCAT(?base, ?pathParts, IF(CONTAINS(?all, "#"), CONCAT("#", ?fragmentParts), "")), CONCAT("#", ?fragmentParts)) AS ?href)
+  # The dimensions it keeps (nav:keeps), whatever their value: a change of one re-runs it (sem:readsLocation).
+  OPTIONAL { ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
+    FILTER(CONTAINS(CONCAT(" ", ?keptList, " "), CONCAT(" ", STR(?keptDim), " "))) }
 }""" .

@@ -388,10 +388,11 @@ c:SegmentedRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?button .
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:hasChild ?button .
+  ?root rdfhtml:attribute ?methodAttr . ?methodAttr a rdfhtml:Attribute ; rdfhtml:attributeName "method" ; rdfhtml:attributeValue "get" .
   ?root rdfhtml:attribute ?roleAttr . ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?root rdfhtml:attribute ?labelAttr . ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
-  ?button a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt .
+  ?button a rdfhtml:Button ; rdfhtml:type ?buttonType ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt .
   ?button rdfhtml:attribute ?pressedAttr . ?pressedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?pressed .
   ?symbol a rdfhtml:Span ; rdfhtml:hasChild ?symbolText ; ord:immediatelyPrecedes ?name .
   ?symbolText a rdfhtml:Text ; rdfhtml:data ?symbolData .
@@ -425,6 +426,13 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?labelAttr)
+  # Over a place the address's path carries (nav:Path: a site's pages), the options go somewhere:
+  # a form whose buttons submit to the address each sets (c:SegmentedDestination), so they work
+  # before and without scripts; with them, the navigation effect keeps the page and the reaction
+  # sets the value.
+  BIND(EXISTS { ?navDim nav:subject ?target ; nav:property ?property ; nav:carriedBy nav:Path FILTER NOT EXISTS { ?navDim a nav:TargetDimension } } AS ?navigates)
+  BIND(IF(?navigates, rdfhtml:Form, rdfhtml:Div) AS ?rootTag)
+  BIND(IF(?navigates, IRI(CONCAT(STR($this), "/~root-method")), ?none) AS ?methodAttr)
   {
     {} UNION {
       { $this c:options/rdf:rest*/rdf:first ?opt FILTER(isIRI(?opt)) BIND($this AS ?self) }
@@ -477,6 +485,7 @@ WHERE {
       BIND(IRI(CONCAT(STR(?self), "/~opt-", ENCODE_FOR_URI(STR(?b)))) AS ?after)
     }
   }
+  BIND(IF(?navigates, "submit", "button") AS ?buttonType)
 }""" .
 
 c:SegmentedRendering-sparql-text a sem:Rule ;
@@ -758,6 +767,7 @@ kinds of component inside the front, not their count."""@en ;
     sem:slug "source-back" .
 # After the flippable's own source rule (95), so every layer that decorated the front is listed.
 c:SourceBackRendering a sem:Rendering ;
+    sem:readsProvenance true ;
     sem:targets c:SourceBack ;
     sem:modality mod:Screen ;
     sem:layer sem:SourceLayer ;

@@ -243,8 +243,14 @@ export interface SandboxesOptions extends SandboxOptions {
   flush: () => void
   /** The site's languages, most preferred first: a sandbox follows them. */
   languages?: () => string[]
-  /** The site's stylesheet (compileStyles of its store): a sandbox's own sheet has only the rules it adds. */
-  siteCss?: string
+  /** The site's stylesheet (compileStyles of its store), or how to get it when first needed: a sandbox's own sheet has only the rules it adds. */
+  siteCss?: string | (() => string)
+  /**
+   * When to build a shown example's sandbox (each loads the whole ontology into a store of its
+   * own): at once by default; a host may wait until its slot is in view or the page is idle, so a
+   * page's first moments are not spent on examples below the fold. Call `build` then (once).
+   */
+  defer?: (slot: Element, build: () => void) => void
   /** How long typing pauses before a sandbox is rebuilt, in ms (300). */
   delayMs?: number
   /** Put text on the clipboard (navigator.clipboard by default). */
@@ -375,7 +381,8 @@ export class Sandboxes {
         if (m) this.unmount(m)
         const fresh: Mounted = { iri, slot, languages: lang, builds: 0, shownAt: tick }
         this.mounted.set(iri, fresh)
-        this.build(fresh)
+        if (this.opts.defer) this.opts.defer(slot, () => !this.disposed && this.mounted.get(iri) === fresh && !fresh.builds && (this.build(fresh), this.opts.flush()))
+        else this.build(fresh)
       }
       // Too many built: let go of those hidden longest (shown ones stay, however many).
       const max = this.opts.maxMounted ?? 8
@@ -578,7 +585,8 @@ export class Sandboxes {
   private sheet(doc: Document, store: GraphStore, n: number): CSSStyleSheet | undefined {
     const Sheet = (doc.defaultView as (Window & typeof globalThis) | null)?.CSSStyleSheet
     if (!Sheet || !('adoptedStyleSheets' in doc)) return undefined
-    const css = scopedCss(compileStyles(store), this.opts.siteCss ?? '', `[data-sem-sandbox="${n}"]`)
+    const site = typeof this.opts.siteCss === 'function' ? this.opts.siteCss() : (this.opts.siteCss ?? '')
+    const css = scopedCss(compileStyles(store), site, `[data-sem-sandbox="${n}"]`)
     if (!css) return undefined
     const sheet = new Sheet()
     sheet.replaceSync(css)

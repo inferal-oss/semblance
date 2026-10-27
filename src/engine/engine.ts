@@ -15,8 +15,13 @@ export interface EngineOptions {
   layers?: Iterable<string>
   prefer?: 'sparql' | 'function'
   functions?: Record<string, FnRule>
-  /** Record PROV-O provenance for every derived node (see ontology/layers/provenance.ttl). */
-  provenance?: boolean
+  /**
+   * Record PROV-O provenance for every derived node (see ontology/layers/provenance.ttl).
+   * 'onDemand': from the first evaluation of a rule that reads it (a rendering whose SPARQL names
+   * the PROV-O namespace: an inspector, a provenance card), for everything derived so far too.
+   * Nothing rendered differs; a first projection that shows no provenance does not pay for it.
+   */
+  provenance?: boolean | 'onDemand'
   /** Evaluate a SPARQL rule once for all dirty foci when at least this many are dirty. */
   bulkThreshold?: number
   /** Distinguishes engines sharing a store; names the derived graph. */
@@ -126,7 +131,13 @@ export class Engine {
   private strata: number[] = []
   private selection: Selection
   private readonly functions: Record<string, FnRule>
-  private readonly provenance: boolean
+  private provenance: boolean
+  /** A rule that reads provenance ran (its IRI), while it was not recorded yet: it is, from the end of the run. */
+  provenanceWanted?: string
+  /** The renderings that read provenance, while it is recorded only on demand. */
+  private readonly provenanceReaders?: Set<string>
+  /** The components that read provenance (sem:readsProvenance on an instance), while it is recorded only on demand. */
+  private readonly provenanceFoci?: Set<string>
   private readonly bulkThreshold: number
   private readonly graphs: Quad_Graph[]
   /** The graphs rules read, and the input graphs among them, by value ('' = the default graph). */
@@ -243,12 +254,34 @@ export class Engine {
     this.graphKeys = new Set(this.graphs.map((g) => g.value))
     this.inputGraphKeys = new Set(this.graphs.slice(0, -1).map((g) => g.value))
     this.functions = opts.functions ?? {}
-    this.provenance = opts.provenance ?? false
+    this.provenance = opts.provenance === true
     this.bulkThreshold = opts.bulkThreshold ?? 2
     this.exactOn = opts.exactDependencies ?? (typeof process !== 'undefined' && process.env?.SEMBLANCE_EXACT_DEPS === '1')
     this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
+    this.locationReaders = new Map(
+      store
+        .match(null, f.namedNode(NS.sem + 'readsLocation'), null)
+        .filter((q) => q.object.value === 'true' || q.object.value === NS.nav + 'TopDimensions')
+        .map((q) => [q.subject.value, q.object.value === 'true' ? 'all' : 'top'] as const),
+    )
+    if (opts.provenance === 'onDemand') {
+      // A rendering reads provenance when any of its implementations' queries names PROV-O.
+      // Only what the engine writes (provenanceOf); prov:wasDerivedFrom and the like are the app's own data.
+      const written = /(?:\bprov:|ns\/prov#)(?:wasGeneratedBy|wasInfluencedBy|wasAssociatedWith|qualifiedAssociation|hadPlan|used|Activity|SoftwareAgent|Association)\b/
+      const reads = (r: Rule) => written.test((r.queryParts?.join('$this') ?? '').split('\n').filter((l) => !/^\s*PREFIX\s/i.test(l)).join('\n'))
+      this.provenanceReaders = new Set(this.allRules.filter(reads).map((r) => r.slot))
+      // And the renderings that say so (sem:readsProvenance: function-only ones, those running queries the graph holds).
+      // A component can say so too (one that runs queries the graph holds about provenance: an
+      // inspector): from when it is shown.
+      this.provenanceFoci = new Set()
+      for (const q of store.match(null, f.namedNode(NS.sem + 'readsProvenance'), null)) {
+        if (q.object.value !== 'true') continue
+        if (store.match(q.subject, f.namedNode(RDF_TYPE), f.namedNode(NS.sem + 'Rendering')).length) this.provenanceReaders.add(q.subject.value)
+        else this.provenanceFoci.add(q.subject.value)
+      }
+    }
     this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
     this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
@@ -317,7 +350,51 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.locationChanged(delta)
     this.run()
+  }
+
+  /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
+  private readonly locationReaders: Map<string, 'all' | 'top'>
+  /** "subject property" of each nav:Dimension's value: the dimensions it is the value of, and whether one is top-level (no nav:parent). */
+  private locationValues?: Map<string, { dims: string[]; top: boolean }>
+
+  /**
+   * A dimension's value changed (the page, the language): every rendering that reads where we are
+   * (sem:readsLocation: link destinations, which keep the language) is due again for each focus it
+   * has output for. Such a value is a property of a node the focus need not reach.
+   */
+  private locationChanged(delta: Delta) {
+    if (!this.locationReaders.size) return
+    if (delta.add.some((q) => q.predicate.value.startsWith(NS.nav)) || delta.remove.some((q) => q.predicate.value.startsWith(NS.nav))) this.locationValues = undefined
+    const f = this.store.factory
+    if (!this.locationValues) {
+      this.locationValues = new Map()
+      for (const q of this.store.match(null, f.namedNode(NS.nav + 'subject'), null, f.defaultGraph())) {
+        const p = this.store.match(q.subject, f.namedNode(NS.nav + 'property'), null, f.defaultGraph())[0]?.object.value
+        if (!p) continue
+        const top = this.store.match(q.subject, f.namedNode(NS.nav + 'parent'), null, f.defaultGraph()).length === 0
+        const key = q.object.value + ' ' + p
+        const entry = this.locationValues.get(key) ?? { dims: [], top: false }
+        entry.dims.push(q.subject.value)
+        entry.top ||= top
+        this.locationValues.set(key, entry)
+      }
+    }
+    const values = this.locationValues
+    const changed = new Set<string>()
+    for (const q of [...delta.add, ...delta.remove]) for (const d of values.get(q.subject.value + ' ' + q.predicate.value)?.dims ?? []) changed.add(d)
+    if (!changed.size) return
+    const keeps = NS.nav + 'keeps'
+    for (const rule of this.rules) {
+      const reads = this.locationReaders.get(rule.slot)
+      if (!reads) continue
+      for (const [focus, out] of this.outputs.get(rule) ?? []) {
+        // nav:TopDimensions: only the foci whose output says they keep a dimension that changed (nav:keeps).
+        if (reads === 'top' && ![...out.values()].some((q) => q.predicate.value === keeps && changed.has(q.object.value))) continue
+        this.markDirty(rule, focus)
+      }
+    }
   }
 
   /** Whether any undemanded work is parked. */
@@ -954,6 +1031,7 @@ export class Engine {
       this.evaluations.clear()
       this.typedIn.clear()
     }
+    this.provenanceIfWanted()
     this.emit()
   }
 
@@ -1008,6 +1086,7 @@ export class Engine {
       this.dirty.clear()
       wd.suspended(this, interrupted)
     }
+    if (!suspended) this.provenanceIfWanted()
     this.emit()
   }
 
@@ -1115,6 +1194,8 @@ export class Engine {
   }
 
   private evaluate(rule: Rule, foci: Set<string>): Leftover | undefined {
+    // Recorded from the end of this run (adding it mid-run would reach rules of strata already done).
+    if (!this.provenance && this.provenanceReaders && (this.provenanceReaders.has(rule.slot) || (this.provenanceFoci!.size && [...foci].some((x) => this.provenanceFoci!.has(focusOf(x)) && this.demand?.(focusOf(x)) !== false)))) this.provenanceWanted = rule.iri
     this.pristine.delete(rule)
     const t = performance.now()
     const wd = this.watchdog
@@ -1456,6 +1537,38 @@ export class Engine {
     keys.delete(key)
     if (!keys.size) byRule!.delete(rule)
     if (!byRule!.size) this.memberReaders.delete(member)
+  }
+
+  /**
+   * Start recording provenance now: what was derived so far gets its PROV-O, as if it had been
+   * recorded from the start (each output's activity, from the output it has), and so does all
+   * that follows. Called by an engine whose provenance is 'onDemand'; inside or outside a run.
+   */
+  recordProvenance(): void {
+    if (this.provenance) return
+    this.provenance = true
+    const outside = this.current === -Infinity
+    for (const [rule, byFocus] of this.outputs) {
+      for (const [focus, next] of byFocus) {
+        const quads = [...next.values()]
+        this.committing = { rule, focus }
+        try {
+          for (const p of this.provenanceOf(rule, focus, quads)) {
+            const k = quadKey(p)
+            if (!next.has(k)) next.set(k, p), this.retain(k, p)
+          }
+        } finally {
+          this.committing = undefined
+        }
+      }
+    }
+    if (outside) this.run()
+  }
+
+  /** At the end of a run: start recording provenance, if a rule that reads it ran. */
+  private provenanceIfWanted() {
+    if (this.provenanceWanted === undefined || this.provenance) return
+    this.recordProvenance()
   }
 
   /**

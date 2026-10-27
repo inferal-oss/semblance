@@ -79,24 +79,31 @@ ui:inspecting rdfs:label "inspecting" .
 
 # --- where we are (nav:Location; ontology/layers/navigation.ttl) ----------------------------------
 # The page, and on it the docs section, the example, the component group or the reference term,
-# is a location in the address: #docs/rules, #examples/kanban, #components/inputs,
-# #reference/c:Window. Changing one is a step Back returns to; reloads and shared links open
-# where they point. A section applies only on its page (out of it, it is left out of the
-# address), and is also kept for this tab, so a page is found where it was left. A link to a
-# resource (c:to) adds what it points at, brought into view: #components/inputs/inp-codes-spec.
+# is a location in the address: /docs/rules/, /examples/kanban/, /components/inputs/,
+# /reference/c:Window/. The page and its section are the path, so each is a page of its own that
+# the build renders (npm run build) and a link reaches without scripts; the Reference shows one
+# term at a time in one place, so the build renders its terms one after another
+# (nav:rendersInPlace). Changing one is a step Back returns to; reloads and shared links open
+# where they point (old #docs/rules links too). A section applies only on its page (out of it, it is left
+# out of the address), and is also kept for this tab, so a page is found where it was left. A link
+# to a resource (c:to) adds what it points at, brought into view: /components/inputs/#inp-codes-spec.
 ui:location a nav:Location ; nav:root ui:shell ;
-    nav:dimensions ( ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atTarget ) .
+    nav:dimensions ( ui:atLanguage ui:atPage ui:atDocSection ui:atExample ui:atGalleryGroup ui:atReferenceTerm ui:atTarget ) .
+# The language leads the path, except the site's own (English): /uk/docs/rules/, /docs/rules/.
+# Links keep it, and it is also what the settings remember (ui:rememberSettings). The home page is /.
+ui:atLanguage a nav:Dimension ; nav:subject ui:app ; nav:property l10n:language ; nav:keyProperty l10n:code ;
+    nav:implicit l10n:English ; nav:carriedBy nav:Path ; nav:history nav:MakesHistory .
 ui:atPage a nav:Dimension ; nav:subject ui:app ; nav:property ui:page ; nav:keyProperty ui:key ;
-    nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
+    nav:implicit ui:Home ; nav:carriedBy nav:Path ; nav:history nav:MakesHistory .
 ui:atDocSection a nav:Dimension ; nav:subject ui:app ; nav:property ui:docSection ; nav:keyProperty ui:key ;
-    nav:parent ui:atPage ; nav:when ui:Docs ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+    nav:parent ui:atPage ; nav:when ui:Docs ; nav:carriedBy nav:Path , per:Session ; nav:history nav:MakesHistory .
 ui:atExample a nav:Dimension ; nav:subject ui:app ; nav:property ui:example ; nav:keyProperty ui:key ;
-    nav:parent ui:atPage ; nav:when ui:Examples ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+    nav:parent ui:atPage ; nav:when ui:Examples ; nav:carriedBy nav:Path , per:Session ; nav:history nav:MakesHistory .
 ui:atGalleryGroup a nav:Dimension ; nav:subject ui:app ; nav:property ui:galleryGroup ; nav:keyProperty ui:key ;
-    nav:parent ui:atPage ; nav:when ui:Components ; nav:carriedBy nav:Fragment , per:Session ; nav:history nav:MakesHistory .
+    nav:parent ui:atPage ; nav:when ui:Components ; nav:carriedBy nav:Path , per:Session ; nav:history nav:MakesHistory .
 # The Reference's selected term, as a prefixed name (its other state is ui:rememberReference's).
 ui:atReferenceTerm a nav:Dimension ; nav:subject ui:app ; nav:property ui:referenceSubject ; nav:spelling nav:PrefixedName ; nav:showsTerms true ;
-    nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Fragment ; nav:history nav:MakesHistory .
+    nav:parent ui:atPage ; nav:when ui:Reference ; nav:carriedBy nav:Path ; nav:rendersInPlace true ; nav:history nav:MakesHistory .
 # What a followed link points at: where to look, not a place of its own.
 ui:atTarget a nav:TargetDimension ; nav:subject ui:app ; nav:property nav:target ;
     nav:carriedBy nav:Fragment ; nav:history nav:NoHistory .
@@ -359,7 +366,7 @@ ui:ClearInspection a beh:Reaction ; beh:when beh:Click ; beh:source ui:inspector
     beh:deletes """CONSTRUCT { ui:app ui:inspecting ?node }
 WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ui:Off . ui:app ui:inspecting ?node }""" .
 ui:inspectingChip a c:Metrics ; c:of ui:app ; c:fields ( ui:inspecting ) .
-ui:inspector a c:QueryView ;
+ui:inspector a c:QueryView ; sem:readsProvenance true ;
     c:queries ( ui:qElement ui:qProvenance ui:qGeneratedBy ui:qInfluencedBy ui:qDerivedFrom ) ;
     c:of ui:inspectorMarkup ;
     c:bindVariable "node" ; c:bindFrom ui:app ; c:bindProperty ui:inspecting ;
