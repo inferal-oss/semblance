@@ -19,8 +19,9 @@ const TEXTS = [
 // Every group in a language that is not English and one written right to left; the groups densest
 // in texts in the other two (the same code paths: a sweep takes minutes).
 const SWEEP: Record<string, string[] | 'all'> = { uk: 'all', ar: 'all', en: ['GroupInputs', 'GroupFeedback', 'GroupData'], de: ['GroupInputs', 'GroupFeedback', 'GroupData'] }
-// Views that show the graph's data as it is (every literal, in every language).
-const AS_DATA = ['triples-view', 'query-view', 'element-markup', 'result-table', 'result-turtle']
+// Views that show the graph's data as it is (every literal, in every language), and a Gantt
+// chart's tasks, named by a query's rows (here, every marked variant of a label is a row).
+const AS_DATA = ['triples-view', 'query-view', 'element-markup', 'result-table', 'result-turtle', 'gantt-task']
 
 function markerize(store: GraphStore) {
   const f = store.factory
