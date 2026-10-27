@@ -1,4 +1,5 @@
 import type * as Ox from 'oxigraph'
+import { hasEngine, startEngine } from './engine.ts'
 import { engineStore } from '../../rdf-engine/host/store.ts'
 import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
@@ -13,16 +14,13 @@ export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
 // The vendored RDF/HTML vocabulary is only read at build time (scripts/gen-rdfhtml-vocab.ts).
 const sources = import.meta.glob(['../../ontology/**/*.ttl', '!../../ontology/vendor/**'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
-// The engine builds (npm run engine:build), as URLs fetched only for the store in use;
-// a build that is missing is simply not offered.
-const engineUrls = import.meta.glob('../../rdf-engine/build/*.wasm', { query: '?url', import: 'default' }) as Record<string, () => Promise<string>>
 
 let ox: typeof Ox | undefined
 const engines: Partial<Record<'rust' | 'wat', WebAssembly.Module>> = {}
 
 /** Whether this build includes the engine behind a store kind. */
 export function hasStore(kind: StoreKind): boolean {
-  return kind === 'rust' || kind === 'wat' ? `../../rdf-engine/build/${kind}.wasm` in engineUrls : true
+  return kind === 'rust' || kind === 'wat' ? hasEngine(kind) : true
 }
 
 /**
@@ -40,11 +38,8 @@ export async function initWeb(kind: StoreKind): Promise<void> {
     ox = web as unknown as typeof Ox
   } else if (kind === 'rust' || kind === 'wat') {
     if (engines[kind]) return
-    const url = engineUrls[`../../rdf-engine/build/${kind}.wasm`]
-    if (!url) throw new Error(`The ${kind} engine is not in this build (npm run engine:build)`)
-    const response = fetch(await url())
-    // Compiled while it streams where the server sends application/wasm.
-    engines[kind] = await WebAssembly.compileStreaming(response).catch(async () => WebAssembly.compile(await (await response).arrayBuffer()))
+    // The engine builds are fetched only for the store in use (a host may have started it already).
+    engines[kind] = await startEngine(kind)
   }
 }
 
