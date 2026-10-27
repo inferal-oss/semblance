@@ -122,6 +122,7 @@ export const ONTOLOGY_FILES = [
   'theme/grid.ttl',
   'theme/panes.ttl',
   'theme/payload.ttl',
+  'theme/rdf-editor.ttl',
   'theme/toolbar.ttl',
   'theme/messages.ttl',
   'theme/reference.ttl',

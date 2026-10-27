@@ -235,13 +235,13 @@ CONSTRUCT {
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
   ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?badge , ?note ; ord:immediatelyPrecedes ?group .
-  ?lead a ?leadTag ; rdfhtml:type ?leadType ; rdfhtml:class ?leadClass ; c:expands ?expands ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
+  ?lead a ?leadTag ; rdfhtml:type ?leadType ; rdfhtml:class ?leadClass ; rdfhtml:tabIndex ?leadTabindex ; c:expands ?expands ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
         rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label .
   ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName ?leadAttrName ; rdfhtml:attributeValue ?leadAttrValue .
   ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
-  ?label a rdfhtml:Span ; rdfhtml:class ?labelClass ; c:jumpsTo ?jumpsTo ; c:goesTo ?goesTo ; rdfhtml:attribute ?linkAttr , ?focusAttr , ?descAttr ;
+  ?label a rdfhtml:Span ; rdfhtml:class ?labelClass ; rdfhtml:tabIndex ?tabindex ; c:jumpsTo ?jumpsTo ; c:goesTo ?goesTo ; rdfhtml:attribute ?linkAttr , ?focusAttr , ?descAttr ;
          rdfhtml:hasChild ?labelText ; ord:precedes ?badge , ?note .
   ?linkAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-link" ; rdfhtml:attributeValue ?link .
   ?focusAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
@@ -274,7 +274,9 @@ WHERE {
   BIND(isIRI(?t) || isBlank(?t) AS ?resource)
   BIND(?resource && EXISTS { ?t ?anyP ?anyO } AS ?hasStatements)
   BIND(BOUND(?s) && EXISTS { ?anyR rdf:reifies <<( ?s ?p ?t )>> } AS ?reified)
-  BIND(?hasStatements || ?reified AS ?expandable)
+  # A class or a property is a link to the Reference, not a resource to open in place (unless it is one of the document's).
+  BIND(isIRI(?t) && !?blank && EXISTS { ?t a ?kind . VALUES ?kind { rdfs:Class owl:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty } } AS ?vocab)
+  BIND((?hasStatements && (?depth = 0 || !?vocab)) || ?reified AS ?expandable)
   OPTIONAL { $this c:expanded ?own }
   BIND(?depth = 0 || ?blank || ?list || ?reifier || ?reified AS ?openByDefault)
   BIND(?expandable && COALESCE(?own, ?openByDefault) AS ?open)
@@ -282,7 +284,7 @@ WHERE {
   BIND(?open && ?hasStatements && (?depth = 0 || ?blank || ?list || ?reifier || COALESCE(?own, false)) AS ?nest)
   # A link: to a resource of the document (jump), else to a class or a property (the Reference).
   BIND(?depth > 0 && isIRI(?t) && !?blank && EXISTS { ?editor c:entry ?t } AS ?jumps)
-  BIND(!?jumps && isIRI(?t) && !?blank && EXISTS { ?t a ?kind . VALUES ?kind { rdfs:Class owl:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty } } AS ?goes)
+  BIND(!?jumps && ?vocab AS ?goes)
   BIND(IF(?jumps, ?t, ?none) AS ?jumpsTo)
   BIND(IF(?goes, ?t, ?none) AS ?goesTo)
   BIND(IF(?jumps, "resource", IF(?goes, "term", ?none)) AS ?link)
@@ -301,7 +303,9 @@ WHERE {
   # The term's label, when it has one (in the viewer's language).
   OPTIONAL { FILTER(isIRI(?t)) ?pickedAt l10n:of ?t ; l10n:name ?picked }
   OPTIONAL { FILTER(isIRI(?t) && !BOUND(?picked)) ?t rdfs:label ?onlyLabel }
-  BIND(IF(isIRI(?t) && !?blank, STR(COALESCE(?picked, ?onlyLabel)), ?none) AS ?noteData)
+  # Only when it says more than the name does.
+  BIND(STR(COALESCE(?picked, ?onlyLabel)) AS ?label0)
+  BIND(IF(isIRI(?t) && !?blank && LCASE(REPLACE(?label0, "[ _-]", "")) != LCASE(REPLACE(?local, "[ _-]", "")), ?label0, ?none) AS ?noteData)
   # What a nested resource, a list and a reifier are, for screen readers.
   OPTIONAL { ?nestedAt l10n:of c:RdfNestedPhrase ; l10n:name ?nested0 }
   OPTIONAL { c:RdfNestedPhrase rdfs:label ?nested0 FILTER(langMatches(lang(?nested0), "en")) }
@@ -322,6 +326,9 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), IF(?expandable, "/~twisty", "/~leaf"))) AS ?lead)
   BIND(IF(?expandable, rdfhtml:Button, rdfhtml:Span) AS ?leadTag)
   BIND(IF(?expandable, "button", ?none) AS ?leadType)
+  # One label of the tree is in the tab order (the arrow keys move among them; the twisties are not stops).
+  BIND(IF(?expandable, "-1", ?none) AS ?leadTabindex)
+  BIND(IF(?depth = 0, "0", "-1") AS ?tabindex)
   BIND(IF(?expandable, "sem-twisty", "sem-leaf") AS ?leadClass)
   BIND(IF(?expandable, $this, ?none) AS ?expands)
   BIND(IF(?expandable, !?open, ?none) AS ?expandsTo)
@@ -410,7 +417,9 @@ WHERE {
   BIND(isIRI(?t) || isBlank(?t) AS ?resource)
   BIND(?resource && EXISTS { ?t ?anyP ?anyO } AS ?hasStatements)
   BIND(BOUND(?s) && EXISTS { ?anyR rdf:reifies <<( ?s ?p ?t )>> } AS ?reified)
-  BIND(?hasStatements || ?reified AS ?expandable)
+  # A class or a property is a link to the Reference, not a resource to open in place (unless it is one of the document's).
+  BIND(isIRI(?t) && !?blank && EXISTS { ?t a ?kind . VALUES ?kind { rdfs:Class owl:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty } } AS ?vocab)
+  BIND((?hasStatements && (?depth = 0 || !?vocab)) || ?reified AS ?expandable)
   OPTIONAL { $this c:expanded ?own }
   BIND(?depth = 0 || ?blank || ?list || ?reifier || ?reified AS ?openByDefault)
   BIND(?expandable && COALESCE(?own, ?openByDefault) AS ?open)
@@ -491,13 +500,13 @@ CONSTRUCT {
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
   ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?note ; ord:immediatelyPrecedes ?group .
-  ?lead a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; c:expands $this ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
+  ?lead a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; rdfhtml:tabIndex "-1" ; c:expands $this ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
         rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label .
   ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?leadLabel .
   ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
-  ?label a rdfhtml:Span ; rdfhtml:class "sem-label sem-predicate" ; c:goesTo ?goesTo ; rdfhtml:attribute ?linkAttr ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?note .
+  ?label a rdfhtml:Span ; rdfhtml:class "sem-label sem-predicate" ; rdfhtml:tabIndex "-1" ; c:goesTo ?goesTo ; rdfhtml:attribute ?linkAttr ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?note .
   ?linkAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-link" ; rdfhtml:attributeValue "term" .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?shown .
   ?note a rdfhtml:Span ; rdfhtml:class "sem-note" ; rdfhtml:hasChild ?noteText .
@@ -523,7 +532,8 @@ WHERE {
   BIND(IF(?goes, ?p, ?none) AS ?goesTo)
   OPTIONAL { FILTER(!sameTerm(?p, rdf:type)) ?pickedAt l10n:of ?p ; l10n:name ?picked }
   OPTIONAL { FILTER(!sameTerm(?p, rdf:type) && !BOUND(?picked)) ?p rdfs:label ?onlyLabel }
-  BIND(STR(COALESCE(?picked, ?onlyLabel)) AS ?noteData)
+  BIND(STR(COALESCE(?picked, ?onlyLabel)) AS ?label0)
+  BIND(IF(LCASE(REPLACE(?label0, "[ _-]", "")) != LCASE(REPLACE(?local, "[ _-]", "")), ?label0, ?none) AS ?noteData)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-level")) AS ?levelAttr)
@@ -600,16 +610,22 @@ WHERE {
 }""" .
 
 # --- reactions: opening and following ---------------------------------------------------------------
+# The editor handles its rows' events, so what a jump focuses can be any row of it.
 
 # A twisty sets its row's c:expanded to what it says (c:expandsTo): the row alone renders again.
+# Like every reaction of the editor, it spends the focus mark a jump left (c:focused), so the focus
+# stays where the person put it.
 c:RdfRowToggle a beh:Reaction ;
     rdfs:label "Open or close a row"@en ;
     beh:when beh:Click ;
-    beh:sourceClass c:RdfRow ;
-    beh:deletes """CONSTRUCT { $this c:expanded ?old }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands $this . $this c:expanded ?old }""" ;
-    beh:inserts """CONSTRUCT { $this c:expanded ?to }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands $this ; c:expandsTo ?to }""" ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?row c:expanded ?old . ?marked c:focused ?f }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?row . ?row c:inEditor $this .
+  { ?row c:expanded ?old } UNION { ?marked c:focused ?f FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+}""" ;
+    beh:inserts """CONSTRUCT { ?row c:expanded ?to }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?row ; c:expandsTo ?to . ?row c:inEditor $this }""" ;
     sem:function "rdf-editor:toggle" .
 
 # Activating a link (a click, or Enter on its row): a resource of the document becomes the current
@@ -617,48 +633,30 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands $this ; 
 c:RdfFollowLink a beh:Reaction ;
     rdfs:label "Follow a link"@en ;
     beh:when beh:Click ;
-    beh:sourceClass c:RdfTerm ;
-    beh:deletes """CONSTRUCT { ?editor c:current ?was . ?row c:focused ?f }
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { $this c:current ?was . ?row c:focused ?f }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:jumpsTo ?to .
-  $this c:inEditor ?editor .
-  { ?editor c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR(?editor), "/~"))) }
+  { $this c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR($this), "/~"))) }
 }""" ;
-    beh:inserts """CONSTRUCT { ?editor c:current ?to . ?row c:focused true . ?asked nav:goTo ?term }
+    beh:inserts """CONSTRUCT { $this c:current ?to ; nav:goTo ?term . ?row c:focused true }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit .
-  $this c:inEditor ?editor .
-  { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR(?editor), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) }
-  UNION { ?n c:goesTo ?term . BIND($this AS ?asked) }
+  { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) } UNION { ?n c:goesTo ?term }
 }""" ;
     sem:function "rdf-editor:follow" .
 c:RdfFollowLinkByKey a beh:Reaction ;
     rdfs:label "Follow a link"@en ;
     beh:when c:RdfEditorKey ;
-    beh:sourceClass c:RdfTerm ;
-    beh:deletes """CONSTRUCT { ?editor c:current ?was . ?row c:focused ?f }
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { $this c:current ?was . ?row c:focused ?f }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:jumpsTo ?to .
-  $this c:inEditor ?editor .
-  { ?editor c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR(?editor), "/~"))) }
+  { $this c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR($this), "/~"))) }
 }""" ;
-    beh:inserts """CONSTRUCT { ?editor c:current ?to . ?row c:focused true . ?asked nav:goTo ?term }
+    beh:inserts """CONSTRUCT { $this c:current ?to ; nav:goTo ?term . ?row c:focused true }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit .
-  $this c:inEditor ?editor .
-  { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR(?editor), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) }
-  UNION { ?n c:goesTo ?term . BIND($this AS ?asked) }
+  { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) } UNION { ?n c:goesTo ?term }
 }""" ;
-    sem:function "rdf-editor:follow" .
-c:RdfFollowPredicate a beh:Reaction ;
-    rdfs:label "Go to a predicate"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:RdfProperty ;
-    beh:inserts """CONSTRUCT { $this nav:goTo ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:goesTo ?term }""" ;
-    sem:function "rdf-editor:follow" .
-c:RdfFollowPredicateByKey a beh:Reaction ;
-    rdfs:label "Go to a predicate"@en ;
-    beh:when c:RdfEditorKey ;
-    beh:sourceClass c:RdfProperty ;
-    beh:inserts """CONSTRUCT { $this nav:goTo ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:goesTo ?term }""" ;
     sem:function "rdf-editor:follow" .

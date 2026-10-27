@@ -78,6 +78,12 @@ const reifiersOf = (ctx: RuleContext, s: Term, p: Term, o: Term): Term[] =>
       .map((q) => q.subject),
   )
 
+/** A label, when it says more than the IRI's local name (ignoring case, spaces, dashes and underscores). */
+function saysMore(label: string | undefined, iri: string): string | undefined {
+  const plain = (x: string) => x.replace(/[ _-]/g, '').toLowerCase()
+  return label !== undefined && plain(label) !== plain(iri.replace(/^.*[#/]/, '')) ? label : undefined
+}
+
 /** A phrase in the viewer's language. */
 const phrase = (ctx: RuleContext, name: string) => text(ctx, ctx.nn(C + name), RDFS_LABEL) ?? ''
 
@@ -163,6 +169,7 @@ interface TermFacts {
   blank: boolean
   hasStatements: boolean
   reified: boolean
+  vocab: boolean
   expandable: boolean
   open: boolean
   nest: boolean
@@ -189,7 +196,8 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const resource = t.termType === 'NamedNode' || t.termType === 'BlankNode'
   const hasStatements = resource && ctx.match(t, null, null).length > 0
   const reified = !!s && !!p && reifiersOf(ctx, s, p, t).length > 0
-  const expandable = hasStatements || reified
+  const vocab = t.termType === 'NamedNode' && !blank && typed(ctx, t, KINDS)
+  const expandable = (hasStatements && (depth === 0 || !vocab)) || reified
   const own = ctx.object(focus, C_EXPANDED)
   const openByDefault = depth === 0 || blank || list || reifier || reified
   const open = expandable && (own ? own.value === 'true' : openByDefault)
@@ -197,7 +205,7 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const namedIri = t.termType === 'NamedNode' && !blank ? t.value : lit && !bare && lang === '' && dt !== XSD + 'string' ? dt : undefined
   const count = list ? rdfList(ctx, t).length : 0
   return {
-    t, editor, depth, editable, s, p, reifier, lit, bare, lang, list, blank, hasStatements, reified, expandable, open, nest,
+    t, editor, depth, editable, s, p, reifier, lit, bare, lang, list, blank, hasStatements, reified, vocab, expandable, open, nest,
     named: namedIri, compactName: namedIri === undefined ? undefined : compact(ctx, namedIri), count,
   }
 }
@@ -259,21 +267,21 @@ const term: FnRule = (ctx, focus) => {
     : '<<( … )>>'
   const shown = f.reifier ? '~ ' + shownTerm : shownTerm
   const badge = f.lit && f.lang !== '' ? '@' + f.lang : f.named !== undefined && f.lit ? f.compactName : undefined
-  const note = t.termType === 'NamedNode' && !f.blank ? text(ctx, t, RDFS_LABEL) : undefined
+  const note = t.termType === 'NamedNode' && !f.blank ? saysMore(text(ctx, t, RDFS_LABEL), t.value) : undefined
   const jumps = f.depth > 0 && t.termType === 'NamedNode' && !f.blank && ctx.untraced(() => ctx.match(f.editor, C_ENTRY, t).length > 0)
-  const goes = !jumps && t.termType === 'NamedNode' && !f.blank && typed(ctx, t, KINDS)
+  const goes = !jumps && f.vocab
   const link = jumps ? 'resource' : goes ? 'term' : undefined
   const description = f.reifier ? phrase(ctx, 'RdfReifierPhrase') : f.list ? phrase(ctx, 'RdfListPhrase').replace('{n}', String(f.count)) : f.blank ? phrase(ctx, 'RdfNestedPhrase') : undefined
   const kind = f.lit ? 'literal' : f.list ? 'list' : f.blank ? 'blank' : t.termType === 'NamedNode' ? 'iri' : 'triple'
   // The markup.
   const lead = f.expandable
-    ? el(o, 'twisty', 'Button', { type: 'button', class: 'sem-twisty', 'aria-label': `${f.open ? 'Collapse' : 'Expand'} ${shownTerm}` }, [
+    ? el(o, 'twisty', 'Button', { type: 'button', class: 'sem-twisty', tabIndex: '-1', 'aria-label': `${f.open ? 'Collapse' : 'Expand'} ${shownTerm}` }, [
         el(o, 'twisty-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('twisty-text', '▸')]),
       ])
     : el(o, 'leaf', 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' })
   if (f.expandable) o.t(lead, C_EXPANDS, focus).t(lead, C_EXPANDS_TO, bool(ctx, !f.open))
   const focused = ctx.match(focus, C_FOCUSED, bool(ctx, true)).length > 0
-  const label = el(o, 'label', 'Span', { class: `sem-label sem-${kind}`, 'data-sem-link': link, 'data-sem-takes-focus': focused ? '' : undefined, 'aria-description': description }, [
+  const label = el(o, 'label', 'Span', { class: `sem-label sem-${kind}`, tabIndex: f.depth === 0 ? '0' : '-1', 'data-sem-link': link, 'data-sem-takes-focus': focused ? '' : undefined, 'aria-description': description }, [
     o.text('label-text', shown),
   ])
   if (jumps) o.t(label, C_JUMPS_TO, t)
@@ -353,12 +361,12 @@ const property: FnRule = (ctx, focus) => {
     return o.quads
   }
   const goes = typed(ctx, p, PROPERTY_KINDS)
-  const note = p.value === RDF_TYPE ? undefined : text(ctx, p, RDFS_LABEL)
-  const lead = el(o, 'twisty', 'Button', { type: 'button', class: 'sem-twisty', 'aria-label': `${open ? 'Collapse' : 'Expand'} ${shown}` }, [
+  const note = p.value === RDF_TYPE ? undefined : saysMore(text(ctx, p, RDFS_LABEL), p.value)
+  const lead = el(o, 'twisty', 'Button', { type: 'button', class: 'sem-twisty', tabIndex: '-1', 'aria-label': `${open ? 'Collapse' : 'Expand'} ${shown}` }, [
     el(o, 'twisty-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('twisty-text', '▸')]),
   ])
   o.t(lead, C_EXPANDS, focus).t(lead, C_EXPANDS_TO, bool(ctx, !open))
-  const label = el(o, 'label', 'Span', { class: 'sem-label sem-predicate', 'data-sem-link': goes ? 'term' : undefined }, [o.text('label-text', shown)])
+  const label = el(o, 'label', 'Span', { class: 'sem-label sem-predicate', tabIndex: '-1', 'data-sem-link': goes ? 'term' : undefined }, [o.text('label-text', shown)])
   if (goes) o.t(label, C_GOES_TO, p)
   const parts = [lead, label]
   if (note !== undefined) parts.push(el(o, 'note', 'Span', { class: 'sem-note' }, [o.text('note-text', note)]))
@@ -376,29 +384,32 @@ const property: FnRule = (ctx, focus) => {
 
 // --- reactions -----------------------------------------------------------------------------------------
 
+/** The focus marks (c:focused) on the rows of the editor an event is addressed to. */
+const focusMarks = (ctx: Parameters<ReactionFn>[0]): Quad[] =>
+  ctx.match(null, C_FOCUSED, null).filter((q) => q.subject.value.startsWith(ctx.target.value + '/~'))
+
 /** A twisty sets its row's c:expanded to what it says. */
 const toggle: ReactionFn = (ctx) => {
   const to = marked(ctx, C_EXPANDS_TO)
   const row = marked(ctx, C_EXPANDS)
-  if (!to || !row?.equals(ctx.target)) return NONE
+  if (!to || !row || !ctx.object(row, C_IN_EDITOR)?.equals(ctx.target)) return NONE
   const f = ctx.runtime.store.factory
-  return { remove: ctx.match(ctx.target, C_EXPANDED, null), add: [f.quad(ctx.target, f.namedNode(C_EXPANDED), to)] }
+  return { remove: [...ctx.match(row, C_EXPANDED, null), ...focusMarks(ctx)], add: [f.quad(row as NamedNode, f.namedNode(C_EXPANDED), to)] }
 }
 
 /** A link: a resource of the document becomes the current one (its row takes the focus); a term is gone to. */
 const follow: ReactionFn = (ctx) => {
   const f = ctx.runtime.store.factory
+  const editor = ctx.target
   const goes = marked(ctx, C_GOES_TO)
-  if (goes) return { remove: [], add: [f.quad(ctx.target, f.namedNode(NS.nav + 'goTo'), goes)] }
+  if (goes) return { remove: [], add: [f.quad(editor, f.namedNode(NS.nav + 'goTo'), goes)] }
   const to = marked(ctx, C_JUMPS_TO)
-  const editor = ctx.object(ctx.target, C_IN_EDITOR)
-  if (!to || !editor) return NONE
-  const prefix = editor.value + '/~'
-  const focused = ctx.match(null, C_FOCUSED, null).filter((q) => q.subject.value.startsWith(prefix))
+  if (!to) return NONE
+  const focused = focusMarks(ctx)
   const row = f.namedNode(`${editor.value}/~t-${key12(to.value)}`)
   return {
     remove: [...ctx.match(editor, C_CURRENT, null), ...focused],
-    add: [f.quad(editor as NamedNode, f.namedNode(C_CURRENT), to), f.quad(row, f.namedNode(C_FOCUSED), f.literal('true', f.namedNode(XSD_BOOLEAN)))],
+    add: [f.quad(editor, f.namedNode(C_CURRENT), to), f.quad(row, f.namedNode(C_FOCUSED), f.literal('true', f.namedNode(XSD_BOOLEAN)))],
   }
 }
 

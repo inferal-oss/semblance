@@ -121,6 +121,8 @@ c:Representation sem:group c:DataGroup .
 c:Money sem:group c:DataGroup . c:Board sem:group c:DataGroup . c:BoardCard sem:group c:DataGroup .
 c:Calendar sem:group c:DataGroup . c:CalendarEntry sem:group c:DataGroup .
 c:Outline sem:group c:DataGroup . c:OutlineItem sem:group c:DataGroup .
+c:RdfEditor sem:group c:DataGroup . c:RdfRow sem:group c:DataGroup . c:RdfTerm sem:group c:DataGroup . c:RdfProperty sem:group c:DataGroup .
+c:ArrowsMode sem:group c:DataGroup . c:RdfEditorKey sem:group c:DataGroup .
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 c:BoardKey sem:group c:DataGroup .
 # Lists an app shows its people, read from the graph: its keyboard shortcuts, and what it remembers.
