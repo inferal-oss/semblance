@@ -45,6 +45,9 @@ ui:inp-topic-ui a ui:InpTopic ; rdfs:label "Interfaces" ; sem:order 4 .
 # --- Text: TextField and TextArea -------------------------------------------------------------------
 
 ui:inp-tf-name a c:TextField ; c:label "Name" ; c:placeholder "Ada Lovelace" .
+ui:inp-tf-off a c:TextField ;
+    c:label "Managed account" , "Managed account"@en , "Керований обліковий запис"@uk , "Verwaltetes Konto"@de , "حساب مُدار"@ar ;
+    c:value "service-account" ; c:disabled true .
 ui:inp-ta-about a c:TextArea ; c:label "Description" ; c:rows 3 ;
     c:placeholder "What is this project about?" ; c:help "Plain text. Every keystroke sets c:value on this instance." .
 ui:inp-ta-error a c:TextArea ; c:label "Release notes" ; c:rows 2 ; c:value "tbd" ;
@@ -52,10 +55,10 @@ ui:inp-ta-error a c:TextArea ; c:label "Release notes" ; c:rows 2 ; c:value "tbd
 ui:inp-ta-off a c:TextArea ; c:label "Archived note" ; c:rows 2 ; c:disabled true ; c:value "This note is read-only." .
 ui:inp-ta-sm a c:TextArea ; c:label "Small" ; c:rows 1 ; sty:size sty:Small ; c:placeholder "A small, single-row text area" .
 ui:inp-text-col a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:inp-tf-name ui:inp-ta-about ui:inp-ta-error ui:inp-ta-off ui:inp-ta-sm ) .
+    c:children ( ui:inp-tf-name ui:inp-tf-off ui:inp-ta-about ui:inp-ta-error ui:inp-ta-off ui:inp-ta-sm ) .
 ui:inp-text a c:Flippable ; c:front ui:inp-text-spec .
 ui:inp-text-spec a c:Specimen ; c:demonstrates c:TextField , c:TextArea ; c:label "Text field and text area" ;
-    c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value." ;
+    c:help "A c:TextArea is the multi-line sibling of c:TextField: label, placeholder, c:rows, help and an announced error line (aria-describedby, aria-invalid). Typing is an RDF event whose reaction sets c:value. c:disabled locks either text entry and preserves its value and error until re-enabled." ;
     c:children ( ui:inp-text-col ) .
 
 # --- Search field: what is typed, as a property of a node ------------------------------------------

@@ -376,6 +376,7 @@ const codeInput: FnRule = (ctx, focus) => {
 // --- reactions --------------------------------------------------------------------------------------
 
 const textAreaInput: ReactionFn = ({ runtime, event, target, match, object }) => {
+  if (object(target, C.disabled)?.value === 'true') return { add: [], remove: [] }
   const f = runtime.store.factory
   const value = object(event, BEH.value)
   return {

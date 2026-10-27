@@ -249,7 +249,7 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input::placeholder" ;
     sty:declares [ sty:property "color" ; sty:token tok:faint ] .
 
-[] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:hover" ;
+[] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:not(:disabled):hover" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:faint ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:focus" ;
@@ -257,6 +257,10 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border-color" ; sty:token tok:accent ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
+
+[] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input:disabled" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
+                 [ sty:property "cursor" ; sty:raw "not-allowed" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:TextField ; sty:part "input[aria-invalid=true]" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:danger ] .

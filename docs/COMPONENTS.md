@@ -361,6 +361,7 @@ renderer.flush()
 new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
 ```
 
+- **Disable text entry.** Set `c:disabled true` on a `c:TextField` or `c:TextArea` to disable its native input. Its input reaction also ignores events while disabled, preserving `c:value` and `c:error`; removing the disabled state makes it editable again. This is presentation and interaction state, not a substitute for backend authorization.
 - **Your data in, your data out.** Change the graph with `runtime.apply({ add, remove })` (quads),
   or several changes as one tick with `runtime.transaction(() => …)`, then `flush()`. Read it with
   `store.match` or `store.select`. Keep domain data in your own vocabulary and point components at

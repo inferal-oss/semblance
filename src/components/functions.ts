@@ -128,6 +128,7 @@ const textFieldScreen: FnRule = (ctx, focus) => {
       id: inputId,
       value: str(ctx.object(focus, C.value)),
       placeholder: text(ctx, focus, C.placeholder),
+      disabled: isTrue(ctx.object(focus, C.disabled)) ? '' : undefined,
     }),
   ]
   if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', help)]))

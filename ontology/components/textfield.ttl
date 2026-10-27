@@ -8,7 +8,8 @@
 c:TextField a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A labelled single-line text input with optional help and error text. Without a c:label it
-renders the input alone, to be labelled by a c:Field."""@en ;
+renders the input alone, to be labelled by a c:Field. c:disabled disables its native input
+and ignores input events while preserving its value and error."""@en ;
     sem:slug "text-field" .
 
 # --- screen ---------------------------------------------------------------------
@@ -28,7 +29,7 @@ CONSTRUCT {
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:precedes ?input .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?labelData .
   ?input a rdfhtml:Input ; rdfhtml:type ?inputType ; rdfhtml:id ?inputId ;
-         rdfhtml:value ?value ; rdfhtml:placeholder ?placeholder ; ord:precedes ?help, ?error .
+         rdfhtml:value ?value ; rdfhtml:placeholder ?placeholder ; rdfhtml:disabled ?disabled ; ord:precedes ?help, ?error .
   ?help a rdfhtml:Div ; rdfhtml:hasChild ?helpText ; ord:precedes ?error .
   ?helpText a rdfhtml:Text ; rdfhtml:data ?helpData .
   ?error a rdfhtml:Div ; rdfhtml:hasChild ?errorText .
@@ -44,6 +45,7 @@ WHERE {
   OPTIONAL { ?l10nAt_placeholder l10n:of $this ; l10n:placeholder ?placeholder } OPTIONAL { $this c:placeholder ?placeholder FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:placeholder ?l10nPick }) }
   OPTIONAL { $this c:inputType ?declaredType }
   BIND(COALESCE(?declaredType, "text") AS ?inputType)
+  BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label")), ?none) AS ?label)
   BIND(IF(BOUND(?labelData), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
@@ -119,6 +121,6 @@ c:TextFieldAsText-fn a sem:Rule ;
 c:TextFieldInput a beh:Reaction ;
     beh:when beh:Input ;
     beh:sourceClass c:TextField ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?value }""" ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } { { $this c:value ?old } UNION { $this c:error ?error } } }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } $event beh:value ?value }""" ;
     sem:function "textfield:input" .
