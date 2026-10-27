@@ -1,17 +1,9 @@
 // Realistic constraint sets for the solver twins: what Semblance would hand a solver that CSS can't
 // (one label column across separate fieldsets, equal-width buttons across separate toolbars,
 // vertical rhythm from tokens), driven by measured inputs as edit variables.
-import { Op, Strength, type Term } from '../src/layout/solver.ts'
+import { Op, Strength, type SolverLike, type Term } from '../src/layout/solver.ts'
 
-export interface SolverLike {
-  addVariable(): number
-  addConstraint(terms: readonly Term[], constant: number, op: Op, strength: number): number
-  removeConstraint(id: number): void
-  addEditVariable(v: number, strength: number): void
-  suggestValue(v: number, value: number): void
-  values(): Float64Array
-  readonly pivots: number
-}
+export type { SolverLike }
 
 const t = (variable: number, coefficient = 1): Term => ({ variable, coefficient })
 

@@ -2,7 +2,7 @@
 // solve and incremental re-solves; the checker twins and the SPARQL checker over a page of boxes.
 // Run through the queue: scripts/test-queue.sh npx tsx layout-solver/bench.ts [--quick]
 import { build } from 'esbuild'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
 import { checkPacked, packBoxes, packInvariants } from '../src/layout/check.ts'
@@ -15,8 +15,9 @@ import { formPage, random, type SolverLike } from './scenarios.ts'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const quick = process.argv.includes('--quick')
-const wasmBytes = readFileSync(here + 'build/solver.wasm')
-const wasm = await WasmLayout.load(wasmBytes)
+// every WASM twin that is built: rust, wat
+const BUILDS = ['rust', 'wat'].filter((k) => existsSync(here + `build/${k}.wasm`))
+const wasms = Object.fromEntries(await Promise.all(BUILDS.map(async (k) => [k, await WasmLayout.load(readFileSync(here + `build/${k}.wasm`))] as const)))
 
 /** Median of `runs` timings of `f` (ms), after one warm-up (unless `warm` is false). */
 function time(f: () => void, runs = quick ? 3 : 7, warm = true): number {
@@ -45,7 +46,7 @@ const SIZES: [string, number, number, number][] = [
 
 const twins: [string, () => SolverLike][] = [
   ['ts', () => new Solver()],
-  ['wasm', () => (wasm.reset(), wasm)],
+  ...BUILDS.map((k) => [k, () => (wasms[k].reset(), wasms[k])] as [string, () => SolverLike]),
 ]
 
 console.log('\n### Solver: form pages (one label column across fieldsets, equal buttons across toolbars)\n')
@@ -101,8 +102,8 @@ function syntheticPage(cards: number): MeasuredPage {
 }
 
 console.log('\n### Checker: a whole page of boxes (cards of field rows, a nav list)\n')
-console.log('| page | boxes | invariants | findings | ts | wasm (with copy in) | sparql (wat store) |')
-console.log('|---|---:|---:|---:|---:|---:|---:|')
+console.log(`| page | boxes | invariants | findings | ts | ${BUILDS.map((k) => k + ' (with copy in)').join(' | ')} | sparql (wat store) |`)
+console.log(`|---|---:|---:|---:|---:|${BUILDS.map(() => '---:|').join('')}---:|`)
 const store = loadStore('wat')
 const decl = readDeclarations(store)
 for (const cards of quick ? [10, 100] : [10, 100, 500]) {
@@ -112,8 +113,10 @@ for (const cards of quick ? [10, 100] : [10, 100, 500]) {
   const prog = packInvariants(invariants)
   const findings = checkPacked(b, prog).length
   const ts = time(() => checkPacked(b, prog))
-  const w = time(() => wasm.check(b, prog))
-  if (wasm.check(b, prog).length !== findings) throw new Error('checker twins disagree')
+  const w = BUILDS.map((k) => {
+    if (wasms[k].check(b, prog).length !== findings) throw new Error(`checker twins disagree (${k})`)
+    return fmt(time(() => wasms[k].check(b, prog)))
+  })
   let sparql = NaN
   if (cards <= 100) {
     const s = loadStore('wat')
@@ -121,7 +124,7 @@ for (const cards of quick ? [10, 100] : [10, 100, 500]) {
     sparql = time(() => checkSparql(s), quick ? 1 : 3)
     s.dispose?.()
   }
-  console.log(`| ${cards} cards | ${boxes.length} | ${invariants.length} | ${findings} | ${fmt(ts)} | ${fmt(w)} | ${Number.isNaN(sparql) ? '-' : fmt(sparql)} |`)
+  console.log(`| ${cards} cards | ${boxes.length} | ${invariants.length} | ${findings} | ${fmt(ts)} | ${w.join(' | ')} | ${Number.isNaN(sparql) ? '-' : fmt(sparql)} |`)
 }
 
 // --- size ---------------------------------------------------------------------------------------
@@ -133,4 +136,12 @@ console.log('| twin | raw | gzip | brotli | source lines |')
 console.log('|---|---:|---:|---:|---:|')
 const lines = (...f: string[]) => f.map((p) => readFileSync(here + p, 'utf8').split('\n').length).reduce((a, b) => a + b)
 console.log(`| ts (minified) | ${kb(tsBytes.length)} | ${kb(gzipSync(tsBytes, { level: 9 }).length)} | ${kb(brotliCompressSync(tsBytes).length)} | ${lines('../src/layout/solver.ts', '../src/layout/check.ts')} |`)
-console.log(`| wasm (Rust, opt-level 3) | ${kb(wasmBytes.length)} | ${kb(gzipSync(wasmBytes, { level: 9 }).length)} | ${kb(brotliCompressSync(wasmBytes).length)} | ${lines('rust/src/solver.rs', 'rust/src/check.rs', 'rust/src/lib.rs')} |`)
+const SOURCES: Record<string, [string, string[]]> = {
+  rust: ['Rust, opt-level 3', ['rust/src/solver.rs', 'rust/src/check.rs', 'rust/src/lib.rs']],
+  wat: ['hand-written WAT', readdirSync(here + 'wat').filter((f) => f.endsWith('.wat')).map((f) => 'wat/' + f)],
+}
+for (const k of BUILDS) {
+  const bytes = readFileSync(here + `build/${k}.wasm`)
+  const [what, files] = SOURCES[k]
+  console.log(`| ${k} (${what}) | ${kb(bytes.length)} | ${kb(gzipSync(bytes, { level: 9 }).length)} | ${kb(brotliCompressSync(bytes).length)} | ${lines(...files)} |`)
+}

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import * as ox from 'oxigraph'
 import { engineStore } from '../../rdf-engine/host/store.ts'
+import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
@@ -40,6 +41,23 @@ function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
   // (rdf-engine/results/compiled.md).
   const env = process.env.SEMBLANCE_ENGINE_COMPILE === 'idle' ? 'idle' : Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0
   return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : env, timeZone: options.timeZone })
+}
+
+/**
+ * Compile the layout solver's WASM twins that are built (`npx tsx layout-solver/build.ts`) and offer
+ * them to src/layout/engine.ts; the kinds it can now use, TypeScript always last.
+ */
+export async function initLayout(): Promise<LayoutKind[]> {
+  for (const kind of ['rust', 'wat'] as const) {
+    const path = fileURLToPath(new URL(`../../layout-solver/build/${kind}.wasm`, import.meta.url))
+    if (!existsSync(path)) continue
+    try {
+      await provideLayoutModule(kind, await WebAssembly.compile(readFileSync(path)))
+    } catch {
+      // not offered: the engine falls back
+    }
+  }
+  return layoutKinds()
 }
 
 let created: ((store: GraphStore) => void) | undefined

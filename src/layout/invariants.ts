@@ -2,7 +2,8 @@
 // with SPARQL, instantiate them over a box tree for the function checker (check.ts), turn the tree
 // into rendered-state triples (rnd:) for the SPARQL checker (lc:Checker), and say what a finding means.
 import type { GraphStore } from '../store/types.ts'
-import { checkPacked, packBoxes, Rel, type Box, type Finding, type Invariant } from './check.ts'
+import { packBoxes, Rel, type Box, type Finding, type Invariant } from './check.ts'
+import { checkLayout } from './engine.ts'
 import type { MeasuredNode, MeasuredPage } from './measure.ts'
 
 export const LC = 'https://semblance.dev/ns/layout-constraints#'
@@ -213,7 +214,7 @@ export function checkMeasured(page: MeasuredPage, d: Declarations): PageFinding[
 export function checkInstantiated(boxes: Box[], invariants: Invariant[], instances: Instance[]): PageFinding[] {
   const program: number[] = []
   for (const inv of invariants) program.push(inv.rel, Math.round(inv.tolerance * 100), inv.members.length, ...inv.members)
-  return checkPacked(packBoxes(boxes), Int32Array.from(program)).map((f) => ({ ...f, member: instances[f.invariant].member ?? f.member, instance: instances[f.invariant] }))
+  return checkLayout(packBoxes(boxes), Int32Array.from(program)).map((f) => ({ ...f, member: instances[f.invariant].member ?? f.member, instance: instances[f.invariant] }))
 }
 
 /** A finding in words: the invariant, where, and by how much. */
