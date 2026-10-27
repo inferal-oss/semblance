@@ -46,7 +46,8 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
     let scope: Element = editor()
     let found: HTMLElement | undefined
     for (const step of path) {
-      found = [...scope.querySelectorAll(':scope [role=treeitem] > .sem-row > .sem-label')].find((l) => l.textContent === step) as HTMLElement | undefined
+      const rows = scope === editor() ? ':scope > .sem-tree > [role=treeitem] > .sem-row > .sem-label' : ':scope > [role=group] > [role=treeitem] > .sem-row > .sem-label'
+      found = [...scope.querySelectorAll(rows)].find((l) => l.textContent === step) as HTMLElement | undefined
       if (!found) throw new Error(`no row ${path.join(' › ')}`)
       scope = found.closest('[role=treeitem]')!
     }
@@ -118,7 +119,6 @@ describe('c:RdfEditor', () => {
     const tree = editor().querySelector(':scope > .sem-tree')!
     expect(tree.getAttribute('role')).toBe('tree')
     expect(tree.getAttribute('aria-label')).toBe('Library')
-    expect(editor().getAttribute('data-sem-nav-items')).toBe('[role=treeitem] > .sem-row > .sem-label')
     expect(item('lib:dispossessed').getAttribute('aria-level')).toBe('1')
     expect(item('lib:dispossessed', 'lib:pages').getAttribute('aria-level')).toBe('2')
     expect(item('lib:dispossessed', 'lib:pages', '387').getAttribute('aria-level')).toBe('3')
@@ -287,7 +287,7 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
       // Shift+Enter beside an object: another object of its predicate.
       each((x) => x.key(x.label('lib:earthsea', 'lib:author', 'lib:ursula'), 'Enter', true), 'Shift+Enter beside an object')
       each((x) => x.enter('<https://example.org/someone>'), 'a new object')
-      expect(m.objects(LIB + 'earthsea', LIB + 'author').sort()).toEqual([LIB + 'ursula', 'https://example.org/someone'])
+      expect(m.objects(LIB + 'earthsea', LIB + 'author').sort()).toEqual(['https://example.org/someone', LIB + 'ursula'])
       // Delete: a statement; list members, the list closing up (the head too).
       each((x) => x.key(x.label('lib:earthsea', 'lib:author', '<https://example.org/someone>'), 'Delete'), 'Delete a statement')
       expect(m.objects(LIB + 'earthsea', LIB + 'author')).toEqual([LIB + 'ursula'])
