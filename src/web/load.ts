@@ -1,5 +1,6 @@
 import type * as Ox from 'oxigraph'
 import { engineStore } from '../../rdf-engine/host/store.ts'
+import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
@@ -45,6 +46,27 @@ export async function initWeb(kind: StoreKind): Promise<void> {
     // Compiled while it streams where the server sends application/wasm.
     engines[kind] = await WebAssembly.compileStreaming(response).catch(async () => WebAssembly.compile(await (await response).arrayBuffer()))
   }
+}
+
+// The layout solver's WASM twins (layout-solver/build.ts), fetched only when initLayout is called.
+const layoutUrls = import.meta.glob('../../layout-solver/build/*.wasm', { query: '?url', import: 'default' }) as Record<string, () => Promise<string>>
+
+/**
+ * Compile the layout solver's WASM twins in this build and offer them to src/layout/engine.ts; the
+ * kinds it can now use, TypeScript always last (a build that fails to load is skipped).
+ */
+export async function initLayout(): Promise<LayoutKind[]> {
+  for (const kind of ['rust', 'wat'] as const) {
+    const url = layoutUrls[`../../layout-solver/build/${kind}.wasm`]
+    if (!url) continue
+    try {
+      const response = fetch(await url())
+      await provideLayoutModule(kind, await WebAssembly.compileStreaming(response).catch(async () => WebAssembly.compile(await (await response).arrayBuffer())))
+    } catch {
+      // not offered: the engine falls back
+    }
+  }
+  return layoutKinds()
 }
 
 /** Store options (benchmark configurations choose them; the defaults are the site's). */

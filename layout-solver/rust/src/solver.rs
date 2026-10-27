@@ -222,13 +222,29 @@ pub enum SolverError {
     Internal,
 }
 
+/// A column of the index: the basic symbols whose rows use a symbol. Removal is lazy (a scan per
+/// removal made relabelling every field of a large page slow): stale entries stay until the column is
+/// half stale, and readers skip them.
+#[derive(Default)]
+struct Column {
+    list: Vec<u32>,
+    live: usize,
+}
+
+impl Column {
+    fn clear(&mut self) {
+        self.list.clear();
+        self.live = 0;
+    }
+}
+
 #[derive(Default)]
 pub struct Solver {
     kinds: Vec<Kind>,
     var_symbols: Vec<u32>,
     rows: Rows,
     /// symbol → the basic symbols whose rows use it (the column index)
-    cols: Vec<Vec<u32>>,
+    cols: Vec<Column>,
     constraints: Vec<Option<Constraint>>,
     /// variable → edit
     edits: Vec<Option<Edit>>,
@@ -478,24 +494,38 @@ impl Solver {
 
     fn link(&mut self, sym: u32, basic: u32) {
         if self.cols.len() <= sym as usize {
-            self.cols.resize_with(sym as usize + 1, Vec::new);
+            self.cols.resize_with(sym as usize + 1, Column::default);
         }
-        self.cols[sym as usize].push(basic);
+        let c = &mut self.cols[sym as usize];
+        c.list.push(basic);
+        c.live += 1;
     }
 
-    fn unlink(&mut self, sym: u32, basic: u32) {
-        if let Some(c) = self.cols.get_mut(sym as usize) {
-            if let Some(i) = c.iter().position(|&b| b == basic) {
-                c.swap_remove(i);
-            }
+    /// `basic`'s row no longer uses `sym` (already removed from it, or the row is no longer basic).
+    fn unlink(&mut self, sym: u32, _basic: u32) {
+        let Some(c) = self.cols.get_mut(sym as usize) else { return };
+        c.live = c.live.saturating_sub(1);
+        if c.list.len() > 2 * c.live + 8 {
+            let mut list = core::mem::take(&mut c.list);
+            list.retain(|&s| self.uses(s, sym));
+            list.sort_unstable();
+            list.dedup();
+            self.cols[sym as usize].list = list;
         }
+    }
+
+    /// Whether `basic` is basic and its row uses `sym` (a column entry is current).
+    #[inline]
+    fn uses(&self, basic: u32, sym: u32) -> bool {
+        self.rows.get(basic).is_some_and(|r| r.index.contains_key(&sym))
     }
 
     /// The basic symbols whose rows use `sym`, in the order they became basic.
     fn users(&self, sym: u32) -> Vec<u32> {
         let Some(c) = self.cols.get(sym as usize) else { return Vec::new() };
-        let mut u = c.clone();
+        let mut u: Vec<u32> = c.list.iter().copied().filter(|&s| self.uses(s, sym)).collect();
         u.sort_unstable_by_key(|&s| self.rows.slot[s as usize]);
+        u.dedup();
         u
     }
 

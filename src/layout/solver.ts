@@ -119,7 +119,20 @@ export interface Term {
 
 export class UnsatisfiableError extends Error {}
 
-export class Solver {
+/** What every twin offers (Solver here, WasmLayout over a WASM build). */
+export interface SolverLike {
+  addVariable(): number
+  addConstraint(terms: readonly Term[], constant: number, op: Op, strength: number): number
+  removeConstraint(id: number): void
+  addEditVariable(v: number, strength: number): void
+  removeEditVariable(v: number): void
+  suggestValue(v: number, value: number): void
+  value(v: number): number
+  values(): Float64Array
+  readonly pivots: number
+}
+
+export class Solver implements SolverLike {
   private kinds: Kind[] = []
   /** variable index → its external symbol */
   private varSymbols: number[] = []
