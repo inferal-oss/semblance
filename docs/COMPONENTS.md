@@ -414,6 +414,28 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   `mount(el, { widgets: { chart }, modules: { 'shoelace/rating': () => import(url) } })`. Theme it by
   mapping tokens onto its documented custom properties with a style rule. See [FOREIGN.md](FOREIGN.md)
   and the site's Coffee tasting example (Shoelace, Chart.js, Leaflet and flatpickr from a CDN).
+
+- **Files kept in the browser.** Any drop target can take files from outside the page: make it a
+  `file:Receiver` (a `c:FileDrop` is one; a `c:Tree , dnd:DropTarget , file:Receiver` takes them into
+  the folder they are dropped on, by `dnd:members`), and the same shapes decide them as decide its
+  drags. Give it `file:keepIn` a `file:Store` and `Files` keeps each accepted file in IndexedDB
+  (`keep`: a `FileStoreBackend`; `memoryFileStore()` in tests), makes a small WebP preview of images
+  (`thumbnail`: in a worker with `workerThumbnails(() => new Worker(...thumbnail.worker.ts...))`, a
+  stand-in in tests), and frees the bytes when the file's node goes (`file:keptIn` removed). The
+  graph keeps names, sizes and handles; what holds only in this page - `file:preview` and `file:url`
+  (object URLs) and each store's `file:usedBytes` / `file:usedFiles` - is in the files graph
+  (`FILES_GRAPH`), rebuilt from storage at load (`await files.ready`). A store's cap is SHACL on it,
+  and a file that would pass it is refused with the shape's message (never by throwing older files
+  away). Show previews with a grid column `c:cellAs c:ImageCell` or a `c:ImageView` (the image
+  itself: `c:payloadProperty file:url`); remember the files' nodes with a `per:Policy` in
+  `per:Database` so they survive a reload with their bytes. The File explorer example does all of it.
+
+  ```turtle
+  ex:store a file:Store .
+  ex:Cap a sh:NodeShape ; sh:targetNode ex:store ;
+      sh:property [ sh:path file:usedBytes ; sh:maxInclusive 25000000 ; sh:message "Up to 25 MB here." ] .
+  ex:folders a c:Tree , dnd:DropTarget , file:Receiver ; dnd:members ex:contains ; file:keepIn ex:store ; ...
+  ```
 - **Connectors.** A `c:Connector` (an arrow `c:from` one component `c:to` another) is drawn by a
   host effect that measures its ends: `mount` attaches it; wiring by hand, call
   `attachConnectors(element)` (`@inferal-oss/semblance/web`). It does nothing while the page has no

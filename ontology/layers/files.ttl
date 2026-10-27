@@ -3,6 +3,9 @@
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix ann: <https://semblance.dev/ns/announce#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -39,6 +42,23 @@
 #   file:uploadTo (an HTTP POST of a form with the file), or through a handler the app gave the
 #   effect by name (file:handler) - which reports progress (file:Progress, not recorded), and how it
 #   ended (file:Done, file:Failure). Taking the state away (removing the file) cancels it.
+#
+#   Receiving. Any drop target can take files from outside the page: a file:Receiver (c:FileDrop
+#   is one; a tree of folders can be). Files dropped on one of its zones arrive into that zone's
+#   receptacle (dnd:into), and the same shapes that decide its drags decide them.
+#
+#   Keeping. A receiver that says where to keep its files (file:keepIn, a file:Store) has each
+#   accepted file kept in the browser (IndexedDB), so it outlives the page: the file says so
+#   (file:keptIn) and is file:Saving until the effect has written it (file:Stored, then
+#   file:Saved). Images get a small preview, made by the effect off the main thread. What holds
+#   only in this page - the preview and the contents as addresses (file:preview, file:url), and how
+#   full each store is (file:usedBytes, file:usedFiles) - is in the files graph
+#   (<urn:semblance:files>), which the effect writes and rebuilds at load; the graph keeps names,
+#   sizes and handles, never bytes. A store's cap is SHACL on the store (sh:maxInclusive on
+#   file:usedBytes and file:usedFiles): a file that would take it past the cap is refused with the
+#   shape's message, like any other refusal - never kept by throwing older files away, which would
+#   delete what a person put there without asking. A file whose node goes (deleted) has its bytes
+#   freed.
 
 <https://semblance.dev/ns/file> a owl:Ontology ;
     rdfs:label "Semblance files"@en ;
@@ -59,7 +79,8 @@ file:mediaType a owl:DatatypeProperty ; rdfs:domain file:File ; rdfs:range xsd:s
     rdfs:comment "The file's media type (\"image/png\"), as the browser guesses it from the name; absent when it cannot."@en .
 file:size a owl:DatatypeProperty ; rdfs:domain file:File ; rdfs:range xsd:integer ;
     rdfs:label "size"@en , "розмір"@uk , "Größe"@de , "الحجم"@ar ;
-    rdfs:comment "The file's size in bytes."@en .
+    rdfs:comment "The file's size in bytes."@en ;
+    c:unit "bytes" .
 file:modified a owl:DatatypeProperty ; rdfs:domain file:File ; rdfs:range xsd:dateTime ;
     rdfs:label "modified"@en , "змінено"@uk , "geändert"@de , "تاريخ التعديل"@ar ;
     rdfs:comment "When the file was last changed, as the person's system says."@en .
@@ -92,6 +113,12 @@ file:Failed a file:State ; sem:slug "failed" ;
 file:Refused a file:State ; sem:slug "refused" ;
     rdfs:label "Not accepted"@en , "Не прийнято"@uk , "Nicht angenommen"@de , "غير مقبول"@ar ;
     rdfs:comment "The target did not take it (file:reason, its shape's message): listed, never added."@en .
+file:Saving a file:State ; sem:slug "saving" ;
+    rdfs:label "Saving"@en , "Зберігається"@uk , "Wird gespeichert"@de , "جارٍ الحفظ"@ar ;
+    rdfs:comment "Accepted, and being written to the browser's storage (file:keptIn its store)."@en .
+file:Saved a file:State ; sem:slug "saved" ;
+    rdfs:label "Saved in this browser"@en , "Збережено в цьому браузері"@uk , "In diesem Browser gespeichert"@de , "محفوظ في هذا المتصفح"@ar ;
+    rdfs:comment "Kept in the browser's storage: it is there after a reload, until it is deleted."@en .
 
 # What only files conform to: a target that takes files from outside the page refuses anything
 # else carried over it (a card from a board).
@@ -133,6 +160,48 @@ file:uploadTo a owl:DatatypeProperty ; rdfs:range xsd:anyURI ;
 file:handler a owl:DatatypeProperty ; rdfs:range xsd:string ;
     rdfs:comment "On a component that takes files: the name of an upload handler the app gave the files effect (Files options: handlers), which sends each accepted file, at once, as the app needs."@en .
 
+# --- what takes files --------------------------------------------------------------------------------------
+
+file:Receiver a owl:Class ;
+    rdfs:subClassOf dnd:DropTarget ;
+    rdfs:label "Takes files"@en , "Приймає файли"@uk , "Nimmt Dateien an"@de , "يقبل الملفات"@ar ;
+    rdfs:comment """A drop target that takes files dragged in from outside the page (and, for a c:FileDrop, picked):
+each file dropped on one of its zones arrives into that zone's receptacle (dnd:into) and, once its
+reception there accepts it, becomes a member as the target says (dnd:members, dnd:memberOf; for a
+control, c:property of the node it c:controls). What it takes is what its drags take: dnd:accepts
+shapes on it or on the receptacle, capacities (sh:maxCount), objections. With file:uploadTo or
+file:handler accepted files are uploaded; with file:keepIn they are kept in the browser."""@en .
+file:keepsRefusals a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a receiver class: its instances list the files they refuse, with why (file:file, file:Refused), as a file drop's list does. Other receivers only announce a refusal; the file is forgotten."@en .
+file:listsHeld a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a c:FileDrop: whether its list shows every value of its property, also those that did not arrive through it (default true). False: only the files it took in or refused - an upload list beside a view of the folder."@en .
+
+# --- keeping files in the browser ------------------------------------------------------------------------
+
+file:Store a owl:Class ;
+    rdfs:label "File store"@en , "Сховище файлів"@uk , "Dateispeicher"@de , "مخزن الملفات"@ar ;
+    rdfs:comment """Where files are kept in this browser (IndexedDB, by the files effect), so they are there after a
+reload until they are deleted. Its cap is SHACL that targets it: sh:maxInclusive (or
+sh:maxExclusive) on file:usedBytes and file:usedFiles, with the sh:message a refused file is given.
+A file that would take it past the cap is refused; nothing already kept is thrown away to make room."""@en .
+file:keepIn a owl:ObjectProperty ; rdfs:domain file:Receiver ; rdfs:range file:Store ;
+    rdfs:label "keep in"@en , "зберігати в"@uk , "speichern in"@de , "الحفظ في"@ar ;
+    rdfs:comment "On a receiver: the store each accepted file is kept in."@en .
+file:keptIn a owl:ObjectProperty ; rdfs:domain file:File ; rdfs:range file:Store ;
+    rdfs:comment "On a file: the store its contents are kept in (under its file:handle). Taking it away - deleting the file - frees them."@en .
+file:usedBytes a owl:DatatypeProperty ; rdfs:domain file:Store ; rdfs:range xsd:integer ;
+    rdfs:label "space used"@en , "використано місця"@uk , "belegter Speicher"@de , "المساحة المستخدمة"@ar ;
+    rdfs:comment "How many bytes of files the store keeps (in the files graph, written by the effect)."@en ;
+    c:unit "bytes" .
+file:usedFiles a owl:DatatypeProperty ; rdfs:domain file:Store ; rdfs:range xsd:integer ;
+    rdfs:label "files kept"@en , "збережено файлів"@uk , "gespeicherte Dateien"@de , "الملفات المحفوظة"@ar ;
+    rdfs:comment "How many files the store keeps (in the files graph, written by the effect)."@en .
+file:preview a owl:DatatypeProperty ; rdfs:domain file:File ; rdfs:range xsd:anyURI ;
+    rdfs:label "preview"@en , "попередній перегляд"@uk , "Vorschau"@de , "معاينة"@ar ;
+    rdfs:comment "A small picture of a kept image (a few kB, at most 192 pixels a side), as an address valid in this page; in the files graph."@en .
+file:url a owl:DatatypeProperty ; rdfs:domain file:File ; rdfs:range xsd:anyURI ;
+    rdfs:comment "The kept file's contents, as an address valid in this page (an object URL: the browser reads the bytes only when something shows them); in the files graph."@en .
+
 # --- events ----------------------------------------------------------------------------------------------
 # Reported by the files effect. Addressed to file:Dragged (the drag) or to the component the files
 # are for; each carries the file it is about (file:file), and what the host knows of it.
@@ -143,10 +212,10 @@ file:file a owl:ObjectProperty ; rdfs:range file:File ;
 file:DragIn a owl:Class ; rdfs:subClassOf beh:Event ; beh:recorded false ;
     rdfs:comment "Files from outside the page are dragged over it: their media types (file:mediaType) and how many (dnd:count). Addressed to file:Dragged; not recorded."@en .
 file:Arrive a owl:Class ; rdfs:subClassOf beh:Event ; beh:recorded false ;
-    rdfs:comment "A file was picked or dropped for a component: its file:name, file:mediaType, file:size, file:modified and file:handle. Its reaction offers it to the component, whose reception decides; not recorded (file:Added or file:Refusal is)."@en .
+    rdfs:comment "A file was picked or dropped for a component: its file:name, file:mediaType, file:size, file:modified and file:handle, and the receptacle it was dropped into (dnd:into). Its reaction offers it to the component, whose reception decides; not recorded (file:Added or file:Refusal is)."@en .
 file:Added a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:label "File added"@en , "Файл додано"@uk , "Datei hinzugefügt"@de , "تمت إضافة الملف"@ar ;
-    rdfs:comment "The component accepted the file it was offered (file:file, file:name)."@en .
+    rdfs:comment "The component accepted the file it was offered (file:file, file:name), into a receptacle (dnd:into)."@en .
 file:Refusal a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:label "File not accepted"@en , "Файл не прийнято"@uk , "Datei nicht angenommen"@de , "لم يُقبل الملف"@ar ;
     rdfs:comment "The component refused the file it was offered (file:file, file:name), and why (file:reason: the violated shape's message). Recorded and announced."@en .
@@ -160,12 +229,18 @@ file:Done a owl:Class ; rdfs:subClassOf beh:Event ;
 file:Failure a owl:Class ; rdfs:subClassOf beh:Event ;
     rdfs:label "Upload failed"@en , "Не надіслано"@uk , "Hochladen fehlgeschlagen"@de , "فشل الرفع"@ar ;
     rdfs:comment "The file's (file:file) upload failed (file:reason)."@en .
+file:Stored a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:label "File saved"@en , "Файл збережено"@uk , "Datei gespeichert"@de , "تم حفظ الملف"@ar ;
+    rdfs:comment "The file (file:file) is kept in its store. Addressed to the receiver that took it."@en .
+file:StoreFailure a owl:Class ; rdfs:subClassOf beh:Event ;
+    rdfs:label "File not saved"@en , "Файл не збережено"@uk , "Datei nicht gespeichert"@de , "لم يُحفظ الملف"@ar ;
+    rdfs:comment "The browser would not keep the file (file:file), and why (file:reason: its storage is full, or private browsing allows none). Addressed to the receiver that took it."@en .
 
 # --- reactions: the drag of files from outside -------------------------------------------------------------
 
 # Files come over the page: they are the drag in progress (dnd:Current), carried by the pointer,
-# copied (never moved: they stay where they are), with what is known of them, and every component
-# that takes files (and is not disabled) is offered them, so each derives its reception (dnd:Receive).
+# copied (never moved: they stay where they are), with what is known of them, and every receiver
+# (that is not disabled) is offered them, so each derives its reception (dnd:Receive).
 file:Lift a beh:Reaction ;
     rdfs:label "Files are dragged in"@en ;
     beh:when file:DragIn ;
@@ -182,7 +257,7 @@ CONSTRUCT {
 WHERE {
   OPTIONAL { $event dnd:count ?count }
   OPTIONAL { $event file:mediaType ?type }
-  OPTIONAL { ?target a/rdfs:subClassOf* c:FileDrop FILTER NOT EXISTS { ?target c:disabled true } }
+  OPTIONAL { ?target a/rdfs:subClassOf* file:Receiver FILTER NOT EXISTS { ?target c:disabled true } }
 }""" ;
     sem:function "files:lift" .
 
@@ -195,3 +270,211 @@ file:Forget a beh:Reaction ;
 CONSTRUCT { file:Dragged file:mediaType ?type . dnd:Current dnd:count ?count }
 WHERE { { file:Dragged file:mediaType ?type } UNION { dnd:Current dnd:count ?count } }""" ;
     sem:function "files:forget" .
+
+# --- reactions: files arriving at a receiver ---------------------------------------------------------------
+
+# A file arrives (picked or dropped): it becomes a file:File under the receiver (named by its handle),
+# in arrival order,
+# and is offered to it as a drag of its own (<receiver>/~arrival), so its reception (dnd:Receive)
+# says whether it may go in. A pick request, if any, is answered.
+file:Offer a beh:Reaction ;
+    rdfs:label "A file arrives"@en ;
+    beh:when file:Arrive ;
+    beh:sourceClass file:Receiver ;
+    beh:deletes """
+CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival . ?pick ?q ?v }
+WHERE {
+  BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival)
+  { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival } UNION { ?pick file:requestedBy $this ; ?q ?v }
+}""" ;
+    beh:inserts """
+CONSTRUCT {
+  ?file a file:File ; file:name ?name ; file:mediaType ?type ; file:size ?size ; file:modified ?modified ; file:handle ?handle ; sem:order ?sequence .
+  $this dnd:offered ?arrival . ?arrival a dnd:Drag ; dnd:carrying ?file .
+}
+WHERE {
+  $event file:name ?name ; beh:sequence ?sequence .
+  OPTIONAL { $event file:mediaType ?type }
+  OPTIONAL { $event file:size ?size }
+  OPTIONAL { $event file:modified ?modified }
+  OPTIONAL { $event file:handle ?handle }
+  # Named by its handle, unique across page loads (a kept file outlives the event's sequence number).
+  BIND(IRI(CONCAT(STR($this), "/~file-", COALESCE(ENCODE_FOR_URI(STR(?handle)), STR(?sequence)))) AS ?file)
+  BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival)
+}""" ;
+    sem:function "files:offer" .
+
+# The receiver takes it, into the receptacle it was dropped in (else the node it controls, else
+# itself), as a member the way the target says (dnd:members, dnd:memberOf; a control's c:property);
+# it is listed (file:file) and uploaded at once when the receiver says where (file:uploadTo,
+# file:handler), else kept when it says where to keep it (file:keepIn), else ready.
+file:Add a beh:Reaction ;
+    rdfs:label "Take the file"@en ;
+    beh:when file:Added ;
+    beh:sourceClass file:Receiver ;
+    beh:deletes """
+CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival }
+WHERE { BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival) { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival } }""" ;
+    beh:inserts """
+CONSTRUCT { ?into ?members ?file . ?file ?memberOf ?into . $this file:file ?file . ?file file:state ?state ; file:keptIn ?store }
+WHERE {
+  $event file:file ?file .
+  OPTIONAL { $event dnd:into ?dropped }
+  OPTIONAL { $this c:controls ?controlled }
+  BIND(COALESCE(?dropped, ?controlled, $this) AS ?into)
+  OPTIONAL { $this dnd:members ?declaredMembers }
+  OPTIONAL { $this c:property ?property }
+  BIND(COALESCE(?declaredMembers, ?property) AS ?members)
+  OPTIONAL { $this dnd:memberOf ?memberOf }
+  OPTIONAL { $this file:keepIn ?store }
+  BIND(IF(EXISTS { $this file:uploadTo ?to } || EXISTS { $this file:handler ?by }, file:Uploading, IF(BOUND(?store), file:Saving, file:Ready)) AS ?state)
+}""" ;
+    sem:function "files:add" .
+
+# The receiver refuses it, with the shape's message, which is announced. One that lists its refusals
+# (file:keepsRefusals: a file drop) lists it as refused; any other forgets it.
+file:Refuse a beh:Reaction ;
+    rdfs:label "Refuse the file"@en ;
+    beh:when file:Refusal ;
+    beh:sourceClass file:Receiver ;
+    ann:announcesFrom file:reason ;
+    ann:announces "The file was not accepted"@en , "Файл не прийнято"@uk , "Die Datei wurde nicht angenommen"@de , "لم يُقبل الملف"@ar ;
+    ann:tone sty:Warning ;
+    beh:deletes """
+CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival . ?gone ?q ?v }
+WHERE {
+  BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival)
+  { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival }
+  UNION { $event file:file ?gone FILTER NOT EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true } ?gone ?q ?v }
+}""" ;
+    beh:inserts """
+CONSTRUCT { $this file:file ?file . ?file file:state file:Refused ; file:reason ?reason }
+WHERE { $event file:file ?file FILTER EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true } OPTIONAL { $event file:reason ?reason } }""" ;
+    sem:function "files:refuse" .
+
+# --- reactions: uploads ---------------------------------------------------------------------------------
+
+# How far an upload is.
+file:FollowUpload a beh:Reaction ;
+    rdfs:label "Upload progress"@en ;
+    beh:when file:Progress ;
+    beh:sourceClass file:Receiver ;
+    beh:deletes """
+CONSTRUCT { ?file file:loaded ?old }
+WHERE { $event file:file ?file ; file:loaded ?loaded . $this file:file ?file . ?file file:state file:Uploading ; file:loaded ?old }""" ;
+    beh:inserts """
+CONSTRUCT { ?file file:loaded ?loaded }
+WHERE { $event file:file ?file ; file:loaded ?loaded . $this file:file ?file . ?file file:state file:Uploading }""" ;
+    sem:function "files:progress" .
+
+# The upload is done: the file is uploaded (and where the server put it, if it said).
+file:FinishUpload a beh:Reaction ;
+    rdfs:label "Uploaded"@en ;
+    beh:when file:Done ;
+    beh:sourceClass file:Receiver ;
+    ann:announces "File uploaded"@en , "Файл надіслано"@uk , "Datei hochgeladen"@de , "تم رفع الملف"@ar ;
+    ann:tone sty:Success ;
+    beh:deletes """
+CONSTRUCT { ?file file:state file:Uploading ; file:loaded ?loaded }
+WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { ?file file:loaded ?loaded } }""" ;
+    beh:inserts """
+CONSTRUCT { ?file file:state file:Uploaded ; file:location ?location }
+WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { $event file:location ?location } }""" ;
+    sem:function "files:done" .
+
+# The upload failed: the file says why, and can be uploaded again.
+file:FailUpload a beh:Reaction ;
+    rdfs:label "Upload failed"@en ;
+    beh:when file:Failure ;
+    beh:sourceClass file:Receiver ;
+    ann:announcesFrom file:reason ;
+    ann:announces "Upload failed"@en , "Не вдалося надіслати"@uk , "Hochladen fehlgeschlagen"@de , "فشل الرفع"@ar ;
+    ann:tone sty:Danger ;
+    beh:deletes """
+CONSTRUCT { ?file file:state file:Uploading ; file:loaded ?loaded }
+WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { ?file file:loaded ?loaded } }""" ;
+    beh:inserts """
+CONSTRUCT { ?file file:state file:Failed ; file:reason ?reason }
+WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { $event file:reason ?reason } }""" ;
+    sem:function "files:fail" .
+
+# --- reactions and rules: keeping files in the browser --------------------------------------------------------
+
+# The effect has written it: saved.
+file:Keep a beh:Reaction ;
+    rdfs:label "Saved"@en ;
+    beh:when file:Stored ;
+    beh:sourceClass file:Receiver ;
+    beh:deletes """CONSTRUCT { ?file file:state file:Saving } WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Saving }""" ;
+    beh:inserts """CONSTRUCT { ?file file:state file:Saved } WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Saving }""" ;
+    sem:function "files:keep" .
+
+# The browser would not keep it: it is taken back out of where it went (its bytes would be gone after
+# a reload), refused with the browser's reason, announced; listed as refused by a receiver that lists
+# its refusals, else forgotten.
+file:KeepFailed a beh:Reaction ;
+    rdfs:label "Not saved"@en ;
+    beh:when file:StoreFailure ;
+    beh:sourceClass file:Receiver ;
+    ann:announcesFrom file:reason ;
+    ann:announces "The file was not saved"@en , "Файл не збережено"@uk , "Die Datei wurde nicht gespeichert"@de , "لم يُحفظ الملف"@ar ;
+    ann:tone sty:Danger ;
+    beh:deletes """
+CONSTRUCT { ?holder ?p ?file . ?file ?q ?v }
+WHERE {
+  $event file:file ?file . $this file:file ?file .
+  BIND(EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true } AS ?lists)
+  { ?holder ?p ?file FILTER(!?lists || ?p != file:file) }
+  UNION { ?file ?q ?v FILTER(!?lists || ?q IN (file:state, file:keptIn, file:loaded)) }
+}""" ;
+    beh:inserts """
+CONSTRUCT { ?file file:state file:Refused ; file:reason ?reason }
+WHERE {
+  $event file:file ?file . $this file:file ?file .
+  FILTER EXISTS { $this a/rdfs:subClassOf* ?kind . ?kind file:keepsRefusals true }
+  OPTIONAL { $event file:reason ?reason }
+}""" ;
+    sem:function "files:keep-failed" .
+
+# While files are carried to a receiver that keeps them: would its store still meet its cap with
+# them in it? Each sh:maxInclusive (sh:maxExclusive) the store's shapes put on file:usedBytes (with
+# the carried file's size, known once it is dropped) and file:usedFiles (with how many are carried)
+# that would be passed objects to every receptacle of the receiver, with the shape's message - so the
+# drop layer refuses it there like any other refusal. Only files coming in from outside the page
+# count: a member dragged between folders (kept or not) takes no more room.
+file:StoreRoom a sem:Rendering ;
+    sem:targets file:Receiver ;
+    sem:modality mod:Screen ;
+    sem:stratum 5 ;
+    sem:requires dnd:offered ;
+    sem:follows dnd:offered , file:keepIn ;
+    sem:watches dnd:offered , dnd:carrying , dnd:count , dnd:zone , dnd:receptacle , file:keepIn , file:usedBytes , file:usedFiles , file:size .
+file:StoreRoom-fn a sem:Rule ; sem:implements file:StoreRoom ; sem:function "files:store-room" .
+file:StoreRoom-sparql a sem:Rule ;
+    sem:implements file:StoreRoom ;
+    sem:construct """
+CONSTRUCT { ?objection a dnd:Objection ; dnd:receptacle ?r ; dnd:against ?drag ; dnd:reason ?reason }
+WHERE {
+  $this dnd:offered ?drag ; file:keepIn ?store . ?drag dnd:carrying ?x .
+  # Only files coming in from outside the page (dragged in, or arriving): a member dragged from
+  # elsewhere in the page is not kept anew.
+  FILTER NOT EXISTS { ?drag dnd:source ?source FILTER(?source != file:Dragged) }
+  # The first message of a limit it would pass.
+  LATERAL { SELECT ?store ?x ?drag (MIN(?said) AS ?reason) WHERE {
+    ?shape sh:targetNode ?store ; sh:property ?ps .
+    ?ps sh:path ?path ; ?bound ?limit FILTER(?path IN (file:usedBytes, file:usedFiles) && ?bound IN (sh:maxInclusive, sh:maxExclusive))
+    OPTIONAL { ?x file:size ?size1 }
+    OPTIONAL { ?drag dnd:count ?count1 }
+    OPTIONAL { ?store ?path ?used0 }
+    BIND(COALESCE(xsd:integer(?used0), 0) AS ?used)
+    BIND(IF(?path = file:usedBytes, IF(BOUND(?size1), ?used + xsd:integer(?size1), ?none), ?used + COALESCE(xsd:integer(?count1), 1)) AS ?after)
+    FILTER(BOUND(?after) && IF(?bound = sh:maxInclusive, ?after > ?limit, ?after >= ?limit))
+    OPTIONAL { ?ps sh:message ?own FILTER(lang(?own) = "") }
+    OPTIONAL { ?shape sh:message ?general FILTER(lang(?general) = "") }
+    BIND(STR(COALESCE(?own, ?general, "There is no room left to keep it.")) AS ?said)
+  } GROUP BY ?store ?x ?drag }
+  # Every receptacle of the receiver: its zones', else its own.
+  { $this dnd:zone ?zone . ?zone dnd:receptacle ?r }
+  UNION { FILTER NOT EXISTS { $this dnd:zone ?anyZone } OPTIONAL { $this dnd:receptacle ?declared } BIND(COALESCE(?declared, $this) AS ?r) }
+  BIND(IRI(CONCAT(STR($this), "/~room-", ENCODE_FOR_URI(STR(?r)))) AS ?objection)
+}""" .

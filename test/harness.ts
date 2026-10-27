@@ -6,6 +6,7 @@ import { Scheduler } from '../src/behaviour/schedule.ts'
 import { Clipboard, type ClipboardLike } from '../src/clipboard.ts'
 import { type FileLike, Files, type PickOptions, type UploadContext } from '../src/files.ts'
 import { Fullscreen, type FullscreenHost } from '../src/fullscreen.ts'
+import { type FileStoreBackend, memoryFileStore } from '../src/file-store.ts'
 import { todoApp, todoReactions } from '../src/examples/todo.ts'
 import { Navigation, type NavigationOptions } from '../src/navigation.ts'
 import { type Backend, Persistence } from '../src/persistence.ts'
@@ -89,8 +90,27 @@ export async function mountNavigating(opts: NavigationOptions, backends?: Record
   return { ...shell, persistence, navigation }
 }
 
-/** `clock` is the host's time (beh:at, beh:dueAt): a ManualClock lets a test move it; by default nothing due fires. */
-function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) {
+/**
+ * The site with persistence over the given backends and files kept in `kept` (a memory stand-in
+ * for the browser's file store), as the host runs it: remembered state is restored before the first
+ * projection. Mount it again with the same backends and store to see what survives a reload.
+ */
+export async function mountSiteKeeping(backends: Record<string, Backend>, kept: FileStoreBackend, prefer: 'sparql' | 'function' = 'sparql') {
+  const store = sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery))
+  const persistence = new Persistence(store, backends, { delayMs: 60_000 })
+  await persistence.restore()
+  const shell = mount(store, prefer, undefined, kept)
+  persistence.attach(shell.runtime)
+  await shell.files.ready
+  shell.shell.flush()
+  return { ...shell, persistence }
+}
+
+/**
+ * `clock` is the host's time (beh:at, beh:dueAt): a ManualClock lets a test move it; by default nothing due fires.
+ * `kept` is where files are kept (file:keepIn): a memory store (a fresh one by default).
+ */
+function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, kept: FileStoreBackend = memoryFileStore()) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const runtime = new Runtime(store)
   const layers = [A11Y.Layer, STY.Layer, SEM.SourceLayer, SEM.TooltipLayer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.DocsLayer, NS.prv + 'Layer', FS.Layer]
@@ -116,6 +136,7 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
   // Files: the picker hands over what the test put in picker.next (none: it was closed), and the
   // "demo" upload handler waits for the test to say how each upload goes (uploads.get(file)).
   const picker = { next: null as FileLike[] | null, asked: [] as PickOptions[] }
+  const urls = { made: 0, revoked: [] as string[] }
   type Upload = { file: FileLike; ctx: UploadContext; resolve(r?: { location?: string }): void; reject(e: Error): void }
   const uploads = new Map<string, Upload>()
   const files = new Files(bus, {
@@ -127,6 +148,11 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     },
     handlers: { demo: (file, ctx) => new Promise((resolve, reject) => void uploads.set(ctx.file, { file, ctx, resolve, reject })) },
     progressEvery: 0,
+    // Kept files: the store the test gave; an image's preview is a stand-in made at once, and
+    // addresses are numbered (urls.made, urls.revoked say which were given out and taken back).
+    keep: kept,
+    thumbnail: async (image) => new Blob([`preview of ${(image as FileLike).name}`], { type: 'image/webp' }),
+    urls: { create: () => `blob:test/${++urls.made}`, revoke: (u) => void urls.revoked.push(u) },
     onHandled: () => shell.flush(),
   })
   files.attach(shell)
@@ -190,6 +216,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock) 
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, kept, urls, fire, value, showPage }
 }
 

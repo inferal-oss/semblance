@@ -188,3 +188,29 @@
 [] a sty:StyleRule ; sty:appliesTo c:BodyViewer ; sty:state ".sem-empty" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+
+# --- image view ---
+# The image fitted to the box it is given: never wider than it, never taller than most of the
+# viewport, on a neutral ground that transparent images read on in either scheme.
+[] a sty:StyleRule ; sty:appliesTo c:ImageView ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-2 ] ,
+                 [ sty:property "background" ; sty:token tok:gray-2 ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] .
+[] a sty:StyleRule ; sty:appliesTo c:ImageView ; sty:part "img" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "max-block-size" ; sty:raw "min(70vh, 40rem)" ] ,
+                 [ sty:property "block-size" ; sty:raw "auto" ] ,
+                 [ sty:property "object-fit" ; sty:raw "contain" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:ImageView ; sty:state ".sem-empty" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "justify-content" ; sty:raw "start" ] ,
+                 [ sty:property "background" ; sty:raw "none" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .

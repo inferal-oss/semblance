@@ -281,6 +281,8 @@ dnd:Zones a sem:Rendering ;
     sem:targets dnd:DropTarget ;
     sem:modality mod:Screen ;
     sem:stratum 10 ;
+    # A zone's receptacle can change (a file drop that follows the folder shown).
+    sem:follows dnd:zone ;
     sem:watches rdf:type , dnd:zone , dnd:receptacle , dnd:orderBy .
 dnd:Zones-fn a sem:Rule ; sem:implements dnd:Zones ; sem:function "dnd:zones" .
 dnd:Zones-sparql a sem:Rule ;
@@ -315,7 +317,7 @@ dnd:Receive a sem:Rendering ;
     sem:modality mod:Screen ;
     sem:stratum 10 ;
     sem:requires dnd:offered ;
-    sem:follows dnd:offered ;
+    sem:follows dnd:offered , dnd:zone ;
     sem:watches dnd:offered , dnd:carrying , dnd:count , dnd:from , dnd:zone , dnd:receptacle , dnd:accepts , dnd:memberOf , dnd:members , val:validates .
 dnd:Receive-fn a sem:Rule ; sem:implements dnd:Receive ; sem:function "dnd:receive" .
 dnd:Receive-sparql a sem:Rule ;

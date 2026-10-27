@@ -111,7 +111,7 @@ c:Picture sem:group c:DataGroup . c:GalleryLayout sem:group c:DataGroup .
 c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
 c:DataGrid sem:group c:DataGroup . c:GridRow sem:group c:DataGroup . c:TimeAxis sem:group c:DataGroup .
 c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView sem:group c:DataGroup .
-c:BodyViewer sem:group c:DataGroup .
+c:BodyViewer sem:group c:DataGroup . c:ImageView sem:group c:DataGroup .
 c:Chart sem:group c:DataGroup . c:BarChart sem:group c:DataGroup . c:Heatmap sem:group c:DataGroup .
 c:LineChart sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
 c:Column sem:group c:DataGroup . c:series sem:group c:DataGroup . c:GridColumn sem:group c:DataGroup .

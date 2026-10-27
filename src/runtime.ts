@@ -4,7 +4,7 @@ import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, NAV_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
+import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { navigationFunctions } from './navigation.ts'
@@ -62,7 +62,7 @@ export class Runtime {
   private tx?: Map<string, { graph: string | undefined; q: Quad; w: number }>
 
   constructor(readonly store: GraphStore) {
-    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH], functions: viewFunctions })
+    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH], functions: viewFunctions })
     // A window's next expiry: a tick with no input.
     this.views.onTimer = () => {
       this.advance()
@@ -232,7 +232,7 @@ export class Runtime {
   private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
     const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, VIEW_GRAPH],
       // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
       maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
