@@ -90,7 +90,13 @@ fn args<const N: usize>(input: &[u8], lens: [u32; N]) -> [&[u8]; N] {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn abi_version() -> i32 {
-    1
+    2
+}
+
+/// The SPARQL extension groups implemented (EXTENSIONS.md, "Capabilities").
+#[unsafe(no_mangle)]
+pub extern "C" fn extensions() -> i32 {
+    crate::sparql::ext::GROUPS
 }
 
 #[unsafe(no_mangle)]

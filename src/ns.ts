@@ -128,6 +128,7 @@ export const SEM = {
   bulk: sem + 'bulk',
   requires: sem + 'requires',
   unless: sem + 'unless',
+  needsExtension: sem + 'needsExtension',
   refresh: sem + 'refresh',
   NextFrame: sem + 'NextFrame',
   TooltipLayer: sem + 'TooltipLayer',

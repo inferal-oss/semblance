@@ -659,6 +659,7 @@ impl Ctx<'_> {
             v.push(self.expr(a, row)?);
         }
         match f {
+            X(x) => self.ext(x, &v),
             Str => match self.kind(&v[0]) {
                 dict::IRI => {
                     let id = self.to_id(&v[0]);

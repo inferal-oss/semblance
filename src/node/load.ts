@@ -22,6 +22,8 @@ export interface StoreOptions {
    * true compiles a query on its second run, 'idle' the most-run ones in idle time.
    */
   compiled?: boolean | 'idle'
+  /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
+  timeZone?: string
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -37,7 +39,7 @@ function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
   // SEMBLANCE_ENGINE_COMPILE=n: compile each prepared query on its n-th run; =idle: in idle time
   // (rdf-engine/results/compiled.md).
   const env = process.env.SEMBLANCE_ENGINE_COMPILE === 'idle' ? 'idle' : Number(process.env.SEMBLANCE_ENGINE_COMPILE ?? 0) || 0
-  return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : env })
+  return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : env, timeZone: options.timeZone })
 }
 
 let created: ((store: GraphStore) => void) | undefined

@@ -64,6 +64,8 @@ interface Reaction {
   deletes?: string
   inserts?: string
   fn?: string
+  /** sem:needsExtension: SPARQL extension groups its queries use; a store lacking one runs `fn`. */
+  needs: string[]
   /** beh:undoable: its effect is recorded on the event's member, for undo. */
   undoable?: boolean
 }
@@ -102,7 +104,7 @@ export class EventBus {
       if (graph !== undefined) return
       for (const q of [...delta.add, ...delta.remove]) {
         const p = q.predicate.value
-        if (p.startsWith(NS.beh) || p === SEM.function || p === RDFS_SUBCLASS) this.cachedReactions = undefined
+        if (p.startsWith(NS.beh) || p === SEM.function || p === SEM.needsExtension || p === RDFS_SUBCLASS) this.cachedReactions = undefined
         if (p === RDF_TYPE || p === RDFS_SUBCLASS) this.classCache.clear()
       }
     })
@@ -149,6 +151,7 @@ export class EventBus {
       deletes: this.value(r, BEH.deletes)?.value,
       inserts: this.value(r, BEH.inserts)?.value,
       fn: this.value(r, SEM.function)?.value,
+      needs: this.runtime.store.match(r, nn(SEM.needsExtension), null, this.f.defaultGraph()).map((q) => q.object.value),
       undoable: this.value(r, BEH.undoable)?.value === 'true',
     }))
   }
@@ -440,7 +443,8 @@ export class EventBus {
   }
 
   private react(r: Reaction, event: NamedNode, target: NamedNode): Delta {
-    const useFn = r.fn && (!this.runtime.store.sparql || this.opts.prefer === 'function' || (!r.deletes && !r.inserts))
+    const store = this.runtime.store
+    const useFn = r.fn && (!store.sparql || this.opts.prefer === 'function' || (!r.deletes && !r.inserts) || !r.needs.every((g) => store.extensions?.has(g)))
     if (useFn) {
       const fn = this.opts.functions?.[r.fn!] ?? builtinReactions[r.fn!]
       if (!fn) throw new Error(`No reaction function registered for "${r.fn}" (<${r.iri}>)`)
