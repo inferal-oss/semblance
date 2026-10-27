@@ -304,7 +304,7 @@ const term: FnRule = (ctx, focus) => {
         el(o, 'twisty-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('twisty-text', '▸')]),
       ])
     : el(o, 'leaf', 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' })
-  if (f.expandable) o.t(lead, C_EXPANDS, focus).t(lead, C_EXPANDS_TO, bool(ctx, !f.open))
+  if (f.expandable) o.t(lead, C_EXPANDS, focus).t(lead, C_EXPANDS_TO, bool(ctx, f.open && !f.nest && f.hasStatements ? true : !f.open))
   const editable = f.editable.value === 'true'
   const editing = editable && (f.lit || (t.termType === 'NamedNode' && !f.blank)) && ctx.match(focus, C_EDITING, bool(ctx, true)).length > 0
   const adding = editable && f.nest && !f.list && ctx.match(focus, C_ADDING, bool(ctx, true)).length > 0

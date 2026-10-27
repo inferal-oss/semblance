@@ -354,7 +354,8 @@ WHERE {
   BIND(IF(?depth = 0, "0", "-1") AS ?tabindex)
   BIND(IF(?expandable, "sem-twisty", "sem-leaf") AS ?leadClass)
   BIND(IF(?expandable, $this, ?none) AS ?expands)
-  BIND(IF(?expandable, !?open, ?none) AS ?expandsTo)
+  # Open on its reifiers alone, the twisty opens its statements too; otherwise it opens or closes.
+  BIND(IF(?expandable, IF(?open && !?nest && ?hasStatements, true, !?open), ?none) AS ?expandsTo)
   BIND(IRI(CONCAT(STR(?lead), IF(?expandable, "-aria-label", "-aria-hidden"))) AS ?leadAttr)
   BIND(IF(?expandable, "aria-label", "aria-hidden") AS ?leadAttrName)
   BIND(IF(?expandable, CONCAT(IF(?open, "Collapse ", "Expand "), ?term), "true") AS ?leadAttrValue)
