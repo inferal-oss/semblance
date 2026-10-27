@@ -1,4 +1,4 @@
-// Prototype for #201: semblance.dev's load in Chrome, phase by phase (the sem:* marks in
+// semblance.dev's load in Chrome (#201), phase by phase (the sem:* marks in
 // demo/boot.ts and demo/main.ts), on a cold and a warm cache, at desktop speed and at a throttled
 // phone's (Lighthouse's Slow 4G: 150 ms, 1.6 Mbps down, 750 kbps up, 4x CPU). Serves dist/ as
 // GitHub Pages does (gzip, max-age=600) unless a URL is given. Not a test; numbers for the design.

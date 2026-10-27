@@ -9,4 +9,3 @@ rdf-engine/rust/target/
 .test-full/
 layout-solver/build/
 layout-solver/rust/target/
-dist-ssr/
