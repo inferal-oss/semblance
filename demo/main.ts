@@ -1,3 +1,4 @@
+performance.mark('sem:main')
 import appGraph from './app.ttl?raw'
 import { EventBus, type Handled } from '../src/behaviour/events.ts'
 import { Scheduler } from '../src/behaviour/schedule.ts'
@@ -57,11 +58,13 @@ const RULES = { sparql: 'PreferSparql', function: 'PreferFunction' } as const
 
 // Only the chosen store's code and WASM are loaded.
 await initWeb(kind)
+performance.mark('sem:wasm')
 // The Components page: one graph per component group (demo/gallery/*.ttl).
 const galleryFiles = import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const gallery = Object.values(galleryFiles)
 const storeOptions = { compiled: compile === 'idle' ? ('idle' as const) : compile === 'run' }
 const store = loadStoreWith(kind, storeOptions, todoApp(5), appGraph, ...gallery)
+performance.mark('sem:store')
 // The examples show their own source, recorded as data (c:SourceText).
 recordSources(store, {
   'src/examples/todo.ts': todoApp(5),
@@ -77,6 +80,7 @@ await persistence.restore().catch((e) => console.warn('[semblance] could not res
 // Where we are (ui:location in app.ttl): the address over what storage kept, before the first projection too.
 const navigation = new Navigation(store, { root: UI + 'shell', persistence })
 await navigation.restore()
+performance.mark('sem:restore')
 const f = store.factory
 const nn = (iri: string) => f.namedNode(iri)
 const app = nn(UI + 'app')
@@ -97,6 +101,7 @@ const enabledLayers = () => new Set(appValues(SEM.enables).map((t) => t.value))
 // Each projection evaluates only what is shown under its mount root (demand-driven).
 const screen = runtime.project({ modality: MOD.Screen, layers: enabledLayers(), prefer, provenance: true, name: 'screen', roots: [UI + 'shell'] })
 const text = runtime.project({ modality: MOD.Text, prefer, provenance: true, name: 'text', roots: [EX + 'page'] })
+performance.mark('sem:rules')
 
 // The keyboard layer shows ⌘ / ⌥ glyphs on Apple platforms, Ctrl / Alt elsewhere.
 if (/Mac|iPhone|iPad/.test(navigator.platform)) document.documentElement.setAttribute('data-sem-platform', 'apple')
@@ -105,8 +110,19 @@ const sheet = new CSSStyleSheet()
 const css = compileStyles(store)
 sheet.replaceSync(css)
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+performance.mark('sem:styles')
 
 const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
+// Prototype (#201): server-rendered HTML is taken over (?ssr=rerender: thrown away and rendered again).
+const ssrHost = document.getElementById('app')!
+if (ssrHost.hasAttribute('data-sem-ssr')) {
+  if (params.get('ssr') === 'rerender') ssrHost.replaceChildren()
+  else {
+    const t = performance.now()
+    const adopted = shell.adopt()
+    performance.mark('sem:adopted', { detail: { ...adopted, ms: performance.now() - t, ops: shell.ops } })
+  }
+}
 // The Text projection mounts into its slot once the slot is shown (it is evaluated on demand).
 let textDom: DomRenderer | undefined
 // The Layout page's c:HostSlot specimen: content the host owns (a native slider), mounted once.
@@ -128,9 +144,13 @@ let sandboxes: Sandboxes | undefined
 // DOM patches are timed: a hang outside every turn of the engine is blamed on them (the stall log).
 let stalls: StallMonitor | undefined
 const flush = () => (stalls ? stalls.rendering(patch) : patch())
+let firstPatch: Record<string, number> | undefined = {}
 const patch = () => {
+  const t0 = performance.now()
   shell.flush()
+  const t1 = performance.now()
   sandboxes?.sync()
+  if (firstPatch && sandboxes) (firstPatch.shell = t1 - t0), (firstPatch.sandboxes = performance.now() - t1), (firstPatch.shellOps = shell.ops)
   hostSlotDemo(shell.slot('gallery-host'))
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
@@ -145,8 +165,12 @@ sandboxes = new Sandboxes(runtime, screen, {
   languages: () => [...screen.engine.languages],
   siteCss: css,
 })
+performance.mark('sem:sandboxes')
 sandboxes.attach()
+performance.mark('sem:sandboxesAttached')
 flush()
+performance.mark('sem:patch', { detail: { ops: shell.ops, ...firstPatch } })
+firstPatch = undefined
 // Views that follow their queries (sem:refresh sem:NextFrame) re-run at the next frame.
 runtime.onRefresh(flush)
 
@@ -438,6 +462,7 @@ navigation.attach(runtime, {
 const checkPerf = perfRunner(runtime, flush)
 syncSettings()
 flush()
+performance.mark('sem:ready')
 
 // Hidden views are evaluated in idle time, a slice at a time, so navigation finds
 // them ready and interactions never pay for them.

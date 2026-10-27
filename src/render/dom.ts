@@ -65,6 +65,67 @@ export class DomRenderer {
     return false
   }
 
+  /**
+   * Prototype (#201): take over the host's server-rendered children (toHTML of an index in the same
+   * state) instead of rendering them again: each index node is paired with the DOM node the HTML
+   * parser made for it, in document order. Adjacent text nodes, which the parser joins, are split
+   * again; an empty one is created. What does not match (another tag, other attributes) is patched
+   * as usual, and counted. Host-owned slots keep their content.
+   */
+  adopt(): { nodes: number; mismatches: number } {
+    this.takeDirty()
+    let nodes = 0
+    let mismatches = 0
+    const take = (k: string, dom: Node | null, parent: Node): Node => {
+      const n = this.index.nodes.get(k)!
+      nodes++
+      if (n.cls === 'Text') {
+        const data = n.data ?? ''
+        if (dom?.nodeType === 3 && data && (dom as Text).data.startsWith(data)) {
+          if ((dom as Text).data.length > data.length) (dom as Text).splitText(data.length)
+          this.els.set(k, dom)
+          this.keys.set(dom, k)
+          return dom
+        }
+        if (data) mismatches++
+        const text = this.element(k)
+        parent.insertBefore(text, dom)
+        return text
+      }
+      const tag = this.index.tagName(k) ?? 'sem-unknown'
+      if (dom?.nodeType !== 1 || (dom as Element).localName !== tag) {
+        mismatches++
+        const el = this.element(k)
+        parent.insertBefore(el, dom)
+        return el
+      }
+      const el = dom as Element
+      this.els.set(k, el)
+      this.keys.set(el, k)
+      const desired = new Map(this.index.attributes(k))
+      const actual = new Map(Array.from(el.attributes, (a) => [a.name, a.value]))
+      this.applied.set(k, actual)
+      if (desired.size !== actual.size || [...desired].some(([name, v]) => actual.get(name) !== v)) mismatches++, this.syncAttrs(k)
+      if (this.index.isVoid(k) || n.slot !== undefined) return el
+      let cursor = el.firstChild
+      for (const slot of this.index.childrenOf(k)) {
+        const r = this.index.resolve(slot)
+        if (!r) continue
+        while (cursor?.nodeType === 8) cursor = cursor.nextSibling
+        cursor = take(r, cursor, el).nextSibling
+      }
+      for (let rest = cursor; rest; ) {
+        const next = rest.nextSibling
+        if (rest.nodeType !== 8) el.removeChild(rest), mismatches++, this.ops++
+        rest = next
+      }
+      return el
+    }
+    const root = this.index.resolve(this.rootFocus)
+    if (root) take(root, this.host.firstElementChild, this.host)
+    return { nodes, mismatches }
+  }
+
   /** Call `listener` after every patch (host effects that act on what was rendered: islands). */
   onPatched(listener: () => void): () => void {
     this.patched.add(listener)
