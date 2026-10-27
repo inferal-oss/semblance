@@ -51,7 +51,7 @@ for (const [name, multiple, disabled] of [['single', false, false], ['multiple',
     h.change('ex:b h:selected "" .')
     expect(h.options.map(option => option.selected)).toEqual([false, true])
     expect(h.options.map(option => option.hasAttribute('selected'))).toEqual([false, true])
-    expect([...h.select.querySelectorAll('option')]).toEqual(original)
+    for (const [i, option] of [...h.select.querySelectorAll('option')].entries()) expect(option).toBe(original[i])
     expect(h.live[0]!.writes).toContain(false)
     expect(h.live[1]!.writes).toContain(true)
     h.change('')
@@ -112,10 +112,37 @@ describe.each(['wat', 'oxigraph'] as const)('stock Choice and compact Segmented 
           expect(list.map(option => option.selected)).toEqual([false, true])
           expect(list.map(option => option.hasAttribute('selected'))).toEqual([false, true])
         }
-        expect([...document.querySelectorAll('select')]).toEqual(selects)
+        for (const [i, select] of [...document.querySelectorAll('select')].entries()) expect(select).toBe(selects[i])
         history.push(snapshot()); histories.push(history)
       } finally { detach(); runtime.dispose(); store.dispose?.() }
     }
     expect(histories[0]).toEqual(histories[1])
   })
+})
+
+
+it('does not clear the newly selected sibling when a later option is already unselected', () => {
+  const { document } = parseHTML('<html><body><main></main></body></html>')
+  const parse = (value: string) => new Parser().parse(`@prefix ex: <${EX}> . @prefix h: <${NS.rdfhtml}> . @prefix sem: <${NS.sem}> . @prefix ord: <${NS.ord}> . ` + value)
+  const index = new HtmlIndex()
+  index.apply({ remove: [], add: parse(`ex:select a h:Select ; sem:renders ex:page ; h:hasChild ex:a, ex:b, ex:c .
+ex:a a h:Option ; h:value "a" ; ord:immediatelyPrecedes ex:b .
+ex:b a h:Option ; h:value "b" ; ord:immediatelyPrecedes ex:c .
+ex:c a h:Option ; h:value "c" ; h:selected "" .`) })
+  const renderer = new DomRenderer(index, document.querySelector('main')!, EX + 'page'); renderer.flush()
+  const select = renderer.nodeOf(EX + 'select') as HTMLSelectElement
+  const original = [...select.querySelectorAll('option')] as HTMLOptionElement[]
+  // Use the real test DOM property setter, not the dirty-property model above.
+  // A redundant false write in linkedom can clear selected siblings. Both real
+  // native selectedness and that implementation need idempotent reflection.
+  original[1]!.selected = true
+  expect(original[2]!.selected).toBe(false)
+  // A projection may publish several RDF/HTML deltas before one renderer flush.
+  // Deliberately make B's changed attributes precede C's removed attributes.
+  index.apply({ remove: [], add: parse('ex:b h:selected "" .') })
+  index.apply({ remove: parse('ex:c h:selected "" .'), add: [] })
+  renderer.flush()
+  expect(original.map(option => option.selected)).toEqual([false, true, false])
+  expect(original.map(option => option.hasAttribute('selected'))).toEqual([false, true, false])
+  for (const [i, option] of [...select.querySelectorAll('option')].entries()) expect(option).toBe(original[i])
 })
