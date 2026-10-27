@@ -208,15 +208,16 @@ Reading the numbers:
 3. **Solve and check in WASM by default, TypeScript as the backup.** `initLayout()` (the node and web loaders) compiles the builds present, and `createLayoutSolver()` / `checkLayout()` take the first of WAT, Rust and TypeScript that instantiates. The solver stays off by default for pages, for the cross-container cases only, and writes tokens through the style layer's hooks and nothing else. With Dantzig's rule and a column index its build is milliseconds even at 500 fields. All three twins stay under the parity tests.
 4. **Don't adopt Yoga or Taffy** (200–900 KB that re-implement the browser), and don't route layout through a solver (GSS).
 
-## Follow-up issues (not filed; for your approval)
+## Follow-up issues
 
-1. **`rnd:` for the checker** (on #35 / PR #100): part boxes with `lc:role` on minted part nodes, `rnd:parent`, `rnd:scrollWidth`/`clientWidth` per element, `rnd:line`, and two-decimal geometry.
-2. **Parts in RDF/HTML:** `lc:role` on the control and label nodes of TextField, Choice (its pill, and its select at compact width), ShapeField, DateField, TimeField, Typeahead and NavList items. This replaces `lc:selector`.
-3. **Layout CI job:** `scripts/layout-check.ts` over the site's pages × widths × themes × languages on `main` after a batch of merges (the coordinator's full-suite slot), with a baseline file of known findings.
-4. **Fix:** the Themes page at 320 px. A `c:Window` specimen is 280 px wide inside a 172 px surface, so the page is 51 px too wide.
-5. **Land PR #125** (#57). The checker confirms it fixes the checkout row in Semblance, Doodle and RTL, at 1280 and 375 px.
-6. **Workbench sample "Layout invariants broken"**, plus outlines (`ol:`) on the offending components; a maintained view of `lc:Checker` for live checks in dev.
-7. **More derived invariants:** `pos:AlignedColumns` (part N of each column on one line), a token comparison (`lc:equals tok:control-height`), baselines across a row.
-8. **WebKit measurement**: `playwright install webkit` or Safari's driver. #34's 23 px select and 56c9b4e were WebKit-only, and Chromium can't see them.
-9. **Solver cost tests:** `test/cost.test.ts` counts pivots and rows touched per edit, the way it counts rule firings, so a change that brings back the quadratic pivots fails there. (Dantzig's rule and the column index have landed on this branch.)
-10. **Solver → tokens, only if wanted:** `lc:Solve` for one label column across fieldsets, written as `--lc-label-column`, with the strength review above.
+- #192 the checker reads geometry from `rnd:` (part boxes, `rnd:parent`, scroll sizes, `rnd:line`, two-decimal geometry)
+- #193 parts in RDF/HTML: `lc:role` on minted part nodes, replacing `lc:selector`
+- #194 a layout CI job on `main`: pages × widths × themes × languages, with a baseline of known findings
+- #195 fix: the Themes page at 320 px (a `c:Window` specimen 280 px wide in a 172 px surface)
+- #196 workbench sample "Layout invariants broken", outlines on the offenders, a maintained view for live checks in dev
+- #197 more invariants: aligned columns, token sizes, baselines
+- #198 measure in WebKit (#34's select and 56c9b4e were WebKit-only)
+- #199 solver cost tests: pivots and rows touched per edit, every twin
+- #200 solver → tokens: `lc:Solve` for one label column across fieldsets
+
+(#57's checkout row is fixed by PR #125, now merged; the checker confirmed it.)
