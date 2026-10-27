@@ -73,10 +73,15 @@ function indented(index: HtmlIndex, k: string, depth: number): string[] {
 
 const BLOCK = new Set(['div', 'p', 'ul', 'ol', 'li', 'pre', 'section', 'header', 'footer', 'main', 'form'])
 
-/** Plain-text reading of a (typically text-modality) projection: blocks become lines. */
+/**
+ * Plain-text reading of a (typically text-modality) projection: blocks become lines. Text runs are
+ * joined by a space, except inside a `pre`, whose text (highlighted code, one span per token) is
+ * kept as it is.
+ */
 export function toText(index: HtmlIndex, focus: string): string {
   const lines: string[] = []
   let line = ''
+  let pre = 0
   const flush = () => {
     if (line.length) lines.push(line)
     line = ''
@@ -84,16 +89,19 @@ export function toText(index: HtmlIndex, focus: string): string {
   const walk = (k: string) => {
     const n = index.nodes.get(k)!
     if (n.cls === 'Text') {
-      if (line.length && !line.endsWith(' ')) line += ' '
+      if (!pre && line.length && !line.endsWith(' ')) line += ' '
       line += n.data ?? ''
       return
     }
-    const block = BLOCK.has(index.tagName(k) ?? '')
+    const tag = index.tagName(k) ?? ''
+    const block = !pre && BLOCK.has(tag)
     if (block) flush()
+    if (tag === 'pre') pre++
     for (const slot of index.childrenOf(k)) {
       const r = index.resolve(slot)
       if (r) walk(r)
     }
+    if (tag === 'pre') pre--
     if (block) flush()
   }
   const root = index.resolve(focus)
