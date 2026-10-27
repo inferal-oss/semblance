@@ -62,14 +62,21 @@ const isSkolem = (t: Term) => t.termType === 'BlankNode' || (t.termType === 'Nam
 const strOf = (t: Term) => (t.termType === 'Literal' || t.termType === 'NamedNode' ? t.value : undefined)
 const typed = (ctx: RuleContext, t: Term, kinds: string[]) => ctx.untraced(() => kinds.some((k) => ctx.match(t, RDF_TYPE, k).length > 0))
 
-/** A blank node's stand-in for a string: its least "p o" pair (an object without a string is "_"). */
+/**
+ * A blank node's stand-in for a string: its least and greatest "p o" pairs, those whose object has a
+ * string (a literal, an IRI) before those whose object has none ("~p _"), so two blank nodes that
+ * differ in a value do not share a key.
+ */
 function blankKey(ctx: RuleContext, b: Term): string {
   let min: string | undefined
+  let max: string | undefined
   for (const q of ctx.match(b, null, null)) {
-    const pair = `${q.predicate.value} ${strOf(q.object) ?? '_'}`
+    const value = strOf(q.object)
+    const pair = `${value === undefined ? '~' : ''}${q.predicate.value} ${value ?? '_'}`
     if (min === undefined || pair < min) min = pair
+    if (max === undefined || pair > max) max = pair
   }
-  return '_:' + (min ?? '')
+  return `_:${min ?? ''}|${max ?? ''}`
 }
 
 /** What identifies an object among its predicate's objects (the SPARQL rule's ?okey). */
@@ -184,7 +191,7 @@ function problemList(ctx: RuleContext, o: Out, focus: NamedNode, label: NamedNod
   const list = el(o, 'problems', 'Span', { class: 'sem-problems', id: o.node('problems').value })
   for (const r of found) {
     const message = ctx.untraced(() => str(ctx.object(r, SH + 'resultMessage'))) ?? ''
-    const local = 'problem-' + key12(r.value)
+    const local = 'problem-' + key12(message)
     const item = el(o, local, 'Span', { class: 'sem-problem' }, [o.text(local + '-text', message)])
     o.t(item, SEM.orderKey, message).t(list, H.hasChild, item)
   }

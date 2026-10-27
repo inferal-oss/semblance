@@ -483,9 +483,10 @@ WHERE {
     # The reifiers of its statement.
     FILTER(?open && ?reified)
     ?childTerm rdf:reifies <<( ?s ?p ?t )>> .
-    OPTIONAL { { SELECT ?childTerm (MIN(CONCAT(STR(?rp), " ", COALESCE(STR(?ro), "_"))) AS ?rmin) WHERE {
-        $this c:subjectTerm ?s3 ; c:predicateTerm ?p3 ; c:term ?t3 . ?childTerm rdf:reifies <<( ?s3 ?p3 ?t3 )>> . FILTER(isBlank(?childTerm)) ?childTerm ?rp ?ro } GROUP BY ?childTerm } }
-    BIND(IF(isIRI(?childTerm), STR(?childTerm), CONCAT("_:", COALESCE(?rmin, ""))) AS ?rkey)
+    OPTIONAL { { SELECT ?childTerm (MIN(?rpair) AS ?rmin) (MAX(?rpair) AS ?rmax) WHERE {
+        $this c:subjectTerm ?s3 ; c:predicateTerm ?p3 ; c:term ?t3 . ?childTerm rdf:reifies <<( ?s3 ?p3 ?t3 )>> . FILTER(isBlank(?childTerm)) ?childTerm ?rp ?ro
+        BIND(CONCAT(IF(isLiteral(?ro) || isIRI(?ro), "", "~"), STR(?rp), " ", COALESCE(STR(?ro), "_")) AS ?rpair) } GROUP BY ?childTerm } }
+    BIND(IF(isIRI(?childTerm), STR(?childTerm), CONCAT("_:", COALESCE(?rmin, ""), "|", COALESCE(?rmax, ""))) AS ?rkey)
     BIND($this AS ?childOf)
     BIND(c:RdfTerm AS ?childClass)
     BIND(CONCAT("\\u0001n2\\u0001s", ?rkey) AS ?childKey)
@@ -529,7 +530,7 @@ WHERE {
     UNION { FILTER(!BOUND(?s)) ?vr2 sh:focusNode ?t . FILTER NOT EXISTS { ?vr2 sh:resultPath ?vp2 . ?t ?vp2 ?vany2 } }
     ?vr2 sh:resultMessage ?message0
     BIND(STR(?message0) AS ?problemText)
-    BIND(IRI(CONCAT(STR($this), "/~problem-", SUBSTR(MD5(STR(?vr2)), 1, 12))) AS ?problem)
+    BIND(IRI(CONCAT(STR($this), "/~problem-", SUBSTR(MD5(?problemText), 1, 12))) AS ?problem)
     BIND(IRI(CONCAT(STR(?problem), "-text")) AS ?problemData)
   } }
 }""" .
@@ -619,9 +620,10 @@ WHERE {
   } UNION {
     FILTER(?open && ?reified)
     ?childTerm rdf:reifies <<( ?s ?p ?t )>> .
-    OPTIONAL { { SELECT ?childTerm (MIN(CONCAT(STR(?rp), " ", COALESCE(STR(?ro), "_"))) AS ?rmin) WHERE {
-        $this c:subjectTerm ?s3 ; c:predicateTerm ?p3 ; c:term ?t3 . ?childTerm rdf:reifies <<( ?s3 ?p3 ?t3 )>> . FILTER(isBlank(?childTerm)) ?childTerm ?rp ?ro } GROUP BY ?childTerm } }
-    BIND(IF(isIRI(?childTerm), STR(?childTerm), CONCAT("_:", COALESCE(?rmin, ""))) AS ?rkey)
+    OPTIONAL { { SELECT ?childTerm (MIN(?rpair) AS ?rmin) (MAX(?rpair) AS ?rmax) WHERE {
+        $this c:subjectTerm ?s3 ; c:predicateTerm ?p3 ; c:term ?t3 . ?childTerm rdf:reifies <<( ?s3 ?p3 ?t3 )>> . FILTER(isBlank(?childTerm)) ?childTerm ?rp ?ro
+        BIND(CONCAT(IF(isLiteral(?ro) || isIRI(?ro), "", "~"), STR(?rp), " ", COALESCE(STR(?ro), "_")) AS ?rpair) } GROUP BY ?childTerm } }
+    BIND(IF(isIRI(?childTerm), STR(?childTerm), CONCAT("_:", COALESCE(?rmin, ""), "|", COALESCE(?rmax, ""))) AS ?rkey)
     BIND($this AS ?childOf)
     BIND(c:RdfTerm AS ?childClass)
     BIND(CONCAT("\\u0001n2\\u0001s", ?rkey) AS ?childKey)
@@ -765,10 +767,11 @@ WHERE {
   LATERAL { {} UNION {
     FILTER(?open)
     ?s ?p ?o .
-    OPTIONAL { { SELECT ?o (MIN(CONCAT(STR(?bp), " ", COALESCE(STR(?bo), "_"))) AS ?bmin) WHERE {
-        $this c:subjectTerm ?s1 ; c:predicateTerm ?p1 . ?s1 ?p1 ?o . FILTER(isBlank(?o)) ?o ?bp ?bo } GROUP BY ?o } }
+    OPTIONAL { { SELECT ?o (MIN(?bpair) AS ?bmin) (MAX(?bpair) AS ?bmax) WHERE {
+        $this c:subjectTerm ?s1 ; c:predicateTerm ?p1 . ?s1 ?p1 ?o . FILTER(isBlank(?o)) ?o ?bp ?bo
+        BIND(CONCAT(IF(isLiteral(?bo) || isIRI(?bo), "", "~"), STR(?bp), " ", COALESCE(STR(?bo), "_")) AS ?bpair) } GROUP BY ?o } }
     BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))),
-         IF(isIRI(?o), STR(?o), IF(isBlank(?o), CONCAT("_:", COALESCE(?bmin, "")),
+         IF(isIRI(?o), STR(?o), IF(isBlank(?o), CONCAT("_:", COALESCE(?bmin, ""), "|", COALESCE(?bmax, "")),
          CONCAT("<<", STR(SUBJECT(?o)), " ", STR(PREDICATE(?o)), " ", COALESCE(STR(OBJECT(?o)), "_"), ">>")))) AS ?okey)
     BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?child)
   } UNION {
@@ -795,7 +798,7 @@ WHERE {
     FILTER(?invalid)
     ?editor val:violation ?vr2 . ?vr2 sh:focusNode ?s ; sh:resultPath ?p ; sh:resultMessage ?message0 . FILTER NOT EXISTS { ?vr2 sh:value ?vv2 }
     BIND(STR(?message0) AS ?problemText)
-    BIND(IRI(CONCAT(STR($this), "/~problem-", SUBSTR(MD5(STR(?vr2)), 1, 12))) AS ?problem)
+    BIND(IRI(CONCAT(STR($this), "/~problem-", SUBSTR(MD5(?problemText), 1, 12))) AS ?problem)
     BIND(IRI(CONCAT(STR(?problem), "-text")) AS ?problemData)
   } }
 }""" .
@@ -834,10 +837,11 @@ WHERE {
   LATERAL { {} UNION {
     FILTER(?open)
     ?s ?p ?o .
-    OPTIONAL { { SELECT ?o (MIN(CONCAT(STR(?bp), " ", COALESCE(STR(?bo), "_"))) AS ?bmin) WHERE {
-        $this c:subjectTerm ?s1 ; c:predicateTerm ?p1 . ?s1 ?p1 ?o . FILTER(isBlank(?o)) ?o ?bp ?bo } GROUP BY ?o } }
+    OPTIONAL { { SELECT ?o (MIN(?bpair) AS ?bmin) (MAX(?bpair) AS ?bmax) WHERE {
+        $this c:subjectTerm ?s1 ; c:predicateTerm ?p1 . ?s1 ?p1 ?o . FILTER(isBlank(?o)) ?o ?bp ?bo
+        BIND(CONCAT(IF(isLiteral(?bo) || isIRI(?bo), "", "~"), STR(?bp), " ", COALESCE(STR(?bo), "_")) AS ?bpair) } GROUP BY ?o } }
     BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))),
-         IF(isIRI(?o), STR(?o), IF(isBlank(?o), CONCAT("_:", COALESCE(?bmin, "")),
+         IF(isIRI(?o), STR(?o), IF(isBlank(?o), CONCAT("_:", COALESCE(?bmin, ""), "|", COALESCE(?bmax, "")),
          CONCAT("<<", STR(SUBJECT(?o)), " ", STR(PREDICATE(?o)), " ", COALESCE(STR(OBJECT(?o)), "_"), ">>")))) AS ?okey)
     BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?child)
   } }

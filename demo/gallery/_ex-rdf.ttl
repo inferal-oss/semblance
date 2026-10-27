@@ -1,0 +1,143 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix rcp: <https://semblance.dev/demo/recipes#> .
+
+# =================================================================================================
+# Editing a dataset: a few recipes, as RDF, edited as structure.
+#
+# The recipes are data in their own vocabulary (rcp:), and what a recipe should say is SHACL
+# (rcp:RecipeShape). A c:RdfEditor lists the recipes and their cook: a tree of resources,
+# predicates and values, with what nests nested - an ingredient and its amount (rdf:value and a
+# unit), the steps (an RDF list), where a recipe comes from (an RDF 1.2 reifier of the authorship).
+# It is editable and validated: what does not conform shows inline and goes when it is fixed, and
+# an adding field offers what the shape expects.
+# =================================================================================================
+
+ui:ex-rdf-prefixes sh:declare [ sh:prefix "rcp" ; sh:namespace "https://semblance.dev/demo/recipes#"^^xsd:anyURI ] .
+
+# --- the vocabulary -----------------------------------------------------------------------------------
+
+rcp:Recipe a owl:Class ; rdfs:label "Recipe"@en , "Рецепт"@uk , "Rezept"@de , "وصفة"@ar .
+rcp:Person a owl:Class ; rdfs:label "Person"@en , "Особа"@uk , "Person"@de , "شخص"@ar .
+rcp:Cuisine a owl:Class ; rdfs:label "Cuisine"@en , "Кухня"@uk , "Küche"@de , "مطبخ"@ar .
+rcp:cuisine a owl:ObjectProperty ; rdfs:label "cuisine"@en , "кухня"@uk , "Küche"@de , "المطبخ"@ar .
+rcp:serves a owl:DatatypeProperty ; rdfs:label "serves"@en , "порцій"@uk , "Portionen"@de , "يكفي"@ar .
+rcp:time a owl:DatatypeProperty ; rdfs:label "time"@en , "час"@uk , "Zeit"@de , "الوقت"@ar .
+rcp:difficulty a owl:DatatypeProperty ; rdfs:label "difficulty"@en , "складність"@uk , "Schwierigkeit"@de , "الصعوبة"@ar .
+rcp:ingredient a owl:ObjectProperty ; rdfs:label "ingredient"@en , "інгредієнт"@uk , "Zutat"@de , "مكوّن"@ar .
+rcp:food a owl:DatatypeProperty ; rdfs:label "food"@en , "продукт"@uk , "Lebensmittel"@de , "طعام"@ar .
+rcp:amount a owl:ObjectProperty ; rdfs:label "amount"@en , "кількість"@uk , "Menge"@de , "الكمية"@ar .
+rcp:unit a owl:DatatypeProperty ; rdfs:label "unit"@en , "одиниця"@uk , "Einheit"@de , "الوحدة"@ar .
+rcp:steps a owl:ObjectProperty ; rdfs:label "steps"@en , "кроки"@uk , "Schritte"@de , "الخطوات"@ar .
+rcp:author a owl:ObjectProperty ; rdfs:label "author"@en , "автор"@uk , "Autor"@de , "المؤلف"@ar .
+rcp:source a owl:ObjectProperty ; rdfs:label "source"@en , "джерело"@uk , "Quelle"@de , "المصدر"@ar .
+
+rcp:Ukrainian a rcp:Cuisine ; rdfs:label "Ukrainian"@en , "Українська"@uk , "Ukrainisch"@de , "أوكراني"@ar .
+rcp:Italian a rcp:Cuisine ; rdfs:label "Italian"@en , "Італійська"@uk , "Italienisch"@de , "إيطالي"@ar .
+rcp:Levantine a rcp:Cuisine ; rdfs:label "Levantine"@en , "Левантійська"@uk , "Levantinisch"@de , "شامي"@ar .
+
+# --- the data -----------------------------------------------------------------------------------------
+
+rcp:borscht a rcp:Recipe ;
+    rdfs:label "Borscht"@en , "Борщ"@uk ;
+    rcp:cuisine rcp:Ukrainian ;
+    rcp:serves 6 ;
+    rcp:time "PT2H"^^xsd:duration ;
+    rcp:difficulty "medium" ;
+    rcp:ingredient [ rcp:food "beetroot" ; rcp:amount [ rdf:value 500 ; rcp:unit "g" ] ] ,
+                   [ rcp:food "cabbage" ; rcp:amount [ rdf:value 300 ; rcp:unit "g" ] ] ;
+    rcp:steps ( "Make the broth" "Add the beetroot" "Add the cabbage" "Serve with sour cream" ) ;
+    rcp:author rcp:olena ~ rcp:attribution {| rcp:source <https://example.org/family-cookbook> |} .
+
+# Not quite right yet: "two" is not a number, and the time is missing.
+rcp:carbonara a rcp:Recipe ;
+    rdfs:label "Carbonara" ;
+    rcp:cuisine rcp:Italian ;
+    rcp:serves "two" ;
+    rcp:steps ( "Cook the pasta" "Mix the eggs and the cheese" "Toss with the pasta, off the heat" ) .
+
+rcp:olena a rcp:Person ; rdfs:label "Olena" .
+
+# --- what a recipe should say ----------------------------------------------------------------------------
+
+rcp:RecipeShape a sh:NodeShape ; sh:targetClass rcp:Recipe ;
+    sh:property [ sh:path rdfs:label ; sh:minCount 1 ] ,
+                [ sh:path rcp:cuisine ; sh:minCount 1 ; sh:class rcp:Cuisine ] ,
+                [ sh:path rcp:serves ; sh:datatype xsd:integer ; sh:minInclusive 1 ;
+                  sh:message "Serves: a number of people"@en , "Порцій: кількість людей"@uk , "Portionen: eine Anzahl Personen"@de , "يكفي: عدد الأشخاص"@ar ] ,
+                [ sh:path rcp:time ; sh:minCount 1 ; sh:datatype xsd:duration ;
+                  sh:message "How long does it take?"@en , "Скільки часу це забирає?"@uk , "Wie lange dauert es?"@de , "كم من الوقت يستغرق؟"@ar ] ,
+                [ sh:path rcp:difficulty ; sh:in ( "easy" "medium" "hard" ) ] ,
+                [ sh:path rcp:author ; sh:class rcp:Person ] .
+
+# --- the page ------------------------------------------------------------------------------------------
+
+ui:ex-rdf a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-rdf-intro ui:ex-rdf-controls ui:ex-rdf-editor ui:ex-rdf-keys ) .
+ui:ex-rdf-intro a c:Text ;
+    c:label "Two recipes and their cook, as RDF, edited as structure. Carbonara does not conform to the recipe shape yet: fix it here. Enter edits a value, Shift+Enter adds a statement (the shape suggests what), Delete removes one, Tab nests a value, Alt+Up and Alt+Down move a step." .
+ui:ex-rdf-editor a c:RdfEditor ;
+    c:label "Recipes"@en , "Рецепти"@uk , "Rezepte"@de , "وصفات"@ar ;
+    c:entry rcp:borscht , rcp:carbonara , rcp:olena ;
+    c:editable true ;
+    c:validated true ;
+    c:arrows c:ArrowsCurrent ;
+    c:current rcp:borscht .
+ui:ex-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:ex-rdf-jump ui:ex-rdf-arrows ui:ex-rdf-validate ui:ex-rdf-undo ) .
+ui:ex-rdf-jump a c:Combobox ; c:controls ui:ex-rdf-editor ; c:property c:current ; c:optionsFrom ui:ex-rdf-editor ;
+    c:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar .
+ui:ex-rdf-arrows a c:Segmented ; c:controls ui:ex-rdf-editor ; c:property c:arrows ;
+    c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
+ui:ex-rdf-validate a c:ToggleSwitch ; c:controls ui:ex-rdf-editor ; c:property c:validated ;
+    c:label "Validate"@en , "Перевіряти"@uk , "Prüfen"@de , "تحقّق"@ar .
+ui:ex-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Outline ;
+    c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
+ui:ex-rdf-keys a c:Text ; sty:textStyle sty:Caption ;
+    c:label "Fields take Turtle: \"text\"@uk, \"PT30M\"^^xsd:duration, 4, rcp:Levantine, <https://…>. Text without quotes keeps the value's datatype and language." .
+
+# --- how it works --------------------------------------------------------------------------------------
+
+ui:ex-rdf-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-rdf-w1 ui:ex-rdf-w2 ui:ex-rdf-w3 ui:ex-rdf-w4 ui:ex-rdf-w5 ) .
+
+ui:ex-rdf-w1 a c:WalkthroughStep ; rdfs:label "The data, as a tree" ;
+    c:children ( "The recipes are data in their own vocabulary: " ui:ex-rdf-m-borscht " and " ui:ex-rdf-m-carbonara " are " ui:ex-rdf-m-Recipe "s, " ui:ex-rdf-m-olena " their cook. " ui:ex-rdf-m-editor " is a " ui:ex-rdf-m-RdfEditor " that lists them: each is a row, its predicates beside their values. An ingredient is a blank node, nested under where it is used, and its " ui:ex-rdf-m-value " a structured value (rdf:value and a unit); the steps are an RDF list, in order." ) .
+ui:ex-rdf-w2 a c:WalkthroughStep ; rdfs:label "Links, arrows, and what is said about a statement" ;
+    c:children ( "A value that is a resource of the document is a link: activating " ui:ex-rdf-m-olena2 " under Borscht jumps to her row (" ui:ex-rdf-m-current "), and " ui:ex-rdf-m-jump " does the same by name. Arrows join links to their resources for the current one. Where the recipe comes from is said about its authorship: " ui:ex-rdf-m-attribution " reifies the statement (RDF 1.2), and shows under it." ) .
+ui:ex-rdf-w3 a c:WalkthroughStep ; rdfs:label "What a recipe should say" ;
+    c:children ( ui:ex-rdf-m-shape " is ordinary SHACL. With " ui:ex-rdf-m-validated ", each recipe is checked against it, one entry at a time, by the same check the shapes layer runs on components. Carbonara's \"two\" fails the serves constraint on its own row; the missing time is on the recipe's row, with the shape's message. Fix them and they go." ) .
+ui:ex-rdf-w4 a c:WalkthroughStep ; rdfs:label "Editing is reactions over the data" ;
+    c:children ( "Enter puts a value in a field in its place; Enter again commits one undoable change: the statement with the new value. Which field is open is view state on the row (" ui:ex-rdf-m-commit "), so undo leaves it alone. Shift+Enter opens a field for a new statement, with what the shape expects under it (" ui:ex-rdf-m-suggest "): a missing time first, a difficulty with each allowed value - one pick, the whole statement. " ui:ex-rdf-m-undo " walks back through the change log." ) .
+ui:ex-rdf-w5 a c:WalkthroughStep ; rdfs:label "Structure, and why it stays fast" ;
+    c:children ( "Tab wraps a value into a nested resource as its rdf:value, Shift+Tab moves it back up, Alt+Up and Alt+Down move a step along its list, and a value's row can be dragged onto another predicate. Each row is minted by the row above it, so an edit re-renders the rows of the resource it changed and re-checks that resource alone - however long the document. " ui:ex-rdf-m-cuisine " values come from " ui:ex-rdf-m-Cuisine "'s instances when you add one." ) .
+
+ui:ex-rdf-m-borscht a c:Mention ; c:label "rcp:borscht" ; c:mentions rcp:borscht .
+ui:ex-rdf-m-carbonara a c:Mention ; c:label "rcp:carbonara" ; c:mentions rcp:carbonara .
+ui:ex-rdf-m-Recipe a c:Mention ; c:label "rcp:Recipe" ; c:mentions rcp:Recipe .
+ui:ex-rdf-m-olena a c:Mention ; c:label "rcp:olena" ; c:mentions rcp:olena .
+ui:ex-rdf-m-olena2 a c:Mention ; c:label "rcp:olena" ; c:mentions rcp:olena .
+ui:ex-rdf-m-editor a c:Mention ; c:label "the editor" ; c:mentions ui:ex-rdf-editor .
+ui:ex-rdf-m-RdfEditor a c:Mention ; c:label "c:RdfEditor" ; c:mentions c:RdfEditor ; c:to c:RdfEditor .
+ui:ex-rdf-m-value a c:Mention ; c:label "rcp:amount" ; c:mentions rcp:amount .
+ui:ex-rdf-m-current a c:Mention ; c:label "c:current" ; c:mentions c:current ; c:to c:current .
+ui:ex-rdf-m-jump a c:Mention ; c:label "the Go to field" ; c:mentions ui:ex-rdf-jump .
+ui:ex-rdf-m-attribution a c:Mention ; c:label "rcp:attribution" ; c:mentions rcp:attribution .
+ui:ex-rdf-m-shape a c:Mention ; c:label "rcp:RecipeShape" ; c:mentions rcp:RecipeShape .
+ui:ex-rdf-m-validated a c:Mention ; c:label "c:validated" ; c:mentions c:validated ; c:to c:validated .
+ui:ex-rdf-m-commit a c:Mention ; c:label "c:editing" ; c:mentions c:editing ; c:to c:editing .
+ui:ex-rdf-m-suggest a c:Mention ; c:label "c:suggestsValue" ; c:mentions c:suggestsValue ; c:to c:suggestsValue .
+ui:ex-rdf-m-undo a c:Mention ; c:label "Undo" ; c:mentions ui:ex-rdf-undo .
+ui:ex-rdf-m-cuisine a c:Mention ; c:label "rcp:cuisine" ; c:mentions rcp:cuisine .
+ui:ex-rdf-m-Cuisine a c:Mention ; c:label "rcp:Cuisine" ; c:mentions rcp:Cuisine .
