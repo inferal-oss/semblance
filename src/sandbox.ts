@@ -5,9 +5,11 @@
 // sees the example's graph. What happened is written back to the site's graph, as data the example's
 // rendering shows: c:sandboxState, c:problem, c:renderTime, c:edited. A sandbox is built when its
 // example is first shown, and rebuilt when its sources change (after typing pauses); a hidden example
-// costs nothing. With c:dataPreview, the example's data (that CONSTRUCT over its graph) is written
-// back too, as lines of Turtle (c:dataLine), after the build and after every interaction that
-// changed it, with what changed marked (c:lineChange, c:changedLine, c:triplesAdded/Removed).
+// costs nothing. With c:dataPreview, the example's data is shown by an RDF editor in diff mode
+// (c:RdfEditor, c:diff) inside the sandbox, over the subjects of that CONSTRUCT, mounted in the
+// example's data slot: what the interactions added and removed since it was built, from the
+// sandbox's own change log. How many triples of the data the last interaction added and removed is
+// written back (c:triplesAdded/Removed) for the caption.
 import { Parser } from 'n3'
 import type { Quad, Term } from '@rdfjs/types'
 import { EventBus } from './behaviour/events.ts'
@@ -23,27 +25,16 @@ import { compileStyles } from './style/compile.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
 
 const c = NS.c
+/** The diff viewer of a live example's data, in its sandbox (each sandbox has a store of its own). */
+const DATA_VIEWER = 'urn:semblance:live:data'
 export const LIVE = {
   LiveExample: c + 'LiveExample',
   sources: c + 'sources',
   exampleRoot: c + 'exampleRoot',
   textPreview: c + 'textPreview',
   dataPreview: c + 'dataPreview',
-  dataLine: c + 'dataLine',
-  DataLine: c + 'DataLine',
-  lineSubject: c + 'lineSubject',
-  lineNode: c + 'lineNode',
-  linePredicate: c + 'linePredicate',
-  lineObject: c + 'lineObject',
-  subjectToken: c + 'subjectToken',
-  predicateToken: c + 'predicateToken',
-  objectToken: c + 'objectToken',
-  lineKey: c + 'lineKey',
-  lineChange: c + 'lineChange',
-  LineAdded: c + 'LineAdded',
-  LineRemoved: c + 'LineRemoved',
-  changedLine: c + 'changedLine',
   triplesAdded: c + 'triplesAdded',
+  changedRow: c + 'changedRow',
   triplesRemoved: c + 'triplesRemoved',
   original: c + 'original',
   value: c + 'value',
@@ -116,6 +107,8 @@ export interface Sandbox {
   runtime: Runtime
   screen: Projection
   text?: Projection
+  /** The diff viewer of its data (c:dataPreview), projected once mounted. */
+  data?: Projection
   /** Whether its sources declare styles of their own (sty:StyleRule, sty:Token, sty:Keyframes). */
   styled: boolean
 }
@@ -276,6 +269,10 @@ interface Mounted {
   sandbox?: Sandbox
   renderer?: DomRenderer
   textRenderer?: DomRenderer
+  /** The data pane's renderer: the sandbox's diff viewer (c:dataPreview). */
+  dataRenderer?: DomRenderer
+  /** The data's subjects since the sandbox was built: the viewer lists them, so one whose statements all went still shows them, removed. */
+  dataSubjects?: Set<string>
   detach?: () => void
   sheet?: CSSStyleSheet
   timer?: ReturnType<typeof setTimeout>
@@ -359,9 +356,10 @@ export class Sandboxes {
       for (const m of this.mounted.values()) {
         if (m.languages === lang || !m.sandbox) continue
         m.languages = lang
-        for (const p of [m.sandbox.screen, m.sandbox.text]) p?.engine.reconfigure({ languages })
+        for (const p of [m.sandbox.screen, m.sandbox.text, m.sandbox.data]) p?.engine.reconfigure({ languages })
         m.renderer?.flush()
         m.textRenderer?.flush()
+        m.dataRenderer?.flush()
       }
       const visibility = this.screen.index.visibility
       if (visibility === this.seenVisibility) return
@@ -520,9 +518,28 @@ export class Sandboxes {
       textHost = doc.createElement('div')
       textRenderer = new DomRenderer(sandbox.text.index, textHost, sandbox.root)
     }
+    // The data: a read-only RDF editor in diff mode, in the sandbox, over the data's subjects.
+    let dataRenderer: DomRenderer | undefined
+    const dataSlot = this.dataQuery(m) && (this.opts.renderer.nodeOf(mint(m.iri, 'data')) as Element | undefined)
+    let dataHost: Element | undefined
+    if (dataSlot) {
+      const sf = sandbox.store.factory
+      const viewer = sf.namedNode(DATA_VIEWER)
+      sandbox.runtime.apply({
+        add: [sf.quad(viewer, sf.namedNode(RDF_TYPE), sf.namedNode(c + 'RdfEditor')), sf.quad(viewer, sf.namedNode(c + 'diff'), sf.literal('true', sf.namedNode(XSD_BOOLEAN)))],
+        remove: [],
+      })
+      sandbox.data = sandbox.runtime.project(
+        { layers: this.opts.layers ?? DEFAULT_LAYERS, prefer: this.opts.prefer, functions: this.opts.functions, languages: this.opts.languages?.(), roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data' },
+        (e) => console.warn('[semblance] the data of a live example', e.message),
+      )
+      dataHost = doc.createElement('div')
+      dataRenderer = new DomRenderer(sandbox.data.index, dataHost, DATA_VIEWER)
+    }
     const flush = () => {
       renderer.flush()
       textRenderer?.flush()
+      dataRenderer?.flush()
     }
     flush()
     const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
@@ -566,9 +583,12 @@ export class Sandboxes {
     m.slot.replaceChildren(host)
     const detachPopups = attachAnchoredPopups(host, node => !renderer.inSlot(node))
     if (textSlot && textHost) textSlot.replaceChildren(textHost)
+    if (dataSlot && dataHost) dataSlot.replaceChildren(dataHost)
     m.sandbox = sandbox
     m.renderer = renderer
     m.textRenderer = textRenderer
+    m.dataRenderer = dataRenderer
+    m.dataSubjects = new Set()
     m.sheet = sheet
     this.followData(m, sandbox, false)
     m.detach = () => {
@@ -599,7 +619,7 @@ export class Sandboxes {
     // The sandbox's runtime and store are its own: release them (Oxigraph's share one WebAssembly memory).
     m.sandbox?.runtime.dispose()
     if (m.sheet) m.slot.ownerDocument.adoptedStyleSheets = m.slot.ownerDocument.adoptedStyleSheets.filter((s) => s !== m.sheet)
-    m.detach = m.sheet = m.sandbox = m.renderer = m.textRenderer = undefined
+    m.detach = m.sheet = m.sandbox = m.renderer = m.textRenderer = m.dataRenderer = undefined
   }
 
   private unmount(m: Mounted) {
@@ -661,18 +681,26 @@ export class Sandboxes {
     this.opts.flush()
   }
 
-  /**
-   * The example's data (c:dataPreview) as it is now in its sandbox, written to the site's graph as
-   * lines of Turtle: after a build all of it as it is; after an interaction (`changed`) with the
-   * triples it added and removed marked, and nothing written when it changed none of them.
-   */
-  private followData(m: Mounted, sandbox: Sandbox, changed: boolean) {
+  /** The example's data query (c:dataPreview), if it has one. */
+  private dataQuery(m: Mounted): string | undefined {
     const site = this.runtime.store
     const sf = site.factory
-    const query = site.match(sf.namedNode(m.iri), sf.namedNode(LIVE.dataPreview), null, sf.defaultGraph())[0]?.object.value
+    return site.match(sf.namedNode(m.iri), sf.namedNode(LIVE.dataPreview), null, sf.defaultGraph())[0]?.object.value
+  }
+
+  /**
+   * The example's data (c:dataPreview) as it is now in its sandbox: its subjects are the diff
+   * viewer's entries (and the sources' prefixes are declared for it); after an interaction
+   * (`changed`) how many of its triples it added and removed is written to the site's graph.
+   */
+  private followData(m: Mounted, sandbox: Sandbox, changed: boolean) {
+    const query = this.dataQuery(m)
     if (!query) return
+    const site = this.runtime.store
+    const sf = site.factory
     const sources = this.sources(m.iri)
-    const prefixes = { ...NS, ...declared(sources.map((s) => s.text).join('\n')) }
+    const own = declared(sources.map((s) => s.text).join('\n'))
+    const prefixes = { ...NS, ...own }
     const head = Object.entries(prefixes).map(([p, ns]) => `PREFIX ${p}: <${ns}>`).join('\n')
     let quads: Quad[]
     try {
@@ -684,38 +712,39 @@ export class Sandboxes {
     const now = new Map(quads.map((q) => [quadKey(q), q]))
     const before = m.data
     m.data = now
-    const added = changed && before ? [...now.keys()].filter((k) => !before.has(k)) : []
-    const removed = changed && before ? [...before.keys()].filter((k) => !now.has(k)) : []
-    if (changed && before && !added.length && !removed.length) return
-    const lines = dataLines(now, removed.map((k) => before!.get(k)!), new Set(added), prefixes)
+    // The viewer's entries: the data's subjects; the sources' own prefixes, so it writes their names.
+    if (sandbox.data) {
+      const bf = sandbox.store.factory
+      const viewer = bf.namedNode(DATA_VIEWER)
+      const entry = bf.namedNode(c + 'entry')
+      const seen = (m.dataSubjects ??= new Set())
+      for (const q of quads) if (q.subject.termType === 'NamedNode') seen.add(q.subject.value)
+      const desired = [...seen].map((iri) => bf.quad(viewer, entry, bf.namedNode(iri)))
+      Object.entries(own).forEach(([p, ns], i) => {
+        const decl = bf.namedNode(`${DATA_VIEWER}-prefix-${i}`)
+        desired.push(bf.quad(decl, bf.namedNode(NS.sh + 'prefix'), bf.literal(p)), bf.quad(decl, bf.namedNode(NS.sh + 'namespace'), bf.literal(ns, bf.namedNode(NS.xsd + 'anyURI'))))
+      })
+      const current = [...sandbox.store.match(viewer, entry, null), ...Object.keys(own).flatMap((_, i) => sandbox.store.match(bf.namedNode(`${DATA_VIEWER}-prefix-${i}`), null, null))]
+      const want = new Set(desired.map(quadKey))
+      const have = new Set(current.map(quadKey))
+      const delta: Delta = { remove: current.filter((q) => !want.has(quadKey(q))), add: desired.filter((q) => !have.has(quadKey(q))) }
+      if (delta.add.length || delta.remove.length) sandbox.runtime.apply(delta)
+      m.dataRenderer?.flush()
+    }
+    // After a build nothing has happened yet: what was said of the last interaction goes.
+    const added = changed && before ? [...now.keys()].filter((k) => !before.has(k)).length : 0
+    const removed = changed && before ? [...before.keys()].filter((k) => !now.has(k)).length : 0
+    if (changed && !added && !removed) return
     const s = sf.namedNode(m.iri)
     const nn = (iri: string) => sf.namedNode(iri)
     const integer = (n: number) => sf.literal(String(n), nn(XSD_INTEGER))
-    const desired: Quad[] = []
-    // The arrows point at the first line added, else the first removed.
-    const target = lines.find((l) => l.change === 'added') ?? lines.find((l) => l.change === 'removed')
-    for (const l of lines) {
-      const node = nn(`${m.iri}/data-${hash(l.key)}`)
-      desired.push(
-        sf.quad(s, nn(LIVE.dataLine), node),
-        sf.quad(node, nn(RDF_TYPE), nn(LIVE.DataLine)),
-        sf.quad(node, nn(LIVE.lineSubject), sf.literal(l.subject.text)),
-        sf.quad(node, nn(LIVE.subjectToken), sf.literal(l.subject.token)),
-        sf.quad(node, nn(LIVE.lineNode), sf.literal(hash(l.subject.text))),
-        sf.quad(node, nn(LIVE.linePredicate), sf.literal(l.predicate.text)),
-        sf.quad(node, nn(LIVE.predicateToken), sf.literal(l.predicate.token)),
-        sf.quad(node, nn(LIVE.lineObject), sf.literal(l.object.text)),
-        sf.quad(node, nn(LIVE.objectToken), sf.literal(l.object.token)),
-        sf.quad(node, nn(LIVE.lineKey), sf.literal(l.sort)),
-      )
-      if (l.change) desired.push(sf.quad(node, nn(LIVE.lineChange), nn(l.change === 'added' ? LIVE.LineAdded : LIVE.LineRemoved)))
-      if (l === target) desired.push(sf.quad(s, nn(LIVE.changedLine), node))
-    }
-    if (changed) desired.push(sf.quad(s, nn(LIVE.triplesAdded), integer(added.length)), sf.quad(s, nn(LIVE.triplesRemoved), integer(removed.length)))
+    const desired: Quad[] = changed ? [sf.quad(s, nn(LIVE.triplesAdded), integer(added)), sf.quad(s, nn(LIVE.triplesRemoved), integer(removed))] : []
+    // The arrows point at the viewer's first row marked added (else removed): its label, by its id.
+    const host = changed ? m.dataRenderer?.host : undefined
+    const row = host?.querySelector('[data-sem-change=added] > .sem-row > .sem-label[id]') ?? host?.querySelector('[data-sem-change=removed] > .sem-row > .sem-label[id]')
+    if (row) desired.push(sf.quad(s, nn(LIVE.changedRow), nn(row.id)))
     const dg = sf.defaultGraph()
-    const current: Quad[] = []
-    for (const p of [LIVE.changedLine, LIVE.triplesAdded, LIVE.triplesRemoved]) current.push(...site.match(s, nn(p), null, dg))
-    for (const q of site.match(s, nn(LIVE.dataLine), null, dg)) current.push(q, ...site.match(q.object, null, null, dg))
+    const current = [LIVE.triplesAdded, LIVE.triplesRemoved, LIVE.changedRow].flatMap((p) => site.match(s, nn(p), null, dg))
     const keys = new Set(desired.map(quadKey))
     const had = new Set(current.map(quadKey))
     const delta: Delta = { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
@@ -747,65 +776,6 @@ export class Sandboxes {
     }, this.opts.copiedMs ?? 1500)
     this.timers.add(t)
   }
-}
-
-/** A term as Turtle writes it, and the kind of token it is (pname, iri, string, number, keyword), as code colours them. */
-export interface DataTerm {
-  text: string
-  token: string
-}
-
-/** A line of a live example's data: its triple's terms, where it sorts, and what the last interaction did to it. */
-export interface DataLine {
-  key: string
-  sort: string
-  subject: DataTerm
-  predicate: DataTerm
-  object: DataTerm
-  change?: 'added' | 'removed'
-}
-
-/**
- * The data, a line per triple: by subject, then rdf:type, rdfs:label and the other predicates,
- * then object; a removed triple (marked) in its place, beside what replaced it.
- */
-export function dataLines(present: Map<string, Quad>, removed: Quad[], added: Set<string>, prefixes: Record<string, string>): DataLine[] {
-  const rank = (p: string) => (p === RDF_TYPE ? '0' : p === NS.rdfs + 'label' ? '1' : '2')
-  const rows = [
-    ...[...present].map(([key, q]) => ({ key, q, change: added.has(key) ? ('added' as const) : undefined })),
-    ...removed.map((q) => ({ key: quadKey(q), q, change: 'removed' as const })),
-  ].map((r) => {
-    const subject = dataTerm(r.q.subject, prefixes)
-    const predicate = r.q.predicate.value === RDF_TYPE ? { text: 'a', token: 'keyword' } : dataTerm(r.q.predicate, prefixes)
-    const object = dataTerm(r.q.object, prefixes)
-    const sort = `${subject.text} ${rank(r.q.predicate.value)}${predicate.text} ${r.change === 'removed' ? 0 : 1}${object.text}`
-    return { key: r.key, sort, subject, predicate, object, change: r.change }
-  })
-  return rows.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0))
-}
-
-/** A term as Turtle writes it, with the given prefixes, and its kind of token. */
-function dataTerm(t: Term, prefixes: Record<string, string>): DataTerm {
-  if (t.termType === 'NamedNode') {
-    const short = compactIri(t.value, prefixes)
-    return short === t.value ? { text: `<${t.value}>`, token: 'iri' } : { text: short, token: 'pname' }
-  }
-  if (t.termType === 'BlankNode') return { text: `_:${t.value}`, token: 'pname' }
-  if (t.termType !== 'Literal') return { text: t.value, token: 'string' }
-  const dt = t.datatype?.value
-  if (dt === XSD_BOOLEAN && /^(true|false)$/.test(t.value)) return { text: t.value, token: 'keyword' }
-  if (dt === XSD_INTEGER && /^[+-]?\d+$/.test(t.value)) return { text: t.value, token: 'number' }
-  const quoted = JSON.stringify(t.value)
-  if (t.language) return { text: `${quoted}@${t.language}`, token: 'string' }
-  if (!dt || dt === NS.xsd + 'string') return { text: quoted, token: 'string' }
-  return { text: `${quoted}^^${dataTerm(t.datatype, prefixes).text}`, token: 'string' }
-}
-
-/** A short, stable name for a line's triple (FNV-1a, hex). */
-function hash(text: string): string {
-  let h = 0x811c9dc5
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
-  return (h >>> 0).toString(16).padStart(8, '0')
 }
 
 /**

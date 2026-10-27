@@ -1825,7 +1825,8 @@ WHERE {
 
 # --- the diff (c:diff): what the change log records, on the rows of an editor that shows it ----------------
 # Three renderings that run only on rows with c:diff (sem:requires), so an editor without it pays
-# nothing: a value's row is marked with what happened to its statement; a predicate's row and a
+# nothing: a value's row is marked with what happened to its statement (and its label named by its
+# IRI, for what points at it); a predicate's row and a
 # resource's row get rows for what was removed (objects, whole predicates), in the places they had.
 # They follow the statements the log records about their subject (( … [ sem:inverse rdf:subject ] )).
 c:RdfDiffMarks a sem:Rendering ;
@@ -1841,6 +1842,7 @@ c:RdfDiffMarks-sparql a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root rdfhtml:attribute ?changeAttr , ?changeSaid .
+  ?label rdfhtml:id ?labelId .
   ?changeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?change .
   ?changeSaid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-description" ; rdfhtml:attributeValue ?changePhrase .
 }
@@ -1859,6 +1861,10 @@ WHERE {
   OPTIONAL { FILTER(!BOUND(?change0)) ?changeKind rdfs:label ?change1 FILTER(langMatches(lang(?change1), "en")) }
   BIND(STR(COALESCE(?change0, ?change1)) AS ?changePhrase)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  # Its label is named, so what points at a change (a live example's arrows) can find it.
+  FILTER NOT EXISTS { $this c:editing true }
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
+  BIND(STR(?label) AS ?labelId)
   BIND(IRI(CONCAT(STR($this), "/~root-data-sem-change")) AS ?changeAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-description")) AS ?changeSaid)
 }""" .

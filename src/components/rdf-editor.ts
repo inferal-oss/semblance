@@ -1343,8 +1343,10 @@ const diffMarks: FnRule = (ctx, focus) => {
   const there = ctx.match(s, p.value, t).length > 0
   const r = [...recorded(ctx, s, p).values()].find((x) => x.o.equals(t))
   const change = r?.kind === ASSERTED && there ? 'added' : r?.kind === RETRACTED && !there ? 'removed' : undefined
-  if (!change) return []
+  if (!change || ctx.match(focus, C_EDITING, bool(ctx, true)).length) return []
   const o = ctx.out(focus)
+  // Its label is named, so what points at a change (a live example's arrows) can find it.
+  o.t(o.node('label'), H.ns + 'id', o.node('label').value)
   o.attr(o.node('root'), 'data-sem-change', change).attr(o.node('root'), 'aria-description', phrase(ctx, change === 'added' ? 'RdfAddedPhrase' : 'RdfRemovedPhrase'))
   return o.quads
 }

@@ -71,8 +71,8 @@ ui:ex-todo-m-toggle a c:Mention ; c:label "its reaction" ; c:mentions ex:ToggleD
 
 # --- The todo, live: on screen, its data as Turtle and as text ----------------------------------
 # The same app in a sandbox of its own (c:LiveExample, ontology/components/live.ttl), with its data
-# (c:dataPreview: the todos and the new todo's field) shown as Turtle that follows every
-# interaction, and the text projection beside it. The home page shows it.
+# (c:dataPreview: the todos) shown by an RDF editor in diff mode - what ticking and adding added and
+# removed - and the text projection beside it. The home page shows it.
 
 ui:todoLive a c:LiveExample ;
     c:label "A todo app: on screen, as data, as text" , "Застосунок справ: на екрані, як дані, як текст"@uk ,
@@ -82,12 +82,7 @@ ui:todoLive a c:LiveExample ;
     c:showSources false ;
     c:textPreview true ;
     c:textHeading ui:QueryProjectionPhrase ;
-    c:dataPreview """CONSTRUCT { ?s ?p ?o }
-WHERE {
-  { ex:todos c:item ?s . ?s ?p ?o }
-  UNION
-  { BIND(ex:newTodo AS ?s) ex:newTodo ?p ?o FILTER(?p IN (c:value, c:error)) }
-}""" .
+    c:dataPreview """CONSTRUCT { ?s ?p ?o } WHERE { ex:todos c:item ?s . ?s ?p ?o }""" .
 ui:QueryProjectionPhrase a c:Phrase ;
     rdfs:label "Query projection"@en , "Проєкція запитом"@uk , "Abfrageprojektion"@de , "إسقاط بالاستعلام"@ar .
 ui:todoLive-app a c:CodeEditor ; c:language "turtle" ; c:label "todo.ttl" ; c:original '''@prefix ex: <https://example.org/todo#> .
@@ -109,7 +104,7 @@ ex:RequireText a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ;
     beh:inserts """PREFIX ex: <https://example.org/todo#>
 CONSTRUCT { ex:newTodo c:error "Please describe the todo first." }
 WHERE { FILTER NOT EXISTS { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) } }""" .
-ex:AddTodo a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ;
+ex:AddTodo a beh:Reaction ; beh:when beh:Click ; beh:source ex:add ; beh:undoable true ;
     beh:deletes """PREFIX ex: <https://example.org/todo#>
 CONSTRUCT { ex:newTodo c:value ?v ; c:error ?e }
 WHERE { ex:newTodo c:value ?v FILTER(STRLEN(STR(?v)) > 0) OPTIONAL { ex:newTodo c:error ?e } }""" ;

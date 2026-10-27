@@ -63,7 +63,7 @@ c:SourceSpan sem:group c:TypeGroup . c:StepInView sem:group c:TypeGroup .
 # Source shown as text: a source text verbatim (the walkthrough's), and a live example's Turtle
 # beside what it renders, with its sandbox's state and problems.
 c:SourceView sem:group c:TypeGroup . c:SourceText sem:group c:TypeGroup .
-c:LiveExample sem:group c:TypeGroup . c:SandboxState sem:group c:TypeGroup . c:SandboxProblem sem:group c:TypeGroup . c:DataLine sem:group c:TypeGroup . c:LineChange sem:group c:TypeGroup .
+c:LiveExample sem:group c:TypeGroup . c:SandboxState sem:group c:TypeGroup . c:SandboxProblem sem:group c:TypeGroup .
 
 # --- Actions ---
 c:Button sem:group c:ActionsGroup . c:IconButton sem:group c:ActionsGroup . c:ButtonGroup sem:group c:ActionsGroup .

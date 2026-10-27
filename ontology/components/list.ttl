@@ -173,9 +173,11 @@ c:ListItemAsText-fn a sem:Rule ;
 # --- behaviour ----------------------------------------------------------------------
 # Changing an item's checkbox writes the checked state to the data item.
 
+# Ticking an item edits the data (its c:checkedFrom property): undoable, and recorded as such.
 c:ListItemChange a beh:Reaction ;
     beh:when beh:Change ;
     beh:sourceClass c:ListItem ;
+    beh:undoable true ;
     beh:deletes """CONSTRUCT { ?item ?p ?old } WHERE { $this c:of ?item ; c:checkedFrom ?p . ?item ?p ?old }""" ;
     beh:inserts """CONSTRUCT { ?item ?p ?checked } WHERE { $this c:of ?item ; c:checkedFrom ?p . $event beh:checked ?checked }""" ;
     sem:function "listitem:change" .
