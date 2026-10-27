@@ -21,7 +21,9 @@ const NAV = NS.nav
 const C = NS.c
 const SH = NS.sh
 const RDFS_RANGE = NS.rdfs + 'range'
-const URL_CARRIERS = new Set([NAV + 'Fragment', NAV + 'Query'])
+const PATH = NAV + 'Path'
+const FRAGMENT = NAV + 'Fragment'
+const URL_CARRIERS = new Set([PATH, FRAGMENT, NAV + 'Query'])
 const GO_TO = NAV + 'goTo'
 
 // --- the model, read from the graph ----------------------------------------------------------
@@ -49,12 +51,18 @@ export interface Dimension {
   target: boolean
   /** Its values are terms of the vocabulary (nav:showsTerms): a link to a term no component shows goes here. */
   terms: boolean
+  /** The part of the address that spells it: the path when it is carried there, else the fragment (else none). */
+  spelledIn?: string
 }
 
 export interface Location {
   iri: string
   root?: string
   dimensions: Dimension[]
+  /** Where its paths start (nav:base), ending with '/'. */
+  base: string
+  /** Whether any dimension is carried by the path (nav:Path): its addresses are paths. */
+  paths: boolean
 }
 
 const one = (r: Reader, s: Term, p: string) => r.match(s, p, null)[0]?.object
@@ -100,7 +108,9 @@ export function readLocations(r: Reader): Location[] {
           },
         ]
       })
-    return { iri: loc.value, root: one(r, loc, NAV + 'root')?.value, dimensions }
+      .map((d) => ({ ...d, spelledIn: d.target ? (d.carriers.includes(FRAGMENT) ? FRAGMENT : undefined) : d.carriers.includes(PATH) ? PATH : d.carriers.includes(FRAGMENT) ? FRAGMENT : undefined }))
+    const base = one(r, loc, NAV + 'base')?.value ?? '/'
+    return { iri: loc.value, root: one(r, loc, NAV + 'root')?.value, dimensions, base: base.endsWith('/') ? base : base + '/', paths: dimensions.some((d) => d.spelledIn === PATH) }
   })
   return locations.sort((a, b) => a.iri.localeCompare(b.iri))
 }
@@ -194,7 +204,8 @@ const segment = (s: string) => encodeURIComponent(s).replaceAll('%3A', ':').repl
 
 /** The dimensions a carrier carries, parents before their children, the target last. */
 function ordered(loc: Location, carrier: string): Dimension[] {
-  const carried = loc.dimensions.filter((d) => d.carriers.includes(carrier))
+  // The path and the fragment each spell the dimensions they are the address part of (spelledIn).
+  const carried = loc.dimensions.filter((d) => (carrier === PATH || carrier === FRAGMENT ? d.spelledIn === carrier : d.carriers.includes(carrier)))
   const out: Dimension[] = []
   const visit = (parent: string | undefined) => {
     for (const d of carried) if (!d.target && d.parent === parent && !out.includes(d)) out.push(d), visit(d.iri)
@@ -204,26 +215,36 @@ function ordered(loc: Location, carrier: string): Dimension[] {
   return [...out, ...carried.filter((d) => d.target)]
 }
 
-/** The location as URL text: the fragment (with '#') and the query parameters it sets. */
-export function spellAddress(r: Reader, loc: Location, values: Values): { fragment: string; query: Map<string, string | undefined> } {
-  const parts = ordered(loc, NAV + 'Fragment')
-    .filter((d) => values.has(d.iri) && inScope(r, loc, d, values))
-    .map((d) => segment(spell(r, d, values.get(d.iri)!)))
+/**
+ * The location as URL text: the path (when the location has one: its base and a segment and a
+ * slash per dimension), the fragment (with '#') and the query parameters it sets.
+ */
+export function spellAddress(r: Reader, loc: Location, values: Values): { path: string; fragment: string; query: Map<string, string | undefined> } {
+  const spelled = (carrier: string) =>
+    ordered(loc, carrier)
+      .filter((d) => values.has(d.iri) && inScope(r, loc, d, values))
+      .map((d) => segment(spell(r, d, values.get(d.iri)!)))
+  const parts = spelled(FRAGMENT)
   const query = new Map<string, string | undefined>()
   for (const d of ordered(loc, NAV + 'Query')) query.set(d.key, values.has(d.iri) && inScope(r, loc, d, values) ? spell(r, d, values.get(d.iri)!) : undefined)
-  return { fragment: parts.length ? '#' + parts.join('/') : '', query }
+  const path = loc.paths ? loc.base + spelled(PATH).map((p) => p + '/').join('') : ''
+  return { path, fragment: parts.length ? '#' + parts.join('/') : '', query }
 }
 
-/**
- * What a URL says (its query and fragment): values for the dimensions it carries that apply,
- * plus, for a target, the values that show it. Unknown text is ignored: a segment no dimension
- * in scope knows ends the path.
- */
-export function readAddress(r: Reader, loc: Location, address: string): Values {
-  const url = new URL(address || '', 'https://semblance.invalid/')
-  const values: Values = new Map()
-  const segments = url.hash
-    .slice(1)
+/** The location's address as links spell it: the path and the fragment ('#' alone when there is neither). */
+export function linkAddress(spelled: { path: string; fragment: string }): string {
+  return spelled.path + spelled.fragment || '#'
+}
+
+/** The segments of a path under a base (none when it is not under it); a trailing index.html is not one. */
+function pathSegments(pathname: string, base: string): string[] {
+  const path = pathname.replace(/\/index\.html?$/, '/')
+  const under = path === base.slice(0, -1) ? '' : path.startsWith(base) ? path.slice(base.length) : undefined
+  return under === undefined ? [] : decodeSegments(under)
+}
+
+const decodeSegments = (text: string) =>
+  text
     .split('/')
     .filter(Boolean)
     .map((s) => {
@@ -233,21 +254,44 @@ export function readAddress(r: Reader, loc: Location, address: string): Values {
         return s
       }
     })
-  const fragmentDims = ordered(loc, NAV + 'Fragment')
-  for (const text of segments) {
-    const open = fragmentDims.filter((d) => !d.target && !values.has(d.iri) && (!d.parent || values.has(d.parent)) && inScope(r, loc, d, values))
-    const hit = open.map((d) => [d, unspell(r, loc, d, text)] as const).find(([, v]) => v)
-    if (hit) {
-      values.set(hit[0].iri, hit[1]!)
-      continue
+
+/**
+ * What a URL says (its query and fragment): values for the dimensions it carries that apply,
+ * plus, for a target, the values that show it. Unknown text is ignored: a segment no dimension
+ * in scope knows ends the path.
+ */
+export function readAddress(r: Reader, loc: Location, address: string): Values {
+  const url = new URL(address || '', 'https://semblance.invalid/')
+  const fragment = decodeSegments(url.hash.slice(1))
+  const pathDims = ordered(loc, PATH)
+  const fragmentDims = ordered(loc, FRAGMENT)
+  // Read segments in order, each by the first dimension still open that knows it.
+  const read = (segments: string[], dims: Dimension[], values: Values) => {
+    for (const text of segments) {
+      const open = dims.filter((d) => !d.target && !values.has(d.iri) && (!d.parent || values.has(d.parent)) && inScope(r, loc, d, values))
+      const hit = open.map((d) => [d, unspell(r, loc, d, text)] as const).find(([, v]) => v)
+      if (hit) {
+        values.set(hit[0].iri, hit[1]!)
+        continue
+      }
+      const target = dims.find((d) => d.target)
+      const v = target && unspell(r, loc, target, text)
+      if (target && v) {
+        values.set(target.iri, v)
+        for (const [dim, val] of shows(r, loc, v) ?? []) values.set(dim, val)
+      }
+      break
     }
-    const target = fragmentDims.find((d) => d.target)
-    const v = target && unspell(r, loc, target, text)
-    if (target && v) {
-      values.set(target.iri, v)
-      for (const [dim, val] of shows(r, loc, v) ?? []) values.set(dim, val)
-    }
-    break
+    return values
+  }
+  const values: Values = new Map()
+  // A fragment that spells what the path carries is an address from before paths (#docs/rules):
+  // it is read whole, path dimensions first, and the path is not.
+  const legacy = pathDims.length > 0 && fragment.length > 0 && read(fragment.slice(0, 1), pathDims, new Map()).size > 0
+  if (legacy) read(fragment, [...pathDims, ...fragmentDims], values)
+  else {
+    if (pathDims.length) read(pathSegments(url.pathname, loc.base), pathDims, values)
+    read(fragment, fragmentDims, values)
   }
   for (const d of ordered(loc, NAV + 'Query')) {
     const text = url.searchParams.get(d.key)
@@ -367,7 +411,7 @@ export function opening(r: Reader, loc: Location, resource: Term): Delta {
   return delta
 }
 
-/** The fragment of the location that shows `resource`, with it as the target. */
+/** The address (path and fragment) of the location that shows `resource`, with it as the target. */
 export function addressOf(r: Reader, resource: Term): string | undefined {
   const locations = readLocations(r)
   for (const loc of locations) {
@@ -379,7 +423,7 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
     const whole = !!last && !!one(r, last.parent, C + 'when')
     const target = loc.dimensions.find((d) => d.target && d.carriers.includes(NAV + 'Fragment'))
     if (target && !whole) needs.set(target.iri, resource)
-    return spellAddress(r, loc, needs).fragment || '#'
+    return linkAddress(spellAddress(r, loc, needs))
   }
   // A term no component shows (a class, a property): the dimension whose values are terms (nav:showsTerms),
   // with the values its parents need (nav:when), e.g. #reference/c:List.
@@ -393,7 +437,7 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
       if (parent && at.when[0]) values.set(parent.iri, at.when[0])
       at = parent
     }
-    return spellAddress(r, loc, values).fragment || '#'
+    return linkAddress(spellAddress(r, loc, values))
   }
   return undefined
 }
@@ -454,6 +498,8 @@ export interface NavigationOptions {
   history?: HistoryLike
   /** Where popstate and hashchange are heard (default: the window). */
   events?: EventTarget
+  /** Where clicks on links to the location's paths are taken over (default: the document). */
+  links?: EventTarget
   /** The persistence effect, which restores dimensions carried by storage scopes (restore it first). */
   persistence?: { restored(policy: string): boolean }
   /** Bring a target's rendered root into view; false while it is not rendered yet (see rendererReveal). */
@@ -498,8 +544,9 @@ export class Navigation {
   private get history(): HistoryLike {
     return this.opts.history ?? globalThis.history
   }
+  /** The URL as the location reads it: its query and fragment, after the path when it has one. */
   private address() {
-    return this.url.search + this.url.hash
+    return (this.location()?.paths ? this.url.pathname.replace(/\/index\.html?$/, '/') : '') + this.url.search + this.url.hash
   }
 
   /**
@@ -536,7 +583,7 @@ export class Navigation {
   }
 
   /** Follow input changes and the URL from now on. With a bus, URL changes are recorded as nav:Navigate events. */
-  attach(runtime: Runtime, opts: { bus?: EventBus; onNavigate?: () => void; reveal?: NavigationOptions['reveal'] } = {}): () => void {
+  attach(runtime: Runtime, opts: { bus?: EventBus; onNavigate?: () => void; reveal?: NavigationOptions['reveal']; links?: EventTarget } = {}): () => void {
     this.runtime = runtime
     this.bus = opts.bus
     this.onNavigate = opts.onNavigate
@@ -548,8 +595,13 @@ export class Navigation {
     const follow = () => this.follow()
     events.addEventListener?.('popstate', follow)
     events.addEventListener?.('hashchange', follow)
+    // A location with paths takes over the links that go to its own paths: a step, not a page load.
+    const links = opts.links ?? this.opts.links ?? (globalThis as { document?: EventTarget }).document
+    const click = (e: Event) => this.click(e as MouseEvent)
+    links?.addEventListener?.('click', click)
     return () => {
       stop()
+      links?.removeEventListener?.('click', click)
       events.removeEventListener?.('popstate', follow)
       events.removeEventListener?.('hashchange', follow)
     }
@@ -576,6 +628,22 @@ export class Navigation {
     ;(this.opts.schedule ?? queueMicrotask)(() => this.pending && this.flush())
   }
 
+  /** A followed link to one of the location's paths: pushed and followed here instead of loaded. */
+  private click(e: MouseEvent) {
+    const loc = this.location()
+    if (!loc?.paths || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
+    if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return
+    const href = a.getAttribute('href')!
+    if (!href.startsWith('/') || href.startsWith('//')) return
+    const path = href.split(/[?#]/)[0]!
+    if (path !== loc.base.slice(0, -1) && !path.startsWith(loc.base)) return
+    e.preventDefault()
+    const next = path + (href.includes('?') ? '?' + href.split('?')[1]!.split('#')[0] : this.url.search) + (href.includes('#') ? href.slice(href.indexOf('#')) : '')
+    if (next !== this.url.pathname + this.url.search + this.url.hash) this.history.pushState(null, '', next)
+    this.follow()
+  }
+
   /** Requests to go somewhere (nav:goTo) not performed yet. */
   private going: Quad[] = []
 
@@ -595,7 +663,9 @@ export class Navigation {
     if (address === undefined) return
     // Anything the change wrote is spelled first, so the step goes from where it left us.
     if (this.pending) this.flush()
-    const href = this.url.pathname + this.url.search + (address.startsWith('#') ? address : '#' + address)
+    const hash = address.indexOf('#')
+    const path = hash > 0 ? address.slice(0, hash) : address.startsWith('#') ? this.url.pathname : address
+    const href = path + this.url.search + (hash >= 0 ? address.slice(hash) : '')
     if (href === this.url.pathname + this.url.search + this.url.hash) this.history.replaceState(null, '', href)
     else this.history.pushState(null, '', href)
     this.follow()
@@ -611,11 +681,11 @@ export class Navigation {
   href(): string | undefined {
     const loc = this.location()
     if (!loc) return undefined
-    const { fragment, query } = spellAddress(this.r, loc, currentValues(this.r, loc))
+    const { path, fragment, query } = spellAddress(this.r, loc, currentValues(this.r, loc))
     const params = new URLSearchParams(this.url.search)
     for (const [k, v] of query) v === undefined ? params.delete(k) : params.set(k, v)
     const search = params.toString()
-    return this.url.pathname + (search ? '?' + search : '') + fragment
+    return (loc.paths ? path : this.url.pathname) + (search ? '?' + search : '') + fragment
   }
 
   private write(asStep: boolean) {
@@ -744,7 +814,7 @@ const linkDestination: FnRule = (ctx, focus) => {
 const linkCurrent: FnRule = (ctx, focus) => {
   const address = ctx.object(focus, NAV + 'address')?.value
   if (address === undefined) return []
-  const fragment = address.includes('#') ? address.slice(address.indexOf('#')) : '#'
+  const fragment = currentLink(address)
   const r = ruleReader(ctx)
   const links = [
     ...ctx.match(null, NAV + 'href', ctx.f.literal(fragment)).map((q) => q.subject),
@@ -754,6 +824,12 @@ const linkCurrent: FnRule = (ctx, focus) => {
   const yes = ctx.f.literal('true', ctx.nn(XSD_BOOLEAN))
   for (const link of new Set(links)) o.t(link, NAV + 'current', yes)
   return o.quads
+}
+
+/** The link address of a reported address: a path and its fragment (no query), else the fragment, else '#'. */
+function currentLink(address: string): string {
+  const bare = address.replace(/\?[^#]*/, '')
+  return bare.startsWith('/') ? bare : bare.includes('#') ? bare.slice(bare.indexOf('#')) : '#'
 }
 
 /** nav:Follow: what the URL in the event says, written into the graph. */
