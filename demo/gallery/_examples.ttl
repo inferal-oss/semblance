@@ -34,12 +34,13 @@ ui:ExFiles a ui:Example ; rdfs:label "File explorer" ; sem:order 17 ; ui:key "fi
 ui:ExPhotos a ui:Example ; rdfs:label "Photo post" ; sem:order 18 ; ui:key "photos" .
 ui:ExForeign a ui:Example ; rdfs:label "Coffee tasting" ; sem:order 19 ; ui:key "foreign" .
 ui:ExRdf a ui:Example ; rdfs:label "Editing a dataset" ; sem:order 20 ; ui:key "rdf-editor" .
+ui:ExReader a ui:Example ; rdfs:label "Reader" ; sem:order 21 ; ui:key "reader" .
 
 ui:examples a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-6 ; pos:inset tok:space-5 ;
     c:children ( ui:examplesNav ui:examplePages ) .
 ui:examplesNav a c:NavList ; c:controls ui:app ; c:property ui:example ; c:label "Examples" ; c:compactAs c:Picker .
 ui:examplePages a c:Switch ; c:controls ui:app ; c:property ui:example ;
-    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ui:exc-photos ui:exc-foreign ui:exc-rdf ) .
+    c:cases ( ui:exc-todo ui:exc-network ui:exc-signin ui:exc-kanban ui:exc-checkout ui:exc-budget ui:exc-activity ui:exc-chat ui:exc-settings ui:exc-localized ui:exc-warehouse ui:exc-shapes ui:exc-sheet ui:exc-calendar ui:exc-dashboard ui:exc-collab ui:exc-files ui:exc-photos ui:exc-foreign ui:exc-rdf ui:exc-reader ) .
 ui:exc-todo c:when ui:ExTodo ; c:content ui:exp-todo .
 ui:exc-signin c:when ui:ExSignin ; c:content ui:exp-signin .
 ui:exc-network c:when ui:ExNetwork ; c:content ui:exp-network .
@@ -60,6 +61,7 @@ ui:exc-collab c:when ui:ExCollab ; c:content ui:exp-collab .
 ui:exc-files c:when ui:ExFiles ; c:content ui:exp-files .
 ui:exc-photos c:when ui:ExPhotos ; c:content ui:exp-photos .
 ui:exc-foreign c:when ui:ExForeign ; c:content ui:exp-foreign .
+ui:exc-reader c:when ui:ExReader ; c:content ui:exp-reader .
 
 # --- Each example: the app, how it works, and its source ---------------------------------------------
 # An example is its own graph, in its own file (demo/gallery/_ex-<key>.ttl; the network inspector in
@@ -127,3 +129,6 @@ ui:exs-foreign a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:de
 ui:exp-rdf a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-rdf ui:ex-rdf-how ) .
 ui:ex-rdf-how c:sourceView ui:exs-rdf .
 ui:exs-rdf a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-rdf.ttl> .
+ui:exp-reader a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; c:children ( ui:ex-reader ui:ex-reader-how ) .
+ui:ex-reader-how c:sourceView ui:exs-reader .
+ui:exs-reader a c:SourceView ; c:label "Source" ; c:of <urn:semblance:source:demo/gallery/_ex-reader.ttl> .

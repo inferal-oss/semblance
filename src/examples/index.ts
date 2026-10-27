@@ -5,10 +5,12 @@
 import type { FnRule } from '../engine/context.ts'
 import { checkoutFunctions } from './checkout.ts'
 import { chatFunctions } from './chat.ts'
+import { readerFunctions } from './reader.ts'
 import { settingsFunctions } from './settings.ts'
 
 export const exampleFunctions: Record<string, FnRule> = {
   ...checkoutFunctions,
   ...chatFunctions,
   ...settingsFunctions,
+  ...readerFunctions,
 }

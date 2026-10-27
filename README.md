@@ -355,7 +355,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen, outline |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen, outline, rendered state |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -367,7 +367,7 @@ unpurged deletions and how the hybrid store works around them.
 | `src/components/` | function rules and reactions, one module per group |
 | `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard, fullscreen and outlines layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/rendered.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, the rendered state of what asks for it (where, how big, on screen, overlapping, focus, scroll), drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

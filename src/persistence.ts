@@ -115,11 +115,22 @@ interface Kept {
   stop: () => void
 }
 
+let created: ((p: Persistence) => void) | undefined
+/**
+ * Hear about every Persistence made (one listener; undefined stops): test/setup.ts stops each
+ * test's before releasing its stores, so no write waiting for its delay outlives them.
+ */
+export function watchPersistence(listener: ((p: Persistence) => void) | undefined): void {
+  created = listener
+}
+
 /** The persistence effect for one store. */
 export class Persistence {
   private runtime?: Runtime
   private dirty = new Set<string>()
   private timer?: ReturnType<typeof setTimeout>
+  private detachInput?: () => void
+  private stopped = false
   private seq = 0
   private log: Term[] = []
   private restoredCounts = new Map<string, number>()
@@ -132,7 +143,17 @@ export class Persistence {
     readonly store: GraphStore,
     readonly backends: Record<string, Backend>,
     readonly opts: { prefix?: string; delayMs?: number } = {},
-  ) {}
+  ) {
+    created?.(this)
+  }
+
+  /** Stop following changes and drop a write waiting for its delay (flush first to keep it). */
+  stop(): void {
+    this.stopped = true
+    if (this.timer) clearTimeout(this.timer), (this.timer = undefined)
+    this.detachInput?.()
+    this.detachInput = undefined
+  }
 
   private key(policy: string) {
     return (this.opts.prefix ?? 'semblance:') + policy
@@ -262,7 +283,7 @@ export class Persistence {
     return (this.restoredCounts.get(policy) ?? 0) > 0
   }
 
-  /** Follow input changes from now on; report restores in the state log. */
+  /** Follow input changes from now on; report restores in the state log. Returns a function that stops it (stop()). */
   attach(runtime: Runtime): () => void {
     this.runtime = runtime
     for (const [policy, n] of this.restoredCounts) this.record(PER + 'Restore', this.policies().find((p) => p.iri === policy)!, n)
@@ -272,11 +293,12 @@ export class Persistence {
     if (this.dirty.size) this.schedule()
     this.keep()
     const stop = runtime.onInput((graph, delta) => this.changed(graph, delta))
-    return () => {
+    this.detachInput = () => {
       stop()
       for (const [iri, k] of this.kept) k.stop(), runtime.views.unhost(mint(iri, 'view'))
       this.kept.clear()
     }
+    return () => this.stop()
   }
 
   /**
@@ -344,7 +366,7 @@ export class Persistence {
   }
 
   private schedule() {
-    if (this.timer) return
+    if (this.timer || this.stopped) return
     this.timer = setTimeout(() => {
       this.timer = undefined
       void this.flush()
@@ -357,9 +379,11 @@ export class Persistence {
     const flags: Record<string, boolean> = {}
     for (const p of this.policies()) if (!p.dimension) flags[p.iri] = p.enabled
     await this.backend(PER + 'Device').set(this.key('enabled'), JSON.stringify(flags))
+    if (this.stopped) return
     const forgetting = delta.add.some((q) => q.subject.value === policy.iri && q.predicate.value === PER + 'request' && q.object.value === 'forget')
     if (!policy.enabled || forgetting) {
       await this.removeStored(policy)
+      if (this.stopped) return
       const k = this.kept.get(policy.iri)
       if (k) k.tick = -1
       this.record(PER + 'Forget', policy, 0)
@@ -380,6 +404,8 @@ export class Persistence {
     const dirty = [...this.dirty]
     this.dirty.clear()
     for (const policy of this.policies()) {
+      // Stopped while a write was awaited: its store may be released.
+      if (this.stopped) return
       if (!dirty.includes(policy.iri) || !policy.enabled) continue
       const k = this.kept.get(policy.iri)
       if (k && (await this.writeChange(policy, k))) continue
@@ -389,6 +415,7 @@ export class Persistence {
       await this.removeStored(policy)
       const blob: Blob = { version: policy.version, savedAt: Date.now(), nt: this.serialize(quads) }
       await this.set(policy, this.key(policy.iri), JSON.stringify(blob), quads.length)
+      if (this.stopped) return
       if (k) Object.assign(k, { tick, chunks: 0, chunkTriples: 0, baseTriples: quads.length })
       this.record(PER + 'Write', policy, quads.length)
       this.report(policy, quads.length)
@@ -417,6 +444,8 @@ export class Persistence {
     k.chunkTriples += n
     await this.set(policy, this.key(policy.iri) + '#' + k.chunks, JSON.stringify({ add: this.serialize(add), remove: this.serialize(remove) } satisfies Chunk), n)
     await this.set(policy, this.key(policy.iri), JSON.stringify({ ...blob, savedAt: Date.now(), chunks: k.chunks } satisfies Blob), 0)
+    // Stopped while the write was awaited: its store may be released.
+    if (this.stopped) return true
     const size = k.view.quads().filter((q) => !this.isSensitive(q.predicate)).length
     this.record(PER + 'Write', policy, n)
     this.report(policy, size)

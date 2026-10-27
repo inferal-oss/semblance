@@ -15,7 +15,9 @@ import type { GraphStore } from '../src/store/types.ts'
 import { loadStore, type StoreKind } from '../src/node/load.ts'
 import { A11Y, ANN, FS, KEY, MOD, NS, SEM, ST, STY, VAL } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
+import { RenderedState } from '../src/rendered.ts'
 import { Runtime } from '../src/runtime.ts'
+import { FakeLayout } from './rendered-layout.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const appGraph = readFileSync(new URL('../demo/app.ttl', import.meta.url), 'utf8')
@@ -196,6 +198,14 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, 
     onHandled: () => shell.flush(),
   })
   screens.attach()
+  // The rendered state of what asks for it (rnd:observes), measured from a layout the test sets;
+  // frames are the test's: rendered.flush() measures.
+  const layout = new FakeLayout((el) => {
+    const key = shell.keyOf(el)
+    return key === undefined ? undefined : screen.index.focusOf(key)
+  })
+  const rendered = new RenderedState(runtime, shell, { layout, frame: () => {}, onWrite: () => shell.flush() })
+  rendered.attach()
   const fire = (el: Element, type: string, init: object = {}) => el.dispatchEvent(new window.Event(type, { bubbles: true, ...init }))
   const app = () => store.factory.namedNode(UI + 'app')
   const value = (p: string) => store.match(app(), store.factory.namedNode(p), null)[0]?.object.value
@@ -216,6 +226,6 @@ function mount(store: GraphStore, prefer: 'sparql' | 'function', clock?: Clock, 
     set(UI + 'app', UI + 'page', UI + (({ Playground: 'Examples', Performance: 'Docs' } as Record<string, string>)[page] ?? page))
     shell.flush()
   }
-  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, kept, urls, fire, value, showPage }
+  return { document, window, store, runtime, screen, shell, bus, scheduler, clipboard, copies, files, picker, uploads, fullscreen, screens, kept, urls, layout, rendered, fire, value, showPage }
 }
 
