@@ -42,6 +42,13 @@
 [] a sty:StyleRule ; sty:appliesTo c:SearchField ; sty:state ":focus-within" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:accent ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:SearchField ; sty:state ":has(> input:disabled)" ;
+    sty:declares [ sty:property "opacity" ; sty:raw "0.55" ] ,
+                 [ sty:property "cursor" ; sty:raw "not-allowed" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SearchField ; sty:part "input:disabled" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "not-allowed" ] .
+[] a sty:StyleRule ; sty:appliesTo c:SearchField ; sty:part ".sem-clear:disabled" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "not-allowed" ] .
 [] a sty:StyleRule ; sty:appliesTo c:SearchField ; sty:part ".sem-icon" ;
     sty:declares [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:token tok:text-md ] ,
