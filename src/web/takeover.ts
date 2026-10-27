@@ -57,8 +57,9 @@ export function replayKept(host: Element): number {
     const target = e.target as Element | null
     if (!target?.isConnected || !host.contains(target)) continue
     const View = target.ownerDocument.defaultView as (Window & typeof globalThis) | null
-    const copy =
-      e.type === 'click' && View ? new View.MouseEvent('click', e as MouseEvent) : e.type === 'submit' && View ? new View.Event('submit', { bubbles: true, cancelable: true }) : new Event(e.type, { bubbles: true })
+    const Mouse = View?.MouseEvent
+    const Plain = View?.Event ?? Event
+    const copy = e.type === 'click' && Mouse ? new Mouse('click', e as MouseEvent) : new Plain(e.type, { bubbles: true, cancelable: e.type === 'click' || e.type === 'submit' })
     target.dispatchEvent(copy)
     replayed++
   }

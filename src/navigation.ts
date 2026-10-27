@@ -663,9 +663,19 @@ export class Navigation {
     const links = opts.links ?? this.opts.links ?? (globalThis as { document?: EventTarget }).document
     const click = (e: Event) => this.click(e as MouseEvent)
     links?.addEventListener?.('click', click)
+    // A chooser's option submits to its address when there is no script (c:SegmentedDestination);
+    // with one, the click's reaction has set the value already: the page stays.
+    const submit = (e: Event) => {
+      const by = (e as SubmitEvent).submitter
+      const action = by?.getAttribute?.('formaction')
+      const loc = this.location()
+      if (loc?.paths && action?.startsWith(loc.base)) e.preventDefault()
+    }
+    links?.addEventListener?.('submit', submit)
     return () => {
       stop()
       links?.removeEventListener?.('click', click)
+      links?.removeEventListener?.('submit', submit)
       events.removeEventListener?.('popstate', follow)
       events.removeEventListener?.('hashchange', follow)
     }
@@ -890,6 +900,38 @@ const linkCurrent: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/**
+ * c:SegmentedDestination: each option of a chooser of a path dimension submits to the address it
+ * sets (formaction), where we are kept for the rest (as the SPARQL rule: one level of nav:parent).
+ */
+const segmentedDestination: FnRule = (ctx, focus) => {
+  const target = ctx.object(focus, C + 'controls')
+  const property = ctx.object(focus, C + 'property')?.value
+  if (!target || !property) return []
+  const r = ruleReader(ctx)
+  for (const loc of readLocations(r)) {
+    const d = loc.dimensions.find((x) => !x.target && x.spelledIn === PATH && same(x.subject, target) && x.property === property)
+    if (!d) continue
+    const o = ctx.out(focus)
+    const current = currentValues(r, loc)
+    for (const q of ctx.match(null, C + 'selects', null)) {
+      if (q.subject.termType !== 'NamedNode' || !q.subject.value.startsWith(focus.value + '/~opt-')) continue
+      const values: Values = new Map([...current, [d.iri, q.object]])
+      const parts = ordered(loc, PATH)
+        .filter((x) => {
+          const v = values.get(x.iri)
+          if (!v || same(x.implicit, v)) return false
+          if (!x.parent) return true
+          return x.when.some((w) => same(w, values.get(x.parent!)))
+        })
+        .map((x) => segment(spell(r, x, values.get(x.iri)!)) + '/')
+      o.attr(q.subject as NamedNode, 'formaction', loc.base + parts.join(''))
+    }
+    return o.quads
+  }
+  return []
+}
+
 /** The link address of a reported address: a path and its fragment (no query), else the fragment, else '#'. */
 function currentLink(address: string): string {
   const bare = address.replace(/\?[^#]*/, '')
@@ -922,5 +964,5 @@ const containment: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
+export const navigationFunctions: Record<string, FnRule> = { 'navigation:segmented-destination': segmentedDestination, 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
 export const locationReactions: Record<string, ReactionFn> = { 'navigation:follow': follow }
