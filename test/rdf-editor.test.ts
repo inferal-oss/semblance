@@ -454,4 +454,27 @@ ui:dt-rdf-editor c:editable true .`
       expect(line('lib:pages')).toEqual(['  lib:pages 387'])
     })
   }
+
+  it('keeps a large document light: closed resources cost a row each, an edit what it changes', () => {
+    const big = (n: number) =>
+      '@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .\nui:dt-rdf-editor c:expandDepth 0 .\n' +
+      Array.from({ length: n }, (_, i) => `lib:b${i} a lib:Book ; lib:title "Book ${i}" ; lib:pages ${i + 1} ; lib:edition [ lib:year ${1900 + i} ] .\nui:dt-rdf-editor c:entry lib:b${i} .`).join('\n')
+    const measure = (n: number) => {
+      const m = mount('oxigraph', 'sparql', big(n))
+      const rows = m.editor().querySelectorAll('[role=treeitem]').length
+      const before = m.runs('Rdf')
+      m.apply({ add: [m.f.quad(m.nn(LIB + 'b1'), m.nn(LIB + 'pages'), m.f.literal('7', m.nn(NS.xsd + 'integer')))] })
+      const edit = m.runs('Rdf') - before
+      m.click(m.twisty('lib:b1'))
+      const opened = m.editor().querySelectorAll('[role=treeitem]').length - rows
+      return { rows, edit, opened }
+    }
+    const small = measure(10)
+    const large = measure(300)
+    expect(small.rows).toBe(13)
+    expect(large.rows).toBe(303)
+    expect(large.edit).toBe(small.edit)
+    expect(large.opened).toBe(small.opened)
+    expect(large.opened).toBeGreaterThan(0)
+  })
 })

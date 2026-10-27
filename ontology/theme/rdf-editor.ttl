@@ -153,3 +153,7 @@
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-required" ;
     sty:declares [ sty:property "border-color" ; sty:token tok:accent-9 ] ,
                  [ sty:property "font-weight" ; sty:raw "600" ] .
+# Off-screen resources are not laid out or painted (the browser skips them until scrolled near).
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-resource" ;
+    sty:declares [ sty:property "content-visibility" ; sty:raw "auto" ] ,
+                 [ sty:property "contain-intrinsic-size" ; sty:raw "auto 2.5em" ] .

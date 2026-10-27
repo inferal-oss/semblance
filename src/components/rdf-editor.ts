@@ -131,6 +131,8 @@ const entry: FnRule = (ctx, focus, member) => {
   o.t(row, RDF_TYPE, ctx.nn(C_RDF_TERM)).t(row, C_TERM, member).t(row, C_IN_EDITOR, focus).t(row, C_DEPTH, int(ctx, 0))
   o.t(row, C_EDITABLE, bool(ctx, editable)).t(row, C_VALIDATED, bool(ctx, validated)).t(row, SEM.orderKey, member.value)
   if (editable) o.t(row, RDF_TYPE, ctx.nn(C_DROP_ROW))
+  const depth = Number(ctx.object(focus, C + 'expandDepth')?.value)
+  if (Number.isFinite(depth) && depth < 1) o.t(row, C + 'startsClosed', bool(ctx, true))
   return o.quads
 }
 
@@ -369,7 +371,7 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const vocab = t.termType === 'NamedNode' && !blank && typed(ctx, t, KINDS)
   const expandable = (hasStatements && (depth === 0 || !vocab)) || reified
   const own = ctx.object(focus, C_EXPANDED)
-  const openByDefault = depth === 0 || blank || list || reifier || reified
+  const openByDefault = (depth === 0 && !ctx.match(focus, C + 'startsClosed', bool(ctx, true)).length) || blank || list || reifier || reified
   const open = expandable && (own ? own.value === 'true' : openByDefault)
   const nest = open && hasStatements && (depth === 0 || blank || list || reifier || own?.value === 'true')
   const namedIri = t.termType === 'NamedNode' && !blank ? t.value : lit && !bare && lang === '' && dt !== XSD + 'string' ? dt : undefined
