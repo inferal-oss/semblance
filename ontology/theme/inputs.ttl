@@ -317,7 +317,11 @@
                  [ sty:property "font-weight" ; sty:raw "600" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.005em" ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:Field ; sty:part "> [data-sem-c]" ;
+# A field's control fills it, except those as wide as their content (a segmented control, a choice,
+# chips, a switch, a checkbox): they sit at its start. The two rules exclude each other, so neither
+# depends on the order the style sheet comes in (same specificity: the later one won, and stretched
+# a segmented control's pill past its options).
+[] a sty:StyleRule ; sty:appliesTo c:Field ; sty:part "> [data-sem-c]:not([data-sem-c=choice], [data-sem-c=segmented], [data-sem-c=chips], [data-sem-c=toggle-switch], [data-sem-c=checkbox])" ;
     sty:declares [ sty:property "width" ; sty:raw "auto" ] ,
                  [ sty:property "justify-self" ; sty:raw "stretch" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Field ; sty:part "> :is([data-sem-c=choice], [data-sem-c=segmented], [data-sem-c=chips], [data-sem-c=toggle-switch], [data-sem-c=checkbox])" ;
