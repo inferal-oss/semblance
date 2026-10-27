@@ -67,6 +67,10 @@ Restored, each subject's properties replace what the application starts with.
 
 ## On a phone
 
+Workspace tabs fit their document labels rather than spreading across the pane. Long labels are
+ellipsized visually, with their complete accessible names retained; the strip scrolls when the
+documents do not fit. Ordinary section tabs outside a workspace keep their existing sizing.
+
 At compact width each split view stacks its panes, so the workspace is a column of panes, each as
 tall as what it shows (a few lines at least), and the dividers go. Tabs still move between panes and split them by
 dragging (a long press picks a tab up) or by keyboard.
