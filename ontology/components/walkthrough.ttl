@@ -151,7 +151,7 @@ WHERE {
 }""" .
 
 # A mention with c:to links where the navigation layer finds its resource shown, like a c:Link.
-c:MentionDestination a sem:Rendering ; sem:targets c:Mention ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation true .
+c:MentionDestination a sem:Rendering ; sem:targets c:Mention ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation nav:TopDimensions .
 c:MentionDestination-fn a sem:Rule ; sem:implements c:MentionDestination ; sem:function "navigation:link-destination" .
 c:MentionDestination-sparql a sem:Rule ;
     sem:implements c:MentionDestination ;

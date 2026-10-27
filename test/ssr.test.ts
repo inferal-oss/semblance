@@ -54,6 +54,9 @@ function setTheme(store: GraphStore, theme: string) {
 function adopt(page: string, client: { screen: { index: DomRenderer['index'] } }) {
   const { document } = parseHTML(page)
   const host = document.getElementById('app')!
+  // A browser decodes character references in a <textarea> (its text is RCDATA); linkedom keeps
+  // them as written: decode them, as the page a browser parsed has them.
+  for (const area of host.querySelectorAll('textarea')) area.textContent = area.textContent!.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
   const renderer = new DomRenderer(client.screen.index, host, ROOT)
   const t = takeOver(renderer)
   renderer.flush()

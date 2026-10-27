@@ -260,7 +260,12 @@ export class Engine {
     this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
-    this.locationReaders = new Set(store.match(null, f.namedNode(NS.sem + 'readsLocation'), null).filter((q) => q.object.value === 'true').map((q) => q.subject.value))
+    this.locationReaders = new Map(
+      store
+        .match(null, f.namedNode(NS.sem + 'readsLocation'), null)
+        .filter((q) => q.object.value === 'true' || q.object.value === NS.nav + 'TopDimensions')
+        .map((q) => [q.subject.value, q.object.value === 'true' ? 'all' : 'top'] as const),
+    )
     if (opts.provenance === 'onDemand') {
       // A rendering reads provenance when any of its implementations' queries names PROV-O.
       // Only what the engine writes (provenanceOf); prov:wasDerivedFrom and the like are the app's own data.
@@ -268,7 +273,8 @@ export class Engine {
       const reads = (r: Rule) => written.test((r.queryParts?.join('$this') ?? '').split('\n').filter((l) => !/^\s*PREFIX\s/i.test(l)).join('\n'))
       this.provenanceReaders = new Set(this.allRules.filter(reads).map((r) => r.slot))
       // And the renderings that say so (sem:readsProvenance: function-only ones, those running queries the graph holds).
-      // A component can say so too (one that runs queries the graph holds about provenance: an inspector).
+      // A component can say so too (one that runs queries the graph holds about provenance: an
+      // inspector): from when it is shown.
       this.provenanceFoci = new Set()
       for (const q of store.match(null, f.namedNode(NS.sem + 'readsProvenance'), null)) {
         if (q.object.value !== 'true') continue
@@ -348,10 +354,10 @@ export class Engine {
     this.run()
   }
 
-  /** The renderings that read where we are (sem:readsLocation): their slots. */
-  private readonly locationReaders: Set<string>
-  /** "subject property" of each nav:Dimension's value, while some rendering reads them. */
-  private locationValues?: Set<string>
+  /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
+  private readonly locationReaders: Map<string, 'all' | 'top'>
+  /** "subject property" of each nav:Dimension's value: whether it is a top-level one (no nav:parent). */
+  private locationValues?: Map<string, boolean>
 
   /**
    * A dimension's value changed (the page, the language): every rendering that reads where we are
@@ -363,16 +369,27 @@ export class Engine {
     if (delta.add.some((q) => q.predicate.value.startsWith(NS.nav)) || delta.remove.some((q) => q.predicate.value.startsWith(NS.nav))) this.locationValues = undefined
     const f = this.store.factory
     if (!this.locationValues) {
-      this.locationValues = new Set()
+      this.locationValues = new Map()
       for (const q of this.store.match(null, f.namedNode(NS.nav + 'subject'), null, f.defaultGraph())) {
         const p = this.store.match(q.subject, f.namedNode(NS.nav + 'property'), null, f.defaultGraph())[0]?.object.value
-        if (p) this.locationValues.add(q.object.value + ' ' + p)
+        const top = this.store.match(q.subject, f.namedNode(NS.nav + 'parent'), null, f.defaultGraph()).length === 0
+        const key = q.object.value + ' ' + p
+        if (p) this.locationValues.set(key, top || this.locationValues.get(key) === true)
       }
     }
     const values = this.locationValues
-    if (![...delta.add, ...delta.remove].some((q) => values.has(q.subject.value + ' ' + q.predicate.value))) return
+    let any = false
+    let top = false
+    for (const q of [...delta.add, ...delta.remove]) {
+      const v = values.get(q.subject.value + ' ' + q.predicate.value)
+      if (v === undefined) continue
+      any = true
+      top ||= v
+    }
+    if (!any) return
     for (const rule of this.rules) {
-      if (!this.locationReaders.has(rule.slot)) continue
+      const reads = this.locationReaders.get(rule.slot)
+      if (!reads || (reads === 'top' && !top)) continue
       for (const focus of this.outputs.get(rule)?.keys() ?? []) this.markDirty(rule, focus)
     }
   }
@@ -1175,7 +1192,7 @@ export class Engine {
 
   private evaluate(rule: Rule, foci: Set<string>): Leftover | undefined {
     // Recorded from the end of this run (adding it mid-run would reach rules of strata already done).
-    if (!this.provenance && this.provenanceReaders && (this.provenanceReaders.has(rule.slot) || (this.provenanceFoci!.size && [...foci].some((x) => this.provenanceFoci!.has(focusOf(x)))))) this.provenanceWanted = rule.iri
+    if (!this.provenance && this.provenanceReaders && (this.provenanceReaders.has(rule.slot) || (this.provenanceFoci!.size && [...foci].some((x) => this.provenanceFoci!.has(focusOf(x)) && this.demand?.(focusOf(x)) !== false)))) this.provenanceWanted = rule.iri
     this.pristine.delete(rule)
     const t = performance.now()
     const wd = this.watchdog

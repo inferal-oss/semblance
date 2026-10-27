@@ -602,7 +602,6 @@ check box can drive it: c:controls it, c:property c:active); otherwise it render
 c:active a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Whether a component that can be switched on (c:ElementMarkup) is."@en .
 c:ElementMarkupRendering a sem:Rendering ;
-    sem:readsProvenance true ;
     sem:targets c:ElementMarkup ;
     sem:modality mod:Screen ;
     sem:stratum 40 ;

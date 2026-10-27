@@ -82,7 +82,9 @@ export class DomRenderer {
       if (n.cls === 'Text') {
         const data = n.data ?? ''
         if (dom?.nodeType === 3 && data && (dom as Text).data.startsWith(data)) {
-          if ((dom as Text).data.length > data.length) (dom as Text).splitText(data.length)
+          const t = dom as Text
+          // The rest is the next text node's (as splitText does; not every DOM has it).
+          if (t.data.length > data.length) parent.insertBefore(this.doc.createTextNode(t.data.slice(data.length)), t.nextSibling), (t.data = t.data.slice(0, data.length))
           this.els.set(k, dom)
           this.keys.set(dom, k)
           return dom

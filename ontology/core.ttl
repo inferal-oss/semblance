@@ -176,10 +176,11 @@ already decides this from the template (bulk output is grouped by the focus each
 minted under, so a template writing about other nodes - sibling components, list members - is
 always evaluated per focus); this states it explicitly."""@en .
 
-sem:readsLocation a owl:DatatypeProperty ; rdfs:domain sem:Rendering ; rdfs:range xsd:boolean ;
-    rdfs:comment """The rendering reads where we are: the values of a nav:Location's dimensions (a link that
-keeps the language). Such a value is a property of a node its focus need not reach, so each
-change of one makes the rendering due again for every focus it has output for."""@en .
+sem:readsLocation a rdf:Property ; rdfs:domain sem:Rendering ;
+    rdfs:comment """The rendering reads where we are: the values of a nav:Location's dimensions (true), or only
+its top-level ones (nav:TopDimensions: the language and the page, which a link keeps). Such a
+value is a property of a node its focus need not reach, so each change of one makes the
+rendering due again for every focus it has output for."""@en .
 sem:readsProvenance a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment """The rendering reads the PROV-O the engine records (prov:wasGeneratedBy, the activity's plan): a
 projection whose provenance is recorded on demand records it from the end of the run in which the

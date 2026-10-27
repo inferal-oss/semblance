@@ -96,6 +96,9 @@ nav:implicit a owl:ObjectProperty ; rdfs:domain nav:Dimension ;
 nav:rendersInPlace a owl:DatatypeProperty ; rdfs:domain nav:Dimension ; rdfs:range xsd:boolean ;
     rdfs:comment "The dimension's values are shown one at a time in one place that re-renders in place (a reference's term): a static build renders the pages that differ only in it one after another in one runtime, rather than each from a fresh store. Its pages are the same either way (test/ssr.test.ts checks the site's)."@en .
 
+nav:TopDimensions a owl:NamedIndividual ;
+    rdfs:comment "As the object of sem:readsLocation: the rendering reads only the top-level dimensions (no nav:parent: the language, the page), as a link keeps them."@en .
+
 nav:Path a nav:Carrier ; nav:rank 0 ; sem:order 0 ;
     rdfs:label "The address (/)"@en , "Адреса (/)"@uk , "Die Adresse (/)"@de , "العنوان (/)"@ar ;
     rdfs:comment """The URL's path after the location's nav:base, one segment per dimension and a slash after
@@ -220,7 +223,7 @@ WHERE {
 nav:from a owl:ObjectProperty ; rdfs:comment "A containment edge's part."@en .
 nav:to a owl:ObjectProperty ; rdfs:comment "A containment edge's container."@en .
 
-c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation true .
+c:LinkDestination a sem:Rendering ; sem:targets c:Link ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation nav:TopDimensions .
 c:LinkDestination-fn a sem:Rule ; sem:implements c:LinkDestination ; sem:function "navigation:link-destination" .
 c:LinkDestination-sparql a sem:Rule ;
     sem:implements c:LinkDestination ;
@@ -333,7 +336,8 @@ WHERE {
 # such a dimension (c:SegmentedRendering), so the options go there before and without scripts.
 # One level of nav:parent is followed for what applies (a section under the page it sets). Above
 # the chooser's rendering (0): it decorates the options that rendering made.
-c:SegmentedDestination a sem:Rendering ; sem:targets c:Segmented ; sem:stratum 5 ; sem:requires c:controls ; sem:readsLocation true .
+c:SegmentedDestination a sem:Rendering ; sem:targets c:Segmented ; sem:stratum 5 ; sem:requires c:controls ; sem:readsLocation true ;
+    sem:watches c:controls , c:property , c:selects ; sem:readsMinted true .
 c:SegmentedDestination-fn a sem:Rule ; sem:implements c:SegmentedDestination ; sem:function "navigation:segmented-destination" .
 c:SegmentedDestination-sparql a sem:Rule ;
     sem:implements c:SegmentedDestination ;
@@ -406,7 +410,7 @@ WHERE {
   ?link a/rdfs:subClassOf* c:Link .
 }""" .
 # An app bar's c:to (its home) is resolved the same way, for the link its logo and name make.
-c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation true .
+c:AppBarDestination a sem:Rendering ; sem:targets c:AppBar ; sem:stratum 0 ; sem:requires c:to ; sem:readsLocation nav:TopDimensions .
 c:AppBarDestination-fn a sem:Rule ; sem:implements c:AppBarDestination ; sem:function "navigation:link-destination" .
 c:AppBarDestination-sparql a sem:Rule ;
     sem:implements c:AppBarDestination ;

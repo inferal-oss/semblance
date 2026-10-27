@@ -437,7 +437,7 @@ export function addressOf(r: Reader, resource: Term): string | undefined {
   // with the values its parents need (nav:when), e.g. #reference/c:List.
   if (resource.termType !== 'NamedNode' || !isTerm(r, resource)) return undefined
   for (const loc of locations) {
-    const d = loc.dimensions.find((x) => x.terms && x.carriers.includes(NAV + 'Fragment'))
+    const d = loc.dimensions.find((x) => x.terms && x.spelledIn !== undefined)
     if (!d) continue
     const values: Values = new Map([[d.iri, resource]])
     for (let at: Dimension | undefined = d, n = 0; at?.parent && n < 16; n++) {
