@@ -56,7 +56,7 @@ const layoutUrls = import.meta.glob('../../layout-solver/build/*.wasm', { query:
  * kinds it can now use, TypeScript always last (a build that fails to load is skipped).
  */
 export async function initLayout(): Promise<LayoutKind[]> {
-  for (const kind of ['rust', 'wat'] as const) {
+  for (const kind of ['wat', 'rust'] as const) {
     const url = layoutUrls[`../../layout-solver/build/${kind}.wasm`]
     if (!url) continue
     try {
