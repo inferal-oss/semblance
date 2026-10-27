@@ -313,7 +313,7 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
 ui:dt-rdf-editor c:validated true ; c:editable true .
 lib:earthsea lib:pages "many" .`
   const problemsOf = (m: ReturnType<typeof mount>, ...path: string[]) =>
-    [...(m.item(...path).querySelector(':scope > .sem-row > .sem-problems')?.children ?? [])].map((p) => p.textContent)
+    [...(m.item(...path).querySelector(':scope > .sem-problems')?.children ?? [])].map((p) => p.textContent)
 
   for (const kind of ['oxigraph', 'wat'] as const) {
     it(`shows what does not conform inline, and lets go of it once fixed; SPARQL and function alike (${kind})`, () => {

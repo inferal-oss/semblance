@@ -268,7 +268,7 @@ const results = (ctx: RuleContext, editor: Term, test: (r: Term) => boolean): Te
 
 /** A row's problems, one each (ordered by message), described for its label (aria-invalid, aria-describedby). */
 function problemList(ctx: RuleContext, o: Out, focus: NamedNode, label: NamedNode, editing: boolean, found: Term[]): NamedNode {
-  const list = el(o, 'problems', 'Span', { class: 'sem-problems', id: o.node('problems').value })
+  const list = el(o, 'problems', 'Div', { class: 'sem-problems', id: o.node('problems').value })
   for (const r of found) {
     const message = ctx.untraced(() => str(ctx.object(r, SH + 'resultMessage'))) ?? ''
     const local = 'problem-' + key12(message)
@@ -643,7 +643,7 @@ const term: FnRule = (ctx, focus) => {
             ? is(ctx, r, SH + 'focusNode', f.s) && is(ctx, r, SH + 'resultPath', f.p) && is(ctx, r, SH + 'value', t)
             : f.depth === 0 && is(ctx, r, SH + 'focusNode', t) && ctx.untraced(() => ctx.objects(r, SH + 'resultPath').every((path) => !ctx.match(t, path, null).length)),
         )
-  if (problems.length) parts.push(problemList(ctx, o, focus, label, editing, problems))
+  const problemLine = problems.length ? problemList(ctx, o, focus, label, editing, problems) : undefined
   const menu = rowMenu(ctx, o, focus, {
     edit: editable && (f.lit || (t.termType === 'NamedNode' && !f.blank)) && (!!f.s || !!ctx.object(focus, C_LIST_CELL)),
     add: editable,
@@ -658,7 +658,7 @@ const term: FnRule = (ctx, focus) => {
   if (menu) parts.push(menu)
   const rowDiv = el(o, 'row', 'Div', { class: 'sem-row' }, parts)
   o.t(rowDiv, C + 'rowOf', focus)
-  const rows = [rowDiv]
+  const rows = problemLine ? [rowDiv, problemLine] : [rowDiv]
   if (f.open || adding) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
     for (const k of kids) o.t(group, H.hasChild, k)
@@ -755,12 +755,12 @@ const property: FnRule = (ctx, focus) => {
     validated.value !== 'true'
       ? []
       : results(ctx, editor, (r) => is(ctx, r, SH + 'focusNode', s) && is(ctx, r, SH + 'resultPath', p) && !ctx.untraced(() => ctx.object(r, SH + 'value')))
-  if (problems.length) parts.push(problemList(ctx, o, focus, label, editing, problems))
+  const problemLine = problems.length ? problemList(ctx, o, focus, label, editing, problems) : undefined
   const menu = rowMenu(ctx, o, focus, { edit: isEditable, add: isEditable, delete: isEditable, go: goes }, p)
   if (menu) parts.push(menu)
   const rowDiv = el(o, 'row', 'Div', { class: 'sem-row' }, parts)
   o.t(rowDiv, C + 'rowOf', focus)
-  const rows = [rowDiv]
+  const rows = problemLine ? [rowDiv, problemLine] : [rowDiv]
   if (open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
     for (const k of kids) o.t(group, H.hasChild, k)

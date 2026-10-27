@@ -328,10 +328,10 @@ CONSTRUCT {
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?badge , ?note , ?problems ; ord:immediatelyPrecedes ?group .
-  ?lead ord:precedes ?problems . ?label ord:precedes ?problems . ?edit ord:precedes ?problems . ?badge ord:precedes ?problems . ?note ord:precedes ?problems .
-  ?row c:rowOf $this ; rdfhtml:hasChild ?menu . ?lead ord:precedes ?menu . ?label ord:precedes ?menu . ?edit ord:precedes ?menu . ?badge ord:precedes ?menu . ?note ord:precedes ?menu . ?problems ord:precedes ?menu .
-  ?problems a rdfhtml:Span ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?badge , ?note ; ord:precedes ?group .
+  ?row c:rowOf $this ; rdfhtml:hasChild ?menu . ?lead ord:precedes ?menu . ?label ord:precedes ?menu . ?edit ord:precedes ?menu . ?badge ord:precedes ?menu . ?note ord:precedes ?menu .
+  ?root rdfhtml:hasChild ?problems . ?row ord:immediatelyPrecedes ?problems . ?problems ord:precedes ?group .
+  ?problems a rdfhtml:Div ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
   ?problem a rdfhtml:Span ; rdfhtml:class "sem-problem" ; sem:orderKey ?problemText ; rdfhtml:hasChild ?problemData .
   ?problemData a rdfhtml:Text ; rdfhtml:data ?problemText .
   ?invalidAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
@@ -797,10 +797,10 @@ CONSTRUCT {
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?note , ?problems ; ord:immediatelyPrecedes ?group .
-  ?lead ord:precedes ?problems . ?label ord:precedes ?problems . ?edit ord:precedes ?problems . ?note ord:precedes ?problems .
-  ?row c:rowOf $this ; rdfhtml:hasChild ?menu . ?lead ord:precedes ?menu . ?label ord:precedes ?menu . ?edit ord:precedes ?menu . ?note ord:precedes ?menu . ?problems ord:precedes ?menu .
-  ?problems a rdfhtml:Span ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?note ; ord:precedes ?group .
+  ?row c:rowOf $this ; rdfhtml:hasChild ?menu . ?lead ord:precedes ?menu . ?label ord:precedes ?menu . ?edit ord:precedes ?menu . ?note ord:precedes ?menu .
+  ?root rdfhtml:hasChild ?problems . ?row ord:immediatelyPrecedes ?problems . ?problems ord:precedes ?group .
+  ?problems a rdfhtml:Div ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
   ?problem a rdfhtml:Span ; rdfhtml:class "sem-problem" ; sem:orderKey ?problemText ; rdfhtml:hasChild ?problemData .
   ?problemData a rdfhtml:Text ; rdfhtml:data ?problemText .
   ?invalidAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .

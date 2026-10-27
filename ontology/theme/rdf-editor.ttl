@@ -42,10 +42,8 @@
 # --- rows ------------------------------------------------------------------------------------------------
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-row" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
-                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "align-items" ; sty:raw "center" ] ,
-                 [ sty:property "column-gap" ; sty:raw "6px" ] ,
-                 [ sty:property "row-gap" ; sty:raw "2px" ] ,
+                 [ sty:property "gap" ; sty:raw "6px" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "min-height" ; sty:raw "26px" ] ,
                  [ sty:property "padding-inline" ; sty:raw "2px var(--sem-space-2)" ] ,
@@ -75,8 +73,14 @@
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "minmax(0, var(--rdf-pred)) minmax(0, 1fr)" ] ,
                  [ sty:property "align-items" ; sty:raw "baseline" ] .
-[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property > .sem-row" ;
-    sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property > .sem-problems" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] .
+# A long value wraps in its place, beside its gutter.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-row > .sem-label" ;
+    sty:declares [ sty:property "flex" ; sty:raw "0 1 auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-row > :is(.sem-twisty, .sem-leaf)" ;
+    sty:declares [ sty:property "align-self" ; sty:raw "flex-start" ] ,
+                 [ sty:property "margin-block-start" ; sty:raw "4px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property[aria-expanded=false]" ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] .
 # A nested resource's own statements go under the whole row, one step in, not into the value column.
@@ -157,12 +161,11 @@
     sty:declares [ sty:property "text-decoration" ; sty:raw "underline wavy var(--sem-danger-9)" ] ,
                  [ sty:property "text-underline-offset" ; sty:raw "3px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-problems" ;
-    sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
-                 [ sty:property "display" ; sty:raw "flex" ] ,
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "gap" ; sty:raw "4px" ] ,
-                 [ sty:property "padding-inline-start" ; sty:raw "24px" ] ,
-                 [ sty:property "padding-block-end" ; sty:raw "2px" ] .
+                 [ sty:property "padding-inline-start" ; sty:raw "36px" ] ,
+                 [ sty:property "padding-block-end" ; sty:raw "4px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-problem" ;
     sty:declares [ sty:property "padding" ; sty:raw "0 6px" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
