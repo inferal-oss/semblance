@@ -1,9 +1,8 @@
 // The Vite plugin that renders a site's pages at build time (docs/SSR.md): after the client is
 // built, every address of the site (its location's paths, src/node/site.ts) becomes a page of its
-// own, already rendered, which the client takes over without rendering it again. The pages'
-// <head> preloads what the client needs at once (its modules and the engine's WASM), so nothing
-// waits for the module that asks for it. In a single-file build (vite-plugin-singlefile) the one
-// file is rendered, with the stylesheet inline.
+// own, already rendered, which the client takes over without rendering it again (with preload,
+// the pages' <head> also preloads the client's modules and the engine's WASM). In a single-file
+// build (vite-plugin-singlefile) the one file is rendered, with the stylesheet inline.
 import { readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +15,14 @@ export interface SemblancePluginOptions {
   config?: string
   /** One self-contained file (default: when the build's mode is "single"). */
   single?: boolean
-  /** Assets to preload in every page besides the modules (default: Semblance's WASM engine). */
+  /**
+   * Preload, in every page's head, the modules the first moments need and the engine's WASM
+   * (preloadAssets). Off by default: they then share the network with the stylesheet the first
+   * paint waits for. On a throttled phone, semblance.dev painted at 1.9 s with them and 0.9 s
+   * without, and was interactive 0.6 s sooner with them.
+   */
+  preload?: boolean
+  /** Assets to preload besides the modules, with preload (default: Semblance's WASM engine). */
   preloadAssets?: RegExp
   /** Worker processes for rendering (see BuildOptions.workers). */
   workers?: number
@@ -66,7 +72,7 @@ function site(opts: SemblancePluginOptions): Plugin {
       disabled = c.plugins.find((p) => p.name === NAME) !== plugin
     },
     generateBundle(_, bundle) {
-      if (disabled || config.build.ssr) return
+      if (disabled || config.build.ssr || !opts.preload) return
       const base = config.base.startsWith('/') ? config.base : '/'
       const chunks = Object.values(bundle).filter((o) => o.type === 'chunk') as unknown as Chunk[]
       const entry = chunks.find((c) => c.isEntry)

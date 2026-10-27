@@ -75,8 +75,11 @@ After the client is built, the plugin:
 - writes each to `<path>/index.html`, from a fresh store, on worker processes;
 - writes the stylesheet once (`semblance.css`, which the client does not compile again);
 - writes `404.html`, the client alone, for any other address;
-- puts in each page's head a `modulepreload` for the modules the first moments need and a
-  `preload` for the engine's WASM, so nothing waits for the module that asks for it.
+- with `preload: true`, puts in each page's head a `modulepreload` for the modules the first
+  moments need and a `preload` for the engine's WASM. This is off by default: the preloads share
+  the network with the stylesheet that the first paint waits for. semblance.dev on a throttled
+  phone painted at 1.9 s with them and at 0.9 s without; it was interactive 0.6 s sooner with
+  them.
 
 semblance.dev has 216 pages: 54 places in 4 languages. They render in about 16 s on 4 workers.
 
