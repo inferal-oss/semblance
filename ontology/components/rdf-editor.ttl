@@ -60,13 +60,13 @@ c:arrows a owl:ObjectProperty ; rdfs:domain c:RdfEditor ; rdfs:range c:ArrowsMod
     rdfs:comment "Which links an RDF editor draws as arrows to their resources (default c:ArrowsOff)."@en .
 c:ArrowsMode a owl:Class ; rdfs:comment "Which links an RDF editor draws as arrows."@en .
 c:ArrowsOff a c:ArrowsMode ; sem:slug "off" ; sem:order 1 ;
-    rdfs:label "Off"@en , "Вимкнено"@uk , "Aus"@de , "إيقاف"@ar ;
+    rdfs:label "None"@en , "Немає"@uk , "Keine"@de , "بلا"@ar ;
     rdfs:comment "No arrows."@en .
 c:ArrowsOn a c:ArrowsMode ; sem:slug "on" ; sem:order 2 ;
-    rdfs:label "All"@en , "Усі"@uk , "Alle"@de , "الكل"@ar ;
+    rdfs:label "Every link"@en , "Усі зв'язки"@uk , "Alle Verweise"@de , "كل الروابط"@ar ;
     rdfs:comment "An arrow for every link of the resources shown."@en .
 c:ArrowsCurrent a c:ArrowsMode ; sem:slug "current" ; sem:order 3 ;
-    rdfs:label "Current"@en , "Поточний"@uk , "Aktuell"@de , "الحالي"@ar ;
+    rdfs:label "From this resource"@en , "Від цього ресурсу"@uk , "Von dieser Ressource"@de , "من هذا المورد"@ar ;
     rdfs:comment "Arrows for the links from and to the current resource (c:current) only."@en .
 # c:entry (calendar.ttl) lists the document's resources; c:current is the current one.
 
@@ -124,6 +124,28 @@ c:editing a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State 
 c:adding a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: a field under it takes a new object (a predicate's row) or a new statement (a resource's)."@en .
 c:editing beh:viewState true . c:adding beh:viewState true . c:focused beh:viewState true .
 c:draft a owl:DatatypeProperty ; beh:viewState true ; rdfs:comment "State on a row of an RDF editor: the text typed in its adding field so far (it filters the suggestions)."@en .
+c:activeOption a owl:ObjectProperty ; beh:viewState true ;
+    rdfs:comment "State on a row of an RDF editor: the suggestion highlighted under its adding field (Down and Up move it, Enter takes it)."@en .
+c:RdfEditorTypeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ;
+    rdfs:comment "Any key on a row of an RDF editor: one that types a character (beh:text) starts editing the row with it."@en .
+c:RdfMenuClick a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "click" ;
+    rdfs:comment "A click in an RDF editor, as its row menu's items hear it: an item does the reaction it names (c:does) on its row (c:actsOn)."@en .
+c:RdfEditorMenuKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "shift+f10" , "contextmenu" ;
+    rdfs:comment "Shift+F10 or the Menu key on a row of an RDF editor: opens its menu."@en .
+c:RdfEditorContextMenu a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "contextmenu" ;
+    rdfs:comment "A right click (or a long press) on a row of an RDF editor: opens its menu instead of the browser's."@en .
+c:RdfMenuEscapeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "escape" ;
+    rdfs:comment "Escape in a row menu of an RDF editor: closes it."@en .
+c:cursor a owl:ObjectProperty ; beh:viewState true ; rdfs:comment "View state on an RDF editor: the row the focus is on (its status line says where)."@en .
+c:cursorMode a owl:DatatypeProperty ; beh:viewState true ; rdfs:comment "View state on an RDF editor: viewing, editing or adding, by where the focus is."@en .
+c:menuOpen a owl:DatatypeProperty ; rdfs:range xsd:boolean ; beh:viewState true ;
+    rdfs:comment "State on a row of an RDF editor: its menu is open."@en .
+c:rowOf a owl:ObjectProperty ; rdfs:comment "On a rendered label of an RDF editor: the row it is the label of."@en .
+c:does a owl:ObjectProperty ; rdfs:range beh:Reaction ; rdfs:comment "On a rendered menu item: the reaction choosing it performs (it answers c:RdfMenuClick)."@en .
+c:actsOn a owl:ObjectProperty ; rdfs:comment "On a rendered menu item: the row it acts on."@en .
+c:asKey a owl:DatatypeProperty ; rdfs:comment "On a rendered menu item: the key combination it stands for, where its reaction asks which (Alt+Up, Alt+Down)."@en .
+c:RdfEditorChooseKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "arrowdown" , "arrowup" ;
+    rdfs:comment "Down or Up in an adding field of an RDF editor: highlights the next or previous suggestion."@en .
 c:suggestsFor a owl:ObjectProperty ; rdfs:comment "On a rendered suggestion of an RDF editor: the row whose adding field it completes."@en .
 c:suggestsPredicate a owl:ObjectProperty ; rdfs:comment "On a rendered suggestion: the predicate it adds (with its c:suggestsValue, the whole statement)."@en .
 c:suggestsValue a owl:ObjectProperty ; rdfs:comment "On a rendered suggestion: the value it adds."@en .
@@ -136,9 +158,35 @@ c:RdfNestedPhrase a c:Phrase ; rdfs:label "nested resource"@en , "вкладен
 c:RdfListPhrase a c:Phrase ; rdfs:label "list of {n}"@en , "список із {n}"@uk , "Liste mit {n}"@de , "قائمة من {n}"@ar .
 c:RdfEditPhrase a c:Phrase ; rdfs:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
 c:RdfNewObjectPhrase a c:Phrase ; rdfs:label "New value"@en , "Нове значення"@uk , "Neuer Wert"@de , "قيمة جديدة"@ar .
-c:RdfNewStatementPhrase a c:Phrase ; rdfs:label "New statement: predicate value"@en , "Нове твердження: предикат значення"@uk , "Neue Aussage: Prädikat Wert"@de , "عبارة جديدة: خاصية قيمة"@ar .
+c:RdfNewStatementPhrase a c:Phrase ; rdfs:label "predicate value"@en , "предикат значення"@uk , "Prädikat Wert"@de , "خاصية قيمة"@ar .
 c:RdfNewMemberPhrase a c:Phrase ; rdfs:label "New member"@en , "Новий елемент"@uk , "Neues Element"@de , "عنصر جديد"@ar .
-c:RdfSuggestionsPhrase a c:Phrase ; rdfs:label "What the shapes expect"@en , "Чого очікують форми"@uk , "Was die Formen erwarten"@de , "ما تتوقعه الأشكال"@ar .
+c:RdfSuggestionsPhrase a c:Phrase ; rdfs:label "Expected here"@en , "Очікується тут"@uk , "Hier erwartet"@de , "المتوقع هنا"@ar .
+c:RdfModeViewingPhrase a c:Phrase ; rdfs:label "Viewing"@en , "Перегляд"@uk , "Ansicht"@de , "عرض"@ar .
+c:RdfModeEditingPhrase a c:Phrase ; rdfs:label "Editing"@en , "Редагування"@uk , "Bearbeiten"@de , "تحرير"@ar .
+c:RdfModeAddingPhrase a c:Phrase ; rdfs:label "Adding"@en , "Додавання"@uk , "Hinzufügen"@de , "إضافة"@ar .
+c:RdfKeyEditPhrase a c:Phrase ; rdfs:label "edit"@en , "редагувати"@uk , "bearbeiten"@de , "تحرير"@ar .
+c:RdfKeyAddPhrase a c:Phrase ; rdfs:label "add"@en , "додати"@uk , "hinzufügen"@de , "إضافة"@ar .
+c:RdfKeyDeletePhrase a c:Phrase ; rdfs:label "delete"@en , "видалити"@uk , "löschen"@de , "حذف"@ar .
+c:RdfKeyNestPhrase a c:Phrase ; rdfs:label "nest"@en , "вкласти"@uk , "verschachteln"@de , "تضمين"@ar .
+c:RdfKeyMovePhrase a c:Phrase ; rdfs:label "move"@en , "перемістити"@uk , "verschieben"@de , "نقل"@ar .
+c:RdfKeyMenuPhrase a c:Phrase ; rdfs:label "menu"@en , "меню"@uk , "Menü"@de , "قائمة"@ar .
+c:RdfKeyFollowPhrase a c:Phrase ; rdfs:label "follow"@en , "перейти"@uk , "folgen"@de , "انتقال"@ar .
+c:RdfKeyOpenPhrase a c:Phrase ; rdfs:label "open, close"@en , "розгорнути, згорнути"@uk , "öffnen, schließen"@de , "فتح، إغلاق"@ar .
+c:RdfKeySavePhrase a c:Phrase ; rdfs:label "save"@en , "зберегти"@uk , "speichern"@de , "حفظ"@ar .
+c:RdfKeyCancelPhrase a c:Phrase ; rdfs:label "cancel"@en , "скасувати"@uk , "abbrechen"@de , "إلغاء"@ar .
+c:RdfKeyChoosePhrase a c:Phrase ; rdfs:label "choose"@en , "вибрати"@uk , "wählen"@de , "اختيار"@ar .
+c:RdfKeyClosePhrase a c:Phrase ; rdfs:label "close"@en , "закрити"@uk , "schließen"@de , "إغلاق"@ar .
+c:RdfMenuEditPhrase a c:Phrase ; rdfs:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
+c:RdfMenuAddPhrase a c:Phrase ; rdfs:label "Add a statement"@en , "Додати твердження"@uk , "Aussage hinzufügen"@de , "إضافة عبارة"@ar .
+c:RdfMenuNestPhrase a c:Phrase ; rdfs:label "Nest in a resource"@en , "Вкласти в ресурс"@uk , "In Ressource verschachteln"@de , "تضمين في مورد"@ar .
+c:RdfMenuOutdentPhrase a c:Phrase ; rdfs:label "Move out"@en , "Винести рівнем вище"@uk , "Eine Ebene höher"@de , "نقل للخارج"@ar .
+c:RdfMenuUpPhrase a c:Phrase ; rdfs:label "Move up"@en , "Вище"@uk , "Nach oben"@de , "تحريك لأعلى"@ar .
+c:RdfMenuDownPhrase a c:Phrase ; rdfs:label "Move down"@en , "Нижче"@uk , "Nach unten"@de , "تحريك لأسفل"@ar .
+c:RdfMenuGoPhrase a c:Phrase ; rdfs:label "Go to the resource"@en , "Перейти до ресурсу"@uk , "Zur Ressource"@de , "الانتقال إلى المورد"@ar .
+c:RdfMenuReferencePhrase a c:Phrase ; rdfs:label "Open in the Reference"@en , "Відкрити в довіднику"@uk , "In der Referenz öffnen"@de , "فتح في المرجع"@ar .
+c:RdfMenuDeletePhrase a c:Phrase ; rdfs:label "Delete"@en , "Видалити"@uk , "Löschen"@de , "حذف"@ar .
+c:RdfRequiredPhrase a c:Phrase ; rdfs:label "required"@en , "обов'язково"@uk , "erforderlich"@de , "مطلوب"@ar .
+c:RdfAboutPhrase a c:Phrase ; rdfs:label "about"@en , "про"@uk , "über"@de , "عن"@ar .
 c:RdfReifierPhrase a c:Phrase ; rdfs:label "said about this statement"@en , "сказане про це твердження"@uk , "über diese Aussage gesagt"@de , "ما قيل عن هذه العبارة"@ar .
 
 # --- the editor: the tree, and a resource row per entry ---------------------------------------------
@@ -192,14 +240,14 @@ c:RdfEditorEntries a sem:Rendering ;
     sem:targets c:RdfEditor ;
     sem:stratum 0 ;
     sem:forEach c:entry ;
-    sem:watches rdf:type , c:editable , c:validated , c:expandDepth .
+    sem:watches rdf:type , c:editable , c:validated , c:expandDepth , c:current .
 c:RdfEditorEntries-fn a sem:Rule ; sem:implements c:RdfEditorEntries ; sem:function "rdf-editor:entry" .
 c:RdfEditorEntries-sparql a sem:Rule ;
     sem:implements c:RdfEditorEntries ;
     sem:construct """
 CONSTRUCT {
   ?tree rdfhtml:hasChild ?row .
-  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:startsClosed ?closed ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
+  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:startsClosed ?closed ; c:isCurrent ?isCurrent ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor .
@@ -208,6 +256,7 @@ WHERE {
   BIND(EXISTS { $this c:editable true } AS ?editable)
   BIND(EXISTS { $this c:validated true } AS ?validated)
   BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
+  BIND(IF(EXISTS { $this c:current $member }, true, ?none) AS ?isCurrent)
   # A large document starts closed (c:expandDepth 0): a row per resource until one is opened.
   BIND(IF(EXISTS { $this c:expandDepth ?d0 FILTER(xsd:integer(STR(?d0)) < 1) }, true, ?none) AS ?closed)
   BIND(IRI(CONCAT(STR($this), "/~tree")) AS ?tree)
@@ -274,12 +323,14 @@ c:RdfTermRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr ; rdfhtml:hasChild ?row , ?group .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr , ?currentAttr ; rdfhtml:hasChild ?row , ?group .
+  ?currentAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-current" ; rdfhtml:attributeValue "true" .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
   ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?badge , ?note , ?problems ; ord:immediatelyPrecedes ?group .
   ?lead ord:precedes ?problems . ?label ord:precedes ?problems . ?edit ord:precedes ?problems . ?badge ord:precedes ?problems . ?note ord:precedes ?problems .
+  ?row c:rowOf $this ; rdfhtml:hasChild ?menu . ?lead ord:precedes ?menu . ?label ord:precedes ?menu . ?edit ord:precedes ?menu . ?badge ord:precedes ?menu . ?note ord:precedes ?menu . ?problems ord:precedes ?menu .
   ?problems a rdfhtml:Span ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
   ?problem a rdfhtml:Span ; rdfhtml:class "sem-problem" ; sem:orderKey ?problemText ; rdfhtml:hasChild ?problemData .
   ?problemData a rdfhtml:Text ; rdfhtml:data ?problemText .
@@ -308,16 +359,42 @@ CONSTRUCT {
   ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child , ?addItem .
   ?groupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?addItem a rdfhtml:Li ; rdfhtml:class "sem-adding" ; sem:orderKey "\\u0001n9" ; rdfhtml:hasChild ?add .
-  ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus .
+  ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus , ?comboRole , ?comboList , ?comboExpanded , ?comboControls , ?comboActive .
+  ?comboRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "combobox" .
+  ?comboList a rdfhtml:Attribute ; rdfhtml:attributeName "aria-autocomplete" ; rdfhtml:attributeValue "list" .
+  ?comboExpanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?comboOpen .
+  ?comboControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?suggestionsId .
+  ?comboActive a rdfhtml:Attribute ; rdfhtml:attributeName "aria-activedescendant" ; rdfhtml:attributeValue ?activeId .
   ?addName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addPhrase .
   ?addFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?addItem rdfhtml:hasChild ?suggestions . ?add ord:immediatelyPrecedes ?suggestions ; rdfhtml:value ?draft .
-  ?suggestions a rdfhtml:Div ; rdfhtml:class "sem-suggestions" ; rdfhtml:attribute ?sugRole , ?sugName ; rdfhtml:hasChild ?option .
-  ?sugRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?suggestions a rdfhtml:Div ; rdfhtml:class "sem-suggestions" ; rdfhtml:id ?suggestionsId ; rdfhtml:attribute ?sugRole , ?sugName ; rdfhtml:hasChild ?option .
+  ?sugRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "listbox" .
   ?sugName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?sugPhrase .
-  ?option a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?optionClass ; sem:orderKey ?optionKey ; c:suggestsFor $this ;
-          c:suggestsPredicate ?optP ; c:suggestsValue ?optV ; c:fillsWith ?fill ; rdfhtml:hasChild ?optionText .
+  ?option a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?optionClass ; rdfhtml:id ?optionId ; rdfhtml:tabIndex "-1" ; rdfhtml:attribute ?optionRole , ?optionSelected ;
+          sem:orderKey ?optionKey ; c:suggestsFor $this ;
+          c:suggestsPredicate ?optP ; c:suggestsValue ?optV ; c:fillsWith ?fill ; rdfhtml:hasChild ?optionText , ?optionDetail .
+  ?optionText ord:immediatelyPrecedes ?optionDetail .
+  ?optionDetail a rdfhtml:Span ; rdfhtml:class "sem-detail" ; rdfhtml:hasChild ?optionDetailText .
+  ?optionDetailText a rdfhtml:Text ; rdfhtml:data ?requiredPhrase .
   ?optionText a rdfhtml:Text ; rdfhtml:data ?optionLabel .
+  ?optionRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "option" .
+  ?optionSelected a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue ?selected .
+  ?menu a rdfhtml:Div ; rdfhtml:class "sem-menu" ; rdfhtml:attribute ?menuRole , ?menuItems , ?menuOrient , ?menuWrap ; rdfhtml:hasChild ?item .
+  ?menuRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menu" .
+  ?menuItems a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-nav-items" ; rdfhtml:attributeValue "[role=menuitem]" .
+  ?menuOrient a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-nav-orientation" ; rdfhtml:attributeValue "vertical" .
+  ?menuWrap a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-nav-wrap" ; rdfhtml:attributeValue "" .
+  ?item a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?itemClass ; rdfhtml:tabIndex "-1" ; sem:orderKey ?itemN ;
+        c:actsOn $this ; c:does ?itemDoes ; c:asKey ?itemAsKey ; c:jumpsTo ?itemJump ; c:goesTo ?itemGo ;
+        rdfhtml:attribute ?itemRole , ?itemFocus , ?itemShortcut ; rdfhtml:hasChild ?itemText , ?itemKbd .
+  ?itemRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menuitem" .
+  ?itemFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
+  ?itemShortcut a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue ?itemKeys .
+  ?itemText a rdfhtml:Text ; rdfhtml:data ?itemLabel ; ord:immediatelyPrecedes ?itemKbd .
+  ?itemKbd a rdfhtml:Kbd ; rdfhtml:attribute ?itemKbdHidden ; rdfhtml:hasChild ?itemKbdText .
+  ?itemKbdHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?itemKbdText a rdfhtml:Text ; rdfhtml:data ?itemKbdShown .
   ?child a ?childClass , ?childDrop ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
          c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?childKey .
 }
@@ -365,8 +442,10 @@ WHERE {
   BIND(IF(?lit, IF(?bare, STR(?t), CONCAT("\\"", STR(?t), "\\"")),
        IF(?list, CONCAT("( ", STR(COALESCE(?count, 0)), " )"),
        IF(?blank, "[ ]", IF(isIRI(?t), ?compact, "<<( … )>>")))) AS ?term)
-  BIND(IF(?reifier, CONCAT("~ ", ?term), ?term) AS ?shown)
-  BIND(IF(?lit && ?lang != "", CONCAT("@", ?lang), IF(BOUND(?named) && ?lit, ?compact, ?none)) AS ?badgeData)
+  BIND(?term AS ?shown)
+  OPTIONAL { FILTER(?reifier) ?aboutAt l10n:of c:RdfAboutPhrase ; l10n:name ?about0 }
+  OPTIONAL { FILTER(?reifier) c:RdfAboutPhrase rdfs:label ?about0 FILTER(langMatches(lang(?about0), "en")) }
+  BIND(IF(?reifier, STR(?about0), IF(?lit && ?lang != "", CONCAT("@", ?lang), IF(BOUND(?named) && ?lit, ?compact, ?none))) AS ?badgeData)
   # The term's label, when it has one (in the viewer's language).
   OPTIONAL { FILTER(isIRI(?t)) ?pickedAt l10n:of ?t ; l10n:name ?picked }
   OPTIONAL { FILTER(isIRI(?t) && !BOUND(?picked)) ?t rdfs:label ?onlyLabel }
@@ -394,6 +473,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root-aria-level")) AS ?levelAttr)
   BIND(STR(?depth + 1) AS ?level)
   BIND(IF(?expandable, IRI(CONCAT(STR($this), "/~root-aria-expanded")), ?none) AS ?expandedAttr)
+  # The current resource (c:current) is marked: the editor says which, on its row.
+  BIND(IF(EXISTS { $this c:isCurrent true }, IRI(CONCAT(STR($this), "/~root-aria-current")), ?none) AS ?currentAttr)
   BIND(IF(?open, "true", "false") AS ?openText)
   BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
   BIND(IRI(CONCAT(STR($this), IF(?expandable, "/~twisty", "/~leaf"))) AS ?lead)
@@ -417,7 +498,9 @@ WHERE {
   BIND(?editable && (?nest && !?list || ?list) && EXISTS { $this c:adding true } AS ?adding)
   BIND(IF(?editable && !?editing, $this, ?none) AS ?editsRow)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit")), ?none) AS ?edit)
-  BIND(IF(?editing, IF(?lit, STR(?t), ?compact), ?none) AS ?editText)
+  # Started by typing, the field holds what was typed (c:draft) instead of the term.
+  OPTIONAL { FILTER(?editing) $this c:draft ?typed0 }
+  BIND(IF(?editing, COALESCE(STR(?typed0), IF(?lit, STR(?t), ?compact)), ?none) AS ?editText)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-aria-label")), ?none) AS ?editName)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-data-sem-takes-focus")), ?none) AS ?editFocus)
   OPTIONAL { FILTER(?editing) ?editAt l10n:of c:RdfEditPhrase ; l10n:name ?edit0 }
@@ -436,6 +519,16 @@ WHERE {
   BIND(IF(?adding, STR(?draft0), ?none) AS ?draft)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~suggestions")), ?none) AS ?suggestions)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~suggestions-role")), ?none) AS ?sugRole)
+  BIND(STR(?suggestions) AS ?suggestionsId)
+  # The field is a combobox over them: the highlighted one (c:activeOption) is its active descendant.
+  OPTIONAL { FILTER(?adding) $this c:activeOption ?active0 }
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-role")), ?none) AS ?comboRole)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-autocomplete")), ?none) AS ?comboList)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-expanded")), ?none) AS ?comboExpanded)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-controls")), ?none) AS ?comboControls)
+  BIND(IF(BOUND(?active0), IRI(CONCAT(STR($this), "/~add-aria-activedescendant")), ?none) AS ?comboActive)
+  BIND(STR(?active0) AS ?activeId)
+  BIND("true" AS ?comboOpen)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~suggestions-aria-label")), ?none) AS ?sugName)
   OPTIONAL { FILTER(?adding) ?sugAt l10n:of c:RdfSuggestionsPhrase ; l10n:name ?sug0 }
   OPTIONAL { FILTER(?adding) c:RdfSuggestionsPhrase rdfs:label ?sug0 FILTER(langMatches(lang(?sug0), "en")) }
@@ -455,6 +548,13 @@ WHERE {
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-invalid")), ?none) AS ?invalidAttr)
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-describedby")), ?none) AS ?describedAttr)
   BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
+  # The row's menu (c:menuOpen), at the end of the row.
+  BIND(EXISTS { $this c:menuOpen true } AS ?menuOpen)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu")), ?none) AS ?menu)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-role")), ?none) AS ?menuRole)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-data-sem-nav-items")), ?none) AS ?menuItems)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-data-sem-nav-orientation")), ?none) AS ?menuOrient)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-data-sem-nav-wrap")), ?none) AS ?menuWrap)
   BIND(?depth + 1 AS ?childDepth)
   # The rows under it, when it is open.
   LATERAL { {} UNION {
@@ -518,10 +618,57 @@ WHERE {
     BIND(IF(BOUND(?optV), CONCAT(?pText, " ", ?vText), ?pText) AS ?optionLabel)
     BIND(IF(BOUND(?optV), ?none, CONCAT(?pText, " ")) AS ?fill)
     BIND(IF(?reqN = 1, "sem-option sem-required", "sem-option") AS ?optionClass)
+    OPTIONAL { FILTER(?reqN = 1) ?requiredAt l10n:of c:RdfRequiredPhrase ; l10n:name ?required0 }
+    OPTIONAL { FILTER(?reqN = 1) c:RdfRequiredPhrase rdfs:label ?required0 FILTER(langMatches(lang(?required0), "en")) }
+    BIND(STR(?required0) AS ?requiredPhrase)
+    BIND(IF(?reqN = 1, IRI(CONCAT(STR($this), "/~opt-", SUBSTR(MD5(?optionLabel), 1, 12), "-detail")), ?none) AS ?optionDetail)
+    BIND(IF(?reqN = 1, IRI(CONCAT(STR($this), "/~opt-", SUBSTR(MD5(?optionLabel), 1, 12), "-detail-text")), ?none) AS ?optionDetailText)
     FILTER(!BOUND(?draft) || ?draft = "" || CONTAINS(LCASE(?optionLabel), LCASE(?draft)))
     BIND(CONCAT("\\u0001n", IF(?reqN = 1, "0", "1"), "\\u0001s", ?optionLabel) AS ?optionKey)
     BIND(IRI(CONCAT(STR($this), "/~opt-", SUBSTR(MD5(?optionLabel), 1, 12))) AS ?option)
     BIND(IRI(CONCAT(STR(?option), "-text")) AS ?optionText)
+    BIND(STR(?option) AS ?optionId)
+    BIND(IRI(CONCAT(STR(?option), "-role")) AS ?optionRole)
+    BIND(IRI(CONCAT(STR(?option), "-aria-selected")) AS ?optionSelected)
+    BIND(IF(BOUND(?active0) && sameTerm(?active0, ?option), "true", "false") AS ?selected)
+  } UNION {
+    # Its menu's items: what can be done here, each with its key.
+    FILTER(?menuOpen)
+    VALUES (?itemN ?itemPhrase ?itemDoes ?itemKeys ?itemKbdShown ?itemKind ?itemAsKey) {
+      (1 c:RdfMenuEditPhrase c:RdfStartEdit "Enter" "↵" "edit" UNDEF)
+      (2 c:RdfMenuAddPhrase c:RdfStartAdd "Shift+Enter" "⇧↵" "add" UNDEF)
+      (3 c:RdfMenuNestPhrase c:RdfNest "Tab" "⇥" "nest" UNDEF)
+      (4 c:RdfMenuOutdentPhrase c:RdfOutdent "Shift+Tab" "⇧⇥" "outdent" UNDEF)
+      (5 c:RdfMenuUpPhrase c:RdfMoveMember "Alt+ArrowUp" "⌥↑" "up" "alt+arrowup")
+      (6 c:RdfMenuDownPhrase c:RdfMoveMember "Alt+ArrowDown" "⌥↓" "down" "alt+arrowdown")
+      (7 c:RdfMenuGoPhrase UNDEF "Enter" "↵" "jump" UNDEF)
+      (8 c:RdfMenuReferencePhrase UNDEF "Enter" "↵" "go" UNDEF)
+      (9 c:RdfMenuDeletePhrase c:RdfDelete "Delete" "⌫" "delete" UNDEF)
+    }
+    FILTER(IF(?itemKind = "edit", ?editable && (?lit || (isIRI(?t) && !?blank)) && (BOUND(?s) || EXISTS { $this c:listCell ?mc1 }),
+           IF(?itemKind = "add", ?editable,
+           IF(?itemKind = "nest", ?editable && BOUND(?s),
+           IF(?itemKind = "outdent", ?editable && BOUND(?s) && EXISTS { ?upRow c:subjectTerm ?ug ; c:term ?s . FILTER(sameTerm(?upRow, IRI(REPLACE(STR($this), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")))) },
+           IF(?itemKind = "up", ?editable && EXISTS { $this c:listIndex ?mi . FILTER(?mi > 1) },
+           IF(?itemKind = "down", ?editable && EXISTS { $this c:listCell ?mc2 . ?mc2 rdf:rest ?mn . ?mn rdf:first ?mf },
+           IF(?itemKind = "jump", ?jumps,
+           IF(?itemKind = "go", ?goes,
+              ?editable && (BOUND(?s) || ?depth = 0 || EXISTS { $this c:listCell ?mc3 }))))))))))
+    OPTIONAL { ?itemAt l10n:of ?itemPhrase ; l10n:name ?item0 }
+    OPTIONAL { ?itemPhrase rdfs:label ?item0 FILTER(langMatches(lang(?item0), "en")) }
+    BIND(STR(?item0) AS ?itemLabel)
+    BIND(IF(?itemKind = "delete", "sem-menuitem sem-danger", "sem-menuitem") AS ?itemClass)
+    BIND(IF(?itemKind = "jump", ?t, ?none) AS ?itemJump)
+    BIND(IF(?itemKind = "go", ?t, ?none) AS ?itemGo)
+    BIND(CONCAT(STR($this), "/~menu-", STR(?itemN)) AS ?itemLocal)
+    BIND(IRI(?itemLocal) AS ?item)
+    BIND(IRI(CONCAT(?itemLocal, "-role")) AS ?itemRole)
+    BIND(IRI(CONCAT(?itemLocal, "-data-sem-takes-focus")) AS ?itemFocus)
+    BIND(IRI(CONCAT(?itemLocal, "-aria-keyshortcuts")) AS ?itemShortcut)
+    BIND(IRI(CONCAT(?itemLocal, "-text")) AS ?itemText)
+    BIND(IRI(CONCAT(?itemLocal, "-kbd")) AS ?itemKbd)
+    BIND(IRI(CONCAT(?itemLocal, "-kbd-aria-hidden")) AS ?itemKbdHidden)
+    BIND(IRI(CONCAT(?itemLocal, "-kbd-text")) AS ?itemKbdText)
   } UNION {
     # Its problems, one each.
     FILTER(?invalid)
@@ -652,6 +799,7 @@ CONSTRUCT {
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
   ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?note , ?problems ; ord:immediatelyPrecedes ?group .
   ?lead ord:precedes ?problems . ?label ord:precedes ?problems . ?edit ord:precedes ?problems . ?note ord:precedes ?problems .
+  ?row c:rowOf $this ; rdfhtml:hasChild ?menu . ?lead ord:precedes ?menu . ?label ord:precedes ?menu . ?edit ord:precedes ?menu . ?note ord:precedes ?menu . ?problems ord:precedes ?menu .
   ?problems a rdfhtml:Span ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
   ?problem a rdfhtml:Span ; rdfhtml:class "sem-problem" ; sem:orderKey ?problemText ; rdfhtml:hasChild ?problemData .
   ?problemData a rdfhtml:Text ; rdfhtml:data ?problemText .
@@ -674,16 +822,42 @@ CONSTRUCT {
   ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child , ?addItem .
   ?groupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?addItem a rdfhtml:Li ; rdfhtml:class "sem-adding" ; sem:orderKey "\uffff" ; rdfhtml:hasChild ?add .
-  ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus .
+  ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus , ?comboRole , ?comboList , ?comboExpanded , ?comboControls , ?comboActive .
+  ?comboRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "combobox" .
+  ?comboList a rdfhtml:Attribute ; rdfhtml:attributeName "aria-autocomplete" ; rdfhtml:attributeValue "list" .
+  ?comboExpanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?comboOpen .
+  ?comboControls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?suggestionsId .
+  ?comboActive a rdfhtml:Attribute ; rdfhtml:attributeName "aria-activedescendant" ; rdfhtml:attributeValue ?activeId .
   ?addName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addPhrase .
   ?addFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?addItem rdfhtml:hasChild ?suggestions . ?add ord:immediatelyPrecedes ?suggestions ; rdfhtml:value ?draft .
-  ?suggestions a rdfhtml:Div ; rdfhtml:class "sem-suggestions" ; rdfhtml:attribute ?sugRole , ?sugName ; rdfhtml:hasChild ?option .
-  ?sugRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?suggestions a rdfhtml:Div ; rdfhtml:class "sem-suggestions" ; rdfhtml:id ?suggestionsId ; rdfhtml:attribute ?sugRole , ?sugName ; rdfhtml:hasChild ?option .
+  ?sugRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "listbox" .
   ?sugName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?sugPhrase .
-  ?option a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?optionClass ; sem:orderKey ?optionKey ; c:suggestsFor $this ;
-          c:suggestsPredicate ?optP ; c:suggestsValue ?optV ; c:fillsWith ?fill ; rdfhtml:hasChild ?optionText .
+  ?option a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?optionClass ; rdfhtml:id ?optionId ; rdfhtml:tabIndex "-1" ; rdfhtml:attribute ?optionRole , ?optionSelected ;
+          sem:orderKey ?optionKey ; c:suggestsFor $this ;
+          c:suggestsPredicate ?optP ; c:suggestsValue ?optV ; c:fillsWith ?fill ; rdfhtml:hasChild ?optionText , ?optionDetail .
+  ?optionText ord:immediatelyPrecedes ?optionDetail .
+  ?optionDetail a rdfhtml:Span ; rdfhtml:class "sem-detail" ; rdfhtml:hasChild ?optionDetailText .
+  ?optionDetailText a rdfhtml:Text ; rdfhtml:data ?requiredPhrase .
   ?optionText a rdfhtml:Text ; rdfhtml:data ?optionLabel .
+  ?optionRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "option" .
+  ?optionSelected a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue ?selected .
+  ?menu a rdfhtml:Div ; rdfhtml:class "sem-menu" ; rdfhtml:attribute ?menuRole , ?menuItems , ?menuOrient , ?menuWrap ; rdfhtml:hasChild ?item .
+  ?menuRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menu" .
+  ?menuItems a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-nav-items" ; rdfhtml:attributeValue "[role=menuitem]" .
+  ?menuOrient a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-nav-orientation" ; rdfhtml:attributeValue "vertical" .
+  ?menuWrap a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-nav-wrap" ; rdfhtml:attributeValue "" .
+  ?item a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class ?itemClass ; rdfhtml:tabIndex "-1" ; sem:orderKey ?itemN ;
+        c:actsOn $this ; c:does ?itemDoes ; c:asKey ?itemAsKey ; c:jumpsTo ?itemJump ; c:goesTo ?itemGo ;
+        rdfhtml:attribute ?itemRole , ?itemFocus , ?itemShortcut ; rdfhtml:hasChild ?itemText , ?itemKbd .
+  ?itemRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menuitem" .
+  ?itemFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
+  ?itemShortcut a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue ?itemKeys .
+  ?itemText a rdfhtml:Text ; rdfhtml:data ?itemLabel ; ord:immediatelyPrecedes ?itemKbd .
+  ?itemKbd a rdfhtml:Kbd ; rdfhtml:attribute ?itemKbdHidden ; rdfhtml:hasChild ?itemKbdText .
+  ?itemKbdHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?itemKbdText a rdfhtml:Text ; rdfhtml:data ?itemKbdShown .
   ?child a c:RdfTerm , ?dragType ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?okey .
 }
 WHERE {
@@ -731,7 +905,8 @@ WHERE {
   BIND(?editable && ?open && EXISTS { $this c:adding true } AS ?adding)
   BIND(IF(?editable && !?editing, $this, ?none) AS ?editsRow)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit")), ?none) AS ?edit)
-  BIND(IF(?editing, ?shown, ?none) AS ?editText)
+  OPTIONAL { FILTER(?editing) $this c:draft ?typed0 }
+  BIND(IF(?editing, COALESCE(STR(?typed0), ?shown), ?none) AS ?editText)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-aria-label")), ?none) AS ?editName)
   BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-data-sem-takes-focus")), ?none) AS ?editFocus)
   OPTIONAL { FILTER(?editing) ?editAt l10n:of c:RdfEditPhrase ; l10n:name ?edit0 }
@@ -749,6 +924,16 @@ WHERE {
   BIND(IF(?adding, STR(?draft0), ?none) AS ?draft)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~suggestions")), ?none) AS ?suggestions)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~suggestions-role")), ?none) AS ?sugRole)
+  BIND(STR(?suggestions) AS ?suggestionsId)
+  # The field is a combobox over them: the highlighted one (c:activeOption) is its active descendant.
+  OPTIONAL { FILTER(?adding) $this c:activeOption ?active0 }
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-role")), ?none) AS ?comboRole)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-autocomplete")), ?none) AS ?comboList)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-expanded")), ?none) AS ?comboExpanded)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-controls")), ?none) AS ?comboControls)
+  BIND(IF(BOUND(?active0), IRI(CONCAT(STR($this), "/~add-aria-activedescendant")), ?none) AS ?comboActive)
+  BIND(STR(?active0) AS ?activeId)
+  BIND("true" AS ?comboOpen)
   BIND(IF(?adding, IRI(CONCAT(STR($this), "/~suggestions-aria-label")), ?none) AS ?sugName)
   OPTIONAL { FILTER(?adding) ?sugAt l10n:of c:RdfSuggestionsPhrase ; l10n:name ?sug0 }
   OPTIONAL { FILTER(?adding) c:RdfSuggestionsPhrase rdfs:label ?sug0 FILTER(langMatches(lang(?sug0), "en")) }
@@ -763,6 +948,14 @@ WHERE {
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-invalid")), ?none) AS ?invalidAttr)
   BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-describedby")), ?none) AS ?describedAttr)
   BIND(IF(?editable, c:RdfDraggableRow, ?none) AS ?dragType)
+  # The row's menu (c:menuOpen), at the end of the row.
+  BIND(EXISTS { $this c:menuOpen true } AS ?menuOpen)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu")), ?none) AS ?menu)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-role")), ?none) AS ?menuRole)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-data-sem-nav-items")), ?none) AS ?menuItems)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-data-sem-nav-orientation")), ?none) AS ?menuOrient)
+  BIND(IF(?menuOpen, IRI(CONCAT(STR($this), "/~menu-data-sem-nav-wrap")), ?none) AS ?menuWrap)
+  BIND(?p AS ?t)
   BIND(?depth + 1 AS ?childDepth)
   LATERAL { {} UNION {
     FILTER(?open)
@@ -794,6 +987,40 @@ WHERE {
     BIND(?optionLabel AS ?optionKey)
     BIND(IRI(CONCAT(STR($this), "/~opt-", SUBSTR(MD5(?optionLabel), 1, 12))) AS ?option)
     BIND(IRI(CONCAT(STR(?option), "-text")) AS ?optionText)
+    BIND(STR(?option) AS ?optionId)
+    BIND(IRI(CONCAT(STR(?option), "-role")) AS ?optionRole)
+    BIND(IRI(CONCAT(STR(?option), "-aria-selected")) AS ?optionSelected)
+    BIND(IF(BOUND(?active0) && sameTerm(?active0, ?option), "true", "false") AS ?selected)
+  } UNION {
+    # Its menu's items: what can be done here, each with its key.
+    FILTER(?menuOpen)
+    VALUES (?itemN ?itemPhrase ?itemDoes ?itemKeys ?itemKbdShown ?itemKind ?itemAsKey) {
+      (1 c:RdfMenuEditPhrase c:RdfStartEdit "Enter" "↵" "edit" UNDEF)
+      (2 c:RdfMenuAddPhrase c:RdfStartAdd "Shift+Enter" "⇧↵" "add" UNDEF)
+      (3 c:RdfMenuNestPhrase c:RdfNest "Tab" "⇥" "nest" UNDEF)
+      (4 c:RdfMenuOutdentPhrase c:RdfOutdent "Shift+Tab" "⇧⇥" "outdent" UNDEF)
+      (5 c:RdfMenuUpPhrase c:RdfMoveMember "Alt+ArrowUp" "⌥↑" "up" "alt+arrowup")
+      (6 c:RdfMenuDownPhrase c:RdfMoveMember "Alt+ArrowDown" "⌥↓" "down" "alt+arrowdown")
+      (7 c:RdfMenuGoPhrase UNDEF "Enter" "↵" "jump" UNDEF)
+      (8 c:RdfMenuReferencePhrase UNDEF "Enter" "↵" "go" UNDEF)
+      (9 c:RdfMenuDeletePhrase c:RdfDelete "Delete" "⌫" "delete" UNDEF)
+    }
+    FILTER(?itemKind IN ("edit", "add", "delete", "go") && IF(?itemKind = "go", ?goes, ?editable))
+    OPTIONAL { ?itemAt l10n:of ?itemPhrase ; l10n:name ?item0 }
+    OPTIONAL { ?itemPhrase rdfs:label ?item0 FILTER(langMatches(lang(?item0), "en")) }
+    BIND(STR(?item0) AS ?itemLabel)
+    BIND(IF(?itemKind = "delete", "sem-menuitem sem-danger", "sem-menuitem") AS ?itemClass)
+    BIND(IF(?itemKind = "jump", ?t, ?none) AS ?itemJump)
+    BIND(IF(?itemKind = "go", ?t, ?none) AS ?itemGo)
+    BIND(CONCAT(STR($this), "/~menu-", STR(?itemN)) AS ?itemLocal)
+    BIND(IRI(?itemLocal) AS ?item)
+    BIND(IRI(CONCAT(?itemLocal, "-role")) AS ?itemRole)
+    BIND(IRI(CONCAT(?itemLocal, "-data-sem-takes-focus")) AS ?itemFocus)
+    BIND(IRI(CONCAT(?itemLocal, "-aria-keyshortcuts")) AS ?itemShortcut)
+    BIND(IRI(CONCAT(?itemLocal, "-text")) AS ?itemText)
+    BIND(IRI(CONCAT(?itemLocal, "-kbd")) AS ?itemKbd)
+    BIND(IRI(CONCAT(?itemLocal, "-kbd-aria-hidden")) AS ?itemKbdHidden)
+    BIND(IRI(CONCAT(?itemLocal, "-kbd-text")) AS ?itemKbdText)
   } UNION {
     FILTER(?invalid)
     ?editor val:violation ?vr2 . ?vr2 sh:focusNode ?s ; sh:resultPath ?p ; sh:resultMessage ?message0 . FILTER NOT EXISTS { ?vr2 sh:value ?vv2 }
@@ -867,8 +1094,8 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?row ; c
     sem:function "rdf-editor:toggle" .
 
 # Activating a link (a click, or Enter on its row): a resource of the document becomes the current
-# one and its row takes the focus; a term is gone to (the Reference). In an editor, where a click and
-# Enter are for editing, a link is followed with Mod and a click.
+# one and its row takes the focus; a term is gone to (the Reference). A click follows a link in an
+# editor too (a double click, Enter or typing edits); Enter follows it only in a viewer.
 c:RdfFollowLink a beh:Reaction ;
     rdfs:label "Follow a link"@en ;
     beh:when beh:Click ;
@@ -876,13 +1103,11 @@ c:RdfFollowLink a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:current ?was . ?row c:focused ?f }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:jumpsTo ?to .
-  FILTER(NOT EXISTS { ?n c:editsRow ?editing } || EXISTS { $event beh:modifiers ?mods FILTER(CONTAINS(CONCAT("+", ?mods, "+"), "+mod+")) })
   { $this c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR($this), "/~"))) }
 }""" ;
     beh:inserts """CONSTRUCT { $this c:current ?to ; nav:goTo ?term . ?row c:focused true }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit .
-  FILTER(NOT EXISTS { ?n c:editsRow ?editing } || EXISTS { $event beh:modifiers ?mods FILTER(CONTAINS(CONCAT("+", ?mods, "+"), "+mod+")) })
   { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) } UNION { ?n c:goesTo ?term }
 }""" ;
     sem:function "rdf-editor:follow" .
@@ -915,10 +1140,11 @@ WHERE {
 c:RdfStartEdit a beh:Reaction ;
     rdfs:label "Edit a row"@en ;
     beh:when c:RdfEditorKey ;
+    beh:when c:RdfMenuClick ;
     beh:sourceClass c:RdfEditor ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
-    beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartEdit } . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+    beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartEdit } . ?row c:inEditor $this . }""" ;
     sem:function "rdf-editor:start-edit" .
 
 c:RdfStartEditByDoubleClick a beh:Reaction ;
@@ -926,7 +1152,7 @@ c:RdfStartEditByDoubleClick a beh:Reaction ;
     beh:when beh:DoubleClick ;
     beh:sourceClass c:RdfEditor ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
     beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . }""" ;
     sem:function "rdf-editor:start-edit" .
 
@@ -936,12 +1162,13 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . 
 c:RdfStartAdd a beh:Reaction ;
     rdfs:label "Add a statement"@en ;
     beh:when c:RdfEditorAddKey ;
+    beh:when c:RdfMenuClick ;
     beh:sourceClass c:RdfEditor ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartAdd } . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
     beh:inserts """CONSTRUCT { ?to c:adding true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfStartAdd } . ?row c:inEditor $this .
   BIND(EXISTS { ?row a c:RdfTerm ; c:subjectTerm ?anyS } AS ?object)
   BIND(EXISTS { ?row a c:RdfProperty } AS ?predicate)
   BIND(EXISTS { ?row c:listCell ?anyCell } AS ?member)
@@ -1008,7 +1235,7 @@ WHERE {
     FILTER(?npText != "")
       FILTER((isIRI(?np) || ?npText = "a") && !sameTerm(IF(?npText = "a", rdf:type, ?np), ?p))
       ?s ?p ?o }
-    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
   }
 }""" ;
     beh:inserts """CONSTRUCT { ?s ?p ?new . ?cell rdf:first ?new . ?s ?newP ?o . ?focus c:focused true }
@@ -1078,16 +1305,16 @@ c:RdfCommitAdd a beh:Reaction ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark . ?last rdf:rest rdf:nil . ?ls ?lp rdf:nil }
 WHERE {
-  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this .
+  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this . FILTER NOT EXISTS { ?row c:activeOption ?highlighted }
   LATERAL {
-    { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+    { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
     UNION { ?row a c:RdfTerm ; c:term ?head . FILTER(REGEX(STR(?raw), "[^ ]"))
       { ?head rdf:rest* ?last . ?last rdf:rest rdf:nil . ?head rdf:first ?anyFirst } UNION { FILTER(sameTerm(?head, rdf:nil)) ?row c:subjectTerm ?ls ; c:predicateTerm ?lp } }
   }
 }""" ;
     beh:inserts """CONSTRUCT { ?s ?p ?new . ?focus c:focused true . ?last rdf:rest ?cell . ?cell rdf:first ?new ; rdf:rest rdf:nil . ?ls ?lp ?cell }
 WHERE {
-  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this .
+  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this . FILTER NOT EXISTS { ?row c:activeOption ?highlighted }
   LATERAL {
     { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p .
     BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?newText)
@@ -1200,9 +1427,9 @@ c:RdfCancelEdit a beh:Reaction ;
     beh:when c:RdfEditorEscapeKey ;
     beh:sourceClass c:RdfEditor ;
     beh:deletes """CONSTRUCT { ?row ?state ?v }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds ?row . ?row c:inEditor $this ; ?state ?v . VALUES ?state { c:editing c:adding c:draft } }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds ?row . ?row c:inEditor $this ; ?state ?v . VALUES ?state { c:editing c:adding c:draft c:activeOption c:menuOpen } }""" ;
     beh:inserts """CONSTRUCT { ?row c:focused true }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits ?row . ?row c:inEditor $this }""" ;
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds ?row . ?row c:inEditor $this }""" ;
     sem:function "rdf-editor:cancel" .
 
 # Delete on a row: its statement; a predicate's statements; a list member (the list closes up); a
@@ -1210,11 +1437,12 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits ?row . ?
 c:RdfDelete a beh:Reaction ;
     rdfs:label "Delete"@en ;
     beh:when c:RdfEditorDeleteKey ;
+    beh:when c:RdfMenuClick ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?s ?p ?o . ?prev rdf:rest ?cell . ?cell rdf:first ?m ; rdf:rest ?next . ?holder ?hp ?cell . $this c:entry ?entry . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfDelete } . ?row c:inEditor $this .
   LATERAL {
     { ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o }
     UNION { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p . ?s ?p ?o }
@@ -1222,12 +1450,12 @@ WHERE {
     UNION { ?row a c:RdfTerm ; c:depth 0 ; c:term ?entry }
     UNION { ?row c:listCell ?cell . ?cell rdf:first ?m ; rdf:rest ?next .
       OPTIONAL { ?prev rdf:rest ?cell } OPTIONAL { FILTER(!BOUND(?prev)) ?holder ?hp ?cell } }
-    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
   }
 }""" ;
     beh:inserts """CONSTRUCT { ?prev rdf:rest ?next . ?holder ?hp ?next . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfDelete } . ?row c:inEditor $this .
   BIND(IRI(REPLACE(STR(?row), "/~[tpir]-[^/]*$", "")) AS ?up)
   BIND(IF(STRSTARTS(STR(?up), CONCAT(STR($this), "/~")), ?up, ?none) AS ?focus)
   OPTIONAL { ?row c:listCell ?cell . ?cell rdf:first ?m ; rdf:rest ?next .
@@ -1244,8 +1472,8 @@ c:RdfDraft a beh:Reaction ;
     rdfs:label "Narrow the suggestions"@en ;
     beh:when beh:Input ;
     beh:sourceClass c:RdfEditor ;
-    beh:deletes """CONSTRUCT { ?row c:draft ?old }
-WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; c:draft ?old }""" ;
+    beh:deletes """CONSTRUCT { ?row ?state ?old }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; ?state ?old . VALUES ?state { c:draft c:activeOption c:menuOpen } }""" ;
     beh:inserts """CONSTRUCT { ?row c:draft ?text }
 WHERE { $event beh:node ?hit ; beh:value ?v . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this . BIND(STR(?v) AS ?text) }""" ;
     sem:function "rdf-editor:draft" .
@@ -1268,7 +1496,7 @@ c:RdfPickSuggestion a beh:Reaction ;
     beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:suggestsValue ?v ; c:suggestsFor ?row . ?row c:inEditor $this .
-  ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~")))
+  ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~")))
 }""" ;
     beh:inserts """CONSTRUCT { ?s ?p ?v . ?focus c:focused true }
 WHERE {
@@ -1291,19 +1519,20 @@ WHERE {
 c:RdfNest a beh:Reaction ;
     rdfs:label "Nest a value"@en ;
     beh:when c:RdfEditorNestKey ;
+    beh:when c:RdfMenuClick ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?s ?p ?o . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfNest } . ?row c:inEditor $this .
   LATERAL {
     { ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o }
-    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
   }
 }""" ;
     beh:inserts """CONSTRUCT { ?s ?p ?nested . ?nested rdf:value ?o . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfNest } . ?row c:inEditor $this .
   ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
   BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))), STR(?o)) AS ?okey)
   BIND(IRI(CONCAT(STR($this), "/.well-known/genid/", SUBSTR(MD5(CONCAT(STR(?s), " ", STR(?p), " ", ?okey)), 1, 16))) AS ?nested)
@@ -1314,23 +1543,24 @@ WHERE {
 c:RdfOutdent a beh:Reaction ;
     rdfs:label "Outdent a statement"@en ;
     beh:when c:RdfEditorOutdentKey ;
+    beh:when c:RdfMenuClick ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?s ?p ?o . ?gs ?gp ?gone . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfOutdent } . ?row c:inEditor $this .
   ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
   BIND(IRI(REPLACE(STR(?row), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")) AS ?up)
   ?up c:subjectTerm ?gs ; c:predicateTerm ?gp ; c:term ?s .
   LATERAL {
     {}
     UNION { FILTER NOT EXISTS { ?s ?q ?x FILTER(!(sameTerm(?q, ?p) && sameTerm(?x, ?o))) } BIND(?s AS ?gone) }
-    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
   }
 }""" ;
     beh:inserts """CONSTRUCT { ?gs ?np ?o . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfOutdent } . ?row c:inEditor $this .
   ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
   BIND(IRI(REPLACE(STR(?row), "/~p-[0-9a-f]{12}/~t-[0-9a-f]{12}$", "")) AS ?up)
   ?up c:subjectTerm ?gs ; c:predicateTerm ?gp ; c:term ?s .
@@ -1344,22 +1574,25 @@ WHERE {
 c:RdfMoveMember a beh:Reaction ;
     rdfs:label "Move a list member"@en ;
     beh:when c:RdfEditorMoveKey ;
+    beh:when c:RdfMenuClick ;
     beh:sourceClass c:RdfEditor ;
     beh:undoable true ;
     beh:deletes """CONSTRUCT { ?cell rdf:first ?m . ?other rdf:first ?om . ?marked ?markP ?mark }
 WHERE {
-  $event beh:node ?hit ; beh:key ?key . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfMoveMember } . ?row c:inEditor $this .
+  OPTIONAL { $event beh:key ?k0 } OPTIONAL { ?n c:asKey ?k1 } BIND(COALESCE(?k1, ?k0) AS ?key)
   ?row c:listCell ?cell . ?cell rdf:first ?m .
   OPTIONAL { ?prev rdf:rest ?cell . ?prev rdf:first ?pm }
   OPTIONAL { ?cell rdf:rest ?next . ?next rdf:first ?nm }
   BIND(IF(?key = "alt+arrowup", ?prev, ?next) AS ?other)
   BIND(IF(?key = "alt+arrowup", ?pm, ?nm) AS ?om)
   FILTER(BOUND(?other) && BOUND(?om))
-  OPTIONAL { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+  OPTIONAL { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
 }""" ;
     beh:inserts """CONSTRUCT { ?cell rdf:first ?om . ?other rdf:first ?m . ?focus c:focused true }
 WHERE {
-  $event beh:node ?hit ; beh:key ?key . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . { ?n c:editsRow ?row FILTER NOT EXISTS { $event a c:RdfMenuClick } } UNION { $event a c:RdfMenuClick . ?n c:actsOn ?row ; c:does c:RdfMoveMember } . ?row c:inEditor $this .
+  OPTIONAL { $event beh:key ?k0 } OPTIONAL { ?n c:asKey ?k1 } BIND(COALESCE(?k1, ?k0) AS ?key)
   ?row c:listCell ?cell ; c:listIndex ?i . ?cell rdf:first ?m .
   OPTIONAL { ?prev rdf:rest ?cell . ?prev rdf:first ?pm }
   OPTIONAL { ?cell rdf:rest ?next . ?next rdf:first ?nm }
@@ -1392,3 +1625,258 @@ WHERE {
   FILTER(!(sameTerm(?ts, ?s) && sameTerm(?np, ?p)))
 }""" ;
     sem:function "rdf-editor:drop" .
+
+# Down and Up in an adding field move the highlight through the suggestions (in their order; Up from
+# the first leaves none); Enter takes the highlighted one, as a click would.
+c:RdfMoveHighlight a beh:Reaction ;
+    rdfs:label "Highlight a suggestion"@en ;
+    beh:when c:RdfEditorChooseKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?row c:activeOption ?old }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; c:activeOption ?old }""" ;
+    beh:inserts """CONSTRUCT { ?row c:activeOption ?next }
+WHERE {
+  $event beh:node ?hit ; beh:key ?key . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this .
+  OPTIONAL { ?row c:activeOption ?current . ?current sem:orderKey ?currentKey0 }
+  BIND(STR(?currentKey0) AS ?currentKey)
+  LATERAL { OPTIONAL { SELECT ?row (MIN(STR(?k1)) AS ?after) WHERE { ?o1 c:suggestsFor ?row ; sem:orderKey ?k1 . OPTIONAL { ?row c:activeOption ?c1 . ?c1 sem:orderKey ?ck1 } FILTER(!BOUND(?ck1) || STR(?k1) > STR(?ck1)) } GROUP BY ?row } }
+  LATERAL { OPTIONAL { SELECT ?row (MAX(STR(?k2)) AS ?before) WHERE { ?o2 c:suggestsFor ?row ; sem:orderKey ?k2 . ?row c:activeOption ?c2 . ?c2 sem:orderKey ?ck2 FILTER(STR(?k2) < STR(?ck2)) } GROUP BY ?row } }
+  BIND(IF(?key = "arrowdown", COALESCE(?after, ?currentKey), ?before) AS ?target)
+  ?next c:suggestsFor ?row ; sem:orderKey ?nk . FILTER(STR(?nk) = ?target)
+}""" ;
+    sem:function "rdf-editor:highlight" .
+
+c:RdfTakeHighlighted a beh:Reaction ;
+    rdfs:label "Add the highlighted statement"@en ;
+    beh:when c:RdfEditorKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; c:activeOption ?option . ?option c:suggestsValue ?v .
+  ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~")))
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?v . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; c:activeOption ?option . ?option c:suggestsValue ?v .
+  LATERAL {
+    { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p . BIND(?row AS ?focus) }
+    UNION { ?row a c:RdfTerm ; c:term ?s . ?option c:suggestsPredicate ?p . BIND(IRI(CONCAT(STR(?row), "/~p-", SUBSTR(MD5(STR(?p)), 1, 12))) AS ?focus) }
+  }
+}""" ;
+    sem:function "rdf-editor:take" .
+
+c:RdfTakeHighlightedPredicate a beh:Reaction ;
+    rdfs:label "Take the highlighted predicate"@en ;
+    beh:when c:RdfEditorKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?row ?state ?old }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; c:activeOption ?option . ?option c:fillsWith ?fill . ?row ?state ?old . VALUES ?state { c:draft c:activeOption c:menuOpen } }""" ;
+    beh:inserts """CONSTRUCT { ?row c:draft ?fill }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this ; c:activeOption ?option . ?option c:fillsWith ?fill }""" ;
+    sem:function "rdf-editor:take-predicate" .
+
+# Typing a character on a row starts editing it with that character, as a spreadsheet does: a value
+# or a predicate is replaced by what is typed; on a resource (or a nested one), a new statement starts.
+# (Space is the drag layer's: it lifts the row.)
+c:RdfTypeToEdit a beh:Reaction ;
+    rdfs:label "Start editing by typing"@en ;
+    beh:when c:RdfEditorTypeKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit ; beh:text ?ch . FILTER(?ch != " ") ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~")))
+}""" ;
+    beh:inserts """CONSTRUCT { ?row ?state true ; c:draft ?ch }
+WHERE {
+  $event beh:node ?hit ; beh:text ?ch . FILTER(?ch != " ") ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  BIND(EXISTS { ?row a c:RdfProperty } || EXISTS { ?row c:subjectTerm ?anyS } || EXISTS { ?row c:listCell ?anyCell } AS ?value)
+  BIND(IF(?value, c:editing, c:adding) AS ?state)
+}""" ;
+    sem:function "rdf-editor:type" .
+
+# --- hard validation: a drop that would not conform is refused --------------------------------------------------
+# While a statement is dragged, each row it is offered to (dnd:offered) objects (dnd:Objection) when
+# the value would break a constraint of the shapes of the target resource on the target predicate:
+# its datatype, class, node kind, allowed values, maximum count, pattern or length. The drag layer
+# then refuses it there, with the shape's message (or a plain reason), and says so.
+c:RdfDropObjections a sem:Rendering ;
+    sem:targets c:RdfDropRow ;
+    sem:modality mod:Screen ;
+    sem:stratum 5 ;
+    sem:requires dnd:offered ;
+    sem:follows dnd:offered ;
+    sem:watches dnd:offered , dnd:carrying .
+c:RdfDropObjections-fn a sem:Rule ; sem:implements c:RdfDropObjections ; sem:function "rdf-editor:objections" .
+c:RdfDropObjections-sparql a sem:Rule ;
+    sem:implements c:RdfDropObjections ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?objection a dnd:Objection ; dnd:receptacle $this ; dnd:against ?drag ; dnd:reason ?reason . }
+WHERE {
+  { SELECT ?drag (MIN(?why) AS ?reason) WHERE {
+    $this dnd:offered ?drag . ?drag dnd:carrying ?dragged .
+    ?dragged a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o .
+    { $this a c:RdfProperty ; c:subjectTerm ?ts ; c:predicateTerm ?np } UNION { $this a c:RdfTerm ; c:term ?ts . FILTER(!isLiteral(?ts)) ?dragged c:predicateTerm ?np }
+    FILTER(!(sameTerm(?ts, ?s) && sameTerm(?np, ?p)))
+    ?ts a ?ty . ?ty rdfs:subClassOf* ?cl . ?shape sh:targetClass ?cl ; sh:property ?ps . ?ps sh:path ?np ; ?constraint ?param .
+    FILTER(?constraint IN (sh:datatype, sh:class, sh:nodeKind, sh:in, sh:maxCount, sh:pattern, sh:minLength, sh:maxLength))
+    LATERAL { OPTIONAL { SELECT ?ts ?np (COUNT(?held) AS ?count) WHERE { ?ts ?np ?held } GROUP BY ?ts ?np } }
+    FILTER(IF(?constraint = sh:datatype, !(isLiteral(?o) && sameTerm(DATATYPE(?o), ?param)),
+           IF(?constraint = sh:class, NOT EXISTS { ?o a/rdfs:subClassOf* ?param },
+           IF(?constraint = sh:nodeKind, (sameTerm(?param, sh:IRI) && !isIRI(?o)) || (sameTerm(?param, sh:Literal) && !isLiteral(?o)),
+           IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?o },
+           IF(?constraint = sh:maxCount, NOT EXISTS { ?ts ?np ?o } && COALESCE(?count, 0) + 1 > xsd:integer(STR(?param)),
+           IF(?constraint = sh:pattern, !REGEX(STR(?o), STR(?param)),
+           IF(?constraint = sh:minLength, STRLEN(STR(?o)) < xsd:integer(STR(?param)),
+              STRLEN(STR(?o)) > xsd:integer(STR(?param))))))))))
+    OPTIONAL { ?ps sh:message ?said FILTER(lang(?said) = "") }
+    OPTIONAL { ?ps sh:message ?saidEn FILTER(langMatches(lang(?saidEn), "en")) }
+    BIND(REPLACE(STR(?np), "^.*[#/]", "") AS ?name)
+    BIND(IF(?constraint = sh:datatype, CONCAT("expected ", REPLACE(STR(?param), "^.*[#/]", "")),
+         IF(?constraint = sh:class, CONCAT("expected a ", REPLACE(STR(?param), "^.*[#/]", "")),
+         IF(?constraint = sh:nodeKind, IF(sameTerm(?param, sh:IRI), "expected an IRI", "expected a literal"),
+         IF(?constraint = sh:in, "not an allowed value",
+         IF(?constraint = sh:maxCount, CONCAT("at most ", STR(?param), " values"),
+         IF(?constraint = sh:pattern, "does not match the expected format",
+         IF(?constraint = sh:minLength, CONCAT("at least ", STR(?param), " characters"), CONCAT("at most ", STR(?param), " characters")))))))) AS ?fallback)
+    BIND(STR(COALESCE(?said, ?saidEn, CONCAT(?name, ": ", ?fallback))) AS ?why)
+  } GROUP BY ?drag }
+  BIND(IRI(CONCAT(STR($this), "/~objection")) AS ?objection)
+}""" .
+
+# --- the row menu ------------------------------------------------------------------------------------------
+# A right click, Shift+F10 or the Menu key opens a row's menu (c:menuOpen, view state): what can be done
+# there, each with its key. Its items do the editor's own reactions (c:does, answering c:RdfMenuClick)
+# on the row (c:actsOn); following a link is the link's own. Escape or a click elsewhere closes it, and
+# choosing an item closes it too.
+c:RdfOpenMenu a beh:Reaction ;
+    rdfs:label "Open a row's menu"@en ;
+    beh:when c:RdfEditorContextMenu , c:RdfEditorMenuKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:rowOf ?row . ?row c:inEditor $this .
+  ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused c:draft c:activeOption c:menuOpen } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~")))
+}""" ;
+    beh:inserts """CONSTRUCT { ?row c:menuOpen true }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:rowOf ?row . ?row c:inEditor $this }""" ;
+    sem:function "rdf-editor:open-menu" .
+c:RdfCloseMenu a beh:Reaction ;
+    rdfs:label "Close a row's menu"@en ;
+    beh:when beh:Click , c:RdfMenuEscapeKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?row c:menuOpen ?open }
+WHERE { ?row c:menuOpen ?open ; c:inEditor $this }""" ;
+    beh:inserts """CONSTRUCT { ?row c:focused true }
+WHERE { $event a c:RdfMenuEscapeKey . ?row c:menuOpen ?open ; c:inEditor $this }""" ;
+    sem:function "rdf-editor:close-menu" .
+
+# The status line under the tree: the mode (viewing, editing, adding), where the focus is (its
+# resource, predicate and value), and the keys that apply now. The focus is the editor's view state
+# (c:cursor, c:cursorMode), kept by a reaction on focus: moving with the arrow keys changes the
+# line and nothing else.
+c:RdfEditorStatus a sem:Rendering ;
+    sem:targets c:RdfEditor ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:follows c:cursor ;
+    sem:watches rdf:type , c:cursor , c:cursorMode , c:editable , c:subjectTerm , c:predicateTerm , c:term .
+c:RdfEditorStatus-fn a sem:Rule ; sem:implements c:RdfEditorStatus ; sem:function "rdf-editor:status" .
+c:RdfEditorStatus-sparql a sem:Rule ;
+    sem:implements c:RdfEditorStatus ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?status . ?arrows ord:immediatelyPrecedes ?status .
+  ?status a rdfhtml:Div ; rdfhtml:class "sem-status" ; rdfhtml:hasChild ?mode , ?where , ?keys .
+  ?mode a rdfhtml:Span ; rdfhtml:class ?modeClass ; rdfhtml:hasChild ?modeText ; ord:immediatelyPrecedes ?where , ?keys .
+  ?modeText a rdfhtml:Text ; rdfhtml:data ?modeLabel .
+  ?where a rdfhtml:Span ; rdfhtml:class "sem-where" ; rdfhtml:hasChild ?whereText ; ord:immediatelyPrecedes ?keys .
+  ?whereText a rdfhtml:Text ; rdfhtml:data ?path .
+  ?keys a rdfhtml:Span ; rdfhtml:class "sem-keys" ; rdfhtml:hasChild ?key .
+  ?key a rdfhtml:Span ; rdfhtml:class "sem-key" ; sem:orderKey ?keyN ; rdfhtml:hasChild ?kbd , ?keyText .
+  ?kbd a rdfhtml:Kbd ; rdfhtml:hasChild ?kbdText ; ord:immediatelyPrecedes ?keyText .
+  ?kbdText a rdfhtml:Text ; rdfhtml:data ?keySym .
+  ?keyText a rdfhtml:Text ; rdfhtml:data ?keyLabel .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:RdfEditor .
+  OPTIONAL { $this c:cursorMode ?mode0 }
+  BIND(COALESCE(STR(?mode0), "viewing") AS ?modeName)
+  BIND(EXISTS { $this c:editable true } AS ?editable)
+  BIND(IF(?modeName = "editing", c:RdfModeEditingPhrase, IF(?modeName = "adding", c:RdfModeAddingPhrase, c:RdfModeViewingPhrase)) AS ?modePhrase)
+  OPTIONAL { ?modeAt l10n:of ?modePhrase ; l10n:name ?mode1 }
+  OPTIONAL { ?modePhrase rdfs:label ?mode1 FILTER(langMatches(lang(?mode1), "en")) }
+  BIND(STR(?mode1) AS ?modeLabel)
+  BIND(CONCAT("sem-mode sem-mode-", ?modeName) AS ?modeClass)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~arrows")) AS ?arrows)
+  BIND(IRI(CONCAT(STR($this), "/~status")) AS ?status)
+  BIND(IRI(CONCAT(STR($this), "/~status-mode")) AS ?mode)
+  BIND(IRI(CONCAT(STR($this), "/~status-mode-text")) AS ?modeText)
+  BIND(IRI(CONCAT(STR($this), "/~status-keys")) AS ?keys)
+  # Where the focus is: the row's resource, predicate and value.
+  OPTIONAL { $this c:cursor ?cur . OPTIONAL { ?cur c:subjectTerm ?ws } OPTIONAL { ?cur c:predicateTerm ?wp } OPTIONAL { ?cur c:term ?wt } }
+  BIND(COALESCE(REPLACE(STR(?ws), "[^#/]*$", ""), "-~") AS ?wsNs)
+  BIND(REPLACE(STR(?ws), "^.*[#/]", "") AS ?wsLocal)
+  OPTIONAL { { SELECT ?wsNs (MIN(?wsP0) AS ?wsPfx) WHERE { ?wsD sh:prefix ?wsP0 ; sh:namespace ?wsN0 BIND(STR(?wsN0) AS ?wsNs) } GROUP BY ?wsNs } }
+  BIND(IF(!BOUND(?ws), ?none, IF(isBlank(?ws) || (isIRI(?ws) && CONTAINS(STR(?ws), "/.well-known/genid/")), "[ ]",
+       IF(isLiteral(?ws), CONCAT("\\"", IF(STRLEN(STR(?ws)) > 32, CONCAT(SUBSTR(STR(?ws), 1, 31), "…"), STR(?ws)), "\\""),
+       IF(BOUND(?wsPfx) && REGEX(?wsLocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?wsPfx, ":", ?wsLocal), CONCAT("<", STR(?ws), ">"))))) AS ?wsShort)
+  BIND(COALESCE(REPLACE(STR(?wp), "[^#/]*$", ""), "-~") AS ?wpNs)
+  BIND(REPLACE(STR(?wp), "^.*[#/]", "") AS ?wpLocal)
+  OPTIONAL { { SELECT ?wpNs (MIN(?wpP0) AS ?wpPfx) WHERE { ?wpD sh:prefix ?wpP0 ; sh:namespace ?wpN0 BIND(STR(?wpN0) AS ?wpNs) } GROUP BY ?wpNs } }
+  BIND(IF(!BOUND(?wp), ?none, IF(isBlank(?wp) || (isIRI(?wp) && CONTAINS(STR(?wp), "/.well-known/genid/")), "[ ]",
+       IF(isLiteral(?wp), CONCAT("\\"", IF(STRLEN(STR(?wp)) > 32, CONCAT(SUBSTR(STR(?wp), 1, 31), "…"), STR(?wp)), "\\""),
+       IF(BOUND(?wpPfx) && REGEX(?wpLocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?wpPfx, ":", ?wpLocal), CONCAT("<", STR(?wp), ">"))))) AS ?wpShort)
+  BIND(COALESCE(REPLACE(STR(?wt), "[^#/]*$", ""), "-~") AS ?wtNs)
+  BIND(REPLACE(STR(?wt), "^.*[#/]", "") AS ?wtLocal)
+  OPTIONAL { { SELECT ?wtNs (MIN(?wtP0) AS ?wtPfx) WHERE { ?wtD sh:prefix ?wtP0 ; sh:namespace ?wtN0 BIND(STR(?wtN0) AS ?wtNs) } GROUP BY ?wtNs } }
+  BIND(IF(!BOUND(?wt), ?none, IF(isBlank(?wt) || (isIRI(?wt) && CONTAINS(STR(?wt), "/.well-known/genid/")), "[ ]",
+       IF(isLiteral(?wt), CONCAT("\\"", IF(STRLEN(STR(?wt)) > 32, CONCAT(SUBSTR(STR(?wt), 1, 31), "…"), STR(?wt)), "\\""),
+       IF(BOUND(?wtPfx) && REGEX(?wtLocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?wtPfx, ":", ?wtLocal), CONCAT("<", STR(?wt), ">"))))) AS ?wtShort)
+  BIND(IF(BOUND(?wp) && sameTerm(?wp, rdf:type), "a", ?wpShort) AS ?wpText)
+  BIND(IF(!BOUND(?cur), ?none, IF(BOUND(?ws), CONCAT(?wsShort, " › ", ?wpText, IF(BOUND(?wt), CONCAT(" › ", ?wtShort), "")), ?wtShort)) AS ?path)
+  BIND(IF(BOUND(?path), IRI(CONCAT(STR($this), "/~status-where")), ?none) AS ?where)
+  BIND(IF(BOUND(?path), IRI(CONCAT(STR($this), "/~status-where-text")), ?none) AS ?whereText)
+  # The keys that apply now.
+  LATERAL { {} UNION {
+    VALUES (?keyMode ?keyN ?keySym ?keyPhrase) {
+      ("edit" 1 "↵" c:RdfKeyEditPhrase) ("edit" 2 "⇧↵" c:RdfKeyAddPhrase) ("edit" 3 "⌫" c:RdfKeyDeletePhrase) ("edit" 4 "⇥" c:RdfKeyNestPhrase)
+      ("edit" 5 "⌥↑↓" c:RdfKeyMovePhrase) ("edit" 6 "⇧F10" c:RdfKeyMenuPhrase)
+      ("view" 1 "↵" c:RdfKeyFollowPhrase) ("view" 2 "← →" c:RdfKeyOpenPhrase) ("view" 3 "⇧F10" c:RdfKeyMenuPhrase)
+      ("editing" 1 "↵" c:RdfKeySavePhrase) ("editing" 2 "Esc" c:RdfKeyCancelPhrase)
+      ("adding" 1 "↑↓" c:RdfKeyChoosePhrase) ("adding" 2 "↵" c:RdfKeyAddPhrase) ("adding" 3 "Esc" c:RdfKeyClosePhrase)
+    }
+    FILTER(?keyMode = IF(?modeName = "viewing", IF(?editable, "edit", "view"), ?modeName))
+    OPTIONAL { ?keyAt l10n:of ?keyPhrase ; l10n:name ?key0 }
+    OPTIONAL { ?keyPhrase rdfs:label ?key0 FILTER(langMatches(lang(?key0), "en")) }
+    BIND(STR(?key0) AS ?keyLabel)
+    BIND(CONCAT(STR($this), "/~status-key-", STR(?keyN)) AS ?keyLocal)
+    BIND(IRI(?keyLocal) AS ?key)
+    BIND(IRI(CONCAT(?keyLocal, "-kbd")) AS ?kbd)
+    BIND(IRI(CONCAT(?keyLocal, "-kbd-text")) AS ?kbdText)
+    BIND(IRI(CONCAT(?keyLocal, "-text")) AS ?keyText)
+  } }
+}""" .
+
+c:RdfTrackCursor a beh:Reaction ;
+    rdfs:label "Keep where the focus is"@en ;
+    beh:when beh:Focus ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { $this ?state ?old }
+WHERE {
+  $this ?state ?old . VALUES ?state { c:cursor c:cursorMode }
+  FILTER EXISTS { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds|c:rowOf ?row . ?row c:inEditor $this }
+}""" ;
+    beh:inserts """CONSTRUCT { $this c:cursor ?row ; c:cursorMode ?mode }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit .
+  LATERAL {
+    { ?n c:commits ?row . BIND("editing" AS ?mode) }
+    UNION { ?n c:adds ?row . BIND("adding" AS ?mode) }
+    UNION { ?n c:rowOf ?row . FILTER NOT EXISTS { ?hit c:commits|c:adds ?field } BIND("viewing" AS ?mode) }
+  }
+}""" ;
+    sem:function "rdf-editor:cursor" .

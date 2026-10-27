@@ -95,13 +95,15 @@ ui:ex-rdf-editor a c:RdfEditor ;
     c:arrows c:ArrowsCurrent ;
     c:current rcp:borscht .
 ui:ex-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:ex-rdf-jump ui:ex-rdf-arrows ui:ex-rdf-validate ui:ex-rdf-undo ) .
+    c:children ( ui:ex-rdf-jump ui:ex-rdf-arrows-field ui:ex-rdf-validate ui:ex-rdf-undo ) .
 ui:ex-rdf-jump a c:Combobox ; c:controls ui:ex-rdf-editor ; c:property c:current ; c:optionsFrom ui:ex-rdf-editor ;
     c:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar .
+ui:ex-rdf-arrows-field a c:Field ; c:content ui:ex-rdf-arrows ;
+    c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
 ui:ex-rdf-arrows a c:Segmented ; c:controls ui:ex-rdf-editor ; c:property c:arrows ;
     c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
 ui:ex-rdf-validate a c:ToggleSwitch ; c:controls ui:ex-rdf-editor ; c:property c:validated ;
-    c:label "Validate"@en , "Перевіряти"@uk , "Prüfen"@de , "تحقّق"@ar .
+    c:label "Check against shapes"@en , "Перевіряти за формами"@uk , "Gegen Formen prüfen"@de , "تحقّق وفق الأشكال"@ar .
 ui:ex-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Outline ;
     c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
 ui:ex-rdf-keys a c:Text ; sty:textStyle sty:Caption ;

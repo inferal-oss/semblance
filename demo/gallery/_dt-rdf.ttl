@@ -62,6 +62,8 @@ ui:dt-rdf-editor a c:RdfEditor ;
     c:entry lib:dispossessed , lib:earthsea , lib:ursula ;
     c:arrows c:ArrowsCurrent ;
     c:current lib:dispossessed .
+ui:dt-rdf-arrows-field a c:Field ; c:content ui:dt-rdf-arrows ;
+    c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
 ui:dt-rdf-arrows a c:Segmented ; c:controls ui:dt-rdf-editor ; c:property c:arrows ;
     c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
 ui:dt-rdf-jump a c:Combobox ; c:controls ui:dt-rdf-editor ; c:property c:current ; c:optionsFrom ui:dt-rdf-editor ;
@@ -69,11 +71,11 @@ ui:dt-rdf-jump a c:Combobox ; c:controls ui:dt-rdf-editor ; c:property c:current
 ui:dt-rdf-editable a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:editable ;
     c:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
 ui:dt-rdf-validate a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:validated ;
-    c:label "Validate"@en , "Перевіряти"@uk , "Prüfen"@de , "تحقّق"@ar .
+    c:label "Check against shapes"@en , "Перевіряти за формами"@uk , "Gegen Formen prüfen"@de , "تحقّق وفق الأشكال"@ar .
 ui:dt-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Ghost ;
     c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
 ui:dt-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:dt-rdf-arrows ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-validate ui:dt-rdf-undo ) .
+    c:children ( ui:dt-rdf-arrows-field ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-validate ui:dt-rdf-undo ) .
 
 ui:dt-rdf a c:Flippable ; c:front ui:dt-rdf-spec .
 ui:dt-rdf-spec a c:Specimen ; c:demonstrates c:RdfEditor ; c:label "RDF editor" ;
