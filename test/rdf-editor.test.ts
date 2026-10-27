@@ -168,6 +168,35 @@ describe('c:RdfEditor', () => {
     })
   }
 
+  const EXAMPLE = readFileSync(new URL('../demo/gallery/_ex-rdf.ttl', import.meta.url), 'utf8')
+  for (const kind of ['oxigraph', 'wat'] as const)
+    for (const prefer of ['sparql', 'function'] as const) {
+      it(`follows a link in the editing example with a click: current, focused, its arrow re-aimed (${kind}, ${prefer})`, () => {
+        // The recipes example as it is on the site: editable, validated, arrows from the current resource.
+        const m = mount(kind, prefer, EXAMPLE, [], UI + 'ex-rdf-editor')
+        const RCP = 'https://semblance.dev/demo/recipes#'
+        const current = () => m.store.match(m.nn(UI + 'ex-rdf-editor'), m.nn(C + 'current'), null).map((q) => q.object.value)
+        const arrows = () => [...m.editor().querySelectorAll('[data-sem-c=connector]')].map((a) => [a.getAttribute('data-sem-from'), a.getAttribute('data-sem-to')])
+        expect(current()).toEqual([RCP + 'borscht'])
+        const link = m.label('rcp:borscht', 'rcp:author', 'rcp:olena')
+        expect(link.getAttribute('data-sem-link')).toBe('resource')
+        expect(arrows()).toEqual([[link.id, m.label('rcp:olena').id]])
+        m.focusOn(link)
+        m.click(link)
+        expect(current()).toEqual([RCP + 'olena'])
+        expect(m.item('rcp:olena').getAttribute('aria-current')).toBe('true')
+        expect(m.item('rcp:borscht').hasAttribute('aria-current')).toBe(false)
+        expect(m.label('rcp:olena').hasAttribute('data-sem-takes-focus')).toBe(true)
+        // Nothing opened for editing: a click on a link follows it, in an editor too.
+        expect(m.field()).toBeNull()
+        // From this resource: the arrows that touch olena, which is the one from Borscht's author.
+        expect(arrows()).toEqual([[m.label('rcp:borscht', 'rcp:author', 'rcp:olena').id, m.label('rcp:olena').id]])
+        // Every link, then none.
+        m.apply({ remove: m.store.match(m.nn(UI + 'ex-rdf-editor'), m.nn(C + 'arrows'), null), add: [m.f.quad(m.nn(UI + 'ex-rdf-editor'), m.nn(C + 'arrows'), m.nn(C + 'ArrowsOff'))] })
+        expect(arrows()).toEqual([])
+      })
+    }
+
   it('draws arrows for the current resource, for all links, or none', () => {
     const { store, nn, f, editor, apply, click, label } = mount('oxigraph', 'sparql')
     const arrows = () => [...editor().querySelectorAll('[data-sem-c=connector]')].length
