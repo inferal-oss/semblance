@@ -72,6 +72,7 @@ const send = (method, params = {}, sessionId) =>
 // Records when #app first has content and the first contentful paint, as marks.
 const OBSERVE = `
 window.__muts = []
+new PerformanceObserver((l) => { const e = l.getEntries().at(-1); if (e) window.__lcp = e.startTime }).observe({ type: 'largest-contentful-paint', buffered: true })
 const record = (ms) => {
   for (const m of ms) if (window.__muts.length < 400) window.__muts.push(m.type + ' ' + (m.target.getAttribute?.('data-sem-c') ?? m.target.nodeName) + ' ' + (m.attributeName ?? '') + ' +' + m.addedNodes.length + ' -' + m.removedNodes.length + ' ' + [...m.addedNodes].map((n) => n.nodeName + ':' + (n.getAttribute?.('data-sem-c') ?? (n.data ?? '').slice(0, 20))).join(','))
 }
@@ -106,7 +107,7 @@ async function load(sessionId, waitMs = 60000) {
         const paint = Object.fromEntries(performance.getEntriesByType('paint').map((p) => [p.name, p.startTime]))
         const res = performance.getEntriesByType('resource').map((r) => ({ name: r.name.split('/').pop(), start: r.startTime, end: r.responseEnd, transfer: r.transferSize, body: r.decodedBodySize }))
         const detail = (n) => performance.getEntriesByName(n)[0]?.detail
-        return { muts: window.__muts, adopted: detail('sem:adopted'), patchOps: JSON.stringify(detail('sem:patch')), html: nav.responseEnd, dcl: nav.domContentLoadedEventEnd, marks, paint, res }
+        return { lcp: window.__lcp, muts: window.__muts, adopted: detail('sem:adopted'), patchOps: JSON.stringify(detail('sem:patch')), html: nav.responseEnd, dcl: nav.domContentLoadedEventEnd, marks, paint, res }
       })()`,
     },
     sessionId,
@@ -161,6 +162,7 @@ for (const profile of Object.keys(PROFILES).filter((p) => !only || only.split(',
 const rows = PHASES.map(([name, from, to]) => [name, ...Object.values(results).map((s) => median(s.map((r) => at(r, to) - at(r, from))))])
 rows.push(['**first content (#app has nodes)**', ...Object.values(results).map((s) => median(s.map((r) => r.marks['sem:firstContent'])))])
 rows.push(['**first contentful paint**', ...Object.values(results).map((s) => median(s.map((r) => r.paint['first-contentful-paint'] ?? NaN)))])
+rows.push(['**largest contentful paint**', ...Object.values(results).map((s) => median(s.map((r) => r.lcp ?? NaN)))])
 rows.push(['**ready (effects attached)**', ...Object.values(results).map((s) => median(s.map((r) => r.marks['sem:ready'])))])
 const transfer = Object.values(results).map((s) => median(s.map((r) => r.res.reduce((n, x) => n + (x.transfer || 0), 0))))
 console.log(`${url} — median of ${runs} runs, ms\n`)
