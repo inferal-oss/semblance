@@ -41,7 +41,7 @@ export interface FormPage {
 
 /**
  * A settings-like page: `fieldsets` separate fieldsets of `rows` rows each, one shared label column
- * (as wide as the widest label, never wider than 40% of the page), controls filling the rest down
+ * (as wide as the widest label, never wider than 40% of the page: past that labels wrap), controls filling the rest down
  * to a minimum; rows stacked with a token gap, each as tall as its label or the control height;
  * `toolbars` separate toolbars of 3 buttons, all as wide as the widest button label.
  */
@@ -61,7 +61,7 @@ export function formPage(s: SolverLike, fieldsets: number, rows: number, toolbar
   add([t(content), t(viewport, -1)], 2 * PAD, Op.Eq) // content = viewport - 2·pad
   const column = s.addVariable()
   add([t(column)], 0, Op.Eq, Strength.weak) // as narrow as it may be
-  add([t(column), t(content, -0.4)], 0, Op.Le, Strength.strong) // at most 40% of the page
+  add([t(column), t(content, -0.4)], 0, Op.Le) // at most 40% of the page
   const controlHeight = s.addVariable()
   s.addEditVariable(controlHeight, Strength.strong)
   s.suggestValue(controlHeight, 38)
@@ -81,7 +81,7 @@ export function formPage(s: SolverLike, fieldsets: number, rows: number, toolbar
       s.addEditVariable(lh, Strength.strong)
       s.suggestValue(lh, 20)
       labelHeights.push(lh)
-      add([t(column), t(label, -1)], 0, Op.Ge) // the column holds every label
+      add([t(column), t(label, -1)], 0, Op.Ge, Strength.medium) // holds every label, or labels wrap (never bends the viewport)
       const control = s.addVariable()
       add([t(control), t(content, -1), t(column)], GAP, Op.Eq, Strength.strong) // fills the rest
       add([t(control)], -120, Op.Ge) // never narrower than 120

@@ -34,6 +34,8 @@ export interface MeasuredPage {
   width: number
   height: number
   theme: string
+  /** the site's language (set by the driver) */
+  lang?: string
   dir: string
   /** document.scrollingElement.scrollWidth */
   scrollWidth: number

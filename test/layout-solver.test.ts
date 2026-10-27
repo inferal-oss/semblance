@@ -40,10 +40,10 @@ describe('solver', () => {
     // a longer label (a language switch) widens the column everywhere
     s.suggestValue(p.labels[5], 260)
     expect(s.value(p.column)).toBeCloseTo(260)
-    // a phone: the column gives way to the 40% cap (strong) before a control shrinks below 120
+    // a phone: the column keeps to 40% of the page (its labels wrap), the controls take the rest
     s.suggestValue(p.viewport, 320)
     expect(s.value(p.column)).toBeCloseTo(0.4 * (320 - 32))
-    for (const c of p.controls) expect(s.value(c)).toBeGreaterThanOrEqual(120 - 1e-6)
+    for (const c of p.controls) expect(s.value(c)).toBeCloseTo(320 - 32 - 0.4 * (320 - 32) - 12)
     // rows stack by the token gap and the taller of label and control
     s.suggestValue(p.controlHeight, 44)
     expect(s.value(p.rowTops[1]) - s.value(p.rowTops[0])).toBeCloseTo(44 + 12)
