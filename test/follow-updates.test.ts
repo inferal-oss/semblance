@@ -92,7 +92,7 @@ describe('following updates as a maintained view (the workbench and IVM)', () =>
   it('a query the runtime cannot maintain is recomputed, and the plan says why; a CONSTRUCT writes nothing to the views graph', async () => {
     const h = workbench()
     h.fire(followSwitch(h), 'click')
-    type(h, 'SELECT ?s (GROUP_CONCAT(?l) AS ?ls) WHERE { ?s rdfs:label ?l } GROUP BY ?s LIMIT 3')
+    type(h, 'SELECT ?s ?l WHERE { ?s rdfs:label ?l FILTER(STRLEN(?l) < STRLEN(STR(NOW()))) } LIMIT 3')
     h.fire(q(h, '.sem-toolbar button')!, 'click')
     const view = h.runtime.views.view(UI + 'currentQuery')!
     expect(view.strategy).toBe('recompute')

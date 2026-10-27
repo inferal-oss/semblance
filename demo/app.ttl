@@ -25,6 +25,7 @@
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
+@prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 
 # =================================================================================================
@@ -133,6 +134,17 @@ ui:inferalChevron a c:Emblem ; rdfs:label "Inferal" ; c:decorative true ;
 
 # Detached views live here, outside the pages, so they survive page changes.
 ui:desktop a c:Desktop ; c:hosts ui:announcements , ui:tools , ui:stallDialog , ui:palette .
+
+# What the page knows about some of it (ontology/layers/rendered.ttl), for the Query tool's samples
+# to show: the focus, the pointer and native disclosures anywhere (followed by events, nothing is
+# measured for them); the boxes of what floats on the desktop, which may overlap (the demo windows
+# say so too, in the windows gallery); and whether the landing page's sections are on screen.
+ui:shell rnd:observes rnd:Focus , rnd:Hover , rnd:Open .
+ui:tools rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:announcements rnd:observesSelf rnd:Overlap , rnd:Visibility .
+ui:hero rnd:observesSelf rnd:Geometry , rnd:Visibility .
+ui:pillars rnd:observesSelf rnd:Geometry , rnd:Visibility .
+ui:howItWorks rnd:observesSelf rnd:Geometry , rnd:Visibility .
 
 # What the last interaction cost and what memory holds, on every page: a bar
 # docked to the bottom of the shell. The host writes ui:stats; c:Metrics shows it.
@@ -632,7 +644,8 @@ ui:rememberPalette a per:Policy ; per:scope per:Device ;
     per:construct """CONSTRUCT { ?run ?p ?o } WHERE { ?run c:recentOf ui:palette ; ?p ?o }""" .
 
 # Opt-in: the change log itself, so the Change log, Activity and Timeline survive a reload.
-ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ;
+# It reads the change log only (an input graph): kept as a view, a write stores the members that came and went.
+ui:rememberChangeLog a per:Policy ; per:scope per:Session ; per:enabled false ; per:graph "urn:semblance:events" ; iv:strategy iv:Incremental ;
     rdfs:label "The change log" , "Журнал змін"@uk , "Das Änderungsprotokoll"@de , "سجل التغييرات"@ar ;
     per:construct """
 CONSTRUCT { beh:ChangeLog tree:member ?m ; beh:latest ?latest . ?m ?p ?o }

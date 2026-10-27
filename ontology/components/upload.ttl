@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
@@ -49,7 +50,7 @@
 # --- vocabulary --------------------------------------------------------------------------------------
 
 c:FileDrop a owl:Class ;
-    rdfs:subClassOf sem:Component , dnd:DropTarget ;
+    rdfs:subClassOf sem:Component , file:Receiver ;
     rdfs:label "File drop"@en , "Завантаження файлів"@uk , "Datei-Ablage"@de , "إسقاط الملفات"@ar ;
     rdfs:comment """Pick or drop files: a drop zone that is a button (a click, Enter or Space opens the system
 picker) and a drop target for files dragged in from outside the page, above the list of the files
@@ -57,9 +58,13 @@ it holds (c:FileItem: name, size, state, progress, remove). The accepted files a
 c:property of the node it c:controls (itself by default); what is accepted is the val:validates
 shape - its sh:node shapes for each file, its sh:maxCount for how many - refusals listed per file
 with the shape's message. With file:uploadTo or file:handler each accepted file is uploaded at
-once, with progress, and removing it cancels the upload. Also: c:label (its accessible name),
-c:help, c:icon, c:disabled, file:accept (what the picker offers)."""@en ;
-    sem:slug "file-drop" .
+once, with progress, and removing it cancels the upload; with file:keepIn each is kept in the
+browser (a file:Store). Also: c:label (its accessible name), c:help, c:icon, c:disabled,
+file:accept (what the picker offers), file:listsHeld (false: the list shows only the files that
+arrived through it, not every value of the property)."""@en ;
+    sem:slug "file-drop" ;
+    # Its list shows what it refused, and why.
+    file:keepsRefusals true .
 
 c:FileItem a owl:Class ;
     rdfs:subClassOf sem:Component ;
@@ -113,7 +118,8 @@ c:FileDropTexts a sem:Rendering ;
     sem:targets c:FileDrop ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:functionOnly "It writes the words in the viewer's language and the sizes and percentages in its locale (Intl.NumberFormat): the language is a projection setting no query can see, and SPARQL has no locale-aware number formatting." .
+    sem:functionOnly "awaits sx:Locale (sx:formatNumber): it writes the sizes and percentages in the viewer's locale (Intl.NumberFormat)." ;
+    sem:needsExtension sx:Locale .
 c:FileDropTexts-fn a sem:Rule ; sem:implements c:FileDropTexts ; sem:function "upload:texts" .
 
 # --- rendering ------------------------------------------------------------------------------------------
@@ -157,7 +163,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+  OPTIONAL { { $this l10n:label ?plainLabel } UNION { ?l10nAt_plainLabel l10n:of $this ; l10n:label ?plainLabel } } OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?plainLabel, "")) AS ?label)
   OPTIONAL { $this c:icon ?ownIcon }
   BIND(STR(COALESCE(?ownIcon, "⤒")) AS ?icon)
@@ -208,7 +214,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+  OPTIONAL { { $this l10n:label ?plainLabel } UNION { ?l10nAt_plainLabel l10n:of $this ; l10n:label ?plainLabel } } OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?plainLabel, "")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~l10n-prompt")) AS ?promptNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-help")) AS ?helpNode)
@@ -224,7 +230,8 @@ WHERE {
 }""" .
 
 # A c:FileItem for each file the drop lists - the values of its property (whichever drop took them
-# in), and the files it refused - in the order they arrived (sem:order).
+# in; with file:listsHeld false, only the files it took in), and the files it refused - in the
+# order they arrived (sem:order).
 c:FileDropItems a sem:Rendering ;
     sem:targets c:FileDrop ;
     sem:stratum 0 ;
@@ -240,7 +247,8 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   { $this file:file ?file }
-  UNION { $this c:property ?property . OPTIONAL { $this c:controls ?declared } BIND(COALESCE(?declared, $this) AS ?node) ?node ?property ?file FILTER(isIRI(?file)) }
+  UNION { $this c:property ?property . FILTER NOT EXISTS { $this file:listsHeld false }
+          OPTIONAL { $this c:controls ?declared } BIND(COALESCE(?declared, $this) AS ?node) ?node ?property ?file FILTER(isIRI(?file)) }
   LATERAL { OPTIONAL { ?file sem:order ?ord } }
   BIND(COALESCE(?ord, 0) AS ?order)
   BIND(IRI(CONCAT(STR($this), "/~list")) AS ?list)
@@ -253,7 +261,9 @@ c:FileItemRendering a sem:Rendering ;
     sem:targets c:FileItem ;
     sem:stratum 0 ;
     sem:readsMinted true ;
-    sem:follows c:of , c:itemOf .
+    sem:follows c:of , c:itemOf ;
+    # What it reads: of the drop only c:disabled, so a file arriving at the drop re-runs no other item.
+    sem:watches rdf:type , c:of , c:itemOf , file:name , file:size , file:loaded , file:reason , file:state , c:disabled , l10n:label .
 c:FileItemRendering-fn a sem:Rule ; sem:implements c:FileItemRendering ; sem:function "upload:item" .
 c:FileItemRendering-sparql-screen a sem:Rule ;
     sem:implements c:FileItemRendering ;
@@ -387,72 +397,8 @@ c:CancelPick a beh:Reaction ;
     beh:deletes """CONSTRUCT { ?pick ?p ?o } WHERE { ?pick file:requestedBy $this ; ?p ?o }""" ;
     sem:function "upload:cancel-pick" .
 
-# A file arrives (picked or dropped): it becomes a file:File under the drop, in arrival order, and
-# is offered to the drop as a drag of its own (<drop>/~arrival), so its reception (dnd:Receive)
-# says whether it may go in. The pick request, if any, is answered.
-c:OfferFile a beh:Reaction ;
-    rdfs:label "A file arrives"@en ;
-    beh:when file:Arrive ;
-    beh:sourceClass c:FileDrop ;
-    beh:deletes """
-CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival . ?pick ?q ?v }
-WHERE {
-  BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival)
-  { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival } UNION { ?pick file:requestedBy $this ; ?q ?v }
-}""" ;
-    beh:inserts """
-CONSTRUCT {
-  ?file a file:File ; file:name ?name ; file:mediaType ?type ; file:size ?size ; file:modified ?modified ; file:handle ?handle ; sem:order ?sequence .
-  $this dnd:offered ?arrival . ?arrival a dnd:Drag ; dnd:carrying ?file .
-}
-WHERE {
-  $event file:name ?name ; beh:sequence ?sequence .
-  OPTIONAL { $event file:mediaType ?type }
-  OPTIONAL { $event file:size ?size }
-  OPTIONAL { $event file:modified ?modified }
-  OPTIONAL { $event file:handle ?handle }
-  BIND(IRI(CONCAT(STR($this), "/~file-", STR(?sequence))) AS ?file)
-  BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival)
-}""" ;
-    sem:function "upload:offer" .
-
-# The drop takes it: it is a value of the property, listed, and uploaded at once when the drop says
-# where (file:uploadTo, file:handler), else ready.
-c:AddFile a beh:Reaction ;
-    rdfs:label "Add the file"@en ;
-    beh:when file:Added ;
-    beh:sourceClass c:FileDrop ;
-    beh:deletes """
-CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival }
-WHERE { BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival) { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival } }""" ;
-    beh:inserts """
-CONSTRUCT { ?node ?property ?file . $this file:file ?file . ?file file:state ?state }
-WHERE {
-  $event file:file ?file .
-  $this c:property ?property .
-  OPTIONAL { $this c:controls ?declared }
-  BIND(COALESCE(?declared, $this) AS ?node)
-  BIND(IF(EXISTS { $this file:uploadTo ?to } || EXISTS { $this file:handler ?by }, file:Uploading, file:Ready) AS ?state)
-}""" ;
-    sem:function "upload:add" .
-
-# The drop refuses it: listed as refused, with the shape's message, which is announced.
-c:RefuseFile a beh:Reaction ;
-    rdfs:label "Refuse the file"@en ;
-    beh:when file:Refusal ;
-    beh:sourceClass c:FileDrop ;
-    ann:announcesFrom file:reason ;
-    ann:announces "The file was not accepted"@en , "Файл не прийнято"@uk , "Die Datei wurde nicht angenommen"@de , "لم يُقبل الملف"@ar ;
-    ann:tone sty:Warning ;
-    beh:deletes """
-CONSTRUCT { ?arrival ?p ?o . $this dnd:offered ?arrival }
-WHERE { BIND(IRI(CONCAT(STR($this), "/~arrival")) AS ?arrival) { ?arrival ?p ?o } UNION { $this dnd:offered ?arrival } }""" ;
-    beh:inserts """
-CONSTRUCT { $this file:file ?file . ?file file:state file:Refused ; file:reason ?reason }
-WHERE { $event file:file ?file . OPTIONAL { $event file:reason ?reason } }""" ;
-    sem:function "upload:refuse" .
-
-# A file's remove button: it leaves the list and the property, with everything said about it.
+# A file's remove button: it leaves the list and the property (wherever it was put), with everything
+# said about it - a kept file's bytes are freed with it.
 c:RemoveFile a beh:Reaction ;
     rdfs:label "Remove the file"@en ;
     beh:when beh:Click ;
@@ -466,7 +412,8 @@ WHERE {
   FILTER NOT EXISTS { ?file file:state file:Uploading }
   # Listed here: taken in or refused by it, or a value of its property.
   FILTER(EXISTS { $this file:file ?file } || EXISTS { $this c:property ?lp . $this c:controls ?ln . ?ln ?lp ?file } || EXISTS { $this c:property ?sp . FILTER NOT EXISTS { $this c:controls ?anyNode } $this ?sp ?file })
-  { $this c:property ?property . OPTIONAL { $this c:controls ?declared } BIND(COALESCE(?declared, $this) AS ?node) ?node ?property ?file }
+  # Wherever it is held through the property (the node it was put in may no longer be the one controlled).
+  { $this c:property ?property . ?node ?property ?file }
   UNION { ?lister file:file ?file }
   UNION { ?file ?p ?o }
 }""" ;
@@ -487,7 +434,8 @@ WHERE {
   ?file file:state file:Uploading .
   # Listed here: taken in or refused by it, or a value of its property.
   FILTER(EXISTS { $this file:file ?file } || EXISTS { $this c:property ?lp . $this c:controls ?ln . ?ln ?lp ?file } || EXISTS { $this c:property ?sp . FILTER NOT EXISTS { $this c:controls ?anyNode } $this ?sp ?file })
-  { $this c:property ?property . OPTIONAL { $this c:controls ?declared } BIND(COALESCE(?declared, $this) AS ?node) ?node ?property ?file }
+  # Wherever it is held through the property (the node it was put in may no longer be the one controlled).
+  { $this c:property ?property . ?node ?property ?file }
   UNION { ?lister file:file ?file }
   UNION { ?file ?p ?o }
 }""" ;
@@ -515,47 +463,3 @@ WHERE {
   FILTER NOT EXISTS { $this c:disabled true }
 }""" ;
     sem:function "upload:retry" .
-
-# How far an upload is.
-c:UploadProgress a beh:Reaction ;
-    rdfs:label "Upload progress"@en ;
-    beh:when file:Progress ;
-    beh:sourceClass c:FileDrop ;
-    beh:deletes """
-CONSTRUCT { ?file file:loaded ?old }
-WHERE { $event file:file ?file ; file:loaded ?loaded . $this file:file ?file . ?file file:state file:Uploading ; file:loaded ?old }""" ;
-    beh:inserts """
-CONSTRUCT { ?file file:loaded ?loaded }
-WHERE { $event file:file ?file ; file:loaded ?loaded . $this file:file ?file . ?file file:state file:Uploading }""" ;
-    sem:function "upload:progress" .
-
-# The upload is done: the file is uploaded (and where the server put it, if it said).
-c:UploadDone a beh:Reaction ;
-    rdfs:label "Uploaded"@en ;
-    beh:when file:Done ;
-    beh:sourceClass c:FileDrop ;
-    ann:announces "File uploaded"@en , "Файл надіслано"@uk , "Datei hochgeladen"@de , "تم رفع الملف"@ar ;
-    ann:tone sty:Success ;
-    beh:deletes """
-CONSTRUCT { ?file file:state file:Uploading ; file:loaded ?loaded }
-WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { ?file file:loaded ?loaded } }""" ;
-    beh:inserts """
-CONSTRUCT { ?file file:state file:Uploaded ; file:location ?location }
-WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { $event file:location ?location } }""" ;
-    sem:function "upload:done" .
-
-# The upload failed: the file says why, and can be uploaded again.
-c:UploadFail a beh:Reaction ;
-    rdfs:label "Upload failed"@en ;
-    beh:when file:Failure ;
-    beh:sourceClass c:FileDrop ;
-    ann:announcesFrom file:reason ;
-    ann:announces "Upload failed"@en , "Не вдалося надіслати"@uk , "Hochladen fehlgeschlagen"@de , "فشل الرفع"@ar ;
-    ann:tone sty:Danger ;
-    beh:deletes """
-CONSTRUCT { ?file file:state file:Uploading ; file:loaded ?loaded }
-WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { ?file file:loaded ?loaded } }""" ;
-    beh:inserts """
-CONSTRUCT { ?file file:state file:Failed ; file:reason ?reason }
-WHERE { $event file:file ?file . $this file:file ?file . ?file file:state file:Uploading . OPTIONAL { $event file:reason ?reason } }""" ;
-    sem:function "upload:fail" .

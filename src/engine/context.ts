@@ -5,6 +5,7 @@ import { mint } from '../rdf.ts'
 import { queryReads, type ReadPattern } from '../sparql-reads.ts'
 import type { Factory, GraphStore } from '../store/types.ts'
 import { ATTRIBUTE_NAMES } from '../vocab/rdfhtml.generated.ts'
+import { maintainedRows } from '../view/rows.ts'
 
 /** What a function rule sees: the input graph plus this engine's derived graph. */
 export interface RuleContext {
@@ -23,6 +24,12 @@ export interface RuleContext {
    */
   select(query: string, opts?: QueryOptions): Map<string, Term>[]
   construct(query: string, opts?: QueryOptions): Quad[]
+  /**
+   * A maintained view's rows (an iv:View materialized as a result set in the views graph, docs/IVM.md
+   * §8.2), in its ORDER BY, read - and traced - row by row, so the rule re-runs exactly when the rows
+   * it read change. Not a maintained view: `query` (the same SELECT) is run instead, untraced, or none.
+   */
+  rows(view: Term, query?: string): Map<string, Term>[]
   readonly sparql: boolean
   /**
    * When set (by the engine, around one function-rule evaluation), every
@@ -64,6 +71,23 @@ export interface FnRule {
   /** `member` is set for member-wise rules (sem:forEach): one evaluation per member. */
   (ctx: RuleContext, focus: NamedNode, member?: NamedNode): Quad[]
   watches?: (ctx: RuleContext, focus: NamedNode) => ReadonlySet<string>
+}
+
+/**
+ * The viewer's languages as texts are matched against them: BCP 47 tags lower-cased (as LANG()
+ * is compared), each followed by its shorter forms (a lookup fallback: en-US, then en), in order
+ * and without repeats. A regional viewer reads a text tagged with its language.
+ */
+export function languageChain(languages: readonly string[]): string[] {
+  const out: string[] = []
+  for (const tag of languages) {
+    const parts = tag.toLowerCase().split('-').filter(Boolean)
+    for (let n = parts.length; n > 0; n--) {
+      const t = parts.slice(0, n).join('-')
+      if (!out.includes(t)) out.push(t)
+    }
+  }
+  return out
 }
 
 /** `graphs` is the rule's view: input graphs, then the engine's derived graph (last). */
@@ -122,7 +146,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
   const ctx: RuleContext = {
     f,
     modality,
-    languages,
+    languages: languageChain(languages),
     nn,
     match,
     object: (s, p) => match(s, p, null)[0]?.object,
@@ -146,6 +170,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     out: (focus) => new Out(ctx, focus, graph),
     sparql: store.sparql,
+    rows: (view, query) => maintainedRows(ctx, view) ?? (query && store.sparql ? ctx.select(query) : []),
     select: (query, opts) => store.select(followed(prefixes() + '\n' + query, opts), graphs),
     construct: (query, opts) => store.construct(followed(prefixes() + '\n' + query, opts), graphs),
   }

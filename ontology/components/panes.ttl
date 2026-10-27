@@ -64,9 +64,9 @@ WHERE {
   $this a/rdfs:subClassOf* c:TiledWorkspace .
   OPTIONAL { $this c:rootTile ?tile FILTER(isIRI(?tile)) }
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?label)
   BIND(IF(BOUND(?label) && ?label != "", ?label, ?none) AS ?caption)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -207,9 +207,10 @@ WHERE {
   OPTIONAL { $this c:primary ?primary FILTER(isIRI(?primary)) }
   OPTIONAL { $this c:secondary ?secondaryChild FILTER(isIRI(?secondaryChild)) }
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
   BIND(IF(BOUND(?caption) && ?caption != "", CONCAT("Resize ", ?caption), "Resize panes") AS ?resizeLabel)
   BIND(COALESCE(xsd:decimal(STR(?ratioRaw)), 0.5) AS ?ratio0)
@@ -242,6 +243,25 @@ WHERE {
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-min"))) AS ?dMinPx)
   BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider-data-sem-step"))) AS ?dStep)
 }""" .
+c:SplitViewRendering-sparql-text a sem:Rule ;
+    sem:implements c:SplitViewRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?primary , ?divider , ?secondary .
+  ?primary ord:precedes ?divider , ?secondary .
+  ?divider a rdfhtml:Text ; rdfhtml:data "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500" ; ord:precedes ?secondary .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:SplitView .
+  BIND(EXISTS { $this c:collapsed ?flag FILTER(STR(?flag) = "true") } AS ?collapsed)
+  OPTIONAL { $this c:primary ?primary0 FILTER(isIRI(?primary0)) }
+  OPTIONAL { $this c:secondary ?secondary0 FILTER(isIRI(?secondary0)) }
+  BIND(?primary0 AS ?primary)
+  BIND(IF(?collapsed, ?none, ?secondary0) AS ?secondary)
+  BIND(IF(?collapsed, ?none, IRI(CONCAT(STR($this), "/~divider"))) AS ?divider)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+}""" .
 
 # Dragging the divider (or an arrow key on it) sets the ratio: the new size over the room
 # there was, to three places, kept at least c:minSize (default 120 px) from either end
@@ -272,7 +292,7 @@ WHERE {
 # size is c:height (top and bottom) or c:width (start and end); c:expanded false folds it.
 
 c:DockPanel a owl:Class ;
-    rdfs:subClassOf sem:Component , c:Dockable ;
+    rdfs:subClassOf sem:Component , c:Foldable , c:Dockable ;
     rdfs:label "Dock panel"@en , "Прикріплена панель"@uk , "Angedocktes Panel"@de , "لوحة مثبتة"@ar ;
     rdfs:comment """A panel attached to an edge of its container (c:attachedTo, bottom by default; with
 c:overViewport true, of the viewport): a header with a fold control and title (c:label), a c:badge
@@ -332,9 +352,10 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:DockPanel .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
   BIND(IF(BOUND(?caption) && ?caption != "", ?caption, ?none) AS ?captionData)
   BIND(IF(BOUND(?captionData), CONCAT("Resize ", ?captionData), "Resize panel") AS ?resizeLabel)
@@ -370,7 +391,7 @@ WHERE {
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~handle-data-sem-min")), ?none) AS ?hMinPx)
   BIND(IRI(CONCAT(STR($this), "/~header")) AS ?header)
   BIND(IRI(CONCAT(STR($this), "/~fold")) AS ?fold)
-  BIND(IF(EXISTS { $this c:badge ?anyBadge FILTER(isLiteral(?anyBadge)) }, IRI(CONCAT(STR($this), "/~badge")), ?none) AS ?badgeRef)
+  BIND(IF(EXISTS { $this c:badge ?anyBadge FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick FILTER(STR(?l10nPick) = STR(?anyBadge)) }) FILTER(isLiteral(?anyBadge)) }, IRI(CONCAT(STR($this), "/~badge")), ?none) AS ?badgeRef)
   BIND(IRI(CONCAT(STR($this), "/~fold-aria-expanded")) AS ?fExpanded)
   BIND(IRI(CONCAT(STR($this), "/~fold-aria-controls")) AS ?fControls)
   BIND(IRI(CONCAT(STR($this), "/~chevron")) AS ?chevron)
@@ -383,7 +404,7 @@ WHERE {
   OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
   # The badge, the header actions (in order), the toolbar and the footer, each only if given.
   {} UNION {
-    $this c:badge ?badgeRaw FILTER(isLiteral(?badgeRaw))
+    $this c:badge ?badgeRaw FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick FILTER(STR(?l10nPick) = STR(?badgeRaw)) }) FILTER(isLiteral(?badgeRaw))
     BIND(STR(?badgeRaw) AS ?badgeData)
     BIND(IRI(CONCAT(STR($this), "/~badge")) AS ?badge)
     BIND(IRI(CONCAT(STR($this), "/~badge-text")) AS ?badgeText)
@@ -399,6 +420,33 @@ WHERE {
     $this c:footer ?footer FILTER(isIRI(?footer))
     BIND(IRI(CONCAT(STR($this), "/~footer")) AS ?footerWrap)
   }
+}""" .
+c:DockPanelRendering-sparql-text a sem:Rule ;
+    sem:implements c:DockPanelRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?caption , ?toolbar , ?content , ?footer .
+  ?caption a rdfhtml:Text ; rdfhtml:data ?line ; ord:precedes ?toolbar , ?content , ?footer .
+  ?toolbar ord:precedes ?content , ?footer .
+  ?content ord:precedes ?footer .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:DockPanel .
+  OPTIONAL { $this l10n:label ?picko }
+  OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) { $this l10n:label ?anyo } UNION { ?l10nAt_anyo l10n:of $this ; l10n:label ?anyo } } OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
+  BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
+  BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)
+  OPTIONAL { $this c:toolbar ?toolbar0 FILTER(isIRI(?toolbar0)) }
+  OPTIONAL { $this c:content ?content0 FILTER(isIRI(?content0)) }
+  OPTIONAL { $this c:footer ?footer0 FILTER(isIRI(?footer0)) }
+  BIND(IF(?open, ?toolbar0, ?none) AS ?toolbar)
+  BIND(IF(?open, ?content0, ?none) AS ?content)
+  BIND(IF(?open, ?footer0, ?none) AS ?footer)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~caption")) AS ?caption)
 }""" .
 
 # Dragging the free edge (or an arrow key on it) sets the panel's size along its axis: c:width
@@ -423,9 +471,3 @@ WHERE {
   BIND(xsd:integer(IF(?capped < ?min, ?min, ?capped)) AS ?size)
 }""" ;
     sem:function "panes:dock-resize" .
-
-# Its fold control (c:folds, as a c:StatusBar's) flips c:expanded.
-c:DockPanelFold a beh:Reaction ; beh:when beh:Click ; beh:sourceClass c:DockPanel ;
-    beh:deletes """CONSTRUCT { $this c:expanded ?e } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . $this c:expanded ?e }""" ;
-    beh:inserts """CONSTRUCT { $this c:expanded ?next } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:folds $this . OPTIONAL { $this c:expanded ?e } BIND(COALESCE(?e, true) = false AS ?next) }""" ;
-    sem:function "status-bar:fold" .

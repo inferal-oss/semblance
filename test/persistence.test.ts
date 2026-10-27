@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { NS } from '../src/ns.ts'
-import { type Backend, memoryBackend } from '../src/persistence.ts'
+import { type Backend, memoryBackend, Persistence } from '../src/persistence.ts'
 import { mountRemembering } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -79,5 +79,30 @@ describe('persistence (per:Policy)', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(await storage[PER + 'Session']!.get(key)).toBeUndefined()
     expect(a.store.match(f.namedNode(UI + 'rememberInspector'), f.namedNode(PER + 'request'), null)).toHaveLength(0)
+  })
+
+  it('restores a remembered subject that is not an IRI (a blank node)', async () => {
+    const storage = browser()
+    const nt = `_:run <${NS.c}recentOf> <${UI}palette> .\n_:run <${NS.rdfs}label> "Blank" .\n<${UI}knownRun> <${NS.c}recentOf> <${UI}palette> .\n`
+    await storage[PER + 'Device']!.set('semblance:' + UI + 'rememberPalette', JSON.stringify({ version: '1', savedAt: Date.now(), nt }))
+    const a = await mountRemembering(storage)
+    const f = a.store.factory
+    expect(a.persistence.restored(UI + 'rememberPalette')).toBe(true)
+    expect(a.store.match(f.namedNode(UI + 'knownRun'), f.namedNode(NS.c + 'recentOf'), f.namedNode(UI + 'palette'))).toHaveLength(1)
+    expect(a.store.match(null, f.namedNode(NS.rdfs + 'label'), f.literal('Blank'))).toHaveLength(1)
+  })
+
+  it('stopped, it drops a write waiting for its delay: none runs against a store released since', async () => {
+    const storage = browser()
+    const a = await mountRemembering(storage)
+    a.persistence.stop()
+    // A persistence of its own over the same shell, with a short delay.
+    const p = new Persistence(a.store, storage, { delayMs: 20 })
+    const stop = p.attach(a.runtime)
+    pressZ(a) // a remembered choice changes: a write is waiting
+    stop()
+    a.store.dispose?.()
+    await new Promise((r) => setTimeout(r, 60))
+    expect(await storage[PER + 'Session']!.get('semblance:' + UI + 'rememberInspector')).toBeUndefined()
   })
 })

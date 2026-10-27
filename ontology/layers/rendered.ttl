@@ -1,0 +1,200 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix rnd: <https://semblance.dev/ns/rendered#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Rendered state: what the page knows about a shown component and the graph does not - where it
+# is and how big, whether it is on screen, what it overlaps, whether it has the focus, is hovered
+# or pressed, how far it is scrolled, whether a native disclosure is open, whether it animates -
+# as triples one can query.
+#
+#   1. A component asks for it (rnd:observes, with the aspects it wants): it and every component
+#      shown inside it are observed (rnd:observesSelf: it alone). Nothing else is measured, so an
+#      app pays only for that. Geometry, visibility, scroll and open state are read every frame
+#      in which something may have moved; focus, hover, press and animation follow their events.
+#   2. The rendered-state effect (src/rendered.ts) measures the observed components once per
+#      frame in which something may have moved (a patch, a resize, a scroll, an animation's end),
+#      reading the whole batch before it writes anything, rounds to whole CSS pixels, and writes
+#      what changed to the rendered graph (urn:semblance:rendered). It never writes the DOM.
+#   3. The state is on a node of its own per component, rnd:State (<urn:semblance:rendered:…>,
+#      rnd:of the component), not on the component: no rule targets it, so a measurement re-runs
+#      no rendering. A rule that wants it reads it (sem:follows rnd:of … or a query). It is not
+#      recorded: nothing here enters the change log, so scrolling makes no history.
+#
+# Boxes are in document coordinates (scrolling the page moves none of them; the one rnd:Viewport
+# node says where the viewport is), so a box relative to the viewport is ?y - ?scrollTop. What moves
+# with the viewport (position: fixed: a docked window, a toast) is rnd:fixed and placed in viewport
+# coordinates instead, so scrolling moves no box at all.
+# Overlap (rnd:overlaps) is a maintained view over the boxes that ask for it, joined by the grid
+# cells they cover (rnd:cell), so moving one box costs its neighbours, not every box.
+
+<https://semblance.dev/ns/rendered> a owl:Ontology ;
+    rdfs:label "Semblance rendered state"@en .
+
+# --- asking for it -----------------------------------------------------------------------------------
+
+rnd:observes a owl:ObjectProperty ; rdfs:range rnd:Aspect ;
+    rdfs:label "observes"@en , "спостерігає"@uk , "beobachtet"@de , "يراقب"@ar ;
+    rdfs:comment """On a component: which aspects of the rendered state to keep in the graph for it and for every
+component shown inside it. Several values add up; so do nested scopes (an inner scope adds aspects
+to what its outer one asked for)."""@en .
+
+rnd:observesSelf a owl:ObjectProperty ; rdfs:range rnd:Aspect ;
+    rdfs:label "observes itself"@en , "спостерігає за собою"@uk , "beobachtet sich selbst"@de , "يراقب نفسه"@ar ;
+    rdfs:comment """On a component: aspects of the rendered state to keep for it alone, not for what it shows
+inside (a window's box, not those of everything in it). Adds to rnd:observes."""@en .
+
+rnd:Aspect a owl:Class ;
+    rdfs:label "Rendered aspect"@en , "Аспект відображення"@uk , "Darstellungsaspekt"@de , "جانب العرض"@ar ;
+    rdfs:comment "A kind of rendered state a scope can ask for (rnd:observes)."@en .
+
+rnd:Geometry a rnd:Aspect ;
+    rdfs:label "geometry"@en , "геометрія"@uk , "Geometrie"@de , "الهندسة"@ar ;
+    rdfs:comment "Where the component's box is and how big (rnd:x, rnd:y, rnd:width, rnd:height), and which observed components it is inside (rnd:within)."@en .
+rnd:Visibility a rnd:Aspect ;
+    rdfs:label "visibility"@en , "видимість"@uk , "Sichtbarkeit"@de , "الظهور"@ar ;
+    rdfs:comment "Whether it is rendered at all (rnd:rendered), in the viewport (rnd:inViewport), and how much of it (rnd:ratio)."@en .
+rnd:Overlap a rnd:Aspect ;
+    rdfs:label "overlap"@en , "перекриття"@uk , "Überlappung"@de , "التداخل"@ar ;
+    rdfs:comment "Geometry, plus which other such components its box overlaps (rnd:overlaps), neither inside the other."@en .
+rnd:Focus a rnd:Aspect ;
+    rdfs:label "focus"@en , "фокус"@uk , "Fokus"@de , "التركيز"@ar ;
+    rdfs:comment "Whether it holds the keyboard focus (rnd:focused, rnd:focusWithin, rnd:focusVisible)."@en .
+rnd:Hover a rnd:Aspect ;
+    rdfs:label "hover"@en , "наведення"@uk , "Überfahren"@de , "التمرير فوق"@ar ;
+    rdfs:comment "Whether the pointer is over it (rnd:hovered): the innermost observed component under the pointer only."@en .
+rnd:Press a rnd:Aspect ;
+    rdfs:label "press"@en , "натискання"@uk , "Drücken"@de , "الضغط"@ar ;
+    rdfs:comment "Whether a pointer is pressed on it (rnd:pressed): the innermost observed component pressed only."@en .
+rnd:Scroll a rnd:Aspect ;
+    rdfs:label "scroll"@en , "прокручування"@uk , "Bildlauf"@de , "التمرير"@ar ;
+    rdfs:comment "For a component that scrolls: how far (rnd:scrollTop, rnd:scrollLeft), its content's extent, and whether it is at the start or the end."@en .
+rnd:Open a rnd:Aspect ;
+    rdfs:label "open"@en , "відкритість"@uk , "Geöffnet"@de , "الفتح"@ar ;
+    rdfs:comment "For a component rendered as a native details, dialog or popover: whether it is open (rnd:open), and whether in the top layer (rnd:topLayer)."@en .
+rnd:Animation a rnd:Aspect ;
+    rdfs:label "animation"@en , "анімація"@uk , "Animation"@de , "الحركة"@ar ;
+    rdfs:comment "Whether a CSS animation or transition is running on it or inside it (rnd:animating)."@en .
+
+# --- what is written ------------------------------------------------------------------------------------
+
+rnd:State a owl:Class ;
+    rdfs:label "Rendered state"@en , "Стан відображення"@uk , "Darstellungszustand"@de , "حالة العرض"@ar ;
+    rdfs:comment """What the page says about one observed component (rnd:of), in the rendered graph. Its IRI is
+urn:semblance:rendered: and the component's IRI, percent-encoded. A property that is false or unknown
+for the moment is absent unless it says otherwise (rnd:rendered, rnd:inViewport, rnd:open, rnd:overflows,
+rnd:atStart and rnd:atEnd are written either way). A component observed only for the focus, the pointer
+or animation has a node only while one of those is true of it."""@en .
+rnd:of a owl:ObjectProperty ; rdfs:domain rnd:State ;
+    rdfs:label "of"@en , "чий"@uk , "von"@de , "لـ"@ar ;
+    rdfs:comment "The component this is the rendered state of."@en .
+
+rnd:x a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:integer ;
+    rdfs:label "x"@en , "x"@uk , "x"@de , "x"@ar ;
+    rdfs:comment "The left edge of its border box, in whole CSS pixels from the document's left edge (the viewport's, when rnd:fixed)."@en .
+rnd:y a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:integer ;
+    rdfs:label "y"@en , "y"@uk , "y"@de , "y"@ar ;
+    rdfs:comment "The top edge of its border box, in whole CSS pixels from the document's top (the viewport's, when rnd:fixed)."@en .
+rnd:fixed a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "fixed"@en , "закріплено"@uk , "fixiert"@de , "مثبّت"@ar ;
+    rdfs:comment "It moves with the viewport (it or what it is in is position: fixed): its box is in viewport coordinates, and it overlaps only boxes that are fixed too (present only while true)."@en .
+rnd:width a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:label "width"@en , "ширина"@uk , "Breite"@de , "العرض"@ar ;
+    rdfs:comment "On a state: its border box's width; on the viewport: the viewport's (whole CSS pixels)."@en .
+rnd:height a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:label "height"@en , "висота"@uk , "Höhe"@de , "الارتفاع"@ar ;
+    rdfs:comment "On a state: its border box's height; on the viewport: the viewport's (whole CSS pixels)."@en .
+rnd:within a owl:ObjectProperty ; rdfs:domain rnd:State ; rdfs:range rnd:State ;
+    rdfs:label "within"@en , "всередині"@uk , "innerhalb"@de , "داخل"@ar ;
+    rdfs:comment "Every observed component (with geometry) it is shown inside, at any depth."@en .
+rnd:cell a owl:DatatypeProperty ; rdfs:domain rnd:State ;
+    rdfs:comment """With rnd:Overlap: the grid cells its box covers ("column,row", 256 px squares of the document;
+"vcolumn,row" of the viewport when rnd:fixed), what the overlap view joins on."""@en .
+
+rnd:rendered a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "rendered"@en , "відображено"@uk , "dargestellt"@de , "معروض"@ar ;
+    rdfs:comment "Whether it generates a box at all: false when it, or an ancestor, is display:none or hidden, or it has no size."@en .
+rnd:inViewport a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "in the viewport"@en , "у полі зору"@uk , "im Sichtbereich"@de , "في نافذة العرض"@ar ;
+    rdfs:comment "Whether any of it is in the viewport (clipped by the ancestors that scroll, where the host can tell)."@en .
+rnd:ratio a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:decimal ;
+    rdfs:label "visible part"@en , "видима частка"@uk , "sichtbarer Anteil"@de , "الجزء الظاهر"@ar ;
+    rdfs:comment "How much of its box is in the viewport, 0 to 1, in quarters (0, 0.25, 0.5, 0.75, 1)."@en .
+
+rnd:overlaps a owl:ObjectProperty , owl:SymmetricProperty ; rdfs:domain rnd:State ; rdfs:range rnd:State ;
+    rdfs:label "overlaps"@en , "перекриває"@uk , "überlappt"@de , "يتداخل مع"@ar ;
+    rdfs:comment "Their boxes share some area and neither is inside the other (rnd:within); both in the document, or both fixed to the viewport. Derived (rnd:Overlaps), in the views graph, both ways."@en .
+
+rnd:focused a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "focused"@en , "у фокусі"@uk , "fokussiert"@de , "مُركَّز"@ar ;
+    rdfs:comment "It is the innermost observed component holding the focus (present only while true)."@en .
+rnd:focusWithin a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "focus within"@en , "фокус усередині"@uk , "Fokus innerhalb"@de , "التركيز بداخله"@ar ;
+    rdfs:comment "The focus is on it or inside it (present only while true)."@en .
+rnd:focusVisible a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "focus shown"@en , "фокус показано"@uk , "Fokus sichtbar"@de , "التركيز ظاهر"@ar ;
+    rdfs:comment "On the focused state: the browser shows a focus ring (:focus-visible, the focus came from the keyboard)."@en .
+rnd:hovered a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "hovered"@en , "під курсором"@uk , "überfahren"@de , "تحت المؤشر"@ar ;
+    rdfs:comment "The pointer is over it, and over no observed component inside it (present only while true)."@en .
+rnd:pressed a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "pressed"@en , "натиснуто"@uk , "gedrückt"@de , "مضغوط"@ar ;
+    rdfs:comment "A pointer went down on it and is not up yet (present only while true)."@en .
+
+rnd:scrollTop a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:label "scrolled down by"@en , "прокручено вниз на"@uk , "nach unten gescrollt um"@de , "مُمرَّر لأسفل بمقدار"@ar ;
+    rdfs:comment "How far its content is scrolled along the block axis, in CSS pixels, in steps of 8."@en .
+rnd:scrollLeft a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:label "scrolled across by"@en , "прокручено вбік на"@uk , "seitlich gescrollt um"@de , "مُمرَّر جانبيًا بمقدار"@ar ;
+    rdfs:comment "How far its content is scrolled along the inline axis, in CSS pixels, in steps of 8 (negative when the content starts on the right, as in Arabic)."@en .
+rnd:scrollHeight a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "Its content's height (whole CSS pixels)."@en .
+rnd:scrollWidth a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "Its content's width (whole CSS pixels)."@en .
+rnd:overflows a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "overflows"@en , "переповнено"@uk , "läuft über"@de , "يفيض"@ar ;
+    rdfs:comment "Its content is bigger than it is: it can scroll."@en .
+rnd:atStart a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "at the start"@en , "на початку"@uk , "am Anfang"@de , "في البداية"@ar ;
+    rdfs:comment "Scrolled to the start along the block axis (nothing above)."@en .
+rnd:atEnd a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:label "at the end"@en , "у кінці"@uk , "am Ende"@de , "في النهاية"@ar ;
+    rdfs:comment "Scrolled to the end along the block axis (nothing below)."@en .
+
+rnd:open a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "open"@en , "відкрито"@uk , "geöffnet"@de , "مفتوح"@ar ;
+    rdfs:comment "Its native details or dialog is open, or its popover is showing (absent for other elements)."@en .
+rnd:topLayer a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "in the top layer"@en , "у верхньому шарі"@uk , "in der obersten Ebene"@de , "في الطبقة العليا"@ar ;
+    rdfs:comment "It is drawn above the page: a modal dialog, a showing popover, or fullscreen (present only while true)."@en .
+rnd:animating a owl:DatatypeProperty ; rdfs:domain rnd:State ; rdfs:range xsd:boolean ;
+    rdfs:label "animating"@en , "анімується"@uk , "animiert"@de , "متحرك"@ar ;
+    rdfs:comment "A CSS animation or transition is running on it or inside it (present only while true)."@en .
+
+rnd:Viewport a owl:Class ;
+    rdfs:label "Viewport"@en , "Поле зору"@uk , "Sichtbereich"@de , "نافذة العرض"@ar ;
+    rdfs:comment """The part of the document on screen, one node (<urn:semblance:rendered:viewport>): rnd:width, rnd:height,
+rnd:scrollTop and rnd:scrollLeft (whole CSS pixels; the page's own scroll is not stepped, so a box's
+place in the viewport is exact). Written while anything is observed."""@en .
+
+# --- overlap ------------------------------------------------------------------------------------------
+# A join of the boxes on the cells they cover: a box that moves is compared with the boxes in its
+# cells only. A pair that shares several cells is one pair (CONSTRUCT is a set).
+
+rnd:Overlaps a iv:View ;
+    rdfs:label "overlapping components"@en , "компоненти, що перекриваються"@uk , "überlappende Komponenten"@de , "مكوّنات متداخلة"@ar ;
+    sem:construct """
+CONSTRUCT { ?a rnd:overlaps ?b }
+WHERE {
+  ?a rnd:cell ?cell .
+  ?b rnd:cell ?cell .
+  FILTER(?a != ?b)
+  ?a rnd:x ?ax ; rnd:y ?ay ; rnd:width ?aw ; rnd:height ?ah .
+  ?b rnd:x ?bx ; rnd:y ?by ; rnd:width ?bw ; rnd:height ?bh .
+  FILTER(?ax < ?bx + ?bw && ?bx < ?ax + ?aw && ?ay < ?by + ?bh && ?by < ?ay + ?ah)
+  FILTER NOT EXISTS { ?a rnd:within ?b }
+  FILTER NOT EXISTS { ?b rnd:within ?a }
+}""" .

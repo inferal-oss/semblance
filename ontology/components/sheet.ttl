@@ -97,8 +97,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~tools")) AS ?tools)
   BIND(IRI(CONCAT(STR($this), "/~add-row")) AS ?addRow)
   BIND(IRI(CONCAT(STR($this), "/~add-column")) AS ?addColumn)
-  OPTIONAL { c:AddRowPhrase rdfs:label ?rowPhrase FILTER(langMatches(lang(?rowPhrase), "en")) }
-  OPTIONAL { c:AddColumnPhrase rdfs:label ?columnPhrase FILTER(langMatches(lang(?columnPhrase), "en")) }
+  OPTIONAL { ?l10nAt_rowPhrase l10n:of c:AddRowPhrase ; l10n:name ?rowPhrase } OPTIONAL { c:AddRowPhrase rdfs:label ?rowPhrase FILTER(langMatches(lang(?rowPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AddRowPhrase ; l10n:name ?l10nPick }) }
+  OPTIONAL { ?l10nAt_columnPhrase l10n:of c:AddColumnPhrase ; l10n:name ?columnPhrase } OPTIONAL { c:AddColumnPhrase rdfs:label ?columnPhrase FILTER(langMatches(lang(?columnPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AddColumnPhrase ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?rowPhrase, "Add a row")) AS ?rowLabel)
   BIND(STR(COALESCE(?columnPhrase, "Add a column")) AS ?columnLabel)
   BIND(IF(?columns >= 26, true, ?none) AS ?full)
@@ -110,7 +110,66 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~corner")) AS ?corner)
   BIND(IRI(CONCAT(STR($this), "/~links")) AS ?links)
   BIND(CONCAT("grid-template-columns: 44px repeat(", STR(?columns), ", 104px)") AS ?gridStyle)
-  OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) }
+  OPTIONAL { { $this l10n:label ?label0 } UNION { ?l10nAt_label0 l10n:of $this ; l10n:label ?label0 } } OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  BIND(STR(COALESCE(?label0, "Sheet")) AS ?label)
+  LATERAL { {
+    # Column letters.
+    VALUES ?c { 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 }
+    FILTER(?c <= ?columns)
+    BIND(SUBSTR("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ?c, 1) AS ?headerData)
+    BIND(IRI(CONCAT(STR($this), "/~col-", ?headerData)) AS ?header)
+    BIND(IRI(CONCAT(STR($this), "/~col-", ?headerData, "-text")) AS ?headerText)
+    BIND(CONCAT("grid-row: 1; grid-column: ", STR(?c + 1)) AS ?headerStyle)
+    BIND(CONCAT("000.", SUBSTR(CONCAT("000", STR(?c)), STRLEN(STR(?c)) + 1)) AS ?headerKey)
+  } UNION {
+    # Row numbers, for the rows that have cells.
+    SELECT DISTINCT ?header ?headerText ?headerData ?headerStyle ?headerKey WHERE {
+      $this c:cell/c:row ?r .
+      BIND(STR(?r) AS ?headerData)
+      BIND(IRI(CONCAT(STR($this), "/~row-", ?headerData)) AS ?header)
+      BIND(IRI(CONCAT(STR($this), "/~row-", ?headerData, "-text")) AS ?headerText)
+      BIND(CONCAT("grid-row: ", STR(?r + 1), "; grid-column: 1") AS ?headerStyle)
+      BIND(CONCAT(SUBSTR(CONCAT("000", ?headerData), STRLEN(?headerData) + 1), ".000") AS ?headerKey)
+    }
+  } UNION {
+    # The cells, in reading order.
+    $this c:cell ?cell . ?cell c:row ?r ; c:column ?c .
+    BIND(CONCAT(SUBSTR(CONCAT("000", STR(?r)), STRLEN(STR(?r)) + 1), ".", SUBSTR(CONCAT("000", STR(?c)), STRLEN(STR(?c)) + 1)) AS ?cellKey)
+  } }
+}""" .
+c:SheetRendering-sparql-text a sem:Rule ;
+    sem:implements c:SheetRendering ;
+    # As on screen, without the controls above the grid.
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?bar , ?scroll , ?status .
+  ?bar a rdfhtml:P ; rdfhtml:class "sem-sheet-bar" ; ord:immediatelyPrecedes ?scroll .
+  ?scroll a rdfhtml:Div ; rdfhtml:class "sem-sheet-scroll" ; rdfhtml:hasChild ?grid ; ord:immediatelyPrecedes ?status .
+  ?status a rdfhtml:P ; rdfhtml:class "sem-sheet-status" ; rdfhtml:attribute ?live .
+  ?live a rdfhtml:Attribute ; rdfhtml:attributeName "aria-live" ; rdfhtml:attributeValue "polite" .
+  ?grid a rdfhtml:Div ; rdfhtml:class "sem-sheet-grid" ; rdfhtml:style ?gridStyle ; rdfhtml:attribute ?gridLabel ;
+        rdfhtml:hasChild ?corner , ?header , ?cell , ?links .
+  ?gridLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?corner a rdfhtml:Div ; rdfhtml:class "sem-sheet-corner" ; sem:orderKey "000.000" .
+  ?header a rdfhtml:Div ; rdfhtml:class "sem-sheet-head" ; rdfhtml:style ?headerStyle ; sem:orderKey ?headerKey ; rdfhtml:hasChild ?headerText .
+  ?headerText a rdfhtml:Text ; rdfhtml:data ?headerData .
+  ?cell sem:orderKey ?cellKey .
+  ?links a rdfhtml:Div ; rdfhtml:class "sem-sheet-links" ; sem:orderKey "999.999" .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Sheet ; c:columns ?columns .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~bar")) AS ?bar)
+  BIND(IRI(CONCAT(STR($this), "/~scroll")) AS ?scroll)
+  BIND(IRI(CONCAT(STR($this), "/~status")) AS ?status)
+  BIND(IRI(CONCAT(STR($this), "/~status-aria-live")) AS ?live)
+  BIND(IRI(CONCAT(STR($this), "/~grid")) AS ?grid)
+  BIND(IRI(CONCAT(STR($this), "/~grid-aria-label")) AS ?gridLabel)
+  BIND(IRI(CONCAT(STR($this), "/~corner")) AS ?corner)
+  BIND(IRI(CONCAT(STR($this), "/~links")) AS ?links)
+  BIND(CONCAT("grid-template-columns: 44px repeat(", STR(?columns), ", 104px)") AS ?gridStyle)
+  OPTIONAL { { $this l10n:label ?label0 } UNION { ?l10nAt_label0 l10n:of $this ; l10n:label ?label0 } } OPTIONAL { $this c:label ?label0 FILTER(isLiteral(?label0)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?label0, "Sheet")) AS ?label)
   LATERAL { {
     # Column letters.
@@ -144,7 +203,7 @@ c:SheetCellRendering a sem:Rendering ; sem:targets c:SheetCell ; sem:stratum 0 .
 c:SheetCellRendering-fn a sem:Rule ; sem:implements c:SheetCellRendering ; sem:function "sheet:cell" .
 c:SheetCellRendering-sparql a sem:Rule ;
     sem:implements c:SheetCellRendering ;
-    sem:modality mod:Screen ;
+    # Like the function, the same in every modality.
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class "sem-cell" ; rdfhtml:style ?style ; rdfhtml:hasChild ?content ;

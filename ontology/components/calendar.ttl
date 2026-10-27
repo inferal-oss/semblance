@@ -5,6 +5,7 @@
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix ann: <https://semblance.dev/ns/announce#> .
 @prefix dnd: <https://semblance.dev/ns/dragdrop#> .
+@prefix l10n: <https://semblance.dev/ns/l10n#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -125,7 +126,8 @@ WHERE {
   {
     # The table, named by the calendar's label, as wide as its days; and the header row's corner.
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") }
+    OPTIONAL { ?ownLabelAt l10n:of $this ; l10n:label ?ownLabel }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     BIND(STR(COALESCE(?localLabel, ?ownLabel)) AS ?label)
     BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~grid-aria-label")), ?none) AS ?gridName)
     BIND(IRI(CONCAT(STR($this), "/~grid-role")) AS ?gridRole)
@@ -144,7 +146,8 @@ WHERE {
     # A column header per day.
     ?dayP rdfs:range ?range . ?day a ?range FILTER(isIRI(?day))
     OPTIONAL { ?day sem:order ?dayOrder0 }
-    OPTIONAL { ?day rdfs:label ?dayPlain FILTER(lang(?dayPlain) = "") }
+    OPTIONAL { ?dayPlainAt l10n:of ?day ; l10n:name ?dayPlain }
+  OPTIONAL { ?day rdfs:label ?dayPlain FILTER(lang(?dayPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?day ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(xsd:double(?dayOrder0), 0)) AS ?cellKey)
     BIND(STR(COALESCE(?dayPlain, REPLACE(STR(?day), "^.*[#/]", ""))) AS ?cellData)
     BIND(CONCAT("day-", ENCODE_FOR_URI(STR(?day))) AS ?dayKey)
@@ -182,7 +185,7 @@ WHERE {
     BIND("cell" AS ?cellRoleName)
     BIND(?cell AS ?zone)
     BIND(IRI(CONCAT(STR($this), "/~slot-", ENCODE_FOR_URI(STR(?day)), "-", STR(?h))) AS ?slot)
-    OPTIONAL { ?day rdfs:label ?slotDayPlain FILTER(lang(?slotDayPlain) = "") }
+    OPTIONAL { ?l10nAt_slotDayPlain l10n:of ?day ; l10n:name ?slotDayPlain } OPTIONAL { ?day rdfs:label ?slotDayPlain FILTER(lang(?slotDayPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?day ; l10n:name ?l10nPick }) }
     BIND(CONCAT(STR(COALESCE(?slotDayPlain, REPLACE(STR(?day), "^.*[#/]", ""))), " ", IF(?h < 10, "0", ""), STR(?h), ":00") AS ?slotLabel)
   } UNION {
     # Each item, in the cell of its day and start hour: where it starts in it, how long it is,
@@ -250,7 +253,8 @@ WHERE {
   {
     ?dayP rdfs:range ?range . ?day a ?range FILTER(isIRI(?day))
     OPTIONAL { ?day sem:order ?dayOrder0 }
-    OPTIONAL { ?day rdfs:label ?dayPlain FILTER(lang(?dayPlain) = "") }
+    OPTIONAL { ?dayPlainAt l10n:of ?day ; l10n:name ?dayPlain }
+  OPTIONAL { ?day rdfs:label ?dayPlain FILTER(lang(?dayPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?day ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(xsd:double(?dayOrder0), 0)) AS ?dayKey)
     BIND(CONCAT("## ", STR(COALESCE(?dayPlain, REPLACE(STR(?day), "^.*[#/]", "")))) AS ?heading)
     BIND(IRI(CONCAT(STR($this), "/~day-", ENCODE_FOR_URI(STR(?day)))) AS ?dayEl)
@@ -309,12 +313,14 @@ WHERE {
   ?cal c:startProperty ?startP . ?item ?startP ?start0 .
   OPTIONAL { ?cal c:durationProperty ?durP . ?item ?durP ?dur0 }
   OPTIONAL { ?cal c:entryTitle ?titleP . ?item ?titleP ?title0 }
-  OPTIONAL { ?cal c:entryDetail ?detailP . ?item ?detailP ?detailValue . OPTIONAL { ?detailValue rdfs:label ?detailPlain FILTER(lang(?detailPlain) = "") } }
+  OPTIONAL { ?cal c:entryDetail ?detailP . ?item ?detailP ?detailValue . OPTIONAL { ?detailPlainAt l10n:of ?detailValue ; l10n:name ?detailPlain }
+  OPTIONAL { ?detailValue rdfs:label ?detailPlain FILTER(lang(?detailPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?detailValue ; l10n:name ?l10nPick }) } }
   LATERAL { OPTIONAL { SELECT ?this ?cal (MIN(?rivalTitle) AS ?firstRival) (COUNT(DISTINCT ?rival) AS ?rivals) WHERE {
     $this c:conflictsWith ?rival . OPTIONAL { ?cal c:entryTitle ?titleP2 . ?rival ?titleP2 ?rivalTitle0 }
     BIND(STR(COALESCE(?rivalTitle0, REPLACE(STR(?rival), "^.*[#/]", ""))) AS ?rivalTitle)
   } GROUP BY ?this ?cal } }
-  OPTIONAL { c:OverlapsPhrase rdfs:label ?overlapsPhrase FILTER(langMatches(lang(?overlapsPhrase), "en")) }
+  OPTIONAL { ?overlapsPhraseAt l10n:of c:OverlapsPhrase ; l10n:name ?overlapsPhrase }
+  OPTIONAL { c:OverlapsPhrase rdfs:label ?overlapsPhrase FILTER(langMatches(lang(?overlapsPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:OverlapsPhrase ; l10n:name ?l10nPick }) }
   BIND(xsd:integer(ROUND(xsd:decimal(?start0) * 60)) AS ?sm)
   BIND(?sm + xsd:integer(ROUND(COALESCE(xsd:decimal(?dur0), 1) * 60)) AS ?em)
   BIND(xsd:integer(FLOOR(?sm / 60)) AS ?sh) BIND(?sm - ?sh * 60 AS ?smin)
@@ -356,12 +362,14 @@ WHERE {
   ?cal c:startProperty ?startP . ?item ?startP ?start0 .
   OPTIONAL { ?cal c:durationProperty ?durP . ?item ?durP ?dur0 }
   OPTIONAL { ?cal c:entryTitle ?titleP . ?item ?titleP ?title0 }
-  OPTIONAL { ?cal c:entryDetail ?detailP . ?item ?detailP ?detailValue . OPTIONAL { ?detailValue rdfs:label ?detailPlain FILTER(lang(?detailPlain) = "") } }
+  OPTIONAL { ?cal c:entryDetail ?detailP . ?item ?detailP ?detailValue . OPTIONAL { ?detailPlainAt l10n:of ?detailValue ; l10n:name ?detailPlain }
+  OPTIONAL { ?detailValue rdfs:label ?detailPlain FILTER(lang(?detailPlain) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?detailValue ; l10n:name ?l10nPick }) } }
   LATERAL { OPTIONAL { SELECT ?this ?cal (MIN(?rivalTitle) AS ?firstRival) (COUNT(DISTINCT ?rival) AS ?rivals) WHERE {
     $this c:conflictsWith ?rival . OPTIONAL { ?cal c:entryTitle ?titleP2 . ?rival ?titleP2 ?rivalTitle0 }
     BIND(STR(COALESCE(?rivalTitle0, REPLACE(STR(?rival), "^.*[#/]", ""))) AS ?rivalTitle)
   } GROUP BY ?this ?cal } }
-  OPTIONAL { c:OverlapsPhrase rdfs:label ?overlapsPhrase FILTER(langMatches(lang(?overlapsPhrase), "en")) }
+  OPTIONAL { ?overlapsPhraseAt l10n:of c:OverlapsPhrase ; l10n:name ?overlapsPhrase }
+  OPTIONAL { c:OverlapsPhrase rdfs:label ?overlapsPhrase FILTER(langMatches(lang(?overlapsPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:OverlapsPhrase ; l10n:name ?l10nPick }) }
   BIND(xsd:integer(ROUND(xsd:decimal(?start0) * 60)) AS ?sm)
   BIND(?sm + xsd:integer(ROUND(COALESCE(xsd:decimal(?dur0), 1) * 60)) AS ?em)
   BIND(xsd:integer(FLOOR(?sm / 60)) AS ?sh) BIND(?sm - ?sh * 60 AS ?smin)
@@ -381,6 +389,11 @@ WHERE {
 # c:exclusiveBy shape (moved there: the slot's hour, its own minutes, its length), and every other value of
 # that property it would overlap one in where it is now (another room, booked then), object to it
 # with the shape's message. The drag and drop layer refuses a drop on what objects.
+
+# Why a slot objects when the c:exclusiveBy shape gives no message.
+c:OverlapPhrase a c:Phrase ;
+    rdfs:label "It would overlap another booking."@en , "Це перетнеться з іншим бронюванням."@uk ,
+               "Das würde sich mit einer anderen Buchung überschneiden."@de , "سيتداخل مع حجز آخر."@ar .
 
 c:CalendarObjections a sem:Rendering ;
     sem:targets c:Calendar ;
@@ -403,8 +416,10 @@ WHERE {
   BIND(COALESCE(xsd:integer(?to0), 18) AS ?to)
   ?shape c:exclusiveBy ?ex ; sh:targetClass ?cls .
   ?x a ?cls ; ?ex ?held ; ?dayP ?xDay ; ?startP ?xStart0 .
-  OPTIONAL { ?shape sh:message ?message0 FILTER(lang(?message0) = "") }
-  BIND(STR(COALESCE(?message0, "It would overlap another booking.")) AS ?reason)
+  OPTIONAL { ?message0At l10n:of ?shape ; l10n:message ?message0 }
+  OPTIONAL { ?shape sh:message ?message0 FILTER(lang(?message0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?shape ; l10n:message ?l10nPick }) }
+  OPTIONAL { ?overlapAt l10n:of c:OverlapPhrase ; l10n:name ?overlap0 }
+  BIND(STR(COALESCE(?message0, ?overlap0, "It would overlap another booking.")) AS ?reason)
   OPTIONAL { $this c:durationProperty ?durP . ?x ?durP ?xDur0 }
   BIND(xsd:integer(ROUND(xsd:decimal(?xStart0) * 60)) AS ?xsm)
   BIND(xsd:integer(ROUND(COALESCE(xsd:decimal(?xDur0), 1) * 60)) AS ?xdm)

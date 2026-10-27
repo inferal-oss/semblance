@@ -1,0 +1,81 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ui: <https://semblance.dev/demo#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix lib: <https://semblance.dev/demo/library#> .
+
+# Data gallery: an RDF document as a tree (c:RdfEditor). A small library: two books and their
+# author, with a nested edition (a blank node), a list of keywords, and what is said about one
+# statement (an RDF 1.2 reifier: where the authorship comes from). Arrows show the links of the
+# current resource; the field above jumps to any resource of the document.
+
+ui:dt-rdf-prefixes sh:declare [ sh:prefix "lib" ; sh:namespace "https://semblance.dev/demo/library#"^^xsd:anyURI ] .
+
+lib:Book a owl:Class ; rdfs:label "Book"@en , "Книга"@uk , "Buch"@de , "كتاب"@ar .
+lib:Person a owl:Class ; rdfs:label "Person"@en , "Особа"@uk , "Person"@de , "شخص"@ar .
+lib:title a owl:DatatypeProperty ; rdfs:label "title"@en , "назва"@uk , "Titel"@de , "العنوان"@ar .
+lib:author a owl:ObjectProperty ; rdfs:label "author"@en , "автор"@uk , "Autor"@de , "المؤلف"@ar .
+lib:published a owl:DatatypeProperty ; rdfs:label "published"@en , "видано"@uk , "erschienen"@de , "نُشر"@ar .
+lib:pages a owl:DatatypeProperty ; rdfs:label "pages"@en , "сторінок"@uk , "Seiten"@de , "الصفحات"@ar .
+lib:keywords a owl:ObjectProperty ; rdfs:label "keywords"@en , "ключові слова"@uk , "Schlagwörter"@de , "الكلمات المفتاحية"@ar .
+lib:edition a owl:ObjectProperty ; rdfs:label "edition"@en , "видання"@uk , "Ausgabe"@de , "الطبعة"@ar .
+lib:publisher a owl:DatatypeProperty ; rdfs:label "publisher"@en , "видавець"@uk , "Verlag"@de , "الناشر"@ar .
+lib:year a owl:DatatypeProperty ; rdfs:label "year"@en , "рік"@uk , "Jahr"@de , "السنة"@ar .
+lib:born a owl:DatatypeProperty ; rdfs:label "born"@en , "народилася"@uk , "geboren"@de , "وُلدت"@ar .
+lib:source a owl:ObjectProperty ; rdfs:label "source"@en , "джерело"@uk , "Quelle"@de , "المصدر"@ar .
+
+lib:dispossessed a lib:Book ;
+    lib:title "The Dispossessed"@en , "Знедолені"@uk ;
+    lib:author lib:ursula ~ lib:authorship {| lib:source <https://www.wikidata.org/wiki/Q1213434> |} ;
+    lib:published "1974"^^xsd:gYear ;
+    lib:pages 387 ;
+    lib:keywords ( "anarchism" "physics" "utopia" ) ;
+    lib:edition [ lib:publisher "Harper & Row" ; lib:year 1974 ] .
+lib:earthsea a lib:Book ;
+    lib:title "A Wizard of Earthsea"@en ;
+    lib:author lib:ursula ;
+    lib:pages 183 .
+lib:ursula a lib:Person ;
+    rdfs:label "Ursula K. Le Guin" ;
+    lib:born "1929-10-21"^^xsd:date .
+
+# What a book and a person should say (SHACL): shown inline while the Validate switch is on.
+lib:BookShape a sh:NodeShape ; sh:targetClass lib:Book ;
+    sh:property [ sh:path lib:title ; sh:minCount 1 ] ,
+                [ sh:path lib:author ; sh:minCount 1 ; sh:class lib:Person ] ,
+                [ sh:path lib:published ; sh:minCount 1 ;
+                  sh:message "When was it published?"@en , "Коли видано?"@uk , "Wann erschienen?"@de , "متى نُشر؟"@ar ] ,
+                [ sh:path lib:pages ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .
+lib:PersonShape a sh:NodeShape ; sh:targetClass lib:Person ;
+    sh:property [ sh:path lib:born ; sh:datatype xsd:date ] .
+
+ui:dt-rdf-editor a c:RdfEditor ;
+    c:label "Library"@en , "Бібліотека"@uk , "Bibliothek"@de , "المكتبة"@ar ;
+    c:entry lib:dispossessed , lib:earthsea , lib:ursula ;
+    c:arrows c:ArrowsCurrent ;
+    c:current lib:dispossessed .
+ui:dt-rdf-arrows a c:Segmented ; c:controls ui:dt-rdf-editor ; c:property c:arrows ;
+    c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
+ui:dt-rdf-jump a c:Combobox ; c:controls ui:dt-rdf-editor ; c:property c:current ; c:optionsFrom ui:dt-rdf-editor ;
+    c:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar .
+ui:dt-rdf-editable a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:editable ;
+    c:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
+ui:dt-rdf-validate a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:validated ;
+    c:label "Validate"@en , "Перевіряти"@uk , "Prüfen"@de , "تحقّق"@ar .
+ui:dt-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Ghost ;
+    c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
+ui:dt-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-rdf-arrows ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-validate ui:dt-rdf-undo ) .
+
+ui:dt-rdf a c:Flippable ; c:front ui:dt-rdf-spec .
+ui:dt-rdf-spec a c:Specimen ; c:demonstrates c:RdfEditor ; c:label "RDF editor" ;
+    c:help "An RDF document as a tree: each resource, its predicates beside their objects, and what nests nested - a blank node, a list, what is said about a statement (an RDF 1.2 reifier, after ~). An object that is a resource of the document jumps to it; a class or a property goes to the Reference. Arrows join links to their resources: off, all, or the current resource's. Rows are minted level by level, so a change re-renders the rows of its subject only. Arrow keys move through the tree; Right opens, Left closes, Enter follows a link. Switched to editing, Enter (or a double click) edits a term in place, in Turtle (text without quotes keeps the datatype and language), Shift+Enter adds a statement, Delete removes one, Escape leaves a field; every edit is one undoable change. Switched to validating, what does not conform to the SHACL shapes shows inline, on the value, the predicate or the resource it is about, and goes when it is fixed." ;
+    c:children ( ui:dt-rdf-controls ui:dt-rdf-editor ) .

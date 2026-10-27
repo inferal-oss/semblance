@@ -5,13 +5,11 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { mint } from '../rdf.ts'
 import { C, DND, NS, RDF_TYPE, RDFS_SUBCLASS, VAL, XSD_INTEGER } from '../ns.ts'
-import { named, RDFS_LABEL, rdfList, text } from '../components/util.ts'
+import { named, RDFS_LABEL, rdfList, text, encodeForUri } from '../components/util.ts'
 
 const SH = NS.sh
 const XSD_DECIMAL = NS.xsd + 'decimal'
 
-/** SPARQL's ENCODE_FOR_URI (encodeURIComponent keeps !'()*), so minted keys match the SPARQL rules'. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 const local = (t: Term) => t.value.replace(/^.*[#/]/, '')
 type Reader = { match(s: Term | null, p: string | null, o: Term | null): Quad[] }
 const objects = (ctx: Reader, s: Term, p: string) => ctx.match(s, p, null).map((q) => q.object)
@@ -21,6 +19,18 @@ const plain = (ctx: Reader, s: Term, p: string) =>
     .filter((t) => t.termType === 'Literal' && t.language === '')
     .map((t) => t.value)
     .sort()
+
+/**
+ * A shape's sh:message as the SPARQL rules read it: in the viewer's language when it has
+ * translations (its l10n:Terms twin, which only named nodes get), else its untagged one.
+ */
+export function messageOf(ctx: RuleContext, shape: Term): string | undefined {
+  const values = new Set(objects(ctx, shape, SH + 'message').filter((t) => t.termType === 'Literal').map((t) => t.value + '@' + (t as { language?: string }).language))
+  return shape.termType === 'NamedNode' && values.size > 1 ? text(ctx, shape, SH + 'message') : plain(ctx, shape, SH + 'message')[0]
+}
+
+/** A phrase in the viewer's language (dnd:UnfitPhrase, dnd:NoRoomPhrase), else its English source. */
+const said = (ctx: RuleContext, phrase: string, english: string) => text(ctx, ctx.nn(NS.dnd + phrase), RDFS_LABEL) ?? english
 
 /** The node a target's reception of a receptacle is minted as (also read by the host). */
 export const receptionOf = (target: string, receptacle: string) => mint(target, 'drop-' + encodeForUri(receptacle))
@@ -79,11 +89,11 @@ function fieldShapes(ctx: RuleContext, focus: NamedNode): Term[] {
 
 /** The least message of the target's dnd:accepts shapes (and its field shape's sh:node) that `x` violates, if any. */
 function unfit(ctx: RuleContext, focus: NamedNode, x: Term, receptacle?: Term): string | undefined {
-  const said: string[] = []
+  const reasons: string[] = []
   // The target's shapes, the receptacle's own (a folder says what it takes), and what its field shape says of each member.
   const shapes = [...ctx.objects(focus, DND.accepts), ...(receptacle ? ctx.objects(receptacle, DND.accepts) : []), ...fieldShapes(ctx, focus).flatMap((f) => ctx.objects(f, SH + 'node'))]
   for (const shape of shapes) {
-    const fail = (violated: Term) => said.push(plain(ctx, violated, SH + 'message')[0] ?? plain(ctx, shape, SH + 'message')[0] ?? 'It does not belong here.')
+    const fail = (violated: Term) => reasons.push(messageOf(ctx, violated) ?? messageOf(ctx, shape) ?? said(ctx, 'UnfitPhrase', 'It does not belong here.'))
     for (const cls of ctx.objects(shape, SH + 'class')) if (!instanceOf(ctx, x, cls.value)) fail(shape)
     for (const ps of ctx.objects(shape, SH + 'property')) {
       for (const p of ctx.objects(ps, SH + 'path').filter(named)) {
@@ -116,7 +126,7 @@ function unfit(ctx: RuleContext, focus: NamedNode, x: Term, receptacle?: Term): 
       }
     }
   }
-  return said.sort()[0]
+  return reasons.sort()[0]
 }
 
 /** A receptacle's capacity: the least sh:maxCount of the shapes on it over the target's membership path, and the least message. */
@@ -124,7 +134,7 @@ function capacityOf(ctx: RuleContext, focus: NamedNode, receptacle: Term): { max
   const memberOf = ctx.objects(focus, DND.memberOf)
   const members = ctx.objects(focus, DND.members)
   const bounds: number[] = []
-  const said: string[] = []
+  const reasons: string[] = []
   for (const q of ctx.match(null, SH + 'targetNode', receptacle)) {
     for (const ps of ctx.objects(q.subject, SH + 'property')) {
       const paths = ctx.objects(ps, SH + 'path')
@@ -133,7 +143,7 @@ function capacityOf(ctx: RuleContext, focus: NamedNode, receptacle: Term): { max
       for (const bound of ctx.objects(ps, SH + 'maxCount')) {
         for (let i = 0; i < matches; i++) {
           bounds.push(Number(bound.value))
-          said.push(plain(ctx, ps, SH + 'message')[0] ?? plain(ctx, q.subject, SH + 'message')[0] ?? 'There is no room for it here.')
+          reasons.push(messageOf(ctx, ps) ?? messageOf(ctx, q.subject) ?? said(ctx, 'NoRoomPhrase', 'There is no room for it here.'))
         }
       }
     }
@@ -142,10 +152,10 @@ function capacityOf(ctx: RuleContext, focus: NamedNode, receptacle: Term): { max
   for (const field of fieldShapes(ctx, focus)) {
     for (const bound of ctx.objects(field, SH + 'maxCount')) {
       bounds.push(Number(bound.value))
-      said.push(plain(ctx, field, SH + 'message')[0] ?? 'There is no room for it here.')
+      reasons.push(messageOf(ctx, field) ?? said(ctx, 'NoRoomPhrase', 'There is no room for it here.'))
     }
   }
-  return bounds.length ? { max: Math.min(...bounds), said: said.sort()[0]! } : undefined
+  return bounds.length ? { max: Math.min(...bounds), said: reasons.sort()[0]! } : undefined
 }
 
 // --- rules ----------------------------------------------------------------------------------------

@@ -64,7 +64,21 @@
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part "> .sem-live-body" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, 20rem), 1fr))" ] ,
+                 [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] .
+# Without the sources, the panes (rendering, data, text) share the whole width - wrapping, not a
+# grid, so the caption across them leaves no empty track - the data a little wider; where there is
+# no room, one above the other.
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-sources=hidden]" ; sty:part "> .sem-live-body" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-5 ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-sources=hidden]" ; sty:part "> .sem-live-body > :is(.sem-live-preview, .sem-live-pane)" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 1 15rem" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-sources=hidden]" ; sty:part "> .sem-live-body > .sem-live-pane:has(.sem-live-data)" ;
+    sty:declares [ sty:property "flex-grow" ; sty:raw "1.4" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:state "[data-sem-sources=hidden]" ; sty:part "> .sem-live-body > .sem-live-flow" ;
+    sty:declares [ sty:property "flex" ; sty:raw "1 0 100%" ] .
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-sources" ;
     sty:declares [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "padding" ; sty:token tok:space-2 ] ,
@@ -106,6 +120,77 @@
                  [ sty:property "font" ; sty:raw "12px/1.55 var(--sem-font-mono)" ] ,
                  [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
                  [ sty:property "overflow-x" ; sty:raw "auto" ] .
+# Each line of the text takes its direction from its own words (English text in an Arabic page reads
+# left to right, and the other way round).
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-text :is(div, p, li)" ;
+    sty:declares [ sty:property "unicode-bidi" ; sty:raw "plaintext" ] .
+
+# The data (c:dataPreview): the caption of what happened across the panes; each further pane (the
+# data, the text) beside the rendering with a rule between; the data as a tree - each subject, its
+# rows (predicate, object) under it along a guide line - what the last interaction added in the
+# success tone and what it removed struck through in the danger tone; the arrows in a layer over the body (hidden on a phone, where the panes stack and the
+# caption says what happened).
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-flow" ;
+    sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] ,
+                 [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "var(--sem-space-2) var(--sem-space-3)" ] ,
+                 [ sty:property "border-bottom" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "font-size" ; sty:token tok:text-sm ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-pane" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-3 ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-data" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "padding" ; sty:token tok:space-3 ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius ] ,
+                 [ sty:property "background" ; sty:token tok:code-bg ] ,
+                 [ sty:property "font" ; sty:raw "12px/1.6 var(--sem-font-mono)" ] ,
+                 [ sty:property "direction" ; sty:raw "ltr" ] ,
+                 [ sty:property "text-align" ; sty:raw "start" ] ,
+                 [ sty:property "overflow-x" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-node" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:raw "2px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-subject" ;
+    sty:declares [ sty:property "font-weight" ; sty:raw "650" ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-rows" ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-direction" ; sty:raw "column" ] ,
+                 [ sty:property "gap" ; sty:raw "1px" ] ,
+                 [ sty:property "margin-inline-start" ; sty:raw "5px" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "10px" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px solid var(--sem-border-strong, var(--sem-border))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-line" ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 7em) minmax(0, 1fr)" ] ,
+                 [ sty:property "column-gap" ; sty:token tok:space-2 ] ,
+                 [ sty:property "padding" ; sty:raw "0 4px" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-line[data-sem-change=added]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:success-3 ] ,
+                 [ sty:property "color" ; sty:token tok:success-11 ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-success-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-line[data-sem-change=removed]" ;
+    sty:declares [ sty:property "background" ; sty:token tok:danger-3 ] ,
+                 [ sty:property "color" ; sty:token tok:danger-11 ] ,
+                 [ sty:property "text-decoration" ; sty:raw "line-through" ] ,
+                 [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-danger-9)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-links" ;
+    sty:declares [ sty:property "position" ; sty:raw "absolute" ] ,
+                 [ sty:property "inset" ; sty:raw "0" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-links" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "display" ; sty:raw "none" ] .
 
 # Problems: one line each, toned (danger stops the rendering, warning does not).
 [] a sty:StyleRule ; sty:appliesTo c:LiveExample ; sty:part ".sem-live-status" ;

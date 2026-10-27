@@ -241,13 +241,15 @@ sty:Mono sty:declares
                  [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-keyword" ; sty:declares [ sty:property "color" ; sty:token tok:code-keyword ] , [ sty:property "font-weight" ; sty:raw "600" ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-var" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-string" ; sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-pname" ; sty:declares [ sty:property "color" ; sty:token tok:code-name ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-iri" ; sty:declares [ sty:property "color" ; sty:token tok:code-iri ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-number" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
-[] a sty:StyleRule ; sty:appliesTo c:Code ; sty:part ".tok-comment" ; sty:declares [ sty:property "color" ; sty:token tok:code-comment ] , [ sty:property "font-style" ; sty:raw "italic" ] .
+# Code tokens, wherever code is coloured (c:Code, c:CodeEditor, c:Flippable's rules, a live example's
+# data): one set of colours, from the code tokens of the theme.
+[] a sty:StyleRule ; sty:part ".tok-keyword" ; sty:declares [ sty:property "color" ; sty:token tok:code-keyword ] , [ sty:property "font-weight" ; sty:raw "600" ] .
+[] a sty:StyleRule ; sty:part ".tok-var" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
+[] a sty:StyleRule ; sty:part ".tok-string" ; sty:declares [ sty:property "color" ; sty:token tok:code-string ] .
+[] a sty:StyleRule ; sty:part ".tok-pname" ; sty:declares [ sty:property "color" ; sty:token tok:code-name ] .
+[] a sty:StyleRule ; sty:part ".tok-iri" ; sty:declares [ sty:property "color" ; sty:token tok:code-iri ] .
+[] a sty:StyleRule ; sty:part ".tok-number" ; sty:declares [ sty:property "color" ; sty:token tok:code-var ] .
+[] a sty:StyleRule ; sty:part ".tok-comment" ; sty:declares [ sty:property "color" ; sty:token tok:code-comment ] , [ sty:property "font-style" ; sty:raw "italic" ] .
 
 # --- blockquote ---
 [] a sty:StyleRule ; sty:appliesTo c:Blockquote ;

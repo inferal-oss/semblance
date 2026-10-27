@@ -6,6 +6,7 @@
 // graph before the first projection, writes the graph back to the URL after input
 // changes (coalesced, one history step per change), turns Back, Forward and typed
 // URLs into nav:Navigate events, and brings a followed target into view.
+import { md5 } from './components/data.ts'
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from './behaviour/events.ts'
 import type { EventBus } from './behaviour/events.ts'
@@ -763,5 +764,23 @@ const follow: ReactionFn = (ctx) => {
   return loc && address !== undefined ? followDelta(r, loc, address) : { add: [], remove: [] }
 }
 
-export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent }
+/**
+ * nav:Containment: each link of this containment property, from a container to what it holds
+ * (directly or through an RDF list), as an edge of its own (for the destinations' SPARQL).
+ */
+const containment: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const edge = (parent: Term, child: Term) => {
+    const e = o.node('up-' + md5(parent.value + ' ' + child.value))
+    o.t(e, NAV + 'from', child).t(e, NAV + 'to', parent)
+  }
+  for (const q of ctx.match(null, focus, null)) {
+    if (q.subject.termType !== 'NamedNode') continue
+    if (q.object.termType === 'NamedNode') edge(q.subject, q.object)
+    else for (const member of list(ruleReader(ctx), q.object)) if (member.termType === 'NamedNode') edge(q.subject, member)
+  }
+  return o.quads
+}
+
+export const navigationFunctions: Record<string, FnRule> = { 'navigation:link-destination': linkDestination, 'navigation:link-current': linkCurrent, 'navigation:containment': containment }
 export const locationReactions: Record<string, ReactionFn> = { 'navigation:follow': follow }

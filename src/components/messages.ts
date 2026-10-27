@@ -4,7 +4,7 @@ import type { NamedNode } from '@rdfjs/types'
 import type { FnRule } from '../engine/context.ts'
 import { C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { el } from './data.ts'
-import { RDFS_LABEL, isTrue, named, str, text } from './util.ts'
+import { encodeForUri, RDFS_LABEL, isTrue, named, picked, str, text } from './util.ts'
 
 const AS = NS.as
 const C_MESSAGE = NS.c + 'Message'
@@ -35,7 +35,7 @@ messageList.watches = () => new Set([C.label])
 const messageMember: FnRule = (ctx, focus, item) => {
   if (!item) return []
   const o = ctx.out(focus)
-  const inst = o.node('m-' + encodeURIComponent(item.value))
+  const inst = o.node('m-' + encodeForUri(item.value))
   o.t(inst, RDF_TYPE, ctx.nn(C_MESSAGE))
   o.t(inst, C.of, item)
   o.t(inst, C.inList, focus)
@@ -50,16 +50,17 @@ messageMember.watches = () => new Set<string>()
 
 /** An xsd:dateTime as a key that sorts as time does (missing or unreadable sorts last). */
 function sortableTime(t: string | undefined): string {
-  const ms = t === undefined ? NaN : Date.parse(t)
+  // A time without an offset counts as UTC (as the SPARQL rule reads it), not as local time.
+  const ms = t === undefined ? NaN : Date.parse(/(Z|[+-]\d\d:\d\d)$/.test(t) ? t : t + 'Z')
   return Number.isFinite(ms) ? new Date(ms).toISOString() : '\uffff'
 }
 
-/** The author's name, as the SPARQL rule finds it: untagged c:label, then rdfs:label, then the IRI's local name. */
+/** The author's name, as the SPARQL rule finds it: c:label (in the viewer's language when translated, else untagged), then rdfs:label, then the IRI's local name. */
 function authorOf(ctx: Parameters<FnRule>[0], message: NamedNode) {
   const person = ctx.object(message, AS + 'attributedTo')
   if (!named(person)) return { person, name: 'Someone', image: undefined }
   const untagged = (p: string) => ctx.objects(person, p).find((t) => t.termType === 'Literal' && !t.language)?.value
-  const name = untagged(C.label) ?? untagged(RDFS_LABEL) ?? person.value.replace(/^.*[#/]/, '')
+  const name = picked(ctx, person, C.label) ?? untagged(C.label) ?? picked(ctx, person, RDFS_LABEL) ?? untagged(RDFS_LABEL) ?? person.value.replace(/^.*[#/]/, '')
   return { person, name, image: str(ctx.object(person, C_IMAGE)) }
 }
 
@@ -67,15 +68,17 @@ const message: FnRule = (ctx, focus) => {
   const item = ctx.object(focus, C.of)
   if (!named(item)) return []
   const content = str(ctx.object(item, AS + 'content'))
+  const component = ctx.object(item, C.content)
+  const rich = named(component) ? component : undefined
   const published = str(ctx.object(item, AS + 'published'))
   // Being written: started, not yet published.
   const pending = published === undefined && ctx.object(item, STARTED) !== undefined
-  if (!pending && content === undefined) return []
+  if (!pending && content === undefined && !rich) return []
   const { person, name, image } = authorOf(ctx, item)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    const line = pending ? `  ${name} is typing…` : `  ${published !== undefined ? `[${published.slice(11, 16)}] ` : ''}${name}: ${content}`
-    o.renders(o.el('root', 'Div', {}, [o.text('text', line)]))
+    const line = pending ? `  ${name} is typing…` : `  ${published !== undefined ? `[${published.slice(11, 16)}] ` : ''}${name}:${content !== undefined ? ` ${content}` : ''}`
+    o.renders(o.el('root', 'Div', {}, [o.text('text', line), ...(!pending && content === undefined && rich ? [rich] : [])]))
     return o.quads
   }
   const list = ctx.object(focus, C.inList)
@@ -94,7 +97,8 @@ const message: FnRule = (ctx, focus) => {
         el(o, 'dots', 'Span', { class: 'sem-dots', 'aria-hidden': 'true' }, [1, 2, 3].map((k) => o.el(`dot-${k}`, 'Span'))),
         el(o, 'typing-say', 'Span', { class: 'sem-visually-hidden' }, [o.text('typing-say-text', 'is typing…')]),
       ])
-    : el(o, 'body', 'P', { class: 'sem-message-body' }, [o.text('body-text', content!)])
+    : rich ? el(o, 'body', 'Div', { class: 'sem-message-body' }, [rich])
+      : el(o, 'body', 'P', { class: 'sem-message-body' }, [o.text('body-text', content!)])
   const main = el(o, 'main', 'Div', { class: 'sem-message-main' }, [el(o, 'meta', 'Div', { class: 'sem-message-meta' }, meta), body])
   const classes = [mine ? 'sem-mine' : '', pending ? 'sem-pending' : ''].filter(Boolean).join(' ')
   o.renders(el(o, 'root', 'Li', { class: classes || undefined }, [avatar, main]))

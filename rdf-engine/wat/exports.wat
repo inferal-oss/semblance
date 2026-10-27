@@ -11,7 +11,10 @@
   (call $init_terms)
   (call $init_store))
 
-(func (export "abi_version") (result i32) (i32.const 1))
+(func (export "abi_version") (result i32) (i32.const 2))
+
+;; The SPARQL extension groups (EXTENSIONS.md): Math, Text, Locale, Matches, JSON.
+(func (export "extensions") (result i32) (i32.const 31))
 
 (func $ni (result i32) (call $fail (@str "not implemented")))
 

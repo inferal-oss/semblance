@@ -3,9 +3,9 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, MOD, NS, RDF_FIRST, RDF_REST, RDF_TYPE, SEM } from '../ns.ts'
+import { C, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { RDFS_LABEL, named, rdfList, str } from './util.ts'
+import { RDFS_LABEL, named, rdfList, str, encodeForUri, picked } from './util.ts'
 
 const SH = NS.sh
 const XSD = NS.xsd
@@ -15,11 +15,11 @@ const F = {
   propertyShape: NS.c + 'propertyShape',
 }
 const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
-/** As SPARQL's ENCODE_FOR_URI. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
 
 /** A literal of `s` in English or untagged (untagged first), as the SPARQL rules read them. */
 function plain(ctx: RuleContext, s: Term, p: string): string | undefined {
+  const translated = picked(ctx, s, p)
+  if (translated !== undefined) return translated
   const values = ctx.objects(s, p).filter((t) => t.termType === 'Literal')
   const lang = (t: Term) => (t.termType === 'Literal' ? t.language.toLowerCase() : '')
   return (values.find((t) => lang(t) === '') ?? values.find((t) => lang(t) === 'en' || lang(t).startsWith('en-')))?.value
@@ -34,7 +34,7 @@ const form: FnRule = (ctx, focus) => {
   const resource = ctx.object(focus, C.of)
   if (!shape || !resource) return []
   const o = ctx.out(focus)
-  const label = ctx.objects(focus, C.label).find((t) => t.termType === 'Literal')?.value
+  const label = (picked(ctx, focus, C.label) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal')?.value)
   // Sections by group (the ungrouped first), fields in sh:order.
   const sections = new Map<string, { group?: Term; order: number; fields: NamedNode[] }>()
   for (const ps of ctx.objects(shape, SH + 'property')) {
@@ -195,15 +195,6 @@ type RCtx = Parameters<ReactionFn>[0]
 const none = () => ({ add: [] as Quad[], remove: [] as Quad[] })
 const own = (ctx: RCtx, s: Term, p: Term) => ctx.match(s, p.value, null).filter((q) => q.graph.termType === 'DefaultGraph')
 
-function listOf(ctx: RCtx, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== NS.rdf + 'nil' && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
-
 /** The field's property shape, resource and path. */
 function target(ctx: RCtx) {
   const ps = ctx.object(ctx.target, F.propertyShape)
@@ -232,7 +223,7 @@ const choose: ReactionFn = (ctx) => {
   const checked = ctx.object(ctx.event, NS.beh + 'checked')
   if (t.boolean && checked) add.push(f.quad(t.resource as NamedNode, t.path as NamedNode, f.literal(checked.value, f.namedNode(XSD + 'boolean'))))
   const v = ctx.object(ctx.event, NS.beh + 'value')?.value
-  if (t.allowed && v !== undefined) for (const choice of listOf(ctx, t.allowed)) if (choice.value === v) add.push(f.quad(t.resource as NamedNode, t.path as NamedNode, choice as NamedNode))
+  if (t.allowed && v !== undefined) for (const choice of rdfList(ctx, t.allowed)) if (choice.value === v) add.push(f.quad(t.resource as NamedNode, t.path as NamedNode, choice as NamedNode))
   return { remove: own(ctx, t.resource, t.path), add }
 }
 

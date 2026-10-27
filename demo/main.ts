@@ -5,6 +5,7 @@ import { Clipboard } from '../src/clipboard.ts'
 import { Files, type Uploader } from '../src/files.ts'
 import { Fullscreen } from '../src/fullscreen.ts'
 import { Islands } from '../src/foreign.ts'
+import { workerThumbnails } from '../src/file-store.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { indexedDbBackend, Persistence, webStorageBackend } from '../src/persistence.ts'
@@ -24,6 +25,8 @@ import { attachWalkthroughs } from '../src/web/walkthrough.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
 import { attachLightboxes } from '../src/web/lightbox.ts'
+import { attachAnchoredPopups } from '../src/web/anchored-popups.ts'
+import { RenderedState } from '../src/rendered.ts'
 import { RecalculationTrace } from '../src/recalculation.ts'
 import { perfRunner } from './perf-runner.ts'
 import { chartJs, flatpickr, leaflet, modules } from './foreign.ts'
@@ -106,28 +109,6 @@ document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
 const shell = new DomRenderer(screen.index, document.getElementById('app')!, UI + 'shell')
 // The Text projection mounts into its slot once the slot is shown (it is evaluated on demand).
 let textDom: DomRenderer | undefined
-// Modal overlays and menus take focus when they open and give it back when they close.
-const popups = {
-  modal: { selector: '[aria-modal=true]', first: 'input, textarea, select, button:not(.sem-close), [tabindex]', open: null as Element | null, opener: null as HTMLElement | null },
-  menu: { selector: '[role=menu]', first: '[role=menuitem]:not([disabled])', open: null as Element | null, opener: null as HTMLElement | null },
-}
-function focusModal() {
-  for (const p of Object.values(popups)) {
-    const open = [...document.querySelectorAll(p.selector)].filter((d) => !d.closest('[hidden]')).at(-1) ?? null
-    if (open === p.open) continue
-    if (open && !p.open) p.opener = document.activeElement as HTMLElement | null
-    // Inside, or moved off it by the renderer when it went away (shell.refocused): either way, it comes back.
-    const wasFocusedInside = !!p.open && (p.open.contains(document.activeElement) || document.activeElement === document.body || document.activeElement === shell.refocused)
-    p.open = open
-    if (open) {
-      if (!open.contains(document.activeElement)) ((open.querySelector(p.first) as HTMLElement | null) ?? (open as HTMLElement)).focus?.()
-    } else {
-      if (wasFocusedInside || document.activeElement === document.body) p.opener?.focus?.()
-      p.opener = null
-    }
-  }
-}
-
 // The Layout page's c:HostSlot specimen: content the host owns (a native slider), mounted once.
 function hostSlotDemo(slot: Element | undefined) {
   if (!slot || slot.firstChild) return
@@ -150,7 +131,6 @@ const flush = () => (stalls ? stalls.rendering(patch) : patch())
 const patch = () => {
   shell.flush()
   sandboxes?.sync()
-  focusModal()
   hostSlotDemo(shell.slot('gallery-host'))
   const slot = shell.slot('text')
   if (slot && textDom?.host !== slot) textDom = new DomRenderer(text.index, slot, EX + 'page')
@@ -265,7 +245,7 @@ async function recordMemory() {
   writeStats({
     heap: f.literal(heap !== undefined ? `${(heap / 1024 / 1024).toFixed(1)} MB` : 'n/a (not reported by this browser)'),
     storage: decimal(storage / 1024),
-    triples: integer(store.match(null, null, null).length),
+    triples: integer(store.size?.() ?? store.match(null, null, null).length),
     domNodes: integer(document.getElementsByTagName('*').length),
   })
   flush()
@@ -306,11 +286,23 @@ const connectors = attachConnectors(document.getElementById('app')!)
 attachSnaps(document.getElementById('app')!)
 // Lightboxes: grown from their image and given back to it, sliding, zooming and panning.
 attachLightboxes(document.getElementById('app')!)
+attachAnchoredPopups(document.getElementById('app')!, node => !shell.inSlot(node))
 persistence.attach(runtime)
 // The page's own fetches and sockets, and the events it reports, as net:Capture members.
 const network = new NetworkCapture(runtime, { onWrite: () => flush() })
 network.attach()
 Object.assign(globalThis, { network })
+// Where the components that ask for it (rnd:observes) are, and in what state: the rendered graph.
+// The page is patched only when a rule that reads it derived something (most writes derive nothing).
+const derived = () => screen.engine.stats.derivedAdded + screen.engine.stats.derivedRemoved + text.engine.stats.derivedAdded + text.engine.stats.derivedRemoved
+let derivedBefore = derived()
+const rendered = new RenderedState(runtime, shell, {
+  onWrite: () => {
+    if (derived() !== derivedBefore) flush()
+    derivedBefore = derived()
+  },
+})
+rendered.attach()
 // Maintained views keep time on the bus's clock (their windows age with beh:at); a window that
 // moved by itself patches the page like an event does.
 runtime.views.clock = bus.clock
@@ -341,10 +333,27 @@ bus.attach(shell, (h: Handled) => {
   scheduleWarmup()
   if (h.recorded) {
     const cost = { ms: performance.now() - mark.t, runs: runs() - mark.runs, ops: shell.ops - mark.ops, views: runtime.views.totals.rowsIn - mark.views }
-    recordStats(`${short(h.type)} → ${h.reactions.map(short).join(', ')}`, cost.ms, cost.runs, cost.ops, cost.views)
-    flush()
+    statsAfterPaint(`${short(h.type)} → ${h.reactions.map(short).join(', ')}`, cost.ms, cost.runs, cost.ops, cost.views)
   }
 })
+// The status bar's figures are a change of their own (a tick and a patch): written after the page
+// has painted the interaction they measure, so it does not wait for them; the latest of a burst wins.
+let pendingStats: Parameters<typeof recordStats> | undefined
+function statsAfterPaint(...stats: Parameters<typeof recordStats>) {
+  const scheduled = !!pendingStats
+  pendingStats = stats
+  if (scheduled) return
+  const write = () => {
+    if (!pendingStats) return
+    const latest = pendingStats
+    pendingStats = undefined
+    recordStats(...latest)
+    flush()
+  }
+  // After the next frame; a hidden page has no frames, so a timer stands in.
+  requestAnimationFrame(() => setTimeout(write))
+  setTimeout(write, 100)
+}
 // Things due later (beh:dueAt: the chat example's script) become beh:Due events, on the bus's
 // clock; one that waits for a component to be shown waits while it is hidden.
 const scheduler = new Scheduler(bus, {
@@ -404,8 +413,11 @@ const demoUpload: Uploader = (file, ctx) =>
     }, 160)
     ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true })
   })
+// Files kept in the browser (file:keepIn: the file explorer) go to IndexedDB; their previews are
+// made in a worker, so decoding a large photo never holds up the page.
 new Files(bus, {
   handlers: { demo: demoUpload },
+  thumbnail: workerThumbnails(() => new Worker(new URL('../src/thumbnail.worker.ts', import.meta.url), { type: 'module' })),
   onHandled: () => {
     syncSettings()
     flush()
@@ -446,4 +458,4 @@ void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 
 // A handle for poking at the graph from the console (dev builds only).
-if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls } })
+if (import.meta.env.DEV) Object.assign(window, { semblance: { runtime, store, screen, text, bus, shell, textDom, navigation, sandboxes, connectors, stalls, rendered } })

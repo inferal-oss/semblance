@@ -27,7 +27,7 @@ export function maintainedRows(ctx: RuleContext, view: Term): Map<string, Term>[
   return rows.flatMap((r) => Array.from({ length: r.n }, () => r.row))
 }
 
-/** A sem:View's rows: maintained ones from the views graph, others by running the SELECT. */
+/** A sem:View's rows: maintained ones from the views graph, others by running the SELECT (RuleContext.rows). */
 export function viewRows(ctx: RuleContext, view: Term, query: string): Map<string, Term>[] {
-  return maintainedRows(ctx, view) ?? ctx.select(query)
+  return ctx.rows(view, query)
 }

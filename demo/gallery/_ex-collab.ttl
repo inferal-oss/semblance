@@ -1,4 +1,5 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
 @prefix tok: <https://semblance.dev/ns/token#> .
@@ -114,7 +115,7 @@ ui:ex-collab-doc a c:Outline ; c:label "Offsite agenda" ;
     c:sortBy ag:rank ; c:entryTitle ag:text ; c:levelProperty ag:level ;
     c:presenceProperty ag:here ; c:typingProperty ag:typingBy ; c:noteProperty ag:edited ; c:flagProperty ag:conflict ;
     c:controls ag:ada ; c:property ag:cursor .
-ui:ex-collab-editor a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+ui:ex-collab-editor a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:ex-collab-field ui:ex-collab-save ) .
 ui:ex-collab-field a c:TextField ; c:label "Your edit" ; c:placeholder "Pick a point above to rewrite it" .
 ui:ex-collab-save a c:Button ; c:label "Save" ; sty:tone sty:Accent ; sty:emphasis sty:Solid ; key:shortcut "mod+enter" .
@@ -154,7 +155,7 @@ ui:ex-collab-changes a c:Table ; c:label "Changes up to this step" ; c:query ag:
 
 # --- the queries: the history, replayed ------------------------------------------------------------------
 
-ag:qLastStep a sem:View ; sem:select """SELECT ?max WHERE { ag:doc ag:seq ?max }""" .
+ag:qLastStep a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-collab-step ; sem:select """SELECT ?max WHERE { ag:doc ag:seq ?max }""" .
 
 # The agenda at the slider's step: each point's last edit up to it, in the points' order.
 ag:qThen a sem:View ; sem:select """
@@ -179,7 +180,7 @@ SELECT ?step ?who ?what ?text ?over WHERE {
 ORDER BY DESC(?step)""" .
 
 # What happened at the step, in words; a warning when it overwrote something unseen.
-ag:qStep a sem:View ; sem:select """
+ag:qStep a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-collab-step-alert ; sem:select """
 SELECT ?label ?tone WHERE {
   ui:ex-collab-step c:value ?k0 . ag:doc ag:seq ?n . BIND(xsd:integer(?k0) AS ?k)
   OPTIONAL { ?e ag:seq ?k ; ag:kind/rdfs:label ?what ; ag:text ?text ; prov:wasAttributedTo/rdfs:label ?who . ag:history tree:member ?e

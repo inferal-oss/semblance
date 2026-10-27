@@ -1,6 +1,7 @@
 import type { Term } from '@rdfjs/types'
-import { RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
+import { RDF_FIRST, RDF_NIL, RDF_REST, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
+import { queryReads } from '../sparql-reads.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Rule {
@@ -16,14 +17,33 @@ export interface Rule {
   queryParts?: string[]
   fn?: string
   follows: string[]
+  /**
+   * Paths of followed predicates (sem:follows given an RDF list): a change on a node reached
+   * from the focus along a path, or on any node on the way, makes the focus dirty. A step
+   * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse).
+   */
+  followPaths: string[][]
+  /**
+   * The predicates whose changes (on the focus, or on a followed node) make the focus dirty:
+   * sem:watches, else, for a SPARQL rule, every predicate its query names (with what it requires,
+   * is stopped by and follows), when it names them all. Absent: any predicate.
+   */
   watches?: Set<string>
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
    * Member-wise rule: evaluated once per (focus, member) for each `focus <forEach> member`,
    * so adding, removing or changing one member re-runs only that member's evaluation.
+   * A function rule gets the member as an argument; a SPARQL rule as `$member`, which is
+   * substituted like `$this`.
    */
   forEach?: string
+  /**
+   * Which of its member's predicates a member-wise SPARQL rule reads: these
+   * (sem:memberWatches), and the values of these focus properties (sem:memberWatchesVia,
+   * for predicates the data names, such as a list's c:sortBy). Absent: all of them.
+   */
+  memberWatches?: { predicates: Set<string>; via: string[] }
   /**
    * Applies only to instances typed in the input graphs, not to ones other rules
    * mint (pre-render rules in strata below the components: localization, validation).
@@ -31,7 +51,7 @@ export interface Rule {
   inputOnly: boolean
   /**
    * Evaluated whether or not its focus is shown (sem:always): state derived about a node no
-   * projection shows (a nav:Location), which shown components read.
+   * projection shows (a nav:Location, a phrase, the viewer), which shown components read.
    */
   always?: boolean
   /**
@@ -45,11 +65,27 @@ export interface Rule {
   /** The focus must have none of these properties, or the rule is not run (sem:unless). */
   unless: string[]
   /**
+   * SPARQL extension groups the rule's query uses (sem:needsExtension, `sx:Math` …; the
+   * engine's EXTENSIONS.md): it is chosen only on a store that has them all (GraphStore.extensions).
+   */
+  needs: string[]
+  /**
    * When a triple a query the rule followed reads changes (RuleContext.select with follow):
    * re-run it in the same run ('now'), or at the host's next frame, once for all such changes
    * ('frame', sem:refresh sem:NextFrame).
    */
   refresh: 'now' | 'frame'
+  /**
+   * A SPARQL rule that reads the viewer's language preferences (l10n:prefers, which the engine
+   * states in its derived graph) or a text picked by them (l10n:label): a language change
+   * re-runs it for every focus.
+   */
+  readsLanguage: boolean
+  /**
+   * iv:strategy iv:Incremental on a SPARQL rule (or its rendering): its query is a maintained view
+   * partitioned by its focus (docs/IVM.md §10.1 step 3), and a focus's output is read from it.
+   */
+  incremental: boolean
 }
 
 export interface Selection {
@@ -59,9 +95,18 @@ export interface Selection {
   prefer: 'sparql' | 'function'
   /** Whether the store can evaluate SPARQL; slots with only SPARQL implementations are skipped otherwise. */
   sparql?: boolean
+  /** The SPARQL extension groups the store has (GraphStore.extensions); a SPARQL rule needing another is skipped. */
+  extensions?: ReadonlySet<string>
   /** The viewer's languages, most preferred first (the localization layer). */
   languages?: string[]
 }
+
+/**
+ * What makes a SPARQL rule language-dependent: it reads the viewer's preferences, or a text
+ * picked by them (l10n:label, l10n:name and the other twins derived in lower strata), so it
+ * re-runs when they change.
+ */
+const READS_LANGUAGE = /\bl10n:[a-z]\w*|<https:\/\/semblance\.dev\/ns\/l10n#[a-z]\w*>/
 
 /** Read every sem:Rule from the ontology graph(s) loaded in the store. */
 /** localeCompare's order, without setting up a comparison per call. */
@@ -86,10 +131,33 @@ export function loadRules(store: GraphStore): Rule[] {
     }
     const target = get(SEM.targets)
     if (!target) throw new Error(`Rule <${r.value}> has no sem:targets`)
-    const query = one(r, SEM.construct)?.value
+    // A rule may take its query from another (sem:constructFrom): one check for several renderings
+    // (a component's own shapes, and its entries' member-wise).
+    const from = one(r, SEM.constructFrom)
+    const query = one(r, SEM.construct)?.value ?? (from ? one(from, SEM.construct)?.value : undefined)
     const fn = one(r, SEM.function)?.value
     if (!query === !fn) throw new Error(`Rule <${r.value}> needs exactly one of sem:construct / sem:function`)
     const watches = getAll(SEM.watches)
+    // A followed predicate, or a path of them (an RDF list).
+    const followTerms = store.match(r, namedNode(SEM.follows), null).map((q) => q.object)
+    const follows = (followTerms.length || !slot ? followTerms : store.match(slot, namedNode(SEM.follows), null).map((q) => q.object)).map((t) => {
+      if (t.termType === 'NamedNode') return t.value
+      const path: string[] = []
+      for (let n: Term | undefined = t; n && n.value !== RDF_NIL; n = one(n, RDF_REST)) {
+        const first = one(n, RDF_FIRST)
+        if (!first) continue
+        // [ sem:zeroOrMore p ]: any number of p steps (an RDF list's rdf:rest), written "*p".
+        // [ sem:inverse p ]: a step against p (from a node to what it is p of), written "^p".
+        const star = first.termType === 'NamedNode' ? undefined : one(first, SEM.zeroOrMore)
+        const inverse = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverse)
+        path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
+      }
+      // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
+      return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
+    })
+    const requires = getAll(SEM.requires)
+    const unless = getAll(SEM.unless)
+    const forEach = get(SEM.forEach)?.value
     rules.push({
       iri: r.value,
       target: target.value,
@@ -100,22 +168,54 @@ export function loadRules(store: GraphStore): Rule[] {
       kind: query ? 'sparql' : 'function',
       queryParts: query ? (prefixes + '\n' + query).split('$this') : undefined,
       fn,
-      follows: getAll(SEM.follows),
-      watches: watches.length ? new Set(watches) : undefined,
+      follows: follows.filter((p): p is string => typeof p === 'string'),
+      followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
+      watches: watches.length ? new Set(watches) : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
-      forEach: get(SEM.forEach)?.value,
+      forEach,
+      memberWatches:
+        getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
+          ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
+          : undefined,
       inputOnly: get(SEM.inputOnly)?.value === 'true',
       always: get(SEM.always)?.value === 'true',
-      bulk: get(SEM.bulk)?.value !== 'false' && (!query || attributable(query)),
-      requires: getAll(SEM.requires),
-      unless: getAll(SEM.unless),
+      // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
+      bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
+      requires,
+      unless,
+      // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.
+      needs: all(r, SEM.needsExtension),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
+      readsLanguage: !!query && READS_LANGUAGE.test(query),
+      incremental: !!query && get('https://semblance.dev/ns/view#strategy')?.value === 'https://semblance.dev/ns/view#Incremental',
     })
   }
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
 }
 
-/** Pick the active rules: matching modality, enabled layer, one runnable implementation per slot. */
+/**
+ * The predicates a query names in its patterns (with `also`), or undefined when some pattern takes
+ * any predicate (a variable, a negated set) or the query cannot be read: a changed triple whose
+ * predicate it does not name matches none of its patterns, so it cannot change the query's result.
+ * A SPARQL rule watches these as a function rule's traced reads would, and is not re-run for the
+ * rest of its focus's (or a followed node's) triples.
+ */
+function namedPredicates(query: string, also: string[]): Set<string> | undefined {
+  const reads = queryReads(query)
+  if (!reads || reads.some((r) => r.p === undefined)) return undefined
+  return new Set([...reads.map((r) => r.p!), ...also])
+}
+
+/** Whether the store can run a rule: a SPARQL rule needs SPARQL and every extension group it names. */
+export function runnable(r: Pick<Rule, 'kind' | 'needs'>, sel: Pick<Selection, 'sparql' | 'extensions'>): boolean {
+  return r.kind !== 'sparql' || (sel.sparql !== false && r.needs.every((g) => sel.extensions?.has(g)))
+}
+
+/**
+ * Pick the active rules: matching modality, enabled layer, one runnable implementation per slot:
+ * the preferred kind if the store can run it, else the next (a SPARQL rule needing an extension
+ * the store lacks falls back to its function twin).
+ */
 export function selectRules(rules: Rule[], sel: Selection, warn: (msg: string) => void = () => {}): Rule[] {
   const bySlot = new Map<string, Rule[]>()
   for (const r of rules) {
@@ -125,12 +225,12 @@ export function selectRules(rules: Rule[], sel: Selection, warn: (msg: string) =
   }
   const out: Rule[] = []
   for (const [slot, impls] of bySlot) {
-    const runnable = sel.sparql === false ? impls.filter((r) => r.kind !== 'sparql') : impls
-    if (!runnable.length) {
+    const can = impls.filter((r) => runnable(r, sel))
+    if (!can.length) {
       warn(`<${slot}> has no implementation this store can run; skipped`)
       continue
     }
-    out.push(runnable.find((r) => r.kind === sel.prefer) ?? runnable[0]!)
+    out.push(can.find((r) => r.kind === sel.prefer) ?? can[0]!)
   }
   return out
 }

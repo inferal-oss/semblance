@@ -1038,17 +1038,17 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields: a white well with a hairline; check boxes and radios are small and blue; sliders thin with a round knob.
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=choice]:not([data-sem-label-placement=inline]) select, [data-sem-c=text-area] > textarea):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background-color" ; sty:raw "var(--sem-surface)" ] ,
                  [ sty:property "border" ; sty:raw "0.5px solid var(--sem-border-strong)" ] ,
                  [ sty:property "padding" ; sty:raw "5px 8px" ] ,
                  [ sty:property "box-shadow" ; sty:raw "inset 0 0.5px 1px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.4))" ] .
 # A select padded all round keeps room for its chevron.
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=shape-field] select:not([multiple]):not([size]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=shape-field], [data-sem-c=choice]) select:not([multiple]):not([size]):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "padding-inline-end" ; sty:raw "var(--sem-chevron-space)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=choice]:not([data-sem-label-placement=inline]) select, [data-sem-c=text-area] > textarea):focus:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "var(--sem-ring)" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
@@ -2418,25 +2418,25 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 # Everything with an edge is inked: two-pixel strokes on wobbly corners (elliptical radii that
 # never agree), a pencil shadow offset down and right, and a tilt when the pointer is over it.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice][data-sem-label-placement=inline], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border-width" ; sty:raw "2px" ] ,
                  [ sty:property "border-style" ; sty:raw "solid" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--ink)" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-a)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "2px 3px 0 var(--ink)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):nth-child(2n):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice][data-sem-label-placement=inline], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):nth-child(2n):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "border-radius" ; sty:raw "var(--wob-b)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):hover:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice][data-sem-label-placement=inline], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):hover:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "transform" ; sty:raw "rotate(-1.5deg) translateY(-1px)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "3px 4px 0 var(--ink)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice][data-sem-label-placement=inline], [data-sem-c=flippable] .sem-flip):not([data-sem-emphasis=ghost]):not(:disabled):is(:active, [aria-pressed=true], [aria-expanded=true], [data-open]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "transform" ; sty:raw "translate(2px, 3px)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "0 0 0 var(--ink)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice], [data-sem-c=flippable] .sem-flip):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=button], [data-sem-c=run-query-button], [data-sem-c=icon-button], [data-sem-c=toggle], [data-sem-c=menu], [data-sem-c=popover] > .sem-trigger, [data-sem-c=chips] button, [data-sem-c=gallery] > .sem-controls > :is(.sem-prev, .sem-next), [data-sem-c=lightbox] > .sem-panel :is(.sem-zoom, .sem-original, .sem-stage > .sem-prev, .sem-stage > .sem-next), [data-sem-c=pagination] button, [data-sem-c=choice][data-sem-label-placement=inline], [data-sem-c=flippable] .sem-flip):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "3px" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
@@ -2471,7 +2471,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
 
 # Fields are written on a line; a text area is a dashed box; selects are circled.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select)):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select), [data-sem-c=choice]:not([data-sem-label-placement=inline]) select):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "background-color" ; sty:raw "transparent" ] ,
                  [ sty:property "border" ; sty:raw "0" ] ,
                  [ sty:property "border-bottom" ; sty:raw "2px solid var(--ink)" ] ,
@@ -2481,10 +2481,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "font-size" ; sty:raw "17px" ] .
 # A select padded all round keeps room for its chevron.
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=shape-field] select:not([multiple]):not([size]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=shape-field], [data-sem-c=choice]) select:not([multiple]):not([size]):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "padding-inline-end" ; sty:raw "var(--sem-chevron-space)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select)):focus:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select), [data-sem-c=choice]:not([data-sem-label-placement=inline]) select):focus:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "background-color" ; sty:raw "var(--hl)" ] ,
                  [ sty:property "border-color" ; sty:raw "var(--ink)" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
@@ -2501,7 +2501,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border-style" ; sty:raw "solid" ] ,
                  [ sty:property "box-shadow" ; sty:raw "none" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=choice] select:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part "[data-sem-c=choice][data-sem-label-placement=inline] select:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "background-color" ; sty:raw "transparent" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-b)" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] .
@@ -2974,7 +2974,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding" ; sty:raw "6px 11px" ] .
 # A select padded all round keeps room for its chevron.
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=shape-field] select:not([multiple]):not([size]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=shape-field], [data-sem-c=choice]) select:not([multiple]):not([size]):not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "padding-inline-end" ; sty:raw "var(--sem-chevron-space)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
     sty:part ":is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
@@ -3008,7 +3008,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "padding-block" ; sty:raw "0" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=choice] select:hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part "[data-sem-c=choice] select:not(:disabled):hover:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "background-color" ; sty:raw "var(--fl-fill-hover)" ] .
 
 # Check boxes and radios: a strong hairline at rest, an accent fill when on; the radio dot grows on hover.

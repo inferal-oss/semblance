@@ -93,6 +93,34 @@ describe('maintained views: operator laws', () => {
     runtime.apply({ add: [], remove: [f.quad(nn('T7'), f.namedNode(NS.rdf + 'type'), nn('Target'))] })
     expect(instance('T7')).toBeUndefined()
   })
+
+  it('a view per referrer (iv:perReferrer) comes and goes with the node naming it, its rows under that node', () => {
+    const { store, runtime } = lawRuntime()
+    const f = store.factory
+    const nn = (s: string) => f.namedNode(V + s)
+    const instance = (a: string) => runtime.views.view(runtime.views.instanceOf(V + 'perAsker', V + a))
+    runtime.transaction(() => {
+      for (const [m, t] of [['p', 'T1'], ['q', 'T1'], ['r', 'T2']]) runtime.apply({ remove: [], add: [f.quad(nn('s'), f.namedNode(LDES.member), nn(m!)), f.quad(nn(m!), nn('target'), nn(t!))] })
+    })
+    expect(instance('B1')).toBeUndefined()
+    runtime.apply({ remove: [], add: [f.quad(nn('B1'), nn('asks'), nn('perAsker')), f.quad(nn('B1'), nn('about'), nn('T1'))] })
+    expect(instance('B1')!.rows().map((r) => r.get('n')!.value)).toEqual(['2'])
+    // Its rows are a result set minted under the node that asks.
+    const RS = 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#'
+    const rows = store.match(f.namedNode(runtime.views.instanceOf(V + 'perAsker', V + 'B1')), f.namedNode(RS + 'solution'), null)
+    expect(rows.map((q) => q.object.value.startsWith(V + 'B1/~'))).toEqual([true])
+    // A second asker is a view of its own; the first is not rebuilt.
+    const rebuilds = runtime.views.totals.rebuilds
+    runtime.apply({ remove: [], add: [f.quad(nn('B2'), nn('asks'), nn('perAsker')), f.quad(nn('B2'), nn('about'), nn('T2'))] })
+    expect(instance('B2')!.rows().map((r) => r.get('n')!.value)).toEqual(['1'])
+    expect(runtime.views.totals.rebuilds).toBe(rebuilds)
+    // What it asks about is a triple its query reads: maintained, not redefined.
+    runtime.apply({ remove: store.match(nn('B1'), nn('about'), null), add: [f.quad(nn('B1'), nn('about'), nn('T2'))] })
+    expect(instance('B1')!.rows().map((r) => r.get('n')!.value)).toEqual(['1'])
+    runtime.apply({ add: [], remove: [f.quad(nn('B1'), nn('asks'), nn('perAsker'))] })
+    expect(instance('B1')).toBeUndefined()
+    expect(instance('B2')).toBeDefined()
+  })
 })
 
 describe('maintained views: work follows the change, not the data', () => {

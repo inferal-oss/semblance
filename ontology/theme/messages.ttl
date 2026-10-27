@@ -48,8 +48,10 @@
     sty:declares [ sty:property "margin" ; sty:raw "2px 0 0" ] ,
                  [ sty:property "font-size" ; sty:token tok:text-sm ] ,
                  [ sty:property "line-height" ; sty:token tok:leading-normal ] ,
-                 [ sty:property "color" ; sty:token tok:text ] ,
-                 [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] .
+# A text body keeps its line breaks; a component body (a div) lays out as it does anywhere else.
+[] a sty:StyleRule ; sty:appliesTo c:Message ; sty:part "p.sem-message-body" ;
+    sty:declares [ sty:property "white-space" ; sty:raw "pre-wrap" ] ,
                  [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 
 # The side that is one's own in a conversation (c:OwnSide): one's messages, and what one writes.

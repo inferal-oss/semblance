@@ -342,7 +342,9 @@ ui:co-form a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
 ui:co-country a c:Choice ; c:label "Country" ; c:controls ui:ex-checkout ; c:property co:country .
 ui:co-name a c:TextField ; c:label "Full name" ; c:placeholder "Ada Lovelace" ; co:fills co:recipient ; val:validates co:NameShape .
 ui:co-street a c:TextField ; c:label "Street address" ; c:placeholder "12 Harbour Road, Apt 3" ; co:fills co:street ; val:validates co:StreetShape .
-ui:co-place a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-4 ; pos:align pos:End ; c:children ( ui:co-city ui:co-region ui:co-postal ) .
+# Fields side by side line up part by part (pos:FieldRow): labels in one row, inputs in the next,
+# help and errors below, so a help line or an error never moves a neighbour's input.
+ui:co-place a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-4 ; c:children ( ui:co-city ui:co-region ui:co-postal ) .
 ui:co-city a c:TextField ; co:fills co:city ; val:validates co:CityShape ;
     dep:follows ui:ex-checkout ; dep:property co:country ; dep:takes co:cityField ;
     dep:otherwise [ c:label "City" ; c:placeholder "City" ] .
@@ -352,7 +354,9 @@ ui:co-region a c:Choice ; c:controls ui:ex-checkout ; c:property co:region ;
 ui:co-postal a c:TextField ; co:fills co:postalCode ;
     dep:follows ui:ex-checkout ; dep:property co:country ; dep:takes co:postalField ;
     dep:otherwise [ c:label "Postal code" ; c:placeholder "Postal code" ; val:validates co:PostalShape ] .
-ui:co-contact a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ; c:children ( ui:co-dial ui:co-phone ) .
+# The dialling code and the number are two fields, each its own value with its own label; side by
+# side, the code's select lines up with the number's input, the number's help line below both.
+ui:co-contact a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ; c:children ( ui:co-dial ui:co-phone ) .
 ui:co-dial a c:Choice ; c:label "Code" ; c:controls ui:ex-checkout ; c:property co:dialCode .
 ui:co-phone a c:TextField ; c:label "Phone" ; c:inputType "tel" ; val:validates co:PhoneShape ;
     c:help "For the courier, if they need to reach you." ;

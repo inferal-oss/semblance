@@ -21,6 +21,11 @@ export interface GraphStore {
    * rather than graph by graph. Optional; stores whose matches are cheap calls omit it.
    */
   readonly crossGraphMatch?: boolean
+  /**
+   * The SPARQL extension groups (`sx:Math`, … as IRIs; rdf-engine/EXTENSIONS.md) the store's
+   * queries may use. Absent: none. A rule that needs a group the store lacks is not chosen.
+   */
+  readonly extensions?: ReadonlySet<string>
   add(q: Quad): void
   delete(q: Quad): void
   has(q: Quad): boolean
@@ -37,6 +42,8 @@ export interface GraphStore {
    */
   constructFor?(query: string, variable: string, values: Term[], graphs: Quad_Graph[]): Quad[]
   loadTurtle(text: string): void
+  /** How many quads it holds, in every graph, without listing them. Optional: else count a match of everything. */
+  size?(): number
   /**
    * Housekeeping in small slices (e.g. in idle time), for at most `budgetMs`.
    * Returns whether more remains. Optional; stores without upkeep omit it.

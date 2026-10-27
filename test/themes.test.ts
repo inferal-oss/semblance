@@ -288,7 +288,7 @@ describe('structural themes', () => {
     expect(find('classic', '[data-sem-c=tabs] [role=tab][aria-selected=true]')).toContain('margin-bottom: -2px')
     expect(find('tracker', '[data-sem-c=tabs] [role=tab]')).toContain('clip-path: polygon(')
     expect(find('classic', '[data-sem-c=checkbox] > .sem-row > input:checked')).toContain('linear-gradient(45deg')
-    expect(find('doodle', ':is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select))')).toContain('border-bottom: 2px solid var(--ink)')
+    expect(find('doodle', ':is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select), [data-sem-c=choice]:not([data-sem-label-placement=inline]) select)')).toContain('border-bottom: 2px solid var(--ink)')
     for (const slug of ['classic', 'tracker']) expect(find(slug, '*'), slug).toContain('border-radius: 0')
     // Fluent: the accent underline on a focused field, the accent pill on the selected tab and nav item, a growing knob
     expect(find('fluent', ':is([data-sem-c=text-field] input, [data-sem-c=shape-field] :is(input:not([type=checkbox]), select, textarea), [data-sem-c=text-area] > textarea):focus')).toMatch(/(?=.*border-bottom-color: var\(--sem-accent-9\))(?=.*inset 0 -1px 0 var\(--sem-accent-9\))/)

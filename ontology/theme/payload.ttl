@@ -8,6 +8,7 @@
 # re-values those recolors them.
 
 # --- JSON tree ---
+# Its twisty, leaf and focus ring are the tree family's: the RDF editor (rdf-editor.ttl) shares them.
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree ;
     sty:declares [ sty:property "flex" ; sty:raw "1 1 100%" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
@@ -35,7 +36,7 @@
                  [ sty:property "border-radius" ; sty:token tok:radius-sm ] .
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-row:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:gray-3 ] .
-[] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-twisty" ;
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part ".sem-twisty" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "place-items" ; sty:raw "center" ] ,
                  [ sty:property "flex" ; sty:raw "none" ] ,
@@ -48,14 +49,14 @@
                  [ sty:property "color" ; sty:token tok:muted ] ,
                  [ sty:property "font-size" ; sty:raw "10px" ] ,
                  [ sty:property "cursor" ; sty:raw "pointer" ] .
-[] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-twisty:hover" ;
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part ".sem-twisty:hover" ;
     sty:declares [ sty:property "background" ; sty:token tok:gray-5 ] ,
                  [ sty:property "color" ; sty:token tok:text ] .
-[] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-twisty > span" ;
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part ".sem-twisty > span" ;
     sty:declares [ sty:property "transition" ; sty:raw "transform var(--sem-duration-fast) var(--sem-ease)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part "[aria-expanded=true] > .sem-row > .sem-twisty > span" ;
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part "[aria-expanded=true] > .sem-row > .sem-twisty > span" ;
     sty:declares [ sty:property "transform" ; sty:raw "rotate(90deg)" ] .
-[] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-leaf" ;
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part ".sem-leaf" ;
     sty:declares [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "width" ; sty:raw "18px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-label" ;
@@ -68,7 +69,7 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part "[aria-expanded] > .sem-row > .sem-label" ;
     sty:declares [ sty:property "cursor" ; sty:raw "pointer" ] .
-[] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ":is(.sem-twisty, .sem-label):focus-visible" ;
+[] a sty:StyleRule ; sty:appliesTo c:JsonTree , c:RdfEditor ; sty:part ":is(.sem-twisty, .sem-label):focus-visible" ;
     sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
                  [ sty:property "box-shadow" ; sty:token tok:ring ] .
 [] a sty:StyleRule ; sty:appliesTo c:JsonTree ; sty:part ".sem-value" ;
@@ -186,4 +187,30 @@
                  [ sty:property "overflow-wrap" ; sty:raw "anywhere" ] .
 [] a sty:StyleRule ; sty:appliesTo c:BodyViewer ; sty:state ".sem-empty" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "color" ; sty:token tok:muted ] .
+
+# --- image view ---
+# The image fitted to the box it is given: never wider than it, never taller than most of the
+# viewport, on a neutral ground that transparent images read on in either scheme.
+[] a sty:StyleRule ; sty:appliesTo c:ImageView ;
+    sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "justify-content" ; sty:raw "center" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:token tok:space-2 ] ,
+                 [ sty:property "background" ; sty:token tok:gray-2 ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-md ] .
+[] a sty:StyleRule ; sty:appliesTo c:ImageView ; sty:part "img" ;
+    sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "max-inline-size" ; sty:raw "100%" ] ,
+                 [ sty:property "max-block-size" ; sty:raw "min(70vh, 40rem)" ] ,
+                 [ sty:property "block-size" ; sty:raw "auto" ] ,
+                 [ sty:property "object-fit" ; sty:raw "contain" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] .
+[] a sty:StyleRule ; sty:appliesTo c:ImageView ; sty:state ".sem-empty" ;
+    sty:declares [ sty:property "margin" ; sty:raw "0" ] ,
+                 [ sty:property "justify-content" ; sty:raw "start" ] ,
+                 [ sty:property "background" ; sty:raw "none" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "padding" ; sty:raw "0" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .

@@ -11,6 +11,9 @@
 
 (import "env" "now" (func $now_ms (result f64)))
 (import "env" "random" (func $random (result f64)))
+;; SPARQL extensions (EXTENSIONS.md): the host's Math and Intl
+(import "env" "math" (func $math (param i32 f64 f64) (result f64)))
+(import "env" "intl" (func $intl (param i32 i32 i32 i32 i32) (result i32)))
 
 (memory (export "memory") 2)
 

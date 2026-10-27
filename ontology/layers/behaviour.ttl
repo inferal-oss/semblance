@@ -211,6 +211,8 @@ beh:retracted a owl:ObjectProperty ; rdfs:domain beh:Event ; rdfs:range rdf:Stat
     rdfs:comment "A triple an undoable reaction of this event removed."@en .
 beh:undone a owl:ObjectProperty ; rdfs:domain ldes:EventStream ; rdfs:range beh:Event ;
     rdfs:comment "A member of the log whose recorded change was undone (state, in the input graph)."@en .
+beh:viewState a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "On a property: true when it is view state (which field is open, where the focus goes next), not data: an undoable reaction's change of it is not recorded, so undoing the change does not bring it back."@en .
 beh:Undoer a owl:Class ;
     rdfs:label "undo"@en , "скасувати"@uk , "rückgängig"@de , "تراجع"@ar ;
     rdfs:comment "A component (e.g. a c:Button that is also a beh:Undoer, with key:shortcut \"mod+z\") that undoes, when clicked, the latest undoable change of its beh:log (default beh:ChangeLog)."@en .

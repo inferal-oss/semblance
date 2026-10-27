@@ -15,6 +15,9 @@ a Linked Data Event Stream, and declarative reactions turn events into state.
 benchmark matrix, running in your browser, itself a Semblance app. GitHub Pages cannot send
 COOP/COEP headers, so the page is not cross-origin isolated: timings are coarser (~100 µs) and the
 heap meter may read n/a. For precise numbers run `npm run dev`.
+For language models, <https://semblance.dev/llms.txt> lists the docs, every component and the
+examples, each with a Markdown page of the site's own text projection (generated at build by
+`scripts/gen-llms.ts`).
 
 **Use it:** [Getting started](docs/GETTING-STARTED.md) builds a small app with a component of its
 own; [Building components](docs/COMPONENTS.md) covers rules, reactions, layers and integrating
@@ -162,7 +165,12 @@ DOM interaction ──► EventBus ──► RDF event ──► reactions (SPAR
   contents. A host effect (`src/files.ts`) opens the system picker for a `file:Pick`, turns files
   dragged in from outside the page into a drag of the dnd: layer (each zone shows its reception),
   offers each arriving file to its target so its SHACL decides, and uploads accepted files with
-  progress, as events. `c:FileDrop` (Inputs) is built on it.
+  progress, as events. `c:FileDrop` (Inputs) is built on it; any drop target can take files
+  (`file:Receiver`). Files can be kept in the browser (`file:keepIn` a `file:Store`, IndexedDB)
+  up to a cap that is SHACL, with image previews made off the main thread (`file:preview`).
+- **Outlines** (`ol:`): `ol:label` names any component; a component whose `ol:shows` is true
+  outlines the named components inside it, dashed, with the name in a tag (in the viewer's
+  language), as overlays that move nothing. A switch on `ol:shows` turns them on and off.
 - **Announcements**: reactions say what they mean (`ann:announces`); a
   `c:ToastRegion` reading the change log shows them as toasts.
 - **Themes**: `sty:theme` re-values every token for a subtree: Semblance,
@@ -212,8 +220,14 @@ the component set. The demo's **Components** page shows all of it.
   the pre-event state, and their union is applied as one delta. A reaction may
   raise a further event on another node (`?node beh:raise key:Press`): the bus
   records it after this one (`beh:raisedBy`), for that node's own reactions.
-- A modal overlay (`aria-modal`) takes the focus when it opens (its `autofocus`
-  element), keeps Tab inside, and gives the focus back when it closes.
+- A modal overlay (`aria-modal`) takes the focus when it opens, keeps Tab inside,
+  and gives the focus back when it closes, however it opened (an event, the
+  address, a timer). Where the focus lands is the rendering's choice: the first
+  element it marks `autofocus` that is or holds a control (a dialog marks its
+  body, then its actions; the lightbox its next arrow; the palette its field),
+  else the panel. A menu or popover marks `data-sem-takes-focus` instead: its
+  popup while open (the first item), its trigger once closed. The host does
+  none of this.
 - Each event, with the size of the change it caused, becomes an immutable
   member of the `beh:ChangeLog` `ldes:EventStream` (timestamp and sequence
   paths, a SHACL shape, a `tree:view`). The stream names its newest member
@@ -260,6 +274,15 @@ window follows the pointer, and letting go is one `beh:TearOff` event that detac
 the window there; dragged back over the list it stays a tab. A window let go over the tab list it
 came from (`c:gathers`) is a `beh:Move` onto it, which docks it. Shift+Enter on a tab detaches it.
 Dialogs, drawers, lightboxes and toast regions are hosted there too.
+
+A desktop may set `c:tileLayout c:DesktopGridLayout` to arrange its open, normal, floating
+windows as tiles, with `c:Grid`'s parameters: as many columns as fit at `c:minWidth` (320px by
+default), at most `c:columns`. Docked, maximized and minimized windows keep their state, and a
+tiled window has no move or resize gesture. Tiling does not write to a window's `c:x`, `c:y`,
+`c:width` or `c:height`: remove the layout or set `c:DesktopFloatingLayout` to restore the same
+floating geometry. The layout is a style hook (`data-sem-tile-layout`), so any control that sets
+a property (`c:Segmented`, `c:Setter`) can switch it. A tree of panes the user splits and
+rearranges is a `c:TiledWorkspace` instead.
 
 **Live examples** (`c:LiveExample`, `ontology/components/live.ttl`) put the Turtle of a small app
 in a code editor beside what it renders. Each runs in a sandbox of its own - its own store, rules,
@@ -332,7 +355,7 @@ unpurged deletions and how the hybrid store works around them.
 | path | what |
 |---|---|
 | `ontology/core.ttl` | rules, renderings, strata, layers, slots |
-| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen |
+| `ontology/layers/*.ttl` | modality, style, position, a11y, behaviour (+ LDES), provenance, tooltip, motion, validation, dependency, keyboard, status, l10n, announce, clipboard, files, fullscreen, outline, rendered state |
 | `ontology/components/*.ttl` | thin component vocabularies, their rules and reactions |
 | `ontology/theme/*.ttl` | the default theme: foundations, variants, per-group styles |
 | `ontology/perf/perf.ttl` | observation vocabulary, SPARQL views and judgements |
@@ -342,9 +365,9 @@ unpurged deletions and how the hybrid store works around them.
 | `src/render/` | HtmlIndex, ordering, DOM patcher, serializers |
 | `src/behaviour/` | event bus (LDES), reaction functions |
 | `src/components/` | function rules and reactions, one module per group |
-| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard and fullscreen layers |
+| `src/layers/` | function rules of the validation, dependency, keyboard, status, l10n, announcement, clipboard, fullscreen and outlines layers |
 | `src/store/` | Oxigraph, N3.js and hybrid store adapters |
-| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, drawing connectors where their ends are |
+| `src/persistence.ts`, `src/navigation.ts`, `src/intent.ts`, `src/network.ts`, `src/sandbox.ts`, `src/clipboard.ts`, `src/files.ts`, `src/fullscreen.ts`, `src/foreign.ts`, `src/rendered.ts`, `src/web/connectors.ts` | host effects: remembering state, where we are (the address), intent preloading, network capture, live examples' sandboxes, copying to the clipboard, picking, dropping and uploading files, full screen and filling the window, mounting foreign components in islands, the rendered state of what asks for it (where, how big, on screen, overlapping, focus, scroll), drawing connectors where their ends are |
 | `bench/` | scenarios, primitives, observations + judgements, Node runner |
 | `demo/` | the demo (boot, playground, performance view, benchmark cells, `gallery/` pages, translations) |
 

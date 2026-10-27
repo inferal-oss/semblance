@@ -30,7 +30,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Heading .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER((NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) || EXISTS { { $this l10n:label ?l10nPick } UNION { ?l10nAt l10n:of $this ; l10n:label ?l10nPick } FILTER(STR(?l10nPick) = STR(?someLabel)) }) FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   OPTIONAL { $this c:level ?l }
@@ -59,7 +62,10 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Heading .
-  $this c:label ?rawLabel FILTER(lang(?rawLabel) = "")
+  # A label, untagged or translated only (l10n:Labels then picks one, as util.text does).
+  FILTER EXISTS { $this c:label ?someLabel FILTER((NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) || EXISTS { { $this l10n:label ?l10nPick } UNION { ?l10nAt l10n:of $this ; l10n:label ?l10nPick } FILTER(STR(?l10nPick) = STR(?someLabel)) }) FILTER(isLiteral(?someLabel)) }
+  OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   BIND(COALESCE(?localLabel, ?rawLabel) AS ?label)
   BIND(CONCAT("# ", UCASE(STR(?label))) AS ?line)

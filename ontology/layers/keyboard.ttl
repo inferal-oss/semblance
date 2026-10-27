@@ -1,3 +1,4 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix key: <https://semblance.dev/ns/keyboard#> .
 @prefix c: <https://semblance.dev/ns/component#> .
@@ -153,7 +154,8 @@ c:ShortcutList a owl:Class ;
     rdfs:comment "Every key:shortcut in the graph, with what it activates."@en ;
     sem:slug "shortcut-list" .
 c:ShortcutListRendering a sem:Rendering ; sem:targets c:ShortcutList ; sem:stratum 0 ;
-    sem:functionOnly "It labels key:Command nodes by their translated rdfs:label in the viewer's language. That language is a projection setting, which SPARQL rules cannot see (components' labels reach them as l10n:label; commands are not components)." .
+    sem:functionOnly "awaits sx:Locale (sx:collated): shortcuts are listed in the viewer's collation order of their labels (localeCompare); the labels themselves are picked from the viewer's languages in the graph." ;
+    sem:needsExtension sx:Locale .
 c:ShortcutListRendering-fn a sem:Rule ; sem:implements c:ShortcutListRendering ; sem:function "shortcut-list" .
 
 # --- Arrow-key navigation (roving focus) -----------------------------------------------------------

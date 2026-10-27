@@ -366,6 +366,7 @@ impl<'a> Ctx<'a> {
                 }
                 rows
             }
+            Pattern::Magic(m) => self.magic(m, sub),
             Pattern::Service(silent) => {
                 if *silent {
                     alloc::vec![sub.to_vec()]
@@ -757,10 +758,29 @@ impl<'a> Ctx<'a> {
             }
         }
         if !s.order.is_empty() {
-            let mut keyed: Vec<(Vec<Option<Val>>, Row)> = rows.into_iter().map(|r| (s.order.iter().map(|(e, _)| self.expr(e, &r).ok()).collect(), r)).collect();
-            keyed.sort_unstable_by(|(a, _), (b, _)| {
+            // sx:collated(s, lang) keys compare with the host's collator (EXTENSIONS.md).
+            fn collated(e: &Expr) -> Option<&[Expr]> {
+                match e {
+                    Expr::Call(Func::X(super::ext::Fx::Collated), a) => Some(a),
+                    _ => None,
+                }
+            }
+            let any_collated = s.order.iter().any(|(e, _)| collated(e).is_some());
+            type Key = (Vec<Option<Val>>, Vec<Option<(Vec<u8>, Vec<u8>)>>);
+            let mut keyed: Vec<(Key, Row)> = rows
+                .into_iter()
+                .map(|r| {
+                    let vals = s.order.iter().map(|(e, _)| self.expr(e, &r).ok()).collect();
+                    let coll = if any_collated { s.order.iter().map(|(e, _)| collated(e).and_then(|a| self.collation_key(a, &r))).collect() } else { Vec::new() };
+                    ((vals, coll), r)
+                })
+                .collect();
+            keyed.sort_unstable_by(|((a, ca), _), ((b, cb), _)| {
                 for (i, (_, desc)) in s.order.iter().enumerate() {
-                    let o = self.sort_cmp(a[i].as_ref(), b[i].as_ref());
+                    let o = match (ca.get(i), cb.get(i)) {
+                        (Some(Some((lang, x))), Some(Some((_, y)))) => crate::host::collate(lang, x, y),
+                        _ => self.sort_cmp(a[i].as_ref(), b[i].as_ref()),
+                    };
                     if o != Ordering::Equal {
                         return if *desc { o.reverse() } else { o };
                     }
@@ -969,7 +989,7 @@ fn certain(p: &Pattern) -> Vec<Var> {
 fn subst_ok(p: &Pattern, v: Var) -> bool {
     let sure = |a: &Pattern| certain(a).contains(&v);
     match p {
-        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => true,
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) | Pattern::Magic(_) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) => subst_ok(a, v) && subst_ok(b, v),
         Pattern::Graph(_, a) => subst_ok(a, v),
         Pattern::Filter(e, a) => subst_ok(a, v) && (!reads(e, v) || sure(a)),
@@ -991,7 +1011,7 @@ fn subst_ok(p: &Pattern, v: Var) -> bool {
 /// nothing in it rebinds `v`, and no subquery projects it away.
 fn keeps(p: &Pattern, v: Var) -> bool {
     match p {
-        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => true,
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) | Pattern::Magic(_) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) | Pattern::LeftJoin(a, b, _) => keeps(a, v) && keeps(b, v),
         Pattern::Graph(_, a) | Pattern::Filter(_, a) => keeps(a, v),
         Pattern::Extend(a, w, _) => *w != v && keeps(a, v),
@@ -1072,6 +1092,7 @@ fn pattern_vars(p: &Pattern, m: &mut [bool]) {
         }
         Pattern::Values(vars, _) => vars.iter().for_each(|&v| set(v, m)),
         Pattern::Sub(s) => select_vars(s, m),
+        Pattern::Magic(x) => x.ins.iter().chain(&x.outs).for_each(|t| tv(t, m)),
     }
 }
 
@@ -1177,7 +1198,7 @@ pub(crate) fn resolve(x: &Tv, row: &[u32]) -> Option<u32> {
 }
 
 /// Bind a pattern position to a term; false if it conflicts.
-fn bind(x: &Tv, id: u32, row: &mut [u32], dict: &Dict) -> bool {
+pub(crate) fn bind(x: &Tv, id: u32, row: &mut [u32], dict: &Dict) -> bool {
     match x {
         Tv::Term(t) => *t == id,
         Tv::Var(v) => {

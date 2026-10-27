@@ -46,7 +46,7 @@ c:exceptProperty a owl:ObjectProperty ; rdfs:domain c:TermSection ; rdfs:range r
     rdfs:comment "Without c:membersVia: terms that have this property are listed elsewhere, not here (sem:group: component classes are in their groups)."@en .
 
 c:TermBranch a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """Internal: one branch of a c:TermTree, minted by the tree (c:of the group, layer or vocabulary;
 c:branchOf the tree; c:section). Its row names the branch, which a click selects, and counts its
 terms; its twisty opens and closes it (c:expanded, graph state on the branch). Open, it lists its
@@ -119,8 +119,9 @@ WHERE {
   # LATERAL: every branch below sees ?root (a plain UNION's branches would not).
   LATERAL { {
     BIND(IRI(CONCAT(STR(?root), "-role")) AS ?rootRole)
-    OPTIONAL { $this c:label ?caption0 FILTER(lang(?caption0) = "") }
-    OPTIONAL { $this c:label ?caption1 FILTER(langMatches(lang(?caption1), "en")) }
+    OPTIONAL { ?caption0At l10n:of $this ; l10n:label ?caption0 }
+  OPTIONAL { { $this l10n:label ?caption0 } UNION { ?l10nAt_caption0 l10n:of $this ; l10n:label ?caption0 } } OPTIONAL { $this c:label ?caption0 FILTER(lang(?caption0) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+    OPTIONAL { { $this l10n:label ?caption1 } UNION { ?l10nAt_caption1 l10n:of $this ; l10n:label ?caption1 } } OPTIONAL { $this c:label ?caption1 FILTER(langMatches(lang(?caption1), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     BIND(STR(COALESCE(?caption0, ?caption1)) AS ?caption)
     BIND(IF(BOUND(?caption), IRI(CONCAT(STR(?root), "-aria-label")), ?none) AS ?rootLabel)
   } UNION {
@@ -130,8 +131,9 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~s-", SUBSTR(MD5(STR(?section)), 1, 8))) AS ?sli)
     OPTIONAL { ?cell rdf:rest ?nextCell FILTER(?nextCell != rdf:nil) ?nextCell rdf:first ?nextSection }
     BIND(IF(BOUND(?nextSection), IRI(CONCAT(STR($this), "/~s-", SUBSTR(MD5(STR(?nextSection)), 1, 8))), ?none) AS ?nextSli)
-    OPTIONAL { ?section rdfs:label ?sname0 FILTER(lang(?sname0) = "") }
-    OPTIONAL { ?section rdfs:label ?sname1 FILTER(langMatches(lang(?sname1), "en")) }
+    OPTIONAL { ?sname0At l10n:of ?section ; l10n:name ?sname0 }
+  OPTIONAL { ?section rdfs:label ?sname0 FILTER(lang(?sname0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?section ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_sname1 l10n:of ?section ; l10n:name ?sname1 } OPTIONAL { ?section rdfs:label ?sname1 FILTER(langMatches(lang(?sname1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?section ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?sname0, ?sname1, "")) AS ?sectionName)
     BIND(IF(?i = 0, "0", "-1") AS ?tab)
     BIND(IRI(CONCAT(STR(?sli), "-role")) AS ?sliRole)
@@ -155,8 +157,9 @@ WHERE {
     OPTIONAL { $this c:controls ?target ; c:property ?property FILTER(isIRI(?target) && isIRI(?property)) }
     OPTIONAL { ?b sem:order ?order }
     # The branch's name (as c:TermBranch shows it): rdfs:label, dcterms:title, or its prefixed name.
-    OPTIONAL { ?b rdfs:label ?bl0 FILTER(lang(?bl0) = "") }
-    OPTIONAL { ?b rdfs:label ?bl1 FILTER(langMatches(lang(?bl1), "en")) }
+    OPTIONAL { ?bl0At l10n:of ?b ; l10n:name ?bl0 }
+  OPTIONAL { ?b rdfs:label ?bl0 FILTER(lang(?bl0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?b ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_bl1 l10n:of ?b ; l10n:name ?bl1 } OPTIONAL { ?b rdfs:label ?bl1 FILTER(langMatches(lang(?bl1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?b ; l10n:name ?l10nPick }) }
     OPTIONAL { ?b dcterms:title ?bt0 FILTER(lang(?bt0) = "") }
     OPTIONAL { ?b dcterms:title ?bt1 FILTER(langMatches(lang(?bt1), "en")) }
     BIND(REPLACE(STR(?b), "[^#/]*$", "") AS ?bns)
@@ -271,8 +274,9 @@ WHERE {
   OPTIONAL { $this c:expanded ?expanded }
   OPTIONAL { $this c:reveals ?revealed }
   BIND(?n > 0 && IF(BOUND(?expanded), STR(?expanded) = "true", COALESCE(STR(?revealed) = "true", false)) AS ?open)
-  OPTIONAL { ?b rdfs:label ?bl0 FILTER(lang(?bl0) = "") }
-  OPTIONAL { ?b rdfs:label ?bl1 FILTER(langMatches(lang(?bl1), "en")) }
+  OPTIONAL { ?bl0At l10n:of ?b ; l10n:name ?bl0 }
+  OPTIONAL { ?b rdfs:label ?bl0 FILTER(lang(?bl0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?b ; l10n:name ?l10nPick }) }
+  OPTIONAL { ?l10nAt_bl1 l10n:of ?b ; l10n:name ?bl1 } OPTIONAL { ?b rdfs:label ?bl1 FILTER(langMatches(lang(?bl1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?b ; l10n:name ?l10nPick }) }
   OPTIONAL { ?b dcterms:title ?bt0 FILTER(lang(?bt0) = "") }
   OPTIONAL { ?b dcterms:title ?bt1 FILTER(langMatches(lang(?bt1), "en")) }
   BIND(REPLACE(STR(?b), "[^#/]*$", "") AS ?bns)
@@ -299,10 +303,14 @@ WHERE {
     BIND(IF(BOUND(?twisty), IRI(CONCAT(STR($this), "/~twisty-icon")), ?none) AS ?icon)
     BIND(IF(BOUND(?twisty), IRI(CONCAT(STR($this), "/~twisty-icon-aria-hidden")), ?none) AS ?iconHidden)
     BIND(IF(BOUND(?twisty), IRI(CONCAT(STR($this), "/~twisty-text")), ?none) AS ?iconText)
-    OPTIONAL { c:CollapsePhrase rdfs:label ?collapse0 FILTER(lang(?collapse0) = "") }
-    OPTIONAL { c:CollapsePhrase rdfs:label ?collapse1 FILTER(langMatches(lang(?collapse1), "en")) }
-    OPTIONAL { c:ExpandPhrase rdfs:label ?expand0 FILTER(lang(?expand0) = "") }
-    OPTIONAL { c:ExpandPhrase rdfs:label ?expand1 FILTER(langMatches(lang(?expand1), "en")) }
+    OPTIONAL { ?collapse0At l10n:of c:CollapsePhrase ; l10n:name ?collapse0 }
+  OPTIONAL { ?collapse0At l10n:of c:CollapsePhrase ; l10n:name ?collapse0 }
+  OPTIONAL { c:CollapsePhrase rdfs:label ?collapse0 FILTER(lang(?collapse0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CollapsePhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_collapse1 l10n:of c:CollapsePhrase ; l10n:name ?collapse1 } OPTIONAL { c:CollapsePhrase rdfs:label ?collapse1 FILTER(langMatches(lang(?collapse1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CollapsePhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?expand0At l10n:of c:ExpandPhrase ; l10n:name ?expand0 }
+  OPTIONAL { ?expand0At l10n:of c:ExpandPhrase ; l10n:name ?expand0 }
+  OPTIONAL { c:ExpandPhrase rdfs:label ?expand0 FILTER(lang(?expand0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:ExpandPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_expand1 l10n:of c:ExpandPhrase ; l10n:name ?expand1 } OPTIONAL { c:ExpandPhrase rdfs:label ?expand1 FILTER(langMatches(lang(?expand1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:ExpandPhrase ; l10n:name ?l10nPick }) }
     BIND(CONCAT(IF(?open, STR(COALESCE(?collapse0, ?collapse1, "Collapse")), STR(COALESCE(?expand0, ?expand1, "Expand"))), " ", ?bname) AS ?twistyWords)
     BIND(IF(?open, ?none, "") AS ?hidden)
     BIND(IRI(CONCAT(STR(?group), "-role")) AS ?groupRole)
@@ -359,15 +367,6 @@ WHERE {
 }""" ;
     sem:function "reference:toggle" .
 
-# A click on a name selects that term: `<controls> <property> <term>`, as c:Tree and c:NavList do.
-c:SelectTerm a beh:Reaction ;
-    rdfs:label "Select a term"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:TermBranch ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .
-
 # Up and Down move among the visible names; Right opens a branch (then enters it), Left closes it
 # (then goes to its section). Enter or Space on a name is its click.
 c:TermTree key:navigation key:TreeNavigation .
@@ -381,7 +380,7 @@ c:TermTree key:navigation key:TreeNavigation .
 # one is a node here, rendered by both implementations alike.
 
 c:TermOverview a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """What the ontology says about one term: the term c:bindProperty of c:bindFrom holds (a
 selection). A header (its prefixed name, its kind, its IRI) and its rdfs:comment, then its facts:
 what it says, by predicate, and what points at it (c:InverseFacet, and its shape). Values that are
@@ -476,10 +475,13 @@ WHERE {
     FILTER(!BOUND(?t))
     BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
-    OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") }
-    OPTIONAL { $this c:emptyText ?e1 FILTER(langMatches(lang(?e1), "en")) }
-    OPTIONAL { c:NoTermPhrase rdfs:label ?e2 FILTER(lang(?e2) = "") }
-    OPTIONAL { c:NoTermPhrase rdfs:label ?e3 FILTER(langMatches(lang(?e3), "en")) }
+    OPTIONAL { ?e0At l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+    OPTIONAL { ?l10nAt_e1 l10n:of $this ; l10n:emptyText ?e1 } OPTIONAL { $this c:emptyText ?e1 FILTER(langMatches(lang(?e1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+    OPTIONAL { ?e2At l10n:of c:NoTermPhrase ; l10n:name ?e2 }
+  OPTIONAL { ?e2At l10n:of c:NoTermPhrase ; l10n:name ?e2 }
+  OPTIONAL { c:NoTermPhrase rdfs:label ?e2 FILTER(lang(?e2) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoTermPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_e3 l10n:of c:NoTermPhrase ; l10n:name ?e3 } OPTIONAL { c:NoTermPhrase rdfs:label ?e3 FILTER(langMatches(lang(?e3), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoTermPhrase ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?e0, ?e1, ?e2, ?e3, "Pick a term.")) AS ?emptyWords)
   } UNION {
     # The header: prefixed name, kind, IRI; then the comment.
@@ -500,8 +502,9 @@ WHERE {
     LATERAL { OPTIONAL { SELECT ?t ?kind0 WHERE { ?t a ?kindType . ?kind0 c:kindOf ?kindType ; sem:order ?kindOrder } ORDER BY ?kindOrder ?kind0 LIMIT 1 } }
     BIND(COALESCE(?kind0, c:IndividualKind) AS ?k)
     OPTIONAL { ?k sem:slug ?kslug }
-    OPTIONAL { ?k rdfs:label ?kn0 FILTER(lang(?kn0) = "") }
-    OPTIONAL { ?k rdfs:label ?kn1 FILTER(langMatches(lang(?kn1), "en")) }
+    OPTIONAL { ?kn0At l10n:of ?k ; l10n:name ?kn0 }
+  OPTIONAL { ?k rdfs:label ?kn0 FILTER(lang(?kn0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?k ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_kn1 l10n:of ?k ; l10n:name ?kn1 } OPTIONAL { ?k rdfs:label ?kn1 FILTER(langMatches(lang(?kn1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?k ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?kslug, "")) AS ?kindSlug)
     BIND(STR(COALESCE(?kn0, ?kn1, "")) AS ?kindName)
     OPTIONAL { ?t rdfs:comment ?c0 FILTER(lang(?c0) = "") }
@@ -543,8 +546,9 @@ WHERE {
         BIND(SUBSTR(MD5(STR(?facet)), 1, 8) AS ?fk)
         OPTIONAL { ?facet sem:order ?facetOrder }
         BIND(CONCAT("b", STR(COALESCE(?facetOrder, ""))) AS ?factKey)
-        OPTIONAL { ?facet rdfs:label ?fl0 FILTER(lang(?fl0) = "") }
-        OPTIONAL { ?facet rdfs:label ?fl1 FILTER(langMatches(lang(?fl1), "en")) }
+        OPTIONAL { ?fl0At l10n:of ?facet ; l10n:name ?fl0 }
+  OPTIONAL { ?facet rdfs:label ?fl0 FILTER(lang(?fl0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?facet ; l10n:name ?l10nPick }) }
+        OPTIONAL { ?l10nAt_fl1 l10n:of ?facet ; l10n:name ?fl1 } OPTIONAL { ?facet rdfs:label ?fl1 FILTER(langMatches(lang(?fl1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?facet ; l10n:name ?l10nPick }) }
         BIND(REPLACE(STR(?facet), "[^#/]*$", "") AS ?fns)
         BIND(REPLACE(STR(?facet), "^.*[#/]", "") AS ?flocal)
         OPTIONAL { { SELECT ?fns (MIN(?fp0) AS ?fpfx) WHERE { ?fd sh:prefix ?fp0 ; sh:namespace ?fn0 BIND(STR(?fn0) AS ?fns) } GROUP BY ?fns } }
@@ -570,8 +574,10 @@ WHERE {
         BIND("gallery" AS ?fk)
         OPTIONAL { c:GalleryFacet sem:order ?galleryOrder }
         BIND(CONCAT("b", STR(COALESCE(?galleryOrder, ""))) AS ?factKey)
-        OPTIONAL { c:GalleryFacet rdfs:label ?gl0 FILTER(lang(?gl0) = "") }
-        OPTIONAL { c:GalleryFacet rdfs:label ?gl1 FILTER(langMatches(lang(?gl1), "en")) }
+        OPTIONAL { ?gl0At l10n:of c:GalleryFacet ; l10n:name ?gl0 }
+  OPTIONAL { ?gl0At l10n:of c:GalleryFacet ; l10n:name ?gl0 }
+  OPTIONAL { c:GalleryFacet rdfs:label ?gl0 FILTER(lang(?gl0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:GalleryFacet ; l10n:name ?l10nPick }) }
+        OPTIONAL { ?l10nAt_gl1 l10n:of c:GalleryFacet ; l10n:name ?gl1 } OPTIONAL { c:GalleryFacet rdfs:label ?gl1 FILTER(langMatches(lang(?gl1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:GalleryFacet ; l10n:name ?l10nPick }) }
         BIND(STR(COALESCE(?gl0, ?gl1, "Shown in the gallery")) AS ?factName)
         BIND(SUBSTR(MD5(STR(?v)), 1, 8) AS ?vk)
       } UNION {
@@ -579,11 +585,13 @@ WHERE {
         BIND("shape" AS ?fk)
         OPTIONAL { c:ShapeFacet sem:order ?shapeOrder }
         BIND(CONCAT("b", STR(COALESCE(?shapeOrder, ""))) AS ?factKey)
-        OPTIONAL { c:ShapeFacet rdfs:label ?sl0 FILTER(lang(?sl0) = "") }
-        OPTIONAL { c:ShapeFacet rdfs:label ?sl1 FILTER(langMatches(lang(?sl1), "en")) }
+        OPTIONAL { ?sl0At l10n:of c:ShapeFacet ; l10n:name ?sl0 }
+  OPTIONAL { ?sl0At l10n:of c:ShapeFacet ; l10n:name ?sl0 }
+  OPTIONAL { c:ShapeFacet rdfs:label ?sl0 FILTER(lang(?sl0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:ShapeFacet ; l10n:name ?l10nPick }) }
+        OPTIONAL { ?l10nAt_sl1 l10n:of c:ShapeFacet ; l10n:name ?sl1 } OPTIONAL { c:ShapeFacet rdfs:label ?sl1 FILTER(langMatches(lang(?sl1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:ShapeFacet ; l10n:name ?l10nPick }) }
         BIND(STR(COALESCE(?sl0, ?sl1, "Shape")) AS ?factName)
         BIND(SUBSTR(MD5(CONCAT(STR(?shape), " ", STR(?v))), 1, 8) AS ?vk)
-        OPTIONAL { ?ps sh:message ?message }
+        OPTIONAL { ?l10nAt_message l10n:of ?ps ; l10n:message ?message } OPTIONAL { ?ps sh:message ?message FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick }) }
         BIND(STR(?message) AS ?noteWords)
         OPTIONAL {
           ?ps ?cp ?cv FILTER(STRSTARTS(STR(?cp), STR(sh:)) && ?cp != sh:path && ?cp != sh:message && !isBlank(?cv))
@@ -607,7 +615,7 @@ WHERE {
     # A specimen is a c:Link to the resource itself; the navigation layer resolves where it is shown.
     BIND(IF(?isSpecimen, IRI(CONCAT(STR(?item), "-link")), ?none) AS ?link)
     BIND(IF(?isSpecimen, ?v, ?none) AS ?spec)
-    OPTIONAL { FILTER(?isSpecimen) ?v c:label ?specLabel }
+    OPTIONAL { FILTER(?isSpecimen) { ?v l10n:label ?specLabel } UNION { ?l10nAt_specLabel l10n:of ?v ; l10n:label ?specLabel } } OPTIONAL { FILTER(?isSpecimen) ?v c:label ?specLabel FILTER(NOT EXISTS { ?v l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?v ; l10n:label ?l10nPick }) }
     BIND(IF(BOUND(?noteWords), IRI(CONCAT(STR(?item), "-note")), ?none) AS ?note)
     BIND(IF(BOUND(?noteWords), IRI(CONCAT(STR(?item), "-note-text")), ?none) AS ?noteText)
     BIND(IF(BOUND(?constraintWords), IRI(CONCAT(STR(?item), "-c-", SUBSTR(MD5(?constraintWords), 1, 8))), ?none) AS ?constraint)
@@ -625,15 +633,6 @@ WHERE {
     BIND(IF(?isLink, ?v, ?none) AS ?selectsTerm)
   } }
 }""" .
-
-# A click on a linked term selects it, as a click in the tree does.
-c:SelectOverviewTerm a beh:Reaction ;
-    rdfs:label "Select a term"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:TermOverview ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .
 
 # --- one term: how it is aligned with other vocabularies ------------------------------------------
 
@@ -697,12 +696,17 @@ WHERE {
     FILTER(!?linked)
     BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
-    OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") }
-    OPTIONAL { $this c:emptyText ?e1 FILTER(langMatches(lang(?e1), "en")) }
-    OPTIONAL { c:NoTermPhrase rdfs:label ?e2 FILTER(lang(?e2) = "") }
-    OPTIONAL { c:NoTermPhrase rdfs:label ?e3 FILTER(langMatches(lang(?e3), "en")) }
-    OPTIONAL { c:NoAlignmentPhrase rdfs:label ?e4 FILTER(lang(?e4) = "") }
-    OPTIONAL { c:NoAlignmentPhrase rdfs:label ?e5 FILTER(langMatches(lang(?e5), "en")) }
+    OPTIONAL { ?e0At l10n:of $this ; l10n:emptyText ?e0 }
+  OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+    OPTIONAL { ?l10nAt_e1 l10n:of $this ; l10n:emptyText ?e1 } OPTIONAL { $this c:emptyText ?e1 FILTER(langMatches(lang(?e1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+    OPTIONAL { ?e2At l10n:of c:NoTermPhrase ; l10n:name ?e2 }
+  OPTIONAL { ?e2At l10n:of c:NoTermPhrase ; l10n:name ?e2 }
+  OPTIONAL { c:NoTermPhrase rdfs:label ?e2 FILTER(lang(?e2) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoTermPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_e3 l10n:of c:NoTermPhrase ; l10n:name ?e3 } OPTIONAL { c:NoTermPhrase rdfs:label ?e3 FILTER(langMatches(lang(?e3), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoTermPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?e4At l10n:of c:NoAlignmentPhrase ; l10n:name ?e4 }
+  OPTIONAL { ?e4At l10n:of c:NoAlignmentPhrase ; l10n:name ?e4 }
+  OPTIONAL { c:NoAlignmentPhrase rdfs:label ?e4 FILTER(lang(?e4) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoAlignmentPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_e5 l10n:of c:NoAlignmentPhrase ; l10n:name ?e5 } OPTIONAL { c:NoAlignmentPhrase rdfs:label ?e5 FILTER(langMatches(lang(?e5), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:NoAlignmentPhrase ; l10n:name ?l10nPick }) }
     BIND(STR(IF(BOUND(?t), COALESCE(?e4, ?e5, "No links to other vocabularies."), COALESCE(?e0, ?e1, ?e2, ?e3, "Pick a term."))) AS ?emptyWords)
   } UNION {
     FILTER(?linked)
@@ -719,12 +723,18 @@ WHERE {
     BIND(IRI(CONCAT(STR(?thRelation), "-text")) AS ?thRelationText)
     BIND(IRI(CONCAT(STR(?thTerm), "-text")) AS ?thTermText)
     BIND(IRI(CONCAT(STR(?thStrength), "-text")) AS ?thStrengthText)
-    OPTIONAL { c:AlignmentRelationPhrase rdfs:label ?r0 FILTER(lang(?r0) = "") }
-    OPTIONAL { c:AlignmentRelationPhrase rdfs:label ?r1 FILTER(langMatches(lang(?r1), "en")) }
-    OPTIONAL { c:AlignmentTermPhrase rdfs:label ?m0 FILTER(lang(?m0) = "") }
-    OPTIONAL { c:AlignmentTermPhrase rdfs:label ?m1 FILTER(langMatches(lang(?m1), "en")) }
-    OPTIONAL { c:AlignmentStrengthPhrase rdfs:label ?g0 FILTER(lang(?g0) = "") }
-    OPTIONAL { c:AlignmentStrengthPhrase rdfs:label ?g1 FILTER(langMatches(lang(?g1), "en")) }
+    OPTIONAL { ?r0At l10n:of c:AlignmentRelationPhrase ; l10n:name ?r0 }
+  OPTIONAL { ?r0At l10n:of c:AlignmentRelationPhrase ; l10n:name ?r0 }
+  OPTIONAL { c:AlignmentRelationPhrase rdfs:label ?r0 FILTER(lang(?r0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlignmentRelationPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_r1 l10n:of c:AlignmentRelationPhrase ; l10n:name ?r1 } OPTIONAL { c:AlignmentRelationPhrase rdfs:label ?r1 FILTER(langMatches(lang(?r1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlignmentRelationPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?m0At l10n:of c:AlignmentTermPhrase ; l10n:name ?m0 }
+  OPTIONAL { ?m0At l10n:of c:AlignmentTermPhrase ; l10n:name ?m0 }
+  OPTIONAL { c:AlignmentTermPhrase rdfs:label ?m0 FILTER(lang(?m0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlignmentTermPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_m1 l10n:of c:AlignmentTermPhrase ; l10n:name ?m1 } OPTIONAL { c:AlignmentTermPhrase rdfs:label ?m1 FILTER(langMatches(lang(?m1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlignmentTermPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?g0At l10n:of c:AlignmentStrengthPhrase ; l10n:name ?g0 }
+  OPTIONAL { ?g0At l10n:of c:AlignmentStrengthPhrase ; l10n:name ?g0 }
+  OPTIONAL { c:AlignmentStrengthPhrase rdfs:label ?g0 FILTER(lang(?g0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlignmentStrengthPhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_g1 l10n:of c:AlignmentStrengthPhrase ; l10n:name ?g1 } OPTIONAL { c:AlignmentStrengthPhrase rdfs:label ?g1 FILTER(langMatches(lang(?g1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:AlignmentStrengthPhrase ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?r0, ?r1, "Relation")) AS ?relationWord)
     BIND(STR(COALESCE(?m0, ?m1, "Term")) AS ?termWord)
     BIND(STR(COALESCE(?g0, ?g1, "Strength")) AS ?strengthWord)
@@ -756,8 +766,9 @@ WHERE {
     BIND(IF(BOUND(?xpfx) && REGEX(?xlocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?xpfx, ":", ?xlocal), CONCAT("<", STR(?target), ">")) AS ?targetName)
     OPTIONAL { ?strength sem:order ?strengthOrder }
     OPTIONAL { ?strength sem:slug ?slug0 }
-    OPTIONAL { ?strength rdfs:label ?sn0 FILTER(lang(?sn0) = "") }
-    OPTIONAL { ?strength rdfs:label ?sn1 FILTER(langMatches(lang(?sn1), "en")) }
+    OPTIONAL { ?sn0At l10n:of ?strength ; l10n:name ?sn0 }
+  OPTIONAL { ?strength rdfs:label ?sn0 FILTER(lang(?sn0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?strength ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_sn1 l10n:of ?strength ; l10n:name ?sn1 } OPTIONAL { ?strength rdfs:label ?sn1 FILTER(langMatches(lang(?sn1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?strength ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?slug0, "")) AS ?strengthSlug)
     BIND(STR(COALESCE(?sn0, ?sn1, "")) AS ?strengthName)
     BIND(CONCAT(STR(COALESCE(?strengthOrder, "")), " ", ?relName, " ", ?targetName) AS ?rowKey)
@@ -780,7 +791,7 @@ a card's name selects its term there."""@en ;
 c:membersOf a owl:ObjectProperty ; rdfs:domain c:TermMembers ; rdfs:range c:TermTree ;
     rdfs:comment "The tree whose sections say what a branch holds."@en .
 c:TermCard a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """Internal: one term's card, minted by a c:TermMembers (c:of the term, c:role its role). Its name
 (selecting it), its slug, the first sentence of its comment, its superclasses, super-properties
 and range as tags (mixins marked), how many properties, renderings, rules (SPARQL, function) and
@@ -865,8 +876,9 @@ WHERE {
          IF(sameTerm(?k, c:RenderingKind), c:RenderingRole, c:OtherRole)))) AS ?role)
     OPTIONAL { ?role sem:slug ?roleSlug0 }
     OPTIONAL { ?role sem:order ?roleOrder0 }
-    OPTIONAL { ?role rdfs:label ?rn0 FILTER(lang(?rn0) = "") }
-    OPTIONAL { ?role rdfs:label ?rn1 FILTER(langMatches(lang(?rn1), "en")) }
+    OPTIONAL { ?rn0At l10n:of ?role ; l10n:name ?rn0 }
+  OPTIONAL { ?role rdfs:label ?rn0 FILTER(lang(?rn0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?role ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_rn1 l10n:of ?role ; l10n:name ?rn1 } OPTIONAL { ?role rdfs:label ?rn1 FILTER(langMatches(lang(?rn1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?role ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?roleSlug0, "")) AS ?roleSlug)
     BIND(STR(COALESCE(?roleOrder0, "")) AS ?roleOrder)
     BIND(STR(COALESCE(?rn0, ?rn1, ?roleSlug)) AS ?roleName)
@@ -975,8 +987,9 @@ WHERE {
     }
     FILTER(?n > 0)
     BIND(IF(?n = 1, ?onePhrase, ?manyPhrase) AS ?phrase)
-    OPTIONAL { ?phrase rdfs:label ?p0 FILTER(lang(?p0) = "") }
-    OPTIONAL { ?phrase rdfs:label ?p1 FILTER(langMatches(lang(?p1), "en")) }
+    OPTIONAL { ?p0At l10n:of ?phrase ; l10n:name ?p0 }
+  OPTIONAL { ?phrase rdfs:label ?p0 FILTER(lang(?p0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?phrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_p1 l10n:of ?phrase ; l10n:name ?p1 } OPTIONAL { ?phrase rdfs:label ?p1 FILTER(langMatches(lang(?p1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?phrase ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?p0, ?p1, IF(?n = 1, ?oneFallback, ?manyFallback))) AS ?pattern)
     BIND(REPLACE(?pattern, "[{]n[}]", STR(?n)) AS ?statWords)
     BIND(IRI(CONCAT(STR($this), "/~counts")) AS ?counts)
@@ -992,19 +1005,10 @@ WHERE {
     } }
     BIND(IRI(CONCAT(STR($this), "/~shown")) AS ?shown)
     BIND(IRI(CONCAT(STR($this), "/~shown-", SUBSTR(MD5(STR(?spec)), 1, 8))) AS ?link)
-    OPTIONAL { ?spec c:label ?specLabel }
+    OPTIONAL { { ?spec l10n:label ?specLabel } UNION { ?l10nAt_specLabel l10n:of ?spec ; l10n:label ?specLabel } } OPTIONAL { ?spec c:label ?specLabel FILTER(NOT EXISTS { ?spec l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?spec ; l10n:label ?l10nPick }) }
     BIND(REPLACE(STR(?spec), "[^#/]*$", "") AS ?gns)
     BIND(REPLACE(STR(?spec), "^.*[#/]", "") AS ?glocal)
     OPTIONAL { { SELECT ?gns (MIN(?gp0) AS ?gpfx) WHERE { ?gd sh:prefix ?gp0 ; sh:namespace ?gn0 BIND(STR(?gn0) AS ?gns) } GROUP BY ?gns } }
     BIND(IF(BOUND(?gpfx) && REGEX(?glocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?gpfx, ":", ?glocal), CONCAT("<", STR(?spec), ">")) AS ?specName)
   } }
 }""" .
-
-# A card's name selects its term, as the tree's names do.
-c:SelectCardTerm a beh:Reaction ;
-    rdfs:label "Select a term"@en ;
-    beh:when beh:Click ;
-    beh:sourceClass c:TermCard ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?term } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?term . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .

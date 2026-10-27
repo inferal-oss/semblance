@@ -28,6 +28,8 @@ iv:Strategy a owl:Class ; rdfs:comment "How a view is kept up to date."@en .
 iv:strategy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Strategy ;
     rdfs:comment """Asked for on a view (iv:Incremental makes a fallback an error), and stated by the
 runtime in the views graph: what the view got."""@en .
+# iv:strategy iv:Incremental on a SPARQL rule (or its rendering) maintains the rule as a view: its
+# query partitioned by $this, each focus's output read from the view (docs/COMPONENTS.md).
 iv:Incremental a iv:Strategy ; rdfs:label "incremental"@en ;
     rdfs:comment "Every operator does work in proportion to the change, not to the data."@en .
 iv:Auto a iv:Strategy ; rdfs:label "as it can"@en ;
@@ -98,6 +100,11 @@ iv:targets a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range owl:Class ;
     rdfs:comment """A view per instance of the class, with $this bound to it (as sem:targets does for rules): its
 IRI is <instance>/~view-<local name>, its output and rows are minted under the instance, and it is
 maintained while the instance is shown (unless iv:whileShown says otherwise)."""@en .
+iv:perReferrer a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Property ;
+    rdfs:comment """A view per node that names it by this property (`?node <property> <view>`), with $this bound to that
+node: as iv:targets, its IRI is <node>/~view-<local name>, its rows are minted under the node, and it is
+maintained while the node is shown. A formula whose query reads $this (c:valueQuery) is one view per
+component that asks it, not one per instance of a class."""@en .
 iv:instanceOf a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: the view it is an instance of."@en .
 iv:focus a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: its instance ($this)."@en .
 iv:parameter a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Parameter ;

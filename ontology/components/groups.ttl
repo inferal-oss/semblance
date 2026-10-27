@@ -48,7 +48,7 @@ c:InspectionGroup a sem:ComponentGroup ; sem:order 11 ;
 c:Stack sem:group c:LayoutGroup . c:HostSlot sem:group c:LayoutGroup . c:Surface sem:group c:LayoutGroup . c:Divider sem:group c:LayoutGroup .
 c:Grid sem:group c:LayoutGroup . c:Spacer sem:group c:LayoutGroup . c:Card sem:group c:LayoutGroup . c:LinkedCard sem:group c:LayoutGroup .
 c:Specimen sem:group c:LayoutGroup . c:Swatches sem:group c:LayoutGroup . c:StatusBar sem:group c:LayoutGroup .
-c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup .
+c:Switch sem:group c:LayoutGroup . c:SplitView sem:group c:LayoutGroup . c:DockPanel sem:group c:LayoutGroup . c:Foldable sem:group c:LayoutGroup . c:TiledWorkspace sem:group c:LayoutGroup . c:TabHandle sem:group c:LayoutGroup . c:CloseTile sem:group c:LayoutGroup .
 c:Canvas sem:group c:LayoutGroup . c:CanvasItem sem:group c:LayoutGroup . c:Connector sem:group c:LayoutGroup .
 # A foreign component (web component, framework component, widget) is laid out like any other part.
 ext:Island sem:group c:LayoutGroup .
@@ -63,7 +63,7 @@ c:SourceSpan sem:group c:TypeGroup . c:StepInView sem:group c:TypeGroup .
 # Source shown as text: a source text verbatim (the walkthrough's), and a live example's Turtle
 # beside what it renders, with its sandbox's state and problems.
 c:SourceView sem:group c:TypeGroup . c:SourceText sem:group c:TypeGroup .
-c:LiveExample sem:group c:TypeGroup . c:SandboxState sem:group c:TypeGroup . c:SandboxProblem sem:group c:TypeGroup .
+c:LiveExample sem:group c:TypeGroup . c:SandboxState sem:group c:TypeGroup . c:SandboxProblem sem:group c:TypeGroup . c:DataLine sem:group c:TypeGroup . c:LineChange sem:group c:TypeGroup .
 
 # --- Actions ---
 c:Button sem:group c:ActionsGroup . c:IconButton sem:group c:ActionsGroup . c:ButtonGroup sem:group c:ActionsGroup .
@@ -75,7 +75,8 @@ clip:Copier sem:group c:ActionsGroup .
 # --- Inputs ---
 c:TextField sem:group c:InputsGroup . c:TextArea sem:group c:InputsGroup . c:Checkbox sem:group c:InputsGroup .
 c:RadioGroup sem:group c:InputsGroup . c:ToggleSwitch sem:group c:InputsGroup . c:Slider sem:group c:InputsGroup .
-c:Field sem:group c:InputsGroup . c:Choice sem:group c:InputsGroup . c:Segmented sem:group c:InputsGroup .
+c:Field sem:group c:InputsGroup . c:Selector sem:group c:InputsGroup . c:Chooser sem:group c:InputsGroup .
+c:TextEntry sem:group c:InputsGroup . c:Choice sem:group c:InputsGroup . c:Segmented sem:group c:InputsGroup .
 c:Chips sem:group c:InputsGroup . c:CodeInput sem:group c:InputsGroup . c:ThemeSwitcher sem:group c:InputsGroup .
 c:SearchField sem:group c:InputsGroup .
 c:Typeahead sem:group c:InputsGroup . c:Combobox sem:group c:InputsGroup . c:TagInput sem:group c:InputsGroup .
@@ -103,7 +104,7 @@ c:Toast sem:group c:FeedbackGroup . c:ToastRegion sem:group c:FeedbackGroup . c:
 c:LiveIndicator sem:group c:FeedbackGroup . c:CountBadge sem:group c:FeedbackGroup .
 
 # --- Data ---
-c:List sem:group c:DataGroup . c:ListItem sem:group c:DataGroup . c:Table sem:group c:DataGroup .
+c:List sem:group c:DataGroup . c:ListItem sem:group c:DataGroup . c:Table sem:group c:DataGroup . c:Sortable sem:group c:DataGroup .
 c:DescriptionList sem:group c:DataGroup . c:Stat sem:group c:DataGroup . c:Metrics sem:group c:DataGroup .
 c:Avatar sem:group c:DataGroup . c:AvatarGroup sem:group c:DataGroup . c:Timeline sem:group c:DataGroup .
 c:Gallery sem:group c:DataGroup . c:ImageBrowser sem:group c:DataGroup . c:Snapped sem:group c:DataGroup .
@@ -111,9 +112,9 @@ c:Picture sem:group c:DataGroup . c:GalleryLayout sem:group c:DataGroup .
 c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
 c:DataGrid sem:group c:DataGroup . c:GridRow sem:group c:DataGroup . c:TimeAxis sem:group c:DataGroup .
 c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView sem:group c:DataGroup .
-c:BodyViewer sem:group c:DataGroup .
+c:BodyViewer sem:group c:DataGroup . c:ImageView sem:group c:DataGroup .
 c:Chart sem:group c:DataGroup . c:BarChart sem:group c:DataGroup . c:Heatmap sem:group c:DataGroup .
-c:LineChart sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
+c:LineChart sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
 c:Column sem:group c:DataGroup . c:series sem:group c:DataGroup . c:GridColumn sem:group c:DataGroup .
 c:CellKind sem:group c:DataGroup . c:Filter sem:group c:DataGroup . c:TextFilter sem:group c:DataGroup .
 c:ValueFilter sem:group c:DataGroup . c:FlagFilter sem:group c:DataGroup . c:TimeScale sem:group c:DataGroup .
@@ -121,6 +122,8 @@ c:Representation sem:group c:DataGroup .
 c:Money sem:group c:DataGroup . c:Board sem:group c:DataGroup . c:BoardCard sem:group c:DataGroup .
 c:Calendar sem:group c:DataGroup . c:CalendarEntry sem:group c:DataGroup .
 c:Outline sem:group c:DataGroup . c:OutlineItem sem:group c:DataGroup .
+c:RdfEditor sem:group c:DataGroup . c:RdfRow sem:group c:DataGroup . c:RdfTerm sem:group c:DataGroup . c:RdfProperty sem:group c:DataGroup .
+c:ArrowsMode sem:group c:DataGroup . c:RdfEditorKey sem:group c:DataGroup .
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 c:BoardKey sem:group c:DataGroup .
 # Lists an app shows its people, read from the graph: its keyboard shortcuts, and what it remembers.
@@ -145,6 +148,7 @@ c:Flippable sem:group c:DisclosureGroup . c:SourceBack sem:group c:DisclosureGro
 # --- Windows ---
 c:Frame sem:group c:WindowsGroup . c:Window sem:group c:WindowsGroup . c:Palette sem:group c:WindowsGroup .
 c:Desktop sem:group c:WindowsGroup . c:Taskbar sem:group c:WindowsGroup .
+c:DesktopLayout sem:group c:WindowsGroup .
 c:Draggable sem:group c:WindowsGroup . c:Resizable sem:group c:WindowsGroup . c:Raisable sem:group c:WindowsGroup .
 c:Restorable sem:group c:WindowsGroup . c:Minimizable sem:group c:WindowsGroup . c:Maximizable sem:group c:WindowsGroup .
 c:Dockable sem:group c:WindowsGroup . fs:Fullscreenable sem:group c:WindowsGroup .
