@@ -64,9 +64,9 @@ WHERE {
   $this a/rdfs:subClassOf* c:TiledWorkspace .
   OPTIONAL { $this c:rootTile ?tile FILTER(isIRI(?tile)) }
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?label)
   BIND(IF(BOUND(?label) && ?label != "", ?label, ?none) AS ?caption)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
@@ -208,9 +208,9 @@ WHERE {
   OPTIONAL { $this c:secondary ?secondaryChild FILTER(isIRI(?secondaryChild)) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
   BIND(IF(BOUND(?caption) && ?caption != "", CONCAT("Resize ", ?caption), "Resize panes") AS ?resizeLabel)
   BIND(COALESCE(xsd:decimal(STR(?ratioRaw)), 0.5) AS ?ratio0)
@@ -353,9 +353,9 @@ WHERE {
   $this a/rdfs:subClassOf* c:DockPanel .
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
   BIND(IF(BOUND(?caption) && ?caption != "", ?caption, ?none) AS ?captionData)
   BIND(IF(BOUND(?captionData), CONCAT("Resize ", ?captionData), "Resize panel") AS ?resizeLabel)
@@ -391,7 +391,7 @@ WHERE {
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~handle-data-sem-min")), ?none) AS ?hMinPx)
   BIND(IRI(CONCAT(STR($this), "/~header")) AS ?header)
   BIND(IRI(CONCAT(STR($this), "/~fold")) AS ?fold)
-  BIND(IF(EXISTS { $this c:badge ?anyBadge FILTER(isLiteral(?anyBadge)) }, IRI(CONCAT(STR($this), "/~badge")), ?none) AS ?badgeRef)
+  BIND(IF(EXISTS { $this c:badge ?anyBadge FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick FILTER(STR(?l10nPick) = STR(?anyBadge)) }) FILTER(isLiteral(?anyBadge)) }, IRI(CONCAT(STR($this), "/~badge")), ?none) AS ?badgeRef)
   BIND(IRI(CONCAT(STR($this), "/~fold-aria-expanded")) AS ?fExpanded)
   BIND(IRI(CONCAT(STR($this), "/~fold-aria-controls")) AS ?fControls)
   BIND(IRI(CONCAT(STR($this), "/~chevron")) AS ?chevron)
@@ -404,7 +404,7 @@ WHERE {
   OPTIONAL { $this c:content ?content FILTER(isIRI(?content)) }
   # The badge, the header actions (in order), the toolbar and the footer, each only if given.
   {} UNION {
-    $this c:badge ?badgeRaw FILTER(isLiteral(?badgeRaw))
+    $this c:badge ?badgeRaw FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:badge ?l10nPick FILTER(STR(?l10nPick) = STR(?badgeRaw)) }) FILTER(isLiteral(?badgeRaw))
     BIND(STR(?badgeRaw) AS ?badgeData)
     BIND(IRI(CONCAT(STR($this), "/~badge")) AS ?badge)
     BIND(IRI(CONCAT(STR($this), "/~badge-text")) AS ?badgeText)
@@ -435,7 +435,7 @@ WHERE {
   $this a/rdfs:subClassOf* c:DockPanel .
   OPTIONAL { $this l10n:label ?picko }
   OPTIONAL { FILTER(!BOUND(?picko)) ?pickoAt l10n:of $this ; l10n:label ?pickoT }
-  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) }
+  OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) { $this l10n:label ?anyo } UNION { ?l10nAt_anyo l10n:of $this ; l10n:label ?anyo } } OPTIONAL { FILTER(!BOUND(?picko) && !BOUND(?pickoT)) $this c:label ?anyo FILTER(isLiteral(?anyo)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?picko, ?pickoT, ?anyo)) AS ?label)
   BIND(!EXISTS { $this c:expanded ?flag FILTER(STR(?flag) = "false") } AS ?open)
   BIND(CONCAT("\u2550 ", COALESCE(?label, ""), " ", IF(?open, "\u25BE", "\u25B8"), " \u2550") AS ?line)

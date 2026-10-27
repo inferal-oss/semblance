@@ -85,14 +85,14 @@ WHERE {
     $this a c:Dialog .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?title0)
     BIND(IF(COALESCE(?title0, "") != "", ?title0, ?none) AS ?title)
     OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(STR(?rawHelp) AS ?bodyText)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
     BIND(?rawContent AS ?content)
@@ -117,8 +117,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
     OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
-  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_closeWord1 l10n:of c:CloseCommand ; l10n:name ?closeWord1 } OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc-text")), ?none) AS ?descText)
@@ -160,9 +160,9 @@ WHERE {
     $this a c:Dialog .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(CONCAT("╔ ", STR(COALESCE(?localLabel, ?rawLabel, "dialog")), " ╗", COALESCE(CONCAT(" ", STR(?rawHelp)), "")) AS ?lineData)
     BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
@@ -234,14 +234,14 @@ WHERE {
     $this a c:Drawer .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?title0)
     BIND(IF(COALESCE(?title0, "") != "", ?title0, ?none) AS ?title)
     OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(STR(?rawHelp) AS ?bodyText)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
     BIND(?rawContent AS ?content)
@@ -269,8 +269,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
     OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
-  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_closeWord1 l10n:of c:CloseCommand ; l10n:name ?closeWord1 } OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc-text")), ?none) AS ?descText)
@@ -312,9 +312,9 @@ WHERE {
     $this a c:Drawer .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(CONCAT("╔ ", STR(COALESCE(?localLabel, ?rawLabel, "drawer")), " ╗", COALESCE(CONCAT(" ", STR(?rawHelp)), "")) AS ?lineData)
     BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
@@ -370,16 +370,16 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Popover .
-  OPTIONAL { $this c:trigger ?rawTrigger }
+  OPTIONAL { ?l10nAt_rawTrigger l10n:of $this ; l10n:trigger ?rawTrigger } OPTIONAL { $this c:trigger ?rawTrigger FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:trigger ?l10nPick }) }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label0)
   BIND(COALESCE(STR(?rawTrigger), ?label0) AS ?label)
   BIND(EXISTS { $this c:open ?o FILTER(STR(?o) = "true") } AS ?open)
-  OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+  OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   BIND(IF(?open, STR(?rawHelp), ?none) AS ?bodyText)
   OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
   BIND(IF(?open, ?rawContent, ?none) AS ?content)
@@ -413,16 +413,16 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Popover .
-  OPTIONAL { $this c:trigger ?rawTrigger }
+  OPTIONAL { ?l10nAt_rawTrigger l10n:of $this ; l10n:trigger ?rawTrigger } OPTIONAL { $this c:trigger ?rawTrigger FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:trigger ?l10nPick }) }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label0)
   BIND(COALESCE(STR(?rawTrigger), ?label0) AS ?label)
   BIND(EXISTS { $this c:open ?o FILTER(STR(?o) = "true") } AS ?open)
-  OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+  OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   BIND(IF(?open, STR(?rawHelp), ?none) AS ?bodyText)
   OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
   BIND(IF(?open, ?rawContent, ?none) AS ?content)

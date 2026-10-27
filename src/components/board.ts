@@ -4,7 +4,7 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import type { Delta } from '../rdf.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY } from '../ns.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { named, picked, RDFS_LABEL, str, text } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const SH = NS.sh
@@ -26,10 +26,10 @@ const P = {
 }
 
 /** As the SPARQL rules read a label: the untagged rdfs:label, else the IRI's local name. */
-function plainLabel(ctx: { objects(s: Term, p: string): Term[] }, t: Term): string {
+function plainLabel(ctx: RuleContext, t: Term): string {
   if (t.termType === 'Literal') return t.value
   const plain = ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')
-  return plain?.value ?? t.value.replace(/^.*[#/]/, '')
+  return picked(ctx, t, RDFS_LABEL) ?? plain?.value ?? t.value.replace(/^.*[#/]/, '')
 }
 
 /** The lanes: the individuals of the property's range, by sem:order (then IRI). */
@@ -128,8 +128,8 @@ const boardCard: FnRule = (ctx, focus, item) => {
   if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
     o.t(card, RDF_TYPE, ctx.nn(DND.Draggable)).t(card, DND.carries, item)
     const titleProperty = ctx.object(focus, P.cardTitle)
-    const title = named(titleProperty) ? ctx.object(item, titleProperty.value) : undefined
-    if (title) o.t(card, DND.name, title.value)
+    const title = named(titleProperty) ? text(ctx, item, titleProperty.value) : undefined
+    if (title !== undefined) o.t(card, DND.name, title)
   }
   if (at > 0) o.t(card, P.previousLane, lanes[at - 1]!)
   if (at < lanes.length - 1) o.t(card, P.nextLane, lanes[at + 1]!)
@@ -149,8 +149,8 @@ const cardView: FnRule = (ctx, focus) => {
   const on = ctx.object(focus, P.onBoard)
   if (!item || !on) return []
   const titleProperty = ctx.object(on, P.cardTitle)
-  const title = named(titleProperty) ? ctx.object(item, titleProperty.value) : undefined
-  if (!title) return []
+  const title = named(titleProperty) ? text(ctx, item, titleProperty.value) : undefined
+  if (title === undefined) return []
   const valueOf = (p: string) => {
     const property = ctx.object(on, p)
     return named(property) ? ctx.object(item, property.value) : undefined
@@ -159,11 +159,11 @@ const cardView: FnRule = (ctx, focus) => {
   const personValue = valueOf(P.cardPerson)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    const line = `  - ${title.value}${personValue ? ` · ${plainLabel(ctx, personValue)}` : ''}${tagValue ? ` [${plainLabel(ctx, tagValue)}]` : ''}`
+    const line = `  - ${title}${personValue ? ` · ${plainLabel(ctx, personValue)}` : ''}${tagValue ? ` [${plainLabel(ctx, tagValue)}]` : ''}`
     o.renders(o.el('root', 'Div', {}, [o.text('text', line)]))
     return o.quads
   }
-  const titleEl = o.el('title', 'Span', { class: 'sem-title', id: o.node('title').value }, [o.text('title-text', title.value)])
+  const titleEl = o.el('title', 'Span', { class: 'sem-title', id: o.node('title').value }, [o.text('title-text', title)])
   const headParts: NamedNode[] = [titleEl]
   if (tagValue) {
     const tag = o.node('tag')

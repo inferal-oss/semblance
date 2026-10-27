@@ -6,7 +6,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
-import { isTrue, nodes, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, nodes, picked, RDFS_LABEL, str, text } from './util.ts'
 
 const c = NS.c
 const L = {
@@ -68,10 +68,10 @@ const P = {
 
 const phrase = (ctx: RuleContext, iri: string) => text(ctx, ctx.nn(iri), RDFS_LABEL) ?? ''
 const fill = (s: string, name: string, value: string) => s.replace(`{${name}}`, value)
-/** As the SPARQL rule names a source: its untagged c:label, else any, else its local name. */
+/** As the SPARQL rule names a source: its c:label in the viewer's language when translated, else its untagged c:label, else any, else its local name. */
 function sourceName(ctx: RuleContext, editor: Term): string {
   const labels = ctx.objects(editor, C.label).filter((t) => t.termType === 'Literal')
-  return (labels.find((t) => t.termType === 'Literal' && !t.language) ?? labels[0])?.value ?? editor.value.replace(/^.*[#/]/, '')
+  return picked(ctx, editor, C.label) ?? (labels.find((t) => t.termType === 'Literal' && !t.language) ?? labels[0])?.value ?? editor.value.replace(/^.*[#/]/, '')
 }
 
 const liveExample: FnRule = (ctx, focus) => {
@@ -136,7 +136,7 @@ const liveExample: FnRule = (ctx, focus) => {
     .sort((a, b) => a.i - b.i)
   const items = problems.map(({ p, i, message }) => {
     const source = ctx.object(p, L.inSource)
-    const name = source && ctx.objects(source, C.label).find((t) => t.termType === 'Literal')?.value
+    const name = source && (picked(ctx, source, C.label) ?? ctx.objects(source, C.label).find((t) => t.termType === 'Literal')?.value)
     const line = str(ctx.object(p, L.sourceLine))
     const lineData = line !== undefined ? fill(phrase(ctx, P.line), 'n', line) : undefined
     const where = name !== undefined && lineData !== undefined ? `${name}, ${lineData}` : (name ?? lineData)

@@ -1,9 +1,9 @@
 // The outline (ontology/components/outline.ttl): function twins of its SPARQL rules and reaction.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
-import type { FnRule } from '../engine/context.ts'
+import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, L10N, MOD, NS, RDF_TYPE, SEM, STY } from '../ns.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { named, RDFS_LABEL, str, text, picked } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const P = {
@@ -26,14 +26,14 @@ const P = {
 const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 const localName = (t: Term) => t.value.replace(/^.*[#/]/, '')
 /** As the SPARQL rules read a value: a literal is itself, a node its untagged rdfs:label or local name. */
-function said(ctx: { objects(s: Term, p: string): Term[] }, t: Term): string {
+function said(ctx: RuleContext, t: Term): string {
   if (t.termType === 'Literal') return t.value
-  return ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')?.value ?? localName(t)
+  return (picked(ctx, t, RDFS_LABEL) ?? ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')?.value) ?? localName(t)
 }
 
 const outline: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const label = str(ctx.object(focus, L10N.label)) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value
+  const label = str(ctx.object(focus, L10N.label)) ?? (picked(ctx, focus, C.label) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value)
   const root = o.el('root', 'Div', { role: 'list', 'aria-label': label })
   const sortP = ctx.object(focus, P.sortBy)
   const target = ctx.object(focus, P.property) ? ctx.object(focus, P.controls) : undefined

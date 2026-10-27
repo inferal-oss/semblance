@@ -159,7 +159,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+  OPTIONAL { { $this l10n:label ?plainLabel } UNION { ?l10nAt_plainLabel l10n:of $this ; l10n:label ?plainLabel } } OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?plainLabel, "")) AS ?label)
   OPTIONAL { $this c:icon ?ownIcon }
   BIND(STR(COALESCE(?ownIcon, "⤒")) AS ?icon)
@@ -210,7 +210,7 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:FileDrop .
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") }
+  OPTIONAL { { $this l10n:label ?plainLabel } UNION { ?l10nAt_plainLabel l10n:of $this ; l10n:label ?plainLabel } } OPTIONAL { $this c:label ?plainLabel FILTER(lang(?plainLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?plainLabel, "")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~l10n-prompt")) AS ?promptNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-help")) AS ?helpNode)

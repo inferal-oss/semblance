@@ -4,7 +4,7 @@ import type { NamedNode } from '@rdfjs/types'
 import type { FnRule } from '../engine/context.ts'
 import { C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { el } from './data.ts'
-import { encodeForUri, RDFS_LABEL, isTrue, named, str, text } from './util.ts'
+import { encodeForUri, RDFS_LABEL, isTrue, named, picked, str, text } from './util.ts'
 
 const AS = NS.as
 const C_MESSAGE = NS.c + 'Message'
@@ -55,12 +55,12 @@ function sortableTime(t: string | undefined): string {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : '\uffff'
 }
 
-/** The author's name, as the SPARQL rule finds it: untagged c:label, then rdfs:label, then the IRI's local name. */
+/** The author's name, as the SPARQL rule finds it: c:label (in the viewer's language when translated, else untagged), then rdfs:label, then the IRI's local name. */
 function authorOf(ctx: Parameters<FnRule>[0], message: NamedNode) {
   const person = ctx.object(message, AS + 'attributedTo')
   if (!named(person)) return { person, name: 'Someone', image: undefined }
   const untagged = (p: string) => ctx.objects(person, p).find((t) => t.termType === 'Literal' && !t.language)?.value
-  const name = untagged(C.label) ?? untagged(RDFS_LABEL) ?? person.value.replace(/^.*[#/]/, '')
+  const name = picked(ctx, person, C.label) ?? untagged(C.label) ?? picked(ctx, person, RDFS_LABEL) ?? untagged(RDFS_LABEL) ?? person.value.replace(/^.*[#/]/, '')
   return { person, name, image: str(ctx.object(person, C_IMAGE)) }
 }
 

@@ -48,6 +48,16 @@ export function text(ctx: RuleContext, s: Term, p: string): string | undefined {
   return (values.find((t) => lang(t) === '') ?? tagged('en') ?? values[0])!.value
 }
 
+/**
+ * A translated text in the viewer's language: when the node has two values or more (as l10n:Terms
+ * derives its twin for the SPARQL rules), the one text() picks; else undefined, so a caller that
+ * reads one particular value (the untagged one) falls back to it as the SPARQL rules do.
+ */
+export function picked(ctx: RuleContext, s: Term, p: string): string | undefined {
+  const values = ctx.objects(s, p).filter((t) => t.termType === 'Literal')
+  return new Set(values.map((t) => t.value + '@' + (t as { language?: string }).language)).size > 1 ? text(ctx, s, p) : undefined
+}
+
 /** What to call a node: its c:label, its rdfs:label, or its IRI's local name. */
 export const labelOf = (ctx: RuleContext, t: Term): string =>
   text(ctx, t, C.label) ?? text(ctx, t, RDFS_LABEL) ?? t.value.replace(/^.*[#/]/, '')

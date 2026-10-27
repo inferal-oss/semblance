@@ -4,7 +4,7 @@ import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
-import { RDFS_LABEL, named, str } from './util.ts'
+import { RDFS_LABEL, named, str, picked } from './util.ts'
 
 const S = {
   cell: NS.c + 'cell',
@@ -42,7 +42,7 @@ const grid: FnRule = (ctx, focus) => {
   const columns = int(ctx, focus, S.columns)
   if (!Number.isFinite(columns)) return []
   const o = ctx.out(focus)
-  const label = ctx.objects(focus, C.label).find((t) => t.termType === 'Literal')?.value ?? 'Sheet'
+  const label = (picked(ctx, focus, C.label) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal')?.value) ?? 'Sheet'
   const cells = ctx.objects(focus, S.cell).filter(named)
   const placed = cells.map((cell) => ({ cell, r: int(ctx, cell, S.row), c: int(ctx, cell, S.column) })).filter((x) => Number.isFinite(x.r) && Number.isFinite(x.c))
   const rows = [...new Set(placed.map((x) => x.r))]

@@ -4,7 +4,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, L10N, MOD, NS, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { mint } from '../rdf.ts'
-import { RDFS_LABEL, named, rdfList, str } from './util.ts'
+import { RDFS_LABEL, named, picked, rdfList, str } from './util.ts'
 
 const c = NS.c
 export const CONNECTOR = {
@@ -41,7 +41,7 @@ function isA(ctx: RuleContext, node: Term, cls: string): boolean {
 /** An end's element: a component's root (as the style hooks have it), else the rendered node itself. */
 const anchorOf = (ctx: RuleContext, end: NamedNode) => (isA(ctx, end, COMPONENT) ? ctx.nn(mint(end.value, 'root')) : end)
 
-const plain = (ctx: RuleContext, s: Term, p: string) => ctx.objects(s, p).find((t) => t.termType === 'Literal' && t.language === '')?.value
+const plain = (ctx: RuleContext, s: Term, p: string) => picked(ctx, s, p) ?? ctx.objects(s, p).find((t) => t.termType === 'Literal' && t.language === '')?.value
 const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
 
 /** What an end is called, as the SPARQL rule has it: its localized label, plain label, rdfs:label, or (its term's) local name. */

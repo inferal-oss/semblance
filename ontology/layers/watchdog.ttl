@@ -252,8 +252,8 @@ WHERE {
     FILTER(!BOUND(?s0) && !BOUND(?n0))
     BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
     BIND(IRI(CONCAT(STR($this), "/~empty-text")) AS ?emptyText)
-    OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") }
-    OPTIONAL { sem:NoStallPhrase rdfs:label ?e1 FILTER(langMatches(lang(?e1), "en")) }
+    OPTIONAL { ?l10nAt_e0 l10n:of $this ; l10n:emptyText ?e0 } OPTIONAL { $this c:emptyText ?e0 FILTER(lang(?e0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
+    OPTIONAL { ?l10nAt_e1 l10n:of sem:NoStallPhrase ; l10n:name ?e1 } OPTIONAL { sem:NoStallPhrase rdfs:label ?e1 FILTER(langMatches(lang(?e1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of sem:NoStallPhrase ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?e0, ?e1, "Nothing has stalled.")) AS ?emptyWords)
   } UNION {
     # The state, as an attribute the theme can hook, and the summary line.
@@ -262,7 +262,7 @@ WHERE {
     OPTIONAL { ?state sem:slug ?stateSlug0 }
     BIND(COALESCE(?stateSlug0, "") AS ?stateSlug)
     BIND(IRI(CONCAT(STR($this), "/~root-data-sem-state")) AS ?stateAttr)
-    OPTIONAL { ?state rdfs:label ?sl FILTER(langMatches(lang(?sl), "en")) }
+    OPTIONAL { ?l10nAt_sl l10n:of ?state ; l10n:name ?sl } OPTIONAL { ?state rdfs:label ?sl FILTER(langMatches(lang(?sl), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?state ; l10n:name ?l10nPick }) }
     OPTIONAL { ?s sem:done ?d0 } OPTIONAL { ?s sem:pending ?p0 } OPTIONAL { ?s sem:spentMs ?ms0 }
     OPTIONAL { sem:done rdfs:label ?doneWord FILTER(langMatches(lang(?doneWord), "en")) }
     OPTIONAL { sem:pending rdfs:label ?pendingWord FILTER(langMatches(lang(?pendingWord), "en")) }
@@ -275,7 +275,7 @@ WHERE {
     ?wd sem:stall ?s .
     ?s sem:stallState sem:Continuing ; sem:done ?done ; sem:pending ?pending .
     BIND(?done + ?pending AS ?total)
-    OPTIONAL { sem:Continuing rdfs:label ?cl FILTER(langMatches(lang(?cl), "en")) }
+    OPTIONAL { ?l10nAt_cl l10n:of sem:Continuing ; l10n:name ?cl } OPTIONAL { sem:Continuing rdfs:label ?cl FILTER(langMatches(lang(?cl), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of sem:Continuing ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?cl, "Continuing")) AS ?stateName)
     BIND(IRI(CONCAT(STR($this), "/~progress")) AS ?progress)
   } UNION {
@@ -286,7 +286,7 @@ WHERE {
       ?s sem:culprit ?culprit .
       BIND("1" AS ?factKey) BIND(sem:culprit AS ?factProperty) BIND("culprit" AS ?local)
       BIND(REPLACE(STR(?culprit), "^.*[#/]", "") AS ?culpritName)
-      OPTIONAL { ?s sem:workKind ?kind . ?kind rdfs:label ?kl FILTER(langMatches(lang(?kl), "en")) }
+      OPTIONAL { ?s sem:workKind ?kind . ?kind rdfs:label ?kl FILTER(NOT EXISTS { ?l10nAt l10n:of ?kind ; l10n:name ?l10nPick } || EXISTS { ?l10nAt l10n:of ?kind ; l10n:name ?l10nPick FILTER(STR(?l10nPick) = STR(?kl)) }) FILTER(langMatches(lang(?kl), "en")) }
       OPTIONAL { ?s sem:culpritMs ?cms }
       BIND(CONCAT(COALESCE(CONCAT(STR(?kl), " · "), ""), STR(COALESCE(?cms, 0)), " ms") AS ?noteWords)
       BIND(IRI(CONCAT(STR($this), "/~fact-culprit-link")) AS ?link)
@@ -305,11 +305,11 @@ WHERE {
     } UNION {
       ?s sem:detectedBy ?detector .
       BIND("4" AS ?factKey) BIND(sem:detectedBy AS ?factProperty) BIND("detector" AS ?local)
-      OPTIONAL { ?detector rdfs:label ?dl FILTER(langMatches(lang(?dl), "en")) }
+      OPTIONAL { ?l10nAt_dl l10n:of ?detector ; l10n:name ?dl } OPTIONAL { ?detector rdfs:label ?dl FILTER(langMatches(lang(?dl), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?detector ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?dl, REPLACE(STR(?detector), "^.*[#/]", ""))) AS ?valueWords)
       BIND(IRI(CONCAT(STR($this), "/~fact-detector-value")) AS ?value)
     }
-    OPTIONAL { ?factProperty rdfs:label ?fl FILTER(langMatches(lang(?fl), "en")) }
+    OPTIONAL { ?l10nAt_fl l10n:of ?factProperty ; l10n:name ?fl } OPTIONAL { ?factProperty rdfs:label ?fl FILTER(langMatches(lang(?fl), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?factProperty ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?fl, ?local)) AS ?factName)
     BIND(IRI(CONCAT(STR($this), "/~fact-", ?local)) AS ?fact)
     BIND(IRI(CONCAT(STR($this), "/~fact-", ?local, "-dt")) AS ?dt)

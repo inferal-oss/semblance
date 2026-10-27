@@ -135,7 +135,7 @@ WHERE {
       BIND("no alternative holds" AS ?fallback)
     }
   }
-  LATERAL { OPTIONAL { SELECT ?ps ?custom WHERE { ?ps sh:message ?custom }
+  LATERAL { OPTIONAL { SELECT ?ps ?custom WHERE { ?ps sh:message ?custom FILTER(NOT EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick } || EXISTS { ?l10nAt l10n:of ?ps ; l10n:message ?l10nPick FILTER(STR(?l10nPick) = STR(?custom)) }) }
                        ORDER BY (lang(?custom) != "") (!langMatches(lang(?custom), "en")) LIMIT 1 } }
   BIND(STR(COALESCE(?custom, CONCAT(REPLACE(STR(COALESCE(?path, ?shape)), ?localName, ""), ": ", ?fallback))) AS ?message)
   BIND(IF(isIRI(?ps), ?ps, ?shape) AS ?source)

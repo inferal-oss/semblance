@@ -419,7 +419,7 @@ ex:title a c:Heading ; c:level 2 ;
     c:label "Good morning" , "Доброго ранку"@uk , "Guten Morgen"@de , "صباح الخير"@ar .
 ex:name a c:TextField ;
     c:label "Name" , "Ім’я"@uk , "Name"@de , "الاسم"@ar ;
-    c:placeholder "Ada" .
+    c:placeholder "Ada" , "Олена"@uk , "Erika"@de , "ليلى"@ar .
 ex:save a c:Button ; sty:intent sty:Primary ;
     c:label "Save" , "Зберегти"@uk , "Speichern"@de , "حفظ"@ar .''' .
 

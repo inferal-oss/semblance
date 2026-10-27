@@ -67,7 +67,8 @@ WHERE {
   BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
   BIND(IRI(CONCAT(?me, "/~panels")) AS ?panels)
   OPTIONAL { $this c:view ?v . ?v sem:select ?anySelect }
-  OPTIONAL { $this c:unit ?u0 } BIND(COALESCE(STR(?u0), "") AS ?unit)
+  OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?u0 }
+  OPTIONAL { FILTER(!BOUND(?u0)) $this c:unit ?u1 FILTER(isLiteral(?u1)) } BIND(COALESCE(STR(?u0), STR(?u1), "") AS ?unit)
   # What it shows instead of a chart: no view, a view whose rows are not in the graph, or no rows
   # and an empty text of its own.
   BIND(COALESCE(?v, c:none) AS ?vNode)
