@@ -290,6 +290,10 @@
     (call $an_ref (local.get $b) (i32.load offset=4 (local.get $n)))
     (call $deep (local.get $b) (i32.load offset=8 (local.get $n)))
     (return)))
+  (if (i32.eq (local.get $k) (i32.const P_MAGIC)) (then
+    (call $refs_bits (local.get $b) (i32.load offset=8 (local.get $n)))
+    (call $refs_bits (local.get $b) (i32.load offset=12 (local.get $n)))
+    (return)))
   (if (i32.eq (local.get $k) (i32.const P_VALUES)) (then
     (loop $vars (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $n))) (then
       (call $setbit (local.get $b) (i32.load (i32.add (i32.load offset=8 (local.get $n)) (i32.shl (local.get $i) (i32.const 2)))))

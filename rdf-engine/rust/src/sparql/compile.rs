@@ -301,7 +301,7 @@ fn optional(x: &[u8], c: &Pattern) -> Vec<u8> {
 fn native(p: &Pattern) -> bool {
     match p {
         Pattern::Bgp(ts) => ts.iter().all(|t| ![&t.s, &t.p, &t.o].iter().any(|x| matches!(x, Tv::Triple(_)))),
-        Pattern::Minus(..) | Pattern::Graph(..) | Pattern::Sub(_) | Pattern::Service(_) => false,
+        Pattern::Minus(..) | Pattern::Graph(..) | Pattern::Sub(_) | Pattern::Service(_) | Pattern::Magic(_) => false,
         _ => true,
     }
 }
@@ -356,6 +356,10 @@ fn pattern_reads(p: &Pattern, out: &mut Vec<Var>) -> bool {
         }
         Pattern::Values(vs, _) => {
             out.extend_from_slice(vs);
+            true
+        }
+        Pattern::Magic(m) => {
+            m.ins.iter().chain(&m.outs).for_each(|x| tv_vars(x, out));
             true
         }
         Pattern::Sub(s) => {

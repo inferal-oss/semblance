@@ -529,6 +529,7 @@
 ;; Functions of evaluated arguments.
 (func $fn (param $f i32) (param $argc i32) (param $a i32) (param $b i32) (param $c i32) (param $d i32) (result i32)
   (local $x i32) (local $y i32) (local $p i32) (local $n i32) (local $i i32) (local $k i32) (local $s f64) (local $l f64)
+  (if (i32.ge_u (local.get $f) (i32.const F_SX_LOG)) (then (return (call $sx_fn (local.get $f) (local.get $argc) (local.get $a) (local.get $b) (local.get $c)))))
   (if (i32.eq (local.get $f) (i32.const F_STR)) (then
     (if (i32.gt_u (i32.sub (call $kind (local.get $a)) (i32.const 1)) (i32.const 2)) (then (return (i32.const 0))))
     (if (i32.eq (call $kind (local.get $a)) (i32.const 2)) (then (return (i32.const 0))))
