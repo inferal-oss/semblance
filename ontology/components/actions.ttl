@@ -148,7 +148,8 @@ c:Menu a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A menu button: a trigger (c:label, optional c:icon) that discloses c:items, a list of
 c:MenuItem. c:open holds whether the menu is shown; clicking the trigger flips it, and Escape
-closes it (the open trigger declares the keyboard layer's escape shortcut). Toned and sized
+closes it (the open trigger declares the keyboard layer's escape shortcut). Opened from the
+trigger, the focus goes to the first item; closed, back to the trigger. Toned and sized
 like a button. Items are only built while the menu is open."""@en ;
     sem:slug "menu" .
 c:MenuItem a owl:Class ;
@@ -169,7 +170,8 @@ CONSTRUCT {
   ?dataOpen a rdfhtml:Attribute ; rdfhtml:attributeName "data-open" ; rdfhtml:attributeValue "true" .
   ?trigger a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:id ?triggerId ; rdfhtml:disabled ?disabled ; c:toggles $this ;
            rdfhtml:hasChild ?icon, ?labelSpan, ?caret ; ord:immediatelyPrecedes ?popup ;
-           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?shortcut, ?shortcutApple, ?shortcutOther .
+           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?shortcut, ?shortcutApple, ?shortcutOther, ?triggerFocus .
+  ?triggerFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?hasPopup a rdfhtml:Attribute ; rdfhtml:attributeName "aria-haspopup" ; rdfhtml:attributeValue "menu" .
   ?expanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openValue .
   ?controls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?popupId .
@@ -185,7 +187,8 @@ CONSTRUCT {
   ?caretText a rdfhtml:Text ; rdfhtml:data "▾" .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?popup a rdfhtml:Div ; rdfhtml:id ?popupId ; rdfhtml:class "sem-menu-popup" ; rdfhtml:hasChild ?item ;
-         rdfhtml:attribute ?popupRole, ?popupLabelledBy, ?popupAnchor .
+         rdfhtml:attribute ?popupRole, ?popupLabelledBy, ?popupAnchor, ?popupFocus .
+  ?popupFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?popupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "menu" .
   ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?triggerId .
   ?popupLabelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
@@ -230,6 +233,9 @@ WHERE {
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-role")), ?none) AS ?popupRole)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-aria-labelledby")), ?none) AS ?popupLabelledBy)
     BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-data-sem-anchor")), ?none) AS ?popupAnchor)
+    # Opened from the trigger, the focus goes to the first item; closed, back to the trigger.
+    BIND(IF(?open, IRI(CONCAT(STR($this), "/~popup-data-sem-takes-focus")), ?none) AS ?popupFocus)
+    BIND(IF(?open, ?none, IRI(CONCAT(STR($this), "/~trigger-data-sem-takes-focus"))) AS ?triggerFocus)
   } UNION {
     # Open: the items, in list order.
     $this a c:Menu .

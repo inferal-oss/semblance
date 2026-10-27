@@ -63,8 +63,9 @@ function modal(kind: 'dialog' | 'drawer'): FnRule {
     ])
     const parts: NamedNode[] = [head]
     if (body) parts.push(o.el('desc', 'P', { id: bodyNode.value, class: 'sem-desc' }, [o.text('desc-text', body)]))
-    if (named(content)) parts.push(o.el('body', 'Div', { class: 'sem-body' }, [content]))
-    if (actions.length) parts.push(o.el('actions', 'Footer', { class: 'sem-actions' }, actions))
+    // Opened, the focus goes to the content's first control, else the first action (the bus's ModalFocus).
+    if (named(content)) parts.push(o.el('body', 'Div', { class: 'sem-body', autofocus: '' }, [content]))
+    if (actions.length) parts.push(o.el('actions', 'Footer', { class: 'sem-actions', autofocus: '' }, actions))
     const panel = o.el('panel', 'Section', { class: 'sem-panel', tabIndex: '-1' }, parts)
     o.attr(panel, 'role', 'dialog').attr(panel, 'aria-modal', 'true')
     if (title) o.attr(panel, 'aria-labelledby', titleNode.value)
@@ -108,12 +109,15 @@ const popover: FnRule = (ctx, focus) => {
   ])
   o.attr(trigger, 'aria-haspopup', 'dialog').attr(trigger, 'aria-expanded', String(open)).attr(trigger, 'aria-controls', panelNode.value)
   if (open) o.attr(trigger, 'data-sem-escape', '')
+  // Opened from the trigger, the focus goes to the panel's first control; closed, back to the trigger.
+  else o.attr(trigger, 'data-sem-takes-focus', '')
   o.t(trigger, FB.toggles, focus)
   const inner: NamedNode[] = []
   if (body) inner.push(o.el('desc', 'P', { class: 'sem-desc' }, [o.text('desc-text', body)]))
   if (named(content)) inner.push(content)
   const panel = o.el('panel', 'Div', { class: 'sem-panel', id: panelNode.value, hidden: open ? undefined : '' }, inner)
   o.attr(panel, 'role', 'dialog').attr(panel, 'aria-labelledby', triggerNode.value).attr(panel, 'data-sem-anchor', triggerNode.value)
+  if (open) o.attr(panel, 'data-sem-takes-focus', '')
   const root = o.el('root', 'Span', {}, [trigger, panel])
   o.renders(root)
   return o.quads
