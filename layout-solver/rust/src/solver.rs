@@ -1,9 +1,16 @@
-// The Rust twin of src/layout/solver.ts: Cassowary in kiwi's shape, step for step. Rows and cells
-// iterate in insertion order, as a JavaScript Map does, so both twins pivot identically.
+// The Rust twin of src/layout/solver.ts, step for step: Cassowary in kiwi's shape with Dantzig's
+// entering rule (Bland's after a stall) and a column index. Cells iterate in insertion order, as a
+// JavaScript Map does, and rows touched together in the order they became basic, so both twins
+// pivot identically.
 
 pub const REQUIRED: f64 = 1_001_001_000.0;
 const EPS: f64 = 1.0e-8;
 const INVALID: u32 = u32::MAX;
+/// degenerate pivots in a row before optimize falls back to Bland's rule
+const STALL: u32 = 64;
+
+use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 
 #[inline]
 fn near_zero(n: f64) -> bool {
@@ -23,56 +30,101 @@ pub const LE: u32 = 0;
 pub const GE: u32 = 1;
 pub const EQ: u32 = 2;
 
-/// `constant + Σ cells`; cells in insertion order (removal keeps the order of the rest).
+/// A symbol's own hash (multiplicative): symbols are dense small integers.
+#[derive(Default)]
+struct SymHasher(u64);
+
+impl Hasher for SymHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, _: &[u8]) {
+        unreachable!()
+    }
+    fn write_u32(&mut self, n: u32) {
+        self.0 = (n as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+}
+
+type SymMap = HashMap<u32, u32, BuildHasherDefault<SymHasher>>;
+
+/// `constant + Σ cells`, ordered as a JavaScript Map: cells in insertion order, a removed cell's
+/// slot dead until the list is compacted, an index symbol → slot (the objective holds every error
+/// symbol, so a lookup must not scan).
 #[derive(Clone, Default)]
 struct Row {
     constant: f64,
     cells: Vec<(u32, f64)>,
+    index: SymMap,
+    dead: usize,
 }
 
 impl Row {
     fn new(constant: f64) -> Self {
-        Row { constant, cells: Vec::new() }
+        Row { constant, ..Default::default() }
     }
-    #[inline]
-    fn find(&self, sym: u32) -> Option<usize> {
-        self.cells.iter().position(|&(s, _)| s == sym)
+    /// The live cells, in order.
+    fn iter(&self) -> impl Iterator<Item = (u32, f64)> + '_ {
+        self.cells.iter().filter(|c| c.0 != INVALID).copied()
+    }
+    fn is_empty(&self) -> bool {
+        self.index.is_empty()
     }
     #[inline]
     fn coefficient_for(&self, sym: u32) -> f64 {
-        self.find(sym).map_or(0.0, |i| self.cells[i].1)
+        self.index.get(&sym).map_or(0.0, |&i| self.cells[i as usize].1)
     }
     fn add(&mut self, v: f64) -> f64 {
         self.constant += v;
         self.constant
     }
-    fn insert(&mut self, sym: u32, coefficient: f64) {
-        match self.find(sym) {
-            Some(i) => {
-                let v = self.cells[i].1 + coefficient;
+    /// Remove `sym`'s cell; its coefficient.
+    fn take(&mut self, sym: u32) -> Option<f64> {
+        let i = self.index.remove(&sym)? as usize;
+        let c = self.cells[i].1;
+        self.cells[i].0 = INVALID;
+        self.dead += 1;
+        if self.dead > 8 && self.dead * 2 > self.cells.len() {
+            self.cells.retain(|c| c.0 != INVALID);
+            self.dead = 0;
+            for (i, c) in self.cells.iter().enumerate() {
+                self.index.insert(c.0, i as u32);
+            }
+        }
+        Some(c)
+    }
+    /// Add `coefficient` to `sym`'s cell; 1 if that added the cell, -1 if it removed it, else 0.
+    fn insert(&mut self, sym: u32, coefficient: f64) -> i8 {
+        match self.index.get(&sym) {
+            Some(&i) => {
+                let v = self.cells[i as usize].1 + coefficient;
                 if near_zero(v) {
-                    self.cells.remove(i);
+                    self.take(sym);
+                    -1
                 } else {
-                    self.cells[i].1 = v;
+                    self.cells[i as usize].1 = v;
+                    0
                 }
             }
             None => {
-                if !near_zero(coefficient) {
+                if near_zero(coefficient) {
+                    0
+                } else {
+                    self.index.insert(sym, self.cells.len() as u32);
                     self.cells.push((sym, coefficient));
+                    1
                 }
             }
         }
     }
     fn insert_row(&mut self, other: &Row, coefficient: f64) {
         self.constant += other.constant * coefficient;
-        for &(s, c) in &other.cells {
+        for (s, c) in other.iter() {
             self.insert(s, c * coefficient);
         }
     }
     fn remove(&mut self, sym: u32) {
-        if let Some(i) = self.find(sym) {
-            self.cells.remove(i);
-        }
+        self.take(sym);
     }
     fn reverse_sign(&mut self) {
         self.constant = -self.constant;
@@ -81,9 +133,7 @@ impl Row {
         }
     }
     fn solve_for(&mut self, sym: u32) {
-        let i = self.find(sym).unwrap();
-        let coefficient = -1.0 / self.cells[i].1;
-        self.cells.remove(i);
+        let coefficient = -1.0 / self.take(sym).unwrap();
         self.constant *= coefficient;
         for c in &mut self.cells {
             c.1 *= coefficient;
@@ -94,16 +144,15 @@ impl Row {
         self.solve_for(rhs);
     }
     fn substitute(&mut self, sym: u32, row: &Row) {
-        if let Some(i) = self.find(sym) {
-            let c = self.cells[i].1;
-            self.cells.remove(i);
+        if let Some(c) = self.take(sym) {
             self.insert_row(row, c);
         }
     }
 }
 
-/// Rows keyed by their basic symbol, iterated in insertion order: an append-only list with
-/// tombstones and a symbol → slot index, compacted when half of it is dead.
+/// Rows keyed by their basic symbol: an append-only list with tombstones and a symbol → slot index,
+/// compacted when half of it is dead. Slots grow in the order rows became basic (compaction keeps
+/// it), so a slot is also the order key the column index sorts by.
 #[derive(Default)]
 struct Rows {
     list: Vec<(u32, Option<Row>)>,
@@ -178,6 +227,8 @@ pub struct Solver {
     kinds: Vec<Kind>,
     var_symbols: Vec<u32>,
     rows: Rows,
+    /// symbol → the basic symbols whose rows use it (the column index)
+    cols: Vec<Vec<u32>>,
     constraints: Vec<Option<Constraint>>,
     /// variable → edit
     edits: Vec<Option<Edit>>,
@@ -220,7 +271,7 @@ impl Solver {
         } else {
             row.solve_for(subject);
             self.substitute(subject, &row);
-            self.rows.set(subject, row);
+            self.attach(subject, row);
         }
         let id = self.constraints.len() as u32;
         self.constraints.push(Some(Constraint { tag, strength }));
@@ -240,12 +291,12 @@ impl Solver {
         if tag.other != INVALID && self.kinds[tag.other as usize] == Kind::Error {
             self.remove_marker_effects(tag.other, strength);
         }
-        if self.rows.take(tag.marker).is_none() {
+        if self.detach(tag.marker).is_none() {
             let leaving = self.marker_leaving_row(tag.marker);
             if leaving == INVALID {
                 return Err(SolverError::Internal);
             }
-            let mut row = self.rows.take(leaving).unwrap();
+            let mut row = self.detach(leaving).unwrap();
             row.solve_for_pair(leaving, tag.marker);
             // the marker leaves the system with its row (as in kiwi)
             self.substitute(tag.marker, &row);
@@ -292,11 +343,11 @@ impl Solver {
                 self.infeasible.push(other);
             }
         } else {
-            for (s, row) in self.rows.list.iter_mut() {
-                let Some(row) = row.as_mut() else { continue };
+            for s in self.users(marker) {
+                let row = self.rows.get_mut(s).unwrap();
                 let c = row.coefficient_for(marker);
-                if c != 0.0 && row.add(delta * c) < 0.0 && self.kinds[*s as usize] != Kind::External {
-                    self.infeasible.push(*s);
+                if row.add(delta * c) < 0.0 && self.kinds[s as usize] != Kind::External {
+                    self.infeasible.push(s);
                 }
             }
         }
@@ -320,7 +371,9 @@ impl Solver {
             let sym = self.var_symbols[variable as usize];
             match self.rows.get(sym) {
                 Some(r) => row.insert_row(r, coefficient),
-                None => row.insert(sym, coefficient),
+                None => {
+                    row.insert(sym, coefficient);
+                }
             }
         }
         if op == LE || op == GE {
@@ -359,7 +412,7 @@ impl Solver {
     }
 
     fn choose_subject(&self, row: &Row, tag: Tag) -> u32 {
-        for &(s, _) in &row.cells {
+        for (s, _) in row.iter() {
             if self.kinds[s as usize] == Kind::External {
                 return s;
             }
@@ -374,18 +427,18 @@ impl Solver {
     }
 
     fn all_dummies(&self, row: &Row) -> bool {
-        row.cells.iter().all(|&(s, _)| self.kinds[s as usize] == Kind::Dummy)
+        row.iter().all(|(s, _)| self.kinds[s as usize] == Kind::Dummy)
     }
 
     fn add_with_artificial_variable(&mut self, row: Row) -> Result<bool, SolverError> {
         let art = self.symbol(Kind::Slack);
-        self.rows.set(art, row.clone());
+        self.attach(art, row.clone());
         // optimize the artificial objective; optimize keeps it substituted as rows pivot
         let mut artificial = row;
         self.optimize(&mut artificial)?;
         let success = near_zero(artificial.constant);
-        if let Some(mut r) = self.rows.take(art) {
-            if r.cells.is_empty() {
+        if let Some(mut r) = self.detach(art) {
+            if r.is_empty() {
                 return Ok(success);
             }
             let entering = self.any_pivotable_symbol(&r);
@@ -394,23 +447,78 @@ impl Solver {
             }
             r.solve_for_pair(art, entering);
             self.substitute(entering, &r);
-            self.rows.set(entering, r);
+            self.attach(entering, r);
         }
-        for (_, row) in self.rows.list.iter_mut() {
-            if let Some(row) = row.as_mut() {
-                row.remove(art);
-            }
+        for s in self.users(art) {
+            self.rows.get_mut(s).unwrap().remove(art);
+        }
+        if let Some(c) = self.cols.get_mut(art as usize) {
+            c.clear();
         }
         self.objective.remove(art);
         Ok(success)
     }
 
+    /// A row becomes basic for `sym`: index its cells.
+    fn attach(&mut self, sym: u32, row: Row) {
+        for (s, _) in row.iter() {
+            self.link(s, sym);
+        }
+        self.rows.set(sym, row);
+    }
+
+    /// `sym` stops being basic: its row, unindexed (None if it was not basic).
+    fn detach(&mut self, sym: u32) -> Option<Row> {
+        let row = self.rows.take(sym)?;
+        for (s, _) in row.iter() {
+            self.unlink(s, sym);
+        }
+        Some(row)
+    }
+
+    fn link(&mut self, sym: u32, basic: u32) {
+        if self.cols.len() <= sym as usize {
+            self.cols.resize_with(sym as usize + 1, Vec::new);
+        }
+        self.cols[sym as usize].push(basic);
+    }
+
+    fn unlink(&mut self, sym: u32, basic: u32) {
+        if let Some(c) = self.cols.get_mut(sym as usize) {
+            if let Some(i) = c.iter().position(|&b| b == basic) {
+                c.swap_remove(i);
+            }
+        }
+    }
+
+    /// The basic symbols whose rows use `sym`, in the order they became basic.
+    fn users(&self, sym: u32) -> Vec<u32> {
+        let Some(c) = self.cols.get(sym as usize) else { return Vec::new() };
+        let mut u = c.clone();
+        u.sort_unstable_by_key(|&s| self.rows.slot[s as usize]);
+        u
+    }
+
+    /// Replace `sym` by `row` in the rows that use it (and the objective), keeping the index.
     fn substitute(&mut self, sym: u32, row: &Row) {
-        for (s, r) in self.rows.list.iter_mut() {
-            let Some(r) = r.as_mut() else { continue };
-            r.substitute(sym, row);
-            if self.kinds[*s as usize] != Kind::External && r.constant < 0.0 {
-                self.infeasible.push(*s);
+        let users = self.users(sym);
+        if let Some(c) = self.cols.get_mut(sym as usize) {
+            c.clear();
+        }
+        for s in users {
+            let r = self.rows.get_mut(s).unwrap();
+            let c = r.take(sym).unwrap();
+            r.constant += row.constant * c;
+            for (t, d) in row.iter() {
+                let r = self.rows.get_mut(s).unwrap();
+                match r.insert(t, d * c) {
+                    1 => self.link(t, s),
+                    -1 => self.unlink(t, s),
+                    _ => {}
+                }
+            }
+            if self.kinds[s as usize] != Kind::External && self.rows.get(s).unwrap().constant < 0.0 {
+                self.infeasible.push(s);
             }
         }
         self.objective.substitute(sym, row);
@@ -419,20 +527,23 @@ impl Solver {
     /// Optimize `objective`, held outside self: the artificial objective (self.substitute keeps the
     /// real one current too) or the real one taken out of self.objective for the duration.
     fn optimize(&mut self, objective: &mut Row) -> Result<(), SolverError> {
+        let mut stalled = 0;
         loop {
-            let entering = self.entering_symbol(objective);
+            let bland = stalled > STALL;
+            let entering = self.entering_symbol(objective, bland);
             if entering == INVALID {
                 return Ok(());
             }
-            let leaving = self.leaving_row(entering);
+            let leaving = self.leaving_row(entering, bland);
             if leaving == INVALID {
                 return Err(SolverError::Internal);
             }
-            let mut row = self.rows.take(leaving).unwrap();
+            let mut row = self.detach(leaving).unwrap();
+            stalled = if near_zero(row.constant) { stalled + 1 } else { 0 };
             row.solve_for_pair(leaving, entering);
             self.substitute(entering, &row);
             objective.substitute(entering, &row);
-            self.rows.set(entering, row);
+            self.attach(entering, row);
             self.pivots += 1;
         }
     }
@@ -447,28 +558,35 @@ impl Solver {
             if entering == INVALID {
                 return Err(SolverError::Internal);
             }
-            let mut row = self.rows.take(leaving).unwrap();
+            let mut row = self.detach(leaving).unwrap();
             row.solve_for_pair(leaving, entering);
             self.substitute(entering, &row);
-            self.rows.set(entering, row);
+            self.attach(entering, row);
             self.pivots += 1;
         }
         Ok(())
     }
 
-    fn entering_symbol(&self, objective: &Row) -> u32 {
-        for &(s, c) in &objective.cells {
-            if self.kinds[s as usize] != Kind::Dummy && c < 0.0 {
-                return s;
+    /// The symbol with the most negative objective coefficient (Bland: the lowest negative one).
+    fn entering_symbol(&self, objective: &Row, bland: bool) -> u32 {
+        let mut entering = INVALID;
+        let mut most = 0.0;
+        for (s, c) in objective.iter() {
+            if c >= 0.0 || self.kinds[s as usize] == Kind::Dummy {
+                continue;
+            }
+            if if bland { entering == INVALID || s < entering } else { c < most } {
+                most = c;
+                entering = s;
             }
         }
-        INVALID
+        entering
     }
 
     fn dual_entering_symbol(&self, row: &Row) -> u32 {
         let mut entering = INVALID;
         let mut ratio = f64::MAX;
-        for &(s, c) in &row.cells {
+        for (s, c) in row.iter() {
             if c > 0.0 && self.kinds[s as usize] != Kind::Dummy {
                 let r = self.objective.coefficient_for(s) / c;
                 if r < ratio {
@@ -481,7 +599,7 @@ impl Solver {
     }
 
     fn any_pivotable_symbol(&self, row: &Row) -> u32 {
-        for &(s, _) in &row.cells {
+        for (s, _) in row.iter() {
             if matches!(self.kinds[s as usize], Kind::Slack | Kind::Error) {
                 return s;
             }
@@ -489,20 +607,21 @@ impl Solver {
         INVALID
     }
 
-    fn leaving_row(&self, entering: u32) -> u32 {
+    /// The row the entering symbol replaces: the lowest ratio, ties to the first (Bland: lowest) row.
+    fn leaving_row(&self, entering: u32, bland: bool) -> u32 {
         let mut ratio = f64::MAX;
         let mut found = INVALID;
-        for (s, row) in &self.rows.list {
-            let Some(row) = row else { continue };
-            if self.kinds[*s as usize] == Kind::External {
+        for s in self.users(entering) {
+            if self.kinds[s as usize] == Kind::External {
                 continue;
             }
+            let row = self.rows.get(s).unwrap();
             let c = row.coefficient_for(entering);
             if c < 0.0 {
                 let r = -row.constant / c;
-                if r < ratio {
+                if r < ratio || (bland && r == ratio && s < found) {
                     ratio = r;
-                    found = *s;
+                    found = s;
                 }
             }
         }
@@ -512,25 +631,22 @@ impl Solver {
     fn marker_leaving_row(&self, marker: u32) -> u32 {
         let (mut r1, mut r2) = (f64::MAX, f64::MAX);
         let (mut first, mut second, mut third) = (INVALID, INVALID, INVALID);
-        for (s, row) in &self.rows.list {
-            let Some(row) = row else { continue };
+        for s in self.users(marker) {
+            let row = self.rows.get(s).unwrap();
             let c = row.coefficient_for(marker);
-            if c == 0.0 {
-                continue;
-            }
-            if self.kinds[*s as usize] == Kind::External {
-                third = *s;
+            if self.kinds[s as usize] == Kind::External {
+                third = s;
             } else if c < 0.0 {
                 let r = -row.constant / c;
                 if r < r1 {
                     r1 = r;
-                    first = *s;
+                    first = s;
                 }
             } else {
                 let r = row.constant / c;
                 if r < r2 {
                     r2 = r;
-                    second = *s;
+                    second = s;
                 }
             }
         }

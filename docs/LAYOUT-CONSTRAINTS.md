@@ -107,8 +107,21 @@ Where checks run:
 
 A small incremental **Cassowary** (kiwi's algorithm: edit variables and dual simplex), twice:
 `src/layout/solver.ts` and `layout-solver/rust/src/solver.rs` (WASM), step for step the same
-(insertion-ordered rows and cells, so both twins pivot identically; a parity test checks values
-and pivot counts). What it may change: **only tokens**, written as custom properties on a scope's
+(rows and cells ordered alike, so both twins pivot identically; a parity test checks values
+and pivot counts). It departs from kiwi in two places:
+
+- **Dantzig's entering rule.** The symbol that improves the objective most enters the basis, not
+  the first one that improves it. With kiwi's rule, the k-th of many constraints that share a
+  variable (every row's `height ≥ control height`) re-pivoted the k before it: 10,195 pivots for
+  100 fields, against 208 now. Dantzig's rule can cycle on a degenerate tableau, so after 64
+  pivots in a row that make no progress, `optimize` switches to Bland's rule, which cannot cycle.
+  On 200 random systems both rules reach equally good optima, and every required constraint holds.
+- **A column index** (symbol → the rows that use it), so a pivot substitutes only into those rows.
+  kiwi scans every row. Rows touched together are taken in the order they became basic, which is
+  the order kiwi's scan would meet them in.
+
+Together they turn the build from about n³ into about n^1.8 (2,000 fields: 0.5 s in TS). Neither
+alone is enough: at 2,000 fields the rule without the index takes 7 s. What it may change: **only tokens**, written as custom properties on a scope's
 root through the style layer's hooks (`--lc-label-column`, `--lc-button-width`), which CSS then
 uses as it uses any token. Where it is worth it:
 
@@ -144,14 +157,19 @@ Medians, measured through `scripts/test-queue.sh` on the shared machine (Node 26
 
 | page | constraints | twin | full solve | resize (1 edit) | one label | all labels (language) | pivots/resize |
 |---|---:|---|---:|---:|---:|---:|---:|
-| small (10 fields) | 81 | ts | 1.91 ms | 11.9 µs | 4.1 µs | 45.4 µs | 2.5 |
-| small (10 fields) | 81 | wasm | 0.39 ms | 1.6 µs | 1.0 µs | 15.0 µs | 2.5 |
-| form (30 fields) | 227 | ts | 16.89 ms | 30.9 µs | 9.3 µs | 0.32 ms | 4.7 |
-| form (30 fields) | 227 | wasm | 3.39 ms | 8.3 µs | 1.2 µs | 49.1 µs | 4.7 |
-| medium (100 fields) | 735 | ts | 507.70 ms | 17.0 µs | 23.3 µs | 1.47 ms | 13.1 |
-| medium (100 fields) | 735 | wasm | 102.62 ms | 2.2 µs | 8.3 µs | 0.48 ms | 13.1 |
-| large (500 fields) | 3595 | ts | 68402.97 ms | 84.1 µs | 0.10 ms | 75.88 ms | 50.5 |
-| large (500 fields) | 3595 | wasm | 13459.03 ms | 20.8 µs | 29.4 µs | 14.23 ms | 50.5 |
+| small (10 fields) | 81 | ts | 0.72 ms | 7.8 µs | 1.3 µs | 19.2 µs | 2.5 |
+| small (10 fields) | 81 | wasm | 0.17 ms | 1.3 µs | 0.5 µs | 6.9 µs | 2.5 |
+| form (30 fields) | 227 | ts | 1.01 ms | 67.5 µs | 1.0 µs | 29.6 µs | 5.2 |
+| form (30 fields) | 227 | wasm | 0.61 ms | 19.5 µs | 0.5 µs | 14.9 µs | 5.2 |
+| medium (100 fields) | 735 | ts | 3.77 ms | 9.2 µs | 1.9 µs | 98.7 µs | 13.6 |
+| medium (100 fields) | 735 | wasm | 1.04 ms | 3.7 µs | 0.8 µs | 41.7 µs | 13.6 |
+| large (500 fields) | 3595 | ts | 42.25 ms | 95.9 µs | 1.5 µs | 0.91 ms | 51.5 |
+| large (500 fields) | 3595 | wasm | 11.23 ms | 21.9 µs | 1.1 µs | 0.63 ms | 51.5 |
+| huge (2000 fields) | 14185 | ts | 526.14 ms | 0.32 ms | 2.0 µs | 4.11 ms | 216.1 |
+| huge (2000 fields) | 14185 | wasm | 113.44 ms | 0.16 ms | 1.3 µs | 7.97 ms | 216.1 |
+
+Before the entering rule and the column index (kiwi's way), the full solve took 16.9 ms / 3.4 ms
+(30 fields), 508 ms / 103 ms (100) and 68 s / 13 s (500), TS / WASM.
 
 #### Checker: a whole page of boxes (cards of field rows, a nav list)
 
@@ -165,21 +183,21 @@ Medians, measured through `scripts/test-queue.sh` on the shared machine (Node 26
 
 | twin | raw | gzip | brotli | source lines |
 |---|---:|---:|---:|---:|
-| ts (minified) | 7.6 KiB | 2.7 KiB | 2.5 KiB | 534 |
-| wasm (Rust, opt-level 3) | 37.7 KiB | 14.3 KiB | 12.3 KiB | 760 |
+| ts (minified) | 8.4 KiB | 3.0 KiB | 2.7 KiB | 606 |
+| wasm (Rust, opt-level 3) | 58.3 KiB | 22.0 KiB | 18.2 KiB | 876 |
 
 Reading the numbers:
 - **Checking** a whole page is microseconds in TS and WASM: 20k boxes take under 0.1 ms. In SPARQL it is milliseconds: 4 ms for 450 boxes, 0.3 s for 4,000 (the `rnd:parent+` paths). Real pages have 20–140 boxes, and on those the SPARQL checker takes 0.3–9 ms per page on the WAT store. That is fine in tests and the workbench. Live checks in dev should use a maintained view. Checking is nowhere near a bottleneck in any twin. The cost that matters is measuring (one `getBoundingClientRect` batch per frame, which #35 already designs) and the browser runs in CI.
 - **The solver's incremental re-solve** costs what it changes. A resize is 2.5–50 pivots (µs). A language switch, where every label is re-measured, takes 0.3 ms in TS for a 30-field form.
-- **WASM is 3–8× faster than TS** for solving, and about 2× for checking. Both are far below a frame at realistic sizes. A 30-field form takes 17 ms (TS) or 3.4 ms (WASM) to build, cold.
-- **The full solve grows about cubically**: 735 constraints take 0.5 s in TS and 0.1 s in WASM; 3,595 take 68 s and 13 s. The profile says it is the algorithm, not the language. Kiwi's entering rule makes about 14 pivots per added constraint here, and every pivot substitutes into every row. A column index (symbol → the rows that hold it) cuts each pivot to the rows it touches, which is worth more than the WASM constant factor. Changing constants (edit variables) is what's cheap: add constraints once, then suggest.
-- **Size:** the TS solver and checker together are 2.7 KiB gzipped (7.6 KiB raw, 534 lines) minified; the Rust → WASM build is 14.3 KiB gzipped (37.7 KiB raw, 760 lines of Rust), plus a buffer ABI and a build step. A WAT twin, following `rdf-engine/`, would be smaller, but would be a third copy of a 400-line algorithm for no measured gain.
+- **The algorithm mattered more than the language.** Kiwi's entering rule and full row scan made the build about cubic: 68 s in TS and 13 s in WASM for 500 fields. With Dantzig's rule and a column index it takes 42 ms and 11 ms, a 1,600× gain in TS against WASM's 5×. A 30-field form now builds in 1 ms (TS) or 0.6 ms (WASM), cold.
+- **WASM is 1.5–4× faster than TS** for building and resizing, and about 2× for checking. Everything at realistic sizes is far below a frame in both. Relabelling all 2,000 fields of the huge page is the one case where WASM is slower (8 ms against 4 ms): Rust's column lists unlink by scan, where TS has a `Set`.
+- **Size:** the TS solver and checker together are 3.0 KiB gzipped (8.4 KiB raw, 606 lines) minified; the Rust → WASM build is 22.0 KiB gzipped (58.3 KiB raw, 876 lines of Rust), plus a buffer ABI and a build step. The index and the hash map for rows' cells cost the WASM build 8 KiB gzipped. A WAT twin, following `rdf-engine/`, would be smaller, but would be a third copy of a 400-line algorithm for no measured gain.
 
 ## Recommendation
 
 1. **Adopt the checker and the `lc:` vocabulary.** It is cheap, needs no new math, explains its findings, and has already found a live bug. Run it in CI on `main` across 320/375/768/1280 × the 10 themes × en/uk/de/ar (RTL included), failing on *new* findings, with a baseline that links known ones to their issues.
 2. **Declare parts in RDF/HTML, not selectors.** The spike's `lc:selector` guesses which element is "the control". A component should say so on its minted node (`<focus>/~control lc:role lc:SingleLineControl`), so `rnd:` measures exactly those nodes.
-3. **Keep the solver in TypeScript, off by default**, for the cross-container cases. It writes tokens through the style layer's hooks and nothing else. First give it a column index, which fixes the cubic build. Keep the Rust twin as the parity oracle and the faster build for when a scope grows past a few hundred constraints. It is 5× the transfer size for a speed nobody needs yet.
+3. **Keep the solver in TypeScript, off by default**, for the cross-container cases. It writes tokens through the style layer's hooks and nothing else. With Dantzig's rule and a column index its build is milliseconds even at 500 fields. Keep the Rust twin as the parity oracle. It is 7× the transfer size for a speedup nobody needs yet.
 4. **Don't adopt Yoga or Taffy** (200–900 KB that re-implement the browser), and don't route layout through a solver (GSS).
 
 ## Follow-up issues (not filed; for your approval)
@@ -192,5 +210,5 @@ Reading the numbers:
 6. **Workbench sample "Layout invariants broken"**, plus outlines (`ol:`) on the offending components; a maintained view of `lc:Checker` for live checks in dev.
 7. **More derived invariants:** `pos:AlignedColumns` (part N of each column on one line), a token comparison (`lc:equals tok:control-height`), baselines across a row.
 8. **WebKit measurement**: `playwright install webkit` or Safari's driver. #34's 23 px select and 56c9b4e were WebKit-only, and Chromium can't see them.
-9. **Solver: a column index** (symbol → rows) in both twins, so a pivot substitutes only into the rows that hold the entering symbol. This fixes the cubic full solve, and cost tests count pivots and rows touched.
+9. **Solver cost tests:** `test/cost.test.ts` counts pivots and rows touched per edit, the way it counts rule firings, so a change that brings back the quadratic pivots fails there. (Dantzig's rule and the column index have landed on this branch.)
 10. **Solver → tokens, only if wanted:** `lc:Solve` for one label column across fieldsets, written as `--lc-label-column`, with the strength review above.

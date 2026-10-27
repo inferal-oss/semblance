@@ -39,10 +39,9 @@ const SIZES: [string, number, number, number][] = [
   ['small (10 fields)', 2, 5, 2],
   ['form (30 fields)', 3, 10, 4],
   ['medium (100 fields)', 10, 10, 10],
-  ...(quick ? [] : ([['large (500 fields)', 25, 20, 30]] as [string, number, number, number][])),
+  ...(quick ? [] : ([['large (500 fields)', 25, 20, 30], ['huge (2000 fields)', 50, 40, 60]] as [string, number, number, number][])),
 ]
-// A full solve grows about cubically here (every pivot substitutes into every row, kiwi's way): the
-// large page is solved once, cold.
+// The large pages are solved once, cold.
 
 const twins: [string, () => SolverLike][] = [
   ['ts', () => new Solver()],

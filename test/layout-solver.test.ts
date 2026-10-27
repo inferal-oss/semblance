@@ -48,6 +48,16 @@ describe('solver', () => {
     s.suggestValue(p.controlHeight, 44)
     expect(s.value(p.rowTops[1]) - s.value(p.rowTops[0])).toBeCloseTo(44 + 12)
   })
+
+  it('pivots about once per constraint, however many share a variable', () => {
+    // every row's height ≥ the shared control height: with the first improving symbol entering
+    // (kiwi's rule), the k-th of them re-pivoted the k before it (10,195 pivots for 100 fields)
+    for (const [f, r, t] of [[10, 10, 10], [25, 20, 30]]) {
+      const s = new Solver()
+      const p = formPage(s, f, r, t)
+      expect(s.pivots).toBeLessThan(1.5 * p.constraints)
+    }
+  })
 })
 
 describe('solver parity (TypeScript and WASM)', () => {
