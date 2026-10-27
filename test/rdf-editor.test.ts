@@ -346,6 +346,44 @@ lib:earthsea lib:pages "many" .`
     })
   }
 
+  const TYPED = `@prefix c: <https://semblance.dev/ns/component#> . @prefix lib: <https://semblance.dev/demo/library#> . @prefix ui: <https://semblance.dev/demo#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+ui:dt-rdf-editor c:editable true .
+lib:earthsea lib:pages "many" .
+lib:rating rdfs:range xsd:decimal .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`types what is written as Turtle does, and as the property expects; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', TYPED), mount(kind, 'function', TYPED)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+        for (const x of both.slice(1)) expect(x.objects(LIB + 'earthsea', LIB + 'note').sort(), step).toEqual(m.objects(LIB + 'earthsea', LIB + 'note').sort())
+      }
+      // A string where the shape says xsd:integer: a number typed over it is an integer.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '"many"'), 'Enter'), 'Enter on a string')
+      each((x) => x.enter('212'), 'a number over it')
+      expect(m.objects(LIB + 'earthsea', LIB + 'pages').sort()).toEqual(['183|integer', '212|integer'])
+      // A date where the shape says xsd:date, though the old value was a string.
+      each((x) => x.apply({ add: [x.f.quad(x.nn(LIB + 'ursula'), x.nn(LIB + 'born'), x.f.literal('soon'))] }), 'a string date')
+      each((x) => x.key(x.label('lib:ursula', 'lib:born', '"soon"'), 'Enter'), 'Enter on it')
+      each((x) => x.enter('1929-10-22'), 'a date')
+      expect(m.objects(LIB + 'ursula', LIB + 'born').sort()).toEqual(['1929-10-21|date', '1929-10-22|date'])
+      // An XSD rdfs:range, for a new statement.
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter')
+      each((x) => x.enter('lib:rating 4'), 'a rating')
+      expect(m.objects(LIB + 'earthsea', LIB + 'rating')).toEqual(['4|decimal'])
+      // Otherwise Turtle's reading: integer, decimal, double, boolean, else a string.
+      for (const [text, typed] of [['2', 'integer'], ['2.5', 'decimal'], ['1e3', 'double'], ['true', 'boolean'], ['two', 'string']]) {
+        each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), `Shift+Enter for ${text}`)
+        each((x) => x.enter(`lib:note ${text}`), `a note ${text}`)
+        // (a store may write the number canonically: 1e3 as 1000)
+        expect(m.objects(LIB + 'earthsea', LIB + 'note').filter((o) => o.endsWith(`|${typed}`)), text).toHaveLength(1)
+      }
+    })
+  }
+
   it('checks what an edit changed: one entry, however many the document has', () => {
     const many = (n: number) =>
       Array.from({ length: n }, (_, i) => `lib:extra${i} a lib:Book ; lib:title "Extra ${i}" ; lib:pages ${i + 1} ; lib:author lib:ursula ; lib:published "1970"^^<http://www.w3.org/2001/XMLSchema#gYear> .\nui:dt-rdf-editor c:entry lib:extra${i} .`).join('\n')

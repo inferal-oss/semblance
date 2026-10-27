@@ -1197,15 +1197,22 @@ WHERE {
     BIND(STRBEFORE(?newName, ":") AS ?newPfx)
     OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
     BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    # What the property expects: its shapes' sh:datatype, else an XSD rdfs:range.
+    BIND(COALESCE(?s0, rdf:nil) AS ?xs) BIND(COALESCE(?p0, rdf:nil) AS ?xp)
+    OPTIONAL { ?xs a/rdfs:subClassOf* ?xc . ?xsh sh:targetClass ?xc ; sh:property ?xps . ?xps sh:path ?xp ; sh:datatype ?shapeDt FILTER(?shapeDt != rdf:langString) }
+    OPTIONAL { ?xp rdfs:range ?rangeDt FILTER(STRSTARTS(STR(?rangeDt), STR(xsd:))) }
+    BIND(COALESCE(?shapeDt, ?rangeDt) AS ?newExpected)
     BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
          IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
          IF(?newQuoted, ?newInner,
          IF(!?newTyped && BOUND(?newNamed), ?newNamed,
-         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
-         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
-         IF(!(BOUND(?old) && isLiteral(?old)) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(BOUND(?newExpected), STRDT(?newText, ?newExpected),
          IF(BOUND(?old) && isLiteral(?old) && LANG(?old) != "", STRLANG(?newText, LANG(?old)),
-         IF(BOUND(?old) && isLiteral(?old), STRDT(?newText, DATATYPE(?old)), ?newText))))))))) AS ?new)
+         IF(REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(REGEX(?newText, "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[eE][+-]?[0-9]+$"), STRDT(?newText, xsd:double),
+         IF(?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(BOUND(?old) && isLiteral(?old), STRDT(?newText, DATATYPE(?old)), ?newText))))))))))) AS ?new)
     FILTER(?newText != "")
       FILTER(!sameTerm(?new, ?old))
       BIND(?s0 AS ?s) BIND(?p0 AS ?p) BIND(IF(BOUND(?s0), ?old, ?none) AS ?o) BIND(?cell0 AS ?cell) }
@@ -1253,15 +1260,22 @@ WHERE {
     BIND(STRBEFORE(?newName, ":") AS ?newPfx)
     OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
     BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    # What the property expects: its shapes' sh:datatype, else an XSD rdfs:range.
+    BIND(COALESCE(?s0, rdf:nil) AS ?xs) BIND(COALESCE(?p0, rdf:nil) AS ?xp)
+    OPTIONAL { ?xs a/rdfs:subClassOf* ?xc . ?xsh sh:targetClass ?xc ; sh:property ?xps . ?xps sh:path ?xp ; sh:datatype ?shapeDt FILTER(?shapeDt != rdf:langString) }
+    OPTIONAL { ?xp rdfs:range ?rangeDt FILTER(STRSTARTS(STR(?rangeDt), STR(xsd:))) }
+    BIND(COALESCE(?shapeDt, ?rangeDt) AS ?newExpected)
     BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
          IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
          IF(?newQuoted, ?newInner,
          IF(!?newTyped && BOUND(?newNamed), ?newNamed,
-         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
-         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
-         IF(!(BOUND(?old) && isLiteral(?old)) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(BOUND(?newExpected), STRDT(?newText, ?newExpected),
          IF(BOUND(?old) && isLiteral(?old) && LANG(?old) != "", STRLANG(?newText, LANG(?old)),
-         IF(BOUND(?old) && isLiteral(?old), STRDT(?newText, DATATYPE(?old)), ?newText))))))))) AS ?new)
+         IF(REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(REGEX(?newText, "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[eE][+-]?[0-9]+$"), STRDT(?newText, xsd:double),
+         IF(?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(BOUND(?old) && isLiteral(?old), STRDT(?newText, DATATYPE(?old)), ?newText))))))))))) AS ?new)
     FILTER(?newText != "")
       BIND(?s0 AS ?s) BIND(?p0 AS ?p) BIND(?cell0 AS ?cell)
       BIND(IF(BOUND(?s0), IRI(CONCAT(REPLACE(STR(?row), "/~t-[0-9a-f]{12}$", ""), "/~t-", SUBSTR(MD5(IF(isLiteral(?new), CONCAT("\\"", STR(?new), "\\"", IF(LANG(?new) != "", CONCAT("@", LANG(?new)), CONCAT("^^", STR(DATATYPE(?new))))), STR(?new))), 1, 12))), ?row) AS ?focus) }
@@ -1326,15 +1340,20 @@ WHERE {
     BIND(STRBEFORE(?newName, ":") AS ?newPfx)
     OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
     BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    # What the property expects: its shapes' sh:datatype, else an XSD rdfs:range.
+    OPTIONAL { ?s a/rdfs:subClassOf* ?xc . ?xsh sh:targetClass ?xc ; sh:property ?xps . ?xps sh:path ?p ; sh:datatype ?shapeDt FILTER(?shapeDt != rdf:langString) }
+    OPTIONAL { ?p rdfs:range ?rangeDt FILTER(STRSTARTS(STR(?rangeDt), STR(xsd:))) }
+    BIND(COALESCE(?shapeDt, ?rangeDt) AS ?newExpected)
     BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
          IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
          IF(?newQuoted, ?newInner,
          IF(!?newTyped && BOUND(?newNamed), ?newNamed,
-         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
-         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
-         IF(!(false) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
-         IF(false && LANG(?x) != "", STRLANG(?newText, LANG(?x)),
-         IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
+         IF(BOUND(?newExpected), STRDT(?newText, ?newExpected),
+         IF(REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(REGEX(?newText, "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[eE][+-]?[0-9]+$"), STRDT(?newText, xsd:double),
+         IF(?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         ?newText))))))))) AS ?new)
     FILTER(?newText != "")
       BIND(IRI(CONCAT(STR(?row), "/~t-", SUBSTR(MD5(IF(isLiteral(?new), CONCAT("\\"", STR(?new), "\\"", IF(LANG(?new) != "", CONCAT("@", LANG(?new)), CONCAT("^^", STR(DATATYPE(?new))))), STR(?new))), 1, 12))) AS ?focus) }
     UNION { ?row a c:RdfTerm ; c:term ?head .
@@ -1354,11 +1373,12 @@ WHERE {
          IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
          IF(?newQuoted, ?newInner,
          IF(!?newTyped && BOUND(?newNamed), ?newNamed,
-         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
-         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
-         IF(!(false) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
-         IF(false && LANG(?x) != "", STRLANG(?newText, LANG(?x)),
-         IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
+         IF(BOUND(?newExpected), STRDT(?newText, ?newExpected),
+         IF(REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(REGEX(?newText, "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[eE][+-]?[0-9]+$"), STRDT(?newText, xsd:double),
+         IF(?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         ?newText))))))))) AS ?new)
     FILTER(?newText != "")
       BIND(IRI(CONCAT(STR($this), "/.well-known/genid/", SUBSTR(MD5(CONCAT(STR(?row), " ", STR(?new), " ", COALESCE(STR(DATATYPE(?new)), ""), COALESCE(LANG(?new), ""))), 1, 16))) AS ?cell)
       OPTIONAL { FILTER(!sameTerm(?head, rdf:nil)) ?head rdf:rest* ?last . ?last rdf:rest rdf:nil }
@@ -1404,15 +1424,20 @@ WHERE {
     BIND(STRBEFORE(?newName, ":") AS ?newPfx)
     OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
     BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    # What the property expects: its shapes' sh:datatype, else an XSD rdfs:range.
+    OPTIONAL { ?s a/rdfs:subClassOf* ?xc . ?xsh sh:targetClass ?xc ; sh:property ?xps . ?xps sh:path ?p ; sh:datatype ?shapeDt FILTER(?shapeDt != rdf:langString) }
+    OPTIONAL { ?p rdfs:range ?rangeDt FILTER(STRSTARTS(STR(?rangeDt), STR(xsd:))) }
+    BIND(COALESCE(?shapeDt, ?rangeDt) AS ?newExpected)
     BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
          IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
          IF(?newQuoted, ?newInner,
          IF(!?newTyped && BOUND(?newNamed), ?newNamed,
-         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
-         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
-         IF(!(false) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
-         IF(false && LANG(?x) != "", STRLANG(?newText, LANG(?x)),
-         IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
+         IF(BOUND(?newExpected), STRDT(?newText, ?newExpected),
+         IF(REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(REGEX(?newText, "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[eE][+-]?[0-9]+$"), STRDT(?newText, xsd:double),
+         IF(?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         ?newText))))))))) AS ?new)
     FILTER(?newText != "")
       BIND(IRI(CONCAT(STR(?row), "/~p-", SUBSTR(MD5(STR(?p)), 1, 12))) AS ?focus) }
   }

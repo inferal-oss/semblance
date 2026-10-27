@@ -808,6 +808,7 @@ const follow: ReactionFn = (ctx) => {
 
 type RCtx = Parameters<ReactionFn>[0]
 const XSD_STRING = XSD + 'string'
+const RDF_LANG_STRING = NS.rdf + 'langString'
 
 /** The namespace a declared prefix names (the least, when it is declared more than once). */
 function namespaceOf(ctx: RCtx, prefix: string): string | undefined {
@@ -821,11 +822,38 @@ function namespaceOf(ctx: RCtx, prefix: string): string | undefined {
 }
 
 /**
- * The term typed in a field, as Turtle writes it ("text"@lang, "text"^^datatype, a number or a
- * boolean, <iri>, prefix:local); text without quotes keeps the old literal's datatype and language.
- * The SPARQL reactions' parse, step for step.
+ * The datatype a property expects of a subject's values: its shapes' sh:datatype (through the
+ * subject's classes), else an XSD rdfs:range.
  */
-export function parseTerm(ctx: RCtx, raw: string, old?: Term): Term | undefined {
+function expectedDatatype(ctx: RCtx, s: Term | undefined, p: Term | undefined): NamedNode | undefined {
+  if (!s || !p) return undefined
+  const classes = new Set<string>()
+  const todo = ctx.match(s, RDF_TYPE, null).map((q) => q.object)
+  while (todo.length) {
+    const c = todo.pop()!
+    if (classes.has(c.value)) continue
+    classes.add(c.value)
+    for (const q of ctx.match(c, NS.rdfs + 'subClassOf', null)) todo.push(q.object)
+  }
+  const shaped: string[] = []
+  for (const c of classes)
+    for (const t of ctx.match(null, SH + 'targetClass', ctx.runtime.store.factory.namedNode(c)))
+      for (const ps of ctx.match(t.subject, SH + 'property', null))
+        if (ctx.match(ps.object, SH + 'path', p).length)
+          for (const d of ctx.match(ps.object, SH + 'datatype', null))
+            if (d.object.termType === 'NamedNode' && d.object.value !== RDF_LANG_STRING) shaped.push(d.object.value)
+  const range = ctx.match(p, NS.rdfs + 'range', null).map((q) => q.object).find((r) => r.termType === 'NamedNode' && r.value.startsWith(XSD))
+  const dt = shaped.sort()[0] ?? range?.value
+  return dt === undefined ? undefined : ctx.runtime.store.factory.namedNode(dt)
+}
+
+/**
+ * The term typed in a field, as Turtle writes it ("text"@lang, "text"^^datatype, <iri>,
+ * prefix:local). Bare text takes the datatype the property expects when it is known, else the old
+ * literal's language, else what Turtle reads it as (an integer, decimal, double or boolean), else
+ * the old literal's datatype. The SPARQL reactions' parse, step for step.
+ */
+export function parseTerm(ctx: RCtx, raw: string, old?: Term, expected?: NamedNode): Term | undefined {
   const f = ctx.runtime.store.factory
   const text = raw.replace(/^\s+|\s+$/g, '')
   if (text === '') return undefined
@@ -843,10 +871,12 @@ export function parseTerm(ctx: RCtx, raw: string, old?: Term): Term | undefined 
   if (typed && named) return f.literal(inner, named)
   if (quoted) return f.literal(inner)
   if (!typed && named) return named
-  if (!oldLiteral && /^[+-]?[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD_INTEGER))
-  if (!oldLiteral && /^[+-]?[0-9]*\.[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD + 'decimal'))
-  if (!oldLiteral && (text === 'true' || text === 'false')) return f.literal(text, f.namedNode(XSD_BOOLEAN))
+  if (expected) return f.literal(text, expected.value === XSD_STRING ? undefined : expected)
   if (oldLiteral && oldLiteral.language) return f.literal(text, oldLiteral.language)
+  if (/^[+-]?[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD_INTEGER))
+  if (/^[+-]?[0-9]*\.[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD + 'decimal'))
+  if (/^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)[eE][+-]?[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD + 'double'))
+  if (text === 'true' || text === 'false') return f.literal(text, f.namedNode(XSD_BOOLEAN))
   if (oldLiteral) return f.literal(text, oldLiteral.datatype.value === XSD_STRING ? undefined : oldLiteral.datatype)
   return f.literal(text)
 }
@@ -941,10 +971,10 @@ const commitEdit: ReactionFn = (ctx) => {
   const focus = (iri: string) => add.push(f.quad(f.namedNode(iri), f.namedNode(C_FOCUSED), yes(ctx)))
   if (isA(ctx, row, C_RDF_TERM)) {
     const old = ctx.object(row, C_TERM)
-    const nw = old && parseTerm(ctx, valueOf(ctx), old)
-    if (!old || !nw) return { remove, add }
     const s = ctx.object(row, C_SUBJECT)
     const p = s && ctx.object(row, C_PREDICATE)
+    const nw = old && parseTerm(ctx, valueOf(ctx), old, expectedDatatype(ctx, s, p))
+    if (!old || !nw) return { remove, add }
     const cell = ctx.object(row, C_LIST_CELL)
     if (!nw.equals(old)) {
       if (s && p) remove.push(f.quad(s, p, old))
@@ -978,7 +1008,7 @@ const commitAdd: ReactionFn = (ctx) => {
   if (isA(ctx, row, C_RDF_PROPERTY)) {
     const s = ctx.object(row, C_SUBJECT)
     const p = ctx.object(row, C_PREDICATE)
-    const nw = parseTerm(ctx, raw)
+    const nw = parseTerm(ctx, raw, undefined, expectedDatatype(ctx, s, p))
     if (s && p && nw) add.push(f.quad(s, p, nw), f.quad(f.namedNode(`${row.value}/~t-${key12(termKey(nw))}`), f.namedNode(C_FOCUSED), yes(ctx)))
   } else if (isA(ctx, row, C_RDF_TERM) && isList(ctx, ctx.object(row, C_TERM))) {
     // A list: a new member at its end (a cell named under the editor).
@@ -1007,7 +1037,7 @@ const commitAdd: ReactionFn = (ctx) => {
     const s = ctx.object(row, C_TERM)
     const trimmed = raw.replace(/^\s+/, '')
     const p = parsePredicate(ctx, trimmed.split(' ')[0]!)
-    const nw = parseTerm(ctx, trimmed.includes(' ') ? trimmed.slice(trimmed.indexOf(' ') + 1) : '')
+    const nw = parseTerm(ctx, trimmed.includes(' ') ? trimmed.slice(trimmed.indexOf(' ') + 1) : '', undefined, expectedDatatype(ctx, s, p))
     if (s && p && nw) add.push(f.quad(s, p, nw), f.quad(f.namedNode(`${row.value}/~p-${key12(p.value)}`), f.namedNode(C_FOCUSED), yes(ctx)))
   }
   return { remove, add }
