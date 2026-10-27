@@ -307,9 +307,10 @@ describe('the reference, as components', () => {
     // mints anew (its gallery links) with the layers that decorate them; and the search field, which
     // shows the term: its values' texts, its own rule and its (closed, empty) list of matches - not
     // the texts of the thousand terms it searches; and the page switcher's Reference option, whose
-    // address (its formaction, for a visit without scripts) keeps the term.
+    // address (its formaction, for a visit without scripts) keeps the term, with the location's
+    // spelling of it.
     expect(which.some((w) => w.startsWith('TypeaheadTexts')), which.join(', ')).toBe(false)
-    expect(ran, which.join(', ')).toBeLessThanOrEqual(28)
+    expect(ran, which.join(', ')).toBeLessThanOrEqual(29)
     // Logged for the report: rule runs and wall time of one selection (Node, linkedom, oxigraph).
     console.log(`reference selection: ${ran} rule runs, ${ms.toFixed(1)} ms`)
   })

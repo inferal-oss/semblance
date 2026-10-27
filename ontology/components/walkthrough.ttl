@@ -168,13 +168,18 @@ WHERE {
        || EXISTS { ?onto a owl:Ontology FILTER(STR(?onto) = ?ns || STR(?onto) = SUBSTR(?ns, 1, STRLEN(?ns) - 1)) }) AS ?term)
   FILTER(?shown || ?term)
   # Path segments end with '/'; fragment ones start with '#' (only the first stays: the rest become '/').
-  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(IF(?inPath, CONCAT(?part, "/"), CONCAT("#", ?part)); separator="") AS ?parts) WHERE {
-    { SELECT DISTINCT ?to ?loc ?d ?part ?inPath ?order WHERE {
-      { SELECT ?to ?loc ?d ?v WHERE {
+  # Each dimension once: what shows the resource decides it (rank 0); the rest of where we are is
+  # kept (rank 1: the top-level dimensions, nav:keeps). An implicit value is kept without a part.
+  OPTIONAL { SELECT ?to ?loc (GROUP_CONCAT(IF(?part = "", "", IF(?inPath, CONCAT(?part, "/"), CONCAT("#", ?part))); separator="") AS ?parts)
+                             (GROUP_CONCAT(IF(?kept, STR(?d), ""); separator=" ") AS ?keptList) (MAX(IF(?inPath, 1, 0)) AS ?pathRows) WHERE {
+   { SELECT ?to ?loc ?d ?part ?kept ?inPath ?order WHERE {
+    { SELECT ?to ?loc ?d (MIN(CONCAT(?prio, ?part0)) AS ?best) (SAMPLE(?inPath0) AS ?inPath) (SAMPLE(?order0) AS ?order) WHERE {
+    { SELECT DISTINCT ?to ?loc ?d ?prio (?part AS ?part0) (?inPath AS ?inPath0) (?order AS ?order0) WHERE {
+      { SELECT ?to ?loc ?d ?v ?prio WHERE {
         $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
         {
           # Shown: the cases of the switches on the way down, and the target - unless it is a whole case.
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           ?to (^nav:from/nav:to)* ?root .
           ?to (^nav:from/nav:to)* ?casea .
       LATERAL { ?casea c:when ?v . ?edgea nav:from ?casea ; nav:to ?switcha .
@@ -187,27 +192,23 @@ WHERE {
         ?switchc c:cases ?casesc ; c:controls ?controlsc ; c:property ?propertyc .
         ?pa nav:subject ?controlsc ; nav:property ?propertyc . FILTER NOT EXISTS { ?pa a nav:TargetDimension } } })
         } UNION {
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           ?to (^nav:from/nav:to)* ?root .
           ?d a nav:TargetDimension ; nav:carriedBy nav:Fragment .
           FILTER NOT EXISTS { ?wholeEdge nav:from ?to ; nav:to ?wholeCase . ?wholeCase c:when ?w }
           BIND(?to AS ?v)
         } UNION {
-          # Where we are, for what nothing on the way to it decides: the path's top-level dimensions
-          # keep their current value (the language; the page, for what is on every page).
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          # Where we are, kept for what nothing on the way to it decides (ranked below what does):
+          # the path's top-level dimensions (the language; the page, for what is on every page).
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("1" AS ?prio)
           ?loc nav:dimensions ?kh . ?kh rdf:rest* ?kc . ?kc rdf:first ?d .
           ?d nav:carriedBy nav:Path ; nav:subject ?ks ; nav:property ?kp .
           FILTER NOT EXISTS { ?d nav:parent ?kpar }
           FILTER NOT EXISTS { ?d a nav:TargetDimension }
           ?ks ?kp ?v .
-          FILTER(IF(EXISTS { ?to (^nav:from/nav:to)* ?root },
-            NOT EXISTS { ?to (^nav:from/nav:to)* ?casek . ?casek c:when ?wk . ?edgek nav:from ?casek ; nav:to ?switchk .
-              ?switchk c:cases ?casesk ; c:controls ?ks ; c:property ?kp },
-            NOT EXISTS { ?td nav:showsTerms true ; nav:parent* ?d }))
         } UNION {
           # A term: the dimension whose values are terms, and what its parents need for it to apply.
-          $this c:to ?to . ?loc a nav:Location ; nav:root ?root .
+          $this c:to ?to . ?loc a nav:Location ; nav:root ?root . BIND("0" AS ?prio)
           FILTER NOT EXISTS { ?to (^nav:from/nav:to)* ?root }
           ?loc nav:dimensions ?termHead . ?termHead rdf:rest* ?termCell . ?termCell rdf:first ?termDim .
           ?termDim nav:showsTerms true ; nav:carriedBy ?termCarrier . FILTER(?termCarrier IN (nav:Path, nav:Fragment))
@@ -219,8 +220,6 @@ WHERE {
       ?d nav:carriedBy ?dc . FILTER(?dc IN (nav:Path, nav:Fragment))
       FILTER(IF(EXISTS { ?d a nav:TargetDimension }, ?dc = nav:Fragment, ?dc = nav:Path || NOT EXISTS { ?d nav:carriedBy nav:Path }))
       BIND(?dc = nav:Path AS ?inPath)
-      # The value the address leaves unspelled (nav:implicit).
-      FILTER NOT EXISTS { ?d nav:implicit ?v }
       OPTIONAL { ?d nav:keyProperty ?keyPropertys }
       BIND(EXISTS { ?d nav:spelling nav:PrefixedName } AS ?prefixeds)
       OPTIONAL { FILTER(!?prefixeds) ?v ?keyPropertys ?ownKeys }
@@ -237,8 +236,9 @@ WHERE {
            IF(EXISTS { ?d a nav:TargetDimension }, COALESCE(STR(?anchors), REPLACE(STR(?v), "^.*[#/]", "")),
            COALESCE(?keys, STRAFTER(?bests, " "), STR(?v)))) AS ?texts)
       # As encodeURIComponent writes it, with ':' and '@' kept readable.
-      BIND(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
-           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*") AS ?part)
+      # The value the address leaves unspelled (nav:implicit) has no part.
+      BIND(IF(EXISTS { ?d nav:implicit ?v }, "", REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ENCODE_FOR_URI(?texts),
+           "%3A", ":"), "%40", "@"), "%21", "!"), "%27", "'"), "%28", "("), "%29", ")"), "%2A", "*")) AS ?part)
       # Parents before their children, in the location's order; a parent not carried here after; the target last.
       # (From the location's list head forward: Oxigraph walks a list path from its far end slowly.)
       {{ SELECT ?d (COUNT(DISTINCT ?before) AS ?at) WHERE {{ ?l0 a nav:Location ; nav:dimensions ?h0 . ?h0 rdf:rest* ?before . ?before rdf:rest* ?c0 . ?c0 rdf:first ?d }} GROUP BY ?d }}
@@ -248,26 +248,24 @@ WHERE {
       BIND(CONCAT(IF(?inPath, "0", "1"), IF(EXISTS {{ ?d a nav:TargetDimension }}, CONCAT("2", ?own),
            IF(!BOUND(?p1), CONCAT("0", ?own, "000"),
            IF(IF(?inPath, EXISTS {{ ?p1 nav:carriedBy nav:Path }}, EXISTS {{ ?p1 nav:carriedBy nav:Fragment }} && NOT EXISTS {{ ?p1 nav:carriedBy nav:Path }}), CONCAT("0", SUBSTR(CONCAT("000", STR(?at1)), STRLEN(STR(?at1)) + 1), ?own), CONCAT("1", ?own))))) AS ?order)
-    } ORDER BY ?order }
+    } }
+    } GROUP BY ?to ?loc ?d }
+    BIND(SUBSTR(?best, 2) AS ?part)
+    BIND(STRSTARTS(?best, "1") AS ?kept)
+   } ORDER BY ?order }
   } GROUP BY ?to ?loc }
   BIND(COALESCE(?parts, "") AS ?all)
   BIND(IF(CONTAINS(?all, "#"), STRBEFORE(?all, "#"), ?all) AS ?pathParts)
   BIND(REPLACE(STRAFTER(?all, "#"), "#", "/") AS ?fragmentParts)
-  BIND(EXISTS { ?loc nav:dimensions ?ph . ?ph rdf:rest* ?pcell . ?pcell rdf:first ?pd . ?pd nav:carriedBy nav:Path FILTER NOT EXISTS { ?pd a nav:TargetDimension } } AS ?paths)
+  # The location has paths when a dimension the path spells is among what the address is made of
+  # (the language is, wherever where we are is kept). Read from the rows, not the location's list.
+  BIND(COALESCE(?pathRows, 0) = 1 AS ?paths)
   OPTIONAL { ?loc nav:base ?base0 }
   BIND(IF(STRENDS(STR(COALESCE(?base0, "/")), "/"), STR(COALESCE(?base0, "/")), CONCAT(STR(?base0), "/")) AS ?base)
   BIND(IF(?paths, CONCAT(?base, ?pathParts, IF(CONTAINS(?all, "#"), CONCAT("#", ?fragmentParts), "")), CONCAT("#", ?fragmentParts)) AS ?href)
-  # The dimensions it keeps (nav:keeps), whatever their value: a change of one of them re-runs it (sem:readsLocation).
-  OPTIONAL {
-    ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
-    ?keptDim nav:carriedBy nav:Path ; nav:subject ?ks2 ; nav:property ?kp2 .
-    FILTER NOT EXISTS { ?keptDim nav:parent ?kpar2 }
-    FILTER NOT EXISTS { ?keptDim a nav:TargetDimension }
-    FILTER(IF(?shown,
-      NOT EXISTS { ?to (^nav:from/nav:to)* ?casek2 . ?casek2 c:when ?wk2 . ?edgek2 nav:from ?casek2 ; nav:to ?switchk2 .
-        ?switchk2 c:cases ?casesk2 ; c:controls ?ks2 ; c:property ?kp2 },
-      NOT EXISTS { ?td2 nav:showsTerms true ; nav:parent* ?keptDim }))
-  }
+  # The dimensions it keeps (nav:keeps), whatever their value: a change of one re-runs it (sem:readsLocation).
+  OPTIONAL { ?loc nav:dimensions ?kh2 . ?kh2 rdf:rest* ?kc2 . ?kc2 rdf:first ?keptDim .
+    FILTER(CONTAINS(CONCAT(" ", ?keptList, " "), CONCAT(" ", STR(?keptDim), " "))) }
 }""" .
 
 # --- the reading state: what stands out ---------------------------------------------------------------

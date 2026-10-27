@@ -452,14 +452,15 @@ export function addressOf(r: Reader, resource: Term, keeps?: Set<string>): strin
 
 /**
  * The values a link needs, and where we are for the rest: the current value of each top-level
- * path dimension they leave open. Those dimensions go into `keeps` (whether they have a value).
+ * path dimension they leave open. Those dimensions go into `keeps`.
  */
 function kept(r: Reader, loc: Location, values: Values, keeps?: Set<string>): Values {
   for (const d of loc.dimensions) {
     if (d.spelledIn !== PATH || d.parent || d.target || values.has(d.iri)) continue
-    keeps?.add(d.iri)
     const v = one(r, d.subject, d.property)
-    if (v) values.set(d.iri, v)
+    if (!v) continue
+    keeps?.add(d.iri)
+    values.set(d.iri, v)
   }
   return values
 }
