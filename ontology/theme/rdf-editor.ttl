@@ -100,3 +100,22 @@
                  [ sty:property "unicode-bidi" ; sty:raw "isolate" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-literal" ;
     sty:declares [ sty:property "unicode-bidi" ; sty:raw "plaintext" ] .
+# A field in a row (editing a term, adding a statement): the row's own type, a thin frame, as wide as its text.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-edit" ;
+    sty:declares [ sty:property "font" ; sty:raw "inherit" ] ,
+                 [ sty:property "color" ; sty:token tok:text ] ,
+                 [ sty:property "background" ; sty:token tok:surface ] ,
+                 [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
+                 [ sty:property "border-radius" ; sty:token tok:radius-sm ] ,
+                 [ sty:property "padding" ; sty:raw "0 4px" ] ,
+                 [ sty:property "min-width" ; sty:raw "12ch" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "field-sizing" ; sty:raw "content" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-edit:focus-visible" ;
+    sty:declares [ sty:property "outline" ; sty:raw "none" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:ring ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-adding" ;
+    sty:declares [ sty:property "padding-block" ; sty:raw "2px" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "22px" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-adding > .sem-edit" ;
+    sty:declares [ sty:property "min-width" ; sty:raw "min(28ch, 100%)" ] .

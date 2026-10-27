@@ -33,6 +33,12 @@ const C_ENTRY = C + 'entry'
 const C_CURRENT = C + 'current'
 const C_ARROWS = C + 'arrows'
 const C_LISTS = C + 'lists'
+const C_EDITING = C + 'editing'
+const C_ADDING = C + 'adding'
+const C_EDITS_ROW = C + 'editsRow'
+const C_COMMITS = C + 'commits'
+const C_ADDS = C + 'adds'
+const MARKS = [C_EDITING, C_ADDING, C_FOCUSED]
 const TUPLE = '\u0001'
 const BARE = new Set([XSD + 'integer', XSD + 'decimal', XSD + 'double', XSD + 'boolean'])
 const KINDS = [NS.rdfs + 'Class', NS.owl + 'Class', NS.rdf + 'Property', NS.owl + 'ObjectProperty', NS.owl + 'DatatypeProperty', NS.owl + 'AnnotationProperty']
@@ -150,6 +156,25 @@ const arrows: FnRule = (ctx, focus) => {
     }
   }
   return o.quads
+}
+
+// --- fields: editing a term, adding a statement ---------------------------------------------------------
+
+/** A row's term in a field in its place: it takes the focus; Enter commits it (c:commits). */
+function field(ctx: RuleContext, o: Out, focus: NamedNode, local: string, marker: string, value: string): NamedNode {
+  const input = el(o, local, 'Input', { type: 'text', class: 'sem-label sem-edit', value, 'aria-label': phrase(ctx, 'RdfEditPhrase'), 'data-sem-takes-focus': '' })
+  o.t(input, marker, focus)
+  return input
+}
+
+/** The last item of a row's group: a field for a new object or statement (c:adds). */
+function addItem(ctx: RuleContext, o: Out, focus: NamedNode, key: string, phraseName: string): NamedNode {
+  const words = phrase(ctx, phraseName)
+  const input = el(o, 'add', 'Input', { type: 'text', class: 'sem-edit', placeholder: words, 'aria-label': words, 'data-sem-takes-focus': '' })
+  o.t(input, C_ADDS, focus)
+  const item = el(o, 'add-item', 'Li', { class: 'sem-adding' }, [input])
+  o.t(item, SEM.orderKey, key)
+  return item
 }
 
 // --- a term at a place -------------------------------------------------------------------------------
@@ -280,12 +305,18 @@ const term: FnRule = (ctx, focus) => {
       ])
     : el(o, 'leaf', 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' })
   if (f.expandable) o.t(lead, C_EXPANDS, focus).t(lead, C_EXPANDS_TO, bool(ctx, !f.open))
+  const editable = f.editable.value === 'true'
+  const editing = editable && (f.lit || (t.termType === 'NamedNode' && !f.blank)) && ctx.match(focus, C_EDITING, bool(ctx, true)).length > 0
+  const adding = editable && f.nest && !f.list && ctx.match(focus, C_ADDING, bool(ctx, true)).length > 0
   const focused = ctx.match(focus, C_FOCUSED, bool(ctx, true)).length > 0
-  const label = el(o, 'label', 'Span', { class: `sem-label sem-${kind}`, tabIndex: f.depth === 0 ? '0' : '-1', 'data-sem-link': link, 'data-sem-takes-focus': focused ? '' : undefined, 'aria-description': description }, [
+  const label = editing ? field(ctx, o, focus, 'edit', C_COMMITS, f.lit ? t.value : f.compactName!) : el(o, 'label', 'Span', { class: `sem-label sem-${kind}`, tabIndex: f.depth === 0 ? '0' : '-1', 'data-sem-link': link, 'data-sem-takes-focus': focused ? '' : undefined, 'aria-description': description }, [
     o.text('label-text', shown),
   ])
-  if (jumps) o.t(label, C_JUMPS_TO, t)
-  if (goes) o.t(label, C_GOES_TO, t)
+  if (!editing) {
+    if (jumps) o.t(label, C_JUMPS_TO, t)
+    if (goes) o.t(label, C_GOES_TO, t)
+    if (editable) o.t(label, C_EDITS_ROW, focus)
+  }
   const parts = [lead, label]
   if (badge !== undefined) parts.push(el(o, 'badge', 'Span', { class: 'sem-datatype' }, [o.text('badge-text', badge)]))
   if (note !== undefined) parts.push(el(o, 'note', 'Span', { class: 'sem-note' }, [o.text('note-text', note)]))
@@ -293,6 +324,7 @@ const term: FnRule = (ctx, focus) => {
   if (f.open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
     for (const k of kids) o.t(group, H.hasChild, k)
+    if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, `${TUPLE}n9`, 'RdfNewStatementPhrase'))
     rows.push(group)
   }
   const root = el(o, 'root', 'Li', { class: 'sem-term' + (f.depth === 0 ? ' sem-resource' : '') }, rows)
@@ -366,14 +398,21 @@ const property: FnRule = (ctx, focus) => {
     el(o, 'twisty-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('twisty-text', '▸')]),
   ])
   o.t(lead, C_EXPANDS, focus).t(lead, C_EXPANDS_TO, bool(ctx, !open))
-  const label = el(o, 'label', 'Span', { class: 'sem-label sem-predicate', tabIndex: '-1', 'data-sem-link': goes ? 'term' : undefined }, [o.text('label-text', shown)])
-  if (goes) o.t(label, C_GOES_TO, p)
+  const isEditable = editable.value === 'true'
+  const editing = isEditable && ctx.match(focus, C_EDITING, bool(ctx, true)).length > 0
+  const adding = isEditable && open && ctx.match(focus, C_ADDING, bool(ctx, true)).length > 0
+  const label = editing
+    ? field(ctx, o, focus, 'edit', C_COMMITS, shown)
+    : el(o, 'label', 'Span', { class: 'sem-label sem-predicate', tabIndex: '-1', 'data-sem-link': goes ? 'term' : undefined }, [o.text('label-text', shown)])
+  if (!editing && goes) o.t(label, C_GOES_TO, p)
+  if (!editing && isEditable) o.t(label, C_EDITS_ROW, focus)
   const parts = [lead, label]
   if (note !== undefined) parts.push(el(o, 'note', 'Span', { class: 'sem-note' }, [o.text('note-text', note)]))
   const rows = [el(o, 'row', 'Div', { class: 'sem-row' }, parts)]
   if (open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
     for (const k of kids) o.t(group, H.hasChild, k)
+    if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, '\uffff', 'RdfNewObjectPhrase'))
     rows.push(group)
   }
   const root = el(o, 'root', 'Li', { class: 'sem-property' }, rows)
@@ -401,6 +440,8 @@ const toggle: ReactionFn = (ctx) => {
 const follow: ReactionFn = (ctx) => {
   const f = ctx.runtime.store.factory
   const editor = ctx.target
+  const withMod = ctx.match(ctx.event, NS.beh + 'modifiers', null).some((q) => `+${q.object.value}+`.includes('+mod+'))
+  if (marked(ctx, C_EDITS_ROW) && !withMod) return NONE
   const goes = marked(ctx, C_GOES_TO)
   if (goes) return { remove: [], add: [f.quad(editor, f.namedNode(NS.nav + 'goTo'), goes)] }
   const to = marked(ctx, C_JUMPS_TO)
@@ -411,6 +452,187 @@ const follow: ReactionFn = (ctx) => {
     remove: [...ctx.match(editor, C_CURRENT, null), ...focused],
     add: [f.quad(editor, f.namedNode(C_CURRENT), to), f.quad(row, f.namedNode(C_FOCUSED), f.literal('true', f.namedNode(XSD_BOOLEAN)))],
   }
+}
+
+// --- editing ---------------------------------------------------------------------------------------------
+
+type RCtx = Parameters<ReactionFn>[0]
+const XSD_STRING = XSD + 'string'
+
+/** The namespace a declared prefix names (the least, when it is declared more than once). */
+function namespaceOf(ctx: RCtx, prefix: string): string | undefined {
+  let min: string | undefined
+  for (const q of ctx.match(null, NS.sh + 'prefix', null)) {
+    if (q.object.value !== prefix) continue
+    const ns = ctx.object(q.subject, NS.sh + 'namespace')?.value
+    if (ns !== undefined && (min === undefined || ns < min)) min = ns
+  }
+  return min
+}
+
+/**
+ * The term typed in a field, as Turtle writes it ("text"@lang, "text"^^datatype, a number or a
+ * boolean, <iri>, prefix:local); text without quotes keeps the old literal's datatype and language.
+ * The SPARQL reactions' parse, step for step.
+ */
+export function parseTerm(ctx: RCtx, raw: string, old?: Term): Term | undefined {
+  const f = ctx.runtime.store.factory
+  const text = raw.replace(/^\s+|\s+$/g, '')
+  if (text === '') return undefined
+  const lang = /^"[^"]*"@[A-Za-z]+(-[A-Za-z0-9]+)*$/.test(text)
+  const typed = /^"[^"]*"\^\^[^ ]+$/.test(text)
+  const quoted = /^"[^"]*"$/.test(text)
+  const inner = text.replace(/^"([^"]*)".*$/, '$1')
+  const name = typed ? text.slice(text.indexOf('"^^') + 3) : text
+  const iri = /^<[^<>" ]+>$/.test(name)
+  const pname = !iri && /^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$/.test(name)
+  const ns = pname ? namespaceOf(ctx, name.slice(0, name.indexOf(':'))) : undefined
+  const named = iri ? f.namedNode(name.slice(1, -1)) : pname && ns !== undefined ? f.namedNode(ns + name.slice(name.indexOf(':') + 1)) : undefined
+  const oldLiteral = old?.termType === 'Literal' ? old : undefined
+  if (lang) return f.literal(inner, text.slice(text.indexOf('"@') + 2))
+  if (typed && named) return f.literal(inner, named)
+  if (quoted) return f.literal(inner)
+  if (!typed && named) return named
+  if (!oldLiteral && /^[+-]?[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD_INTEGER))
+  if (!oldLiteral && /^[+-]?[0-9]*\.[0-9]+$/.test(text)) return f.literal(text, f.namedNode(XSD + 'decimal'))
+  if (!oldLiteral && (text === 'true' || text === 'false')) return f.literal(text, f.namedNode(XSD_BOOLEAN))
+  if (oldLiteral && oldLiteral.language) return f.literal(text, oldLiteral.language)
+  if (oldLiteral) return f.literal(text, oldLiteral.datatype.value === XSD_STRING ? undefined : oldLiteral.datatype)
+  return f.literal(text)
+}
+
+/** A predicate typed in a field: a name, or "a" for rdf:type. */
+function parsePredicate(ctx: RCtx, raw: string): NamedNode | undefined {
+  const p = parseTerm(ctx, raw)
+  if (p?.termType === 'NamedNode') return p
+  return p?.value === 'a' ? ctx.runtime.store.factory.namedNode(RDF_TYPE) : undefined
+}
+
+/** The key a new object's row is minted under (the SPARQL rules' ?okey, for a literal or an IRI). */
+const termKey = (t: Term) => (t.termType === 'Literal' ? `"${t.value}"` + (t.language ? '@' + t.language : '^^' + t.datatype.value) : t.value)
+
+/** The editing marks (c:editing, c:adding, c:focused) on the rows of the editor. */
+const marks = (ctx: RCtx): Quad[] => MARKS.flatMap((m) => ctx.match(null, m, null)).filter((q) => q.subject.value.startsWith(ctx.target.value + '/~'))
+const inThisEditor = (ctx: RCtx, row: Term | undefined): row is NamedNode => named(row) && !!ctx.object(row, C_IN_EDITOR)?.equals(ctx.target)
+const isA = (ctx: RCtx, row: Term, cls: string) => ctx.match(row, RDF_TYPE, ctx.runtime.store.factory.namedNode(cls)).length > 0
+const yes = (ctx: RCtx) => ctx.runtime.store.factory.literal('true', ctx.runtime.store.factory.namedNode(XSD_BOOLEAN))
+const valueOf = (ctx: RCtx) => ctx.object(ctx.event, NS.beh + 'value')?.value ?? ''
+
+/** Enter or a double click on a row: its term in a field. */
+const startEdit: ReactionFn = (ctx) => {
+  const row = marked(ctx, C_EDITS_ROW)
+  if (!inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  return { remove: marks(ctx), add: [f.quad(row, f.namedNode(C_EDITING), yes(ctx))] }
+}
+
+/** Shift+Enter: a field for a new object (beside an object) or a new statement (on a predicate, a resource). */
+const startAdd: ReactionFn = (ctx) => {
+  const row = marked(ctx, C_EDITS_ROW)
+  if (!inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  const object = isA(ctx, row, C_RDF_TERM) && !!ctx.object(row, C_SUBJECT)
+  const up = object || isA(ctx, row, C_RDF_PROPERTY) ? f.namedNode(row.value.replace(/\/~[tp]-[0-9a-f]{12}$/, '')) : row
+  return { remove: marks(ctx), add: [f.quad(up, f.namedNode(C_ADDING), yes(ctx))] }
+}
+
+/** Enter in a row's field: the statement (or a predicate's statements) with the new term. */
+const commitEdit: ReactionFn = (ctx) => {
+  const row = marked(ctx, C_COMMITS)
+  if (!inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  const remove = marks(ctx)
+  const add: Quad[] = []
+  const focus = (iri: string) => add.push(f.quad(f.namedNode(iri), f.namedNode(C_FOCUSED), yes(ctx)))
+  if (isA(ctx, row, C_RDF_TERM)) {
+    const old = ctx.object(row, C_TERM)
+    const nw = old && parseTerm(ctx, valueOf(ctx), old)
+    if (!old || !nw) return { remove, add }
+    const s = ctx.object(row, C_SUBJECT)
+    const p = s && ctx.object(row, C_PREDICATE)
+    const cell = ctx.object(row, C_LIST_CELL)
+    if (!nw.equals(old)) {
+      if (s && p) remove.push(f.quad(s, p, old))
+      if (cell) remove.push(f.quad(cell, f.namedNode(RDF_FIRST), old))
+    }
+    if (s && p) add.push(f.quad(s, p, nw))
+    if (cell) add.push(f.quad(cell, f.namedNode(RDF_FIRST), nw))
+    focus(s ? `${row.value.replace(/\/~t-[0-9a-f]{12}$/, '')}/~t-${key12(termKey(nw))}` : row.value)
+  } else if (isA(ctx, row, C_RDF_PROPERTY)) {
+    const s = ctx.object(row, C_SUBJECT)
+    const p = ctx.object(row, C_PREDICATE)
+    const np = parsePredicate(ctx, valueOf(ctx))
+    if (!s || !p || !np) return { remove, add }
+    for (const q of ctx.match(s, p.value, null)) {
+      if (!np.equals(p)) remove.push(q)
+      add.push(f.quad(s, np, q.object))
+    }
+    if (add.length) focus(`${row.value.replace(/\/~p-[0-9a-f]{12}$/, '')}/~p-${key12(np.value)}`)
+  }
+  return { remove, add }
+}
+
+/** Enter in an adding field: a new object of the predicate, or a new statement ("predicate value") of the resource. */
+const commitAdd: ReactionFn = (ctx) => {
+  const row = marked(ctx, C_ADDS)
+  if (!inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  const remove = marks(ctx)
+  const add: Quad[] = []
+  const raw = valueOf(ctx)
+  if (isA(ctx, row, C_RDF_PROPERTY)) {
+    const s = ctx.object(row, C_SUBJECT)
+    const p = ctx.object(row, C_PREDICATE)
+    const nw = parseTerm(ctx, raw)
+    if (s && p && nw) add.push(f.quad(s, p, nw), f.quad(f.namedNode(`${row.value}/~t-${key12(termKey(nw))}`), f.namedNode(C_FOCUSED), yes(ctx)))
+  } else if (isA(ctx, row, C_RDF_TERM)) {
+    const s = ctx.object(row, C_TERM)
+    const trimmed = raw.replace(/^\s+/, '')
+    const p = parsePredicate(ctx, trimmed.split(' ')[0]!)
+    const nw = parseTerm(ctx, trimmed.includes(' ') ? trimmed.slice(trimmed.indexOf(' ') + 1) : '')
+    if (s && p && nw) add.push(f.quad(s, p, nw), f.quad(f.namedNode(`${row.value}/~p-${key12(p.value)}`), f.namedNode(C_FOCUSED), yes(ctx)))
+  }
+  return { remove, add }
+}
+
+/** Escape in a field: nothing changes; the focus goes back to its row. */
+const cancel: ReactionFn = (ctx) => {
+  const f = ctx.runtime.store.factory
+  const edited = marked(ctx, C_COMMITS)
+  const row = edited ?? marked(ctx, C_ADDS)
+  if (!inThisEditor(ctx, row)) return NONE
+  return {
+    remove: [...ctx.match(row, C_EDITING, null), ...ctx.match(row, C_ADDING, null)],
+    add: edited ? [f.quad(row, f.namedNode(C_FOCUSED), yes(ctx))] : [],
+  }
+}
+
+/** Delete on a row: its statement, a predicate's statements, a list member (the list closes up), or a resource. */
+const remove: ReactionFn = (ctx) => {
+  const row = marked(ctx, C_EDITS_ROW)
+  if (!inThisEditor(ctx, row)) return NONE
+  const f = ctx.runtime.store.factory
+  const out = { remove: marks(ctx), add: [] as Quad[] }
+  const s = ctx.object(row, C_SUBJECT)
+  const p = ctx.object(row, C_PREDICATE)
+  const t = ctx.object(row, C_TERM)
+  if (isA(ctx, row, C_RDF_TERM) && s && p && t) out.remove.push(f.quad(s, p, t))
+  if (isA(ctx, row, C_RDF_PROPERTY) && s && p) out.remove.push(...ctx.match(s, p.value, null))
+  if (isA(ctx, row, C_RDF_TERM) && t && ctx.object(row, C_DEPTH)?.value === '0') {
+    out.remove.push(...ctx.match(t, null, null), ...ctx.match(ctx.target, C_ENTRY, t))
+  }
+  const cell = ctx.object(row, C_LIST_CELL)
+  const first = cell && ctx.object(cell, RDF_FIRST)
+  const next = cell && ctx.object(cell, RDF_REST)
+  if (cell && first && next) {
+    out.remove.push(f.quad(cell, f.namedNode(RDF_FIRST), first), f.quad(cell, f.namedNode(RDF_REST), next))
+    const prev = ctx.match(null, RDF_REST, cell)
+    if (prev.length) for (const q of prev) out.remove.push(q), out.add.push(f.quad(q.subject, q.predicate, next))
+    else for (const q of ctx.match(null, null, cell)) out.remove.push(q), out.add.push(f.quad(q.subject, q.predicate, next))
+  }
+  const up = row.value.replace(/\/~[tpir]-[^/]*$/, '')
+  if (up.startsWith(ctx.target.value + '/~')) out.add.push(f.quad(f.namedNode(up), f.namedNode(C_FOCUSED), yes(ctx)))
+  return out
 }
 
 export const functions: Record<string, FnRule> = {
@@ -425,4 +647,11 @@ export const functions: Record<string, FnRule> = {
 export const reactions: Record<string, ReactionFn> = {
   'rdf-editor:toggle': toggle,
   'rdf-editor:follow': follow,
+  'rdf-editor:follow-key': (ctx) => (marked(ctx, C_EDITS_ROW) ? NONE : follow(ctx)),
+  'rdf-editor:start-edit': startEdit,
+  'rdf-editor:start-add': startAdd,
+  'rdf-editor:commit-edit': commitEdit,
+  'rdf-editor:commit-add': commitAdd,
+  'rdf-editor:cancel': cancel,
+  'rdf-editor:delete': remove,
 }

@@ -95,10 +95,24 @@ c:focused a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "State on a row of an RDF editor: the row the focus goes to after the next change (a jump's resource)."@en .
 
 c:RdfEditorKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "enter" ;
-    rdfs:comment "Enter on a row of an RDF editor: activates its link (jump to the resource, or go to the term)."@en .
+    rdfs:comment "Enter on a row of an RDF editor: follows its link (a viewer), or edits it (an editor); in a row's field, commits it."@en .
+c:RdfEditorAddKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "shift+enter" ;
+    rdfs:comment "Shift+Enter on a row of an RDF editor: adds an object beside an object, a statement beside a predicate or in a resource."@en .
+c:RdfEditorEscapeKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "escape" ;
+    rdfs:comment "Escape in a row's field of an RDF editor: leaves it unchanged."@en .
+c:RdfEditorDeleteKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "keydown" ; beh:key "delete" , "backspace" ;
+    rdfs:comment "Delete or Backspace on a row of an RDF editor: removes its statement, its predicate's statements, a list member or a resource."@en .
+c:editing a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: its term is being edited, in a field in its place."@en .
+c:adding a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: a field under it takes a new object (a predicate's row) or a new statement (a resource's)."@en .
+c:editsRow a owl:ObjectProperty ; rdfs:comment "On a rendered label of an editable RDF editor: the row that Enter, a double click, Shift+Enter and Delete act on."@en .
+c:commits a owl:ObjectProperty ; rdfs:comment "On a rendered field of an RDF editor: the row whose term it edits."@en .
+c:adds a owl:ObjectProperty ; rdfs:comment "On a rendered field of an RDF editor: the row it adds an object (a predicate's) or a statement (a resource's) to."@en .
 
 c:RdfNestedPhrase a c:Phrase ; rdfs:label "nested resource"@en , "вкладений ресурс"@uk , "verschachtelte Ressource"@de , "مورد متداخل"@ar .
 c:RdfListPhrase a c:Phrase ; rdfs:label "list of {n}"@en , "список із {n}"@uk , "Liste mit {n}"@de , "قائمة من {n}"@ar .
+c:RdfEditPhrase a c:Phrase ; rdfs:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
+c:RdfNewObjectPhrase a c:Phrase ; rdfs:label "New value"@en , "Нове значення"@uk , "Neuer Wert"@de , "قيمة جديدة"@ar .
+c:RdfNewStatementPhrase a c:Phrase ; rdfs:label "New statement: predicate value"@en , "Нове твердження: предикат значення"@uk , "Neue Aussage: Prädikat Wert"@de , "عبارة جديدة: خاصية قيمة"@ar .
 c:RdfReifierPhrase a c:Phrase ; rdfs:label "said about this statement"@en , "сказане про це твердження"@uk , "über diese Aussage gesagt"@de , "ما قيل عن هذه العبارة"@ar .
 
 # --- the editor: the tree, and a resource row per entry ---------------------------------------------
@@ -234,25 +248,33 @@ CONSTRUCT {
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?badge , ?note ; ord:immediatelyPrecedes ?group .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?badge , ?note ; ord:immediatelyPrecedes ?group .
   ?lead a ?leadTag ; rdfhtml:type ?leadType ; rdfhtml:class ?leadClass ; rdfhtml:tabIndex ?leadTabindex ; c:expands ?expands ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
-        rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label .
+        rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label , ?edit .
   ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName ?leadAttrName ; rdfhtml:attributeValue ?leadAttrValue .
   ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
-  ?label a rdfhtml:Span ; rdfhtml:class ?labelClass ; rdfhtml:tabIndex ?tabindex ; c:jumpsTo ?jumpsTo ; c:goesTo ?goesTo ; rdfhtml:attribute ?linkAttr , ?focusAttr , ?descAttr ;
+  ?label a rdfhtml:Span ; rdfhtml:class ?labelClass ; rdfhtml:tabIndex ?tabindex ; c:jumpsTo ?jumpsTo ; c:goesTo ?goesTo ; c:editsRow ?editsRow ; rdfhtml:attribute ?linkAttr , ?focusAttr , ?descAttr ;
          rdfhtml:hasChild ?labelText ; ord:precedes ?badge , ?note .
   ?linkAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-link" ; rdfhtml:attributeValue ?link .
   ?focusAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?descAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-description" ; rdfhtml:attributeValue ?description .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?edit a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-label sem-edit" ; rdfhtml:value ?editText ; c:commits $this ; rdfhtml:attribute ?editName , ?editFocus ;
+        ord:precedes ?badge , ?note .
+  ?editName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?editPhrase .
+  ?editFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?badge a rdfhtml:Span ; rdfhtml:class "sem-datatype" ; rdfhtml:hasChild ?badgeText ; ord:precedes ?note .
   ?badgeText a rdfhtml:Text ; rdfhtml:data ?badgeData .
   ?note a rdfhtml:Span ; rdfhtml:class "sem-note" ; rdfhtml:hasChild ?noteText .
   ?noteText a rdfhtml:Text ; rdfhtml:data ?noteData .
-  ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child .
+  ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child , ?addItem .
   ?groupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?addItem a rdfhtml:Li ; rdfhtml:class "sem-adding" ; sem:orderKey "\\u0001n9" ; rdfhtml:hasChild ?add .
+  ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus .
+  ?addName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addPhrase .
+  ?addFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?child a ?childClass ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
          c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; sem:orderKey ?childKey .
 }
@@ -338,12 +360,30 @@ WHERE {
   BIND(IF(?expandable, IRI(CONCAT(STR($this), "/~twisty-icon")), ?none) AS ?icon)
   BIND(IF(?expandable, IRI(CONCAT(STR($this), "/~twisty-icon-aria-hidden")), ?none) AS ?iconHidden)
   BIND(IF(?expandable, IRI(CONCAT(STR($this), "/~twisty-text")), ?none) AS ?iconText)
-  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
+  # Editing: the term in a field in its place (a literal's text; a name as written), or a field for a new statement.
+  BIND(?editable && (?lit || (isIRI(?t) && !?blank)) && EXISTS { $this c:editing true } AS ?editing)
+  BIND(?editable && ?nest && !?list && EXISTS { $this c:adding true } AS ?adding)
+  BIND(IF(?editable && !?editing, $this, ?none) AS ?editsRow)
+  BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit")), ?none) AS ?edit)
+  BIND(IF(?editing, IF(?lit, STR(?t), ?compact), ?none) AS ?editText)
+  BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-aria-label")), ?none) AS ?editName)
+  BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-data-sem-takes-focus")), ?none) AS ?editFocus)
+  OPTIONAL { FILTER(?editing) ?editAt l10n:of c:RdfEditPhrase ; l10n:name ?edit0 }
+  OPTIONAL { FILTER(?editing) c:RdfEditPhrase rdfs:label ?edit0 FILTER(langMatches(lang(?edit0), "en")) }
+  BIND(STR(?edit0) AS ?editPhrase)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-item")), ?none) AS ?addItem)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add")), ?none) AS ?add)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-label")), ?none) AS ?addName)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-data-sem-takes-focus")), ?none) AS ?addFocus)
+  OPTIONAL { FILTER(?adding) ?addAt l10n:of c:RdfNewStatementPhrase ; l10n:name ?add0 }
+  OPTIONAL { FILTER(?adding) c:RdfNewStatementPhrase rdfs:label ?add0 FILTER(langMatches(lang(?add0), "en")) }
+  BIND(STR(?add0) AS ?addPhrase)
+  BIND(IF(?editing, ?none, IRI(CONCAT(STR($this), "/~label"))) AS ?label)
   BIND(CONCAT("sem-label sem-", IF(?lit, "literal", IF(?list, "list", IF(?blank, "blank", IF(isIRI(?t), "iri", "triple"))))) AS ?labelClass)
-  BIND(IF(BOUND(?link), IRI(CONCAT(STR($this), "/~label-data-sem-link")), ?none) AS ?linkAttr)
-  BIND(IF(EXISTS { $this c:focused true }, IRI(CONCAT(STR($this), "/~label-data-sem-takes-focus")), ?none) AS ?focusAttr)
-  BIND(IF(BOUND(?description), IRI(CONCAT(STR($this), "/~label-aria-description")), ?none) AS ?descAttr)
-  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IF(BOUND(?label) && BOUND(?link), IRI(CONCAT(STR($this), "/~label-data-sem-link")), ?none) AS ?linkAttr)
+  BIND(IF(BOUND(?label) && EXISTS { $this c:focused true }, IRI(CONCAT(STR($this), "/~label-data-sem-takes-focus")), ?none) AS ?focusAttr)
+  BIND(IF(BOUND(?label) && BOUND(?description), IRI(CONCAT(STR($this), "/~label-aria-description")), ?none) AS ?descAttr)
+  BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
   BIND(IF(BOUND(?badgeData), IRI(CONCAT(STR($this), "/~badge")), ?none) AS ?badge)
   BIND(IF(BOUND(?badgeData), IRI(CONCAT(STR($this), "/~badge-text")), ?none) AS ?badgeText)
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note")), ?none) AS ?note)
@@ -499,20 +539,27 @@ CONSTRUCT {
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?note ; ord:immediatelyPrecedes ?group .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?note ; ord:immediatelyPrecedes ?group .
   ?lead a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; rdfhtml:tabIndex "-1" ; c:expands $this ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
-        rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label .
+        rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label , ?edit .
   ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?leadLabel .
   ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
-  ?label a rdfhtml:Span ; rdfhtml:class "sem-label sem-predicate" ; rdfhtml:tabIndex "-1" ; c:goesTo ?goesTo ; rdfhtml:attribute ?linkAttr ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?note .
+  ?label a rdfhtml:Span ; rdfhtml:class "sem-label sem-predicate" ; rdfhtml:tabIndex "-1" ; c:goesTo ?goesTo ; c:editsRow ?editsRow ; rdfhtml:attribute ?linkAttr ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?note .
+  ?edit a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-label sem-edit" ; rdfhtml:value ?editText ; c:commits $this ; rdfhtml:attribute ?editName , ?editFocus ; ord:immediatelyPrecedes ?note .
+  ?editName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?editPhrase .
+  ?editFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?linkAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-link" ; rdfhtml:attributeValue "term" .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?shown .
   ?note a rdfhtml:Span ; rdfhtml:class "sem-note" ; rdfhtml:hasChild ?noteText .
   ?noteText a rdfhtml:Text ; rdfhtml:data ?noteData .
-  ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child .
+  ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child , ?addItem .
   ?groupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?addItem a rdfhtml:Li ; rdfhtml:class "sem-adding" ; sem:orderKey "\uffff" ; rdfhtml:hasChild ?add .
+  ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus .
+  ?addName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addPhrase .
+  ?addFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; sem:orderKey ?okey .
 }
 WHERE {
@@ -548,9 +595,27 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~twisty-icon")) AS ?icon)
   BIND(IRI(CONCAT(STR($this), "/~twisty-icon-aria-hidden")) AS ?iconHidden)
   BIND(IRI(CONCAT(STR($this), "/~twisty-text")) AS ?iconText)
-  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
-  BIND(IF(?goes, IRI(CONCAT(STR($this), "/~label-data-sem-link")), ?none) AS ?linkAttr)
-  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  # Editing: the predicate in a field in its place, or a field for a new object.
+  BIND(?editable && EXISTS { $this c:editing true } AS ?editing)
+  BIND(?editable && ?open && EXISTS { $this c:adding true } AS ?adding)
+  BIND(IF(?editable && !?editing, $this, ?none) AS ?editsRow)
+  BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit")), ?none) AS ?edit)
+  BIND(IF(?editing, ?shown, ?none) AS ?editText)
+  BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-aria-label")), ?none) AS ?editName)
+  BIND(IF(?editing, IRI(CONCAT(STR($this), "/~edit-data-sem-takes-focus")), ?none) AS ?editFocus)
+  OPTIONAL { FILTER(?editing) ?editAt l10n:of c:RdfEditPhrase ; l10n:name ?edit0 }
+  OPTIONAL { FILTER(?editing) c:RdfEditPhrase rdfs:label ?edit0 FILTER(langMatches(lang(?edit0), "en")) }
+  BIND(STR(?edit0) AS ?editPhrase)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-item")), ?none) AS ?addItem)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add")), ?none) AS ?add)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-aria-label")), ?none) AS ?addName)
+  BIND(IF(?adding, IRI(CONCAT(STR($this), "/~add-data-sem-takes-focus")), ?none) AS ?addFocus)
+  OPTIONAL { FILTER(?adding) ?addAt l10n:of c:RdfNewObjectPhrase ; l10n:name ?add0 }
+  OPTIONAL { FILTER(?adding) c:RdfNewObjectPhrase rdfs:label ?add0 FILTER(langMatches(lang(?add0), "en")) }
+  BIND(STR(?add0) AS ?addPhrase)
+  BIND(IF(?editing, ?none, IRI(CONCAT(STR($this), "/~label"))) AS ?label)
+  BIND(IF(BOUND(?label) && ?goes, IRI(CONCAT(STR($this), "/~label-data-sem-link")), ?none) AS ?linkAttr)
+  BIND(IF(BOUND(?label), IRI(CONCAT(STR($this), "/~label-text")), ?none) AS ?labelText)
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note")), ?none) AS ?note)
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note-text")), ?none) AS ?noteText)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
@@ -629,7 +694,8 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?row ; c
     sem:function "rdf-editor:toggle" .
 
 # Activating a link (a click, or Enter on its row): a resource of the document becomes the current
-# one and its row takes the focus; a term is gone to (the Reference).
+# one and its row takes the focus; a term is gone to (the Reference). In an editor, where a click and
+# Enter are for editing, a link is followed with Mod and a click.
 c:RdfFollowLink a beh:Reaction ;
     rdfs:label "Follow a link"@en ;
     beh:when beh:Click ;
@@ -637,11 +703,13 @@ c:RdfFollowLink a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:current ?was . ?row c:focused ?f }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:jumpsTo ?to .
+  FILTER(NOT EXISTS { ?n c:editsRow ?editing } || EXISTS { $event beh:modifiers ?mods FILTER(CONTAINS(CONCAT("+", ?mods, "+"), "+mod+")) })
   { $this c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR($this), "/~"))) }
 }""" ;
     beh:inserts """CONSTRUCT { $this c:current ?to ; nav:goTo ?term . ?row c:focused true }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit .
+  FILTER(NOT EXISTS { ?n c:editsRow ?editing } || EXISTS { $event beh:modifiers ?mods FILTER(CONTAINS(CONCAT("+", ?mods, "+"), "+mod+")) })
   { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) } UNION { ?n c:goesTo ?term }
 }""" ;
     sem:function "rdf-editor:follow" .
@@ -652,11 +720,306 @@ c:RdfFollowLinkByKey a beh:Reaction ;
     beh:deletes """CONSTRUCT { $this c:current ?was . ?row c:focused ?f }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:jumpsTo ?to .
+  FILTER NOT EXISTS { ?n c:editsRow ?editing }
   { $this c:current ?was } UNION { ?row c:focused ?f FILTER(STRSTARTS(STR(?row), CONCAT(STR($this), "/~"))) }
 }""" ;
     beh:inserts """CONSTRUCT { $this c:current ?to ; nav:goTo ?term . ?row c:focused true }
 WHERE {
   $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit .
+  FILTER NOT EXISTS { ?n c:editsRow ?editing }
   { ?n c:jumpsTo ?to . BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(STR(?to)), 1, 12))) AS ?row) } UNION { ?n c:goesTo ?term }
 }""" ;
-    sem:function "rdf-editor:follow" .
+    sem:function "rdf-editor:follow-key" .
+
+# --- reactions: editing (c:editable true) -------------------------------------------------------------
+# Every edit is one reaction over the document, undoable through the change log (beh:undoable); the
+# fields are state on the rows (c:editing, c:adding), so opening one renders that row alone. A field
+# takes what Turtle writes: "text"@lang, "text"^^datatype, a number or a boolean, <iri>, prefix:local
+# (a declared prefix); text without quotes keeps the literal's datatype and language, so a date stays a
+# date and a title keeps its language. Enter commits (the focus goes to the row it made), Escape leaves
+# it, Shift+Enter adds, Delete removes.
+
+c:RdfStartEdit a beh:Reaction ;
+    rdfs:label "Edit a row"@en ;
+    beh:when c:RdfEditorKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+    beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . }""" ;
+    sem:function "rdf-editor:start-edit" .
+
+c:RdfStartEditByDoubleClick a beh:Reaction ;
+    rdfs:label "Edit a row"@en ;
+    beh:when beh:DoubleClick ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+    beh:inserts """CONSTRUCT { ?row c:editing true } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . }""" ;
+    sem:function "rdf-editor:start-edit" .
+
+# Shift+Enter: beside an object, a new object of its predicate; on a predicate, a new statement of its
+# resource; on a resource (or a nested one), a new statement in it.
+c:RdfStartAdd a beh:Reaction ;
+    rdfs:label "Add a statement"@en ;
+    beh:when c:RdfEditorAddKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+    beh:inserts """CONSTRUCT { ?to c:adding true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  BIND(EXISTS { ?row a c:RdfTerm ; c:subjectTerm ?anyS } AS ?object)
+  BIND(EXISTS { ?row a c:RdfProperty } AS ?predicate)
+  BIND(IF(?object || ?predicate, IRI(REPLACE(STR(?row), "/~[tp]-[0-9a-f]{12}$", "")), ?row) AS ?to)
+}""" ;
+    sem:function "rdf-editor:start-add" .
+
+# Enter in a row's field: the statement (or every statement of a predicate) with the new term instead.
+c:RdfCommitEdit a beh:Reaction ;
+    rdfs:label "Change a term"@en ;
+    beh:when c:RdfEditorKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?cell rdf:first ?old . ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:commits ?row . ?row c:inEditor $this .
+  LATERAL {
+    { ?row a c:RdfTerm ; c:term ?old .
+      OPTIONAL { ?row c:subjectTerm ?s0 ; c:predicateTerm ?p0 } OPTIONAL { ?row c:listCell ?cell0 }
+    BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?newText)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?newLang)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?newTyped)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"$") AS ?newQuoted)
+    BIND(REPLACE(?newText, "^\\"([^\\"]*)\\".*$", "$1") AS ?newInner)
+    BIND(IF(?newTyped, STRAFTER(?newText, "\\"^^"), ?newText) AS ?newName)
+    BIND(REGEX(?newName, "^<[^<>\\" ]+>$") AS ?newIri)
+    BIND(!?newIri && REGEX(?newName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?newPname)
+    BIND(STRBEFORE(?newName, ":") AS ?newPfx)
+    OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
+    BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
+         IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
+         IF(?newQuoted, ?newInner,
+         IF(!?newTyped && BOUND(?newNamed), ?newNamed,
+         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(!(BOUND(?old) && isLiteral(?old)) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(BOUND(?old) && isLiteral(?old) && LANG(?old) != "", STRLANG(?newText, LANG(?old)),
+         IF(BOUND(?old) && isLiteral(?old), STRDT(?newText, DATATYPE(?old)), ?newText))))))))) AS ?new)
+    FILTER(?newText != "")
+      FILTER(!sameTerm(?new, ?old))
+      BIND(?s0 AS ?s) BIND(?p0 AS ?p) BIND(IF(BOUND(?s0), ?old, ?none) AS ?o) BIND(?cell0 AS ?cell) }
+    UNION { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p .
+    BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?npText)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?npLang)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?npTyped)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"$") AS ?npQuoted)
+    BIND(REPLACE(?npText, "^\\"([^\\"]*)\\".*$", "$1") AS ?npInner)
+    BIND(IF(?npTyped, STRAFTER(?npText, "\\"^^"), ?npText) AS ?npName)
+    BIND(REGEX(?npName, "^<[^<>\\" ]+>$") AS ?npIri)
+    BIND(!?npIri && REGEX(?npName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?npPname)
+    BIND(STRBEFORE(?npName, ":") AS ?npPfx)
+    OPTIONAL { FILTER(?npPname) ?npDecl sh:prefix ?npP0 ; sh:namespace ?npNs0 FILTER(STR(?npP0) = ?npPfx) BIND(STR(?npNs0) AS ?npNs) }
+    BIND(IF(?npIri, IRI(SUBSTR(?npName, 2, STRLEN(?npName) - 2)), IF(?npPname && BOUND(?npNs), IRI(CONCAT(?npNs, STRAFTER(?npName, ":"))), ?none)) AS ?npNamed)
+    BIND(IF(?npLang, STRLANG(?npInner, STRAFTER(?npText, "\\"@")),
+         IF(?npTyped && BOUND(?npNamed), STRDT(?npInner, ?npNamed),
+         IF(?npQuoted, ?npInner,
+         IF(!?npTyped && BOUND(?npNamed), ?npNamed,
+         IF(!(false) && REGEX(?npText, "^[+-]?[0-9]+$"), STRDT(?npText, xsd:integer),
+         IF(!(false) && REGEX(?npText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?npText, xsd:decimal),
+         IF(!(false) && ?npText IN ("true", "false"), STRDT(?npText, xsd:boolean),
+         IF(false && LANG(?x) != "", STRLANG(?npText, LANG(?x)),
+         IF(false, STRDT(?npText, DATATYPE(?x)), ?npText))))))))) AS ?np)
+    FILTER(?npText != "")
+      FILTER((isIRI(?np) || ?npText = "a") && !sameTerm(IF(?npText = "a", rdf:type, ?np), ?p))
+      ?s ?p ?o }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?new . ?cell rdf:first ?new . ?s ?newP ?o . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:commits ?row . ?row c:inEditor $this .
+  LATERAL {
+    { ?row a c:RdfTerm ; c:term ?old .
+      OPTIONAL { ?row c:subjectTerm ?s0 ; c:predicateTerm ?p0 } OPTIONAL { ?row c:listCell ?cell0 }
+    BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?newText)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?newLang)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?newTyped)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"$") AS ?newQuoted)
+    BIND(REPLACE(?newText, "^\\"([^\\"]*)\\".*$", "$1") AS ?newInner)
+    BIND(IF(?newTyped, STRAFTER(?newText, "\\"^^"), ?newText) AS ?newName)
+    BIND(REGEX(?newName, "^<[^<>\\" ]+>$") AS ?newIri)
+    BIND(!?newIri && REGEX(?newName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?newPname)
+    BIND(STRBEFORE(?newName, ":") AS ?newPfx)
+    OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
+    BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
+         IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
+         IF(?newQuoted, ?newInner,
+         IF(!?newTyped && BOUND(?newNamed), ?newNamed,
+         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(!(BOUND(?old) && isLiteral(?old)) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(!(BOUND(?old) && isLiteral(?old)) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(BOUND(?old) && isLiteral(?old) && LANG(?old) != "", STRLANG(?newText, LANG(?old)),
+         IF(BOUND(?old) && isLiteral(?old), STRDT(?newText, DATATYPE(?old)), ?newText))))))))) AS ?new)
+    FILTER(?newText != "")
+      BIND(?s0 AS ?s) BIND(?p0 AS ?p) BIND(?cell0 AS ?cell)
+      BIND(IF(BOUND(?s0), IRI(CONCAT(REPLACE(STR(?row), "/~t-[0-9a-f]{12}$", ""), "/~t-", SUBSTR(MD5(IF(isLiteral(?new), CONCAT("\\"", STR(?new), "\\"", IF(LANG(?new) != "", CONCAT("@", LANG(?new)), CONCAT("^^", STR(DATATYPE(?new))))), STR(?new))), 1, 12))), ?row) AS ?focus) }
+    UNION { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p0 .
+    BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?npText)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?npLang)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?npTyped)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"$") AS ?npQuoted)
+    BIND(REPLACE(?npText, "^\\"([^\\"]*)\\".*$", "$1") AS ?npInner)
+    BIND(IF(?npTyped, STRAFTER(?npText, "\\"^^"), ?npText) AS ?npName)
+    BIND(REGEX(?npName, "^<[^<>\\" ]+>$") AS ?npIri)
+    BIND(!?npIri && REGEX(?npName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?npPname)
+    BIND(STRBEFORE(?npName, ":") AS ?npPfx)
+    OPTIONAL { FILTER(?npPname) ?npDecl sh:prefix ?npP0 ; sh:namespace ?npNs0 FILTER(STR(?npP0) = ?npPfx) BIND(STR(?npNs0) AS ?npNs) }
+    BIND(IF(?npIri, IRI(SUBSTR(?npName, 2, STRLEN(?npName) - 2)), IF(?npPname && BOUND(?npNs), IRI(CONCAT(?npNs, STRAFTER(?npName, ":"))), ?none)) AS ?npNamed)
+    BIND(IF(?npLang, STRLANG(?npInner, STRAFTER(?npText, "\\"@")),
+         IF(?npTyped && BOUND(?npNamed), STRDT(?npInner, ?npNamed),
+         IF(?npQuoted, ?npInner,
+         IF(!?npTyped && BOUND(?npNamed), ?npNamed,
+         IF(!(false) && REGEX(?npText, "^[+-]?[0-9]+$"), STRDT(?npText, xsd:integer),
+         IF(!(false) && REGEX(?npText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?npText, xsd:decimal),
+         IF(!(false) && ?npText IN ("true", "false"), STRDT(?npText, xsd:boolean),
+         IF(false && LANG(?x) != "", STRLANG(?npText, LANG(?x)),
+         IF(false, STRDT(?npText, DATATYPE(?x)), ?npText))))))))) AS ?np)
+    FILTER(?npText != "")
+      FILTER(isIRI(?np) || ?npText = "a")
+      BIND(IF(?npText = "a", rdf:type, ?np) AS ?newP)
+      ?s ?p0 ?o
+      BIND(IRI(CONCAT(REPLACE(STR(?row), "/~p-[0-9a-f]{12}$", ""), "/~p-", SUBSTR(MD5(STR(?newP)), 1, 12))) AS ?focus) }
+  }
+}""" ;
+    sem:function "rdf-editor:commit-edit" .
+
+# Enter in an adding field: a new object of the predicate, or a new statement ("predicate value") of the resource.
+c:RdfCommitAdd a beh:Reaction ;
+    rdfs:label "Add a statement"@en ;
+    beh:when c:RdfEditorKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?marked ?markP ?mark }
+WHERE { $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this . ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }""" ;
+    beh:inserts """CONSTRUCT { ?s ?p ?new . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit ; beh:value ?raw . ?n rdfhtml:hasChild* ?hit . ?n c:adds ?row . ?row c:inEditor $this .
+  LATERAL {
+    { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p .
+    BIND(REPLACE(STR(?raw), "^\\\\s+|\\\\s+$", "") AS ?newText)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?newLang)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?newTyped)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"$") AS ?newQuoted)
+    BIND(REPLACE(?newText, "^\\"([^\\"]*)\\".*$", "$1") AS ?newInner)
+    BIND(IF(?newTyped, STRAFTER(?newText, "\\"^^"), ?newText) AS ?newName)
+    BIND(REGEX(?newName, "^<[^<>\\" ]+>$") AS ?newIri)
+    BIND(!?newIri && REGEX(?newName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?newPname)
+    BIND(STRBEFORE(?newName, ":") AS ?newPfx)
+    OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
+    BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
+         IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
+         IF(?newQuoted, ?newInner,
+         IF(!?newTyped && BOUND(?newNamed), ?newNamed,
+         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(!(false) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(false && LANG(?x) != "", STRLANG(?newText, LANG(?x)),
+         IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
+    FILTER(?newText != "")
+      BIND(IRI(CONCAT(STR(?row), "/~t-", SUBSTR(MD5(IF(isLiteral(?new), CONCAT("\\"", STR(?new), "\\"", IF(LANG(?new) != "", CONCAT("@", LANG(?new)), CONCAT("^^", STR(DATATYPE(?new))))), STR(?new))), 1, 12))) AS ?focus) }
+    UNION { ?row a c:RdfTerm ; c:term ?s .
+      BIND(REPLACE(STR(?raw), "^\\\\s+", "") AS ?trimmed)
+      BIND(STRBEFORE(CONCAT(?trimmed, " "), " ") AS ?predText)
+      BIND(STRAFTER(?trimmed, " ") AS ?objText)
+    BIND(REPLACE(STR(?predText), "^\\\\s+|\\\\s+$", "") AS ?npText)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?npLang)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?npTyped)
+    BIND(REGEX(?npText, "^\\"[^\\"]*\\"$") AS ?npQuoted)
+    BIND(REPLACE(?npText, "^\\"([^\\"]*)\\".*$", "$1") AS ?npInner)
+    BIND(IF(?npTyped, STRAFTER(?npText, "\\"^^"), ?npText) AS ?npName)
+    BIND(REGEX(?npName, "^<[^<>\\" ]+>$") AS ?npIri)
+    BIND(!?npIri && REGEX(?npName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?npPname)
+    BIND(STRBEFORE(?npName, ":") AS ?npPfx)
+    OPTIONAL { FILTER(?npPname) ?npDecl sh:prefix ?npP0 ; sh:namespace ?npNs0 FILTER(STR(?npP0) = ?npPfx) BIND(STR(?npNs0) AS ?npNs) }
+    BIND(IF(?npIri, IRI(SUBSTR(?npName, 2, STRLEN(?npName) - 2)), IF(?npPname && BOUND(?npNs), IRI(CONCAT(?npNs, STRAFTER(?npName, ":"))), ?none)) AS ?npNamed)
+    BIND(IF(?npLang, STRLANG(?npInner, STRAFTER(?npText, "\\"@")),
+         IF(?npTyped && BOUND(?npNamed), STRDT(?npInner, ?npNamed),
+         IF(?npQuoted, ?npInner,
+         IF(!?npTyped && BOUND(?npNamed), ?npNamed,
+         IF(!(false) && REGEX(?npText, "^[+-]?[0-9]+$"), STRDT(?npText, xsd:integer),
+         IF(!(false) && REGEX(?npText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?npText, xsd:decimal),
+         IF(!(false) && ?npText IN ("true", "false"), STRDT(?npText, xsd:boolean),
+         IF(false && LANG(?x) != "", STRLANG(?npText, LANG(?x)),
+         IF(false, STRDT(?npText, DATATYPE(?x)), ?npText))))))))) AS ?np)
+    FILTER(?npText != "")
+      FILTER(isIRI(?np) || ?npText = "a")
+      BIND(IF(?npText = "a", rdf:type, ?np) AS ?p)
+    BIND(REPLACE(STR(?objText), "^\\\\s+|\\\\s+$", "") AS ?newText)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"@[A-Za-z]+(-[A-Za-z0-9]+)*$") AS ?newLang)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"\\\\^\\\\^[^ ]+$") AS ?newTyped)
+    BIND(REGEX(?newText, "^\\"[^\\"]*\\"$") AS ?newQuoted)
+    BIND(REPLACE(?newText, "^\\"([^\\"]*)\\".*$", "$1") AS ?newInner)
+    BIND(IF(?newTyped, STRAFTER(?newText, "\\"^^"), ?newText) AS ?newName)
+    BIND(REGEX(?newName, "^<[^<>\\" ]+>$") AS ?newIri)
+    BIND(!?newIri && REGEX(?newName, "^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z0-9_.-]*$") AS ?newPname)
+    BIND(STRBEFORE(?newName, ":") AS ?newPfx)
+    OPTIONAL { FILTER(?newPname) ?newDecl sh:prefix ?newP0 ; sh:namespace ?newNs0 FILTER(STR(?newP0) = ?newPfx) BIND(STR(?newNs0) AS ?newNs) }
+    BIND(IF(?newIri, IRI(SUBSTR(?newName, 2, STRLEN(?newName) - 2)), IF(?newPname && BOUND(?newNs), IRI(CONCAT(?newNs, STRAFTER(?newName, ":"))), ?none)) AS ?newNamed)
+    BIND(IF(?newLang, STRLANG(?newInner, STRAFTER(?newText, "\\"@")),
+         IF(?newTyped && BOUND(?newNamed), STRDT(?newInner, ?newNamed),
+         IF(?newQuoted, ?newInner,
+         IF(!?newTyped && BOUND(?newNamed), ?newNamed,
+         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]+$"), STRDT(?newText, xsd:integer),
+         IF(!(false) && REGEX(?newText, "^[+-]?[0-9]*\\\\.[0-9]+$"), STRDT(?newText, xsd:decimal),
+         IF(!(false) && ?newText IN ("true", "false"), STRDT(?newText, xsd:boolean),
+         IF(false && LANG(?x) != "", STRLANG(?newText, LANG(?x)),
+         IF(false, STRDT(?newText, DATATYPE(?x)), ?newText))))))))) AS ?new)
+    FILTER(?newText != "")
+      BIND(IRI(CONCAT(STR(?row), "/~p-", SUBSTR(MD5(STR(?p)), 1, 12))) AS ?focus) }
+  }
+}""" ;
+    sem:function "rdf-editor:commit-add" .
+
+# Escape in a field: nothing changes; the focus goes back to its row.
+c:RdfCancelEdit a beh:Reaction ;
+    rdfs:label "Leave a field"@en ;
+    beh:when c:RdfEditorEscapeKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:deletes """CONSTRUCT { ?row ?state ?v }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits|c:adds ?row . ?row c:inEditor $this ; ?state ?v . VALUES ?state { c:editing c:adding } }""" ;
+    beh:inserts """CONSTRUCT { ?row c:focused true }
+WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:commits ?row . ?row c:inEditor $this }""" ;
+    sem:function "rdf-editor:cancel" .
+
+# Delete on a row: its statement; a predicate's statements; a list member (the list closes up); a
+# resource of the document, with all it says. The focus goes to the row it was in.
+c:RdfDelete a beh:Reaction ;
+    rdfs:label "Delete"@en ;
+    beh:when c:RdfEditorDeleteKey ;
+    beh:sourceClass c:RdfEditor ;
+    beh:undoable true ;
+    beh:deletes """CONSTRUCT { ?s ?p ?o . ?prev rdf:rest ?cell . ?cell rdf:first ?m ; rdf:rest ?next . ?holder ?hp ?cell . $this c:entry ?entry . ?marked ?markP ?mark }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  LATERAL {
+    { ?row a c:RdfTerm ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?o }
+    UNION { ?row a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p . ?s ?p ?o }
+    UNION { ?row a c:RdfTerm ; c:depth 0 ; c:term ?s . ?s ?p ?o }
+    UNION { ?row a c:RdfTerm ; c:depth 0 ; c:term ?entry }
+    UNION { ?row c:listCell ?cell . ?cell rdf:first ?m ; rdf:rest ?next .
+      OPTIONAL { ?prev rdf:rest ?cell } OPTIONAL { FILTER(!BOUND(?prev)) ?holder ?hp ?cell } }
+    UNION { ?marked ?markP ?mark . VALUES ?markP { c:editing c:adding c:focused } FILTER(STRSTARTS(STR(?marked), CONCAT(STR($this), "/~"))) }
+  }
+}""" ;
+    beh:inserts """CONSTRUCT { ?prev rdf:rest ?next . ?holder ?hp ?next . ?focus c:focused true }
+WHERE {
+  $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:editsRow ?row . ?row c:inEditor $this .
+  BIND(IRI(REPLACE(STR(?row), "/~[tpir]-[^/]*$", "")) AS ?up)
+  BIND(IF(STRSTARTS(STR(?up), CONCAT(STR($this), "/~")), ?up, ?none) AS ?focus)
+  OPTIONAL { ?row c:listCell ?cell . ?cell rdf:first ?m ; rdf:rest ?next .
+    OPTIONAL { ?prev rdf:rest ?cell } OPTIONAL { FILTER(!BOUND(?prev)) ?holder ?hp ?cell } }
+}""" ;
+    sem:function "rdf-editor:delete" .

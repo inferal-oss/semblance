@@ -24,17 +24,17 @@ const GALLERY = readFileSync(new URL('../demo/gallery/_dt-rdf.ttl', import.meta.
 type Kind = 'oxigraph' | 'wat'
 
 /** The library editor, projected on its own (Screen and Text) and driven through events. */
-function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages: string[] = []) {
+function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages: string[] = [], root = EDITOR) {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const store = loadStore(kind, GALLERY, extra)
   const runtime = new Runtime(store)
   const fail = (e: unknown) => {
     throw e
   }
-  const screen = runtime.project({ modality: MOD.Screen, layers: [STY.Layer], prefer, languages, name: 'screen', roots: [EDITOR] }, fail)
+  const screen = runtime.project({ modality: MOD.Screen, layers: [STY.Layer], prefer, languages, name: 'screen', roots: [root] }, fail)
   const text = runtime.project({ modality: MOD.Text, layers: [], prefer, languages, name: 'text', roots: [EDITOR] }, fail)
   const app = document.getElementById('app')!
-  const dom = new DomRenderer(screen.index, app, EDITOR)
+  const dom = new DomRenderer(screen.index, app, root)
   dom.flush()
   const bus = new EventBus(runtime, screen, { prefer })
   bus.attach(dom, () => dom.flush())
@@ -55,7 +55,20 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const item = (...path: string[]) => label(...path).closest('[role=treeitem]') as HTMLElement
   const twisty = (...path: string[]) => item(...path).querySelector(':scope > .sem-row > .sem-twisty') as HTMLElement
   const click = (el: Element) => el.dispatchEvent(new window.Event('click', { bubbles: true }))
-  const key = (el: Element, k: string) => el.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true }))
+  const key = (el: Element, k: string, shiftKey = false) => {
+    const e = new window.Event('keydown', { bubbles: true, cancelable: true })
+    Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey })
+    el.dispatchEvent(e)
+  }
+  /** The field open in the editor (editing a row, or adding to one). */
+  const field = () => editor().querySelector('input.sem-edit') as HTMLInputElement | null
+  /** Types into the open field and presses Enter. */
+  const enter = (text: string) => {
+    const input = field()!
+    input.value = text
+    key(input, 'Enter')
+  }
+  const objects = (s: string, p: string) => store.match(nn(s), nn(p), null).map((q) => (q.object.termType === 'Literal' ? `${q.object.value}|${q.object.language || q.object.datatype.value.replace(/^.*#/, '')}` : q.object.value))
   const apply = (change: { add?: Quad[]; remove?: Quad[] }) => {
     runtime.apply({ add: change.add ?? [], remove: change.remove ?? [] })
     dom.flush()
@@ -63,7 +76,7 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const outline = () => toText(text.index, EDITOR)
   const html = () => app.innerHTML
   const runs = (prefix: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(C + prefix)).reduce((n, [, s]) => n + s.runs, 0)
-  return { store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, apply, outline, html, runs }
+  return { store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
 }
 
 const LIBRARY = [
@@ -218,4 +231,76 @@ describe('c:RdfEditor', () => {
     expect(small).toBeLessThanOrEqual(12)
     expect(editRuns(40)).toBe(small)
   })
+
+  const EDITABLE = `@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> .
+ui:dt-rdf-editor c:editable true .
+ui:rdf-edit a c:Stack ; c:children ( ui:rdf-undo ui:dt-rdf-editor ) .
+ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`edits as structure: terms, predicates, new statements, list members, undo; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', EDITABLE, [], UI + 'rdf-edit'), mount(kind, 'function', EDITABLE, [], UI + 'rdf-edit')]
+      const [m] = both as [ReturnType<typeof mount>]
+      const same = (step: string) => {
+        expect(both[1]!.html(), step).toBe(both[0]!.html())
+        expect(both[1]!.store.match(null, null, null).filter((q) => q.subject.value.startsWith(LIB)).length, step).toBe(m.store.match(null, null, null).filter((q) => q.subject.value.startsWith(LIB)).length)
+      }
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        same(step)
+      }
+      same('initial')
+      // A click does not follow a link in an editor; Enter edits instead.
+      each((x) => x.click(x.label('lib:earthsea', 'lib:author', 'lib:ursula')), 'a plain click')
+      expect(m.store.match(m.nn(EDITOR), m.nn(C + 'current'), null).map((q) => q.object.value)).toEqual([LIB + 'dispossessed'])
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '183'), 'Enter'), 'Enter on a number')
+      expect(m.field()!.value).toBe('183')
+      expect(m.field()!.hasAttribute('data-sem-takes-focus')).toBe(true)
+      each((x) => x.enter('205'), 'a new number')
+      expect(m.objects(LIB + 'earthsea', LIB + 'pages')).toEqual(['205|integer'])
+      expect(m.field()).toBeNull()
+      expect(m.label('lib:earthsea', 'lib:pages', '205').hasAttribute('data-sem-takes-focus')).toBe(true)
+      // Text without quotes keeps the literal's language; Turtle syntax says another.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:title', '"A Wizard of Earthsea"'), 'Enter'), 'Enter on a title')
+      expect(m.field()!.value).toBe('A Wizard of Earthsea')
+      each((x) => x.enter('A Wizard of Earthsea (1968)'), 'a new title')
+      expect(m.objects(LIB + 'earthsea', LIB + 'title')).toEqual(['A Wizard of Earthsea (1968)|en'])
+      each((x) => x.key(x.label('lib:earthsea', 'lib:title', '"A Wizard of Earthsea (1968)"'), 'Enter'), 'Enter on it again')
+      each((x) => x.enter('"Чарівник Земномор\'я"@uk'), 'a title in Ukrainian')
+      expect(m.objects(LIB + 'earthsea', LIB + 'title')).toEqual(["Чарівник Земномор'я|uk"])
+      // A predicate renamed: every statement of it.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages'), 'Enter'), 'Enter on a predicate')
+      expect(m.field()!.value).toBe('lib:pages')
+      each((x) => x.enter('lib:pageCount'), 'a renamed predicate')
+      expect(m.objects(LIB + 'earthsea', LIB + 'pageCount')).toEqual(['205|integer'])
+      expect(m.objects(LIB + 'earthsea', LIB + 'pages')).toEqual([])
+      // Escape leaves a field unchanged.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pageCount', '205'), 'Enter'), 'Enter on a value')
+      each((x) => x.key(x.field()!, 'Escape'), 'Escape')
+      expect(m.field()).toBeNull()
+      expect(m.objects(LIB + 'earthsea', LIB + 'pageCount')).toEqual(['205|integer'])
+      // Shift+Enter on a resource: a new statement, "predicate value".
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter on a resource')
+      expect(m.field()!.getAttribute('aria-label')).toBe('New statement: predicate value')
+      each((x) => x.enter('lib:published "1968"^^xsd:gYear'), 'a new statement')
+      expect(m.objects(LIB + 'earthsea', LIB + 'published')).toEqual(['1968|gYear'])
+      // Shift+Enter beside an object: another object of its predicate.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:author', 'lib:ursula'), 'Enter', true), 'Shift+Enter beside an object')
+      each((x) => x.enter('<https://example.org/someone>'), 'a new object')
+      expect(m.objects(LIB + 'earthsea', LIB + 'author').sort()).toEqual([LIB + 'ursula', 'https://example.org/someone'])
+      // Delete: a statement; list members, the list closing up (the head too).
+      each((x) => x.key(x.label('lib:earthsea', 'lib:author', '<https://example.org/someone>'), 'Delete'), 'Delete a statement')
+      expect(m.objects(LIB + 'earthsea', LIB + 'author')).toEqual([LIB + 'ursula'])
+      // Undo goes back through the change log, one change at a time.
+      const undo = (x: ReturnType<typeof mount>) => x.click(x.document.querySelector('[data-sem-c=button]')!)
+      each(undo, 'Undo the delete')
+      expect(m.objects(LIB + 'earthsea', LIB + 'author')).toHaveLength(2)
+      each(undo, 'Undo the addition')
+      expect(m.objects(LIB + 'earthsea', LIB + 'author')).toEqual([LIB + 'ursula'])
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"'), 'Delete'), 'Delete a list member')
+      expect(m.outline()).toContain('lib:keywords ( "anarchism" "utopia" )')
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 2 )', '"anarchism"'), 'Delete'), 'Delete the head of a list')
+      expect(m.outline()).toContain('lib:keywords ( "utopia" )')
+    })
+  }
 })
