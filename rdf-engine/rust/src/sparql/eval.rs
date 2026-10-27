@@ -52,7 +52,8 @@ pub struct Ctx<'a> {
     bnodes: IdMap,
     bnode_row: usize,
     scan: Vec<u32>,
-    /// Per pattern (by address): the variables a join may pass into it.
+    /// Per pattern (by address): the variables a join may pass into it; and
+    /// (by address and 1) what a FILTER reads, when it can be decided early.
     side: IdMap,
     side_list: Vec<Option<Rc<[bool]>>>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
@@ -199,21 +200,8 @@ impl<'a> Ctx<'a> {
                 if left.is_empty() {
                     return left;
                 }
-                let Some(safe) = self.sideways(b) else {
-                    let mut out = Vec::new();
-                    for r in &left {
-                        out.extend(self.eval(b, r, active));
-                    }
-                    return out;
-                };
-                if !left.iter().any(|r| useful(r, sub, &safe)) {
-                    let right = self.eval(b, sub, active);
-                    return join_rows(left, &right);
-                }
-                let (mut whole, mut out) = (None, Vec::new());
-                for r in &left {
-                    self.join_one(b, sub, r, &safe, &mut whole, active, &mut out);
-                }
+                let mut out = Vec::new();
+                self.join_right(left, b, sub, active, &mut out);
                 out
             }
             Pattern::LeftJoin(a, b, f) => {
@@ -395,7 +383,8 @@ impl<'a> Ctx<'a> {
     /// (no EXISTS) and `a` keeps each one as substituted; cached per pattern.
     fn early(&mut self, p: &Pattern) -> Option<Rc<[bool]>> {
         let Pattern::Filter(f, a) = p else { return None };
-        let key = [p as *const Pattern as usize as u32];
+        // Keyed apart from `sideways`, which caches what a join passes into the same pattern.
+        let key = [p as *const Pattern as usize as u32, 1];
         if let Some(i) = self.side.get(&key) {
             return self.side_list[i as usize].clone();
         }
@@ -406,6 +395,33 @@ impl<'a> Ctx<'a> {
         self.side_list.push(reads.clone());
         self.side.insert(&key, self.side_list.len() as u32 - 1);
         reads
+    }
+
+    /// The rows of `left` joined with `b`, onto `out`. A UNION that is not pure
+    /// is joined branch by branch (as WAT's `$join_union`): each branch is passed
+    /// the bindings it is safe to pass it, which another branch (a subquery
+    /// projecting the variable, say) does not make unsafe.
+    fn join_right(&mut self, left: Vec<Row>, b: &Pattern, sub: &[u32], active: Active, out: &mut Vec<Row>) {
+        if let Pattern::Union(x, y) = b {
+            if !pure(b) {
+                self.join_right(left.clone(), x, sub, active, out);
+                return self.join_right(left, y, sub, active, out);
+            }
+        }
+        let Some(safe) = self.sideways(b) else {
+            for r in &left {
+                out.extend(self.eval(b, r, active));
+            }
+            return;
+        };
+        if !left.iter().any(|r| useful(r, sub, &safe)) {
+            let right = self.eval(b, sub, active);
+            return out.extend(join_rows(left, &right));
+        }
+        let mut whole = None;
+        for r in &left {
+            self.join_one(b, sub, r, &safe, &mut whole, active, out);
+        }
     }
 
     /// Join one left row with `b`: evaluated with the row's safe bindings
