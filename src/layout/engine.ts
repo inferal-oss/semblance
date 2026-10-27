@@ -8,8 +8,11 @@ import { WasmLayout } from './wasm.ts'
 /** `wat` and `rust` are the WASM twins (layout-solver/build/), `ts` is src/layout/solver.ts. */
 export type LayoutKind = 'wat' | 'rust' | 'ts'
 
-/** The kinds tried, in order, when none is asked for: the fastest build first (layout-solver/bench.ts). */
-export const LAYOUT_PREFERENCE: readonly LayoutKind[] = ['rust', 'wat', 'ts']
+/**
+ * The kinds tried, in order, when none is asked for: WAT is as fast as Rust (layout-solver/bench.ts)
+ * at a sixth of its size (3.7 KiB gzipped against 24.5), TypeScript the backup.
+ */
+export const LAYOUT_PREFERENCE: readonly LayoutKind[] = ['wat', 'rust', 'ts']
 
 const modules: Partial<Record<Exclude<LayoutKind, 'ts'>, WebAssembly.Module>> = {}
 let checker: { kind: LayoutKind; check(boxes: Float64Array, program: Int32Array): Finding[] } = { kind: 'ts', check: checkPacked }

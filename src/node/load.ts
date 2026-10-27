@@ -48,7 +48,7 @@ function engine(kind: 'rust' | 'wat', options: StoreOptions): GraphStore {
  * them to src/layout/engine.ts; the kinds it can now use, TypeScript always last.
  */
 export async function initLayout(): Promise<LayoutKind[]> {
-  for (const kind of ['rust', 'wat'] as const) {
+  for (const kind of ['wat', 'rust'] as const) {
     const path = fileURLToPath(new URL(`../../layout-solver/build/${kind}.wasm`, import.meta.url))
     if (!existsSync(path)) continue
     try {

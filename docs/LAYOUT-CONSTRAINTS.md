@@ -105,8 +105,9 @@ Where checks run:
 
 ## The solver
 
-A small incremental **Cassowary** (kiwi's algorithm: edit variables and dual simplex), twice:
-`src/layout/solver.ts` and `layout-solver/rust/src/solver.rs` (WASM), step for step the same
+A small incremental **Cassowary** (kiwi's algorithm: edit variables and dual simplex), three
+times: `src/layout/solver.ts`, `layout-solver/wat/` (hand-written WebAssembly) and
+`layout-solver/rust/src/solver.rs` (Rust → WebAssembly), step for step the same
 (rows and cells ordered alike, so both twins pivot identically; a parity test checks values
 and pivot counts). It departs from kiwi in two places:
 
@@ -157,47 +158,54 @@ Medians, measured through `scripts/test-queue.sh` on the shared machine (Node 26
 
 | page | constraints | twin | full solve | resize (1 edit) | one label | all labels (language) | pivots/resize |
 |---|---:|---|---:|---:|---:|---:|---:|
-| small (10 fields) | 81 | ts | 0.72 ms | 7.8 µs | 1.3 µs | 19.2 µs | 2.5 |
-| small (10 fields) | 81 | wasm | 0.17 ms | 1.3 µs | 0.5 µs | 6.9 µs | 2.5 |
-| form (30 fields) | 227 | ts | 1.01 ms | 67.5 µs | 1.0 µs | 29.6 µs | 5.2 |
-| form (30 fields) | 227 | wasm | 0.61 ms | 19.5 µs | 0.5 µs | 14.9 µs | 5.2 |
-| medium (100 fields) | 735 | ts | 3.77 ms | 9.2 µs | 1.9 µs | 98.7 µs | 13.6 |
-| medium (100 fields) | 735 | wasm | 1.04 ms | 3.7 µs | 0.8 µs | 41.7 µs | 13.6 |
-| large (500 fields) | 3595 | ts | 42.25 ms | 95.9 µs | 1.5 µs | 0.91 ms | 51.5 |
-| large (500 fields) | 3595 | wasm | 11.23 ms | 21.9 µs | 1.1 µs | 0.63 ms | 51.5 |
-| huge (2000 fields) | 14185 | ts | 526.14 ms | 0.32 ms | 2.0 µs | 4.11 ms | 216.1 |
-| huge (2000 fields) | 14185 | wasm | 113.44 ms | 0.16 ms | 1.3 µs | 7.97 ms | 216.1 |
+| small (10 fields) | 81 | ts | 0.86 ms | 8.4 µs | 1.4 µs | 28.2 µs | 2.5 |
+| small (10 fields) | 81 | rust | 0.21 ms | 2.3 µs | 0.6 µs | 10.4 µs | 2.5 |
+| small (10 fields) | 81 | wat | 0.15 ms | 2.9 µs | 0.5 µs | 9.9 µs | 2.5 |
+| form (30 fields) | 227 | ts | 1.53 ms | 66.8 µs | 0.6 µs | 32.4 µs | 5.2 |
+| form (30 fields) | 227 | rust | 0.50 ms | 16.2 µs | 0.4 µs | 10.9 µs | 5.2 |
+| form (30 fields) | 227 | wat | 0.27 ms | 27.6 µs | 0.3 µs | 13.6 µs | 5.2 |
+| medium (100 fields) | 735 | ts | 3.17 ms | 8.8 µs | 1.7 µs | 99.4 µs | 13.6 |
+| medium (100 fields) | 735 | rust | 0.87 ms | 3.3 µs | 0.4 µs | 27.1 µs | 13.6 |
+| medium (100 fields) | 735 | wat | 0.72 ms | 5.6 µs | 0.5 µs | 28.0 µs | 13.6 |
+| large (500 fields) | 3595 | ts | 39.90 ms | 62.8 µs | 1.4 µs | 0.82 ms | 51.5 |
+| large (500 fields) | 3595 | rust | 9.01 ms | 18.0 µs | 0.7 µs | 0.18 ms | 51.5 |
+| large (500 fields) | 3595 | wat | 8.16 ms | 28.7 µs | 0.7 µs | 0.19 ms | 51.5 |
+| huge (2000 fields) | 14185 | ts | 561.19 ms | 0.28 ms | 2.4 µs | 3.22 ms | 216.1 |
+| huge (2000 fields) | 14185 | rust | 103.33 ms | 84.4 µs | 0.8 µs | 1.00 ms | 216.1 |
+| huge (2000 fields) | 14185 | wat | 105.09 ms | 0.19 ms | 0.6 µs | 0.54 ms | 216.1 |
 
 Before the entering rule and the column index (kiwi's way), the full solve took 16.9 ms / 3.4 ms
 (30 fields), 508 ms / 103 ms (100) and 68 s / 13 s (500), TS / WASM.
 
 #### Checker: a whole page of boxes (cards of field rows, a nav list)
 
-| page | boxes | invariants | findings | ts | wasm (with copy in) | sparql (wat store) |
-|---|---:|---:|---:|---:|---:|---:|
-| 10 cards | 454 | 112 | 3 | 17.5 µs | 5.6 µs | 4.07 ms |
-| 100 cards | 4144 | 922 | 33 | 40.6 µs | 27.9 µs | 293.47 ms |
-| 500 cards | 20544 | 4522 | 165 | 95.0 µs | 44.8 µs | - |
+| page | boxes | invariants | findings | ts | rust (with copy in) | wat (with copy in) | sparql (wat store) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 10 cards | 454 | 112 | 3 | 15.0 µs | 5.2 µs | 7.2 µs | 3.77 ms |
+| 100 cards | 4144 | 922 | 33 | 21.8 µs | 27.0 µs | 59.6 µs | 282.12 ms |
+| 500 cards | 20544 | 4522 | 165 | 94.2 µs | 44.7 µs | 35.8 µs | - |
 
 #### Size
 
 | twin | raw | gzip | brotli | source lines |
 |---|---:|---:|---:|---:|
-| ts (minified) | 8.4 KiB | 3.0 KiB | 2.7 KiB | 606 |
-| wasm (Rust, opt-level 3) | 58.3 KiB | 22.0 KiB | 18.2 KiB | 876 |
+| ts (minified, solver and checker) | 8.4 KiB | 3.0 KiB | 2.7 KiB | 619 |
+| rust (Rust, opt-level 3) | 65.0 KiB | 24.5 KiB | 20.2 KiB | 906 |
+| wat (hand-written WAT) | 7.7 KiB | 3.7 KiB | 3.4 KiB | 1273 |
 
 Reading the numbers:
 - **Checking** a whole page is microseconds in TS and WASM: 20k boxes take under 0.1 ms. In SPARQL it is milliseconds: 4 ms for 450 boxes, 0.3 s for 4,000 (the `rnd:parent+` paths). Real pages have 20–140 boxes, and on those the SPARQL checker takes 0.3–9 ms per page on the WAT store. That is fine in tests and the workbench. Live checks in dev should use a maintained view. Checking is nowhere near a bottleneck in any twin. The cost that matters is measuring (one `getBoundingClientRect` batch per frame, which #35 already designs) and the browser runs in CI.
 - **The solver's incremental re-solve** costs what it changes. A resize is 2.5–50 pivots (µs). A language switch, where every label is re-measured, takes 0.3 ms in TS for a 30-field form.
 - **The algorithm mattered more than the language.** Kiwi's entering rule and full row scan made the build about cubic: 68 s in TS and 13 s in WASM for 500 fields. With Dantzig's rule and a column index it takes 42 ms and 11 ms, a 1,600× gain in TS against WASM's 5×. A 30-field form now builds in 1 ms (TS) or 0.6 ms (WASM), cold.
-- **WASM is 1.5–4× faster than TS** for building and resizing, and about 2× for checking. Everything at realistic sizes is far below a frame in both. Relabelling all 2,000 fields of the huge page is the one case where WASM is slower (8 ms against 4 ms): Rust's column lists unlink by scan, where TS has a `Set`.
-- **Size:** the TS solver and checker together are 3.0 KiB gzipped (8.4 KiB raw, 606 lines) minified; the Rust → WASM build is 22.0 KiB gzipped (58.3 KiB raw, 876 lines of Rust), plus a buffer ABI and a build step. The index and the hash map for rows' cells cost the WASM build 8 KiB gzipped. A WAT twin, following `rdf-engine/`, would be smaller, but would be a third copy of a 400-line algorithm for no measured gain.
+- **WASM is 1.5–5× faster than TS** for building and resizing, and about 2× for checking large pages. Everything at realistic sizes is far below a frame in all three.
+- **WAT is as fast as Rust**: faster on full solves up to 500 fields (0.27 against 0.50 ms for 30 fields), level at 2,000, slower on a single resize (µs either way), twice as fast relabelling 2,000 fields. Rust's column index first removed by scan, which made that relabel slower than TS; it removes lazily now, like the WAT.
+- **Size:** WAT is 3.7 KiB gzipped (7.7 KiB raw), about TypeScript's 3.0 KiB; Rust is 24.5 KiB gzipped (65 KiB raw: the standard library's hash map, sort and allocator). So **WAT is the default** (`LAYOUT_PREFERENCE` in `src/layout/engine.ts`: wat, rust, ts): Rust's speed at TypeScript's size. Rust and TypeScript stay as parity twins and backups.
 
 ## Recommendation
 
 1. **Adopt the checker and the `lc:` vocabulary.** It is cheap, needs no new math, explains its findings, and has already found a live bug. Run it in CI on `main` across 320/375/768/1280 × the 10 themes × en/uk/de/ar (RTL included), failing on *new* findings, with a baseline that links known ones to their issues.
 2. **Declare parts in RDF/HTML, not selectors.** The spike's `lc:selector` guesses which element is "the control". A component should say so on its minted node (`<focus>/~control lc:role lc:SingleLineControl`), so `rnd:` measures exactly those nodes.
-3. **Keep the solver in TypeScript, off by default**, for the cross-container cases. It writes tokens through the style layer's hooks and nothing else. With Dantzig's rule and a column index its build is milliseconds even at 500 fields. Keep the Rust twin as the parity oracle. It is 7× the transfer size for a speedup nobody needs yet.
+3. **Solve and check in WASM by default, TypeScript as the backup.** `initLayout()` (the node and web loaders) compiles the builds present, and `createLayoutSolver()` / `checkLayout()` take the first of WAT, Rust and TypeScript that instantiates. The solver stays off by default for pages, for the cross-container cases only, and writes tokens through the style layer's hooks and nothing else. With Dantzig's rule and a column index its build is milliseconds even at 500 fields. All three twins stay under the parity tests.
 4. **Don't adopt Yoga or Taffy** (200–900 KB that re-implement the browser), and don't route layout through a solver (GSS).
 
 ## Follow-up issues (not filed; for your approval)
