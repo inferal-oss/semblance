@@ -3,7 +3,7 @@
 // elements, again when they move, not at all while an end is hidden, and writes nothing when
 // nothing it joins moved.
 import { parseHTML } from 'linkedom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { attachConnectors, route } from '../src/web/connectors.ts'
 import { NS } from '../src/ns.ts'
 import { mountShell, mountSite } from './harness.ts'
@@ -121,7 +121,11 @@ describe('the connector effect', () => {
     box.append(p.a, p.b, p.svg)
     place(box, { left: 0, top: 0, width: 800, height: 200 })
     Object.assign(box, { scrollHeight: 1000, clientHeight: 200, scrollWidth: 800, clientWidth: 800, clientTop: 0 })
-    Object.assign(p.window, { innerWidth: 800, innerHeight: 300, getComputedStyle: (el: Element) => ({ overflowX: 'visible', overflowY: el === box ? 'auto' : 'visible', direction: 'ltr' }) })
+    // linkedom's window reads through to the global object: put back what the test stubs.
+    const w = p.window as unknown as Record<string, unknown>
+    const had = { innerWidth: w.innerWidth, innerHeight: w.innerHeight, getComputedStyle: w.getComputedStyle }
+    onTestFinished(() => void Object.assign(w, had))
+    Object.assign(w, { innerWidth: 800, innerHeight: 300, getComputedStyle: (el: Element) => ({ overflowX: 'visible', overflowY: el === box ? 'auto' : 'visible', direction: 'ltr' }) })
     // B is below the box's visible part (and the viewport): the line runs to the box's bottom edge, toward it.
     place(p.b, { left: 300, top: 400, width: 100, height: 40 })
     p.tick()
