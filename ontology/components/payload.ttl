@@ -45,7 +45,7 @@ c:collapsedPath; a twisty (or the container's key) toggles it. Invalid JSON is s
 a note. c:label names the root (default "root")."""@en ;
     sem:slug "json-tree" ;
     key:navigation key:TreeNavigation .
-c:expandDepth a owl:DatatypeProperty ; rdfs:domain c:JsonTree ; rdfs:range xsd:integer ;
+c:expandDepth a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "Containers shallower than this are open unless collapsed (default 1: the root only)."@en .
 c:expandedPath a owl:DatatypeProperty ; rdfs:domain c:JsonTree ;
     rdfs:comment "The JSON Pointer of a container the person opened (\"\" is the root, \"/items/0\" the first item)."@en .

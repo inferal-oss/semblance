@@ -38,6 +38,9 @@
 
 # --- vocabulary ------------------------------------------------------------------------------------
 
+# c:expandDepth (payload.ttl) on an RDF editor: 0 starts its resources closed - for a large document,
+# whose rows then cost one each until opened; off-screen rows are skipped by the browser
+# (content-visibility), so a document of thousands of resources stays as fast to edit as a small one.
 c:RdfEditor a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:label "RDF editor"@en , "Редактор RDF"@uk , "RDF-Editor"@de , "محرر RDF"@ar ;
@@ -87,6 +90,8 @@ c:RdfDraggableRow dnd:keepsFocus true .
 c:RdfDropRow a owl:Class ; rdfs:subClassOf dnd:DropTarget ;
     rdfs:comment "Minted on a predicate's or a resource's row of an editable RDF editor: a statement dropped on it moves there."@en .
 c:inEditor a owl:ObjectProperty ; rdfs:domain c:RdfRow ; rdfs:range c:RdfEditor .
+c:startsClosed a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment "Derived on a resource's row of an RDF editor whose c:expandDepth is 0: it is closed until opened."@en .
 c:depth a owl:DatatypeProperty ; rdfs:domain c:RdfRow ; rdfs:range xsd:integer ;
     rdfs:comment "How deep a row is: 0 for a resource of the document, one more per row it is under."@en .
 c:subjectTerm a owl:ObjectProperty ; rdfs:domain c:RdfRow ; rdfs:comment "The subject of the statement (or the resource of the predicate) a row shows."@en .
@@ -187,14 +192,14 @@ c:RdfEditorEntries a sem:Rendering ;
     sem:targets c:RdfEditor ;
     sem:stratum 0 ;
     sem:forEach c:entry ;
-    sem:watches rdf:type , c:editable , c:validated .
+    sem:watches rdf:type , c:editable , c:validated , c:expandDepth .
 c:RdfEditorEntries-fn a sem:Rule ; sem:implements c:RdfEditorEntries ; sem:function "rdf-editor:entry" .
 c:RdfEditorEntries-sparql a sem:Rule ;
     sem:implements c:RdfEditorEntries ;
     sem:construct """
 CONSTRUCT {
   ?tree rdfhtml:hasChild ?row .
-  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
+  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:startsClosed ?closed ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor .
@@ -203,6 +208,8 @@ WHERE {
   BIND(EXISTS { $this c:editable true } AS ?editable)
   BIND(EXISTS { $this c:validated true } AS ?validated)
   BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
+  # A large document starts closed (c:expandDepth 0): a row per resource until one is opened.
+  BIND(IF(EXISTS { $this c:expandDepth ?d0 FILTER(xsd:integer(STR(?d0)) < 1) }, true, ?none) AS ?closed)
   BIND(IRI(CONCAT(STR($this), "/~tree")) AS ?tree)
   BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?key), 1, 12))) AS ?row)
 }""" .
@@ -338,7 +345,7 @@ WHERE {
   BIND(isIRI(?t) && !?blank && EXISTS { ?t a ?kind . VALUES ?kind { rdfs:Class owl:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty } } AS ?vocab)
   BIND((?hasStatements && (?depth = 0 || !?vocab)) || ?reified AS ?expandable)
   OPTIONAL { $this c:expanded ?own }
-  BIND(?depth = 0 || ?blank || ?list || ?reifier || ?reified AS ?openByDefault)
+  BIND((?depth = 0 && NOT EXISTS { $this c:startsClosed true }) || ?blank || ?list || ?reifier || ?reified AS ?openByDefault)
   BIND(?expandable && COALESCE(?own, ?openByDefault) AS ?open)
   # Open, it shows its reifiers; and its statements when it nests by nature, or was opened on purpose.
   BIND(?open && ?hasStatements && (?depth = 0 || ?blank || ?list || ?reifier || COALESCE(?own, false)) AS ?nest)
@@ -563,7 +570,7 @@ WHERE {
   BIND(isIRI(?t) && !?blank && EXISTS { ?t a ?kind . VALUES ?kind { rdfs:Class owl:Class rdf:Property owl:ObjectProperty owl:DatatypeProperty owl:AnnotationProperty } } AS ?vocab)
   BIND((?hasStatements && (?depth = 0 || !?vocab)) || ?reified AS ?expandable)
   OPTIONAL { $this c:expanded ?own }
-  BIND(?depth = 0 || ?blank || ?list || ?reifier || ?reified AS ?openByDefault)
+  BIND((?depth = 0 && NOT EXISTS { $this c:startsClosed true }) || ?blank || ?list || ?reifier || ?reified AS ?openByDefault)
   BIND(?expandable && COALESCE(?own, ?openByDefault) AS ?open)
   # Open, it shows its reifiers; and its statements when it nests by nature, or was opened on purpose.
   BIND(?open && ?hasStatements && (?depth = 0 || ?blank || ?list || ?reifier || COALESCE(?own, false)) AS ?nest)
