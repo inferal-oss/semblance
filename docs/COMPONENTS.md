@@ -52,6 +52,19 @@ puts a term in a field in its place, in Turtle (`"text"@uk`, `"1974"^^xsd:gYear`
 or a `predicate value` statement, Delete removes, Escape leaves a field. Which field is open is view
 state (`beh:viewState`), which undo leaves alone. The Text modality is a Turtle-like outline.
 
+With `c:validated true` each resource is checked against the SHACL shapes of its classes (the shapes
+layer's own check, run member-wise over `c:entry` by `val:EntryShapes`, so an edit re-checks the
+resource it changed); a value's problems show on its row, count problems on the predicate's, a
+missing required predicate on the resource's, each label `aria-invalid` and described by them. An
+adding field lists what the shapes expect, narrowed as you type: a missing required predicate
+first, and a predicate with each value it fixes or allows (`sh:hasValue`, `sh:in`), which adds the
+whole statement in one pick; on a predicate, its allowed values and the instances of its
+`sh:class`. Tab wraps a value into a nested resource as its `rdf:value`, Shift+Tab moves a statement
+up out of a nested resource, Alt+Up and Alt+Down move a list member, Shift+Enter on a list appends
+to it, and a value's row drags onto another predicate or resource (the drag layer). For a large
+document, `c:expandDepth 0` starts the resources closed (a row each until opened), and rows out of
+view are not laid out. The Examples page's "Editing a dataset" shows all of it.
+
 ```turtle
 ex:editor a c:RdfEditor ; c:label "Library" ; c:entry ex:book , ex:author ; c:editable true ; c:arrows c:ArrowsCurrent .
 ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
