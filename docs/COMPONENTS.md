@@ -278,10 +278,6 @@ new EventBus(runtime, screen).attach(renderer, () => renderer.flush())
   with `role="menuitem"`. An item without a destination renders a button. `c:disabled true`
   keeps a destination item as a disabled button, so it cannot navigate. The menu's choice
   reaction still closes it when an enabled item is chosen.
-  Browser mounts fit open menus above or below their triggers and scroll long lists within the
-  available viewport. Hosts that use `DomRenderer` directly can call `attachMenus(host)` once for
-  their whole menu region, and `fitMenus(host)` after each manual flush. An open menu in a `c:Card`
-  paints above adjacent cards.
 - **Things due later, the clipboard.** Attach a `Scheduler` (`beh:dueAt` becomes a `beh:Due`
   event) and a `Clipboard` (a `clip:Request` is written with `navigator.clipboard`, or a stand-in
   you pass, e.g. in tests); both report back as events on the bus.

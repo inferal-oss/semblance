@@ -7,4 +7,3 @@ export { DEFAULT_LAYERS, mount, type MountedApp, type MountOptions } from './mou
 export { attachConnectors, type ConnectorHost } from './connectors.ts'
 export { attachSnaps, type SnapHost } from './snap.ts'
 export { attachLightboxes, type LightboxHost } from './lightbox.ts'
-export { attachMenus, fitMenus } from './menu.ts'
