@@ -67,6 +67,7 @@ rcp:carbonara a rcp:Recipe ;
     rcp:steps ( "Cook the pasta" "Mix the eggs and the cheese" "Toss with the pasta, off the heat" ) .
 
 rcp:olena a rcp:Person ; rdfs:label "Olena" .
+rcp:attribution rdfs:comment "Where the authorship of Borscht comes from: said about the statement, not about the recipe." .
 
 # --- what a recipe should say ----------------------------------------------------------------------------
 

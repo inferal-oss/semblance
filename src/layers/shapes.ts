@@ -177,7 +177,8 @@ const validate: FnRule = (ctx, component, member) => {
 
 /** Outlines a component with violations and explains them in its tooltip. */
 const mark: FnRule = (ctx, focus) => {
-  const results = ctx.objects(focus, VAL.violation)
+  // Only results about the component itself (its entries' are shown where it shows them).
+  const results = ctx.objects(focus, VAL.violation).filter((r) => ctx.match(r, SH + 'focusNode', focus).length > 0)
   if (!results.length) return []
   const o = ctx.out(focus)
   const root = ctx.nn(mint(focus.value, 'root'))

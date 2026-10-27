@@ -178,12 +178,12 @@ CONSTRUCT {
   ?count a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-shape-invalid" ; rdfhtml:attributeValue ?n .
 }
 WHERE {
-  # One row per marked component: its first result.
-  $this val:violation ?first .
-  FILTER NOT EXISTS { $this val:violation ?earlier FILTER(STR(?earlier) < STR(?first)) }
+  # One row per marked component: its first result about itself (its entries' are shown where it shows them).
+  $this val:violation ?first . ?first sh:focusNode $this .
+  FILTER NOT EXISTS { $this val:violation ?earlier . ?earlier sh:focusNode $this FILTER(STR(?earlier) < STR(?first)) }
   BIND($this AS ?self)
   LATERAL { OPTIONAL { SELECT ?self (COUNT(?message) AS ?c) (GROUP_CONCAT(?message; separator=" · ") AS ?all) WHERE {
-    { SELECT ?self ?message WHERE { ?self val:violation ?result . ?result sh:resultMessage ?raw BIND(STR(?raw) AS ?message) FILTER(?message != "") }
+    { SELECT ?self ?message WHERE { ?self val:violation ?result . ?result sh:focusNode ?self ; sh:resultMessage ?raw BIND(STR(?raw) AS ?message) FILTER(?message != "") }
       ORDER BY ?message }
   } GROUP BY ?self } }
   BIND(STR(COALESCE(?c, 0)) AS ?n)
