@@ -1,0 +1,18 @@
+[package]
+name = "semblance-layout"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true
+
+[profile.dev]
+panic = "abort"
