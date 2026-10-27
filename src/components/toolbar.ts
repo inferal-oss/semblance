@@ -54,6 +54,7 @@ const searchField: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const value = boundText(ctx, focus)
   const label = text(ctx, focus, C.label) ?? phrase(ctx, 'SearchPhrase')
+  const disabled = ctx.object(focus, C.disabled)?.value === 'true'
   if (ctx.modality === MOD.Text) {
     o.renders(el(o, 'root', 'Div', {}, [o.text('line', `⌕ ${label}: [${value ?? ''}_]`)]))
     return o.quads
@@ -65,12 +66,13 @@ const searchField: FnRule = (ctx, focus) => {
       id: o.node('input').value,
       autocomplete: 'off',
       value,
+      disabled: disabled ? '' : undefined,
       placeholder: text(ctx, focus, C.placeholder),
       'aria-label': label,
     }),
   ]
   if (value !== undefined) {
-    const clear = el(o, 'clear', 'Button', { type: 'button', class: 'sem-clear', 'aria-label': phrase(ctx, 'ClearSearchCommand') }, [
+    const clear = el(o, 'clear', 'Button', { type: 'button', class: 'sem-clear', disabled: disabled ? '' : undefined, 'aria-label': phrase(ctx, 'ClearSearchCommand') }, [
       el(o, 'clear-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('clear-icon-text', '✕')]),
     ])
     o.t(clear, C_CLEARS, focus)
@@ -90,6 +92,7 @@ function binding(ctx: ReactionContext): { remove: Quad[]; target: NamedNode; pro
 
 /** Typing writes the text; an empty field removes the value. */
 const searchInput: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, C.disabled)?.value === 'true') return NONE
   const b = binding(ctx)
   if (!b) return NONE
   const f = ctx.runtime.store.factory
@@ -99,12 +102,14 @@ const searchInput: ReactionFn = (ctx) => {
 
 /** The ✕ removes the value. */
 const searchClear: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, C.disabled)?.value === 'true') return NONE
   const b = marked(ctx, C_CLEARS)?.equals(ctx.target) ? binding(ctx) : undefined
   return b ? { remove: b.remove, add: [] } : NONE
 }
 
 /** Escape in the field removes the value (with nothing to remove, it is not handled). */
 const searchEscape: ReactionFn = (ctx) => {
+  if (ctx.object(ctx.target, C.disabled)?.value === 'true') return NONE
   const b = str(ctx.object(ctx.event, NS.beh + 'key')) === 'escape' ? binding(ctx) : undefined
   return b ? { remove: b.remove, add: [] } : NONE
 }
