@@ -76,7 +76,7 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   }
   const outline = () => toText(text.index, EDITOR)
   const html = () => app.innerHTML
-  const runs = (prefix: string) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(C + prefix)).reduce((n, [, s]) => n + s.runs, 0)
+  const runs = (prefix: string, ns: string = C) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(ns + prefix)).reduce((n, [, s]) => n + s.runs, 0)
   return { store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
 }
 
@@ -305,4 +305,54 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
       expect(m.outline()).toContain('lib:keywords ( "utopia" )')
     })
   }
+
+  const VALIDATED = `@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .
+ui:dt-rdf-editor c:validated true ; c:editable true .
+lib:earthsea lib:pages "many" .`
+  const problemsOf = (m: ReturnType<typeof mount>, ...path: string[]) =>
+    [...(m.item(...path).querySelector(':scope > .sem-row > .sem-problems')?.children ?? [])].map((p) => p.textContent)
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`shows what does not conform inline, and lets go of it once fixed; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', VALIDATED), mount(kind, 'function', VALIDATED)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+      }
+      each(() => {}, 'initial')
+      // A required predicate the resource lacks: on the resource's row, its label described by it.
+      expect(problemsOf(m, 'lib:earthsea')).toEqual(['When was it published?'])
+      const label = m.label('lib:earthsea')
+      expect(label.getAttribute('aria-invalid')).toBe('true')
+      expect(m.document.getElementById(label.getAttribute('aria-describedby')!)?.textContent).toContain('When was it published?')
+      // A value's own problems: on its row.
+      expect(problemsOf(m, 'lib:earthsea', 'lib:pages', '"many"')).toEqual(['pages: at least 1', 'pages: expected xsd:integer'])
+      expect(problemsOf(m, 'lib:earthsea', 'lib:pages', '183')).toEqual([])
+      expect(m.editor().querySelectorAll('.sem-invalid')).toHaveLength(2)
+      // Fixed by editing: the problems go.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '"many"'), 'Delete'), 'deleting the bad value')
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter')
+      each((x) => x.enter('lib:published "1968"^^xsd:gYear'), 'adding what was missing')
+      expect(m.editor().querySelectorAll('.sem-invalid')).toHaveLength(0)
+      // Switched off, nothing is checked or shown.
+      each((x) => x.apply({ add: [x.f.quad(x.nn(LIB + 'ursula'), x.nn(LIB + 'born'), x.f.literal('long ago'))] }), 'a bad date')
+      expect(problemsOf(m, 'lib:ursula', 'lib:born', '"long ago"')).toEqual(['born: expected xsd:date'])
+      each((x) => x.apply({ remove: x.store.match(x.nn(EDITOR), x.nn(C + 'validated'), null) }), 'validation off')
+      expect(m.editor().querySelectorAll('.sem-problems')).toHaveLength(0)
+    })
+  }
+
+  it('checks what an edit changed: one entry, however many the document has', () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => `lib:extra${i} a lib:Book ; lib:title "Extra ${i}" ; lib:pages ${i + 1} ; lib:author lib:ursula ; lib:published "1970"^^<http://www.w3.org/2001/XMLSchema#gYear> .\nui:dt-rdf-editor c:entry lib:extra${i} .`).join('\n')
+    const editRuns = (n: number) => {
+      const m = mount('oxigraph', 'sparql', VALIDATED + '\n' + many(n))
+      const before = m.runs('EntryShapes', 'https://semblance.dev/ns/validation#')
+      m.apply({ add: [m.f.quad(m.nn(LIB + 'earthsea'), m.nn(LIB + 'published'), m.f.literal('1968'))] })
+      return m.runs('EntryShapes', 'https://semblance.dev/ns/validation#') - before
+    }
+    expect(editRuns(2)).toBe(1)
+    expect(editRuns(40)).toBe(1)
+  })
 })

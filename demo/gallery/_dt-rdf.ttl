@@ -47,6 +47,16 @@ lib:ursula a lib:Person ;
     rdfs:label "Ursula K. Le Guin" ;
     lib:born "1929-10-21"^^xsd:date .
 
+# What a book and a person should say (SHACL): shown inline while the Validate switch is on.
+lib:BookShape a sh:NodeShape ; sh:targetClass lib:Book ;
+    sh:property [ sh:path lib:title ; sh:minCount 1 ] ,
+                [ sh:path lib:author ; sh:minCount 1 ; sh:class lib:Person ] ,
+                [ sh:path lib:published ; sh:minCount 1 ;
+                  sh:message "When was it published?"@en , "Коли видано?"@uk , "Wann erschienen?"@de , "متى نُشر؟"@ar ] ,
+                [ sh:path lib:pages ; sh:datatype xsd:integer ; sh:minInclusive 1 ] .
+lib:PersonShape a sh:NodeShape ; sh:targetClass lib:Person ;
+    sh:property [ sh:path lib:born ; sh:datatype xsd:date ] .
+
 ui:dt-rdf-editor a c:RdfEditor ;
     c:label "Library"@en , "Бібліотека"@uk , "Bibliothek"@de , "المكتبة"@ar ;
     c:entry lib:dispossessed , lib:earthsea , lib:ursula ;
@@ -58,12 +68,14 @@ ui:dt-rdf-jump a c:Combobox ; c:controls ui:dt-rdf-editor ; c:property c:current
     c:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar .
 ui:dt-rdf-editable a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:editable ;
     c:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
+ui:dt-rdf-validate a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:validated ;
+    c:label "Validate"@en , "Перевіряти"@uk , "Prüfen"@de , "تحقّق"@ar .
 ui:dt-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Ghost ;
     c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
 ui:dt-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
-    c:children ( ui:dt-rdf-arrows ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-undo ) .
+    c:children ( ui:dt-rdf-arrows ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-validate ui:dt-rdf-undo ) .
 
 ui:dt-rdf a c:Flippable ; c:front ui:dt-rdf-spec .
 ui:dt-rdf-spec a c:Specimen ; c:demonstrates c:RdfEditor ; c:label "RDF editor" ;
-    c:help "An RDF document as a tree: each resource, its predicates beside their objects, and what nests nested - a blank node, a list, what is said about a statement (an RDF 1.2 reifier, after ~). An object that is a resource of the document jumps to it; a class or a property goes to the Reference. Arrows join links to their resources: off, all, or the current resource's. Rows are minted level by level, so a change re-renders the rows of its subject only. Arrow keys move through the tree; Right opens, Left closes, Enter follows a link. Switched to editing, Enter (or a double click) edits a term in place, in Turtle (text without quotes keeps the datatype and language), Shift+Enter adds a statement, Delete removes one, Escape leaves a field; every edit is one undoable change." ;
+    c:help "An RDF document as a tree: each resource, its predicates beside their objects, and what nests nested - a blank node, a list, what is said about a statement (an RDF 1.2 reifier, after ~). An object that is a resource of the document jumps to it; a class or a property goes to the Reference. Arrows join links to their resources: off, all, or the current resource's. Rows are minted level by level, so a change re-renders the rows of its subject only. Arrow keys move through the tree; Right opens, Left closes, Enter follows a link. Switched to editing, Enter (or a double click) edits a term in place, in Turtle (text without quotes keeps the datatype and language), Shift+Enter adds a statement, Delete removes one, Escape leaves a field; every edit is one undoable change. Switched to validating, what does not conform to the SHACL shapes shows inline, on the value, the predicate or the resource it is about, and goes when it is fixed." ;
     c:children ( ui:dt-rdf-controls ui:dt-rdf-editor ) .

@@ -4,7 +4,7 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { H, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { H, MOD, NS, VAL, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { el, marked, md5 } from './data.ts'
 import { compact } from './reference.ts'
 import { named, rdfList, RDFS_LABEL, str, text } from './util.ts'
@@ -18,6 +18,8 @@ const C_TERM = C + 'term'
 const C_IN_EDITOR = C + 'inEditor'
 const C_DEPTH = C + 'depth'
 const C_EDITABLE = C + 'editable'
+const C_VALIDATED = C + 'validated'
+const SH = NS.sh
 const C_SUBJECT = C + 'subjectTerm'
 const C_PREDICATE = C + 'predicateTerm'
 const C_LIST_CELL = C + 'listCell'
@@ -117,9 +119,10 @@ const entry: FnRule = (ctx, focus, member) => {
   const o = ctx.out(focus)
   const row = o.node('t-' + key12(member.value))
   const editable = ctx.match(focus, C_EDITABLE, bool(ctx, true)).length > 0
+  const validated = ctx.match(focus, C_VALIDATED, bool(ctx, true)).length > 0
   o.t(o.node('tree'), H.hasChild, row)
   o.t(row, RDF_TYPE, ctx.nn(C_RDF_TERM)).t(row, C_TERM, member).t(row, C_IN_EDITOR, focus).t(row, C_DEPTH, int(ctx, 0))
-  o.t(row, C_EDITABLE, bool(ctx, editable)).t(row, SEM.orderKey, member.value)
+  o.t(row, C_EDITABLE, bool(ctx, editable)).t(row, C_VALIDATED, bool(ctx, validated)).t(row, SEM.orderKey, member.value)
   return o.quads
 }
 
@@ -158,6 +161,27 @@ const arrows: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+// --- what does not conform (c:validated) ---------------------------------------------------------------
+
+const is = (ctx: RuleContext, s: Term, p: string, o: Term) => ctx.untraced(() => ctx.match(s, p, o).length > 0)
+
+/** The editor's SHACL results (val:EntryShapes) that pass a test: read untraced, as the SPARQL rules declare no dependency on them. */
+const results = (ctx: RuleContext, editor: Term, test: (r: Term) => boolean): Term[] =>
+  ctx.untraced(() => ctx.objects(editor, VAL.violation)).filter(test)
+
+/** A row's problems, one each (ordered by message), described for its label (aria-invalid, aria-describedby). */
+function problemList(ctx: RuleContext, o: Out, focus: NamedNode, label: NamedNode, editing: boolean, found: Term[]): NamedNode {
+  const list = el(o, 'problems', 'Span', { class: 'sem-problems', id: o.node('problems').value })
+  for (const r of found) {
+    const message = ctx.untraced(() => str(ctx.object(r, SH + 'resultMessage'))) ?? ''
+    const local = 'problem-' + key12(r.value)
+    const item = el(o, local, 'Span', { class: 'sem-problem' }, [o.text(local + '-text', message)])
+    o.t(item, SEM.orderKey, message).t(list, H.hasChild, item)
+  }
+  if (!editing) o.attr(label, 'aria-invalid', 'true').attr(label, 'aria-describedby', list.value)
+  return list
+}
+
 // --- fields: editing a term, adding a statement ---------------------------------------------------------
 
 /** A row's term in a field in its place: it takes the focus; Enter commits it (c:commits). */
@@ -184,6 +208,7 @@ interface TermFacts {
   editor: Term
   depth: number
   editable: Term
+  validated: Term
   s?: Term
   p?: Term
   reifier: boolean
@@ -209,6 +234,7 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   if (!t || !editor) return undefined
   const depth = Number(str(ctx.object(focus, C_DEPTH)) ?? 0) || 0
   const editable = ctx.object(focus, C_EDITABLE) ?? bool(ctx, false)
+  const validated = ctx.object(focus, C_VALIDATED) ?? bool(ctx, false)
   const s = ctx.object(focus, C_SUBJECT)
   const p = s ? ctx.object(focus, C_PREDICATE) : undefined
   const reifier = !!ctx.object(focus, C_REIFIER_OF)
@@ -230,7 +256,7 @@ function termFacts(ctx: RuleContext, focus: NamedNode): TermFacts | undefined {
   const namedIri = t.termType === 'NamedNode' && !blank ? t.value : lit && !bare && lang === '' && dt !== XSD + 'string' ? dt : undefined
   const count = list ? rdfList(ctx, t).length : 0
   return {
-    t, editor, depth, editable, s, p, reifier, lit, bare, lang, list, blank, hasStatements, reified, vocab, expandable, open, nest,
+    t, editor, depth, editable, validated, s, p, reifier, lit, bare, lang, list, blank, hasStatements, reified, vocab, expandable, open, nest,
     named: namedIri, compactName: namedIri === undefined ? undefined : compact(ctx, namedIri), count,
   }
 }
@@ -241,7 +267,7 @@ function children(ctx: RuleContext, o: Out, focus: NamedNode, f: TermFacts): Nam
   const out: NamedNode[] = []
   const depth = int(ctx, f.depth + 1)
   const common = (child: NamedNode, cls: string, key: string) => {
-    o.t(child, RDF_TYPE, ctx.nn(cls)).t(child, C_IN_EDITOR, f.editor).t(child, C_DEPTH, depth).t(child, C_EDITABLE, f.editable).t(child, SEM.orderKey, key)
+    o.t(child, RDF_TYPE, ctx.nn(cls)).t(child, C_IN_EDITOR, f.editor).t(child, C_DEPTH, depth).t(child, C_EDITABLE, f.editable).t(child, C_VALIDATED, f.validated).t(child, SEM.orderKey, key)
     out.push(child)
   }
   if (f.nest && f.list) {
@@ -320,6 +346,17 @@ const term: FnRule = (ctx, focus) => {
   const parts = [lead, label]
   if (badge !== undefined) parts.push(el(o, 'badge', 'Span', { class: 'sem-datatype' }, [o.text('badge-text', badge)]))
   if (note !== undefined) parts.push(el(o, 'note', 'Span', { class: 'sem-note' }, [o.text('note-text', note)]))
+  // What does not conform: a value's own problems on its row; a resource's (its node shape's, a
+  // required predicate it lacks) on the resource's row.
+  const problems =
+    f.validated.value !== 'true'
+      ? []
+      : results(ctx, f.editor, (r) =>
+          f.s && f.p
+            ? is(ctx, r, SH + 'focusNode', f.s) && is(ctx, r, SH + 'resultPath', f.p) && is(ctx, r, SH + 'value', t)
+            : f.depth === 0 && is(ctx, r, SH + 'focusNode', t) && ctx.untraced(() => ctx.objects(r, SH + 'resultPath').every((path) => !ctx.match(t, path, null).length)),
+        )
+  if (problems.length) parts.push(problemList(ctx, o, focus, label, editing, problems))
   const rows = [el(o, 'row', 'Div', { class: 'sem-row' }, parts)]
   if (f.open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
@@ -327,7 +364,7 @@ const term: FnRule = (ctx, focus) => {
     if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, `${TUPLE}n9`, 'RdfNewStatementPhrase'))
     rows.push(group)
   }
-  const root = el(o, 'root', 'Li', { class: 'sem-term' + (f.depth === 0 ? ' sem-resource' : '') }, rows)
+  const root = el(o, 'root', 'Li', { class: 'sem-term' + (f.depth === 0 ? ' sem-resource' : '') + (problems.length ? ' sem-invalid' : '') }, rows)
   o.attr(root, 'role', 'treeitem').attr(root, 'aria-level', String(f.depth + 1))
   if (f.expandable) o.attr(root, 'aria-expanded', String(f.open))
   o.renders(root)
@@ -367,6 +404,7 @@ const property: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const depth = Number(str(ctx.object(focus, C_DEPTH)) ?? 1) || 1
   const editable = ctx.object(focus, C_EDITABLE) ?? bool(ctx, false)
+  const validated = ctx.object(focus, C_VALIDATED) ?? bool(ctx, false)
   const own = ctx.object(focus, C_EXPANDED)
   const open = own ? own.value === 'true' : true
   const name = compact(ctx, p.value)
@@ -378,7 +416,7 @@ const property: FnRule = (ctx, focus) => {
       if (okey === undefined) continue
       const child = o.node('t-' + key12(okey))
       o.t(child, RDF_TYPE, ctx.nn(C_RDF_TERM)).t(child, C_TERM, q.object).t(child, C_SUBJECT, s).t(child, C_PREDICATE, p).t(child, C_IN_EDITOR, editor)
-      o.t(child, C_DEPTH, int(ctx, depth + 1)).t(child, C_EDITABLE, editable).t(child, SEM.orderKey, okey)
+      o.t(child, C_DEPTH, int(ctx, depth + 1)).t(child, C_EDITABLE, editable).t(child, C_VALIDATED, validated).t(child, SEM.orderKey, okey)
       kids.push(child)
     }
   }
@@ -408,6 +446,12 @@ const property: FnRule = (ctx, focus) => {
   if (!editing && isEditable) o.t(label, C_EDITS_ROW, focus)
   const parts = [lead, label]
   if (note !== undefined) parts.push(el(o, 'note', 'Span', { class: 'sem-note' }, [o.text('note-text', note)]))
+  // Its count problems: too few or too many values.
+  const problems =
+    validated.value !== 'true'
+      ? []
+      : results(ctx, editor, (r) => is(ctx, r, SH + 'focusNode', s) && is(ctx, r, SH + 'resultPath', p) && !ctx.untraced(() => ctx.object(r, SH + 'value')))
+  if (problems.length) parts.push(problemList(ctx, o, focus, label, editing, problems))
   const rows = [el(o, 'row', 'Div', { class: 'sem-row' }, parts)]
   if (open) {
     const group = el(o, 'group', 'Ul', { role: 'group' })
@@ -415,7 +459,7 @@ const property: FnRule = (ctx, focus) => {
     if (adding) o.t(group, H.hasChild, addItem(ctx, o, focus, '\uffff', 'RdfNewObjectPhrase'))
     rows.push(group)
   }
-  const root = el(o, 'root', 'Li', { class: 'sem-property' }, rows)
+  const root = el(o, 'root', 'Li', { class: 'sem-property' + (problems.length ? ' sem-invalid' : '') }, rows)
   o.attr(root, 'role', 'treeitem').attr(root, 'aria-level', String(depth + 1)).attr(root, 'aria-expanded', String(open))
   o.renders(root)
   return o.quads

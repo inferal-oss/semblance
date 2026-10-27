@@ -167,20 +167,21 @@ c:RdfEditorEntries a sem:Rendering ;
     sem:targets c:RdfEditor ;
     sem:stratum 0 ;
     sem:forEach c:entry ;
-    sem:watches rdf:type , c:editable .
+    sem:watches rdf:type , c:editable , c:validated .
 c:RdfEditorEntries-fn a sem:Rule ; sem:implements c:RdfEditorEntries ; sem:function "rdf-editor:entry" .
 c:RdfEditorEntries-sparql a sem:Rule ;
     sem:implements c:RdfEditorEntries ;
     sem:construct """
 CONSTRUCT {
   ?tree rdfhtml:hasChild ?row .
-  ?row a c:RdfTerm ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:editable ?editable ; sem:orderKey ?key .
+  ?row a c:RdfTerm ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor .
   $this c:entry $member . FILTER(isIRI($member))
   BIND(STR($member) AS ?key)
   BIND(EXISTS { $this c:editable true } AS ?editable)
+  BIND(EXISTS { $this c:validated true } AS ?validated)
   BIND(IRI(CONCAT(STR($this), "/~tree")) AS ?tree)
   BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?key), 1, 12))) AS ?row)
 }""" .
@@ -249,14 +250,20 @@ CONSTRUCT {
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?badge , ?note ; ord:immediatelyPrecedes ?group .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?badge , ?note , ?problems ; ord:immediatelyPrecedes ?group .
+  ?lead ord:precedes ?problems . ?label ord:precedes ?problems . ?edit ord:precedes ?problems . ?badge ord:precedes ?problems . ?note ord:precedes ?problems .
+  ?problems a rdfhtml:Span ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
+  ?problem a rdfhtml:Span ; rdfhtml:class "sem-problem" ; sem:orderKey ?problemText ; rdfhtml:hasChild ?problemData .
+  ?problemData a rdfhtml:Text ; rdfhtml:data ?problemText .
+  ?invalidAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?problemsId .
   ?lead a ?leadTag ; rdfhtml:type ?leadType ; rdfhtml:class ?leadClass ; rdfhtml:tabIndex ?leadTabindex ; c:expands ?expands ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
         rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label , ?edit .
   ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName ?leadAttrName ; rdfhtml:attributeValue ?leadAttrValue .
   ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
-  ?label a rdfhtml:Span ; rdfhtml:class ?labelClass ; rdfhtml:tabIndex ?tabindex ; c:jumpsTo ?jumpsTo ; c:goesTo ?goesTo ; c:editsRow ?editsRow ; rdfhtml:attribute ?linkAttr , ?focusAttr , ?descAttr ;
+  ?label a rdfhtml:Span ; rdfhtml:class ?labelClass ; rdfhtml:tabIndex ?tabindex ; c:jumpsTo ?jumpsTo ; c:goesTo ?goesTo ; c:editsRow ?editsRow ; rdfhtml:attribute ?linkAttr , ?focusAttr , ?descAttr , ?invalidAttr , ?describedAttr ;
          rdfhtml:hasChild ?labelText ; ord:precedes ?badge , ?note .
   ?linkAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-link" ; rdfhtml:attributeValue ?link .
   ?focusAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
@@ -277,7 +284,7 @@ CONSTRUCT {
   ?addName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addPhrase .
   ?addFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?child a ?childClass ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
-         c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; sem:orderKey ?childKey .
+         c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?childKey .
 }
 WHERE {
   $this a c:RdfTerm ; c:term ?t ; c:inEditor ?editor .
@@ -285,6 +292,8 @@ WHERE {
   BIND(COALESCE(xsd:integer(STR(?depth0)), 0) AS ?depth)
   OPTIONAL { $this c:editable ?editable0 }
   BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 }
+  BIND(COALESCE(?validated0, false) AS ?validated)
   OPTIONAL { $this c:subjectTerm ?s ; c:predicateTerm ?p }
   BIND(EXISTS { $this c:reifierOf ?of } AS ?reifier)
   # What the term is.
@@ -337,9 +346,15 @@ WHERE {
   OPTIONAL { ?reifierAt l10n:of c:RdfReifierPhrase ; l10n:name ?reifier0 }
   OPTIONAL { c:RdfReifierPhrase rdfs:label ?reifier0 FILTER(langMatches(lang(?reifier0), "en")) }
   BIND(IF(?reifier, STR(?reifier0), IF(?list, REPLACE(STR(?list0), "\\\\{n\\\\}", STR(COALESCE(?count, 0))), IF(?blank, STR(?nested0), ?none))) AS ?description)
+  # What does not conform (c:validated): a value's own problems on its row; a resource's (its node
+  # shape's, and a required predicate it lacks) on the resource's row. The editor holds the results.
+  BIND(?validated && IF(BOUND(?s), EXISTS { ?editor val:violation ?vr . ?vr sh:focusNode ?s ; sh:resultPath ?p ; sh:value ?t },
+       ?depth = 0 && EXISTS { ?editor val:violation ?vr . ?vr sh:focusNode ?t . FILTER NOT EXISTS { ?vr sh:resultPath ?vp . ?t ?vp ?vany } }) AS ?invalid)
+  BIND(IF(?invalid, IRI(CONCAT(STR($this), "/~problems")), ?none) AS ?problems)
+  BIND(STR(?problems) AS ?problemsId)
   # The markup.
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
-  BIND(CONCAT("sem-term", IF(?depth = 0, " sem-resource", "")) AS ?rootClass)
+  BIND(CONCAT("sem-term", IF(?depth = 0, " sem-resource", ""), IF(?invalid, " sem-invalid", "")) AS ?rootClass)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-level")) AS ?levelAttr)
   BIND(STR(?depth + 1) AS ?level)
@@ -392,6 +407,8 @@ WHERE {
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note-text")), ?none) AS ?noteText)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
+  BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-invalid")), ?none) AS ?invalidAttr)
+  BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-describedby")), ?none) AS ?describedAttr)
   BIND(?depth + 1 AS ?childDepth)
   # The rows under it, when it is open.
   LATERAL { {} UNION {
@@ -426,6 +443,16 @@ WHERE {
     BIND(c:RdfTerm AS ?childClass)
     BIND(CONCAT("\\u0001n2\\u0001s", ?rkey) AS ?childKey)
     BIND(IRI(CONCAT(STR($this), "/~r-", SUBSTR(MD5(?rkey), 1, 12))) AS ?child)
+  } UNION {
+    # Its problems, one each.
+    FILTER(?invalid)
+    ?editor val:violation ?vr2 .
+    { FILTER(BOUND(?s)) ?vr2 sh:focusNode ?s ; sh:resultPath ?p ; sh:value ?t }
+    UNION { FILTER(!BOUND(?s)) ?vr2 sh:focusNode ?t . FILTER NOT EXISTS { ?vr2 sh:resultPath ?vp2 . ?t ?vp2 ?vany2 } }
+    ?vr2 sh:resultMessage ?message0
+    BIND(STR(?message0) AS ?problemText)
+    BIND(IRI(CONCAT(STR($this), "/~problem-", SUBSTR(MD5(STR(?vr2)), 1, 12))) AS ?problem)
+    BIND(IRI(CONCAT(STR(?problem), "-text")) AS ?problemData)
   } }
 }""" .
 c:RdfTermRendering-sparql-text a sem:Rule ;
@@ -440,7 +467,7 @@ CONSTRUCT {
   ?close a ?groupTag ; rdfhtml:hasChild ?closeText .
   ?closeText a rdfhtml:Text ; rdfhtml:data ?closeData .
   ?child a ?childClass ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
-         c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; sem:orderKey ?childKey .
+         c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?childKey .
 }
 WHERE {
   $this a c:RdfTerm ; c:term ?t ; c:inEditor ?editor .
@@ -448,6 +475,8 @@ WHERE {
   BIND(COALESCE(xsd:integer(STR(?depth0)), 0) AS ?depth)
   OPTIONAL { $this c:editable ?editable0 }
   BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 }
+  BIND(COALESCE(?validated0, false) AS ?validated)
   OPTIONAL { $this c:subjectTerm ?s ; c:predicateTerm ?p }
   BIND(EXISTS { $this c:reifierOf ?of } AS ?reifier)
   BIND(isLiteral(?t) AS ?lit)
@@ -537,18 +566,24 @@ c:RdfPropertyRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class "sem-property" ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr ; rdfhtml:hasChild ?row , ?group .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr ; rdfhtml:hasChild ?row , ?group .
   ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
   ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?level .
   ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?note ; ord:immediatelyPrecedes ?group .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?label , ?edit , ?note , ?problems ; ord:immediatelyPrecedes ?group .
+  ?lead ord:precedes ?problems . ?label ord:precedes ?problems . ?edit ord:precedes ?problems . ?note ord:precedes ?problems .
+  ?problems a rdfhtml:Span ; rdfhtml:class "sem-problems" ; rdfhtml:id ?problemsId ; rdfhtml:hasChild ?problem .
+  ?problem a rdfhtml:Span ; rdfhtml:class "sem-problem" ; sem:orderKey ?problemText ; rdfhtml:hasChild ?problemData .
+  ?problemData a rdfhtml:Text ; rdfhtml:data ?problemText .
+  ?invalidAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-invalid" ; rdfhtml:attributeValue "true" .
+  ?describedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-describedby" ; rdfhtml:attributeValue ?problemsId .
   ?lead a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-twisty" ; rdfhtml:tabIndex "-1" ; c:expands $this ; c:expandsTo ?expandsTo ; rdfhtml:attribute ?leadAttr ;
         rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?label , ?edit .
   ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?leadLabel .
   ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
   ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
-  ?label a rdfhtml:Span ; rdfhtml:class "sem-label sem-predicate" ; rdfhtml:tabIndex "-1" ; c:goesTo ?goesTo ; c:editsRow ?editsRow ; rdfhtml:attribute ?linkAttr ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?note .
+  ?label a rdfhtml:Span ; rdfhtml:class "sem-label sem-predicate" ; rdfhtml:tabIndex "-1" ; c:goesTo ?goesTo ; c:editsRow ?editsRow ; rdfhtml:attribute ?linkAttr , ?invalidAttr , ?describedAttr ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?note .
   ?edit a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-label sem-edit" ; rdfhtml:value ?editText ; c:commits $this ; rdfhtml:attribute ?editName , ?editFocus ; ord:immediatelyPrecedes ?note .
   ?editName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?editPhrase .
   ?editFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
@@ -562,7 +597,7 @@ CONSTRUCT {
   ?add a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-edit" ; rdfhtml:placeholder ?addPhrase ; c:adds $this ; rdfhtml:attribute ?addName , ?addFocus .
   ?addName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?addPhrase .
   ?addFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
-  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; sem:orderKey ?okey .
+  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?okey .
 }
 WHERE {
   $this a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor .
@@ -570,6 +605,8 @@ WHERE {
   BIND(COALESCE(xsd:integer(STR(?depth0)), 1) AS ?depth)
   OPTIONAL { $this c:editable ?editable0 }
   BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 }
+  BIND(COALESCE(?validated0, false) AS ?validated)
   OPTIONAL { $this c:expanded ?own }
   BIND(COALESCE(?own, true) AS ?open)
   BIND(REPLACE(STR(?p), "[^#/]*$", "") AS ?ns)
@@ -583,6 +620,11 @@ WHERE {
   OPTIONAL { FILTER(!sameTerm(?p, rdf:type) && !BOUND(?picked)) ?p rdfs:label ?onlyLabel }
   BIND(STR(COALESCE(?picked, ?onlyLabel)) AS ?label0)
   BIND(IF(LCASE(REPLACE(?label0, "[ _-]", "")) != LCASE(REPLACE(?local, "[ _-]", "")), ?label0, ?none) AS ?noteData)
+  # Its count problems (c:validated): too few or too many values.
+  BIND(?validated && EXISTS { ?editor val:violation ?vr . ?vr sh:focusNode ?s ; sh:resultPath ?p . FILTER NOT EXISTS { ?vr sh:value ?vv } } AS ?invalid)
+  BIND(IF(?invalid, IRI(CONCAT(STR($this), "/~problems")), ?none) AS ?problems)
+  BIND(STR(?problems) AS ?problemsId)
+  BIND(CONCAT("sem-property", IF(?invalid, " sem-invalid", "")) AS ?rootClass)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-level")) AS ?levelAttr)
@@ -622,6 +664,8 @@ WHERE {
   BIND(IF(BOUND(?noteData), IRI(CONCAT(STR($this), "/~note-text")), ?none) AS ?noteText)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
+  BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-invalid")), ?none) AS ?invalidAttr)
+  BIND(IF(?invalid && BOUND(?label), IRI(CONCAT(STR($this), "/~label-aria-describedby")), ?none) AS ?describedAttr)
   BIND(?depth + 1 AS ?childDepth)
   LATERAL { {} UNION {
     FILTER(?open)
@@ -632,6 +676,12 @@ WHERE {
          IF(isIRI(?o), STR(?o), IF(isBlank(?o), CONCAT("_:", COALESCE(?bmin, "")),
          CONCAT("<<", STR(SUBJECT(?o)), " ", STR(PREDICATE(?o)), " ", COALESCE(STR(OBJECT(?o)), "_"), ">>")))) AS ?okey)
     BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?child)
+  } UNION {
+    FILTER(?invalid)
+    ?editor val:violation ?vr2 . ?vr2 sh:focusNode ?s ; sh:resultPath ?p ; sh:resultMessage ?message0 . FILTER NOT EXISTS { ?vr2 sh:value ?vv2 }
+    BIND(STR(?message0) AS ?problemText)
+    BIND(IRI(CONCAT(STR($this), "/~problem-", SUBSTR(MD5(STR(?vr2)), 1, 12))) AS ?problem)
+    BIND(IRI(CONCAT(STR(?problem), "-text")) AS ?problemData)
   } }
 }""" .
 c:RdfPropertyRendering-sparql-text a sem:Rule ;
@@ -643,7 +693,7 @@ CONSTRUCT {
   ?label a rdfhtml:Span ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?group .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?data .
   ?group a rdfhtml:Span ; rdfhtml:hasChild ?child .
-  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; sem:orderKey ?okey .
+  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?okey .
 }
 WHERE {
   $this a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor .
@@ -651,6 +701,8 @@ WHERE {
   BIND(COALESCE(xsd:integer(STR(?depth0)), 1) AS ?depth)
   OPTIONAL { $this c:editable ?editable0 }
   BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 }
+  BIND(COALESCE(?validated0, false) AS ?validated)
   OPTIONAL { $this c:expanded ?own }
   BIND(COALESCE(?own, true) AS ?open)
   BIND(REPLACE(STR(?p), "[^#/]*$", "") AS ?ns)
