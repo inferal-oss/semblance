@@ -378,17 +378,26 @@ describe('the recent runs', () => {
     const PER = NS.per
     const storage = { [PER + 'Session']: memoryBackend(), [PER + 'Device']: memoryBackend(), [PER + 'Database']: memoryBackend() }
     const a = await mountRemembering(storage)
-    const p = drive(a as unknown as Shell)
-    p.open()
-    p.type('private')
-    p.press('Enter')
-    await a.persistence.flush()
-    expect(await storage[PER + 'Device']!.get('semblance:' + UI + 'rememberPalette')).toBeTruthy()
-    // A reload: a new shell over the same storage.
-    const b = await mountRemembering(storage)
-    const q = drive(b as unknown as Shell)
-    q.open()
-    expect(q.sections()[0]).toEqual({ heading: 'Recent', options: ['*Private mode on or off'] })
+    try {
+      const p = drive(a as unknown as Shell)
+      p.open()
+      p.type('private')
+      p.press('Enter')
+      await a.persistence.flush()
+      expect(await storage[PER + 'Device']!.get('semblance:' + UI + 'rememberPalette')).toBeTruthy()
+      // A reload: a new shell over the same storage.
+      const b = await mountRemembering(storage)
+      try {
+        const q = drive(b as unknown as Shell)
+        q.open()
+        expect(q.sections()[0]).toEqual({ heading: 'Recent', options: ['*Private mode on or off'] })
+      } finally {
+        // Drain scheduled writes before test/setup.ts releases the store.
+        await b.persistence.flush()
+      }
+    } finally {
+      await a.persistence.flush()
+    }
   })
 })
 
@@ -409,4 +418,98 @@ describe('the command palette shape', () => {
     const messages = h.store.match(null, f.namedNode(SH + 'resultMessage'), null).map((q) => q.object.value)
     expect(messages).toContain('How many recent runs a palette keeps is a number, 0 or more (c:recentLimit).')
   })
+})
+
+/** Search metadata is input on an entry, separate from its displayed name. */
+function metadata(p: ReturnType<typeof drive>, value?: string) {
+  const f = p.store.factory, subject = f.namedNode(UI + 'toolsToggle'), predicate = f.namedNode(C + 'keywords')
+  p.runtime.apply({ remove: p.store.match(subject, predicate, null, f.defaultGraph()), add: value === undefined ? [] : [f.quad(subject, predicate, f.literal(value))] })
+  p.shell.flush()
+}
+
+function disabled(p: ReturnType<typeof drive>, value?: boolean) {
+  const f = p.store.factory, subject = f.namedNode(UI + 'toolsToggle'), predicate = f.namedNode(C + 'disabled')
+  p.runtime.apply({ remove: p.store.match(subject, predicate, null, f.defaultGraph()), add: value === undefined ? [] : [f.quad(subject, predicate, f.literal(String(value), f.namedNode(NS.xsd + 'boolean')))] })
+  p.shell.flush()
+}
+
+describe.each(['wat', 'oxigraph'] as const)('palette search metadata (%s)', (kind) => {
+  it('matches metadata only without displaying or falsely highlighting it, and follows updates/removal', () => {
+    const p = drive(mountShell(5, kind))
+    metadata(p, 'Complete-ID-abc123 Café compiler')
+    p.open()
+    const textRuns = () => p.screen.engine.stats.byRule.get(C + 'PaletteTexts-fn')?.runs ?? 0
+    const beforeTyping = textRuns()
+    p.type('cafe compiler')
+    expect(textRuns()).toBe(beforeTyping)
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    expect(p.option('Tools').querySelector('mark')).toBe(null)
+    expect(p.option('Tools').textContent).not.toContain('abc123')
+    expect(p.input().getAttribute('aria-activedescendant')).toBe(p.option('Tools').id)
+    const before = p.fact('palette', C + 'entries')
+    metadata(p, 'Replacement-identifier')
+    expect(textRuns()).toBeGreaterThan(beforeTyping)
+    expect(p.sections()).toEqual([])
+    p.type('replacement-identifier')
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    expect(p.fact('palette', C + 'entries')).toEqual(before)
+    metadata(p)
+    expect(p.sections()).toEqual([])
+    p.type('tools')
+    // The site also has a place named Tools; removing metadata preserves both
+    // ordinary label matches, with the action still highlighted first.
+    expect(p.sections()).toContainEqual({ heading: 'Actions', options: ['*Tools'] })
+    expect(p.option('Tools').querySelector('mark')?.textContent).toBe('Tools')
+  })
+
+  it('excludes disabled entries and restores them when re-enabled without replaying a selection', () => {
+    const p = drive(mountShell(5, kind))
+    metadata(p, 'Exact-host-identity')
+    p.open()
+    p.type('exact-host')
+    disabled(p, true)
+    expect(p.sections()).toEqual([])
+    expect(p.press('Enter')).toBe(false)
+    expect(p.fact('tools', C + 'open')).toEqual(['true'])
+    disabled(p, false)
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    // Removing an entry's metadata does not select it or perform its effect.
+    metadata(p)
+    expect(p.fact('tools', C + 'open')).toEqual(['true'])
+    expect(p.sections()).toEqual([])
+  })
+
+  it('bounds indexed metadata and declares its size/type validation shape', () => {
+    const p = drive(mountShell(5, kind))
+    metadata(p, 'a'.repeat(32768) + 'suffix-outside-bound')
+    p.open()
+    p.type('suffix-outside-bound')
+    expect(p.sections()).toEqual([])
+    const f = p.store.factory
+    const keys = p.store.match(null, f.namedNode(C + 'searchKey'), null).map(q => q.object.value)
+    expect(keys.some(value => value === 'tools\n' + 'a'.repeat(32768))).toBe(true)
+    expect(keys.some(value => value.includes('suffix-outside-bound'))).toBe(false)
+    expect(p.store.match(null, f.namedNode(NS.sh + 'focusNode'), f.namedNode(UI + 'toolsToggle')).length).toBeGreaterThan(0)
+    const subject = f.namedNode(UI + 'toolsToggle'), predicate = f.namedNode(C + 'keywords')
+    p.runtime.apply({ remove: p.store.match(subject, predicate, null, f.defaultGraph()), add: [f.quad(subject, predicate, f.namedNode(UI + 'not-a-literal'))] })
+    p.shell.flush()
+    p.type('not-a-literal')
+    expect(p.sections()).toEqual([])
+    expect(p.store.match(null, f.namedNode(NS.sh + 'focusNode'), subject).length).toBeGreaterThan(0)
+  })
+})
+
+it('keeps search metadata matching and updates byte-identical across projection implementations', () => {
+  const shells = (['sparql', 'function'] as const).map(prefer => drive(mountShell(5, 'oxigraph', prefer)))
+  const all = (act: (p: (typeof shells)[number]) => void) => {
+    for (const p of shells) act(p)
+    expect(shells[0]!.document.getElementById('app')!.innerHTML).toBe(shells[1]!.document.getElementById('app')!.innerHTML)
+  }
+  all(p => metadata(p, 'Hidden-ID-123'))
+  all(p => { p.open(); p.type('hidden-id') })
+  all(p => metadata(p, 'Changed-ID-456'))
+  all(p => p.type('changed-id'))
+  all(p => disabled(p, true))
+  all(p => disabled(p, false))
+  all(p => metadata(p))
 })

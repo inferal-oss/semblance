@@ -33,3 +33,9 @@ c:RecentRunShape a sh:NodeShape ; sh:targetClass c:RecentRun ;
 c:PaletteSectionShape a sh:NodeShape ; sh:targetClass c:PaletteSection ;
     sh:property [ sh:path sem:order ; sh:maxCount 1 ;
                   sh:message "A section has one place among the others (sem:order)." ] .
+
+# Optional metadata on component entries, including buttons and places. Other
+# RDF entries may use this same property shape with their own SHACL target.
+c:PaletteKeywordsShape a sh:NodeShape ; sh:targetClass sem:Component ;
+    sh:property [ sh:path c:keywords ; sh:maxCount 1 ; sh:nodeKind sh:Literal ; sh:maxLength 32768 ;
+                  sh:message "Palette search keywords are one literal of at most 32768 characters (c:keywords)." ] .

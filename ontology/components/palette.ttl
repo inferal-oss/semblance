@@ -83,6 +83,14 @@ c:lists a owl:ObjectProperty ; rdfs:domain c:CommandPalette ; rdfs:range c:Palet
 c:entries a owl:ObjectProperty ; rdfs:domain c:CommandPalette ; rdfs:range rdf:List ;
     rdfs:label "Entries"@en , "Записи"@uk , "Einträge"@de , "الإدخالات"@ar ;
     rdfs:comment "More items the app lists, in this order: a key:Command, a component (clicked), or any node with a c:to (gone to). Each is labelled by c:label or rdfs:label and described by c:help or rdfs:comment."@en .
+c:keywords a owl:DatatypeProperty ; rdfs:range rdfs:Literal ;
+    rdfs:label "Search keywords"@en , "Ключові слова пошуку"@uk , "Suchbegriffe"@de , "كلمات البحث"@ar ;
+    rdfs:comment """Optional search metadata on a palette entry: one literal, at most 32768 characters.
+The palette appends its folded text to the label's normalized search key, after a line break.
+It is never shown in the label or help. Matching only keywords leaves the displayed label intact.
+Only the first 32768 characters of an oversized literal are indexed. Metadata remains graph data:
+applications must not put secrets here. Disabled entries are not listed."""@en .
+
 c:paletteSection a owl:ObjectProperty ; rdfs:range c:PaletteSection ;
     rdfs:label "Section"@en , "Розділ"@uk , "Abschnitt"@de , "القسم"@ar ;
     rdfs:comment "On an item a palette lists: the section it is shown in (default: by what it is: a command, an action, a place). On an option: the section it is in."@en .
@@ -135,7 +143,7 @@ c:PaletteTexts a sem:Rendering ;
     sem:targets c:CommandPalette ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries ;
+    sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries , c:keywords , c:disabled ;
     sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed), as c:TypeaheadTexts does; the labels themselves are picked from the viewer's languages in the graph." ;
     sem:needsExtension sx:Locale .
 c:PaletteTexts-fn a sem:Rule ; sem:implements c:PaletteTexts ; sem:function "palette:texts" .
@@ -210,6 +218,7 @@ WHERE {
   # Not what opens the palette itself (its command, its button).
   FILTER NOT EXISTS { ?item c:opens $this }
   FILTER NOT EXISTS { ?item c:controls $this }
+  FILTER NOT EXISTS { ?item c:disabled ?disabled FILTER(STR(?disabled) = "true") }
   # What running it does: a command's key press, a place's or a c:to's address, else a click.
   BIND(EXISTS { ?item a key:Command } AS ?isCommand)
   BIND(?placed = 1 AS ?isPlace)

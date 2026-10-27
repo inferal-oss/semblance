@@ -16,6 +16,7 @@ const P = {
   Option: c('TypeaheadOption'),
   lists: c('lists'),
   entries: c('entries'),
+  keywords: c('keywords'),
   section: c('paletteSection'),
   recentLimit: c('recentLimit'),
   recentOf: c('recentOf'),
@@ -132,7 +133,7 @@ export function paletteItems(ctx: RuleContext, palette: NamedNode): PaletteItem[
   rdfList(ctx, ctx.object(palette, P.entries)).forEach((t, i) => add(t, i + 1))
   // Not what opens the palette itself (its command, its button).
   const opener = (item: NamedNode) => ctx.match(item, P.opens, palette).length > 0 || ctx.match(item, C.controls, palette).length > 0
-  return [...found.values()].filter(({ item }) => !opener(item)).map(({ item, n }) => {
+  return [...found.values()].filter(({ item }) => !opener(item) && !isTrue(ctx.object(item, C.disabled))).map(({ item, n }) => {
     const command = ctx.match(item, RDF_TYPE, KEY.Command).length > 0
     const ps = all.get(item.value)
     const place = ps?.slice().sort((a, b) => (a.value.value < b.value.value ? -1 : a.value.value > b.value.value ? 1 : 0))[0]
@@ -190,7 +191,20 @@ const texts: FnRule = (ctx, focus) => {
     const help = it.place
       ? it.place.up && labelOf(ctx, it.place.up)
       : (text(ctx, it.item, C.help) ?? text(ctx, it.item, RDFS_COMMENT) ?? (!it.command ? whereShown(ctx, it.item) : undefined))
-    o.t(node, c('textOf'), focus).t(node, c('textFor'), it.item).t(node, L10N.label, label).t(node, P.searchKey, fold(label))
+    // This traced read follows changes to the entry even while its label and
+    // the palette's c:entries list stay unchanged. Keywords are graph data, not
+    // hidden rendered text; only the normalized key receives them.
+    const metadata = ctx.object(it.item, P.keywords)
+    let keywords = ''
+    if (metadata?.termType === 'Literal') {
+      let count = 0
+      for (const char of metadata.value) {
+        if (count++ === 32768) break
+        keywords += char
+      }
+    }
+    const searchKey = fold(label) + (keywords ? '\n' + fold(keywords) : '')
+    o.t(node, c('textOf'), focus).t(node, c('textFor'), it.item).t(node, L10N.label, label).t(node, P.searchKey, searchKey)
     if (help) o.t(node, C.help, help)
   }
   for (const section of sections.values()) {
