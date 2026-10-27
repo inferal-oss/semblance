@@ -218,7 +218,7 @@ export function checkInstantiated(boxes: Box[], invariants: Invariant[], instanc
 
 /** A finding in words: the invariant, where, and by how much. */
 export function describe(page: MeasuredPage, f: PageFinding): string {
-  const at = `${page.url.split('#')[1]} at ${page.width}px${page.theme ? ' in ' + page.theme : ''}${page.dir === 'rtl' ? ' (rtl)' : ''}`
+  const at = `${page.url.split('#')[1]} at ${page.width}px${page.theme ? ' in ' + page.theme : ''}${page.lang && page.lang !== 'en' ? ' (' + page.lang + ')' : ''}${page.dir === 'rtl' ? ' (rtl)' : ''}`
   const name = (i: number) => {
     const n = page.nodes[i]
     if (!n) return 'the page'

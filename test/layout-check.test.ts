@@ -31,22 +31,41 @@ beforeAll(() => {
 const local = (iri: string) => iri.slice(iri.lastIndexOf('#') + 1)
 const found = (f: string) => [...new Set(checkMeasured(page(f), decl).map((x) => local(x.instance.declaration.iri)))].sort()
 
-/** What each recording must show: the invariants broken there (and nothing else). */
+/**
+ * What each recording must show: the invariants broken there, and nothing else. Labels are the
+ * commit before a fix (before), after it (after), main when recorded (57-main, today).
+ */
 const EXPECTED: [RegExp, string[]][] = [
-  [/^34-before_.*_(semblance|classic|cupertino)/, ['formControlsShareHeight']],
+  // #34: a select and a date input taller than the text inputs of the shape form, in every theme
+  [/^34-before_/, ['formControlsShareHeight']],
   [/^34-after_/, []],
-  [/^53-before_components-navigation_375/, ['navItemsFit']],
-  [/^53-after_/, []],
-  [/^320-before_components-inspection/, ['pageFits']],
-  [/^320-after_/, []],
-  [/^375-before_components-themes/, ['pageFits']],
-  [/^375-after_/, []],
-  [/^57-main_.*_1280/, ['fieldRowControlsShareTops']],
+  // #53: with one long label, every nav item runs out of the list (nowrap); the gallery has no
+  // label that long, so both checkouts are measured with one lengthened (scripts/layout-check.ts)
+  [/^53-before-longlabel_components-navigation_375_semblance/, ['navItemsFit']],
+  [/^53-before-longlabel_.*_1280_|^53-before-longlabel_.*_classic/, []],
+  [/^53-after-longlabel_/, []],
+  // 71686f3: at 320px the dock panel (and the page) are wider than the screen
+  [/^320-before_components-inspection/, ['contentStaysInCards', 'pageFits']],
+  [/^320-after_components-inspection/, ['contentStaysInCards']], // a button, gone on main since
+  [/^320-.*_components-feedback/, []],
+  // a5fc6b7: gallery pages 443-1038px wide at 375px
+  [/^375-before_/, ['contentStaysInCards', 'pageFits']],
+  [/^375-after_components-(data|type)/, []],
+  [/^375-after_components-themes/, ['contentStaysInCards']], // c:Progress's 260px minimum, fixed by 71686f3
+  // #57: the checkout's code and phone fields (open on main; PR #125 fixes it); on a phone they wrap
+  [/^57-main_.*_1280_/, ['fieldRowControlsShareTops']],
+  [/^57-main_.*_375_/, []],
   [/^57-after_/, []],
+  // main at 320px: only the themes page (a c:Window specimen wider than its card)
+  [/^today_components-themes_320/, ['contentStaysInCards', 'pageFits']],
+  [/^today_components-(inspection|navigation|feedback)_320/, []],
 ]
 
 describe('layout checker over recorded pages', () => {
-  it('has recordings', () => expect(fixtures.length).toBeGreaterThan(10))
+  it('has an expectation for every recording', () => {
+    expect(fixtures.length).toBeGreaterThan(30)
+    expect(fixtures.filter((f) => !EXPECTED.some(([re]) => re.test(f)))).toEqual([])
+  })
 
   it.each(EXPECTED.map(([re, want]) => [String(re), re, want] as const))('%s', (_, re, want) => {
     const matching = fixtures.filter((f) => re.test(f))

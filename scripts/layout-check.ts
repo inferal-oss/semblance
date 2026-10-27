@@ -2,7 +2,10 @@
 // fixtures test/layout-check.test.ts checks), or check them on the spot.
 //
 //   npx tsx scripts/layout-check.ts [--root <checkout>] --pages 'examples/checkout@Continue to shipping,examples/shapes' \
-//     [--widths 320,1280] [--themes semblance,doodle] [--dir rtl] [--out <dir>] [--check]
+//     [--widths 320,1280] [--themes semblance,doodle] [--langs en,uk,de,ar] [--dir rtl] [--out <dir>] [--check]
+//
+// A language is chosen the way the site remembers it: its policy (ui:rememberSettings) in the tab's
+// sessionStorage before the page loads.
 //
 // It starts the checkout's Vite dev server in-process, drives a headless Chromium over the DevTools
 // protocol (Node's own WebSocket; the browser is the cached Playwright or Puppeteer headless shell,
@@ -27,6 +30,7 @@ const { values: args } = parseArgs({
     widths: { type: 'string', default: '1280' },
     themes: { type: 'string', default: '' },
     dir: { type: 'string', default: '' },
+    langs: { type: 'string', default: '' },
     out: { type: 'string', default: '' },
     label: { type: 'string', default: '' },
     check: { type: 'boolean', default: false },
@@ -105,7 +109,7 @@ class Cdp {
   }
 }
 
-async function launch(): Promise<{ cdp: Cdp; stop: () => void }> {
+export async function launch(): Promise<{ cdp: Cdp; stop: () => void }> {
   const profile = join(tmpdir(), 'semblance-layout-' + process.pid)
   const proc = spawn(chrome(), ['--headless', '--remote-debugging-port=0', '--user-data-dir=' + profile, '--no-first-run', '--hide-scrollbars', '--font-render-hinting=none', 'about:blank'], {
     stdio: ['ignore', 'ignore', 'pipe'],
@@ -132,7 +136,7 @@ async function launch(): Promise<{ cdp: Cdp; stop: () => void }> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Wait until the page has rendered components and stopped changing. */
-async function settle(cdp: Cdp): Promise<void> {
+export async function settle(cdp: Cdp): Promise<void> {
   let last = -1
   let still = 0
   for (let i = 0; i < 120 && still < 4; i++) {
@@ -143,11 +147,19 @@ async function settle(cdp: Cdp): Promise<void> {
   }
 }
 
-export async function measure(base: string, pages: string[], widths: number[], themes: string[], dir: string): Promise<MeasuredPage[]> {
+const LANGUAGES: Record<string, string> = { en: 'English', uk: 'Ukrainian', de: 'German', ar: 'Arabic' }
+
+export async function measure(base: string, pages: string[], widths: number[], themes: string[], dir: string, langs: string[] = []): Promise<MeasuredPage[]> {
   const parts = partSelectors()
   const { cdp, stop } = await launch()
   const out: MeasuredPage[] = []
   try {
+    for (const lang of langs.length ? langs : ['']) {
+    if (lang) {
+      await cdp.send('Page.navigate', { url: base + 'favicon.ico' })
+      const nt = `<https://semblance.dev/demo#app> <https://semblance.dev/ns/l10n#language> <https://semblance.dev/ns/l10n#${LANGUAGES[lang]}> .\n`
+      await cdp.evaluate(`sessionStorage.setItem('semblance:https://semblance.dev/demo#rememberSettings', ${JSON.stringify(JSON.stringify({ version: '1', savedAt: Date.now(), nt }))})`)
+    }
     for (const width of widths) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
       for (const page of pages) {
@@ -172,11 +184,13 @@ export async function measure(base: string, pages: string[], widths: number[], t
           await sleep(150)
           // tsx (esbuild) wraps named functions in __name(); give the page one
           const m = await cdp.evaluate<MeasuredPage>(`((__name) => (${measurePage.toString()})(${JSON.stringify(parts)}))((f) => f)`)
+          m.lang = lang || 'en'
           if (m.nodes.length < 10) throw new Error(`${page} did not render (${m.nodes.length} boxes)`)
           out.push(m)
-          console.log(`measured ${page} at ${width}px${theme ? ' in ' + theme : ''}${dir ? ' ' + dir : ''}: ${m.nodes.length} boxes, page ${m.scrollWidth}px wide`)
+          console.log(`measured ${page} at ${width}px${theme ? ' in ' + theme : ''}${lang ? ' (' + lang + ')' : ''}${dir ? ' ' + dir : ''}: ${m.nodes.length} boxes, page ${m.scrollWidth}px wide`)
         }
       }
+    }
     }
   } finally {
     stop()
@@ -198,11 +212,12 @@ async function main() {
       args.widths!.split(',').map(Number),
       args.themes ? args.themes.split(',') : [],
       args.dir!,
+      args.langs ? args.langs.split(',') : [],
     )
     if (args.out) {
       mkdirSync(args.out, { recursive: true })
       for (const p of pages) {
-        const name = [args.label, p.url.split('#')[1].replace(/[/@ ]/g, '-'), p.width, p.theme, p.dir === 'rtl' ? 'rtl' : ''].filter(Boolean).join('_')
+        const name = [args.label, p.url.split('#')[1].replace(/[/@ ]/g, '-'), p.width, p.theme, p.lang && p.lang !== 'en' ? p.lang : '', p.dir === 'rtl' ? 'rtl' : ''].filter(Boolean).join('_')
         writeFileSync(join(args.out, name + '.json'), JSON.stringify(p) + '\n')
       }
     }

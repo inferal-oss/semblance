@@ -193,11 +193,11 @@ SELECT ?inv ?scope ?member ?by WHERE {
   ?inv a lc:Invariant ; lc:relation ?rel ; lc:over ?cls ; lc:tolerance ?tol .
   FILTER(?rel IN (lc:FitsInline, lc:FitsWithin))
   ?scope a/rdfs:subClassOf* ?cls . ?sb rnd:of ?scope . FILTER NOT EXISTS { ?sb lc:role ?r }
-  FILTER NOT EXISTS { ?sb rnd:scrolls true }
   {
     ?inv lc:members lc:Parts ; lc:part ?role . ?member lc:role ?role ; rnd:parent+ ?sb .
   } UNION {
-    ?inv lc:members lc:Descendants .
+    # a scroller's content may be wider than it: that is what it scrolls
+    ?inv lc:members lc:Descendants . FILTER NOT EXISTS { ?sb rnd:scrolls true }
     ?member rnd:parent+ ?sb . FILTER NOT EXISTS { ?member lc:role ?r4 }
     FILTER NOT EXISTS { ?member rnd:parent+ ?s . ?s rnd:parent+ ?sb ; rnd:scrolls true }
   }
