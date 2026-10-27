@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import '../src/behaviour/events.ts'
 import { SPARQL_PREFIXES } from '../src/ns.ts'
-import { DEFAULT_GRAPH, Engine, EngineError, Form, Kind, type Query } from '../rdf-engine/host/engine.ts'
+import { DEFAULT_GRAPH, Engine, EngineError, Form, Format, Kind, type Query } from '../rdf-engine/host/engine.ts'
 import { semblanceQueries } from '../rdf-engine/host/parse-check.ts'
 import { type EngineStore, engineStoreHooks } from '../rdf-engine/host/store.ts'
 import { mountShell } from './harness.ts'
@@ -205,5 +205,39 @@ describe.skipIf(!built)('Semblance queries on both builds', () => {
     }
     expect(mismatches).toEqual([])
     expect(compared).toBeGreaterThan(corpus.length)
+  }, 300_000)
+
+  it('give the same results for the calendar rules on a calendar, within the budget (#190)', () => {
+    // A UNION of branches joined with the calendar's row: one branch's subquery projects ?dayP,
+    // which must not stop the others from being passed it (Rust ran them for every property's
+    // range, out of its budget interpreted and out of memory compiled).
+    const data = `@prefix c: <https://semblance.dev/ns/component#> . @prefix ex: <https://example.org/cal#> .
+      @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix sem: <https://semblance.dev/ns/core#> . @prefix sh: <http://www.w3.org/ns/shacl#> .
+      ex:cal a c:Calendar ; c:dayProperty ex:day ; c:startProperty ex:start ; c:durationProperty ex:dur ; c:entryTitle rdfs:label ;
+        c:entry ex:m1 , ex:m2 , ex:m3 ; c:label "Rooms" ; c:fromHour 9 .
+      ex:day rdfs:range ex:Day . ex:mon a ex:Day ; sem:order 1 ; rdfs:label "Mon" . ex:tue a ex:Day ; sem:order 2 ; rdfs:label "Tue" .
+      ex:m1 a ex:Meeting ; ex:day ex:mon ; ex:start 10 ; ex:dur 1.5 ; rdfs:label "Standup" ; ex:room ex:r1 .
+      ex:m2 a ex:Meeting ; ex:day ex:mon ; ex:start 10.5 ; ex:room ex:r1 . ex:m3 a ex:Meeting ; ex:day ex:tue ; ex:start 14 ; ex:room ex:r2 .
+      ex:shape c:exclusiveBy ex:room ; sh:targetClass ex:Meeting .`
+    const rules = semblanceQueries().filter((q) => /CONSTRUCT[^]*\$this a\/rdfs:subClassOf\* c:Calendar/.test(q))
+    expect(rules.length).toBeGreaterThan(1)
+    for (const k of KINDS) engines[k].e.load(Format.Turtle, data)
+    for (const raw of rules)
+      for (const compiled of [false, true]) {
+        const out = KINDS.map((k) => {
+          const { e } = engines[k]
+          const q = e.prepare(SPARQL_PREFIXES + '\n' + raw)
+          e.setFuel(FUEL)
+          try {
+            q.bind('this', e.iri('https://example.org/cal#cal'))
+            return results(e, q, [], compiled)
+          } finally {
+            q.release()
+            e.setFuel()
+          }
+        })
+        expect(out[0], `${compiled ? 'compiled' : 'interpreted'}: ${raw.slice(0, 120)}`).toBe(out[1])
+        expect(out[0]?.split('\n').length).toBeGreaterThan(10)
+      }
   }, 300_000)
 })
