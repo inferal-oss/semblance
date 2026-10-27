@@ -213,11 +213,19 @@ export class DomRenderer {
     for (const name of prev.keys()) if (!desired.has(name)) el.removeAttribute(name), this.reflect(el, name, undefined), this.ops++
     for (const [name, value] of desired) {
       if (prev.get(name) === value) continue
-      el.setAttribute(name, value)
+      if (name === 'style') this.syncStyle(el, value)
+      else el.setAttribute(name, value)
       this.reflect(el, name, value)
       this.ops++
     }
     this.applied.set(k, desired)
+  }
+
+  /** CSSOM reflection is allowed for trusted scripts when CSP blocks style attributes. */
+  private syncStyle(el: Element, value: string): void {
+    // The browser parses the full declaration block, including custom properties,
+    // quoted strings and !important. HTML serialization retains the graph text.
+    ;(el as HTMLElement | SVGElement).style.cssText = value
   }
 
   /** Keep live form state in line with the graph (attributes only set defaults). */
