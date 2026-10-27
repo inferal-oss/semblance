@@ -32,7 +32,8 @@ c:Choice c:labelPart "select" .
 c:TextArea a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment """A multi-line text input: c:label, c:value, c:placeholder, c:help, c:error, c:rows (default 3),
-c:disabled. Typing sets c:value (and clears a stale c:error). Without a c:label it renders the
+c:disabled. Disabled text areas ignore input events, preserving value and error.
+Typing in an enabled text area sets c:value (and clears a stale c:error). Without a c:label it renders the
 input alone, to be labelled by a c:Field."""@en ;
     sem:slug "text-area" ;
     c:labelPart "input" .
@@ -150,8 +151,8 @@ WHERE {
 c:TextAreaInput a beh:Reaction ;
     beh:when beh:Input ;
     beh:sourceClass c:TextArea ;
-    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { { $this c:value ?old } UNION { $this c:error ?error } }""" ;
-    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { $event beh:value ?value }""" ;
+    beh:deletes """CONSTRUCT { $this c:value ?old ; c:error ?error } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } { { $this c:value ?old } UNION { $this c:error ?error } } }""" ;
+    beh:inserts """CONSTRUCT { $this c:value ?value } WHERE { FILTER NOT EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") } $event beh:value ?value }""" ;
     sem:function "inputs:text-area-input" .
 
 # --- Checkbox --------------------------------------------------------------------------------------
