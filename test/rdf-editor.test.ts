@@ -295,6 +295,8 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
       const undo = (x: ReturnType<typeof mount>) => x.click(x.document.querySelector('[data-sem-c=button]')!)
       each(undo, 'Undo the delete')
       expect(m.objects(LIB + 'earthsea', LIB + 'author')).toHaveLength(2)
+      // The field the edit closed is view state (beh:viewState): undo does not open it again.
+      expect(m.field()).toBeNull()
       each(undo, 'Undo the addition')
       expect(m.objects(LIB + 'earthsea', LIB + 'author')).toEqual([LIB + 'ursula'])
       each((x) => x.key(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"'), 'Delete'), 'Delete a list member')

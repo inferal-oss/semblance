@@ -104,6 +104,7 @@ c:RdfEditorDeleteKey a owl:Class ; rdfs:subClassOf beh:Event ; beh:domEvent "key
     rdfs:comment "Delete or Backspace on a row of an RDF editor: removes its statement, its predicate's statements, a list member or a resource."@en .
 c:editing a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: its term is being edited, in a field in its place."@en .
 c:adding a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "State on a row of an RDF editor: a field under it takes a new object (a predicate's row) or a new statement (a resource's)."@en .
+c:editing beh:viewState true . c:adding beh:viewState true . c:focused beh:viewState true .
 c:editsRow a owl:ObjectProperty ; rdfs:comment "On a rendered label of an editable RDF editor: the row that Enter, a double click, Shift+Enter and Delete act on."@en .
 c:commits a owl:ObjectProperty ; rdfs:comment "On a rendered field of an RDF editor: the row whose term it edits."@en .
 c:adds a owl:ObjectProperty ; rdfs:comment "On a rendered field of an RDF editor: the row it adds an object (a predicate's) or a statement (a resource's) to."@en .

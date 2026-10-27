@@ -339,6 +339,7 @@ export const NETWORK_GRAPH = 'urn:semblance:network'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {
+  viewState: beh + 'viewState',
   ChangeLog: beh + 'ChangeLog',
   undoable: beh + 'undoable',
   asserted: beh + 'asserted',

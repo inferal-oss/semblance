@@ -9,6 +9,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix ui: <https://semblance.dev/demo#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix lib: <https://semblance.dev/demo/library#> .
 
 # Data gallery: an RDF document as a tree (c:RdfEditor). A small library: two books and their
@@ -55,9 +56,14 @@ ui:dt-rdf-arrows a c:Segmented ; c:controls ui:dt-rdf-editor ; c:property c:arro
     c:label "Arrows"@en , "Стрілки"@uk , "Pfeile"@de , "الأسهم"@ar .
 ui:dt-rdf-jump a c:Combobox ; c:controls ui:dt-rdf-editor ; c:property c:current ; c:optionsFrom ui:dt-rdf-editor ;
     c:label "Go to"@en , "Перейти до"@uk , "Gehe zu"@de , "انتقل إلى"@ar .
-ui:dt-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; c:children ( ui:dt-rdf-arrows ui:dt-rdf-jump ) .
+ui:dt-rdf-editable a c:ToggleSwitch ; c:controls ui:dt-rdf-editor ; c:property c:editable ;
+    c:label "Edit"@en , "Редагувати"@uk , "Bearbeiten"@de , "تحرير"@ar .
+ui:dt-rdf-undo a c:Button , beh:Undoer ; sty:emphasis sty:Ghost ;
+    c:label "Undo"@en , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar .
+ui:dt-rdf-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ;
+    c:children ( ui:dt-rdf-arrows ui:dt-rdf-jump ui:dt-rdf-editable ui:dt-rdf-undo ) .
 
 ui:dt-rdf a c:Flippable ; c:front ui:dt-rdf-spec .
 ui:dt-rdf-spec a c:Specimen ; c:demonstrates c:RdfEditor ; c:label "RDF editor" ;
-    c:help "An RDF document as a tree: each resource, its predicates beside their objects, and what nests nested - a blank node, a list, what is said about a statement (an RDF 1.2 reifier, after ~). An object that is a resource of the document jumps to it; a class or a property goes to the Reference. Arrows join links to their resources: off, all, or the current resource's. Rows are minted level by level, so a change re-renders the rows of its subject only. Arrow keys move through the tree; Right opens, Left closes, Enter follows a link." ;
+    c:help "An RDF document as a tree: each resource, its predicates beside their objects, and what nests nested - a blank node, a list, what is said about a statement (an RDF 1.2 reifier, after ~). An object that is a resource of the document jumps to it; a class or a property goes to the Reference. Arrows join links to their resources: off, all, or the current resource's. Rows are minted level by level, so a change re-renders the rows of its subject only. Arrow keys move through the tree; Right opens, Left closes, Enter follows a link. Switched to editing, Enter (or a double click) edits a term in place, in Turtle (text without quotes keeps the datatype and language), Shift+Enter adds a statement, Delete removes one, Escape leaves a field; every edit is one undoable change." ;
     c:children ( ui:dt-rdf-controls ui:dt-rdf-editor ) .
