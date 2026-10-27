@@ -479,6 +479,25 @@ describe.each(['wat', 'oxigraph'] as const)('palette search metadata (%s)', (kin
     expect(p.sections()).toEqual([])
   })
 
+  it('uses the same Unicode code-point bound for indexed metadata and validation', () => {
+    const p = drive(mountShell(5, kind)), f = p.store.factory
+    const subject = f.namedNode(UI + 'toolsToggle'), keywords = f.namedNode(C + 'keywords')
+    const keywordViolations = () => p.store.match(null, f.namedNode(NS.sh + 'focusNode'), subject)
+      .filter(q => p.store.match(q.subject, f.namedNode(NS.sh + 'resultPath'), keywords).length > 0)
+    const exact = '😀'.repeat(32768)
+    metadata(p, exact)
+    p.open()
+    expect(keywordViolations()).toHaveLength(0)
+    p.type('😀')
+    expect(p.sections()).toEqual([{ heading: 'Actions', options: ['*Tools'] }])
+    expect(p.option('Tools').textContent).not.toContain('😀')
+    metadata(p, exact + 'suffix-outside-bound')
+    expect(keywordViolations().length).toBeGreaterThan(0)
+    p.type('suffix-outside-bound')
+    expect(p.sections()).toEqual([])
+    expect(p.store.match(null, f.namedNode(C + 'searchKey'), null).some(q => q.object.value === 'tools\n' + exact)).toBe(true)
+  })
+
   it('bounds indexed metadata and declares its size/type validation shape', () => {
     const p = drive(mountShell(5, kind))
     metadata(p, 'a'.repeat(32768) + 'suffix-outside-bound')
