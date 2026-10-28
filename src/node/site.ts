@@ -7,9 +7,8 @@ import { availableParallelism } from 'node:os'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { followDelta, inPlaceKey, readLocations, routesOf, setBase } from '../navigation.ts'
-import { toHTML } from '../render/serialize.ts'
 import { renderDocument, type DocumentOptions } from '../server/document.ts'
-import { type Rendered, renderToString } from '../server/render.ts'
+import { type Rendered, renderToString, serializeRoot } from '../server/render.ts'
 import type { Site } from '../server/site.ts'
 import type { GraphStore } from '../store/types.ts'
 import { loadStore } from './load.ts'
@@ -35,10 +34,13 @@ export async function siteStore(site: Site, opts: RenderSiteOptions = {}): Promi
   return store
 }
 
+/** How a site's live examples are rendered on the server: each sandbox in a store of the site's kind, as its client builds them. */
+const sandboxesOf = (site: Site) => ({ load: (...turtle: string[]) => loadStore(site.store ?? 'wat', ...turtle) })
+
 /** Render one address of a site, as its client's first render of it. */
 export async function renderSite(site: Site, url: string, opts: RenderSiteOptions = {}): Promise<Rendered & { attributes: Record<string, string> }> {
   const store = await siteStore(site, opts)
-  const rendered = await renderToString({ store, root: site.root, url, prepare: site.prepare, layers: site.layers?.(store), prefer: site.prefer, functions: site.functions, styles: opts.styles })
+  const rendered = await renderToString({ store, root: site.root, url, prepare: site.prepare, layers: site.layers?.(store), prefer: site.prefer, functions: site.functions, styles: opts.styles, sandboxes: sandboxesOf(site) })
   const attributes = site.documentAttributes?.(store) ?? {}
   return { ...rendered, attributes }
 }
@@ -188,7 +190,7 @@ export async function renderPages(job: PagesJob): Promise<{ bytes: number; css?:
     const loc = readLocations(r).find((l) => l.root === site.root)
     for (const route of rest) {
       rendered.runtime.apply(followDelta(r, loc!, route))
-      write(route, toHTML(rendered.projection.index, site.root), rendered)
+      write(route, serializeRoot(rendered.runtime, rendered.projection, site.root, { sandboxes: sandboxesOf(site), prefer: site.prefer, functions: site.functions }), rendered)
     }
     rendered.runtime.dispose()
   }

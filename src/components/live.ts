@@ -173,10 +173,13 @@ const liveExample: FnRule = (ctx, focus) => {
   parts.push(o.el('preview', 'Div', { class: 'sem-live-preview', role: 'region', 'aria-label': phrase(ctx, P.rendering) }, preview))
   if (withData) {
     const dataPhrase = phrase(ctx, P.data)
+    // The host's: the sandbox's diff viewer is mounted (or taken over) in it.
+    const data = o.el('data', 'Div', { class: 'sem-live-data' })
+    o.t(data, SEM.slot, `${focus.value} data`)
     parts.push(
       o.el('data-pane', 'Div', { class: 'sem-live-pane', role: 'region', 'aria-label': dataPhrase }, [
         o.el('data-head', 'P', { class: 'sem-live-modality' }, [o.text('data-head-text', dataPhrase)]),
-        o.el('data', 'Div', { class: 'sem-live-data' }),
+        data,
       ]),
     )
     if (withText) parts.push(o.el('text-pane', 'Div', { class: 'sem-live-pane' }, textParts))

@@ -10,7 +10,7 @@ import { DomRenderer } from '../src/render/dom.ts'
 import { toHTML } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
 import { renderDocument } from '../src/server/document.ts'
-import { graphLanguages } from '../src/server/render.ts'
+import { graphLanguages, serializeRoot } from '../src/server/render.ts'
 import { renderToStream } from '../src/server/stream.ts'
 import type { Site } from '../src/server/site.ts'
 import type { GraphStore } from '../src/store/types.ts'
@@ -38,7 +38,8 @@ async function siteClient(url: string, extra?: (store: GraphStore) => void) {
   prepareSite(store, { kind: 'wat', prefer: 'sparql', compile: 'off' })
   const runtime = new Runtime(store)
   const screen = runtime.project({ modality: MOD.Screen, layers: siteLayers(store), prefer: 'sparql', provenance: 'onDemand', languages: graphLanguages(store, ROOT), name: 'screen', roots: [ROOT] })
-  return { store, runtime, screen, html: toHTML(screen.index, ROOT) }
+  // Its live examples as its sandboxes render them first (test/ssr-live.test.ts takes them over).
+  return { store, runtime, screen, html: serializeRoot(runtime, screen, ROOT, { sandboxes: { load: (...t) => loadStore('wat', ...t) }, prefer: 'sparql' }) }
 }
 
 /** The site with a theme on its shell (as a visitor who chose it would have it restored). */
