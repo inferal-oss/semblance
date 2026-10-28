@@ -129,6 +129,7 @@ describe('c:Table', () => {
     expect(dom.slot('name-first')).toBe(first)
     expect(dom.slot('name-second')).toBe(second)
   })
+
   it('renders the rows of its SELECT with table semantics and a sticky, sortable header', () => {
     const { root, document } = gallery()
     const t = root('dt-table-component')

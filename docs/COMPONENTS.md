@@ -153,8 +153,10 @@ ex:actions a c:Column ;
 ```
 
 Each row must bind `?id` to a unique, stable value. The cell becomes a host slot named
-`action-` plus that value, which `DomRenderer.slot(name)` can find. Semblance keeps the cell
-and its mounted content when rows sort. A row with no bound value has an empty cell and no
+`action-` plus that value, which `DomRenderer.slot(name)` can find: the same host-owned slot
+(`sem:slot`) as a `c:HostSlot` or a foreign island's mount ([FOREIGN.md](FOREIGN.md)), so the
+patcher never touches what the host puts there. Semblance keeps the cell and its mounted content
+when rows sort. A row with no bound value has an empty cell and no
 slot. If `c:slotVariable` is absent, the slot key comes from `c:variable`. A host cell can
 still sort by `c:variable`, independent of its slot key. Set `c:sortable false` for an
 action column; otherwise column headers sort by default.

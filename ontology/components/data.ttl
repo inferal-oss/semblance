@@ -21,20 +21,22 @@ c:parentProperty a owl:ObjectProperty ; rdfs:range rdf:Property ;
 # The rows are the solutions of c:query (a sem:View: sem:select). Columns are c:Column nodes
 # naming a variable. Sorting is graph state on the table (c:sortColumn, c:sortDescending),
 # written by a reaction when a header is clicked; the rule sorts the selected rows. A row's
-# elements are keyed by its content, so re-sorting moves rows without re-rendering them.
+# elements are keyed by its content (and its host cells' slot keys), so re-sorting moves rows
+# without re-rendering them, and a host cell (sem:slot) keeps what the host mounted in it.
 
 c:Table a owl:Class ;
     rdfs:subClassOf sem:Component , c:Sortable ;
     rdfs:comment """Rows of a SPARQL SELECT (c:query, a sem:View with sem:select) under declared columns
-(c:tableColumns, an rdf:List of c:Column). Headers sort: clicking one writes c:sortColumn (and toggles
-c:sortDescending on a second click). c:label names the table; c:emptyText shows when there are no rows;
+(c:tableColumns, an rdf:List of c:Column). Headers sort (unless the column is c:sortable false): clicking
+one writes c:sortColumn (and toggles c:sortDescending on a second click). A column with c:slotPrefix
+has host-owned cells (sem:slot), where the embedding application mounts its own controls. c:label names the table; c:emptyText shows when there are no rows;
 c:dataset names a node whose changes mean the rows changed."""@en ;
     sem:slug "table" .
 c:query a owl:ObjectProperty ; rdfs:subPropertyOf c:dataQuery ; rdfs:range sem:View ;
     rdfs:comment "The SELECT whose solutions are the rows (sem:select)."@en .
 c:tableColumns a owl:ObjectProperty ; rdfs:domain c:Table ; rdfs:range rdf:List ;
     rdfs:comment "The columns, in order (c:Column nodes). Not c:columns, which is a c:Grid's column count."@en .
-c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format, c:unit, or a host-owned cell (c:slotPrefix)."@en .
+c:Column a owl:Class ; rdfs:comment "A table column: the SELECT variable it shows (c:variable), a header (c:label), c:align, c:format, c:unit, whether its header sorts (c:sortable), or host-owned cells (c:slotPrefix)."@en .
 c:variable a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:comment "Name of a SELECT variable, without the '?'."@en .
 c:slotPrefix a owl:DatatypeProperty ; rdfs:domain c:Column ; rdfs:range xsd:string ;
     rdfs:comment "For c:Table, make each cell a host-owned slot named by this prefix plus the bound c:slotVariable value (or c:variable if no slot variable is set). The value must be present and unique across rows."@en .
