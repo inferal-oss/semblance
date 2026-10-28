@@ -1,5 +1,7 @@
 import type { Term } from '@rdfjs/types'
 import { termKey } from '../rdf.ts'
+import { numericInput } from '../numeric.ts'
+export { NUMERIC } from '../numeric.ts'
 
 /**
  * Interned terms: each distinct term gets a small integer id (0 = unbound), so rows are
@@ -68,8 +70,8 @@ export class Terms {
   number(id: number): number | undefined {
     if (this.numbers.has(id)) return this.numbers.get(id)
     const t = this.terms[id]
-    const n = t?.termType === 'Literal' && NUMERIC.has(t.datatype.value) && t.value.trim() !== '' ? Number(t.value) : undefined
-    const v = n === undefined || Number.isNaN(n) ? undefined : n
+    const input = t?.termType === 'Literal' ? numericInput(t.value, t.datatype.value) : undefined
+    const v = input?.valid && !Number.isNaN(input.value) ? input.value : undefined
     this.numbers.set(id, v)
     return v
   }
@@ -78,8 +80,3 @@ export class Terms {
     return this.ids.size
   }
 }
-
-const XSD = 'http://www.w3.org/2001/XMLSchema#'
-export const NUMERIC = new Set(
-  ['integer', 'decimal', 'double', 'float', 'int', 'long', 'short', 'byte', 'nonNegativeInteger', 'positiveInteger', 'negativeInteger', 'nonPositiveInteger', 'unsignedInt', 'unsignedLong', 'unsignedShort', 'unsignedByte'].map((l) => XSD + l),
-)

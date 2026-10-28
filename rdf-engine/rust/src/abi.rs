@@ -623,10 +623,11 @@ pub extern "C" fn cq_begin(h: u32, shape_id: u32, graphs: u32) -> i32 {
     };
     let combos = combos(&p.binds);
     let n = combos.len() as i32;
+    // The run's budget: the module steps in line (budget::cd_addr), cq_end says -2 once it is spent.
+    // Ctx collects the clock, so start before it: a fault may not be erased.
+    crate::budget::start();
     let ctx = sparql::eval::Ctx::new(&mut s.dict, &s.store, default, named, &q.base, q.vars.len());
     s.result.clear();
-    // The run's budget: the module steps in line (budget::cd_addr), cq_end says -2 once it is spent.
-    crate::budget::start();
     unsafe {
         *RUN.0.get() = Some(Run { ctx, p, combos, count: 0, seen: crate::idmap::IdMap::new(), distinct: crate::idmap::IdMap::new(), stack: Vec::new(), scan: Vec::new(), keep: Vec::new() });
     }
@@ -815,6 +816,7 @@ fn bytes_at(p: u32, n: u32) -> &'static [u8] {
 /// A number into the record: its type (1 an integer that fits in 64 bits, 4 a
 /// double), or 6 for a number compiled code leaves to the engine.
 fn put_num(n: sparql::num::Num) -> i32 {
+    if crate::budget::query_stopped() { return 0; }
     let r = num_rec();
     match n {
         sparql::num::Num::Int(i) if i64::try_from(i).is_ok() => {
@@ -928,11 +930,24 @@ pub extern "C" fn cq_substr(p: u32, n: u32, k: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cq_tonum(src: u32, a: u32, b: u32, tc: u32) -> i32 {
     use sparql::expr::Val;
+    if crate::budget::query_stopped() { return 0; }
+    // A compiled simple string is borrowed directly, including a wide lexical.
+    if src == 1 {
+        use sparql::numeric::{self, Family, Poll, Precision};
+        if tc == 4 {
+            return match sparql::eval::Ctx::cast_floating_bytes(bytes_at(a, b), Family::Double, Precision::Double) {
+                Ok(Val::Num(x)) => put_num(x), _ => 0,
+            };
+        }
+        let Ok(mut poll) = Poll::new() else { return 0 };
+        return match numeric::validate(bytes_at(a, b), Family::Integer, &mut poll).and_then(|x| x.integer(&mut poll)) {
+            Ok(i) => put_num(sparql::num::Num::Int(i)), Err(_) => 0,
+        };
+    }
     let r = run_state();
     let n = num_rec();
     let v = match src {
         0 => Val::Id(a),
-        1 => Val::Str(bytes_at(a, b).to_vec(), None),
         _ if a == 1 => Val::Num(sparql::num::Num::Int(n[0] as i64 as i128)),
         _ => Val::Num(sparql::num::Num::Double(f64::from_bits(n[1]))),
     };

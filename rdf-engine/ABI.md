@@ -226,3 +226,47 @@ them) and typed expressions in the module; the Rust engine follows.
 Both engines and the host move together: an ABI change is a commit that edits
 this file and `host/`, bumps `abi_version`, and states what each engine needs to
 do. Neither engine adds exports the host relies on without it.
+
+### Numeric lexical input and clock callbacks
+
+The numeric reader validates the lexical form and value restrictions of the
+sixteen XML Schema numeric datatype families before materializing an arithmetic
+value. Validity and arithmetic storage are separate: `isNUMERIC` and floating
+casts accept a valid wide integer or decimal even when exact native arithmetic
+cannot represent it. WAT exact arithmetic uses an i64 mantissa with at most 18
+decimal places; Rust uses i128 integers and i128 decimals scaled by 10^18.
+Parsing does not add arbitrary-precision arithmetic or change existing arithmetic
+overflow behavior. Exact operations outside those native bounds remain unsupported.
+
+Float input rounds directly to binary32; double input rounds directly to
+binary64, with nearest/ties-even rounding, signed floating zero, subnormals and
+overflow. Casting an existing float to double widens the already-rounded float;
+casting a double to float narrows the already-rounded double. Integer/decimal
+operands promoted to float round directly before the operation. Numeric input
+retains an 800-significant-digit prefix and a nonzero-tail flag; eight fixed
+256-u32 limb buffers bound each native conversion's limb workspace. This is
+separate from the output formatter and does not copy the complete lexical input.
+The formatter and temporal fractional-second scale limits remain unchanged.
+
+Active query conversions poll the deadline at entry, completion, and bounded
+scan/limb intervals without spending row fuel or changing the compiled countdown.
+An interrupted conversion does not publish a negative numeric cache entry or a
+partial compiled numeric record. Compiled float arithmetic continues through the
+existing interpreter callback; mixed float comparison also uses that callback
+for the same operand promotion as interpreted evaluation.
+
+The official TypeScript host rejects same-instance engine or Query entry from
+its injected `now` callback before memory or binding mutation. Independent engine
+instances remain usable. A callback may catch that rejection and return finite
+time; the outer query may then continue. An uncaught callback exception or a
+nonfinite return during an interpreted or compiled query stops native evaluation,
+runs normal query cleanup, then raises an interrupted `EngineError` with its
+cause before exposing results. That query and instance may be used again.
+
+Updates and other unbudgeted entrypoints retain their existing clock-failure
+boundary: a callback exception or nonfinite return propagates directly. Prior
+update effects are unknown after such a failure; the host does not replay the
+operation, promise rollback, or claim same-instance recovery. These guarantees
+apply to the official host entrypoints; callers that instantiate raw WebAssembly
+must enforce their own callback and reentry contract. The ABI and host imports
+are unchanged.

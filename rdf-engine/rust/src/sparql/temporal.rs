@@ -97,7 +97,7 @@ fn moment(k: K, s: &[u8]) -> Option<Moment> {
         }
     };
     let d = datetime(&text)?;
-    let sec = micro(num::parse_dec(d.seconds)?);
+    let sec = micro(num::parse_temporal_dec(d.seconds)?);
     if d.day > days_in(d.year, d.month) || !(0..60 * SCALE).contains(&sec) {
         return None;
     }
@@ -148,7 +148,7 @@ fn duration(k: K, s: &[u8]) -> Option<Dur> {
             3 => secs += whole()? * DAY,
             4 => secs += whole()? * 3600 * SCALE,
             5 => secs += whole()? * 60 * SCALE,
-            _ => secs += micro(num::parse_dec(digits)?),
+            _ => secs += micro(num::parse_temporal_dec(digits)?),
         }
     }
     if !any || (k == K::YearMonth && secs != 0) || (k == K::DayTime && months != 0) {
@@ -291,7 +291,7 @@ fn round_even(x: f64) -> f64 {
 /// the WAT build does: a dayTimeDuration rounds half to even, a
 /// yearMonthDuration half up (as fn:round).
 fn scale(d: Dur, n: Num, div: bool) -> Option<Dur> {
-    let x = n.as_f64();
+    let x = n.as_f64()?;
     if !x.is_finite() || (div && x == 0.0) || d.k == K::Duration {
         return None;
     }

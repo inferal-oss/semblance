@@ -30,6 +30,7 @@
 ;; --- the engine side ------------------------------------------------------------------
 
 (func $cx_put_num (param $t i32) (result i32)
+  (if (call $bu_poll_deadline) (then (return (i32.const 0))))
   (i64.store offset=32 (global.get $bases) (global.get $ni))
   (f64.store offset=40 (global.get $bases) (global.get $nf))
   (i32.store offset=48 (global.get $bases) (global.get $nsc))
@@ -51,15 +52,23 @@
 
 ;; Term id as a number: its type, the value in the record (0: not a number).
 (func (export "cq_num") (param $id i32) (result i32)
-  (global.set $nsc (i32.const 0))
-  (global.set $ni (i64.const 0))
   (call $cx_put_num (call $num (local.get $id))))
 
 ;; A cast to xsd:integer (tc C_INTEGER) or xsd:double (C_DOUBLE) of term v, or
 ;; (v = 0) of the simple literal [p, p+n), as $cast computes it: the result's
 ;; type (1 or 4), its value in the record; 0 on an error.
 (func (export "cq_tonum") (param $v i32) (param $p i32) (param $n i32) (param $tc i32) (result i32)
-  (local $t i32) (local $b i32)
+  (local $t i32) (local $b i32) (local $family i32)
+  (if (i32.eq (local.get $tc) (i32.const C_DOUBLE)) (then
+    (if (local.get $v) (then
+      (if (i32.ne (call $kind (local.get $v)) (i32.const 3)) (then (return (i32.const 0))))
+      (local.set $p (call $tval (local.get $v))) (local.set $n (call $tlen (local.get $v)))
+      (local.set $family (call $nu_family (call $tdt (local.get $v))))
+      (if (call $is_plain (local.get $v)) (then (local.set $family (i32.const 4)))))
+      (else (local.set $family (i32.const 4))))
+    (if (local.get $family) (then
+      (if (i32.eqz (call $num_float_source (local.get $p) (local.get $n) (local.get $family) (i32.const 0))) (then (return (i32.const 0))))
+      (return (call $cx_put_num (i32.const 4)))))))
   (global.set $nsc (i32.const 0))
   (global.set $ni (i64.const 0))
   (if (local.get $v) (then
@@ -864,6 +873,15 @@
   (local $r i32) (local $x i32) (local $na i32) (local $nb i32) (local $sa i32) (local $sb i32) (local $c i32)
   (local.set $r (call $tv (local.get $f) (i32.const TK_BOOL)))
   (local.set $x (call $local (local.get $f)))
+  (local.set $na (i32.load offset=8 (local.get $a)))
+  (local.set $nb (i32.load offset=8 (local.get $b)))
+  (if (i32.and (i32.ne (local.get $na) (i32.const 0)) (i32.ne (local.get $nb) (i32.const 0))) (then
+    ;; Float comparisons need the engine's direct operand promotion. Emit the
+    ;; bail before the raw IFs below: those compact comparison-only blocks are
+    ;; not tracked by $txd and cannot surround a $bail_if safely.
+    (call $em2 (local.get $f) (@str "gak1Fgbk1Fq") (i32.load (local.get $a)) (i32.load (local.get $b)))
+    (call $em2 (local.get $f) (@str "gak3Fgbk3Frq") (call $tva (local.get $na)) (call $tva (local.get $nb)))
+    (call $bail_if (local.get $f))))
   (call $em1 (local.get $f) (@str "k2va") (call $tva (local.get $r)))
   (call $em2 (local.get $f) (@str "gak0Ggbk0Gq(") (i32.load (local.get $a)) (i32.load (local.get $b)))
   ;; x: -1, 0, 1, or 2 (unequal and not ordered)
@@ -874,8 +892,6 @@
     (call $em2 (local.get $f) (@str "gak2Fgbk2Fq(k3") (i32.load (local.get $a)) (i32.load (local.get $b)))
     (call $em (local.get $f) (@str "gagbgcgdCJ") (call $tva (local.get $sa)) (call $tvb (local.get $sa)) (call $tva (local.get $sb)) (call $tvb (local.get $sb)))
     (call $em1 (local.get $f) (@str "va}") (local.get $x))))
-  (local.set $na (i32.load offset=8 (local.get $a)))
-  (local.set $nb (i32.load offset=8 (local.get $b)))
   (if (i32.and (i32.ne (local.get $na) (i32.const 0)) (i32.ne (local.get $nb) (i32.const 0))) (then
     (call $em2 (local.get $f) (@str "gak1Fgbk1Fq(") (i32.load (local.get $a)) (i32.load (local.get $b)))
     ;; num_cmp: integers or decimals of one scale by ni, else by nf (NaN: 2)

@@ -3,6 +3,7 @@
 
 use alloc::vec::Vec;
 use core::fmt::Write;
+use super::numeric::{self, Family, Poll, Precision};
 
 pub const SCALE: i128 = 1_000_000_000_000_000_000;
 
@@ -25,12 +26,16 @@ fn rank(n: &Num) -> u8 {
 }
 
 impl Num {
-    pub fn as_f64(self) -> f64 {
+    pub fn as_f64(self) -> Option<f64> {
+        self.floating(Precision::Double)
+    }
+
+    pub fn floating(self, precision: Precision) -> Option<f64> {
         match self {
-            Num::Int(i) => i as f64,
-            Num::Dec(d) => d as f64 / SCALE as f64,
-            Num::Float(f) => f as f64,
-            Num::Double(d) => d,
+            Num::Int(i) => numeric::native(i, 0, precision).ok(),
+            Num::Dec(d) => numeric::native(d, 18, precision).ok(),
+            Num::Float(f) => Some(f as f64),
+            Num::Double(d) => Some(if precision == Precision::Single { d as f32 as f64 } else { d }),
         }
     }
 
@@ -43,18 +48,21 @@ impl Num {
     }
 
     /// Promote both to their common type.
-    pub fn promote(a: Num, b: Num) -> (Num, Num) {
+    pub fn promote(a: Num, b: Num) -> Option<(Num, Num)> {
         let r = rank(&a).max(rank(&b));
-        (a.to_rank(r), b.to_rank(r))
+        Some((a.to_rank(r)?, b.to_rank(r)?))
     }
 
-    fn to_rank(self, r: u8) -> Num {
-        match r {
+    fn to_rank(self, r: u8) -> Option<Num> {
+        Some(match r {
             0 => self,
-            1 => self.as_dec().map_or(Num::Double(self.as_f64()), Num::Dec),
-            2 => Num::Float(self.as_f64() as f32),
-            _ => Num::Double(self.as_f64()),
-        }
+            1 => match self.as_dec() {
+                Some(d) => Num::Dec(d),
+                None => Num::Double(self.as_f64()?),
+            },
+            2 => Num::Float(self.floating(Precision::Single)? as f32),
+            _ => Num::Double(self.as_f64()?),
+        })
     }
 
     pub fn is_zero(self) -> bool {
@@ -75,27 +83,18 @@ impl Num {
     }
 }
 
-fn digits(s: &[u8]) -> bool {
-    !s.is_empty() && s.iter().all(u8::is_ascii_digit)
-}
-
 pub fn parse_int(s: &[u8]) -> Option<i128> {
-    let (neg, d) = match s.first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, s),
-    };
-    if !digits(d) {
-        return None;
-    }
-    let mut n: i128 = 0;
-    for &c in d {
-        n = n.checked_mul(10)?.checked_add((c - b'0') as i128)?;
-    }
-    Some(if neg { -n } else { n })
+    let mut poll = Poll::new().ok()?;
+    numeric::validate(s, Family::Integer, &mut poll).ok()?.integer(&mut poll).ok()
 }
 
 pub fn parse_dec(s: &[u8]) -> Option<i128> {
+    let mut poll = Poll::new().ok()?;
+    numeric::validate(s, Family::Decimal, &mut poll).ok()?.decimal(&mut poll).ok()
+}
+
+/// Temporal fractions retain their existing finite-scale truncation boundary.
+pub fn parse_temporal_dec(s: &[u8]) -> Option<i128> {
     let (neg, d) = match s.first() {
         Some(b'-') => (true, &s[1..]),
         Some(b'+') => (false, &s[1..]),
@@ -125,99 +124,7 @@ pub fn parse_dec(s: &[u8]) -> Option<i128> {
 }
 
 pub fn parse_double(s: &[u8]) -> Option<f64> {
-    match s {
-        b"INF" | b"+INF" => return Some(f64::INFINITY),
-        b"-INF" => return Some(f64::NEG_INFINITY),
-        b"NaN" => return Some(f64::NAN),
-        _ => {}
-    }
-    // XSD's lexical space: digits, one optional point, optional exponent.
-    let body = match s.first() {
-        Some(b'+' | b'-') => &s[1..],
-        _ => s,
-    };
-    let (mant, exp) = match body.iter().position(|&c| c == b'e' || c == b'E') {
-        Some(i) => (&body[..i], Some(&body[i + 1..])),
-        None => (body, None),
-    };
-    let points = mant.iter().filter(|&&c| c == b'.').count();
-    if mant.is_empty() || points > 1 || !mant.iter().any(u8::is_ascii_digit) || !mant.iter().all(|&c| c.is_ascii_digit() || c == b'.') {
-        return None;
-    }
-    if let Some(e) = exp {
-        let e = match e.first() {
-            Some(b'+' | b'-') => &e[1..],
-            _ => e,
-        };
-        if !digits(e) {
-            return None;
-        }
-    }
-    // Decimal digits to a mantissa (up to 19 significant digits) and a power of ten.
-    let neg = s.first() == Some(&b'-');
-    let (mut m, mut e10, mut sig, mut point) = (0u64, 0i32, 0u32, false);
-    for &c in mant {
-        if c == b'.' {
-            point = true;
-            continue;
-        }
-        if sig < 19 {
-            m = m * 10 + (c - b'0') as u64;
-            if m > 0 {
-                sig += 1;
-            }
-            if point {
-                e10 -= 1;
-            }
-        } else if !point {
-            e10 += 1;
-        }
-    }
-    if let Some(e) = exp {
-        let (en, digits) = match e.first() {
-            Some(b'-') => (true, &e[1..]),
-            Some(b'+') => (false, &e[1..]),
-            _ => (false, e),
-        };
-        let mut x: i32 = 0;
-        for &d in digits {
-            x = x.saturating_mul(10).saturating_add((d - b'0') as i32);
-        }
-        e10 = e10.saturating_add(if en { -x } else { x });
-    }
-    Some(if neg { -scale10(m, e10) } else { scale10(m, e10) })
-}
-
-const POW10: [f64; 23] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22];
-
-/// m * 10^e: exact when m < 2^53 and |e| <= 22 (both factors exact, one
-/// rounding); otherwise by repeated scaling, within a few ulps.
-fn scale10(m: u64, e: i32) -> f64 {
-    let mut v = m as f64;
-    if m == 0 {
-        return 0.0;
-    }
-    if e >= 0 {
-        let mut e = e;
-        while e > 22 {
-            v *= 1e22;
-            e -= 22;
-            if v.is_infinite() {
-                return v;
-            }
-        }
-        v * POW10[e as usize]
-    } else {
-        let mut e = -e;
-        while e > 22 {
-            v /= 1e22;
-            e -= 22;
-            if v == 0.0 {
-                return v;
-            }
-        }
-        v / POW10[e as usize]
-    }
+    numeric::parse(s, Family::Double, Precision::Double).ok()
 }
 
 pub fn write_int(out: &mut Vec<u8>, n: i128) {
@@ -299,7 +206,7 @@ pub fn write_num(out: &mut Vec<u8>, n: Num) {
 
 pub fn arith(op: super::Op, a: Num, b: Num) -> Option<Num> {
     use super::Op::*;
-    let (a, b) = Num::promote(a, b);
+    let (a, b) = Num::promote(a, b)?;
     Some(match (a, b) {
         (Num::Int(x), Num::Int(y)) => match op {
             Add => Num::Int(x.checked_add(y)?),
@@ -326,7 +233,7 @@ pub fn arith(op: super::Op, a: Num, b: Num) -> Option<Num> {
             Div => x / y,
         }),
         (x, y) => {
-            let (x, y) = (x.as_f64(), y.as_f64());
+            let (x, y) = (x.as_f64()?, y.as_f64()?);
             Num::Double(match op {
                 Add => x + y,
                 Sub => x - y,
@@ -430,9 +337,9 @@ fn libm_floor(x: f64) -> f64 {
 }
 
 pub fn cmp(a: Num, b: Num) -> Option<core::cmp::Ordering> {
-    let (a, b) = Num::promote(a, b);
+    let (a, b) = Num::promote(a, b)?;
     match (a, b) {
         (Num::Int(x), Num::Int(y)) | (Num::Dec(x), Num::Dec(y)) => Some(x.cmp(&y)),
-        (x, y) => x.as_f64().partial_cmp(&y.as_f64()),
+        (x, y) => x.as_f64()?.partial_cmp(&y.as_f64()?),
     }
 }

@@ -89,10 +89,40 @@ WHERE {
       FILTER(?constraint NOT IN (sh:minCount, sh:maxCount, sh:lessThanOrEquals, sh:or))
       ?focus ?path ?value .
       OPTIONAL { FILTER(?constraint = sh:pattern) ?ps sh:flags ?flags }
+      # Validate the stored term's XML lexical space independently of a backend's
+      # permissive numeric cast, native integer width or isNUMERIC implementation.
+      # A canonicalizing store may already have erased an original input spelling.
+      BIND(COALESCE(DATATYPE(?value), sh:none) AS ?numericDatatype)
+      BIND(IF(?constraint = sh:datatype && ?numericDatatype IN (xsd:integer, xsd:decimal, xsd:float, xsd:double, xsd:long, xsd:int, xsd:short, xsd:byte, xsd:nonNegativeInteger, xsd:positiveInteger, xsd:nonPositiveInteger, xsd:negativeInteger, xsd:unsignedLong, xsd:unsignedInt, xsd:unsignedShort, xsd:unsignedByte), STR(?value), "") AS ?numericSource)
+      BIND(REPLACE(?numericSource, "^[ \\\\t\\\\r\\\\n]+|[ \\\\t\\\\r\\\\n]+$", "") AS ?numericLexical)
+      BIND(REPLACE(REPLACE(?numericLexical, "^[+-]", ""), "^0+", "") AS ?numericMagnitude)
+      BIND(?numericMagnitude = "" AS ?numericZero)
+      BIND(STRSTARTS(?numericLexical, "-") && !?numericZero AS ?numericNegative)
+      BIND(IF(?numericDatatype IN (xsd:float, xsd:double), REGEX(?numericLexical, "^([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?|[+-]?INF|NaN)$"),
+              IF(?numericDatatype = xsd:decimal, REGEX(?numericLexical, "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$"),
+                 REGEX(?numericLexical, "^[+-]?[0-9]+$"))) AS ?numericGrammar)
+      BIND(IF(?numericDatatype = xsd:long, IF(?numericNegative, "9223372036854775808", "9223372036854775807"),
+              IF(?numericDatatype = xsd:int, IF(?numericNegative, "2147483648", "2147483647"),
+              IF(?numericDatatype = xsd:short, IF(?numericNegative, "32768", "32767"),
+              IF(?numericDatatype = xsd:byte, IF(?numericNegative, "128", "127"),
+              IF(?numericDatatype = xsd:unsignedLong, "18446744073709551615",
+              IF(?numericDatatype = xsd:unsignedInt, "4294967295",
+              IF(?numericDatatype = xsd:unsignedShort, "65535",
+              IF(?numericDatatype = xsd:unsignedByte, "255", "")))))))) AS ?numericLimit)
+      BIND((?numericDatatype != xsd:positiveInteger || (!?numericNegative && !?numericZero))
+        && (?numericDatatype != xsd:negativeInteger || ?numericNegative)
+        && (?numericDatatype != xsd:nonPositiveInteger || (?numericNegative || ?numericZero))
+        && (?numericDatatype NOT IN (xsd:nonNegativeInteger, xsd:unsignedLong, xsd:unsignedInt, xsd:unsignedShort, xsd:unsignedByte) || !?numericNegative)
+        AS ?numericSign)
+      BIND(?numericLimit = "" || STRLEN(?numericMagnitude) < STRLEN(?numericLimit)
+        || (STRLEN(?numericMagnitude) = STRLEN(?numericLimit) && ?numericMagnitude <= ?numericLimit) AS ?numericRange)
+      BIND(?numericDatatype NOT IN (xsd:integer, xsd:decimal, xsd:float, xsd:double, xsd:long, xsd:int, xsd:short, xsd:byte, xsd:nonNegativeInteger, xsd:positiveInteger, xsd:nonPositiveInteger, xsd:negativeInteger, xsd:unsignedLong, xsd:unsignedInt, xsd:unsignedShort, xsd:unsignedByte)
+        || COALESCE(?numericGrammar && ?numericSign && ?numericRange, false) AS ?numericValid)
       FILTER(IF(?constraint = sh:datatype,
-                !(COALESCE(DATATYPE(?value), sh:none) = ?param
+                !(?numericValid
+                  && (COALESCE(DATATYPE(?value), sh:none) = ?param
                   || (?param IN (xsd:integer, xsd:decimal, xsd:double, xsd:float) && DATATYPE(?value) IN (xsd:integer, xsd:decimal, xsd:double, xsd:float)
-                      && (?param != xsd:integer || COALESCE(xsd:double(STR(?value)) = FLOOR(xsd:double(STR(?value))), false)))),
+                      && (?param != xsd:integer || COALESCE("-INF"^^xsd:double < xsd:double(STR(?value)) && xsd:double(STR(?value)) < "INF"^^xsd:double && xsd:double(STR(?value)) = FLOOR(xsd:double(STR(?value))), false))))),
              IF(?constraint = sh:class, NOT EXISTS { ?value a/rdfs:subClassOf* ?param },
              IF(?constraint = sh:nodeKind, (?param = sh:IRI && !isIRI(?value)) || (?param = sh:Literal && !isLiteral(?value)),
              IF(?constraint = sh:in, NOT EXISTS { ?param rdf:rest*/rdf:first ?value },

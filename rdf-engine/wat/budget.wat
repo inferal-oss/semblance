@@ -46,6 +46,7 @@
 
 ;; The step that ends a chunk: the fuel used, the clock read on every 4096th step.
 (func $bu_event (export "cq_bu_event") (result i32)
+  (local $now f64)
   (if (i32.eqz (global.get $bu_stop)) (then
     (global.set $bu_ticks (i32.add (global.get $bu_ticks) (global.get $bu_chunk)))
     (global.set $bu_left (i64.sub (global.get $bu_left) (i64.extend_i32_u (global.get $bu_chunk))))
@@ -53,8 +54,20 @@
       (then (global.set $bu_stop (i32.const 1)))
       (else
         (if (i32.and (i32.eqz (i32.and (global.get $bu_ticks) (i32.const 4095))) (f64.gt (global.get $bu_deadline) (f64.const 0))) (then
-          (global.set $bu_stop (f64.ge (call $now_ms) (global.get $bu_deadline)))))))
+          (local.set $now (call $now_ms))
+          (global.set $bu_stop (i32.or (global.get $bu_stop) (f64.ge (local.get $now) (global.get $bu_deadline))))))))
     (if (i32.eqz (global.get $bu_stop)) (then (call $bu_next) (return (i32.const 0))))))
   ;; spent: every later step ends here too
   (i32.store offset=60 (global.get $bases) (i32.const 1))
   (i32.const 1))
+
+;; A lexical/limb work poll is not a row, join or path step. In particular it
+;; neither resets nor consumes the compiled countdown at bases+60.
+(func $bu_poll_deadline (result i32)
+  (local $now f64)
+  (if (i32.eqz (global.get $bu_active)) (then (return (i32.const 0))))
+  (if (global.get $bu_stop) (then (return (i32.const 1))))
+  (if (f64.gt (global.get $bu_deadline) (f64.const 0)) (then
+    (local.set $now (call $now_ms))
+    (global.set $bu_stop (i32.or (global.get $bu_stop) (f64.ge (local.get $now) (global.get $bu_deadline))))))
+  (global.get $bu_stop))

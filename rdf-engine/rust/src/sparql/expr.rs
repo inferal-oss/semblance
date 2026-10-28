@@ -3,6 +3,7 @@
 use super::eval::Ctx;
 use super::num::{self, Num};
 use super::regex;
+use super::numeric::{self, Family, Poll, Precision};
 use super::*;
 use crate::dict::{self, Key, NONE, RDF_DIR_LANG_STRING, RDF_LANG_STRING, XSD_STRING};
 use crate::iri;
@@ -153,23 +154,29 @@ impl Ctx<'_> {
         })
     }
 
+    fn number_bytes(source: &[u8], family: Family) -> Option<Num> {
+        let mut poll = Poll::new().ok()?;
+        let x = numeric::validate(source, family, &mut poll).ok()?;
+        match family {
+            Family::Float => numeric::bits(&x, Precision::Single, &mut poll).ok().map(|b| Num::Float(f32::from_bits(b as u32))),
+            Family::Double => numeric::bits(&x, Precision::Double, &mut poll).ok().map(|b| Num::Double(f64::from_bits(b))),
+            Family::Decimal => x.decimal(&mut poll).ok().map(Num::Dec),
+            _ => x.integer(&mut poll).ok().map(Num::Int),
+        }
+    }
+
     pub fn num(&mut self, v: &Val) -> Option<Num> {
         match v {
-            Val::Num(n) => Some(*n),
+            Val::Num(n) => if crate::budget::query_stopped() { None } else { Some(*n) },
             Val::Id(i) => {
                 let t = *self.dict.term(*i)?;
-                if t.kind != dict::LITERAL {
-                    return None;
-                }
-                let k = self.dt_kind(t.a);
-                let s = self.dict.value(*i);
-                match k {
-                    Dt::Integer => num::parse_int(s).map(Num::Int),
-                    Dt::Decimal => num::parse_dec(s).map(Num::Dec),
-                    Dt::Float => num::parse_double(s).map(|d| Num::Float(d as f32)),
-                    Dt::Double => num::parse_double(s).map(Num::Double),
-                    _ => None,
-                }
+                if t.kind != dict::LITERAL { return None; }
+                let family = Family::local(self.dict.value(t.a).strip_prefix(XSD)?)?;
+                Self::number_bytes(self.dict.value(*i), family)
+            }
+            Val::Typed(source, dt) => {
+                let family = Family::local(self.dict.value(*dt).strip_prefix(XSD)?)?;
+                Self::number_bytes(source, family)
             }
             _ => None,
         }
@@ -469,7 +476,7 @@ impl Ctx<'_> {
             Expr::Arith(op, a, b) => {
                 let (x, y) = (self.expr(a, row)?, self.expr(b, row)?);
                 let (Some(x), Some(y)) = (self.num(&x), self.num(&y)) else { return self.temporal_arith(*op, &x, &y) };
-                if *op == Op::Div && matches!(Num::promote(x, y), (Num::Int(_) | Num::Dec(_), _)) && y.is_zero() {
+                if *op == Op::Div && matches!(Num::promote(x, y).ok_or(())?, (Num::Int(_) | Num::Dec(_), _)) && y.is_zero() {
                     return Err(());
                 }
                 num::arith(*op, x, y).map(Val::Num).ok_or(())
@@ -513,8 +520,78 @@ impl Ctx<'_> {
         }
     }
 
+    fn valid_numeric(&self, v: &Val) -> bool {
+        match v {
+            Val::Num(_) => !crate::budget::query_stopped(),
+            Val::Typed(source, dt) => {
+                let Some(family) = self.dict.value(*dt).strip_prefix(XSD).and_then(Family::local) else { return false };
+                let Ok(mut poll) = Poll::new() else { return false };
+                numeric::validate(source, family, &mut poll).is_ok()
+            }
+            Val::Id(id) => {
+                let Some(t) = self.dict.term(*id) else { return false };
+                if t.kind != dict::LITERAL { return false; }
+                let Some(family) = self.dict.value(t.a).strip_prefix(XSD).and_then(Family::local) else { return false };
+                let Ok(mut poll) = Poll::new() else { return false };
+                numeric::validate(self.dict.value(*id), family, &mut poll).is_ok()
+            }
+            _ => false,
+        }
+    }
+
+    /// Floating targets read borrowed input and never require native exact materialization.
+    pub(crate) fn cast_floating_bytes(source: &[u8], family: Family, precision: Precision) -> R<Val> {
+        let value = match family {
+            Family::Float => {
+                let f = numeric::parse(source, family, Precision::Single).map_err(|_| ())?;
+                f // widening an already rounded float is exact
+            }
+            Family::Double => {
+                let d = numeric::parse(source, family, Precision::Double).map_err(|_| ())?;
+                if precision == Precision::Single { d as f32 as f64 } else { d }
+            }
+            _ => numeric::parse(source, family, precision).map_err(|_| ())?,
+        };
+        if crate::budget::query_stopped() { return Err(()); }
+        Ok(Val::Num(if precision == Precision::Single { Num::Float(value as f32) } else { Num::Double(value) }))
+    }
+
+    fn floating_cast(&self, v: &Val, precision: Precision) -> R<Val> {
+        let bytes = match v {
+            Val::Num(n) => {
+                let f = n.floating(precision).ok_or(())?;
+                return Ok(Val::Num(if precision == Precision::Single { Num::Float(f as f32) } else { Num::Double(f) }));
+            }
+            Val::Bool(b) => return Ok(Val::Num(if precision == Precision::Single { Num::Float(*b as u8 as f32) } else { Num::Double(*b as u8 as f64) })),
+            Val::Str(s, None) => (s.as_slice(), None),
+            Val::Typed(s, dt) => (s.as_slice(), Some(*dt)),
+            Val::Id(id) => {
+                let t = self.dict.term(*id).ok_or(())?;
+                if t.kind != dict::LITERAL { return Err(()); }
+                (self.dict.value(*id), Some(t.a))
+            }
+            _ => return Err(()),
+        };
+        let family = match bytes.1 {
+            None | Some(XSD_STRING) => if precision == Precision::Single { Family::Float } else { Family::Double },
+            Some(dt) => {
+                let local = self.dict.value(dt).strip_prefix(XSD).ok_or(())?;
+                if local == b"boolean" {
+                    let value = match trim(bytes.0) { b"true" | b"1" => 1.0, b"false" | b"0" => 0.0, _ => return Err(()) };
+                    return Ok(Val::Num(if precision == Precision::Single { Num::Float(value as f32) } else { Num::Double(value) }));
+                }
+                Family::local(local).ok_or(())?
+            }
+        };
+        Self::cast_floating_bytes(bytes.0, family, precision)
+    }
+
     pub(crate) fn cast(&mut self, dt: u32, v: &Val) -> R<Val> {
-        let local = self.dict.value(dt).strip_prefix(XSD).ok_or(())?.to_vec();
+        let target = self.dict.value(dt).strip_prefix(XSD).ok_or(())?;
+        if target == b"float" || target == b"double" {
+            return self.floating_cast(v, if target == b"float" { Precision::Single } else { Precision::Double });
+        }
+        let local = target.to_vec();
         if self.kind(v) == dict::IRI {
             if local == b"string" {
                 let id = self.to_id(v);
@@ -568,7 +645,7 @@ impl Ctx<'_> {
                     (_, Some(Num::Int(i))) => i,
                     (_, Some(Num::Dec(d))) => d / num::SCALE,
                     (_, Some(x @ (Num::Float(_) | Num::Double(_)))) => {
-                        let f = x.as_f64();
+                        let f = x.as_f64().ok_or(())?;
                         if !f.is_finite() {
                             return Err(());
                         }
@@ -583,6 +660,8 @@ impl Ctx<'_> {
                 } else {
                     let mut out = Vec::new();
                     num::write_int(&mut out, i);
+                    let mut poll = Poll::new().map_err(|_| ())?;
+                    numeric::validate(&out, Family::local(&local).ok_or(())?, &mut poll).map_err(|_| ())?;
                     Ok(Val::Typed(out, dt))
                 }
             }
@@ -590,7 +669,7 @@ impl Ctx<'_> {
                 (_, Some(Num::Int(i))) => i.checked_mul(num::SCALE).ok_or(())?,
                 (_, Some(Num::Dec(d))) => d,
                 (_, Some(x)) => {
-                    let f = x.as_f64();
+                    let f = x.as_f64().ok_or(())?;
                     if !f.is_finite() {
                         return Err(());
                     }
@@ -605,15 +684,7 @@ impl Ctx<'_> {
                 }
                 _ => return Err(()),
             }))),
-            k @ (Dt::Float | Dt::Double) => {
-                let f = match (src, n) {
-                    (_, Some(n)) => n.as_f64(),
-                    (Dt::Boolean, _) => (self.boolean(v).ok_or(())?) as u8 as f64,
-                    (Dt::String, _) => num::parse_double(s).ok_or(())?,
-                    _ => return Err(()),
-                };
-                Ok(Val::Num(if k == Dt::Float { Num::Float(f as f32) } else { Num::Double(f) }))
-            }
+            Dt::Float | Dt::Double => unreachable!(),
             Dt::DateTime => match src {
                 Dt::DateTime | Dt::String => {
                     datetime(s).ok_or(())?;
@@ -645,7 +716,10 @@ impl Ctx<'_> {
                 return Ok(Val::Id(self.bnode_for(row, &s)));
             }
             Rand => return Ok(Val::Num(Num::Double(self.random()))),
-            Now => return Ok(Val::Typed(self.now_lexical(), self.xsd(b"dateTime"))),
+            Now => {
+                if crate::budget::query_stopped() { return Err(()); }
+                return Ok(Val::Typed(self.now_lexical(), self.xsd(b"dateTime")));
+            }
             Uuid => {
                 let mut s = b"urn:uuid:".to_vec();
                 s.extend_from_slice(&self.uuid());
@@ -752,8 +826,8 @@ impl Ctx<'_> {
             }
             SubStr => {
                 self.str_check(&v[0])?;
-                let start = self.num(&v[1]).ok_or(())?.as_f64();
-                let length = if v.len() > 2 { Some(self.num(&v[2]).ok_or(())?.as_f64()) } else { None };
+                let start = self.num(&v[1]).ok_or(())?.as_f64().ok_or(())?;
+                let length = if v.len() > 2 { Some(self.num(&v[2]).ok_or(())?.as_f64().ok_or(())?) } else { None };
                 let (s, l) = self.str_view(&v[0]);
                 let (from, to) = substr_range(s, start, length);
                 Ok(Val::Str(s[from..to].to_vec(), l.map(|(t, d)| (t.to_vec(), d))))
@@ -885,7 +959,7 @@ impl Ctx<'_> {
                     Day => Val::Num(Num::Int(d.day as i128)),
                     Hours => Val::Num(Num::Int(d.hour as i128)),
                     Minutes => Val::Num(Num::Int(d.minute as i128)),
-                    Seconds => Val::Num(Num::Dec(num::parse_dec(d.seconds).ok_or(())?)),
+                    Seconds => Val::Num(Num::Dec(num::parse_temporal_dec(d.seconds).ok_or(())?)),
                     Tz => Val::Str(d.tz.to_vec(), None),
                     _ => {
                         let off = d.offset_minutes.ok_or(())?;
@@ -978,7 +1052,7 @@ impl Ctx<'_> {
             IsBlank => Ok(Val::Bool(self.kind(&v[0]) == dict::BNODE)),
             IsLiteral => Ok(Val::Bool(self.kind(&v[0]) == dict::LITERAL)),
             IsTriple => Ok(Val::Bool(self.kind(&v[0]) == dict::TRIPLE)),
-            IsNumeric => Ok(Val::Bool(self.num(&v[0]).is_some())),
+            IsNumeric => Ok(Val::Bool(self.valid_numeric(&v[0]))),
             Triple => {
                 let (s, p, o) = (self.to_id(&v[0]), self.to_id(&v[1]), self.to_id(&v[2]));
                 let ks = self.dict.term(s).map(|t| t.kind);
@@ -1127,7 +1201,7 @@ pub fn datetime_cmp(a: &[u8], b: &[u8]) -> Option<Ordering> {
     let key = |d: &DateTime| -> i128 {
         let days = days_from_civil(d.year, d.month, d.day) as i128;
         let mins = days * 1440 + d.hour as i128 * 60 + d.minute as i128 - d.offset_minutes.unwrap_or(0) as i128;
-        mins * 60 * num::SCALE + num::parse_dec(d.seconds).unwrap_or(0)
+        mins * 60 * num::SCALE + num::parse_temporal_dec(d.seconds).unwrap_or(0)
     };
     let (kx, ky) = (key(&x), key(&y));
     if x.offset_minutes.is_some() == y.offset_minutes.is_some() {

@@ -169,6 +169,34 @@ export class EngineError extends Error {
 
 export class Engine {
   private x: Exports
+  private inClockImport = false
+  private queryDepth = 0
+  private clockFault: { cause: unknown } | undefined
+
+  /** @internal A callback may inspect cached metadata, but may not reenter this instance. */
+  assertNotInClock(): void {
+    if (this.inClockImport) throw new EngineError('same-instance engine entry from clock callback')
+  }
+
+  private queryCall<T>(invoke: () => T): T {
+    this.assertNotInClock()
+    this.queryDepth++
+    try {
+      const value = invoke()
+      const fault = this.clockFault
+      if (fault) {
+        this.clockFault = undefined
+        const error = new EngineError('engine clock callback failed', true)
+        Object.defineProperty(error, 'cause', { value: fault.cause })
+        throw error
+      }
+      return value
+    } finally {
+      this.queryDepth--
+      // A separate native trap is not turned into a claimed clock-only recovery.
+      if (this.queryDepth === 0) this.clockFault = undefined
+    }
+  }
   /** Compile a prepared query (for its current bound variables) on its n-th run; 0: never. */
   autoCompile = 0
   /**
@@ -191,7 +219,23 @@ export class Engine {
   /** `now` replaces the clock (`env.now`), for tests of the query budget. */
   constructor(module: WebAssembly.Module, now?: () => number) {
     const env = {
-      now: now ?? (() => Date.now()),
+      now: () => {
+        const prior = this.inClockImport
+        this.inClockImport = true
+        try {
+          // Once one query clock failed, later polls preserve that first fault.
+          if (this.clockFault && this.queryDepth > 0) return NaN
+          const value = (now ?? Date.now)()
+          if (!Number.isFinite(value)) throw new TypeError('engine clock must return finite milliseconds')
+          return value
+        } catch (cause) {
+          if (this.queryDepth === 0) throw cause // unbudgeted/update failure remains unsupported
+          this.clockFault ??= { cause }
+          return NaN // native query cleanup must run before the host raises the cause
+        } finally {
+          this.inClockImport = prior
+        }
+      },
       random: () => Math.random(),
       math,
       intl: intlImport(
@@ -206,6 +250,7 @@ export class Engine {
 
   /** Drop the instance, so its memory can be collected while this object is still referenced; the engine must not be used afterwards. */
   dispose(): void {
+    this.assertNotInClock()
     this.x = undefined as unknown as Exports
   }
 
@@ -245,6 +290,7 @@ export class Engine {
 
   /** The SPARQL extension groups this build implements, as IRIs (EXTENSIONS.md). */
   get extensions(): ReadonlySet<string> {
+    this.assertNotInClock()
     const bits = this.x.extensions?.() ?? 0
     return new Set(EXTENSION_GROUPS.filter((_, i) => bits & (1 << i)))
   }
@@ -258,74 +304,94 @@ export class Engine {
 
   /** Queries running past `atMs` (on the `env.now` clock) stop with an interrupted error; undefined: no deadline. */
   setDeadline(atMs?: number): void {
+    this.assertNotInClock()
     this.x.set_deadline?.(atMs ?? 0)
   }
 
   /** Queries taking more than `steps` evaluation steps stop with an interrupted error; undefined: unlimited. */
   setFuel(steps?: number): void {
+    this.assertNotInClock()
     this.x.set_fuel?.((steps ?? 0) >>> 0)
   }
 
   // --- terms ----------------------------------------------------------------
 
   iri(value: string): number {
+    this.assertNotInClock()
     return this.check(this.x.intern_iri(this.put(value)[0]!))
   }
   bnode(label?: string): number {
+    this.assertNotInClock()
     return this.check(label === undefined ? this.x.fresh_bnode() : this.x.intern_bnode(this.put(label)[0]!))
   }
   literal(value: string, datatype = 0): number {
+    this.assertNotInClock()
     return this.check(this.x.intern_literal(this.put(value)[0]!, datatype))
   }
   langLiteral(value: string, lang: string, dir: Direction = 0): number {
+    this.assertNotInClock()
     const [v, l] = this.put(value, lang)
     return this.check(this.x.intern_lang_literal(v!, l!, dir))
   }
   triple(s: number, p: number, o: number): number {
+    this.assertNotInClock()
     return this.check(this.x.intern_triple(s, p, o))
   }
   lookupIri(value: string): number {
+    this.assertNotInClock()
     return this.x.lookup_iri(this.put(value)[0]!)
   }
 
   kind(id: number): Kind {
+    this.assertNotInClock()
     return this.x.term_kind(id)
   }
   value(id: number): string {
+    this.assertNotInClock()
     return this.str(this.x.term_value_ptr(id), this.x.term_value_len(id))
   }
   datatype(id: number): number {
+    this.assertNotInClock()
     return this.x.term_datatype(id)
   }
   lang(id: number): string {
+    this.assertNotInClock()
     return this.str(this.x.term_lang_ptr(id), this.x.term_lang_len(id))
   }
   direction(id: number): Direction {
+    this.assertNotInClock()
     return this.x.term_direction(id) as Direction
   }
   tripleParts(id: number): [number, number, number] {
+    this.assertNotInClock()
     return [this.x.triple_subject(id), this.x.triple_predicate(id), this.x.triple_object(id)]
   }
   termCount(): number {
+    this.assertNotInClock()
     return this.x.term_count()
   }
 
   // --- store ----------------------------------------------------------------
 
   add(s: number, p: number, o: number, g = DEFAULT_GRAPH): boolean {
+    this.assertNotInClock()
     return this.check(this.x.add(s, p, o, g)) === 1
   }
   remove(s: number, p: number, o: number, g = DEFAULT_GRAPH): boolean {
+    this.assertNotInClock()
     return this.check(this.x.remove(s, p, o, g)) === 1
   }
   has(s: number, p: number, o: number, g = DEFAULT_GRAPH): boolean {
+    this.assertNotInClock()
     return this.x.has(s, p, o, g) === 1
   }
   /** Matching quads, 4 ids each. `g = 0`: all graphs. */
   match(s = 0, p = 0, o = 0, g = 0): Uint32Array {
+    this.assertNotInClock()
     return this.results(this.check(this.x.match(s, p, o, g)) * 4)
   }
   apply(removes: ArrayLike<number>, adds: ArrayLike<number>): void {
+    this.assertNotInClock()
     const all = new Uint32Array(removes.length + adds.length)
     all.set(removes)
     all.set(adds, removes.length)
@@ -333,20 +399,24 @@ export class Engine {
     this.check(this.x.apply(removes.length / 4, adds.length / 4))
   }
   quadCount(): number {
+    this.assertNotInClock()
     return this.x.quad_count()
   }
   load(format: Format, text: string, base = '', graph = DEFAULT_GRAPH): number {
+    this.assertNotInClock()
     const [t, b] = this.put(text, base)
     return this.check(this.x.load(format, t!, b!, graph))
   }
   /** Free unused terms; returns the freed ids. */
   collect(): Uint32Array {
+    this.assertNotInClock()
     return this.results(this.check(this.x.collect()))
   }
 
   // --- queries --------------------------------------------------------------
 
   prepare(text: string, base = ''): Query {
+    this.assertNotInClock()
     const [t, b] = this.put(text, base)
     const h = this.check(this.x.prepare(t!, b!))
     const vars: string[] = []
@@ -355,10 +425,12 @@ export class Engine {
   }
   /** @internal */
   bindVar(h: number, name: string, id: number): void {
+    this.assertNotInClock()
     this.check(this.x.bind(h, this.put(name)[0]!, id))
   }
   /** @internal */
   bindValues(h: number, name: string, ids: ArrayLike<number>): void {
+    this.assertNotInClock()
     const at = this.x.input(ids.length * 4 + name.length * 3)
     new Uint32Array(this.x.memory.buffer, at, ids.length).set(ids)
     const n = encoder.encodeInto(name, new Uint8Array(this.x.memory.buffer, at + ids.length * 4)).written
@@ -366,8 +438,9 @@ export class Engine {
   }
   /** @internal */
   runQuery(h: number, graphs: ArrayLike<number>): number {
+    this.assertNotInClock()
     this.putIds(graphs)
-    return this.check(this.x.run(h, graphs.length))
+    return this.check(this.queryCall(() => this.x.run(h, graphs.length)))
   }
   /** Milliseconds one module costs (emit, compile, instantiate), as measured so far. */
   private get moduleCost(): number {
@@ -382,6 +455,7 @@ export class Engine {
 
   /** @internal A compiled profile's runs, for the measured saving. */
   noteCompiled(interpretedMean: number, compiledMean: number): void {
+    this.assertNotInClock()
     this.measured.interpretedMs += interpretedMean
     this.measured.compiledMs += compiledMean
     this.measured.profiles++
@@ -389,6 +463,7 @@ export class Engine {
 
   /** @internal A module was dropped (slower than interpreted, or its query released). */
   dropModule(): void {
+    this.assertNotInClock()
     this.modules--
   }
 
@@ -400,6 +475,7 @@ export class Engine {
    * worthwhile candidates remain.
    */
   compileIdle(budgetMs: number): boolean {
+    this.assertNotInClock()
     if (!this.idleCompile || !this.x.compile || !this.candidates.size) return false
     const t0 = performance.now()
     const until = t0 + budgetMs
@@ -429,6 +505,7 @@ export class Engine {
    * says why the engine declined.
    */
   compileQuery(h: number): CompiledExports | string {
+    this.assertNotInClock()
     if (!this.x.compile) return 'engine cannot compile'
     let t = performance.now()
     const n = this.x.compile(h)
@@ -450,6 +527,7 @@ export class Engine {
   }
   /** @internal The bytes of query h's compiled module (or why not), without instantiating it. */
   compiledBytes(h: number): Uint8Array<ArrayBuffer> | string {
+    this.assertNotInClock()
     if (!this.x.compile) return 'engine cannot compile'
     const n = this.x.compile(h)
     if (n < 0) return this.str(this.x.error_ptr(), this.x.error_len())
@@ -457,30 +535,37 @@ export class Engine {
   }
   /** @internal */
   instantiateCompiled(module: WebAssembly.Module): CompiledExports {
+    this.assertNotInClock()
     return new WebAssembly.Instance(module, { engine: this.x as unknown as WebAssembly.ModuleImports }).exports as unknown as CompiledExports
   }
   /** @internal A compiled run stopped by the budget (-2): its error. */
   interrupted(): never {
+    this.assertNotInClock()
     throw new EngineError(this.str(this.x.error_ptr(), this.x.error_len()) || 'interrupted', true)
   }
   /** @internal Run a compiled query; negative: its error (the caller falls back, except -2: interrupted). */
   runCompiled(c: CompiledExports, graphs: ArrayLike<number>): number {
+    this.assertNotInClock()
     this.putIds(graphs)
-    return c.run(graphs.length)
+    return this.queryCall(() => c.run(graphs.length))
   }
   /** @internal */
   resultIds(n: number): Uint32Array {
+    this.assertNotInClock()
     return this.results(n)
   }
   /** @internal */
   releaseQuery(h: number): void {
+    this.assertNotInClock()
     this.x.release(h)
   }
   parseUpdate(text: string, base = ''): void {
+    this.assertNotInClock()
     const [t, b] = this.put(text, base)
     this.check(this.x.parse_update(t!, b!))
   }
   update(text: string, base = ''): void {
+    this.assertNotInClock()
     const [t, b] = this.put(text, base)
     this.check(this.x.update(t!, b!))
   }
@@ -508,6 +593,7 @@ export class Query {
   ) {}
 
   bind(name: string, id: number): this {
+    this.engine.assertNotInClock()
     this.engine.bindVar(this.handle, name, id)
     if (id) this.bound.set(name, id)
     else this.bound.delete(name)
@@ -516,6 +602,7 @@ export class Query {
 
   /** Bind a variable to several terms: the results of running once with each. */
   bindValues(name: string, ids: ArrayLike<number>): this {
+    this.engine.assertNotInClock()
     this.engine.bindValues(this.handle, name, ids)
     if (ids.length) this.bound.set(name, ids)
     else this.bound.delete(name)
@@ -532,6 +619,7 @@ export class Query {
    * null, or why the engine declined (runs then stay interpreted).
    */
   compile(): string | null {
+    this.engine.assertNotInClock()
     const key = this.shape
     let c = this.compiled.get(key)
     if (c === undefined) this.compiled.set(key, (c = this.engine.compileQuery(this.handle)))
@@ -547,6 +635,7 @@ export class Query {
    * happen now, in idle time, rather than on the next interaction's path.
    */
   compileShape(shape: string): string | null {
+    this.engine.assertNotInClock()
     const warm = (why: string | null) => {
       const c = this.compiled.get(shape)
       if (why !== null || typeof c !== 'object') return why
@@ -581,6 +670,7 @@ export class Query {
   }
 
   run(graphs: ArrayLike<number> = []): Solutions {
+    this.engine.assertNotInClock()
     const key = this.shape
     let c = this.compiled.get(key)
     if (c === undefined && this.engine.autoCompile) {
@@ -670,6 +760,7 @@ export class Query {
   }
 
   release(): void {
+    this.engine.assertNotInClock()
     for (const p of this.profiles.values()) this.engine.candidates.delete(p)
     for (const c of this.compiled.values()) if (typeof c === 'object') this.engine.dropModule()
     this.engine.releaseQuery(this.handle)

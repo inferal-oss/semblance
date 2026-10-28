@@ -38,7 +38,7 @@
 
 ;; Parse a number's lexical form [p, p+n) as type t (1-4) into $ni/$nsc/$nf;
 ;; whether it is valid.
-(func $parse_num (param $p i32) (param $n i32) (param $t i32) (result i32)
+(func $parse_temporal_num (param $p i32) (param $n i32) (param $t i32) (result i32)
   (local $e i32) (local $neg i32) (local $c i32) (local $digits i32) (local $dot i32) (local $exp i32) (local $eneg i32)
   (local $m i64) (local $nd i32) (local $drop i32) (local $f f64)
   (local.set $e (i32.add (local.get $p) (local.get $n)))
@@ -101,6 +101,38 @@
     (return (i32.const 1)))
   (i32.const 0))
 
+(func $parse_valid_num (param $t i32) (result i32)
+  (local $m i64) (local $s i32)
+  (if (i32.le_u (local.get $t) (i32.const 2)) (then
+    (if (i32.eqz (call $nu_native (i32.eq (local.get $t) (i32.const 2)))) (then (return (i32.const 0))))
+    (local.set $m (global.get $nu_integer)) (local.set $s (global.get $nu_scale))))
+  (if (i32.eqz (call $nu_float (i32.eq (local.get $t) (i32.const 3)))) (then (return (i32.const 0))))
+  (global.set $ni (local.get $m)) (global.set $nsc (local.get $s)) (global.set $nf (global.get $nu_value))
+  (i32.const 1))
+
+(func $parse_num (param $p i32) (param $n i32) (param $t i32) (result i32)
+  (if (i32.eqz (call $nu_validate (local.get $p) (local.get $n) (local.get $t))) (then (return (i32.const 0))))
+  (call $parse_valid_num (local.get $t)))
+
+;; Floating casts preserve the source float/double rounding; exact and string
+;; sources round directly to the target. Only the completed value is published.
+(func $num_float_source (param $p i32) (param $n i32) (param $family i32) (param $single i32) (result i32)
+  (local $source_single i32) (local $value f64)
+  (if (i32.eqz (call $nu_validate (local.get $p) (local.get $n) (local.get $family))) (then (return (i32.const 0))))
+  (local.set $source_single (if (result i32) (i32.le_u (i32.sub (local.get $family) (i32.const 3)) (i32.const 1))
+    (then (i32.eq (local.get $family) (i32.const 3))) (else (local.get $single))))
+  (if (i32.eqz (call $nu_float (local.get $source_single))) (then (return (i32.const 0))))
+  (local.set $value (global.get $nu_value))
+  (if (local.get $single) (then (local.set $value (f64.promote_f32 (f32.demote_f64 (local.get $value))))))
+  (if (call $nu_poll) (then (return (i32.const 0))))
+  (global.set $nf (local.get $value)) (i32.const 1))
+
+(func $numeric_valid (param $id i32) (result i32)
+  (local $family i32)
+  (if (i32.ne (call $kind (local.get $id)) (i32.const 3)) (then (return (i32.const 0))))
+  (if (i32.eqz (local.tee $family (call $nu_family (call $tdt (local.get $id))))) (then (return (i32.const 0))))
+  (call $nu_validate (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $family)))
+
 ;; The numeric type of term id (0: not a valid number), its value in $ni/$nsc/$nf.
 ;; A literal's parse is kept in a table its record (+24) points into (index + 1).
 (global $ncache (mut i32) (i32.const 0))     ;; 24 bytes each: type, scale, i64 value, f64 value
@@ -108,7 +140,10 @@
 (global $ncache_cap (mut i32) (i32.const 0))
 
 (func $num (param $id i32) (result i32)
-  (local $c i32) (local $t i32) (local $r i32) (local $e i32)
+  (local $c i32) (local $t i32) (local $r i32) (local $e i32) (local $family i32)
+  (local $old_i i64) (local $old_s i32) (local $old_f f64)
+  (if (call $bu_poll_deadline) (then (return (i32.const 0))))
+  (local.set $old_i (global.get $ni)) (local.set $old_s (global.get $nsc)) (local.set $old_f (global.get $nf))
   (if (i32.ne (call $kind (local.get $id)) (i32.const 3)) (then (return (i32.const 0))))
   (local.set $r (call $rec (local.get $id)))
   (if (local.tee $e (i32.load offset=24 (local.get $r))) (then
@@ -122,7 +157,9 @@
   (global.set $ni (i64.const 0))
   (if (i32.le_u (i32.sub (local.get $c) (i32.const C_INTEGER)) (i32.const 3)) (then
     (local.set $t (i32.sub (local.get $c) (i32.const 1)))
-    (if (i32.eqz (call $parse_num (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $t))) (then (local.set $t (i32.const 0))))))
+    (local.set $family (call $nu_family (call $tdt (local.get $id))))
+    (if (i32.eqz (if (result i32) (call $nu_validate (call $tval (local.get $id)) (call $tlen (local.get $id)) (local.get $family))
+      (then (call $parse_valid_num (local.get $t))) (else (i32.const 0)))) (then (local.set $t (i32.const 0))))))
   ;; a dateTime or date (not a number, type 0) keeps its instant for $date_cmp: $ni whole
   ;; seconds, $nf the fraction's bits, $nsc 1 when valid, | 2 with a timezone
   (if (i32.or (i32.eq (local.get $c) (i32.const C_DATETIME)) (i32.eq (local.get $c) (i32.const C_DATE))) (then
@@ -131,6 +168,9 @@
       (global.set $ni (global.get $dk_s))
       (global.set $nf (f64.reinterpret_i64 (global.get $dk_f)))
       (global.set $nsc (i32.or (i32.const 1) (i32.shl (i32.ne (global.get $d_tz) (i32.const 0)) (i32.const 1))))))))
+  (if (call $bu_poll_deadline) (then
+    (global.set $ni (local.get $old_i)) (global.set $nsc (local.get $old_s)) (global.set $nf (local.get $old_f))
+    (return (i32.const 0))))
   (if (i32.eq (global.get $ncache_n) (global.get $ncache_cap)) (then
     (local.set $c (i32.add (i32.shl (global.get $ncache_cap) (i32.const 1)) (i32.const 64)))
     (global.set $ncache (if (result i32) (global.get $ncache_cap)
@@ -149,15 +189,24 @@
 
 ;; a <=> b for numbers: -1, 0, 1, or 2 (not comparable, NaN).
 (func $num_cmp (param $a i32) (param $b i32) (result i32)
-  (local $ta i32) (local $ia i64) (local $sa i32) (local $fa f64) (local $tb i32)
+  (local $ta i32) (local $ia i64) (local $sa i32) (local $fa f64) (local $tb i32) (local $fb f64)
   (if (i32.eqz (local.tee $ta (call $num (local.get $a)))) (then (return (i32.const 2))))
   (local.set $ia (global.get $ni)) (local.set $sa (global.get $nsc)) (local.set $fa (global.get $nf))
   (if (i32.eqz (local.tee $tb (call $num (local.get $b)))) (then (return (i32.const 2))))
   (if (i32.and (i32.le_u (local.get $ta) (i32.const 2)) (i32.le_u (local.get $tb) (i32.const 2))) (then
     (if (i32.eq (local.get $sa) (global.get $nsc)) (then
       (return (i32.sub (i64.gt_s (local.get $ia) (global.get $ni)) (i64.lt_s (local.get $ia) (global.get $ni))))))))
-  (if (i32.or (f64.ne (local.get $fa) (local.get $fa)) (f64.ne (global.get $nf) (global.get $nf))) (then (return (i32.const 2))))
-  (i32.sub (f64.gt (local.get $fa) (global.get $nf)) (f64.lt (local.get $fa) (global.get $nf))))
+  (local.set $fb (global.get $nf))
+  (if (i32.and (i32.le_u (local.get $ta) (i32.const 3)) (i32.le_u (local.get $tb) (i32.const 3))) (then
+    (if (i32.or (i32.eq (local.get $ta) (i32.const 3)) (i32.eq (local.get $tb) (i32.const 3))) (then
+      (if (i32.lt_u (local.get $ta) (i32.const 3)) (then
+        (if (i32.eqz (call $nu_from_native (local.get $ia) (local.get $sa) (i32.const 1))) (then (return (i32.const 2))))
+        (local.set $fa (global.get $nu_value))))
+      (if (i32.lt_u (local.get $tb) (i32.const 3)) (then
+        (if (i32.eqz (call $nu_from_native (global.get $ni) (global.get $nsc) (i32.const 1))) (then (return (i32.const 2))))
+        (local.set $fb (global.get $nu_value))))))))
+  (if (i32.or (f64.ne (local.get $fa) (local.get $fa)) (f64.ne (local.get $fb) (local.get $fb))) (then (return (i32.const 2))))
+  (i32.sub (f64.gt (local.get $fa) (local.get $fb)) (f64.lt (local.get $fa) (local.get $fb))))
 
 ;; --- formatting --------------------------------------------------------------------
 
@@ -191,7 +240,10 @@
   (call $int_term_dt (local.get $v) (call $known (i32.const K_INTEGER))))
 
 (func $int_term_dt (param $v i64) (param $dt i32) (result i32)
-  (call $typed (global.get $nbuf) (i32.sub (call $i64_text (global.get $nbuf) (local.get $v)) (global.get $nbuf)) (local.get $dt)))
+  (local $n i32)
+  (local.set $n (i32.sub (call $i64_text (global.get $nbuf) (local.get $v)) (global.get $nbuf)))
+  (if (i32.eqz (call $nu_validate (global.get $nbuf) (local.get $n) (call $nu_family (local.get $dt)))) (then (return (i32.const 0))))
+  (call $typed (global.get $nbuf) (local.get $n) (local.get $dt)))
 
 ;; A decimal: mantissa m, scale s, written as Oxigraph does: "-1.5", "2" (no
 ;; trailing zeros, no exponent).
@@ -223,7 +275,7 @@
 
 ;; The shortest digits of x > 0 that read back as x (at float precision when
 ;; f32): mantissa in $ni (p digits), decimal exponent of the first digit in $nsc.
-;; Doubles are exact ($shortest64); floats keep the f32 read-back test.
+;; Doubles are exact ($shortest64); floats use an exactly rounded f32 read-back test.
 (func $shortest (param $x f64) (param $f32 i32) (result i32)
   (local $e i32) (local $y f64) (local $p i32) (local $m i64) (local $e2 i32) (local $back f64) (local $max i32)
   (if (i32.eqz (local.get $f32)) (then (return (call $shortest64 (local.get $x)))))
@@ -238,7 +290,9 @@
     (if (i64.ge_u (local.get $m) (call $i10 (local.get $p))) (then
       (local.set $m (i64.div_u (local.get $m) (i64.const 10)))
       (local.set $e2 (i32.add (local.get $e) (i32.const 1)))))
-    (local.set $back (call $scale10 (f64.convert_i64_u (local.get $m)) (i32.add (i32.sub (local.get $e2) (local.get $p)) (i32.const 1))))
+    ;; Trial readback uses the direct f32 converter, never f64-then-f32.
+    (if (i32.eqz (call $nu_from_native (local.get $m) (i32.sub (i32.sub (local.get $p) (i32.const 1)) (local.get $e2)) (i32.const 1))) (then (return (i32.const 0))))
+    (local.set $back (global.get $nu_value))
     (if (i32.eqz (if (result i32) (local.get $f32)
                    (then (f32.eq (f32.demote_f64 (local.get $back)) (f32.demote_f64 (local.get $x))))
                    (else (f64.eq (local.get $back) (local.get $x)))))
@@ -442,6 +496,7 @@
 ;; or INF, -INF, NaN.
 (func $dbl_term (param $v f64) (param $dt i32) (result i32)
   (local $w i32) (local $p i32) (local $e i32) (local $d i32) (local $i i32) (local $digits i32)
+  (if (call $bu_poll_deadline) (then (return (i32.const 0))))
   (local.set $w (global.get $nbuf))
   (if (f64.ne (local.get $v) (local.get $v)) (then (return (call $typed (@str "NaN") (local.get $dt)))))
   (if (f64.eq (local.get $v) (f64.const inf)) (then (return (call $typed (@str "INF") (local.get $dt)))))
@@ -455,6 +510,7 @@
     (i32.store8 (local.get $w) (i32.const '0'))
     (return (call $typed (global.get $nbuf) (i32.sub (i32.add (local.get $w) (i32.const 1)) (global.get $nbuf)) (local.get $dt)))))
   (local.set $p (call $shortest (local.get $v) (i32.eq (call $dtc (local.get $dt)) (i32.const C_FLOAT))))
+  (if (call $bu_poll_deadline) (then (return (i32.const 0))))
   (local.set $e (global.get $nsc))
   ;; the p digits, at the end of the buffer
   (local.set $digits (i32.add (global.get $nbuf) (i32.const 370)))
@@ -587,6 +643,19 @@
     (local.set $ia (if (result i64) (i32.eq (local.get $op) (i32.const F_ADD)) (then (i64.add (local.get $ia) (local.get $ib))) (else (i64.sub (local.get $ia) (local.get $ib)))))
     (if (i32.eq (local.get $t) (i32.const 1)) (then (return (call $int_term (local.get $ia)))))
     (return (call $dec_term (local.get $ia) (local.get $s)))))
+  (if (i32.eq (local.get $t) (i32.const 3)) (then
+    (if (i32.lt_u (local.get $ta) (i32.const 3)) (then
+      (if (i32.eqz (call $nu_from_native (local.get $ia) (local.get $sa) (i32.const 1))) (then (return (i32.const 0))))
+      (local.set $fa (global.get $nu_value))))
+    (if (i32.lt_u (local.get $tb) (i32.const 3)) (then
+      (if (i32.eqz (call $nu_from_native (local.get $ib) (local.get $sb) (i32.const 1))) (then (return (i32.const 0))))
+      (local.set $fb (global.get $nu_value))))
+    (local.set $r (f64.promote_f32
+      (if (result f32) (i32.eq (local.get $op) (i32.const F_ADD)) (then (f32.add (f32.demote_f64 (local.get $fa)) (f32.demote_f64 (local.get $fb))))
+      (else (if (result f32) (i32.eq (local.get $op) (i32.const F_SUB)) (then (f32.sub (f32.demote_f64 (local.get $fa)) (f32.demote_f64 (local.get $fb))))
+      (else (if (result f32) (i32.eq (local.get $op) (i32.const F_MUL)) (then (f32.mul (f32.demote_f64 (local.get $fa)) (f32.demote_f64 (local.get $fb))))
+      (else (f32.div (f32.demote_f64 (local.get $fa)) (f32.demote_f64 (local.get $fb)))))))))))
+    (return (call $dbl_term (local.get $r) (call $known_float)))))
   (local.set $r
     (if (result f64) (i32.eq (local.get $op) (i32.const F_ADD)) (then (f64.add (local.get $fa) (local.get $fb)))
     (else (if (result f64) (i32.eq (local.get $op) (i32.const F_SUB)) (then (f64.sub (local.get $fa) (local.get $fb)))
@@ -634,7 +703,7 @@
 ;; --- casts -----------------------------------------------------------------------
 
 (func $cast (param $v i32) (param $dt i32) (result i32)
-  (local $tc i32) (local $k i32) (local $t i32) (local $p i32) (local $n i32) (local $b i32) (local $sc i32) (local $m i64)
+  (local $tc i32) (local $k i32) (local $t i32) (local $p i32) (local $n i32) (local $b i32) (local $family i32) (local $sc i32) (local $m i64)
   (local.set $tc (call $dtc (local.get $dt)))
   ;; to a date, time or duration (temporal.wat)
   (if (local.tee $k (call $tkind (local.get $dt))) (then (return (call $temporal_cast (local.get $k) (local.get $v)))))
@@ -656,6 +725,12 @@
   (if (i32.ne (local.get $k) (i32.const 3)) (then (return (i32.const 0))))
   (local.set $p (call $tval (local.get $v)))
   (local.set $n (call $tlen (local.get $v)))
+  (if (i32.le_u (i32.sub (local.get $tc) (i32.const C_FLOAT)) (i32.const 1)) (then
+    (local.set $family (call $nu_family (call $tdt (local.get $v))))
+    (if (call $is_plain (local.get $v)) (then (local.set $family (i32.sub (local.get $tc) (i32.const 1)))))
+    (if (local.get $family) (then
+      (if (i32.eqz (call $num_float_source (local.get $p) (local.get $n) (local.get $family) (i32.eq (local.get $tc) (i32.const C_FLOAT)))) (then (return (i32.const 0))))
+      (return (call $dbl_term (global.get $nf) (local.get $dt)))))))
   (local.set $t (call $num (local.get $v)))
   (if (i32.and (i32.eqz (local.get $t)) (i32.eq (call $dtc (call $tdt (local.get $v))) (i32.const C_BOOLEAN))) (then
     (if (i32.lt_s (local.tee $b (call $bool_value (local.get $v))) (i32.const 0)) (then (return (i32.const 0))))
@@ -813,7 +888,7 @@
   (if (global.get $d_sec_len) (then
     (global.set $nsc (i32.const 0))
     (global.set $ni (i64.const 0))
-    (if (call $parse_num (global.get $d_sec) (global.get $d_sec_len) (i32.const 2)) (then
+    (if (call $parse_temporal_num (global.get $d_sec) (global.get $d_sec_len) (i32.const 2)) (then
       (local.set $sc (call $i10 (global.get $nsc)))
       (global.set $dk_s (i64.add (global.get $dk_s) (i64.div_u (global.get $ni) (local.get $sc))))
       (global.set $dk_f (i64.rem_u (global.get $ni) (local.get $sc)))
@@ -862,7 +937,7 @@
   (if (i32.eq (local.get $f) (i32.const F_SECONDS)) (then
     (if (i32.eqz (global.get $d_sec_len)) (then (return (call $dec_term (i64.const 0) (i32.const 0)))))
     (global.set $nsc (i32.const 0))
-    (drop (call $parse_num (global.get $d_sec) (global.get $d_sec_len) (i32.const 2)))
+    (drop (call $parse_temporal_num (global.get $d_sec) (global.get $d_sec_len) (i32.const 2)))
     (return (call $dec_term (global.get $ni) (global.get $nsc)))))
   (if (i32.eq (local.get $f) (i32.const F_TZ)) (then (return (call $simple (global.get $d_tz) (global.get $d_tz_len)))))
   ;; TIMEZONE: an xsd:dayTimeDuration
@@ -898,6 +973,7 @@
   (local $doy i32) (local $mp i32) (local $y i32) (local $m i32) (local $d i32) (local $w i32)
   (if (global.get $now) (then (return (global.get $now))))
   (local.set $ms (call $now_ms))
+  (if (i32.and (global.get $bu_active) (global.get $bu_stop)) (then (return (i32.const 0))))
   (local.set $days (i32.trunc_sat_f64_s (f64.floor (f64.div (local.get $ms) (f64.const 86400000)))))
   (local.set $secs (i32.trunc_sat_f64_s (f64.sub (f64.div (local.get $ms) (f64.const 1000)) (f64.mul (f64.convert_i32_s (local.get $days)) (f64.const 86400)))))
   (local.set $z (i32.add (local.get $days) (i32.const 719468)))

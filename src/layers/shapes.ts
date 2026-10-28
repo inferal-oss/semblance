@@ -7,7 +7,10 @@ import { labelOf, named, rdfList, str, text } from '../components/util.ts'
 import { mint } from '../rdf.ts'
 import { md5Key } from '../components/data.ts'
 
+import { NUMERIC as NUMERIC_FAMILIES, numericInput } from '../numeric.ts'
+
 const SH = NS.sh
+
 const XSD = NS.xsd
 
 /** Node shapes that target the class or any superclass of it (memoized per class). */
@@ -49,6 +52,11 @@ function instanceOf(ctx: RuleContext, value: Term, cls: string): boolean {
 }
 
 const NUMERIC = new Set([XSD + 'integer', XSD + 'decimal', XSD + 'double', XSD + 'float'])
+const doubleInput = (value: string) => {
+  const input = numericInput(value, XSD + 'double')
+  return input.valid ? input.value : NaN
+}
+
 const datatypeOf = (t: Term) => (t.termType === 'Literal' ? (t.language ? NS.rdf + 'langString' : t.datatype.value) : undefined)
 
 interface Violation {
@@ -73,7 +81,7 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
     out.push({ path: path.value, shape: ps, value, kind, fallback, message: text(ctx, ps, SH + 'message') ?? `${short}: ${fallback}` })
   const n = (p: string) => {
     const v = str(ctx.object(ps, SH + p))
-    return v === undefined ? undefined : Number(v)
+    return v === undefined ? undefined : doubleInput(v)
   }
   const min = n('minCount')
   if (min !== undefined && values.length < min) fail('minCount', min === 1 ? 'required' : `at least ${min} values`)
@@ -87,7 +95,8 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
   for (const v of values) {
     if (datatype) {
       const dt = datatypeOf(v)
-      const ok = dt === datatype || (datatype === XSD + 'string' && dt === XSD + 'string') || (NUMERIC.has(datatype) && dt !== undefined && NUMERIC.has(dt) && (datatype !== XSD + 'integer' || Number.isInteger(Number(v.value))))
+      const numericValid = dt !== undefined && (!NUMERIC_FAMILIES.has(dt) || numericInput(v.value, dt).valid)
+      const ok = numericValid && (dt === datatype || (datatype === XSD + 'string' && dt === XSD + 'string') || (NUMERIC.has(datatype) && dt !== undefined && NUMERIC.has(dt) && (datatype !== XSD + 'integer' || Number.isInteger(doubleInput(v.value)))))
       if (!ok) fail('datatype', `expected ${datatype.replace(XSD, 'xsd:')}`, v)
     }
     if (cls && !instanceOf(ctx, v, cls)) fail('class', `expected a ${cls.replace(/^.*[#/]/, '')}`, v)
@@ -95,7 +104,7 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
     if (kind === SH + 'Literal' && v.termType !== 'Literal') fail('nodeKind', 'expected a literal', v)
     if (allowed && !rdfList(ctx, allowed).some((a) => a.equals(v))) fail('in', 'not an allowed value', v)
     if (v.termType === 'Literal') {
-      const x = Number(v.value)
+      const x = doubleInput(v.value)
       const lo = n('minInclusive')
       const hi = n('maxInclusive')
       if (lo !== undefined && !(x >= lo)) fail('minInclusive', `at least ${lo}`, v)
@@ -117,7 +126,7 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
   const other = ctx.object(ps, SH + 'lessThanOrEquals')
   if (named(other)) {
     const bounds = ctx.objects(focus, other.value)
-    for (const v of values) for (const b of bounds) if (!(Number(v.value) <= Number(b.value))) fail('lessThanOrEquals', `more than ${other.value.replace(/^.*[#/]/, '')} (${b.value})`, v)
+    for (const v of values) for (const b of bounds) if (!(doubleInput(v.value) <= doubleInput(b.value))) fail('lessThanOrEquals', `more than ${other.value.replace(/^.*[#/]/, '')} (${b.value})`, v)
   }
   return out
 }
