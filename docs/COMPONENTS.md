@@ -504,7 +504,7 @@ ex:note a c:Text ; c:label "Check the attached item." .
 ex:approved a c:ToggleSwitch ; c:label "Approved" ; c:checked false .
 ```
 
-Screen prefers the component value. Text uses `c:value` as a summary when it is present; omit
+Screen prefers the component value, as a message body does. Text uses `c:value` as a summary when it is present; omit
 the summary to render the component in Text too, including its current control state. Existing
 text values, field and entry modes, units and locale formatting keep their behavior.
 
