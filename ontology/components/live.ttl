@@ -260,7 +260,8 @@ WHERE {
     BIND(IF(EXISTS { $this c:edited|c:interacted ?changed FILTER(STR(?changed) = "true") }, ?none, true) AS ?pristine)
     OPTIONAL { $this c:renderTime ?ms }
     BIND(CONCAT(STRBEFORE(STR(?timePhrase0), "{ms}"), STR(?ms), STRAFTER(STR(?timePhrase0), "{ms}")) AS ?timeData)
-    BIND(IF(BOUND(?ms), IRI(CONCAT(STR($this), "/~time")), ?none) AS ?time)
+    # The time's place is kept before it is known (a page rendered beforehand, until its sandbox runs): the bar does not move when it is.
+    BIND(IRI(CONCAT(STR($this), "/~time")) AS ?time)
     BIND(IF(BOUND(?ms), IRI(CONCAT(STR($this), "/~time-text")), ?none) AS ?timeText)
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?rootRole)
     BIND(IF(?caption != "", IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?rootLabel)

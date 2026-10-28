@@ -107,7 +107,8 @@ const liveExample: FnRule = (ctx, focus) => {
   // The actions: how long the last build took, Reset (once a source is edited or the example used) and Copy.
   const ms = str(ctx.object(focus, L.renderTime))
   const actions: NamedNode[] = []
-  if (ms !== undefined) actions.push(o.el('time', 'Span', { class: 'sem-live-time' }, [o.text('time-text', fill(phrase(ctx, P.time), 'ms', ms))]))
+  // The time's place is kept before it is known (a page rendered beforehand, until its sandbox runs): the bar does not move when it is.
+  actions.push(o.el('time', 'Span', { class: 'sem-live-time' }, ms !== undefined ? [o.text('time-text', fill(phrase(ctx, P.time), 'ms', ms))] : []))
   const button = (local: string, label: string, p: string) => {
     const b = o.node(local)
     o.t(b, RDF_TYPE, ctx.nn(NS.c + 'Button')).t(b, C.label, label).t(b, p, focus)

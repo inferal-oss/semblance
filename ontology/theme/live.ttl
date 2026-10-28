@@ -58,6 +58,9 @@
     sty:declares [ sty:property "font" ; sty:raw "11px/1 var(--sem-font-mono)" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] ,
                  [ sty:property "padding-inline-end" ; sty:raw "6px" ] ,
+                 # Room for "1234 ms" in every language, kept before the time is known.
+                 [ sty:property "min-inline-size" ; sty:raw "8ch" ] ,
+                 [ sty:property "text-align" ; sty:raw "end" ] ,
                  [ sty:property "font-variant-numeric" ; sty:raw "tabular-nums" ] .
 
 # The body: two columns where each gets at least 20rem, else one.
