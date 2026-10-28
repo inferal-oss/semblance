@@ -594,3 +594,21 @@ slowest, for which focus, how much is done and waiting, the event that started t
 | `ontology/layers/*.ttl` | the layers (`foreign.ttl`: islands for foreign components, mounted by `src/foreign.ts`) |
 | `src/components/<group>.ts` | function twins and reaction functions |
 | `demo/gallery/<group>.ttl` | the Components page's specimens; each says which classes it demonstrates (`c:demonstrates`) and sits on their group's page (`test/gallery.test.ts`) |
+
+### Dynamic styles and Content Security Policy
+
+The DOM renderer reflects `rdfhtml:style` declaration blocks through the
+browser's CSSOM (`CSSStyleDeclaration.cssText`), including custom properties
+and priorities. It removes declarations that disappear from the graph and keeps
+the keyed element. The browser fixture verifies this path in Chrome under
+`style-src 'self'`, with no `unsafe-inline` or policy relaxation. The compiled
+theme stylesheet must still be provided through a channel the host's policy
+allows. This is browser evidence, rather than a universal CSP guarantee:
+[the CSP/CSSOM integration remains under discussion](https://github.com/w3c/webappsec-csp/issues/212).
+Run the fixture in other target browsers before claiming the same coverage.
+
+The live DOM normalizes style syntax according to its CSS parser. RDF/HTML
+serialization (`toHTML`) retains the graph's original attribute text and does
+not execute CSSOM; a host serving that serialized HTML must separately account
+for those initial style attributes in its CSP. This renderer behavior is not a
+CSS sanitizer: applications must continue to control the graphs they render.
