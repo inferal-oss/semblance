@@ -594,3 +594,32 @@ slowest, for which focus, how much is done and waiting, the event that started t
 | `ontology/layers/*.ttl` | the layers (`foreign.ttl`: islands for foreign components, mounted by `src/foreign.ts`) |
 | `src/components/<group>.ts` | function twins and reaction functions |
 | `demo/gallery/<group>.ttl` | the Components page's specimens; each says which classes it demonstrates (`c:demonstrates`) and sits on their group's page (`test/gallery.test.ts`) |
+
+
+### Command palette search metadata
+
+An entry can carry one `c:keywords` literal (at most 32,768 characters) with
+alternate names, a complete identifier or bounded text to find it by. The stock
+palette folds this metadata like its label and appends it only to the normalized
+search key. `c:label` and `c:help` remain concise; a metadata-only match does not
+insert metadata into the option's label or add an unrelated highlight. Disabled
+entries are excluded. The Overlays gallery's “Wave hello” entry is also found
+by “greeting”.
+
+Changing or removing `c:keywords` on an entry refreshes an open palette without
+replacing `c:entries`. The existing locale text stage (`c:PaletteTexts`) records
+this input dependency and is still function-only pending `sx:Locale`; both
+SPARQL and function option/rendering rules consume the same derived key. No
+host search filter is involved. Oversized literals index only their first
+32,768 characters. The supplied shape validates component entries (`sem:Component`);
+commands and other entry nodes need an application shape with their own SHACL
+target. The indexing cap applies to every entry, including those without that
+validation target. Keywords are ordinary RDF data, including derived graph keys,
+and must never contain credentials or other secrets. Applications remain
+responsible for bounding their entry inventory.
+
+
+The metadata bound follows SHACL/SPARQL character length (Unicode code points,
+including supplementary characters as one). This change also corrects the
+shared function shape validator's previous UTF-16-unit count for `sh:minLength`
+and `sh:maxLength`; it stops counting as soon as both bounds can be decided.

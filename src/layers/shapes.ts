@@ -102,8 +102,19 @@ function checkProperty(ctx: RuleContext, focus: NamedNode, ps: Term): Violation[
       if (hi !== undefined && !(x <= hi)) fail('maxInclusive', `at most ${hi}`, v)
       const minLength = n('minLength')
       const maxLength = n('maxLength')
-      if (minLength !== undefined && v.value.length < minLength) fail('minLength', `at least ${minLength} characters`, v)
-      if (maxLength !== undefined && v.value.length > maxLength) fail('maxLength', `at most ${maxLength} characters`, v)
+      if (minLength !== undefined || maxLength !== undefined) {
+        // SHACL length is SPARQL STRLEN: Unicode code points, not UTF-16
+        // units. Count only far enough to decide either bound, without
+        // allocating an array for an arbitrarily large graph literal.
+        const needed = Math.max(minLength ?? 0, maxLength === undefined ? 0 : maxLength + 1)
+        let length = 0
+        for (const _ of v.value) {
+          if (length >= needed) break
+          length++
+        }
+        if (minLength !== undefined && length < minLength) fail('minLength', `at least ${minLength} characters`, v)
+        if (maxLength !== undefined && length > maxLength) fail('maxLength', `at most ${maxLength} characters`, v)
+      }
       if (pattern !== undefined) {
         let re: RegExp | undefined
         try {

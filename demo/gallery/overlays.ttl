@@ -109,6 +109,7 @@ ui:ov-palette a c:CommandPalette ; c:label "Gallery palette" ; c:placeholder "Ru
 ui:ov-pal-section a c:PaletteSection ; sem:order 4 ;
     rdfs:label "Overlays page"@en , "Сторінка накладок"@uk , "Seite Overlays"@de , "صفحة الطبقات المنبثقة"@ar .
 ui:ov-pal-wave a key:Command ; c:paletteSection ui:ov-pal-section ;
+    c:keywords "greeting salutation привіт Begrüßung تحية" ;
     rdfs:label "Wave hello" , "Помахати"@uk , "Winken"@de , "التلويح بالتحية"@ar ;
     rdfs:comment "Changes the badge on the card" , "Змінює значок на картці"@uk , "Ändert das Abzeichen auf der Karte"@de , "يغيّر الشارة على البطاقة"@ar .
 ui:WaveHello a beh:Reaction ; beh:when key:Press ; beh:source ui:ov-pal-wave ;
@@ -125,5 +126,5 @@ ui:ov-open-palette a c:Button ; c:label "Open the gallery palette" ; sty:tone st
 ui:ov-pal-badge a c:Badge ; c:label "Not waved yet" ; sty:tone sty:Neutral .
 ui:ov-palettes a c:Flippable ; c:front ui:ov-palettes-spec .
 ui:ov-palettes-spec a c:Specimen ; c:demonstrates c:CommandPalette , c:PaletteSection ; c:label "Command palette" ;
-    c:help "A modal list of what one can do or go to, filtered as you type (a typeahead: the WAI-ARIA combobox over a listbox, in a dialog). It lists every key:Command, every component with a key:shortcut and every place of the app's location (c:lists), and the app's own c:entries, in sections (c:PaletteSection), the recently run first. ↓ ↑ move, Enter runs: a command gets its key:Press, a component its click, a place is gone to (c:to). A key:Command that c:opens it opens it - on this site ⌘K / Ctrl+K, anywhere - and the focus comes back where it was when it closes." ;
+    c:help "A modal list of what one can do or go to, filtered as you type (a typeahead: the WAI-ARIA combobox over a listbox, in a dialog). It lists every key:Command, every component with a key:shortcut and every place of the app's location (c:lists), and the app's own c:entries, in sections (c:PaletteSection), the recently run first. Optional c:keywords on an entry supplies search metadata without lengthening its label: try “greeting”. ↓ ↑ move, Enter runs: a command gets its key:Press, a component its click, a place is gone to (c:to). A key:Command that c:opens it opens it - on this site ⌘K / Ctrl+K, anywhere - and the focus comes back where it was when it closes." ;
     c:children ( ui:ov-open-palette ui:ov-pal-badge ) .

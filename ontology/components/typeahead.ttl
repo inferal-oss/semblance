@@ -150,7 +150,7 @@ c:activeOption a rdf:Property ; rdfs:domain c:Typeahead ;
 c:foldedQuery a owl:DatatypeProperty ; rdfs:domain c:Typeahead ;
     rdfs:comment "Derived: the typed text, trimmed, lower-cased and without diacritics, which the options are matched against."@en .
 c:searchKey a owl:DatatypeProperty ;
-    rdfs:comment "Derived: a label folded like c:foldedQuery, one character for each of the label's, so that a match's position in it is its position in the label."@en .
+    rdfs:comment "Derived: a label folded like c:foldedQuery, one character for each of the label's, so that a match's position in that portion is its position in the label. A command palette may append folded c:keywords after a line break."@en .
 c:detail a owl:DatatypeProperty ;
     rdfs:comment "Derived, on a text node and an option: a second name the option is found by and shown with (its label, under c:PrefixedNames)."@en .
 c:matchKey a owl:DatatypeProperty ;
