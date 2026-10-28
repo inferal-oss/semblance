@@ -50,6 +50,14 @@ and the theme styles it once for every component that has it.
   the bar is `c:expanded`; Escape or a press outside closes it). On a compact screen a segmented control or nav list with
   `c:compactAs c:Picker` becomes a native select of its options, the status bar is one
   scrolling line, a split view stacks and a bottom-docked frame keeps to half the screen.
+- **Fields** — every labelled field has one anatomy: its label, its control (the single-line
+  box), its help, its error, one below the other; a field class says how many parts it lays out
+  (`pos:rowParts`). A `c:Choice` is such a field (caption over select); `c:labelPlacement
+  c:LabelInline` makes it the compact caption-and-select pill, which a choice in a `c:Toolbar` or
+  an app bar's actions gets by derivation. Fields side by side go in a `pos:FieldRow`: each takes
+  the row's tracks (label, control, help, error), so the controls line up whatever is under them
+  and an error moves nothing beside it; a button in the row sits beside the controls. Don't align
+  a row of fields by its ends (`pos:align pos:End`): a field's end is its help line.
 
 ## 3. Components
 
@@ -68,7 +76,7 @@ Thin vocabularies. Every component
 | **Actions** | Button · IconButton · ButtonGroup · Menu / MenuItem · Toolbar (+ Pressable, Setter, Unsetter mixins) |
 | **Inputs** | TextField · TextArea · SearchField · Checkbox · RadioGroup · ToggleSwitch · Slider · Field · Choice · Segmented · Chips · CodeInput · Combobox · TagInput · FileDrop (FileItem) · DateField · DateRangeField · TimeField · MonthGrid · ThemeSwitcher · ShapeForm · CodeEditor (QueryEditor) |
 | **Feedback** | Alert · Badge · Tag · Spinner · Skeleton · Progress · Toast · ToastRegion · EmptyState · LiveIndicator · CountBadge |
-| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · Board · Calendar · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · FindingList · ShortcutList · PolicyList · charts |
+| **Data** | List · Table · DescriptionList · Stat · Metrics · Money · Avatar · AvatarGroup · Gallery (carousel, grid, pile) · MessageList · Timeline · Tree · Outline · RdfEditor · Board · Calendar · GanttChart · Sheet · Legend · DataGrid (GridColumn, filters) · TimeAxis · JsonTree · HexView · BodyViewer · ImageView · FindingList · ShortcutList · PolicyList · charts |
 | **Navigation** | Tabs · NavLink · NavList · Breadcrumbs · Pagination · Stepper · AppBar |
 | **Overlays** | Dialog · Drawer · Popover · Lightbox · CommandPalette · Tooltip (layer) |
 | **Windows** | Frame · Window · Palette · Desktop · Taskbar (+ Draggable, Resizable, Raisable, Restorable, Minimizable, Maximizable, Dockable mixins) |
@@ -145,8 +153,12 @@ or `file:name`, `sh:maxInclusive` on `file:size`), and its `sh:maxCount` says ho
 `file:File` node with its metadata, never its contents (`ontology/layers/files.ttl`); each arrives on
 its own and is offered to the zone, so the shape decides with its size known, and a refused one is
 listed (`c:FileItem`) with the reason. With `file:uploadTo` or `file:handler` each accepted file is
-uploaded at once, with a `c:Progress`, and its remove button cancels the upload. The picker, the
-drop's `DataTransfer` and the uploads are a host effect (`Files`, `src/files.ts`).
+uploaded at once, with a `c:Progress`, and its remove button cancels the upload; with `file:keepIn`
+each is kept in the browser (states Saving, then "Saved in this browser"). The picker, the
+drop's `DataTransfer`, the uploads and the keeping are a host effect (`Files`, `src/files.ts`).
+An **image view** (`c:ImageView`, `ontology/components/payload.ttl`) shows one image whose address is
+data (a kept file's `file:url` or `file:preview`), fitted to its box; a grid column shows small ones
+with `c:cellAs c:ImageCell`, and dates with `c:DateCell`.
 
 A **command palette** (`c:CommandPalette`, `ontology/components/palette.ttl`; ⌘K / Ctrl+K) is a
 typeahead in a modal overlay whose options are things to run: every `key:Command`, every component

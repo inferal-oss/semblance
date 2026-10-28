@@ -1,9 +1,9 @@
 // The outline (ontology/components/outline.ttl): function twins of its SPARQL rules and reaction.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
-import type { FnRule } from '../engine/context.ts'
+import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, L10N, MOD, NS, RDF_TYPE, SEM, STY } from '../ns.ts'
-import { named, RDFS_LABEL, str, text } from './util.ts'
+import { named, RDFS_LABEL, str, text, plainLabel, encodeForUri, picked } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const P = {
@@ -22,18 +22,11 @@ const P = {
   selects: c('selects'),
 }
 
-/** SPARQL's ENCODE_FOR_URI, so minted keys match the SPARQL rules'. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 const localName = (t: Term) => t.value.replace(/^.*[#/]/, '')
-/** As the SPARQL rules read a value: a literal is itself, a node its untagged rdfs:label or local name. */
-function said(ctx: { objects(s: Term, p: string): Term[] }, t: Term): string {
-  if (t.termType === 'Literal') return t.value
-  return ctx.objects(t, RDFS_LABEL).find((l) => l.termType === 'Literal' && l.language === '')?.value ?? localName(t)
-}
 
 const outline: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const label = str(ctx.object(focus, L10N.label)) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value
+  const label = str(ctx.object(focus, L10N.label)) ?? (picked(ctx, focus, C.label) ?? ctx.objects(focus, C.label).find((t) => t.termType === 'Literal' && t.language === '')?.value)
   const root = o.el('root', 'Div', { role: 'list', 'aria-label': label })
   const sortP = ctx.object(focus, P.sortBy)
   const target = ctx.object(focus, P.property) ? ctx.object(focus, P.controls) : undefined
@@ -67,7 +60,7 @@ const item: FnRule = (ctx, focus) => {
   const flagValue = valueOf(P.flagProperty)
   const o = ctx.out(focus)
   if (ctx.modality === MOD.Text) {
-    const line = `${'  '.repeat(level)}- ${label}${noteValue ? ` (${said(ctx, noteValue)})` : ''}${flagValue ? ` ⚠ ${said(ctx, flagValue)}` : ''}`
+    const line = `${'  '.repeat(level)}- ${label}${noteValue ? ` (${plainLabel(ctx, noteValue)})` : ''}${flagValue ? ` ⚠ ${plainLabel(ctx, flagValue)}` : ''}`
     o.renders(o.el('root', 'Div', {}, [o.text('text-text', line)]))
     return o.quads
   }
@@ -77,7 +70,7 @@ const item: FnRule = (ctx, focus) => {
   const people = o.el('people', 'Span', { class: 'sem-people' })
   const phrase = text(ctx, ctx.nn(c('TypingPhrase')), RDFS_LABEL) ?? ''
   for (const agent of presenceP ? ctx.objects(it, presenceP) : []) {
-    const name = said(ctx, agent)
+    const name = plainLabel(ctx, agent)
     const key = 'who-' + encodeForUri(agent.value)
     const writing = typing.has(agent.value)
     const avatar = o.node(key + '-avatar')
@@ -98,8 +91,8 @@ const item: FnRule = (ctx, focus) => {
     o.t(textEl, P.selects, it)
   } else textEl = o.el('text', 'Span', { class: 'sem-text' }, [o.text('text-text', label)])
   const parts: NamedNode[] = [people, textEl]
-  if (noteValue) parts.push(o.el('note', 'Span', { class: 'sem-note' }, [o.text('note-text', said(ctx, noteValue))]))
-  if (flagValue) parts.push(o.el('flag', 'Span', { class: 'sem-flag', role: 'note' }, [o.text('flag-text', said(ctx, flagValue))]))
+  if (noteValue) parts.push(o.el('note', 'Span', { class: 'sem-note' }, [o.text('note-text', plainLabel(ctx, noteValue))]))
+  if (flagValue) parts.push(o.el('flag', 'Span', { class: 'sem-flag', role: 'note' }, [o.text('flag-text', plainLabel(ctx, flagValue))]))
   const cls = `sem-outline-item${flagValue ? ' sem-flagged' : ''}${typing.size ? ' sem-busy' : ''}`
   const root = o.el('root', 'Div', { class: cls, style: `--sem-level: ${level}`, role: 'listitem' })
   for (const part of parts) o.t(root, H.hasChild, part)

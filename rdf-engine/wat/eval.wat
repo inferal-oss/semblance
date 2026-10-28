@@ -858,6 +858,9 @@
       (br $done)))
     (if (i32.eq (local.get $k) (i32.const P_PATH)) (then
       (call $eval_path (local.get $el) (local.get $t) (local.get $out))
+      (br $done)))
+    (if (i32.eq (local.get $k) (i32.const P_MAGIC)) (then
+      (call $eval_magic (local.get $el) (local.get $t) (local.get $out))
       (br $done))))
   (local.get $out))
 
@@ -930,10 +933,8 @@
 
 ;; MINUS: rows of t with no compatible row of g sharing a variable.
 (func $minus (param $g i32) (param $t i32) (param $out i32)
-  (local $one i32) (local $r i32) (local $i i32) (local $j i32) (local $a i32) (local $b i32) (local $drop i32)
-  (local.set $one (call $t_one (global.get $params)))
-  (local.set $r (call $eval_group (local.get $g) (local.get $one) (i32.const 0)))
-  (call $t_free (local.get $one))
+  (local $r i32) (local $i i32) (local $j i32) (local $a i32) (local $b i32) (local $drop i32)
+  (local.set $r (call $minus_rows (local.get $g)))
   (loop $left
     (if (i32.lt_u (local.get $i) (i32.load offset=4 (local.get $t))) (then
       (local.set $a (call $t_row (local.get $t) (local.get $i)))
@@ -948,7 +949,33 @@
       (if (i32.eqz (local.get $drop)) (then (call $t_push (local.get $out) (local.get $a))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $left))))
-  (call $t_free (local.get $r)))
+  (if (global.get $lat) (then (call $t_free (local.get $r)))))
+
+;; MINUS's right side: the same for every left row (it sees only the
+;; parameters), so kept for the run per group and active graph (a compiled
+;; query asks for it row by row). Inside a LATERAL it is solved each time.
+(global $mcache (mut i32) (i32.const 0))   ;; a vector: group, graph, table
+
+(func $minus_rows (param $g i32) (result i32)
+  (local $one i32) (local $r i32) (local $i i32)
+  (if (i32.eqz (global.get $lat)) (then
+    (if (global.get $mcache) (then
+      (loop $entries
+        (if (i32.lt_u (local.get $i) (i32.load offset=4 (global.get $mcache))) (then
+          (if (i32.and (i32.eq (call $v_at (global.get $mcache) (local.get $i)) (local.get $g))
+                       (i32.eq (call $v_at (global.get $mcache) (i32.add (local.get $i) (i32.const 1))) (global.get $ag)))
+            (then (return (call $v_at (global.get $mcache) (i32.add (local.get $i) (i32.const 2))))))
+          (local.set $i (i32.add (local.get $i) (i32.const 3)))
+          (br $entries))))))))
+  (local.set $one (call $t_one (global.get $params)))
+  (local.set $r (call $eval_group (local.get $g) (local.get $one) (i32.const 0)))
+  (call $t_free (local.get $one))
+  (if (i32.eqz (global.get $lat)) (then
+    (if (i32.eqz (global.get $mcache)) (then (global.set $mcache (call $v_new))))
+    (call $v_push2 (global.get $mcache) (local.get $g) (global.get $ag))
+    (call $v_push1 (global.get $mcache) (local.get $r))
+    (call $cache_keep (local.get $r))))
+  (local.get $r))
 
 ;; Whether rows a and b bind a common variable (parameters are constants).
 (func $shares (param $a i32) (param $b i32) (result i32)
@@ -1120,7 +1147,8 @@
       (local.set $i (i32.add (local.get $i) (i32.const 2)))
       (br $tables))))
   (call $v_free (global.get $cache))
-  (global.set $cache (i32.const 0)))
+  (global.set $cache (i32.const 0))
+  (if (global.get $mcache) (then (i32.store offset=4 (global.get $mcache) (i32.const 0)))))
 
 ;; --- property paths --------------------------------------------------------------
 

@@ -107,13 +107,16 @@ that decides what may start must be written there, not just held in your briefs:
   whenever you start a worker, a worker reports, something lands, or a wait clears; remove rows
   for work that landed. Read it first when you take over, and don't start anything a row owns.
 - **A `Coordination:` comment on each issue that waits**, naming what it waits on and who owns
-  it: another PR or issue landing ("starts after PR #31 merges"), the user's approval ("stays
-  uncommitted until the user approves"; "the design needs approval before implementation"), or
-  the user's go-ahead for costly work. Post it when the wait is decided, and comment again when it
-  clears.
+  it: another PR or issue landing ("starts after PR #31 merges"), an approval ("stays uncommitted
+  until approved"; "implementation waits for design approval"), or a go-ahead for costly work. Post
+  it when the wait is decided, and comment again when it clears.
 - **Gates the user sets are recorded verbatim in spirit** (approve each refactor first, don't
   commit until approved): they bind every coordinator and worker, not just the session that heard
   them.
+- **Write in the project's voice** (AGENTS.md): everything you post goes out under the maintainer's
+  account, so never "the user" or "the user's approval" on GitHub, in issues, comments, the
+  Coordination table, PRs or commits. Write "waits for design approval", "Decided: …", "Wanted: …".
+  Briefs to workers say the same.
 
 ## 5b. PRs opened by others
 
@@ -125,6 +128,11 @@ Group PRs that duplicate each other (several agents building the same component)
 who recommends which survives and asks the user before closing any. PRs from outside the team are
 reviewed without running their code, and merged only with the user's approval. Record each reviewer
 as a "review PR #N" row.
+
+**Scheduled turns can't start sessions.** A cron turn (or one started by another session's message)
+is refused by `start_session`: propose each reviewer as a card (`initiation: "own_initiative"`) and
+record the row as "none (proposed as a card)"; don't propose the same PR twice. When a card's PR
+merges or is picked up some other way, withdraw it (`dismiss_task`) and drop the row.
 
 ## 5c. Tests and the shared machine
 
@@ -151,4 +159,13 @@ as a "review PR #N" row.
   the question goes to the user.
 - Keep #8 (its Coordination table too) and #9 current as things land; when a PR merges, offer to
   archive its worker.
+- **Before archiving a session, check its worktree.** `git -C <worktree> status -sb` and
+  `git log origin/main..<branch>` for every branch it made: unpushed commits or uncommitted changes
+  mean the work isn't done. Push the branch (or have the worker push it and open its PR) before it
+  is archived. When the maintainer asks about work from an archived session, look there first: its
+  branches, its worktree, the end of its transcript.
+- **A worker's blocked action goes back to the maintainer.** When a worker reports that a permission
+  check blocked a merge or a force-push, tell the maintainer it waits on them in that session. Act
+  yourself only on the maintainer's own words to you (and say so on the issue or PR), never on the
+  worker's request.
 - Report to the user in a line or two per worker: what landed (with links), what is left.

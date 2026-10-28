@@ -1,7 +1,7 @@
 // The dependency layer (ontology/layers/dependency.ttl): function twins of its rules and
 // reactions. A dependent takes the properties of the profiles its followed value selects
 // (dep:Facets), a component with c:hidden is hidden (dep:Hidden), and choosing a value writes
-// that value's defaults (dep:ChoiceDefaults, dep:RadioDefaults).
+// that value's defaults (dep:Defaults).
 import type { Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule } from '../engine/context.ts'
@@ -40,7 +40,7 @@ const hidden: FnRule = (ctx, focus) => {
   return ctx.out(focus).t(ctx.nn(mint(focus.value, 'root')), H.ns + 'hidden', '').quads
 }
 
-/** dep:ChoiceDefaults / dep:RadioDefaults: the chosen value's defaults replace the replaced value's. */
+/** dep:Defaults: the chosen value's defaults replace the replaced value's. */
 const defaults: ReactionFn = ({ runtime, event, target, match, object }) => {
   const f = runtime.store.factory
   const node = object(target, C.controls)

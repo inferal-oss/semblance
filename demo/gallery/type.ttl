@@ -61,11 +61,11 @@ ui:ty-running-spec a c:Specimen ; c:demonstrates c:Text ; c:label "Running text"
     c:children ( ui:ty-run ) .
 
 # --- links ---
-ui:ty-link-internal a c:Link ; c:label "Components" ; c:href "#components" .
-ui:ty-link-current a c:Link ; c:label "This page" ; c:href "#type" ; c:currentPage true .
+ui:ty-link-internal a c:Link ; c:label "Components" ; c:href "/components/" .
+ui:ty-link-current a c:Link ; c:label "This page" ; c:href "/components/type/" ; c:currentPage true .
 ui:ty-link-external a c:Link ; c:label "RDF/HTML specification" ; c:href "https://ia2.dev/spec/rdf-html" .
-ui:ty-link-success a c:Link ; c:label "All checks passed" ; c:href "#components" ; sty:tone sty:Success .
-ui:ty-link-danger a c:Link ; c:label "3 rules failed" ; c:href "#components" ; sty:tone sty:Danger .
+ui:ty-link-success a c:Link ; c:label "All checks passed" ; c:href "/components/" ; sty:tone sty:Success .
+ui:ty-link-danger a c:Link ; c:label "3 rules failed" ; c:href "/components/" ; sty:tone sty:Danger .
 ui:ty-links-row a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-5 ;
     c:children ( ui:ty-link-internal ui:ty-link-current ui:ty-link-external ui:ty-link-success ui:ty-link-danger ) .
 ui:ty-links a c:Flippable ; c:front ui:ty-links-spec .

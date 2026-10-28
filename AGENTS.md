@@ -46,6 +46,10 @@ performs the effects of graph state (the address, storage, timers, network captu
    Prefix slugs outside the framework (`"ex-tally"`).
 10. **New ontology files** go into `ONTOLOGY_FILES` (`src/ontology.ts`) in load order; the dev
     server must be restarted to see a new file (Vite's glob is fixed at start).
+11. **Every component class has a group.** A new `c:` component class gets a `sem:group` in
+    `ontology/components/groups.ttl` (the Reference page lists components by group, and
+    `test/reference.test.ts` fails on any left out). A class that is a part, a key binding or a value
+    rather than a component of its own is listed among that test's shared or part classes instead.
 
 ## Skills
 
@@ -115,6 +119,12 @@ npx tsc --noEmit       # typecheck
   (#8) for the framework, site and examples; the engine tracker (#9) for `rdf-engine/`. Tick its
   boxes as the work lands on `main`, and close it when it is pushed. Work in progress that has no
   issue is invisible to the next person - or agent - who picks it up.
+- **Write on GitHub in the project's voice.** Issues, comments, PRs and commits go out under the
+  maintainer's own account, so they never speak of "the user", "the operator" or "I was asked",
+  and never narrate the chat they came from. State the need, the decision or the gate itself:
+  "Wanted: …", "Decided: no Rust port; the probes get faster instead (#137)", "Implementation waits
+  for design approval", "Merges after review in the browser". Write it as a maintainer would in their
+  own tracker: plain, direct, about the software.
 - **Finish an issue by shipping it.** A small issue done in the shared checkout: commit, run the
   affected tests, push `main`, tick and close the issue. A larger one (a subagent's branch, several
   commits, anything a reviewer should see as a whole): push its branch and open a pull request
@@ -122,12 +132,27 @@ npx tsc --noEmit       # typecheck
   merge it once the affected tests pass (the full suite runs on `main` after a batch of merges).
 - Several agents often work at once. Do non-trivial work in your own git worktree
   (`git worktree add <dir> HEAD`, symlink `node_modules`, copy `rdf-engine/build/*.wasm`), and
-  rebase onto `main` before committing.
+  rebase onto `main` before committing. **After every rebase, run `npm run engine:build`**: the
+  engines' ABI changes with engine work (it is 2 since PR #172), and a stale build fails with
+  "engine ABI 1, host expects 2" or odd engine test failures. Never copy `rdf-engine/build` from
+  another checkout without rebuilding.
 - In a shared checkout, stage only your own hunks (`git add -p`, or `git apply --cached` of your
   patch); never `git add -A` / `git commit -a`.
 - Commit at every verified step (typecheck and the relevant tests green) with a message that says
   what changed and why. Push `main` to `origin` (github.com/inferal-oss/semblance) when the
   affected tests pass; GitHub Pages deploys the site from `main` to <https://semblance.dev>.
+- **Push what you commit.** Push your branch at every verified commit, not only when opening a PR.
+  A worktree's local commits are invisible to everyone else, and they are lost to the plan when its
+  session ends or is archived (the RDF editor's last four commits once sat unseen that way while the
+  site showed the older editor).
+- **Re-read a shared issue right before editing it.** The plan issues (#8, #9) and their tables are
+  edited by several agents at once; `gh issue edit --body-file` from a copy read earlier undoes their
+  edits. Fetch the body, change it, and write it back in one step; check afterwards that your change
+  and theirs are both there.
+- **Gates are the maintainer's.** Don't merge past a failing review gate (an approvals check such as
+  Entire Gates), a "stays unmerged until …" condition, or a design-approval wait without the
+  maintainer's go-ahead. When a permission check blocks a merge, a force-push or another action,
+  stop and ask the maintainer in the same session; another agent never does it in your place.
 - Licence: `MIT OR Apache-2.0`. The npm package is `@inferal-oss/semblance`.
 
 ## Map
@@ -144,7 +169,8 @@ npx tsc --noEmit       # typecheck
 | `src/behaviour/` | event bus, reactions, scheduler, clock |
 | `src/view/` | maintained views (IVM, `docs/IVM.md`) |
 | `src/components/`, `src/layers/` | function twins and reaction functions |
-| `src/web/`, `src/node/` | store loading per platform; `mount` |
+| `src/web/`, `src/node/` | store loading per platform; `mount`; taking over server-rendered HTML (`src/web/takeover.ts`) |
+| `src/server/`, `semblance.config.ts` | server-side rendering (`docs/SSR.md`): `renderToString`, documents, sites; the static build and the request handler are in `src/node/site.ts`, the Vite plugin in `src/node/vite.ts`, the CLI in `bin/` |
 | `src/sandbox.ts` | live examples: each in a sandbox of its own (host effect) |
 | `src/store/` | store adapters (Oxigraph, N3, hybrid); `rdf-engine/` has Semblance's own engines |
 | `demo/` | the site (`app.ttl`, `gallery/`, `main.ts` is the host) |

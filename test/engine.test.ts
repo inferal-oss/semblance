@@ -263,6 +263,37 @@ describe('reconfiguration and layers', () => {
     expect(runs()).toBe(before + 1)
   })
 
+  it('a SPARQL rule without sem:watches watches the predicates its query names (#153)', () => {
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix ex: <urn:w:> .
+      <urn:w:Named> a sem:Rule ; sem:targets ex:Shown ; sem:stratum 1 ; sem:follows ex:of ;
+        sem:construct """CONSTRUCT { $this <urn:w:seen> ?n } WHERE { $this <urn:w:of> ?d . ?d <urn:w:note> ?n }""" .
+      <urn:w:Any> a sem:Rule ; sem:targets ex:Shown ; sem:stratum 1 ;
+        sem:construct """CONSTRUCT { $this <urn:w:has> ?p } WHERE { $this ?p ?o FILTER(?p = <urn:w:own>) }""" .
+      ex:a a ex:Shown ; ex:of ex:d ; ex:own "x" . ex:d ex:note "one" ; ex:other "x" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen })
+    const f = store.factory
+    const nn = (s: string) => f.namedNode('urn:w:' + s)
+    const runs = (rule: string) => screen.engine.stats.byRule.get('urn:w:' + rule)?.runs ?? 0
+    const seen = () => store.match(nn('a'), nn('seen'), null).map((q) => q.object.value)
+    const set = (s: string, p: string, v: string) => runtime.apply({ remove: store.match(nn(s), nn(p), null), add: [f.quad(nn(s), nn(p), f.literal(v))] })
+    expect(seen()).toEqual(['one'])
+    const named = runs('Named')
+    // A predicate the query names, on the followed node, re-runs it...
+    set('d', 'note', 'two')
+    expect(seen()).toEqual(['two'])
+    expect(runs('Named')).toBe(named + 1)
+    // ...others do not: on the followed node, or on the focus itself.
+    set('d', 'other', 'y')
+    const any = runs('Any')
+    set('a', 'own', 'y')
+    expect(runs('Named')).toBe(named + 1)
+    // A rule whose query takes any predicate of its focus re-runs for any of them.
+    expect(runs('Any')).toBe(any + 1)
+  })
+
   it('refuses blank nodes in rule output', () => {
     const extra = `
       @prefix sem: <${NS.sem}> . @prefix c: <${NS.c}> .
@@ -270,6 +301,19 @@ describe('reconfiguration and layers', () => {
         sem:construct """CONSTRUCT { $this sem:note [ sem:x 1 ] } WHERE { $this a c:Button }""" .`
     const store = loadStore('oxigraph', todoApp(1), extra)
     expect(() => new Runtime(store).project({ modality: MOD.Screen })).toThrow(/blank node/)
+  })
+
+  it('lets a rule point at a blank node the data has (as an object), not mint one', () => {
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix c: <${NS.c}> .
+      <urn:x:held> sem:note [ sem:x 1 ] .
+      <urn:x:Names> a sem:Rule ; sem:targets c:Button ; sem:stratum 1 ;
+        sem:construct """CONSTRUCT { $this sem:names ?b } WHERE { $this a c:Button . <urn:x:held> sem:note ?b }""" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    expect(() => new Runtime(store).project({ modality: MOD.Screen })).not.toThrow()
+    const named = store.match(null, store.factory.namedNode(NS.sem + 'names'), null)
+    expect(named.length).toBeGreaterThan(0)
+    expect(named.every((q) => q.object.termType === 'BlankNode')).toBe(true)
   })
 
   it('treats the debug layer as optional', () => {

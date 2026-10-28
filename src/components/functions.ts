@@ -3,14 +3,15 @@
 // swapped per rule and compared head-to-head.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
+import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
 import { functions as boardFunctions } from './board.ts'
 import { typeaheadFunctions } from './typeahead.ts'
-import { uploadFunctions } from './upload.ts'
+import { filesFunctions, uploadFunctions } from './upload.ts'
 import { paletteFunctions } from './palette.ts'
 import { functions as calendarFunctions } from './calendar.ts'
 import { datesFunctions } from './dates.ts'
@@ -40,6 +41,7 @@ import { functions as disclosureFunctions } from './disclosure.ts'
 import { functions as gridFunctions } from './grid.ts'
 import { functions as panesFunctions } from './panes.ts'
 import { functions as payloadFunctions } from './payload.ts'
+import { functions as rdfEditorFunctions } from './rdf-editor.ts'
 import { functions as toolbarFunctions } from './toolbar.ts'
 import { functions as messagesFunctions } from './messages.ts'
 import { containerFunctions } from './containers.ts'
@@ -53,21 +55,8 @@ import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
-import { encodeForUri, labelOf, RDFS_LABEL, text } from './util.ts'
+import { encodeForUri, isA, isTrue, labelOf, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
-
-const str = (t: Term | undefined) => t?.value
-export { encodeForUri } from './util.ts'
-const isTrue = (t: Term | undefined) => t?.termType === 'Literal' && t.value === 'true'
-
-function rdfList(ctx: RuleContext, head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== RDF_NIL && out.length < 10_000; n = ctx.object(n, RDF_REST)) {
-    const first = ctx.object(n, RDF_FIRST)
-    if (first) out.push(first)
-  }
-  return out
-}
 
 // --- components ----------------------------------------------------------------
 
@@ -173,6 +162,7 @@ const listMember: FnRule = (ctx, focus, item) => {
   const sortBy = ctx.object(focus, C.sortBy)
   const labelFrom = ctx.object(focus, C.itemLabel)
   const checkedFrom = ctx.object(focus, C.itemChecked)
+  const imageFrom = ctx.object(focus, C.itemImage)
   const key = sortBy ? ctx.object(item, sortBy) : undefined
   const inst = o.node('i-' + encodeForUri(item.value))
   o.t(inst, RDF_TYPE, ctx.nn(C.ListItem))
@@ -180,37 +170,48 @@ const listMember: FnRule = (ctx, focus, item) => {
   o.t(inst, C.inList, focus)
   if (labelFrom) o.t(inst, C.labelFrom, labelFrom)
   if (checkedFrom) o.t(inst, C.checkedFrom, checkedFrom)
+  if (imageFrom) o.t(inst, C.imageFrom, imageFrom)
   // A sortable list's items can be picked up, carrying the data item (the drag and drop layer).
   if (ctx.match(focus, RDF_TYPE, DND.Sortable).length) {
     o.t(inst, RDF_TYPE, ctx.nn(DND.Draggable)).t(inst, DND.carries, item)
-    const name = labelFrom && ctx.object(item, labelFrom)
-    if (name) o.t(inst, DND.name, name.value)
+    const name = labelFrom && text(ctx, item, labelFrom.value)
+    if (name !== undefined && name !== null) o.t(inst, DND.name, name)
   }
   // Missing keys sort last.
   o.t(inst, SEM.orderKey, key?.value ?? '\uffff')
   o.t(o.node('root'), H.hasChild, inst)
   return o.quads
 }
-listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked])
+listMember.watches = () => new Set([RDF_TYPE, C.sortBy, C.itemLabel, C.itemChecked, C.itemImage])
 
 function itemData(ctx: RuleContext, focus: NamedNode) {
   const item = ctx.object(focus, C.of)
   const labelFrom = ctx.object(focus, C.labelFrom)
   if (!item || !labelFrom) return undefined
-  const label = str(ctx.object(item, labelFrom))
+  const label = text(ctx, item, labelFrom.value)
   if (label === undefined) return undefined
   const checkedFrom = ctx.object(focus, C.checkedFrom)
-  return { label, checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false }
+  const imageFrom = ctx.object(focus, C.imageFrom)
+  return {
+    label,
+    // Only a list that says what checks its items (c:itemChecked) has checkboxes.
+    checkable: !!checkedFrom,
+    checked: checkedFrom ? ctx.match(item, checkedFrom, null).some((q) => isTrue(q.object)) : false,
+    image: imageFrom ? str(ctx.object(item, imageFrom)) : undefined,
+  }
 }
 
 const listItemScreen: FnRule = (ctx, focus) => {
   const d = itemData(ctx, focus)
   if (!d) return []
   const o = ctx.out(focus)
+  const parts: NamedNode[] = []
   const checkId = mint(focus.value, 'check')
-  const check = o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined })
-  const label = o.el('label', 'Label', { for: checkId }, [o.text('label-text', d.label)])
-  o.renders(o.el('root', 'Li', {}, [check, label]))
+  if (d.checkable) parts.push(o.el('check', 'Input', { type: 'checkbox', id: checkId, checked: d.checked ? '' : undefined }))
+  // A thumbnail of the item (c:itemImage), beside its label: decoration, the label names it.
+  if (d.image !== undefined) parts.push(o.el('image', 'Img', { class: 'sem-thumb', src: d.image, alt: '', loading: 'lazy', draggable: 'false' }))
+  parts.push(o.el('label', 'Label', { for: d.checkable ? checkId : undefined }, [o.text('label-text', d.label)]))
+  o.renders(o.el('root', 'Li', {}, parts))
   return o.quads
 }
 
@@ -218,7 +219,7 @@ const listItemText: FnRule = (ctx, focus) => {
   const d = itemData(ctx, focus)
   if (!d) return []
   const o = ctx.out(focus)
-  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checked ? '  [x] ' : '  [ ] '}${d.label}`)]))
+  o.renders(o.el('root', 'Div', {}, [o.text('label-text', `${d.checkable ? (d.checked ? '  [x] ' : '  [ ] ') : '  - '}${d.label}`)]))
   return o.quads
 }
 
@@ -348,6 +349,13 @@ function splitZones(ctx: RuleContext, o: ReturnType<RuleContext['out']>, focus: 
   })
 }
 
+/** Whether a nav:Dimension the path carries (not a target) is `property` of `target`: a chooser of it goes somewhere. */
+function navigatesBy(ctx: RuleContext, target: Term, property: Term): boolean {
+  return ctx.match(null, NS.nav + 'subject', target).some(
+    (q) => ctx.match(q.subject, NS.nav + 'property', property).length > 0 && ctx.match(q.subject, NS.nav + 'carriedBy', ctx.nn(NS.nav + 'Path')).length > 0 && ctx.match(q.subject, RDF_TYPE, ctx.nn(NS.nav + 'TargetDimension')).length === 0,
+  )
+}
+
 const segmented: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)
   const property = ctx.object(focus, C.property)
@@ -360,6 +368,8 @@ const segmented: FnRule = (ctx, focus) => {
     o.renders(o.el('root', 'Div', {}, [o.text('line', `${caption}: ${line}`)]))
     return o.quads
   }
+  // Over a place the address's path carries, a form whose buttons submit to the address each sets.
+  const navigates = navigatesBy(ctx, target, property)
   const buttons = options(ctx, focus, property).map((opt) => {
     const key = encodeForUri(opt.value)
     const symbol = str(ctx.object(opt, SEM.symbol))
@@ -367,12 +377,13 @@ const segmented: FnRule = (ctx, focus) => {
       ...(symbol ? [o.el('opt-' + key + '-symbol', 'Span', {}, [o.text('opt-' + key + '-symbol-text', symbol)])] : []),
       o.el('opt-' + key + '-label', 'Span', {}, [o.text('opt-' + key + '-label-text', label(ctx, opt))]),
     ]
-    const b = o.el('opt-' + key, 'Button', { type: 'button' }, parts)
+    const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button' }, parts)
     o.attr(b, 'aria-pressed', String(opt.value === current))
     o.t(b, C.selects, opt)
     return b
   })
-  const root = o.el('root', 'Div', {}, buttons)
+  const root = o.el('root', navigates ? 'Form' : 'Div', {}, buttons)
+  if (navigates) o.attr(root, 'method', 'get')
   o.attr(root, 'role', 'group').attr(root, 'aria-label', caption)
   o.renders(root)
   return o.quads
@@ -576,6 +587,15 @@ function options(ctx: RuleContext, focus: Term, property: Term): NamedNode[] {
 const watchControlled: FnRule['watches'] = (ctx, focus) => {
   const property = ctx.object(focus, C.property)
   return new Set([C.controls, C.property, C.label, C.options, ...(property ? [property.value] : [])])
+}
+
+/** A choice among a toolbar's children or an app bar's actions is placed inline (twin of c:ChoicesInlineInBars). */
+const choicesInlineInBars: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  for (const p of [C.children, NS.c + 'actions', NS.c + 'moreActions'])
+    for (const item of nodes(ctx, ctx.object(focus, p)))
+      if (isA(ctx, item, NS.c + 'Choice')) o.t(item, NS.c + 'labelPlacement', ctx.nn(NS.c + 'LabelInline'))
+  return o.quads
 }
 
 const choice: FnRule = (ctx, focus) => {
@@ -812,17 +832,27 @@ const a11yList: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+const a11yTabs: FnRule = (ctx, focus) => {
+  const label = text(ctx, focus, C.label)
+  if (label === undefined) return []
+  const o = ctx.out(focus)
+  o.attr(o.node('tablist'), 'aria-label', label, 'tablist-aria-label')
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
   ...stallFunctions,
   ...containerFunctions,
   ...viewFunctions,
   ...chartFunctions,
+  ...ganttFunctions,
   ...formulaFunctions,
   ...moneyFunctions,
   ...boardFunctions,
   ...typeaheadFunctions,
   ...uploadFunctions,
   ...paletteFunctions,
+  ...filesFunctions,
   ...calendarFunctions,
   ...datesFunctions,
   ...outlineFunctions,
@@ -851,6 +881,7 @@ export const functions: Record<string, FnRule> = {
   ...gridFunctions,
   ...panesFunctions,
   ...payloadFunctions,
+  ...rdfEditorFunctions,
   ...toolbarFunctions,
   ...messagesFunctions,
   ...walkthroughFunctions,
@@ -876,11 +907,13 @@ export const functions: Record<string, FnRule> = {
   'flippable:source': flippableSource,
   'source-back': sourceBack,
   choice,
+  'choice:inline-in-bars': choicesInlineInBars,
   chips,
   'chips:counts': chipCounts,
   'style:hooks': styleHooks,
   'a11y:textfield': a11yTextField,
   'a11y:list': a11yList,
+  'a11y:tabs': a11yTabs,
   'stream-stats:screen': streamStatsScreen,
   'stream-stats:text': streamStatsText,
   'l10n:option-labels': optionLabels,

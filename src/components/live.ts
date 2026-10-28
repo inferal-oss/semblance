@@ -6,7 +6,7 @@ import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, H, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_BOOLEAN } from '../ns.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
-import { isTrue, nodes, RDFS_LABEL, str, text } from './util.ts'
+import { isTrue, nodes, RDFS_LABEL, str, text, rdfList, picked } from './util.ts'
 
 const c = NS.c
 const L = {
@@ -17,16 +17,7 @@ const L = {
   showSources: c + 'showSources',
   textHeading: c + 'textHeading',
   dataPreview: c + 'dataPreview',
-  lineSubject: c + 'lineSubject',
-  linePredicate: c + 'linePredicate',
-  lineObject: c + 'lineObject',
-  lineNode: c + 'lineNode',
-  subjectToken: c + 'subjectToken',
-  predicateToken: c + 'predicateToken',
-  objectToken: c + 'objectToken',
-  lineKey: c + 'lineKey',
-  lineChange: c + 'lineChange',
-  changedLine: c + 'changedLine',
+  changedRow: c + 'changedRow',
   triplesAdded: c + 'triplesAdded',
   triplesRemoved: c + 'triplesRemoved',
   sandboxState: c + 'sandboxState',
@@ -68,10 +59,10 @@ const P = {
 
 const phrase = (ctx: RuleContext, iri: string) => text(ctx, ctx.nn(iri), RDFS_LABEL) ?? ''
 const fill = (s: string, name: string, value: string) => s.replace(`{${name}}`, value)
-/** As the SPARQL rule names a source: its untagged c:label, else any, else its local name. */
+/** As the SPARQL rule names a source: its c:label in the viewer's language when translated, else its untagged c:label, else any, else its local name. */
 function sourceName(ctx: RuleContext, editor: Term): string {
   const labels = ctx.objects(editor, C.label).filter((t) => t.termType === 'Literal')
-  return (labels.find((t) => t.termType === 'Literal' && !t.language) ?? labels[0])?.value ?? editor.value.replace(/^.*[#/]/, '')
+  return picked(ctx, editor, C.label) ?? (labels.find((t) => t.termType === 'Literal' && !t.language) ?? labels[0])?.value ?? editor.value.replace(/^.*[#/]/, '')
 }
 
 const liveExample: FnRule = (ctx, focus) => {
@@ -136,7 +127,7 @@ const liveExample: FnRule = (ctx, focus) => {
     .sort((a, b) => a.i - b.i)
   const items = problems.map(({ p, i, message }) => {
     const source = ctx.object(p, L.inSource)
-    const name = source && ctx.objects(source, C.label).find((t) => t.termType === 'Literal')?.value
+    const name = source && (picked(ctx, source, C.label) ?? ctx.objects(source, C.label).find((t) => t.termType === 'Literal')?.value)
     const line = str(ctx.object(p, L.sourceLine))
     const lineData = line !== undefined ? fill(phrase(ctx, P.line), 'n', line) : undefined
     const where = name !== undefined && lineData !== undefined ? `${name}, ${lineData}` : (name ?? lineData)
@@ -196,33 +187,7 @@ const liveExample: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** c:LiveExampleData: one triple of the example's data, as a row of its subject's node in the data tree. */
-const dataLine: FnRule = (ctx, focus, member) => {
-  if (!member || !ctx.object(focus, L.dataPreview)) return []
-  const o = ctx.out(focus)
-  const get = (p: string) => str(ctx.object(member, p))
-  const [subject, sk, node, p, pk, obj, ok, key] = [L.lineSubject, L.subjectToken, L.lineNode, L.linePredicate, L.predicateToken, L.lineObject, L.objectToken, L.lineKey].map(get)
-  if ([subject, sk, node, p, pk, obj, ok, key].some((x) => x === undefined)) return []
-  // The subject's node, minted alike by each of its lines.
-  const n = `node-${node}`
-  const rows = o.el(`${n}-rows`, 'Div', { class: 'sem-live-rows' })
-  const group = o.el(n, 'Div', { class: 'sem-live-node', role: 'group', 'aria-label': subject }, [
-    o.el(`${n}-subject`, 'Span', { class: `sem-live-subject tok-${sk}` }, [o.text(`${n}-subject-text`, subject!)]),
-    rows,
-  ])
-  o.t(group, SEM.orderKey, subject!)
-  o.t(o.node('data'), H.hasChild, group)
-  // The row: predicate and object, coloured by kind, marked with what the last interaction did.
-  const change = ctx.object(member, L.lineChange)
-  const local = 'line-' + member.value.replace(/^.*\//, '')
-  const term = (part: string, kind: string, text: string) => o.el(`${local}-${part}`, 'Span', { class: `tok-${kind}` }, [o.text(`${local}-${part}-text`, text)])
-  const line = o.el(local, 'Div', { class: 'sem-live-line', 'data-sem-change': (change && str(ctx.object(change, SEM.slug))) || undefined }, [term('p', pk!, p!), term('o', ok!, obj!)])
-  o.t(line, SEM.orderKey, key!)
-  o.t(rows, H.hasChild, line)
-  return o.quads
-}
-
-/** c:LiveExampleFlow: the caption of what happened, and the arrows from the rendering to the changed line and on to the text. */
+/** c:LiveExampleFlow: the caption of what happened, and the arrows from the rendering to the data viewer's changed row and on to the text. */
 const flow: FnRule = (ctx, focus) => {
   if (!ctx.object(focus, L.dataPreview)) return []
   const o = ctx.out(focus)
@@ -233,9 +198,8 @@ const flow: FnRule = (ctx, focus) => {
     ? fill(fill(phrase(ctx, P.flow), 'added', added ?? '0'), 'removed', removed ?? '0')
     : phrase(ctx, P.hint)
   o.t(o.node('flow'), H.hasChild, o.text('flow-text', caption))
-  const changed = ctx.object(focus, L.changedLine)
-  if (!changed) return o.quads
-  const line = o.node('line-' + changed.value.replace(/^.*\//, ''))
+  const line = ctx.object(focus, L.changedRow)
+  if (line?.termType !== 'NamedNode') return o.quads
   const links = o.node('links')
   const connector = (local: string, from: NamedNode, to: NamedNode, label: string, tone: string, key: string) => {
     const n = o.node(local)
@@ -256,7 +220,7 @@ const flow: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-export const functions: Record<string, FnRule> = { 'live-example': liveExample, 'live-example:line': dataLine, 'live-example:flow': flow }
+export const functions: Record<string, FnRule> = { 'live-example': liveExample, 'live-example:flow': flow }
 
 // --- reactions (for stores without SPARQL) ---------------------------------------------------------
 
@@ -289,24 +253,16 @@ export const reactions: Record<string, ReactionFn> = {
   },
   'live-example:reset': (ctx) => {
     if (!control(ctx, L.resets)) return none()
-    const editors = listOf(ctx, ctx.object(ctx.target, L.sources))
+    const editors = rdfList(ctx, ctx.object(ctx.target, L.sources))
     const sources = editors.flatMap((e) => [L.value, L.caret, L.suggesting, L.activeSuggestion].flatMap((p) => ctx.match(e, p, null)))
     return { add: [], remove: [...sources, ...ctx.match(ctx.target, L.interacted, null)] }
   },
   'live-example:copy': (ctx) => {
     if (!control(ctx, L.copies)) return none()
     const f = ctx.runtime.store.factory
-    const editor = ctx.object(ctx.target, L.selectedSource) ?? listOf(ctx, ctx.object(ctx.target, L.sources))[0]
+    const editor = ctx.object(ctx.target, L.selectedSource) ?? rdfList(ctx, ctx.object(ctx.target, L.sources))[0]
     if (!editor) return none()
     return { remove: ctx.match(ctx.target, L.copied, null), add: [f.quad(ctx.target, f.namedNode(L.copied), editor)] }
   },
 }
 
-function listOf(ctx: Parameters<ReactionFn>[0], head: Term | undefined): Term[] {
-  const out: Term[] = []
-  for (let n = head; n && n.value !== NS.rdf + 'nil' && out.length < 64; n = ctx.object(n, NS.rdf + 'rest')) {
-    const first = ctx.object(n, NS.rdf + 'first')
-    if (first) out.push(first)
-  }
-  return out
-}

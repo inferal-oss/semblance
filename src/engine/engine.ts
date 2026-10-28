@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
-import { createContext, type FnRule, LANGUAGE, type RuleContext } from './context.ts'
+import { createContext, type FnRule, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
@@ -15,8 +15,13 @@ export interface EngineOptions {
   layers?: Iterable<string>
   prefer?: 'sparql' | 'function'
   functions?: Record<string, FnRule>
-  /** Record PROV-O provenance for every derived node (see ontology/layers/provenance.ttl). */
-  provenance?: boolean
+  /**
+   * Record PROV-O provenance for every derived node (see ontology/layers/provenance.ttl).
+   * 'onDemand': from the first evaluation of a rule that reads it (a rendering whose SPARQL names
+   * the PROV-O namespace: an inspector, a provenance card), for everything derived so far too.
+   * Nothing rendered differs; a first projection that shows no provenance does not pay for it.
+   */
+  provenance?: boolean | 'onDemand'
   /** Evaluate a SPARQL rule once for all dirty foci when at least this many are dirty. */
   bulkThreshold?: number
   /** Distinguishes engines sharing a store; names the derived graph. */
@@ -126,7 +131,13 @@ export class Engine {
   private strata: number[] = []
   private selection: Selection
   private readonly functions: Record<string, FnRule>
-  private readonly provenance: boolean
+  private provenance: boolean
+  /** A rule that reads provenance ran (its IRI), while it was not recorded yet: it is, from the end of the run. */
+  provenanceWanted?: string
+  /** The renderings that read provenance, while it is recorded only on demand. */
+  private readonly provenanceReaders?: Set<string>
+  /** The components that read provenance (sem:readsProvenance on an instance), while it is recorded only on demand. */
+  private readonly provenanceFoci?: Set<string>
   private readonly bulkThreshold: number
   private readonly graphs: Quad_Graph[]
   /** The graphs rules read, and the input graphs among them, by value ('' = the default graph). */
@@ -243,13 +254,35 @@ export class Engine {
     this.graphKeys = new Set(this.graphs.map((g) => g.value))
     this.inputGraphKeys = new Set(this.graphs.slice(0, -1).map((g) => g.value))
     this.functions = opts.functions ?? {}
-    this.provenance = opts.provenance ?? false
+    this.provenance = opts.provenance === true
     this.bulkThreshold = opts.bulkThreshold ?? 2
     this.exactOn = opts.exactDependencies ?? (typeof process !== 'undefined' && process.env?.SEMBLANCE_EXACT_DEPS === '1')
     this.maintain = opts.maintain
     this.supers = superclasses(store)
     this.allRules = loadRules(store)
-    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, languages: opts.languages ?? [] }
+    this.locationReaders = new Map(
+      store
+        .match(null, f.namedNode(NS.sem + 'readsLocation'), null)
+        .filter((q) => q.object.value === 'true' || q.object.value === NS.nav + 'TopDimensions')
+        .map((q) => [q.subject.value, q.object.value === 'true' ? 'all' : 'top'] as const),
+    )
+    if (opts.provenance === 'onDemand') {
+      // A rendering reads provenance when any of its implementations' queries names PROV-O.
+      // Only what the engine writes (provenanceOf); prov:wasDerivedFrom and the like are the app's own data.
+      const written = /(?:\bprov:|ns\/prov#)(?:wasGeneratedBy|wasInfluencedBy|wasAssociatedWith|qualifiedAssociation|hadPlan|used|Activity|SoftwareAgent|Association)\b/
+      const reads = (r: Rule) => written.test((r.queryParts?.join('$this') ?? '').split('\n').filter((l) => !/^\s*PREFIX\s/i.test(l)).join('\n'))
+      this.provenanceReaders = new Set(this.allRules.filter(reads).map((r) => r.slot))
+      // And the renderings that say so (sem:readsProvenance: function-only ones, those running queries the graph holds).
+      // A component can say so too (one that runs queries the graph holds about provenance: an
+      // inspector): from when it is shown.
+      this.provenanceFoci = new Set()
+      for (const q of store.match(null, f.namedNode(NS.sem + 'readsProvenance'), null)) {
+        if (q.object.value !== 'true') continue
+        if (store.match(q.subject, f.namedNode(RDF_TYPE), f.namedNode(NS.sem + 'Rendering')).length) this.provenanceReaders.add(q.subject.value)
+        else this.provenanceFoci.add(q.subject.value)
+      }
+    }
+    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
     this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
     this.activate(selectRules(this.allRules, this.selection, warn))
   }
@@ -317,7 +350,51 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.locationChanged(delta)
     this.run()
+  }
+
+  /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
+  private readonly locationReaders: Map<string, 'all' | 'top'>
+  /** "subject property" of each nav:Dimension's value: the dimensions it is the value of, and whether one is top-level (no nav:parent). */
+  private locationValues?: Map<string, { dims: string[]; top: boolean }>
+
+  /**
+   * A dimension's value changed (the page, the language): every rendering that reads where we are
+   * (sem:readsLocation: link destinations, which keep the language) is due again for each focus it
+   * has output for. Such a value is a property of a node the focus need not reach.
+   */
+  private locationChanged(delta: Delta) {
+    if (!this.locationReaders.size) return
+    if (delta.add.some((q) => q.predicate.value.startsWith(NS.nav)) || delta.remove.some((q) => q.predicate.value.startsWith(NS.nav))) this.locationValues = undefined
+    const f = this.store.factory
+    if (!this.locationValues) {
+      this.locationValues = new Map()
+      for (const q of this.store.match(null, f.namedNode(NS.nav + 'subject'), null, f.defaultGraph())) {
+        const p = this.store.match(q.subject, f.namedNode(NS.nav + 'property'), null, f.defaultGraph())[0]?.object.value
+        if (!p) continue
+        const top = this.store.match(q.subject, f.namedNode(NS.nav + 'parent'), null, f.defaultGraph()).length === 0
+        const key = q.object.value + ' ' + p
+        const entry = this.locationValues.get(key) ?? { dims: [], top: false }
+        entry.dims.push(q.subject.value)
+        entry.top ||= top
+        this.locationValues.set(key, entry)
+      }
+    }
+    const values = this.locationValues
+    const changed = new Set<string>()
+    for (const q of [...delta.add, ...delta.remove]) for (const d of values.get(q.subject.value + ' ' + q.predicate.value)?.dims ?? []) changed.add(d)
+    if (!changed.size) return
+    const keeps = NS.nav + 'keeps'
+    for (const rule of this.rules) {
+      const reads = this.locationReaders.get(rule.slot)
+      if (!reads) continue
+      for (const [focus, out] of this.outputs.get(rule) ?? []) {
+        // nav:TopDimensions: only the foci whose output says they keep a dimension that changed (nav:keeps).
+        if (reads === 'top' && ![...out.values()].some((q) => q.predicate.value === keeps && changed.has(q.object.value))) continue
+        this.markDirty(rule, focus)
+      }
+    }
   }
 
   /** Whether any undemanded work is parked. */
@@ -332,11 +409,21 @@ export class Engine {
    */
   warm(budgetMs: number, slice = 4, only?: (focus: string) => boolean): boolean {
     if (!this.demand) return false
-    const allowed = only ?? this.warmable
+    const test = only ?? this.warmable
+    // Asked once per focus (many parked pairs share one), afresh after each run, which may move it.
+    const known = new Map<string, boolean>()
+    const allowed =
+      test &&
+      ((focus: string) => {
+        let v = known.get(focus)
+        if (v === undefined) known.set(focus, (v = test(focus)))
+        return v
+      })
     const until = performance.now() + budgetMs
     this.warming = true
     try {
-      while (performance.now() < until) {
+      // Mostly nothing parked may be warmed (lazy parts): that costs a look per focus, not per pair.
+      while (performance.now() < until && this.hasWarmable(allowed)) {
         let picked = 0
         for (const [rule, foci] of this.deferred) {
           for (const focus of foci) {
@@ -348,8 +435,8 @@ export class Engine {
           }
           if (picked >= slice) break
         }
-        if (!picked) break
         this.run()
+        known.clear()
       }
     } finally {
       this.warming = false
@@ -359,7 +446,8 @@ export class Engine {
 
   /** Whether parked work remains that idle time may evaluate. */
   private hasWarmable(allowed = this.warmable): boolean {
-    for (const [, foci] of this.deferred) for (const focus of foci) if (!allowed || allowed(focusOf(focus))) return true
+    if (!allowed) return this.deferred.size > 0
+    for (const focus of this.deferred.foci()) if (allowed(focus)) return true
     return false
   }
 
@@ -485,7 +573,7 @@ export class Engine {
     const g = this.graph
     const next = new Map<string, Quad>()
     const put = (q: Quad) => next.set(quadKey(q), q)
-    const languages = this.selection.languages ?? []
+    const languages = languageChain(this.selection.languages ?? [])
     // Always a viewer (its texts are picked even without a preference: untagged, then English).
     put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
     languages.forEach((code, i) => {
@@ -658,6 +746,9 @@ export class Engine {
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
   private markFocus(rule: Rule, focus: string) {
     if (!rule.forEach) return this.markDirty(rule, focus)
+    // Its own writes never re-dirty it: one member's output about the focus (a result it records
+    // there) does not re-run the other members.
+    if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
     for (const g of this.graphs) {
       for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
@@ -775,7 +866,7 @@ export class Engine {
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
         if (r.watches && !r.watches.has(p)) continue
-        for (const x of this.walkBack(new Set([s]), path)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
       }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
@@ -940,6 +1031,7 @@ export class Engine {
       this.evaluations.clear()
       this.typedIn.clear()
     }
+    this.provenanceIfWanted()
     this.emit()
   }
 
@@ -994,6 +1086,7 @@ export class Engine {
       this.dirty.clear()
       wd.suspended(this, interrupted)
     }
+    if (!suspended) this.provenanceIfWanted()
     this.emit()
   }
 
@@ -1101,6 +1194,8 @@ export class Engine {
   }
 
   private evaluate(rule: Rule, foci: Set<string>): Leftover | undefined {
+    // Recorded from the end of this run (adding it mid-run would reach rules of strata already done).
+    if (!this.provenance && this.provenanceReaders && (this.provenanceReaders.has(rule.slot) || (this.provenanceFoci!.size && [...foci].some((x) => this.provenanceFoci!.has(focusOf(x)) && this.demand?.(focusOf(x)) !== false)))) this.provenanceWanted = rule.iri
     this.pristine.delete(rule)
     const t = performance.now()
     const wd = this.watchdog
@@ -1323,6 +1418,11 @@ export class Engine {
     }
   }
 
+  /** Whether the store has a statement about (or pointing at) a blank node. */
+  private inStore(b: Quad["object"]): boolean {
+    return this.store.match(b, null, null).length > 0 || this.store.match(null, null, b).length > 0
+  }
+
   private commit(rule: Rule, focus: string, quads: Quad[]) {
     for (const l of this.evaluationListeners) l(rule.slot, focus)
     let counts = this.evaluations.get(rule)
@@ -1336,7 +1436,10 @@ export class Engine {
     const next = new Map<string, Quad>()
     const f = this.store.factory
     for (const q of quads) {
-      if (q.subject.termType === 'BlankNode' || q.object.termType === 'BlankNode') {
+      // A rule mints IRIs, never blank nodes. It may point at a blank node the data already has (an
+      // RDF editor's row naming the nested resource it shows): as an object, and only one the store
+      // holds, so a fresh blank node from a CONSTRUCT template is still refused.
+      if (q.subject.termType === 'BlankNode' || (q.object.termType === 'BlankNode' && !this.inStore(q.object))) {
         throw new Error(`Rule <${rule.iri}> emitted a blank node for <${focus}>; mint IRIs instead`)
       }
       next.set(quadKey(q), q)
@@ -1373,7 +1476,8 @@ export class Engine {
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
-  private walkBack(nodes: Set<string>, steps: string[]): Set<string> {
+  /** Back along the steps to the nodes they start from; `removed`, a triple just removed, is walked as if still there. */
+  private walkBack(nodes: Set<string>, steps: string[], removed?: Quad): Set<string> {
     const f = this.store.factory
     for (let i = steps.length - 1; i >= 0 && nodes.size; i--) {
       const step = steps[i]!
@@ -1389,6 +1493,8 @@ export class Engine {
           // (A list cell on the way is a blank node, never the subject of a named step.)
           if (!IRI_LIKE.test(n)) continue
           for (const g of this.graphs) for (const q of this.store.match(f.namedNode(n), p, null, g)) if (q.object.termType === 'NamedNode') next.add(q.object.value)
+          // A link that is going away still led here: what it linked to read it.
+          if (removed && removed.subject.value === n && removed.predicate.value === p.value && removed.object.termType === 'NamedNode') next.add(removed.object.value)
         }
       } else for (const n of nodes) for (const x of this.links.get(n)?.get(step) ?? []) next.add(x)
       nodes = next
@@ -1431,6 +1537,38 @@ export class Engine {
     keys.delete(key)
     if (!keys.size) byRule!.delete(rule)
     if (!byRule!.size) this.memberReaders.delete(member)
+  }
+
+  /**
+   * Start recording provenance now: what was derived so far gets its PROV-O, as if it had been
+   * recorded from the start (each output's activity, from the output it has), and so does all
+   * that follows. Called by an engine whose provenance is 'onDemand'; inside or outside a run.
+   */
+  recordProvenance(): void {
+    if (this.provenance) return
+    this.provenance = true
+    const outside = this.current === -Infinity
+    for (const [rule, byFocus] of this.outputs) {
+      for (const [focus, next] of byFocus) {
+        const quads = [...next.values()]
+        this.committing = { rule, focus }
+        try {
+          for (const p of this.provenanceOf(rule, focus, quads)) {
+            const k = quadKey(p)
+            if (!next.has(k)) next.set(k, p), this.retain(k, p)
+          }
+        } finally {
+          this.committing = undefined
+        }
+      }
+    }
+    if (outside) this.run()
+  }
+
+  /** At the end of a run: start recording provenance, if a rule that reads it ran. */
+  private provenanceIfWanted() {
+    if (this.provenanceWanted === undefined || this.provenance) return
+    this.recordProvenance()
   }
 
   /**

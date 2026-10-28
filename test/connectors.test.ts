@@ -3,7 +3,7 @@
 // elements, again when they move, not at all while an end is hidden, and writes nothing when
 // nothing it joins moved.
 import { parseHTML } from 'linkedom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { attachConnectors, route } from '../src/web/connectors.ts'
 import { NS } from '../src/ns.ts'
 import { mountShell, mountSite } from './harness.ts'
@@ -110,6 +110,37 @@ describe('the connector effect', () => {
     expect(p.svg.hasAttribute('data-sem-drawn')).toBe(false)
     p.host.append(p.b)
     place(p.a, { left: 0, top: 0, width: 0, height: 0 })
+    p.effect.draw()
+    expect(p.svg.hasAttribute('data-sem-drawn')).toBe(false)
+  })
+
+  it('pins an end scrolled out of the box it shares with the connector to that box\'s edge', () => {
+    const p = page()
+    const box = p.document.createElement('div')
+    p.host.append(box)
+    box.append(p.a, p.b, p.svg)
+    place(box, { left: 0, top: 0, width: 800, height: 200 })
+    Object.assign(box, { scrollHeight: 1000, clientHeight: 200, scrollWidth: 800, clientWidth: 800, clientTop: 0 })
+    // linkedom's window reads through to the global object: put back what the test stubs.
+    const w = p.window as unknown as Record<string, unknown>
+    const had = { innerWidth: w.innerWidth, innerHeight: w.innerHeight, getComputedStyle: w.getComputedStyle }
+    onTestFinished(() => void Object.assign(w, had))
+    Object.assign(w, { innerWidth: 800, innerHeight: 300, getComputedStyle: (el: Element) => ({ overflowX: 'visible', overflowY: el === box ? 'auto' : 'visible', direction: 'ltr' }) })
+    // B is below the box's visible part (and the viewport): the line runs to the box's bottom edge, toward it.
+    place(p.b, { left: 300, top: 400, width: 100, height: 40 })
+    p.tick()
+    expect(p.svg.hasAttribute('data-sem-drawn')).toBe(true)
+    expect(p.svg.getAttribute('data-sem-away')).toBe('to')
+    expect(ends(p.line.getAttribute('d')!).to[1]).toBeGreaterThanOrEqual(199)
+    expect(ends(p.line.getAttribute('d')!).to[1]).toBeLessThanOrEqual(200)
+    // Scrolled into view: drawn to it, nothing away.
+    place(p.b, { left: 300, top: 100, width: 100, height: 40 })
+    p.effect.draw()
+    expect(p.svg.hasAttribute('data-sem-away')).toBe(false)
+    expect(ends(p.line.getAttribute('d')!).to).toEqual([300, 120])
+    // Both away: hidden.
+    place(p.a, { left: 10, top: -300, width: 100, height: 40 })
+    place(p.b, { left: 300, top: 400, width: 100, height: 40 })
     p.effect.draw()
     expect(p.svg.hasAttribute('data-sem-drawn')).toBe(false)
   })

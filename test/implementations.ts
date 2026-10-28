@@ -10,7 +10,8 @@ const UI = 'https://semblance.dev/demo#'
 /**
  * The renderings declared in the given ontology files (relative to ontology/)
  * that lack a SPARQL rule (and await no SPARQL extension, sem:needsExtension, nor tracked work,
- * sem:awaitsWork) or lack a function rule.
+ * sem:awaitsWork) or lack a function rule. A SPARQL rule that needs an extension counts, since
+ * its function rule runs on stores without it (and must exist).
  */
 export function implementationGaps(files: string[]): { noSparql: string[]; noFunction: string[] } {
   const store = new Store()
@@ -31,10 +32,11 @@ export function implementationGaps(files: string[]): { noSparql: string[]; noFun
 
 /**
  * Render the demo with SPARQL rules preferred and with function rules preferred,
- * show each page / gallery group, and require identical HTML.
+ * show each page / gallery group, and require identical HTML. A rendering whose SPARQL rule
+ * needs an extension (sem:needsExtension) runs it only on Semblance's engines: pass `'wat'`.
  */
-export function expectSameRendering(groups: string[], pages: ('Playground' | 'Performance' | 'Components')[] = []) {
-  const shells = (['sparql', 'function'] as const).map((prefer) => mountShell(5, 'oxigraph', prefer))
+export function expectSameRendering(groups: string[], pages: ('Playground' | 'Performance' | 'Components')[] = [], kind: 'oxigraph' | 'wat' | 'rust' = 'oxigraph') {
+  const shells = (['sparql', 'function'] as const).map((prefer) => mountShell(5, kind, prefer))
   const html = () => shells.map((h) => h.document.getElementById('app')!.innerHTML)
   for (const page of pages) {
     for (const h of shells) h.showPage(page)

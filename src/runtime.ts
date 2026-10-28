@@ -4,7 +4,7 @@ import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, NAV_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, SEM } from './ns.ts'
+import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { navigationFunctions } from './navigation.ts'
@@ -31,6 +31,9 @@ export class Runtime {
   readonly projections: Projection[] = []
   private readonly inputListeners: ((graph: string | undefined, delta: Delta) => void)[] = []
   private readonly warmth = new WeakMap<Engine, (focus: string) => string | undefined>()
+  /** Bumped when a sem:warm triple changes; each node's own sem:warm until then. */
+  private warmDeclared = 0
+  private readonly ownWarmth = new Map<string, string | undefined>()
   private readonly refreshListeners: (() => void)[] = []
   private refreshQueued = false
   /** When the next refresh may run: a slow one waits longer, so following never takes over. */
@@ -59,7 +62,7 @@ export class Runtime {
   private tx?: Map<string, { graph: string | undefined; q: Quad; w: number }>
 
   constructor(readonly store: GraphStore) {
-    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH], functions: viewFunctions })
+    this.views = new ViewRuntime(store, { graphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH], functions: viewFunctions })
     // A window's next expiry: a tick with no input.
     this.views.onTimer = () => {
       this.advance()
@@ -98,15 +101,44 @@ export class Runtime {
   }
 
   private disposed = false
+  private readonly endListeners: (() => void)[] = []
+
+  /** Whether the runtime has ended (end, dispose): it no longer ticks, applies or writes. */
+  get ended(): boolean {
+    return this.disposed
+  }
 
   /**
-   * Let the runtime and its store go: no timer or queued refresh touches the store afterwards,
-   * and the store releases what it holds outside the JavaScript heap (GraphStore.dispose).
+   * Hear once that the runtime ends, before its store is released: host effects that follow it
+   * (persistence's delayed write, a pending report) finish what they can and stop. Returns a
+   * function that stops listening.
+   */
+  onEnd(listener: () => void): () => void {
+    this.endListeners.push(listener)
+    return () => {
+      const i = this.endListeners.indexOf(listener)
+      if (i >= 0) this.endListeners.splice(i, 1)
+    }
+  }
+
+  /**
+   * End the runtime but keep its store: the effects that follow it stop (onEnd), its views'
+   * timers are cancelled, and no tick, refresh, change or event touches the store afterwards.
+   */
+  end(): void {
+    if (this.disposed) return
+    for (const l of this.endListeners.splice(0)) l()
+    this.disposed = true
+    this.views.dispose()
+  }
+
+  /**
+   * Let the runtime and its store go: it ends (end), and the store releases what it holds
+   * outside the JavaScript heap (GraphStore.dispose).
    */
   dispose(): void {
     if (this.disposed) return
-    this.disposed = true
-    this.views.dispose()
+    this.end()
     this.store.dispose?.()
   }
 
@@ -153,6 +185,7 @@ export class Runtime {
     const views = this.views.tick(input)
     const all = views.add.length || views.remove.length ? { add: [...input.add, ...views.add], remove: [...input.remove, ...views.remove] } : input
     if (!all.add.length && !all.remove.length) return
+    if (all.add.some(declaresWarmth) || all.remove.some(declaresWarmth)) this.warmDeclared++
     for (const p of this.projections) p.engine.process(all), settle(p)
     this.resumeViews()
     for (const [graph, d] of byGraph) for (const l of this.inputListeners) l(graph, d)
@@ -228,7 +261,7 @@ export class Runtime {
   private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
     const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
-      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, VIEW_GRAPH],
+      inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, VIEW_GRAPH],
       // A rule maintained as a view (iv:strategy iv:Incremental): one hosted view per rule and projection.
       maintain: (rule, query) => this.views.hostRule(mint(rule.iri, 'view-' + name), query),
       ...opts,
@@ -253,7 +286,26 @@ export class Runtime {
       // Idle time warms only what an ancestor declares sem:warm sem:Eager (default: lazy).
       const f = this.store.factory
       const warm = f.namedNode(SEM.warm)
-      const warmth = (focus: string) => index.nearest(focus, (key) => (key.includes(' ') ? undefined : this.store.match(f.namedNode(key), warm, null)[0]?.object.value))
+      // Remembered until the projection's structure (index.visibility) or a sem:warm triple
+      // changes: idle time asks it of every focus with parked work, every slice.
+      let structure = -1
+      let declared = -1
+      let nearest = new Map<string, string | undefined>()
+      const own = (key: string) => {
+        if (key.includes(' ')) return undefined
+        if (declared !== this.warmDeclared) (declared = this.warmDeclared), this.ownWarmth.clear()
+        if (this.ownWarmth.has(key)) return this.ownWarmth.get(key)
+        const v = this.store.match(f.namedNode(key), warm, null)[0]?.object.value
+        this.ownWarmth.set(key, v)
+        return v
+      }
+      const warmth = (focus: string) => {
+        if (structure !== index.visibility || declared !== this.warmDeclared) (structure = index.visibility), (nearest = new Map())
+        if (nearest.has(focus)) return nearest.get(focus)
+        const v = index.nearest(focus, own)
+        nearest.set(focus, v)
+        return v
+      }
       engine.warmable = (focus) => warmth(focus) === SEM.Eager
       this.warmth.set(engine, warmth)
     }
@@ -270,6 +322,7 @@ export class Runtime {
    * and update the projections that read it.
    */
   write(graph: string, delta: Delta): Delta {
+    if (this.disposed) return { add: [], remove: [] }
     const f = this.store.factory
     const g = f.namedNode(graph)
     const effective: Delta = { add: [], remove: [] }
@@ -362,6 +415,7 @@ export class Runtime {
    * turn that was never suspended. Returns whether work is still held.
    */
   continueStall(sliceMs = 50): boolean {
+    if (this.disposed) return false
     const more = this.watchdog.turn(
       () => {
         let more = false
@@ -388,6 +442,7 @@ export class Runtime {
    * Returns how many pairs are out of date.
    */
   stopStall(): number {
+    if (this.disposed) return 0
     for (const p of this.projections) if (p.engine.heldCount) p.engine.stopHeld()
     this.watchdog.resolve()
     for (const l of this.refreshListeners) l()
@@ -396,6 +451,7 @@ export class Runtime {
 
   /** Evaluate what a stopped stall left out of date, as a turn of its own (it may stall again). */
   retryStopped(): void {
+    if (this.disposed) return
     this.watchdog.turn(() => {
       for (const p of this.projections) p.engine.retryStopped(), settle(p)
     })
@@ -405,6 +461,7 @@ export class Runtime {
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
     const effective: Delta = { add: [], remove: [] }
+    if (this.disposed) return effective
     const f = this.store.factory
     const dg = f.defaultGraph()
     for (const q of delta.remove) {
@@ -433,3 +490,5 @@ function settle(p: Projection) {
     if (!p.engine.resume()) return
   }
 }
+
+const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm

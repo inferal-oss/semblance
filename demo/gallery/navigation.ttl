@@ -21,12 +21,12 @@ ui:gallery-navigation-intro a c:Heading ; c:label "Navigation" .
 
 # A site's navigation as links to the gallery's own pages. The one to this page is current because
 # the address says so (nav:current); c:currentPage true would say it outright.
-ui:nv-link-home a c:NavLink ; c:href "#home" ; c:logo ui:nv-link-mark ;
+ui:nv-link-home a c:NavLink ; c:href "/" ; c:logo ui:nv-link-mark ;
     c:label "Home" , "Головна"@uk , "Startseite"@de , "الرئيسية"@ar .
 ui:nv-link-mark a c:Emblem ; c:viewBox "0 0 16 16" ; c:pathData "M2 7L8 2L14 7V14H2Z" ; c:decorative true .
-ui:nv-link-navigation a c:NavLink ; c:href "#components/navigation" ;
+ui:nv-link-navigation a c:NavLink ; c:href "/components/navigation/" ;
     c:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقّل"@ar .
-ui:nv-link-components a c:NavLink ; c:href "#components" ; c:count 3 ;
+ui:nv-link-components a c:NavLink ; c:href "/components/" ; c:count 3 ;
     c:label "Components" , "Компоненти"@uk , "Komponenten"@de , "المكوّنات"@ar ;
     c:countLabel "new" , "нові"@uk , "neu"@de , "جديدة"@ar .
 ui:nv-links-list a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-1 ;
@@ -39,10 +39,10 @@ ui:nv-links-spec a c:Specimen ; c:demonstrates c:NavLink ; c:label "Navigation l
 # --- Breadcrumbs ----------------------------------------------------------------------------------
 
 # The explicit trail links to the site's own pages (c:href, the addresses the navigation layer reads).
-ui:nv-crumb-home c:href "#home" ; c:label "Semblance" .
-ui:nv-crumb-components c:href "#components" ;
+ui:nv-crumb-home c:href "/" ; c:label "Semblance" .
+ui:nv-crumb-components c:href "/components/" ;
     c:label "Components" , "Компоненти"@uk , "Komponenten"@de , "المكوّنات"@ar .
-ui:nv-crumb-navigation c:href "#components/navigation" ;
+ui:nv-crumb-navigation c:href "/components/navigation/" ;
     c:label "Navigation" , "Навігація"@uk , "Navigation"@de , "التنقّل"@ar .
 ui:nv-crumb-breadcrumbs c:label "Breadcrumbs" , "Хлібні крихти"@uk , "Brotkrümel"@de , "مسار التنقّل"@ar .
 ui:nv-crumbs-explicit a c:Breadcrumbs ;

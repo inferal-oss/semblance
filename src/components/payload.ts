@@ -10,6 +10,7 @@ import { named, num, RDFS_LABEL, str, text } from './util.ts'
 const C_VIA = NS.c + 'via'
 const C_PAYLOAD_PROPERTY = NS.c + 'payloadProperty'
 const C_TYPE_PROPERTY = NS.c + 'typeProperty'
+const C_ALT_PROPERTY = NS.c + 'altProperty'
 const C_BIND_FROM = NS.c + 'bindFrom'
 const C_BIND_PROPERTY = NS.c + 'bindProperty'
 const C_JSON_NODE = NS.c + 'JsonNode'
@@ -321,7 +322,28 @@ const viewerTexts: FnRule = (ctx, focus) => {
   return o.quads
 }
 
+/** One image (c:ImageView): its address from the payload's place, its alt text from c:altProperty of the same node. */
+const imageView: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const { text: src, holder } = payloadOf(ctx, focus)
+  if (src === undefined) {
+    if (text(ctx, focus, C.emptyText) !== undefined) return message(ctx, o, focus, '')
+    o.renders(el(o, 'root', 'Div', { hidden: ctx.modality === MOD.Text ? undefined : '' }))
+    return o.quads
+  }
+  const altProperty = ctx.object(focus, C_ALT_PROPERTY)
+  const said = named(holder) && named(altProperty) ? ctx.object(holder, altProperty) : undefined
+  const alt = said?.termType === 'Literal' ? said.value : undefined
+  if (ctx.modality === MOD.Text) {
+    o.renders(el(o, 'root', 'Div', {}, [o.text('line', `[image${alt !== undefined ? ': ' + alt : ''}]`)]))
+    return o.quads
+  }
+  o.renders(el(o, 'root', 'Div', {}, [el(o, 'image', 'Img', { src, alt: alt ?? '', decoding: 'async' })]))
+  return o.quads
+}
+
 export const functions: Record<string, FnRule> = {
+  'payload:image-view': imageView,
   'payload:json-tree': jsonTree,
   'payload:json-node': jsonNode,
   'payload:hex-view': hexView,

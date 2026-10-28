@@ -1,6 +1,7 @@
 import type { Term } from '@rdfjs/types'
 import { RDF_FIRST, RDF_NIL, RDF_REST, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
+import { queryReads } from '../sparql-reads.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Rule {
@@ -22,6 +23,11 @@ export interface Rule {
    * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse).
    */
   followPaths: string[][]
+  /**
+   * The predicates whose changes (on the focus, or on a followed node) make the focus dirty:
+   * sem:watches, else, for a SPARQL rule, every predicate its query names (with what it requires,
+   * is stopped by and follows), when it names them all. Absent: any predicate.
+   */
   watches?: Set<string>
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
@@ -59,6 +65,11 @@ export interface Rule {
   /** The focus must have none of these properties, or the rule is not run (sem:unless). */
   unless: string[]
   /**
+   * SPARQL extension groups the rule's query uses (sem:needsExtension, `sx:Math` …; the
+   * engine's EXTENSIONS.md): it is chosen only on a store that has them all (GraphStore.extensions).
+   */
+  needs: string[]
+  /**
    * When a triple a query the rule followed reads changes (RuleContext.select with follow):
    * re-run it in the same run ('now'), or at the host's next frame, once for all such changes
    * ('frame', sem:refresh sem:NextFrame).
@@ -84,6 +95,8 @@ export interface Selection {
   prefer: 'sparql' | 'function'
   /** Whether the store can evaluate SPARQL; slots with only SPARQL implementations are skipped otherwise. */
   sparql?: boolean
+  /** The SPARQL extension groups the store has (GraphStore.extensions); a SPARQL rule needing another is skipped. */
+  extensions?: ReadonlySet<string>
   /** The viewer's languages, most preferred first (the localization layer). */
   languages?: string[]
 }
@@ -118,7 +131,10 @@ export function loadRules(store: GraphStore): Rule[] {
     }
     const target = get(SEM.targets)
     if (!target) throw new Error(`Rule <${r.value}> has no sem:targets`)
-    const query = one(r, SEM.construct)?.value
+    // A rule may take its query from another (sem:constructFrom): one check for several renderings
+    // (a component's own shapes, and its entries' member-wise).
+    const from = one(r, SEM.constructFrom)
+    const query = one(r, SEM.construct)?.value ?? (from ? one(from, SEM.construct)?.value : undefined)
     const fn = one(r, SEM.function)?.value
     if (!query === !fn) throw new Error(`Rule <${r.value}> needs exactly one of sem:construct / sem:function`)
     const watches = getAll(SEM.watches)
@@ -139,6 +155,9 @@ export function loadRules(store: GraphStore): Rule[] {
       // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
       return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
     })
+    const requires = getAll(SEM.requires)
+    const unless = getAll(SEM.unless)
+    const forEach = get(SEM.forEach)?.value
     rules.push({
       iri: r.value,
       target: target.value,
@@ -151,9 +170,9 @@ export function loadRules(store: GraphStore): Rule[] {
       fn,
       follows: follows.filter((p): p is string => typeof p === 'string'),
       followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
-      watches: watches.length ? new Set(watches) : undefined,
+      watches: watches.length ? new Set(watches) : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : undefined,
       readsMinted: get(SEM.readsMinted)?.value === 'true',
-      forEach: get(SEM.forEach)?.value,
+      forEach,
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
@@ -162,8 +181,10 @@ export function loadRules(store: GraphStore): Rule[] {
       always: get(SEM.always)?.value === 'true',
       // Member-wise output is attributed to (focus, member) pairs, which bulk output cannot be.
       bulk: get(SEM.bulk)?.value !== 'false' && !get(SEM.forEach) && (!query || attributable(query)),
-      requires: getAll(SEM.requires),
-      unless: getAll(SEM.unless),
+      requires,
+      unless,
+      // The rule's own: a rendering's sem:needsExtension says what its SPARQL rule awaits.
+      needs: all(r, SEM.needsExtension),
       refresh: get(SEM.refresh)?.value === SEM.NextFrame ? 'frame' : 'now',
       readsLanguage: !!query && READS_LANGUAGE.test(query),
       incremental: !!query && get('https://semblance.dev/ns/view#strategy')?.value === 'https://semblance.dev/ns/view#Incremental',
@@ -172,7 +193,29 @@ export function loadRules(store: GraphStore): Rule[] {
   return rules.sort((a, b) => a.stratum - b.stratum || collator.compare(a.iri, b.iri))
 }
 
-/** Pick the active rules: matching modality, enabled layer, one runnable implementation per slot. */
+/**
+ * The predicates a query names in its patterns (with `also`), or undefined when some pattern takes
+ * any predicate (a variable, a negated set) or the query cannot be read: a changed triple whose
+ * predicate it does not name matches none of its patterns, so it cannot change the query's result.
+ * A SPARQL rule watches these as a function rule's traced reads would, and is not re-run for the
+ * rest of its focus's (or a followed node's) triples.
+ */
+function namedPredicates(query: string, also: string[]): Set<string> | undefined {
+  const reads = queryReads(query)
+  if (!reads || reads.some((r) => r.p === undefined)) return undefined
+  return new Set([...reads.map((r) => r.p!), ...also])
+}
+
+/** Whether the store can run a rule: a SPARQL rule needs SPARQL and every extension group it names. */
+export function runnable(r: Pick<Rule, 'kind' | 'needs'>, sel: Pick<Selection, 'sparql' | 'extensions'>): boolean {
+  return r.kind !== 'sparql' || (sel.sparql !== false && r.needs.every((g) => sel.extensions?.has(g)))
+}
+
+/**
+ * Pick the active rules: matching modality, enabled layer, one runnable implementation per slot:
+ * the preferred kind if the store can run it, else the next (a SPARQL rule needing an extension
+ * the store lacks falls back to its function twin).
+ */
 export function selectRules(rules: Rule[], sel: Selection, warn: (msg: string) => void = () => {}): Rule[] {
   const bySlot = new Map<string, Rule[]>()
   for (const r of rules) {
@@ -182,12 +225,12 @@ export function selectRules(rules: Rule[], sel: Selection, warn: (msg: string) =
   }
   const out: Rule[] = []
   for (const [slot, impls] of bySlot) {
-    const runnable = sel.sparql === false ? impls.filter((r) => r.kind !== 'sparql') : impls
-    if (!runnable.length) {
+    const can = impls.filter((r) => runnable(r, sel))
+    if (!can.length) {
       warn(`<${slot}> has no implementation this store can run; skipped`)
       continue
     }
-    out.push(runnable.find((r) => r.kind === sel.prefer) ?? runnable[0]!)
+    out.push(can.find((r) => r.kind === sel.prefer) ?? can[0]!)
   }
   return out
 }

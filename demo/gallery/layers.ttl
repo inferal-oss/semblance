@@ -95,13 +95,13 @@ ui:dndBugsTitle a c:Heading ; c:level 3 ; c:label "Bugs only" , "Лише вад
 
 # The lists: sortable (their items are draggables, ordered by ui:rank), holding their tasks as c:item.
 ui:Shelf a owl:Class ; rdfs:comment "The specimen's lists: a drop moves the task into the list, at its place."@en .
-ui:dndBacklog a c:List , dnd:Sortable , ui:Shelf ; c:label "Backlog" ; c:itemLabel rdfs:label ; c:sortBy ui:rank ;
+ui:dndBacklog a c:List , dnd:Sortable , ui:Shelf ; c:label "Backlog" ; c:itemLabel rdfs:label ; c:itemChecked ui:done ; c:sortBy ui:rank ;
     dnd:members c:item ; dnd:orderBy ui:rank ;
     c:item ui:task-notes , ui:task-dark , ui:task-search , ui:task-profile .
-ui:dndToday a c:List , dnd:Sortable , ui:Shelf ; c:label "Today" ; c:itemLabel rdfs:label ; c:sortBy ui:rank ;
+ui:dndToday a c:List , dnd:Sortable , ui:Shelf ; c:label "Today" ; c:itemLabel rdfs:label ; c:itemChecked ui:done ; c:sortBy ui:rank ;
     dnd:members c:item ; dnd:orderBy ui:rank ;
     c:item ui:task-login , ui:task-review .
-ui:dndBugs a c:List , dnd:Sortable , ui:Shelf ; c:label "Bugs" ; c:itemLabel rdfs:label ; c:sortBy ui:rank ;
+ui:dndBugs a c:List , dnd:Sortable , ui:Shelf ; c:label "Bugs" ; c:itemLabel rdfs:label ; c:itemChecked ui:done ; c:sortBy ui:rank ;
     dnd:members c:item ; dnd:orderBy ui:rank ; dnd:accepts ui:BugShape ;
     c:item ui:task-crash .
 

@@ -79,6 +79,13 @@ stylesheet, projects `root` on screen, patches it into the element and routes th
 events to reactions. It returns the pieces (`store`, `runtime`, `projection`, `renderer`, `bus`)
 for when you need more.
 
+The browser host anchors open menus, calendars, typeahead lists and popover panels to their
+controls and keeps them within the viewport. Their renderings say which control each panel opens
+from (`data-sem-anchor`, the control's id; see the position layer); where available, native
+popovers lift a shown panel above scrolling containers without moving its DOM, and other browsers
+use fixed positioning. Scrolling and resizing update the placement; the graph continues to own
+open and hidden state.
+
 The components you can use, with live specimens and their ontology, are on the site's
 [Components](https://semblance.dev/#components) page; [Reference](https://semblance.dev/#reference)
 has every term.
@@ -246,6 +253,11 @@ const store = loadStore('wat', tally, app)
 const screen = new Runtime(store).project({ modality: MOD.Screen, roots: [page] })
 const html = toHTML(screen.index, page)
 ```
+
+To serve an app already rendered, describe it once as a site (`semblance.config.ts`, as in
+`examples/hello`). Then `npx semblance build` renders every address of it into the build, each a
+page the browser paints before any script runs, and `npx semblance serve` renders per request.
+`mount()` takes the rendered page over without rendering it again. See [SSR.md](SSR.md).
 
 ## Stores
 

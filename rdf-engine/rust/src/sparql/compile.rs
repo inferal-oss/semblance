@@ -122,7 +122,9 @@ pub type Res<T> = Result<T, &'static str>;
 /// (1) OPTIONAL right sides computed in the module, (2) join right sides
 /// computed in the module, (4) filters pushed down, (8) EXISTS as functions,
 /// (16) subqueries in the module, (32) typed expressions, (64) right sides in
-/// line with the left row's bindings (masked).
+/// line with the left row's bindings (masked), (128) right sides computed
+/// whatever the left side (no probe of its triples first), (256) a UNION
+/// joined as a whole rather than branch by branch.
 pub static DEBUG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 fn off(bit: u32) -> bool {
     DEBUG.load(core::sync::atomic::Ordering::Relaxed) & bit != 0
@@ -163,6 +165,8 @@ enum Step<'a> {
     Unmask(u32),
     /// OPTIONAL over such a right side, with its condition.
     OptMasked(&'a Pattern, Option<&'a Expr>, u32),
+    /// The branches of a UNION joined with the row (fork i), each its own way.
+    Fork(&'a Pattern, u32),
 }
 
 /// A mask: per hidden variable, the global holding its value and what is
@@ -193,6 +197,8 @@ struct Gen<'q> {
     in_tx: bool,
     tx_used: Option<u32>,
     masks: Vec<Mask>,
+    /// For `Step::Fork`: how each branch of its UNION is joined.
+    forks: Vec<Vec<Step<'q>>>,
     /// Expressions compiled now are SELECT expressions after another (bit 31 of their index).
     same_solution: bool,
 }
@@ -216,7 +222,7 @@ pub fn compile(q: &Query, dict: &Dict, bound: &[Var], h: u32, shape: u32, frame:
     if q.template.iter().flatten().any(|t| matches!(t, Tt::Triple(_))) {
         return Err("not compilable: triple term in template");
     }
-    let mut g = Gen { q, dict, frame, width: q.vars.len() as u32, funcs: Vec::new(), t: Tables::default(), base, globals: 0, here: None, txd: 0, in_tx: false, tx_used: None, masks: Vec::new(), same_solution: false };
+    let mut g = Gen { q, dict, frame, width: q.vars.len() as u32, funcs: Vec::new(), t: Tables::default(), base, globals: 0, here: None, txd: 0, in_tx: false, tx_used: None, masks: Vec::new(), forks: Vec::new(), same_solution: false };
     // run(graphs) -> n
     let mut run = Body::new(T_I_I, 1);
     let (n, i, top) = (run.local(), run.local(), run.local());
@@ -301,7 +307,7 @@ fn optional(x: &[u8], c: &Pattern) -> Vec<u8> {
 fn native(p: &Pattern) -> bool {
     match p {
         Pattern::Bgp(ts) => ts.iter().all(|t| ![&t.s, &t.p, &t.o].iter().any(|x| matches!(x, Tv::Triple(_)))),
-        Pattern::Minus(..) | Pattern::Graph(..) | Pattern::Sub(_) | Pattern::Service(_) => false,
+        Pattern::Minus(..) | Pattern::Graph(..) | Pattern::Sub(_) | Pattern::Service(_) | Pattern::Magic(_) => false,
         _ => true,
     }
 }
@@ -358,6 +364,10 @@ fn pattern_reads(p: &Pattern, out: &mut Vec<Var>) -> bool {
             out.extend_from_slice(vs);
             true
         }
+        Pattern::Magic(m) => {
+            m.ins.iter().chain(&m.outs).for_each(|x| tv_vars(x, out));
+            true
+        }
         Pattern::Sub(s) => {
             out.extend_from_slice(&s.project);
             pattern_reads(&s.pattern, out)
@@ -380,7 +390,7 @@ fn has_exists(e: &Expr) -> bool {
 /// Variables a step may bind.
 fn step_binds(s: &Step, out: &mut Vec<Var>) {
     match s {
-        Step::Pat(p) | Step::Eval(p) | Step::Rows(_, p) | Step::OptRows(_, p, _) | Step::Optional(p, _) | Step::Masked(p, _) | Step::OptMasked(p, _, _) => super::parse::pattern_vars(p, out),
+        Step::Pat(p) | Step::Eval(p) | Step::Rows(_, p) | Step::OptRows(_, p, _) | Step::Optional(p, _) | Step::Masked(p, _) | Step::OptMasked(p, _, _) | Step::Fork(p, _) => super::parse::pattern_vars(p, out),
         Step::Triple(t) => [&t.s, &t.p, &t.o].iter().for_each(|x| tv_vars(x, out)),
         Step::Extend(v, _) | Step::Project(v, _) => out.push(*v),
         _ => {}
@@ -407,6 +417,33 @@ fn ready_filter(steps: &[Step], bound: &[u8]) -> Option<usize> {
         }
     }
     None
+}
+
+/// The branches of a UNION that is not pure, as the interpreter joins them
+/// (a pure one is a branch as a whole).
+fn branches<'q>(p: &'q Pattern, out: &mut Vec<&'q Pattern>) {
+    match p {
+        Pattern::Union(a, b) if !pure(p) => {
+            branches(a, out);
+            branches(b, out);
+        }
+        _ => out.push(p),
+    }
+}
+
+/// The basic graph patterns every solution of `p` matches (joined): a left side
+/// with no match for them has no rows. Filters, BINDs, OPTIONAL right sides,
+/// UNIONs and what the compiler does not run itself are left out.
+fn required<'q>(p: &'q Pattern, out: &mut Vec<&'q Pattern>) {
+    match p {
+        Pattern::Bgp(ts) if !ts.is_empty() && exists_inline(p) => out.push(p),
+        Pattern::Join(a, b) | Pattern::Lateral(a, b) => {
+            required(a, out);
+            required(b, out);
+        }
+        Pattern::LeftJoin(a, ..) | Pattern::Minus(a, _) | Pattern::Filter(_, a) | Pattern::Extend(a, ..) => required(a, out),
+        _ => {}
+    }
 }
 
 /// An EXISTS pattern the compiler runs itself: triples and filters.
@@ -522,6 +559,27 @@ impl<'q> Gen<'q> {
                     self.emit(f, &then(&head), st)
                 }
                 Pattern::Join(a, b) if pure(b) => self.emit(f, &then(&[Step::Pat(a), Step::Pat(b)]), st),
+                // A UNION is joined branch by branch, as the interpreter does: each
+                // in line, masked, or from its rows, whatever the other branches need.
+                Pattern::Join(a, b) if matches!(**b, Pattern::Union(..)) && !off(256) => {
+                    let mut leaves = Vec::new();
+                    branches(b, &mut leaves);
+                    let (mut ways, mut next) = (Vec::new(), st.clone());
+                    for x in leaves {
+                        ways.push(if pure(x) {
+                            Step::Pat(x)
+                        } else if self.hidden(a, x, st).is_some() {
+                            Step::Masked(x, self.mask(a, x, st))
+                        } else {
+                            let (g, top) = self.table_if(f, a, x, &next, 2)?;
+                            next.top = top;
+                            Step::Rows(g, x)
+                        });
+                    }
+                    self.forks.push(ways);
+                    let i = self.forks.len() as u32 - 1;
+                    self.emit(f, &then(&[Step::Pat(a), Step::Fork(b, i)]), &next)
+                }
                 // The left row's bindings make the right side cheap: it runs per row, as the interpreter's join_one.
                 Pattern::Join(a, b) if self.hidden(a, b, st).is_some() => {
                     let m = self.mask(a, b, st);
@@ -529,7 +587,7 @@ impl<'q> Gen<'q> {
                 }
                 // Else the right side's rows, computed (as the interpreter does) before the left side runs.
                 Pattern::Join(a, b) => {
-                    let (g, top) = self.table(f, b, st)?;
+                    let (g, top) = self.table_if(f, a, b, st, 2)?;
                     let next = St { bound: st.bound.clone(), top };
                     self.emit(f, &then(&[Step::Pat(a), Step::Rows(g, b)]), &next)
                 }
@@ -539,7 +597,7 @@ impl<'q> Gen<'q> {
                     self.emit(f, &then(&[Step::Pat(a), Step::OptMasked(b, c.as_ref(), m)]), st)
                 }
                 Pattern::LeftJoin(a, b, c) => {
-                    let (g, top) = self.table_as(f, b, st, 1)?;
+                    let (g, top) = self.table_if(f, a, b, st, 1)?;
                     let next = St { bound: st.bound.clone(), top };
                     self.emit(f, &then(&[Step::Pat(a), Step::OptRows(g, b, c.as_ref())]), &next)
                 }
@@ -647,6 +705,14 @@ impl<'q> Gen<'q> {
             }
             Step::Exit(g) => {
                 self.f(f).i32(1).global_set(g).op(RETURN);
+                Ok(())
+            }
+            Step::Fork(b, i) => {
+                let ways = self.forks[i as usize].clone();
+                let k = self.cont(rest, after(b, &st.bound))?;
+                for w in ways {
+                    self.emit(f, &[w, Step::Call(k)], st)?;
+                }
                 Ok(())
             }
             Step::Masked(b, m) => {
@@ -769,6 +835,43 @@ impl<'q> Gen<'q> {
             self.f(f).get(cur).global_set(g).i32(-1).get(cur).call(GROUP).global_set(g + 1);
         }
         self.f(f).get(cur).global_get(g + 1).i32(w).op(MUL).op(ADD).set(top);
+        Ok((g, top))
+    }
+
+    /// `table_as` for the right side `b` of a join with `a`, computed only when
+    /// the triples `a` requires have a match: the interpreter never evaluates
+    /// the right side of a join (or OPTIONAL) whose left side has no rows, and
+    /// one evaluated without the left row's bindings can be large.
+    fn table_if(&mut self, f: usize, a: &'q Pattern, b: &'q Pattern, st: &St, opt: u32) -> Res<(u32, u32)> {
+        let mut req = Vec::new();
+        required(a, &mut req);
+        if req.is_empty() || off(128) {
+            return self.table_as(f, b, st, opt);
+        }
+        // As EXISTS: a function that returns at the first solution, what it binds restored.
+        let flag = self.global();
+        let mut probe: Vec<Step<'q>> = req.iter().map(|&p| Step::Pat(p)).collect();
+        probe.push(Step::Exit(flag));
+        let k = self.cont(&probe, st.bound.clone())?;
+        let mut saves = Vec::new();
+        for &p in &req {
+            for v in vars_of(p) {
+                if st.bound[v as usize] != CERTAIN && !saves.iter().any(|&(w, _)| w == v) {
+                    let l = self.f(f).local();
+                    self.load_var(f, v);
+                    self.f(f).set(l);
+                    saves.push((v, l));
+                }
+            }
+        }
+        self.f(f).i32(0).global_set(flag).get(st.top).call(k);
+        for (v, l) in saves {
+            self.store_var(f, v, l);
+        }
+        self.f(f).global_get(flag).open(IF);
+        let (g, top) = self.table_as(f, b, st, opt)?;
+        // else no rows (and no left rows to join them with)
+        self.f(f).op(END).global_get(flag).op(EQZ).open(IF).get(st.top).set(top).i32(0).global_set(g + 1).op(END);
         Ok((g, top))
     }
 

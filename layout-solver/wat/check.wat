@@ -1,0 +1,96 @@
+;; The WAT twin of src/layout/check.ts: the same program over the same packed boxes (x, y, width,
+;; height per box, f64, in $buf); findings as invariant, member, by triples into $out.
+
+(@define SAME_BLOCK_SIZE 1)
+(@define SAME_INLINE_SIZE 2)
+(@define SAME_TOP 3)
+(@define SAME_BOTTOM 4)
+(@define SAME_START 5)
+(@define FITS_WITHIN 7)
+
+(func $box (param $i i32) (result i32)
+  (i32.add (global.get $buf) (i32.shl (local.get $i) (i32.const 5))))
+
+(func $top (param $i i32) (result f64) (f64.load offset=8 (call $box (local.get $i))))
+(func $bottom (param $i i32) (result f64)
+  (local $b i32)
+  (local.set $b (call $box (local.get $i)))
+  (f64.add (f64.load offset=8 (local.get $b)) (f64.load offset=24 (local.get $b))))
+(func $start (param $i i32) (result f64) (f64.load (call $box (local.get $i))))
+(func $end (param $i i32) (result f64)
+  (local $b i32)
+  (local.set $b (call $box (local.get $i)))
+  (f64.add (f64.load (local.get $b)) (f64.load offset=16 (local.get $b))))
+
+(func $measure (param $rel i32) (param $i i32) (result f64)
+  (if (i32.eq (local.get $rel) (i32.const SAME_BLOCK_SIZE)) (then (return (f64.load offset=24 (call $box (local.get $i))))))
+  (if (i32.eq (local.get $rel) (i32.const SAME_INLINE_SIZE)) (then (return (f64.load offset=16 (call $box (local.get $i))))))
+  (if (i32.eq (local.get $rel) (i32.const SAME_TOP)) (then (return (call $top (local.get $i)))))
+  (if (i32.eq (local.get $rel) (i32.const SAME_BOTTOM)) (then (return (call $bottom (local.get $i)))))
+  (call $start (local.get $i)))
+
+(func $finding (param $inv i32) (param $member i32) (param $by f64)
+  (local $p i32)
+  (call $out_reserve (i32.add (global.get $outlen) (i32.const 3)))
+  (local.set $p (i32.add (global.get $out) (i32.shl (global.get $outlen) (i32.const 3))))
+  (f64.store (local.get $p) (f64.convert_i32_s (local.get $inv)))
+  (f64.store offset=8 (local.get $p) (f64.convert_i32_s (local.get $member)))
+  (f64.store offset=16 (local.get $p) (local.get $by))
+  (global.set $outlen (i32.add (global.get $outlen) (i32.const 3))))
+
+(func $prog_at (param $i i32) (result i32)
+  (i32.load (i32.add (global.get $prog) (i32.shl (local.get $i) (i32.const 2)))))
+
+;; Findings into $out; their count.
+(func $check (result i32)
+  (local $pc i32) (local $inv i32) (local $rel i32) (local $tolerance f64) (local $n i32) (local $m i32) (local $k i32)
+  (local $v0 f64) (local $v f64) (local $lo f64) (local $hi f64) (local $worst i32) (local $far f64) (local $d f64)
+  (local $c i32) (local $i i32) (local $over f64)
+  (global.set $outlen (i32.const 0))
+  (block $done (loop $each
+    (br_if $done (i32.ge_s (local.get $pc) (global.get $proglen)))
+    (local.set $rel (call $prog_at (local.get $pc)))
+    (local.set $tolerance (f64.div (f64.convert_i32_s (call $prog_at (i32.add (local.get $pc) (i32.const 1)))) (f64.const 100)))
+    (local.set $n (call $prog_at (i32.add (local.get $pc) (i32.const 2))))
+    (local.set $m (i32.add (local.get $pc) (i32.const 3)))
+    (local.set $pc (i32.add (local.get $m) (local.get $n)))
+    (if (i32.and (i32.ge_s (local.get $rel) (i32.const SAME_BLOCK_SIZE)) (i32.le_s (local.get $rel) (i32.const SAME_START)))
+      (then
+        ;; a group's spread (max - min); the member reported is the one farthest from the first
+        (local.set $worst (call $prog_at (local.get $m)))
+        (local.set $v0 (call $measure (local.get $rel) (local.get $worst)))
+        (local.set $lo (local.get $v0))
+        (local.set $hi (local.get $v0))
+        (local.set $far (f64.const 0))
+        (local.set $k (i32.const 1))
+        (block $members (loop $member
+          (br_if $members (i32.ge_s (local.get $k) (local.get $n)))
+          (local.set $i (call $prog_at (i32.add (local.get $m) (local.get $k))))
+          (local.set $v (call $measure (local.get $rel) (local.get $i)))
+          (if (f64.lt (local.get $v) (local.get $lo)) (then (local.set $lo (local.get $v))))
+          (if (f64.gt (local.get $v) (local.get $hi)) (then (local.set $hi (local.get $v))))
+          (if (f64.gt (local.tee $d (f64.abs (f64.sub (local.get $v) (local.get $v0)))) (local.get $far)) (then
+            (local.set $far (local.get $d))
+            (local.set $worst (local.get $i))))
+          (local.set $k (i32.add (local.get $k) (i32.const 1)))
+          (br $member)))
+        (if (f64.gt (f64.sub (local.get $hi) (local.get $lo)) (local.get $tolerance))
+          (then (call $finding (local.get $inv) (local.get $worst) (f64.sub (local.get $hi) (local.get $lo))))))
+      (else
+        (local.set $c (call $prog_at (local.get $m)))
+        (local.set $k (i32.const 1))
+        (block $members (loop $member
+          (br_if $members (i32.ge_s (local.get $k) (local.get $n)))
+          (local.set $i (call $prog_at (i32.add (local.get $m) (local.get $k))))
+          (local.set $over (f64.max (f64.sub (call $start (local.get $c)) (call $start (local.get $i)))
+                                    (f64.sub (call $end (local.get $i)) (call $end (local.get $c)))))
+          (if (i32.eq (local.get $rel) (i32.const FITS_WITHIN)) (then
+            (local.set $over (f64.max (f64.max (local.get $over) (f64.sub (call $top (local.get $c)) (call $top (local.get $i))))
+                                      (f64.sub (call $bottom (local.get $i)) (call $bottom (local.get $c)))))))
+          (if (f64.gt (local.get $over) (local.get $tolerance))
+            (then (call $finding (local.get $inv) (local.get $i) (local.get $over))))
+          (local.set $k (i32.add (local.get $k) (i32.const 1)))
+          (br $member)))))
+    (local.set $inv (i32.add (local.get $inv) (i32.const 1)))
+    (br $each)))
+  (i32.div_u (global.get $outlen) (i32.const 3)))

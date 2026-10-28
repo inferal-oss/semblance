@@ -104,6 +104,38 @@
 [] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:part "> .sem-frames > *" ;
     sty:declares [ sty:property "z-index" ; sty:raw "0" ] .
 
+# A desktop that tiles (c:tileLayout c:DesktopGridLayout) lays its normal floating windows out in
+# flow, in the layer between the docked edges. The tracks are c:Grid's (theme/layout.ttl): as many
+# columns as fit at --grid-min, capped at --grid-columns when the frames' layer has data-columns.
+# The windows' c:x, c:y, c:width and c:height stay graph state, used again when it floats.
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:when c:DesktopGridLayout ; sty:part "> .sem-frames" ;
+    sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
+                 [ sty:property "inset-block" ; sty:raw "max(var(--sem-dock-top, 0px), 72px) max(var(--sem-dock-bottom, 0px), 64px)" ] ,
+                 [ sty:property "inset-inline" ; sty:raw "max(var(--sem-dock-start, 0px), 24px) max(var(--sem-dock-end, 0px), 24px)" ] ,
+                 [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fill, minmax(min(100%, var(--grid-min, 320px)), 1fr))" ] ,
+                 [ sty:property "grid-auto-rows" ; sty:raw "minmax(180px, 1fr)" ] ,
+                 [ sty:property "gap" ; sty:token tok:space-3 ] ,
+                 [ sty:property "overflow" ; sty:raw "auto" ] ,
+                 [ sty:property "pointer-events" ; sty:raw "none" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:when c:DesktopGridLayout ; sty:part "> .sem-frames[data-columns]" ;
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "repeat(auto-fit, minmax(min(100%, max(var(--grid-min, 160px), calc((100% - (var(--grid-columns) - 1) * var(--sem-space-3)) / var(--grid-columns)))), 1fr))" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:when c:DesktopGridLayout ; sty:part "> .sem-frames > *" ;
+    sty:declares [ sty:property "pointer-events" ; sty:raw "auto" ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:when c:DesktopGridLayout ; sty:part "> .sem-frames > [data-sem-tiled]" ;
+    sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
+                 [ sty:property "inset" ; sty:raw "auto" ] ,
+                 [ sty:property "width" ; sty:raw "auto" ] ,
+                 [ sty:property "height" ; sty:raw "auto" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "min-height" ; sty:raw "180px" ] ,
+                 [ sty:property "box-shadow" ; sty:token tok:shadow-2 ] .
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:when c:DesktopGridLayout ; sty:part "> .sem-frames > [data-sem-tiled] .sem-window-bar" ;
+    sty:declares [ sty:property "cursor" ; sty:raw "default" ] .
+# At phone width, one window per row whatever the cap (uncapped, the tracks already give one).
+[] a sty:StyleRule ; sty:appliesTo c:Desktop ; sty:when c:DesktopGridLayout ; sty:part "> .sem-frames[data-columns]" ; sty:atWidth sty:CompactWidth ;
+    sty:declares [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] .
+
 # --- taskbar ---------------------------------------------------------------------------------------------------------
 
 [] a sty:StyleRule ; sty:appliesTo c:Taskbar ;

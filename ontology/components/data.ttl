@@ -24,7 +24,7 @@ c:parentProperty a owl:ObjectProperty ; rdfs:range rdf:Property ;
 # elements are keyed by its content, so re-sorting moves rows without re-rendering them.
 
 c:Table a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Sortable ;
     rdfs:comment """Rows of a SPARQL SELECT (c:query, a sem:View with sem:select) under declared columns
 (c:tableColumns, an rdf:List of c:Column). Headers sort: clicking one writes c:sortColumn (and toggles
 c:sortDescending on a second click). c:label names the table; c:emptyText shows when there are no rows;
@@ -53,9 +53,15 @@ c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ; sem:fol
     sem:needsExtension sx:Locale .
 c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .
 
-c:TableSort a beh:Reaction ;
+# --- Sortable: a header sorts by its column --------------------------------------------------------
+
+c:Sortable a owl:Class ;
+    rdfs:label "Sortable"@en , "Сортується"@uk , "Sortierbar"@de , "قابل للفرز"@ar ;
+    rdfs:comment "Mixin: a click on a header (a rendered element that c:sorts a column) sorts by that column (c:sortColumn); again, the other way (c:sortDescending)."@en .
+c:Sort a beh:Reaction ;
+    rdfs:label "Sort"@en ;
     beh:when beh:Click ;
-    beh:sourceClass c:Table ;
+    beh:sourceClass c:Sortable ;
     beh:deletes """CONSTRUCT { $this c:sortColumn ?old . $this c:sortDescending ?desc }
 WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:sorts ?col .
         { $this c:sortColumn ?old } UNION { $this c:sortDescending ?desc } }""" ;
@@ -130,9 +136,9 @@ WHERE {
   $this a c:Avatar .
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   OPTIONAL { $this c:image ?img }
   BIND(MD5(?label) AS ?h)
@@ -166,9 +172,9 @@ WHERE {
   $this a c:Avatar .
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label)
   BIND(REPLACE(?label, "[\\\\s_.·-]+", " ") AS ?spaced)
   BIND(IF(STRSTARTS(?spaced, " "), SUBSTR(?spaced, 2), ?spaced) AS ?trimmed)
@@ -218,7 +224,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~more")) AS ?moreNode)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, CONCAT(STR(?count), IF(?count = 1, " member", " members")))) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?role)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
@@ -265,9 +271,9 @@ WHERE {
               FILTER(?pos >= ?max)
               OPTIONAL { ?member l10n:label ?memberLocal }
               OPTIONAL { ?memberRawAt l10n:of ?member ; l10n:label ?memberRaw }
-  OPTIONAL { ?member c:label ?memberRaw FILTER(lang(?memberRaw) = "") }
+  OPTIONAL { { ?member l10n:label ?memberRaw } UNION { ?l10nAt_memberRaw l10n:of ?member ; l10n:label ?memberRaw } } OPTIONAL { ?member c:label ?memberRaw FILTER(lang(?memberRaw) = "") FILTER(NOT EXISTS { ?member l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?member ; l10n:label ?l10nPick }) }
               OPTIONAL { ?memberRdfsAt l10n:of ?member ; l10n:name ?memberRdfs }
-  OPTIONAL { ?member rdfs:label ?memberRdfs FILTER(lang(?memberRdfs) = "") }
+  OPTIONAL { ?member rdfs:label ?memberRdfs FILTER(lang(?memberRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?member ; l10n:name ?l10nPick }) }
               BIND(STR(COALESCE(?memberLocal, ?memberRaw, ?memberRdfs, REPLACE(STR(?member), "^.*[#/]", ""))) AS ?memberLabel)
             } ORDER BY ?pos }
         } GROUP BY ?list ?max }
@@ -370,7 +376,7 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       BIND(?empty AS ?child)
       OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
-  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No events yet.")) AS ?emptyText)
     } UNION {
       FILTER(?any)
@@ -378,11 +384,11 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?name)
       OPTIONAL { $this l10n:label ?localLabel }
       OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
       OPTIONAL { ?streamLabelAt l10n:of ?stream ; l10n:label ?streamLabel }
-  OPTIONAL { ?stream c:label ?streamLabel FILTER(lang(?streamLabel) = "") }
+  OPTIONAL { { ?stream l10n:label ?streamLabel } UNION { ?l10nAt_streamLabel l10n:of ?stream ; l10n:label ?streamLabel } } OPTIONAL { ?stream c:label ?streamLabel FILTER(lang(?streamLabel) = "") FILTER(NOT EXISTS { ?stream l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?stream ; l10n:label ?l10nPick }) }
       OPTIONAL { ?streamRdfsAt l10n:of ?stream ; l10n:name ?streamRdfs }
-  OPTIONAL { ?stream rdfs:label ?streamRdfs FILTER(lang(?streamRdfs) = "") }
+  OPTIONAL { ?stream rdfs:label ?streamRdfs FILTER(lang(?streamRdfs) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?stream ; l10n:name ?l10nPick }) }
       BIND(STR(COALESCE(?localLabel, ?rawLabel, ?streamLabel, ?streamRdfs, REPLACE(STR(?stream), "^.*[#/]", ""))) AS ?label)
     } UNION {
       FILTER(?any)
@@ -424,7 +430,7 @@ WHERE {
       BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
       BIND(?empty AS ?child)
       OPTIONAL { ?rawEmptyAt l10n:of $this ; l10n:emptyText ?rawEmpty }
-  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") }
+  OPTIONAL { $this c:emptyText ?rawEmpty FILTER(lang(?rawEmpty) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:emptyText ?l10nPick }) }
       BIND(STR(COALESCE(?rawEmpty, "No events yet.")) AS ?emptyText)
     } UNION {
       FILTER(?any)
@@ -454,7 +460,7 @@ c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ;
 # selects it: clicking writes `<controls> <property> <node>`, and that node is aria-selected.
 
 c:Tree a owl:Class ;
-    rdfs:subClassOf sem:Component ;
+    rdfs:subClassOf sem:Component , c:Selector ;
     rdfs:comment """An expandable tree (role=tree) of a hierarchy: c:of is the root; children are the subjects
 pointing at a node through c:parentProperty. c:expandedNode lists the open nodes; the twisty toggles one.
 c:detailProperty is shown beside each label. With c:controls and c:property, clicking a label selects it.
@@ -482,10 +488,3 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?node . 
     beh:inserts """CONSTRUCT { $this c:expandedNode ?node }
 WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:expands ?node . FILTER NOT EXISTS { $this c:expandedNode ?node } }""" ;
     sem:function "data:tree-toggle" .
-
-c:TreeSelect a beh:Reaction ;
-    beh:when beh:Click ;
-    beh:sourceClass c:Tree ;
-    beh:deletes """CONSTRUCT { ?target ?p ?old } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p . ?target ?p ?old }""" ;
-    beh:inserts """CONSTRUCT { ?target ?p ?node } WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ?node . $this c:controls ?target ; c:property ?p }""" ;
-    sem:function "segmented:select" .

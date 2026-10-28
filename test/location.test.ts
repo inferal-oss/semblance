@@ -49,6 +49,10 @@ function tab(start = '/') {
     get address() {
       return location.search + location.hash
     },
+    /** The whole address: the path too (the site's location has paths). */
+    get url() {
+      return location.pathname + location.search + location.hash
+    },
     get length() {
       return entries.length
     },
@@ -60,7 +64,7 @@ function tab(start = '/') {
       at++
       events.dispatchEvent(new Event('popstate'))
     },
-    /** Follow a link or type an address: a new entry, then hashchange (as browsers do). */
+    /** Follow a link or type an address: a new entry, then hashchange (as browsers do for a fragment; the navigation effect takes over links to paths). */
     visit(url: string) {
       entries.splice(at + 1, Infinity, new URL(url, entries[at]))
       at++
@@ -85,29 +89,39 @@ async function site(start = '/', backends?: Record<string, Backend>, extra: Part
 }
 
 describe('navigation: where we are, in the address', () => {
-  it('reads the fragment into the graph before the first projection, and keeps a canonical one', async () => {
-    const s = await site('/#docs/rules')
+  it('reads the address into the graph before the first projection, and keeps a canonical one (a fragment from before paths too)', async () => {
+    const s = await site('/docs/rules/')
     expect(s.value(UI + 'page')).toBe(UI + 'Docs')
     expect(s.value(UI + 'docSection')).toBe(UI + 'DocRules')
-    expect(s.tab.address).toBe('#docs/rules')
+    expect(s.tab.url).toBe('/docs/rules/')
     expect(s.tab.history.pushes).toBe(0)
+    const old = await site('/#docs/rules')
+    expect(old.value(UI + 'docSection')).toBe(UI + 'DocRules')
+    expect(old.tab.url).toBe('/docs/rules/') // rewritten in place
+    expect(old.tab.history.pushes).toBe(0)
+    const uk = await site('/uk/docs/rules/')
+    expect(uk.value(NS.l10n + 'language')).toBe(NS.l10n + 'Ukrainian')
+    expect(uk.tab.url).toBe('/uk/docs/rules/')
   })
 
-  it('writes the graph to the fragment, nested dimensions after their parent and only in scope', async () => {
+  it('writes the graph to the address, nested dimensions after their parent and only in scope', async () => {
     const s = await site('/')
-    expect(s.tab.address).toBe('#home') // no section: the docs section applies only on the docs
+    expect(s.tab.url).toBe('/') // the home page, in English: nothing to spell; no section: it applies only on the docs
     s.set(UI + 'page', UI + 'Docs')
     await tick()
-    expect(s.tab.address).toBe('#docs/overview')
+    expect(s.tab.url).toBe('/docs/overview/')
     s.set(UI + 'docSection', UI + 'DocLayers')
     await tick()
-    expect(s.tab.address).toBe('#docs/layers')
+    expect(s.tab.url).toBe('/docs/layers/')
     s.set(UI + 'page', UI + 'Components')
     await tick()
-    expect(s.tab.address).toBe('#components/foundations')
+    expect(s.tab.url).toBe('/components/foundations/')
     s.set(UI + 'page', UI + 'Reference')
     await tick()
-    expect(s.tab.address).toBe('#reference/c:Window') // a term, as a prefixed name
+    expect(s.tab.url).toBe('/reference/c:Window/') // a term, as a prefixed name
+    s.set(NS.l10n + 'language', NS.l10n + 'German')
+    await tick()
+    expect(s.tab.url).toBe('/de/reference/c:Window/')
   })
 
   it('makes one step per interaction, through the graph; Back and Forward walk it', async () => {
@@ -117,13 +131,13 @@ describe('navigation: where we are, in the address', () => {
     await tick()
     s.fire([...s.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === 'Performance' && s.visible(b))!, 'click')
     await tick()
-    expect(s.tab.address).toBe('#docs/performance')
+    expect(s.tab.url).toBe('/docs/performance/')
     expect(s.tab.history.pushes).toBe(2)
     expect(s.tab.length).toBe(3)
 
     s.tab.back()
     expect(s.value(UI + 'docSection')).toBe(UI + 'DocOverview')
-    expect(s.tab.address).toBe('#docs/overview')
+    expect(s.tab.url).toBe('/docs/overview/')
     s.tab.back()
     expect(s.value(UI + 'page')).toBe(UI + 'Home')
     s.tab.forward()
@@ -139,7 +153,7 @@ describe('navigation: where we are, in the address', () => {
   })
 
   it('shows where we are in the tools: the address, and each dimension with its value, spelling and carriers', async () => {
-    const s = await site('/#docs/rules')
+    const s = await site('/docs/rules/')
     const f = s.store.factory
     s.runtime.apply({
       remove: [...s.store.match(f.namedNode(UI + 'tools'), f.namedNode(NS.c + 'open'), null), ...s.store.match(f.namedNode(UI + 'views'), f.namedNode(NS.c + 'selected'), null)],
@@ -148,75 +162,78 @@ describe('navigation: where we are, in the address', () => {
     s.shell.flush()
     const table = () => s.shell.nodeOf(UI + 'locationTable/~root') as Element
     const rows = () => [...table().querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('th, td')].map((td) => td.textContent!.trim()))
-    expect(rows()[0]).toEqual(['Page', 'Docs', 'docs', 'The address (#)', 'Makes history'])
-    expect(rows()[1]!.slice(0, 3)).toEqual(['Docs', 'Rules and the engine', 'rules'])
-    expect(rows()[1]![3]!.split(', ').sort()).toEqual(['The address (#)', 'This tab'])
-    expect(rows()[2]!.slice(1, 3)).toEqual(['Todo, two projections', '—']) // the example applies only on the examples
-    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('#docs/rules')
+    expect(rows()[0]!.slice(1, 4)).toEqual(['English', 'en', 'The address (/)']) // the language (the address leaves English unspelled)
+    expect(rows()[1]).toEqual(['Page', 'Docs', 'docs', 'The address (/)', 'Makes history'])
+    expect(rows()[2]!.slice(0, 3)).toEqual(['Docs', 'Rules and the engine', 'rules'])
+    expect(rows()[2]![3]!.split(', ').sort()).toEqual(['The address (/)', 'This tab'])
+    expect(rows()[3]!.slice(1, 3)).toEqual(['Todo, two projections', '—']) // the example applies only on the examples
+    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('/docs/rules/')
     s.set(UI + 'page', UI + 'Examples')
     await tick()
     s.shell.flush()
-    expect(rows()[0]!.slice(1, 3)).toEqual(['Examples', 'examples'])
-    expect(rows()[1]![2]).toBe('—')
-    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('#examples/todo')
+    expect(rows()[1]!.slice(1, 3)).toEqual(['Examples', 'examples'])
+    expect(rows()[2]![2]).toBe('—')
+    expect((s.shell.nodeOf(UI + 'locationAddress/~root') as Element).textContent).toContain('/examples/todo/')
   })
 
   it('opens deep links where they point', async () => {
-    const perf = await site('/#docs/performance')
+    const perf = await site('/docs/performance/')
     expect([...perf.document.querySelectorAll('[data-sem-c=bar-chart]')].some(perf.visible)).toBe(true)
-    const signin = await site('/#examples/signin')
+    const signin = await site('/examples/signin/')
     expect(signin.value(UI + 'example')).toBe(UI + 'ExSignin')
     expect([...signin.document.querySelectorAll('[data-sem-c=code-input]')].some(signin.visible)).toBe(true)
-    const group = await site('/#components/inputs')
+    const group = await site('/components/inputs/')
     expect(group.value(UI + 'galleryGroup')).toBe(UI + 'GroupInputs')
     // The docs say so, with links to resources in them.
-    const docs = await site('/#docs/navigation')
+    const docs = await site('/docs/navigation/')
     const links = [...docs.document.querySelectorAll('a')].filter(docs.visible).map((a) => a.textContent + ' ' + a.getAttribute('href'))
-    expect(links).toContain('the code input #components/inputs/inp-codes-spec')
-    expect(links).toContain('the SPARQL workbench #workbench')
+    expect(links).toContain('the code input /components/inputs/#inp-codes-spec')
+    expect(links).toContain('the SPARQL workbench /docs/#workbench') // on every page: the page stays
   })
 
   it('ignores what it does not know, safely', async () => {
     for (const [start, page, address] of [
-      ['/#nowhere/at/all', UI + 'Home', '#home'],
-      ['/#docs/nonsense', UI + 'Docs', '#docs/overview'],
-      ['/#docs/rules/extra/segments', UI + 'Docs', '#docs/rules'],
-      ['/#docs/%E0%A4%A', UI + 'Docs', '#docs/overview'],
-      ['/#home/rules', UI + 'Home', '#home'], // the docs section does not apply on the home page
+      ['/#nowhere/at/all', UI + 'Home', '/'],
+      ['/nowhere/at/all/', UI + 'Home', '/'],
+      ['/docs/nonsense/', UI + 'Docs', '/docs/overview/'],
+      ['/docs/rules/extra/segments/', UI + 'Docs', '/docs/rules/'],
+      ['/docs/%E0%A4%A/', UI + 'Docs', '/docs/overview/'],
+      ['/#docs/rules/extra/segments', UI + 'Docs', '/docs/rules/'],
+      ['/home/rules/', UI + 'Home', '/'], // the docs section does not apply on the home page
     ] as const) {
       const s = await site(start)
       expect(s.value(UI + 'page'), start).toBe(page)
-      expect(s.tab.address, start).toBe(address)
+      expect(s.tab.url, start).toBe(address)
     }
     const s = await site('/')
-    s.tab.visit('#examples/no-such-example')
+    s.tab.visit('#examples/no-such-example') // an old link: read whole
     expect(s.value(UI + 'page')).toBe(UI + 'Examples')
     expect(s.value(UI + 'example')).toBe(UI + 'ExTodo')
   })
 
   it('keeps other query parameters (the host’s own) as they are', async () => {
-    const s = await site('/?store=n3&prefer=function#examples/kanban')
+    const s = await site('/examples/kanban/?store=n3&prefer=function')
     expect(s.value(UI + 'example')).toBe(UI + 'ExKanban')
-    s.set(UI + 'page', UI + 'Home')
+    s.set(UI + 'page', UI + 'Docs')
     await tick()
-    expect(s.tab.address).toBe('?store=n3&prefer=function#home')
+    expect(s.tab.url).toBe('/docs/overview/?store=n3&prefer=function')
   })
 
   it('takes the address over storage, and storage over the default (nav:rank)', async () => {
     const backends = storage()
-    const a = await site('/#docs/rules', backends)
+    const a = await site('/docs/rules/', backends)
     await a.persistence!.flush()
     expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'atDocSection')).toContain('DocRules')
     // Remembered once, by the location: the settings policy no longer covers it.
     expect(await backends[PER + 'Session']!.get('semblance:' + UI + 'rememberSettings')).toBeUndefined()
 
-    expect((await site('/#docs/layers', backends)).value(UI + 'docSection')).toBe(UI + 'DocLayers') // the address
-    expect((await site('/#docs', backends)).value(UI + 'docSection')).toBe(UI + 'DocRules') // storage
-    expect((await site('/#docs', storage())).value(UI + 'docSection')).toBe(UI + 'DocOverview') // the default
-    const back = await site('/#home', backends)
+    expect((await site('/docs/layers/', backends)).value(UI + 'docSection')).toBe(UI + 'DocLayers') // the address
+    expect((await site('/docs/', backends)).value(UI + 'docSection')).toBe(UI + 'DocRules') // storage
+    expect((await site('/docs/', storage())).value(UI + 'docSection')).toBe(UI + 'DocOverview') // the default
+    const back = await site('/', backends)
     back.set(UI + 'page', UI + 'Docs')
     await tick()
-    expect(back.tab.address).toBe('#docs/rules') // the page is found where it was left
+    expect(back.tab.url).toBe('/docs/rules/') // the page is found where it was left
   })
 })
 
@@ -309,17 +326,17 @@ describe('navigation: links to resources', () => {
     const loc = readLocations(r).find((l) => l.iri === UI + 'location')!
     const needs = shows(r, loc, s.store.factory.namedNode(UI + 'inp-codes-spec'))!
     expect(Object.fromEntries([...needs].map(([d, v]) => [d.slice(UI.length), v.value.slice(UI.length)]))).toEqual({ atPage: 'Components', atGalleryGroup: 'GroupInputs' })
-    expect(addressOf(r, s.store.factory.namedNode(UI + 'inp-codes-spec'))).toBe('#components/inputs/inp-codes-spec')
+    expect(addressOf(r, s.store.factory.namedNode(UI + 'inp-codes-spec'))).toBe('/components/inputs/#inp-codes-spec')
     expect(addressOf(r, s.store.factory.namedNode(UI + 'DocRules'))).toBe(undefined) // not a component anywhere
     // A whole page (a switch case's content) is shown by the page alone: nothing to bring into view.
-    expect(addressOf(r, s.store.factory.namedNode(UI + 'home'))).toBe('#home')
+    expect(addressOf(r, s.store.factory.namedNode(UI + 'home'))).toBe('/')
   })
 
   it.each(['sparql', 'function'] as const)("the app bar's logo and name link home (%s)", (prefer) => {
     const s = mountSite('wat', prefer)
     const home = s.document.querySelector('[data-sem-c=app-bar] .sem-home')!
     expect(home.tagName).toBe('A')
-    expect(home.getAttribute('href')).toBe('#home')
+    expect(home.getAttribute('href')).toBe('/')
     expect(home.querySelector('[data-sem-c=graph-mark]')).not.toBeNull()
     expect(home.textContent).toContain('Semblance')
     expect(home.querySelector('.sem-byline')).toBeNull() // the sponsor's own link stays outside
@@ -362,11 +379,11 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
       reveal: (iri, { smooth }) => (rendered ? (revealed.push({ iri, smooth }), true) : false),
       frame: (run) => frames.push(run),
     })
-    s.tab.visit('#components/inputs/inp-codes-spec')
+    s.tab.visit('/components/inputs/#inp-codes-spec')
     expect(s.value(UI + 'page')).toBe(UI + 'Components')
     expect(s.value(UI + 'galleryGroup')).toBe(UI + 'GroupInputs')
     expect(s.value(NAV + 'target')).toBe(UI + 'inp-codes-spec')
-    expect(s.tab.address).toBe('#components/inputs/inp-codes-spec')
+    expect(s.tab.url).toBe('/components/inputs/#inp-codes-spec')
     expect(s.shell.nodeOf(UI + 'inp-codes-spec/~root')).toBeDefined()
     // It waits for the target to be rendered.
     expect(revealed).toEqual([])
@@ -378,14 +395,14 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
     s.set(UI + 'galleryGroup', UI + 'GroupLayout')
     await tick()
     expect(s.value(NAV + 'target')).toBeUndefined()
-    expect(s.tab.address).toBe('#components/layout')
+    expect(s.tab.url).toBe('/components/layout/')
     s.tab.back()
     expect(s.value(NAV + 'target')).toBe(UI + 'inp-codes-spec')
     expect(revealed.length).toBe(2)
   })
 
   it('opens what hides the target: the tools window and the tab it is in, as part of the same step', async () => {
-    const s = await site('/#docs/rules')
+    const s = await site('/docs/rules/')
     const f = s.store.factory
     const o = (subject: string, p: string) => s.store.match(f.namedNode(subject), f.namedNode(p), null)[0]?.object.value
     expect(o(UI + 'tools', NS.c + 'open')).toBe('false')
@@ -394,7 +411,7 @@ ui:field a c:TextField ; c:label "Field" ; nav:anchor "the-field" .
     expect(o(UI + 'tools', NS.c + 'open')).toBe('true')
     expect(o(UI + 'views', NS.c + 'selected')).toBe(UI + 'queryTab')
     expect(s.value(UI + 'page')).toBe(UI + 'Docs') // the tools are on every page: where we are stays
-    expect(s.tab.address).toBe('#docs/rules/workbench')
+    expect(s.tab.url).toBe('/docs/rules/#workbench')
     expect(s.shell.nodeOf(UI + 'workbench/~root')).toBeDefined()
     // One navigation event did it all.
     const navigations = s.store.match(null, f.namedNode(NS.rdf + 'type'), f.namedNode(NAV + 'Navigate'))
@@ -429,11 +446,11 @@ ui:deep a c:Text .`)
     const revealed: { iri: string; smooth: boolean }[] = []
     const s = await site('/#inp-codes-spec', undefined, { reveal: (iri, { smooth }) => (revealed.push({ iri, smooth }), true) })
     expect(s.value(UI + 'page')).toBe(UI + 'Components')
-    expect(s.tab.address).toBe('#components/inputs/inp-codes-spec')
+    expect(s.tab.url).toBe('/components/inputs/#inp-codes-spec')
     expect(revealed).toEqual([{ iri: UI + 'inp-codes-spec', smooth: true }])
     const f = s.store.factory
     s.runtime.apply({ remove: s.store.match(f.namedNode(UI + 'shell'), f.namedNode(NS.mot + 'preference'), null), add: [f.quad(f.namedNode(UI + 'shell'), f.namedNode(NS.mot + 'preference'), f.namedNode(NS.mot + 'Reduced'))] })
-    s.tab.visit('#components/inputs/inp-text-spec')
+    s.tab.visit('/components/inputs/#inp-text-spec')
     expect(revealed.at(-1)).toEqual({ iri: UI + 'inp-text-spec', smooth: false })
   })
 })

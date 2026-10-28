@@ -86,31 +86,13 @@ c:interacted a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd
     rdfs:comment "Whether an interaction changed the example since it was built (Reset is enabled, and builds it again as written)."@en .
 c:copied a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:CodeEditor ;
     rdfs:comment "A request to copy a source to the clipboard: the host carries it out and removes it a moment later."@en .
-# The data (c:dataPreview), as the host last found it: a line per triple, each with its terms as
-# Turtle writes them (subject, predicate, object, each with its kind of token for colouring), its
-# subject's node (c:lineNode, a key) and its place (c:lineKey: by subject, then rdf:type, rdfs:label
-# and the other predicates). A triple the last interaction added is c:LineAdded; one it removed stays, as
-# c:LineRemoved, until the next. c:changedLine is the first changed line, c:triplesAdded and
-# c:triplesRemoved count them (absent until something changed).
-c:dataLine a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:DataLine ;
-    rdfs:comment "A line of the example's data, as Turtle (written by the host)."@en .
-c:DataLine a owl:Class ; rdfs:comment "One triple of a live example's data, as a line of Turtle."@en .
-c:lineSubject a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The subject."@en .
-c:lineNode a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "A key of the line's subject: the lines of one subject share its node."@en .
-c:linePredicate a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The predicate (a for rdf:type)."@en .
-c:lineObject a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The object."@en .
-c:subjectToken a owl:DatatypeProperty ; rdfs:domain c:DataLine ;
-    rdfs:comment "The kind of token the subject is, as the code colours name them: pname, iri, string, number, keyword."@en .
-c:predicateToken a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The kind of token the predicate is."@en .
-c:objectToken a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "The kind of token the object is."@en .
-c:lineKey a owl:DatatypeProperty ; rdfs:domain c:DataLine ; rdfs:comment "Where the line goes: lines sort by it."@en .
-c:lineChange a owl:ObjectProperty ; rdfs:domain c:DataLine ; rdfs:range c:LineChange ;
-    rdfs:comment "What the last interaction did to the line's triple (absent: nothing)."@en .
-c:LineChange a owl:Class .
-c:LineAdded a c:LineChange ; sem:slug "added" ; rdfs:label "Added"@en , "Додано"@uk , "Hinzugefügt"@de , "مضاف"@ar .
-c:LineRemoved a c:LineChange ; sem:slug "removed" ; rdfs:label "Removed"@en , "Вилучено"@uk , "Entfernt"@de , "محذوف"@ar .
-c:changedLine a owl:ObjectProperty ; rdfs:domain c:LiveExample ; rdfs:range c:DataLine ;
-    rdfs:comment "The first line the last interaction changed: where the arrows point."@en .
+# The data (c:dataPreview) is shown by an RDF editor in diff mode (c:RdfEditor, c:diff) in the
+# example's own sandbox, over the subjects of that CONSTRUCT, mounted by the host in the data pane
+# (~data): what the interactions added and removed since the example was built. The host writes how
+# many triples of the data the last interaction added and removed (c:triplesAdded, c:triplesRemoved:
+# absent until something changed) and where the arrows point (c:changedRow).
+c:changedRow a owl:ObjectProperty ; rdfs:domain c:LiveExample ;
+    rdfs:comment "The data viewer's first changed row (its label, by its IRI): where the arrows from the rendering, and on to the text, point."@en .
 c:triplesAdded a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:integer ;
     rdfs:comment "How many triples of the data the last interaction added."@en .
 c:triplesRemoved a owl:DatatypeProperty ; rdfs:domain c:LiveExample ; rdfs:range xsd:integer ;
@@ -166,7 +148,7 @@ c:LiveExampleRendering-fn a sem:Rule ; sem:implements c:LiveExampleRendering ; s
 # Tabs and panels are keyed by their place in c:sources. With c:showSources false there are no
 # tabs and no editor. With c:dataPreview the body has panes - the rendering, the data, the text -
 # after a caption of what happened (~flow) and before a layer for the arrows between them (~links),
-# which c:LiveExampleFlow fills; c:LiveExampleData fills the data pane's lines.
+# which c:LiveExampleFlow fills; the host mounts the data viewer in the data pane (~data).
 c:LiveExampleRendering-sparql-screen a sem:Rule ;
     sem:implements c:LiveExampleRendering ;
     sem:modality mod:Screen ;
@@ -247,30 +229,30 @@ WHERE {
   {
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-    OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-    OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+    OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+    OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
     OPTIONAL { $this c:sandboxState ?state0 . ?state0 sem:slug ?stateSlug0 }
     BIND(COALESCE(STR(?stateSlug0), "pending") AS ?stateSlug)
     OPTIONAL { ?sourcesPhrase0At l10n:of c:LiveSourcesPhrase ; l10n:name ?sourcesPhrase0 }
   OPTIONAL { ?sourcesPhrase0At l10n:of c:LiveSourcesPhrase ; l10n:name ?sourcesPhrase0 }
-  OPTIONAL { c:LiveSourcesPhrase rdfs:label ?sourcesPhrase0 FILTER(langMatches(lang(?sourcesPhrase0), "en")) }
+  OPTIONAL { ?l10nAt_sourcesPhrase0 l10n:of c:LiveSourcesPhrase ; l10n:name ?sourcesPhrase0 } OPTIONAL { c:LiveSourcesPhrase rdfs:label ?sourcesPhrase0 FILTER(langMatches(lang(?sourcesPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveSourcesPhrase ; l10n:name ?l10nPick }) }
     OPTIONAL { ?resetPhrase0At l10n:of c:LiveResetPhrase ; l10n:name ?resetPhrase0 }
   OPTIONAL { ?resetPhrase0At l10n:of c:LiveResetPhrase ; l10n:name ?resetPhrase0 }
-  OPTIONAL { c:LiveResetPhrase rdfs:label ?resetPhrase0 FILTER(langMatches(lang(?resetPhrase0), "en")) }
+  OPTIONAL { ?l10nAt_resetPhrase0 l10n:of c:LiveResetPhrase ; l10n:name ?resetPhrase0 } OPTIONAL { c:LiveResetPhrase rdfs:label ?resetPhrase0 FILTER(langMatches(lang(?resetPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveResetPhrase ; l10n:name ?l10nPick }) }
     OPTIONAL { ?copyPhrase0At l10n:of c:LiveCopyPhrase ; l10n:name ?copyPhrase0 }
   OPTIONAL { ?copyPhrase0At l10n:of c:LiveCopyPhrase ; l10n:name ?copyPhrase0 }
-  OPTIONAL { c:LiveCopyPhrase rdfs:label ?copyPhrase0 FILTER(langMatches(lang(?copyPhrase0), "en")) }
+  OPTIONAL { ?l10nAt_copyPhrase0 l10n:of c:LiveCopyPhrase ; l10n:name ?copyPhrase0 } OPTIONAL { c:LiveCopyPhrase rdfs:label ?copyPhrase0 FILTER(langMatches(lang(?copyPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveCopyPhrase ; l10n:name ?l10nPick }) }
     OPTIONAL { ?copiedPhrase0At l10n:of c:LiveCopiedPhrase ; l10n:name ?copiedPhrase0 }
   OPTIONAL { ?copiedPhrase0At l10n:of c:LiveCopiedPhrase ; l10n:name ?copiedPhrase0 }
-  OPTIONAL { c:LiveCopiedPhrase rdfs:label ?copiedPhrase0 FILTER(langMatches(lang(?copiedPhrase0), "en")) }
+  OPTIONAL { ?l10nAt_copiedPhrase0 l10n:of c:LiveCopiedPhrase ; l10n:name ?copiedPhrase0 } OPTIONAL { c:LiveCopiedPhrase rdfs:label ?copiedPhrase0 FILTER(langMatches(lang(?copiedPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveCopiedPhrase ; l10n:name ?l10nPick }) }
     OPTIONAL { ?renderingPhrase0At l10n:of c:LiveRenderingPhrase ; l10n:name ?renderingPhrase0 }
   OPTIONAL { ?renderingPhrase0At l10n:of c:LiveRenderingPhrase ; l10n:name ?renderingPhrase0 }
-  OPTIONAL { c:LiveRenderingPhrase rdfs:label ?renderingPhrase0 FILTER(langMatches(lang(?renderingPhrase0), "en")) }
+  OPTIONAL { ?l10nAt_renderingPhrase0 l10n:of c:LiveRenderingPhrase ; l10n:name ?renderingPhrase0 } OPTIONAL { c:LiveRenderingPhrase rdfs:label ?renderingPhrase0 FILTER(langMatches(lang(?renderingPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveRenderingPhrase ; l10n:name ?l10nPick }) }
     OPTIONAL { ?timePhrase0At l10n:of c:LiveTimePhrase ; l10n:name ?timePhrase0 }
   OPTIONAL { ?timePhrase0At l10n:of c:LiveTimePhrase ; l10n:name ?timePhrase0 }
-  OPTIONAL { c:LiveTimePhrase rdfs:label ?timePhrase0 FILTER(langMatches(lang(?timePhrase0), "en")) }
+  OPTIONAL { ?l10nAt_timePhrase0 l10n:of c:LiveTimePhrase ; l10n:name ?timePhrase0 } OPTIONAL { c:LiveTimePhrase rdfs:label ?timePhrase0 FILTER(langMatches(lang(?timePhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveTimePhrase ; l10n:name ?l10nPick }) }
     BIND(STR(?sourcesPhrase0) AS ?sourcesPhrase)
     BIND(STR(?resetPhrase0) AS ?resetPhrase)
     BIND(STR(?renderingPhrase0) AS ?renderingPhrase)
@@ -293,8 +275,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~reset")) AS ?reset)
     BIND(IRI(CONCAT(STR($this), "/~copy")) AS ?copy)
     # Its own toggles (fs:Fullscreenable): fill the window, full screen; the layer says which is pressed.
-    OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) }
-    OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) }
+    OPTIONAL { ?l10nAt_vpPhrase0 l10n:of fs:ViewportCommand ; l10n:name ?vpPhrase0 } OPTIONAL { fs:ViewportCommand rdfs:label ?vpPhrase0 FILTER(langMatches(lang(?vpPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of fs:ViewportCommand ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_fsPhrase0 l10n:of fs:ToggleCommand ; l10n:name ?fsPhrase0 } OPTIONAL { fs:ToggleCommand rdfs:label ?fsPhrase0 FILTER(langMatches(lang(?fsPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of fs:ToggleCommand ; l10n:name ?l10nPick }) }
     BIND(STR(?vpPhrase0) AS ?vpPhrase)
     BIND(STR(?fsPhrase0) AS ?fsPhrase)
     BIND(IRI(CONCAT(STR($this), "/~viewport-toggle")) AS ?vpToggle)
@@ -312,8 +294,8 @@ WHERE {
     BIND(STR($this) AS ?screenSlot)
     # Problems: a summary when the rendering is not of the sources as they are, and the list.
     BIND(EXISTS { $this c:problem ?anyProblem } AS ?hasProblems)
-    OPTIONAL { FILTER(?stateSlug = "stale") c:LiveStalePhrase rdfs:label ?stalePhrase FILTER(langMatches(lang(?stalePhrase), "en")) }
-    OPTIONAL { FILTER(?stateSlug = "broken") c:LiveBrokenPhrase rdfs:label ?brokenPhrase FILTER(langMatches(lang(?brokenPhrase), "en")) }
+    OPTIONAL { FILTER(?stateSlug = "stale") ?l10nAt_stalePhrase l10n:of c:LiveStalePhrase ; l10n:name ?stalePhrase } OPTIONAL { FILTER(?stateSlug = "stale") c:LiveStalePhrase rdfs:label ?stalePhrase FILTER(langMatches(lang(?stalePhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveStalePhrase ; l10n:name ?l10nPick }) }
+    OPTIONAL { FILTER(?stateSlug = "broken") ?l10nAt_brokenPhrase l10n:of c:LiveBrokenPhrase ; l10n:name ?brokenPhrase } OPTIONAL { FILTER(?stateSlug = "broken") c:LiveBrokenPhrase rdfs:label ?brokenPhrase FILTER(langMatches(lang(?brokenPhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveBrokenPhrase ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?stalePhrase, ?brokenPhrase)) AS ?summaryData)
     BIND(IF(?hasProblems || BOUND(?summaryData), IRI(CONCAT(STR($this), "/~status")), ?none) AS ?status)
     BIND(IF(?hasProblems || BOUND(?summaryData), IRI(CONCAT(STR($this), "/~status-role")), ?none) AS ?statusRole)
@@ -324,9 +306,9 @@ WHERE {
     # own, the caption before them and the layer of arrows after.
     BIND(EXISTS { $this c:dataPreview ?dq } AS ?withData)
     OPTIONAL { FILTER(?withData) ?screenPhrase0At l10n:of c:LiveScreenPhrase ; l10n:name ?screenPhrase0 }
-    OPTIONAL { FILTER(?withData) c:LiveScreenPhrase rdfs:label ?screenPhrase0 FILTER(langMatches(lang(?screenPhrase0), "en")) }
+    OPTIONAL { FILTER(?withData) ?l10nAt_screenPhrase0 l10n:of c:LiveScreenPhrase ; l10n:name ?screenPhrase0 } OPTIONAL { FILTER(?withData) c:LiveScreenPhrase rdfs:label ?screenPhrase0 FILTER(langMatches(lang(?screenPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveScreenPhrase ; l10n:name ?l10nPick }) }
     OPTIONAL { FILTER(?withData) ?dataPhrase0At l10n:of c:LiveDataPhrase ; l10n:name ?dataPhrase0 }
-    OPTIONAL { FILTER(?withData) c:LiveDataPhrase rdfs:label ?dataPhrase0 FILTER(langMatches(lang(?dataPhrase0), "en")) }
+    OPTIONAL { FILTER(?withData) ?l10nAt_dataPhrase0 l10n:of c:LiveDataPhrase ; l10n:name ?dataPhrase0 } OPTIONAL { FILTER(?withData) c:LiveDataPhrase rdfs:label ?dataPhrase0 FILTER(langMatches(lang(?dataPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveDataPhrase ; l10n:name ?l10nPick }) }
     BIND(STR(?screenPhrase0) AS ?screenPhrase)
     BIND(STR(?dataPhrase0) AS ?dataPhrase)
     BIND(IF(?withData, IRI(CONCAT(STR($this), "/~flow")), ?none) AS ?flow)
@@ -347,7 +329,7 @@ WHERE {
     OPTIONAL { FILTER(?withText) $this c:textHeading ?ownTextPhrase }
     BIND(COALESCE(?ownTextPhrase, c:LiveTextPhrase) AS ?textPhraseIri)
     OPTIONAL { FILTER(?withText) ?textPhrase0At l10n:of ?textPhraseIri ; l10n:name ?textPhrase0 }
-    OPTIONAL { FILTER(?withText) ?textPhraseIri rdfs:label ?textPhrase0 FILTER(langMatches(lang(?textPhrase0), "en")) }
+    OPTIONAL { FILTER(?withText) ?l10nAt_textPhrase0 l10n:of ?textPhraseIri ; l10n:name ?textPhrase0 } OPTIONAL { FILTER(?withText) ?textPhraseIri rdfs:label ?textPhrase0 FILTER(langMatches(lang(?textPhrase0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of ?textPhraseIri ; l10n:name ?l10nPick }) }
     BIND(STR(?textPhrase0) AS ?textPhrase)
     BIND(IF(?withText, IRI(CONCAT(STR($this), "/~text-head")), ?none) AS ?textHead)
     BIND(IF(?withText, IRI(CONCAT(STR($this), "/~text-head-text")), ?none) AS ?textHeadText)
@@ -367,8 +349,8 @@ WHERE {
       OPTIONAL { $this c:sources/rdf:first ?first }
       OPTIONAL { ?cell rdf:rest ?nextCell FILTER(?nextCell != rdf:nil) }
       OPTIONAL { ?name_uAt l10n:of ?editor ; l10n:label ?name_u }
-  OPTIONAL { ?editor c:label ?name_u FILTER(isLiteral(?name_u) && lang(?name_u) = "") }
-      OPTIONAL { FILTER(!BOUND(?name_u)) ?editor c:label ?name_any FILTER(isLiteral(?name_any)) }
+  OPTIONAL { { ?editor l10n:label ?name_u } UNION { ?l10nAt_name_u l10n:of ?editor ; l10n:label ?name_u } } OPTIONAL { ?editor c:label ?name_u FILTER(isLiteral(?name_u) && lang(?name_u) = "") FILTER(NOT EXISTS { ?editor l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?editor ; l10n:label ?l10nPick }) }
+      OPTIONAL { FILTER(!BOUND(?name_u)) { ?editor l10n:label ?name_any } UNION { ?l10nAt_name_any l10n:of ?editor ; l10n:label ?name_any } } OPTIONAL { FILTER(!BOUND(?name_u)) ?editor c:label ?name_any FILTER(isLiteral(?name_any)) FILTER(NOT EXISTS { ?editor l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?editor ; l10n:label ?l10nPick }) }
     }
     BIND(STR(COALESCE(?name_u, ?name_any, REPLACE(STR(?editor), "^.*[#/]", ""))) AS ?sourceName)
     BIND(COALESCE(?chosen, ?first) = ?editor AS ?on)
@@ -392,13 +374,13 @@ WHERE {
     # A problem per c:problem, by sem:order: where (the source's name, the line) and what.
     $this c:problem ?problem . ?problem sem:order ?i ; c:message ?message0 .
     LATERAL {
-      OPTIONAL { ?problem c:inSource ?in . OPTIONAL { ?in c:label ?inName FILTER(isLiteral(?inName)) } }
+      OPTIONAL { ?problem c:inSource ?in . OPTIONAL { { ?in l10n:label ?inName } UNION { ?l10nAt_inName l10n:of ?in ; l10n:label ?inName } } OPTIONAL { ?in c:label ?inName FILTER(isLiteral(?inName)) FILTER(NOT EXISTS { ?in l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of ?in ; l10n:label ?l10nPick }) } }
       OPTIONAL { ?problem c:sourceLine ?line }
       OPTIONAL { ?problem sty:tone/sem:slug ?tone0 }
       OPTIONAL { $this c:problem ?nextProblem . ?nextProblem sem:order ?nextOrder FILTER(?nextOrder = ?i + 1) }
       OPTIONAL { ?linePhraseAt l10n:of c:LiveLinePhrase ; l10n:name ?linePhrase }
   OPTIONAL { ?linePhraseAt l10n:of c:LiveLinePhrase ; l10n:name ?linePhrase }
-  OPTIONAL { c:LiveLinePhrase rdfs:label ?linePhrase FILTER(langMatches(lang(?linePhrase), "en")) }
+  OPTIONAL { ?l10nAt_linePhrase l10n:of c:LiveLinePhrase ; l10n:name ?linePhrase } OPTIONAL { c:LiveLinePhrase rdfs:label ?linePhrase FILTER(langMatches(lang(?linePhrase), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveLinePhrase ; l10n:name ?l10nPick }) }
     }
     BIND(STR(?message0) AS ?message)
     BIND(COALESCE(STR(?tone0), "danger") AS ?toneSlug)
@@ -433,11 +415,11 @@ WHERE {
   {
     OPTIONAL { $this l10n:label ?localLabel }
     OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
-  OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") }
-    OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) }
-    OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) }
+  OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+    OPTIONAL { FILTER(!BOUND(?ownLabel_u)) { $this l10n:label ?ownLabel_en } UNION { ?l10nAt_ownLabel_en l10n:of $this ; l10n:label ?ownLabel_en } } OPTIONAL { FILTER(!BOUND(?ownLabel_u)) $this c:label ?ownLabel_en FILTER(langMatches(lang(?ownLabel_en), "en")) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+    OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) { $this l10n:label ?ownLabel_any } UNION { ?l10nAt_ownLabel_any l10n:of $this ; l10n:label ?ownLabel_any } } OPTIONAL { FILTER(!BOUND(?ownLabel_u) && !BOUND(?ownLabel_en)) $this c:label ?ownLabel_any FILTER(isLiteral(?ownLabel_any)) FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { ?kindAt l10n:of c:LiveExample ; l10n:name ?kind }
-  OPTIONAL { c:LiveExample rdfs:label ?kind FILTER(langMatches(lang(?kind), "en")) }
+  OPTIONAL { ?l10nAt_kind l10n:of c:LiveExample ; l10n:name ?kind } OPTIONAL { c:LiveExample rdfs:label ?kind FILTER(langMatches(lang(?kind), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveExample ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?localLabel, ?ownLabel_u, ?ownLabel_en, ?ownLabel_any)) AS ?caption)
     BIND(CONCAT("[", STR(?kind), IF(BOUND(?caption) && ?caption != "", CONCAT(": ", ?caption), ""), "]") AS ?line)
     BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
@@ -450,68 +432,13 @@ WHERE {
   }
 }""" .
 
-# --- the data and what happened ----------------------------------------------------------------------------
-# The data as a tree, member-wise (sem:forEach c:dataLine): each subject a node, its predicates and
-# objects the rows under it. Each line places its row in its subject's node, and the node in the data
-# pane (the lines of one subject mint the same node), so an interaction re-runs the lines it changed,
-# not the others. A row is marked with what the last interaction did to it (data-sem-change); terms
-# are coloured by kind (tok-<kind>, as code is).
-
-c:LiveExampleData a sem:Rendering ; sem:targets c:LiveExample ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:forEach c:dataLine ;
-    sem:watches rdf:type , c:dataPreview .
-c:LiveExampleData-fn a sem:Rule ; sem:implements c:LiveExampleData ; sem:function "live-example:line" .
-c:LiveExampleData-sparql a sem:Rule ;
-    sem:implements c:LiveExampleData ;
-    sem:construct """
-CONSTRUCT {
-  ?data rdfhtml:hasChild ?node .
-  ?node a rdfhtml:Div ; rdfhtml:class "sem-live-node" ; sem:orderKey ?s ; rdfhtml:attribute ?nodeRole , ?nodeLabel ; rdfhtml:hasChild ?subject , ?rows .
-  ?nodeRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
-  ?nodeLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?s .
-  ?subject a rdfhtml:Span ; rdfhtml:class ?subjectClass ; rdfhtml:hasChild ?subjectText ; ord:immediatelyPrecedes ?rows .
-  ?subjectText a rdfhtml:Text ; rdfhtml:data ?s .
-  ?rows a rdfhtml:Div ; rdfhtml:class "sem-live-rows" ; rdfhtml:hasChild ?line .
-  ?line a rdfhtml:Div ; rdfhtml:class "sem-live-line" ; sem:orderKey ?key ; rdfhtml:attribute ?changeAttr ; rdfhtml:hasChild ?predicate , ?object .
-  ?changeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?change .
-  ?predicate a rdfhtml:Span ; rdfhtml:class ?predicateClass ; rdfhtml:hasChild ?predicateText ; ord:immediatelyPrecedes ?object .
-  ?predicateText a rdfhtml:Text ; rdfhtml:data ?p .
-  ?object a rdfhtml:Span ; rdfhtml:class ?objectClass ; rdfhtml:hasChild ?objectText .
-  ?objectText a rdfhtml:Text ; rdfhtml:data ?o .
-}
-WHERE {
-  $this a/rdfs:subClassOf* c:LiveExample ; c:dataPreview ?query .
-  $member c:lineSubject ?s0 ; c:subjectToken ?sk ; c:lineNode ?n0 ; c:linePredicate ?p0 ; c:predicateToken ?pk ;
-          c:lineObject ?o0 ; c:objectToken ?ok ; c:lineKey ?key0 .
-  OPTIONAL { $member c:lineChange/sem:slug ?change }
-  BIND(STR(?key0) AS ?key)
-  BIND(STR(?s0) AS ?s) BIND(STR(?p0) AS ?p) BIND(STR(?o0) AS ?o)
-  BIND(CONCAT("sem-live-subject tok-", STR(?sk)) AS ?subjectClass)
-  BIND(CONCAT("tok-", STR(?pk)) AS ?predicateClass)
-  BIND(CONCAT("tok-", STR(?ok)) AS ?objectClass)
-  BIND(IRI(CONCAT(STR($this), "/~data")) AS ?data)
-  BIND(CONCAT(STR($this), "/~node-", STR(?n0)) AS ?nodeLocal)
-  BIND(IRI(?nodeLocal) AS ?node)
-  BIND(IRI(CONCAT(?nodeLocal, "-role")) AS ?nodeRole)
-  BIND(IRI(CONCAT(?nodeLocal, "-aria-label")) AS ?nodeLabel)
-  BIND(IRI(CONCAT(?nodeLocal, "-subject")) AS ?subject)
-  BIND(IRI(CONCAT(?nodeLocal, "-subject-text")) AS ?subjectText)
-  BIND(IRI(CONCAT(?nodeLocal, "-rows")) AS ?rows)
-  BIND(CONCAT(STR($this), "/~line-", REPLACE(STR($member), "^.*/", "")) AS ?local)
-  BIND(IRI(?local) AS ?line)
-  BIND(IF(BOUND(?change), IRI(CONCAT(?local, "-data-sem-change")), ?none) AS ?changeAttr)
-  BIND(IRI(CONCAT(?local, "-p")) AS ?predicate)
-  BIND(IRI(CONCAT(?local, "-p-text")) AS ?predicateText)
-  BIND(IRI(CONCAT(?local, "-o")) AS ?object)
-  BIND(IRI(CONCAT(?local, "-o-text")) AS ?objectText)
-}""" .
-
+# --- what happened ----------------------------------------------------------------------------------------
 # What happened, once something did: the caption says it, and two arrows show it - from the
-# rendering to the first line it changed (the accent), and from that line on to the text (success,
+# rendering to the data viewer's first changed row (the accent), and from that row on to the text (success,
 # dashed). Before anything happened, the caption invites the reader to try.
 
 c:LiveExampleFlow a sem:Rendering ; sem:targets c:LiveExample ; sem:modality mod:Screen ; sem:stratum 0 ;
-    sem:watches rdf:type , c:dataPreview , c:textPreview , c:changedLine , c:triplesAdded , c:triplesRemoved , l10n:label .
+    sem:watches rdf:type , c:dataPreview , c:textPreview , c:changedRow , c:triplesAdded , c:triplesRemoved , l10n:label .
 c:LiveExampleFlow-fn a sem:Rule ; sem:implements c:LiveExampleFlow ; sem:function "live-example:flow" .
 c:LiveExampleFlow-sparql a sem:Rule ;
     sem:implements c:LiveExampleFlow ;
@@ -527,30 +454,30 @@ WHERE {
   $this a/rdfs:subClassOf* c:LiveExample ; c:dataPreview ?query .
   OPTIONAL { $this c:triplesAdded ?added }
   OPTIONAL { $this c:triplesRemoved ?removed }
-  OPTIONAL { $this c:changedLine ?changed }
+  OPTIONAL { $this c:changedRow ?changed }
   BIND(BOUND(?added) || BOUND(?removed) AS ?happened)
   OPTIONAL { FILTER(!?happened) ?hintAt l10n:of c:LiveFlowHintPhrase ; l10n:name ?hint0 }
-  OPTIONAL { FILTER(!?happened) c:LiveFlowHintPhrase rdfs:label ?hint0 FILTER(langMatches(lang(?hint0), "en")) }
+  OPTIONAL { FILTER(!?happened) ?l10nAt_hint0 l10n:of c:LiveFlowHintPhrase ; l10n:name ?hint0 } OPTIONAL { FILTER(!?happened) c:LiveFlowHintPhrase rdfs:label ?hint0 FILTER(langMatches(lang(?hint0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveFlowHintPhrase ; l10n:name ?l10nPick }) }
   OPTIONAL { FILTER(?happened) ?flowAt l10n:of c:LiveFlowPhrase ; l10n:name ?flow0 }
-  OPTIONAL { FILTER(?happened) c:LiveFlowPhrase rdfs:label ?flow0 FILTER(langMatches(lang(?flow0), "en")) }
+  OPTIONAL { FILTER(?happened) ?l10nAt_flow0 l10n:of c:LiveFlowPhrase ; l10n:name ?flow0 } OPTIONAL { FILTER(?happened) c:LiveFlowPhrase rdfs:label ?flow0 FILTER(langMatches(lang(?flow0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveFlowPhrase ; l10n:name ?l10nPick }) }
   BIND(COALESCE(STR(?added), "0") AS ?a)
   BIND(COALESCE(STR(?removed), "0") AS ?r)
   BIND(IF(?happened, CONCAT(STRBEFORE(STR(?flow0), "{added}"), ?a, STRBEFORE(STRAFTER(STR(?flow0), "{added}"), "{removed}"), ?r, STRAFTER(STR(?flow0), "{removed}")), STR(?hint0)) AS ?caption)
   BIND(IRI(CONCAT(STR($this), "/~flow")) AS ?flow)
   BIND(IRI(CONCAT(STR($this), "/~flow-text")) AS ?flowText)
-  # The arrows, while a changed line is shown.
-  BIND(IF(BOUND(?changed), IRI(CONCAT(STR($this), "/~line-", REPLACE(STR(?changed), "^.*/", ""))), ?none) AS ?line)
+  # The arrows, while a changed row is shown.
+  BIND(?changed AS ?line)
   BIND(IF(BOUND(?line), IRI(CONCAT(STR($this), "/~links")), ?none) AS ?links)
   BIND(IF(BOUND(?line), IRI(CONCAT(STR($this), "/~screen")), ?none) AS ?screen)
   BIND(IF(BOUND(?line), IRI(CONCAT(STR($this), "/~cause")), ?none) AS ?cause)
   OPTIONAL { FILTER(BOUND(?line)) ?causeAt l10n:of c:LiveCausePhrase ; l10n:name ?cause0 }
-  OPTIONAL { FILTER(BOUND(?line)) c:LiveCausePhrase rdfs:label ?cause0 FILTER(langMatches(lang(?cause0), "en")) }
+  OPTIONAL { FILTER(BOUND(?line)) ?l10nAt_cause0 l10n:of c:LiveCausePhrase ; l10n:name ?cause0 } OPTIONAL { FILTER(BOUND(?line)) c:LiveCausePhrase rdfs:label ?cause0 FILTER(langMatches(lang(?cause0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveCausePhrase ; l10n:name ?l10nPick }) }
   BIND(STR(?cause0) AS ?causeLabel)
   BIND(EXISTS { $this c:textPreview ?tp FILTER(STR(?tp) = "true") } AS ?withText)
   BIND(IF(BOUND(?line) && ?withText, IRI(CONCAT(STR($this), "/~text")), ?none) AS ?text)
   BIND(IF(BOUND(?text), IRI(CONCAT(STR($this), "/~follow")), ?none) AS ?follow)
   OPTIONAL { FILTER(BOUND(?text)) ?followAt l10n:of c:LiveFollowPhrase ; l10n:name ?follow0 }
-  OPTIONAL { FILTER(BOUND(?text)) c:LiveFollowPhrase rdfs:label ?follow0 FILTER(langMatches(lang(?follow0), "en")) }
+  OPTIONAL { FILTER(BOUND(?text)) ?l10nAt_follow0 l10n:of c:LiveFollowPhrase ; l10n:name ?follow0 } OPTIONAL { FILTER(BOUND(?text)) c:LiveFollowPhrase rdfs:label ?follow0 FILTER(langMatches(lang(?follow0), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:LiveFollowPhrase ; l10n:name ?l10nPick }) }
   BIND(STR(?follow0) AS ?followLabel)
 }""" .
 

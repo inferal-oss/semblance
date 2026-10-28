@@ -2,9 +2,9 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { BEH, C, H, L10N, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN } from '../ns.ts'
+import { BEH, C, H, L10N, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { el, marked } from './data.ts'
-import { labelOf, named, nodes, str, text } from './util.ts'
+import { labelOf, named, nodes, str, text, isA, encodeForUri } from './util.ts'
 import { C as VIEW_C } from '../view/functions.ts'
 
 const C_CLEARS = NS.c + 'clears'
@@ -19,9 +19,6 @@ const STY_TONE = NS.sty + 'tone'
 const TREE_MEMBER = NS.tree + 'member'
 
 const NONE = { add: [], remove: [] }
-
-/** SPARQL's ENCODE_FOR_URI. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
 
 /** A phrase (c:Phrase) in the viewer's language. */
 const phrase = (ctx: RuleContext, name: string) => labelOf(ctx, ctx.nn(NS.c + name))
@@ -212,20 +209,6 @@ const liveToggle: ReactionFn = (ctx) => {
 }
 
 // --- CountBadge -----------------------------------------------------------------------------------
-
-/** Whether a node is an instance of a class or of one of its subclasses. */
-function isA(ctx: RuleContext, node: Term, cls: Term): boolean {
-  const seen = new Set<string>()
-  const todo = ctx.objects(node, RDF_TYPE)
-  while (todo.length) {
-    const t = todo.pop()!
-    if (t.equals(cls)) return true
-    if (seen.has(t.value)) continue
-    seen.add(t.value)
-    todo.push(...ctx.objects(t, RDFS_SUBCLASS))
-  }
-  return false
-}
 
 const countBadge: FnRule = (ctx, focus) => {
   const collection = ctx.object(focus, C_COLLECTION)

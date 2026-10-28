@@ -36,6 +36,21 @@ export function galleryPage(file: string, root: string, kind: StoreKind = 'oxigr
 
 const gallery = (kind: StoreKind = 'oxigraph', prefer?: 'sparql' | 'function') => galleryPage('data', 'gallery-data', kind, prefer)
 
+describe('c:GanttChart', () => {
+  it("shows the gallery's plan: a region that scrolls, a task a row, its dates in words", () => {
+    const { root } = gallery()
+    const chart = root('dt-gantt-chart')
+    expect(chart.getAttribute('data-sem-c')).toBe('gantt-chart')
+    const region = chart.querySelector('.sem-gantt-scroll')!
+    expect([region.getAttribute('role'), region.getAttribute('tabindex'), region.getAttribute('aria-label')]).toEqual(['region', '0', 'Release plan'])
+    expect([...chart.querySelectorAll('.sem-gantt-label')].map((l) => l.textContent)).toEqual(['Sketch the interface', 'Build the component', 'Write the docs', 'Review'])
+    expect(chart.querySelectorAll('.sem-gantt-bar')).toHaveLength(3)
+    expect(chart.querySelectorAll('.sem-gantt-milestone')).toHaveLength(1)
+    expect(chart.querySelector('.sem-gantt-track')!.getAttribute('aria-hidden')).toBe('true')
+    expect(chart.querySelectorAll('li')[3]!.querySelector('.sem-visually-hidden')!.textContent).toBe('2026-11-17 · Milestone · After Build the component · After Write the docs')
+  })
+})
+
 describe('c:Table', () => {
   it('keeps host-owned cells and their controls when rows sort', () => {
     const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>')
@@ -215,8 +230,8 @@ describe('c:DescriptionList, c:Stat and c:Avatar', () => {
     expect(dl.localName).toBe('dl')
     const pairs = [...dl.querySelectorAll('.sem-pair')].map((p) => [p.querySelector('dt')!.textContent, p.querySelector('dd')!.textContent])
     expect(pairs[0]).toEqual(['slug', 'table'])
-    // c:Table is a sem:Component, and (ontology/alignments.ttl) a schema:Table.
-    expect(pairs[1]).toEqual(['subClassOf', 'Table, Component'])
+    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table.
+    expect(pairs[1]).toEqual(['subClassOf', 'Table, Sortable, Component'])
     expect(pairs[2]![1]).toMatch(/^Rows of a SPARQL SELECT/)
     expect([...root('dt-dl-explicit').querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Store', 'Strata', 'Change log', 'Identity'])
   })
@@ -315,7 +330,7 @@ describe('c:Tree', () => {
     click(twisty)
     expect(objects(UI + 'dt-tree-classes', NS.c + 'expandedNode')).toContain(NS.c + 'Chart')
     expect(item('Chart').getAttribute('aria-expanded')).toBe('true')
-    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Heatmap', 'LineChart'])
+    expect([...item('Chart').querySelectorAll(':scope > [role=group] > li > .sem-row > .sem-label')].map((l) => l.textContent)).toEqual(['BarChart', 'Gantt chart', 'Heatmap', 'LineChart'])
     expect(item('BarChart').getAttribute('aria-level')).toBe('3')
     click(item('Chart').querySelector('.sem-twisty')!)
     expect(item('Chart').getAttribute('aria-expanded')).toBe('false')

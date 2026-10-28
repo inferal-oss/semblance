@@ -6,8 +6,8 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, KEY, L10N, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { readLocations, shows } from '../navigation.ts'
 import { decor, FB, phrase } from './feedback.ts'
-import { encodeForUri, fold } from './typeahead.ts'
-import { isTrue, labelOf, named, RDFS_COMMENT, RDFS_LABEL, rdfList, str, text } from './util.ts'
+import { fold } from './typeahead.ts'
+import { isTrue, labelOf, named, RDFS_COMMENT, RDFS_LABEL, rdfList, str, text, encodeForUri } from './util.ts'
 
 const c = (local: string) => NS.c + local
 const NAV = NS.nav

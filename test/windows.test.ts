@@ -32,6 +32,108 @@ function showWindows(kind: 'oxigraph' | 'hybrid' | 'n3' = 'oxigraph') {
 }
 
 describe('windows', () => {
+  it('tiles open floating windows and restores their saved geometry when floating again', () => {
+    const h = showWindows()
+    const { root, click, fact, store, runtime, shell } = h
+    const f = store.factory
+    const desktop = f.namedNode(UI + 'desktop')
+    const layout = f.namedNode(c + 'tileLayout')
+    click(root('wn-open-checklist'))
+    click(root('wn-open-log'))
+    const saved = root('win-checklist').getAttribute('style')
+    expect(saved).toContain('left: 140px')
+    runtime.apply({ add: [f.quad(desktop, layout, f.namedNode(c + 'DesktopGridLayout'))], remove: store.match(desktop, layout, null) })
+    shell.flush()
+    expect(root('desktop').getAttribute('data-sem-tile-layout')).toBe('desktop-grid')
+    // As many columns as fit: no cap until c:columns says one.
+    expect(root('desktop').querySelector('.sem-frames')!.hasAttribute('data-columns')).toBe(false)
+    expect(root('win-checklist').getAttribute('data-sem-tiled')).toBe('true')
+    expect(root('win-checklist').getAttribute('style')).toBeNull()
+    expect(root('win-checklist').querySelector('.sem-window-bar')!.hasAttribute('data-sem-gesture')).toBe(false)
+    expect(root('win-checklist').querySelector('.sem-window-grip')).toBeNull()
+    expect(fact('win-checklist', 'x')).toBe('140')
+    // c:Grid's parameters: c:columns caps the columns, c:minWidth sets the least tile width.
+    runtime.apply({ add: [f.quad(desktop, f.namedNode(c + 'columns'), f.literal('1', f.namedNode(NS.xsd + 'integer'))), f.quad(desktop, f.namedNode(c + 'minWidth'), f.literal('24rem'))], remove: [] })
+    shell.flush()
+    const layer = root('desktop').querySelector('.sem-frames')!
+    expect(layer.getAttribute('data-columns')).toBe('1')
+    expect(layer.getAttribute('style')).toBe('--grid-min: 24rem; --grid-columns: 1')
+    runtime.apply({ add: [], remove: store.match(desktop, layout, null) })
+    shell.flush()
+    expect(root('desktop').hasAttribute('data-sem-tile-layout')).toBe(false)
+    expect(root('desktop').querySelector('.sem-frames')!.hasAttribute('style')).toBe(false)
+    expect(root('win-checklist').getAttribute('style')).toBe(saved)
+    expect(root('win-checklist').querySelector('.sem-window-bar')!.getAttribute('data-sem-gesture')).toBe('move')
+  })
+
+  it('tiles the same way in SPARQL and in functions, after every step', () => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'oxigraph', prefer)
+      const f = h.store.factory
+      const set = (s: string, p: string, o: string | undefined) => {
+        const add = o === undefined ? [] : [f.quad(f.namedNode(UI + s), f.namedNode(c + p), o.startsWith('"') ? f.literal(o.slice(1, -1)) : f.namedNode(o))]
+        h.runtime.apply({ remove: h.store.match(f.namedNode(UI + s), f.namedNode(c + p), null), add })
+        h.shell.flush()
+      }
+      h.showPage('Components')
+      h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'app'), f.namedNode(UI + 'galleryGroup'), null), add: [f.quad(f.namedNode(UI + 'app'), f.namedNode(UI + 'galleryGroup'), f.namedNode(UI + 'GroupWindows'))] })
+      h.shell.flush()
+      return { ...h, set, html: () => h.document.getElementById('app')!.innerHTML }
+    })
+    const steps: [string, string, string | undefined][] = [
+      ['win-checklist', 'open', '"true"'],
+      ['win-log', 'open', '"true"'],
+      ['win-activity', 'open', '"true"'],
+      ['desktop', 'tileLayout', c + 'DesktopGridLayout'],
+      ['desktop', 'columns', '"2"'],
+      ['desktop', 'minWidth', '"18rem"'],
+      ['win-log', 'windowState', c + 'Maximized'],
+      ['win-log', 'windowState', c + 'Normal'],
+      ['win-activity', 'attachedTo', c + 'EndEdge'],
+      ['win-checklist', 'windowState', c + 'Minimized'],
+      ['desktop', 'columns', undefined],
+      ['desktop', 'tileLayout', c + 'DesktopFloatingLayout'],
+    ]
+    for (const [s, p, o] of steps) {
+      for (const h of shells) h.set(s, p, o)
+      const [a, b] = shells.map((h) => h.html()) as [string, string]
+      if (o === c + 'DesktopGridLayout') expect(a).toContain('data-sem-tiled')
+      if (a !== b) {
+        let i = 0
+        while (i < a.length && a[i] === b[i]) i++
+        expect(a.slice(Math.max(0, i - 300), i + 300), `after ${s} ${p} ${o}`).toBe(b.slice(Math.max(0, i - 300), i + 300))
+      }
+    }
+    const tiled = shells[0]!.document.querySelectorAll('[data-sem-tiled]')
+    expect(tiled.length).toBe(0)
+  })
+
+  it('offers a desktop layout control above the frames and returns to floating through its event', () => {
+    const { root, click, fact } = showWindows()
+    click(root('wn-open-all-grid'))
+    const saved = root('win-checklist').getAttribute('style')
+    const grid = [...root('wn-grid-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Grid'))!
+    click(grid)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopGridLayout')
+    expect(root('win-checklist').getAttribute('data-sem-tiled')).toBe('true')
+    const toolbar = root('wn-layout-toolbar')
+    expect(toolbar.getAttribute('role')).toBe('toolbar')
+    expect(toolbar.closest('.sem-frames')).toBeNull()
+    const floating = [...root('wn-layout-floating-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Floating'))!
+    click(floating)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopFloatingLayout')
+    expect(root('wn-layout-toolbar').closest('[hidden]')).not.toBeNull()
+    expect(root('win-checklist').getAttribute('style')).toBe(saved)
+    // The gallery control and the parked desktop control stay usable on another cycle.
+    click(grid)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopGridLayout')
+    expect(root('wn-layout-toolbar').closest('[hidden]')).toBeNull()
+    const floatingAgain = [...root('wn-layout-floating-control').querySelectorAll('button')].find((button) => button.textContent?.includes('Floating'))!
+    click(floatingAgain)
+    expect(fact('desktop', 'tileLayout')).toBe(c + 'DesktopFloatingLayout')
+    expect(root('win-checklist').getAttribute('style')).toBe(saved)
+  })
+
   it('closed frames are not placed on the desktop, so neither they nor their content are evaluated', () => {
     const { root, document, taskbar, screen } = showWindows()
     expect(root('win-checklist')).toBeNull()

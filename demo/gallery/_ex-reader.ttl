@@ -1,0 +1,361 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix rnd: <https://semblance.dev/ns/rendered#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rd: <https://semblance.dev/demo/reader#> .
+@prefix ui: <https://semblance.dev/demo#> .
+
+# =================================================================================================
+# Reader: an article in a pane of its own, a table of contents that follows what is being read,
+# and how far along the reader is; and a window that can be opened, moved and resized, whose shadow a
+# schematic of the viewport follows.
+#
+# Nothing here measures the page. The pane and its sections ask for their rendered state
+# (rnd:observesSelf), which the host's rendered-state effect writes to the graph as they move: where
+# each section is, how far the pane is scrolled. Three maintained views turn that into this
+# example's own facts - which section is being read, how far along the reader is, where the window
+# and the article are in the viewport, the rows of a table - and components show them. The state is never recorded: scrolling makes no
+# history, and only what the views derive from it re-renders.
+# =================================================================================================
+
+ui:ex-reader-prefixes sh:declare [ sh:prefix "rd" ; sh:namespace "https://semblance.dev/demo/reader#"^^xsd:anyURI ] .
+
+rd:for rdfs:label "for" ; rdfs:comment "On an entry of the table of contents: the section it stands for." .
+rd:order rdfs:label "order" ; rdfs:comment "A section's place in the article." .
+rd:name rdfs:label "name" ; rdfs:comment "What a component is called in the schematic." .
+
+# --- the interface ---------------------------------------------------------------------------------
+
+# The example and, after it (pos:AsideEnd), a narrow column that sticks to the top as the page
+# scrolls: the schematic of the viewport, and the button that opens the window under it.
+ui:ex-reader a c:Stack ; pos:layout pos:AsideEnd ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-reader-main ui:ex-reader-side ) .
+ui:ex-reader-main a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
+    c:children ( ui:ex-reader-intro ui:ex-reader-progress ui:ex-reader-body ui:ex-reader-table ) .
+ui:ex-reader-intro a c:Text ;
+    c:label "Scroll the article. The table of contents marks the section being read, and the bar says how far along you are: both are derived from where the page says the sections are, a query over the rendered state. Beside it, the same kind of query draws your viewport to scale." .
+
+# How far along: its value and its words come from a view over the pane's scroll (rd:Progress).
+ui:ex-reader-progress a c:Progress ; c:active true ; c:max 100 .
+
+ui:ex-reader-body a c:Stack ; pos:layout pos:Aside ; pos:gap tok:space-5 ;
+    c:children ( ui:ex-reader-toc ui:ex-reader-pane ) .
+
+# The table of contents: one badge per section. The one being read is solid and accented (rd:Current).
+ui:ex-reader-toc a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:align pos:Start ;
+    c:children ( ui:ex-reader-t1 ui:ex-reader-t2 ui:ex-reader-t3 ui:ex-reader-t4 ui:ex-reader-t5 ) .
+ui:ex-reader-t1 a c:Badge ; c:label "1 · An interface is a graph" ; rd:for ui:ex-reader-s1 .
+ui:ex-reader-t2 a c:Badge ; c:label "2 · Rules project it" ; rd:for ui:ex-reader-s2 .
+ui:ex-reader-t3 a c:Badge ; c:label "3 · Events are data" ; rd:for ui:ex-reader-s3 .
+ui:ex-reader-t4 a c:Badge ; c:label "4 · Measured, not guessed" ; rd:for ui:ex-reader-s4 .
+ui:ex-reader-t5 a c:Badge ; c:label "5 · What it costs" ; rd:for ui:ex-reader-s5 .
+
+# The article: a pane that scrolls on its own (pos:ScrollPane). It asks for its own box and scroll;
+# each section for its own box - not for what is inside them, so nothing else is measured.
+ui:ex-reader-pane a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-6 ; pos:scroll pos:ScrollPane ; rd:name "Article" ;
+    rnd:observesSelf rnd:Geometry , rnd:Scroll ;
+    c:children ( ui:ex-reader-s1 ui:ex-reader-s2 ui:ex-reader-s3 ui:ex-reader-s4 ui:ex-reader-s5 ) .
+
+ui:ex-reader-s1 a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; rd:order 1 ; rnd:observesSelf rnd:Geometry ;
+    c:children ( ui:ex-reader-s1-h ui:ex-reader-s1-p1 ui:ex-reader-s1-p2 ui:ex-reader-s1-p3 ) .
+ui:ex-reader-s1-h a c:Heading ; c:level 3 ; c:label "An interface is a graph" .
+ui:ex-reader-s1-p1 a c:Text ; c:label "A button is not a function that returns markup. It is a node with a type, a label and whatever else describes it, in the same graph as the data it shows and the rules that show it." .
+ui:ex-reader-s1-p2 a c:Text ; c:label "Because everything is triples, everything can be asked about: which components are on this page, which rules render them, which reactions answer a click. The tools on this site are queries over the interface they are part of." .
+ui:ex-reader-s1-p3 a c:Text ; c:label "An application is its own vocabulary wired to components: cards and columns, files and folders, sections and a table of contents. Nothing about any of them is in the framework." .
+
+ui:ex-reader-s2 a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; rd:order 2 ; rnd:observesSelf rnd:Geometry ;
+    c:children ( ui:ex-reader-s2-h ui:ex-reader-s2-p1 ui:ex-reader-s2-p2 ui:ex-reader-s2-p3 ) .
+ui:ex-reader-s2-h a c:Heading ; c:level 3 ; c:label "Rules project it" .
+ui:ex-reader-s2-p1 a c:Text ; c:label "Rendering is a projection: SPARQL rules read a component and its data and construct an RDF description of HTML, which a renderer patches into the page or writes out as text." .
+ui:ex-reader-s2-p2 a c:Text ; c:label "Projection is incremental. A rule depends on its focus and on what it follows; when one of those triples changes, it runs again for that focus alone, and the page is patched where its output changed." .
+ui:ex-reader-s2-p3 a c:Text ; c:label "Layers add to what components render - accessibility, style, validation, keyboard patterns - without the component knowing about them." .
+
+ui:ex-reader-s3 a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; rd:order 3 ; rnd:observesSelf rnd:Geometry ;
+    c:children ( ui:ex-reader-s3-h ui:ex-reader-s3-p1 ui:ex-reader-s3-p2 ui:ex-reader-s3-p3 ) .
+ui:ex-reader-s3-h a c:Heading ; c:level 3 ; c:label "Events are data" .
+ui:ex-reader-s3-p1 a c:Text ; c:label "A click becomes an event in the graph. Reactions are pairs of CONSTRUCT queries over it: what to take away and what to add. Their union is one change, applied at once." .
+ui:ex-reader-s3-p2 a c:Text ; c:label "Every recorded event joins a change log, a bounded stream that views, undo and the tools read. Pointing, hovering and scrolling are not recorded: they are moments, not history." .
+ui:ex-reader-s3-p3 a c:Text ; c:label "The host code does only what a browser must: it mounts projections and performs the effects of graph state, such as the address, storage and timers." .
+
+ui:ex-reader-s4 a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; rd:order 4 ; rnd:observesSelf rnd:Geometry ;
+    c:children ( ui:ex-reader-s4-h ui:ex-reader-s4-p1 ui:ex-reader-s4-p2 ui:ex-reader-s4-p3 ) .
+ui:ex-reader-s4-h a c:Heading ; c:level 3 ; c:label "Measured, not guessed" .
+ui:ex-reader-s4-p1 a c:Text ; c:label "Some state belongs to the page and not to the graph: where a component landed, how big it is, whether it is on screen, how far a pane is scrolled, what has the focus." .
+ui:ex-reader-s4-p2 a c:Text ; c:label "A component that asks for it gets it as triples. The host measures once per frame in which something may have moved, reads everything before it writes anything, rounds to whole pixels and writes only what changed." .
+ui:ex-reader-s4-p3 a c:Text ; c:label "This article is such a component. The table of contents beside it is not told where you are; it asks." .
+
+ui:ex-reader-s5 a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-3 ; rd:order 5 ; rnd:observesSelf rnd:Geometry ;
+    c:children ( ui:ex-reader-s5-h ui:ex-reader-s5-p1 ui:ex-reader-s5-p2 ui:ex-reader-s5-p3 ) .
+ui:ex-reader-s5-h a c:Heading ; c:level 3 ; c:label "What it costs" .
+ui:ex-reader-s5-p1 a c:Text ; c:label "Only the pane and five sections are measured. Scrolling the pane moves their boxes; scrolling the page moves none, since boxes are kept in document coordinates." .
+ui:ex-reader-s5-p2 a c:Text ; c:label "The measurements live on nodes of their own, in a graph of their own. No rendering depends on them unless it asks, so a scroll re-runs the views of this example and the few components they change: one badge's tone, the bar, a shadow, the table." .
+ui:ex-reader-s5-p3 a c:Text ; c:label "When you reach the end, the bar says so: the pane reports that it is scrolled to its end." .
+
+# --- the window and the schematic ---------------------------------------------------------------------
+# A window on the shell's desktop, closed until the button opens it: it moves, resizes, minimizes and
+# docks like any c:Window, and asks for its own box. The schematic draws the viewport to scale and,
+# in it, the shadow of each component it rd:shows, where the page says it is and as big.
+
+ui:ex-reader-side a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-2 ; pos:align pos:Start ; pos:sticky pos:StickToTop ;
+    c:children ( ui:ex-reader-map ui:ex-reader-open ui:ex-reader-side-note ) .
+ui:ex-reader-side-note a c:Text ; sty:textStyle sty:Caption ;
+    c:label "Your viewport, to scale: the shadows are the article and the window, where the page says they are. Move or resize the window, or scroll the page, and watch them follow." .
+ui:ex-reader-open a c:Button ; c:label "Open a window" ; c:icon "▢" ; sty:emphasis sty:Outline ; sty:size sty:Small ; c:opens ui:ex-reader-window .
+
+ui:desktop c:hosts ui:ex-reader-window .
+ui:ex-reader-window a c:Window ; c:title "Notes" ; c:open false ; rd:name "Notes" ;
+    c:x 160 ; c:y 160 ; c:width 320 ; c:height 220 ;
+    rnd:observesSelf rnd:Geometry ;
+    c:body ui:ex-reader-window-text .
+ui:ex-reader-window-text a c:Text ; pos:inset tok:space-4 ;
+    c:label "Move me by my title bar, resize me from a corner: the schematic draws my shadow where the page says I am." .
+
+ui:ex-reader-map a rd:Schematic ; c:label "The viewport, to scale" ; rd:shows ui:ex-reader-pane , ui:ex-reader-window .
+
+# The schematic: an SVG whose view box is the viewport's own size, so a shadow is drawn at the
+# component's coordinates and size as they are - the scaling is the SVG's. Its shadows are derived
+# (rd:Shadows, below); it follows them (sem:follows rd:shadow). A function twin, reader:schematic in
+# src/examples/reader.ts, renders the same.
+rd:Schematic a owl:Class ; rdfs:subClassOf sem:Component ; sem:slug "ex-schematic" ;
+    rdfs:comment "A schematic of the viewport: the shadows of the components it rd:shows, to scale." .
+rd:shows a owl:ObjectProperty ; rdfs:domain rd:Schematic ; rdfs:comment "A component whose shadow the schematic draws." .
+rd:shadow a owl:ObjectProperty ; rdfs:domain rd:Schematic ; rdfs:comment "Derived: a shown component's box in the viewport (rd:x, rd:y, rd:width, rd:height, rd:name)." .
+rd:viewWidth a owl:DatatypeProperty ; rdfs:comment "Derived: the viewport's width." .
+rd:viewHeight a owl:DatatypeProperty ; rdfs:comment "Derived: the viewport's height." .
+rd:x a owl:DatatypeProperty . rd:y a owl:DatatypeProperty . rd:width a owl:DatatypeProperty . rd:height a owl:DatatypeProperty .
+
+rd:SchematicRendering a sem:Rendering ; sem:targets rd:Schematic ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows rd:shadow .
+rd:SchematicRendering-fn a sem:Rule ; sem:implements rd:SchematicRendering ; sem:function "reader:schematic" .
+rd:SchematicRendering-sparql a sem:Rule ; sem:implements rd:SchematicRendering ;
+    sem:construct """PREFIX rd: <https://semblance.dev/demo/reader#>
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?svg , ?caption .
+  ?svg a svg:Svg ; ord:immediatelyPrecedes ?caption ; rdfhtml:attribute ?svgBox , ?svgRole , ?svgName ; rdfhtml:hasChild ?frame , ?g .
+  ?svgBox a rdfhtml:Attribute ; rdfhtml:attributeName "viewBox" ; rdfhtml:attributeValue ?box .
+  ?svgRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "img" .
+  ?svgName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?label .
+  ?frame a svg:Rect ; sem:orderKey "0" ; rdfhtml:attribute ?frameClass , ?frameW , ?frameH .
+  ?frameClass a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "ex-schematic-viewport" .
+  ?frameW a rdfhtml:Attribute ; rdfhtml:attributeName "width" ; rdfhtml:attributeValue ?w .
+  ?frameH a rdfhtml:Attribute ; rdfhtml:attributeName "height" ; rdfhtml:attributeValue ?h .
+  ?g a svg:G ; sem:orderKey ?key ; rdfhtml:attribute ?gClass ; rdfhtml:hasChild ?rect , ?text .
+  ?gClass a rdfhtml:Attribute ; rdfhtml:attributeName "class" ; rdfhtml:attributeValue "ex-schematic-shadow" .
+  ?rect a svg:Rect ; ord:immediatelyPrecedes ?text ; rdfhtml:attribute ?rectX , ?rectY , ?rectW , ?rectH .
+  ?rectX a rdfhtml:Attribute ; rdfhtml:attributeName "x" ; rdfhtml:attributeValue ?sx .
+  ?rectY a rdfhtml:Attribute ; rdfhtml:attributeName "y" ; rdfhtml:attributeValue ?sy .
+  ?rectW a rdfhtml:Attribute ; rdfhtml:attributeName "width" ; rdfhtml:attributeValue ?sw .
+  ?rectH a rdfhtml:Attribute ; rdfhtml:attributeName "height" ; rdfhtml:attributeValue ?sh .
+  ?text a svg:Text ; rdfhtml:attribute ?textX , ?textY , ?textSize ; rdfhtml:hasChild ?textData .
+  ?textX a rdfhtml:Attribute ; rdfhtml:attributeName "x" ; rdfhtml:attributeValue ?tx .
+  ?textY a rdfhtml:Attribute ; rdfhtml:attributeName "y" ; rdfhtml:attributeValue ?ty .
+  ?textSize a rdfhtml:Attribute ; rdfhtml:attributeName "font-size" ; rdfhtml:attributeValue ?fs .
+  ?textData a rdfhtml:Text ; rdfhtml:data ?name .
+  ?caption a rdfhtml:Span ; rdfhtml:class "ex-schematic-caption" ; rdfhtml:hasChild ?captionText .
+  ?captionText a rdfhtml:Text ; rdfhtml:data ?says .
+}
+WHERE {
+  $this a rd:Schematic .
+  OPTIONAL { $this c:label ?own }
+  BIND(STR(COALESCE(?own, "")) AS ?label)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~caption")) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~caption-text")) AS ?captionText)
+  OPTIONAL {
+    $this rd:viewWidth ?vw ; rd:viewHeight ?vh .
+    BIND(STR(?vw) AS ?w) BIND(STR(?vh) AS ?h)
+    BIND(CONCAT("0 0 ", ?w, " ", ?h) AS ?box)
+    BIND(IRI(CONCAT(STR($this), "/~svg")) AS ?svg)
+    BIND(IRI(CONCAT(STR($this), "/~svg-a-viewBox")) AS ?svgBox)
+    BIND(IRI(CONCAT(STR($this), "/~svg-a-role")) AS ?svgRole)
+    BIND(IRI(CONCAT(STR($this), "/~svg-a-aria-label")) AS ?svgName)
+    BIND(IRI(CONCAT(STR($this), "/~frame")) AS ?frame)
+    BIND(IRI(CONCAT(STR($this), "/~frame-a-class")) AS ?frameClass)
+    BIND(IRI(CONCAT(STR($this), "/~frame-a-width")) AS ?frameW)
+    BIND(IRI(CONCAT(STR($this), "/~frame-a-height")) AS ?frameH)
+    # A label's size, in the viewport's units: about a thirty-second of its width.
+    BIND(xsd:integer(ROUND(?vw / 32)) AS ?size)
+    BIND(STR(?size) AS ?fs)
+    OPTIONAL {
+      $this rd:shadow ?shadow .
+      ?shadow rd:name ?n ; rd:x ?x ; rd:y ?y ; rd:width ?ww ; rd:height ?hh .
+      BIND(STR(?n) AS ?name)
+      BIND(CONCAT("1 ", ?name) AS ?key)
+      BIND(STR(?x) AS ?sx) BIND(STR(?y) AS ?sy) BIND(STR(?ww) AS ?sw) BIND(STR(?hh) AS ?sh)
+      BIND(ENCODE_FOR_URI(?name) AS ?slug)
+      BIND(IRI(CONCAT(STR($this), "/~g-", ?slug)) AS ?g)
+      BIND(IRI(CONCAT(STR($this), "/~g-", ?slug, "-a-class")) AS ?gClass)
+      BIND(IRI(CONCAT(STR($this), "/~r-", ?slug)) AS ?rect)
+      BIND(IRI(CONCAT(STR($this), "/~r-", ?slug, "-a-x")) AS ?rectX)
+      BIND(IRI(CONCAT(STR($this), "/~r-", ?slug, "-a-y")) AS ?rectY)
+      BIND(IRI(CONCAT(STR($this), "/~r-", ?slug, "-a-width")) AS ?rectW)
+      BIND(IRI(CONCAT(STR($this), "/~r-", ?slug, "-a-height")) AS ?rectH)
+      BIND(IRI(CONCAT(STR($this), "/~t-", ?slug)) AS ?text)
+      BIND(IRI(CONCAT(STR($this), "/~t-", ?slug, "-a-x")) AS ?textX)
+      BIND(IRI(CONCAT(STR($this), "/~t-", ?slug, "-a-y")) AS ?textY)
+      BIND(IRI(CONCAT(STR($this), "/~t-", ?slug, "-a-font-size")) AS ?textSize)
+      BIND(IRI(CONCAT(STR($this), "/~t-", ?slug, "-data")) AS ?textData)
+    }
+    # Out here, where both the shadow and the label's size are in scope. The label sits at the top of
+    # the shadow's part in the viewport, so a component scrolled half out of view is still named.
+    BIND(STR(IF(?x < 0, 0, ?x) + xsd:integer(FLOOR(?size / 2))) AS ?tx)
+    BIND(STR(IF(?y < 0, 0, ?y) + xsd:integer(FLOOR(?size * 3 / 2))) AS ?ty)
+  }
+  BIND(IF(BOUND(?w), CONCAT("Viewport ", ?w, " × ", ?h), "Not measured yet.") AS ?says)
+}""" .
+
+[] a sty:StyleRule ; sty:appliesTo rd:Schematic ;
+    sty:declares [ sty:property "display" ; sty:raw "grid" ] , [ sty:property "gap" ; sty:token tok:space-1 ] ,
+                 [ sty:property "inline-size" ; sty:raw "100%" ] .
+[] a sty:StyleRule ; sty:appliesTo rd:Schematic ; sty:part "svg" ;
+    sty:declares [ sty:property "inline-size" ; sty:raw "100%" ] , [ sty:property "block-size" ; sty:raw "auto" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] , [ sty:property "border-radius" ; sty:token tok:radius-md ] .
+[] a sty:StyleRule ; sty:appliesTo rd:Schematic ; sty:part ".ex-schematic-viewport" ;
+    sty:declares [ sty:property "fill" ; sty:token tok:surface-sunken ] , [ sty:property "stroke" ; sty:token tok:border ] ,
+                 [ sty:property "stroke-width" ; sty:raw "2" ] , [ sty:property "vector-effect" ; sty:raw "non-scaling-stroke" ] .
+[] a sty:StyleRule ; sty:appliesTo rd:Schematic ; sty:part ".ex-schematic-shadow rect" ;
+    sty:declares [ sty:property "fill" ; sty:token tok:accent-soft ] , [ sty:property "stroke" ; sty:token tok:accent ] ,
+                 [ sty:property "stroke-width" ; sty:raw "1.5" ] , [ sty:property "vector-effect" ; sty:raw "non-scaling-stroke" ] ,
+                 [ sty:property "fill-opacity" ; sty:raw "0.7" ] .
+[] a sty:StyleRule ; sty:appliesTo rd:Schematic ; sty:part ".ex-schematic-shadow text" ;
+    sty:declares [ sty:property "fill" ; sty:token tok:text ] , [ sty:property "font-family" ; sty:token tok:font ] .
+[] a sty:StyleRule ; sty:appliesTo rd:Schematic ; sty:part ".ex-schematic-caption" ;
+    sty:declares [ sty:property "color" ; sty:token tok:muted ] , [ sty:property "font-size" ; sty:token tok:text-xs ] .
+
+# What the page says right now: the sections' boxes relative to the pane, from the rendered graph.
+# It is read again when the reader moves (c:dataset: the progress bar, which every scroll updates).
+ui:ex-reader-table a c:Table ; c:label "What the page says" ; c:query ui:ex-reader-rows ; c:dataset ui:ex-reader-progress ;
+    c:tableColumns ( ui:ex-reader-col-section ui:ex-reader-col-top ui:ex-reader-col-height ui:ex-reader-col-reading ) ;
+    c:emptyText "Nothing measured yet." .
+ui:ex-reader-col-section a c:Column ; c:variable "section" ; c:label "Section" .
+ui:ex-reader-col-top a c:Column ; c:variable "top" ; c:label "Top in the pane (px)" .
+ui:ex-reader-col-height a c:Column ; c:variable "height" ; c:label "Height (px)" .
+ui:ex-reader-col-reading a c:Column ; c:variable "reading" ; c:label "Being read" .
+ui:ex-reader-rows a sem:View ; rdfs:label "the sections, where the page says they are"@en ;
+    sem:select """
+SELECT ?section ?top ?height ?reading WHERE {
+  ?pane rnd:of ui:ex-reader-pane ; rnd:y ?py .
+  ?entry rd:for ?s ; c:label ?section .
+  ?state rnd:of ?s ; rnd:y ?y ; rnd:height ?height .
+  ?s rd:order ?n .
+  BIND(?y - ?py AS ?top)
+  BIND(IF(EXISTS { ?entry sty:emphasis sty:Solid }, "yes", "") AS ?reading)
+}
+ORDER BY ?n""" .
+
+# --- the views: the rendered state, as this example's facts ------------------------------------------
+# Maintained (docs/IVM.md) while the example is shown, from the changes to what they read: the
+# pane's and the sections' rendered state (urn:semblance:rendered). Their output is in the views
+# graph, on this example's components, which render it like any other triple.
+
+# The section being read: the first, in order, that still reaches past the pane's top (by more than
+# 48 px) and has begun before its bottom. Its entry in the table of contents is solid and accented.
+rd:Current a iv:View ; iv:whileShown ui:ex-reader ;
+    rdfs:label "the section being read"@en ;
+    sem:construct """
+CONSTRUCT { ?entry sty:tone sty:Accent ; sty:emphasis sty:Solid }
+WHERE {
+  ?pane rnd:of ui:ex-reader-pane ; rnd:y ?py ; rnd:height ?ph .
+  ?entry rd:for ?section .
+  ?section rd:order ?n .
+  ?state rnd:of ?section ; rnd:y ?y ; rnd:height ?h .
+  FILTER(?y + ?h > ?py + 48 && ?y < ?py + ?ph)
+  FILTER NOT EXISTS {
+    ?earlier rd:order ?m .
+    ?seen rnd:of ?earlier ; rnd:y ?ey ; rnd:height ?eh .
+    FILTER(?m < ?n && ?ey + ?eh > ?py + 48 && ?ey < ?py + ?ph)
+  }
+}""" .
+
+# How far along: the pane's scroll over how far it can scroll, as a percentage; all of it once the
+# pane says it is at its end. Its words in each language the site speaks: the viewer's is shown.
+rd:Progress a iv:View ; iv:whileShown ui:ex-reader ;
+    rdfs:label "how far along the reader is"@en ;
+    sem:construct """
+CONSTRUCT { ui:ex-reader-progress c:value ?pct ; c:label ?en , ?uk , ?de , ?ar }
+WHERE {
+  ?pane rnd:of ui:ex-reader-pane ; rnd:scrollTop ?top ; rnd:scrollHeight ?extent ; rnd:height ?h ; rnd:atEnd ?end .
+  BIND(IF(?extent <= ?h, 0, xsd:integer(ROUND(100 * ?top / (?extent - ?h)))) AS ?raw)
+  BIND(IF(STR(?end) = "true", 100, IF(?raw > 100, 100, ?raw)) AS ?pct)
+  BIND(STR(?pct) AS ?n)
+  BIND(IF(?pct = 100, "Read to the end"@en, STRLANG(CONCAT(?n, "% read"), "en")) AS ?en)
+  BIND(IF(?pct = 100, "Прочитано до кінця"@uk, STRLANG(CONCAT("Прочитано ", ?n, "%"), "uk")) AS ?uk)
+  BIND(IF(?pct = 100, "Bis zum Ende gelesen"@de, STRLANG(CONCAT(?n, " % gelesen"), "de")) AS ?de)
+  BIND(IF(?pct = 100, "قُرئ حتى النهاية"@ar, STRLANG(CONCAT("قُرئ ", ?n, "٪"), "ar")) AS ?ar)
+}""" .
+
+# Where each shown component is in the viewport: a fixed one (the window) is placed in it already;
+# the article, in the document, is moved up by how far the page is scrolled. Its shadow is minted
+# under the schematic, which follows it; the viewport's size goes on the schematic itself.
+rd:Shadows a iv:View ; iv:whileShown ui:ex-reader ;
+    rdfs:label "the shadows of the shown components, in the viewport"@en ;
+    sem:construct """
+CONSTRUCT {
+  ui:ex-reader-map rd:viewWidth ?vw ; rd:viewHeight ?vh ; rd:shadow ?shadow .
+  ?shadow rd:name ?name ; rd:x ?x ; rd:y ?y ; rd:width ?w ; rd:height ?h .
+}
+WHERE {
+  ?viewport a rnd:Viewport ; rnd:width ?vw ; rnd:height ?vh ; rnd:scrollTop ?top ; rnd:scrollLeft ?left .
+  OPTIONAL {
+    ui:ex-reader-map rd:shows ?c .
+    ?c rd:name ?name .
+    ?state rnd:of ?c ; rnd:x ?bx ; rnd:y ?by ; rnd:width ?w ; rnd:height ?h .
+  }
+  # After the OPTIONAL, where the page's scroll is in scope too.
+  BIND(EXISTS { ?state rnd:fixed true } AS ?fixed)
+  BIND(IF(?fixed, ?bx, ?bx - ?left) AS ?x)
+  BIND(IF(?fixed, ?by, ?by - ?top) AS ?y)
+  BIND(IRI(CONCAT(STR(ui:ex-reader-map), "/~shadow-", ENCODE_FOR_URI(STR(?name)))) AS ?shadow)
+}""" .
+
+# --- how it works ---------------------------------------------------------------------------------
+
+ui:ex-reader-how a c:Walkthrough ; c:label "How it works" ;
+    c:note "Scroll through the steps: the diagram follows, and each phrase in color points at its node. Click one to see its Turtle." ;
+    c:steps ( ui:ex-reader-w1 ui:ex-reader-w2 ui:ex-reader-w3 ui:ex-reader-w4 ui:ex-reader-w6 ui:ex-reader-w5 ) .
+
+ui:ex-reader-w1 a c:WalkthroughStep ; rdfs:label "The article asks to be measured" ;
+    c:children ( ui:ex-reader-m-pane " is a stack that scrolls on its own (" ui:ex-reader-m-ScrollPane ") and asks for its own box and scroll with " ui:ex-reader-m-observesSelf ". Each section, such as " ui:ex-reader-m-s4 ", asks for its own box. Nothing inside them is measured, and nothing else on the page." ) .
+ui:ex-reader-w2 a c:WalkthroughStep ; rdfs:label "The page answers in triples" ;
+    c:children ( "The host's rendered-state effect writes an " ui:ex-reader-m-State " for each: " ui:ex-reader-m-y " and the box's size in document pixels, and for the pane " ui:ex-reader-m-scrollTop ", the extent of its content and whether it is " ui:ex-reader-m-atEnd ". They are in a graph of their own, never in the change log, and no rendering reads them unless it asks." ) .
+ui:ex-reader-w3 a c:WalkthroughStep ; rdfs:label "Views turn them into this example's facts" ;
+    c:children ( ui:ex-reader-m-current " is a maintained view: the first section, by " ui:ex-reader-m-order ", that still reaches past the pane's top. It writes a solid, accented tone onto that section's entry in " ui:ex-reader-m-toc ", found by " ui:ex-reader-m-for ". " ui:ex-reader-m-progress " divides the pane's scroll by how far it can scroll, and writes the bar's value and words." ) .
+ui:ex-reader-w4 a c:WalkthroughStep ; rdfs:label "Components show them as usual" ;
+    c:children ( "The entries are plain " ui:ex-reader-m-Badge "s and the bar a " ui:ex-reader-m-Progress ": they render a tone and a value as they would from any triple. " ui:ex-reader-m-table " runs " ui:ex-reader-m-rows ", a query over the rendered state itself, again whenever the bar moves." ) .
+ui:ex-reader-w6 a c:WalkthroughStep ; rdfs:label "A window and its shadow" ;
+    c:children ( ui:ex-reader-m-open " opens " ui:ex-reader-m-window ", a " ui:ex-reader-m-Window " on the shell's desktop that asks for its own box. It is fixed to the viewport, so the page reports it in viewport coordinates (" ui:ex-reader-m-fixed "). " ui:ex-reader-m-shadows " places each component " ui:ex-reader-m-map " shows in the viewport - the article moved up by the page's scroll - and " ui:ex-reader-m-Schematic " draws them in an SVG whose view box is the viewport's own size: to scale, with no arithmetic." ) .
+ui:ex-reader-w5 a c:WalkthroughStep ; rdfs:label "Why it is cheap" ;
+    c:children ( "Six boxes are measured (seven with the window open), once per frame in which something moved. A frame writes what changed - a few numbers - and the views run over those changes: one entry's tone, the bar, a shadow and the table re-render. Scrolling the page moves no box at all, only the viewport's offset, and nothing about it is history." ) .
+
+ui:ex-reader-m-pane a c:Mention ; c:label "The pane" ; c:mentions ui:ex-reader-pane .
+ui:ex-reader-m-ScrollPane a c:Mention ; c:label "pos:ScrollPane" ; c:mentions pos:ScrollPane ; c:to pos:ScrollPane .
+ui:ex-reader-m-observesSelf a c:Mention ; c:label "rnd:observesSelf" ; c:mentions rnd:observesSelf ; c:to rnd:observesSelf .
+ui:ex-reader-m-s4 a c:Mention ; c:label "ui:ex-reader-s4" ; c:mentions ui:ex-reader-s4 .
+ui:ex-reader-m-State a c:Mention ; c:label "rnd:State" ; c:mentions rnd:State ; c:to rnd:State .
+ui:ex-reader-m-y a c:Mention ; c:label "rnd:y" ; c:mentions rnd:y ; c:to rnd:y .
+ui:ex-reader-m-scrollTop a c:Mention ; c:label "rnd:scrollTop" ; c:mentions rnd:scrollTop ; c:to rnd:scrollTop .
+ui:ex-reader-m-atEnd a c:Mention ; c:label "rnd:atEnd" ; c:mentions rnd:atEnd ; c:to rnd:atEnd .
+ui:ex-reader-m-current a c:Mention ; c:label "rd:Current" ; c:mentions rd:Current .
+ui:ex-reader-m-order a c:Mention ; c:label "rd:order" ; c:mentions rd:order .
+ui:ex-reader-m-toc a c:Mention ; c:label "the table of contents" ; c:mentions ui:ex-reader-toc .
+ui:ex-reader-m-for a c:Mention ; c:label "rd:for" ; c:mentions rd:for .
+ui:ex-reader-m-progress a c:Mention ; c:label "rd:Progress" ; c:mentions rd:Progress .
+ui:ex-reader-m-Badge a c:Mention ; c:label "c:Badge" ; c:mentions c:Badge ; c:to c:Badge .
+ui:ex-reader-m-Progress a c:Mention ; c:label "c:Progress" ; c:mentions c:Progress ; c:to c:Progress .
+ui:ex-reader-m-table a c:Mention ; c:label "The table" ; c:mentions ui:ex-reader-table .
+ui:ex-reader-m-rows a c:Mention ; c:label "ui:ex-reader-rows" ; c:mentions ui:ex-reader-rows .
+ui:ex-reader-m-open a c:Mention ; c:label "The button" ; c:mentions ui:ex-reader-open .
+ui:ex-reader-m-window a c:Mention ; c:label "the window" ; c:mentions ui:ex-reader-window .
+ui:ex-reader-m-Window a c:Mention ; c:label "c:Window" ; c:mentions c:Window ; c:to c:Window .
+ui:ex-reader-m-fixed a c:Mention ; c:label "rnd:fixed" ; c:mentions rnd:fixed ; c:to rnd:fixed .
+ui:ex-reader-m-shadows a c:Mention ; c:label "rd:Shadows" ; c:mentions rd:Shadows .
+ui:ex-reader-m-map a c:Mention ; c:label "the schematic" ; c:mentions ui:ex-reader-map .
+ui:ex-reader-m-Schematic a c:Mention ; c:label "its rendering" ; c:mentions rd:SchematicRendering .

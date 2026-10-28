@@ -157,7 +157,7 @@ wh:Recorded a sem:View , iv:View ; rdfs:label "movements recorded" ;
     sem:select """SELECT (COUNT(?m) AS ?value) WHERE { wh:movements tree:member ?m }""" .
 
 # The reorder alert reads the reorder list's rows (at most one per item), never the movements.
-wh:qReorderAlert a sem:View ; sem:select """
+wh:qReorderAlert a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads wh:Reorder ; iv:whileShown ui:ex-warehouse ; sem:select """
 SELECT ?label ?tone WHERE {
   { SELECT (COUNT(?row) AS ?n) WHERE { wh:Reorder <http://www.w3.org/2001/sw/DataAccess/tests/result-set#solution> ?row } }
   BIND(IF(?n = 0, "Every item is at or above its minimum.",
@@ -195,7 +195,7 @@ wh:desk wh:item wh:tube ; wh:amount wh:one .
 ui:ex-warehouse-counter a c:Card ; c:label "At the counter" ;
     c:note "Choose an item and how many. Sell takes them off the shelf; Restock receives one case from the item's supplier." ;
     c:content ui:ex-warehouse-controls .
-ui:ex-warehouse-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; pos:align pos:End ;
+ui:ex-warehouse-controls a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-4 ;
     c:children ( ui:ex-warehouse-item ui:ex-warehouse-amount ui:ex-warehouse-actions ) .
 ui:ex-warehouse-item a c:Choice ; c:label "Item" ; c:controls wh:desk ; c:property wh:item .
 ui:ex-warehouse-amount a c:Segmented ; c:label "How many" ; c:controls wh:desk ; c:property wh:amount .

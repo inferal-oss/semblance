@@ -52,7 +52,8 @@ pub struct Ctx<'a> {
     bnodes: IdMap,
     bnode_row: usize,
     scan: Vec<u32>,
-    /// Per pattern (by address): the variables a join may pass into it.
+    /// Per pattern (by address): the variables a join may pass into it; and
+    /// (by address and 1) what a FILTER reads, when it can be decided early.
     side: IdMap,
     side_list: Vec<Option<Rc<[bool]>>>,
     /// The active graph of the pattern being evaluated (for EXISTS in expressions).
@@ -199,21 +200,8 @@ impl<'a> Ctx<'a> {
                 if left.is_empty() {
                     return left;
                 }
-                let Some(safe) = self.sideways(b) else {
-                    let mut out = Vec::new();
-                    for r in &left {
-                        out.extend(self.eval(b, r, active));
-                    }
-                    return out;
-                };
-                if !left.iter().any(|r| useful(r, sub, &safe)) {
-                    let right = self.eval(b, sub, active);
-                    return join_rows(left, &right);
-                }
-                let (mut whole, mut out) = (None, Vec::new());
-                for r in &left {
-                    self.join_one(b, sub, r, &safe, &mut whole, active, &mut out);
-                }
+                let mut out = Vec::new();
+                self.join_right(left, b, sub, active, &mut out);
                 out
             }
             Pattern::LeftJoin(a, b, f) => {
@@ -366,6 +354,7 @@ impl<'a> Ctx<'a> {
                 }
                 rows
             }
+            Pattern::Magic(m) => self.magic(m, sub),
             Pattern::Service(silent) => {
                 if *silent {
                     alloc::vec![sub.to_vec()]
@@ -394,7 +383,8 @@ impl<'a> Ctx<'a> {
     /// (no EXISTS) and `a` keeps each one as substituted; cached per pattern.
     fn early(&mut self, p: &Pattern) -> Option<Rc<[bool]>> {
         let Pattern::Filter(f, a) = p else { return None };
-        let key = [p as *const Pattern as usize as u32];
+        // Keyed apart from `sideways`, which caches what a join passes into the same pattern.
+        let key = [p as *const Pattern as usize as u32, 1];
         if let Some(i) = self.side.get(&key) {
             return self.side_list[i as usize].clone();
         }
@@ -405,6 +395,33 @@ impl<'a> Ctx<'a> {
         self.side_list.push(reads.clone());
         self.side.insert(&key, self.side_list.len() as u32 - 1);
         reads
+    }
+
+    /// The rows of `left` joined with `b`, onto `out`. A UNION that is not pure
+    /// is joined branch by branch (as WAT's `$join_union`): each branch is passed
+    /// the bindings it is safe to pass it, which another branch (a subquery
+    /// projecting the variable, say) does not make unsafe.
+    fn join_right(&mut self, left: Vec<Row>, b: &Pattern, sub: &[u32], active: Active, out: &mut Vec<Row>) {
+        if let Pattern::Union(x, y) = b {
+            if !pure(b) {
+                self.join_right(left.clone(), x, sub, active, out);
+                return self.join_right(left, y, sub, active, out);
+            }
+        }
+        let Some(safe) = self.sideways(b) else {
+            for r in &left {
+                out.extend(self.eval(b, r, active));
+            }
+            return;
+        };
+        if !left.iter().any(|r| useful(r, sub, &safe)) {
+            let right = self.eval(b, sub, active);
+            return out.extend(join_rows(left, &right));
+        }
+        let mut whole = None;
+        for r in &left {
+            self.join_one(b, sub, r, &safe, &mut whole, active, out);
+        }
     }
 
     /// Join one left row with `b`: evaluated with the row's safe bindings
@@ -757,10 +774,29 @@ impl<'a> Ctx<'a> {
             }
         }
         if !s.order.is_empty() {
-            let mut keyed: Vec<(Vec<Option<Val>>, Row)> = rows.into_iter().map(|r| (s.order.iter().map(|(e, _)| self.expr(e, &r).ok()).collect(), r)).collect();
-            keyed.sort_unstable_by(|(a, _), (b, _)| {
+            // sx:collated(s, lang) keys compare with the host's collator (EXTENSIONS.md).
+            fn collated(e: &Expr) -> Option<&[Expr]> {
+                match e {
+                    Expr::Call(Func::X(super::ext::Fx::Collated), a) => Some(a),
+                    _ => None,
+                }
+            }
+            let any_collated = s.order.iter().any(|(e, _)| collated(e).is_some());
+            type Key = (Vec<Option<Val>>, Vec<Option<(Vec<u8>, Vec<u8>)>>);
+            let mut keyed: Vec<(Key, Row)> = rows
+                .into_iter()
+                .map(|r| {
+                    let vals = s.order.iter().map(|(e, _)| self.expr(e, &r).ok()).collect();
+                    let coll = if any_collated { s.order.iter().map(|(e, _)| collated(e).and_then(|a| self.collation_key(a, &r))).collect() } else { Vec::new() };
+                    ((vals, coll), r)
+                })
+                .collect();
+            keyed.sort_unstable_by(|((a, ca), _), ((b, cb), _)| {
                 for (i, (_, desc)) in s.order.iter().enumerate() {
-                    let o = self.sort_cmp(a[i].as_ref(), b[i].as_ref());
+                    let o = match (ca.get(i), cb.get(i)) {
+                        (Some(Some((lang, x))), Some(Some((_, y)))) => crate::host::collate(lang, x, y),
+                        _ => self.sort_cmp(a[i].as_ref(), b[i].as_ref()),
+                    };
                     if o != Ordering::Equal {
                         return if *desc { o.reverse() } else { o };
                     }
@@ -969,7 +1005,7 @@ fn certain(p: &Pattern) -> Vec<Var> {
 fn subst_ok(p: &Pattern, v: Var) -> bool {
     let sure = |a: &Pattern| certain(a).contains(&v);
     match p {
-        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => true,
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) | Pattern::Magic(_) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) => subst_ok(a, v) && subst_ok(b, v),
         Pattern::Graph(_, a) => subst_ok(a, v),
         Pattern::Filter(e, a) => subst_ok(a, v) && (!reads(e, v) || sure(a)),
@@ -991,7 +1027,7 @@ fn subst_ok(p: &Pattern, v: Var) -> bool {
 /// nothing in it rebinds `v`, and no subquery projects it away.
 fn keeps(p: &Pattern, v: Var) -> bool {
     match p {
-        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) => true,
+        Pattern::Unit | Pattern::Bgp(_) | Pattern::Values(..) | Pattern::Service(_) | Pattern::Magic(_) => true,
         Pattern::Join(a, b) | Pattern::Union(a, b) | Pattern::Minus(a, b) | Pattern::Lateral(a, b) | Pattern::LeftJoin(a, b, _) => keeps(a, v) && keeps(b, v),
         Pattern::Graph(_, a) | Pattern::Filter(_, a) => keeps(a, v),
         Pattern::Extend(a, w, _) => *w != v && keeps(a, v),
@@ -1072,6 +1108,7 @@ fn pattern_vars(p: &Pattern, m: &mut [bool]) {
         }
         Pattern::Values(vars, _) => vars.iter().for_each(|&v| set(v, m)),
         Pattern::Sub(s) => select_vars(s, m),
+        Pattern::Magic(x) => x.ins.iter().chain(&x.outs).for_each(|t| tv(t, m)),
     }
 }
 
@@ -1177,7 +1214,7 @@ pub(crate) fn resolve(x: &Tv, row: &[u32]) -> Option<u32> {
 }
 
 /// Bind a pattern position to a term; false if it conflicts.
-fn bind(x: &Tv, id: u32, row: &mut [u32], dict: &Dict) -> bool {
+pub(crate) fn bind(x: &Tv, id: u32, row: &mut [u32], dict: &Dict) -> bool {
     match x {
         Tv::Term(t) => *t == id,
         Tv::Var(v) => {

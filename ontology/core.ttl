@@ -60,6 +60,8 @@ sem:stratum a owl:DatatypeProperty ; rdfs:range xsd:integer ;
 sem:layer a owl:ObjectProperty ; rdfs:range sem:Layer .
 sem:construct a owl:DatatypeProperty ;
     rdfs:comment "SPARQL CONSTRUCT body. $this is substituted with the focus IRI, or with ?this for bulk evaluation, so the WHERE clause must bind $this through a triple pattern."@en .
+sem:constructFrom a owl:ObjectProperty ; rdfs:domain sem:Rule ; rdfs:range sem:Rule ;
+    rdfs:comment "A rule whose sem:construct this rule runs as its own, for its own rendering: one query serving several renderings (a member-wise one reads $member, unbound in the other)."@en .
 sem:function a owl:DatatypeProperty ; rdfs:comment "Identifier of a registered function implementation."@en .
 sem:follows a owl:ObjectProperty ;
     rdfs:comment """Predicate from the focus to nodes the rule reads; changes on those nodes make the focus dirty.
@@ -174,6 +176,18 @@ already decides this from the template (bulk output is grouped by the focus each
 minted under, so a template writing about other nodes - sibling components, list members - is
 always evaluated per focus); this states it explicitly."""@en .
 
+sem:readsLocation a rdf:Property ; rdfs:domain sem:Rendering ;
+    rdfs:comment """The rendering reads where we are: the values of a nav:Location's dimensions (true), or only
+its top-level ones (nav:TopDimensions: the language and the page, which a link keeps). Such a
+value is a property of a node its focus need not reach. With true, each change of one makes the
+rendering due again for every focus it has output for; with nav:TopDimensions, for each focus
+whose output says it keeps that dimension (nav:keeps)."""@en .
+sem:readsProvenance a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """The rendering reads the PROV-O the engine records (prov:wasGeneratedBy, the activity's plan): a
+projection whose provenance is recorded on demand records it from the end of the run in which the
+rendering is first evaluated. A rendering whose SPARQL names those terms says so by itself; this is
+for function-only renderings, and for a component (an instance) that runs queries the graph holds
+about it (an inspector)."""@en .
 sem:functionOnly a owl:DatatypeProperty ;
     rdfs:comment """On a rendering: it has no SPARQL implementation (or none for a modality) yet, and this says
 which SPARQL extension it awaits ("awaits sx:Locale (sx:formatNumber)"), or which tracked work
@@ -189,12 +203,14 @@ sem:needsExtension a owl:ObjectProperty ;
 extension functions it needs (sx:Math, sx:Text, sx:Locale, sx:Matches, sx:Json; see the engine's
 EXTENSIONS.md). Stores without the group run the function twin."""@en .
 
-# The groups of SPARQL extension functions Semblance's own engines will offer (the engine's
-# EXTENSIONS.md); none is implemented yet, so the renderings that need one stay function-only.
+# The groups of SPARQL extensions Semblance's own engines offer (the engine's EXTENSIONS.md;
+# GraphStore.extensions). A SPARQL rule or reaction that uses one says so (sem:needsExtension) and
+# is chosen only on a store that has it; elsewhere its function twin runs. A rendering whose
+# SPARQL rule is not written yet carries sem:needsExtension itself, with sem:functionOnly.
 sem:ExtensionGroup a owl:Class ;
     rdfs:comment "A group of SPARQL extension functions a store may offer (sem:needsExtension)."@en .
 sx:Math a sem:ExtensionGroup ; rdfs:label "math"@en ; rdfs:comment "sx:log, sx:log10, sx:exp, sx:pow, sx:sqrt, trigonometry, sx:pi."@en .
-sx:Text a sem:ExtensionGroup ; rdfs:label "text"@en ; rdfs:comment "sx:codepoint, sx:char, sx:decodeURI."@en .
+sx:Text a sem:ExtensionGroup ; rdfs:label "text"@en ; rdfs:comment "sx:codepoint, sx:char, sx:utf8Hex, sx:decodeURI, sx:fnv1a."@en .
 sx:Locale a sem:ExtensionGroup ; rdfs:label "locale"@en ; rdfs:comment "sx:formatNumber, sx:formatDateTime, sx:collated, sx:sortKey (Intl)."@en .
 sx:Matches a sem:ExtensionGroup ; rdfs:label "matches"@en ; rdfs:comment "The sx:matches and sx:chars relations: regex matches and characters of a text as solutions (tokenizing)."@en .
 sx:Json a sem:ExtensionGroup ; rdfs:label "JSON"@en ; rdfs:comment "The sx:json relation: a JSON text's structure as solutions."@en .

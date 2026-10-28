@@ -1,5 +1,6 @@
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
 @prefix beh: <https://semblance.dev/ns/behaviour#> .
 @prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
@@ -66,6 +67,7 @@ the button beside it opens a month grid in a popup (role=dialog), which takes th
 today), picks with a click or Enter and closes, giving the focus back to the button, as Escape does.
 Also: c:label, c:placeholder (default: the locale's pattern), c:help, c:disabled, val:validates."""@en ;
     sem:slug "date-field" ;
+    pos:rowParts 4 ;
     c:labelPart "input" ;
     l10n:phrase c:ChooseDatePhrase , c:EndDatePhrase , c:InvalidDatePhrase , c:PreviousMonthPhrase , c:NextMonthPhrase .
 
@@ -87,6 +89,7 @@ format (14:30, 2:30 PM) or picked from a list of times every c:minuteStep minute
 the val:validates shapes' bounds: role=combobox over a role=listbox, Down and Up open the list and move
 through it, Enter picks, Escape closes. Also: c:label, c:placeholder, c:help, c:disabled."""@en ;
     sem:slug "time-field" ;
+    pos:rowParts 4 ;
     c:labelPart "input" ;
     l10n:phrase c:ChooseTimePhrase , c:InvalidTimePhrase .
 
@@ -253,8 +256,8 @@ WHERE {
       BIND(IRI(CONCAT(STR(?owner), "/~l10n-month-", STR(?M))) AS ?monthNode)
       OPTIONAL { ?prevNode l10n:label ?prev0 }
       OPTIONAL { ?nextNode l10n:label ?next0 }
-      OPTIONAL { c:PreviousMonthPhrase rdfs:label ?prev1 FILTER(langMatches(lang(?prev1), "en")) }
-      OPTIONAL { c:NextMonthPhrase rdfs:label ?next1 FILTER(langMatches(lang(?next1), "en")) }
+      OPTIONAL { ?l10nAt_prev1 l10n:of c:PreviousMonthPhrase ; l10n:name ?prev1 } OPTIONAL { c:PreviousMonthPhrase rdfs:label ?prev1 FILTER(langMatches(lang(?prev1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:PreviousMonthPhrase ; l10n:name ?l10nPick }) }
+      OPTIONAL { ?l10nAt_next1 l10n:of c:NextMonthPhrase ; l10n:name ?next1 } OPTIONAL { c:NextMonthPhrase rdfs:label ?next1 FILTER(langMatches(lang(?next1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:NextMonthPhrase ; l10n:name ?l10nPick }) }
       OPTIONAL { ?monthNode l10n:label ?monthName0 }
       BIND(STR(COALESCE(?prev0, ?prev1)) AS ?prevLabel)
       BIND(STR(COALESCE(?next0, ?next1)) AS ?nextLabel)
@@ -638,7 +641,7 @@ CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?label , ?row , ?popup , ?help , ?error .
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?row .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
-  ?row a rdfhtml:Div ; rdfhtml:class "sem-date-row" ; rdfhtml:hasChild ?input , ?dash , ?endInput , ?opener ; ord:immediatelyPrecedes ?popup .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-date-row" ; rdfhtml:id ?rowId ; rdfhtml:hasChild ?input , ?dash , ?endInput , ?opener ; ord:immediatelyPrecedes ?popup .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:class "sem-date-input" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ;
          rdfhtml:placeholder ?placeholder ; rdfhtml:autocomplete "off" ; rdfhtml:spellcheck "false" ; rdfhtml:disabled ?disabled ;
          rdfhtml:attribute ?inputDescribed , ?inputInvalid ; ord:immediatelyPrecedes ?afterInput .
@@ -662,8 +665,9 @@ CONSTRUCT {
   ?outside a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-dismiss-outside" ; rdfhtml:attributeValue "" .
   ?takesFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?popup a rdfhtml:Div ; rdfhtml:class "sem-date-popup" ; rdfhtml:id ?popupId ; rdfhtml:hidden ?popupHidden ;
-         rdfhtml:attribute ?popupRole , ?popupName ; rdfhtml:hasChild ?grid ; ord:precedes ?help , ?error .
+         rdfhtml:attribute ?popupRole , ?popupName , ?popupAnchor ; rdfhtml:hasChild ?grid ; ord:precedes ?help , ?error .
   ?popupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
+  ?popupAnchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?rowId .
   ?popupName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?chooseLabel .
   ?grid a c:MonthGrid ; c:pickerFor $this ; c:controls ?target ; c:property ?property ; c:endProperty ?endProperty .
   ?help a rdfhtml:Div ; rdfhtml:class "sem-help" ; rdfhtml:id ?helpId ; rdfhtml:hasChild ?helpText ; ord:precedes ?error .
@@ -687,19 +691,19 @@ WHERE {
   OPTIONAL { $this l10n:digits ?digits0 }
   BIND(COALESCE(STR(?dp0), "%y-%m-%d") AS ?dp)
   BIND(COALESCE(STR(?digits0), "0123456789") AS ?digits)
-  OPTIONAL { $this c:placeholder ?placeholder0 }
+  OPTIONAL { ?l10nAt_placeholder0 l10n:of $this ; l10n:placeholder ?placeholder0 } OPTIONAL { $this c:placeholder ?placeholder0 FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:placeholder ?l10nPick }) }
   BIND(STR(COALESCE(?placeholder0, ?hint0, "yyyy-mm-dd")) AS ?placeholder)
   BIND(IRI(CONCAT(STR($this), "/~l10n-ChooseDatePhrase")) AS ?chooseNode)
   BIND(IRI(CONCAT(STR($this), "/~l10n-EndDatePhrase")) AS ?endNode)
   OPTIONAL { ?chooseNode l10n:label ?choose0 }
   OPTIONAL { ?endNode l10n:label ?end0 }
-  OPTIONAL { c:ChooseDatePhrase rdfs:label ?choose1 FILTER(langMatches(lang(?choose1), "en")) }
-  OPTIONAL { c:EndDatePhrase rdfs:label ?end1 FILTER(langMatches(lang(?end1), "en")) }
+  OPTIONAL { ?l10nAt_choose1 l10n:of c:ChooseDatePhrase ; l10n:name ?choose1 } OPTIONAL { c:ChooseDatePhrase rdfs:label ?choose1 FILTER(langMatches(lang(?choose1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:ChooseDatePhrase ; l10n:name ?l10nPick }) }
+  OPTIONAL { ?l10nAt_end1 l10n:of c:EndDatePhrase ; l10n:name ?end1 } OPTIONAL { c:EndDatePhrase rdfs:label ?end1 FILTER(langMatches(lang(?end1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:EndDatePhrase ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?choose0, ?choose1)) AS ?chooseLabel)
   # The caption: c:label in the viewer's language, else the property's label.
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") }
-  OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_propertyLabel l10n:of ?property ; l10n:name ?propertyLabel } OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?property ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel, ?propertyLabel, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   BIND(IF(?ranged, CONCAT(?caption, " – ", STR(COALESCE(?end0, ?end1))), ?none) AS ?endLabel)
   # What the inputs show: what is typed, else the value in the locale's format.
@@ -722,7 +726,7 @@ WHERE {
   BIND(COALESCE(STR(?typed0), ?startFormatted, "") AS ?shown)
   BIND(IF(?ranged, COALESCE(STR(?endTyped0), ?endFormatted, ""), ?none) AS ?endShown)
   # Help and the error (the validation layer's); the inputs are described by them.
-  OPTIONAL { $this c:help ?help0 }
+  OPTIONAL { ?l10nAt_help0 l10n:of $this ; l10n:help ?help0 } OPTIONAL { $this c:help ?help0 FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   OPTIONAL { $this c:error ?error0 }
   BIND(STR(?help0) AS ?helpData)
   BIND(STR(?error0) AS ?errorData)
@@ -739,6 +743,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
+  BIND(STR(?row) AS ?rowId)
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)
   BIND(STR(?input) AS ?inputId)
   BIND(IF(BOUND(?describedIds), IRI(CONCAT(STR($this), "/~input-aria-describedby")), ?none) AS ?inputDescribed)
@@ -766,6 +771,7 @@ WHERE {
   BIND(IF(?open, ?none, "") AS ?popupHidden)
   BIND(IRI(CONCAT(STR($this), "/~popup-role")) AS ?popupRole)
   BIND(IRI(CONCAT(STR($this), "/~popup-aria-label")) AS ?popupName)
+  BIND(IRI(CONCAT(STR($this), "/~popup-data-sem-anchor")) AS ?popupAnchor)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~grid")), ?none) AS ?grid)
 }""" .
 
@@ -792,8 +798,8 @@ WHERE {
   BIND(COALESCE(STR(?dp0), "%y-%m-%d") AS ?dp)
   BIND(COALESCE(STR(?digits0), "0123456789") AS ?digits)
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") }
-  OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_propertyLabel l10n:of ?property ; l10n:name ?propertyLabel } OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?property ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel, ?propertyLabel, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   LATERAL { OPTIONAL { SELECT ?target ?property (MIN(STR(?v)) AS ?startValue) WHERE { ?target ?property ?v } GROUP BY ?target ?property } }
   # (A predicate nothing has stands in for a missing end, so the subquery is bound to it.)
@@ -817,7 +823,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
-  OPTIONAL { $this c:help ?h . BIND(CONCAT("  ", STR(?h)) AS ?helpData) BIND(IRI(CONCAT(STR($this), "/~help")) AS ?help) BIND(IRI(CONCAT(STR($this), "/~help-text")) AS ?helpText) }
+  OPTIONAL { $this c:help ?h FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick FILTER(STR(?l10nPick) = STR(?h)) }) . BIND(CONCAT("  ", STR(?h)) AS ?helpData) BIND(IRI(CONCAT(STR($this), "/~help")) AS ?help) BIND(IRI(CONCAT(STR($this), "/~help-text")) AS ?helpText) }
   OPTIONAL { $this c:error ?e . BIND(CONCAT("  ! ", STR(?e)) AS ?errorData) BIND(IRI(CONCAT(STR($this), "/~error")) AS ?error) BIND(IRI(CONCAT(STR($this), "/~error-text")) AS ?errorText) }
 }""" .
 
@@ -1036,15 +1042,15 @@ WHERE {
   BIND(COALESCE(STR(?am0), "AM") AS ?am)
   BIND(COALESCE(STR(?pm0), "PM") AS ?pm)
   BIND(COALESCE(STR(?digits0), "0123456789") AS ?digits)
-  OPTIONAL { $this c:placeholder ?placeholder0 }
+  OPTIONAL { ?l10nAt_placeholder0 l10n:of $this ; l10n:placeholder ?placeholder0 } OPTIONAL { $this c:placeholder ?placeholder0 FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:placeholder ?l10nPick }) }
   BIND(STR(COALESCE(?placeholder0, ?hint0, "hh:mm")) AS ?placeholder)
   BIND(IRI(CONCAT(STR($this), "/~l10n-ChooseTimePhrase")) AS ?chooseNode)
   OPTIONAL { ?chooseNode l10n:label ?choose0 }
-  OPTIONAL { c:ChooseTimePhrase rdfs:label ?choose1 FILTER(langMatches(lang(?choose1), "en")) }
+  OPTIONAL { ?l10nAt_choose1 l10n:of c:ChooseTimePhrase ; l10n:name ?choose1 } OPTIONAL { c:ChooseTimePhrase rdfs:label ?choose1 FILTER(langMatches(lang(?choose1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:ChooseTimePhrase ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?choose0, ?choose1)) AS ?chooseLabel)
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") }
-  OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_propertyLabel l10n:of ?property ; l10n:name ?propertyLabel } OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?property ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel, ?propertyLabel, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   # The value in the locale's format, unless something is typed.
   LATERAL { OPTIONAL { SELECT ?target ?property (MIN(STR(?v)) AS ?value) WHERE { ?target ?property ?v } GROUP BY ?target ?property } }
@@ -1068,7 +1074,7 @@ WHERE {
   BIND(IF(BOUND(?active0), xsd:integer(SUBSTR(STR(?active0), 1, 2)) * 60 + xsd:integer(SUBSTR(STR(?active0), 4, 2)), ?none) AS ?activeMinutes)
   BIND(IF(BOUND(?activeMinutes), CONCAT(STR($this), "/~t-", STR(?activeMinutes)), ?none) AS ?activeId)
   # Help and the error.
-  OPTIONAL { $this c:help ?help0 }
+  OPTIONAL { ?l10nAt_help0 l10n:of $this ; l10n:help ?help0 } OPTIONAL { $this c:help ?help0 FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   OPTIONAL { $this c:error ?error0 }
   BIND(STR(?help0) AS ?helpData)
   BIND(STR(?error0) AS ?errorData)
@@ -1161,8 +1167,8 @@ WHERE {
   BIND(COALESCE(STR(?pm0), "PM") AS ?pm)
   BIND(COALESCE(STR(?digits0), "0123456789") AS ?digits)
   OPTIONAL { $this l10n:label ?localLabel }
-  OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") }
-  OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") }
+  OPTIONAL { { $this l10n:label ?ownLabel } UNION { ?l10nAt_ownLabel l10n:of $this ; l10n:label ?ownLabel } } OPTIONAL { $this c:label ?ownLabel FILTER(isLiteral(?ownLabel) && lang(?ownLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
+  OPTIONAL { ?l10nAt_propertyLabel l10n:of ?property ; l10n:name ?propertyLabel } OPTIONAL { ?property rdfs:label ?propertyLabel FILTER(lang(?propertyLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of ?property ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?ownLabel, ?propertyLabel, REPLACE(STR(?property), "^.*[#/]", ""))) AS ?caption)
   LATERAL { OPTIONAL { SELECT ?target ?property (MIN(STR(?v)) AS ?value) WHERE { ?target ?property ?v } GROUP BY ?target ?property } }
   OPTIONAL { $this c:value ?typed0 }
@@ -1179,7 +1185,7 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
   BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
-  OPTIONAL { $this c:help ?h . BIND(CONCAT("  ", STR(?h)) AS ?helpData) BIND(IRI(CONCAT(STR($this), "/~help")) AS ?help) BIND(IRI(CONCAT(STR($this), "/~help-text")) AS ?helpText) }
+  OPTIONAL { $this c:help ?h FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick } || EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick FILTER(STR(?l10nPick) = STR(?h)) }) . BIND(CONCAT("  ", STR(?h)) AS ?helpData) BIND(IRI(CONCAT(STR($this), "/~help")) AS ?help) BIND(IRI(CONCAT(STR($this), "/~help-text")) AS ?helpText) }
   OPTIONAL { $this c:error ?e . BIND(CONCAT("  ! ", STR(?e)) AS ?errorData) BIND(IRI(CONCAT(STR($this), "/~error")) AS ?error) BIND(IRI(CONCAT(STR($this), "/~error-text")) AS ?errorText) }
 }""" .
 

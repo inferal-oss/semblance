@@ -39,6 +39,8 @@ c:Dialog a owl:Class ;
     rdfs:comment """A modal panel over a scrim: title (c:label), description (c:help), content
 (c:content) and actions (c:actions, typically buttons that c:closes it). role=dialog, aria-modal,
 labelled by its title and described by its description. The ✕ and a click on the scrim close it.
+Opened, it takes the focus to the first control of its content, else to its first action (a
+confirmation lists the safe one first); closed, it gives the focus back to what had it.
 Closed (the default) it renders an empty hidden root: its content is not evaluated."""@en ;
     sem:slug "dialog" .
 c:DialogRendering a sem:Rendering ; sem:targets c:Dialog ; sem:stratum 0 .
@@ -69,8 +71,8 @@ CONSTRUCT {
   ?escape a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-escape" ; rdfhtml:attributeValue "" .
   ?desc a rdfhtml:P ; rdfhtml:id ?descId ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?afterDesc .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
-  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:hasChild ?child .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
+  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?child .
   ?a ord:immediatelyPrecedes ?b .
 }
 WHERE {
@@ -85,14 +87,14 @@ WHERE {
     $this a c:Dialog .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?title0)
     BIND(IF(COALESCE(?title0, "") != "", ?title0, ?none) AS ?title)
     OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(STR(?rawHelp) AS ?bodyText)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
     BIND(?rawContent AS ?content)
@@ -117,8 +119,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
     OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
-  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_closeWord1 l10n:of c:CloseCommand ; l10n:name ?closeWord1 } OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc-text")), ?none) AS ?descText)
@@ -160,9 +162,9 @@ WHERE {
     $this a c:Dialog .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(CONCAT("╔ ", STR(COALESCE(?localLabel, ?rawLabel, "dialog")), " ╗", COALESCE(CONCAT(" ", STR(?rawHelp)), "")) AS ?lineData)
     BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
@@ -218,8 +220,8 @@ CONSTRUCT {
   ?escape a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-escape" ; rdfhtml:attributeValue "" .
   ?desc a rdfhtml:P ; rdfhtml:id ?descId ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?afterDesc .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
-  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
-  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:hasChild ?child .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?content ; ord:immediatelyPrecedes ?actions .
+  ?actions a rdfhtml:Footer ; rdfhtml:class "sem-actions" ; rdfhtml:autofocus "" ; rdfhtml:hasChild ?child .
   ?a ord:immediatelyPrecedes ?b .
 }
 WHERE {
@@ -234,14 +236,14 @@ WHERE {
     $this a c:Drawer .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
     BIND(STR(COALESCE(?localLabel, ?rawLabel)) AS ?title0)
     BIND(IF(COALESCE(?title0, "") != "", ?title0, ?none) AS ?title)
     OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
     BIND(IF(BOUND(?title), ?none, STR(COALESCE(?title0, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", "")))) AS ?label)
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(STR(?rawHelp) AS ?bodyText)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
     BIND(?rawContent AS ?content)
@@ -269,8 +271,8 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~close-data-sem-escape")) AS ?escape)
     OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
   OPTIONAL { ?closeWord0At l10n:of c:CloseCommand ; l10n:name ?closeWord0 }
-  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") }
-    OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) }
+  OPTIONAL { c:CloseCommand rdfs:label ?closeWord0 FILTER(lang(?closeWord0) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
+    OPTIONAL { ?l10nAt_closeWord1 l10n:of c:CloseCommand ; l10n:name ?closeWord1 } OPTIONAL { c:CloseCommand rdfs:label ?closeWord1 FILTER(langMatches(lang(?closeWord1), "en")) FILTER(NOT EXISTS { ?l10nAt l10n:of c:CloseCommand ; l10n:name ?l10nPick }) }
     BIND(STR(COALESCE(?closeWord0, ?closeWord1, "Close")) AS ?closeWord)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
     BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc-text")), ?none) AS ?descText)
@@ -312,9 +314,9 @@ WHERE {
     $this a c:Drawer .
     FILTER EXISTS { $this c:open ?o FILTER(STR(?o) = "true") }
     OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
     OPTIONAL { $this l10n:label ?localLabel }
-    OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+    OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
     BIND(CONCAT("╔ ", STR(COALESCE(?localLabel, ?rawLabel, "drawer")), " ╗", COALESCE(CONCAT(" ", STR(?rawHelp)), "")) AS ?lineData)
     BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
     OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
@@ -339,7 +341,8 @@ c:Popover a owl:Class ;
     rdfs:subClassOf c:Overlay ;
     rdfs:comment """A non-modal panel anchored below its trigger button (labelled by c:trigger, else
 c:label). The trigger toggles c:open and reports it (aria-expanded, aria-controls); the panel
-(role=dialog, labelled by the trigger) shows c:help and c:content while open."""@en ;
+(role=dialog, labelled by the trigger) shows c:help and c:content while open. Opened from the
+trigger, the focus goes to the panel's first control (if it has one); closed, back to the trigger."""@en ;
     sem:slug "popover" .
 c:trigger a owl:DatatypeProperty ; rdfs:domain c:Popover ; rdfs:comment "The trigger button's label."@en .
 c:PopoverRendering a sem:Rendering ; sem:targets c:Popover ; sem:stratum 0 .
@@ -352,7 +355,8 @@ CONSTRUCT {
   ?root a rdfhtml:Span ; sem:renders $this ; rdfhtml:hasChild ?trigger, ?panel .
   ?trigger a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-trigger" ; rdfhtml:id ?triggerId ;
            rdfhtml:hasChild ?triggerText, ?caret ; c:toggles $this ; ord:immediatelyPrecedes ?panel ;
-           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?escape .
+           rdfhtml:attribute ?hasPopup, ?expanded, ?controls, ?escape, ?triggerFocus .
+  ?triggerFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?hasPopup a rdfhtml:Attribute ; rdfhtml:attributeName "aria-haspopup" ; rdfhtml:attributeValue "dialog" .
   ?expanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openValue .
   ?controls a rdfhtml:Attribute ; rdfhtml:attributeName "aria-controls" ; rdfhtml:attributeValue ?panelId .
@@ -361,24 +365,26 @@ CONSTRUCT {
   ?caret a rdfhtml:Span ; rdfhtml:class "sem-caret" ; rdfhtml:attribute ?caretHidden .
   ?caretHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?panel a rdfhtml:Div ; rdfhtml:class "sem-panel" ; rdfhtml:id ?panelId ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?desc, ?content ;
-         rdfhtml:attribute ?role, ?labelledBy .
+         rdfhtml:attribute ?role, ?labelledBy, ?anchor, ?panelFocus .
   ?role a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "dialog" .
   ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?triggerId .
+  ?anchor a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-anchor" ; rdfhtml:attributeValue ?triggerId .
+  ?panelFocus a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-takes-focus" ; rdfhtml:attributeValue "" .
   ?desc a rdfhtml:P ; rdfhtml:class "sem-desc" ; rdfhtml:hasChild ?descText ; ord:immediatelyPrecedes ?content .
   ?descText a rdfhtml:Text ; rdfhtml:data ?bodyText .
 }
 WHERE {
   $this a c:Popover .
-  OPTIONAL { $this c:trigger ?rawTrigger }
+  OPTIONAL { ?l10nAt_rawTrigger l10n:of $this ; l10n:trigger ?rawTrigger } OPTIONAL { $this c:trigger ?rawTrigger FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:trigger ?l10nPick }) }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label0)
   BIND(COALESCE(STR(?rawTrigger), ?label0) AS ?label)
   BIND(EXISTS { $this c:open ?o FILTER(STR(?o) = "true") } AS ?open)
-  OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+  OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   BIND(IF(?open, STR(?rawHelp), ?none) AS ?bodyText)
   OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
   BIND(IF(?open, ?rawContent, ?none) AS ?content)
@@ -394,10 +400,14 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~trigger-aria-expanded")) AS ?expanded)
   BIND(IRI(CONCAT(STR($this), "/~trigger-aria-controls")) AS ?controls)
   BIND(IF(?open, IRI(CONCAT(STR($this), "/~trigger-data-sem-escape")), ?none) AS ?escape)
+  # Opened from the trigger, the focus goes to the first control in the panel; closed, back to the trigger.
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~panel-data-sem-takes-focus")), ?none) AS ?panelFocus)
+  BIND(IF(?open, ?none, IRI(CONCAT(STR($this), "/~trigger-data-sem-takes-focus"))) AS ?triggerFocus)
   BIND(IRI(CONCAT(STR($this), "/~panel")) AS ?panel)
   BIND(STR(?panel) AS ?panelId)
   BIND(IRI(CONCAT(STR($this), "/~panel-role")) AS ?role)
   BIND(IRI(CONCAT(STR($this), "/~panel-aria-labelledby")) AS ?labelledBy)
+  BIND(IRI(CONCAT(STR($this), "/~panel-data-sem-anchor")) AS ?anchor)
   BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc")), ?none) AS ?desc)
   BIND(IF(BOUND(?bodyText), IRI(CONCAT(STR($this), "/~desc-text")), ?none) AS ?descText)
 }""" .
@@ -411,16 +421,16 @@ CONSTRUCT {
 }
 WHERE {
   $this a c:Popover .
-  OPTIONAL { $this c:trigger ?rawTrigger }
+  OPTIONAL { ?l10nAt_rawTrigger l10n:of $this ; l10n:trigger ?rawTrigger } OPTIONAL { $this c:trigger ?rawTrigger FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:trigger ?l10nPick }) }
   OPTIONAL { ?rawLabelAt l10n:of $this ; l10n:label ?rawLabel }
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?rdfsLabelAt l10n:of $this ; l10n:name ?rdfsLabel }
-  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") }
+  OPTIONAL { $this rdfs:label ?rdfsLabel FILTER(lang(?rdfsLabel) = "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:name ?l10nPick }) }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, ?rdfsLabel, REPLACE(STR($this), "^.*[#/]", ""))) AS ?label0)
   BIND(COALESCE(STR(?rawTrigger), ?label0) AS ?label)
   BIND(EXISTS { $this c:open ?o FILTER(STR(?o) = "true") } AS ?open)
-  OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") }
+  OPTIONAL { ?l10nAt_rawHelp l10n:of $this ; l10n:help ?rawHelp } OPTIONAL { $this c:help ?rawHelp FILTER(STR(?rawHelp) != "") FILTER(NOT EXISTS { ?l10nAt l10n:of $this ; l10n:help ?l10nPick }) }
   BIND(IF(?open, STR(?rawHelp), ?none) AS ?bodyText)
   OPTIONAL { $this c:content ?rawContent FILTER(isIRI(?rawContent)) }
   BIND(IF(?open, ?rawContent, ?none) AS ?content)

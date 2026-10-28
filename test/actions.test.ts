@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
+import { trackFocus } from './focus.ts'
 import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
@@ -100,6 +101,7 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     const popup = menu.querySelector('[role=menu]')!
     expect(popup.getAttribute('aria-labelledby')).toBe(trigger.id)
+    expect(popup.getAttribute('data-sem-anchor')).toBe(trigger.id)
     expect(trigger.getAttribute('aria-controls')).toBe(popup.id)
     expect(trigger.getAttribute('data-sem-shortcut')).toBe('escape')
     const items = [...popup.querySelectorAll('[role=menuitem]')]
@@ -113,6 +115,27 @@ describe.each(['oxigraph', 'n3', 'wat', 'rust'] as const)('actions components (%
     expect(menu.querySelector('[role=menu]')).toBeNull()
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     expect(root('act-menu-log')!.textContent).toContain('Deleted')
+  })
+
+  it('opened from its trigger, a menu takes the focus to its first item, and gives it back on a choice or Escape', () => {
+    const { root, fire, document, window } = actions()
+    trackFocus(window, document)
+    const menu = root('act-menu-actions')!
+    const trigger = menu.querySelector('button')!
+    trigger.focus()
+    fire(trigger, 'click')
+    const items = () => [...menu.querySelectorAll('[role=menuitem]')]
+    expect(document.activeElement).toBe(items()[0])
+    fire(items()[0]!, 'click')
+    expect(menu.querySelector('[role=menu]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    fire(trigger, 'click')
+    expect(document.activeElement).toBe(items()[0])
+    const esc = new window.Event('keydown', { bubbles: true })
+    Object.defineProperty(esc, 'key', { value: 'Escape' })
+    document.activeElement!.dispatchEvent(esc)
+    expect(menu.querySelector('[role=menu]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('closes the menu when the trigger is clicked again, and not from elsewhere', () => {

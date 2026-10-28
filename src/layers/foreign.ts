@@ -3,6 +3,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, EXT, H, L10N, OL, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
+import { encodeForUri } from '../components/util.ts'
 
 /** The island and every class it is an instance of, with their superclasses (rdf:type/rdfs:subClassOf*). */
 function declarers(ctx: RuleContext, focus: NamedNode): Term[] {
@@ -18,9 +19,6 @@ function declarers(ctx: RuleContext, focus: NamedNode): Term[] {
   }
   return out
 }
-
-/** SPARQL's ENCODE_FOR_URI: encodeURIComponent, and the five characters it leaves alone. */
-const encodeForUri = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase())
 
 /** An island: a wrapper, its host-owned slot, the slot's tag and its inputs' current values. */
 const island: FnRule = (ctx, focus) => {

@@ -1,5 +1,7 @@
 import type * as Ox from 'oxigraph'
+import { hasEngine, startEngine } from './engine.ts'
 import { engineStore } from '../../rdf-engine/host/store.ts'
+import { layoutKinds, provideLayoutModule, type LayoutKind } from '../layout/engine.ts'
 import { ONTOLOGY_FILES } from '../ontology.ts'
 import { hybridStore } from '../store/hybrid.ts'
 import { n3Store } from '../store/n3.ts'
@@ -12,16 +14,13 @@ export type StoreKind = 'wat' | 'rust' | 'oxigraph' | 'n3' | 'hybrid'
 // The vendored RDF/HTML vocabulary is only read at build time (scripts/gen-rdfhtml-vocab.ts).
 const sources = import.meta.glob(['../../ontology/**/*.ttl', '!../../ontology/vendor/**'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
-// The engine builds (npm run engine:build), as URLs fetched only for the store in use;
-// a build that is missing is simply not offered.
-const engineUrls = import.meta.glob('../../rdf-engine/build/*.wasm', { query: '?url', import: 'default' }) as Record<string, () => Promise<string>>
 
 let ox: typeof Ox | undefined
 const engines: Partial<Record<'rust' | 'wat', WebAssembly.Module>> = {}
 
 /** Whether this build includes the engine behind a store kind. */
 export function hasStore(kind: StoreKind): boolean {
-  return kind === 'rust' || kind === 'wat' ? `../../rdf-engine/build/${kind}.wasm` in engineUrls : true
+  return kind === 'rust' || kind === 'wat' ? hasEngine(kind) : true
 }
 
 /**
@@ -39,12 +38,30 @@ export async function initWeb(kind: StoreKind): Promise<void> {
     ox = web as unknown as typeof Ox
   } else if (kind === 'rust' || kind === 'wat') {
     if (engines[kind]) return
-    const url = engineUrls[`../../rdf-engine/build/${kind}.wasm`]
-    if (!url) throw new Error(`The ${kind} engine is not in this build (npm run engine:build)`)
-    const response = fetch(await url())
-    // Compiled while it streams where the server sends application/wasm.
-    engines[kind] = await WebAssembly.compileStreaming(response).catch(async () => WebAssembly.compile(await (await response).arrayBuffer()))
+    // The engine builds are fetched only for the store in use (a host may have started it already).
+    engines[kind] = await startEngine(kind)
   }
+}
+
+// The layout solver's WASM twins (layout-solver/build.ts), fetched only when initLayout is called.
+const layoutUrls = import.meta.glob('../../layout-solver/build/*.wasm', { query: '?url', import: 'default' }) as Record<string, () => Promise<string>>
+
+/**
+ * Compile the layout solver's WASM twins in this build and offer them to src/layout/engine.ts; the
+ * kinds it can now use, TypeScript always last (a build that fails to load is skipped).
+ */
+export async function initLayout(): Promise<LayoutKind[]> {
+  for (const kind of ['wat', 'rust'] as const) {
+    const url = layoutUrls[`../../layout-solver/build/${kind}.wasm`]
+    if (!url) continue
+    try {
+      const response = fetch(await url())
+      await provideLayoutModule(kind, await WebAssembly.compileStreaming(response).catch(async () => WebAssembly.compile(await (await response).arrayBuffer())))
+    } catch {
+      // not offered: the engine falls back
+    }
+  }
+  return layoutKinds()
 }
 
 /** Store options (benchmark configurations choose them; the defaults are the site's). */
@@ -54,6 +71,8 @@ export interface StoreOptions {
    * true compiles a query on its second run, 'idle' the most-run ones in idle time.
    */
   compiled?: boolean | 'idle'
+  /** Semblance's engines: the time zone sx:formatDateTime uses when its options name none (default: the host's). */
+  timeZone?: string
 }
 
 /** Compiled queries: a prepared query is compiled on its second run with the same variables bound. */
@@ -63,7 +82,7 @@ export function createStore(kind: StoreKind, options: StoreOptions = {}): GraphS
   if (kind === 'rust' || kind === 'wat') {
     const module = engines[kind]
     if (!module) throw new Error(`initWeb('${kind}') must be awaited first`)
-    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0 })
+    return engineStore(module, kind, { compile: options.compiled === 'idle' ? 'idle' : options.compiled ? COMPILE_ON_RUN : 0, timeZone: options.timeZone })
   }
   if (kind === 'n3') return n3Store()
   if (!ox) throw new Error(`initWeb('${kind}') must be awaited first`)

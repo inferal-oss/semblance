@@ -28,20 +28,23 @@
     "./web": "./src/web/index.ts",
     "./node": "./src/node/index.ts",
     "./ontology/*": "./ontology/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
   },
   "files": [
     "src",
     "ontology",
     "rdf-engine/host",
     "rdf-engine/build/*.wasm",
+    "layout-solver/build/*.wasm",
     "docs",
     "README.md",
     "DESIGN.md",
     "PERSISTENCE.md",
     "LICENSE",
     "LICENSE-APACHE",
-    "LICENSE-MIT"
+    "LICENSE-MIT",
+    "bin"
   ],
   "publishConfig": {
     "access": "public"
@@ -58,20 +61,23 @@
     "build:single": "vite build --mode single && node scripts/name-single.mjs",
     "conformance": "tsx rdf-engine/conformance/run.ts",
     "engine:build": "tsx rdf-engine/build.ts",
+    "layout:build": "tsx layout-solver/build.ts",
     "engine:check": "tsx rdf-engine/host/abi-check.ts",
     "engine:compare": "tsx rdf-engine/compare.ts",
     "engine:sizes": "tsx rdf-engine/sizes.ts",
     "engine:speed": "tsx rdf-engine/host/speed-check.ts",
-    "predev": "npm run engine:build",
-    "prebuild": "npm run engine:build",
-    "pretest": "npm run engine:build",
-    "pretest:full": "npm run engine:build",
-    "prebuild:single": "npm run engine:build",
-    "prepack": "npm run engine:build"
+    "predev": "npm run engine:build && npm run layout:build",
+    "prebuild": "npm run engine:build && npm run layout:build",
+    "pretest": "npm run engine:build && npm run layout:build",
+    "pretest:full": "npm run engine:build && npm run layout:build",
+    "prebuild:single": "npm run engine:build && npm run layout:build",
+    "prepack": "npm run engine:build && npm run layout:build",
+    "serve": "node bin/semblance.mjs serve"
   },
   "dependencies": {
     "n3": "^2.13.12",
-    "oxigraph": "^0.5.13"
+    "oxigraph": "^0.5.13",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@comunica/query-sparql-rdfjs": "^5.4.1",
@@ -80,11 +86,21 @@
     "@types/node": "^26.6.5",
     "binaryen": "^132.0.0",
     "linkedom": "^0.18.14",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^5.0.5",
     "wabt": "^1.0.39"
+  },
+  "bin": {
+    "semblance": "./bin/semblance.mjs"
+  },
+  "peerDependencies": {
+    "vite": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }

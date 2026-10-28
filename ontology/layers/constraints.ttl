@@ -1,0 +1,253 @@
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix lc: <https://semblance.dev/ns/layout-constraints#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix rnd: <https://semblance.dev/ns/rendered#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Layout constraints layer (#167): invariants about rendered geometry - "are the sizes aligned, does
+# everything fit?" - as data. An invariant names a relation (lc:SameTop, lc:FitsInline, ...), the
+# components it holds over (lc:over: each instance of a class is one group, or one container), what
+# in them it compares (lc:members: their children, a part role inside them, or every component
+# inside), and a tolerance. Nothing here changes the layout: the checker reads rendered boxes (the
+# rendered-state layer, rnd:, #35) and reports lc:Finding nodes; a test fails on them, the
+# workbench lists them.
+#
+#   lc:fieldRowsShareTops a lc:Invariant ;
+#       lc:relation lc:SameTop ; lc:over lc:FieldRow ;
+#       lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 0.5 .
+#
+# Some invariants are declared (a nav list's items fit in it); some are derived from layout
+# vocabulary that already promises them (a row of fields, pos:AlignedColumns, a width class). The
+# SPARQL that finds violations is on each relation (lc:select): over the rendered graph, each result
+# is one violation. src/layout/check.ts is its function twin and the format of the WASM twin.
+
+<https://semblance.dev/ns/layout-constraints> a owl:Ontology ;
+    rdfs:label "Semblance layout constraints layer"@en .
+
+lc:Invariant a owl:Class ;
+    rdfs:label "Layout invariant"@en , "Інваріант розкладки"@uk , "Layout-Invariante"@de , "ثابت التخطيط"@ar ;
+    rdfs:comment "A relation that rendered boxes must keep, over each instance of lc:over."@en .
+lc:Relation a owl:Class ;
+    rdfs:label "Layout relation"@en , "Відношення розкладки"@uk , "Layout-Beziehung"@de , "علاقة التخطيط"@ar .
+lc:Role a owl:Class ;
+    rdfs:label "Part role"@en , "Роль частини"@uk , "Teilrolle"@de , "دور الجزء"@ar ;
+    rdfs:comment "A part of a component that invariants compare, found in its root by lc:selector (not crossing into a nested component's root)."@en .
+lc:Finding a owl:Class ;
+    rdfs:label "Layout finding"@en , "Порушення розкладки"@uk , "Layout-Befund"@de , "مخالفة التخطيط"@ar ;
+    rdfs:comment "One broken invariant: lc:invariant, lc:scope (the group's component), lc:member, lc:by (px)."@en .
+
+lc:relation a owl:ObjectProperty ; rdfs:domain lc:Invariant ; rdfs:range lc:Relation ;
+    rdfs:label "Relation"@en , "Відношення"@uk , "Beziehung"@de , "العلاقة"@ar .
+lc:over a owl:ObjectProperty ; rdfs:domain lc:Invariant ;
+    rdfs:label "Holds over"@en , "Діє над"@uk , "Gilt für"@de , "ينطبق على"@ar ;
+    rdfs:comment "A class: each of its instances is one group (or, for a Fits relation, the container)."@en .
+lc:members a owl:ObjectProperty ; rdfs:domain lc:Invariant ;
+    rdfs:label "Members"@en , "Учасники"@uk , "Mitglieder"@de , "الأعضاء"@ar ;
+    rdfs:comment "lc:EachChild (one member per child component: its first lc:part, or its root), lc:Parts (every lc:part inside), lc:Descendants (every component inside, but not inside a scroller in between)."@en .
+lc:part a owl:ObjectProperty ; rdfs:domain lc:Invariant ; rdfs:range lc:Role ;
+    rdfs:label "Part"@en , "Частина"@uk , "Teil"@de , "الجزء"@ar .
+lc:tolerance a owl:DatatypeProperty ; rdfs:domain lc:Invariant ; rdfs:range xsd:decimal ;
+    rdfs:label "Tolerance"@en , "Допуск"@uk , "Toleranz"@de , "التسامح"@ar ;
+    rdfs:comment "CSS px a measurement may be off before it counts (sub-pixel rounding, a theme's tilt)."@en .
+lc:atWidth a owl:ObjectProperty ; rdfs:domain lc:Invariant ;
+    rdfs:label "At width"@en , "За ширини"@uk , "Bei Breite"@de , "عند العرض"@ar ;
+    rdfs:comment "A width class (sty:CompactWidth, ...): the invariant holds only there. Without one, at every width."@en .
+lc:selector a owl:DatatypeProperty ;
+    rdfs:label "Selector"@en , "Селектор"@uk , "Selektor"@de , "المحدد"@ar .
+lc:pick a owl:ObjectProperty ; rdfs:domain lc:Role ;
+    rdfs:label "Picked at a width"@en , "Вибір за ширини"@uk , "Auswahl bei Breite"@de , "الاختيار عند عرض"@ar ;
+    rdfs:comment "Where a width class moves the part: a node with lc:selector and lc:atWidth, used instead of the role's own selector at that width."@en .
+
+lc:EachChild a sem:Value ; rdfs:label "Each child"@en , "Кожна дочірня"@uk , "Jedes Kind"@de , "كل فرع"@ar .
+lc:Parts a sem:Value ; rdfs:label "Parts"@en , "Частини"@uk , "Teile"@de , "الأجزاء"@ar .
+lc:Descendants a sem:Value ; rdfs:label "Everything inside"@en , "Усе всередині"@uk , "Alles darin"@de , "كل ما بداخله"@ar .
+
+# --- part roles --------------------------------------------------------------------------------
+
+lc:SingleLineControl a lc:Role ;
+    rdfs:label "Single-line control"@en , "Однорядковий елемент"@uk , "Einzeiliges Steuerelement"@de , "عنصر بسطر واحد"@ar ;
+    rdfs:comment "An inline Choice (its caption inside, data-sem-label-placement=inline) draws its control as the pill around its select, so for it the role is the root; a Choice with its label above is a label and a select, like any field (#57)."@en ;
+    lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]):not([data-sem-label-placement=inline] *), select:not([data-sem-label-placement=inline] *), [data-sem-c=choice][data-sem-label-placement=inline]" ;
+    # On a compact screen a Choice puts its caption above its select, and the select is the control.
+    lc:pick [ lc:atWidth sty:CompactWidth ;
+        lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]), select" ] .
+lc:FieldLabel a lc:Role ;
+    rdfs:label "Field label"@en , "Мітка поля"@uk , "Feldbeschriftung"@de , "تسمية الحقل"@ar ;
+    rdfs:comment "A field's label; a Choice with its label above is itself a label element, its caption the span inside."@en ;
+    lc:selector "label:not([data-sem-c=choice]), [data-sem-c=choice]:not([data-sem-label-placement=inline]) > span" .
+lc:NavItem a lc:Role ;
+    rdfs:label "Navigation item"@en , "Пункт навігації"@uk , "Navigationseintrag"@de , "عنصر التنقل"@ar ;
+    lc:selector "[data-sem-c=nav-list] > button, [data-sem-c=nav-list] > a, [data-sem-c=nav-list] > li > button, [data-sem-c=nav-list] > li > a" .
+
+# --- derived groups ------------------------------------------------------------------------------
+
+lc:includes a owl:ObjectProperty ;
+    rdfs:label "Includes"@en , "Охоплює"@uk , "Umfasst"@de , "يشمل"@ar ;
+    rdfs:comment "On a derived group class: the component classes that count as its members' kind."@en .
+lc:derive a owl:DatatypeProperty ;
+    rdfs:label "Derived by"@en , "Виводиться"@uk , "Abgeleitet durch"@de , "مشتق بواسطة"@ar ;
+    rdfs:comment "A SPARQL CONSTRUCT that types the components a derived class holds over, from layout vocabulary that already promises the invariant."@en .
+
+lc:Field a owl:Class ;
+    rdfs:label "Field"@en , "Поле"@uk , "Feld"@de , "حقل"@ar ;
+    rdfs:comment "The kinds of field that line up with each other: a label (or an inline caption) and one control."@en ;
+    lc:includes c:TextField , c:Choice , c:DateField , c:TimeField , c:Typeahead , c:Field , c:ShapeField .
+
+lc:FieldRow a owl:Class ;
+    rdfs:label "Row of fields"@en , "Ряд полів"@uk , "Feldzeile"@de , "صف حقول"@ar ;
+    rdfs:comment "A row (pos:direction pos:Row, or the pos:FieldRow layout) with two fields or more side by side (#57: the checkout's code and phone)."@en ;
+    lc:derive """
+CONSTRUCT { ?row a lc:FieldRow }
+WHERE {
+  { ?row pos:direction pos:Row } UNION { ?row pos:layout pos:FieldRow }
+  ?row c:children ?list .
+  ?list rdf:rest*/rdf:first ?a . ?list rdf:rest*/rdf:first ?b . FILTER(?a != ?b)
+  ?a a ?ka . lc:Field lc:includes ?ka . ?b a ?kb . lc:Field lc:includes ?kb .
+}""" .
+
+lc:Page a owl:Class ;
+    rdfs:label "Page"@en , "Сторінка"@uk , "Seite"@de , "الصفحة"@ar ;
+    rdfs:comment "The document in its viewport (rnd:Viewport)."@en .
+
+# --- relations: each with the SPARQL that finds its violations over the rendered graph -------------
+#
+# Boxes are rnd: states (#35): ?b rnd:of ?component ; rnd:x, rnd:y, rnd:width, rnd:height. A part's box
+# also has lc:role and lc:index (its order among its component's parts of that role); every box has
+# rnd:parent, the box of the nearest component above it (a part's: its component's), and rnd:scrolls
+# true when it clips or scrolls its inline overflow. A child of a row that wraps has rnd:line, the
+# line it is on (0, 1, ...): a group of children is compared line by line. Each result is one violation: ?inv ?scope
+# (the group's component) ?by (px), and for a Fits relation ?member (the box that sticks out).
+
+lc:sparql a owl:DatatypeProperty ;
+    rdfs:label "SPARQL fragment"@en , "Фрагмент SPARQL"@uk , "SPARQL-Fragment"@de , "جزء SPARQL"@ar ;
+    rdfs:comment "A SPARQL group pattern that lc:select queries splice in where they say %name%."@en .
+
+lc:groupMembers a owl:NamedIndividual ;
+    rdfs:comment "The member boxes ?m of each group ?scope of an invariant ?inv (lc:EachChild or lc:Parts)."@en ;
+    lc:sparql """
+  ?scope a/rdfs:subClassOf* ?cls . ?sb rnd:of ?scope . FILTER NOT EXISTS { ?sb lc:role ?r }
+  {
+    ?inv lc:members lc:EachChild ; lc:part ?role .
+    ?cb rnd:parent ?sb ; rnd:of ?child . FILTER NOT EXISTS { ?cb lc:role ?r2 }
+    ?m rnd:of ?child ; lc:role ?role ; lc:index 0 ; rnd:parent ?cb .
+  } UNION {
+    ?inv lc:members lc:EachChild . FILTER NOT EXISTS { ?inv lc:part ?p }
+    ?m rnd:parent ?sb . FILTER NOT EXISTS { ?m lc:role ?r3 }
+  } UNION {
+    ?inv lc:members lc:Parts ; lc:part ?role .
+    ?m lc:role ?role ; rnd:parent+ ?sb .
+  }""" .
+
+lc:SameBlockSize a lc:Relation ;
+    rdfs:label "Same height"@en , "Однакова висота"@uk , "Gleiche Höhe"@de , "نفس الارتفاع"@ar ;
+    lc:measure rnd:height .
+lc:SameInlineSize a lc:Relation ;
+    rdfs:label "Same width"@en , "Однакова ширина"@uk , "Gleiche Breite"@de , "نفس العرض"@ar ;
+    lc:measure rnd:width .
+lc:SameTop a lc:Relation ;
+    rdfs:label "Same top"@en , "Однаковий верх"@uk , "Gleiche Oberkante"@de , "نفس الحافة العلوية"@ar ;
+    lc:measure rnd:y .
+lc:SameBottom a lc:Relation ;
+    rdfs:label "Same bottom"@en , "Однаковий низ"@uk , "Gleiche Unterkante"@de , "نفس الحافة السفلية"@ar .
+lc:FitsInline a lc:Relation ;
+    rdfs:label "Fits across"@en , "Вміщується вшир"@uk , "Passt in die Breite"@de , "يتسع عرضًا"@ar .
+lc:FitsWithin a lc:Relation ;
+    rdfs:label "Fits inside"@en , "Вміщується всередині"@uk , "Passt hinein"@de , "يتسع داخله"@ar .
+lc:NoPageOverflow a lc:Relation ;
+    rdfs:label "Page fits its width"@en , "Сторінка вміщується в ширину"@uk , "Seite passt in die Breite"@de , "الصفحة تتسع لعرضها"@ar .
+
+lc:ContentFits a lc:Relation ;
+    rdfs:label "Content fits its box"@en , "Вміст уміщується у свою рамку"@uk , "Inhalt passt in seinen Rahmen"@de , "المحتوى يتسع لإطاره"@ar ;
+    rdfs:comment "Each member's own content is no wider than it (rnd:scrollWidth against rnd:clientWidth): text does not run out of a button."@en .
+
+lc:measure a owl:ObjectProperty ; rdfs:domain lc:Relation ;
+    rdfs:label "Compares"@en , "Порівнює"@uk , "Vergleicht"@de , "يقارن"@ar ;
+    rdfs:comment "For a Same relation: the rnd: property it compares across a group (lc:SameBottom compares rnd:y + rnd:height)."@en .
+
+lc:select a owl:DatatypeProperty ;
+    rdfs:label "Violations query"@en , "Запит порушень"@uk , "Abfrage der Verstöße"@de , "استعلام المخالفات"@ar ;
+    rdfs:comment "The SPARQL SELECT that finds every violation of every invariant (the checker's SPARQL side; src/layout/check.ts is its twin)."@en .
+
+lc:Checker a sem:Query ;
+    rdfs:label "Layout invariants broken"@en , "Порушені інваріанти розкладки"@uk , "Verletzte Layout-Invarianten"@de , "ثوابت التخطيط المخالفة"@ar ;
+    lc:select """
+SELECT ?inv ?scope ?member ?by WHERE {
+ {
+  {
+    SELECT ?inv ?scope ?line (MAX(?v) - MIN(?v) AS ?by) (SAMPLE(?tol) AS ?t) WHERE {
+      ?inv a lc:Invariant ; lc:relation ?rel ; lc:over ?cls ; lc:tolerance ?tol .
+      FILTER(?rel IN (lc:SameBlockSize, lc:SameInlineSize, lc:SameTop, lc:SameBottom))
+      %groupMembers%
+      ?m rnd:y ?y ; rnd:height ?h ; rnd:width ?w .
+      BIND(IF(?rel = lc:SameBlockSize, ?h, IF(?rel = lc:SameInlineSize, ?w, IF(?rel = lc:SameTop, ?y, ?y + ?h))) AS ?v)
+      OPTIONAL { ?m rnd:parent ?mc . ?mc rnd:line ?ln . ?mc rnd:parent ?sb }
+      OPTIONAL { ?m rnd:line ?ln2 . ?m rnd:parent ?sb }
+      BIND(COALESCE(?ln, ?ln2, 0) AS ?line)
+    } GROUP BY ?inv ?scope ?line
+  }
+  FILTER(?by > ?t)
+ } UNION {
+  ?inv a lc:Invariant ; lc:relation ?rel ; lc:over ?cls ; lc:tolerance ?tol .
+  FILTER(?rel IN (lc:FitsInline, lc:FitsWithin))
+  ?scope a/rdfs:subClassOf* ?cls . ?sb rnd:of ?scope . FILTER NOT EXISTS { ?sb lc:role ?r }
+  {
+    ?inv lc:members lc:Parts ; lc:part ?role . ?member lc:role ?role ; rnd:parent+ ?sb .
+  } UNION {
+    # a scroller's content may be wider than it: that is what it scrolls
+    ?inv lc:members lc:Descendants . FILTER NOT EXISTS { ?sb rnd:scrolls true }
+    ?member rnd:parent+ ?sb . FILTER NOT EXISTS { ?member lc:role ?r4 }
+    FILTER NOT EXISTS { ?member rnd:parent+ ?s . ?s rnd:parent+ ?sb ; rnd:scrolls true }
+  }
+  ?sb rnd:x ?sx ; rnd:y ?sy ; rnd:width ?sw ; rnd:height ?sh .
+  ?member rnd:x ?mx ; rnd:y ?my ; rnd:width ?mw ; rnd:height ?mh .
+  BIND(?sx - ?mx AS ?o1) BIND((?mx + ?mw) - (?sx + ?sw) AS ?o2)
+  BIND(IF(?rel = lc:FitsWithin, ?sy - ?my, ?o1) AS ?o3) BIND(IF(?rel = lc:FitsWithin, (?my + ?mh) - (?sy + ?sh), ?o1) AS ?o4)
+  BIND(IF(?o1 > ?o2, ?o1, ?o2) AS ?a) BIND(IF(?o3 > ?o4, ?o3, ?o4) AS ?b)
+  BIND(IF(?a > ?b, ?a, ?b) AS ?by)
+  FILTER(?by > ?tol)
+ } UNION {
+  ?inv a lc:Invariant ; lc:relation lc:ContentFits ; lc:over ?cls ; lc:members lc:Parts ; lc:part ?role ; lc:tolerance ?tol .
+  ?scope a/rdfs:subClassOf* ?cls . ?sb rnd:of ?scope . FILTER NOT EXISTS { ?sb lc:role ?r5 }
+  ?member lc:role ?role ; rnd:parent+ ?sb ; rnd:scrollWidth ?msw ; rnd:clientWidth ?mcw .
+  BIND(?msw - ?mcw AS ?by) FILTER(?by > ?tol)
+ } UNION {
+  ?inv a lc:Invariant ; lc:relation lc:NoPageOverflow ; lc:tolerance ?tol .
+  ?scope a rnd:Viewport ; rnd:width ?vw ; rnd:scrollWidth ?vsw .
+  BIND(?vsw - ?vw AS ?by) FILTER(?by > ?tol)
+ }
+}""" .
+
+# --- the invariants -----------------------------------------------------------------------------
+
+lc:fieldRowControlsShareTops a lc:Invariant ;
+    rdfs:label "Fields side by side line up"@en , "Поля поруч на одному рівні"@uk , "Felder nebeneinander fluchten"@de , "الحقول المتجاورة متحاذية"@ar ;
+    rdfs:comment "In a row of fields, every field's control starts at the same height (#57)."@en ;
+    lc:relation lc:SameTop ; lc:over lc:FieldRow ; lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 1.0 .
+lc:fieldRowControlsShareHeight a lc:Invariant ;
+    rdfs:label "Fields side by side are one height"@en , "Поля поруч однієї висоти"@uk , "Felder nebeneinander gleich hoch"@de , "الحقول المتجاورة بارتفاع واحد"@ar ;
+    lc:relation lc:SameBlockSize ; lc:over lc:FieldRow ; lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 0.5 .
+lc:formControlsShareHeight a lc:Invariant ;
+    rdfs:label "A form's single-line controls are one height"@en , "Однорядкові елементи форми однієї висоти"@uk , "Einzeilige Steuerelemente eines Formulars gleich hoch"@de , "عناصر النموذج ذات السطر الواحد بارتفاع واحد"@ar ;
+    rdfs:comment "Text, select, date and number inputs in one form have the control height (#34)."@en ;
+    lc:relation lc:SameBlockSize ; lc:over c:ShapeForm ; lc:members lc:Parts ; lc:part lc:SingleLineControl ; lc:tolerance 0.5 .
+lc:navItemsFit a lc:Invariant ;
+    rdfs:label "Navigation items fit their list"@en , "Пункти навігації вміщуються у список"@uk , "Navigationseinträge passen in ihre Liste"@de , "عناصر التنقل تتسع لقائمتها"@ar ;
+    rdfs:comment "A nav list's items wrap rather than stick out of it (#53)."@en ;
+    lc:relation lc:FitsInline ; lc:over c:NavList ; lc:members lc:Parts ; lc:part lc:NavItem ; lc:tolerance 1.0 .
+lc:navItemsShowTheirText a lc:Invariant ;
+    rdfs:label "Navigation items show all their text"@en , "Пункти навігації показують увесь текст"@uk , "Navigationseinträge zeigen ihren ganzen Text"@de , "عناصر التنقل تعرض نصها كاملًا"@ar ;
+    rdfs:comment "A nav item's label wraps rather than running out of the item (#53)."@en ;
+    lc:relation lc:ContentFits ; lc:over c:NavList ; lc:members lc:Parts ; lc:part lc:NavItem ; lc:tolerance 1.0 .
+lc:contentStaysInCards a lc:Invariant ;
+    rdfs:label "Content stays inside its card"@en , "Вміст не виходить за картку"@uk , "Inhalt bleibt in seiner Karte"@de , "المحتوى يبقى داخل بطاقته"@ar ;
+    rdfs:comment "Nothing inside a card or a specimen sticks out of it, unless it is inside a scroller (the 320 px specimens, the Photo post's segmented control)."@en ;
+    lc:relation lc:FitsInline ; lc:over c:Card , c:Specimen ; lc:members lc:Descendants ; lc:tolerance 1.0 .
+lc:pageFits a lc:Invariant ;
+    rdfs:label "The page fits its width"@en , "Сторінка вміщується в ширину"@uk , "Die Seite passt in ihre Breite"@de , "الصفحة تتسع لعرضها"@ar ;
+    rdfs:comment "No sideways scrolling of the whole page, at any width (a5fc6b7, 71686f3)."@en ;
+    lc:relation lc:NoPageOverflow ; lc:over lc:Page ; lc:tolerance 1.0 .

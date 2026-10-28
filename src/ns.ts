@@ -44,6 +44,7 @@ export const NS = {
   clip: 'https://semblance.dev/ns/clipboard#',
   fs: 'https://semblance.dev/ns/fullscreen#',
   ext: 'https://semblance.dev/ns/foreign#',
+  rnd: 'https://semblance.dev/ns/rendered#',
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
   ol: 'https://semblance.dev/ns/outline#',
@@ -107,6 +108,7 @@ export const SEM = {
   layer: sem + 'layer',
   implements: sem + 'implements',
   construct: sem + 'construct',
+  constructFrom: sem + 'constructFrom',
   function: sem + 'function',
   follows: sem + 'follows',
   watches: sem + 'watches',
@@ -128,6 +130,7 @@ export const SEM = {
   bulk: sem + 'bulk',
   requires: sem + 'requires',
   unless: sem + 'unless',
+  needsExtension: sem + 'needsExtension',
   refresh: sem + 'refresh',
   NextFrame: sem + 'NextFrame',
   TooltipLayer: sem + 'TooltipLayer',
@@ -185,6 +188,8 @@ export const C = {
   EndEdge: c + 'EndEdge',
   TopEdge: c + 'TopEdge',
   BottomEdge: c + 'BottomEdge',
+  tileLayout: c + 'tileLayout',
+  DesktopGridLayout: c + 'DesktopGridLayout',
   hosts: c + 'hosts',
   windowsOn: c + 'windowsOn',
   Switch: c + 'Switch',
@@ -272,6 +277,8 @@ export const C = {
   sortBy: c + 'sortBy',
   itemLabel: c + 'itemLabel',
   itemChecked: c + 'itemChecked',
+  itemImage: c + 'itemImage',
+  imageFrom: c + 'imageFrom',
   of: c + 'of',
   inList: c + 'inList',
   labelFrom: c + 'labelFrom',
@@ -330,11 +337,16 @@ export const PERF_GRAPH = 'urn:semblance:perf'
 export const PERSIST_GRAPH = 'urn:semblance:persistence'
 /** What the navigation effect reports: each location's address as the URL last spelled it. */
 export const NAV_GRAPH = 'urn:semblance:navigation'
+/** What the files effect knows that holds only in this page (src/files.ts): previews and contents as object URLs, how full each file store is. */
+export const FILES_GRAPH = 'urn:semblance:files'
 /** Captured network activity (net:Capture), written by the capture effect (src/network.ts). */
 export const NETWORK_GRAPH = 'urn:semblance:network'
+/** What the rendered-state effect measures (rnd:State, rnd:Viewport; src/rendered.ts): unrecorded. */
+export const RENDERED_GRAPH = 'urn:semblance:rendered'
 export const SVG_NS = 'http://www.w3.org/2000/svg'
 
 export const BEH = {
+  viewState: beh + 'viewState',
   ChangeLog: beh + 'ChangeLog',
   undoable: beh + 'undoable',
   asserted: beh + 'asserted',
@@ -378,6 +390,7 @@ export const POS = {
   Layer: NS.pos + 'Layer',
   layout: NS.pos + 'layout',
   AlignedColumns: NS.pos + 'AlignedColumns',
+  FieldRow: NS.pos + 'FieldRow',
   rows: NS.pos + 'rows',
   RowSubgrid: NS.pos + 'RowSubgrid',
   rowParts: NS.pos + 'rowParts',
@@ -427,6 +440,10 @@ export const FILE = {
   uploadTo: NS.file + 'uploadTo', handler: NS.file + 'handler', file: NS.file + 'file', removes: NS.file + 'removes', retries: NS.file + 'retries',
   DragIn: NS.file + 'DragIn', Arrive: NS.file + 'Arrive', Added: NS.file + 'Added', Refusal: NS.file + 'Refusal', PickCancelled: NS.file + 'PickCancelled',
   Progress: NS.file + 'Progress', Done: NS.file + 'Done', Failure: NS.file + 'Failure',
+  Receiver: NS.file + 'Receiver', keepsRefusals: NS.file + 'keepsRefusals', listsHeld: NS.file + 'listsHeld',
+  Store: NS.file + 'Store', keepIn: NS.file + 'keepIn', keptIn: NS.file + 'keptIn', usedBytes: NS.file + 'usedBytes', usedFiles: NS.file + 'usedFiles',
+  preview: NS.file + 'preview', url: NS.file + 'url', Saving: NS.file + 'Saving', Saved: NS.file + 'Saved',
+  Stored: NS.file + 'Stored', StoreFailure: NS.file + 'StoreFailure',
 } as const
 /** Full screen as a fact (ontology/layers/fullscreen.ttl, src/fullscreen.ts). */
 export const FS = {
@@ -445,6 +462,22 @@ export const EXT = {
 } as const
 /** The outlines layer (ontology/layers/outline.ttl). */
 export const OL = { label: NS.ol + 'label', defaultLabel: NS.ol + 'defaultLabel', shows: NS.ol + 'shows' } as const
+
+/** The rendered state (ontology/layers/rendered.ttl, src/rendered.ts). */
+export const RND = Object.fromEntries(
+  [
+    'observes', 'Aspect', 'Geometry', 'Visibility', 'Overlap', 'Focus', 'Hover', 'Press', 'Scroll', 'Open', 'Animation',
+    'State', 'of', 'observesSelf', 'fixed', 'x', 'y', 'width', 'height', 'within', 'cell', 'rendered', 'inViewport', 'ratio', 'overlaps',
+    'focused', 'focusWithin', 'focusVisible', 'hovered', 'pressed', 'scrollTop', 'scrollLeft', 'scrollHeight', 'scrollWidth',
+    'overflows', 'atStart', 'atEnd', 'open', 'topLayer', 'animating', 'Viewport',
+  ].map((l) => [l, NS.rnd + l]),
+) as Record<
+  | 'observes' | 'Aspect' | 'Geometry' | 'Visibility' | 'Overlap' | 'Focus' | 'Hover' | 'Press' | 'Scroll' | 'Open' | 'Animation'
+  | 'State' | 'of' | 'observesSelf' | 'fixed' | 'x' | 'y' | 'width' | 'height' | 'within' | 'cell' | 'rendered' | 'inViewport' | 'ratio' | 'overlaps'
+  | 'focused' | 'focusWithin' | 'focusVisible' | 'hovered' | 'pressed' | 'scrollTop' | 'scrollLeft' | 'scrollHeight' | 'scrollWidth'
+  | 'overflows' | 'atStart' | 'atEnd' | 'open' | 'topLayer' | 'animating' | 'Viewport',
+  string
+>
 /** The dependency layer (ontology/layers/dependency.ttl). */
 export const DEP = {
   follows: NS.dep + 'follows',

@@ -143,7 +143,7 @@ CONSTRUCT {
 }
 WHERE {
   $this a/rdfs:subClassOf* ext:Island .
-  OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") }
+  OPTIONAL { { $this l10n:label ?rawLabel } UNION { ?l10nAt_rawLabel l10n:of $this ; l10n:label ?rawLabel } } OPTIONAL { $this c:label ?rawLabel FILTER(lang(?rawLabel) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { $this a/rdfs:subClassOf* ?summarized . ?summarized ext:summary ?property . $this ?property ?summary }
   BIND(STR(COALESCE(?localLabel, ?rawLabel, "")) AS ?label)

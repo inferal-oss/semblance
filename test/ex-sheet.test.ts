@@ -102,7 +102,7 @@ describe('a spreadsheet of resources and queries', () => {
     const ran: string[] = []
     // (the formula layer is offered every cell; a value cell is passed over)
     const formula = (focus: string) => s.store.match(s.store.factory.namedNode(focus), s.store.factory.namedNode(C + 'formulaText'), null).length > 0
-    const stop = s.screen.engine.onEvaluate((slot, focus) => slot.endsWith('#Formula') && focus.startsWith(SS) && formula(focus) && ran.push(focus.slice(SS.length)))
+    const stop = s.screen.engine.onEvaluate((slot, focus) => (slot.endsWith('#Formula') || slot.endsWith('#QueryFormula')) && focus.startsWith(SS) && formula(focus) && ran.push(focus.slice(SS.length)))
     const edit = (text: string) => {
       ran.length = 0
       const before = s.screen.engine.stats.ruleRuns

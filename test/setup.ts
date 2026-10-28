@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach } from 'vitest'
 import { watchStores } from '../src/node/load.ts'
 import type { GraphStore } from '../src/store/types.ts'
+import { type Persistence, watchPersistence } from '../src/persistence.ts'
 import { type Sandboxes, watchSandboxes } from '../src/sandbox.ts'
 
 // Stores are released when they are done with (GraphStore.dispose): Oxigraph's share one capped
@@ -26,6 +27,14 @@ watchSandboxes((s) => (inTest ? sandboxesOfTest : sandboxesOfFile).push(new Weak
 const stop = (all: WeakRef<Sandboxes>[]) => {
   for (const s of all.splice(0)) s.deref()?.dispose()
 }
+// So does persistence: a write waiting for its delay (60 s in the harness) would otherwise run
+// against a store released here, in a later test.
+const persistenceOfTest: WeakRef<Persistence>[] = []
+const persistenceOfFile: WeakRef<Persistence>[] = []
+watchPersistence((p) => (inTest ? persistenceOfTest : persistenceOfFile).push(new WeakRef(p)))
+const halt = (all: WeakRef<Persistence>[]) => {
+  for (const p of all.splice(0)) p.deref()?.stop()
+}
 
 beforeEach(() => {
   inTest = true
@@ -33,9 +42,11 @@ beforeEach(() => {
 afterEach(() => {
   inTest = false
   stop(sandboxesOfTest)
+  halt(persistenceOfTest)
   dispose(ofTest)
 })
 afterAll(() => {
   stop(sandboxesOfFile)
+  halt(persistenceOfFile)
   dispose(ofFile)
 })
