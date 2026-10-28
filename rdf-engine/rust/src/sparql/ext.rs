@@ -133,7 +133,7 @@ impl Ctx<'_> {
             Log | Log10 | Log2 | Exp | Pow | Sqrt | Sin | Cos | Tan | Asin | Acos | Atan | Atan2 | Pi => {
                 let mut x = [0.0; 2];
                 for (i, a) in v.iter().enumerate() {
-                    x[i] = self.num(a).ok_or(())?.as_f64();
+                    x[i] = self.num(a).ok_or(())?.as_f64().ok_or(())?;
                 }
                 let r = match f {
                     Log | Log10 | Log2 if !(x[0] > 0.0) => return Err(()),

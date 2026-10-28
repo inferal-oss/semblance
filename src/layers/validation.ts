@@ -7,13 +7,22 @@ import { C, NS, VAL, XSD_BOOLEAN } from '../ns.ts'
 import { isTrue, nodes, rdfList, str, text } from '../components/util.ts'
 import { LATIN, parseDate, parseTime } from '../components/dates.ts'
 
+import { numericInput } from '../numeric.ts'
+
+// Numeric form constraints cast the input as double, then check integrality.
+// This deliberately accepts exponent notation for a whole-number field.
+const doubleInput = (value: string) => {
+  const input = numericInput(value, NS.xsd + 'double')
+  return input.valid ? input.value : NaN
+}
+
 const SH = NS.sh
 
 /** The first constraint of `shape` that `value` violates, as a message; undefined if it conforms. */
 function violation(ctx: RuleContext, shape: Term, value: string | undefined): string | undefined {
   const n = (p: string) => {
     const v = str(ctx.object(shape, SH + p))
-    return v === undefined ? undefined : Number(v)
+    return v === undefined ? undefined : doubleInput(v)
   }
   const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
   const required = (n('minCount') ?? 0) > 0
@@ -34,7 +43,7 @@ function violation(ctx: RuleContext, shape: Term, value: string | undefined): st
   }
   const datatype = str(ctx.object(shape, SH + 'datatype'))
   const numeric = datatype === NS.xsd + 'integer' || datatype === NS.xsd + 'decimal'
-  const x = Number(value)
+  const x = doubleInput(value)
   if (numeric && (value.trim() === '' || !Number.isFinite(x) || (datatype === NS.xsd + 'integer' && !Number.isInteger(x)))) {
     return message(datatype === NS.xsd + 'integer' ? 'A whole number.' : 'A number.')
   }
@@ -71,7 +80,7 @@ function controlled(ctx: RuleContext, focus: Term, shapes: Term[], target: Term,
   for (const shape of shapes) {
     const bound = (p: string) => {
       const v = str(ctx.object(shape, SH + p))
-      return v === undefined ? undefined : Number(v)
+      return v === undefined ? undefined : doubleInput(v)
     }
     const message = (fallback: string) => text(ctx, shape, SH + 'message') ?? fallback
     const min = bound('minCount')

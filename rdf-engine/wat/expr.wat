@@ -576,7 +576,7 @@
   (if (i32.eq (local.get $f) (i32.const F_ISBLANK)) (then (return (call $bool (i32.eq (call $kind (local.get $a)) (i32.const 2))))))
   (if (i32.eq (local.get $f) (i32.const F_ISLITERAL)) (then (return (call $bool (i32.eq (call $kind (local.get $a)) (i32.const 3))))))
   (if (i32.eq (local.get $f) (i32.const F_ISTRIPLE)) (then (return (call $bool (i32.eq (call $kind (local.get $a)) (i32.const 4))))))
-  (if (i32.eq (local.get $f) (i32.const F_ISNUMERIC)) (then (return (call $bool (i32.ne (call $num (local.get $a)) (i32.const 0))))))
+  (if (i32.eq (local.get $f) (i32.const F_ISNUMERIC)) (then (return (call $bool (call $numeric_valid (local.get $a))))))
   (if (i32.eq (local.get $f) (i32.const F_SAMETERM)) (then (return (call $bool (i32.eq (local.get $a) (local.get $b))))))
   (if (i32.eq (local.get $f) (i32.const F_STRLEN)) (then
     (if (i32.eqz (call $is_str (local.get $a))) (then (return (i32.const 0))))

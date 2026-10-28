@@ -113,3 +113,25 @@ pub fn cd_addr() -> u32 {
 pub fn stopped() -> bool {
     B.stop.get()
 }
+
+pub fn query_stopped() -> bool { B.active.get() && B.stop.get() }
+
+/// A conversion's bounded work may check its deadline without consuming a row
+/// step, changing a compiled countdown, or restarting the run's budget.
+pub fn poll_deadline() -> bool {
+    if !B.active.get() { return false; }
+    if B.stop.get() { return true; }
+    if B.deadline.get() > 0.0 {
+        let now = crate::host::now();
+        if B.stop.get() || now >= B.deadline.get() { B.stop.set(true); }
+    }
+    B.stop.get()
+}
+
+/// The official query host turns a clock callback fault into nonfinite time so
+/// native cleanup can return normally. Unbudgeted calls keep their old boundary.
+pub fn invalid_query_clock() -> bool {
+    if !B.active.get() { return false; }
+    B.stop.set(true);
+    true
+}
