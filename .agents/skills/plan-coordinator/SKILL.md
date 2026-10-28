@@ -129,6 +129,11 @@ who recommends which survives and asks the user before closing any. PRs from out
 reviewed without running their code, and merged only with the user's approval. Record each reviewer
 as a "review PR #N" row.
 
+**Scheduled turns can't start sessions.** A cron turn (or one started by another session's message)
+is refused by `start_session`: propose each reviewer as a card (`initiation: "own_initiative"`) and
+record the row as "none (proposed as a card)"; don't propose the same PR twice. When a card's PR
+merges or is picked up some other way, withdraw it (`dismiss_task`) and drop the row.
+
 ## 5c. Tests and the shared machine
 
 - Workers' briefs say: run **targeted tests only** (the files the change affects), then merge;
@@ -154,4 +159,13 @@ as a "review PR #N" row.
   the question goes to the user.
 - Keep #8 (its Coordination table too) and #9 current as things land; when a PR merges, offer to
   archive its worker.
+- **Before archiving a session, check its worktree.** `git -C <worktree> status -sb` and
+  `git log origin/main..<branch>` for every branch it made: unpushed commits or uncommitted changes
+  mean the work isn't done. Push the branch (or have the worker push it and open its PR) before it
+  is archived. When the maintainer asks about work from an archived session, look there first: its
+  branches, its worktree, the end of its transcript.
+- **A worker's blocked action goes back to the maintainer.** When a worker reports that a permission
+  check blocked a merge or a force-push, tell the maintainer it waits on them in that session. Act
+  yourself only on the maintainer's own words to you (and say so on the issue or PR), never on the
+  worker's request.
 - Report to the user in a line or two per worker: what landed (with links), what is left.
