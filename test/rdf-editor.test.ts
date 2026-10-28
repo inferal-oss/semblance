@@ -57,6 +57,8 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const item = (...path: string[]) => label(...path).closest('[role=treeitem]') as HTMLElement
   const twisty = (...path: string[]) => item(...path).querySelector(':scope > .sem-row > .sem-twisty') as HTMLElement
   const click = (el: Element) => el.dispatchEvent(new window.Event('click', { bubbles: true }))
+  const contextMenu = (el: Element) => el.dispatchEvent(new window.Event('contextmenu', { bubbles: true, cancelable: true }))
+  const focusOn = (el: Element) => el.dispatchEvent(new window.Event('focusin', { bubbles: true }))
   const key = (el: Element, k: string, shiftKey = false, altKey = false) => {
     const e = new window.Event('keydown', { bubbles: true, cancelable: true })
     Object.assign(e, { key: k, ctrlKey: false, metaKey: false, altKey, shiftKey })
@@ -78,7 +80,7 @@ function mount(kind: Kind, prefer: 'sparql' | 'function', extra = '', languages:
   const outline = () => toText(text.index, EDITOR)
   const html = () => app.innerHTML
   const runs = (prefix: string, ns: string = C) => [...screen.engine.stats.byRule].filter(([iri]) => iri.startsWith(ns + prefix)).reduce((n, [, s]) => n + s.runs, 0)
-  return { bus, store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
+  return { contextMenu, focusOn, bus, store, runtime, screen, dom, f, nn, editor, label, item, twisty, click, key, field, enter, objects, apply, outline, html, runs, document }
 }
 
 const LIBRARY = [
@@ -127,7 +129,7 @@ describe('c:RdfEditor', () => {
     expect(item('lib:dispossessed', 'lib:title', '"Знедолені"').querySelector('.sem-datatype')!.textContent).toBe('@uk')
     expect(label('lib:dispossessed', 'lib:edition', '[ ]').getAttribute('aria-description')).toBe('nested resource')
     expect(label('lib:dispossessed', 'lib:keywords', '( 3 )').getAttribute('aria-description')).toBe('list of 3')
-    expect(label('lib:dispossessed', 'lib:author', 'lib:ursula', '~ lib:authorship').getAttribute('aria-description')).toBe('said about this statement')
+    expect(label('lib:dispossessed', 'lib:author', 'lib:ursula', 'lib:authorship').getAttribute('aria-description')).toBe('said about this statement')
     // A label that says more than the name is shown; one that repeats it is not.
     expect(item('lib:dispossessed', 'lib:author', 'lib:ursula').querySelector(':scope > .sem-row > .sem-note')!.textContent).toBe('Ursula K. Le Guin')
     expect(item('lib:dispossessed', 'lib:author').querySelector(':scope > .sem-row > .sem-note')).toBeNull()
@@ -143,7 +145,7 @@ describe('c:RdfEditor', () => {
     expect(label('lib:dispossessed', 'a', 'lib:Book').getAttribute('data-sem-link')).toBe('term')
     expect(item('lib:dispossessed', 'a', 'lib:Book').hasAttribute('aria-expanded')).toBe(false)
     expect(label('lib:dispossessed', 'lib:author').getAttribute('data-sem-link')).toBe('term')
-    expect(label('lib:dispossessed', 'lib:author', 'lib:ursula', '~ lib:authorship', 'lib:source', '<https://www.wikidata.org/wiki/Q1213434>').hasAttribute('data-sem-link')).toBe(false)
+    expect(label('lib:dispossessed', 'lib:author', 'lib:ursula', 'lib:authorship', 'lib:source', '<https://www.wikidata.org/wiki/Q1213434>').hasAttribute('data-sem-link')).toBe(false)
   })
 
   for (const prefer of ['sparql', 'function'] as const) {
@@ -165,6 +167,35 @@ describe('c:RdfEditor', () => {
       expect(item('lib:dispossessed', 'lib:edition').querySelector('[role=group]')).toBeNull()
     })
   }
+
+  const EXAMPLE = readFileSync(new URL('../demo/gallery/_ex-rdf.ttl', import.meta.url), 'utf8')
+  for (const kind of ['oxigraph', 'wat'] as const)
+    for (const prefer of ['sparql', 'function'] as const) {
+      it(`follows a link in the editing example with a click: current, focused, its arrow re-aimed (${kind}, ${prefer})`, () => {
+        // The recipes example as it is on the site: editable, validated, arrows from the current resource.
+        const m = mount(kind, prefer, EXAMPLE, [], UI + 'ex-rdf-editor')
+        const RCP = 'https://semblance.dev/demo/recipes#'
+        const current = () => m.store.match(m.nn(UI + 'ex-rdf-editor'), m.nn(C + 'current'), null).map((q) => q.object.value)
+        const arrows = () => [...m.editor().querySelectorAll('[data-sem-c=connector]')].map((a) => [a.getAttribute('data-sem-from'), a.getAttribute('data-sem-to')])
+        expect(current()).toEqual([RCP + 'borscht'])
+        const link = m.label('rcp:borscht', 'rcp:author', 'rcp:olena')
+        expect(link.getAttribute('data-sem-link')).toBe('resource')
+        expect(arrows()).toEqual([[link.id, m.label('rcp:olena').id]])
+        m.focusOn(link)
+        m.click(link)
+        expect(current()).toEqual([RCP + 'olena'])
+        expect(m.item('rcp:olena').getAttribute('aria-current')).toBe('true')
+        expect(m.item('rcp:borscht').hasAttribute('aria-current')).toBe(false)
+        expect(m.label('rcp:olena').hasAttribute('data-sem-takes-focus')).toBe(true)
+        // Nothing opened for editing: a click on a link follows it, in an editor too.
+        expect(m.field()).toBeNull()
+        // From this resource: the arrows that touch olena, which is the one from Borscht's author.
+        expect(arrows()).toEqual([[m.label('rcp:borscht', 'rcp:author', 'rcp:olena').id, m.label('rcp:olena').id]])
+        // Every link, then none.
+        m.apply({ remove: m.store.match(m.nn(UI + 'ex-rdf-editor'), m.nn(C + 'arrows'), null), add: [m.f.quad(m.nn(UI + 'ex-rdf-editor'), m.nn(C + 'arrows'), m.nn(C + 'ArrowsOff'))] })
+        expect(arrows()).toEqual([])
+      })
+    }
 
   it('draws arrows for the current resource, for all links, or none', () => {
     const { store, nn, f, editor, apply, click, label } = mount('oxigraph', 'sparql')
@@ -251,9 +282,9 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
         same(step)
       }
       same('initial')
-      // A click does not follow a link in an editor; Enter edits instead.
-      each((x) => x.click(x.label('lib:earthsea', 'lib:author', 'lib:ursula')), 'a plain click')
-      expect(m.store.match(m.nn(EDITOR), m.nn(C + 'current'), null).map((q) => q.object.value)).toEqual([LIB + 'dispossessed'])
+      // A click follows a link in an editor too; Enter edits.
+      each((x) => x.click(x.label('lib:earthsea', 'lib:author', 'lib:ursula')), 'a click on a link')
+      expect(m.store.match(m.nn(EDITOR), m.nn(C + 'current'), null).map((q) => q.object.value)).toEqual([LIB + 'ursula'])
       each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '183'), 'Enter'), 'Enter on a number')
       expect(m.field()!.value).toBe('183')
       expect(m.field()!.hasAttribute('data-sem-takes-focus')).toBe(true)
@@ -282,7 +313,7 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
       expect(m.objects(LIB + 'earthsea', LIB + 'pageCount')).toEqual(['205|integer'])
       // Shift+Enter on a resource: a new statement, "predicate value".
       each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter on a resource')
-      expect(m.field()!.getAttribute('aria-label')).toBe('New statement: predicate value')
+      expect(m.field()!.getAttribute('aria-label')).toBe('predicate value')
       each((x) => x.enter('lib:published "1968"^^xsd:gYear'), 'a new statement')
       expect(m.objects(LIB + 'earthsea', LIB + 'published')).toEqual(['1968|gYear'])
       // Shift+Enter beside an object: another object of its predicate.
@@ -311,7 +342,7 @@ ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
 ui:dt-rdf-editor c:validated true ; c:editable true .
 lib:earthsea lib:pages "many" .`
   const problemsOf = (m: ReturnType<typeof mount>, ...path: string[]) =>
-    [...(m.item(...path).querySelector(':scope > .sem-row > .sem-problems')?.children ?? [])].map((p) => p.textContent)
+    [...(m.item(...path).querySelector(':scope > .sem-problems')?.children ?? [])].map((p) => p.textContent)
 
   for (const kind of ['oxigraph', 'wat'] as const) {
     it(`shows what does not conform inline, and lets go of it once fixed; SPARQL and function alike (${kind})`, () => {
@@ -344,6 +375,44 @@ lib:earthsea lib:pages "many" .`
     })
   }
 
+  const TYPED = `@prefix c: <https://semblance.dev/ns/component#> . @prefix lib: <https://semblance.dev/demo/library#> . @prefix ui: <https://semblance.dev/demo#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+ui:dt-rdf-editor c:editable true .
+lib:earthsea lib:pages "many" .
+lib:rating rdfs:range xsd:decimal .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`types what is written as Turtle does, and as the property expects; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', TYPED), mount(kind, 'function', TYPED)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+        for (const x of both.slice(1)) expect(x.objects(LIB + 'earthsea', LIB + 'note').sort(), step).toEqual(m.objects(LIB + 'earthsea', LIB + 'note').sort())
+      }
+      // A string where the shape says xsd:integer: a number typed over it is an integer.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '"many"'), 'Enter'), 'Enter on a string')
+      each((x) => x.enter('212'), 'a number over it')
+      expect(m.objects(LIB + 'earthsea', LIB + 'pages').sort()).toEqual(['183|integer', '212|integer'])
+      // A date where the shape says xsd:date, though the old value was a string.
+      each((x) => x.apply({ add: [x.f.quad(x.nn(LIB + 'ursula'), x.nn(LIB + 'born'), x.f.literal('soon'))] }), 'a string date')
+      each((x) => x.key(x.label('lib:ursula', 'lib:born', '"soon"'), 'Enter'), 'Enter on it')
+      each((x) => x.enter('1929-10-22'), 'a date')
+      expect(m.objects(LIB + 'ursula', LIB + 'born').sort()).toEqual(['1929-10-21|date', '1929-10-22|date'])
+      // An XSD rdfs:range, for a new statement.
+      each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter')
+      each((x) => x.enter('lib:rating 4'), 'a rating')
+      expect(m.objects(LIB + 'earthsea', LIB + 'rating')).toEqual(['4|decimal'])
+      // Otherwise Turtle's reading: integer, decimal, double, boolean, else a string.
+      for (const [text, typed] of [['2', 'integer'], ['2.5', 'decimal'], ['1e3', 'double'], ['true', 'boolean'], ['two', 'string']]) {
+        each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), `Shift+Enter for ${text}`)
+        each((x) => x.enter(`lib:note ${text}`), `a note ${text}`)
+        // (a store may write the number canonically: 1e3 as 1000)
+        expect(m.objects(LIB + 'earthsea', LIB + 'note').filter((o) => o.endsWith(`|${typed}`)), text).toHaveLength(1)
+      }
+    })
+  }
+
   it('checks what an edit changed: one entry, however many the document has', () => {
     const many = (n: number) =>
       Array.from({ length: n }, (_, i) => `lib:extra${i} a lib:Book ; lib:title "Extra ${i}" ; lib:pages ${i + 1} ; lib:author lib:ursula ; lib:published "1970"^^<http://www.w3.org/2001/XMLSchema#gYear> .\nui:dt-rdf-editor c:entry lib:extra${i} .`).join('\n')
@@ -372,15 +441,15 @@ lib:loose lib:title "Untyped" .`
         both.forEach(act)
         expect(both[1]!.html(), step).toBe(m.html())
       }
-      const options = () => [...m.editor().querySelectorAll('.sem-suggestions > button')].map((b) => b.textContent + (b.classList.contains('sem-required') ? ' *' : ''))
-      const option = (x: ReturnType<typeof mount>, text: string) => [...x.editor().querySelectorAll('.sem-suggestions > button')].find((b) => b.textContent === text)!
+      const options = () => [...m.editor().querySelectorAll('.sem-suggestions > button')].map((b) => b.firstChild!.textContent + (b.classList.contains('sem-required') ? ' *' : ''))
+      const option = (x: ReturnType<typeof mount>, text: string) => [...x.editor().querySelectorAll('.sem-suggestions > button')].find((b) => b.firstChild!.textContent === text)!
       const type = (x: ReturnType<typeof mount>, text: string) => {
         const input = x.field()!
         input.value = text
         input.dispatchEvent(new x.document.defaultView!.Event('input', { bubbles: true }))
       }
       each((x) => x.key(x.label('lib:earthsea'), 'Enter', true), 'Shift+Enter on a book')
-      expect(m.editor().querySelector('.sem-suggestions')!.getAttribute('aria-label')).toBe('What the shapes expect')
+      expect(m.editor().querySelector('.sem-suggestions')!.getAttribute('aria-label')).toBe('Expected here')
       expect(options()).toEqual(['lib:published *', 'lib:author', 'lib:format', 'lib:language', 'lib:language "en"', 'lib:language "uk"', 'lib:pages', 'lib:title'])
       // Typing narrows them.
       each((x) => type(x, 'lang'), 'typing')
@@ -455,6 +524,60 @@ ui:dt-rdf-editor c:editable true .`
     })
   }
 
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`reorders a list by dragging a member to another's place, and refuses other drops there; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', EDITABLE, [], UI + 'rdf-edit'), mount(kind, 'function', EDITABLE, [], UI + 'rdf-edit')]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+        expect(both[1]!.outline(), step).toBe(m.outline())
+      }
+      const keywords = () => m.outline().split('\n').filter((l) => l.includes('lib:keywords'))
+      const row = (x: ReturnType<typeof mount>, word: string) => x.item('lib:dispossessed', 'lib:keywords', '( 3 )', word).getAttribute('data-sem-drop-zone')!
+      const drop = (x: ReturnType<typeof mount>, dragged: string, target: string) => {
+        x.bus.emit(NS.dnd + 'Drop', target, { about: [[NS.dnd + 'into', x.nn(target)], [NS.dnd + 'carrying', x.nn(dragged)]] })
+        x.dom.flush()
+      }
+      // Members are draggable, and drop targets, in an editor.
+      const member = m.item('lib:dispossessed', 'lib:keywords', '( 3 )', '"utopia"')
+      expect(member.hasAttribute('data-sem-drop-zone')).toBe(true)
+      expect(member.hasAttribute('data-sem-drag')).toBe(true)
+      // Up: the last to the first's place, the others down one.
+      each((x) => drop(x, row(x, '"utopia"'), row(x, '"anarchism"')), 'utopia onto anarchism')
+      expect(keywords()).toEqual(['  lib:keywords ( "utopia" "anarchism" "physics" )'])
+      expect(m.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"utopia"').hasAttribute('data-sem-takes-focus')).toBe(true)
+      // Down: the second to the last place.
+      each((x) => drop(x, row(x, '"anarchism"'), row(x, '"physics"')), 'anarchism onto physics')
+      expect(keywords()).toEqual(['  lib:keywords ( "utopia" "physics" "anarchism" )'])
+      // One undoable change each.
+      each((x) => x.click(x.document.querySelector('[data-sem-c=button]')!), 'Undo')
+      expect(keywords()).toEqual(['  lib:keywords ( "utopia" "anarchism" "physics" )'])
+    })
+  }
+
+  it('refuses a statement on a list member\'s place, and a member anywhere but its list', () => {
+    const m = mount('oxigraph', 'sparql', EDITABLE)
+    const k12 = (v: string) => md5(v).slice(0, 12)
+    const reception = (target: string) => {
+      const r = m.store.match(null, m.nn(NS.dnd + 'receptacle'), m.nn(target)).map((q) => q.subject).find((x) => m.store.match(x, m.nn(NS.dnd + 'verdict'), null).length)
+      return r && [m.store.match(r, m.nn(NS.dnd + 'verdict'), null)[0]!.object.value.replace(/^.*#/, ''), m.store.match(r, m.nn(NS.dnd + 'reason'), null)[0]?.object.value]
+    }
+    const member = (word: string) => m.item('lib:dispossessed', 'lib:keywords', '( 3 )', word).getAttribute('data-sem-drop-zone')!
+    const pages = `${EDITOR}/~t-${k12(LIB + 'dispossessed')}/~p-${k12(LIB + 'pages')}`
+    // A statement carried over a member: refused.
+    m.bus.emit(NS.dnd + 'Start', `${pages}/~t-${k12('"387"^^http://www.w3.org/2001/XMLSchema#integer')}`, { about: [] })
+    m.dom.flush()
+    expect(reception(member('"physics"'))).toEqual(['Refused', "only this list's members go here"])
+    m.bus.emit(NS.dnd + 'End', `${pages}/~t-${k12('"387"^^http://www.w3.org/2001/XMLSchema#integer')}`, { about: [] })
+    m.dom.flush()
+    // A member carried over a predicate: refused; over another member of its list: accepted.
+    m.bus.emit(NS.dnd + 'Start', member('"utopia"'), { about: [] })
+    m.dom.flush()
+    expect(reception(pages)).toEqual(['Refused', 'a list member moves within its list'])
+    expect(reception(member('"anarchism"'))).toEqual(['Accepted', undefined])
+  })
+
   it('keeps a large document light: closed resources cost a row each, an edit what it changes', () => {
     const big = (n: number) =>
       '@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .\nui:dt-rdf-editor c:expandDepth 0 .\n' +
@@ -476,5 +599,83 @@ ui:dt-rdf-editor c:editable true .`
     expect(large.edit).toBe(small.edit)
     expect(large.opened).toBe(small.opened)
     expect(large.opened).toBeGreaterThan(0)
+  })
+
+  const FLUID = `@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> .
+ui:dt-rdf-editor c:editable true .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`is fluid from the keyboard: typing edits, the suggestions are a combobox, rows have a menu, a status line says where; SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', FLUID), mount(kind, 'function', FLUID)]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+      }
+      const typeKey = (x: ReturnType<typeof mount>, el: Element, ch: string) => {
+        const e = new x.document.defaultView!.Event('keydown', { bubbles: true, cancelable: true })
+        Object.assign(e, { key: ch, ctrlKey: false, metaKey: false, altKey: false, shiftKey: ch !== ch.toLowerCase() })
+        el.dispatchEvent(e)
+      }
+      const status = () => m.editor().querySelector('.sem-status')!
+      // The status line: viewing, with the keys that apply; focus moves it.
+      expect(status().querySelector('.sem-mode')!.textContent).toBe('Viewing')
+      expect([...status().querySelectorAll('.sem-key')].map((k) => k.textContent)).toEqual(['↵edit', '⇧↵add', '⌫delete', '⇥nest', '⌥↑↓move', '⇧F10menu'])
+      each((x) => x.focusOn(x.label('lib:earthsea', 'lib:pages', '183')), 'focus on a value')
+      expect(status().querySelector('.sem-where')!.textContent).toBe('lib:earthsea › lib:pages › "183"')
+      // Typing a character edits the row, the character typed.
+      each((x) => typeKey(x, x.label('lib:earthsea', 'lib:pages', '183'), '2'), 'typing on a value')
+      expect(m.field()!.value).toBe('2')
+      each((x) => x.focusOn(x.field()!), 'focus in the field')
+      expect(status().querySelector('.sem-mode')!.textContent).toBe('Editing')
+      each((x) => x.enter('205'), 'commit')
+      expect(m.objects(LIB + 'earthsea', LIB + 'pages')).toEqual(['205|integer'])
+      // Typing on a resource starts a statement; Down and Up highlight what the shapes expect, Enter takes it.
+      each((x) => typeKey(x, x.label('lib:earthsea'), 'P'), 'typing on a resource')
+      const input = () => m.field()!
+      expect(input().value).toBe('P')
+      expect(input().getAttribute('role')).toBe('combobox')
+      const listbox = m.document.getElementById(input().getAttribute('aria-controls')!)!
+      expect(listbox.getAttribute('role')).toBe('listbox')
+      expect([...listbox.querySelectorAll('[role=option]')].map((o) => o.firstChild!.textContent)).toEqual(['lib:published', 'lib:pages'])
+      each((x) => x.key(x.field()!, 'ArrowDown'), 'Down')
+      expect(input().getAttribute('aria-activedescendant')).toBe(listbox.querySelector('[role=option]')!.id)
+      expect(listbox.querySelector('[aria-selected=true]')!.firstChild!.textContent).toBe('lib:published')
+      each((x) => x.key(x.field()!, 'ArrowDown'), 'Down again')
+      each((x) => x.key(x.field()!, 'ArrowUp'), 'Up')
+      each((x) => x.key(x.field()!, 'Enter'), 'Enter takes the predicate')
+      expect(input().value).toBe('lib:published ')
+      each((x) => x.enter(x.field()!.value + '"1968"^^xsd:gYear'), 'its value')
+      expect(m.objects(LIB + 'earthsea', LIB + 'published')).toEqual(['1968|gYear'])
+      // A right click opens the row's menu; its items do the editor's reactions; Escape closes it.
+      each((x) => x.contextMenu(x.label('lib:dispossessed', 'lib:keywords', '( 3 )', '"physics"')), 'right click')
+      const items = () => [...m.editor().querySelectorAll('[role=menu] [role=menuitem]')].map((b) => b.firstChild!.textContent)
+      expect(items()).toEqual(['Edit', 'Add a statement', 'Move up', 'Move down', 'Delete'])
+      expect(m.editor().querySelector('[role=menuitem]')!.getAttribute('aria-keyshortcuts')).toBe('Enter')
+      each((x) => x.click([...x.editor().querySelectorAll('[role=menuitem]')].find((b) => b.firstChild!.textContent === 'Move up')!), 'Move up')
+      expect(m.outline()).toContain('lib:keywords ( "physics" "anarchism" "utopia" )')
+      expect(m.editor().querySelector('[role=menu]')).toBeNull()
+      each((x) => x.key(x.label('lib:dispossessed', 'lib:pages'), 'F10', true), 'Shift+F10')
+      expect(items()).toEqual(['Edit', 'Add a statement', 'Open in the Reference', 'Delete'])
+      each((x) => x.key(x.editor().querySelector('[role=menuitem]')!, 'Escape'), 'Escape')
+      expect(m.editor().querySelector('[role=menu]')).toBeNull()
+    })
+  }
+
+  it('refuses a drop where the value would not conform, with the shape\'s reason', () => {
+    const m = mount('oxigraph', 'sparql', FLUID)
+    const k12 = (v: string) => md5(v).slice(0, 12)
+    // Lift Earthsea's 183 (an integer) and carry it over Ursula's lib:born (dates only).
+    const dragged = `${EDITOR}/~t-${k12(LIB + 'earthsea')}/~p-${k12(LIB + 'pages')}/~t-${k12('"183"^^http://www.w3.org/2001/XMLSchema#integer')}`
+    m.bus.emit(NS.dnd + 'Start', dragged, { about: [] })
+    m.dom.flush()
+    const born = `${EDITOR}/~t-${k12(LIB + 'ursula')}/~p-${k12(LIB + 'born')}`
+    const reception = (target: string) => {
+      const r = m.store.match(null, m.nn(NS.dnd + 'receptacle'), m.nn(target)).map((q) => q.subject).find((x) => m.store.match(x, m.nn(NS.dnd + 'verdict'), null).length)
+      return r && [m.store.match(r, m.nn(NS.dnd + 'verdict'), null)[0]!.object.value.replace(/^.*#/, ''), m.store.match(r, m.nn(NS.dnd + 'reason'), null)[0]?.object.value]
+    }
+    expect(reception(born)).toEqual(['Refused', 'born: expected date'])
+    // Where it fits (another book's pages), it is accepted.
+    expect(reception(`${EDITOR}/~t-${k12(LIB + 'dispossessed')}/~p-${k12(LIB + 'pages')}`)).toEqual(['Accepted', undefined])
   })
 })

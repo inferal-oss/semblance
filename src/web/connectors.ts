@@ -11,7 +11,9 @@
 //   - Never into the graph: geometry stays in the DOM. What it says is coarse and on the canvas
 //     only: data-sem-drawn once both ends are found and can be seen.
 //   - An end that is not rendered, hidden, out of view or covered (a sticky bar, a diagram that
-//     stays on top) hides its connector.
+//     stays on top) hides its connector; but an end scrolled out of a box that holds the connector
+//     too (a long tree, a list) while the other end shows is pinned to that box's edge, toward where
+//     it is, and the canvas says which end is away (data-sem-away="from" | "to").
 //   - Colours are the theme's (classes, the connector's tone); a new connector draws itself in
 //     unless motion is calmed (mot:preference, src/layers/motion.ts); routes that
 //     go out to a side (c:Arc) go to the inline end, mirrored right to left.
@@ -37,6 +39,8 @@ interface Plan {
   start?: Pt
   headTo?: string
   headFrom?: string
+  /** The end scrolled out of the box the connector is in, pinned to its edge. */
+  away?: 'from' | 'to'
 }
 
 export interface ConnectorStats {
@@ -199,14 +203,20 @@ export function attachConnectors(host: HTMLElement, opts: ConnectorOptions = {})
     used.add(svg).add(from).add(to)
     if (!shown(from) || !shown(to)) return undefined
     if (svg.getAttribute('data-sem-shown-while') === 'pointed' && !pointed(from)) return undefined
-    const a = from.getBoundingClientRect()
-    const b = to.getBoundingClientRect()
-    if (!seen(from, a) || !seen(to, b)) return undefined
+    let a: Box = from.getBoundingClientRect()
+    let b: Box = to.getBoundingClientRect()
+    const seenA = seen(from, a)
+    const seenB = seen(to, b)
+    let away: 'from' | 'to' | undefined
+    if (seenA && !seenB) (b = pinned(svg, to, b)!) && (away = 'to')
+    else if (seenB && !seenA) (a = pinned(svg, from, a)!) && (away = 'from')
+    else if (!seenA || !seenB) return undefined
+    if (!a || !b) return undefined
     const o = svg.getBoundingClientRect()
     const leaderEl = resolve(svg, 'data-sem-leader')
     if (leaderEl) used.add(leaderEl)
     const shift = (r: DOMRect | Box): Box => ({ left: r.left - o.left, top: r.top - o.top, right: r.right - o.left, bottom: r.bottom - o.top, width: r.width, height: r.height })
-    return route({
+    const planned = route({
       a: shift(a),
       b: shift(b),
       leader: leaderEl ? shift(leaderEl.getBoundingClientRect()) : undefined,
@@ -216,6 +226,28 @@ export function attachConnectors(host: HTMLElement, opts: ConnectorOptions = {})
       roundTo: round(to),
       rtl: rtl(svg),
     })
+    return away ? { ...planned, away } : planned
+  }
+
+  /**
+   * An end scrolled out of a box that scrolls and holds the connector too, as a sliver on that box's
+   * edge toward it (where it would come into view); undefined if it is out of view otherwise.
+   */
+  function pinned(svg: Element, end: Element, r: Box): Box | undefined {
+    for (let box = end.parentElement; box && box !== doc.body && box !== doc.documentElement; box = box.parentElement) {
+      if (box.scrollHeight <= box.clientHeight + 1 && box.scrollWidth <= box.clientWidth + 1) continue
+      const overflow = win.getComputedStyle?.(box)
+      if (!overflow || !/(auto|scroll|hidden)/.test(overflow.overflowY + overflow.overflowX)) continue
+      if (!box.contains(svg)) return undefined
+      const v = box.getBoundingClientRect()
+      const top = v.top + box.clientTop
+      const bottom = top + box.clientHeight
+      if (!seen(box, v)) return undefined
+      if (r.bottom <= top) return { left: r.left, right: r.right, width: r.width, top, bottom: top + 1, height: 1 }
+      if (r.top >= bottom) return { left: r.left, right: r.right, width: r.width, top: bottom - 1, bottom, height: 1 }
+      return undefined
+    }
+    return undefined
   }
 
   const set = (el: Element | null | undefined, name: string, value: string) => {
@@ -241,6 +273,8 @@ export function attachConnectors(host: HTMLElement, opts: ConnectorOptions = {})
     }
     if (p.headTo) set(part('.sem-connector-head[data-sem-end=to]'), 'd', p.headTo)
     if (p.headFrom) set(part('.sem-connector-head[data-sem-end=from]'), 'd', p.headFrom)
+    if (p.away) set(svg, 'data-sem-away', p.away)
+    else if (svg.hasAttribute('data-sem-away')) svg.removeAttribute('data-sem-away'), stats.writes++
     if (!svg.hasAttribute('data-sem-drawn')) svg.setAttribute('data-sem-drawn', ''), stats.writes++
     // A connector that appears draws itself in, unless motion is calmed.
     if (!drawn.has(svg)) {

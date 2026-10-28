@@ -127,6 +127,8 @@ c:ArrowsMode sem:group c:DataGroup . c:RdfEditorKey sem:group c:DataGroup .
 c:RdfEditorAddKey sem:group c:DataGroup . c:RdfEditorEscapeKey sem:group c:DataGroup . c:RdfEditorDeleteKey sem:group c:DataGroup .
 c:RdfEditorNestKey sem:group c:DataGroup . c:RdfEditorOutdentKey sem:group c:DataGroup . c:RdfEditorMoveKey sem:group c:DataGroup .
 c:RdfDraggableRow sem:group c:DataGroup . c:RdfDropRow sem:group c:DataGroup .
+c:RdfEditorTypeKey sem:group c:DataGroup . c:RdfEditorChooseKey sem:group c:DataGroup . c:RdfEditorMenuKey sem:group c:DataGroup .
+c:RdfEditorContextMenu sem:group c:DataGroup . c:RdfMenuEscapeKey sem:group c:DataGroup .
 c:MessageList sem:group c:DataGroup . c:Message sem:group c:DataGroup .
 c:BoardKey sem:group c:DataGroup .
 # Lists an app shows its people, read from the graph: its keyboard shortcuts, and what it remembers.

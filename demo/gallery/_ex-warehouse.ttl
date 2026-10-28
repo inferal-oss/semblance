@@ -195,7 +195,7 @@ wh:desk wh:item wh:tube ; wh:amount wh:one .
 ui:ex-warehouse-counter a c:Card ; c:label "At the counter" ;
     c:note "Choose an item and how many. Sell takes them off the shelf; Restock receives one case from the item's supplier." ;
     c:content ui:ex-warehouse-controls .
-ui:ex-warehouse-controls a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-4 ; pos:align pos:End ;
+ui:ex-warehouse-controls a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-4 ;
     c:children ( ui:ex-warehouse-item ui:ex-warehouse-amount ui:ex-warehouse-actions ) .
 ui:ex-warehouse-item a c:Choice ; c:label "Item" ; c:controls wh:desk ; c:property wh:item .
 ui:ex-warehouse-amount a c:Segmented ; c:label "How many" ; c:controls wh:desk ; c:property wh:amount .

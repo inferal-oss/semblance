@@ -470,9 +470,12 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ; sty:atWidth sty:CompactWidth ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] , [ sty:property "scrollbar-width" ; sty:raw "none" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "nowrap" ] .
+# As wide as its options, never stretched to its container's width: as a grid or flex item (a field's
+# control, a column of a form) it would be blockified and stretched, the pill running on past them.
 [] a sty:StyleRule ; sty:appliesTo c:Segmented ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
                  [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "width" ; sty:raw "fit-content" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "gap" ; sty:raw "2px" ] ,
                  [ sty:property "padding" ; sty:raw "3px" ] ,

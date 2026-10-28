@@ -1117,11 +1117,11 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=table] tbody :is(th, td):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "border-bottom" ; sty:raw "0" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] ,
                  [ sty:property "border-radius" ; sty:raw "5px" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row :is(.sem-label, .sem-count, .sem-twisty):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row :is(.sem-label, .sem-count, .sem-twisty):not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "#ffffff" ] .
 [] a sty:StyleRule ; sty:when sty:Cupertino ;
     sty:part "[data-sem-c=metrics] .sem-metric:not(:where([data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]), [data-sem-theme=cupertino] [data-sem-theme]:not([data-sem-theme=cupertino]) *))" ;
@@ -1182,7 +1182,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "var(--s-focus-offset)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part ":is(input, select, textarea, [data-sem-c=table], [data-sem-c=tree] .sem-label):focus-visible:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is(input, select, textarea, [data-sem-c=table], [data-sem-c=tree] .sem-label, [data-sem-c=rdf-editor] .sem-label):focus-visible:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "1px" ] .
 
@@ -1427,17 +1427,17 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=table] tbody :is(th, td):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "border-bottom" ; sty:raw "1px dotted var(--sem-border)" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row > .sem-label:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row > .sem-label:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-select-bg)" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-select-fg)" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] .
 [] a sty:StyleRule ; sty:when sty:Tracker ;
-    sty:part "[data-sem-c=tree] :is(ul[role=group], .sem-row):not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
-    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-border)" ] ,
-                 [ sty:property "border-style" ; sty:raw "dotted" ] .
+    sty:part ":is([data-sem-c=tree], [data-sem-c=rdf-editor]) [role=group]:not(:where([data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]), [data-sem-theme=tracker] [data-sem-theme]:not([data-sem-theme=tracker]) *))" ;
+    sty:declares [ sty:property "border-width" ; sty:raw "0" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px dotted var(--sem-border-strong)" ] .
 
 # Panels stand out of the page with a bevel; a group box is etched; a specimen's stage is an etched well.
 [] a sty:StyleRule ; sty:when sty:Tracker ;
@@ -1843,7 +1843,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "var(--s-focus-offset)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part ":is(input, select, textarea, [data-sem-c=table], [data-sem-c=tree] .sem-label):focus-visible:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is(input, select, textarea, [data-sem-c=table], [data-sem-c=tree] .sem-label, [data-sem-c=rdf-editor] .sem-label):focus-visible:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "1px" ] .
 
@@ -2088,17 +2088,17 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=table] tbody :is(th, td):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "border-bottom" ; sty:raw "1px dotted var(--sem-border)" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row > .sem-label:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row > .sem-label:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "var(--bv-select-bg)" ] ,
                  [ sty:property "color" ; sty:raw "var(--bv-select-fg)" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] .
 [] a sty:StyleRule ; sty:when sty:Classic ;
-    sty:part "[data-sem-c=tree] :is(ul[role=group], .sem-row):not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
-    sty:declares [ sty:property "border-color" ; sty:raw "var(--sem-border)" ] ,
-                 [ sty:property "border-style" ; sty:raw "dotted" ] .
+    sty:part ":is([data-sem-c=tree], [data-sem-c=rdf-editor]) [role=group]:not(:where([data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]), [data-sem-theme=classic] [data-sem-theme]:not([data-sem-theme=classic]) *))" ;
+    sty:declares [ sty:property "border-width" ; sty:raw "0" ] ,
+                 [ sty:property "border-inline-start" ; sty:raw "1px dotted var(--sem-border-strong)" ] .
 
 # Panels stand out of the page with a bevel; a group box is etched; a specimen's stage is an etched well.
 [] a sty:StyleRule ; sty:when sty:Classic ;
@@ -2506,7 +2506,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border-radius" ; sty:raw "var(--wob-b)" ] ,
                  [ sty:property "font-weight" ; sty:raw "700" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part ":is(input, select, textarea, [role=tab], :is([data-sem-c=nav-list] button, [data-sem-c=nav-link]), [data-sem-c=segmented] button, [data-sem-c=menu-item], .sem-window-control, [data-sem-c=tree] .sem-label, [data-sem-c=table]):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is(input, select, textarea, [role=tab], :is([data-sem-c=nav-list] button, [data-sem-c=nav-link]), [data-sem-c=segmented] button, [data-sem-c=menu-item], .sem-window-control, [data-sem-c=tree] .sem-label, [data-sem-c=rdf-editor] .sem-label, [data-sem-c=table]):focus-visible:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "outline" ; sty:raw "var(--s-focus)" ] ,
                  [ sty:property "outline-offset" ; sty:raw "2px" ] .
 
@@ -2661,10 +2661,10 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part "[data-sem-c=table] tbody tr:nth-child(even):not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "transparent" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "background" ; sty:raw "linear-gradient(100deg, transparent 1%, var(--hl-strong) 3% 94%, transparent 98%)" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row > .sem-label:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row > .sem-label:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] .
 
 # Sheets of paper: cards, specimens and panels are inked and set down slightly askew; menus and
@@ -3238,12 +3238,12 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border-radius" ; sty:raw "2px" ] ,
                  [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "position" ; sty:raw "relative" ] ,
                  [ sty:property "background" ; sty:raw "var(--fl-subtle-hover)" ] ,
                  [ sty:property "border-radius" ; sty:raw "4px" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
                  [ sty:property "position" ; sty:raw "absolute" ] ,
                  [ sty:property "left" ; sty:raw "0" ] ,
@@ -3254,7 +3254,7 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
                  [ sty:property "border-radius" ; sty:raw "2px" ] ,
                  [ sty:property "background" ; sty:raw "var(--sem-accent-9)" ] .
 [] a sty:StyleRule ; sty:when sty:Fluent ;
-    sty:part "[data-sem-c=tree] [aria-selected=\"true\"] > .sem-row > .sem-label:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
+    sty:part ":is([data-sem-c=tree] [aria-selected=\"true\"], [data-sem-c=rdf-editor] [aria-current=\"true\"]) > .sem-row > .sem-label:not(:where([data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]), [data-sem-theme=fluent] [data-sem-theme]:not([data-sem-theme=fluent]) *))" ;
     sty:declares [ sty:property "color" ; sty:raw "var(--sem-text)" ] ,
                  [ sty:property "font-weight" ; sty:raw "400" ] .
 

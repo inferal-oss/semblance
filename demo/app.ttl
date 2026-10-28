@@ -460,7 +460,7 @@ WHERE {
 ui:performance a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
     c:children ( ui:perfToolbar ui:perfWorkspace ) .
 
-ui:perfToolbar a c:Stack ; pos:direction pos:Row ; pos:gap tok:space-3 ; pos:align pos:End ;
+ui:perfToolbar a c:Stack ; pos:layout pos:FieldRow ; pos:gap tok:space-3 ;
     c:children ( ui:sizes ui:runButton ui:clearButton ui:perfProgress ) .
 ui:sizes a c:TextField ; c:label "Sizes" ; c:value "100,1000" ; c:placeholder "100,1000,10000" .
 ui:runButton a c:Button ; c:label "Run matrix" ; sty:intent sty:Primary .

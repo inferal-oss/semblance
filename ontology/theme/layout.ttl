@@ -363,10 +363,13 @@ sty:Raised rdfs:label "Raised"@en ; sem:order 2 .
 # the columns.
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> [data-sem-row-span] > :nth-child(n+3):not([role=dialog], [role=listbox])" ;
     sty:declares [ sty:property "contain" ; sty:raw "inline-size" ] .
-# What is not a field (a button acting on the fields) sits beside the controls, at its own width.
+# What is not a field (a button acting on the fields, a switch, a segmented control) sits beside the
+# controls, at its own width, centred on their row: a shorter control (a switch) lines up on their
+# middle, one of the control height on their edges.
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:part "> :not([data-sem-row-span])" ;
     sty:declares [ sty:property "grid-row" ; sty:raw "2" ] ,
                  [ sty:property "justify-self" ; sty:raw "start" ] ,
+                 [ sty:property "align-self" ; sty:raw "center" ] ,
                  [ sty:property "margin-block-start" ; sty:token tok:space-2 ] .
 # On a phone the fields wrap, two or one to a line (each line with rows of its own).
 [] a sty:StyleRule ; sty:when pos:FieldRow ; sty:atWidth sty:CompactWidth ;
