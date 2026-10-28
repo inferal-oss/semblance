@@ -148,7 +148,7 @@ c:LiveExampleRendering-fn a sem:Rule ; sem:implements c:LiveExampleRendering ; s
 # Tabs and panels are keyed by their place in c:sources. With c:showSources false there are no
 # tabs and no editor. With c:dataPreview the body has panes - the rendering, the data, the text -
 # after a caption of what happened (~flow) and before a layer for the arrows between them (~links),
-# which c:LiveExampleFlow fills; the host mounts the data viewer in the data pane (~data).
+# which c:LiveExampleFlow fills; the host mounts the data viewer in the data pane's slot (~data).
 c:LiveExampleRendering-sparql-screen a sem:Rule ;
     sem:implements c:LiveExampleRendering ;
     sem:modality mod:Screen ;
@@ -189,7 +189,7 @@ CONSTRUCT {
   ?dataLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?dataPhrase .
   ?dataHead a rdfhtml:P ; rdfhtml:class "sem-live-modality" ; rdfhtml:hasChild ?dataHeadText ; ord:immediatelyPrecedes ?data .
   ?dataHeadText a rdfhtml:Text ; rdfhtml:data ?dataPhrase .
-  ?data a rdfhtml:Div ; rdfhtml:class "sem-live-data" .
+  ?data a rdfhtml:Div ; rdfhtml:class "sem-live-data" ; sem:slot ?dataSlotName .
   ?textPane a rdfhtml:Div ; rdfhtml:class "sem-live-pane" ; ord:immediatelyPrecedes ?links .
   ?links a rdfhtml:Div ; rdfhtml:class "sem-live-links" .
   ?textParent rdfhtml:hasChild ?textHead, ?textSlot .
@@ -260,7 +260,8 @@ WHERE {
     BIND(IF(EXISTS { $this c:edited|c:interacted ?changed FILTER(STR(?changed) = "true") }, ?none, true) AS ?pristine)
     OPTIONAL { $this c:renderTime ?ms }
     BIND(CONCAT(STRBEFORE(STR(?timePhrase0), "{ms}"), STR(?ms), STRAFTER(STR(?timePhrase0), "{ms}")) AS ?timeData)
-    BIND(IF(BOUND(?ms), IRI(CONCAT(STR($this), "/~time")), ?none) AS ?time)
+    # The time's place is kept before it is known (a page rendered beforehand, until its sandbox runs): the bar does not move when it is.
+    BIND(IRI(CONCAT(STR($this), "/~time")) AS ?time)
     BIND(IF(BOUND(?ms), IRI(CONCAT(STR($this), "/~time-text")), ?none) AS ?timeText)
     BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?rootRole)
     BIND(IF(?caption != "", IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?rootLabel)
@@ -323,6 +324,7 @@ WHERE {
     BIND(IF(?withData, IRI(CONCAT(STR($this), "/~data-head")), ?none) AS ?dataHead)
     BIND(IF(?withData, IRI(CONCAT(STR($this), "/~data-head-text")), ?none) AS ?dataHeadText)
     BIND(IF(?withData, IRI(CONCAT(STR($this), "/~data")), ?none) AS ?data)
+    BIND(IF(?withData, CONCAT(STR($this), " data"), ?none) AS ?dataSlotName)
     BIND(IF(?withData, IRI(CONCAT(STR($this), "/~links")), ?none) AS ?links)
     # The Text modality, when asked for.
     BIND(EXISTS { $this c:textPreview ?tp FILTER(STR(?tp) = "true") } AS ?withText)

@@ -147,9 +147,31 @@ that belongs to the engine (#9).
 - it compares tag names case-blind, because a parser may lower SVG names;
 - on a mismatch (another tag, other attributes) it patches that node as a flush would, and counts it.
 
-Host-owned slots keep their content: islands' custom elements, live examples. A live example's
-sandbox is built when its slot comes near the view (`Sandboxes`' `defer`), not during the first
-moments.
+Host-owned slots keep their content: islands' custom elements, live examples.
+
+## Live examples
+
+A live example (`c:LiveExample`) runs in a sandbox of its own: a store, a runtime and projections
+of its own (`src/sandbox.ts`). With `sandboxes` in the render options (`renderSite` and the
+build pass them: a store of the site's kind), the server builds the sandbox of every example the
+page shows, as the browser builds it: the same sources, the same languages, the same turn limit
+(1.5 s). It serializes the rendering, the text (`c:textPreview`) and the data's RDF editor
+(`c:dataPreview`) into the example's slots, then lets the sandbox go: one sandbox per example
+shown, built and disposed while the page renders (`prerenderSandboxes`). The page shows the
+example before any script runs. Its frame says `data-sem-state="pending"` until the client's
+sandbox runs.
+
+A build that fails writes its problem to the page's graph, as the browser's host does. The frame
+then shows it (`broken`), and the panes stay empty. A styled example (one that declares its own
+`sty:` rules) carries its scoped styles in a `<style>` beside its rendering.
+
+The client still builds a sandbox when its slot comes near the view (`Sandboxes`' `defer`), not
+during the first moments. The first sandbox of a slot the server rendered takes its elements
+over (`DomRenderer.adopt`, `Sandboxes.adopted`) rather than replacing them: its first projection
+is the server's, so no node is created, and nothing flashes or moves. Its own stylesheet replaces
+the server's `<style>`. The frame then reads `live`. A source edit remembered from earlier in the
+session differs from what the server rendered, so it is patched, like any change. A click on a
+pre-rendered example before its sandbox runs does nothing.
 
 `CAPTURE_SCRIPT` sits right after the mount element. It keeps clicks (on anything but a link)
 and submits, holding them back, and it keeps `input` and `change` while letting them happen (what

@@ -9,7 +9,9 @@
 // (c:RdfEditor, c:diff) inside the sandbox, over the subjects of that CONSTRUCT, mounted in the
 // example's data slot: what the interactions added and removed since it was built, from the
 // sandbox's own change log. How many triples of the data the last interaction added and removed is
-// written back (c:triplesAdded/Removed) for the caption.
+// written back (c:triplesAdded/Removed) for the caption. A server renders the examples it shows the
+// same way (prerenderSandboxes, docs/SSR.md), and the client's first sandbox of such a slot takes the
+// server's elements over.
 import { Parser } from 'n3'
 import type { Quad, Term } from '@rdfjs/types'
 import { EventBus } from './behaviour/events.ts'
@@ -19,6 +21,7 @@ import { DEFAULT_LAYERS, MOD, NS, RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, SEM, S
 import { compactIri } from './prefixes.ts'
 import { type Delta, mint, quadKey } from './rdf.ts'
 import { DomRenderer } from './render/dom.ts'
+import { toHTML } from './render/serialize.ts'
 import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
@@ -225,6 +228,213 @@ export function completeSource(text: string): string {
   return missing.length ? missing.map(([p, ns]) => `@prefix ${p}: <${ns}> .`).join('\n') + '\n\n' + text : text
 }
 
+// --- a live example in the site's graph ----------------------------------------------------------
+
+/** What the site's graph says of a live example: its sources (each editor's text as edited, else as written), what it shows, and how. */
+export interface ExampleSpec {
+  sources: SandboxSource[]
+  /** c:exampleRoot: the root of its projection. */
+  root?: string
+  /** c:textPreview: shown in the Text modality too. */
+  withText: boolean
+  /** c:dataPreview: the CONSTRUCT of its data. */
+  dataQuery?: string
+}
+
+/** A live example as the site's graph describes it now. */
+export function exampleSpec(store: GraphStore, example: string): ExampleSpec {
+  const f = store.factory
+  const dg = f.defaultGraph()
+  const one = (s: Term, p: string) => store.match(s, f.namedNode(p), null, dg)[0]?.object
+  const ex = f.namedNode(example)
+  const sources: SandboxSource[] = []
+  for (let cell = one(ex, LIVE.sources); cell && cell.value !== RDF_NIL && sources.length < 64; cell = one(cell, RDF_REST)) {
+    const editor = one(cell, RDF_FIRST)
+    if (!editor) continue
+    const text = one(editor, LIVE.value)?.value ?? one(editor, LIVE.original)?.value ?? ''
+    sources.push({ editor: editor.value, name: one(editor, LIVE.label)?.value ?? editor.value.replace(/^.*[#/]/, ''), text })
+  }
+  return {
+    sources,
+    root: one(ex, LIVE.exampleRoot)?.value,
+    withText: store.match(ex, f.namedNode(LIVE.textPreview), null, dg).some((q) => q.object.value === 'true'),
+    dataQuery: one(ex, LIVE.dataPreview)?.value,
+  }
+}
+
+/** Build the sandbox of an example as the site's graph describes it (a build with no root is a problem). */
+function buildExample(spec: ExampleSpec, opts: SandboxOptions & { languages?: string[] }): Build {
+  return spec.root
+    ? buildSandbox(spec.sources, spec.root, { ...opts, withText: spec.withText })
+    : { problems: [{ message: 'The example names nothing to show (c:exampleRoot).', severity: 'error' as const }], ms: 0 }
+}
+
+/** What a build or an interaction found, as written to the site's graph (only what is given changes). */
+export interface SandboxStatus {
+  state?: string
+  problems?: SandboxProblem[]
+  ms?: number
+  edited?: boolean
+  interacted?: boolean
+}
+
+/** The change to the site's graph that says `status` of `example` (empty when it says so already). */
+export function statusDelta(store: GraphStore, example: string, status: SandboxStatus): Delta {
+  const f = store.factory
+  const dg = f.defaultGraph()
+  const s = f.namedNode(example)
+  const nn = (iri: string) => f.namedNode(iri)
+  const integer = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
+  const current: Quad[] = []
+  const given = [
+    [LIVE.sandboxState, status.state],
+    [LIVE.problem, status.problems],
+    [LIVE.renderTime, status.ms],
+    [LIVE.edited, status.edited],
+    [LIVE.interacted, status.interacted],
+  ] as const
+  for (const [p, v] of given) {
+    if (v === undefined) continue
+    for (const q of store.match(s, nn(p), null, dg)) {
+      current.push(q)
+      if (p === LIVE.problem) current.push(...store.match(q.object, null, null, dg))
+    }
+  }
+  const desired: Quad[] = []
+  if (status.state) desired.push(f.quad(s, nn(LIVE.sandboxState), nn(status.state)))
+  if (status.ms !== undefined) desired.push(f.quad(s, nn(LIVE.renderTime), integer(status.ms)))
+  if (status.edited) desired.push(f.quad(s, nn(LIVE.edited), f.literal('true', nn(XSD_BOOLEAN))))
+  if (status.interacted) desired.push(f.quad(s, nn(LIVE.interacted), f.literal('true', nn(XSD_BOOLEAN))))
+  ;(status.problems ?? []).slice(0, 20).forEach((p, i) => {
+    const node = nn(`${example}/problem-${i}`)
+    desired.push(
+      f.quad(s, nn(LIVE.problem), node),
+      f.quad(node, nn(RDF_TYPE), nn(LIVE.SandboxProblem)),
+      f.quad(node, nn(SEM.order), integer(i)),
+      f.quad(node, nn(LIVE.message), f.literal(p.message)),
+      f.quad(node, nn(STY.tone), nn(NS.sty + (p.severity === 'error' ? 'Danger' : 'Warning'))),
+    )
+    if (p.source) desired.push(f.quad(node, nn(LIVE.inSource), nn(p.source)))
+    if (p.line !== undefined) desired.push(f.quad(node, nn(LIVE.sourceLine), integer(p.line)))
+  })
+  const keys = new Set(desired.map(quadKey))
+  const had = new Set(current.map(quadKey))
+  return { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
+}
+
+/** The example's data (c:dataPreview) in its sandbox now: the CONSTRUCT, with Semblance's prefixes and the sources' own declared. */
+function readData(sandbox: Sandbox, query: string, sources: SandboxSource[]): Quad[] | undefined {
+  const prefixes = { ...NS, ...declared(sources.map((s) => s.text).join('\n')) }
+  const head = Object.entries(prefixes).map(([p, ns]) => `PREFIX ${p}: <${ns}>`).join('\n')
+  try {
+    return sandbox.store.construct(head + '\n' + query, [sandbox.store.factory.defaultGraph()])
+  } catch (e) {
+    console.warn('[semblance] the data of a live example could not be read', e)
+    return undefined
+  }
+}
+
+/**
+ * The diff viewer's entries: the data's subjects (`seen`, since the sandbox was built: one whose
+ * statements all went still shows them, removed), and the sources' own prefixes, so it writes their names.
+ */
+function showData(sandbox: Sandbox, quads: Quad[], seen: Set<string>, sources: SandboxSource[]): void {
+  const own = declared(sources.map((s) => s.text).join('\n'))
+  const bf = sandbox.store.factory
+  const viewer = bf.namedNode(DATA_VIEWER)
+  const entry = bf.namedNode(c + 'entry')
+  for (const q of quads) if (q.subject.termType === 'NamedNode') seen.add(q.subject.value)
+  const desired = [...seen].map((iri) => bf.quad(viewer, entry, bf.namedNode(iri)))
+  Object.entries(own).forEach(([p, ns], i) => {
+    const decl = bf.namedNode(`${DATA_VIEWER}-prefix-${i}`)
+    desired.push(bf.quad(decl, bf.namedNode(NS.sh + 'prefix'), bf.literal(p)), bf.quad(decl, bf.namedNode(NS.sh + 'namespace'), bf.literal(ns, bf.namedNode(NS.xsd + 'anyURI'))))
+  })
+  const current = [...sandbox.store.match(viewer, entry, null), ...Object.keys(own).flatMap((_, i) => sandbox.store.match(bf.namedNode(`${DATA_VIEWER}-prefix-${i}`), null, null))]
+  const want = new Set(desired.map(quadKey))
+  const have = new Set(current.map(quadKey))
+  const delta: Delta = { remove: current.filter((q) => !want.has(quadKey(q))), add: desired.filter((q) => !have.has(quadKey(q))) }
+  if (delta.add.length || delta.remove.length) sandbox.runtime.apply(delta)
+}
+
+/**
+ * The data's viewer in a built sandbox: a read-only RDF editor in diff mode over the data's
+ * subjects, with its entries in place before it is first projected (so its first rendering, on a
+ * server or in the browser, is the same).
+ */
+function projectData(sandbox: Sandbox, query: string, sources: SandboxSource[], seen: Set<string>, opts: SandboxOptions & { languages?: string[] }): Projection {
+  const sf = sandbox.store.factory
+  const viewer = sf.namedNode(DATA_VIEWER)
+  sandbox.runtime.apply({
+    add: [sf.quad(viewer, sf.namedNode(RDF_TYPE), sf.namedNode(c + 'RdfEditor')), sf.quad(viewer, sf.namedNode(c + 'diff'), sf.literal('true', sf.namedNode(XSD_BOOLEAN)))],
+    remove: [],
+  })
+  const quads = readData(sandbox, query, sources)
+  if (quads) showData(sandbox, quads, seen, sources)
+  return (sandbox.data = sandbox.runtime.project(
+    { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data' },
+    (e) => console.warn('[semblance] the data of a live example', e.message),
+  ))
+}
+
+/** The attribute of a sandbox's own element (its styles are scoped to it). */
+const SANDBOX_ATTRIBUTE = 'data-sem-sandbox'
+/** The attribute of the style a server put beside a styled sandbox's rendering (the client's own sheet replaces it). */
+const SANDBOX_STYLES_ATTRIBUTE = 'data-sem-sandbox-styles'
+
+/** The slot names of a live example (sem:slot in its renderings): the rendering, the text, the data. */
+export const slotsOf = (example: string) => ({ screen: example, text: `${example} text`, data: `${example} data` })
+
+export interface PrerenderOptions extends SandboxOptions {
+  /** The site's projection roots: an example is rendered when it is shown under them. */
+  roots: Iterable<string>
+  /** The site's stylesheet, or how to get it (a styled sandbox's own rules are what it adds). */
+  siteCss?: string | (() => string)
+}
+
+/**
+ * Server-side rendering of the site's live examples: each one shown has its sandbox built as the
+ * browser builds it (its sources, a store of its own, the same turn limit), its rendering, text
+ * and data serialized for its slots, and is let go. A build that fails writes its problems to the
+ * site's graph, as the browser's host does. The client takes the slots over (Sandboxes.mount).
+ * Returns what each slot holds, by its name (toHTML's `slots`).
+ */
+export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: PrerenderOptions): Map<string, string> {
+  const out = new Map<string, string>()
+  const store = runtime.store
+  const f = store.factory
+  const roots = new Set(opts.roots)
+  const languages = [...screen.engine.languages]
+  let n = 0
+  for (const q of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(LIVE.LiveExample), f.defaultGraph())) {
+    const iri = q.subject.value
+    const slots = slotsOf(iri)
+    if (!screen.index.slots.has(slots.screen) || !screen.index.isShown(iri, roots)) continue
+    const spec = exampleSpec(store, iri)
+    const built = buildExample(spec, { ...opts, languages })
+    const sandbox = built.sandbox
+    if (!sandbox) {
+      // What the browser's host writes of a build that failed (and nothing was ever shown).
+      const delta = statusDelta(store, iri, { state: LIVE.Broken, problems: built.problems })
+      if (delta.add.length || delta.remove.length) runtime.apply(delta)
+      continue
+    }
+    try {
+      const id = `ssr-${++n}`
+      const css = sandbox.styled ? scopedCss(compileStyles(sandbox.store), typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), `[${SANDBOX_ATTRIBUTE}="${id}"]`) : ''
+      const style = css ? `<style ${SANDBOX_STYLES_ATTRIBUTE}>${css.replace(/<\/style/gi, '<\\/style')}</style>` : ''
+      out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}">${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
+      if (sandbox.text && screen.index.slots.has(slots.text)) out.set(slots.text, `<div>${toHTML(sandbox.text.index, sandbox.root)}</div>`)
+      if (spec.dataQuery && screen.index.slots.has(slots.data)) {
+        const data = projectData(sandbox, spec.dataQuery, spec.sources, new Set(), { ...opts, languages })
+        out.set(slots.data, `<div>${toHTML(data.index, DATA_VIEWER)}</div>`)
+      }
+    } finally {
+      sandbox.runtime.dispose()
+    }
+  }
+  return out
+}
+
 // --- the host effect -------------------------------------------------------------------------------
 
 export interface SandboxesOptions extends SandboxOptions {
@@ -316,6 +526,8 @@ export class Sandboxes {
   private writing = false
   /** Builds done, for tests and cost checks. */
   builds = 0
+  /** What taking over server-rendered slots found (tests, performance marks): nodes paired, and those patched. */
+  readonly adopted = { nodes: 0, mismatches: 0 }
 
   constructor(
     readonly runtime: Runtime,
@@ -449,31 +661,24 @@ export class Sandboxes {
     }, ms)
   }
 
+  /** The example as the site's graph describes it (its editors are followed). */
+  private spec(example: string): ExampleSpec {
+    const spec = exampleSpec(this.runtime.store, example)
+    for (const s of spec.sources) this.editorOf.set(s.editor!, example)
+    return spec
+  }
+
   /** The example's sources from the site's graph: each editor's text as edited, else as written. */
   private sources(example: string): SandboxSource[] {
-    const store = this.runtime.store
-    const f = store.factory
-    const dg = f.defaultGraph()
-    const one = (s: Term, p: string) => store.match(s, f.namedNode(p), null, dg)[0]?.object
-    const out: SandboxSource[] = []
-    for (let cell = one(f.namedNode(example), LIVE.sources); cell && cell.value !== RDF_NIL && out.length < 64; cell = one(cell, RDF_REST)) {
-      const editor = one(cell, RDF_FIRST)
-      if (!editor) continue
-      this.editorOf.set(editor.value, example)
-      const text = one(editor, LIVE.value)?.value ?? one(editor, LIVE.original)?.value ?? ''
-      out.push({ editor: editor.value, name: one(editor, LIVE.label)?.value ?? editor.value.replace(/^.*[#/]/, ''), text })
-    }
-    return out
+    return this.spec(example).sources
   }
 
   private build(m: Mounted) {
     const store = this.runtime.store
     const f = store.factory
-    const example = f.namedNode(m.iri)
-    const sources = this.sources(m.iri)
+    const spec = this.spec(m.iri)
+    const sources = spec.sources
     const key = JSON.stringify(sources.map((s) => s.text))
-    const root = store.match(example, f.namedNode(LIVE.exampleRoot), null, f.defaultGraph())[0]?.object.value
-    const withText = store.match(example, f.namedNode(LIVE.textPreview), null, f.defaultGraph()).some((q) => q.object.value === 'true')
     const edited = sources.some((s) => {
       const editor = f.namedNode(s.editor!)
       const original = store.match(editor, f.namedNode(LIVE.original), null)[0]?.object.value
@@ -492,9 +697,7 @@ export class Sandboxes {
     // A build is a turn of the site's watchdog (no budget of its own there): a hang it causes is blamed on the example.
     const wd = this.runtime.watchdog
     const built = wd.turn(() => {
-      const b = root
-        ? buildSandbox(sources, root, { ...this.opts, languages: this.opts.languages?.(), withText })
-        : { problems: [{ message: 'The example names nothing to show (c:exampleRoot).', severity: 'error' as const }], ms: 0 }
+      const b = buildExample(spec, { ...this.opts, languages: this.opts.languages?.() })
       wd.note('rule', LIVE.LiveExample, m.iri, 1, now() - t0)
       return b
     })
@@ -504,44 +707,55 @@ export class Sandboxes {
     this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited, interacted: built.sandbox ? false : undefined })
   }
 
-  /** Put a built sandbox in the slot, in place of the one there (whose bus and styles go with it). */
+  /**
+   * Put a built sandbox in the slot, in place of the one there (whose bus and styles go with it).
+   * The first sandbox of a slot that a server rendered (prerenderSandboxes) takes its elements over
+   * instead: its first projection is the server's, so no node is created and nothing flashes.
+   */
   private mount(m: Mounted, sandbox: Sandbox) {
     const doc = m.slot.ownerDocument
     const n = ++sandboxes
-    const host = doc.createElement('div')
-    host.setAttribute('data-sem-sandbox', String(n))
+    const textSlot = sandbox.text && (this.opts.renderer.nodeOf(mint(m.iri, 'text')) as Element | undefined)
+    const dataQuery = this.dataQuery(m)
+    const dataSlot = dataQuery && (this.opts.renderer.nodeOf(mint(m.iri, 'data')) as Element | undefined)
+    // What a server rendered in the slots: the sandbox's element, and the text's and the data's.
+    const served = !m.sandbox ? ([...m.slot.children].find((el) => el.getAttribute(SANDBOX_ATTRIBUTE)?.startsWith('ssr-')) ?? null) : null
+    const servedIn = (slot: Element | undefined | '') => (served && slot && slot.firstElementChild?.localName === 'div' ? slot.firstElementChild : null)
+    const taken: Element[] = []
+    const hostIn = (own: Element | null) => (own ? (taken.push(own), own) : doc.createElement('div'))
+    const host = hostIn(served)
+    host.setAttribute(SANDBOX_ATTRIBUTE, String(n))
     const renderer = new DomRenderer(sandbox.screen.index, host, sandbox.root)
     let textRenderer: DomRenderer | undefined
-    const textSlot = sandbox.text && (this.opts.renderer.nodeOf(mint(m.iri, 'text')) as Element | undefined)
     let textHost: Element | undefined
     if (sandbox.text && textSlot) {
-      textHost = doc.createElement('div')
+      textHost = hostIn(servedIn(textSlot))
       textRenderer = new DomRenderer(sandbox.text.index, textHost, sandbox.root)
     }
     // The data: a read-only RDF editor in diff mode, in the sandbox, over the data's subjects.
     let dataRenderer: DomRenderer | undefined
-    const dataSlot = this.dataQuery(m) && (this.opts.renderer.nodeOf(mint(m.iri, 'data')) as Element | undefined)
     let dataHost: Element | undefined
-    if (dataSlot) {
-      const sf = sandbox.store.factory
-      const viewer = sf.namedNode(DATA_VIEWER)
-      sandbox.runtime.apply({
-        add: [sf.quad(viewer, sf.namedNode(RDF_TYPE), sf.namedNode(c + 'RdfEditor')), sf.quad(viewer, sf.namedNode(c + 'diff'), sf.literal('true', sf.namedNode(XSD_BOOLEAN)))],
-        remove: [],
-      })
-      sandbox.data = sandbox.runtime.project(
-        { layers: this.opts.layers ?? DEFAULT_LAYERS, prefer: this.opts.prefer, functions: this.opts.functions, languages: this.opts.languages?.(), roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data' },
-        (e) => console.warn('[semblance] the data of a live example', e.message),
-      )
-      dataHost = doc.createElement('div')
-      dataRenderer = new DomRenderer(sandbox.data.index, dataHost, DATA_VIEWER)
+    const seen = new Set<string>()
+    if (dataQuery && dataSlot) {
+      const data = projectData(sandbox, dataQuery, this.sources(m.iri), seen, { ...this.opts, languages: this.opts.languages?.() })
+      dataHost = hostIn(servedIn(dataSlot))
+      dataRenderer = new DomRenderer(data.index, dataHost, DATA_VIEWER)
     }
     const flush = () => {
       renderer.flush()
       textRenderer?.flush()
       dataRenderer?.flush()
     }
-    flush()
+    // Rendered on the server: adopted as it is (what differs, an edit remembered, is patched).
+    for (const r of [renderer, textRenderer, dataRenderer]) {
+      if (!r) continue
+      if (!taken.includes(r.host)) r.flush()
+      else {
+        const a = r.adopt()
+        this.adopted.nodes += a.nodes
+        this.adopted.mismatches += a.mismatches
+      }
+    }
     const bus = new EventBus(sandbox.runtime, sandbox.screen, { prefer: this.opts.prefer })
     const failed = (e: Error) => this.write(m.iri, { problems: [{ message: e.message, severity: 'error' }] })
     const detachBus = bus.attach(
@@ -578,17 +792,18 @@ export class Sandboxes {
     const detachRefresh = sandbox.runtime.onRefresh(flush)
     const detachTimer = sandbox.runtime.onTimer(flush)
     const sheet = sandbox.styled ? this.sheet(doc, sandbox.store, n) : undefined
-    // The new rendering replaces the old in one step.
+    // The new rendering replaces the old in one step (the server's styles go once its own are in).
     this.unmountSandbox(m)
-    m.slot.replaceChildren(host)
+    if (!taken.includes(host)) m.slot.replaceChildren(host)
+    else for (const style of [...m.slot.children]) if (style.hasAttribute(SANDBOX_STYLES_ATTRIBUTE)) style.remove()
     const detachPopups = attachAnchoredPopups(host, node => !renderer.inSlot(node))
-    if (textSlot && textHost) textSlot.replaceChildren(textHost)
-    if (dataSlot && dataHost) dataSlot.replaceChildren(dataHost)
+    if (textSlot && textHost && !taken.includes(textHost)) textSlot.replaceChildren(textHost)
+    if (dataSlot && dataHost && !taken.includes(dataHost)) dataSlot.replaceChildren(dataHost)
     m.sandbox = sandbox
     m.renderer = renderer
     m.textRenderer = textRenderer
     m.dataRenderer = dataRenderer
-    m.dataSubjects = new Set()
+    m.dataSubjects = seen
     m.sheet = sheet
     this.followData(m, sandbox, false)
     m.detach = () => {
@@ -629,48 +844,8 @@ export class Sandboxes {
   }
 
   /** Write what a build found to the site's graph (only what changed; what is not given stays), and patch the site. */
-  private write(example: string, status: { state?: string; problems?: SandboxProblem[]; ms?: number; edited?: boolean; interacted?: boolean }) {
-    const store = this.runtime.store
-    const f = store.factory
-    const dg = f.defaultGraph()
-    const s = f.namedNode(example)
-    const nn = (iri: string) => f.namedNode(iri)
-    const integer = (n: number) => f.literal(String(n), nn(XSD_INTEGER))
-    const current: Quad[] = []
-    const given = [
-      [LIVE.sandboxState, status.state],
-      [LIVE.problem, status.problems],
-      [LIVE.renderTime, status.ms],
-      [LIVE.edited, status.edited],
-      [LIVE.interacted, status.interacted],
-    ] as const
-    for (const [p, v] of given) {
-      if (v === undefined) continue
-      for (const q of store.match(s, nn(p), null, dg)) {
-        current.push(q)
-        if (p === LIVE.problem) current.push(...store.match(q.object, null, null, dg))
-      }
-    }
-    const desired: Quad[] = []
-    if (status.state) desired.push(f.quad(s, nn(LIVE.sandboxState), nn(status.state)))
-    if (status.ms !== undefined) desired.push(f.quad(s, nn(LIVE.renderTime), integer(status.ms)))
-    if (status.edited) desired.push(f.quad(s, nn(LIVE.edited), f.literal('true', nn(XSD_BOOLEAN))))
-    if (status.interacted) desired.push(f.quad(s, nn(LIVE.interacted), f.literal('true', nn(XSD_BOOLEAN))))
-    ;(status.problems ?? []).slice(0, 20).forEach((p, i) => {
-      const node = nn(`${example}/problem-${i}`)
-      desired.push(
-        f.quad(s, nn(LIVE.problem), node),
-        f.quad(node, nn(RDF_TYPE), nn(LIVE.SandboxProblem)),
-        f.quad(node, nn(SEM.order), integer(i)),
-        f.quad(node, nn(LIVE.message), f.literal(p.message)),
-        f.quad(node, nn(STY.tone), nn(NS.sty + (p.severity === 'error' ? 'Danger' : 'Warning'))),
-      )
-      if (p.source) desired.push(f.quad(node, nn(LIVE.inSource), nn(p.source)))
-      if (p.line !== undefined) desired.push(f.quad(node, nn(LIVE.sourceLine), integer(p.line)))
-    })
-    const keys = new Set(desired.map(quadKey))
-    const had = new Set(current.map(quadKey))
-    const delta: Delta = { remove: current.filter((q) => !keys.has(quadKey(q))), add: desired.filter((q) => !had.has(quadKey(q))) }
+  private write(example: string, status: SandboxStatus) {
+    const delta = statusDelta(this.runtime.store, example, status)
     if (!delta.add.length && !delta.remove.length) return
     this.writing = true
     try {
@@ -699,36 +874,14 @@ export class Sandboxes {
     const site = this.runtime.store
     const sf = site.factory
     const sources = this.sources(m.iri)
-    const own = declared(sources.map((s) => s.text).join('\n'))
-    const prefixes = { ...NS, ...own }
-    const head = Object.entries(prefixes).map(([p, ns]) => `PREFIX ${p}: <${ns}>`).join('\n')
-    let quads: Quad[]
-    try {
-      quads = sandbox.store.construct(head + '\n' + query, [sandbox.store.factory.defaultGraph()])
-    } catch (e) {
-      console.warn('[semblance] the data of a live example could not be read', e)
-      return
-    }
+    const quads = readData(sandbox, query, sources)
+    if (!quads) return
     const now = new Map(quads.map((q) => [quadKey(q), q]))
     const before = m.data
     m.data = now
     // The viewer's entries: the data's subjects; the sources' own prefixes, so it writes their names.
     if (sandbox.data) {
-      const bf = sandbox.store.factory
-      const viewer = bf.namedNode(DATA_VIEWER)
-      const entry = bf.namedNode(c + 'entry')
-      const seen = (m.dataSubjects ??= new Set())
-      for (const q of quads) if (q.subject.termType === 'NamedNode') seen.add(q.subject.value)
-      const desired = [...seen].map((iri) => bf.quad(viewer, entry, bf.namedNode(iri)))
-      Object.entries(own).forEach(([p, ns], i) => {
-        const decl = bf.namedNode(`${DATA_VIEWER}-prefix-${i}`)
-        desired.push(bf.quad(decl, bf.namedNode(NS.sh + 'prefix'), bf.literal(p)), bf.quad(decl, bf.namedNode(NS.sh + 'namespace'), bf.literal(ns, bf.namedNode(NS.xsd + 'anyURI'))))
-      })
-      const current = [...sandbox.store.match(viewer, entry, null), ...Object.keys(own).flatMap((_, i) => sandbox.store.match(bf.namedNode(`${DATA_VIEWER}-prefix-${i}`), null, null))]
-      const want = new Set(desired.map(quadKey))
-      const have = new Set(current.map(quadKey))
-      const delta: Delta = { remove: current.filter((q) => !want.has(quadKey(q))), add: desired.filter((q) => !have.has(quadKey(q))) }
-      if (delta.add.length || delta.remove.length) sandbox.runtime.apply(delta)
+      showData(sandbox, quads, (m.dataSubjects ??= new Set()), sources)
       m.dataRenderer?.flush()
     }
     // After a build nothing has happened yet: what was said of the last interaction goes.

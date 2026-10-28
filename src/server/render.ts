@@ -9,6 +9,7 @@ import { Navigation, readAddress, readLocations, spellAddress } from '../navigat
 import { DEFAULT_LAYERS, MOD, NS } from '../ns.ts'
 import { toHTML } from '../render/serialize.ts'
 import { type Projection, Runtime } from '../runtime.ts'
+import { prerenderSandboxes, type SandboxOptions } from '../sandbox.ts'
 import type { GraphStore } from '../store/types.ts'
 import { compileStyles } from '../style/compile.ts'
 
@@ -30,6 +31,12 @@ export interface RenderOptions {
   provenance?: boolean
   /** Compile the stylesheet too (default true). */
   styles?: boolean
+  /**
+   * Render the live examples shown (c:LiveExample) too, each in a sandbox of its own as the
+   * browser builds it: how to load a sandbox's store (the client's store kind), and its turn limit.
+   * Without it their slots are empty until the client builds them.
+   */
+  sandboxes?: Pick<SandboxOptions, 'load' | 'budgetMs'>
 }
 
 export interface Rendered {
@@ -110,9 +117,19 @@ export function project(opts: RenderOptions, languages: string[]): Pick<Rendered
   const { store, root } = opts
   const runtime = new Runtime(store)
   const projection = runtime.project({ modality: MOD.Screen, layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer ?? 'sparql', functions: opts.functions, languages, provenance: opts.provenance, name: 'screen', roots: [root] })
-  const html = toHTML(projection.index, root)
   const css = opts.styles === false ? undefined : compileStyles(store)
+  let siteCss = css
+  const html = serializeRoot(runtime, projection, root, { ...opts, siteCss: () => (siteCss ??= compileStyles(store)) })
   return { html, css, runtime, projection }
+}
+
+/**
+ * The root's HTML as the projection has it now, with the live examples it shows rendered in
+ * their slots (with `sandboxes`): what a page rendered beforehand holds, at each address.
+ */
+export function serializeRoot(runtime: Runtime, projection: Projection, root: string, opts: Pick<RenderOptions, 'sandboxes' | 'prefer' | 'functions'> & { siteCss?: () => string }): string {
+  const slots = opts.sandboxes ? prerenderSandboxes(runtime, projection, { ...opts.sandboxes, prefer: opts.prefer ?? 'sparql', functions: opts.functions, roots: [root], siteCss: opts.siteCss }) : undefined
+  return toHTML(projection.index, root, slots?.size ? { slots: (name) => slots.get(name) } : {})
 }
 
 /** Project `root` at `url` and serialize it: what the client's first render of that address shows. */

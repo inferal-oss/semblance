@@ -4,25 +4,30 @@ import type { HtmlIndex } from './html-index.ts'
 const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const escapeAttr = (s: string) => escapeText(s).replace(/"/g, '&quot;')
 
-/** Static HTML for a component instance (server-side rendering, tests). */
-export function toHTML(index: HtmlIndex, focus: string): string {
-  const root = index.resolve(focus)
-  return root ? node(index, root) : ''
+export interface SerializeOptions {
+  /** What a host-owned slot (sem:slot) holds, by its name, as HTML (a live example's sandbox, rendered on the server); else an island's tag or nothing. */
+  slots?: (name: string) => string | undefined
 }
 
-function node(index: HtmlIndex, k: string): string {
+/** Static HTML for a component instance (server-side rendering, tests). */
+export function toHTML(index: HtmlIndex, focus: string, opts: SerializeOptions = {}): string {
+  const root = index.resolve(focus)
+  return root ? node(index, root, opts) : ''
+}
+
+function node(index: HtmlIndex, k: string, opts: SerializeOptions = {}): string {
   const n = index.nodes.get(k)!
   if (n.cls === 'Text') return escapeText(n.data ?? '')
   const tag = index.tagName(k) ?? 'sem-unknown'
   const attrs = index.attributes(k).map(([name, v]) => (v === '' ? ` ${name}` : ` ${name}="${escapeAttr(v)}"`))
   const open = `<${tag}${attrs.join('')}>`
   if (index.isVoid(k)) return open
-  if (n.slot !== undefined) return `${open}${island(index, k)}</${tag}>`
+  if (n.slot !== undefined) return `${open}${opts.slots?.(n.slot) ?? island(index, k)}</${tag}>`
   const inner = index
     .childrenOf(k)
     .map((slot) => index.resolve(slot))
     .filter((r): r is string => r !== undefined)
-    .map((r) => node(index, r))
+    .map((r) => node(index, r, opts))
     .join('')
   return `${open}${inner}</${tag}>`
 }
