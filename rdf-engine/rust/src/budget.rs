@@ -113,3 +113,15 @@ pub fn cd_addr() -> u32 {
 pub fn stopped() -> bool {
     B.stop.get()
 }
+
+/// Bounded proof work polls the current deadline without resetting or
+/// consuming the compiled row countdown.
+pub fn poll_deadline() -> bool {
+    if !B.active.get() { return false; }
+    if B.stop.get() { return true; }
+    if B.deadline.get() > 0.0 {
+        let now = crate::host::now();
+        if !now.is_finite() || now >= B.deadline.get() { B.stop.set(true); }
+    }
+    B.stop.get()
+}
