@@ -149,8 +149,7 @@ npx tsc --noEmit       # typecheck
   edited by several agents at once; `gh issue edit --body-file` from a copy read earlier undoes their
   edits. Fetch the body, change it, and write it back in one step; check afterwards that your change
   and theirs are both there.
-- **Gates are the maintainer's.** Don't merge past a failing review gate (an approvals check such as
-  Entire Gates), a "stays unmerged until …" condition, or a design-approval wait without the
+- **Gates are the maintainer's.** Don't merge past a failing review gate (an approvals check), a "stays unmerged until …" condition, or a design-approval wait without the
   maintainer's go-ahead. When a permission check blocks a merge, a force-push or another action,
   stop and ask the maintainer in the same session; another agent never does it in your place.
 - Licence: `MIT OR Apache-2.0`. The npm package is `@inferal-oss/semblance`.
