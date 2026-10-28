@@ -84,7 +84,14 @@ rcp:RecipeShape a sh:NodeShape ; sh:targetClass rcp:Recipe ;
 # --- the page ------------------------------------------------------------------------------------------
 
 ui:ex-rdf a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;
-    c:children ( ui:ex-rdf-intro ui:ex-rdf-controls ui:ex-rdf-editor ui:ex-rdf-keys ) .
+    c:children ( ui:ex-rdf-intro ui:ex-rdf-controls ui:ex-rdf-panes ui:ex-rdf-keys ) .
+# The editor, and beside it the same component as a diff viewer (c:diff): what the edits added and
+# removed, from what the change log records. Undo takes a change back out of it too.
+ui:ex-rdf-panes a c:Stack ; pos:layout pos:Columns ; pos:gap tok:space-4 ; c:children ( ui:ex-rdf-editor ui:ex-rdf-diff ) .
+ui:ex-rdf-diff a c:RdfEditor ;
+    c:label "What changed"@en , "Що змінилося"@uk , "Was sich geändert hat"@de , "ما الذي تغيّر"@ar ;
+    c:entry rcp:borscht , rcp:carbonara , rcp:olena ;
+    c:diff true .
 ui:ex-rdf-intro a c:Text ;
     c:label "Two recipes and their cook, as RDF, edited as structure. Carbonara does not conform to the recipe shape yet: fix it here. Enter edits a value, Shift+Enter adds a statement (the shape suggests what), Delete removes one, Tab nests a value, Alt+Up and Alt+Down move a step." .
 ui:ex-rdf-editor a c:RdfEditor ;

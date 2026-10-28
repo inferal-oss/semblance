@@ -63,10 +63,19 @@ whole statement in one pick; on a predicate, its allowed values and the instance
 up out of a nested resource, Alt+Up and Alt+Down move a list member, Shift+Enter on a list appends
 to it, and a value's row drags onto another predicate or resource (the drag layer). For a large
 document, `c:expandDepth 0` starts the resources closed (a row each until opened), and rows out of
-view are not laid out. The Examples page's "Editing a dataset" shows all of it.
+view are not laid out. A list member drags to another member's place.
+
+With `c:diff true` the editor is a diff viewer: from what the change log records of undoable
+changes (`beh:asserted`, `beh:retracted`, undone ones left out), a statement whose earliest recorded
+change added it, and that is there, is marked added; one whose earliest recorded change removed it,
+and that is gone, is still shown where it was, struck, marked removed. Beside an editor of the same
+document it shows what the edits there did; the home page's live todo shows its data with one. Its
+renderings run only on rows that have `c:diff`, so an editor without it pays nothing. The Examples
+page's "Editing a dataset" shows all of it.
 
 ```turtle
 ex:editor a c:RdfEditor ; c:label "Library" ; c:entry ex:book , ex:author ; c:editable true ; c:arrows c:ArrowsCurrent .
+ex:changes a c:RdfEditor ; c:label "What changed" ; c:entry ex:book , ex:author ; c:diff true .
 ex:undo a c:Button , beh:Undoer ; c:label "Undo" .
 ```
 

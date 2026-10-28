@@ -90,6 +90,15 @@ c:RdfDraggableRow dnd:keepsFocus true .
 c:RdfDropRow a owl:Class ; rdfs:subClassOf dnd:DropTarget ;
     rdfs:comment "Minted on a predicate's or a resource's row of an editable RDF editor: a statement dropped on it moves there; and on a list member's row: a member of the same list dropped on it takes its place."@en .
 c:inEditor a owl:ObjectProperty ; rdfs:domain c:RdfRow ; rdfs:range c:RdfEditor .
+c:diff a owl:DatatypeProperty ; rdfs:domain c:RdfEditor ; rdfs:range xsd:boolean ;
+    rdfs:label "Diff"@en , "Різниця"@uk , "Unterschied"@de , "الفرق"@ar ;
+    rdfs:comment """True: the editor shows what has changed, from what the change log records (beh:asserted,
+beh:retracted; undone changes left out). A statement whose earliest recorded change added it, and that
+is there, is marked added; one whose earliest recorded change removed it, and that is gone, is still
+shown where it was, struck, marked removed. Beside an editor of the same document it shows what the
+edits there did. Copied to its rows; the diff renderings run only on rows that have it."""@en .
+c:RdfAddedPhrase a c:Phrase ; rdfs:label "added"@en , "додано"@uk , "hinzugefügt"@de , "مضاف"@ar .
+c:RdfRemovedPhrase a c:Phrase ; rdfs:label "removed"@en , "вилучено"@uk , "entfernt"@de , "محذوف"@ar .
 c:startsClosed a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
     rdfs:comment "Derived on a resource's row of an RDF editor whose c:expandDepth is 0: it is closed until opened."@en .
 c:depth a owl:DatatypeProperty ; rdfs:domain c:RdfRow ; rdfs:range xsd:integer ;
@@ -238,14 +247,14 @@ c:RdfEditorEntries a sem:Rendering ;
     sem:targets c:RdfEditor ;
     sem:stratum 0 ;
     sem:forEach c:entry ;
-    sem:watches rdf:type , c:editable , c:validated , c:expandDepth , c:current .
+    sem:watches rdf:type , c:editable , c:validated , c:diff , c:expandDepth , c:current .
 c:RdfEditorEntries-fn a sem:Rule ; sem:implements c:RdfEditorEntries ; sem:function "rdf-editor:entry" .
 c:RdfEditorEntries-sparql a sem:Rule ;
     sem:implements c:RdfEditorEntries ;
     sem:construct """
 CONSTRUCT {
   ?tree rdfhtml:hasChild ?row .
-  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:startsClosed ?closed ; c:isCurrent ?isCurrent ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?key .
+  ?row a c:RdfTerm , ?dropType ; c:term $member ; c:inEditor $this ; c:depth 0 ; c:startsClosed ?closed ; c:isCurrent ?isCurrent ; c:editable ?editable ; c:validated ?validated ; c:diff ?diffOn ; sem:orderKey ?key .
 }
 WHERE {
   $this a/rdfs:subClassOf* c:RdfEditor .
@@ -253,6 +262,7 @@ WHERE {
   BIND(STR($member) AS ?key)
   BIND(EXISTS { $this c:editable true } AS ?editable)
   BIND(EXISTS { $this c:validated true } AS ?validated)
+  BIND(IF(EXISTS { $this c:diff true }, true, ?none) AS ?diffOn)
   BIND(IF(?editable, c:RdfDropRow, ?none) AS ?dropType)
   BIND(IF(EXISTS { $this c:current $member }, true, ?none) AS ?isCurrent)
   # A large document starts closed (c:expandDepth 0): a row per resource until one is opened.
@@ -394,7 +404,7 @@ CONSTRUCT {
   ?itemKbdHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?itemKbdText a rdfhtml:Text ; rdfhtml:data ?itemKbdShown .
   ?child a ?childClass , ?childDrop , ?childDrag ; c:term ?childTerm ; c:subjectTerm ?childSubject ; c:predicateTerm ?childPredicate ; c:listCell ?childCell ; c:listIndex ?childIndex ;
-         c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?childKey .
+         c:reifierOf ?childOf ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; c:diff ?diffOn ; sem:orderKey ?childKey .
 }
 WHERE {
   $this a c:RdfTerm ; c:term ?t ; c:inEditor ?editor .
@@ -404,6 +414,7 @@ WHERE {
   BIND(COALESCE(?editable0, false) AS ?editable)
   OPTIONAL { $this c:validated ?validated0 }
   BIND(COALESCE(?validated0, false) AS ?validated)
+  OPTIONAL { $this c:diff ?diffOn }
   OPTIONAL { $this c:subjectTerm ?s ; c:predicateTerm ?p }
   BIND(EXISTS { $this c:reifierOf ?of } AS ?reifier)
   # What the term is.
@@ -859,7 +870,7 @@ CONSTRUCT {
   ?itemKbd a rdfhtml:Kbd ; rdfhtml:attribute ?itemKbdHidden ; rdfhtml:hasChild ?itemKbdText .
   ?itemKbdHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
   ?itemKbdText a rdfhtml:Text ; rdfhtml:data ?itemKbdShown .
-  ?child a c:RdfTerm , ?dragType ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; sem:orderKey ?okey .
+  ?child a c:RdfTerm , ?dragType ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; c:diff ?diffOn ; sem:orderKey ?okey .
 }
 WHERE {
   $this a c:RdfProperty ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor .
@@ -869,6 +880,7 @@ WHERE {
   BIND(COALESCE(?editable0, false) AS ?editable)
   OPTIONAL { $this c:validated ?validated0 }
   BIND(COALESCE(?validated0, false) AS ?validated)
+  OPTIONAL { $this c:diff ?diffOn }
   OPTIONAL { $this c:expanded ?own }
   BIND(COALESCE(?own, true) AS ?open)
   BIND(REPLACE(STR(?p), "[^#/]*$", "") AS ?ns)
@@ -1809,6 +1821,120 @@ WHERE {
     BIND(IF(BOUND(?dc), "a list member moves within its list", "only this list's members go here") AS ?why)
   } } GROUP BY ?drag }
   BIND(IRI(CONCAT(STR($this), "/~objection")) AS ?objection)
+}""" .
+
+# --- the diff (c:diff): what the change log records, on the rows of an editor that shows it ----------------
+# Three renderings that run only on rows with c:diff (sem:requires), so an editor without it pays
+# nothing: a value's row is marked with what happened to its statement (and its label named by its
+# IRI, for what points at it); a predicate's row and a
+# resource's row get rows for what was removed (objects, whole predicates), in the places they had.
+# They follow the statements the log records about their subject (( … [ sem:inverse rdf:subject ] )).
+c:RdfDiffMarks a sem:Rendering ;
+    sem:targets c:RdfTerm ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:bulk false ;
+    sem:requires c:diff ;
+    sem:follows ( c:subjectTerm [ sem:inverse rdf:subject ] ) .
+c:RdfDiffMarks-fn a sem:Rule ; sem:implements c:RdfDiffMarks ; sem:function "rdf-editor:diff-marks" .
+c:RdfDiffMarks-sparql a sem:Rule ;
+    sem:implements c:RdfDiffMarks ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:attribute ?changeAttr , ?changeSaid .
+  ?label rdfhtml:id ?labelId .
+  ?changeAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-change" ; rdfhtml:attributeValue ?change .
+  ?changeSaid a rdfhtml:Attribute ; rdfhtml:attributeName "aria-description" ; rdfhtml:attributeValue ?changePhrase .
+}
+WHERE {
+  $this c:diff true ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:term ?t .
+  { ?sta rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?eva beh:asserted ?sta ; beh:sequence ?seqa .
+    FILTER NOT EXISTS { ?undoa beh:undone ?eva }
+    FILTER NOT EXISTS { ?xsta rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?xeva beh:asserted|beh:retracted ?xsta ; beh:sequence ?xseqa . FILTER(?xseqa < ?seqa) FILTER NOT EXISTS { ?xundoa beh:undone ?xeva } }
+    FILTER EXISTS { ?s ?p ?t } BIND("added" AS ?change) BIND(c:RdfAddedPhrase AS ?changeKind) }
+  UNION
+  { ?str rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?evr beh:retracted ?str ; beh:sequence ?seqr .
+    FILTER NOT EXISTS { ?undor beh:undone ?evr }
+    FILTER NOT EXISTS { ?xstr rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?t . ?xevr beh:asserted|beh:retracted ?xstr ; beh:sequence ?xseqr . FILTER(?xseqr < ?seqr) FILTER NOT EXISTS { ?xundor beh:undone ?xevr } }
+    FILTER NOT EXISTS { ?s ?p ?t } BIND("removed" AS ?change) BIND(c:RdfRemovedPhrase AS ?changeKind) }
+  OPTIONAL { ?changeAt l10n:of ?changeKind ; l10n:name ?change0 }
+  OPTIONAL { FILTER(!BOUND(?change0)) ?changeKind rdfs:label ?change1 FILTER(langMatches(lang(?change1), "en")) }
+  BIND(STR(COALESCE(?change0, ?change1)) AS ?changePhrase)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  # Its label is named, so what points at a change (a live example's arrows) can find it.
+  FILTER NOT EXISTS { $this c:editing true }
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?label)
+  BIND(STR(?label) AS ?labelId)
+  BIND(IRI(CONCAT(STR($this), "/~root-data-sem-change")) AS ?changeAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-description")) AS ?changeSaid)
+}""" .
+
+c:RdfDiffRemovedObjects a sem:Rendering ;
+    sem:targets c:RdfProperty ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:bulk false ;
+    sem:requires c:diff ;
+    sem:follows ( c:subjectTerm [ sem:inverse rdf:subject ] ) .
+c:RdfDiffRemovedObjects-fn a sem:Rule ; sem:implements c:RdfDiffRemovedObjects ; sem:function "rdf-editor:diff-removed-objects" .
+c:RdfDiffRemovedObjects-sparql a sem:Rule ;
+    sem:implements c:RdfDiffRemovedObjects ;
+    sem:construct """
+CONSTRUCT {
+  ?group rdfhtml:hasChild ?child .
+  ?child a c:RdfTerm ; c:term ?o ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth ?childDepth ; c:editable ?editable ; c:validated ?validated ; c:diff true ; sem:orderKey ?okey .
+}
+WHERE {
+  $this c:diff true ; c:subjectTerm ?s ; c:predicateTerm ?p ; c:inEditor ?editor .
+  FILTER NOT EXISTS { $this c:expanded false }
+  ?str rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o . ?evr beh:retracted ?str ; beh:sequence ?seqr .
+    FILTER NOT EXISTS { ?undor beh:undone ?evr }
+    FILTER NOT EXISTS { ?xstr rdf:subject ?s ; rdf:predicate ?p ; rdf:object ?o . ?xevr beh:asserted|beh:retracted ?xstr ; beh:sequence ?xseqr . FILTER(?xseqr < ?seqr) FILTER NOT EXISTS { ?xundor beh:undone ?xevr } }
+  FILTER NOT EXISTS { ?s ?p ?o } FILTER(isIRI(?o) || isLiteral(?o))
+  OPTIONAL { $this c:depth ?depth0 }
+  BIND(COALESCE(xsd:integer(STR(?depth0)), 1) + 1 AS ?childDepth)
+  OPTIONAL { $this c:editable ?editable0 } BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 } BIND(COALESCE(?validated0, false) AS ?validated)
+  BIND(IF(isLiteral(?o), CONCAT("\\"", STR(?o), "\\"", IF(LANG(?o) != "", CONCAT("@", LANG(?o)), CONCAT("^^", STR(DATATYPE(?o))))), STR(?o)) AS ?okey)
+  BIND(IRI(CONCAT(STR($this), "/~group")) AS ?group)
+  BIND(IRI(CONCAT(STR($this), "/~t-", SUBSTR(MD5(?okey), 1, 12))) AS ?child)
+}""" .
+
+c:RdfDiffRemovedPredicates a sem:Rendering ;
+    sem:targets c:RdfTerm ;
+    sem:modality mod:Screen ;
+    sem:stratum 0 ;
+    sem:bulk false ;
+    sem:requires c:diff ;
+    sem:follows c:term , ( c:term [ sem:inverse rdf:subject ] ) .
+c:RdfDiffRemovedPredicates-fn a sem:Rule ; sem:implements c:RdfDiffRemovedPredicates ; sem:function "rdf-editor:diff-removed-predicates" .
+c:RdfDiffRemovedPredicates-sparql a sem:Rule ;
+    sem:implements c:RdfDiffRemovedPredicates ;
+    sem:construct """
+CONSTRUCT {
+  ?group rdfhtml:hasChild ?child .
+  ?child a c:RdfProperty ; c:subjectTerm ?t ; c:predicateTerm ?p ; c:inEditor ?editor ; c:depth 1 ; c:editable ?editable ; c:validated ?validated ; c:diff true ; sem:orderKey ?childKey .
+}
+WHERE {
+  # A resource's own row (the top level), open, that still says something: the predicates it said no more.
+  $this c:diff true ; c:term ?t ; c:inEditor ?editor ; c:depth 0 . FILTER(isIRI(?t))
+  FILTER NOT EXISTS { $this c:expanded false } FILTER NOT EXISTS { $this c:startsClosed true }
+  FILTER EXISTS { ?t ?anyP ?anyO }
+  { SELECT DISTINCT ?t ?p WHERE {
+    $this c:term ?t .
+    ?str rdf:subject ?t ; rdf:predicate ?p ; rdf:object ?o . ?evr beh:retracted ?str ; beh:sequence ?seqr .
+    FILTER NOT EXISTS { ?undor beh:undone ?evr }
+    FILTER NOT EXISTS { ?xstr rdf:subject ?t ; rdf:predicate ?p ; rdf:object ?o . ?xevr beh:asserted|beh:retracted ?xstr ; beh:sequence ?xseqr . FILTER(?xseqr < ?seqr) FILTER NOT EXISTS { ?xundor beh:undone ?xevr } }
+    FILTER NOT EXISTS { ?t ?p ?o } FILTER NOT EXISTS { ?t ?p ?other } } }
+  OPTIONAL { $this c:editable ?editable0 } BIND(COALESCE(?editable0, false) AS ?editable)
+  OPTIONAL { $this c:validated ?validated0 } BIND(COALESCE(?validated0, false) AS ?validated)
+  BIND(REPLACE(STR(?p), "[^#/]*$", "") AS ?pns)
+  BIND(REPLACE(STR(?p), "^.*[#/]", "") AS ?plocal)
+  OPTIONAL { { SELECT ?pns (MIN(?pprefix0) AS ?pprefix) WHERE { ?pdecl sh:prefix ?pprefix0 ; sh:namespace ?pns0 BIND(STR(?pns0) AS ?pns) } GROUP BY ?pns } }
+  BIND(IF(BOUND(?pprefix) && REGEX(?plocal, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(?pprefix, ":", ?plocal), CONCAT("<", STR(?p), ">")) AS ?pcompact)
+  BIND(CONCAT("\\u0001n1\\u0001n", IF(sameTerm(?p, rdf:type), "0", "1"), "\\u0001s", ?pcompact) AS ?childKey)
+  BIND(IRI(CONCAT(STR($this), "/~group")) AS ?group)
+  BIND(IRI(CONCAT(STR($this), "/~p-", SUBSTR(MD5(STR(?p)), 1, 12))) AS ?child)
 }""" .
 
 # --- the row menu ------------------------------------------------------------------------------------------

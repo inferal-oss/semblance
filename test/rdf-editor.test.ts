@@ -578,6 +578,48 @@ ui:dt-rdf-editor c:editable true .`
     expect(reception(member('"anarchism"'))).toEqual(['Accepted', undefined])
   })
 
+  const SIDE_BY_SIDE = `@prefix c: <https://semblance.dev/ns/component#> . @prefix beh: <https://semblance.dev/ns/behaviour#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .
+ui:dt-rdf-editor c:editable true .
+ui:rdf-diff a c:RdfEditor ; c:diff true ; c:entry lib:dispossessed , lib:earthsea , lib:ursula .
+ui:rdf-both a c:Stack ; c:children ( ui:rdf-undo ui:dt-rdf-editor ui:rdf-diff ) .
+ui:rdf-undo a c:Button , beh:Undoer ; c:label "Undo" .`
+
+  for (const kind of ['oxigraph', 'wat'] as const) {
+    it(`shows beside an editor what its edits added and removed (c:diff, from the change log); SPARQL and function alike (${kind})`, () => {
+      const both = [mount(kind, 'sparql', SIDE_BY_SIDE, [], UI + 'rdf-both'), mount(kind, 'function', SIDE_BY_SIDE, [], UI + 'rdf-both')]
+      const [m] = both as [ReturnType<typeof mount>]
+      const each = (act: (x: ReturnType<typeof mount>) => void, step: string) => {
+        both.forEach(act)
+        expect(both[1]!.html(), step).toBe(m.html())
+      }
+      // The viewer: the second editor; its changed rows, as "change:label".
+      const viewer = () => m.document.querySelectorAll('[data-sem-c=rdf-editor]')[1] as HTMLElement
+      const changes = () => [...viewer().querySelectorAll('[data-sem-change]')].map((r) => `${r.getAttribute('data-sem-change')}:${r.querySelector(':scope > .sem-row > .sem-label')?.textContent}`)
+      expect(changes()).toEqual([])
+      // An edit in the editor: the old value is still shown in the viewer, removed; the new one added.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '183'), 'Enter'), 'Enter on a number')
+      each((x) => x.enter('205'), 'a new number')
+      expect(changes()).toEqual(['removed:183', 'added:205'])
+      expect([...viewer().querySelectorAll('[data-sem-change=removed]')].map((r) => r.getAttribute('aria-description'))).toEqual(['removed'])
+      // The editor itself shows no diff.
+      expect(m.editor().querySelectorAll('[data-sem-change]')).toHaveLength(0)
+      // A predicate deleted whole: still in the viewer, with its value, removed.
+      each((x) => x.key(x.label('lib:earthsea', 'lib:title', '"A Wizard of Earthsea"'), 'Delete'), 'Delete the title')
+      expect(changes()).toEqual(['removed:183', 'added:205', 'removed:"A Wizard of Earthsea"'])
+      expect([...viewer().querySelectorAll('[data-sem-c=rdf-property] > .sem-row > .sem-label')].map((l) => l.textContent)).toContain('lib:title')
+      // Edited back: no change any more (the earliest record says it was there, and it is).
+      each((x) => x.key(x.label('lib:earthsea', 'lib:pages', '205'), 'Enter'), 'Enter again')
+      each((x) => x.enter('183'), 'the old number')
+      expect(changes()).toEqual(['removed:"A Wizard of Earthsea"'])
+      // Undo takes a change back out of the diff.
+      const undo = (x: ReturnType<typeof mount>) => x.click(x.document.querySelector('[data-sem-c=button]')!)
+      each(undo, 'Undo the number')
+      each(undo, 'Undo the number again')
+      each(undo, 'Undo the delete')
+      expect(changes()).toEqual([])
+    })
+  }
+
   it('keeps a large document light: closed resources cost a row each, an edit what it changes', () => {
     const big = (n: number) =>
       '@prefix c: <https://semblance.dev/ns/component#> . @prefix ui: <https://semblance.dev/demo#> . @prefix lib: <https://semblance.dev/demo/library#> .\nui:dt-rdf-editor c:expandDepth 0 .\n' +

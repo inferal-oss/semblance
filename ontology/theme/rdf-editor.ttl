@@ -67,7 +67,7 @@
     sty:declares [ sty:property "padding-inline-start" ; sty:raw "18px" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property" ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
-                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, var(--rdf-pred)) minmax(0, 1fr)" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, min(var(--rdf-pred), 38%)) minmax(0, 1fr)" ] ,
                  [ sty:property "align-items" ; sty:raw "start" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-property > .sem-problems" ;
     sty:declares [ sty:property "grid-column" ; sty:raw "1 / -1" ] .
@@ -363,10 +363,28 @@
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 [] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-key > kbd" ;
     sty:declares [ sty:property "margin-inline-end" ; sty:raw "4px" ] .
-# On a phone the status line is one line that scrolls, as a status bar's is.
-[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ":is(.sem-status, .sem-keys)" ; sty:atWidth sty:CompactWidth ;
+# The status line is one line that scrolls, as a status bar's is, however narrow the editor.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ":is(.sem-status, .sem-keys)" ;
     sty:declares [ sty:property "flex-wrap" ; sty:raw "nowrap" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
-[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-status" ; sty:atWidth sty:CompactWidth ;
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part ".sem-status" ;
     sty:declares [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "scrollbar-width" ; sty:raw "none" ] .
+
+# --- the diff (c:added, c:removed): a changed statement's row, as a diff marks a line --------------------------
+# Added: success, with a bar at the row's start; removed: danger, struck through, still in its place.
+# The bar is logical (inset-inline-start), so it is on the right in a right-to-left page.
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change] > .sem-row" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset 3px 0 0 var(--sem-change-bar)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change] > .sem-row:dir(rtl)" ;
+    sty:declares [ sty:property "box-shadow" ; sty:raw "inset -3px 0 0 var(--sem-change-bar)" ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change=added] > .sem-row" ;
+    sty:declares [ sty:property "--sem-change-bar" ; sty:raw "var(--sem-success-9)" ] ,
+                 [ sty:property "background" ; sty:token tok:success-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change=removed] > .sem-row" ;
+    sty:declares [ sty:property "--sem-change-bar" ; sty:raw "var(--sem-danger-9)" ] ,
+                 [ sty:property "background" ; sty:token tok:danger-3 ] .
+[] a sty:StyleRule ; sty:appliesTo c:RdfEditor ; sty:part "[data-sem-change=removed] > .sem-row > :is(.sem-label, .sem-datatype)" ;
+    sty:declares [ sty:property "text-decoration" ; sty:raw "line-through" ] ,
+                 [ sty:property "text-decoration-color" ; sty:raw "var(--sem-danger-9)" ] ,
+                 [ sty:property "opacity" ; sty:raw "0.8" ] .
