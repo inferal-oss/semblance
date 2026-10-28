@@ -251,7 +251,7 @@ legend and payload views (data), split and docked panes (layout), a toolbar
 count badge (feedback) - and the network inspector example is composed of them;
 the inspection group is the graph looking at itself (the SPARQL workbench and
 its results, query, triples and stream views, element markup, the reference).
-[DESIGN.md](DESIGN.md) lists them. Each group is one
+[DESIGN.md](DESIGN.md) lists them. `c:Sparkline` shows a compact linear history from explicit bounded graph points, retaining zero and unknown gaps with a textual sample alternative. Each group is one
 file of each kind: `ontology/components/<group>.ttl` (the vocabulary,
 renderings and reactions), `ontology/theme/<group>.ttl` (its styles),
 `src/components/<group>.ts` (function rules and reactions) and

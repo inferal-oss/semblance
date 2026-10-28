@@ -339,6 +339,70 @@ layer can give a whole class a name to fall back on, `ol:defaultLabel`, derived 
 components and shown only where there is no `ol:label`: an island is named by what it mounts
 ([FOREIGN.md](FOREIGN.md)). The Layers page of the gallery has a specimen.
 
+## Explicit linear history
+
+Use `c:Sparkline` for a compact monitoring history. It reads a bounded set of named graph
+points, with no stored SELECT and no logarithmic axes. Zero and negative observations are
+ordinary values. Omit `c:value` for an unknown sample; omit an adjacency edge for a disconnected
+interval. Neither becomes zero or an interpolated line.
+
+```turtle
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix ex: <https://example.org/history#> .
+
+ex:history a c:Sparkline ; c:label "CPU headroom" ; c:unit "cores" ;
+    c:start 0 ; c:end 3 ; c:min 0 ; c:max 8 ; c:point ex:p0, ex:p1, ex:p2, ex:p3 .
+ex:p0 c:start 0 ; c:value 4 ; c:label "10:00" ; ord:immediatelyPrecedes ex:p1 .
+ex:p1 c:start 1 ; c:value 0 ; c:label "10:01" ; ord:immediatelyPrecedes ex:p2 .
+ex:p2 c:start 2 ; c:label "10:02" ; ord:immediatelyPrecedes ex:p3 .
+ex:p3 c:start 3 ; c:value 2 ; c:label "10:03" .
+```
+
+The chart's `c:start`/`c:end` are increasing numeric horizontal bounds; its `c:min`/`c:max` are
+increasing vertical bounds. Their finite magnitudes are limited to `1e100`. A point's `c:start`
+is its numeric horizontal position (sequence, elapsed seconds or epoch milliseconds all work).
+The caller supplies its human-readable `c:label`, optional numeric `c:value`, and exact adjacent
+`ord:immediatelyPrecedes` edge. Values outside the extents are listed but not drawn or clamped;
+a missing or out-of-range endpoint breaks its line. There is one series per sparkline: compose
+several with ordinary Cards or Stacks rather than hiding unrelated scales behind one axis.
+
+Both renderings accept the sixteen XML Schema numeric families (integer, decimal, float, double
+and the twelve integer subtypes), with strict lexical forms and exact subtype ranges. XML
+whitespace is collapsed; blank, hexadecimal and ill-typed values are unavailable. Float rounds
+directly to binary32 before widening; bounds and coordinates use binary64 on both paths.
+Distinct source bounds that collapse through rounding or underflow are refused. Sample readings
+retain the stored graph literal's lexical text, rather than showing a rounded geometry value.
+Ingestion can canonicalize a datatype or lexical spelling before Runtime sees the graph; the
+component cannot recover an original payload that its store has discarded. The selected Oxigraph0.5.13
+ingestion control, for example, stores some integer subtypes as base integers and can canonicalize
+lexical spelling; an invalid unsignedByte payload can already be an ordinary integer in the
+stored graph. Tests distinguish that canonical-graph behavior from the retaining WAT/Rust
+original-term contract. The chart does not claim to validate erased input metadata.
+NaN, infinity and normalized magnitudes above `1e100` are unavailable.
+
+The supplied shapes check supported structural constraints: bound cardinality/literal kind,
+named point membership/count and internal member links. Numeric validity, increasing extents,
+unique point values and usable adjacency are checked by `SparklineState`, `SparklinePointData`
+and point rendering. Invalid extents show the localized refusal; invalid or missing values are listed as
+unavailable. An unusable horizontal coordinate keeps its known reading row but draws no mark
+or adjacent line. This is not a claim of complete SHACL numeric conformance or nested
+`sh:node` sample validation. The shared shape layer's datatype policy is unchanged.
+
+Chart units and sample labels follow the viewer’s language, including regional language fallback.
+The internal projected points share `c:inChart` with Gantt tasks; each keeps its own component class
+and rendering.
+
+The caller retains an explicit window of at most 512 named points and removes evicted points and
+edges. Excess input or invalid extents produces a visible localized refusal, without truncation.
+An empty window uses the chart’s optional `c:emptyText`, else the framework’s localized message.
+Membership and extent changes can redraw the bounded window; an ordinary value update affects
+its point and predecessor only. Fixed extents avoid re-ranking every point as observations arrive.
+The Screen rendering includes a stock AccordionItem Samples disclosure with exact values and unknown readings;
+the Text rendering lists the same readings. Stock tokens and a scalable SVG support every theme
+and narrow layouts; chronology stays increasing left to right while labels and readings follow
+RTL. The Data gallery demonstrates receiving and withdrawing a missing value through RDF events.
+
 ## Testing a component
 
 - **Render and interact** through events, as a person would: mount the graph in linkedom (see

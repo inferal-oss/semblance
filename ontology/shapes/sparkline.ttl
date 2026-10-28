@@ -1,0 +1,19 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# Supported structural constraints only. SparklineState and PointData enforce
+# strict sixteen-family lexical/range/finite numeric checks before geometry.
+# A valid integer subtype must not fail an xsd:decimal shape: the framework's
+# existing cross-datatype compatibility deliberately covers only four families.
+# The layer does not implement nested sh:node validation; no such claim is made.
+c:SparklineShape a sh:NodeShape ; sh:targetClass c:Sparkline ;
+    sh:property [ sh:path c:label ; sh:minCount 1 ; sh:nodeKind sh:Literal ] ,
+      [ sh:path c:start ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+      [ sh:path c:end ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+      [ sh:path c:min ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+      [ sh:path c:max ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ,
+      [ sh:path c:point ; sh:maxCount 512 ; sh:nodeKind sh:IRI ;
+        sh:message "A sparkline accepts at most 512 named samples; retain an explicit bounded window."@en , "Мініграфік приймає не більше 512 іменованих вимірювань; зберігайте явне обмежене вікно."@uk , "Ein Verlauf akzeptiert höchstens 512 benannte Messwerte; ein begrenztes Fenster beibehalten."@de , "يقبل المخطط المصغر 512 قياسًا مسمى كحد أقصى؛ احتفظ بنافذة محدودة واضحة."@ar ] .
+c:SparklinePointShape a sh:NodeShape ; sh:targetClass c:SparklinePoint ;
+    sh:property [ sh:path c:of ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ,
+      [ sh:path c:inChart ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] .

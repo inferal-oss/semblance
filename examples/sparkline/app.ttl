@@ -1,0 +1,39 @@
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix sty: <https://semblance.dev/ns/style#> .
+@prefix pos: <https://semblance.dev/ns/position#> .
+@prefix tok: <https://semblance.dev/ns/token#> .
+@prefix beh: <https://semblance.dev/ns/behaviour#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
+@prefix ex: <https://example.org/sparkline#> .
+
+ex:page a c:Stack ; sty:theme sty:Semblance ; pos:direction pos:Column ; pos:gap tok:space-4 ; pos:inset tok:space-6 ; pos:measure pos:PageMeasure ;
+    c:children ( ex:title ex:description ex:chart ex:receive ex:note ) .
+ex:title a c:Heading ; c:level 1 ;
+    c:label "Explicit history" , "Явна історія"@uk , "Expliziter Verlauf"@de , "سجل واضح"@ar .
+ex:description a c:Text ;
+    c:label "Linear values, including zero. Missing observations and disconnected intervals remain gaps." ,
+      "Лінійні значення, включно з нулем. Відсутні вимірювання та роз'єднані інтервали залишаються прогалинами."@uk ,
+      "Lineare Werte einschließlich null. Fehlende Messwerte und getrennte Intervalle bleiben Lücken."@de ,
+      "قيم خطية تشمل الصفر. تبقى القياسات المفقودة والفترات المنفصلة فجوات."@ar .
+ex:chart a c:Sparkline ; pos:measure pos:ReadingMeasure ; c:label "Available capacity" , "Доступна місткість"@uk , "Verfügbare Kapazität"@de , "السعة المتاحة"@ar ;
+    c:unit "units" ; c:start 0 ; c:end 7 ; c:min 0 ; c:max 10 ;
+    c:point ex:p0, ex:p1, ex:p2, ex:p3, ex:p4, ex:p5, ex:p6, ex:p7 .
+ex:p0 c:start 0 ; c:value 8 ; c:label "10:00" ; ord:immediatelyPrecedes ex:p1 .
+ex:p1 c:start 1 ; c:value 0 ; c:label "10:01" ; ord:immediatelyPrecedes ex:p2 .
+ex:p2 c:start 2 ; c:value 4 ; c:label "10:02" ; ord:immediatelyPrecedes ex:p3 .
+ex:p3 c:start 3 ; c:label "10:03" ; ord:immediatelyPrecedes ex:p4 .
+ex:p4 c:start 4 ; c:value 6 ; c:label "10:04" ; ord:immediatelyPrecedes ex:p5 .
+ex:p5 c:start 5 ; c:value 4 ; c:label "10:05" .
+ex:p6 c:start 6 ; c:value 9 ; c:label "10:06" ; ord:immediatelyPrecedes ex:p7 .
+ex:p7 c:start 7 ; c:value 7 ; c:label "10:07" .
+ex:receive a c:Button ;
+    c:label "Receive / withdraw missing sample" , "Отримати / відкликати відсутнє вимірювання"@uk ,
+      "Fehlenden Messwert empfangen / zurücknehmen"@de , "استلام القياس المفقود أو سحبه"@ar .
+ex:toggle a beh:Reaction ; beh:when beh:Click ; beh:source ex:receive ;
+    beh:deletes "CONSTRUCT { <https://example.org/sparkline#p3> c:value ?value } WHERE { <https://example.org/sparkline#p3> c:value ?value }" ;
+    beh:inserts "CONSTRUCT { <https://example.org/sparkline#p3> c:value 3 } WHERE { FILTER NOT EXISTS { <https://example.org/sparkline#p3> c:value ?value } }" .
+ex:note a c:Text ;
+    c:label "Samples exposes the exact graph readings. The separate final segment has no connecting edge and stays disconnected when the missing sample arrives." ,
+      "Вимірювання показують точні значення графа. Окремий кінцевий сегмент не має з'єднувального ребра та залишається роз'єднаним після отримання відсутнього вимірювання."@uk ,
+      "Messwerte zeigt die genauen Graphwerte. Das letzte Segment hat keine verbindende Kante und bleibt getrennt, wenn der fehlende Messwert eintrifft."@de ,
+      "تعرض القياسات قيم الرسم البياني الدقيقة. لا توجد حافة تصل المقطع الأخير المنفصل، ويظل منفصلًا عند وصول القياس المفقود."@ar .

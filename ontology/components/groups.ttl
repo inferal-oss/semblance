@@ -115,6 +115,7 @@ c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView 
 c:BodyViewer sem:group c:DataGroup . c:ImageView sem:group c:DataGroup .
 c:Chart sem:group c:DataGroup . c:BarChart sem:group c:DataGroup . c:Heatmap sem:group c:DataGroup .
 c:LineChart sem:group c:DataGroup . c:GanttChart sem:group c:DataGroup . c:GanttTask sem:group c:DataGroup . c:FindingList sem:group c:DataGroup .
+c:Sparkline sem:group c:DataGroup . c:SparklinePoint sem:group c:DataGroup . c:SparklineReadings sem:group c:DataGroup .
 c:Column sem:group c:DataGroup . c:series sem:group c:DataGroup . c:GridColumn sem:group c:DataGroup .
 c:CellKind sem:group c:DataGroup . c:Filter sem:group c:DataGroup . c:TextFilter sem:group c:DataGroup .
 c:ValueFilter sem:group c:DataGroup . c:FlagFilter sem:group c:DataGroup . c:TimeScale sem:group c:DataGroup .
