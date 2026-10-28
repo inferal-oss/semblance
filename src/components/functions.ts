@@ -6,6 +6,7 @@ import type { FnRule, RuleContext } from '../engine/context.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { ganttFunctions } from './gantt.ts'
+import { sparklineFunctions } from './sparkline.ts'
 import { C as VIEW_C } from '../view/functions.ts'
 import { formulaFunctions } from './formula.ts'
 import { moneyFunctions } from './money.ts'
@@ -846,6 +847,7 @@ export const functions: Record<string, FnRule> = {
   ...viewFunctions,
   ...chartFunctions,
   ...ganttFunctions,
+  ...sparklineFunctions,
   ...formulaFunctions,
   ...moneyFunctions,
   ...boardFunctions,

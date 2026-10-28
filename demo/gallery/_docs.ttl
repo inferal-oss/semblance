@@ -512,7 +512,7 @@ const tally: FnRule = (ctx, focus) => {
   o.renders(o.el('root', 'Div', {}, [o.el('name', 'Span', {}, [o.text('name-text', label)]), o.el('figure', 'Strong', {}, [o.text('figure-text', shown)])]))
   return o.quads
 }""" .
-ui:doc-cp-6 a c:Text ; c:label "Components come in groups - layout, type, actions, inputs, feedback, data, navigation, overlays, disclosure, windows, inspection - each one file of vocabulary, one of styles, one of function twins and one gallery page. A class says its group (sem:group), and so do its parts; a specimen says which classes it demonstrates (c:demonstrates), and is shown on their group's page. docs/COMPONENTS.md in the repository has the details." .
+ui:doc-cp-6 a c:Text ; c:label "Components come in groups - layout, type, actions, inputs, feedback, data, navigation, overlays, disclosure, windows, inspection - each one file of vocabulary, one of styles, one of function twins and one gallery page. A class says its group (sem:group), and so do its parts; a specimen says which classes it demonstrates (c:demonstrates), and is shown on their group's page. docs/COMPONENTS.md in the repository has the details. For a compact linear history from existing graph points, c:Sparkline accepts a bounded explicit window and fixed extents. Observed zero remains a value; absent values or adjacency edges leave gaps. The Data gallery demonstrates receiving a missing value, and its Samples disclosure lists exact observations." .
 
 # --- Integrating ---
 ui:doc-integrate a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-4 ;

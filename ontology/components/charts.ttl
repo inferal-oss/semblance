@@ -38,6 +38,9 @@ c:logScale a owl:DatatypeProperty ; rdfs:range xsd:boolean .
 c:referenceLine a owl:DatatypeProperty ; rdfs:comment "Name of a reference to draw (\"linear\" = proportional growth)."@en .
 
 c:Chart a owl:Class ; rdfs:subClassOf sem:Component .
+# Shared by internal chart members, including Gantt tasks and explicit Sparkline points.
+c:inChart a owl:ObjectProperty ; rdfs:domain sem:Component ; rdfs:range c:Chart ;
+    rdfs:comment "Derived: the chart an internal projected member belongs to."@en .
 
 c:BarChart a owl:Class ;
     rdfs:subClassOf c:Chart ;
@@ -512,7 +515,6 @@ c:milestoneVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a
 c:toneVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a task's sty:Tone (default tone)."@en .
 c:hrefVariable a owl:DatatypeProperty ; rdfs:comment "SELECT variable for a task's link, http(s) or a path on the site (default href)."@en .
 # Derived, by c:GanttPlan.
-c:inChart a owl:ObjectProperty ; rdfs:domain c:GanttTask ; rdfs:comment "Derived: the chart a task belongs to."@en .
 c:baselineStart a owl:DatatypeProperty ; rdfs:comment "Derived: a task's baseline start, a day number (c:start and c:end are its own)."@en .
 c:baselineEnd a owl:DatatypeProperty ; rdfs:comment "Derived: a task's baseline end, a day number."@en .
 c:uncertaintyEnd a owl:DatatypeProperty ; rdfs:comment "Derived: the latest day a task may end."@en .

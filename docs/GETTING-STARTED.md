@@ -241,6 +241,11 @@ The others: a theme for part of a page (`sty:theme` on any component, written by
 component with a rendering per modality (`sem:modality mod:Screen` and `mod:Text`), and labels in the
 viewer's language (an untagged source label plus `@uk`, `@de`, `@ar` translations).
 
+For a compact history whose observations are already in the graph, use `c:Sparkline`: explicit
+bounded points, fixed linear extents, observed zero and absent-value gaps. The [explicit history
+recipe](COMPONENTS.md#explicit-linear-history) shows its input contract; the Data gallery runs it
+through a receive/withdraw event.
+
 ## Rendering on the server
 
 The same graph renders to HTML or text without a DOM:

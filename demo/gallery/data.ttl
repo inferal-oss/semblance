@@ -14,13 +14,14 @@
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix as: <https://www.w3.org/ns/activitystreams#> .
 @prefix net: <https://semblance.dev/ns/network#> .
+@prefix ord: <https://ontology.inferal.com/modules/ordering/> .
 @prefix tree: <https://w3id.org/tree#> .
 @prefix iv: <https://semblance.dev/ns/view#> .
 
 # Gallery page: Data.
 
 ui:gallery-data a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
+    c:children ( ui:gallery-data-intro ui:dt-table ui:dt-sparkline ui:dt-stats ui:dt-formula ui:dt-money ui:dt-board ui:dt-gantt ui:dt-tree ui:dt-dl ui:dt-avatars ui:dt-gallery ui:dt-messages ui:dt-timeline ui:dt-legend ui:dt-grid ui:dt-payload ui:dt-rdf ) .
 ui:gallery-data-intro a c:Heading ; c:label "Data" .
 
 # --- Table: the project's own component classes, from a SELECT -------------------------------------
@@ -268,3 +269,26 @@ ui:dt-legend a c:Flippable ; c:front ui:dt-legend-spec .
 ui:dt-legend-spec a c:Specimen ; c:demonstrates c:Legend ; c:label "Legend" ;
     c:help "Swatches and labels for categories: the instances of a class by sem:order (network activity kinds, each drawn in its c:swatch series color), or an explicit list (statuses, which are states and so carry a sty:tone instead)." ;
     c:children ( ui:dt-legend-kinds ui:dt-legend-statuses ) .
+
+
+# --- Explicit compact history: zero is observed, missing samples stay gaps ---
+ui:dt-sparkline a c:Specimen ; c:demonstrates c:Sparkline , c:SparklinePoint ;
+    c:label "Linear history" , "Лінійна історія"@uk , "Linearer Verlauf"@de , "سجل خطي"@ar ;
+    c:help "A bounded graph window, fixed linear extents, exact zero and an unknown interval. Receive the missing sample to join only its explicit adjacent edges; Samples exposes the exact values." ;
+    c:children ( ui:dt-sparkline-chart ui:dt-sparkline-receive ) .
+ui:dt-sparkline-chart a c:Sparkline ;
+    c:label "Available capacity" , "Доступна місткість"@uk , "Verfügbare Kapazität"@de , "السعة المتاحة"@ar ;
+    c:unit "units" ; c:start 0 ; c:end 5 ; c:min 0 ; c:max 10 ;
+    c:point ui:dt-spark-p0 , ui:dt-spark-p1 , ui:dt-spark-p2 , ui:dt-spark-p3 , ui:dt-spark-p4 , ui:dt-spark-p5 .
+ui:dt-spark-p0 c:start 0 ; c:value 8 ; c:label "10:00" ; ord:immediatelyPrecedes ui:dt-spark-p1 .
+ui:dt-spark-p1 c:start 1 ; c:value 0 ; c:label "10:01" ; ord:immediatelyPrecedes ui:dt-spark-p2 .
+ui:dt-spark-p2 c:start 2 ; c:label "10:02" ; ord:immediatelyPrecedes ui:dt-spark-p3 .
+ui:dt-spark-p3 c:start 3 ; c:value 6 ; c:label "10:03" ; ord:immediatelyPrecedes ui:dt-spark-p4 .
+ui:dt-spark-p4 c:start 4 ; c:value 4 ; c:label "10:04" .
+ui:dt-spark-p5 c:start 5 ; c:value 9 ; c:label "10:05" .
+ui:dt-sparkline-receive a c:Button ;
+    c:label "Receive / withdraw missing sample" , "Отримати / відкликати відсутнє вимірювання"@uk ,
+      "Fehlenden Messwert empfangen / zurücknehmen"@de , "استلام القياس المفقود أو سحبه"@ar .
+ui:dt-sparkline-change a beh:Reaction ; beh:when beh:Click ; beh:source ui:dt-sparkline-receive ;
+    beh:deletes "CONSTRUCT { ui:dt-spark-p2 c:value ?value } WHERE { ui:dt-spark-p2 c:value ?value }" ;
+    beh:inserts "CONSTRUCT { ui:dt-spark-p2 c:value 3 } WHERE { FILTER NOT EXISTS { ui:dt-spark-p2 c:value ?value } }" .
