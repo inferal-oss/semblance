@@ -554,7 +554,8 @@ const sourceBack: FnRule = (ctx, focus) => {
   })
   const rules = plans.map(({ plan, role }, i) => {
     const key = `rule-${i}`
-    const query = str(ctx.object(plan, SEM.construct))
+    const from = ctx.object(plan, SEM.constructFrom)
+    const query = str(ctx.object(plan, SEM.construct)) ?? (from && str(ctx.object(from, SEM.construct)))
     const fn = str(ctx.object(plan, SEM.function))
     const slot = ctx.object(plan, SEM.implements)
     const layer = ctx.object(plan, SEM.layer) ?? (slot && ctx.object(slot, SEM.layer))
