@@ -17,13 +17,13 @@ describe('SPARQL coverage', () => {
   FILTER NOT EXISTS { ?rendering sem:needsExtension ?extension }
   FILTER NOT EXISTS { ?rendering sem:awaitsWork ?issue }
   BIND(EXISTS { ?fn sem:implements ?rendering ; sem:function ?name } AS ?hasFunction)
-  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct ?text } AS ?hasSparql)
+  BIND(EXISTS { ?q sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?text } AS ?hasSparql)
   OPTIONAL {
     FILTER NOT EXISTS { ?rendering sem:modality ?own }
     VALUES ?modality { mod:Screen mod:Text }
-    ?some sem:implements ?rendering ; sem:construct ?someText ; sem:modality ?named .
+    ?some sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?someText ; sem:modality ?named .
     FILTER NOT EXISTS {
-      ?q2 sem:implements ?rendering ; sem:construct ?text2 .
+      ?q2 sem:implements ?rendering ; sem:construct|sem:constructFrom/sem:construct ?text2 .
       FILTER(NOT EXISTS { ?q2 sem:modality ?m2 } || EXISTS { ?q2 sem:modality ?modality })
     }
   }

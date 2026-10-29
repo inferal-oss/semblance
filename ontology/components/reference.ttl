@@ -980,7 +980,7 @@ WHERE {
       SELECT ?t ?statKey (COUNT(DISTINCT ?counted) AS ?n) WHERE {
         { FILTER(?statKey = "properties") ?counted rdfs:domain ?t }
         UNION { FILTER(?statKey = "renderings") ?counted sem:targets ?t }
-        UNION { FILTER(?statKey = "sparql") ?counted sem:implements/sem:targets ?t ; sem:construct ?body }
+        UNION { FILTER(?statKey = "sparql") ?counted sem:implements/sem:targets ?t ; sem:construct|sem:constructFrom/sem:construct ?body }
         UNION { FILTER(?statKey = "functions") ?counted sem:implements/sem:targets ?t ; sem:function ?name }
         UNION { FILTER(?statKey = "reactions") ?counted beh:sourceClass ?t }
       } GROUP BY ?t ?statKey
