@@ -1032,8 +1032,17 @@ const graphview: FnRule = (ctx, focus) => {
   const { height } = layout(kept, edges)
   const at = new Map(kept.map((n) => [n.key, n]))
   const ids = new Map(kept.map((n) => [n.key, 'n' + fnv(n.key)]))
-  // Many edges: one legend of predicates instead of a label on each.
-  const labels = edges.length <= 24
+  // At most 24 edge labels, spent on the rarest predicates first: a predicate's edges are labelled
+  // all or none, and the frequent ones (many look alike) are left to a legend of every predicate.
+  const counts = new Map<string, number>()
+  for (const e of edges) counts.set(e.label, (counts.get(e.label) ?? 0) + 1)
+  const labelled = new Set<string>()
+  let budget = 24
+  for (const [p, n] of [...counts].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))) {
+    if (n > budget) break
+    labelled.add(p)
+    budget -= n
+  }
   const marks: NamedNode[] = []
   edges.forEach((e) => {
     const a = at.get(e.from)!
@@ -1049,7 +1058,7 @@ const graphview: FnRule = (ctx, focus) => {
       o.svg(`${id}-line`, 'Line', { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), class: 'sem-edge' }),
       o.svg(`${id}-head`, 'Path', { d: head, class: 'sem-arrow' }),
     ]
-    if (labels)
+    if (labelled.has(e.label))
       parts.push(
         o.svg(`${id}-label`, 'Text', { x: ((a.x + b.x) / 2).toFixed(1), y: ((a.y + b.y) / 2 - 3).toFixed(1), 'text-anchor': 'middle', class: 'sem-edge-label' }, [
           o.text(`${id}-label-text`, truncate(e.label, 22)),
@@ -1080,9 +1089,7 @@ const graphview: FnRule = (ctx, focus) => {
   const details = o.el('selection', 'P', { id: mint(focus.value, 'selection'), class: 'sem-selection' })
   o.attr(details, 'aria-live', 'polite')
   const parts = [summaryBar(ctx, o, size + (more ? ` · ${more}` : '')), details, o.el('canvas', 'Div', { class: 'sem-canvas' }, [svg])]
-  if (!labels) {
-    const counts = new Map<string, number>()
-    for (const e of edges) counts.set(e.label, (counts.get(e.label) ?? 0) + 1)
+  if (labelled.size < counts.size) {
     const legend = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([p, n]) => `${p} ×${formatNumber(ctx, n)}`).join(' · ')
     parts.splice(1, 0, o.el('legend', 'P', { class: 'sem-legend' }, [o.text('legend-text', legend)]))
   }

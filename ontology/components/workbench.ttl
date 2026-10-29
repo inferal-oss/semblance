@@ -392,7 +392,8 @@ c:ResultGraph a owl:Class ;
     rdfs:comment """The results as a node-link diagram: the triples of a CONSTRUCT, or of SELECT rows (?s ?p ?o,
 or each row's first value linked to the others by variable name). The best-connected nodes are
 shown (at most c:limit, default 40), laid out in layers when the graph is acyclic and narrow
-enough, else around its hub; nodes are prefixed names, edges are labelled by predicate. Selecting a
+enough, else around its hub; nodes are prefixed names, edges are labelled by predicate (at most 24
+labels, rarest predicates first; a busy graph adds a legend counting every predicate). Selecting a
 node (a click, or Enter or Space on it) highlights it and its connections and dims the rest; see
 c:selectedTerm."""@en ;
     sem:slug "result-graph" .

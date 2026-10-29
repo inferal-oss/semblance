@@ -242,6 +242,19 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(hub.querySelector('circle')!.getAttribute('cx')).toBe('360')
   })
 
+  it('labels the rarest predicates of a busy graph, and counts every predicate in a legend', () => {
+    const h = workbench()
+    const many = Array.from({ length: 30 }, (_, i) => `ex:n${i}`).join(' ')
+    type(h, `CONSTRUCT { ex:hub ex:many ?n . ex:hub ex:rare ex:other } WHERE { VALUES ?n { ${many} } }`)
+    run(h)
+    showResults(h, 'Graph')
+    const graph = panel(h).querySelector('[data-sem-c=result-graph]')!
+    expect(graph.querySelector('.sem-summary')!.textContent).toBe('Nodes: 32 · edges: 31')
+    // 30 edges of one predicate are past the 24 labels; the one rare edge keeps its label.
+    expect([...graph.querySelectorAll('.sem-edge-label')].map((t) => t.textContent)).toEqual(['ex:rare'])
+    expect(graph.querySelector('.sem-legend')!.textContent).toBe('ex:many ×30 · ex:rare ×1')
+  })
+
   it('shows a failing query as an error, and never throws', () => {
     for (const prefer of ['sparql', 'function'] as const) {
       const h = workbench(prefer)
