@@ -3,6 +3,7 @@
 // N3.js, and the same HTML rendered as Oxigraph (with SPARQL rules, once the
 // build runs SPARQL) or as N3.js (function rules, until then).
 import { existsSync, readFileSync } from 'node:fs'
+import * as ox from 'oxigraph'
 import { describe, expect, it } from 'vitest'
 import { Engine, Form, Format } from '../rdf-engine/host/engine.ts'
 import { EX } from '../src/examples/todo.ts'
@@ -58,6 +59,29 @@ describe.skipIf(!built.length).each(built)('%s engine store', (kind) => {
     expect(rows('{ BIND(1 AS ?v) ?s <http://x/p> ?v }')).toEqual(['s=http://x/a v=1'])
     expect(rows('OPTIONAL { BIND(1 AS ?v) ?s <http://x/q> ?v }')).toEqual(['s=http://x/a v=1', 's=http://x/a v=5'])
     expect(rows('{ BIND(1 AS ?v) }')).toEqual(['s=http://x/a v=1'])
+  })
+
+  // The bar chart's fmtIn (charts.ttl): a computed double is read back from its shortest digits.
+  // "999.4999999999999" (9.995 × 100) once read as 999.5 (16 digits above 2^53 rounded before the
+  // division), and ROUND was floor(x + 0.5); a 9.99 € segment showed as "10.00 €" (#225).
+  it.skipIf(!sparql)('reads and rounds doubles as Oxigraph does', () => {
+    const e = new Engine(new WebAssembly.Module(readFileSync(new URL(`../rdf-engine/build/${kind}.wasm`, import.meta.url))))
+    const reference = new ox.Store()
+    const exprs = [
+      'xsd:double(9.995) * 100',
+      'ROUND(xsd:double(9.995) * 100)',
+      'xsd:double(9.995) * 100 + 0',
+      'STR(xsd:integer(ROUND(xsd:double(9.995) * IF(true, 100, 1)) + 0.5))',
+      ...['999.4999999999999', '9007199254740993', '9007199254740993.0000000000000001', '1.7976931348623157e308', '1.7976931348623159e308', '4.9e-324', '2.4703282292062327e-324', '2.4703282292062328e-324', '2.2250738585072011e-308', '123456789012345678901234567890', '1e23', '1e400', '0.1'].map((d) => `"${d}"^^xsd:double + 0`),
+      ...['0.49999999999999994e0', '-0.49999999999999994e0', '-0.5e0', '-2.5e0', '2.5e0', '4503599627370497e0', '"INF"^^xsd:double', '"NaN"^^xsd:double'].map((d) => `ROUND(${d})`),
+    ]
+    const value = (x: string) => {
+      const r = e.prepare(`PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT (${x} AS ?v) {}`).run()
+      if (r.form !== Form.Select) throw new Error('not a SELECT')
+      return r.rows[0] ? e.value(r.rows[0]) : undefined
+    }
+    const want = (x: string) => (reference.query(`PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT (${x} AS ?v) {}`) as Map<string, ox.Term>[])[0]!.get('v')?.value
+    expect(exprs.map((x) => `${x} = ${value(x)}`)).toEqual(exprs.map((x) => `${x} = ${want(x)}`))
   })
 
   for (const prefer of sparql ? (['function', 'sparql'] as const) : (['function'] as const)) {

@@ -40,7 +40,7 @@
 ;; whether it is valid.
 (func $parse_num (param $p i32) (param $n i32) (param $t i32) (result i32)
   (local $e i32) (local $neg i32) (local $c i32) (local $digits i32) (local $dot i32) (local $exp i32) (local $eneg i32)
-  (local $m i64) (local $nd i32) (local $drop i32) (local $f f64)
+  (local $m i64) (local $nd i32) (local $drop i32) (local $f f64) (local $sticky i32)
   (local.set $e (i32.add (local.get $p) (local.get $n)))
   (if (i32.ge_u (local.get $t) (i32.const 3)) (then
     (if (i32.or (call $same (local.get $p) (local.get $n) (@str "INF") (i32.const 0)) (call $same (local.get $p) (local.get $n) (@str "+INF") (i32.const 0)))
@@ -65,7 +65,8 @@
                 (local.set $m (i64.add (i64.mul (local.get $m) (i64.const 10)) (i64.extend_i32_u (i32.sub (local.get $c) (i32.const '0')))))
                 (if (local.get $dot) (then (global.set $nsc (i32.add (global.get $nsc) (i32.const 1))))))
               (else
-                ;; digits beyond what an i64 holds: scale only
+                ;; digits beyond what an i64 holds: scale only, and whether any was not 0
+                (if (i32.ne (local.get $c) (i32.const '0')) (then (local.set $sticky (i32.const 1))))
                 (if (i32.eqz (local.get $dot)) (then (local.set $drop (i32.add (local.get $drop) (i32.const 1)))))))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $chars)))
@@ -91,15 +92,68 @@
             (br $edigits))))
         (if (local.get $eneg) (then (local.set $exp (i32.sub (i32.const 0) (local.get $exp))))))))
     (br_if $bad (i32.eqz (local.get $digits)))
-    (if (local.get $neg) (then (local.set $m (i64.sub (i64.const 0) (local.get $m)))))
+    (local.set $f (call $read_double (local.get $m) (i32.sub (i32.add (local.get $exp) (local.get $drop)) (global.get $nsc)) (local.get $sticky)))
+    (if (local.get $neg) (then
+      (local.set $m (i64.sub (i64.const 0) (local.get $m)))
+      (local.set $f (f64.neg (local.get $f)))))
     (global.set $ni (local.get $m))
-    (local.set $f (call $scale10 (f64.convert_i64_s (local.get $m)) (i32.sub (i32.add (local.get $exp) (local.get $drop)) (global.get $nsc))))
     (if (i32.eq (local.get $t) (i32.const 3)) (then (local.set $f (f64.promote_f32 (f32.demote_f64 (local.get $f))))))
     ;; the integer mantissa has no -0: "-0", "-0.0e0" keep their sign
     (if (i32.and (local.get $neg) (f64.eq (local.get $f) (f64.const 0))) (then (local.set $f (f64.const -0))))
     (global.set $nf (local.get $f))
     (return (i32.const 1)))
   (i32.const 0))
+
+;; m * 10^k as a double (m >= 0; sticky: digits that were not 0 were dropped
+;; after m), rounded once, ties to even, as Oxigraph reads it: scale10's
+;; estimate (exact when m <= 2^53 and |k| <= 22: both factors exact), else moved
+;; an ulp at a time until x lies between the midpoints to its neighbours, each
+;; compared with m * 10^k exactly ($scaled). ("999.4999999999999": m, above
+;; 2^53, rounds before the division, and the estimate is 999.5.)
+(func $read_double (param $m i64) (param $k i32) (param $sticky i32) (result f64)
+  (local $f f64) (local $bits i64) (local $be i32) (local $fm i64) (local $q i32) (local $c i32) (local $odd i32)
+  (local.set $f (call $scale10 (f64.convert_i64_u (local.get $m)) (local.get $k)))
+  (if (i64.eqz (local.get $m)) (then (return (local.get $f))))
+  (if (i32.and (i32.eqz (local.get $sticky))
+               (i32.and (i64.le_u (local.get $m) (i64.const 0x20000000000000)) (i32.le_u (i32.add (local.get $k) (i32.const 22)) (i32.const 44))))
+    (then (return (local.get $f))))
+  ;; m < 10^18: beyond these, x is above the largest double or below half the smallest
+  (if (i32.gt_s (local.get $k) (i32.const 310)) (then (return (f64.const inf))))
+  (if (i32.lt_s (local.get $k) (i32.const -342)) (then (return (f64.const 0))))
+  (if (f64.eq (local.get $f) (f64.const inf)) (then (local.set $f (f64.reinterpret_i64 (i64.const 0x7fefffffffffffff)))))
+  (if (f64.eq (local.get $f) (f64.const 0)) (then (local.set $f (f64.reinterpret_i64 (i64.const 1)))))
+  (loop $adjust
+    (local.set $bits (i64.reinterpret_f64 (local.get $f)))
+    (local.set $be (i32.wrap_i64 (i64.shr_u (local.get $bits) (i64.const 52))))
+    (local.set $fm (i64.and (local.get $bits) (i64.const 0xfffffffffffff)))
+    (if (local.get $be)
+      (then (local.set $fm (i64.or (local.get $fm) (i64.const 0x10000000000000))) (local.set $q (i32.sub (local.get $be) (i32.const 1075))))
+      (else (local.set $q (i32.const -1074))))
+    (local.set $odd (i32.wrap_i64 (i64.and (local.get $fm) (i64.const 1))))
+    ;; past the midpoint to the next double up (on it: to the even one)
+    (local.set $c (call $cmp_mid (i64.add (i64.shl (local.get $fm) (i64.const 1)) (i64.const 1)) (i32.sub (local.get $q) (i32.const 1)) (local.get $m) (local.get $k) (local.get $sticky)))
+    (if (i32.or (i32.gt_s (local.get $c) (i32.const 0)) (i32.and (i32.eqz (local.get $c)) (local.get $odd))) (then
+      (if (i64.eq (local.get $bits) (i64.const 0x7fefffffffffffff)) (then (return (f64.const inf))))
+      (local.set $f (f64.reinterpret_i64 (i64.add (local.get $bits) (i64.const 1))))
+      (br $adjust)))
+    ;; before the one to the next down (half as far below a power of two)
+    (local.set $c
+      (if (result i32) (i32.and (i64.eq (local.get $fm) (i64.const 0x10000000000000)) (i32.gt_u (local.get $be) (i32.const 1)))
+        (then (call $cmp_mid (i64.sub (i64.shl (local.get $fm) (i64.const 2)) (i64.const 1)) (i32.sub (local.get $q) (i32.const 2)) (local.get $m) (local.get $k) (local.get $sticky)))
+        (else (call $cmp_mid (i64.sub (i64.shl (local.get $fm) (i64.const 1)) (i64.const 1)) (i32.sub (local.get $q) (i32.const 1)) (local.get $m) (local.get $k) (local.get $sticky)))))
+    (if (i32.or (i32.lt_s (local.get $c) (i32.const 0)) (i32.and (i32.eqz (local.get $c)) (local.get $odd))) (then
+      (if (i64.eq (local.get $bits) (i64.const 1)) (then (return (f64.const 0))))
+      (local.set $f (f64.reinterpret_i64 (i64.sub (local.get $bits) (i64.const 1))))
+      (br $adjust))))
+  (local.get $f))
+
+;; m * 10^k (and a dropped fraction when sticky) against a * 2^b: -1, 0 or 1.
+;; Scaled by 10^-k, the midpoint is near m, so its whole part fits $sc_f.
+(func $cmp_mid (param $a i64) (param $b i32) (param $m i64) (param $k i32) (param $sticky i32) (result i32)
+  (call $scaled (local.get $a) (local.get $b) (i32.sub (i32.const 0) (local.get $k)))
+  (if (i64.ne (local.get $m) (global.get $sc_f)) (then (return (select (i32.const 1) (i32.const -1) (i64.gt_u (local.get $m) (global.get $sc_f))))))
+  ;; the same whole part: the one with a fraction is larger (both: taken as equal)
+  (i32.sub (local.get $sticky) (global.get $sc_s)))
 
 ;; The numeric type of term id (0: not a valid number), its value in $ni/$nsc/$nf.
 ;; A literal's parse is kept in a table its record (+24) points into (index + 1).
@@ -603,7 +657,7 @@
 
 ;; ABS, CEIL, FLOOR, ROUND (round half up).
 (func $round (param $f i32) (param $a i32) (result i32)
-  (local $t i32) (local $m i64) (local $s i32) (local $p i64) (local $q i64) (local $x f64) (local $dt i32)
+  (local $t i32) (local $m i64) (local $s i32) (local $p i64) (local $q i64) (local $x f64) (local $dt i32) (local $y f64)
   (if (i32.eqz (local.tee $t (call $num (local.get $a)))) (then (return (i32.const 0))))
   (if (i32.eq (local.get $t) (i32.const 1)) (then
     (if (i32.and (i32.eq (local.get $f) (i32.const F_ABS)) (i64.lt_s (global.get $ni) (i64.const 0)))
@@ -628,7 +682,11 @@
     (if (result f64) (i32.eq (local.get $f) (i32.const F_ABS)) (then (f64.abs (local.get $x)))
     (else (if (result f64) (i32.eq (local.get $f) (i32.const F_CEIL)) (then (f64.ceil (local.get $x)))
     (else (if (result f64) (i32.eq (local.get $f) (i32.const F_FLOOR)) (then (f64.floor (local.get $x)))
-    (else (f64.floor (f64.add (local.get $x) (f64.const 0.5))))))))))
+    ;; not floor(x + 0.5), which rounds 0.49999999999999994 to 1: x - floor(x) is
+    ;; exact where it matters; the sign is kept (Oxigraph: -0.5 -> -0)
+    (else (f64.copysign
+      (select (f64.add (local.tee $y (f64.floor (local.get $x))) (f64.const 1)) (local.get $y) (f64.ge (f64.sub (local.get $x) (local.get $y)) (f64.const 0.5)))
+      (local.get $x)))))))))
   (call $dbl_term (local.get $x) (call $tdt (local.get $a))))
 
 ;; --- casts -----------------------------------------------------------------------
