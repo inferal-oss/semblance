@@ -153,71 +153,10 @@ pub fn parse_double(s: &[u8]) -> Option<f64> {
             return None;
         }
     }
-    // Decimal digits to a mantissa (up to 19 significant digits) and a power of ten.
-    let neg = s.first() == Some(&b'-');
-    let (mut m, mut e10, mut sig, mut point) = (0u64, 0i32, 0u32, false);
-    for &c in mant {
-        if c == b'.' {
-            point = true;
-            continue;
-        }
-        if sig < 19 {
-            m = m * 10 + (c - b'0') as u64;
-            if m > 0 {
-                sig += 1;
-            }
-            if point {
-                e10 -= 1;
-            }
-        } else if !point {
-            e10 += 1;
-        }
-    }
-    if let Some(e) = exp {
-        let (en, digits) = match e.first() {
-            Some(b'-') => (true, &e[1..]),
-            Some(b'+') => (false, &e[1..]),
-            _ => (false, e),
-        };
-        let mut x: i32 = 0;
-        for &d in digits {
-            x = x.saturating_mul(10).saturating_add((d - b'0') as i32);
-        }
-        e10 = e10.saturating_add(if en { -x } else { x });
-    }
-    Some(if neg { -scale10(m, e10) } else { scale10(m, e10) })
-}
-
-const POW10: [f64; 23] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22];
-
-/// m * 10^e: exact when m < 2^53 and |e| <= 22 (both factors exact, one
-/// rounding); otherwise by repeated scaling, within a few ulps.
-fn scale10(m: u64, e: i32) -> f64 {
-    let mut v = m as f64;
-    if m == 0 {
-        return 0.0;
-    }
-    if e >= 0 {
-        let mut e = e;
-        while e > 22 {
-            v *= 1e22;
-            e -= 22;
-            if v.is_infinite() {
-                return v;
-            }
-        }
-        v * POW10[e as usize]
-    } else {
-        let mut e = -e;
-        while e > 22 {
-            v /= 1e22;
-            e -= 22;
-            if v == 0.0 {
-                return v;
-            }
-        }
-        v / POW10[e as usize]
-    }
+    // Rounded once, ties to even, as Oxigraph reads it (core's reader is exact; the
+    // XSD form checked above is one it accepts). Not mantissa-then-scale: 16 digits
+    // above 2^53 round before the division ("999.4999999999999" read as 999.5).
+    core::str::from_utf8(s).ok()?.parse::<f64>().ok()
 }
 
 pub fn write_int(out: &mut Vec<u8>, n: i128) {
@@ -384,9 +323,16 @@ pub fn round(n: Num) -> Num {
     match n {
         Num::Int(_) => n,
         Num::Dec(d) => Num::Dec(floor_dec(d + SCALE / 2)),
-        Num::Float(f) => Num::Float(libm_floor(f as f64 + 0.5) as f32),
-        Num::Double(d) => Num::Double(if d.is_finite() { libm_floor(d + 0.5) } else { d }),
+        Num::Float(f) => Num::Float(round_half_up(f as f64) as f32),
+        Num::Double(d) => Num::Double(round_half_up(d)),
     }
+}
+
+/// Not floor(x + 0.5), which rounds 0.49999999999999994 to 1: x - floor(x) is
+/// exact where it matters. The sign is kept (Oxigraph: -0.5 -> -0).
+fn round_half_up(x: f64) -> f64 {
+    let y = libm_floor(x);
+    (if x - y >= 0.5 { y + 1.0 } else { y }).copysign(x)
 }
 
 fn floor_dec(d: i128) -> i128 {
