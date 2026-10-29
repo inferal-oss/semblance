@@ -54,4 +54,46 @@ describe.skipIf(!built.length).each(built)('%s engine: numbers and casts to stri
     const v = r.rows[0]?.get('x') as { v: string; dt?: string } | undefined
     expect(v ? `${v.v}^^${(v.dt ?? '').replace(/.*#/, '')}` : undefined).toBe(want)
   })
+
+  // Reading a double rounds once, to the nearest (ties to even), as Number() does (#159): the
+  // midpoints between neighbouring doubles written out exactly (up to 767 digits), the same
+  // with a 1 far past them, the midpoints below, and 20- and 40-digit spellings; normal
+  // numbers across the range, subnormals, the largest double and powers of two.
+  it('reads long and halfway double literals as Number() does', () => {
+    const exact = (n: bigint, q: number) => {
+      if (q >= 0) return (n << BigInt(q)).toString()
+      const s = (n * 5n ** BigInt(-q)).toString().padStart(-q + 1, '0')
+      return `${s.slice(0, s.length + q)}.${s.slice(s.length + q)}`
+    }
+    const view = new DataView(new ArrayBuffer(8))
+    const double = (bits: bigint) => (view.setBigUint64(0, bits), view.getFloat64(0))
+    const literals: string[] = []
+    const around = (bits: bigint) => {
+      const be = Number((bits >> 52n) & 0x7ffn)
+      const f = (bits & 0xfffffffffffffn) | (be ? 1n << 52n : 0n)
+      const q = Math.max(be, 1) - 1076
+      const above = exact(2n * f + 1n, q)
+      const point = above.includes('.') ? '' : '.'
+      literals.push(above, `${above}${point}${'0'.repeat(30)}1`, `${above}${point}${'0'.repeat(900)}1`)
+      // below a power of two the midpoint is half as far
+      literals.push(f === 1n << 52n && be > 1 ? exact(4n * f - 1n, q - 1) : exact(2n * f - 1n, q))
+      literals.push(double(bits).toExponential(20), double(bits).toPrecision(40))
+    }
+    let seed = 7
+    const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+    for (let i = 0; i < 200; i++) {
+      view.setFloat64(0, (1 + random()) * 2 ** Math.floor(random() * 2000 - 1000))
+      around(view.getBigUint64(0))
+    }
+    for (const bits of [1n, 2n, 3n, 0xfffffffffffffn, 1n << 52n, (1n << 52n) + 1n, 0x3ff0000000000000n, 0x7feffffffffffffen]) around(bits)
+    literals.push(`1${'0'.repeat(400)}`, `0.${'0'.repeat(400)}1`, '999.4999999999999', '9007199254740993')
+    const read = (s: string) => {
+      const r = target.query({ default: [], named: [] }, `SELECT ?x { BIND("${s}"^^<http://www.w3.org/2001/XMLSchema#double> + 0 AS ?x) }`, 'http://example/')
+      if (r.kind !== 'bindings') throw new Error('expected bindings')
+      const v = (r.rows[0]?.get('x') as { v: string }).v
+      return v === 'INF' ? Infinity : Number(v)
+    }
+    const wrong = literals.filter((s) => !Object.is(read(s), Number(s)))
+    expect(wrong.map((s) => `${s.slice(0, 40)}… (${s.length} chars): ${read(s)}, not ${Number(s)}`)).toEqual([])
+  })
 })
