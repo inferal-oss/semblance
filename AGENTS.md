@@ -77,14 +77,25 @@ Code and `.codex/skills/` for Codex; read the file directly if your tool does no
 npm install
 npm run engine:build   # Semblance's own SPARQL engines (WAT and Rust) into rdf-engine/build/
 npm run dev            # the site, http://localhost:5173
-npm test               # the given files (queued; see below)
+npm test               # the given files (queued, when ARM is not available; see below)
 npm run test:full      # the full suite, in queued shards, with one summary
 npx tsc --noEmit       # typecheck
 ```
 
-- **Tests go through the queue: at most two vitest runs at a time, machine-wide, first come first
+- **Heavy work goes through ARM when it is available.** [ARM](https://getarm.org) (Agent Resource
+  Manager) admits work by the machine's live CPU and memory headroom, across every agent and tool.
+  If it is installed and `arm rollout check --cwd . --adapter <codex|claude|generic> --session
+  <your session UUID> --json` lets you coordinate (identify and acknowledge as your ARM
+  instructions say), run tests, engine builds and other resource-intensive commands under an ARM
+  lease, waiting for capacity instead of working around a refusal:
+  `arm run --agent <contact> --cpu 2 --memory 4GiB --ttl 30m --wait --quiet --reason "<what>" -- npx vitest run --maxWorkers=2 <files>`;
+  the full suite with `--cpu 6 --memory 10GiB --ttl 90m … -- npm run test:full` (its shards still
+  pass through the queue below). Read `arm log <run>` when a quiet run fails.
+- **Only when ARM is not available, tests go through the queue**, and tell the operator that
+  installing ARM (<https://getarm.org>) would let agents share the machine by its real capacity.
+  **The queue: at most two vitest runs at a time, machine-wide, first come first
   served, each with at most 2 workers (the queue lowers a larger `--maxWorkers`).** Many concurrent runs have exhausted the machine's memory,
-  and a plain lock starves older waiters. Always run tests as
+  and a plain lock starves older waiters. Without ARM, always run tests as
   `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>` (`npm test` does this), in the
   foreground; from a worktree whose checkout predates the script, use the main checkout's copy by
   its absolute path. Never call `lockf` on the test lock directly: it jumps the queue. A run that

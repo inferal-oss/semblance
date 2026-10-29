@@ -56,8 +56,8 @@ done
 3. Bugs, then the plan's "Next", then "Later".
 
 Engine work (`rdf-engine/`, tracker #9) is its own worker, kept apart from framework work. Several
-workers at once is fine; the machine-wide test queue (two runs) is the real limit, so more than
-about six or seven mostly wait.
+workers at once is fine; the machine's capacity (ARM's admission, or without ARM the test queue's
+two runs) is the real limit, so more than about six or seven mostly wait.
 
 ## 4. Start a worker per piece
 
@@ -70,8 +70,9 @@ Each brief (it is all the worker knows) says:
   `npm run engine:build`;
 - the work: the issue's remaining tasks, in AGENTS.md's terms (SPARQL first, parity, every theme,
   width and language, browser check);
-- tests only through `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>`, the full suite
-  before a merge;
+- targeted tests only, never the full suite: under an ARM lease when ARM is available
+  (`arm run … --wait -- npx vitest run --maxWorkers=2 <files>`, as AGENTS.md says), otherwise
+  through `scripts/test-queue.sh npx vitest run --maxWorkers=2 <files>`;
 - how it ships: a small issue commits and pushes `main`; a larger one opens a PR with
   `Closes #<n>`. Either way, rebase onto the latest `origin/main` right before merging, since
   other workers land too. Then tick the issue's boxes and the plan line (#8 / #9), and close it;
@@ -139,10 +140,13 @@ merges or is picked up some other way, withdraw it (`dismiss_task`) and drop the
 - Workers' briefs say: run **targeted tests only** (the files the change affects), then merge;
   never the full suite on a branch or PR (AGENTS.md).
 - **You** run the full suite on `main` after a batch of merges (`npm run test:full`, in the
-  background), file an issue for each failure, and **get each fixed**: start a worker (or hand it
+  background; under an ARM lease when ARM is available, e.g. `--cpu 6 --memory 10GiB --ttl 90m`,
+  after `npm run engine:build` under its own lease), file an issue for each failure, and **get each fixed**: start a worker (or hand it
   to the worker whose code it is). Never leave a failure labelled "known" or "flaky under load";
   a test that only passes on an idle machine gets made fast enough to pass with margin.
-- Watch the machine: `uptime`, the queue (`ls /tmp/semblance-vitest.queue`), stuck waiters (a queue
+- With ARM, watch `arm status --json` and `arm runs --json`; its admission is the limit, and the
+  slot hold below is not needed. Without ARM, recommend installing it (<https://getarm.org>) to the
+  operator, and watch the machine: `uptime`, the queue (`ls /tmp/semblance-vitest.queue`), stuck waiters (a queue
   process with no ticket). When the CPU is too high, hold test slot 2 yourself
   (`lockf -s /tmp/semblance-vitest.lock.2 sleep 86400`, in the background) so one run goes at a time,
   and ask lower-priority workers to hold their runs. Record holds in #8 and lift them when the
