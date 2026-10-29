@@ -318,8 +318,14 @@ const descriptionList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const of = describedNode(ctx, focus)
   const items = nodes(ctx, ctx.object(focus, C_ITEMS))
-  const pairs: { key: string; term: string; value: string }[] = items.length
-    ? items.map((item) => ({ key: hashKey(item.value), term: labelOf(ctx, item), value: display(ctx, ctx.object(item, C.value)) }))
+  const pairs: { key: string; term: string; value?: string; component?: NamedNode }[] = items.length
+    ? items.map((item) => {
+        const content = ctx.object(item, C.content)
+        const component = named(content) ? content : undefined
+        const value = ctx.object(item, C.value)
+        return { key: hashKey(item.value), term: labelOf(ctx, item), component,
+          value: value !== undefined || !component ? display(ctx, value) : undefined }
+      })
     : of && ctx.object(focus, NS.c + 'entryProperty')
       ? entriesOf(ctx, focus, of)
       : of
@@ -334,13 +340,17 @@ const descriptionList: FnRule = (ctx, focus) => {
   if (!pairs.length) return message(o, 'P', text(ctx, focus, C.emptyText) ?? 'Nothing to describe.')
   if (ctx.modality === MOD.Text) {
     const width = Math.max(...pairs.map((p) => p.term.length))
-    o.renders(el(o, 'root', 'Div', {}, pairs.map((p) => el(o, `p${p.key}`, 'Div', {}, [o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  ${p.value}`)]))))
+    // Text prefers the c:value summary; without one, the component follows the term.
+    o.renders(el(o, 'root', 'Div', {}, pairs.map((p) => el(o, `p${p.key}`, 'Div', {}, [
+      o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  ${p.value ?? ''}`),
+      ...(p.component && p.value === undefined ? [p.component] : []),
+    ]))))
     return o.quads
   }
   const groups = pairs.map((p) =>
     el(o, `p${p.key}`, 'Div', { class: 'sem-pair' }, [
       el(o, `p${p.key}-dt`, 'Dt', {}, [o.text(`p${p.key}-dt-text`, p.term)]),
-      el(o, `p${p.key}-dd`, 'Dd', {}, [o.text(`p${p.key}-dd-text`, p.value)]),
+      el(o, `p${p.key}-dd`, 'Dd', {}, [p.component ?? o.text(`p${p.key}-dd-text`, p.value ?? '')]),
     ]),
   )
   o.renders(el(o, 'root', 'Dl', {}, groups))
