@@ -2719,6 +2719,12 @@ sty:Doodle a sty:Theme ; sem:slug "doodle" ; sem:order 9 ; sem:symbol "✎" ;
     sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
     sty:declares [ sty:property "rotate" ; sty:raw "-0.6deg" ] ,
                  [ sty:property "border-radius" ; sty:raw "var(--wob-c)" ] .
+# A full-viewport sheet needs cross-axis room for its retained -0.6deg tilt.
+# sin(0.6deg) < 0.0105: subtract that fraction of the other viewport dimension.
+[] a sty:StyleRule ; sty:when sty:Doodle ; sty:atWidth sty:CompactWidth ;
+    sty:part "[data-sem-c=lightbox] > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))" ;
+    sty:declares [ sty:property "max-width" ; sty:raw "max(0px, calc(100% - 1.05vh))" ] ,
+                 [ sty:property "max-height" ; sty:raw "max(0px, calc(100% - 1.05vw))" ] .
 [] a sty:StyleRule ; sty:when sty:Doodle ;
     sty:part ":is([data-sem-c=dialog], [data-sem-c=lightbox]) > .sem-panel:not(:where([data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]), [data-sem-theme=doodle] [data-sem-theme]:not([data-sem-theme=doodle]) *))::before" ;
     sty:declares [ sty:property "content" ; sty:raw "\"\"" ] ,
