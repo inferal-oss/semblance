@@ -168,10 +168,10 @@ describe('a large result table', () => {
       const ta = h.document.querySelector('[data-sem-c=query-editor] textarea') as HTMLTextAreaElement
       ta.value = `SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT ${limit}`
       h.fire(ta, 'input')
-      const [md, table] = [ms('ResultTableMarkdown-sparql'), ms('ResultTableRendering-fn')]
+      const [md, table] = [ms('ResultTableMarkdown-sparql'), ms('ResultTableRendering-sparql')]
       h.fire(h.document.querySelector('[data-sem-c=query-workbench] .sem-toolbar button')!, 'click')
       expect(h.document.querySelectorAll('[data-sem-c=result-table] tbody tr').length).toBe(limit)
-      return { md: ms('ResultTableMarkdown-sparql') - md, table: ms('ResultTableRendering-fn') - table }
+      return { md: ms('ResultTableMarkdown-sparql') - md, table: ms('ResultTableRendering-sparql') - table }
     }
     const small = { md: Infinity, table: Infinity }
     const large = { md: Infinity, table: Infinity }

@@ -358,6 +358,8 @@ export function engineStore(module: WebAssembly.Module, kind: string, options: E
     select(query, graphs) {
       if (!sparql) throw new Error(`The ${kind} store has no SPARQL engine yet`)
       const r = prepare(query).run(graphIds(graphs as Term[]))
+      // An ASK answers true or false, as Oxigraph's query does.
+      if (r.form === Form.Ask) return r.value as never
       if (r.form !== Form.Select) throw new Error('not a SELECT query')
       const out: Map<string, Term>[] = []
       const width = r.vars.length
