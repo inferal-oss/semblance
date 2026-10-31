@@ -12,16 +12,33 @@ const X = 'https://example.org/collation#'
 const KEY = 'https://semblance.dev/ns/keyboard#'
 const graph = `
   @prefix c: <${NS.c}> . @prefix x: <${X}> . @prefix key: <${KEY}> .
+  @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix sem: <https://semblance.dev/ns/core#> .
   x:list a c:ShortcutList .
   x:save a c:Button ; c:label "Save" , "Зберегти"@uk , "Speichern"@de , "حفظ"@ar ; key:shortcut "Mod+S" .
   x:open a c:Button ; c:label "Open" , "Відкрити"@uk , "Öffnen"@de , "فتح"@ar ; key:shortcut "mod + o" .
   x:undo a c:Button ; c:label "Undo" , "Скасувати"@uk , "Rückgängig"@de , "تراجع"@ar ; key:shortcut "Shift+Mod+z" .
   x:edit a c:Button ; c:label "édit" ; key:shortcut "Alt+e" .
   x:help a c:Button ; key:shortcut "F1" .
+  x:coffee x:origin "Ethiopia" ; x:weight 1234.5 ; x:notes "Jasmine" , "Bergamot" , "Lemon"@en ; x:roaster x:acme .
+  x:acme rdfs:label "Acme" , "Акме"@uk .
+  x:origin rdfs:label "Origin" , "Походження"@uk . x:weight rdfs:label "Weight" ; c:unit "g" . x:notes rdfs:label "Notes" .
+  x:fields a c:DescriptionList ; c:of x:coffee ; c:fields ( x:origin x:weight x:missing x:notes x:roaster ) .
+  x:items a c:DescriptionList ; c:items ( x:i1 x:i2 x:i3 ) .
+  x:i1 c:label "Status" , "Стан"@uk ; c:value "open" .
+  x:i2 c:label "Body" ; c:content x:body .
+  x:i3 c:label "Summary" ; c:value 42 ; c:content x:body2 .
+  x:body a c:Text ; c:label "A body." . x:body2 a c:Text ; c:label "Another body." .
+  x:exchange x:header x:h1 , x:h2 , x:h3 , x:h4 .
+  x:h1 x:name "Content-Type" ; x:value "text/html" ; sem:order 2 .
+  x:h2 x:name "Accept" ; x:value "*/*" ; sem:order 1 .
+  x:h3 x:name "éTag" ; x:value "abc" .
+  x:h4 x:name "date" ; x:value "today" .
+  x:entries a c:DescriptionList ; c:of x:exchange ; c:entryProperty x:header ; c:keyProperty x:name ; c:valueProperty x:value .
+  x:nothing a c:DescriptionList ; c:of x:coffee ; c:fields ( x:missing ) ; c:emptyText "Nothing here." , "Тут нічого."@uk .
 `
-const parts = ['list']
+const parts = ['list', 'fields', 'items', 'entries', 'nothing']
 const LANGUAGES = [[], ['en'], ['de'], ['uk'], ['ar']]
-const SLOTS = ['ShortcutListRendering', 'ShapeReportRendering']
+const SLOTS = ['ShortcutListRendering', 'ShapeReportRendering', 'DescriptionPairs']
 
 function mount(prefer: 'sparql' | 'function', languages: string[]) {
   const { store, runtime, screen } = setup('wat', { modality: MOD.Screen, layers: SCREEN_LAYERS, prefer, languages }, 1, [graph])
@@ -51,6 +68,21 @@ describe('lists in the viewer collation, SPARQL (sx:sortKey) and function rules 
     expect(screen).toContain('<kbd class="sem-apple">⌘⇧Z</kbd><kbd class="sem-other">Ctrl+Shift+Z</kbd>')
   })
 
+  it('describes fields, items and entries', () => {
+    const [, fields, items, entries, nothing] = mount('sparql', ['en']).html()
+    expect(fields).toContain('<dt>Weight</dt><dd>1,234.5 g</dd>')
+    expect(fields).not.toContain('missing')
+    expect(fields!.match(/<dt>Notes<\/dt><dd>([^<]*)<\/dd>/)![1]!.split(', ').sort()).toEqual(['Bergamot', 'Jasmine', 'Lemon'])
+    expect(fields).toContain('<dt>roaster</dt><dd>Acme</dd>')
+    expect(items).toContain('<dt>Status</dt><dd>open</dd>')
+    expect(items).toContain('A body.')
+    expect(items).toContain('Summary  42')
+    expect(entries!.indexOf('Accept')).toBeLessThan(entries!.indexOf('Content-Type'))
+    expect(entries!.indexOf('Content-Type')).toBeLessThan(entries!.indexOf('date'))
+    expect(entries!.indexOf('date')).toBeLessThan(entries!.indexOf('éTag'))
+    expect(nothing).toContain('Nothing here.')
+  })
+
   it('stays the same as shortcuts and labels change anywhere in the graph', () => {
     const mounts = (['sparql', 'function'] as const).map((prefer) => mount(prefer, ['uk']))
     const step = (change: (m: (typeof mounts)[number]) => void) => {
@@ -67,6 +99,12 @@ describe('lists in the viewer collation, SPARQL (sx:sortKey) and function rules 
       m.runtime.apply({ remove: m.store.match(f.namedNode(X + 'open'), f.namedNode(KEY + 'shortcut'), null), add: [] })
     })
     expect(mounts[0]!.html()[0]).not.toContain('Відкрити')
+    step((m) => {
+      const f = m.store.factory
+      const coffee = f.namedNode(X + 'coffee')
+      m.runtime.apply({ remove: m.store.match(coffee, f.namedNode(X + 'weight'), null), add: [f.quad(coffee, f.namedNode(X + 'weight'), f.literal('250')), f.quad(coffee, f.namedNode(X + 'notes'), f.literal('Cocoa'))] })
+    })
+    expect(mounts[0]!.html()[1]).toContain('Cocoa')
     step((m) => {
       m.screen.engine.reconfigure({ languages: ['de'] })
       m.text.engine.reconfigure({ languages: ['de'] })

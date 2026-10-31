@@ -4,7 +4,9 @@ import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
-import { isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
+import { isTrue, labelOf, named, nodes, num, rdfList, str, text } from './util.ts'
+import { sortKey } from '../../rdf-engine/host/intl.ts'
+import { compareKeys, TUPLE } from '../render/order-key.ts'
 import { viewRows } from '../view/rows.ts'
 
 const C_QUERY = NS.c + 'query'
@@ -19,6 +21,12 @@ const C_SORT_COLUMN = NS.c + 'sortColumn'
 const C_SORT_DESCENDING = NS.c + 'sortDescending'
 const C_SORTS = NS.c + 'sorts'
 const C_ITEMS = NS.c + 'items'
+const C_PAIR_OF = NS.c + 'pairOf'
+const C_TERM = NS.c + 'term'
+const C_PAIR_ORDER = NS.c + 'pairOrder'
+const C_PAIR_COMPONENT = NS.c + 'pairComponent'
+const C_PIECE_OF = NS.c + 'pieceOf'
+const C_PIECE_TEXT = NS.c + 'pieceText'
 const C_DELTA = NS.c + 'delta'
 const C_DELTA_UNIT = NS.c + 'deltaUnit'
 const C_LOWER_IS_BETTER = NS.c + 'lowerIsBetter'
@@ -315,60 +323,133 @@ function describedNode(ctx: RuleContext, focus: NamedNode): Term | undefined {
   return subject && named(via) ? ctx.object(subject, via) : subject
 }
 
-/** Entries of a node (c:entryProperty values, each a c:keyProperty / c:valueProperty pair), by sem:order. */
-function entriesOf(ctx: RuleContext, focus: NamedNode, of: Term): { key: string; term: string; value: string }[] {
-  const entry = ctx.object(focus, NS.c + 'entryProperty')
-  const keyP = ctx.object(focus, NS.c + 'keyProperty')
-  const valueP = ctx.object(focus, NS.c + 'valueProperty')
-  if (!named(entry) || !named(keyP) || !named(valueP)) return []
-  return ctx
-    .objects(of, entry)
-    .filter(named)
-    .map((e) => ({ e, order: Number(str(ctx.object(e, SEM.order)) ?? NaN), term: display(ctx, ctx.object(e, keyP)) }))
-    .sort((a, b) => (Number.isFinite(a.order) && Number.isFinite(b.order) ? a.order - b.order : 0) || a.term.localeCompare(b.term) || (a.e.value < b.e.value ? -1 : 1))
-    .map(({ e, term }) => ({ key: hashKey(e.value), term, value: display(ctx, ctx.object(e, valueP)) }))
+/** A pair a description list shows: its key, term, order key, and its component or the pieces of its value. */
+interface Pair { key: string; term: string; order: string; component?: NamedNode; pieces: { key: string; text: string; order: string }[] }
+
+/** A term's key, as the SPARQL rule writes it (an IRI as it is; a literal with its language and datatype). */
+const termKey = (t: Term) => (t.termType === 'Literal' ? `${t.value}@${t.language}^${t.datatype.value}` : t.value)
+
+/** The members of an RDF list with their positions (as the SPARQL rule counts the cells before each). */
+function positioned(ctx: RuleContext, head: Term | undefined): { member: NamedNode; at: number }[] {
+  return rdfList(ctx, head).flatMap((member, at) => (named(member) ? [{ member, at }] : []))
+}
+
+/**
+ * c:DescriptionPairs: the pairs a description list shows, as data under it (<list>/~pair-<key>):
+ * explicit c:items, else the entries of the node it describes (c:entryProperty, by sem:order, then
+ * by term in the viewer's collation), else the values of c:fields on it. A field's values are
+ * pieces in the viewer's collation of their texts, each after ", " but the first, and its unit a last piece.
+ */
+function pairsOf(ctx: RuleContext, focus: NamedNode): Pair[] {
+  const of = describedNode(ctx, focus)
+  const lang = formatLocale(ctx.languages)
+  const items = positioned(ctx, ctx.object(focus, C_ITEMS))
+  if (items.length) {
+    return items.map(({ member: item, at }) => {
+      const content = ctx.object(item, C.content)
+      const component = named(content) ? content : undefined
+      const value = ctx.object(item, C.value)
+      const key = md5Key(item.value)
+      return { key, term: labelOf(ctx, item), order: TUPLE + 'n' + at, component,
+        pieces: value !== undefined || !component ? [{ key: key + '-v', text: display(ctx, value), order: TUPLE + 'n0' }] : [] }
+    })
+  }
+  if (!of) return []
+  if (ctx.object(focus, NS.c + 'entryProperty')) {
+    const entry = ctx.object(focus, NS.c + 'entryProperty')
+    const keyP = ctx.object(focus, NS.c + 'keyProperty')
+    const valueP = ctx.object(focus, NS.c + 'valueProperty')
+    if (!named(entry) || !named(keyP) || !named(valueP)) return []
+    return ctx.objects(of, entry).filter(named).map((e) => {
+      const position = str(ctx.object(e, SEM.order))
+      const term = display(ctx, ctx.object(e, keyP))
+      const sorted = TUPLE + 's' + sortKey(term, lang)
+      const key = md5Key(e.value)
+      return { key, term, order: position !== undefined && Number.isFinite(Number(position)) ? TUPLE + 'n0' + TUPLE + 'n' + position + sorted : TUPLE + 'n1' + sorted,
+        pieces: [{ key: key + '-v', text: display(ctx, ctx.object(e, valueP)), order: TUPLE + 'n0' }] }
+    })
+  }
+  return positioned(ctx, ctx.object(focus, C.fields)).flatMap(({ member: p, at }) => {
+    const values = ctx.objects(of, p)
+    if (!values.length) return []
+    const key = md5Key(p.value)
+    const pieces = values
+      .map((v) => {
+        const value = display(ctx, v)
+        const k = key + '-v' + md5Key(termKey(v))
+        return { key: k, value, order: TUPLE + 'n0' + TUPLE + 's' + sortKey(value, lang) + TUPLE + 's' + k }
+      })
+      .sort((x, y) => compareKeys(x.order, y.order))
+      .map((x, i) => ({ key: x.key, text: (i ? ', ' : '') + x.value, order: x.order }))
+    const unit = text(ctx, p, C.unit)
+    if (unit) pieces.push({ key: key + '-unit', text: ' ' + unit, order: TUPLE + 'n1' })
+    return [{ key, term: labelOf(ctx, p), order: TUPLE + 'n' + at, pieces }]
+  })
+}
+
+const descriptionPairs: FnRule = (ctx, focus) => {
+  ctx.readsLanguage()
+  const o = ctx.out(focus)
+  for (const p of pairsOf(ctx, focus)) {
+    const pair = o.node('pair-' + p.key)
+    o.t(pair, C_PAIR_OF, focus).t(pair, C_TERM, p.term).t(pair, C_PAIR_ORDER, p.order)
+    if (p.component) o.t(pair, C_PAIR_COMPONENT, p.component)
+    for (const piece of p.pieces) {
+      const n = o.node('pair-' + piece.key)
+      o.t(n, C_PIECE_OF, pair).t(n, C_PIECE_TEXT, piece.text).t(n, C_PAIR_ORDER, piece.order)
+    }
+  }
+  return o.quads
+}
+
+/** The pairs c:DescriptionPairs wrote under the list. */
+function writtenPairs(ctx: RuleContext, focus: NamedNode) {
+  return ctx.match(null, C_PAIR_OF, focus).map((q) => {
+    const pair = q.subject as NamedNode
+    const key = pair.value.slice(focus.value.length + '/~pair-'.length)
+    const component = ctx.object(pair, C_PAIR_COMPONENT)
+    const pieces = ctx.match(null, C_PIECE_OF, pair).map((pq) => ({ node: pq.subject as NamedNode, text: str(ctx.object(pq.subject, C_PIECE_TEXT)) ?? '', order: str(ctx.object(pq.subject, C_PAIR_ORDER)) ?? '' }))
+    return { key, term: str(ctx.object(pair, C_TERM)) ?? '', order: str(ctx.object(pair, C_PAIR_ORDER)) ?? '', component: named(component) ? component : undefined, pieces }
+  })
 }
 
 const descriptionList: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const of = describedNode(ctx, focus)
-  const items = nodes(ctx, ctx.object(focus, C_ITEMS))
-  const pairs: { key: string; term: string; value?: string; component?: NamedNode }[] = items.length
-    ? items.map((item) => {
-        const content = ctx.object(item, C.content)
-        const component = named(content) ? content : undefined
-        const value = ctx.object(item, C.value)
-        return { key: hashKey(item.value), term: labelOf(ctx, item), component,
-          value: value !== undefined || !component ? display(ctx, value) : undefined }
-      })
-    : of && ctx.object(focus, NS.c + 'entryProperty')
-      ? entriesOf(ctx, focus, of)
-      : of
-      ? nodes(ctx, ctx.object(focus, C.fields)).flatMap((p) => {
-          const values = ctx.objects(of, p)
-          if (!values.length) return []
-          const unit = text(ctx, p, C.unit)
-          const value = values.map((v) => display(ctx, v)).join(', ')
-          return [{ key: hashKey(p.value), term: labelOf(ctx, p), value: unit ? `${value} ${unit}` : value }]
-        })
-      : []
+  const pairs = writtenPairs(ctx, focus)
   if (!pairs.length) return message(o, 'P', text(ctx, focus, C.emptyText) ?? 'Nothing to describe.')
+  const root = o.el('root', ctx.modality === MOD.Text ? 'Div' : 'Dl')
+  // Each piece of a value is a text node of its own, in its order (they read as one text):
+  // <local><what the piece's key adds to its pair's>.
+  const pieces = (p: (typeof pairs)[number], local: string) =>
+    p.pieces.map((piece) => {
+      const n = o.node(local + piece.node.value.slice(focus.value.length + '/~pair-'.length + p.key.length))
+      o.t(n, RDF_TYPE, ctx.nn(H.Text)).t(n, H.data, piece.text).t(n, SEM.orderKey, TUPLE + 'n1' + piece.order)
+      return n
+    })
   if (ctx.modality === MOD.Text) {
-    const width = Math.max(...pairs.map((p) => p.term.length))
-    // Text prefers the c:value summary; without one, the component follows the term.
-    o.renders(el(o, 'root', 'Div', {}, pairs.map((p) => el(o, `p${p.key}`, 'Div', {}, [
-      o.text(`p${p.key}-text`, `${p.term.padEnd(width)}  ${p.value ?? ''}`),
-      ...(p.component && p.value === undefined ? [p.component] : []),
-    ]))))
+    // Terms padded to the longest (in characters), then the value; without one, the component follows the term.
+    const width = Math.max(...pairs.map((p) => [...p.term].length))
+    for (const p of pairs) {
+      const pair = el(o, `p${p.key}`, 'Div')
+      o.t(pair, SEM.orderKey, p.order).t(root, H.hasChild, pair)
+      const head = o.text(`p${p.key}-text`, `${p.term}${' '.repeat(width - [...p.term].length)}  `)
+      o.t(pair, H.hasChild, head)
+      if (p.pieces.length) {
+        o.t(head, SEM.orderKey, TUPLE + 'n0')
+        for (const n of pieces(p, `p${p.key}-text`)) o.t(pair, H.hasChild, n)
+      } else if (p.component) o.t(pair, H.hasChild, p.component).t(head, NS.ord + 'immediatelyPrecedes', p.component)
+    }
+    o.renders(root)
     return o.quads
   }
-  const groups = pairs.map((p) =>
-    el(o, `p${p.key}`, 'Div', { class: 'sem-pair' }, [
+  for (const p of pairs) {
+    const pair = el(o, `p${p.key}`, 'Div', { class: 'sem-pair' }, [
       el(o, `p${p.key}-dt`, 'Dt', {}, [o.text(`p${p.key}-dt-text`, p.term)]),
-      el(o, `p${p.key}-dd`, 'Dd', {}, [p.component ?? o.text(`p${p.key}-dd-text`, p.value ?? '')]),
-    ]),
-  )
-  o.renders(el(o, 'root', 'Dl', {}, groups))
+      el(o, `p${p.key}-dd`, 'Dd', {}, p.component ? [p.component] : pieces(p, `p${p.key}-dd-text`)),
+    ])
+    o.t(pair, SEM.orderKey, p.order).t(root, H.hasChild, pair)
+  }
+  o.renders(root)
   return o.quads
 }
 
@@ -634,6 +715,7 @@ const treeToggle: ReactionFn = (ctx) => {
 export const functions: Record<string, FnRule> = {
   'data:table': table,
   'data:description-list': descriptionList,
+  'data:description-pairs': descriptionPairs,
   'data:stat': stat,
   'data:avatar': avatar,
   'data:avatar-group': avatarGroup,
