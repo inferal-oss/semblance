@@ -107,3 +107,37 @@ describe('the Layers gallery group (shortcuts, shape results), on wat', () => {
     same()
   })
 })
+
+describe('a specimen ontology section (the docs layer), on wat', () => {
+  const UI = 'https://semblance.dev/demo#'
+  it('renders the same with SPARQL and with function rules, closed, opened and in another language', { timeout: 300_000 }, () => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'wat', prefer)
+      const f = h.store.factory
+      const app = f.namedNode(UI + 'app')
+      const group = f.namedNode(UI + 'galleryGroup')
+      h.showPage('Components')
+      h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupFeedback'))] })
+      h.shell.flush()
+      return h
+    })
+    const spec = (h: (typeof shells)[number]) => h.shell.nodeOf(`${UI}fb-alerts-spec/~root`) as Element
+    const same = () => {
+      const [a, b] = shells.map((h) => h.document.getElementById('app')!.innerHTML)
+      if (a !== b) {
+        let i = 0
+        while (i < a!.length && a![i] === b![i]) i++
+        expect(a!.slice(Math.max(0, i - 300), i + 300)).toBe(b!.slice(Math.max(0, i - 300), i + 300))
+      }
+    }
+    const rules = (shells[0]!.screen.engine as unknown as { rules: Rule[] }).rules
+    expect(rules.find((r) => r.slot === NS.sem + 'SpecimenOntology')?.kind).toBe('sparql')
+    same()
+    expect(spec(shells[0]!).querySelector('.sem-docs-toggle')!.textContent).toContain('c:Alert')
+    for (const h of shells) h.fire(spec(h).querySelector('.sem-docs-toggle')!, 'click'), h.shell.flush()
+    same()
+    expect(spec(shells[0]!).querySelector('[data-sem-c=class-doc]')).not.toBeNull()
+    for (const h of shells) h.screen.engine.reconfigure({ languages: ['de'] }), h.shell.flush()
+    same()
+  })
+})
