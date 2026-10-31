@@ -5,10 +5,10 @@ import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, STY, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeCode, tokenizeSparql } from '../sparql-tokens.ts'
+import { queryForm } from '../sparql-forms.ts'
 import { turtleTokens } from '../turtle.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes, fnv } from './util.ts'
 import { hitToggles } from './actions.ts'
-import { maintainedRows } from '../view/rows.ts'
 
 const c = NS.c
 const W = {
@@ -182,49 +182,7 @@ function codeNodes(o: Out, tokens: { kind: string; text: string }[], plain: Read
  */
 export const CONSTRUCT_FORM = /^(?:[ \t\r\n]+|#[^\n]*|PREFIX[ \t\r\n]+[A-Za-z0-9_.-]*:[ \t\r\n]*<[^>]*>|BASE[ \t\r\n]*<[^>]*>)*(?:CONSTRUCT|DESCRIBE)/i
 
-/** The form of a query, read from its tokens (comments, strings and IRIs skipped). */
-export function queryForm(query: string): 'SELECT' | 'CONSTRUCT' | 'DESCRIBE' | 'ASK' | undefined {
-  for (const t of tokenizeSparql(query)) {
-    if (t.kind === 'comment' || t.kind === 'iri' || t.kind === 'pname') continue
-    for (const word of t.text.match(/[A-Za-z]+/g) ?? []) {
-      const w = word.toUpperCase()
-      if (w === 'SELECT' || w === 'CONSTRUCT' || w === 'DESCRIBE' || w === 'ASK') return w
-      if (w !== 'PREFIX' && w !== 'BASE') return undefined
-    }
-  }
-  return undefined
-}
-
-/** The variables a SELECT projects, in order; undefined for SELECT * (or when it can't tell). */
-export function selectVariables(query: string): string[] | undefined {
-  const tokens = tokenizeSparql(query).filter((t) => t.kind !== 'comment')
-  let i = tokens.findIndex((t) => /\bSELECT\b/i.test(t.text) && t.kind !== 'string' && t.kind !== 'iri')
-  if (i < 0) return undefined
-  const vars: string[] = []
-  let depth = 0
-  let pendingAs = false
-  for (i++; i < tokens.length; i++) {
-    const t = tokens[i]!
-    if (t.kind === 'var') {
-      const name = t.text.slice(1)
-      if ((depth === 0 || pendingAs) && !vars.includes(name)) vars.push(name)
-      pendingAs = false
-      continue
-    }
-    if (t.kind === 'keyword' || t.kind === 'text') {
-      for (const m of t.text.matchAll(/\(|\)|\{|\*|[A-Za-z]+/g)) {
-        const s = m[0]
-        if (s === '(') depth++
-        else if (s === ')') depth = Math.max(0, depth - 1)
-        else if (s === '{') return vars.length ? vars : undefined
-        else if (s === '*' && depth === 0) return undefined
-        else if (/^AS$/i.test(s)) pendingAs = true
-        else if (depth === 0 && /^(WHERE|FROM)$/i.test(s)) return vars.length ? vars : undefined
-      }
-    }
-  }
-  return vars.length ? vars : undefined
-}
+export { queryForm, selectVariables } from '../sparql-forms.ts'
 
 // --- running a query ----------------------------------------------------------------------------
 
@@ -238,7 +196,7 @@ type Outcome =
   | { kind: 'ask'; answer: boolean }
   | { kind: 'graph'; quads: Quad[] }
 
-const nonEmpty = (s: string | undefined) => (s && s.trim() ? s : undefined)
+const nonEmpty = (s: string | undefined) => (s && /[^ \t\r\n]/.test(s) ? s : undefined)
 
 /** The executed text of a query node, and its form (sem:construct wins over sem:select). */
 function executed(ctx: RuleContext, q: Term): { text: string; graph: boolean } | undefined {
@@ -248,70 +206,78 @@ function executed(ctx: RuleContext, q: Term): { text: string; graph: boolean } |
   return select ? { text: select, graph: false } : undefined
 }
 
-/**
- * Whether a result view follows updates: it, or a workbench that runs its query (c:runs), says
- * c:followUpdates true. Read (traced), so switching it re-evaluates the view.
- */
-function following(ctx: RuleContext, focus: NamedNode, q: Term): boolean {
-  if (isTrue(ctx.object(focus, W.followUpdates))) return true
-  return ctx.untraced(() => ctx.match(null, W.runs, q)).some((m) => isTrue(ctx.object(m.subject, W.followUpdates)))
+/** A row of a run's result set: its key (what follows "row-" in its IRI), its position (from 1), its values by column. */
+interface RunRow {
+  key: string
+  index: number
+  cells: (Term | undefined)[]
+  /** A blank node's label (iv:label), by column. */
+  labels: (string | undefined)[]
 }
 
+/** A run of the query a result view shows, as the views runtime wrote it (iv:run: src/view/runs.ts). */
+type Run =
+  | { kind: 'none' }
+  | { kind: 'unbound' }
+  | { kind: 'nosparql' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ask'; answer: boolean }
+  | { kind: 'rows'; triples: boolean; total: number; columns: string[]; rows: RunRow[] }
+
+const IV = NS.iv
+const RSN = NS.rs
+
 /**
- * Run the query a result view shows. Never throws: a failing query is an outcome like any other.
- * Followed (see following()), the view depends on the triples the query reads, and its
- * rendering's sem:refresh re-runs it when they change; otherwise its results stay as of the run.
+ * The run of the query a result view shows (c:of): its view (iv:run) runs it - on request, or
+ * maintained while it follows updates - and keeps the result in the views graph; this reads it, the
+ * rows up to `limit` (in their order), as c:ResultTableRendering-sparql does.
  */
-function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
+function readRun(ctx: RuleContext, focus: NamedNode, limit = Infinity): Run {
   const q = ctx.object(focus, W.of)
-  if (!named(q)) return { kind: 'none' }
-  // Read so that running the same text again re-evaluates the view.
-  ctx.object(q, W.runCount)
-  const follow = following(ctx, focus, q)
-  const run = executed(ctx, q)
-  if (!run) return { kind: 'none' }
-  // A bound view (c:bindVariable, as a c:QueryView): $variable is the value of c:bindProperty on
-  // c:bindFrom (e.g. a selection), read so that a new value runs the query again.
-  const variable = str(ctx.object(focus, C.bindVariable))
-  if (variable) {
+  if (!named(q) || !executed(ctx, q)) return { kind: 'none' }
+  // A bound view (c:bindVariable): $variable is the value of c:bindProperty on c:bindFrom.
+  if (ctx.objects(focus, C.bindVariable).some((v) => v.value !== '')) {
     const from = ctx.object(focus, C.bindFrom)
     const p = ctx.object(focus, C.bindProperty)
-    const value = named(from) && named(p) ? ctx.object(from, p) : undefined
-    if (!named(value)) return { kind: 'unbound' }
-    run.text = run.text.replaceAll('$' + variable, `<${value.value}>`)
+    if (!(named(from) && named(p) && ctx.objects(from, p).some(named))) return { kind: 'unbound' }
   }
-  if (!ctx.sparql) return { kind: 'nosparql' }
-  // A query maintained as a view (followed, see FollowAsView): its rows, from the views graph, are
-  // read instead of running it again. Followed like a query - its result set's rows and their
-  // multiplicities are the reads - so a burst of changes still costs one run at the next frame.
-  const maintained = !run.graph && !variable ? (follow ? ctx.untraced(() => maintainedRows(ctx, q)) : maintainedRows(ctx, q)) : undefined
-  if (maintained && follow) ctx.queryReads?.push({ s: q.value, p: NS.rs + 'solution' }, { p: NS.iv + 'multiplicity' }, { s: q.value, p: RDF_TYPE })
-  if (maintained) {
-    const declared = selectVariables(run.text)
-    const shown = declared ? [...declared] : []
-    for (const r of maintained) for (const k of r.keys()) if (!shown.includes(k)) shown.push(k)
-    return { kind: 'select', vars: shown, rows: maintained }
+  const view = ctx.object(focus, IV + 'run')
+  if (!view || !ctx.match(view, RDF_TYPE, RSN + 'ResultSet').length) return { kind: ctx.sparql ? 'none' : 'nosparql' }
+  const error = ctx.object(view, IV + 'error')
+  if (error) return { kind: 'error', message: error.value }
+  const answer = ctx.object(view, RSN + 'boolean')
+  if (answer) return { kind: 'ask', answer: answer.value === 'true' }
+  const columns = ctx
+    .objects(view, IV + 'column')
+    .map((c): [number, string] => [Number(ctx.object(c, RSN + 'index')?.value), ctx.object(c, RSN + 'variable')?.value ?? ''])
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v)
+  const rows: RunRow[] = []
+  for (const r of ctx.objects(view, RSN + 'solution')) {
+    const index = Number(ctx.object(r, RSN + 'index')?.value)
+    if (!(index <= limit)) continue
+    const bindings = columns.map((v) => ctx.nn(r.value + '-' + v))
+    rows.push({
+      key: r.value.slice(view.value.length).replace(/^.*?row-/, ''),
+      index,
+      cells: bindings.map((b) => ctx.object(b, RSN + 'value')),
+      labels: bindings.map((b) => ctx.object(b, IV + 'label')?.value),
+    })
   }
-  try {
-    const result = (run.graph ? ctx.construct(run.text, { follow }) : ctx.select(run.text, { follow })) as unknown
-    if (typeof result === 'boolean') return { kind: 'ask', answer: result }
-    if (!Array.isArray(result)) return { kind: 'error', message: 'The query returned no results the workbench can show.' }
-    if (result.length && result[0] instanceof Map) {
-      const rows = result as Row[]
-      const declared = selectVariables(run.text)
-      const vars = declared ? [...declared] : []
-      if (!declared) for (const v of tokenizeSparql(run.text)) if (v.kind === 'var' && !vars.includes(v.text.slice(1))) vars.push(v.text.slice(1))
-      const bound = new Set(rows.flatMap((r) => [...r.keys()]))
-      const shown = declared ? vars : vars.filter((v) => bound.has(v))
-      for (const k of bound) if (!shown.includes(k)) shown.push(k)
-      return { kind: 'select', vars: shown, rows }
-    }
-    if (result.length && !('subject' in (result[0] as object))) return { kind: 'error', message: 'The query returned no results the workbench can show.' }
-    if (!run.graph) return { kind: 'select', vars: selectVariables(run.text) ?? [], rows: [] }
-    return { kind: 'graph', quads: result as Quad[] }
-  } catch (e) {
-    return { kind: 'error', message: truncate(String((e as Error)?.message ?? e), 600) }
+  rows.sort((a, b) => a.index - b.index)
+  return { kind: 'rows', triples: !!ctx.object(view, IV + 'triples'), total: Number(ctx.object(view, IV + 'rowCount')?.value ?? 0), columns, rows }
+}
+
+/** A run as the function-only result views use it (the graph, Turtle): every row. */
+function outcome(ctx: RuleContext, focus: NamedNode): Outcome {
+  const run = readRun(ctx, focus)
+  if (run.kind !== 'rows') return run
+  if (run.triples) {
+    const quads = run.rows.flatMap((r) => (r.cells[0] && r.cells[1]?.termType === 'NamedNode' && r.cells[2] ? [quad(r.cells[0], r.cells[1] as NamedNode, r.cells[2])] : []))
+    return { kind: 'graph', quads }
   }
+  const rows = run.rows.map((r) => new Map(r.cells.flatMap((t, i): [string, Term][] => (t ? [[run.columns[i]!, t]] : []))))
+  return { kind: 'select', vars: run.columns, rows }
 }
 
 /** What a result view shows instead of results: a sentence, or the error as a c:Alert. */
@@ -706,79 +672,118 @@ function liveIndicator(ctx: RuleContext, o: Out, focus: NamedNode, label: string
 
 const NUMERIC = /#(integer|decimal|double|float|long|int|short|nonNegativeInteger|positiveInteger)$/
 
+/** A string cut at n characters (code points, as SPARQL counts them), the last one an ellipsis. */
+function cut(s: string, n: number): string {
+  const chars = Array.from(s)
+  return chars.length > n ? chars.slice(0, n - 1).join('') + '…' : s
+}
+
+/** Every (prefix, namespace) the engine knows (sem:prefixName: the framework's) or the graph declares (sh:declare). */
+const knownNamespaces = (ctx: RuleContext): [string, string][] =>
+  ctx.memo('workbench:namespaces', () => [...declarations(ctx), ...Object.entries(NS)])
+
+/** An IRI as the result table shows it: prefix:local with the longest namespace that leaves a plain local name (then the least prefix), else <iri> (its end, when long). */
+function shownIri(ctx: RuleContext, iri: string): string {
+  let best: [string, string] | undefined
+  for (const [p, ns] of knownNamespaces(ctx)) {
+    if (!iri.startsWith(ns) || !PN_LOCAL.test(iri.slice(ns.length))) continue
+    if (!best || ns.length > best[1].length || (ns.length === best[1].length && p < best[0])) best = [p, ns]
+  }
+  if (best) return `${best[0]}:${iri.slice(best[1].length)}`
+  const chars = Array.from(iri)
+  return chars.length > 60 ? `<…${chars.slice(-56).join('')}>` : `<${iri}>`
+}
+
+/** A value as the result table shows it: an IRI by name, a blank node by its label, a literal as its text. */
+const shownTerm = (ctx: RuleContext, t: Term | undefined, label: string | undefined): string =>
+  !t ? '' : t.termType === 'NamedNode' ? shownIri(ctx, t.value) : t.termType === 'BlankNode' ? (label ?? '_:' + t.value) : t.value
+
+/** A phrase with its count, written with thousands separators as the SPARQL writes it. */
+const sayCount = (ctx: RuleContext, iri: string, fallback: string, n: number) => say(ctx, iri, fallback, { n: n.toLocaleString('en-US') })
+
+/** A column's header: ?variable, or for a CONSTRUCT's triples what it holds (rdf:subject …), by its label. */
+const header = (ctx: RuleContext, run: Extract<Run, { kind: 'rows' }>, v: string) =>
+  run.triples ? (text(ctx, ctx.nn(RDF + v), RDFS_LABEL) ?? v) : '?' + v
+
 /**
  * A cell. One showing an IRI says which (c:term), so rules above the table can name it with the
  * graph's prefixes (c:markdown); the rest they read as shown.
  */
-function cell(ctx: RuleContext, o: Out, id: string, t: Term | undefined): NamedNode {
+function cell(ctx: RuleContext, o: Out, id: string, t: Term | undefined, label: string | undefined): NamedNode {
   if (!t) return o.el(id, 'Td', { class: 'sem-unbound' })
   if (t.termType === 'NamedNode' || t.termType === 'BlankNode') {
-    const code = o.el(`${id}-code`, 'Code', {}, [o.text(`${id}-text`, display(ctx, t))])
+    const code = o.el(`${id}-code`, 'Code', {}, [o.text(`${id}-text`, shownTerm(ctx, t, label))])
     const td = o.el(id, 'Td', {}, [code])
     if (t.termType === 'NamedNode') o.t(td, W.term, t)
     return td
   }
   const lit = t as Term & { language?: string; datatype?: NamedNode }
   const numeric = !lit.language && NUMERIC.test(lit.datatype?.value ?? '')
-  const parts = [o.text(`${id}-text`, truncate(t.value, 240))]
+  const parts = [o.text(`${id}-text`, cut(t.value, 240))]
   if (lit.language) parts.push(o.el(`${id}-lang`, 'Span', { class: 'sem-lang' }, [o.text(`${id}-lang-text`, '@' + lit.language)]))
   return o.el(id, 'Td', { class: numeric ? 'sem-end' : undefined }, parts)
 }
 
+/** What a result table shows instead of rows (not run, unbound, failed) or an answer; undefined for rows. */
+function runNotice(ctx: RuleContext, o: Out, run: Run): NamedNode | undefined {
+  const shown = notice(ctx, o, run as Outcome)
+  if (shown) return o.el('root', 'Div', {}, shown)
+  if (run.kind === 'ask') return o.el('root', 'Div', {}, [summary(o, say(ctx, P.answer, 'Answer: {v}', { v: String(run.answer) }))])
+  return undefined
+}
+
+// The function variant of c:ResultTableRendering-sparql: the run's rows (readRun) as a table.
 const table: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const result = outcome(ctx, focus)
   const limit = limitOf(ctx, focus, 200)
-  const shownNotice = notice(ctx, o, result)
-  if (shownNotice) {
-    o.renders(o.el('root', 'Div', {}, shownNotice))
+  const run = readRun(ctx, focus, limit)
+  const shownNotice = runNotice(ctx, o, run)
+  if (shownNotice || run.kind !== 'rows') {
+    o.renders(shownNotice!)
     return o.quads
   }
-  if (result.kind === 'ask') {
-    o.renders(o.el('root', 'Div', {}, [summary(o, say(ctx, P.answer, 'Answer: {v}', { v: String(result.answer) }))]))
-    return o.quads
-  }
-  const graph = result.kind === 'graph'
-  const columns = graph ? ['subject', 'predicate', 'object'] : result.kind === 'select' ? result.vars : []
-  const headers = graph ? columns.map((n) => labelOf(ctx, ctx.nn(RDF + n))) : columns.map((v) => '?' + v)
-  const rows: (Term | undefined)[][] =
-    result.kind === 'graph' ? result.quads.map((q) => [q.subject, q.predicate, q.object]) : result.kind === 'select' ? result.rows.map((r) => columns.map((v) => r.get(v))) : []
-  const total = rows.length
-  const shown = rows.slice(0, limit)
-  const count = graph ? say(ctx, P.triples, 'Triples: {n}', { n: total }) : say(ctx, P.rows, 'Rows: {n}', { n: total })
-
-  if (ctx.modality === MOD.Text) {
-    const lines = shown.slice(0, 20).map((r) => r.map((t) => truncate(display(ctx, t), 32)).join('  ·  '))
-    if (total > lines.length) lines.push(say(ctx, P.more, '+{n} more', { n: total - lines.length }))
-    o.renders(o.el('root', 'Div', {}, [o.text('lines', [count, headers.join('  ·  '), ...lines].join('\n'))]))
-    return o.quads
-  }
-  if (!total) {
+  const count = sayCount(ctx, run.triples ? P.triples : P.rows, run.triples ? 'Triples: {n}' : 'Rows: {n}', run.total)
+  if (!run.total) {
     o.renders(o.el('root', 'Div', {}, [summary(o, count), o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noResults, 'No results.'))])]))
     return o.quads
   }
   // Each cell says which column it is in (c:column), as each row which row (c:row).
   const at = (n: NamedNode, i: number) => (o.t(n, W.column, int(ctx, i)), n)
-  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, headers.map((h, i) => at(o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, h)]), i)))])
-  const seen = new Map<string, number>()
+  const head = o.el('head', 'Thead', {}, [o.el('head-row', 'Tr', {}, run.columns.map((v, i) => at(o.el(`h${i}`, 'Th', { scope: 'col' }, [o.text(`h${i}-text`, header(ctx, run, v))]), i)))])
+  // Keyed by its values (its row's node): a row that is in the next run too keeps its elements.
   const body = o.el(
     'body',
     'Tbody',
     {},
-    shown.map((r, ri) => {
-      // Keyed by content: a row that is in the next run too keeps its elements.
-      const base = 'r' + fnv(r.map((t) => (t ? t.termType + t.value : '')).join('\u0000'))
-      const n = seen.get(base) ?? 0
-      seen.set(base, n + 1)
-      const id = n ? `${base}-${n}` : base
-      const tr = o.el(id, 'Tr', {}, r.map((t, ci) => at(cell(ctx, o, `${id}-c${ci}`, t), ci)))
-      o.t(tr, W.row, int(ctx, ri))
+    run.rows.map((r) => {
+      const id = 'r-' + r.key
+      const tr = o.el(id, 'Tr', {}, r.cells.map((t, ci) => at(cell(ctx, o, `${id}-c${ci}`, t, r.labels[ci]), ci)))
+      o.t(tr, W.row, int(ctx, r.index - 1))
       return tr
     }),
   )
+  const shown = Math.min(run.total, limit)
   const parts = [summaryBar(ctx, o, count), o.el('scroll', 'Div', { class: 'sem-scroll' }, [o.el('table', 'Table', {}, [head, body])])]
-  if (total > shown.length) parts.push(o.el('more', 'P', { class: 'sem-more' }, [o.text('more-text', say(ctx, P.more, '+{n} more', { n: total - shown.length }))]))
+  if (run.total > shown) parts.push(o.el('more', 'P', { class: 'sem-more' }, [o.text('more-text', sayCount(ctx, P.more, '+{n} more', run.total - shown))]))
   o.renders(o.el('root', 'Div', {}, parts))
+  return o.quads
+}
+
+// The function variant of c:ResultTableAsText-sparql: the count, the columns and the first 20 rows as lines.
+const tableText: FnRule = (ctx, focus) => {
+  const o = ctx.out(focus)
+  const limit = limitOf(ctx, focus, 200)
+  const run = readRun(ctx, focus, Math.min(limit, 20))
+  const shownNotice = runNotice(ctx, o, run)
+  if (shownNotice || run.kind !== 'rows') {
+    o.renders(shownNotice!)
+    return o.quads
+  }
+  const count = sayCount(ctx, run.triples ? P.triples : P.rows, run.triples ? 'Triples: {n}' : 'Rows: {n}', run.total)
+  const lines = run.rows.map((r) => r.cells.map((t, i) => cut(shownTerm(ctx, t, r.labels[i]), 32)).join('  ·  '))
+  const shownLines = Math.min(run.total, limit, 20)
+  if (run.total > shownLines) lines.push(sayCount(ctx, P.more, '+{n} more', run.total - shownLines))
+  o.renders(o.el('root', 'Div', {}, [o.text('lines', [count, run.columns.map((v) => header(ctx, run, v)).join('  ·  '), ...lines].join('\n'))]))
   return o.quads
 }
 
@@ -1234,6 +1239,7 @@ export const functions: Record<string, FnRule> = {
   'workbench:workbench': workbench,
   'workbench:editor': editor,
   'workbench:table': table,
+  'workbench:table-text': tableText,
   'workbench:table-markdown': tableMarkdown,
   'workbench:graph': graphview,
   'workbench:graph-selection': graphSelection,

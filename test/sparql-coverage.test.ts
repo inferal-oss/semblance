@@ -49,8 +49,6 @@ describe('SPARQL coverage', () => {
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
       // Views over derived triples (#147): formulas over a sheet's derived inputs or a view's figures.
       { rendering: 'QueryFormula', issue: '147' },
-      // Query runs as graph data (#148): the result table, of a query run when asked.
-      { rendering: 'ResultTableRendering', issue: '148' },
     ])
   })
 

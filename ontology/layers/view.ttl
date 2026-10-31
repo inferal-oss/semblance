@@ -36,6 +36,11 @@ iv:Auto a iv:Strategy ; rdfs:label "as it can"@en ;
     rdfs:comment "Asked for on a view whose query may not be maintainable (one typed into the workbench): a fallback to recompute is expected - no warning, and no error in strict mode, which still compares it."@en .
 iv:Recompute a iv:Strategy ; rdfs:label "recomputed"@en ;
     rdfs:comment "Re-run from scratch whenever an input changes, and diffed (the fallback)."@en .
+iv:OnRequest a iv:Strategy ; rdfs:label "on request"@en , "на запит"@uk , "auf Anfrage"@de , "عند الطلب"@ar ;
+    rdfs:comment """Run, not maintained: evaluated when defined, when a triple about its query changes (its text, a
+c:runCount), when a parameter changes and when it is shown again - never for a change to the data. A
+query someone runs and reads (a result table that is not following updates). With iv:ResultSet, its
+result stays in the views graph until the next run."""@en .
 iv:fallback a owl:DatatypeProperty ; rdfs:domain iv:View ;
     rdfs:comment "Why the runtime recomputes a view rather than maintaining it (written by the runtime)."@en .
 
@@ -105,6 +110,25 @@ iv:perReferrer a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Prope
 node: as iv:targets, its IRI is <node>/~view-<local name>, its rows are minted under the node, and it is
 maintained while the node is shown. A formula whose query reads $this (c:valueQuery) is one view per
 component that asks it, not one per instance of a class."""@en .
+iv:perQuery a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Property ;
+    rdfs:comment """A view per query that a node names by this property (`?node <property> ?query`, the query a node
+with sem:select or sem:construct): at the query's own IRI, so the nodes that name one query share its
+run, with this view's annotations (iv:strategy, iv:materialize), maintained while one of those nodes is
+shown. A query that is an iv:View of its own is left to its own annotations. Each node that names it
+says which view runs it (iv:run). With iv:bindsBy, a node that binds a variable gets a view of its own,
+<node>/~run, its variable an iv:parameter."""@en .
+iv:referrerClass a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range owl:Class ;
+    rdfs:comment "With iv:perQuery: only nodes of this class (or a subclass) name queries."@en .
+iv:followedBy a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range rdf:Property ;
+    rdfs:comment "With iv:perQuery: a query a node names while saying this property true is maintained (iv:Auto), not run on request."@en .
+iv:bindsBy a owl:ObjectProperty ; rdfs:domain iv:View ;
+    rdfs:comment """With iv:perQuery: how a node binds a variable of the query it names - the property holding the
+variable's name (iv:variableBy), the node (iv:fromBy) and the property (iv:propertyBy) whose value it is."""@en .
+iv:variableBy a owl:ObjectProperty ; rdfs:range rdf:Property .
+iv:fromBy a owl:ObjectProperty ; rdfs:range rdf:Property .
+iv:propertyBy a owl:ObjectProperty ; rdfs:range rdf:Property .
+iv:run a owl:ObjectProperty ; rdfs:range iv:View ;
+    rdfs:comment "Written by the runtime, on a node that names a query (iv:perQuery): the view that runs it, whose result set it shows."@en .
 iv:instanceOf a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: the view it is an instance of."@en .
 iv:focus a owl:ObjectProperty ; rdfs:comment "Written by the runtime on a view per instance: its instance ($this)."@en .
 iv:parameter a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:Parameter ;
@@ -142,8 +166,21 @@ iv:Graph a iv:Materialization ; rdfs:label "in the views graph"@en ;
 iv:Ephemeral a iv:Materialization ; rdfs:label "to subscribers only"@en ;
     rdfs:comment "A CONSTRUCT view's triples are not written to the views graph: only subscribers (and since()) see them."@en .
 iv:ResultSet a iv:Materialization ; rdfs:label "rows only"@en ;
-    rdfs:comment """A SELECT's rows as a result set in the views graph (as iv:Graph), a CONSTRUCT's triples nowhere (as
-iv:Ephemeral): for a query whose text anyone may type (the workbench), whose triples must not become input."""@en .
+    rdfs:comment """Whatever the query gives, as a result set in the views graph, and never as triples of their own:
+for a query whose text anyone may type (the workbench), whose triples must not become input. A
+SELECT's rows, a CONSTRUCT's triples as rows (?subject ?predicate ?object, iv:triples), an ASK's
+answer (rs:boolean) or the error a run ended in (iv:error). Every row has rs:index (1-based, ORDER
+BY's order, else a stable one: by its values), a row the result has n times is n rows, and the
+columns are in order (iv:column):
+  <view> a rs:ResultSet ; iv:rowCount n ; iv:column <view>/~column-i … ; rs:solution <row> …
+  <view>/~column-i rs:variable "v" ; rs:index i
+  <row> rs:index i ; rs:binding <row>-v …   <row>-v rs:variable "v" ; rs:value term
+(src/view/runs.ts)."""@en .
+iv:column a owl:ObjectProperty ; rdfs:comment "On an iv:ResultSet's view: one of its columns (rs:variable, rs:index from 1)."@en .
+iv:rowCount a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "On an iv:ResultSet's view: how many rows it has."@en .
+iv:triples a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On an iv:ResultSet's view: its rows are a CONSTRUCT's (or DESCRIBE's) triples."@en .
+iv:error a owl:DatatypeProperty ; rdfs:range xsd:string ; rdfs:comment "On an iv:ResultSet's view: the run failed, with this message (no rows)."@en .
+iv:label a owl:DatatypeProperty ; rdfs:comment "On a result set's binding whose value is a blank node: the node's label (\"_:b0\"), which SPARQL cannot write."@en .
 iv:multiplicity a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "How many times a result set's row occurs (when more than once)."@en .
 
 # Designed, not built yet (docs/IVM.md §8.1): iv:maxState.
