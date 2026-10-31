@@ -61,6 +61,49 @@ describe.skipIf(!built.length).each(built)('%s engine store', (kind) => {
     expect(rows('{ BIND(1 AS ?v) }')).toEqual(['s=http://x/a v=1'])
   })
 
+  // LATERAL's right side may not define (by BIND, VALUES or a subquery's SELECT expression or
+  // aggregate) a variable in scope on its left; it may still join on it by triples or a plain
+  // GROUP BY key. Each build accepts and rejects the same queries as Oxigraph (#69).
+  it.skipIf(!sparql)('rejects a LATERAL that binds a variable in scope, as Oxigraph', () => {
+    const e = new Engine(new WebAssembly.Module(readFileSync(new URL(`../rdf-engine/build/${kind}.wasm`, import.meta.url))))
+    const reference = new ox.Store()
+    const rights = [
+      '{ SELECT (COUNT(*) AS ?n) WHERE { VALUES ?c { 5 6 } } }',
+      '{ SELECT (2 AS ?n) WHERE { } }',
+      '{ SELECT * WHERE { BIND(2 AS ?n) } }',
+      '{ SELECT ?n WHERE { VALUES ?n { 1 } } }',
+      '{ SELECT ?n WHERE { } GROUP BY (?m AS ?n) }',
+      'BIND(2 AS ?n)',
+      'VALUES ?n { 1 }',
+      'OPTIONAL { BIND(2 AS ?n) }',
+      '{ BIND(2 AS ?n) } UNION { }',
+      'MINUS { BIND(2 AS ?n) }',
+      'GRAPH ?g { BIND(2 AS ?n) }',
+      // accepted
+      '?s ?p ?n',
+      '{ SELECT ?n WHERE { ?s ?p ?n } }',
+      '{ SELECT ?n (COUNT(*) AS ?c) WHERE { ?s ?p ?n } GROUP BY ?n }',
+      '{ SELECT ?m WHERE { BIND(2 AS ?n) BIND(?n AS ?m) } }',
+      'FILTER NOT EXISTS { BIND(2 AS ?n) }',
+      'GRAPH ?n { }',
+      'BIND(2 AS ?m)',
+    ]
+    const accepts = (q: string, prepare: (q: string) => unknown) => {
+      try {
+        prepare(q)
+        return true
+      } catch {
+        return false
+      }
+    }
+    for (const left of ['BIND(1 AS ?n)', '?s ?p ?n', '{ SELECT ?n WHERE { ?s ?p ?n } }'])
+      for (const right of rights) {
+        const q = `SELECT * WHERE { ${left} LATERAL { ${right} } }`
+        expect(accepts(q, (q) => e.prepare(q)), q).toBe(accepts(q, (q) => reference.query(q)))
+      }
+    expect(accepts('SELECT * WHERE { BIND(1 AS ?n) LATERAL { { SELECT (COUNT(*) AS ?n) WHERE { VALUES ?c { 5 6 } } } } }', (q) => e.prepare(q))).toBe(false)
+  })
+
   // The bar chart's fmtIn (charts.ttl): a computed double is read back from its shortest digits.
   // "999.4999999999999" (9.995 × 100) once read as 999.5 (16 digits above 2^53 rounded before the
   // division), and ROUND was floor(x + 0.5); a 9.99 € segment showed as "10.00 €" (#225).

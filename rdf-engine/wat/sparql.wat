@@ -671,6 +671,8 @@
         (if (call $is_kw (@str "LATERAL")) (then
           (call $lex)
           (if (i32.eqz (local.tee $n (call $ggp))) (then (return (i32.const 0))))
+          (if (call $lateral_rebinds (i32.load offset=4 (local.get $g)) (local.get $n))
+            (then (return (call $syntax (@str "LATERAL binds a variable already in scope")))))
           (call $add_elem (local.get $g) (call $node2 (i32.const P_LATERAL) (local.get $n) (i32.const 0)))
           (br $next)))
         (if (call $is_kw (@str "GRAPH")) (then
@@ -1378,6 +1380,71 @@
       (if (i32.eq (i32.load offset=8 (local.get $m)) (local.get $slot)) (then (return (i32.const 1))))
       (local.set $m (i32.load offset=28 (local.get $m))) (br $map))))))
   (i32.const 0))
+
+;; Whether the right side of a LATERAL defines a variable that the elements
+;; before it (from el) put in scope.
+(func $lateral_rebinds (param $el i32) (param $right i32) (result i32)
+  (local $e i32)
+  (local.set $e (global.get $vars))
+  (loop $each (if (local.get $e) (then
+    (if (call $defines (local.get $right) (i32.load offset=8 (local.get $e))) (then
+      (if (call $elems_bind (local.get $el) (i32.load offset=8 (local.get $e))) (then (return (i32.const 1))))))
+    (local.set $e (i32.load offset=16 (local.get $e)))
+    (br $each))))
+  (i32.const 0))
+
+;; Whether pattern element el defines slot: binds it by BIND, VALUES or a
+;; subquery's SELECT expression (an aggregate's too), as LATERAL's scope rule
+;; counts it. A triple's variables and a plain GROUP BY key do not count, nor
+;; does a FILTER's EXISTS.
+(func $defines (param $el i32) (param $slot i32) (result i32)
+  (local $k i32) (local $q i32) (local $m i32)
+  (local.set $k (i32.load (local.get $el)))
+  (if (i32.or (i32.eq (local.get $k) (i32.const P_BIND)) (i32.eq (local.get $k) (i32.const P_VALUES)))
+    (then (return (call $binds (local.get $el) (local.get $slot)))))
+  (if (i32.eq (local.get $k) (i32.const P_GROUP)) (then
+    (local.set $m (i32.load offset=4 (local.get $el)))
+    (loop $each (if (local.get $m) (then
+      (if (call $defines (local.get $m) (local.get $slot)) (then (return (i32.const 1))))
+      (local.set $m (i32.load offset=28 (local.get $m)))
+      (br $each))))
+    (return (i32.const 0))))
+  (if (i32.eq (local.get $k) (i32.const P_UNION)) (then
+    (return (i32.or (call $defines (i32.load offset=4 (local.get $el)) (local.get $slot)) (call $defines (i32.load offset=8 (local.get $el)) (local.get $slot))))))
+  (if (i32.or (i32.or (i32.eq (local.get $k) (i32.const P_OPTIONAL)) (i32.eq (local.get $k) (i32.const P_LATERAL)))
+              (i32.eq (local.get $k) (i32.const P_MINUS)))
+    (then (return (call $defines (i32.load offset=4 (local.get $el)) (local.get $slot)))))
+  (if (i32.eq (local.get $k) (i32.const P_GRAPH)) (then (return (call $defines (i32.load offset=8 (local.get $el)) (local.get $slot)))))
+  (if (i32.eq (local.get $k) (i32.const P_SUB)) (then
+    (local.set $q (i32.load offset=4 (local.get $el)))
+    (local.set $m (i32.load offset=72 (local.get $q)))
+    (loop $map (if (local.get $m) (then
+      (if (i32.eq (i32.load offset=8 (local.get $m)) (local.get $slot)) (then
+        (if (call $sub_defines (local.get $q) (i32.load offset=4 (local.get $m))) (then (return (i32.const 1))))))
+      (local.set $m (i32.load offset=28 (local.get $m))) (br $map))))))
+  (i32.const 0))
+
+;; Whether subquery q defines its own slot: a SELECT or GROUP BY expression, its
+;; trailing VALUES or its WHERE clause.
+(func $sub_defines (param $q i32) (param $slot i32) (result i32)
+  (local $item i32) (local $e i32)
+  (local.set $item (i32.load offset=8 (local.get $q)))
+  (loop $items (if (local.get $item) (then
+    (if (i32.and (i32.eq (i32.load offset=4 (local.get $item)) (local.get $slot)) (i32.ne (i32.load offset=8 (local.get $item)) (i32.const 0)))
+      (then (return (i32.const 1))))
+    (local.set $item (i32.load offset=28 (local.get $item)))
+    (br $items))))
+  (local.set $item (i32.load offset=16 (local.get $q)))
+  (loop $keys (if (local.get $item) (then
+    (local.set $e (i32.load offset=4 (local.get $item)))
+    (if (i32.and (i32.eq (i32.load offset=8 (local.get $item)) (local.get $slot))
+                 (i32.eqz (i32.and (i32.eq (i32.load (local.get $e)) (i32.const E_VAR)) (i32.eq (i32.load offset=4 (local.get $e)) (local.get $slot)))))
+      (then (return (i32.const 1))))
+    (local.set $item (i32.load offset=28 (local.get $item)))
+    (br $keys))))
+  (if (i32.load offset=40 (local.get $q)) (then
+    (if (call $binds (i32.load offset=40 (local.get $q)) (local.get $slot)) (then (return (i32.const 1))))))
+  (call $defines (i32.load offset=12 (local.get $q)) (local.get $slot)))
 
 (func $modifiers (param $q i32) (result i32)
   (local $e i32) (local $slot i32) (local $desc i32) (local $v i32)
