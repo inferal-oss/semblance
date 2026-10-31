@@ -793,10 +793,11 @@ const streamStatsText: FnRule = (ctx, focus) => {
 
 /** Style layer: expose hookable properties of the instance on its root. */
 const styleHooks: FnRule = (ctx, focus) => {
-  const hooks = ctx.memo('style:hooks', () => new Map(ctx.match(null, STY.hookAttribute, null).map((q) => [q.subject.value, q.object.value])))
+  const hooks = hookAttributes(ctx)
   const o = ctx.out(focus)
   const root = o.node('root')
-  for (const q of ctx.match(focus, null, null)) {
+  // Every triple of the focus, read untraced: it depends on the hooked ones only (its watches).
+  for (const q of ctx.untraced(() => ctx.match(focus, null, null))) {
     const name = hooks.get(q.predicate.value)
     if (!name) continue
     const slug = str(ctx.object(q.object, SEM.slug))
@@ -804,6 +805,10 @@ const styleHooks: FnRule = (ctx, focus) => {
   }
   return o.quads
 }
+
+/** Hooked properties (sty:hookAttribute), with the attribute each sets. */
+const hookAttributes = (ctx: RuleContext) => ctx.memo('style:hooks', () => new Map(ctx.match(null, STY.hookAttribute, null).map((q) => [q.subject.value, q.object.value])))
+styleHooks.watches = (ctx) => ctx.memo('style:hooked', () => new Set(hookAttributes(ctx).keys()))
 
 const a11yTextField: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)

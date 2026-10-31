@@ -2,6 +2,8 @@ import type { Term } from '@rdfjs/types'
 import { RDF_FIRST, RDF_NIL, RDF_REST, RDFS_SUBCLASS, RDF_TYPE, SEM } from '../ns.ts'
 import { prefixesFor } from '../prefixes.ts'
 import { queryReads } from '../sparql-reads.ts'
+import { prefixMap } from '../view/compile.ts'
+import { focusPredicates } from './focus-predicates.ts'
 import type { GraphStore } from '../store/types.ts'
 
 export interface Rule {
@@ -29,6 +31,14 @@ export interface Rule {
    * is stopped by and follows), when it names them all. Absent: any predicate.
    */
   watches?: Set<string>
+  /**
+   * Paths from the focus to predicates the rule reads too (with `watches`; a step "^p" goes against
+   * p): a SPARQL rule whose variable predicates come from its focus (`$this c:property ?p . ?target
+   * ?p ?value`, focus-predicates.ts) watches, per focus, the predicates its focus names there.
+   */
+  watchesVia?: string[][]
+  /** Predicates that have one of these properties are read too (with `watches`): `$this ?p ?v . ?p sty:hookAttribute ?name`. */
+  watchesMarked?: string[]
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
@@ -170,7 +180,7 @@ export function loadRules(store: GraphStore): Rule[] {
       fn,
       follows: follows.filter((p): p is string => typeof p === 'string'),
       followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
-      watches: watches.length ? new Set(watches) : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : undefined,
+      ...(watches.length ? { watches: new Set(watches) } : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach,
       memberWatches:
@@ -200,10 +210,16 @@ export function loadRules(store: GraphStore): Rule[] {
  * A SPARQL rule watches these as a function rule's traced reads would, and is not re-run for the
  * rest of its focus's (or a followed node's) triples.
  */
-function namedPredicates(query: string, also: string[]): Set<string> | undefined {
+function namedPredicates(query: string, also: string[]): Pick<Rule, 'watches' | 'watchesVia' | 'watchesMarked'> {
   const reads = queryReads(query)
-  if (!reads || reads.some((r) => r.p === undefined)) return undefined
-  return new Set([...reads.map((r) => r.p!), ...also])
+  if (!reads) return {}
+  if (reads.every((r) => r.p !== undefined)) return { watches: new Set([...reads.map((r) => r.p!), ...also]) }
+  // Variable predicates: watched as the focus names them, when that is all they can be.
+  const text = query.replaceAll('$this', '?this')
+  const from = focusPredicates(text, prefixMap(text.slice(0, text.search(/\b(CONSTRUCT|SELECT)\b/i))))
+  if (!from) return {}
+  const watches = new Set([...from.named, ...from.iris, ...also])
+  return { watches, ...(from.via.length && { watchesVia: from.via }), ...(from.marked.size && { watchesMarked: [...from.marked] }) }
 }
 
 /** Whether the store can run a rule: a SPARQL rule needs SPARQL and every extension group it names. */

@@ -5,6 +5,7 @@ import { A11Y, C, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import { loadRules } from '../src/engine/rules.ts'
 import { ALL_LAYERS, inputQuads, SCREEN_LAYERS, setup, todo } from './helpers.ts'
 
 const page = EX + 'page'
@@ -141,12 +142,12 @@ describe('incremental updates', () => {
     runtime.apply(t.set('t7', NS.rdfs + 'label', 'x'))
     expect(screen.engine.stats.ruleRuns - mid.ruleRuns).toBe(2)
     // A sort-key change re-places that one item (its member-wise list evaluation
-    // reads the key) and, since the SPARQL item rule watches everything on its
-    // data item, re-runs that item too, with no change in its output.
+    // reads the key). The item's rendering reads its data item's predicates as the
+    // list names them (c:itemLabel ...), not the key, so it does not re-run (#153).
     const reorder = { ...screen.engine.stats }
     const added = screen.engine.stats.derivedAdded
     runtime.apply(t.set('t7', 'priority', 1000))
-    expect(screen.engine.stats.ruleRuns - reorder.ruleRuns).toBe(2)
+    expect(screen.engine.stats.ruleRuns - reorder.ruleRuns).toBe(1)
     expect(screen.engine.stats.derivedAdded - added).toBeLessThanOrEqual(2)
   })
 
@@ -292,6 +293,45 @@ describe('reconfiguration and layers', () => {
     expect(runs('Named')).toBe(named + 1)
     // A rule whose query takes any predicate of its focus re-runs for any of them.
     expect(runs('Any')).toBe(any + 1)
+  })
+
+  it('a SPARQL rule whose predicate its focus names watches that predicate of the node it follows (#153)', () => {
+    // Two fields over one node, as a form's are: each reads only the property it names there.
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix ex: <urn:w:> .
+      <urn:w:Field> a sem:Rule ; sem:targets ex:Field ; sem:stratum 1 ; sem:follows ex:controls ;
+        sem:construct """CONSTRUCT { $this <urn:w:shows> ?v } WHERE {
+          $this <urn:w:controls> ?target . OPTIONAL { $this <urn:w:property> ?p0 }
+          BIND(COALESCE(?p0, <urn:w:own>) AS ?p) BIND(COALESCE(?target, $this) AS ?node)
+          OPTIONAL { ?node ?p ?v } }""" .
+      ex:a a ex:Field ; ex:controls ex:form ; ex:property ex:one .
+      ex:b a ex:Field ; ex:controls ex:form ; ex:property ex:two .
+      ex:form ex:one "1" ; ex:two "2" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen })
+    const f = store.factory
+    const nn = (s: string) => f.namedNode('urn:w:' + s)
+    expect(loadRules(store).find((r) => r.iri === 'urn:w:Field')!.watchesVia).toEqual([['urn:w:property']])
+    const runs = () => screen.engine.stats.byRule.get('urn:w:Field')?.runs ?? 0
+    const shows = (s: string) => store.match(nn(s), nn('shows'), null).map((q) => q.object.value)
+    const set = (s: string, p: string, v: string) => runtime.apply({ remove: store.match(nn(s), nn(p), null), add: [f.quad(nn(s), nn(p), f.literal(v))] })
+    expect([shows('a'), shows('b')]).toEqual([['1'], ['2']])
+    const before = runs()
+    // The property one field names re-runs that field only...
+    set('form', 'one', '1!')
+    expect([shows('a'), shows('b')]).toEqual([['1!'], ['2']])
+    expect(runs()).toBe(before + 1)
+    // ...a property neither names re-runs neither...
+    set('form', 'three', '3')
+    expect(runs()).toBe(before + 1)
+    // ...and a field that names another property reads that one from then on.
+    runtime.apply({ remove: store.match(nn('b'), nn('property'), null), add: [f.quad(nn('b'), nn('property'), nn('three'))] })
+    expect(shows('b')).toEqual(['3'])
+    const after = runs()
+    set('form', 'three', '3!')
+    expect(shows('b')).toEqual(['3!'])
+    expect(runs()).toBe(after + 1)
   })
 
   it('refuses blank nodes in rule output', () => {
