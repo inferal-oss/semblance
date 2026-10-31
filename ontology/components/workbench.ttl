@@ -11,6 +11,8 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 
 # The SPARQL workbench: an editor, sample queries, and results as a table, a graph and Turtle.
 #
@@ -292,16 +294,342 @@ then also when a triple the query reads changes, at the next frame. At most c:li
 shown. A query that fails shows its error (a c:Alert) instead. Components in its c:actions (e.g. a
 clip:Copier of its c:markdown) are shown beside the summary line of its results."""@en .
 
+# A run of each query a result view shows (iv:perQuery, ontology/layers/view.ttl): the query node is a
+# view of its own, run on request - when shown, when its text or c:runCount changes, not when the graph
+# does - its result a result set in the views graph (iv:ResultSet: rows, a CONSTRUCT's triples as rows,
+# an ASK's answer or an error), which each result view names (iv:run) and reads. A view that follows
+# updates (c:followUpdates) has its query maintained instead (iv:Auto); a workbench that follows
+# makes its query a view of its own (c:FollowAsView). A view that binds a variable (c:bindVariable:
+# $variable is the value of c:bindProperty on c:bindFrom) runs its own, <view>/~run.
+c:QueryRuns a iv:View ;
+    iv:perQuery c:of ; iv:referrerClass c:QueryResultView ; iv:followedBy c:followUpdates ; iv:bindsBy c:QueryRunBinding ;
+    iv:strategy iv:OnRequest ; iv:materialize iv:ResultSet .
+c:QueryRunBinding iv:variableBy c:bindVariable ; iv:fromBy c:bindFrom ; iv:propertyBy c:bindProperty .
+
 c:ResultTable a owl:Class ;
     rdfs:subClassOf c:QueryResultView ;
     rdfs:label "Result table"@en , "Таблиця результатів"@uk , "Ergebnistabelle"@de , "جدول النتائج"@ar ;
     rdfs:comment "The results as a table: one column per variable the query selects, or subject, predicate and object for a graph."@en ;
     sem:slug "result-table" .
-c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
-    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "awaits #148 (query runs as graph data): it runs the query held in the data (sem:select / sem:construct of c:of) when asked, not as the graph changes, and shows triples, an answer or an error, none of which a view keeps in the graph yet." ;
-    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/148> .
+# The rows come from a run of the query (c:QueryRuns): the result set its view writes to the views
+# graph (iv:ResultSet, ontology/layers/view.ttl), which the table names by iv:run. Each solution
+# shown is a row (c:row, from 0) keyed by its values, each column (c:column, from 0) a header cell and a
+# cell per row: an IRI as a prefixed name (the namespaces the engine knows, sem:prefixName, or the
+# graph declares, sh:declare: the longest that leaves a plain local name, then the least prefix; else
+# <iri>, its last 56 characters when longer than 60) and c:term, a blank node as its label, a literal
+# as its text (cut at 240 characters; a number at the end) with @lang. Counts are written with
+# thousands separators (1,234), as the charts write numbers.
+c:ResultTableRendering a sem:Rendering ; sem:targets c:ResultTable ; sem:modality mod:Screen ; sem:stratum 0 ;
+    sem:follows c:of , c:bindFrom , ( iv:run rs:solution rs:binding ) , ( iv:run iv:column ) , ( c:actions [ sem:zeroOrMore rdf:rest ] rdf:first ) .
 c:ResultTableRendering-fn a sem:Rule ; sem:implements c:ResultTableRendering ; sem:function "workbench:table" .
+# Per table (sem:bulk false): every sub-select starts from $this.
+c:ResultTableRendering-sparql a sem:Rule ;
+    sem:implements c:ResultTableRendering ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:scope ?scope ; sem:orderKey ?key ; c:column ?column ; c:row ?row ; c:term ?term ;
+      c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?el ord:immediatelyPrecedes ?after .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultTable .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  # What it shows: not run (no query, or no run of it yet), a binding without a value, a failed run,
+  # an ASK's answer, or rows (the run's result set, iv:run: view.ttl, src/view/runs.ts).
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none",
+       IF(EXISTS { ?view iv:error ?anyError }, "error", IF(EXISTS { ?view rs:boolean ?anyAnswer }, "answer", "rows"))))) AS ?state)
+  # Phrases in the viewer's language.
+  OPTIONAL { ?notRunAt l10n:of c:NotRunPhrase ; l10n:name ?notRun0 } OPTIONAL { FILTER(!BOUND(?notRun0)) c:NotRunPhrase rdfs:label ?notRun1 }
+  OPTIONAL { ?failedAt l10n:of c:QueryFailedPhrase ; l10n:name ?failed0 } OPTIONAL { FILTER(!BOUND(?failed0)) c:QueryFailedPhrase rdfs:label ?failed1 }
+  OPTIONAL { ?answerAt l10n:of c:AnswerPhrase ; l10n:name ?answer0 } OPTIONAL { FILTER(!BOUND(?answer0)) c:AnswerPhrase rdfs:label ?answer1 }
+  BIND(IF(EXISTS { ?view iv:triples ?anyTriples }, c:TriplesPhrase, c:RowsPhrase) AS ?countNode)
+  LATERAL { OPTIONAL { ?countAt l10n:of ?countNode ; l10n:name ?count0 } }
+  LATERAL { OPTIONAL { FILTER(!BOUND(?count0)) ?countNode rdfs:label ?count1 } }
+  OPTIONAL { ?moreAt l10n:of c:MorePhrase ; l10n:name ?more0 } OPTIONAL { FILTER(!BOUND(?more0)) c:MorePhrase rdfs:label ?more1 }
+  BIND(STR(COALESCE(?notRun0, ?notRun1)) AS ?notRun)
+  BIND(STR(COALESCE(?failed0, ?failed1)) AS ?failed)
+  BIND(STR(COALESCE(?answer0, ?answer1)) AS ?answerPhrase)
+  BIND(STR(COALESCE(?count0, ?count1)) AS ?countPhrase)
+  BIND(STR(COALESCE(?more0, ?more1)) AS ?morePhrase)
+  # The rows: how many, how many are shown (c:limit, default 200), the count with thousands separators.
+  LATERAL { OPTIONAL { ?view iv:rowCount ?total0 } }
+  BIND(COALESCE(xsd:integer(?total0), 0) AS ?total)
+  OPTIONAL { $this c:limit ?limit0 }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?limit0))), 200) AS ?limit1)
+  BIND(IF(?limit1 < 1, 1, ?limit1) AS ?limit)
+  BIND(IF(?total < ?limit, ?total, ?limit) AS ?shown)
+  BIND(EXISTS { ?view iv:triples ?anyTriples } AS ?triples)
+  BIND(STR(?total) AS ?tn) BIND(STRLEN(?tn) AS ?tl) BIND(xsd:integer(?tl - FLOOR((?tl - 1) / 3) * 3) AS ?tg)
+  BIND(CONCAT(SUBSTR(?tn, 1, ?tg), IF(?tl > ?tg, CONCAT(",", SUBSTR(?tn, ?tg + 1, 3)), ""), IF(?tl > ?tg + 3, CONCAT(",", SUBSTR(?tn, ?tg + 4, 3)), ""),
+       IF(?tl > ?tg + 6, CONCAT(",", SUBSTR(?tn, ?tg + 7, 3)), ""), IF(?tl > ?tg + 9, CONCAT(",", SUBSTR(?tn, ?tg + 10, 3)), "")) AS ?totalText)
+  BIND(IF(CONTAINS(?countPhrase, "{n}"), CONCAT(STRBEFORE(?countPhrase, "{n}"), ?totalText, STRAFTER(?countPhrase, "{n}")), ?countPhrase) AS ?countLine)
+  BIND(?total - ?shown AS ?moreN)
+  BIND(STR(?moreN) AS ?mn) BIND(STRLEN(?mn) AS ?ml) BIND(xsd:integer(?ml - FLOOR((?ml - 1) / 3) * 3) AS ?mg)
+  BIND(CONCAT(SUBSTR(?mn, 1, ?mg), IF(?ml > ?mg, CONCAT(",", SUBSTR(?mn, ?mg + 1, 3)), ""), IF(?ml > ?mg + 3, CONCAT(",", SUBSTR(?mn, ?mg + 4, 3)), ""),
+       IF(?ml > ?mg + 6, CONCAT(",", SUBSTR(?mn, ?mg + 7, 3)), ""), IF(?ml > ?mg + 9, CONCAT(",", SUBSTR(?mn, ?mg + 10, 3)), "")) AS ?moreText)
+  BIND(IF(CONTAINS(?morePhrase, "{n}"), CONCAT(STRBEFORE(?morePhrase, "{n}"), ?moreText, STRAFTER(?morePhrase, "{n}")), ?morePhrase) AS ?moreLine)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # Not run (no query, or no run yet), or a binding without a value: a sentence (its c:emptyText).
+    FILTER(?state = "none" || ?state = "unbound")
+    OPTIONAL { FILTER(?state = "unbound") ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(?state = "unbound" && !BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, ?notRun)) AS ?data)
+  } UNION {
+    # A failed run: its error, as a c:Alert.
+    FILTER(?state = "error")
+    ?view iv:error ?message .
+    BIND(IRI(CONCAT(?me, "/~error")) AS ?el) BIND(c:Alert AS ?tag) BIND(?root AS ?parent)
+    BIND(?failed AS ?alertLabel) BIND(STR(?message) AS ?alertHelp) BIND(sty:Danger AS ?tone)
+  } UNION {
+    # An ASK: its answer.
+    FILTER(?state = "answer")
+    ?view rs:boolean ?answer .
+    BIND(IRI(CONCAT(?me, "/~summary")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-summary" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~summary-text")) AS ?textNode)
+    BIND(IF(CONTAINS(?answerPhrase, "{v}"), CONCAT(STRBEFORE(?answerPhrase, "{v}"), STR(?answer), STRAFTER(?answerPhrase, "{v}")), ?answerPhrase) AS ?data)
+  } UNION {
+    # Rows: the count (beside the c:actions, when there are rows), the table, and how many more there are.
+    FILTER(?state = "rows")
+    BIND(?total > 0 && EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+    OPTIONAL { ?noResultsAt l10n:of c:NoResultsPhrase ; l10n:name ?noResults0 } OPTIONAL { FILTER(!BOUND(?noResults0)) c:NoResultsPhrase rdfs:label ?noResults1 }
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
+      ("empty" rdfhtml:P "sem-empty" "root" 1) ("scroll" rdfhtml:Div "sem-scroll" "root" 1) ("table" rdfhtml:Table UNDEF "scroll" UNDEF)
+      ("head" rdfhtml:Thead UNDEF "table" 0) ("head-row" rdfhtml:Tr UNDEF "head" UNDEF) ("body" rdfhtml:Tbody UNDEF "table" 1) ("more" rdfhtml:P "sem-more" "root" 2)
+    }
+    FILTER(IF(?local = "summary-bar" || ?local = "actions", ?bar, IF(?local = "summary", true, IF(?local = "empty", ?total = 0, IF(?local = "more", ?total > ?shown, ?total > 0)))))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IRI(CONCAT(?me, "/~", COALESCE(?parentLocal, IF(?bar, "summary-bar", "root")))) AS ?parent)
+    BIND(IF(?local IN ("summary", "empty", "more"), IRI(CONCAT(?me, "/~", ?local, "-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "summary", ?countLine, IF(?local = "empty", STR(COALESCE(?noResults0, ?noResults1)), IF(?local = "more", ?moreLine, ?unset))) AS ?data)
+  } UNION {
+    # The actions, in their order.
+    FILTER(?state = "rows" && ?total > 0)
+    $this c:actions/rdf:rest* ?cell . ?cell rdf:first ?el FILTER(isIRI(?el))
+    BIND(IRI(CONCAT(?me, "/~actions")) AS ?parent)
+    OPTIONAL { ?cell rdf:rest/rdf:first ?after FILTER(isIRI(?after)) }
+  } UNION {
+    # A header cell per column (c:column, from 0): ?variable, or for a CONSTRUCT's triples what the
+    # column holds (rdf:subject, rdf:predicate, rdf:object), by its label.
+    FILTER(?state = "rows" && ?total > 0)
+    ?view iv:column ?col . ?col rs:variable ?variable ; rs:index ?colIndex .
+    BIND(xsd:integer(?colIndex) - 1 AS ?column)
+    BIND(IRI(CONCAT(?me, "/~h", STR(?column))) AS ?el) BIND(rdfhtml:Th AS ?tag) BIND("col" AS ?scope) BIND(?column AS ?key)
+    BIND(IRI(CONCAT(?me, "/~head-row")) AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~h", STR(?column), "-text")) AS ?textNode)
+    BIND(IF(?triples, IRI(CONCAT("http://www.w3.org/1999/02/22-rdf-syntax-ns#", STR(?variable))), c:none) AS ?columnTerm)
+    LATERAL { OPTIONAL { ?columnLabelAt l10n:of ?columnTerm ; l10n:name ?columnLabel0 } }
+    LATERAL { OPTIONAL { FILTER(!BOUND(?columnLabel0)) ?columnTerm rdfs:label ?columnLabel1 FILTER(isLiteral(?columnLabel1)) } }
+    BIND(IF(?triples, STR(COALESCE(?columnLabel0, ?columnLabel1, ?variable)), CONCAT("?", STR(?variable))) AS ?data)
+  } UNION {
+    # A row per solution shown (c:row, from 0), keyed by its values: a row in the next run too keeps its elements.
+    FILTER(?state = "rows" && ?total > 0)
+    ?view rs:solution ?r . ?r rs:index ?rowIndex . FILTER(?rowIndex <= ?limit)
+    BIND(xsd:integer(?rowIndex) - 1 AS ?row)
+    BIND(IRI(CONCAT(?me, "/~r-", STRAFTER(SUBSTR(STR(?r), STRLEN(STR(?view)) + 1), "row-"))) AS ?el) BIND(rdfhtml:Tr AS ?tag) BIND(?rowIndex AS ?key)
+    BIND(IRI(CONCAT(?me, "/~body")) AS ?parent)
+  } UNION {
+    # A cell per row and column (c:column): an IRI (c:term) or a blank node as code, a literal as its
+    # text (cut at 240 characters; numbers at the end), with its language.
+    FILTER(?state = "rows" && ?total > 0)
+    ?view rs:solution ?r . ?r rs:index ?rowIndex . FILTER(?rowIndex <= ?limit)
+    ?view iv:column ?col . ?col rs:variable ?variable ; rs:index ?colIndex .
+    BIND(xsd:integer(?colIndex) - 1 AS ?cellColumn)
+    BIND(CONCAT(?me, "/~r-", STRAFTER(SUBSTR(STR(?r), STRLEN(STR(?view)) + 1), "row-")) AS ?tr)
+    BIND(CONCAT(?tr, "-c", STR(?cellColumn)) AS ?td)
+    BIND(IRI(CONCAT(STR(?r), "-", STR(?variable))) AS ?binding)
+    LATERAL { OPTIONAL { ?binding rs:value ?value } }
+    LATERAL { OPTIONAL { ?binding iv:label ?blankLabel } }
+    # An IRI as a prefixed name: the longest namespace the engine knows (sem:prefixName) or the graph
+    # declares (sh:declare) that leaves a plain local name, then the least prefix; else <iri>, its end
+    # when long. Each IRI the rows shown hold is matched once.
+    BIND(COALESCE(IF(isIRI(?value), ?value, c:none), c:none) AS ?iriKey)
+    OPTIONAL { SELECT ?iriKey (CONCAT(?prefix, ":", SUBSTR(STR(?iriKey), ?length + 1)) AS ?prefixed) WHERE {
+        { SELECT ?iriKey ?length (MIN(?p) AS ?prefix) WHERE {
+            { SELECT ?iriKey (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                { SELECT DISTINCT ?iriKey WHERE {
+                    $this iv:run ?pv . ?pv rs:solution ?pr . ?pr rs:index ?pi ; rs:binding ?pb . ?pb rs:value ?iriKey FILTER(isIRI(?iriKey))
+                    OPTIONAL { $this c:limit ?pl0 } BIND(COALESCE(xsd:integer(ROUND(xsd:double(?pl0))), 200) AS ?pl1)
+                    FILTER(?pi <= IF(?pl1 < 1, 1, ?pl1) )
+                  } }
+                { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                BIND(STR(?ns0) AS ?ns)
+                FILTER(STRSTARTS(STR(?iriKey), ?ns) && REGEX(SUBSTR(STR(?iriKey), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+              } GROUP BY ?iriKey }
+            { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+            BIND(STR(?p1) AS ?p)
+            FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?iriKey), STR(?ns1)))
+          } GROUP BY ?iriKey ?length }
+      } }
+    BIND(STR(?value) AS ?iriText)
+    BIND(IF(isIRI(?value), COALESCE(?prefixed, IF(STRLEN(?iriText) > 60, CONCAT("<…", SUBSTR(?iriText, STRLEN(?iriText) - 55), ">"), CONCAT("<", ?iriText, ">"))),
+         IF(isBlank(?value), STR(?blankLabel), STR(?value))) AS ?shownText)
+    BIND(isLiteral(?value) && LANG(?value) = "" && REGEX(STR(DATATYPE(?value)), "#(integer|decimal|double|float|long|int|short|nonNegativeInteger|positiveInteger)$") AS ?numeric)
+    VALUES ?part { "td" "code" "lang" }
+    FILTER(?part = "td" || (?part = "code" && (isIRI(?value) || isBlank(?value))) || (?part = "lang" && isLiteral(?value) && LANG(?value) != ""))
+    BIND(IRI(IF(?part = "td", ?td, CONCAT(?td, "-", ?part))) AS ?el)
+    BIND(IF(?part = "td", rdfhtml:Td, IF(?part = "code", rdfhtml:Code, rdfhtml:Span)) AS ?tag)
+    BIND(IRI(IF(?part = "td", ?tr, ?td)) AS ?parent)
+    BIND(IF(?part = "td", ?cellColumn, IF(?part = "lang", 1, ?unset)) AS ?key)
+    BIND(IF(?part = "td", ?cellColumn, ?unset) AS ?column)
+    BIND(IF(?part = "td" && isIRI(?value), ?value, ?unset) AS ?term)
+    BIND(IF(?part = "td", IF(!BOUND(?value), "sem-unbound", IF(?numeric, "sem-end", ?unset)), IF(?part = "lang", "sem-lang", ?unset)) AS ?cls)
+    BIND(IF(?part = "lang", IRI(CONCAT(?td, "-lang-text")), IF(?part = "code" || (BOUND(?value) && isLiteral(?value)), IRI(CONCAT(?td, "-text")), ?unset)) AS ?textNode)
+    BIND(IF(?part = "td" && BOUND(?textNode), 0, ?unset) AS ?textKey)
+    BIND(IF(?part = "lang", CONCAT("@", LANG(?value)), IF(?part = "code", ?shownText,
+         IF(STRLEN(?shownText) > 240, CONCAT(SUBSTR(?shownText, 1, 239), "…"), ?shownText))) AS ?data)
+  }
+  }
+}""" .
+# As text: the count, the columns and the first 20 rows (values cut at 32 characters), one line each.
+c:ResultTableAsText a sem:Rendering ; sem:targets c:ResultTable ; sem:modality mod:Text ; sem:stratum 0 ;
+    sem:follows c:of , c:bindFrom , ( iv:run rs:solution rs:binding ) , ( iv:run iv:column ) .
+c:ResultTableAsText-fn a sem:Rule ; sem:implements c:ResultTableAsText ; sem:function "workbench:table-text" .
+c:ResultTableAsText-sparql a sem:Rule ;
+    sem:implements c:ResultTableAsText ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultTable .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  # What it shows: not run (no query, or no run of it yet), a binding without a value, a failed run,
+  # an ASK's answer, or rows (the run's result set, iv:run: view.ttl, src/view/runs.ts).
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none",
+       IF(EXISTS { ?view iv:error ?anyError }, "error", IF(EXISTS { ?view rs:boolean ?anyAnswer }, "answer", "rows"))))) AS ?state)
+  # Phrases in the viewer's language.
+  OPTIONAL { ?notRunAt l10n:of c:NotRunPhrase ; l10n:name ?notRun0 } OPTIONAL { FILTER(!BOUND(?notRun0)) c:NotRunPhrase rdfs:label ?notRun1 }
+  OPTIONAL { ?failedAt l10n:of c:QueryFailedPhrase ; l10n:name ?failed0 } OPTIONAL { FILTER(!BOUND(?failed0)) c:QueryFailedPhrase rdfs:label ?failed1 }
+  OPTIONAL { ?answerAt l10n:of c:AnswerPhrase ; l10n:name ?answer0 } OPTIONAL { FILTER(!BOUND(?answer0)) c:AnswerPhrase rdfs:label ?answer1 }
+  BIND(IF(EXISTS { ?view iv:triples ?anyTriples }, c:TriplesPhrase, c:RowsPhrase) AS ?countNode)
+  LATERAL { OPTIONAL { ?countAt l10n:of ?countNode ; l10n:name ?count0 } }
+  LATERAL { OPTIONAL { FILTER(!BOUND(?count0)) ?countNode rdfs:label ?count1 } }
+  OPTIONAL { ?moreAt l10n:of c:MorePhrase ; l10n:name ?more0 } OPTIONAL { FILTER(!BOUND(?more0)) c:MorePhrase rdfs:label ?more1 }
+  BIND(STR(COALESCE(?notRun0, ?notRun1)) AS ?notRun)
+  BIND(STR(COALESCE(?failed0, ?failed1)) AS ?failed)
+  BIND(STR(COALESCE(?answer0, ?answer1)) AS ?answerPhrase)
+  BIND(STR(COALESCE(?count0, ?count1)) AS ?countPhrase)
+  BIND(STR(COALESCE(?more0, ?more1)) AS ?morePhrase)
+  # The rows: how many, how many are shown (c:limit, default 200), the count with thousands separators.
+  LATERAL { OPTIONAL { ?view iv:rowCount ?total0 } }
+  BIND(COALESCE(xsd:integer(?total0), 0) AS ?total)
+  OPTIONAL { $this c:limit ?limit0 }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?limit0))), 200) AS ?limit1)
+  BIND(IF(?limit1 < 1, 1, ?limit1) AS ?limit)
+  BIND(IF(?total < ?limit, ?total, ?limit) AS ?shown)
+  BIND(EXISTS { ?view iv:triples ?anyTriples } AS ?triples)
+  BIND(STR(?total) AS ?tn) BIND(STRLEN(?tn) AS ?tl) BIND(xsd:integer(?tl - FLOOR((?tl - 1) / 3) * 3) AS ?tg)
+  BIND(CONCAT(SUBSTR(?tn, 1, ?tg), IF(?tl > ?tg, CONCAT(",", SUBSTR(?tn, ?tg + 1, 3)), ""), IF(?tl > ?tg + 3, CONCAT(",", SUBSTR(?tn, ?tg + 4, 3)), ""),
+       IF(?tl > ?tg + 6, CONCAT(",", SUBSTR(?tn, ?tg + 7, 3)), ""), IF(?tl > ?tg + 9, CONCAT(",", SUBSTR(?tn, ?tg + 10, 3)), "")) AS ?totalText)
+  BIND(IF(CONTAINS(?countPhrase, "{n}"), CONCAT(STRBEFORE(?countPhrase, "{n}"), ?totalText, STRAFTER(?countPhrase, "{n}")), ?countPhrase) AS ?countLine)
+  BIND(?total - IF(?shown < 20, ?shown, 20) AS ?moreN)
+  BIND(STR(?moreN) AS ?mn) BIND(STRLEN(?mn) AS ?ml) BIND(xsd:integer(?ml - FLOOR((?ml - 1) / 3) * 3) AS ?mg)
+  BIND(CONCAT(SUBSTR(?mn, 1, ?mg), IF(?ml > ?mg, CONCAT(",", SUBSTR(?mn, ?mg + 1, 3)), ""), IF(?ml > ?mg + 3, CONCAT(",", SUBSTR(?mn, ?mg + 4, 3)), ""),
+       IF(?ml > ?mg + 6, CONCAT(",", SUBSTR(?mn, ?mg + 7, 3)), ""), IF(?ml > ?mg + 9, CONCAT(",", SUBSTR(?mn, ?mg + 10, 3)), "")) AS ?moreText)
+  BIND(IF(CONTAINS(?morePhrase, "{n}"), CONCAT(STRBEFORE(?morePhrase, "{n}"), ?moreText, STRAFTER(?morePhrase, "{n}")), ?morePhrase) AS ?moreLine)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    FILTER(?state = "none" || ?state = "unbound")
+    OPTIONAL { FILTER(?state = "unbound") ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(?state = "unbound" && !BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, ?notRun)) AS ?data)
+  } UNION {
+    FILTER(?state = "error")
+    ?view iv:error ?message .
+    BIND(IRI(CONCAT(?me, "/~error")) AS ?el) BIND(c:Alert AS ?tag) BIND(?root AS ?parent)
+    BIND(?failed AS ?alertLabel) BIND(STR(?message) AS ?alertHelp) BIND(sty:Danger AS ?tone)
+  } UNION {
+    FILTER(?state = "answer")
+    ?view rs:boolean ?answer .
+    BIND(IRI(CONCAT(?me, "/~summary")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-summary" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~summary-text")) AS ?textNode)
+    BIND(IF(CONTAINS(?answerPhrase, "{v}"), CONCAT(STRBEFORE(?answerPhrase, "{v}"), STR(?answer), STRAFTER(?answerPhrase, "{v}")), ?answerPhrase) AS ?data)
+  } UNION {
+    # Rows, as lines: the count, the columns, the first 20 rows (each value cut at 32 characters), and how many more.
+    FILTER(?state = "rows")
+    OPTIONAL { SELECT (GROUP_CONCAT(?h; separator="  ·  ") AS ?headerLine) WHERE {
+        { SELECT ?h WHERE {
+            $this iv:run ?hv . ?hv iv:column ?hc . ?hc rs:variable ?hvar ; rs:index ?hi .
+            BIND(IF(EXISTS { ?hv iv:triples ?anyHt }, IRI(CONCAT("http://www.w3.org/1999/02/22-rdf-syntax-ns#", STR(?hvar))), c:none) AS ?hterm)
+            LATERAL { OPTIONAL { ?hlAt l10n:of ?hterm ; l10n:name ?hl0 } }
+            LATERAL { OPTIONAL { FILTER(!BOUND(?hl0)) ?hterm rdfs:label ?hl1 FILTER(isLiteral(?hl1)) } }
+            BIND(IF(?hterm != c:none, STR(COALESCE(?hl0, ?hl1, ?hvar)), CONCAT("?", STR(?hvar))) AS ?h)
+          } ORDER BY ?hi }
+      } }
+    OPTIONAL { SELECT (GROUP_CONCAT(?line; separator="\\n") AS ?rowLines) WHERE {
+        { SELECT ?line WHERE {
+            { SELECT ?li (GROUP_CONCAT(?cellText; separator="  ·  ") AS ?line) WHERE {
+                { SELECT ?li ?cellText WHERE {
+                    $this iv:run ?lv . ?lv rs:solution ?lr . ?lr rs:index ?li .
+                    OPTIONAL { $this c:limit ?ll0 } BIND(COALESCE(xsd:integer(ROUND(xsd:double(?ll0))), 200) AS ?ll1)
+                    FILTER(?li <= IF(?ll1 < 1, 1, ?ll1) && ?li <= 20)
+                    ?lv iv:column ?lc . ?lc rs:variable ?variable ; rs:index ?lci .
+                    BIND(IRI(CONCAT(STR(?lr), "-", STR(?variable))) AS ?binding)
+                    LATERAL { OPTIONAL { ?binding rs:value ?value } }
+                    LATERAL { OPTIONAL { ?binding iv:label ?blankLabel } }
+                    # An IRI as a prefixed name: the longest namespace the engine knows (sem:prefixName) or the graph
+                    # declares (sh:declare) that leaves a plain local name, then the least prefix; else <iri>, its end
+                    # when long. Each IRI the rows shown hold is matched once.
+                    BIND(COALESCE(IF(isIRI(?value), ?value, c:none), c:none) AS ?iriKey)
+                    OPTIONAL { SELECT ?iriKey (CONCAT(?prefix, ":", SUBSTR(STR(?iriKey), ?length + 1)) AS ?prefixed) WHERE {
+                        { SELECT ?iriKey ?length (MIN(?p) AS ?prefix) WHERE {
+                            { SELECT ?iriKey (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                                { SELECT DISTINCT ?iriKey WHERE {
+                                    $this iv:run ?pv . ?pv rs:solution ?pr . ?pr rs:index ?pi ; rs:binding ?pb . ?pb rs:value ?iriKey FILTER(isIRI(?iriKey))
+                                    OPTIONAL { $this c:limit ?pl0 } BIND(COALESCE(xsd:integer(ROUND(xsd:double(?pl0))), 200) AS ?pl1)
+                                    FILTER(?pi <= IF(?pl1 < 1, 1, ?pl1) && ?pi <= 20)
+                                  } }
+                                { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                                BIND(STR(?ns0) AS ?ns)
+                                FILTER(STRSTARTS(STR(?iriKey), ?ns) && REGEX(SUBSTR(STR(?iriKey), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+                              } GROUP BY ?iriKey }
+                            { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+                            BIND(STR(?p1) AS ?p)
+                            FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?iriKey), STR(?ns1)))
+                          } GROUP BY ?iriKey ?length }
+                      } }
+                    BIND(STR(?value) AS ?iriText)
+                    BIND(IF(isIRI(?value), COALESCE(?prefixed, IF(STRLEN(?iriText) > 60, CONCAT("<…", SUBSTR(?iriText, STRLEN(?iriText) - 55), ">"), CONCAT("<", ?iriText, ">"))),
+                         IF(isBlank(?value), STR(?blankLabel), STR(?value))) AS ?shownText)
+                    BIND(IF(BOUND(?value), IF(STRLEN(?shownText) > 32, CONCAT(SUBSTR(?shownText, 1, 31), "…"), ?shownText), "") AS ?cellText)
+                  } ORDER BY ?li ?lci }
+              } GROUP BY ?li }
+          } ORDER BY ?li }
+      } }
+    BIND(?root AS ?el) BIND(IRI(CONCAT(?me, "/~lines")) AS ?textNode)
+    BIND(IF(?shown < 20, ?shown, 20) AS ?lineCount)
+    BIND(CONCAT(?countLine, "\\n", COALESCE(?headerLine, ""), IF(?lineCount > 0, CONCAT("\\n", COALESCE(?rowLines, "")), ""), IF(?total > ?lineCount, CONCAT("\\n", ?moreLine), "")) AS ?data)
+  }
+  }
+}""" .
 
 # --- the table as Markdown ----------------------------------------------------------------------------
 # What a table shows is graph data: each header cell and each row's cells say which column they are

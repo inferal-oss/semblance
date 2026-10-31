@@ -20,6 +20,8 @@ import type { FnView, MaintainedPlan, Part, Post, ViewCompiler, ViewPlan, ViewSo
 import { WindowState } from './window.ts'
 import type { Node, Triple } from './sparql.ts'
 import { Terms } from './terms.ts'
+import { ResultSetWriter, resultSetQuads, runQuery, type RunResult } from './runs.ts'
+import { resultColumns } from '../sparql-forms.ts'
 import { ZSet } from './zset.ts'
 
 export const IV = 'https://semblance.dev/ns/view#'
@@ -163,6 +165,14 @@ interface Definition {
    * (a rule maintained as a view: the focus).
    */
   hosted?: { query: string; form: 'select' | 'construct'; attribute?: string }
+  /** For an instance of an iv:perQuery template: the node whose sem:select / sem:construct it runs. */
+  query?: string
+  /** The nodes that name its query (iv:perQuery): it is maintained while one of them is shown, and each says which view runs it (iv:run). */
+  referrers?: string[]
+  /** iv:strategy, when the instance's own (iv:followedBy) overrides the template's. */
+  strategy?: string
+  /** A referrer's binding (iv:bindsBy): $name is the value of `property` on `from`. */
+  bind?: { name: string; from: string; property: string }
 }
 
 /** A parameter, resolved: what it reads, so a change to that re-resolves it. */
@@ -196,8 +206,11 @@ export class ViewRuntime {
   private afterTicks: ((tick: number) => void)[] = []
   /** Views in the order they step: a view after the views it reads (iv:reads). */
   private order: MaintainedView[] = []
-  /** Templates: template IRI -> its class (iv:targets), or the property that names it (iv:perReferrer). */
-  private templates = new Map<string, { cls?: string; referrer?: string }>()
+  /** Templates: template IRI -> its class (iv:targets), or the property that names it (iv:perReferrer), or names a query (iv:perQuery). */
+  private templates = new Map<string, { cls?: string; referrer?: string; perQuery?: PerQuery }>()
+  /** iv:perQuery instances: template -> instance IRI -> its definition's signature; and instance -> template. */
+  private perQuery = new Map<string, Map<string, string>>()
+  private instanceTemplate = new Map<string, string>()
   private refs = new Map<string, { q: Quad; n: number }>()
   private dataset: Set<string>
   readonly graphs: Term[]
@@ -247,9 +260,11 @@ export class ViewRuntime {
     this.prefer = prefer
     const out = new ZSet<Quad>()
     const f = this.store.factory
-    for (const q of this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(IV + 'View'))) {
-      if (q.subject.termType === 'NamedNode') for (const d of this.definitions(q.subject.value)) this.define(d, out)
-    }
+    // iv:perQuery templates first: a query that is a view of its own reads which nodes name it from them.
+    const nodes = this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(IV + 'View')).flatMap((q) => (q.subject.termType === 'NamedNode' ? [q.subject.value] : []))
+    const first = (iri: string) => (this.readPerQuery(iri) ? 0 : 1)
+    nodes.sort((a, b) => first(a) - first(b))
+    for (const node of nodes) for (const d of this.definitions(node)) this.define(d, out)
     for (const d of this.hosted.values()) this.define(d, out)
     this.sort()
     const now = this.clock.now()
@@ -278,17 +293,111 @@ export class ViewRuntime {
    */
   private definitions(iri: string): Definition[] {
     const f = this.store.factory
+    const perQuery = this.readPerQuery(iri)
+    if (perQuery) return this.queryDefinitions(iri, perQuery)
     const cls = this.store.match(f.namedNode(iri), f.namedNode(IV + 'targets'), null)[0]?.object
     const referrer = this.store.match(f.namedNode(iri), f.namedNode(IV + 'perReferrer'), null)[0]?.object
     if (!cls && referrer?.termType !== 'NamedNode') {
       this.templates.delete(iri)
-      return [{ iri, node: iri }]
+      // A query that is a view of its own (a followed one) still says which nodes it runs for (iv:run).
+      const referrers = this.queryReferrers(iri)
+      return [referrers.length ? { iri, node: iri, referrers } : { iri, node: iri }]
     }
     this.templates.set(iri, cls ? { cls: cls.value } : { referrer: referrer!.value })
     const foci = cls
       ? this.store.match(null, f.namedNode(RDF_TYPE), cls as NamedNode).map((q) => q.subject)
       : this.store.match(null, referrer as NamedNode, f.namedNode(iri)).map((q) => q.subject)
     return [...new Set(foci.filter((t) => t.termType === 'NamedNode').map((t) => t.value))].map((focus) => ({ iri: this.instanceOf(iri, focus), node: iri, focus }))
+  }
+
+  /** A template's iv:perQuery declaration, if it has one. */
+  private readPerQuery(iri: string): PerQuery | undefined {
+    const f = this.store.factory
+    const s = f.namedNode(iri)
+    const property = this.one(s, IV + 'perQuery')
+    if (property?.termType !== 'NamedNode') return undefined
+    const cls = this.one(s, IV + 'referrerClass')
+    // The class and its subclasses (instances are typed with the class they are).
+    const classes = new Set<string>()
+    if (cls?.termType === 'NamedNode') {
+      const todo = [cls.value]
+      while (todo.length) {
+        const c = todo.pop()!
+        if (classes.has(c)) continue
+        classes.add(c)
+        for (const q of this.store.match(null, f.namedNode(NS.rdfs + 'subClassOf'), f.namedNode(c))) if (q.subject.termType === 'NamedNode') todo.push(q.subject.value)
+      }
+    }
+    const binds = this.one(s, IV + 'bindsBy')
+    const bindProp = (p: string) => (binds ? this.one(binds, IV + p)?.value : undefined)
+    const bind = binds ? { variable: bindProp('variableBy'), from: bindProp('fromBy'), property: bindProp('propertyBy') } : undefined
+    return {
+      property: property.value,
+      classes: classes.size ? classes : undefined,
+      followedBy: this.one(s, IV + 'followedBy')?.value,
+      bind: bind?.variable && bind.from && bind.property ? (bind as PerQuery['bind']) : undefined,
+    }
+  }
+
+  /**
+   * The views of an iv:perQuery template: one per query node that a node (of iv:referrerClass) names by
+   * the property, at the query's own IRI - unless the query is a view of its own - and one per referrer
+   * that binds a variable (iv:bindsBy), at <referrer>/~run.
+   */
+  private queryDefinitions(tpl: string, pq: PerQuery): Definition[] {
+    const f = this.store.factory
+    const nn = (x: string) => f.namedNode(x)
+    this.templates.set(tpl, { perQuery: pq })
+    const byIri = new Map<string, Definition>()
+    for (const q of this.store.match(null, nn(pq.property), null)) {
+      if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'NamedNode') continue
+      const ref = q.subject.value
+      const query = q.object.value
+      if (pq.classes && !this.store.match(q.subject, nn(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
+      if (!this.one(q.object, SEM.select) && !this.one(q.object, SEM.construct)) continue
+      if (this.store.match(q.object, nn(RDF_TYPE), nn(IV + 'View')).length) continue
+      const name = pq.bind ? this.one(q.subject, pq.bind.variable)?.value : undefined
+      const from = name ? this.one(q.subject, pq.bind!.from) : undefined
+      const property = name ? this.one(q.subject, pq.bind!.property) : undefined
+      const bind = name && from?.termType === 'NamedNode' && property?.termType === 'NamedNode' ? { name, from: from.value, property: property.value } : undefined
+      const iri = bind ? mint(ref, 'run') : query
+      const def = byIri.get(iri) ?? { iri, node: tpl, query, referrers: [], bind }
+      def.referrers!.push(ref)
+      if (pq.followedBy && this.store.match(q.subject, nn(pq.followedBy), null).some((t) => t.object.value === 'true')) def.strategy = IV + 'Auto'
+      byIri.set(iri, def)
+    }
+    const defs = [...byIri.values()]
+    for (const d of defs) d.referrers!.sort()
+    const sigs = new Map(defs.map((d) => [d.iri, JSON.stringify(d)]))
+    for (const [iri, t] of this.instanceTemplate) if (t === tpl && !sigs.has(iri)) this.instanceTemplate.delete(iri)
+    for (const iri of sigs.keys()) this.instanceTemplate.set(iri, tpl)
+    this.perQuery.set(tpl, sigs)
+    return defs
+  }
+
+  /** The nodes that name a query by an iv:perQuery template's property (of its referrer class). */
+  private queryReferrers(query: string): string[] {
+    const f = this.store.factory
+    const out = new Set<string>()
+    for (const t of this.templates.values()) {
+      const pq = t.perQuery
+      if (!pq) continue
+      for (const q of this.store.match(null, f.namedNode(pq.property), f.namedNode(query))) {
+        if (q.subject.termType !== 'NamedNode') continue
+        if (pq.classes && !this.store.match(q.subject, f.namedNode(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
+        if (pq.bind && this.one(q.subject, pq.bind.variable)) continue
+        out.add(q.subject.value)
+      }
+    }
+    return [...out].sort()
+  }
+
+  /** Whether a changed triple can change which views an iv:perQuery template defines. */
+  private perQueryReads(pq: PerQuery, q: Quad): boolean {
+    const p = q.predicate.value
+    if (p === pq.property || p === pq.followedBy || p === SEM.select || p === SEM.construct) return true
+    if (pq.bind && (p === pq.bind.variable || p === pq.bind.from || p === pq.bind.property)) return true
+    return p === RDF_TYPE && (q.object.value === IV + 'View' || !!pq.classes?.has(q.object.value))
   }
 
   /** One tick: the consolidated change of the input graphs. Returns the view graph's change (applied). */
@@ -318,11 +427,21 @@ export class ViewRuntime {
       for (const v of this.views.values()) {
         if (v.window === s) redefine.add(v.iri)
         if (v.def.node === s) redefine.add(v.iri)
+        // A query a template's instance runs: its text, or c:runCount, changed. It runs again.
+        if (v.def.query === s) redefine.add(v.iri)
       }
+      for (const [tpl, t] of this.templates) if (t.perQuery && this.perQueryReads(t.perQuery, q)) members.add(tpl)
     }
     // Only the instances that came or went are defined or dropped; the others keep their state.
     for (const tpl of members) {
       if (nodes.has(tpl)) continue
+      const before = this.perQuery.get(tpl)
+      if (before) {
+        const after = new Map(this.definitions(tpl).map((d) => [d.iri, JSON.stringify(d)]))
+        for (const [iri, sig] of after) if (before.get(iri) !== sig || !this.views.has(iri)) redefine.add(iri)
+        for (const iri of before.keys()) if (!after.has(iri)) redefine.add(iri)
+        continue
+      }
       const defined = new Set(this.definitions(tpl).map((d) => d.iri))
       for (const v of this.views.values()) if (v.def.node === tpl && !defined.has(v.iri)) redefine.add(v.iri)
       for (const iri of defined) if (!this.views.has(iri)) redefine.add(iri)
@@ -338,6 +457,11 @@ export class ViewRuntime {
       if (![...changes.add, ...changes.remove].some((q) => v.params.some((p) => p.reads(q)))) continue
       const params = this.resolve(v.def, v.paramNodes)
       if (params.every((p, i) => sameTerm(p.value, v.params[i]?.value))) continue
+      // Run on request: a new value is a new run.
+      if (v.onRequest) {
+        redefine.add(v.iri)
+        continue
+      }
       const next = this.compileFor(v.def, params)
       if (next && v.retune(next, params, out, now, changes.remove)) retuned.add(v.iri)
       else redefine.add(v.iri)
@@ -371,7 +495,7 @@ export class ViewRuntime {
     flush()
     for (const v of this.order) {
       if (v.suspended) continue
-      if (v.whileShown && !this.demanded(v)) {
+      if ((v.whileShown || v.def.query) && !this.demanded(v)) {
         v.suspended = true
         continue
       }
@@ -400,6 +524,8 @@ export class ViewRuntime {
   }
 
   private defNode(iri: string): string | undefined {
+    const tpl = this.instanceTemplate.get(iri)
+    if (tpl) return tpl
     if (this.store.match(this.store.factory.namedNode(iri), this.store.factory.namedNode(RDF_TYPE), this.store.factory.namedNode(IV + 'View')).length) return iri
     for (const tpl of this.templates.keys()) if (iri.endsWith('/~view-' + localName(tpl))) return tpl
     return undefined
@@ -427,6 +553,8 @@ export class ViewRuntime {
   }
 
   private demanded(v: MaintainedView): boolean {
+    // An instance of an iv:perQuery template runs while a node naming its query is shown.
+    if (v.def.query && v.def.referrers && this.shown) return v.def.referrers.some((c) => this.shown!(c))
     if (!v.whileShown || !this.shown) return true
     const f = this.store.factory
     const instances = this.store.match(null, f.namedNode(RDF_TYPE), f.namedNode(v.whileShown))
@@ -569,7 +697,12 @@ export class ViewRuntime {
   /** Parameters (iv:parameter) of a view, resolved for its focus. */
   private resolve(def: Definition, nodes: Term[]): Param[] {
     const f = this.store.factory
-    return nodes.map((n) => {
+    const bound: Param[] = []
+    if (def.bind) {
+      const { name, from, property } = def.bind
+      bound.push({ name, value: this.store.match(f.namedNode(from), f.namedNode(property), null)[0]?.object, reads: (q) => q.subject.value === from && q.predicate.value === property })
+    }
+    return [...bound, ...nodes.map((n) => {
       const name = this.one(n, IV + 'variable')?.value ?? ''
       const select = this.one(n, IV + 'select')?.value
       const property = this.one(n, IV + 'property')
@@ -593,7 +726,22 @@ export class ViewRuntime {
         value = this.store.match(from as NamedNode, property as NamedNode, null)[0]?.object
       }
       return { name, value: value ?? fallback, reads }
-    })
+    })]
+  }
+
+  /** A view's query text, with $this and its parameters put in; `missing` names a parameter with no value. */
+  private queryText(def: Definition, params: Param[]): { form: 'select' | 'construct'; query: string; missing?: string } {
+    const s = this.store.factory.namedNode(def.query ?? def.node)
+    const select = def.hosted ? (def.hosted.form === 'select' ? def.hosted.query : undefined) : this.one(s, SEM.select)?.value
+    const construct = def.hosted ? (def.hosted.form === 'construct' ? def.hosted.query : undefined) : this.one(s, SEM.construct)?.value
+    const form = construct ? 'construct' : 'select'
+    let query = construct ?? select ?? ''
+    if (def.focus) query = query.replaceAll('$this', `<${def.focus}>`)
+    for (const p of [...params].sort((a, b) => b.name.length - a.name.length)) {
+      if (!p.value) return { form, query, missing: p.name }
+      query = query.replaceAll('$' + p.name, p.value.termType === 'Literal' && /integer$/.test(p.value.datatype.value) ? p.value.value : sparqlTerm(p.value))
+    }
+    return { form, query }
   }
 
   private compileFor(def: Definition, params: Param[]): ViewPlan | undefined {
@@ -601,14 +749,9 @@ export class ViewRuntime {
     if (!this.store.sparql) return undefined
     const f = this.store.factory
     const s = f.namedNode(def.node)
-    const select = def.hosted ? (def.hosted.form === 'select' ? def.hosted.query : undefined) : this.one(s, SEM.select)?.value
-    const construct = def.hosted ? (def.hosted.form === 'construct' ? def.hosted.query : undefined) : this.one(s, SEM.construct)?.value
-    let query = construct ?? select ?? ''
-    if (def.focus) query = query.replaceAll('$this', `<${def.focus}>`)
-    for (const p of [...params].sort((a, b) => b.name.length - a.name.length)) {
-      if (!p.value) return { kind: 'recompute', form: construct ? 'construct' : 'select', query, reason: `the parameter $${p.name} has no value (and no iv:default)` }
-      query = query.replaceAll('$' + p.name, p.value.termType === 'Literal' && /integer$/.test(p.value.datatype.value) ? p.value.value : sparqlTerm(p.value))
-    }
+    const { form, query, missing } = this.queryText(def, params)
+    const construct = form === 'construct'
+    if (missing !== undefined) return { kind: 'recompute', form, query, reason: `the parameter $${missing} has no value (and no iv:default)` }
     const window = this.readWindow(def)
     const partitionBy = this.one(s, IV + 'partitionBy')?.value
     const source: ViewSource = {
@@ -666,14 +809,19 @@ export class ViewRuntime {
     const s = f.namedNode(def.node)
     const fn = this.one(s, SEM.function)?.value
     // A hosted view is expected to fall back now and then (its query is someone else's): iv:Auto.
-    const strategy = def.hosted ? IV + 'Auto' : this.one(s, IV + 'strategy')?.value
+    const strategy = def.hosted ? IV + 'Auto' : (def.strategy ?? this.one(s, IV + 'strategy')?.value)
     const windowNode = this.one(s, IV + 'window')
     const paramNodes = this.store.match(s, f.namedNode(IV + 'parameter'), null).map((q) => q.object)
     const params = this.resolve(def, paramNodes)
     const fnView = fn ? this.opts.functions?.[fn] : undefined
     if (fn && !fnView) throw new Error(`No view function registered for "${fn}" (<${def.iri}>)`)
-    const hasQuery = !!def.hosted || !!(this.one(s, SEM.construct) ?? this.one(s, SEM.select))
-    const sparqlPlan = this.compileFor(def, params)
+    const hasQuery = !!def.hosted || !!(this.one(f.namedNode(def.query ?? def.node), SEM.construct) ?? this.one(f.namedNode(def.query ?? def.node), SEM.select))
+    // Run on request (iv:OnRequest): no circuit, a run when defined, when its query or a parameter
+    // changes and when shown again; never for a change to the data.
+    const onRequest = strategy === IV + 'OnRequest'
+    if (onRequest && !this.store.sparql) return
+    const text = onRequest ? this.queryText(def, params) : undefined
+    const sparqlPlan = text ? ({ kind: 'recompute', form: text.form, query: text.query, reason: 'run on request' } satisfies ViewPlan) : this.compileFor(def, params)
     const useFn = fnView && (!this.store.sparql || this.prefer === 'function' || !hasQuery)
     let plan: ViewPlan
     if (useFn) plan = this.fnPlan(fnView!, def, sparqlPlan)
@@ -682,7 +830,7 @@ export class ViewRuntime {
       warn(`<${def.iri}> has no implementation this store can run; skipped`)
       return
     }
-    if (plan.kind === 'recompute') {
+    if (plan.kind === 'recompute' && !onRequest) {
       const note = `<${def.iri}> is recomputed from scratch: ${plan.reason}`
       // iv:Auto says a fallback is expected (a query typed into the workbench): no error, no warning; strict still compares it.
       if (strategy === IV + 'Incremental' || (this.strict && strategy !== IV + 'Auto')) throw new Error(note)
@@ -691,12 +839,17 @@ export class ViewRuntime {
     const view = new MaintainedView(this, def, plan, windowNode?.termType === 'NamedNode' ? windowNode.value : undefined)
     view.params = params
     view.paramNodes = paramNodes
+    view.onRequest = onRequest
+    view.text = this.queryText(def, params).query
+    // A run with a parameter that has no value would read every triple ($name a variable): none.
+    view.missing = text?.missing
     view.whileShown = this.one(s, IV + 'whileShown')?.value ?? def.focus
     view.deltaLog = this.one(s, IV + 'deltaLog')?.value
     if (view.deltaLog) view.keepHistory(this.retained(view.deltaLog) ?? 12)
     // iv:ResultSet: a SELECT's rows in the views graph, a CONSTRUCT's triples nowhere (a query typed into the workbench).
     const materialize = this.one(s, IV + 'materialize')?.value
-    view.materialize = materialize === IV + 'Graph' || materialize === IV + 'ResultSet'
+    view.materialize = materialize === IV + 'Graph'
+    if (materialize === IV + 'ResultSet') view.resultSet = new ResultSetWriter()
     view.ephemeral = !!def.hosted || materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
     view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
     view.readsViews = view.reads.length > 0
@@ -876,7 +1029,7 @@ export class ViewRuntime {
   private check(now: number) {
     if (!this.strict || !this.store.sparql) return
     for (const v of this.views.values()) {
-      if (v.suspended) continue
+      if (v.suspended || v.onRequest) continue
       const problem = v.compare(now)
       if (problem) throw new Error(`View <${v.iri}> differs from a from-scratch evaluation: ${problem}`)
     }
@@ -906,6 +1059,14 @@ export class ViewRuntime {
   get context(): RuleContext {
     return this.ctx
   }
+}
+
+/** An iv:perQuery template: the property that names a query, the referrers' classes, and what they may say. */
+interface PerQuery {
+  property: string
+  classes?: Set<string>
+  followedBy?: string
+  bind?: { variable: string; from: string; property: string }
 }
 
 const sameTerm = (a: Term | undefined, b: Term | undefined) => (!a && !b) || (!!a && !!b && a.equals(b))
@@ -1475,6 +1636,14 @@ export class MaintainedView implements ViewHandle {
   materialize = false
   /** iv:materialize iv:Ephemeral: a CONSTRUCT view's triples go to subscribers only, not to the views graph. */
   ephemeral = false
+  /** iv:materialize iv:ResultSet: whatever the query gives - rows, triples, an answer, an error - as a result set (runs.ts). */
+  resultSet?: ResultSetWriter
+  /** iv:strategy iv:OnRequest: run when defined (and shown), never stepped by a change to the data. */
+  onRequest = false
+  /** The query text it runs (parameters put in): its result set's columns are read from it. */
+  text = ''
+  /** Run on request: a parameter with no value (it is not run). */
+  missing?: string
   /** iv:reads: the views whose output it reads (it steps after them, and sees the views graph). */
   reads: string[] = []
   readsViews = false
@@ -1570,7 +1739,10 @@ export class MaintainedView implements ViewHandle {
       const q = f.quad(s, nn(p), o, g)
       out.add(quadKey(q), q)
     }
-    t(v, IV + 'strategy', nn(IV + (this.plan.kind === 'recompute' ? 'Recompute' : 'Incremental')))
+    t(v, IV + 'strategy', nn(IV + (this.onRequest ? 'OnRequest' : this.plan.kind === 'recompute' ? 'Recompute' : 'Incremental')))
+    // Each node that names its query says which view runs it (iv:perQuery).
+    for (const r of this.def.referrers ?? []) t(nn(r), IV + 'run', v)
+    if (this.def.query) t(v, IV + 'instanceOf', nn(this.def.node))
     t(this.activity, RDF_TYPE, nn(PROV.Activity))
     t(this.activity, PROV.used, v)
     if (this.def.focus) {
@@ -1578,7 +1750,7 @@ export class MaintainedView implements ViewHandle {
       t(v, IV + 'focus', nn(this.def.focus))
     }
     if (this.plan.kind === 'recompute') {
-      t(v, IV + 'fallback', f.literal(this.plan.reason))
+      if (!this.onRequest) t(v, IV + 'fallback', f.literal(this.plan.reason))
       return out
     }
     const p = this.plan
@@ -1593,7 +1765,7 @@ export class MaintainedView implements ViewHandle {
     if (p.parts.length > 1) ops.push(['Union', `Union(${p.parts.length} parts)`])
     if (p.algebra.topk) ops.push(['TopK', p.algebra.topk])
     if (p.algebra.post) ops.push(['Extend', p.algebra.post])
-    ops.push(['Sink', p.algebra.output ?? (this.materialize ? 'Rows(rs:)' : 'Rows')])
+    ops.push(['Sink', p.algebra.output ?? (this.materialize || this.resultSet ? 'Rows(rs:)' : 'Rows')])
     let prev: NamedNode | undefined
     ops.forEach(([kind, algebra, key], i) => {
       const op = nn(mint(this.iri, `op-${i + 1}`))
@@ -1619,6 +1791,7 @@ export class MaintainedView implements ViewHandle {
 
   /** One tick; undefined when the view had nothing to do. */
   step(changes: Delta, now: number): ZSet<Quad> | undefined {
+    if (this.onRequest) return undefined
     if (this.plan.kind === 'recompute') {
       if (!changes.add.length && !changes.remove.length) return undefined
       // Exact dependencies where the query's patterns could be read: only a change it can see re-runs it.
@@ -1706,6 +1879,13 @@ export class MaintainedView implements ViewHandle {
       if (e.n <= 0) this.outRows.delete(k)
     }
     if (changed.size) for (const l of this.fociListeners) l(changed)
+    if (this.resultSet) {
+      const written = new ZSet<Quad>()
+      const result: RunResult = plan.form === 'select' ? { kind: 'rows', vars: resultColumns(this.text, this.rows()), rows: this.orderedRows() } : { kind: 'triples', quads: this.quads() }
+      this.resultSet.write(resultSetQuads(f, this.rt.graph, this.iri, result), written, result)
+      this.notify(rowDelta, out)
+      return written
+    }
     if (plan.form === 'select' && this.materialize) this.writeRows(out)
     this.notify(rowDelta, out)
     return this.ephemeral ? new ZSet() : out
@@ -1758,6 +1938,16 @@ export class MaintainedView implements ViewHandle {
       if (w.index !== undefined) out.add(quadKey(f.quad(w.node, nn(RS + 'index'), int(w.index), g)), f.quad(w.node, nn(RS + 'index'), int(w.index), g), -1)
       this.written.delete(k)
     }
+  }
+
+  /** The output rows in their order: ORDER BY's (the top-k's positions), else by their values; a row n times, n times. */
+  private orderedRows(): Row[] {
+    const plan = this.plan as MaintainedPlan
+    const at = new Map<string, number>()
+    if (this.topk) for (const [k, e] of this.topk.window) at.set(mapKey(project(e.row, plan.vars)), this.topk.positions.get(k) ?? Infinity)
+    const entries = [...this.outRows.entries()].map(([k, e]) => ({ k, e, pos: at.get(mapKey(e.row)) ?? Infinity }))
+    entries.sort((a, b) => a.pos - b.pos || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0))
+    return entries.flatMap(({ e }) => Array.from({ length: Math.max(0, e.n) }, () => e.row))
   }
 
   private topkIndex(row: Row): number | undefined {
@@ -1854,7 +2044,7 @@ export class MaintainedView implements ViewHandle {
   /** Subjects the view types were generated by its activity; others it decorates were influenced. */
   private withProvenance(quads: Quad[]): Quad[] {
     // A hosted view's output is someone else's data (what a policy stores), not the views graph's.
-    if (this.def.hosted) return quads
+    if (this.def.hosted || this.resultSet) return quads
     const f = this.rt.store.factory
     const typed = new Set(quads.filter((q) => q.predicate.value === RDF_TYPE).map((q) => q.subject.value))
     const subjects = new Map(quads.map((q) => [q.subject.value, q.subject]))
@@ -1869,6 +2059,18 @@ export class MaintainedView implements ViewHandle {
     const run = this.rt.runner(this.readsViews)
     const out = new ZSet<Quad>()
     const rowDelta = new ZSet<Row>()
+    if (this.resultSet) {
+      const result: RunResult = this.missing !== undefined ? { kind: 'error', message: `The parameter $${this.missing} has no value.` } : runQuery(run, p.query, p.form === 'construct')
+      this.recomputed = result.kind === 'rows' ? new Map(result.rows.map((r, i) => [i + '|' + mapKey(r), r])) : result.kind === 'triples' ? new Map(result.quads.map((q) => [quadKey(q), q])) : undefined
+      this.resultSet.write(resultSetQuads(this.rt.store.factory, this.rt.graph, this.iri, result), out, result)
+      const ms = performance.now() - t0
+      if (!initial) {
+        this.figures.ticks++
+        this.figures.ms += ms
+        this.figures.lastMs = ms
+      }
+      return out
+    }
     if (p.form === 'construct') {
       const next = new Map(this.withProvenance(run.construct(p.query)).map((q) => [quadKey(q), q]))
       const prev = (this.recomputed as Map<string, Quad> | undefined) ?? new Map()
@@ -1965,6 +2167,7 @@ export class MaintainedView implements ViewHandle {
 
   /** Every triple the view's output holds now (a materialized SELECT's rs: rows too). */
   outputQuads(): Quad[] {
+    if (this.resultSet) return this.resultSet.quads()
     if (this.plan.form === 'construct') return this.quads()
     const out: Quad[] = [...(this.header ?? [])]
     const f = this.rt.store.factory
@@ -2001,7 +2204,8 @@ export class MaintainedView implements ViewHandle {
   }
 
   private reset(out: ZSet<Quad>) {
-    if (!this.ephemeral) for (const q of this.quads()) out.add(quadKey(q), q, -1)
+    this.resultSet?.clear(out)
+    if (!this.ephemeral && !this.resultSet) for (const q of this.quads()) out.add(quadKey(q), q, -1)
     if (this.plan.kind === 'maintained' && this.plan.form === 'select') {
       const f = this.rt.store.factory
       for (const w of this.written.values()) {
@@ -2094,11 +2298,20 @@ export class MaintainedView implements ViewHandle {
     const run = this.rt.runner(this.readsViews)
     const query = this.plan.kind === 'recompute' ? this.plan.query : this.plan.reference?.(now)
     if (!query) return []
-    return this.plan.form === 'construct' ? run.construct(query) : run.select(query)
+    try {
+      const result = (this.plan.form === 'construct' ? run.construct(query) : run.select(query)) as unknown
+      return Array.isArray(result) ? result : []
+    } catch (e) {
+      // A run that fails is the result of a result set (iv:error); of any other view, a failure.
+      if (this.resultSet) return []
+      throw e
+    }
   }
 
   /** undefined when the maintained result equals the from-scratch one; else what differs. */
   compare(now: number): string | undefined {
+    // A result set holding an answer or an error has no rows to compare.
+    if (this.onRequest || (this.resultSet?.last && this.resultSet.last.kind !== 'rows' && this.resultSet.last.kind !== 'triples')) return undefined
     const query = this.plan.kind === 'recompute' ? this.plan.query : this.plan.reference?.(now)
     if (!query) return undefined
     const expected = new ZSet<string>()
