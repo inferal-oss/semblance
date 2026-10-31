@@ -38,6 +38,43 @@ describe('board, money and formula', () => {
     expect(html(shells[0]!)).toContain('sem-refused')
   })
 
+  it('links a card title when its item has the configured address', () => {
+    const html = (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'oxigraph', prefer)
+      const f = h.store.factory
+      const board = f.namedNode(UI + 'dt-board-pipeline')
+      const item = f.namedNode(UI + 'dt-change-4')
+      const href = f.namedNode(UI + 'cardHref')
+      const content = f.namedNode(UI + 'cardContent')
+      const detail = f.namedNode(UI + 'cardDetail')
+      const locked = f.namedNode(UI + 'cardLocked')
+      const app = f.namedNode(UI + 'app')
+      const group = f.namedNode(UI + 'galleryGroup')
+      h.showPage('Components')
+      h.runtime.apply({ remove: h.store.match(app, group, null), add: [
+        f.quad(app, group, f.namedNode(UI + 'GroupData')),
+        f.quad(board, f.namedNode('https://semblance.dev/ns/component#cardHref'), href),
+        f.quad(item, href, f.literal('/changes/board-keyboard-moves')),
+        f.quad(board, f.namedNode('https://semblance.dev/ns/component#cardContent'), content),
+        f.quad(item, content, detail),
+        f.quad(detail, f.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), f.namedNode('https://semblance.dev/ns/component#Text')),
+        f.quad(detail, f.namedNode('https://semblance.dev/ns/component#label'), f.literal('A generic detail')),
+        f.quad(board, f.namedNode('https://semblance.dev/ns/component#cardLocked'), locked),
+        f.quad(f.namedNode(UI + 'dt-change-1'), locked, f.literal('true', f.namedNode('http://www.w3.org/2001/XMLSchema#boolean'))),
+      ] })
+      h.shell.flush()
+      const card = [...h.document.querySelectorAll('[data-sem-c=board-card]')].find((c) => c.textContent!.includes('Board keyboard moves'))!
+      expect(card.querySelector('.sem-title')?.tagName).toBe('A')
+      expect(card.querySelector('.sem-title')?.getAttribute('href')).toBe('/changes/board-keyboard-moves')
+      expect(card.textContent).toContain('A generic detail')
+      const plain = [...h.document.querySelectorAll('[data-sem-c=board-card]')].find((c) => c.textContent!.includes('Formula rule'))!
+      expect(plain.querySelector('.sem-title')?.tagName).toBe('SPAN')
+      expect(plain.querySelectorAll('button')).toHaveLength(0)
+      return (h.shell.nodeOf(UI + 'dt-board-pipeline/~root') as Element).outerHTML
+    })
+    expect(html[1]).toBe(html[0])
+  })
+
   it('draws a board, and money, as text too', () => {
     for (const prefer of ['sparql', 'function'] as const) {
       const h = mountShell(5, 'oxigraph', prefer)
