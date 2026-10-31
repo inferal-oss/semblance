@@ -11,6 +11,9 @@ const C_COLUMNS = NS.c + 'tableColumns'
 const C_VARIABLE = NS.c + 'variable'
 const C_ALIGN = NS.c + 'align'
 const C_FORMAT = NS.c + 'format'
+const C_SLOT_PREFIX = NS.c + 'slotPrefix'
+const C_SLOT_VARIABLE = NS.c + 'slotVariable'
+const C_SORTABLE = NS.c + 'sortable'
 const C_SORT_COLUMN = NS.c + 'sortColumn'
 const C_SORT_DESCENDING = NS.c + 'sortDescending'
 const C_SORTS = NS.c + 'sorts'
@@ -152,6 +155,9 @@ interface Column {
   align?: string
   format?: string
   unit?: string
+  slotPrefix?: string
+  slotVariable?: string
+  sortable?: boolean
 }
 
 type Row = Map<string, Term>
@@ -159,6 +165,7 @@ type Row = Map<string, Term>
 function columnsOf(ctx: RuleContext, focus: NamedNode, rows: Row[]): Column[] {
   const declared = nodes(ctx, ctx.object(focus, C_COLUMNS)).map((node) => {
     const variable = str(ctx.object(node, C_VARIABLE)) ?? labelOf(ctx, node)
+    const sorting = ctx.object(node, C_SORTABLE)
     return {
       node,
       variable,
@@ -166,6 +173,9 @@ function columnsOf(ctx: RuleContext, focus: NamedNode, rows: Row[]): Column[] {
       align: str(ctx.object(node, C_ALIGN)),
       format: str(ctx.object(node, C_FORMAT)),
       unit: text(ctx, node, C.unit),
+      slotPrefix: str(ctx.object(node, C_SLOT_PREFIX)),
+      slotVariable: str(ctx.object(node, C_SLOT_VARIABLE)),
+      sortable: sorting ? isTrue(sorting) : true,
     }
   })
   if (declared.length) return declared
@@ -200,7 +210,7 @@ const table: FnRule = (ctx, focus) => {
   const columns = columnsOf(ctx, focus, rows)
   const sortNode = ctx.object(focus, C_SORT_COLUMN)
   const descending = isTrue(ctx.object(focus, C_SORT_DESCENDING))
-  const sortBy = sortNode ? columns.find((c) => c.node.equals(sortNode)) : undefined
+  const sortBy = sortNode ? columns.find((c) => c.sortable !== false && c.node.equals(sortNode)) : undefined
   if (sortBy) {
     const sign = descending ? -1 : 1
     rows = rows
@@ -209,6 +219,7 @@ const table: FnRule = (ctx, focus) => {
       .map(({ row }) => row)
   }
   const cell = (row: Row, c: Column) => {
+    if (c.slotPrefix !== undefined) return ''
     const v = display(ctx, row.get(c.variable), c.format)
     return v && c.unit ? `${v} ${c.unit}` : v
   }
@@ -236,12 +247,14 @@ const table: FnRule = (ctx, focus) => {
     el(o, 'head-row', 'Tr', {}, columns.map((c, ci) => {
       const id = `h${ci}`
       const sorted = sortBy === c
-      const button = el(o, `${id}-sort`, 'Button', { type: 'button', class: 'sem-sort' }, [
-        el(o, `${id}-label`, 'Span', {}, [o.text(`${id}-label-text`, c.label)]),
-        el(o, `${id}-icon`, 'Span', { class: 'sem-sort-icon', 'aria-hidden': 'true' }, [o.text(`${id}-icon-text`, sorted ? (descending ? '↓' : '↑') : '↕')]),
-      ])
-      o.t(button, C_SORTS, c.node)
-      const th = el(o, id, 'Th', { scope: 'col', class: alignClass(c) }, [button])
+      const content = c.sortable === false
+        ? [el(o, `${id}-label`, 'Span', { class: 'sem-head-label' }, [o.text(`${id}-label-text`, c.label)])]
+        : [el(o, `${id}-sort`, 'Button', { type: 'button', class: 'sem-sort' }, [
+            el(o, `${id}-label`, 'Span', {}, [o.text(`${id}-label-text`, c.label)]),
+            el(o, `${id}-icon`, 'Span', { class: 'sem-sort-icon', 'aria-hidden': 'true' }, [o.text(`${id}-icon-text`, sorted ? (descending ? '↓' : '↑') : '↕')]),
+          ])]
+      if (c.sortable !== false) o.t(content[0]!, C_SORTS, c.node)
+      const th = el(o, id, 'Th', { scope: 'col', class: alignClass(c) }, content)
       if (sorted) o.attr(th, 'aria-sort', descending ? 'descending' : 'ascending')
       return th
     })),
@@ -249,15 +262,22 @@ const table: FnRule = (ctx, focus) => {
   const seen = new Map<string, number>()
   const body = rows.length
     ? rows.map((row) => {
-        // Keyed by content: the same row keeps its elements wherever it sorts to.
-        const base = 'r' + hashKey(columns.map((c) => row.get(c.variable)?.value ?? '').join('\u0000'))
+        // Include host slot keys so rows with equal displayed values keep distinct elements.
+        const base = 'r' + hashKey(columns.flatMap((c) => [
+          row.get(c.variable)?.value ?? '',
+          ...(c.slotPrefix !== undefined ? [row.get(c.slotVariable ?? c.variable)?.value ?? ''] : []),
+        ]).join('\u0000'))
         const n = seen.get(base) ?? 0
         seen.set(base, n + 1)
         const id = n ? `${base}-${n}` : base
         return el(o, id, 'Tr', {}, columns.map((c, ci) => {
+          const key = row.get(c.slotVariable ?? c.variable)?.value
+          const slotName = c.slotPrefix !== undefined && key !== undefined ? c.slotPrefix + key : undefined
           const v = cell(row, c)
-          const content = c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
-          return el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
+          const content = slotName !== undefined ? [] : c.format === 'code' && v ? [el(o, `${id}-c${ci}-code`, 'Code', {}, [o.text(`${id}-c${ci}-text`, v)])] : [o.text(`${id}-c${ci}-text`, v)]
+          const cellEl = el(o, `${id}-c${ci}`, ci === 0 ? 'Th' : 'Td', { scope: ci === 0 ? 'row' : undefined, class: alignClass(c) }, content)
+          if (slotName !== undefined) o.t(cellEl, SEM.slot, slotName)
+          return cellEl
         }))
       })
     : [el(o, 'empty-row', 'Tr', {}, [el(o, 'empty-cell', 'Td', { colSpan: String(Math.max(1, columns.length)), class: 'sem-empty' }, [o.text('empty-text', text(ctx, focus, C.emptyText) ?? 'No rows.')])])]
