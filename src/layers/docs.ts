@@ -3,8 +3,12 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
+import { formatLocale } from '../engine/context.ts'
+import { sortKey } from '../../rdf-engine/host/intl.ts'
+import { compareKeys, TUPLE } from '../render/order-key.ts'
+import { md5Key } from '../components/data.ts'
 import { BEH, C, H, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN } from '../ns.ts'
-import { isTrue, labelOf, named, nodes, rdfList, text } from '../components/util.ts'
+import { encodeForUri, isTrue, labelOf, named, nodes, rdfList, text } from '../components/util.ts'
 import { turtleTokens } from '../turtle.ts'
 
 const S = NS.sem
@@ -31,23 +35,23 @@ function isComponentClass(ctx: RuleContext, cls: string): boolean {
   )
 }
 
-/** The component classes used by a specimen's components (through lists and holding properties). */
+/** The component classes used by a specimen's components (through lists and holding properties, at any depth). */
 function classesUsed(ctx: RuleContext, specimen: Term): NamedNode[] {
   const found = new Map<string, NamedNode>()
   const seen = new Set<string>()
-  const visit = (node: Term, depth: number) => {
-    if (!named(node) || seen.has(node.value) || depth > 6) return
+  const visit = (node: Term) => {
+    if (!named(node) || seen.has(node.value)) return
     seen.add(node.value)
     for (const t of ctx.objects(node, RDF_TYPE)) if (named(t) && isComponentClass(ctx, t.value) && !PLUMBING.has(t.value)) found.set(t.value, t)
     for (const p of HOLDS) {
       for (const v of ctx.objects(node, p)) {
         const members = ctx.object(v, NS.rdf + 'first') ? rdfList(ctx, v) : [v]
-        for (const m of members) visit(m, depth + 1)
+        for (const m of members) visit(m)
       }
     }
   }
-  for (const child of nodes(ctx, ctx.object(specimen, C.children))) visit(child, 0)
-  return [...found.values()].sort((a, b) => labelOf(ctx, a).localeCompare(labelOf(ctx, b)))
+  for (const child of nodes(ctx, ctx.object(specimen, C.children))) visit(child)
+  return [...found.values()]
 }
 
 const specimenOntology: FnRule = (ctx, focus) => {
@@ -55,21 +59,31 @@ const specimenOntology: FnRule = (ctx, focus) => {
   if (!classes.length) return []
   const open = isTrue(ctx.object(focus, S + 'showsOntology'))
   const o = ctx.out(focus)
-  const short = (c: Term) => c.value.replace(NS.c, 'c:').replace(/^.*[#/]/, (m) => m)
+  // In the viewer's collation of their labels, as order keys (sx:sortKey), as the SPARQL rule places them.
+  ctx.readsLanguage()
+  const lang = formatLocale(ctx.languages)
+  const sorted = classes
+    .map((cls) => ({ cls, order: TUPLE + 's' + sortKey(labelOf(ctx, cls), lang), name: o.node('docs-classes-' + md5Key(cls.value)) }))
+    .sort((a, b) => compareKeys(a.order, b.order) || (a.name.value < b.name.value ? -1 : a.name.value > b.name.value ? 1 : 0))
+  const short = (c: Term) => c.value.replace(NS.c, 'c:')
+  const names = o.el('docs-classes', 'Span')
+  sorted.forEach(({ cls, order, name }, i) => {
+    o.t(names, H.hasChild, name).t(name, RDF_TYPE, ctx.nn(H.Text)).t(name, H.data, (i ? ' · ' : '') + short(cls)).t(name, SEM.orderKey, order)
+  })
   const toggle = o.el('docs-toggle', 'Button', { type: 'button', class: 'sem-docs-toggle', 'aria-expanded': String(open) }, [
     o.el('docs-title', 'Strong', {}, [o.text('docs-title-text', text(ctx, ctx.nn(S + 'DocsLayer'), NS.rdfs + 'label') ?? 'ontology')]),
-    o.el('docs-classes', 'Span', {}, [o.text('docs-classes-text', classes.map(short).join(' · '))]),
+    names,
     o.el('docs-chevron', 'Span', { class: 'sem-chevron', 'aria-hidden': 'true' }),
   ])
-  o.t(toggle, S + 'revealsOntology', focus)
-  const docs = open
-    ? classes.map((cls) => {
-        const doc = o.node('doc-' + encodeURIComponent(cls.value.replace(/^.*[#/]/, '')))
-        o.t(doc, RDF_TYPE, ctx.nn(NS.c + 'ClassDoc')).t(doc, C.of, cls)
-        return doc
-      })
-    : []
-  const section = o.el('docs', 'Div', { class: 'sem-docs' }, [toggle, ...docs])
+  o.t(toggle, S + 'revealsOntology', focus).t(toggle, SEM.orderKey, TUPLE + 'n0')
+  const section = o.el('docs', 'Div', { class: 'sem-docs' })
+  o.t(section, H.hasChild, toggle)
+  if (open) {
+    for (const { cls, order } of sorted) {
+      const doc = o.node('doc-' + encodeForUri(cls.value.replace(/^.*[#/]/, '')))
+      o.t(doc, RDF_TYPE, ctx.nn(NS.c + 'ClassDoc')).t(doc, C.of, cls).t(section, H.hasChild, doc).t(doc, SEM.orderKey, TUPLE + 'n1' + order)
+    }
+  }
   // After the specimen's stage, inside its root (the specimen rule chains header -> stage).
   o.t(ctx.nn(focus.value + '/~root'), H.hasChild, section).t(ctx.nn(focus.value + '/~stage'), ORD.precedes, section)
   return o.quads

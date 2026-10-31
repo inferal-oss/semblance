@@ -2,7 +2,10 @@
 // component classes, checked against every component declared in the graph.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL } from '../ns.ts'
+import { formatLocale } from '../engine/context.ts'
+import { sortKey } from '../../rdf-engine/host/intl.ts'
+import { TUPLE } from '../render/order-key.ts'
+import { H, MOD, NS, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL } from '../ns.ts'
 import { labelOf, named, rdfList, str, text } from '../components/util.ts'
 import { mint } from '../rdf.ts'
 import { md5Key } from '../components/data.ts'
@@ -191,29 +194,38 @@ const mark: FnRule = (ctx, focus) => {
 /** Every recorded result, grouped by component. */
 const report: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
+  // By component, then message, in the viewer's collation as an order key (sx:sortKey), as the
+  // SPARQL rule places them; a row is keyed by its result.
+  ctx.readsLanguage()
+  const lang = formatLocale(ctx.languages)
   const results = ctx
     .match(null, RDF_TYPE, SH + 'ValidationResult')
     .map((q) => q.subject)
     .map((r) => ({ r, node: ctx.object(r, SH + 'focusNode'), path: ctx.object(r, SH + 'resultPath'), message: str(ctx.object(r, SH + 'resultMessage')) ?? '' }))
     .filter((x) => named(x.node))
-    .sort((a, b) => a.node!.value.localeCompare(b.node!.value) || a.message.localeCompare(b.message))
+    .map((x) => ({ ...x, key: md5Key(x.r.value), order: TUPLE + 's' + sortKey(x.node!.value, lang) + TUPLE + 's' + sortKey(x.message, lang) }))
   if (ctx.modality === MOD.Text) {
-    o.renders(o.el('root', 'Div', {}, results.map((x, i) => o.text('l' + i, `✕ ${x.node!.value.replace(/^.*[#/]/, '')} — ${x.message}\n`))))
+    const root = o.el('root', 'Div')
+    for (const x of results) o.t(root, H.hasChild, o.text('l' + x.key, `✕ ${x.node!.value.replace(/^.*[#/]/, '')} — ${x.message}\n`)).t(o.node('l' + x.key), SEM.orderKey, x.order)
+    o.renders(root)
     return o.quads
   }
   if (!results.length) {
     o.renders(o.el('root', 'P', { class: 'sem-ok' }, [o.text('ok', text(ctx, focus, NS.c + 'emptyText') ?? 'Every component conforms to its shapes.')]))
     return o.quads
   }
-  const rows = results.map((x, i) => {
-    const type = ctx.object(x.node!, RDF_TYPE)
-    return o.el('r' + i, 'Li', {}, [
-      o.el('r' + i + '-what', 'Strong', {}, [o.text('r' + i + '-what-text', `${type ? labelOf(ctx, type) : ''} ${x.node!.value.replace(/^.*[#/]/, '')}`)]),
-      o.el('r' + i + '-path', 'Code', {}, [o.text('r' + i + '-path-text', x.path ? x.path.value.replace(/^.*[#/]/, 'c:') : '')]),
-      o.el('r' + i + '-msg', 'Span', {}, [o.text('r' + i + '-msg-text', x.message)]),
+  const root = o.el('root', 'Ul', { 'aria-label': text(ctx, focus, NS.c + 'label') ?? 'Shape violations' })
+  for (const x of results) {
+    // Its component's class: the first of its types by IRI.
+    const type = ctx.objects(x.node!, RDF_TYPE).filter(named).sort((p, q) => (p.value < q.value ? -1 : p.value > q.value ? 1 : 0))[0]
+    const r = 'r' + x.key
+    const row = o.el(r, 'Li', {}, [
+      o.el(r + '-what', 'Strong', {}, [o.text(r + '-what-text', `${type ? labelOf(ctx, type) : ''} ${x.node!.value.replace(/^.*[#/]/, '')}`)]),
+      o.el(r + '-path', 'Code', {}, [o.text(r + '-path-text', x.path ? x.path.value.replace(/^.*[#/]/, 'c:') : '')]),
+      o.el(r + '-msg', 'Span', {}, [o.text(r + '-msg-text', x.message)]),
     ])
-  })
-  const root = o.el('root', 'Ul', { 'aria-label': text(ctx, focus, NS.c + 'label') ?? 'Shape violations' }, rows)
+    o.t(row, SEM.orderKey, x.order).t(root, H.hasChild, row)
+  }
   o.renders(root)
   return o.quads
 }

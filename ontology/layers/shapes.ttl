@@ -196,8 +196,100 @@ c:ShapeReport a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Every SHACL result the shapes layer recorded, by component."@en ;
     sem:slug "shape-report" .
+# Every result the shapes layer recorded, wherever it is (sem:watchesAnywhere), by component, then
+# message, in the viewer's collation: an order key from sx:sortKey, which the function twin
+# computes alike.
 c:ShapeReportRendering a sem:Rendering ; sem:targets c:ShapeReport ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:collated): results are listed in collation order of their components and messages (localeCompare). They come from anywhere in the graph, so its SPARQL rule will also follow the results (val:violation) it lists." ;
-    sem:needsExtension sx:Locale .
+    sem:watchesAnywhere sh:focusNode , sh:resultMessage , sh:resultPath .
 c:ShapeReportRendering-fn a sem:Rule ; sem:implements c:ShapeReportRendering ; sem:function "shape-report" .
+c:ShapeReportRendering-sparql-screen a sem:Rule ;
+    sem:implements c:ShapeReportRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootType ; sem:renders $this ; rdfhtml:class ?okClass ; rdfhtml:hasChild ?ok , ?row ; rdfhtml:attribute ?aria .
+  ?ok a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?aria a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?ariaLabel .
+  ?row a rdfhtml:Li ; sem:orderKey ?order ; rdfhtml:hasChild ?what , ?pathEl , ?msgEl .
+  ?what a rdfhtml:Strong ; rdfhtml:hasChild ?whatText ; ord:immediatelyPrecedes ?pathEl .
+  ?whatText a rdfhtml:Text ; rdfhtml:data ?whatData .
+  ?pathEl a rdfhtml:Code ; rdfhtml:hasChild ?pathText ; ord:immediatelyPrecedes ?msgEl .
+  ?pathText a rdfhtml:Text ; rdfhtml:data ?pathData .
+  ?msgEl a rdfhtml:Span ; rdfhtml:hasChild ?msgText .
+  ?msgText a rdfhtml:Text ; rdfhtml:data ?message .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ShapeReport .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(EXISTS { ?anyResult a sh:ValidationResult ; sh:focusNode ?anyNode FILTER(isIRI(?anyNode)) } AS ?some)
+  # Its label and its empty text in the viewer's language, else the one value.
+  OPTIONAL { $this l10n:label ?pickedLabel }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel)) $this c:label ?onlyLabel FILTER(isLiteral(?onlyLabel)) }
+  OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?pickedEmpty }
+  OPTIONAL { FILTER(!BOUND(?pickedEmpty)) $this c:emptyText ?onlyEmpty FILTER(isLiteral(?onlyEmpty)) }
+  BIND(IF(?some, rdfhtml:Ul, rdfhtml:P) AS ?rootType)
+  BIND(IF(?some, ?none, "sem-ok") AS ?okClass)
+  BIND(IF(?some, ?none, IRI(CONCAT(STR($this), "/~ok"))) AS ?ok)
+  BIND(IF(?some, ?none, COALESCE(STR(?pickedEmpty), STR(?onlyEmpty), "Every component conforms to its shapes.")) AS ?emptyText)
+  BIND(IF(?some, IRI(CONCAT(STR($this), "/~root-aria-label")), ?none) AS ?aria)
+  BIND(COALESCE(STR(?pickedLabel), STR(?onlyLabel), "Shape violations") AS ?ariaLabel)
+  OPTIONAL {
+    ?result a sh:ValidationResult ; sh:focusNode ?node . FILTER(isIRI(?node))
+    ?viewer l10n:formatLocale ?locale .
+    OPTIONAL { ?result sh:resultMessage ?messageValue }
+    OPTIONAL { ?result sh:resultPath ?path }
+    BIND(COALESCE(STR(?messageValue), "") AS ?message)
+    BIND(REPLACE(STR(?node), "^.*[#/]", "") AS ?local)
+    # By component, then message, in the viewer's collation (an order key: case folded, accents stripped).
+    BIND(CONCAT("\\u0001s", sx:sortKey(STR(?node), ?locale), "\\u0001s", sx:sortKey(?message, ?locale)) AS ?order)
+    BIND(SUBSTR(MD5(STR(?result)), 1, 8) AS ?key)
+    # Its component's class (the first of its types by IRI), by its label as util.labelOf reads it.
+    OPTIONAL {
+      ?node a ?type . FILTER(isIRI(?type))
+      FILTER NOT EXISTS { ?node a ?earlier FILTER(isIRI(?earlier) && STR(?earlier) < STR(?type)) }
+      OPTIONAL { ?typeAt l10n:of ?type ; l10n:label ?typeTwin }
+      OPTIONAL { FILTER(!BOUND(?typeTwin)) ?type c:label ?typeOnly FILTER(isLiteral(?typeOnly)) }
+      OPTIONAL { FILTER(!BOUND(?typeTwin) && !BOUND(?typeOnly)) ?typeNameAt l10n:of ?type ; l10n:name ?typeName }
+      OPTIONAL { FILTER(!BOUND(?typeTwin) && !BOUND(?typeOnly) && !BOUND(?typeName)) ?type rdfs:label ?typeRdfs FILTER(isLiteral(?typeRdfs)) }
+    }
+    BIND(IF(BOUND(?type), COALESCE(STR(?typeTwin), STR(?typeOnly), STR(?typeName), STR(?typeRdfs), REPLACE(STR(?type), "^.*[#/]", "")), "") AS ?typeLabel)
+    BIND(CONCAT(?typeLabel, " ", ?local) AS ?whatData)
+    BIND(IF(BOUND(?path), REPLACE(STR(?path), "^.*[#/]", "c:"), "") AS ?pathData)
+    BIND(CONCAT(STR($this), "/~r", ?key) AS ?r)
+    BIND(IRI(?r) AS ?row)
+    BIND(IRI(CONCAT(?r, "-what")) AS ?what)
+    BIND(IRI(CONCAT(?r, "-what-text")) AS ?whatText)
+    BIND(IRI(CONCAT(?r, "-path")) AS ?pathEl)
+    BIND(IRI(CONCAT(?r, "-path-text")) AS ?pathText)
+    BIND(IRI(CONCAT(?r, "-msg")) AS ?msgEl)
+    BIND(IRI(CONCAT(?r, "-msg-text")) AS ?msgText)
+  }
+}""" .
+c:ShapeReportRendering-sparql-text a sem:Rule ;
+    sem:implements c:ShapeReportRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData ; sem:orderKey ?order .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ShapeReport .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    ?result a sh:ValidationResult ; sh:focusNode ?node . FILTER(isIRI(?node))
+    ?viewer l10n:formatLocale ?locale .
+    OPTIONAL { ?result sh:resultMessage ?messageValue }
+    OPTIONAL { ?result sh:resultPath ?path }
+    BIND(COALESCE(STR(?messageValue), "") AS ?message)
+    BIND(REPLACE(STR(?node), "^.*[#/]", "") AS ?local)
+    # By component, then message, in the viewer's collation (an order key: case folded, accents stripped).
+    BIND(CONCAT("\\u0001s", sx:sortKey(STR(?node), ?locale), "\\u0001s", sx:sortKey(?message, ?locale)) AS ?order)
+    BIND(SUBSTR(MD5(STR(?result)), 1, 8) AS ?key)
+    BIND(CONCAT("✕ ", ?local, " — ", ?message, "\\n") AS ?lineData)
+    BIND(IRI(CONCAT(STR($this), "/~l", ?key)) AS ?line)
+  }
+}""" .
 

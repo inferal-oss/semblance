@@ -166,6 +166,9 @@ export class Engine {
   private removedBy = new Map<string, Quad[]>()
   /** Exact dependencies: instances per rule (by (focus, class)), and the rules none of whose foci was evaluated since all were marked. */
   private instancesOf = new Map<Rule, number>()
+  /** sem:watchesAnywhere: predicate -> the rules that read it on any node, and each such rule's foci. */
+  private anywhere = new Map<string, Rule[]>()
+  private anywhereFoci = new Map<Rule, Set<string>>()
   private pristine = new Set<Rule>()
   /** Every predicate whose links are indexed: followed alone or on a path. */
   private linkedPredicates = new Set<string>()
@@ -634,6 +637,8 @@ export class Engine {
       }
     }
     const fed = rules.filter((r) => !this.maintained.has(r))
+    this.anywhere.clear()
+    for (const r of rules) for (const p of r.anywhere) this.anywhere.set(p, [...(this.anywhere.get(p) ?? []), r])
     this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed) : undefined
     // What a rule with exact dependencies declares is not used: its patterns say what it reads.
     const declaring = this.exact ? fed.filter((r) => !this.exact!.has(r)) : fed
@@ -665,6 +670,7 @@ export class Engine {
     const f = this.store.factory
     this.types.clear()
     this.instancesOf.clear()
+    this.anywhereFoci.clear()
     this.targets.clear()
     this.retypedAll = true
     this.links.clear()
@@ -788,6 +794,13 @@ export class Engine {
         if (!classes.size) this.types.delete(s)
       }
       this.targets.delete(s)
+      for (const r of this.rulesFor(cls)) {
+        if (!r.anywhere.length) continue
+        let foci = this.anywhereFoci.get(r)
+        if (!foci) this.anywhereFoci.set(r, (foci = new Set()))
+        if (sign > 0) foci.add(s)
+        else if (!this.isInstance(s, r)) foci.delete(s)
+      }
       if (this.deferred.hasFocus(s)) this.retyped.add(s)
     }
     // (List cells are blank nodes: a path may go through them.)
@@ -905,6 +918,8 @@ export class Engine {
         for (const c of ownerClasses) for (const r of this.mintReadersFor(c)) if (r.stratum > this.current) this.markFocus(r, owner)
       }
     }
+    // Rules that read this predicate on any node (sem:watchesAnywhere): each of their foci.
+    for (const r of this.anywhere.get(p) ?? []) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
     if (this.exact) this.propagateExact(q)
     if (sign > 0) this.index(q, sign)
   }

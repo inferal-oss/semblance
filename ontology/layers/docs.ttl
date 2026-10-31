@@ -24,12 +24,81 @@ sem:SpecimenOntology a sem:Rendering ;
     sem:targets c:Specimen ;
     sem:modality mod:Screen ;
     sem:layer sem:DocsLayer ;
-    sem:stratum 0 ;
-    sem:needsExtension sx:Locale ;
-    sem:functionOnly """awaits sx:Locale (sx:collated): the classes are listed in collation order of their labels
-(localeCompare). The walk needs no extension: the holding properties are a fixed set (c:children, c:items, c:content,
-c:front, c:tabs, c:actions, c:steps, c:body, each a node or a list), so a property path reaches the components.""" .
+    sem:stratum 0 .
 sem:SpecimenOntology-fn a sem:Rule ; sem:implements sem:SpecimenOntology ; sem:function "docs:specimen" .
+# The classes in the viewer's collation of their labels: each name a text node of its own, placed by
+# an order key from sx:sortKey (the function twin computes the same), the first without the
+# separator; the walk is a property path over the fixed holding properties.
+sem:SpecimenOntology-sparql a sem:Rule ;
+    sem:implements sem:SpecimenOntology ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root rdfhtml:hasChild ?section . ?stage ord:precedes ?section .
+  ?section a rdfhtml:Div ; rdfhtml:class "sem-docs" ; rdfhtml:hasChild ?toggle , ?doc .
+  ?toggle a rdfhtml:Button ; rdfhtml:type "button" ; rdfhtml:class "sem-docs-toggle" ; rdfhtml:attribute ?expanded ;
+    sem:revealsOntology $this ; sem:orderKey "\\u0001n0" ; rdfhtml:hasChild ?title , ?names , ?chevron .
+  ?expanded a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
+  ?title a rdfhtml:Strong ; rdfhtml:hasChild ?titleText ; ord:immediatelyPrecedes ?names .
+  ?titleText a rdfhtml:Text ; rdfhtml:data ?titleData .
+  ?names a rdfhtml:Span ; rdfhtml:hasChild ?name ; ord:immediatelyPrecedes ?chevron .
+  ?name a rdfhtml:Text ; rdfhtml:data ?nameData ; sem:orderKey ?order .
+  ?chevron a rdfhtml:Span ; rdfhtml:class "sem-chevron" ; rdfhtml:attribute ?chevronHidden .
+  ?chevronHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?doc a c:ClassDoc ; c:of ?cls ; sem:orderKey ?docOrder .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Specimen .
+  ?viewer l10n:formatLocale ?locale .
+  # The component classes its components use, through the holding properties and lists, at any depth.
+  { SELECT DISTINCT ?cls WHERE {
+      $this c:children/(rdf:rest*/rdf:first)?/((c:children|c:items|c:content|c:front|c:tabs|c:actions|c:steps|c:body)/(rdf:rest*/rdf:first)?)* ?node . FILTER(isIRI(?node))
+      ?node a ?cls . FILTER(isIRI(?cls)) ?cls rdfs:subClassOf* sem:Component .
+      FILTER(?cls NOT IN (c:Stack, c:Specimen, c:Flippable, c:Grid, c:Surface))
+  } }
+    OPTIONAL { ?at l10n:of ?cls ; l10n:label ?twin }
+    OPTIONAL { FILTER(!BOUND(?twin)) ?cls c:label ?only FILTER(isLiteral(?only)) }
+    OPTIONAL { FILTER(!BOUND(?twin) && !BOUND(?only)) ?nameAt l10n:of ?cls ; l10n:name ?named }
+    OPTIONAL { FILTER(!BOUND(?twin) && !BOUND(?only) && !BOUND(?named)) ?cls rdfs:label ?rdfs FILTER(isLiteral(?rdfs)) }
+    BIND(COALESCE(STR(?twin), STR(?only), STR(?named), STR(?rdfs), REPLACE(STR(?cls), "^.*[#/]", "")) AS ?label)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(IRI(CONCAT(STR($this), "/~docs-classes-", SUBSTR(MD5(STR(?cls)), 1, 8))) AS ?name)
+  # The first in that order has no separator before it: the least (order key, node) pair.
+  { SELECT (MIN(?position) AS ?first) WHERE {
+      ?viewer2 l10n:formatLocale ?locale2 .
+      $this c:children/(rdf:rest*/rdf:first)?/((c:children|c:items|c:content|c:front|c:tabs|c:actions|c:steps|c:body)/(rdf:rest*/rdf:first)?)* ?node2 . FILTER(isIRI(?node2))
+      ?node2 a ?cls2 . FILTER(isIRI(?cls2)) ?cls2 rdfs:subClassOf* sem:Component .
+      FILTER(?cls2 NOT IN (c:Stack, c:Specimen, c:Flippable, c:Grid, c:Surface))
+    OPTIONAL { ?at2 l10n:of ?cls2 ; l10n:label ?twin2 }
+    OPTIONAL { FILTER(!BOUND(?twin2)) ?cls2 c:label ?only2 FILTER(isLiteral(?only2)) }
+    OPTIONAL { FILTER(!BOUND(?twin2) && !BOUND(?only2)) ?nameAt2 l10n:of ?cls2 ; l10n:name ?named2 }
+    OPTIONAL { FILTER(!BOUND(?twin2) && !BOUND(?only2) && !BOUND(?named2)) ?cls2 rdfs:label ?rdfs2 FILTER(isLiteral(?rdfs2)) }
+    BIND(COALESCE(STR(?twin2), STR(?only2), STR(?named2), STR(?rdfs2), REPLACE(STR(?cls2), "^.*[#/]", "")) AS ?label2)
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label2, ?locale2)) AS ?order2)
+    BIND(IRI(CONCAT(STR($this), "/~docs-classes-", SUBSTR(MD5(STR(?cls2)), 1, 8))) AS ?name2)
+    BIND(CONCAT(?order2, "\\u0001", STR(?name2)) AS ?position)
+  } }
+  BIND(CONCAT(?order, "\\u0001", STR(?name)) = ?first AS ?isFirst)
+  BIND(IF(STRSTARTS(STR(?cls), "https://semblance.dev/ns/component#"), CONCAT("c:", STRAFTER(STR(?cls), "https://semblance.dev/ns/component#")), STR(?cls)) AS ?short)
+  BIND(CONCAT(IF(?isFirst, "", " · "), ?short) AS ?nameData)
+  BIND(EXISTS { $this sem:showsOntology true } AS ?open)
+  BIND(IF(?open, "true", "false") AS ?openText)
+  OPTIONAL { ?titleAt l10n:of sem:DocsLayer ; l10n:name ?titlePicked }
+  OPTIONAL { FILTER(!BOUND(?titlePicked)) sem:DocsLayer rdfs:label ?titleOnly FILTER(isLiteral(?titleOnly)) }
+  BIND(COALESCE(STR(?titlePicked), STR(?titleOnly), "ontology") AS ?titleData)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~doc-", ENCODE_FOR_URI(REPLACE(STR(?cls), "^.*[#/]", "")))), ?none) AS ?doc)
+  BIND(CONCAT("\\u0001n1", ?order) AS ?docOrder)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~stage")) AS ?stage)
+  BIND(IRI(CONCAT(STR($this), "/~docs")) AS ?section)
+  BIND(IRI(CONCAT(STR($this), "/~docs-toggle")) AS ?toggle)
+  BIND(IRI(CONCAT(STR($this), "/~docs-toggle-aria-expanded")) AS ?expanded)
+  BIND(IRI(CONCAT(STR($this), "/~docs-title")) AS ?title)
+  BIND(IRI(CONCAT(STR($this), "/~docs-title-text")) AS ?titleText)
+  BIND(IRI(CONCAT(STR($this), "/~docs-classes")) AS ?names)
+  BIND(IRI(CONCAT(STR($this), "/~docs-chevron")) AS ?chevron)
+  BIND(IRI(CONCAT(STR($this), "/~docs-chevron-aria-hidden")) AS ?chevronHidden)
+}""" .
 
 c:ClassDoc a owl:Class ;
     rdfs:subClassOf sem:Component ;

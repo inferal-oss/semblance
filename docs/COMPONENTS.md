@@ -211,6 +211,10 @@ A pair is dirty when the focus's own triples change, and also:
   `c:property` names (also along a path from the focus, among IRIs a `BIND`/`VALUES` chooses, or
   any predicate with a property, as `?p sty:hookAttribute ?name`). A variable predicate that can
   be unbound or anything where it is read makes the rule watch everything;
+- `sem:watchesAnywhere key:shortcut` — a change to a triple with that predicate anywhere in the
+  graph makes each focus of the rendering dirty: for a list of everything of a kind (every
+  shortcut, every shape result), which reaches what it lists from no path of its focus. Keep its
+  foci few: every such change re-runs them all;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so
@@ -356,6 +360,12 @@ on the rule; its function twin calls `formatLocale(ctx.languages)` for the same 
 ?viewer l10n:formatLocale ?locale .
 BIND(sx:formatNumber(xsd:double(STR(?value)), ?locale, "maximumFractionDigits=2") AS ?shown)
 ```
+
+Lists in the viewer's collation are placed by order keys: `sx:sortKey(?label, ?locale)` (case
+folded, accents stripped) as a `sem:orderKey`, since a CONSTRUCT cannot rank rows by
+`localeCompare`; the function twin computes the same key (`sortKey` from
+`rdf-engine/host/intl.ts`) instead of sorting, and rows are keyed by what they show, not by their
+position.
 
 ## Outlines
 
