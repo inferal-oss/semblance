@@ -175,7 +175,8 @@ columns are in order (iv:column):
   <view> a rs:ResultSet ; iv:rowCount n ; iv:column <view>/~column-i … ; rs:solution <row> …
   <view>/~column-i rs:variable "v" ; rs:index i
   <row> rs:index i ; rs:binding <row>-v …   <row>-v rs:variable "v" ; rs:value term
-(src/view/runs.ts)."""@en .
+(src/view/runs.ts). A maintained one (a query that follows updates) writes its rows at the host's
+next refresh, once for every change since, as a rule that follows a query re-runs once a frame."""@en .
 iv:column a owl:ObjectProperty ; rdfs:comment "On an iv:ResultSet's view: one of its columns (rs:variable, rs:index from 1)."@en .
 iv:rowCount a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "On an iv:ResultSet's view: how many rows it has."@en .
 iv:triples a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On an iv:ResultSet's view: its rows are a CONSTRUCT's (or DESCRIBE's) triples."@en .

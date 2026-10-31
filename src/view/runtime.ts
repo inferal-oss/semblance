@@ -118,7 +118,8 @@ export interface ViewChange {
 
 export interface ViewHandle {
   readonly iri: string
-  readonly strategy: 'incremental' | 'recompute'
+  /** Maintained incrementally, recomputed from scratch when an input changes, or run on request (iv:OnRequest). */
+  readonly strategy: 'incremental' | 'recompute' | 'on request'
   readonly fallback?: string
   readonly figures: ViewFigures
   /** The current result. */
@@ -200,6 +201,16 @@ export class ViewRuntime {
    * instances - is shown; otherwise it is suspended, and rebuilt when it is shown again.
    */
   shown?: (component: string) => boolean
+  /**
+   * The graph a projection derives (its rules' output) that shows one of these components: a query run
+   * on request (iv:OnRequest) reads it too, as a rule's own query would. Never stepped by a change, it
+   * cannot feed back (views -> rules -> views).
+   */
+  derivedFor?: (components: string[]) => Term | undefined
+  /** A followed result set changed: its rows are written at the next refresh (flushPending), which this asks for. */
+  onPending?: () => void
+  /** Followed result sets (iv:ResultSet, maintained) whose rows wait for the next refresh, and the nodes naming them that were shown when they changed. */
+  private pending = new Map<MaintainedView, Set<string>>()
   /** Times each view's step (the watchdog blames the slowest work of a turn). */
   watchdog?: { clock(): number; note(kind: 'view', iri: string, focus: string | undefined, count: number, ms: number): void }
   private views = new Map<string, MaintainedView>()
@@ -354,7 +365,7 @@ export class ViewRuntime {
       const ref = q.subject.value
       const query = q.object.value
       if (pq.classes && !this.store.match(q.subject, nn(RDF_TYPE), null).some((t) => pq.classes!.has(t.object.value))) continue
-      if (!this.one(q.object, SEM.select) && !this.one(q.object, SEM.construct)) continue
+      if (!this.text(q.object, SEM.select) && !this.text(q.object, SEM.construct)) continue
       if (this.store.match(q.object, nn(RDF_TYPE), nn(IV + 'View')).length) continue
       const name = pq.bind ? this.one(q.subject, pq.bind.variable)?.value : undefined
       const from = name ? this.one(q.subject, pq.bind!.from) : undefined
@@ -531,6 +542,29 @@ export class ViewRuntime {
     return undefined
   }
 
+  /**
+   * A followed result set changed (a person reads it): its rows are written once at the next refresh,
+   * for every change since, as a rule that follows a query re-runs once a frame (sem:NextFrame).
+   */
+  markPending(v: MaintainedView) {
+    if (this.pending.has(v)) return
+    this.pending.set(v, new Set((v.def.referrers ?? []).filter((c) => this.shown?.(c) ?? true)))
+    this.onPending?.()
+  }
+
+  /** Forget what a view had waiting (it was dropped, or wrote its rows). */
+  unpend(v: MaintainedView) {
+    this.pending.delete(v)
+  }
+
+  /** Write the rows of the followed result sets that changed since the last refresh; returns the view graph's change (applied). */
+  flushPending(): Delta {
+    const out = new ZSet<Quad>()
+    for (const v of this.pending.keys()) if (this.views.get(v.iri) === v) v.writeResultSet(out)
+    this.pending.clear()
+    return out.size ? this.sink(out) : { add: [], remove: [] }
+  }
+
   /** Rebuild suspended views whose component is shown again; returns the view graph's change (applied). */
   resume(): Delta {
     const out = new ZSet<Quad>()
@@ -540,6 +574,17 @@ export class ViewRuntime {
       if (!v.suspended || !this.demanded(v)) continue
       v.suspended = false
       out.plus(v.rebuild(now))
+      const d = this.sink(out)
+      out.clear()
+      applied.add.push(...d.add)
+      applied.remove.push(...d.remove)
+    }
+    // A result set that changed while a node naming it was hidden: that node shown now, it is written now.
+    for (const [v, wasShown] of [...this.pending]) {
+      if (!v.def.referrers?.some((c) => !wasShown.has(c) && (this.shown?.(c) ?? true))) continue
+      this.pending.delete(v)
+      if (this.views.get(v.iri) !== v) continue
+      v.writeResultSet(out)
       const d = this.sink(out)
       out.clear()
       applied.add.push(...d.add)
@@ -689,9 +734,9 @@ export class ViewRuntime {
     return { add, remove }
   }
 
-  /** The view node's annotations. */
+  /** The view node's annotations, as the input says them (not what the runtime wrote about it in the views graph). */
   private one(node: Term, p: string): Term | undefined {
-    return this.store.match(node as NamedNode, this.store.factory.namedNode(p), null)[0]?.object
+    return this.store.match(node as NamedNode, this.store.factory.namedNode(p), null).find((q) => !q.graph.equals(this.graph))?.object
   }
 
   /** Parameters (iv:parameter) of a view, resolved for its focus. */
@@ -729,11 +774,17 @@ export class ViewRuntime {
     })]
   }
 
+  /** A query's text (sem:select or sem:construct), unless blank: a blank one is no query. */
+  private text(node: Term, p: string): string | undefined {
+    const t = this.one(node, p)?.value
+    return t && /[^ \t\r\n]/.test(t) ? t : undefined
+  }
+
   /** A view's query text, with $this and its parameters put in; `missing` names a parameter with no value. */
   private queryText(def: Definition, params: Param[]): { form: 'select' | 'construct'; query: string; missing?: string } {
     const s = this.store.factory.namedNode(def.query ?? def.node)
-    const select = def.hosted ? (def.hosted.form === 'select' ? def.hosted.query : undefined) : this.one(s, SEM.select)?.value
-    const construct = def.hosted ? (def.hosted.form === 'construct' ? def.hosted.query : undefined) : this.one(s, SEM.construct)?.value
+    const select = def.hosted ? (def.hosted.form === 'select' ? def.hosted.query : undefined) : this.text(s, SEM.select)
+    const construct = def.hosted ? (def.hosted.form === 'construct' ? def.hosted.query : undefined) : this.text(s, SEM.construct)
     const form = construct ? 'construct' : 'select'
     let query = construct ?? select ?? ''
     if (def.focus) query = query.replaceAll('$this', `<${def.focus}>`)
@@ -815,7 +866,7 @@ export class ViewRuntime {
     const params = this.resolve(def, paramNodes)
     const fnView = fn ? this.opts.functions?.[fn] : undefined
     if (fn && !fnView) throw new Error(`No view function registered for "${fn}" (<${def.iri}>)`)
-    const hasQuery = !!def.hosted || !!(this.one(f.namedNode(def.query ?? def.node), SEM.construct) ?? this.one(f.namedNode(def.query ?? def.node), SEM.select))
+    const hasQuery = !!def.hosted || !!(this.text(f.namedNode(def.query ?? def.node), SEM.construct) ?? this.text(f.namedNode(def.query ?? def.node), SEM.select))
     // Run on request (iv:OnRequest): no circuit, a run when defined, when its query or a parameter
     // changes and when shown again; never for a change to the data.
     const onRequest = strategy === IV + 'OnRequest'
@@ -917,10 +968,10 @@ export class ViewRuntime {
     return readsViews ? [...this.graphs, this.graph] : this.graphs
   }
 
-  runner(readsViews = false) {
+  runner(readsViews = false, extra: Term[] = []) {
     const prefixes = this.prefixes()
     const f = this.store.factory
-    const graphs = this.datasetFor(readsViews)
+    const graphs = [...this.datasetFor(readsViews), ...extra]
     return {
       factory: f,
       select: (q: string) => this.store.select(prefixes + '\n' + q, graphs as never),
@@ -1696,7 +1747,7 @@ export class MaintainedView implements ViewHandle {
   }
 
   get strategy() {
-    return this.plan.kind === 'recompute' ? ('recompute' as const) : ('incremental' as const)
+    return this.onRequest ? ('on request' as const) : this.plan.kind === 'recompute' ? ('recompute' as const) : ('incremental' as const)
   }
 
   get fallback() {
@@ -1843,7 +1894,6 @@ export class MaintainedView implements ViewHandle {
   /** Expressions after the top-k, then the output: CONSTRUCT triples, or SELECT rows. */
   private output(delta: ZSet<Row>, happened: Happened, now: number, initial: boolean): ZSet<Quad> {
     void now
-    void initial
     const plan = this.plan as MaintainedPlan
     const rows = this.post ? this.post.map(delta) : delta
     const out = new ZSet<Quad>()
@@ -1881,8 +1931,9 @@ export class MaintainedView implements ViewHandle {
     if (changed.size) for (const l of this.fociListeners) l(changed)
     if (this.resultSet) {
       const written = new ZSet<Quad>()
-      const result: RunResult = plan.form === 'select' ? { kind: 'rows', vars: resultColumns(this.text, this.rows()), rows: this.orderedRows() } : { kind: 'triples', quads: this.quads() }
-      this.resultSet.write(resultSetQuads(f, this.rt.graph, this.iri, result), written, result)
+      // Evaluated now, written now; a change after that, at the next refresh.
+      if (initial || this.onRequest) this.writeResultSet(written)
+      else this.rt.markPending(this)
       this.notify(rowDelta, out)
       return written
     }
@@ -1938,6 +1989,35 @@ export class MaintainedView implements ViewHandle {
       if (w.index !== undefined) out.add(quadKey(f.quad(w.node, nn(RS + 'index'), int(w.index), g)), f.quad(w.node, nn(RS + 'index'), int(w.index), g), -1)
       this.written.delete(k)
     }
+  }
+
+  /** A recomputed result set's run: the query, into its rows. */
+  private runInto(out: ZSet<Quad>, run: ReturnType<ViewRuntime['runner']>) {
+    const p = this.plan as Extract<ViewPlan, { kind: 'recompute' }>
+    const result: RunResult = this.missing !== undefined ? { kind: 'error', message: `The parameter $${this.missing} has no value.` } : runQuery(run, p.query, p.form === 'construct')
+    this.recomputed = result.kind === 'rows' ? new Map(result.rows.map((r, i) => [i + '|' + mapKey(r), r])) : result.kind === 'triples' ? new Map(result.quads.map((q) => [quadKey(q), q])) : undefined
+    this.resultSet!.write(resultSetQuads(this.rt.store.factory, this.rt.graph, this.iri, result), out, result)
+  }
+
+  /** Write the result set as the view holds it now (a recomputed one: run its query). */
+  writeResultSet(out: ZSet<Quad>) {
+    if (!this.resultSet) return
+    this.rt.unpend(this)
+    if (this.plan.kind === 'recompute') {
+      const t0 = performance.now()
+      const derived = this.onRequest ? this.rt.derivedFor?.(this.def.referrers ?? []) : undefined
+      this.runInto(out, this.rt.runner(this.readsViews || this.onRequest, derived ? [derived] : []))
+      if (!this.onRequest) {
+        const ms = performance.now() - t0
+        this.figures.ticks++
+        this.figures.ms += ms
+        this.figures.lastMs = ms
+      }
+      return
+    }
+    const plan = this.plan
+    const result: RunResult = plan.form === 'select' ? { kind: 'rows', vars: resultColumns(this.text, this.rows()), rows: this.orderedRows() } : { kind: 'triples', quads: this.quads() }
+    this.resultSet.write(resultSetQuads(this.rt.store.factory, this.rt.graph, this.iri, result), out, result)
   }
 
   /** The output rows in their order: ORDER BY's (the top-k's positions), else by their values; a row n times, n times. */
@@ -2056,13 +2136,18 @@ export class MaintainedView implements ViewHandle {
   private recompute(initial: boolean): ZSet<Quad> | undefined {
     const p = this.plan as Extract<ViewPlan, { kind: 'recompute' }>
     const t0 = performance.now()
-    const run = this.rt.runner(this.readsViews)
+    const derived = this.onRequest ? this.rt.derivedFor?.(this.def.referrers ?? []) : undefined
+    // A run on request reads everything a rule's query would: other views' output and what rules derive.
+    const run = this.rt.runner(this.readsViews || this.onRequest, derived ? [derived] : [])
     const out = new ZSet<Quad>()
     const rowDelta = new ZSet<Row>()
     if (this.resultSet) {
-      const result: RunResult = this.missing !== undefined ? { kind: 'error', message: `The parameter $${this.missing} has no value.` } : runQuery(run, p.query, p.form === 'construct')
-      this.recomputed = result.kind === 'rows' ? new Map(result.rows.map((r, i) => [i + '|' + mapKey(r), r])) : result.kind === 'triples' ? new Map(result.quads.map((q) => [quadKey(q), q])) : undefined
-      this.resultSet.write(resultSetQuads(this.rt.store.factory, this.rt.graph, this.iri, result), out, result)
+      // Followed, it runs at the next refresh, once for every change since.
+      if (!initial && !this.onRequest) {
+        this.rt.markPending(this)
+        return out
+      }
+      this.runInto(out, run)
       const ms = performance.now() - t0
       if (!initial) {
         this.figures.ticks++
@@ -2205,6 +2290,7 @@ export class MaintainedView implements ViewHandle {
 
   private reset(out: ZSet<Quad>) {
     this.resultSet?.clear(out)
+    this.rt.unpend(this)
     if (!this.ephemeral && !this.resultSet) for (const q of this.quads()) out.add(quadKey(q), q, -1)
     if (this.plan.kind === 'maintained' && this.plan.form === 'select') {
       const f = this.rt.store.factory

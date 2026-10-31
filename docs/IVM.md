@@ -1820,6 +1820,41 @@ rules as views are opt-in per rule and must read only input graphs (views step b
 persistence policies are views when they opt in; persistence keeps one blob per policy plus chunks, not
 per-triple keys (the backends have no key listing).
 
+## 26. Runs on request, as built
+
+A query a person runs and reads (the workbench's, a result table's) is a view too, but not a
+maintained one (`src/view/runs.ts`, `runtime.ts`, `ontology/layers/view.ttl`):
+
+- **`iv:strategy iv:OnRequest`**: no circuit. The view is evaluated when defined, when a triple about
+  its query changes (its text, `c:runCount`), when a parameter's value changes and when it is shown
+  again (while hidden it is suspended); a change to the data does not run it. Strict mode does not
+  compare it with a from-scratch run: it is meant to stay as of its run.
+- **`iv:materialize iv:ResultSet`** writes whatever the query gives as a result set: a SELECT's rows,
+  a CONSTRUCT's triples as rows (`?subject ?predicate ?object`, `iv:triples`), an ASK's answer
+  (`rs:boolean`) or the error a run ended in (`iv:error`), with the columns in order (`iv:column`), the
+  row count (`iv:rowCount`) and every row's position (`rs:index`, ORDER BY's, else a stable one by its
+  values; a row the result has n times is n rows). A maintained view (one that follows updates) writes
+  the same, from its output, at the host's next refresh (`Runtime.refresh`, `ViewRuntime.flushPending`):
+  it is maintained every tick, but a busy graph rewrites its rows, and re-renders what reads them, once a
+  frame - or at once when a node that shows it is shown again. A blank node's label is written beside
+  it (`iv:label`).
+- **A run reads everything a rule's query would**: the input graphs, the views graph (other views'
+  output: `rnd:overlaps`) and the derived graph of the projection that shows it (`derivedFor`). It is
+  never stepped by a change, so this cannot feed back; a maintained view still reads input graphs only
+  (#147).
+- **`iv:perQuery <property>`**: a template whose instances are the queries nodes name by the property
+  (of `iv:referrerClass`), each at the query's own IRI, so the nodes that show one query share one run;
+  each node says which view runs it (`iv:run`, in the views graph). A query that is an `iv:View` of its
+  own (a followed workbench query) keeps its own annotations; `iv:followedBy <property>` makes an
+  instance `iv:Auto` while a node naming it says the property true; `iv:bindsBy` gives a node that binds
+  a variable a view of its own, `<node>/~run`, the variable an `iv:parameter`. An instance is maintained
+  while one of the nodes naming it is shown.
+- **What uses it**: every `c:QueryResultView`'s query (`c:QueryRuns` in `ontology/components/workbench.ttl`).
+  The result table renders the result set in SPARQL (`c:ResultTableRendering-sparql`, and
+  `c:ResultTableAsText-sparql` as text), byte for byte as its function twins, which read the same rows
+  (`test/result-table-sparql.test.ts`, Oxigraph and WAT, after each step); the graph and Turtle views
+  read it too, so no rendering runs a query held in the data.
+
 ## Decisions
 
 Taken 2026-10-24, all as recommended when these were open questions.

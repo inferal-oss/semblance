@@ -105,7 +105,8 @@ SELECT ?label WHERE {
           CONCAT("Maintained incrementally: each change costs what it changes.", ?work, ?check))) AS ?label)
 }""" .
 ui:queryPlanTable a c:ResultTable ; c:of ui:qPlanOperators ; c:followUpdates true .
-ui:qPlanOperators a sem:Query ;
+# What the runtime writes about the query is in the views graph: a view that reads its view (iv:reads).
+ui:qPlanOperators a sem:Query , iv:View ; iv:strategy iv:Auto ; iv:materialize iv:ResultSet ; iv:reads ui:currentQuery ;
     rdfs:label "The query's operators" , "Оператори запиту"@uk , "Die Operatoren der Abfrage"@de , "عوامل الاستعلام"@ar ;
     sem:select """
 SELECT ?step ?operator ?algebra ?key WHERE {

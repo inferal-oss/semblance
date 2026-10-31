@@ -114,6 +114,9 @@ describe('result tables over runs of their queries, in SPARQL', () => {
       // A change to the data: an on-request run stays as it was; a table that follows updates follows.
       both((h) => h.set('dave', 'knows', 'alice'))
       expect(s.at('all')).not.toContain('ex:dave')
+      // (Following, at the next refresh: once for every change since.)
+      expect(s.at('live')).not.toContain('ex:dave')
+      both((h) => h.runtime.refresh())
       expect(s.at('live')).toContain('ex:dave')
       // Run again (c:runCount): now it has it.
       both((h) => h.set('qAll', 'https://semblance.dev/ns/component#runCount', 2))
