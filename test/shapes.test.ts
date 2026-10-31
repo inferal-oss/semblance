@@ -130,3 +130,27 @@ describe('the Inputs gallery conforms to the component shapes', () => {
     })
   }
 })
+
+describe('shape string lengths count Unicode code points like SPARQL STRLEN', () => {
+  for (const [kind, prefer] of runs) {
+    it(`checks exact, minimum and maximum supplementary-character lengths (${kind}, ${prefer})`, () => {
+      const source = `@prefix ui: <${UI}> . @prefix c: <${C}> . @prefix sh: <${SH}> .
+ui:root a c:Button ; c:label "Text length" ; ui:text "😀😀" .
+ui:TextLengthShape a sh:NodeShape ; sh:targetClass c:Button ;
+  sh:property [ sh:path ui:text ; sh:minLength 2 ; sh:maxLength 2 ] .`
+      const store = loadStore(kind, source), runtime = new Runtime(store)
+      runtime.project({ modality: MOD.Screen, layers: [VAL.ShapesLayer], prefer, roots: [UI + 'root'] }, e => { throw e })
+      const f = store.factory, subject = f.namedNode(UI + 'root'), property = f.namedNode(UI + 'text')
+      const results = () => store.match(null, f.namedNode(SH + 'focusNode'), subject)
+        .flatMap(q => store.match(q.subject, f.namedNode(SH + 'resultMessage'), null)).map(q => q.object.value)
+      const set = (value: string) => runtime.apply({ remove: store.match(subject, property, null, f.defaultGraph()), add: [f.quad(subject, property, f.literal(value))] })
+      expect(results()).toEqual([])
+      set('😀')
+      expect(results()).toEqual(['text: at least 2 characters'])
+      set('😀😀😀')
+      expect(results()).toEqual(['text: at most 2 characters'])
+      set('A😀')
+      expect(results()).toEqual([])
+    })
+  }
+})
