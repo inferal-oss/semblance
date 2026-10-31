@@ -245,6 +245,16 @@ export class Engine {
   /** Pairs a stopped stall left out of date: their output is as it was before the stall. */
   private stopped = new Map<Rule, Set<string>>()
   private stoppedPairs = 0
+  /** Input-only pairs with retained evaluation or pending state, by owning focus.
+   * Parked-only pairs already have an owner index in deferred. Neither index
+   * admits evaluation: markDirty still checks the actual pair state and fences.
+   */
+  private inputPairs = new Map<string, Map<Rule, Set<string>>>()
+  /** The same pairs by rule, for teardown without searching unrelated owners. */
+  private inputPairsByRule = new Map<Rule, Set<string>>()
+  private inputPairCount = 0
+  /** The dirty batch being drained: its pairs are pending until evaluated/held. */
+  private running = new Map<Rule, Set<string>>()
 
   constructor(
     readonly store: GraphStore,
@@ -323,7 +333,7 @@ export class Engine {
     for (const byFocus of this.queryFollowers.values()) following += byFocus.size
     let memberReaders = 0
     for (const byRule of this.memberReaders.values()) for (const keys of byRule.values()) memberReaders += keys.size
-    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size }
+    return { refs: this.refs.size, outputs, readerSubjects: this.readers.size, readers, readsOf, deferred, members, memberReaders, types: this.types.size, links: this.links.size, following, stale: this.stale.size, inputPairOwners: this.inputPairs.size, inputPairRules: this.inputPairsByRule.size, inputPairs: this.inputPairCount }
   }
 
   onChange(listener: Listener): () => void {
@@ -353,8 +363,21 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    this.retireInputPairs(delta)
     this.locationChanged(delta)
     this.run()
+  }
+
+  /** Retire exact cached/parked input-only pairs after an input type is removed. */
+  private retireInputPairs(delta: Delta) {
+    const owners = new Set(delta.remove.filter((q) => q.predicate.value === RDF_TYPE && q.subject.termType === 'NamedNode' && this.inputGraphKeys.has(q.graph.value)).map((q) => q.subject.value))
+    if (!owners.size) return
+    const retired = (rule: Rule, key: string) => rule.inputOnly && owners.has(focusOf(key)) && (!this.typedInInput(focusOf(key)) || !this.isInstance(key, rule))
+    for (const owner of owners) {
+      // Parked-only pairs have no evaluation state to withdraw.
+      this.deferred.take(owner, retired)
+      for (const [rule, keys] of this.inputPairs.get(owner) ?? []) for (const key of keys) if (retired(rule, key)) this.markDirty(rule, key)
+    }
   }
 
   /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
@@ -524,19 +547,35 @@ export class Engine {
     const kept = new Set(full ? [] : after.filter((r) => before.has(r)))
     // A rule on its way out is not probed while its output is withdrawn (nor is one about to run for every focus).
     if (this.exact) for (const r of [...this.rules, ...after]) if (!kept.has(r)) this.pristine.add(r)
-    for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
-    for (const r of this.rules) if (!kept.has(r)) this.outputs.delete(r), this.memberKeys.delete(r), this.forgetAllFollowing(r)
-    for (const [member, byRule] of [...this.memberReaders]) {
-      for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
-      if (!byRule.size) this.memberReaders.delete(member)
-    }
-    // Keep what the retractions dirtied for rules that stay; drop the rest.
-    for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
+    this.dropRules(kept)
     this.activate(after)
     this.reindex()
     for (const [focus, classes] of this.types) for (const c of classes) for (const r of this.rulesFor(c)) if (!kept.has(r)) this.markFocus(r, focus)
     if (this.exact) for (const r of after) if (!kept.has(r)) this.pristine.add(r)
     this.run()
+  }
+
+  /** Removal cleanup only; activation/reindexing still visits the selected app. */
+  private dropRules(kept: ReadonlySet<Rule>) {
+    for (const r of this.rules) if (!kept.has(r)) for (const focus of [...(this.outputs.get(r)?.keys() ?? [])]) this.commit(r, focus, [])
+    let legacyCleanup = false
+    for (const r of this.rules) if (!kept.has(r)) {
+      this.outputs.delete(r)
+      this.memberKeys.delete(r)
+      this.forgetAllFollowing(r)
+      if (r.inputOnly) this.dropInputRule(r)
+      else legacyCleanup = true
+    }
+    // Input-only teardown already removed its exact registrations and pending
+    // work. Legacy scans are needed only for other outgoing rules.
+    if (legacyCleanup) {
+      for (const [member, byRule] of [...this.memberReaders]) {
+        for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
+        if (!byRule.size) this.memberReaders.delete(member)
+      }
+      // Keep what the retractions dirtied for rules that stay; drop the rest.
+      for (const byRule of this.dirty.values()) for (const r of [...byRule.keys()]) if (!kept.has(r)) byRule.delete(r)
+    }
   }
 
   /** Which rule produced a derived node, and for which focus. */
@@ -557,6 +596,27 @@ export class Engine {
     for (const { q } of this.refs.values()) this.store.delete(q)
     this.refs.clear()
     this.outputs.clear()
+    this.readers.clear()
+    this.readsOf.clear()
+    this.queryFollowers.clear()
+    this.queryFollowersByPredicate.clear()
+    this.stale.clear()
+    this.memberKeys.clear()
+    this.memberReaders.clear()
+    this.dirty.clear()
+    this.held.clear()
+    this.heldPairs = 0
+    this.stopped.clear()
+    this.stoppedPairs = 0
+    this.deferred.clear()
+    this.retyped.clear()
+    this.pristine.clear()
+    this.evaluations.clear()
+    this.inputPairs.clear()
+    this.inputPairsByRule.clear()
+    this.inputPairCount = 0
+    this.running.clear()
+    this.watchdog?.released(this)
   }
 
   // --- the viewer ------------------------------------------------------------
@@ -714,10 +774,70 @@ export class Engine {
     return fn?.watches ? fn.watches(this.ctx, this.store.factory.namedNode(focus)).has(predicate) : true
   }
 
+  /** Exact state already retained for this rule/pair, including zero-output evaluations. */
+  private ownsPairState(rule: Rule, focus: string): boolean {
+    const member = memberOf(focus)
+    return !!(this.outputs.get(rule)?.has(focus) || this.readsOf.get(rule)?.has(focus) || this.queryFollowers.get(rule)?.has(focus) ||
+      (member !== undefined && this.memberReaders.get(member)?.get(rule)?.has(focus)) ||
+      this.dirty.get(rule.stratum)?.get(rule)?.has(focus) || this.held.get(rule.stratum)?.get(rule)?.has(focus) || this.stopped.get(rule)?.has(focus))
+  }
+
+  /** Mirror only actual retained state; each update is a fixed number of keyed lookups. */
+  private syncInputPair(rule: Rule, key: string) {
+    if (!rule.inputOnly) return
+    const owner = focusOf(key)
+    let byRule = this.inputPairs.get(owner)
+    let keys = byRule?.get(rule)
+    if (this.ownsPairState(rule, key) || this.running.get(rule)?.has(key)) {
+      if (!byRule) this.inputPairs.set(owner, (byRule = new Map()))
+      if (!keys) byRule.set(rule, (keys = new Set()))
+      if (!keys.has(key)) {
+        keys.add(key)
+        let byFocus = this.inputPairsByRule.get(rule)
+        if (!byFocus) this.inputPairsByRule.set(rule, (byFocus = new Set()))
+        byFocus.add(key)
+        this.inputPairCount++
+      }
+    } else if (keys?.delete(key)) {
+      this.inputPairCount--
+      const byFocus = this.inputPairsByRule.get(rule)!
+      byFocus.delete(key)
+      if (!byFocus.size) this.inputPairsByRule.delete(rule)
+      if (!keys.size) byRule!.delete(rule)
+      if (!byRule!.size) this.inputPairs.delete(owner)
+    }
+  }
+
+  /** An outgoing input-only rule cannot leave active caches or pending work behind.
+   * Its output was withdrawn by reconfigure before reaching this point.
+   */
+  private dropInputRule(rule: Rule) {
+    const keys = [...(this.inputPairsByRule.get(rule) ?? [])]
+    this.dirty.get(rule.stratum)?.delete(rule)
+    const held = this.held.get(rule.stratum)?.get(rule)
+    if (held) this.heldPairs -= held.size, this.held.get(rule.stratum)!.delete(rule)
+    const stopped = this.stopped.get(rule)
+    if (stopped) this.stoppedPairs -= stopped.size, this.stopped.delete(rule)
+    this.running.delete(rule)
+    this.deferred.deleteRule(rule)
+    this.pristine.delete(rule)
+    this.evaluations.delete(rule)
+    for (const key of keys) {
+      this.forgetReads(rule, key)
+      this.forgetFollowing(rule, key)
+      if (rule.forEach && rule.kind === 'sparql' && memberOf(key) !== undefined) this.trackMember(rule, key, false)
+      this.syncInputPair(rule, key)
+    }
+    this.readsOf.delete(rule)
+    if (!this.heldPairs) this.watchdog?.released(this)
+  }
+
   private markDirty(rule: Rule, focus: string) {
     // Input-only rules never hear about instances other rules mint, nor about what
     // higher strata derive (they judge the input, which is settled before them).
-    if (rule.inputOnly && (this.derivedTrigger || rule.stratum < this.current || !this.typedInInput(focusOf(focus)))) return
+    // Losing the last input type can retire an existing pair's state, but must not
+    // admit a new evaluation of an untyped (or derived-only) component.
+    if (rule.inputOnly && (this.derivedTrigger || rule.stratum < this.current || (!this.typedInInput(focusOf(focus)) && !this.ownsPairState(rule, focus)))) return
     if (rule.stratum < this.current) {
       throw new Error(`Stratification violation: stratum ${this.current} invalidated <${rule.iri}> (stratum ${rule.stratum}) for <${focus}>. If that rule judges only the input, mark its rendering sem:inputOnly true; otherwise move it above stratum ${this.current} (docs/COMPONENTS.md, "Strata and layers")`)
     }
@@ -729,6 +849,7 @@ export class Engine {
     // Dirty again: it is evaluated now, not as held or stopped work.
     if (this.heldPairs && this.held.get(rule.stratum)?.get(rule)?.delete(focus)) this.heldPairs--
     if (this.stoppedPairs && this.stopped.get(rule)?.delete(focus)) this.stoppedPairs--
+    this.syncInputPair(rule, focus)
   }
 
   /** Whether a node is typed in one of the input graphs (not only by a rule's output). */
@@ -1006,6 +1127,7 @@ export class Engine {
     let byFocus = this.queryFollowers.get(rule)
     if (!byFocus) this.queryFollowers.set(rule, (byFocus = new Map()))
     byFocus.set(focus, f)
+    this.syncInputPair(rule, focus)
     for (const p of new Set(reads.map((r) => r.p ?? '*'))) {
       let set = this.queryFollowersByPredicate.get(p)
       if (!set) this.queryFollowersByPredicate.set(p, (set = new Set()))
@@ -1019,6 +1141,7 @@ export class Engine {
     if (!f) return
     byFocus!.delete(focus)
     if (!byFocus!.size) this.queryFollowers.delete(rule)
+    this.syncInputPair(rule, focus)
     this.stale.delete(f)
     for (const p of new Set(f.reads.map((r) => r.p ?? '*'))) {
       const set = this.queryFollowersByPredicate.get(p)
@@ -1033,6 +1156,18 @@ export class Engine {
 
   // --- evaluation ------------------------------------------------------------
 
+  /** Keep the pending owner index while a batch moves from dirty to evaluated/held. */
+  private drainBatch<T>(batch: Map<Rule, Set<string>>, drain: () => T): T {
+    const previous = this.running
+    this.running = batch
+    try {
+      return drain()
+    } finally {
+      this.running = previous
+      for (const [rule, keys] of batch) for (const key of keys) this.syncInputPair(rule, key)
+    }
+  }
+
   private run() {
     const wd = this.watchdog
     if (wd) return wd.turn(() => this.runWatched(wd))
@@ -1041,7 +1176,9 @@ export class Engine {
         this.current = stratum
         for (let batch = this.dirty.get(stratum); batch?.size; batch = this.dirty.get(stratum)) {
           this.dirty.set(stratum, new Map())
-          for (const [rule, foci] of batch) this.evaluate(rule, foci)
+          this.drainBatch(batch, () => {
+            for (const [rule, foci] of batch) this.evaluate(rule, foci)
+          })
         }
       }
     } finally {
@@ -1073,19 +1210,21 @@ export class Engine {
           // Over budget: this rule's unevaluated foci, and the rules after it in the batch, are held.
           let stop: Rule | undefined
           let left: Leftover | undefined
-          for (const [rule, foci] of batch) {
-            if (stop) {
-              if (foci.size) this.hold(rule, foci)
-              continue
+          this.drainBatch(batch, () => {
+            for (const [rule, foci] of batch) {
+              if (stop) {
+                if (foci.size) this.hold(rule, foci)
+                continue
+              }
+              if (wd.due()) {
+                stop = rule
+                if (foci.size) this.hold(rule, foci)
+                continue
+              }
+              left = this.evaluate(rule, foci)
+              if (left) (stop = rule), this.hold(rule, left.foci), (interrupted = left.interrupted)
             }
-            if (wd.due()) {
-              stop = rule
-              if (foci.size) this.hold(rule, foci)
-              continue
-            }
-            left = this.evaluate(rule, foci)
-            if (left) (stop = rule), this.hold(rule, left.foci), (interrupted = left.interrupted)
-          }
+          })
           if (stop) {
             suspended = true
             break outer
@@ -1113,7 +1252,10 @@ export class Engine {
     if (!byRule) this.held.set(stratum, (byRule = new Map()))
     let set = byRule.get(rule)
     if (!set) byRule.set(rule, (set = new Set()))
-    for (const f of foci) if (!set.has(f)) set.add(f), this.heldPairs++
+    for (const f of foci) {
+      if (!set.has(f)) set.add(f), this.heldPairs++
+      this.syncInputPair(rule, f)
+    }
   }
 
   /** (rule, focus) pairs a suspended run set aside, still to evaluate. */
@@ -1163,6 +1305,7 @@ export class Engine {
       let set = this.stopped.get(rule)
       if (!set) this.stopped.set(rule, (set = new Set()))
       if (!set.has(focus)) set.add(focus), this.stoppedPairs++
+      this.syncInputPair(rule, focus)
     }
     for (const byRule of held.values()) {
       for (const [rule, foci] of byRule) {
@@ -1185,7 +1328,10 @@ export class Engine {
     const stopped = this.stopped
     this.stopped = new Map()
     this.stoppedPairs = 0
-    for (const [rule, foci] of stopped) for (const focus of foci) this.markDirty(rule, focus)
+    for (const [rule, foci] of stopped) for (const focus of foci) {
+      this.markDirty(rule, focus)
+      this.syncInputPair(rule, focus)
+    }
     this.run()
   }
 
@@ -1196,6 +1342,7 @@ export class Engine {
     let foci = byRule.get(rule)
     if (!foci) byRule.set(rule, (foci = new Set()))
     foci.add(focus)
+    this.syncInputPair(rule, focus)
   }
 
   /** Report the run's net change to listeners. */
@@ -1238,6 +1385,21 @@ export class Engine {
   private evaluateAll(rule: Rule, foci: Set<string>): Leftover | undefined {
     const wd = this.watchdog
     if (wd) (wd.rule = rule.iri), (wd.focus = foci.values().next().value)
+    if (rule.inputOnly) {
+      for (const focus of foci) {
+        if (this.typedInInput(focusOf(focus))) continue
+        // Retire only this producer's prior support, before demand can park it.
+        // No function or query evaluates an owner absent from the input.
+        if (this.outputs.get(rule)?.has(focus)) this.commit(rule, focus, [])
+        this.forgetReads(rule, focus)
+        this.forgetFollowing(rule, focus)
+        if (rule.forEach && rule.kind === 'sparql' && memberOf(focus) !== undefined) this.trackMember(rule, focus, false)
+        this.deferred.delete(rule, focus)
+        foci.delete(focus)
+        this.syncInputPair(rule, focus)
+      }
+      if (!foci.size) return
+    }
     if (this.demand && !this.warming && !rule.always) {
       // Park undemanded foci (retractions always run, so nothing stale stays visible).
       // (Deleting the entry being visited from a Set does not disturb the iteration.)
@@ -1245,6 +1407,7 @@ export class Engine {
         if (this.isInstance(focus, rule) && !this.demand(focusOf(focus))) {
           this.deferred.add(rule, focus)
           foci.delete(focus)
+          this.syncInputPair(rule, focus)
         } else this.deferred.delete(rule, focus)
       }
       if (!foci.size) return
@@ -1256,6 +1419,7 @@ export class Engine {
         if ((rule.requires.length && !this.hasAny(node, rule.requires)) || (rule.unless.length && this.hasAny(node, rule.unless))) {
           this.commit(rule, focus, [])
           foci.delete(focus)
+          this.syncInputPair(rule, focus)
         }
       }
       if (!foci.size) return
@@ -1366,6 +1530,7 @@ export class Engine {
       if (!byRule!.size) this.readers.delete(subject)
     }
     byFocus?.delete(focus)
+    this.syncInputPair(rule, focus)
   }
 
   /** Replace a (rule, focus) pair's traced reads. */
@@ -1376,6 +1541,7 @@ export class Engine {
     trace.delete(focusOf(focus)) // the focus's own triples are covered by its self-watch
     if (!trace.size) return
     byFocus.set(focus, [...trace.keys()])
+    this.syncInputPair(rule, focus)
     for (const [subject, preds] of trace) {
       let byRule = this.readers.get(subject)
       if (!byRule) this.readers.set(subject, (byRule = new Map()))
@@ -1491,6 +1657,7 @@ export class Engine {
         if (!keys.size) byOwner.delete(owner)
       }
     }
+    this.syncInputPair(rule, focus)
   }
 
   /** Back along a path's steps, from the nodes at its end to the nodes at its start. */
@@ -1565,6 +1732,7 @@ export class Engine {
       let keys = byRule.get(rule)
       if (!keys) byRule.set(rule, (keys = new Set()))
       keys.add(key)
+      this.syncInputPair(rule, key)
       return
     }
     const keys = byRule?.get(rule)
@@ -1572,6 +1740,7 @@ export class Engine {
     keys.delete(key)
     if (!keys.size) byRule!.delete(rule)
     if (!byRule!.size) this.memberReaders.delete(member)
+    this.syncInputPair(rule, key)
   }
 
   /**
