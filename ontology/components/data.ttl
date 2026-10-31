@@ -80,7 +80,9 @@ c:DescriptionList a owl:Class ;
 rdfs:label, with their c:unit) on c:of, or explicit c:items (each a c:label and a c:value), or the
 entries of c:of (its c:entryProperty values, each a c:keyProperty / c:valueProperty pair, by
 sem:order: HTTP headers). Instead of c:of it may describe what c:bindProperty of c:bindFrom holds
-(a grid's selection), and c:via takes one hop from there first (an exchange's response)."""@en ;
+(a grid's selection), and c:via takes one hop from there first (an exchange's response).
+An explicit item can give c:content, a component, as its value (as a message's body does): Screen
+shows the component; Text prefers the item's c:value as a summary, or shows the component without one."""@en ;
     sem:slug "description-list" .
 c:entryProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A multi-valued property whose values are the pairs to list (e.g. http:headers)."@en .
 c:keyProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "An entry's key (e.g. http:fieldName)."@en .
