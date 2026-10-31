@@ -45,6 +45,9 @@ announced. c:label names the board."""@en ;
     sem:slug "board" .
 c:card a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:comment "A data item shown as a card on the board (unordered set)."@en .
 c:cardTitle a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:range rdf:Property ; rdfs:comment "Property of a card that is its title."@en .
+c:cardHref a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:range rdf:Property ; rdfs:comment "Property of a card whose value is its title link's address; without one the title is plain text."@en .
+c:cardContent a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:range rdf:Property ; rdfs:comment "Property of a card whose value is a component shown between its title and controls."@en .
+c:cardLocked a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:range rdf:Property ; rdfs:comment "Property of a card whose true value prevents moves and hides its move controls."@en .
 c:cardTag a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:range rdf:Property ;
     rdfs:comment "Property of a card whose value (an individual, with rdfs:label and sty:tone) is shown as a tag."@en .
 c:cardPerson a owl:ObjectProperty ; rdfs:domain c:Board ; rdfs:range rdf:Property ;
@@ -167,7 +170,7 @@ c:BoardCards a sem:Rendering ;
     sem:targets c:Board ;
     sem:stratum 0 ;
     sem:forEach c:card ;
-    sem:watches rdf:type , c:property , c:cardOrder , c:cardTitle .
+    sem:watches rdf:type , c:property , c:cardOrder , c:cardTitle , c:cardLocked .
 c:BoardCards-fn a sem:Rule ; sem:implements c:BoardCards ; sem:function "board:card" .
 # $member is the card's item. Its lane is its value of the board's property, one of the
 # individuals of that property's range; the neighbouring lanes are the ones just before and
@@ -207,7 +210,7 @@ WHERE {
   BIND(COALESCE(STR(?rawKey), "\\uFFFF") AS ?key)
   BIND(IRI(CONCAT(STR($this), "/~card-", ENCODE_FOR_URI(STR($member)))) AS ?card)
   BIND(IRI(CONCAT(STR($this), "/~lane-", ENCODE_FOR_URI(STR(?lane)), "-cards")) AS ?cards)
-  BIND(IF(EXISTS { $this a dnd:Sortable }, ?card, ?none) AS ?drag)
+  BIND(IF(EXISTS { $this a dnd:Sortable } && NOT EXISTS { $this c:cardLocked ?lockedProperty . $member ?lockedProperty true }, ?card, ?none) AS ?drag)
   OPTIONAL { $this c:cardTitle ?titleFrom . FILTER(isIRI(?titleFrom)) $member ?titleFrom ?rawTitle FILTER(NOT EXISTS { { ?titleFrom l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of $member ; ?l10nTwin ?l10nPick } UNION { FILTER(?titleFrom = c:label) $member l10n:label ?l10nPick } } || EXISTS { { { ?titleFrom l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of $member ; ?l10nTwin ?l10nPick } UNION { FILTER(?titleFrom = c:label) $member l10n:label ?l10nPick } } FILTER(STR(?l10nPick) = STR(?rawTitle)) }) }
   BIND(IF(BOUND(?drag), STR(?rawTitle), ?none) AS ?title)
 }""" .
@@ -224,12 +227,13 @@ c:BoardCardRendering-sparql-screen a sem:Rule ;
     sem:modality mod:Screen ;
     sem:construct """
 CONSTRUCT {
-  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:tabIndex "0" ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?head, ?foot ;
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:tabIndex "0" ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?head, ?content, ?foot ;
         rdfhtml:attribute ?labelledBy, ?keys .
   ?labelledBy a rdfhtml:Attribute ; rdfhtml:attributeName "aria-labelledby" ; rdfhtml:attributeValue ?titleId .
   ?keys a rdfhtml:Attribute ; rdfhtml:attributeName "aria-keyshortcuts" ; rdfhtml:attributeValue "ArrowLeft ArrowRight" .
-  ?head a rdfhtml:Div ; rdfhtml:class "sem-card-head" ; rdfhtml:hasChild ?title, ?tag ; ord:immediatelyPrecedes ?foot .
-  ?title a rdfhtml:Span ; rdfhtml:class "sem-title" ; rdfhtml:id ?titleId ; rdfhtml:hasChild ?titleText ; ord:precedes ?tag .
+  ?head a rdfhtml:Div ; rdfhtml:class "sem-card-head" ; rdfhtml:hasChild ?title, ?tag ; ord:immediatelyPrecedes ?headNext .
+  ?content ord:immediatelyPrecedes ?foot .
+  ?title a ?titleTag ; rdfhtml:class "sem-title" ; rdfhtml:id ?titleId ; rdfhtml:href ?titleHref ; rdfhtml:hasChild ?titleText ; ord:precedes ?tag .
   ?titleText a rdfhtml:Text ; rdfhtml:data ?titleData .
   ?tag a c:Tag ; c:label ?tagLabel ; sty:tone ?tagTone ; sty:size sty:Small .
   ?foot a rdfhtml:Div ; rdfhtml:class "sem-card-foot" ; rdfhtml:hasChild ?avatar, ?person, ?moves .
@@ -247,6 +251,11 @@ WHERE {
   $this a c:BoardCard ; c:of ?item ; c:onBoard ?board .
   ?board c:cardTitle ?titleProperty . ?item ?titleProperty ?titleValue . FILTER(NOT EXISTS { { ?titleProperty l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of ?item ; ?l10nTwin ?l10nPick } UNION { FILTER(?titleProperty = c:label) ?item l10n:label ?l10nPick } } || EXISTS { { { ?titleProperty l10n:pickedAs ?l10nTwin . ?l10nAt l10n:of ?item ; ?l10nTwin ?l10nPick } UNION { FILTER(?titleProperty = c:label) ?item l10n:label ?l10nPick } } FILTER(STR(?l10nPick) = STR(?titleValue)) })
   BIND(STR(?titleValue) AS ?titleData)
+  OPTIONAL { ?board c:cardHref ?hrefProperty . ?item ?hrefProperty ?hrefValue }
+  BIND(IF(BOUND(?hrefValue), rdfhtml:A, rdfhtml:Span) AS ?titleTag)
+  BIND(IF(BOUND(?hrefValue), STR(?hrefValue), ?none) AS ?titleHref)
+  OPTIONAL { ?board c:cardContent ?contentProperty . ?item ?contentProperty ?content FILTER(isIRI(?content)) }
+  BIND(EXISTS { ?board c:cardLocked ?lockedProperty . ?item ?lockedProperty true } AS ?locked)
   BIND(IF(EXISTS { $this c:refusedBy ?refusal }, "sem-refused", ?none) AS ?rootClass)
   # Optional parts are matched in OPTIONALs and minted after them (an OPTIONAL is evaluated on
   # its own, so it cannot see $this when the rule runs for many cards at once).
@@ -277,21 +286,22 @@ WHERE {
   BIND(IF(BOUND(?personValue), IRI(CONCAT(STR($this), "/~person")), ?none) AS ?person)
   BIND(IF(BOUND(?personValue), IRI(CONCAT(STR($this), "/~person-text")), ?none) AS ?personText)
   BIND(CONCAT(STR(?movePhrase), " ", STR(COALESCE(?prevPlain, REPLACE(STR(?prevLane), "^.*[#/]", "")))) AS ?prevLabel)
-  BIND(IF(BOUND(?prevLane), IRI(CONCAT(STR($this), "/~prev-step")), ?none) AS ?prevStep)
-  BIND(IF(BOUND(?prevLane), IRI(CONCAT(STR($this), "/~prev")), ?none) AS ?prev)
+  BIND(IF(BOUND(?prevLane) && !?locked, IRI(CONCAT(STR($this), "/~prev-step")), ?none) AS ?prevStep)
+  BIND(IF(BOUND(?prevLane) && !?locked, IRI(CONCAT(STR($this), "/~prev")), ?none) AS ?prev)
   BIND(CONCAT(STR(?movePhrase), " ", STR(COALESCE(?nextPlain, REPLACE(STR(?nextLane), "^.*[#/]", "")))) AS ?nextLabel)
-  BIND(IF(BOUND(?nextLane), IRI(CONCAT(STR($this), "/~next-step")), ?none) AS ?nextStep)
-  BIND(IF(BOUND(?nextLane), IRI(CONCAT(STR($this), "/~next")), ?none) AS ?next)
-  BIND(IF(?canRemove, STR(?removePhrase), ?none) AS ?removeLabel)
-  BIND(IF(?canRemove, IRI(CONCAT(STR($this), "/~remove")), ?none) AS ?remove)
+  BIND(IF(BOUND(?nextLane) && !?locked, IRI(CONCAT(STR($this), "/~next-step")), ?none) AS ?nextStep)
+  BIND(IF(BOUND(?nextLane) && !?locked, IRI(CONCAT(STR($this), "/~next")), ?none) AS ?next)
+  BIND(IF(?canRemove && !?locked, STR(?removePhrase), ?none) AS ?removeLabel)
+  BIND(IF(?canRemove && !?locked, IRI(CONCAT(STR($this), "/~remove")), ?none) AS ?remove)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~root-aria-labelledby")) AS ?labelledBy)
-  BIND(IRI(CONCAT(STR($this), "/~root-aria-keyshortcuts")) AS ?keys)
+  BIND(IF(?locked, ?none, IRI(CONCAT(STR($this), "/~root-aria-keyshortcuts"))) AS ?keys)
   BIND(IRI(CONCAT(STR($this), "/~head")) AS ?head)
   BIND(IRI(CONCAT(STR($this), "/~title")) AS ?title)
   BIND(STR(?title) AS ?titleId)
   BIND(IRI(CONCAT(STR($this), "/~title-text")) AS ?titleText)
   BIND(IRI(CONCAT(STR($this), "/~foot")) AS ?foot)
+  BIND(COALESCE(?content, ?foot) AS ?headNext)
   BIND(IRI(CONCAT(STR($this), "/~moves")) AS ?moves)
 }""" .
 c:BoardCardRendering-sparql-text a sem:Rule ;
@@ -369,6 +379,7 @@ WHERE {
   BIND(IF((?key = "arrowright") != ?rtl, c:nextLane, c:previousLane) AS ?step)
   $this ?step ?to .
   $this c:of ?item ; c:onBoard ?board . ?board c:property ?p . ?item ?p ?from .
+  FILTER NOT EXISTS { ?board c:cardLocked ?lockedProperty . ?item ?lockedProperty true }
   LATERAL { OPTIONAL { SELECT ?p ?to (COUNT(?other) AS ?held) WHERE { ?other ?p ?to } GROUP BY ?p ?to } }
   LATERAL { OPTIONAL { SELECT ?to ?p (MIN(?bound) AS ?max) WHERE { ?shape sh:targetNode ?to ; sh:property ?ps . ?ps sh:path/sh:inversePath ?p ; sh:maxCount ?bound } GROUP BY ?to ?p } }
   FILTER(!BOUND(?max) || COALESCE(?held, 0) < ?max)
@@ -382,6 +393,7 @@ WHERE {
   BIND(IF((?key = "arrowright") != ?rtl, c:nextLane, c:previousLane) AS ?step)
   $this ?step ?to .
   $this c:of ?item ; c:onBoard ?board . ?board c:property ?p .
+  FILTER NOT EXISTS { ?board c:cardLocked ?lockedProperty . ?item ?lockedProperty true }
   LATERAL { OPTIONAL { SELECT ?p ?to (COUNT(?other) AS ?held) WHERE { ?other ?p ?to } GROUP BY ?p ?to } }
   LATERAL { OPTIONAL { SELECT ?to ?p (MIN(?bound) AS ?max) WHERE { ?shape sh:targetNode ?to ; sh:property ?ps . ?ps sh:path/sh:inversePath ?p ; sh:maxCount ?bound } GROUP BY ?to ?p } }
   FILTER(!BOUND(?max) || COALESCE(?held, 0) < ?max)
@@ -427,6 +439,7 @@ WHERE {
   BIND(IF((?key = "arrowright") != ?rtl, c:nextLane, c:previousLane) AS ?step)
   $this ?step ?to .
   $this c:of ?item ; c:onBoard ?board ; c:refusedBy ?refusal . ?board c:property ?p .
+  FILTER NOT EXISTS { ?board c:cardLocked ?lockedProperty . ?item ?lockedProperty true }
   LATERAL { OPTIONAL { SELECT ?p ?to (COUNT(?other) AS ?held) WHERE { ?other ?p ?to } GROUP BY ?p ?to } }
   ?shape sh:targetNode ?to ; sh:property ?ps . ?ps sh:path/sh:inversePath ?p ; sh:maxCount ?max .
   FILTER(COALESCE(?held, 0) >= ?max)
@@ -439,6 +452,7 @@ WHERE {
   BIND(IF((?key = "arrowright") != ?rtl, c:nextLane, c:previousLane) AS ?step)
   $this ?step ?to .
   $this c:of ?item ; c:onBoard ?board . ?board c:property ?p .
+  FILTER NOT EXISTS { ?board c:cardLocked ?lockedProperty . ?item ?lockedProperty true }
   LATERAL { OPTIONAL { SELECT ?p ?to (COUNT(?other) AS ?held) WHERE { ?other ?p ?to } GROUP BY ?p ?to } }
   ?shape sh:targetNode ?to ; sh:property ?ps . ?ps sh:path/sh:inversePath ?p ; sh:maxCount ?max .
   FILTER(COALESCE(?held, 0) >= ?max)
