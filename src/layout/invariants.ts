@@ -4,7 +4,7 @@
 import type { GraphStore } from '../store/types.ts'
 import { packBoxes, Rel, type Box, type Finding, type Invariant } from './check.ts'
 import { checkLayout } from './engine.ts'
-import type { MeasuredNode, MeasuredPage } from './measure.ts'
+import { pagePath, type MeasuredNode, type MeasuredPage } from './measure.ts'
 
 export const LC = 'https://semblance.dev/ns/layout-constraints#'
 export const RND = 'https://semblance.dev/ns/rendered#'
@@ -219,7 +219,7 @@ export function checkInstantiated(boxes: Box[], invariants: Invariant[], instanc
 
 /** A finding in words: the invariant, where, and by how much. */
 export function describe(page: MeasuredPage, f: PageFinding): string {
-  const at = `${page.url.split('#')[1]} at ${page.width}px${page.theme ? ' in ' + page.theme : ''}${page.lang && page.lang !== 'en' ? ' (' + page.lang + ')' : ''}${page.dir === 'rtl' ? ' (rtl)' : ''}`
+  const at = `${pagePath(page)} at ${page.width}px${page.theme ? ' in ' + page.theme : ''}${page.lang && page.lang !== 'en' ? ' (' + page.lang + ')' : ''}${page.dir === 'rtl' ? ' (rtl)' : ''}`
   const name = (i: number) => {
     const n = page.nodes[i]
     if (!n) return 'the page'

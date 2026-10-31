@@ -1186,12 +1186,15 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # --- frames (windows, palettes; their states and the taskbar are in windows.ttl) ---------------------------
 
+# A frame's minimum width is a floor for resizing, never wider than what holds it (the screen, or
+# the tile a frame outside a desktop stands in): min-width beats max-width, so it is capped itself.
 [] a sty:StyleRule ; sty:appliesTo c:Frame ;
     sty:declares [ sty:property "position" ; sty:raw "fixed" ] ,
                  [ sty:property "z-index" ; sty:raw "50" ] ,
                  [ sty:property "display" ; sty:raw "grid" ] ,
                  [ sty:property "grid-template-rows" ; sty:raw "auto minmax(0, 1fr)" ] ,
-                 [ sty:property "min-width" ; sty:raw "280px" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(280px, 100%)" ] ,
                  [ sty:property "min-height" ; sty:raw "180px" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border-strong)" ] ,
@@ -1210,8 +1213,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "cursor" ; sty:raw "grab" ] ,
                  [ sty:property "user-select" ; sty:raw "none" ] ,
                  [ sty:property "touch-action" ; sty:raw "none" ] .
+# A narrow frame shortens its title, never its controls.
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-bar strong" ;
     sty:declares [ sty:property "flex" ; sty:raw "1" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "font-size" ; sty:raw "13px" ] ,
                  [ sty:property "font-weight" ; sty:raw "650" ] .
 [] a sty:StyleRule ; sty:appliesTo c:Frame ; sty:part ".sem-window-control" ;

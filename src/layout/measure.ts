@@ -119,3 +119,11 @@ export function measurePage(parts: PartSelectors): MeasuredPage {
     nodes,
   }
 }
+
+/** The page a measurement is of: its hash route, or (the site routes by path) its path without a language prefix. */
+export function pagePath(page: MeasuredPage): string {
+  const url = new URL(page.url)
+  if (url.hash.length > 1) return url.hash.slice(1)
+  const path = url.pathname.replace(/^\/+|\/+$/g, '')
+  return page.lang && path.startsWith(page.lang + '/') ? path.slice(page.lang.length + 1) : path
+}

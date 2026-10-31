@@ -76,7 +76,7 @@
 
 [] a sty:StyleRule ; sty:appliesTo c:Palette ;
     sty:declares [ sty:property "grid-template-rows" ; sty:raw "auto auto" ] ,
-                 [ sty:property "min-width" ; sty:raw "180px" ] ,
+                 [ sty:property "min-width" ; sty:raw "min(180px, 100%)" ] ,
                  [ sty:property "min-height" ; sty:raw "0" ] ,
                  [ sty:property "border-radius" ; sty:token tok:radius-md ] .
 [] a sty:StyleRule ; sty:appliesTo c:Palette ; sty:part ".sem-window-bar" ;

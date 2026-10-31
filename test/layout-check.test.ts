@@ -59,9 +59,8 @@ const EXPECTED: [RegExp, string[]][] = [
   [/^57-main_.*_375_/, []],
   [/^57-after_examples-checkout_1280_doodle/, ['fieldRowControlsShareTops']],
   [/^57-after_.*_(375_|semblance)/, []],
-  // main at 320px: only the themes page (a c:Window specimen wider than its card)
-  [/^today_components-themes_320/, ['contentStaysInCards', 'pageFits']],
-  [/^today_components-(inspection|navigation|feedback)_320/, []],
+  // main at 320px; the themes page's frame specimens fit since #195 (a frame's minimum width is capped at its container)
+  [/^today_components-(themes|inspection|navigation|feedback)_320/, []],
 ]
 
 describe('layout checker over recorded pages', () => {

@@ -20,7 +20,7 @@ import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { Parser } from 'n3'
 import { createServer } from 'vite'
-import { measurePage, type MeasuredPage, type PartSelectors } from '../src/layout/measure.ts'
+import { measurePage, pagePath, type MeasuredPage, type PartSelectors } from '../src/layout/measure.ts'
 
 const here = resolve(import.meta.dirname, '..')
 const { values: args } = parseArgs({
@@ -223,7 +223,7 @@ async function main() {
     if (args.out) {
       mkdirSync(args.out, { recursive: true })
       for (const p of pages) {
-        const name = [args.label, p.url.split('#')[1].replace(/[/@ ]/g, '-'), p.width, p.theme, p.lang && p.lang !== 'en' ? p.lang : '', p.dir === 'rtl' ? 'rtl' : ''].filter(Boolean).join('_')
+        const name = [args.label, pagePath(p).replace(/[/@ ]/g, '-'), p.width, p.theme, p.lang && p.lang !== 'en' ? p.lang : '', p.dir === 'rtl' ? 'rtl' : ''].filter(Boolean).join('_')
         writeFileSync(join(args.out, name + '.json'), JSON.stringify(p) + '\n')
       }
     }
