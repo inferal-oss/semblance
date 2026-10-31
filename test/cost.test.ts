@@ -3,6 +3,8 @@ import { todoOps } from '../src/examples/todo.ts'
 import { NS, SEM } from '../src/ns.ts'
 import { mountShell } from './harness.ts'
 
+const UI = 'https://semblance.dev/demo#'
+
 /**
  * The cost of an interaction must not depend on how big the app is or how long
  * the session has been. Every interaction is measured in work counters (not
@@ -151,6 +153,32 @@ describe('interaction cost', () => {
         .map(([k, v]) => `${name}.${k}: ${before[name]![k]} -> ${v}`),
     )
     expect(grew).toEqual([])
+  }, 120_000)
+})
+
+describe('fields over one node', () => {
+  // The Inputs page's fields edit properties of one node (ui:inputsDemo, through c:controls and
+  // c:property). Flipping one switch changes one of its properties: only the controls that name that
+  // property re-render (the switch and the c:Toggle over the same triple), not every field that
+  // follows the node - their queries read the node's predicate as a variable, which the focus names
+  // (#153: it was 37 rule runs and ~10 ms on WAT, the validation layer's check alone 9 of them).
+  it('re-renders only the controls that name the changed property (wat, SPARQL)', () => {
+    const h = mountShell(5, 'wat', 'sparql')
+    h.showPage('Components')
+    const f = h.store.factory
+    const app = f.namedNode(UI + 'app')
+    const group = f.namedNode(UI + 'galleryGroup')
+    h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupInputs'))] })
+    h.shell.flush()
+    const flip = () => h.fire((h.shell.nodeOf(`${UI}inp-sw-notify/~root`) as HTMLElement).querySelector('.sem-thumb')!, 'click')
+    flip()
+    flip()
+    const stats = h.screen.engine.stats
+    const before = new Map([...stats.byRule].map(([k, v]) => [k, v.runs]))
+    flip()
+    const ran = [...stats.byRule].filter(([k, v]) => v.runs > (before.get(k) ?? 0)).map(([k]) => k.replace(/^.*[#/]/, ''))
+    expect(ran.filter((r) => /Rendering|Check|Shapes/.test(r)).sort()).toEqual(['ToggleRendering-sparql', 'ToggleSwitchRendering-sparql'])
+    expect(h.document.querySelectorAll('[data-sem-c=radio-group]').length).toBeGreaterThan(0)
   }, 120_000)
 })
 

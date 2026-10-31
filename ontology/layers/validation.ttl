@@ -273,7 +273,7 @@ WHERE {
   } } }
     BIND(IF(BOUND(?minb) && STR(?held) < STR(?minb), COALESCE(?messageb, CONCAT("At least ", STR(?minb), ".")),
          IF(BOUND(?maxb) && STR(?held) > STR(?maxb), COALESCE(?messageb, CONCAT("At most ", STR(?maxb), ".")),
-         IF(BOUND(?before) && EXISTS { ?boundTarget ?before ?later FILTER(STR(?held) > STR(?later)) }, COALESCE(?messageb, "Out of order."), ?none))) AS ?boundProblem)
+         IF(BOUND(?before) && EXISTS { ?shape sh:lessThanOrEquals ?before . ?boundTarget ?before ?later FILTER(STR(?held) > STR(?later)) }, COALESCE(?messageb, "Out of order."), ?none))) AS ?boundProblem)
     FILTER(BOUND(?boundProblem))
   } ORDER BY STR(?shape) LIMIT 1 }
   BIND(IF(?unreadable, ?unreadableMessage, IF(BOUND(?kind), ?boundProblem, ?none)) AS ?datedProblem)
