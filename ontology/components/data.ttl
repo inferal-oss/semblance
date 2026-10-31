@@ -104,10 +104,159 @@ c:delta a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:decimal ; r
 c:deltaUnit a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:comment "Unit of c:delta (e.g. \"%\")."@en .
 c:lowerIsBetter a owl:DatatypeProperty ; rdfs:domain c:Stat ; rdfs:range xsd:boolean ;
     rdfs:comment "A falling value is good news (latency, errors): the trend's tone flips."@en .
-c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): the value and its change are written in the viewer's locale." ;
-    sem:needsExtension sx:Locale .
+c:StatRendering a sem:Rendering ; sem:targets c:Stat ; sem:stratum 0 .
 c:StatRendering-fn a sem:Rule ; sem:implements c:StatRendering ; sem:function "data:stat" .
+# The value and its change are written by sx:formatNumber in the viewer's l10n:formatLocale.
+c:StatRendering-sparql-screen a sem:Rule ;
+    sem:implements c:StatRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?labelEl , ?figure , ?deltaEl , ?helpEl .
+  ?labelEl a rdfhtml:Span ; rdfhtml:class "sem-label" ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?figure .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?figure a rdfhtml:Div ; rdfhtml:class "sem-figure" ; rdfhtml:hasChild ?valueEl , ?unitEl ; ord:immediatelyPrecedes ?afterFigure .
+  ?valueEl a rdfhtml:Span ; rdfhtml:class "sem-value" ; rdfhtml:hasChild ?valueText ; ord:immediatelyPrecedes ?unitEl .
+  ?valueText a rdfhtml:Text ; rdfhtml:data ?shownValue .
+  ?unitEl a rdfhtml:Span ; rdfhtml:class "sem-unit" ; rdfhtml:hasChild ?unitText .
+  ?unitText a rdfhtml:Text ; rdfhtml:data ?unit .
+  ?deltaEl a rdfhtml:Span ; rdfhtml:class ?deltaClass ; rdfhtml:hasChild ?arrowEl , ?deltaValueEl ; ord:immediatelyPrecedes ?helpEl ;
+    rdfhtml:attribute ?trendAttr , ?roleAttr , ?ariaLabelAttr .
+  ?trendAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-trend" ; rdfhtml:attributeValue ?trend .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "img" .
+  ?ariaLabelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?spoken .
+  ?arrowEl a rdfhtml:Span ; rdfhtml:attribute ?arrowHidden ; rdfhtml:hasChild ?arrowText ; ord:immediatelyPrecedes ?deltaValueEl .
+  ?arrowHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?arrowText a rdfhtml:Text ; rdfhtml:data ?arrow .
+  ?deltaValueEl a rdfhtml:Span ; rdfhtml:attribute ?deltaValueHidden ; rdfhtml:hasChild ?deltaValueText .
+  ?deltaValueHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?deltaValueText a rdfhtml:Text ; rdfhtml:data ?signed .
+  ?helpEl a rdfhtml:P ; rdfhtml:class "sem-help" ; rdfhtml:hasChild ?helpText .
+  ?helpText a rdfhtml:Text ; rdfhtml:data ?help .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Stat .
+  ?viewer l10n:formatLocale ?locale .
+  # Its label: in the viewer's language (l10n:label), else its one c:label, else its rdfs:label, else its local name.
+  OPTIONAL { $this l10n:label ?pickedLabel }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel)) $this c:label ?onlyLabel FILTER(isLiteral(?onlyLabel)) }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel)) ?nameAt l10n:of $this ; l10n:name ?pickedName }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel) && !BOUND(?pickedName)) $this rdfs:label ?onlyName FILTER(isLiteral(?onlyName)) }
+  BIND(COALESCE(STR(?pickedLabel), STR(?onlyLabel), STR(?pickedName), STR(?onlyName), REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  # Its value as text: a node by its label, a number grouped (at most two decimals), else as it is.
+  OPTIONAL {
+    $this c:value ?v .
+    OPTIONAL { ?v l10n:label ?vPicked }
+    OPTIONAL { FILTER(!BOUND(?vPicked)) ?vAt l10n:of ?v ; l10n:label ?vTwin }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin)) ?v c:label ?vOnly FILTER(isLiteral(?vOnly)) }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly)) ?vNameAt l10n:of ?v ; l10n:name ?vName }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly) && !BOUND(?vName)) ?v rdfs:label ?vRdfs FILTER(isLiteral(?vRdfs)) }
+  }
+  BIND(IF(isLiteral(?v) && REGEX(STR(?v), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?v)), ?none) AS ?vNumber)
+  BIND(IF(!BOUND(?v), "",
+       IF(isIRI(?v), COALESCE(STR(?vPicked), STR(?vTwin), STR(?vOnly), STR(?vName), STR(?vRdfs), REPLACE(STR(?v), "^.*[#/]", "")),
+       COALESCE(IF(?vNumber * 0 = 0, sx:formatNumber(?vNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?v)))) AS ?value)
+  # Texts in the viewer's language (l10n:Terms twins), else the one value.
+  OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?unitPicked }
+  OPTIONAL { FILTER(!BOUND(?unitPicked)) $this c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+  BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit0)
+  BIND(IF(COALESCE(?unit0, "") != "", ?unit0, ?none) AS ?unit)
+  OPTIONAL { ?helpAt l10n:of $this ; l10n:help ?helpPicked }
+  OPTIONAL { FILTER(!BOUND(?helpPicked)) $this c:help ?helpOnly FILTER(isLiteral(?helpOnly)) }
+  BIND(STR(COALESCE(?helpPicked, ?helpOnly)) AS ?help0)
+  BIND(IF(COALESCE(?help0, "") != "", ?help0, ?none) AS ?help)
+  OPTIONAL { ?deltaUnitAt l10n:of $this ; l10n:deltaUnit ?deltaUnitPicked }
+  OPTIONAL { FILTER(!BOUND(?deltaUnitPicked)) $this c:deltaUnit ?deltaUnitOnly FILTER(isLiteral(?deltaUnitOnly)) }
+  BIND(COALESCE(STR(?deltaUnitPicked), STR(?deltaUnitOnly), "") AS ?deltaUnit)
+  # The change: its trend, and its magnitude and sign as text.
+  OPTIONAL { $this c:delta ?deltaTerm }
+  BIND(xsd:double(STR(?deltaTerm)) AS ?delta)
+  BIND(IF(?delta * 0 = 0, IF(?delta > 0, "up", IF(?delta < 0, "down", "flat")), ?none) AS ?trend)
+  BIND(IF(?trend = "up", "↑", IF(?trend = "down", "↓", "→")) AS ?arrow)
+  BIND(CONCAT(sx:formatNumber(ABS(?delta), ?locale, "maximumFractionDigits=2"), ?deltaUnit) AS ?magnitude)
+  BIND(CONCAT(IF(?delta > 0, "+", IF(?delta < 0, "−", "")), ?magnitude) AS ?signed)
+  BIND(EXISTS { $this c:lowerIsBetter true } AS ?lowerIsBetter)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(?value != "", ?value, "–") AS ?shownValue)
+  BIND(CONCAT("sem-delta sem-", IF(?trend = "flat", "neutral", IF((?trend = "up") != ?lowerIsBetter, "good", "bad"))) AS ?deltaClass)
+  BIND(IF(?trend = "flat", "unchanged", CONCAT(?trend, " ", ?magnitude)) AS ?spoken)
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelEl)
+  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IRI(CONCAT(STR($this), "/~figure")) AS ?figure)
+  BIND(IRI(CONCAT(STR($this), "/~value")) AS ?valueEl)
+  BIND(IRI(CONCAT(STR($this), "/~value-text")) AS ?valueText)
+  BIND(IF(BOUND(?unit), IRI(CONCAT(STR($this), "/~unit")), ?none) AS ?unitEl)
+  BIND(IF(BOUND(?unit), IRI(CONCAT(STR($this), "/~unit-text")), ?none) AS ?unitText)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta")), ?none) AS ?deltaEl)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-data-trend")), ?none) AS ?trendAttr)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-role")), ?none) AS ?roleAttr)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-aria-label")), ?none) AS ?ariaLabelAttr)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-arrow")), ?none) AS ?arrowEl)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-arrow-aria-hidden")), ?none) AS ?arrowHidden)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-arrow-text")), ?none) AS ?arrowText)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-value")), ?none) AS ?deltaValueEl)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-value-aria-hidden")), ?none) AS ?deltaValueHidden)
+  BIND(IF(BOUND(?trend), IRI(CONCAT(STR($this), "/~delta-value-text")), ?none) AS ?deltaValueText)
+  BIND(IF(BOUND(?help), IRI(CONCAT(STR($this), "/~help")), ?none) AS ?helpEl)
+  BIND(IF(BOUND(?help), IRI(CONCAT(STR($this), "/~help-text")), ?none) AS ?helpText)
+  BIND(COALESCE(?deltaEl, ?helpEl) AS ?afterFigure)
+}""" .
+c:StatRendering-sparql-text a sem:Rule ;
+    sem:implements c:StatRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Stat .
+  ?viewer l10n:formatLocale ?locale .
+  # Its label: in the viewer's language (l10n:label), else its one c:label, else its rdfs:label, else its local name.
+  OPTIONAL { $this l10n:label ?pickedLabel }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel)) $this c:label ?onlyLabel FILTER(isLiteral(?onlyLabel)) }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel)) ?nameAt l10n:of $this ; l10n:name ?pickedName }
+  OPTIONAL { FILTER(!BOUND(?pickedLabel) && !BOUND(?onlyLabel) && !BOUND(?pickedName)) $this rdfs:label ?onlyName FILTER(isLiteral(?onlyName)) }
+  BIND(COALESCE(STR(?pickedLabel), STR(?onlyLabel), STR(?pickedName), STR(?onlyName), REPLACE(STR($this), "^.*[#/]", "")) AS ?label)
+  # Its value as text: a node by its label, a number grouped (at most two decimals), else as it is.
+  OPTIONAL {
+    $this c:value ?v .
+    OPTIONAL { ?v l10n:label ?vPicked }
+    OPTIONAL { FILTER(!BOUND(?vPicked)) ?vAt l10n:of ?v ; l10n:label ?vTwin }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin)) ?v c:label ?vOnly FILTER(isLiteral(?vOnly)) }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly)) ?vNameAt l10n:of ?v ; l10n:name ?vName }
+    OPTIONAL { FILTER(!BOUND(?vPicked) && !BOUND(?vTwin) && !BOUND(?vOnly) && !BOUND(?vName)) ?v rdfs:label ?vRdfs FILTER(isLiteral(?vRdfs)) }
+  }
+  BIND(IF(isLiteral(?v) && REGEX(STR(?v), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?v)), ?none) AS ?vNumber)
+  BIND(IF(!BOUND(?v), "",
+       IF(isIRI(?v), COALESCE(STR(?vPicked), STR(?vTwin), STR(?vOnly), STR(?vName), STR(?vRdfs), REPLACE(STR(?v), "^.*[#/]", "")),
+       COALESCE(IF(?vNumber * 0 = 0, sx:formatNumber(?vNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?v)))) AS ?value)
+  # Texts in the viewer's language (l10n:Terms twins), else the one value.
+  OPTIONAL { ?unitAt l10n:of $this ; l10n:unit ?unitPicked }
+  OPTIONAL { FILTER(!BOUND(?unitPicked)) $this c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+  BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit0)
+  BIND(IF(COALESCE(?unit0, "") != "", ?unit0, ?none) AS ?unit)
+  OPTIONAL { ?helpAt l10n:of $this ; l10n:help ?helpPicked }
+  OPTIONAL { FILTER(!BOUND(?helpPicked)) $this c:help ?helpOnly FILTER(isLiteral(?helpOnly)) }
+  BIND(STR(COALESCE(?helpPicked, ?helpOnly)) AS ?help0)
+  BIND(IF(COALESCE(?help0, "") != "", ?help0, ?none) AS ?help)
+  OPTIONAL { ?deltaUnitAt l10n:of $this ; l10n:deltaUnit ?deltaUnitPicked }
+  OPTIONAL { FILTER(!BOUND(?deltaUnitPicked)) $this c:deltaUnit ?deltaUnitOnly FILTER(isLiteral(?deltaUnitOnly)) }
+  BIND(COALESCE(STR(?deltaUnitPicked), STR(?deltaUnitOnly), "") AS ?deltaUnit)
+  # The change: its trend, and its magnitude and sign as text.
+  OPTIONAL { $this c:delta ?deltaTerm }
+  BIND(xsd:double(STR(?deltaTerm)) AS ?delta)
+  BIND(IF(?delta * 0 = 0, IF(?delta > 0, "up", IF(?delta < 0, "down", "flat")), ?none) AS ?trend)
+  BIND(IF(?trend = "up", "↑", IF(?trend = "down", "↓", "→")) AS ?arrow)
+  BIND(CONCAT(sx:formatNumber(ABS(?delta), ?locale, "maximumFractionDigits=2"), ?deltaUnit) AS ?magnitude)
+  BIND(CONCAT(IF(?delta > 0, "+", IF(?delta < 0, "−", "")), ?magnitude) AS ?signed)
+  BIND(EXISTS { $this c:lowerIsBetter true } AS ?lowerIsBetter)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(CONCAT(?label, ": ", ?value, IF(BOUND(?unit), CONCAT(" ", ?unit), ""), IF(BOUND(?trend), CONCAT("  ", ?arrow, " ", ?signed), "")) AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
 
 # --- Avatar and AvatarGroup ---------------------------------------------------------------------
 

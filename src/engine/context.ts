@@ -90,6 +90,26 @@ export function languageChain(languages: readonly string[]): string[] {
   return out
 }
 
+/**
+ * The locale numbers (and other Intl formats) are written in for these languages (a
+ * languageChain): the first that Intl knows, else en-US. The engine states it on the viewer
+ * (l10n:formatLocale) for SPARQL rules to pass to sx:formatNumber; function rules call this.
+ */
+export function formatLocale(languages: readonly string[]): string {
+  const key = languages.join(',')
+  let tag = formatLocales.get(key)
+  if (tag === undefined) {
+    try {
+      tag = Intl.NumberFormat.supportedLocalesOf([...languages])[0] ?? 'en-US'
+    } catch {
+      tag = 'en-US'
+    }
+    formatLocales.set(key, tag)
+  }
+  return tag
+}
+const formatLocales = new Map<string, string>()
+
 /** `graphs` is the rule's view: input graphs, then the engine's derived graph (last). */
 export function createContext(store: GraphStore, graphs: Quad_Graph[], modality: string, languages: string[] = []): RuleContext {
   const graph = graphs[graphs.length - 1] as NamedNode

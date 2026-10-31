@@ -2,7 +2,7 @@ import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
 import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
-import { createContext, type FnRule, LANGUAGE, languageChain, type RuleContext } from './context.ts'
+import { createContext, type FnRule, formatLocale, LANGUAGE, languageChain, type RuleContext } from './context.ts'
 import { matchesRead, type ReadPattern } from '../sparql-reads.ts'
 import { loadRules, type Rule, type Selection, selectRules, superclasses } from './rules.ts'
 import type { Watchdog } from './watchdog.ts'
@@ -565,7 +565,8 @@ export class Engine {
    * State the viewer's languages as graph data, in this engine's derived graph, so SPARQL
    * rules can read them: the agent standing for this projection is the l10n:Viewer, and
    * each language it prefers is an l10n:Preference with its l10n:code and rank (sem:order 1
-   * is the most preferred). Function rules read the same through ctx.languages.
+   * is the most preferred), and its l10n:formatLocale. Function rules read the same through
+   * ctx.languages (and formatLocale).
    */
   private stateViewer() {
     const f = this.store.factory
@@ -576,6 +577,8 @@ export class Engine {
     const languages = languageChain(this.selection.languages ?? [])
     // Always a viewer (its texts are picked even without a preference: untagged, then English).
     put(f.quad(this.agent, nn(RDF_TYPE), nn(L10N.Viewer), g))
+    // The locale its numbers are written in (sx:formatNumber's), as function rules pick it.
+    put(f.quad(this.agent, nn(L10N.formatLocale), f.literal(formatLocale(languages)), g))
     languages.forEach((code, i) => {
       const pref = nn(mint(this.agent.value, 'prefers-' + (i + 1)))
       put(f.quad(this.agent, nn(L10N.prefers), pref, g))

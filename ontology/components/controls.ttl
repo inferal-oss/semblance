@@ -1,4 +1,5 @@
 @prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
 @prefix sem: <https://semblance.dev/ns/core#> .
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
@@ -1141,10 +1142,50 @@ c:ChipsCounts a sem:Rendering ;
     sem:requires c:countQuery ;
     sem:modality mod:Screen ;
     sem:stratum 0 ;
-    sem:follows c:dataset ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): each count is written in the viewer's locale (Intl.NumberFormat). (Its rows, those of a maintained c:countQuery, are in the views graph.)" ;
-    sem:needsExtension sx:Locale .
+    sem:follows c:dataset , ( c:countQuery rs:solution rs:binding ) .
 c:ChipsCounts-fn a sem:Rule ; sem:implements c:ChipsCounts ; sem:function "chips:counts" .
+# The rows of a maintained c:countQuery (iv:materialize iv:Graph), in the views graph; each count
+# written by sx:formatNumber in the viewer's l10n:formatLocale.
+c:ChipsCounts-sparql a sem:Rule ;
+    sem:implements c:ChipsCounts ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?chip rdfhtml:hasChild ?count . ?chipText ord:immediatelyPrecedes ?count .
+  ?count a rdfhtml:Span ; rdfhtml:class ?class ; rdfhtml:hasChild ?figure , ?spokenEl .
+  ?figure ord:immediatelyPrecedes ?spokenEl .
+  ?figure a rdfhtml:Span ; rdfhtml:attribute ?hidden ; rdfhtml:hasChild ?figureText .
+  ?hidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?figureText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?spokenEl a rdfhtml:Span ; rdfhtml:class "sem-visually-hidden" ; rdfhtml:hasChild ?spokenText .
+  ?spokenText a rdfhtml:Text ; rdfhtml:data ?spoken .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Chips ; c:countQuery ?view .
+  ?view sem:select ?query .
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?labelAt l10n:of $this ; l10n:countLabel ?labelPicked }
+  OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:countLabel ?labelOnly FILTER(isLiteral(?labelOnly)) }
+  BIND(STR(COALESCE(?labelPicked, ?labelOnly)) AS ?countLabel)
+  # A binding is <row>-<variable> (view.ttl).
+  ?view rs:solution ?row .
+  BIND(IRI(CONCAT(STR(?row), "-option")) AS ?optionBinding)
+  BIND(IRI(CONCAT(STR(?row), "-count")) AS ?countBinding)
+  ?optionBinding rs:value ?option . ?countBinding rs:value ?n .
+  BIND(xsd:double(STR(?n)) AS ?number)
+  BIND(COALESCE(sx:formatNumber(?number, ?locale), STR(?n)) AS ?shown)
+  BIND(COALESCE(IF(?number = 0, "sem-count sem-zero", "sem-count"), "sem-count") AS ?class)
+  BIND(CONCAT(", ", ?shown, IF(COALESCE(?countLabel, "") != "", CONCAT(" ", ?countLabel), "")) AS ?spoken)
+  BIND(CONCAT(STR($this), "/~chip-", ENCODE_FOR_URI(STR(?option))) AS ?key)
+  BIND(IRI(?key) AS ?chip)
+  BIND(IRI(CONCAT(?key, "-text")) AS ?chipText)
+  BIND(IRI(CONCAT(?key, "-count")) AS ?count)
+  BIND(IRI(CONCAT(?key, "-count-figure")) AS ?figure)
+  BIND(IRI(CONCAT(?key, "-count-figure-aria-hidden")) AS ?hidden)
+  BIND(IRI(CONCAT(?key, "-count-text")) AS ?figureText)
+  BIND(IRI(CONCAT(?key, "-count-spoken")) AS ?spokenEl)
+  BIND(IRI(CONCAT(?key, "-count-spoken-text")) AS ?spokenText)
+}""" .
 
 c:ChipsRendering-sparql-screen a sem:Rule ;
     sem:implements c:ChipsRendering ;
