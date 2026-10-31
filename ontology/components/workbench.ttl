@@ -287,12 +287,13 @@ c:fn-uuid a c:SparqlFunction ; rdfs:label "UUID" ; rdfs:comment "A fresh urn:uui
 
 c:QueryResultView a owl:Class ;
     rdfs:subClassOf sem:Component ;
-    rdfs:comment """A view of the results of a query (c:of a sem:Query with sem:select or sem:construct). It
-runs the query when shown and again when its text or c:runCount changes, not when the graph does -
-unless it follows updates (its own c:followUpdates, or that of a workbench that c:runs its query):
-then also when a triple the query reads changes, at the next frame. At most c:limit results are
-shown. A query that fails shows its error (a c:Alert) instead. Components in its c:actions (e.g. a
-clip:Copier of its c:markdown) are shown beside the summary line of its results."""@en .
+    rdfs:comment """A view of the results of a query (c:of a sem:Query with sem:select or sem:construct). Its
+query is run (c:QueryRuns) when shown and again when its text or c:runCount changes, not when the
+graph does - unless it follows updates (its own c:followUpdates, or that of a workbench that c:runs
+its query): then it is maintained as the graph changes. The run's result is graph data (a result set
+in the views graph, which the view names by iv:run). At most c:limit results are shown. A query that
+fails shows its error (a c:Alert) instead. Components in its c:actions (e.g. a clip:Copier of its
+c:markdown) are shown beside the summary line of its results."""@en .
 
 # A run of each query a result view shows (iv:perQuery, ontology/layers/view.ttl): the query node is a
 # view of its own, run on request - when shown, when its text or c:runCount changes, not when the graph

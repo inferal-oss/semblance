@@ -72,6 +72,10 @@ export class Runtime {
     // person last showed intent to see (preload) counts as shown, so its views are ready by the click.
     this.views.shown = (component) => this.projections.some((p) => !p.engine.demand || p.engine.demand(component) || this.intended(p, component))
     this.views.watchdog = this.watchdog
+    // A query run on request reads what the projection showing it derives, as its result view's rule once did.
+    // A followed result set (what a person reads, maintained) writes its rows at the next refresh.
+    this.views.onPending = () => this.queueRefresh()
+    this.views.derivedFor = (components) => (this.projections.find((p) => components.some((c) => !p.engine.demand || p.engine.demand(c))) ?? this.projections[0])?.engine.graph
   }
 
   private readonly timerListeners: (() => void)[] = []
@@ -218,6 +222,11 @@ export class Runtime {
     if (this.disposed) return false
     const t = performance.now()
     let any = false
+    const rows = this.views.flushPending()
+    if (rows.add.length || rows.remove.length) {
+      for (const p of this.projections) p.engine.process(rows), settle(p)
+      any = true
+    }
     for (const p of this.projections) if (p.engine.refresh()) settle(p), (any = true)
     if (!any) return false
     const took = performance.now() - t

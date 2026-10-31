@@ -66,7 +66,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
   it('typing updates c:value and re-renders only the editor', () => {
     const h = workbench()
     const runs = (rule: string) => h.screen.engine.stats.byRule.get(C + rule)?.runs ?? 0
-    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-fn'), editor: runs('CodeEditorRendering-fn') }
+    const before = { bench: runs('QueryWorkbenchRendering-fn'), table: runs('ResultTableRendering-sparql'), editor: runs('CodeEditorRendering-fn') }
     const rows = panel(h).querySelector('tbody')!.innerHTML
     const query = 'SELECT ?tab WHERE { ?tab a c:Tab }'
     type(h, query)
@@ -79,7 +79,7 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(highlighted(h).textContent).toBe(query + ' ')
     expect(runs('CodeEditorRendering-fn')).toBe(before.editor + 1)
     expect(runs('QueryWorkbenchRendering-fn')).toBe(before.bench)
-    expect(runs('ResultTableRendering-fn')).toBe(before.table)
+    expect(runs('ResultTableRendering-sparql')).toBe(before.table)
     expect(panel(h).querySelector('tbody')!.innerHTML).toBe(rows) // results change only on Run
     // A second line adds a line number; editing it leaves the first line's nodes alone.
     const first = highlighted(h).querySelector('span')!
@@ -176,9 +176,9 @@ describe('the SPARQL workbench (c:QueryWorkbench)', () => {
     expect(panel(h).querySelector('.sem-summary')!.textContent).toBe('Triples: 5')
     expect([...panel(h).querySelectorAll('th')].map((t) => t.textContent)).toEqual(['subject', 'predicate', 'object'])
     // Running the same text again re-runs it.
-    const runs = h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-fn')!.runs
+    const runs = h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-sparql')!.runs
     run(h)
-    expect(h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-fn')!.runs).toBe(runs + 1)
+    expect(h.screen.engine.stats.byRule.get(C + 'ResultTableRendering-sparql')!.runs).toBe(runs + 1)
   })
 
   it('every sample runs, into a table, a graph and Turtle', () => {
@@ -395,13 +395,13 @@ describe('selecting a node in the graph view', () => {
     expect(selectionLine(h).textContent).toMatch(/^Select a node/)
     expect(selectionLine(h).getAttribute('aria-live')).toBe('polite')
 
-    const before = { graph: runs('ResultGraphRendering-fn'), selection: runs('ResultGraphSelection-sparql'), table: runs('ResultTableRendering-fn'), ops: h.shell.ops }
+    const before = { graph: runs('ResultGraphRendering-fn'), selection: runs('ResultGraphSelection-sparql'), table: runs('ResultTableRendering-sparql'), ops: h.shell.ops }
     const tabs = graphNode(h, 'c:Tabs')
     h.fire(tabs.querySelector('circle')!, 'click')
     expect(value(h, UI + 'queryGraph', C + 'selectedTerm')).toBe(C + 'Tabs')
     // Only the selection rule ran for the view: the query did not run again, nothing was laid out.
     expect(runs('ResultGraphRendering-fn')).toBe(before.graph)
-    expect(runs('ResultTableRendering-fn')).toBe(before.table)
+    expect(runs('ResultTableRendering-sparql')).toBe(before.table)
     expect(runs('ResultGraphSelection-sparql')).toBe(before.selection + 1)
 
     const pairs = links(h)
