@@ -205,7 +205,12 @@ A pair is dirty when the focus's own triples change, and also:
   `sem:watches` must list every predicate of the followed node it reads (the workbench's result
   views watch only their query's text and run count, so the runtime's figures on that query
   node do not re-run them). A function rule's traced reads are not filtered: what it reads
-  through the context re-runs it either way;
+  through the context re-runs it either way. A SPARQL rule without `sem:watches` watches the
+  predicates its query names; a variable predicate it reads is watched as its focus names it -
+  `$this c:property ?p . ?target ?p ?v` watches, per focus, the property that focus's
+  `c:property` names (also along a path from the focus, among IRIs a `BIND`/`VALUES` chooses, or
+  any predicate with a property, as `?p sty:hookAttribute ?name`). A variable predicate that can
+  be unbound or anything where it is read makes the rule watch everything;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so

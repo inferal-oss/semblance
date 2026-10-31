@@ -703,7 +703,7 @@ export class Engine {
   }
 
   private watched(rule: Rule, focus: string, predicate: string): boolean {
-    if (rule.watches) return rule.watches.has(predicate)
+    if (rule.watches) return rule.watches.has(predicate) || (!!rule.watchesVia && this.names(focus, rule.watchesVia, predicate)) || (!!rule.watchesMarked && this.marked(predicate, rule.watchesMarked))
     const fn = rule.kind === 'function' ? this.functions[rule.fn!] : undefined
     return fn?.watches ? fn.watches(this.ctx, this.store.factory.namedNode(focus)).has(predicate) : true
   }
@@ -868,7 +868,7 @@ export class Engine {
     // and a rule that watches predicates is not walked to for others: this runs for every triple.)
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
-        if (r.watches && !r.watches.has(p)) continue
+        if (r.watches && !r.watchesVia && !r.watchesMarked && !r.watches.has(p)) continue
         for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
       }
     }
@@ -1513,15 +1513,32 @@ export class Engine {
     return out
   }
 
+  /** Whether the predicate is reached from the focus along one of these paths (Rule.watchesVia; a step "^p" goes against p). */
+  private names(focus: string, via: string[][], predicate: string): boolean {
+    const f = this.store.factory
+    return via.some((path) => {
+      let nodes: Term[] = [f.namedNode(focus)]
+      for (const step of path) {
+        const back = step.startsWith('^')
+        const p = f.namedNode(back ? step.slice(1) : step)
+        nodes = nodes.flatMap((n) => this.graphs.flatMap((g) => (back ? this.store.match(null, p, n as never, g).map((q) => q.subject) : n.termType === 'Literal' ? [] : this.store.match(n as never, p, null, g).map((q) => q.object))))
+      }
+      return nodes.some((n) => n.termType === 'NamedNode' && n.value === predicate)
+    })
+  }
+
+  /** Whether the predicate has one of these properties (Rule.watchesMarked). */
+  private marked(predicate: string, by: string[]): boolean {
+    const f = this.store.factory
+    const p = f.namedNode(predicate)
+    return by.some((m) => this.graphs.some((g) => this.store.match(p, f.namedNode(m), null, g).length > 0))
+  }
+
   /** Whether a member-wise SPARQL pair reads this predicate of its member (sem:memberWatches). */
   private memberWatched(rule: Rule, key: string, predicate: string): boolean {
     const w = rule.memberWatches
     if (!w || w.predicates.has(predicate)) return true
-    if (!w.via.length) return false
-    const f = this.store.factory
-    const focus = f.namedNode(focusOf(key))
-    const p = f.namedNode(predicate)
-    return w.via.some((via) => this.graphs.some((g) => this.store.match(focus, f.namedNode(via), p, g).length > 0))
+    return this.names(focusOf(key), w.via.map((p) => [p]), predicate)
   }
 
   /** Register (or drop) a member-wise SPARQL pair as a reader of its member. */
