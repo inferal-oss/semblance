@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Rule } from '../src/engine/rules.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { toHTML } from '../src/render/serialize.ts'
+import { mountShell } from './harness.ts'
 import { setup, SCREEN_LAYERS } from './helpers.ts'
 
 // Lists in the viewer's collation (#7): on Semblance's engines the SPARQL rules place their rows
@@ -20,7 +21,7 @@ const graph = `
 `
 const parts = ['list']
 const LANGUAGES = [[], ['en'], ['de'], ['uk'], ['ar']]
-const SLOTS = ['ShortcutListRendering']
+const SLOTS = ['ShortcutListRendering', 'ShapeReportRendering']
 
 function mount(prefer: 'sparql' | 'function', languages: string[]) {
   const { store, runtime, screen } = setup('wat', { modality: MOD.Screen, layers: SCREEN_LAYERS, prefer, languages }, 1, [graph])
@@ -70,5 +71,39 @@ describe('lists in the viewer collation, SPARQL (sx:sortKey) and function rules 
       m.screen.engine.reconfigure({ languages: ['de'] })
       m.text.engine.reconfigure({ languages: ['de'] })
     })
+  })
+})
+
+describe('the Layers gallery group (shortcuts, shape results), on wat', () => {
+  const UI = 'https://semblance.dev/demo#'
+  it('renders the same with SPARQL and with function rules, as a result goes away and the language changes', { timeout: 300_000 }, () => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'wat', prefer)
+      const f = h.store.factory
+      const app = f.namedNode(UI + 'app')
+      const group = f.namedNode(UI + 'galleryGroup')
+      h.showPage('Components')
+      h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupLayers'))] })
+      h.shell.flush()
+      return h
+    })
+    const html = (id: string) => shells.map((h) => (h.shell.nodeOf(`${UI}${id}/~root`) as Element).outerHTML)
+    const same = () => {
+      for (const id of ['shapeReport', 'shortcuts']) {
+        const [a, b] = html(id)
+        expect(a, id).toBe(b)
+      }
+    }
+    same()
+    expect(html('shapeReport')[0]!.match(/<li/g)).toHaveLength(3)
+    for (const h of shells) {
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode(UI + 'badBadge'), f.namedNode('https://semblance.dev/ns/style#tone'), null), add: [] })
+      h.shell.flush()
+    }
+    same()
+    expect(html('shapeReport')[0]!.match(/<li/g)).toHaveLength(2)
+    for (const h of shells) h.screen.engine.reconfigure({ languages: ['uk'] }), h.shell.flush()
+    same()
   })
 })
