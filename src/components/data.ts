@@ -2,6 +2,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
+import { formatLocale } from '../engine/context.ts'
 import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
 import { isTrue, labelOf, named, nodes, num, str, text } from './util.ts'
 import { viewRows } from '../view/rows.ts'
@@ -75,14 +76,8 @@ export function md5(s: string): string {
 /** A short, stable key that SPARQL rules compute too: SUBSTR(MD5(STR(?x)), 1, 8). */
 export const md5Key = (s: string): string => md5(s).slice(0, 8)
 
-/** The viewer's first language that Intl knows, else en-US. */
-const locale = (ctx: RuleContext) => ctx.memo('data:locale:' + ctx.languages.join(','), () => {
-  try {
-    return Intl.NumberFormat.supportedLocalesOf(ctx.languages)[0] ?? 'en-US'
-  } catch {
-    return 'en-US'
-  }
-})
+/** The viewer's first language that Intl knows, else en-US (the viewer's l10n:formatLocale). */
+const locale = (ctx: RuleContext) => formatLocale(ctx.languages)
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
 const isNumeric = (t: Term | undefined) => t?.termType === 'Literal' && NUMERIC.test(t.value)
 

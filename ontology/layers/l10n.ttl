@@ -93,7 +93,8 @@ WHERE {
 # Each engine states, in its own derived graph, whom it renders for: its agent
 # (urn:semblance:projection:<name>) is an l10n:Viewer that l10n:prefers one
 # l10n:Preference per language of its `languages` option (BCP 47 l10n:code,
-# sem:order 1 the most preferred). Nothing when it has no preference.
+# sem:order 1 the most preferred), and the locale its numbers are written in (l10n:formatLocale).
+# No preferences when it has none.
 
 l10n:Viewer a owl:Class ;
     rdfs:comment "Whom a projection renders for. The engine states it, in its derived graph, from its languages option."@en .
@@ -101,6 +102,9 @@ l10n:prefers a owl:ObjectProperty ; rdfs:domain l10n:Viewer ; rdfs:range l10n:Pr
     rdfs:comment "A language the viewer reads; sem:order ranks them (1 is the most preferred)."@en .
 l10n:Preference a owl:Class ;
     rdfs:comment "One of a viewer's languages: its l10n:code and its rank (sem:order)."@en .
+l10n:formatLocale a owl:DatatypeProperty ; rdfs:domain l10n:Viewer ;
+    rdfs:comment """The BCP 47 tag the viewer's numbers are written in: its first language the host's Intl knows,
+else "en-US". SPARQL rules pass it to sx:formatNumber (sx:Locale); function rules use the same tag."""@en .
 
 # --- Dates and times in the viewer's locale ---------------------------------------------------------
 # A component that shows or reads dates or times (a month grid, a date field, a time field) is an

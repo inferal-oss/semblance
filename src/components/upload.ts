@@ -4,6 +4,7 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
+import { formatLocale } from '../engine/context.ts'
 import { mint, type Delta } from '../rdf.ts'
 import { BEH, C, DND, FILE, H, L10N, MOD, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, VAL, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { md5Key } from './data.ts'
@@ -44,14 +45,8 @@ function single(ctx: { objects(s: Term, p: string): Term[] }, focus: Term): bool
 
 // --- texts -------------------------------------------------------------------------------------------
 
-/** The viewer's first language that Intl knows, else en-US. */
-function locale(ctx: RuleContext): string {
-  try {
-    return Intl.NumberFormat.supportedLocalesOf(ctx.languages)[0] ?? 'en-US'
-  } catch {
-    return 'en-US'
-  }
-}
+/** The viewer's first language that Intl knows, else en-US (the viewer's l10n:formatLocale). */
+const locale = (ctx: RuleContext) => formatLocale(ctx.languages)
 
 /** A size in bytes, in the viewer's locale, in the largest decimal unit it reaches ("12 bytes", "1.2 MB", "1,2 MB"). */
 export function formatSize(lang: string, bytes: number): string {
@@ -69,44 +64,55 @@ export function formatSize(lang: string, bytes: number): string {
   }
 }
 
-/**
- * The drop's words in the viewer's language (its prompt, its help) on nodes minted under it, and for
- * each file it lists, under the file's item: its size, its state, how far it is uploaded, and the
- * labels of its buttons ("Remove report.pdf").
- */
+/** The drop's words in the viewer's language (its prompt, its help), on nodes minted under it. */
 const texts: FnRule = (ctx, focus) => {
   ctx.readsLanguage()
   const o = ctx.out(focus)
-  const lang = locale(ctx)
   const phrase = (local: string) => text(ctx, ctx.nn(NS.c + local), RDFS_LABEL) ?? ''
   o.t(o.node('l10n-prompt'), L10N.label, phrase(single(ctx, focus) ? 'FileDropPromptOne' : 'FileDropPrompt'))
   const help = text(ctx, focus, C.help)
   if (help !== undefined) o.t(o.node('l10n-help'), L10N.label, help)
-  for (const file of listed(ctx, focus)) {
-    const item = itemOf(focus.value, file.value)
-    const node = (local: string) => ctx.nn(mint(item, local))
-    const name = str(ctx.object(file, FILE.name)) ?? file.value.replace(/^.*[#/]/, '')
-    const bytes = Number(str(ctx.object(file, FILE.size)))
-    if (Number.isFinite(bytes)) o.t(node('l10n-size'), L10N.label, formatSize(lang, bytes))
-    const state = ctx.object(file, FILE.state) ?? ctx.nn(FILE.Ready)
-    const said = text(ctx, state, RDFS_LABEL)
-    if (said !== undefined) o.t(node('l10n-state'), L10N.label, said)
-    const uploading = state.value === FILE.Uploading
-    if (uploading) {
-      const loaded = Number(str(ctx.object(file, FILE.loaded)) ?? 0)
-      const share = Number.isFinite(bytes) && bytes > 0 ? Math.min(1, Math.max(0, loaded / bytes)) : 0
-      let percent: string
-      try {
-        percent = new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 }).format(share)
-      } catch {
-        percent = `${Math.round(share * 100)}%`
-      }
-      o.t(node('l10n-progress'), L10N.label, percent)
-    }
-    o.t(node('l10n-remove'), L10N.label, phrase(uploading ? 'CancelUploadPhrase' : 'RemoveFilePhrase').replace('{name}', name))
-    if (state.value === FILE.Failed) o.t(node('l10n-retry'), L10N.label, phrase('RetryUploadPhrase').replace('{name}', name))
-  }
   return o.quads
+}
+
+/**
+ * A listed file's words, under its item: its size, its state, how far it is uploaded, and the labels
+ * of its buttons ("Remove report.pdf"), in the viewer's language and locale.
+ */
+const itemTexts: FnRule = (ctx, focus) => {
+  const file = ctx.object(focus, NS.c + 'of')
+  if (!named(file)) return []
+  ctx.readsLanguage()
+  const o = ctx.out(focus)
+  const lang = locale(ctx)
+  const phrase = (local: string) => text(ctx, ctx.nn(NS.c + local), RDFS_LABEL) ?? ''
+  const name = str(ctx.object(file, FILE.name)) ?? file.value.replace(/^.*[#/]/, '')
+  const bytes = Number(str(ctx.object(file, FILE.size)))
+  if (Number.isFinite(bytes)) o.t(o.node('l10n-size'), L10N.label, formatSize(lang, bytes))
+  const state = ctx.object(file, FILE.state) ?? ctx.nn(FILE.Ready)
+  const said = text(ctx, state, RDFS_LABEL)
+  if (said !== undefined) o.t(o.node('l10n-state'), L10N.label, said)
+  const uploading = state.value === FILE.Uploading
+  if (uploading) {
+    const loaded = Number(str(ctx.object(file, FILE.loaded)) ?? 0)
+    const share = Number.isFinite(bytes) && bytes > 0 ? Math.min(1, Math.max(0, loaded / bytes)) : 0
+    let percent: string
+    try {
+      percent = new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 }).format(share)
+    } catch {
+      percent = `${Math.round(share * 100)}%`
+    }
+    o.t(o.node('l10n-progress'), L10N.label, percent)
+  }
+  o.t(o.node('l10n-remove'), L10N.label, withName(phrase(uploading ? 'CancelUploadPhrase' : 'RemoveFilePhrase'), name))
+  if (state.value === FILE.Failed) o.t(o.node('l10n-retry'), L10N.label, withName(phrase('RetryUploadPhrase'), name))
+  return o.quads
+}
+
+/** A phrase with the file's name in place of its first {name} (as the SPARQL rule: STRBEFORE / STRAFTER). */
+const withName = (phrase: string, name: string) => {
+  const at = phrase.indexOf('{name}')
+  return at < 0 ? phrase : phrase.slice(0, at) + name + phrase.slice(at + 6)
 }
 
 // --- the drop target --------------------------------------------------------------------------------
@@ -235,6 +241,7 @@ const item: FnRule = (ctx, focus) => {
 
 export const uploadFunctions: Record<string, FnRule> = {
   'upload:texts': texts,
+  'upload:item-texts': itemTexts,
   'upload:targets': targets,
   'upload:drop': drop,
   'upload:items': items,

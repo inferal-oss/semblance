@@ -12,10 +12,10 @@
 # written as its narrow symbol (€, ₴, $). The
 # amount and the currency are data; the formatting is the viewer's.
 #
-# The viewer's language is a projection setting that SPARQL rules cannot see. As with labels
-# (l10n:label) and option texts, a function rule before the components (c:MoneyTexts, stratum
-# -20) writes the formatted amount, in the viewer's language, on a node minted under the
-# instance (<money>/~l10n-amount l10n:label "…"); both renderings show that. Without it (an
+# As with labels (l10n:label) and option texts, a rule before the components (c:MoneyTexts,
+# stratum -20) writes the formatted amount, in the viewer's locale (sx:formatNumber on stores
+# with sx:Locale, else its function twin), on a node minted under the instance
+# (<money>/~l10n-amount l10n:label "…"); both renderings show that. Without it (an
 # instance another rule minted) they fall back to the currency code and the plain amount.
 
 c:Money a owl:Class ;
@@ -34,10 +34,24 @@ c:MoneyTexts a sem:Rendering ;
     sem:targets c:Money ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches c:value , c:currency ;
-    sem:functionOnly "awaits sx:Locale (sx:formatNumber): amounts in the viewer's locale and the currency's format (Intl.NumberFormat)." ;
-    sem:needsExtension sx:Locale .
+    sem:watches c:value , c:currency .
 c:MoneyTexts-fn a sem:Rule ; sem:implements c:MoneyTexts ; sem:function "money:texts" .
+# Intl.NumberFormat through sx:formatNumber, in the viewer's l10n:formatLocale: currency style with
+# the narrow symbol, or two decimals without a currency. A currency Intl does not know is an
+# error, so nothing is written and the renderings fall back to the code and the plain amount.
+c:MoneyTexts-sparql a sem:Rule ;
+    sem:implements c:MoneyTexts ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT { ?local l10n:label ?formatted }
+WHERE {
+  $this a/rdfs:subClassOf* c:Money ; c:value ?value .
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { $this c:currency ?code }
+  BIND(IF(BOUND(?code), CONCAT("style=currency;currency=", STR(?code), ";currencyDisplay=narrowSymbol"), "minimumFractionDigits=2;maximumFractionDigits=2") AS ?options)
+  BIND(sx:formatNumber(xsd:double(STR(?value)), ?locale, ?options) AS ?formatted)
+  BIND(IRI(CONCAT(STR($this), "/~l10n-amount")) AS ?local)
+}""" .
 
 # It reads the formatted text minted under the instance, so it re-runs when that changes.
 c:MoneyRendering a sem:Rendering ; sem:targets c:Money ; sem:stratum 0 ; sem:readsMinted true .
