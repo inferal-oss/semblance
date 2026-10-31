@@ -826,6 +826,12 @@ impl P<'_, '_> {
                 g = Pattern::Minus(Box::new(g), Box::new(p));
             } else if self.kw(b"LATERAL") {
                 let p = self.group_pattern()?;
+                let (mut bound, mut defined) = (Vec::new(), Vec::new());
+                pattern_vars(&g, &mut bound);
+                defined_vars(&p, &mut defined);
+                if defined.iter().any(|v| bound.contains(v)) {
+                    return self.c.err("LATERAL binds a variable already in scope");
+                }
                 g = Pattern::Lateral(Box::new(g), Box::new(p));
             } else if self.kw(b"BIND") {
                 self.expect(b"(", "expected (")?;
@@ -2029,6 +2035,42 @@ pub fn pattern_vars(p: &Pattern, out: &mut Vec<Var>) {
         Pattern::Values(vs, _) => vs.iter().for_each(|v| add(*v, out)),
         Pattern::Sub(s) => s.project.iter().for_each(|v| add(*v, out)),
         Pattern::Magic(m) => m.ins.iter().chain(&m.outs).for_each(|x| tv_vars(x, out)),
+    }
+}
+
+/// Variables a pattern defines: binds by BIND, VALUES or a subquery's SELECT
+/// expression (an aggregate's too), as LATERAL's scope rule counts them. A
+/// triple's variables and a plain GROUP BY key do not count, nor does a
+/// FILTER's EXISTS.
+fn defined_vars(p: &Pattern, out: &mut Vec<Var>) {
+    match p {
+        Pattern::Unit | Pattern::Service(_) | Pattern::Bgp(_) | Pattern::Magic(_) => {}
+        Pattern::Join(a, b) | Pattern::LeftJoin(a, b, _) | Pattern::Union(a, b) | Pattern::Lateral(a, b) | Pattern::Minus(a, b) => {
+            defined_vars(a, out);
+            defined_vars(b, out);
+        }
+        Pattern::Filter(_, a) | Pattern::Graph(_, a) => defined_vars(a, out),
+        Pattern::Extend(a, v, _) => {
+            defined_vars(a, out);
+            out.push(*v);
+        }
+        Pattern::Values(vs, _) => out.extend(vs),
+        Pattern::Sub(s) => {
+            let mut inner = Vec::new();
+            defined_vars(&s.pattern, &mut inner);
+            inner.extend(s.extend.iter().map(|(v, _)| *v));
+            for (e, v) in s.group.iter().flatten() {
+                match (e, v) {
+                    (Expr::Var(x), Some(v)) if x == v => {}
+                    (_, Some(v)) => inner.push(*v),
+                    _ => {}
+                }
+            }
+            if let Some(vs) = &s.values {
+                defined_vars(vs, &mut inner);
+            }
+            out.extend(s.project.iter().filter(|v| inner.contains(v)));
+        }
     }
 }
 
