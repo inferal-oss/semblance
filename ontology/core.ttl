@@ -75,6 +75,10 @@ sem:inverse a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: a step against this predicate (from a class to its instances: [ sem:inverse rdf:type ])."@en .
 sem:watches a owl:ObjectProperty ;
     rdfs:comment "Restricts the predicates (on the focus and on followed nodes) whose changes make the focus dirty. Absent means all."@en .
+sem:watchesAnywhere a owl:ObjectProperty ; rdfs:range rdf:Property ;
+    rdfs:comment """On a rendering that reads a predicate on any node, not only on its focus and the nodes it follows (a list of
+every key:shortcut, of every recorded val:violation): a change to a triple with this predicate, wherever it is, makes
+each of its foci dirty. For a few foci (a list or two on a page), since every such change re-runs them all."""@en .
 
 # A function rule may run a query held in the data and follow it (RuleContext.select / construct
 # with { follow: true }): it then depends on the triples the query reads - its triple patterns,

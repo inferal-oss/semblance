@@ -100,6 +100,7 @@ export const ORD = {
 } as const
 
 export const SEM = {
+  watchesAnywhere: sem + 'watchesAnywhere',
   Component: sem + 'Component',
   Rule: sem + 'Rule',
   targets: sem + 'targets',

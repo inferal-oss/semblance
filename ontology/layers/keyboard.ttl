@@ -153,10 +153,109 @@ c:ShortcutList a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Every key:shortcut in the graph, with what it activates."@en ;
     sem:slug "shortcut-list" .
+# Every shortcut in the graph (sem:watchesAnywhere), in the viewer's collation of their labels: an
+# order key from sx:sortKey (case folded, accents stripped), which the function twin computes alike.
 c:ShortcutListRendering a sem:Rendering ; sem:targets c:ShortcutList ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:collated): shortcuts are listed in the viewer's collation order of their labels (localeCompare); the labels themselves are picked from the viewer's languages in the graph." ;
-    sem:needsExtension sx:Locale .
+    sem:watchesAnywhere key:shortcut .
 c:ShortcutListRendering-fn a sem:Rule ; sem:implements c:ShortcutListRendering ; sem:function "shortcut-list" .
+c:ShortcutListRendering-sparql-screen a sem:Rule ;
+    sem:implements c:ShortcutListRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Dl ; sem:renders $this ; rdfhtml:hasChild ?row .
+  ?row a rdfhtml:Div ; sem:orderKey ?order ; rdfhtml:hasChild ?dt , ?dd .
+  ?dt a rdfhtml:Dt ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?dd .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?dd a rdfhtml:Dd ; rdfhtml:hasChild ?appleEl , ?otherEl .
+  ?appleEl a rdfhtml:Kbd ; rdfhtml:class "sem-apple" ; rdfhtml:hasChild ?appleText ; ord:immediatelyPrecedes ?otherEl .
+  ?appleText a rdfhtml:Text ; rdfhtml:data ?apple .
+  ?otherEl a rdfhtml:Kbd ; rdfhtml:class "sem-other" ; rdfhtml:hasChild ?otherText .
+  ?otherText a rdfhtml:Text ; rdfhtml:data ?other .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ShortcutList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    ?node key:shortcut ?combo .
+    ?viewer l10n:formatLocale ?locale .
+    # Its label as util.labelOf reads it: in the viewer's language, else its one c:label, else its rdfs:label, else its local name.
+    OPTIONAL { ?node l10n:label ?picked }
+    OPTIONAL { FILTER(!BOUND(?picked)) ?at l10n:of ?node ; l10n:label ?twin }
+    OPTIONAL { FILTER(!BOUND(?picked) && !BOUND(?twin)) ?node c:label ?only FILTER(isLiteral(?only)) }
+    OPTIONAL { FILTER(!BOUND(?picked) && !BOUND(?twin) && !BOUND(?only)) ?nameAt l10n:of ?node ; l10n:name ?name }
+    OPTIONAL { FILTER(!BOUND(?picked) && !BOUND(?twin) && !BOUND(?only) && !BOUND(?name)) ?node rdfs:label ?rdfsOnly FILTER(isLiteral(?rdfsOnly)) }
+    BIND(COALESCE(STR(?picked), STR(?twin), STR(?only), STR(?name), STR(?rdfsOnly), REPLACE(STR(?node), "^.*[#/]", "")) AS ?label)
+    # In the viewer's collation, as an order key (case folded, accents stripped).
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(SUBSTR(MD5(CONCAT(STR(?node), " ", STR(?combo))), 1, 8) AS ?key)
+    # The combination as the platforms spell it (as key:Hints does).
+    VALUES (?pluses ?ends ?modifiers) { ("(\\\\s*\\\\+\\\\s*)+" "^[\\\\s+]+|[\\\\s+]+$" "\\\\+(?:(?:mod|ctrl|alt|shift|meta)\\\\+)+") }
+    BIND(CONCAT("+", REPLACE(REPLACE(LCASE(STR(?combo)), ?pluses, "+"), ?ends, ""), "+") AS ?parts)
+    BIND(CONTAINS(?parts, "+mod+") AS ?mod)
+    BIND(CONTAINS(?parts, "+ctrl+") AS ?ctrl)
+    BIND(CONTAINS(?parts, "+alt+") AS ?alt)
+    BIND(CONTAINS(?parts, "+shift+") AS ?shift)
+    BIND(CONTAINS(?parts, "+meta+") AS ?meta)
+    BIND(REPLACE(?parts, ?modifiers, "+") AS ?keyParts)
+    BIND(SUBSTR(?keyParts, 2, STRLEN(?keyParts) - 2) AS ?pressed)
+    BIND(IF(STRLEN(?pressed) = 1, UCASE(?pressed), CONCAT(UCASE(SUBSTR(?pressed, 1, 1)), SUBSTR(?pressed, 2))) AS ?k)
+    BIND(CONCAT(IF(?mod, "⌘", ""), IF(?ctrl, "⌃", ""), IF(?alt, "⌥", ""), IF(?shift, "⇧", ""), IF(?meta, "◆", ""), ?k) AS ?apple)
+    BIND(CONCAT(IF(?mod, "Ctrl+", ""), IF(?ctrl, "Ctrl+", ""), IF(?alt, "Alt+", ""), IF(?shift, "Shift+", ""), IF(?meta, "Win+", ""), ?k) AS ?other)
+  }
+  BIND(CONCAT(STR($this), "/~row-", ?key) AS ?r)
+  BIND(IRI(?r) AS ?row)
+  BIND(IRI(CONCAT(?r, "-dt")) AS ?dt)
+  BIND(IRI(CONCAT(?r, "-label")) AS ?labelText)
+  BIND(IRI(CONCAT(?r, "-dd")) AS ?dd)
+  BIND(IRI(CONCAT(?r, "-apple")) AS ?appleEl)
+  BIND(IRI(CONCAT(?r, "-apple-text")) AS ?appleText)
+  BIND(IRI(CONCAT(?r, "-other")) AS ?otherEl)
+  BIND(IRI(CONCAT(?r, "-other-text")) AS ?otherText)
+}""" .
+c:ShortcutListRendering-sparql-text a sem:Rule ;
+    sem:implements c:ShortcutListRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?lineData ; sem:orderKey ?order .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ShortcutList .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  OPTIONAL {
+    ?node key:shortcut ?combo .
+    ?viewer l10n:formatLocale ?locale .
+    # Its label as util.labelOf reads it: in the viewer's language, else its one c:label, else its rdfs:label, else its local name.
+    OPTIONAL { ?node l10n:label ?picked }
+    OPTIONAL { FILTER(!BOUND(?picked)) ?at l10n:of ?node ; l10n:label ?twin }
+    OPTIONAL { FILTER(!BOUND(?picked) && !BOUND(?twin)) ?node c:label ?only FILTER(isLiteral(?only)) }
+    OPTIONAL { FILTER(!BOUND(?picked) && !BOUND(?twin) && !BOUND(?only)) ?nameAt l10n:of ?node ; l10n:name ?name }
+    OPTIONAL { FILTER(!BOUND(?picked) && !BOUND(?twin) && !BOUND(?only) && !BOUND(?name)) ?node rdfs:label ?rdfsOnly FILTER(isLiteral(?rdfsOnly)) }
+    BIND(COALESCE(STR(?picked), STR(?twin), STR(?only), STR(?name), STR(?rdfsOnly), REPLACE(STR(?node), "^.*[#/]", "")) AS ?label)
+    # In the viewer's collation, as an order key (case folded, accents stripped).
+    BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale)) AS ?order)
+    BIND(SUBSTR(MD5(CONCAT(STR(?node), " ", STR(?combo))), 1, 8) AS ?key)
+    # The combination as the platforms spell it (as key:Hints does).
+    VALUES (?pluses ?ends ?modifiers) { ("(\\\\s*\\\\+\\\\s*)+" "^[\\\\s+]+|[\\\\s+]+$" "\\\\+(?:(?:mod|ctrl|alt|shift|meta)\\\\+)+") }
+    BIND(CONCAT("+", REPLACE(REPLACE(LCASE(STR(?combo)), ?pluses, "+"), ?ends, ""), "+") AS ?parts)
+    BIND(CONTAINS(?parts, "+mod+") AS ?mod)
+    BIND(CONTAINS(?parts, "+ctrl+") AS ?ctrl)
+    BIND(CONTAINS(?parts, "+alt+") AS ?alt)
+    BIND(CONTAINS(?parts, "+shift+") AS ?shift)
+    BIND(CONTAINS(?parts, "+meta+") AS ?meta)
+    BIND(REPLACE(?parts, ?modifiers, "+") AS ?keyParts)
+    BIND(SUBSTR(?keyParts, 2, STRLEN(?keyParts) - 2) AS ?pressed)
+    BIND(IF(STRLEN(?pressed) = 1, UCASE(?pressed), CONCAT(UCASE(SUBSTR(?pressed, 1, 1)), SUBSTR(?pressed, 2))) AS ?k)
+    BIND(CONCAT(IF(?mod, "⌘", ""), IF(?ctrl, "⌃", ""), IF(?alt, "⌥", ""), IF(?shift, "⇧", ""), IF(?meta, "◆", ""), ?k) AS ?apple)
+    BIND(CONCAT(IF(?mod, "Ctrl+", ""), IF(?ctrl, "Ctrl+", ""), IF(?alt, "Alt+", ""), IF(?shift, "Shift+", ""), IF(?meta, "Win+", ""), ?k) AS ?other)
+  }
+  BIND(CONCAT(?other, "  ", ?label, "\\n") AS ?lineData)
+  BIND(IRI(CONCAT(STR($this), "/~l", ?key)) AS ?line)
+}""" .
 
 # --- Arrow-key navigation (roving focus) -----------------------------------------------------------
 # A component class may declare how arrow keys move focus among its parts

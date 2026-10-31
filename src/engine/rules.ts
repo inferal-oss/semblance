@@ -39,6 +39,11 @@ export interface Rule {
   watchesVia?: string[][]
   /** Predicates that have one of these properties are read too (with `watches`): `$this ?p ?v . ?p sty:hookAttribute ?name`. */
   watchesMarked?: string[]
+  /**
+   * sem:watchesAnywhere: predicates the rule reads on any node (a list of every shortcut, of every
+   * shape result): a change to a triple with one of them makes each of its foci due.
+   */
+  anywhere: string[]
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
@@ -183,6 +188,7 @@ export function loadRules(store: GraphStore): Rule[] {
       ...(watches.length ? { watches: new Set(watches) } : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach,
+      anywhere: getAll(SEM.watchesAnywhere),
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
