@@ -3,6 +3,7 @@
 // swapped per rule and compared head-to-head.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
+import { formatLocale } from '../engine/context.ts'
 import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { ganttFunctions } from './gantt.ts'
@@ -666,7 +667,7 @@ const chipCounts: FnRule = (ctx, focus) => {
   const spoken = text(ctx, focus, NS.c + 'countLabel')
   // Written in the viewer's locale (grouping, digits).
   ctx.readsLanguage()
-  const format = new Intl.NumberFormat(ctx.languages[0] ?? 'en')
+  const format = new Intl.NumberFormat(formatLocale(ctx.languages))
   const o = ctx.out(focus)
   for (const row of rows) {
     const opt = row.get('option')

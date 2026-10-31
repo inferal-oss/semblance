@@ -9,9 +9,9 @@ import { implementationGaps } from './implementations.ts'
 const UI = 'https://semblance.dev/demo#'
 const DX = 'https://semblance.dev/demo/dashboard#'
 
-function dashboard(prefer: 'sparql' | 'function' = 'sparql', strict = false) {
+function dashboard(prefer: 'sparql' | 'function' = 'sparql', strict = false, kind: 'oxigraph' | 'wat' = 'oxigraph') {
   const clock = new ManualClock()
-  const h = mountSite('oxigraph', prefer, clock)
+  const h = mountSite(kind, prefer, clock)
   h.runtime.views.clock = clock
   h.runtime.views.strict = strict
   const visible = (el: Element | null | undefined) => !!el && !el.closest('[hidden]')
@@ -38,7 +38,7 @@ function dashboard(prefer: 'sparql' | 'function' = 'sparql', strict = false) {
 }
 
 describe('the sales dashboard example', () => {
-  it('has both implementations of the chips it uses, and says why their counts are function-only', () => {
+  it('has both implementations of the chips it uses', () => {
     expect(implementationGaps(['components/controls.ttl'])).toEqual({ noSparql: [], noFunction: [] })
   })
 
@@ -116,10 +116,12 @@ describe('the sales dashboard example', () => {
     expect(Number(work.getAttribute('aria-valuenow'))).toBeLessThan(40)
   }, 120_000)
 
-  it('renders the same with SPARQL and with function rules, filtered and not', () => {
-    const [a, b] = [dashboard('sparql'), dashboard('function')]
+  // On wat the SPARQL rules that write numbers in the viewer's locale (sx:formatNumber) are the ones chosen.
+  for (const kind of ['oxigraph', 'wat'] as const) it(`renders the same with SPARQL and with function rules, filtered and not (${kind})`, () => {
+    const [a, b] = [dashboard('sparql', false, kind), dashboard('function', false, kind)]
     const html = (h: typeof a) => h.root().innerHTML
     expect(html(b)).toBe(html(a))
+    expect(a.root().querySelectorAll('.sem-count').length).toBeGreaterThan(3)
     for (const h of [a, b]) h.click(h.chip('Store'))
     expect(html(b)).toBe(html(a))
     for (const h of [a, b]) h.click(h.chip('East'))

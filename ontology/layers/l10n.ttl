@@ -204,6 +204,7 @@ c:caption l10n:pickedAs l10n:caption .
 c:attribution l10n:pickedAs l10n:attribution .
 c:trigger l10n:pickedAs l10n:trigger .
 c:unit l10n:pickedAs l10n:unit .
+c:deltaUnit l10n:pickedAs l10n:deltaUnit .
 sh:name l10n:pickedAs l10n:shapeName .
 sh:description l10n:pickedAs l10n:description .
 l10n:name a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the rdfs:label in the viewer's language."@en .
@@ -226,6 +227,7 @@ l10n:caption a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:
 l10n:attribution a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:attribution in the viewer's language."@en .
 l10n:trigger a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:trigger in the viewer's language."@en .
 l10n:unit a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:unit in the viewer's language."@en .
+l10n:deltaUnit a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the c:deltaUnit in the viewer's language."@en .
 l10n:shapeName a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the sh:name in the viewer's language."@en .
 l10n:description a owl:DatatypeProperty ; rdfs:comment "Derived (l10n:Terms): the sh:description in the viewer's language."@en .
 

@@ -342,6 +342,16 @@ Labels are language-tagged literals (`c:label "Save"@en , "Зберегти"@uk`
 picks the viewer's language into `l10n:label`, which rules read before `c:label`. Untagged
 literals are the fallback. RTL languages flip the page.
 
+Numbers are written in the viewer's locale: the engine states it on the viewer as
+`l10n:formatLocale` (its first language the host's `Intl` knows, else `en-US`), and a SPARQL rule
+passes it to `sx:formatNumber` (`rdf-engine/EXTENSIONS.md`), with `sem:needsExtension sx:Locale`
+on the rule; its function twin calls `formatLocale(ctx.languages)` for the same tag:
+
+```sparql
+?viewer l10n:formatLocale ?locale .
+BIND(sx:formatNumber(xsd:double(STR(?value)), ?locale, "maximumFractionDigits=2") AS ?shown)
+```
+
 ## Outlines
 
 To show which parts a page is made of, name components and switch outlines on around them
