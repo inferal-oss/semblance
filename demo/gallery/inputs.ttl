@@ -63,11 +63,17 @@ ui:inp-text-spec a c:Specimen ; c:demonstrates c:TextField , c:TextArea ; c:labe
 ui:inp-search-text a owl:DatatypeProperty ; rdfs:label "search"@en .
 ui:inp-search-field a c:SearchField ; c:label "Search the components" ; c:placeholder "Name, slug or group…" ;
     c:controls ui:inp-search-query ; c:property ui:inp-search-text .
+ui:inp-search-waiting ui:inp-search-text "Waiting for index" .
+ui:inp-search-field-off a c:SearchField ;
+    c:label "Search while loading"@en , "Пошук під час завантаження"@uk ,
+            "Suche während des Ladens"@de , "البحث أثناء التحميل"@ar ;
+    c:disabled true ;
+    c:controls ui:inp-search-waiting ; c:property ui:inp-search-text .
 ui:inp-search-state a c:Metrics ; c:of ui:inp-search-query ; c:fields ( ui:inp-search-text ) .
 ui:inp-search a c:Flippable ; c:front ui:inp-search-spec .
 ui:inp-search-spec a c:Specimen ; c:demonstrates c:SearchField ; c:label "Search field" ;
     c:help "A search box (type=search) bound to a property of a node (c:controls / c:property): typing writes what is typed, and emptying it, its ✕ or Escape removes the triple. The chip below reads the node back. A toolbar's filters are fields like this one." ;
-    c:children ( ui:inp-search-field ui:inp-search-state ) .
+    c:children ( ui:inp-search-field ui:inp-search-field-off ui:inp-search-state ) .
 
 # --- Code input: one-time codes of any length and alphabet ----------------------------------------
 # What a code may contain is a c:Charset; this one is defined here, not in the framework: no
