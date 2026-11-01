@@ -180,6 +180,27 @@ describe('fields over one node', () => {
     expect(ran.filter((r) => /Rendering|Check|Shapes/.test(r)).sort()).toEqual(['ToggleRendering-sparql', 'ToggleSwitchRendering-sparql'])
     expect(h.document.querySelectorAll('[data-sem-c=radio-group]').length).toBeGreaterThan(0)
   }, 120_000)
+
+  // With function rules preferred, the twins that follow the node (date and time fields, month
+  // grid, file drop) traced what they read there: a property none of them read does not re-run them
+  // (#237: it was 8 function runs, ~7.7 ms on the dev site).
+  it('re-renders only the controls that name the changed property (wat, functions)', () => {
+    const h = mountShell(5, 'wat', 'function')
+    h.showPage('Components')
+    const f = h.store.factory
+    const app = f.namedNode(UI + 'app')
+    const group = f.namedNode(UI + 'galleryGroup')
+    h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupInputs'))] })
+    h.shell.flush()
+    const flip = () => h.fire((h.shell.nodeOf(`${UI}inp-sw-notify/~root`) as HTMLElement).querySelector('.sem-thumb')!, 'click')
+    flip()
+    flip()
+    const stats = h.screen.engine.stats
+    const before = new Map([...stats.byRule].map(([k, v]) => [k, v.runs]))
+    flip()
+    const ran = [...stats.byRule].filter(([k, v]) => v.runs > (before.get(k) ?? 0)).map(([k, v]) => `${k.replace(/^.*[#/]/, '')} ${v.runs - (before.get(k) ?? 0)}`)
+    expect(ran.sort()).toEqual(['ToggleRendering-fn 1', 'ToggleSwitchRendering-fn 1', 'Tooltips-fn 2'])
+  }, 120_000)
 })
 
 describe('a large result table', () => {

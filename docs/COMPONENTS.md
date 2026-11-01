@@ -199,7 +199,11 @@ Each (rule, focus) pair owns its output; the engine diffs outputs and patches on
 A pair is dirty when the focus's own triples change, and also:
 
 - `sem:follows c:of` — when the triples of the node the focus points at through `c:of` change
-  (for components that show another node's data);
+  (for components that show another node's data). A function rule's pair whose last evaluation
+  read only through the context's trace (no `ctx.untraced`, no pattern without an IRI subject, no
+  query it does not `follow`) is re-run by those reads alone: a followed node's change re-runs it
+  only if it read that predicate there. The declaration still stands for its SPARQL twin and for
+  pairs that read untraced;
 - `sem:watches c:value` — narrows it: only these predicates make the focus dirty. It applies to
   the followed nodes' triples as well as the focus's own: a rule with both `sem:follows` and
   `sem:watches` must list every predicate of the followed node it reads (the workbench's result
