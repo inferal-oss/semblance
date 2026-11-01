@@ -1,4 +1,5 @@
-import type { Quad } from '@rdfjs/types'
+import type { Quad, Term } from '@rdfjs/types'
+import { Parser } from 'n3'
 import { type Delta, mint, quadKey } from './rdf.ts'
 import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
@@ -467,6 +468,15 @@ export class Runtime {
     for (const l of this.refreshListeners) l()
   }
 
+  /**
+   * Load a Turtle graph into the input (the default graph) after start, as one change: the rules
+   * and renderings it defines join every projection's engine and are evaluated for the foci
+   * already shown, its reactions join the bus, as if it had been loaded before start.
+   */
+  load(turtle: string): Delta {
+    return this.apply({ add: parseTurtle(turtle, this.store.factory), remove: [] })
+  }
+
   /** Apply a change to the input graph (default graph) and update every projection. */
   apply(delta: Delta): Delta {
     const effective: Delta = { add: [], remove: [] }
@@ -501,3 +511,13 @@ function settle(p: Projection) {
 }
 
 const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm
+
+/** Graphs parsed by parseTurtle: each one's blank nodes are its own. */
+let parsed = 0
+
+/** A Turtle document's triples, in the store's terms (blank nodes labelled apart from every other document's). */
+export function parseTurtle(turtle: string, f: GraphStore['factory']): Quad[] {
+  const term = (t: Term): Term =>
+    t.termType === 'NamedNode' ? f.namedNode(t.value) : t.termType === 'Literal' ? f.literal(t.value, t.language || f.namedNode(t.datatype.value)) : t
+  return new Parser({ format: 'text/turtle', blankNodePrefix: `g${++parsed}_` }).parse(turtle).map((q) => f.quad(term(q.subject as Term), term(q.predicate as Term), term(q.object as Term)))
+}

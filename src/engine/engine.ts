@@ -1,5 +1,5 @@
 import type { NamedNode, Quad, Quad_Graph, Term } from '@rdfjs/types'
-import { H, L10N, NS, PROV, RDF_TYPE, SEM } from '../ns.ts'
+import { H, L10N, NS, PROV, RDF_TYPE, RDFS_SUBCLASS, SEM } from '../ns.ts'
 import { type Delta, mint, owningFocus, quadKey, termKey } from '../rdf.ts'
 import { QueryInterrupted, type GraphStore } from '../store/types.ts'
 import { createContext, type FnRule, formatLocale, LANGUAGE, languageChain, type RuleContext } from './context.ts'
@@ -122,12 +122,22 @@ const isPlacementOrProvenance = (p: string) => p.startsWith(H.ns) || p.startsWit
 /** A node's value that is an IRI (a scheme), not a blank node's label. */
 const IRI_LIKE = /^[A-Za-z][A-Za-z0-9+.-]*:/
 
+/** Whether two readings of a rule are the same rule (reloadRules keeps it, with its outputs). */
+function sameRule(a: Rule, b: Rule): boolean {
+  return JSON.stringify(a, ruleField) === JSON.stringify(b, ruleField)
+}
+/**
+ * A rule's fields as compared: its query without the prefixes declared before it (a graph that
+ * declares one more prefix changes every query's header, not what any of them selects).
+ */
+const ruleField = (k: string, v: unknown) => (v instanceof Set ? [...v] : k === 'queryParts' && Array.isArray(v) ? [String(v[0]).replace(/^(?:\s*PREFIX\s+[^\n]*\n)*/i, ''), ...v.slice(1)] : v)
+
 export class Engine {
   readonly graph: NamedNode
   /** The PROV-O software agent standing for this projection. */
   readonly agent: NamedNode
   readonly stats: EngineStats = { byRule: new Map(), ruleRuns: 0, queries: 0, bulkQueries: 0, fnCalls: 0, derivedAdded: 0, derivedRemoved: 0 }
-  private readonly allRules: Rule[]
+  private allRules: Rule[]
   private rules: Rule[] = []
   private strata: number[] = []
   private selection: Selection
@@ -136,15 +146,15 @@ export class Engine {
   /** A rule that reads provenance ran (its IRI), while it was not recorded yet: it is, from the end of the run. */
   provenanceWanted?: string
   /** The renderings that read provenance, while it is recorded only on demand. */
-  private readonly provenanceReaders?: Set<string>
+  private provenanceReaders?: Set<string>
   /** The components that read provenance (sem:readsProvenance on an instance), while it is recorded only on demand. */
-  private readonly provenanceFoci?: Set<string>
+  private provenanceFoci?: Set<string>
   private readonly bulkThreshold: number
   private readonly graphs: Quad_Graph[]
   /** The graphs rules read, and the input graphs among them, by value ('' = the default graph). */
   private readonly graphKeys: ReadonlySet<string>
   private readonly inputGraphKeys: ReadonlySet<string>
-  private readonly supers: (cls: string) => Set<string>
+  private supers!: (cls: string) => Set<string>
   private ctx: RuleContext
 
   private rulesByClass = new Map<string, Rule[]>()
@@ -170,6 +180,8 @@ export class Engine {
   /** sem:watchesAnywhere: predicate -> the rules that read it on any node, and each such rule's foci. */
   private anywhere = new Map<string, Rule[]>()
   private anywhereFoci = new Map<Rule, Set<string>>()
+  /** sem:watchesStatements: the rules whose focus is a property whose statements they read anywhere. */
+  private statementWatchers: Rule[] = []
   private pristine = new Set<Rule>()
   /** Every predicate whose links are indexed: followed alone or on a path. */
   private linkedPredicates = new Set<string>()
@@ -267,33 +279,44 @@ export class Engine {
     this.bulkThreshold = opts.bulkThreshold ?? 2
     this.exactOn = opts.exactDependencies ?? (typeof process !== 'undefined' && process.env?.SEMBLANCE_EXACT_DEPS === '1')
     this.maintain = opts.maintain
-    this.supers = superclasses(store)
-    this.allRules = loadRules(store)
+    this.allRules = this.readRules(opts.provenance === 'onDemand')
+    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
+    this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
+    this.activate(selectRules(this.allRules, this.selection, warn))
+  }
+
+  /**
+   * Read the rules, the class hierarchy and what the rules declare about themselves (where we
+   * are, provenance) from the store: at construction, and again when a delta adds or removes
+   * rules (reloadRules).
+   */
+  private readRules(onDemand: boolean): Rule[] {
+    const f = this.store.factory
+    this.supers = superclasses(this.store)
+    const all = loadRules(this.store)
     this.locationReaders = new Map(
-      store
+      this.store
         .match(null, f.namedNode(NS.sem + 'readsLocation'), null)
         .filter((q) => q.object.value === 'true' || q.object.value === NS.nav + 'TopDimensions')
         .map((q) => [q.subject.value, q.object.value === 'true' ? 'all' : 'top'] as const),
     )
-    if (opts.provenance === 'onDemand') {
+    if (onDemand) {
       // A rendering reads provenance when any of its implementations' queries names PROV-O.
       // Only what the engine writes (provenanceOf); prov:wasDerivedFrom and the like are the app's own data.
       const written = /(?:\bprov:|ns\/prov#)(?:wasGeneratedBy|wasInfluencedBy|wasAssociatedWith|qualifiedAssociation|hadPlan|used|Activity|SoftwareAgent|Association)\b/
       const reads = (r: Rule) => written.test((r.queryParts?.join('$this') ?? '').split('\n').filter((l) => !/^\s*PREFIX\s/i.test(l)).join('\n'))
-      this.provenanceReaders = new Set(this.allRules.filter(reads).map((r) => r.slot))
+      this.provenanceReaders = new Set(all.filter(reads).map((r) => r.slot))
       // And the renderings that say so (sem:readsProvenance: function-only ones, those running queries the graph holds).
       // A component can say so too (one that runs queries the graph holds about provenance: an
       // inspector): from when it is shown.
       this.provenanceFoci = new Set()
-      for (const q of store.match(null, f.namedNode(NS.sem + 'readsProvenance'), null)) {
+      for (const q of this.store.match(null, f.namedNode(NS.sem + 'readsProvenance'), null)) {
         if (q.object.value !== 'true') continue
-        if (store.match(q.subject, f.namedNode(RDF_TYPE), f.namedNode(NS.sem + 'Rendering')).length) this.provenanceReaders.add(q.subject.value)
+        if (this.store.match(q.subject, f.namedNode(RDF_TYPE), f.namedNode(NS.sem + 'Rendering')).length) this.provenanceReaders.add(q.subject.value)
         else this.provenanceFoci.add(q.subject.value)
       }
     }
-    this.selection = { modality: opts.modality, layers: new Set(opts.layers ?? []), prefer: opts.prefer ?? 'sparql', sparql: store.sparql, extensions: store.extensions, languages: opts.languages ?? [] }
-    this.ctx = createContext(store, this.graphs, opts.modality, this.selection.languages)
-    this.activate(selectRules(this.allRules, this.selection, warn))
+    return all
   }
 
   get languages(): readonly string[] {
@@ -359,12 +382,68 @@ export class Engine {
     this.typedIn.clear()
     for (const q of delta.remove) this.propagate(q, -1)
     for (const q of delta.add) this.propagate(q, 1)
+    // A graph loaded (or unloaded) after start that defines rules: they join (or leave) the running engine.
+    if (this.definesRules(delta)) return this.reloadRules()
     this.locationChanged(delta)
     this.run()
   }
 
+  /**
+   * Whether a change adds or removes rules or what they read about themselves: a sem:Rule or
+   * sem:Rendering typed, a triple about a rule or the rendering it implements, a subclass link
+   * (which classes a rule applies to), a sem:readsLocation or sem:readsProvenance.
+   */
+  private definesRules(delta: Delta): boolean {
+    if (!delta.add.length && !delta.remove.length) return false
+    let defined = this.ruleSubjects
+    if (!defined) {
+      defined = new Set()
+      for (const r of this.allRules) defined.add(r.iri), defined.add(r.slot)
+      this.ruleSubjects = defined
+    }
+    const RULE = SEM.Rule
+    const RENDERING = NS.sem + 'Rendering'
+    const LOCATION = NS.sem + 'readsLocation'
+    const PROVENANCE = NS.sem + 'readsProvenance'
+    const test = (q: Quad) => {
+      const p = q.predicate.value
+      if (p === RDF_TYPE) return q.object.value === RULE || q.object.value === RENDERING || (defined.has(q.subject.value) && q.graph.termType === 'DefaultGraph')
+      return p === RDFS_SUBCLASS || p === LOCATION || p === PROVENANCE || (defined.has(q.subject.value) && q.graph.termType === 'DefaultGraph')
+    }
+    return delta.add.some(test) || delta.remove.some(test)
+  }
+
+  /** The IRIs of every rule and of the renderings they implement (definesRules), until the rules are read again. */
+  private ruleSubjects?: Set<string>
+
+  /**
+   * Read the rules again (a graph that defines rules was loaded into the store, or unloaded) and
+   * make the running engine what one started with them would be, as enabling a layer does
+   * (reconfigure): a rule whose definition is unchanged keeps its outputs and its place; a new one
+   * (or a changed one) is evaluated for every focus it applies to, in its stratum; a removed one
+   * withdraws its output. The work costs what the rules added or removed, not the app.
+   */
+  private reloadRules(): void {
+    const before = new Map(this.allRules.map((r) => [r.iri, r]))
+    const read = this.readRules(this.provenanceReaders !== undefined)
+    // The same rule (by IRI and definition) stays the same object: its outputs and bookkeeping are keyed by it.
+    this.allRules = read.map((r) => {
+      const old = before.get(r.iri)
+      if (!old || !sameRule(old, r)) return r
+      // The same rule, with the prefixes known now.
+      old.queryParts = r.queryParts
+      return old
+    })
+    this.ruleSubjects = undefined
+    this.locationValues = undefined
+    // What function rules memoize about the ontology (ctx.memo: the declared prefixes, a class's
+    // properties) is read afresh, as an engine started with these rules would.
+    this.ctx = createContext(this.store, this.graphs, this.selection.modality, this.selection.languages)
+    this.reconfigure({})
+  }
+
   /** The renderings that read where we are (sem:readsLocation), by slot: every dimension, or the top-level ones. */
-  private readonly locationReaders: Map<string, 'all' | 'top'>
+  private locationReaders!: Map<string, 'all' | 'top'>
   /** "subject property" of each nav:Dimension's value: the dimensions it is the value of, and whether one is top-level (no nav:parent). */
   private locationValues?: Map<string, { dims: string[]; top: boolean }>
 
@@ -644,6 +723,7 @@ export class Engine {
     }
     const fed = rules.filter((r) => !this.maintained.has(r))
     this.anywhere.clear()
+    this.statementWatchers = rules.filter((r) => r.watchesStatements)
     for (const r of rules) for (const p of r.anywhere) this.anywhere.set(p, [...(this.anywhere.get(p) ?? []), r])
     this.exact = this.exactOn ? new ExactIndex(this.store.factory, fed) : undefined
     // What a rule with exact dependencies declares is not used: its patterns say what it reads.
@@ -936,6 +1016,9 @@ export class Engine {
     }
     // Rules that read this predicate on any node (sem:watchesAnywhere): each of their foci.
     for (const r of this.anywhere.get(p) ?? []) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
+    // Rules that read the statements made with their focus (sem:watchesStatements): that focus,
+    // unless a higher stratum made the statement (which the rule, evaluated before it, never reads).
+    for (const r of this.statementWatchers) if (r.stratum >= this.current && this.isInstance(p, r)) this.markFocus(r, p)
     if (this.exact) this.propagateExact(q)
     if (sign > 0) this.index(q, sign)
   }

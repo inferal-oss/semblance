@@ -48,6 +48,16 @@ export function mountSite(kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'func
 }
 
 /**
+ * The site without some of its gallery files (by name, `_ex-settings.ttl`): their texts, to load
+ * into the running site later (Runtime.load), as a page that loads its graphs as it needs them does.
+ */
+export function mountSiteWithout(held: string[], kind: StoreKind = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+  const keep = Object.entries(galleryFiles).filter(([p]) => !held.some((h) => p.endsWith('/' + h)))
+  const later = held.map((h) => galleryFiles['demo/gallery/' + h]!)
+  return { ...mount(sources(loadStore(kind, todoApp(5), appGraph, ...keep.map(([, t]) => t))), prefer), later }
+}
+
+/**
  * Most tests start where the demo's Playground page was: the todo example shown, with the
  * tools open (written before the first projection, as a restored session would be).
  */

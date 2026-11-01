@@ -71,6 +71,10 @@ A step [ sem:zeroOrMore p ] is any number of p steps: tabs read their list's mem
 ( c:tabs [ sem:zeroOrMore rdf:rest ] rdf:first )."""@en .
 sem:zeroOrMore a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: any number (zero included) of steps along this predicate."@en .
+sem:watchesStatements a owl:DatatypeProperty ; rdfs:range xsd:boolean ;
+    rdfs:comment """On a rendering whose focus is a property (a nav:ContainmentProperty), true when it reads the statements
+made with that property on any node (`?s $this ?o`): adding or removing one (a graph loaded later, a component placed in
+another) makes that focus dirty."""@en .
 sem:inverse a owl:ObjectProperty ; rdfs:range rdf:Property ;
     rdfs:comment "In a sem:follows path: a step against this predicate (from a class to its instances: [ sem:inverse rdf:type ])."@en .
 sem:watches a owl:ObjectProperty ;

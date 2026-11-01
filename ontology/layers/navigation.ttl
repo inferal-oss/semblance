@@ -209,7 +209,8 @@ nav:href a owl:DatatypeProperty ;
 nav:Containment a sem:BuildingBlock ;
     sem:targets nav:ContainmentProperty ;
     sem:stratum -30 ;
-    sem:always true .
+    sem:always true ;
+    sem:watchesStatements true .
 nav:Containment-fn a sem:Rule ; sem:implements nav:Containment ; sem:function "navigation:containment" .
 nav:Containment-sparql a sem:Rule ;
     sem:implements nav:Containment ;

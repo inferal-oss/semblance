@@ -219,10 +219,18 @@ A pair is dirty when the focus's own triples change, and also:
   graph makes each focus of the rendering dirty: for a list of everything of a kind (every
   shortcut, every shape result), which reaches what it lists from no path of its focus. Keep its
   foci few: every such change re-runs them all;
+- `sem:watchesStatements true` — the focus is a property and the rule reads the statements made
+  with it on any node (`?s $this ?o`: `nav:Containment`, whose foci are the containment
+  properties): adding or removing one makes that focus dirty;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so
   adding or re-sorting one item touches only that item.
+
+A graph loaded after start (`runtime.load(turtle)`, or any change that adds or removes a
+`sem:Rule`, a `sem:Rendering` or a triple about one) brings its rules into the running engine as
+enabling a layer does: they are evaluated for every focus they apply to, in their stratum, and the
+bus answers its reactions.
 
 Strata only run upward: a rule that a higher stratum's output would make dirty again throws
 "Stratification violation". A rule at a low stratum (say -15) targeting a component onto which a
