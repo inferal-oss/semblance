@@ -5,6 +5,7 @@ import { A11Y, C, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { toHTML, toText } from '../src/render/serialize.ts'
 import { Runtime } from '../src/runtime.ts'
+import type { FnRule } from '../src/engine/context.ts'
 import { loadRules } from '../src/engine/rules.ts'
 import { ALL_LAYERS, inputQuads, SCREEN_LAYERS, setup, todo } from './helpers.ts'
 
@@ -332,6 +333,51 @@ describe('reconfiguration and layers', () => {
     set('form', 'three', '3!')
     expect(shows('b')).toEqual(['3!'])
     expect(runs()).toBe(after + 1)
+  })
+
+  it('a function rule that follows a node is re-run there by what it read, traced (#237)', () => {
+    // Two twins of one field: one reads the followed node through the context, the other untraced
+    // (each writes under its focus, so neither re-runs the other).
+    const extra = `
+      @prefix sem: <${NS.sem}> . @prefix ex: <urn:w:> .
+      <urn:w:Traced> a sem:Rule ; sem:targets ex:Field ; sem:stratum 1 ; sem:follows ex:controls ; sem:function "w-traced" .
+      <urn:w:Untraced> a sem:Rule ; sem:targets ex:Field ; sem:stratum 1 ; sem:follows ex:controls ; sem:function "w-untraced" .
+      ex:a a ex:Field ; ex:controls ex:form ; ex:property ex:one .
+      ex:form ex:one "1" ; ex:two "2" .`
+    const store = loadStore('oxigraph', todoApp(1), extra)
+    const f = store.factory
+    const nn = (s: string) => f.namedNode('urn:w:' + s)
+    const shows = (into: string): FnRule => (ctx, focus) => {
+      const read = () => {
+        const node = ctx.object(focus, nn('controls'))
+        const p = ctx.object(focus, nn('property'))
+        return node && p ? ctx.objects(node, p) : []
+      }
+      const values = into === 'shows' ? read() : ctx.untraced(read)
+      return values.map((v) => f.quad(f.namedNode(focus.value + '/~' + into), nn(into), v))
+    }
+    const runtime = new Runtime(store)
+    const screen = runtime.project({ modality: MOD.Screen, functions: { 'w-traced': shows('shows'), 'w-untraced': shows('sees') } })
+    const runs = (rule: string) => screen.engine.stats.byRule.get('urn:w:' + rule)?.runs ?? 0
+    const out = (p: string) => store.match(nn('a/~' + p), nn(p), null).map((q) => q.object.value)
+    const set = (s: string, p: string, v: string) => runtime.apply({ remove: store.match(nn(s), nn(p), null), add: [f.quad(nn(s), nn(p), f.literal(v))] })
+    expect([out('shows'), out('sees')]).toEqual([['1'], ['1']])
+    const [traced, untraced] = [runs('Traced'), runs('Untraced')]
+    // A predicate it did not read on the followed node re-runs only the twin that read untraced...
+    set('form', 'two', '2!')
+    expect([runs('Traced'), runs('Untraced')]).toEqual([traced, untraced + 1])
+    // ...one it read re-runs both...
+    set('form', 'one', '1!')
+    expect([out('shows'), out('sees')]).toEqual([['1!'], ['1!']])
+    expect([runs('Traced'), runs('Untraced')]).toEqual([traced + 1, untraced + 2])
+    // ...and naming another property on the focus moves its reads there.
+    runtime.apply({ remove: store.match(nn('a'), nn('property'), null), add: [f.quad(nn('a'), nn('property'), nn('two'))] })
+    expect(out('shows')).toEqual(['2!'])
+    set('form', 'one', '1!!')
+    expect(runs('Traced')).toBe(traced + 2)
+    set('form', 'two', '2!!')
+    expect(out('shows')).toEqual(['2!!'])
+    expect(runs('Traced')).toBe(traced + 3)
   })
 
   it('refuses blank nodes in rule output', () => {

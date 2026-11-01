@@ -42,6 +42,12 @@ export interface RuleContext {
    */
   queryReads?: ReadPattern[]
   /**
+   * Set with `trace` (to false): whether the rule read something the trace does not record - in
+   * `untraced`, by a pattern with no IRI subject, or by a query it does not follow. A rule whose
+   * reads were all traced is re-run by them alone, not by what it declares it follows.
+   */
+  opaque?: boolean
+  /**
    * Run `read` without recording its reads: the rule is not re-run when what it
    * read there changes (for snapshots, such as a view's source on its back side).
    */
@@ -136,7 +142,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
         let preds = trace.get(subject)
         if (!preds) trace.set(subject, (preds = new Set()))
         preds.add(p === null ? '*' : typeof p === 'string' ? p : p.value)
-      }
+      } else ctx.opaque = true
     }
     const [ts, tp, to] = [term(s), term(p), term(o)]
     // With a subject, and where a lookup across graphs costs what one in a graph does
@@ -161,6 +167,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
   }
   const followed = (text: string, opts: QueryOptions | undefined) => {
     if (opts?.follow && ctx.queryReads) ctx.queryReads.push(...(queryReads(text) ?? [{}]))
+    else if (ctx.trace) ctx.opaque = true
     return text
   }
   const ctx: RuleContext = {
@@ -176,6 +183,7 @@ export function createContext(store: GraphStore, graphs: Quad_Graph[], modality:
     },
     untraced<T>(read: () => T): T {
       const { trace, queryReads } = ctx
+      if (trace) ctx.opaque = true
       ctx.trace = ctx.queryReads = undefined
       try {
         return read()

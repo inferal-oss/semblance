@@ -184,6 +184,11 @@ export class Engine {
   private readers = new Map<string, Map<Rule, Map<string, Set<string>>>>()
   /** The inverse, to retract a pair's previous reads: rule -> focus -> subjects. */
   private readsOf = new Map<Rule, Map<string, string[]>>()
+  /**
+   * Function-rule pairs whose last evaluation read only what its trace records (RuleContext.opaque):
+   * their traced reads re-run them, so what they follow (sem:follows) does not.
+   */
+  private traced = new Map<Rule, Set<string>>()
   /** Pairs that follow queries, by rule and focus, and by the predicates they read ('*' = any). */
   private queryFollowers = new Map<Rule, Map<string, Follower>>()
   private queryFollowersByPredicate = new Map<string, Set<Follower>>()
@@ -754,18 +759,28 @@ export class Engine {
   }
 
   /** Dirty a rule for a focus: for a member-wise rule, every current and previous member. */
-  private markFocus(rule: Rule, focus: string) {
-    if (!rule.forEach) return this.markDirty(rule, focus)
+  /**
+   * A rule that follows its way to a changed node (sem:follows): its pairs, but for a function
+   * rule's pairs whose reads were traced, which that node's change re-runs only if they read it.
+   */
+  private markFollower(rule: Rule, focus: string) {
+    const traced = rule.kind === 'function' ? this.traced.get(rule) : undefined
+    if (traced?.size) this.markFocus(rule, focus, (key) => !traced.has(key))
+    else this.markFocus(rule, focus)
+  }
+
+  private markFocus(rule: Rule, focus: string, keep?: (key: string) => boolean) {
+    if (!rule.forEach) return keep && !keep(focus) ? undefined : this.markDirty(rule, focus)
     // Its own writes never re-dirty it: one member's output about the focus (a result it records
     // there) does not re-run the other members.
     if (this.committing?.rule === rule && focusOf(this.committing.focus) === focus) return
     const f = this.store.factory
     for (const g of this.graphs) {
       for (const q of this.store.match(f.namedNode(focus), f.namedNode(rule.forEach), null, g)) {
-        if (q.object.termType === 'NamedNode') this.markDirty(rule, focus + SEP + q.object.value)
+        if (q.object.termType === 'NamedNode' && (!keep || keep(focus + SEP + q.object.value))) this.markDirty(rule, focus + SEP + q.object.value)
       }
     }
-    for (const key of this.memberKeys.get(rule)?.get(focus) ?? []) this.markDirty(rule, key)
+    for (const key of this.memberKeys.get(rule)?.get(focus) ?? []) if (!keep || keep(key)) this.markDirty(rule, key)
   }
 
   /** Whether a member-wise pair's link (`focus forEach member`) still holds. */
@@ -867,13 +882,13 @@ export class Engine {
     if (back) {
       for (const [fp, subjects] of back) {
         for (const r of this.followers.get(fp) ?? []) {
-          for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+          for (const x of subjects) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
         }
         // Along a path: back from the nodes linking here, one step at a time, to the foci.
         for (const { rule: r, path } of this.pathFollowers.get(fp) ?? []) {
           // The last step was taken (into this node); a repeated last step may also have been taken before.
           const start = path[path.length - 1]!.startsWith('*') ? this.backClosure(subjects, fp) : new Set(subjects)
-          for (const x of this.walkBack(start, path.slice(0, -1))) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+          for (const x of this.walkBack(start, path.slice(0, -1))) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
         }
       }
     }
@@ -883,7 +898,7 @@ export class Engine {
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
         if (r.watches && !r.watchesVia && !r.watchesMarked && !r.watches.has(p)) continue
-        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFocus(r, x)
+        for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
       }
     }
     // Function rules that read this subject (traced) re-run if they read this predicate.
@@ -1320,13 +1335,18 @@ export class Engine {
       const reads: ReadPattern[] = []
       this.ctx.trace = trace
       this.ctx.queryReads = reads
+      this.ctx.opaque = false
+      let done = false
       try {
         const f = this.store.factory
         const member = memberOf(focus)
-        return this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
+        const out = this.functions[rule.fn!]!(this.ctx, f.namedNode(focusOf(focus)), member === undefined ? undefined : f.namedNode(member))
+        done = true
+        return out
       } finally {
-        this.ctx.trace = this.ctx.queryReads = undefined
-        this.recordReads(rule, focus, trace)
+        const traced = done && !this.ctx.opaque
+        this.ctx.trace = this.ctx.queryReads = this.ctx.opaque = undefined
+        this.recordReads(rule, focus, trace, traced)
         if (reads.length || this.queryFollowers.has(rule)) this.recordFollowing(rule, focus, reads)
       }
     }
@@ -1350,11 +1370,17 @@ export class Engine {
       if (!byRule!.size) this.readers.delete(subject)
     }
     byFocus?.delete(focus)
+    this.traced.get(rule)?.delete(focus)
   }
 
-  /** Replace a (rule, focus) pair's traced reads. */
-  private recordReads(rule: Rule, focus: string, trace: Map<string, Set<string>>) {
+  /** Replace a (rule, focus) pair's traced reads (`traced`: all it read). */
+  private recordReads(rule: Rule, focus: string, trace: Map<string, Set<string>>, traced: boolean) {
     this.forgetReads(rule, focus)
+    if (traced) {
+      let pairs = this.traced.get(rule)
+      if (!pairs) this.traced.set(rule, (pairs = new Set()))
+      pairs.add(focus)
+    }
     let byFocus = this.readsOf.get(rule)
     if (!byFocus) this.readsOf.set(rule, (byFocus = new Map()))
     trace.delete(focusOf(focus)) // the focus's own triples are covered by its self-watch
