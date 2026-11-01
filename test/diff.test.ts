@@ -59,6 +59,7 @@ describe('c:DiffView', () => {
     expect(css).toContain('[data-sem-change=removed]')
     expect(css).toContain('var(--sem-success)')
     expect(css).toContain('var(--sem-danger)')
+    expect(css).toMatch(/\[data-sem-c="diff-line"\] > code[^}]*background: transparent/)
   })
 
   it('speaks change names in the viewer language', () => {

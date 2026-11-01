@@ -24,7 +24,12 @@
                  [ sty:property "user-select" ; sty:raw "none" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:part "> code" ;
-    sty:declares [ sty:property "padding-inline-end" ; sty:token tok:space-3 ] ,
+    sty:declares [ sty:property "background" ; sty:raw "transparent" ] ,
+                 [ sty:property "border" ; sty:raw "0" ] ,
+                 [ sty:property "border-radius" ; sty:raw "0" ] ,
+                 [ sty:property "padding-block" ; sty:raw "0" ] ,
+                 [ sty:property "padding-inline-start" ; sty:raw "0" ] ,
+                 [ sty:property "padding-inline-end" ; sty:token tok:space-3 ] ,
                  [ sty:property "font" ; sty:raw "inherit" ] ,
                  [ sty:property "white-space" ; sty:raw "inherit" ] .
 [] a sty:StyleRule ; sty:appliesTo c:DiffLine ; sty:state "[data-sem-change=added]" ;
