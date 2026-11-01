@@ -4,6 +4,7 @@
 
 [] a sty:StyleRule ; sty:appliesTo c:DiffView ;
     sty:declares [ sty:property "display" ; sty:raw "block" ] ,
+                 [ sty:property "width" ; sty:raw "100%" ] ,
                  [ sty:property "overflow-x" ; sty:raw "auto" ] ,
                  [ sty:property "max-width" ; sty:raw "100%" ] ,
                  [ sty:property "border" ; sty:raw "1px solid var(--sem-border)" ] ,

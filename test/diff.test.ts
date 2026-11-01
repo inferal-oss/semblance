@@ -17,16 +17,16 @@ ex:removed a c:DiffLine ; c:value "old" ; c:diffKind c:DiffRemoved .
 ex:added a c:DiffLine ; c:value "new" ; c:diffKind c:DiffAdded .
 ex:after a c:DiffLine ; c:value "<escaped>" ; c:diffKind c:DiffContext .`
 
-function show(prefer: 'sparql' | 'function') {
+function show(prefer: 'sparql' | 'function', languages?: string[]) {
   const store = loadStore('oxigraph', graph)
   const runtime = new Runtime(store)
   const screen = runtime.project({ modality: MOD.Screen, name: `diff-${prefer}`, roots: [base + 'view'] }, error => { throw error })
-  screen.engine.reconfigure({ prefer })
+  screen.engine.reconfigure({ prefer, languages })
   const { document } = parseHTML('<!doctype html><html><body><div id="app"></div></body></html>')
   const dom = new DomRenderer(screen.index, document.getElementById('app')!, base + 'view')
   dom.flush()
   const text = runtime.project({ modality: MOD.Text, name: `diff-text-${prefer}`, roots: [base + 'view'] }, error => { throw error })
-  text.engine.reconfigure({ prefer })
+  text.engine.reconfigure({ prefer, languages })
   return { document, text: toText(text.index, base + 'view') }
 }
 
@@ -54,9 +54,18 @@ describe('c:DiffView', () => {
     const css = compileStyles(loadStore('n3'))
     expect(css).toContain('[data-sem-c="diff-view"]')
     expect(css).toContain('var(--sem-surface-sunken)')
+    expect(css).toContain('width: 100%')
     expect(css).toContain('[data-sem-change=added]')
     expect(css).toContain('[data-sem-change=removed]')
     expect(css).toContain('var(--sem-success)')
     expect(css).toContain('var(--sem-danger)')
+  })
+
+  it('speaks change names in the viewer language', () => {
+    for (const prefer of ['sparql', 'function'] as const) {
+      const result = show(prefer, ['ar'])
+      const names = [...result.document.querySelectorAll('[role=listitem]')].map(row => row.getAttribute('aria-label'))
+      expect(names).toEqual(['دون تغيير: one', 'محذوف: old', 'مضاف: new', 'دون تغيير: <escaped>'])
+    }
   })
 })

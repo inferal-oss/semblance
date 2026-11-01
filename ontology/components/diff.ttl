@@ -81,8 +81,9 @@ WHERE {
   BIND(IF(?kind = c:DiffAdded, "added", IF(?kind = c:DiffRemoved, "removed", "context")) AS ?slug)
   BIND(IF(?kind = c:DiffAdded, "+", IF(?kind = c:DiffRemoved, "-", " ")) AS ?marker)
   BIND(STR(?value) AS ?text)
+  OPTIONAL { ?localized l10n:of ?kind ; l10n:name ?localKindLabel }
   OPTIONAL { ?kind rdfs:label ?enLabel FILTER(lang(?enLabel) = "en") }
-  BIND(CONCAT(STR(COALESCE(?enLabel, "Unchanged")), ": ", ?text) AS ?description)
+  BIND(CONCAT(STR(COALESCE(?localKindLabel, ?enLabel, "Unchanged")), ": ", ?text) AS ?description)
   BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
   BIND(IRI(CONCAT(STR($this), "/~role")) AS ?roleAttr)
   BIND(IRI(CONCAT(STR($this), "/~kind")) AS ?kindAttr)
