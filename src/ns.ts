@@ -103,6 +103,7 @@ export const ORD = {
 export const SEM = {
   watchesAnywhere: sem + 'watchesAnywhere',
   watchesStatements: sem + 'watchesStatements',
+  inverseVia: sem + 'inverseVia',
   Component: sem + 'Component',
   Rule: sem + 'Rule',
   Rendering: sem + 'Rendering',

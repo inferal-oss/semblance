@@ -109,7 +109,7 @@ c:DescriptionList sem:group c:DataGroup . c:Stat sem:group c:DataGroup . c:Metri
 c:Avatar sem:group c:DataGroup . c:AvatarGroup sem:group c:DataGroup . c:Timeline sem:group c:DataGroup .
 c:Gallery sem:group c:DataGroup . c:ImageBrowser sem:group c:DataGroup . c:Snapped sem:group c:DataGroup .
 c:Picture sem:group c:DataGroup . c:GalleryLayout sem:group c:DataGroup .
-c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
+c:TimelineItem sem:group c:DataGroup . c:Tree sem:group c:DataGroup . c:TreeItem sem:group c:DataGroup . c:Legend sem:group c:DataGroup .
 c:DataGrid sem:group c:DataGroup . c:GridRow sem:group c:DataGroup . c:TimeAxis sem:group c:DataGroup .
 c:JsonTree sem:group c:DataGroup . c:JsonNode sem:group c:DataGroup . c:HexView sem:group c:DataGroup .
 c:BodyViewer sem:group c:DataGroup . c:ImageView sem:group c:DataGroup .

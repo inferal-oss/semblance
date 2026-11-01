@@ -1009,6 +1009,15 @@ export class Engine {
     // and a rule that watches predicates is not walked to for others: this runs for every triple.)
     if (this.inverseFollowers.length && q.subject.termType === 'NamedNode' && !isPlacementOrProvenance(p) && !(p === RDF_TYPE && q.object.value.startsWith(H.ns))) {
       for (const { rule: r, path } of this.inverseFollowers) {
+        const last = path[path.length - 1]!
+        if (last.startsWith('^@')) {
+          // Against a predicate named in the data: only one some node names that way, and only to the foci that name it.
+          const via = last.slice(2).split(' ')
+          const f = this.store.factory
+          if (!this.graphs.some((g) => this.store.match(null, f.namedNode(via[via.length - 1]!), q.predicate, g).length)) continue
+          for (const x of this.walkBack(new Set([s]), [...path.slice(0, -1), '^' + p], sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.names(x, [via], p)) this.markFocus(r, x)
+          continue
+        }
         if (r.watches && !r.watchesVia && !r.watchesMarked && !r.watches.has(p)) continue
         for (const x of this.walkBack(new Set([s]), path, sign < 0 ? q : undefined)) if (this.isInstance(x, r) && this.watched(r, x, p)) this.markFollower(r, x)
       }
