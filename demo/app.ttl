@@ -26,6 +26,7 @@
 @prefix tree: <https://w3id.org/tree#> .
 @prefix nav: <https://semblance.dev/ns/navigation#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
+@prefix lc: <https://semblance.dev/ns/layout-constraints#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 
 # =================================================================================================
@@ -37,7 +38,7 @@
 # --- application state ---------------------------------------------------------------------------
 
 ui:app sty:colorScheme sty:System ;
-    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer, fs:Layer ;
+    sem:enables a11y:Layer, sty:Layer, sem:SourceLayer, sem:TooltipLayer, val:Layer, val:ShapesLayer, key:Layer, st:Layer, ann:Layer, sem:DocsLayer, prv:Layer, fs:Layer, lc:Layer ;
     l10n:language l10n:English ;
     ui:store ui:SemblanceWasm ;
     ui:rules ui:PreferSparql ;
@@ -257,7 +258,7 @@ ui:storeChoice a c:Choice ; c:controls ui:app ; c:property ui:store .
 ui:rulesChoice a c:Choice ; c:controls ui:app ; c:property ui:rules .
 ui:compileChoice a c:Choice ; c:controls ui:app ; c:property ui:compile .
 ui:layerChips a c:Chips ; c:controls ui:app ; c:property sem:enables ;
-    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer ) .
+    c:options ( a11y:Layer sty:Layer sem:DebugLayer sem:SourceLayer sem:TooltipLayer val:Layer val:ShapesLayer key:Layer st:Layer ann:Layer sem:DocsLayer prv:Layer lc:Layer ) .
 ui:lastUpdate a c:Metrics ; c:of ui:stats ; c:fields ( ui:action ui:ms ui:ruleRuns ui:domOps ui:viewRows ) .
 
 # Every tool is a view of the same graph. ↗ opens one in a window; tab and window state are graph state.

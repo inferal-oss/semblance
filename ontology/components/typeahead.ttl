@@ -252,6 +252,7 @@ CONSTRUCT {
   ?label a rdfhtml:Label ; rdfhtml:for ?inputId ; rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?field .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?field a rdfhtml:Div ; rdfhtml:class "sem-ta-field" ; rdfhtml:id ?fieldId ; rdfhtml:hasChild ?pills, ?input, ?chevron, ?popup ; ord:immediatelyPrecedes ?foot .
+  ?field lc:role ?fieldRole . ?label lc:role lc:FieldLabel .
   ?pills a rdfhtml:Ul ; rdfhtml:class "sem-ta-pills" ; rdfhtml:attribute ?pillsLabel ; ord:immediatelyPrecedes ?input .
   ?pillsLabel a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
   ?input a rdfhtml:Input ; rdfhtml:type "text" ; rdfhtml:id ?inputId ; rdfhtml:value ?shown ; rdfhtml:placeholder ?placeholder ;
@@ -424,6 +425,8 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
   BIND(IRI(CONCAT(STR($this), "/~field")) AS ?field)
   BIND(STR(?field) AS ?fieldId)
+  # One value is a single-line control; several wrap their pills onto more lines.
+  BIND(IF(?multi, ?none, lc:SingleLineControl) AS ?fieldRole)
   BIND(IF(?multi, IRI(CONCAT(STR($this), "/~pills")), ?none) AS ?pills)
   BIND(IF(?multi, IRI(CONCAT(STR($this), "/~pills-aria-label")), ?none) AS ?pillsLabel)
   BIND(IRI(CONCAT(STR($this), "/~input")) AS ?input)

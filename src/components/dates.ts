@@ -5,7 +5,7 @@
 // month lengths with leap years), and typed text is read as their reactions read it.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
-import { C, H, L10N, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
+import { C, H, L10N, LC, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { isTrue, named, RDFS_LABEL, str, text, picked } from './util.ts'
 
 const c = (local: string) => NS.c + local
@@ -552,6 +552,7 @@ const dateField: FnRule = (ctx, focus) => {
   }
   const popup = o.el('popup', 'Div', { class: 'sem-date-popup', id: popupId, hidden: open ? undefined : '', role: 'dialog', 'aria-label': choose, 'data-sem-anchor': rowId }, grid ? [grid] : [])
   const label = o.el('label', 'Label', { for: inputId }, [o.text('label-text', caption)])
+  o.t(row, LC.role, ctx.nn(LC.SingleLineControl)).t(label, LC.role, ctx.nn(LC.FieldLabel))
   const root = o.el('root', 'Div', {})
   place(o, root, [label, row, popup, help, error])
   o.t(label, ORD.immediatelyPrecedes, row).t(row, ORD.immediatelyPrecedes, popup)
@@ -640,6 +641,7 @@ const timeField: FnRule = (ctx, focus) => {
   place(o, list, options)
   const row = o.el('row', 'Div', { class: 'sem-time-row' }, [input, opener])
   const label = o.el('label', 'Label', { for: inputId }, [o.text('label-text', caption)])
+  o.t(row, LC.role, ctx.nn(LC.SingleLineControl)).t(label, LC.role, ctx.nn(LC.FieldLabel))
   const root = o.el('root', 'Div', {})
   place(o, root, [label, row, list, help, error])
   o.t(label, ORD.immediatelyPrecedes, row).t(row, ORD.immediatelyPrecedes, list)

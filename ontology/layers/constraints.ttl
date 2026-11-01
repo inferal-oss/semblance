@@ -3,6 +3,7 @@
 @prefix c: <https://semblance.dev/ns/component#> .
 @prefix pos: <https://semblance.dev/ns/position#> .
 @prefix sty: <https://semblance.dev/ns/style#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
 @prefix rnd: <https://semblance.dev/ns/rendered#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -21,6 +22,11 @@
 #       lc:relation lc:SameTop ; lc:over lc:FieldRow ;
 #       lc:members lc:EachChild ; lc:part lc:SingleLineControl ; lc:tolerance 0.5 .
 #
+# What they compare inside a component are its parts, which the component names itself: its
+# renderings say which minted node is which (`<field>/~input lc:role lc:SingleLineControl`), and
+# this layer shows that on the element (data-sem-part), so the rendered-state layer measures
+# exactly those nodes and a recording in a browser finds them.
+#
 # Some invariants are declared (a nav list's items fit in it); some are derived from layout
 # vocabulary that already promises them (a row of fields, pos:AlignedColumns, a width class). The
 # SPARQL that finds violations is on each relation (lc:select): over the rendered graph, each result
@@ -36,7 +42,7 @@ lc:Relation a owl:Class ;
     rdfs:label "Layout relation"@en , "Відношення розкладки"@uk , "Layout-Beziehung"@de , "علاقة التخطيط"@ar .
 lc:Role a owl:Class ;
     rdfs:label "Part role"@en , "Роль частини"@uk , "Teilrolle"@de , "دور الجزء"@ar ;
-    rdfs:comment "A part of a component that invariants compare, found in its root by lc:selector (not crossing into a nested component's root)."@en .
+    rdfs:comment "A part of a component that invariants compare: a node its rendering mints says it has the role (lc:role)."@en .
 lc:Finding a owl:Class ;
     rdfs:label "Layout finding"@en , "Порушення розкладки"@uk , "Layout-Befund"@de , "مخالفة التخطيط"@ar ;
     rdfs:comment "One broken invariant: lc:invariant, lc:scope (the group's component), lc:member, lc:by (px)."@en .
@@ -54,35 +60,73 @@ lc:part a owl:ObjectProperty ; rdfs:domain lc:Invariant ; rdfs:range lc:Role ;
 lc:tolerance a owl:DatatypeProperty ; rdfs:domain lc:Invariant ; rdfs:range xsd:decimal ;
     rdfs:label "Tolerance"@en , "Допуск"@uk , "Toleranz"@de , "التسامح"@ar ;
     rdfs:comment "CSS px a measurement may be off before it counts (sub-pixel rounding, a theme's tilt)."@en .
-lc:atWidth a owl:ObjectProperty ; rdfs:domain lc:Invariant ;
+lc:atWidth a owl:ObjectProperty ; rdfs:range sty:WidthClass ;
     rdfs:label "At width"@en , "За ширини"@uk , "Bei Breite"@de , "عند العرض"@ar ;
-    rdfs:comment "A width class (sty:CompactWidth, ...): the invariant holds only there. Without one, at every width."@en .
-lc:selector a owl:DatatypeProperty ;
-    rdfs:label "Selector"@en , "Селектор"@uk , "Selektor"@de , "المحدد"@ar .
-lc:pick a owl:ObjectProperty ; rdfs:domain lc:Role ;
-    rdfs:label "Picked at a width"@en , "Вибір за ширини"@uk , "Auswahl bei Breite"@de , "الاختيار عند عرض"@ar ;
-    rdfs:comment "Where a width class moves the part: a node with lc:selector and lc:atWidth, used instead of the role's own selector at that width."@en .
+    rdfs:comment "A width class (sty:CompactWidth, ...). On an invariant: it holds only there. On a part: it has its role only there (a pill is a choice's control when wide, its select on a phone). Without one, at every width."@en .
 
 lc:EachChild a sem:Value ; rdfs:label "Each child"@en , "Кожна дочірня"@uk , "Jedes Kind"@de , "كل فرع"@ar .
 lc:Parts a sem:Value ; rdfs:label "Parts"@en , "Частини"@uk , "Teile"@de , "الأجزاء"@ar .
 lc:Descendants a sem:Value ; rdfs:label "Everything inside"@en , "Усе всередині"@uk , "Alles darin"@de , "كل ما بداخله"@ar .
 
 # --- part roles --------------------------------------------------------------------------------
+# A component's rendering puts lc:role on the nodes it mints for its parts; lc:WithParts is the
+# mixin of the components that do, which this layer shows on their elements.
 
-lc:SingleLineControl a lc:Role ;
+lc:role a owl:ObjectProperty ; rdfs:range lc:Role ;
+    rdfs:label "Part role"@en , "Роль частини"@uk , "Teilrolle"@de , "دور الجزء"@ar ;
+    rdfs:comment "On a node a rendering mints (<focus>/~input): which part of its component it is. One role a node."@en .
+
+lc:WithParts a owl:Class ;
+    rdfs:label "Component with parts"@en , "Компонент із частинами"@uk , "Komponente mit Teilen"@de , "مكوّن بأجزاء"@ar ;
+    rdfs:comment "Mixin: its renderings name their parts by role (lc:role), and the layer marks them data-sem-part."@en .
+
+lc:SingleLineControl a lc:Role ; sem:slug "single-line-control" ;
     rdfs:label "Single-line control"@en , "Однорядковий елемент"@uk , "Einzeiliges Steuerelement"@de , "عنصر بسطر واحد"@ar ;
-    rdfs:comment "An inline Choice (its caption inside, data-sem-label-placement=inline) draws its control as the pill around its select, so for it the role is the root; a Choice with its label above is a label and a select, like any field (#57)."@en ;
-    lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]):not([data-sem-label-placement=inline] *), select:not([data-sem-label-placement=inline] *), [data-sem-c=choice][data-sem-label-placement=inline]" ;
-    # On a compact screen a Choice puts its caption above its select, and the select is the control.
-    lc:pick [ lc:atWidth sty:CompactWidth ;
-        lc:selector "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]):not([type=file]):not([type=color]), select" ] .
-lc:FieldLabel a lc:Role ;
+    rdfs:comment "The box a single-line field draws its value in: a text input, a select, a date field's row (the input with its button), a typeahead's field. An inline Choice (its caption inside) draws its control as the pill around its select, so its root is the control where it is wide, and its select on a compact screen, where the caption goes above (#57)."@en .
+lc:FieldLabel a lc:Role ; sem:slug "field-label" ;
     rdfs:label "Field label"@en , "Мітка поля"@uk , "Feldbeschriftung"@de , "تسمية الحقل"@ar ;
-    rdfs:comment "A field's label; a Choice with its label above is itself a label element, its caption the span inside."@en ;
-    lc:selector "label:not([data-sem-c=choice]), [data-sem-c=choice]:not([data-sem-label-placement=inline]) > span" .
-lc:NavItem a lc:Role ;
+    rdfs:comment "A field's label (a Choice's caption above its select)."@en .
+lc:NavItem a lc:Role ; sem:slug "nav-item" ;
     rdfs:label "Navigation item"@en , "Пункт навігації"@uk , "Navigationseintrag"@de , "عنصر التنقل"@ar ;
-    lc:selector "[data-sem-c=nav-list] > button, [data-sem-c=nav-list] > a, [data-sem-c=nav-list] > li > button, [data-sem-c=nav-list] > li > a" .
+    rdfs:comment "One destination of a navigation list."@en .
+
+c:TextField rdfs:subClassOf lc:WithParts .
+c:ShapeField rdfs:subClassOf lc:WithParts .
+c:Choice rdfs:subClassOf lc:WithParts .
+c:DateField rdfs:subClassOf lc:WithParts .
+c:TimeField rdfs:subClassOf lc:WithParts .
+c:Typeahead rdfs:subClassOf lc:WithParts .
+c:NavList rdfs:subClassOf lc:WithParts .
+
+lc:Layer a sem:Layer ;
+    rdfs:label "parts"@en , "частини"@uk , "Teile"@de , "الأجزاء"@ar ;
+    rdfs:comment "Marks the parts components name (lc:role) on their elements: data-sem-part, and data-sem-part-at with the width class a part has its role at."@en .
+
+lc:PartHooks a sem:Rendering ;
+    sem:targets lc:WithParts ;
+    sem:modality mod:Screen ;
+    sem:layer lc:Layer ;
+    sem:stratum 30 ;
+    sem:readsMinted true .
+lc:PartHooks-fn a sem:Rule ; sem:implements lc:PartHooks ; sem:function "constraints:parts" .
+# Nodes minted under the focus (<focus>/~local, local without "/~"). In bulk evaluation ($this
+# unbound) the focus test is skipped: the engine groups the output by owning focus.
+lc:PartHooks-sparql a sem:Rule ;
+    sem:implements lc:PartHooks ;
+    sem:construct """
+CONSTRUCT {
+  ?node rdfhtml:attribute ?partAttr , ?atAttr .
+  ?partAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-part" ; rdfhtml:attributeValue ?slug .
+  ?atAttr a rdfhtml:Attribute ; rdfhtml:attributeName "data-sem-part-at" ; rdfhtml:attributeValue ?at .
+}
+WHERE {
+  ?node lc:role ?role .
+  FILTER(isIRI(?node) && CONTAINS(STR(?node), "/~"))
+  FILTER(COALESCE(STRSTARTS(STR(?node), CONCAT(STR($this), "/~")) && !CONTAINS(STRAFTER(STR(?node), CONCAT(STR($this), "/~")), "/~"), true))
+  ?role sem:slug ?slug .
+  BIND(IRI(CONCAT(STR(?node), "-part")) AS ?partAttr)
+  OPTIONAL { ?node lc:atWidth ?width . ?width sem:slug ?at . BIND(IRI(CONCAT(STR(?node), "-part-at")) AS ?atAttr) }
+}""" .
 
 # --- derived groups ------------------------------------------------------------------------------
 

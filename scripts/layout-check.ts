@@ -9,8 +9,9 @@
 //
 // It starts the checkout's Vite dev server in-process, drives a headless Chromium over the DevTools
 // protocol (Node's own WebSocket; the browser is the cached Playwright or Puppeteer headless shell,
-// or SEMBLANCE_CHROME), measures with src/layout/measure.ts, and stops both. The part selectors come
-// from this checkout's ontology (lc:selector), so an old checkout is measured with today's roles.
+// or SEMBLANCE_CHROME), measures with src/layout/measure.ts, and stops both. Parts are the elements
+// the checkout's components mark (data-sem-part, from lc:role), so a checkout from before they did
+// (#193) records component boxes only.
 // A page may name buttons to click first, by their text, after an @ each.
 // One browser, one page at a time, at a low priority: the machine is shared.
 import { spawn } from 'node:child_process'
@@ -20,7 +21,7 @@ import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { Parser } from 'n3'
 import { createServer } from 'vite'
-import { measurePage, pagePath, type MeasuredPage, type PartSelectors } from '../src/layout/measure.ts'
+import { measurePage, pagePath, type MeasuredPage, type PartHooks } from '../src/layout/measure.ts'
 
 const here = resolve(import.meta.dirname, '..')
 const { values: args } = parseArgs({
@@ -37,19 +38,21 @@ const { values: args } = parseArgs({
   },
 })
 
-/** Part roles and their selectors (and where a width class picks another), from the ontology. */
-export function partSelectors(): PartSelectors {
+/** What the part hooks mean, from the ontology: each role's slug, each width class's slug and media condition. */
+export function partHooks(): PartHooks {
   const LC = 'https://semblance.dev/ns/layout-constraints#'
   const STY = 'https://semblance.dev/ns/style#'
+  const SLUG = 'https://semblance.dev/ns/core#slug'
+  const TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
   const quads = ['ontology/layers/constraints.ttl', 'ontology/layers/style.ttl'].flatMap((f) => new Parser().parse(readFileSync(join(here, f), 'utf8')))
   const one = (s: string, p: string) => quads.find((q) => q.subject.value === s && q.predicate.value === p)?.object.value
-  const out: PartSelectors = {}
+  const out: PartHooks = { roles: {}, widths: {} }
   for (const q of quads) {
-    if (q.predicate.value === LC + 'selector' && q.subject.termType === 'NamedNode') (out[q.subject.value.slice(LC.length)] ??= []).push({ selector: q.object.value })
-    if (q.predicate.value === LC + 'pick') {
-      const media = one(one(q.object.value, LC + 'atWidth')!, STY + 'media')
-      ;(out[q.subject.value.slice(LC.length)] ??= []).push({ selector: one(q.object.value, LC + 'selector')!, media })
-    }
+    if (q.predicate.value !== TYPE) continue
+    const slug = one(q.subject.value, SLUG)
+    if (!slug) continue
+    if (q.object.value === LC + 'Role') out.roles[slug] = q.subject.value.slice(LC.length)
+    if (q.object.value === STY + 'WidthClass') out.widths[slug] = one(q.subject.value, STY + 'media')!
   }
   return out
 }
@@ -156,7 +159,7 @@ export async function settle(cdp: Cdp): Promise<void> {
 const LANGUAGES: Record<string, string> = { en: 'English', uk: 'Ukrainian', de: 'German', ar: 'Arabic' }
 
 export async function measure(base: string, pages: string[], widths: number[], themes: string[], dir: string, langs: string[] = []): Promise<MeasuredPage[]> {
-  const parts = partSelectors()
+  const parts = partHooks()
   const { cdp, stop } = await launch()
   const out: MeasuredPage[] = []
   try {

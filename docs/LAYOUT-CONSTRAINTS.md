@@ -50,12 +50,17 @@ lc:fieldRowControlsShareTops a lc:Invariant ;
 - **Members** `lc:members`: `lc:EachChild` (one per child: its first `lc:part`, or its root),
   `lc:Parts` (every part of a role inside), `lc:Descendants` (every component inside, but not
   inside a scroller between).
-- **Parts** `lc:Role` with `lc:selector`, and `lc:pick [ lc:atWidth sty:CompactWidth ;
-  lc:selector … ]` where a width class moves the part (a Choice's control is its pill when wide,
-  its select on a phone, where the caption goes above it). Selectors are the spike's stand-in:
-  the real design marks the part on the component's RDF/HTML (its minted `<focus>/~control`
-  node carries `lc:role lc:SingleLineControl`), so the component author says which element is
-  the control and the rendered-state effect measures exactly those nodes.
+- **Parts** `lc:Role`: a component's renderings say which node they mint is which part, on the
+  node itself (`<field>/~input lc:role lc:SingleLineControl`, `<field>/~label lc:role
+  lc:FieldLabel`, a nav list's option buttons `lc:NavItem`), in both twins. A part that has its
+  role at one width only says so (`lc:atWidth`): an inline Choice's pill is its control where it is
+  wide (`sty:RegularWidth`), its select on a phone (`sty:CompactWidth`), where the caption goes
+  above it. The layer (`lc:PartHooks`, over the `lc:WithParts` mixin) marks the elements
+  `data-sem-part="single-line-control"` and `data-sem-part-at="compact-width"`, so the
+  rendered-state effect, a recording in a browser and a server-rendered page all find exactly
+  those elements (#193; the spike guessed them with CSS selectors). Which element is the control
+  is the component's call: a date field's control is its row, the outlined box that holds the
+  input and its button, not the input inside.
 - **Lines**: a group in a row that wraps is compared line by line (`rnd:line`, which the host
   measures), so fields that wrap on a phone don't count as misaligned.
 - Declared invariants in the spike: `formControlsShareHeight` (#34), `fieldRowControlsShareTops`
@@ -204,7 +209,7 @@ Reading the numbers:
 ## Recommendation
 
 1. **Adopt the checker and the `lc:` vocabulary.** It is cheap, needs no new math, explains its findings, and has already found a live bug. Run it in CI on `main` across 320/375/768/1280 × the 10 themes × en/uk/de/ar (RTL included), failing on *new* findings, with a baseline that links known ones to their issues.
-2. **Declare parts in RDF/HTML, not selectors.** The spike's `lc:selector` guesses which element is "the control". A component should say so on its minted node (`<focus>/~control lc:role lc:SingleLineControl`), so `rnd:` measures exactly those nodes.
+2. **Declare parts in RDF/HTML, not selectors.** The spike's `lc:selector` guessed which element is "the control". A component says so on its minted node (`<focus>/~control lc:role lc:SingleLineControl`), so `rnd:` measures exactly those nodes (done in #193).
 3. **Solve and check in WASM by default, TypeScript as the backup.** `initLayout()` (the node and web loaders) compiles the builds present, and `createLayoutSolver()` / `checkLayout()` take the first of WAT, Rust and TypeScript that instantiates. The solver stays off by default for pages, for the cross-container cases only, and writes tokens through the style layer's hooks and nothing else. With Dantzig's rule and a column index its build is milliseconds even at 500 fields. All three twins stay under the parity tests.
 4. **Don't adopt Yoga or Taffy** (200–900 KB that re-implement the browser), and don't route layout through a solver (GSS).
 
