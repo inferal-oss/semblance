@@ -1016,8 +1016,9 @@ export class Engine {
     }
     // Rules that read this predicate on any node (sem:watchesAnywhere): each of their foci.
     for (const r of this.anywhere.get(p) ?? []) for (const focus of this.anywhereFoci.get(r) ?? []) this.markFocus(r, focus)
-    // Rules that read the statements made with their focus (sem:watchesStatements): that focus.
-    for (const r of this.statementWatchers) if (this.isInstance(p, r)) this.markFocus(r, p)
+    // Rules that read the statements made with their focus (sem:watchesStatements): that focus,
+    // unless a higher stratum made the statement (which the rule, evaluated before it, never reads).
+    for (const r of this.statementWatchers) if (r.stratum >= this.current && this.isInstance(p, r)) this.markFocus(r, p)
     if (this.exact) this.propagateExact(q)
     if (sign > 0) this.index(q, sign)
   }
