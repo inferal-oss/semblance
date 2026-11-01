@@ -14,6 +14,7 @@ import type { GraphStore } from '../store/types.ts'
 import { accSize, accumulate, compareTerms, type Group, newGroup, result } from './aggregate.ts'
 import { compiler, keyString, prefixMap, sparqlTerm, TREE_MEMBER } from './compile.ts'
 import { Dependencies, type Lookup } from './deps.ts'
+import { indexRemoved, probeLookup } from './lookup.ts'
 import { parseQuery } from './sparql.ts'
 import { OrderedMultiset } from './ordered.ts'
 import type { FnView, MaintainedPlan, Part, Post, ViewCompiler, ViewPlan, ViewSource, WindowSource } from './plan.ts'
@@ -504,6 +505,7 @@ export class ViewRuntime {
       viewDelta.remove.push(...d.remove)
     }
     flush()
+    let withViews: { at: number; delta: Delta } | undefined
     for (const v of this.order) {
       if (v.suspended) continue
       if ((v.whileShown || v.def.query) && !this.demanded(v)) {
@@ -515,8 +517,11 @@ export class ViewRuntime {
         flush()
         continue
       }
-      // A view that reads other views' output sees what they wrote this tick.
-      const own = v.readsViews ? { add: [...changes.add, ...viewDelta.add], remove: [...changes.remove, ...viewDelta.remove] } : changes
+      // A view that reads other views' output sees what they wrote this tick (one change for all
+      // such views until another view writes: probes then share its removed triples' index).
+      if (v.readsViews && (!withViews || withViews.at !== viewDelta.add.length + viewDelta.remove.length))
+        withViews = { at: viewDelta.add.length + viewDelta.remove.length, delta: { add: [...changes.add, ...viewDelta.add], remove: [...changes.remove, ...viewDelta.remove] } }
+      const own = v.readsViews ? withViews!.delta : changes
       const w = this.watchdog
       const t0 = w ? w.clock() : 0
       const d = v.step(own, now)
@@ -984,37 +989,12 @@ export class ViewRuntime {
    * Triple lookups over a view's graphs with this tick's removed triples put back: the old and
    * the new state together, for dependency probes.
    */
+  private removedIndex = new WeakMap<readonly Quad[], Map<string, Quad[]>>()
+
   lookup(removed: readonly Quad[], readsViews: boolean): Lookup {
-    const graphs = this.datasetFor(readsViews)
-    const by = new Map<string, Quad[]>()
-    const index = (k: string, q: Quad) => {
-      let l = by.get(k)
-      if (!l) by.set(k, (l = []))
-      l.push(q)
-    }
-    for (const q of removed) {
-      index('s' + termKey(q.subject), q)
-      index('p' + q.predicate.value, q)
-      index('o' + termKey(q.object), q)
-    }
-    // Without `g`: the union default graph (a triple once). With it: quads of the named graphs
-    // (`g` one of them, or null: any), each with its graph.
-    return (s, p, o, g) => {
-      const seen = new Set<string>()
-      const out: Quad[] = []
-      const named = g !== undefined
-      const put = (q: Quad) => {
-        if (named && (q.graph.termType !== 'NamedNode' || (g && !q.graph.equals(g)))) return
-        const k = termKey(q.subject) + ' ' + q.predicate.value + ' ' + termKey(q.object) + (named ? ' ' + q.graph.value : '')
-        if (!seen.has(k)) seen.add(k), out.push(q)
-      }
-      for (const x of graphs) if (!named || (x.termType === 'NamedNode' && (!g || x.equals(g)))) for (const q of this.store.match(s as never, p as never, o as never, x as never)) put(q)
-      if (removed.length) {
-        const pool = s ? by.get('s' + termKey(s)) : o ? by.get('o' + termKey(o)) : p ? by.get('p' + p.value) : removed
-        for (const q of pool ?? []) if ((!s || q.subject.equals(s)) && (!p || q.predicate.equals(p)) && (!o || q.object.equals(o))) put(q)
-      }
-      return out
-    }
+    let removedBy = this.removedIndex.get(removed)
+    if (!removedBy && removed.length) this.removedIndex.set(removed, (removedBy = indexRemoved(removed)))
+    return probeLookup({ store: this.store, graphs: this.datasetFor(readsViews), removed, removedBy, graphMode: 'named' })
   }
 
   /** A stream's retention (tree:view/ldes:retentionPolicy/ldes:amount), if it has one. */
@@ -1261,11 +1241,11 @@ class PartState {
     const p = this.part
     const touched = new Map<string, (Term | undefined)[]>()
     if (p.deps) {
-      const lookup = this.rt.lookup(changes.remove, this.view.readsViews)
+      let lookup: Lookup | undefined
       const candidates = new Map<string, (Term | undefined)[]>()
       for (const q of [...changes.remove, ...changes.add]) {
         for (const pat of p.deps.route(q)) {
-          const keys = p.deps.probe(pat, q, lookup)
+          const keys = p.deps.probe(pat, q, (lookup ??= this.rt.lookup(changes.remove, this.view.readsViews)))
           if (keys === 'global') return 'all'
           for (const k of keys) candidates.set(keyString(k), k)
         }

@@ -50,6 +50,24 @@ export interface Pat {
   scope: Scope
 }
 
+/** A step of a walk: through a pattern, or an alias (out: from ?to to its sources; in: the reverse), from a bound variable. */
+type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
+
+/** A walk planned for a pattern (or a derived row's scope) and the variables bound at its start. */
+interface WalkPlan {
+  id: string
+  /** The start's variables the walk reads (the rest only ride along). */
+  reads: string[]
+  /** Every key bound at the start. */
+  bound: boolean
+  /** No key reachable: a change that joins anything around it touches every partition. */
+  unreachable: boolean
+  needed: Edge[]
+  reached: Set<string>
+  /** The patterns that prune rows, and their variables a row's binding of does not constrain them. */
+  checks: { x: Pat; blocked: string[] }[]
+}
+
 /** BIND(?from AS ?to), BIND(COALESCE(?a, …) AS ?to), BIND(IF(…, ?a, ?b) AS ?to): ?to is one of ?from. */
 interface Alias {
   to: string
@@ -124,7 +142,8 @@ export class Dependencies {
   /** Patterns a changed triple matches (by their constant positions). */
   route(q: Quad): Pat[] {
     const out: Pat[] = []
-    for (const p of [...(this.byPredicate.get(q.predicate.value) ?? []), ...this.anyPredicate]) {
+    const named = this.byPredicate.get(q.predicate.value)
+    for (const p of named ? (this.anyPredicate.length ? [...named, ...this.anyPredicate] : named) : this.anyPredicate) {
       if ('t' in p.s && !same(p.s.t, q.subject)) {
         if (!('path' in p.p)) continue
       }
@@ -296,11 +315,106 @@ export class Dependencies {
 
   /** From bindings in a scope (a pattern bound to a triple, or a derived row), join through the patterns around them until the keys are bound. */
   private walk(scope: Scope, p: Pat | undefined, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
+    const plan = this.plan(scope, p, start)
+    // The same walk again (another change binding the same variables the walk reads, as a value's
+    // removal and its replacement do) is answered once per lookup (while the store holds still).
+    let memo = this.walks.get(lookup)
+    if (!memo) this.walks.set(lookup, (memo = new Map()))
+    let key = plan.id
+    for (const v of plan.reads) {
+      const t = start.get(v)
+      key += '\u0001' + (t ? termKey(t) : '')
+    }
+    let out = memo.get(key)
+    if (!out) memo.set(key, (out = this.walkPlanned(plan, start, lookup)))
+    return out
+  }
+
+  /** Walks answered per lookup, by plan and the values of the variables it reads. */
+  private walks = new WeakMap<Lookup, Map<string, Map<string, Term>[] | 'global'>>()
+
+  private walkPlanned(plan: WalkPlan, start: Map<string, Term>, lookup: Lookup): Map<string, Term>[] | 'global' {
+    // Bound already: the key is the change's own (with semiJoin, if the patterns around it hold).
+    if (plan.bound) return !this.semiJoin || this.holds(plan, start, lookup) ? [start] : []
+    if (!this.holds(plan, start, lookup)) return []
+    let rows = [start]
+    for (const e of plan.needed) {
+      const next: Map<string, Term>[] = []
+      for (const r of rows) {
+        if (e.pat) {
+          for (const x of this.extend(e.pat, r, lookup)) next.push(x)
+        } else {
+          const a = e.alias!
+          if (e.dir === 'out') {
+            const t = r.get(a.to)
+            if (!t) continue
+            for (const w of a.from) {
+              const had = r.get(w)
+              if (had && !had.equals(t)) continue
+              next.push(new Map(r).set(w, t))
+            }
+          } else {
+            const t = r.get(a.from[0]!)
+            if (t && !r.has(a.to)) next.push(new Map(r).set(a.to, t))
+            else next.push(r)
+          }
+        }
+        if (next.length > 50_000) return 'global'
+      }
+      rows = []
+      for (const r of next.length > 1 ? dedupe(next) : next) if (this.holds(plan, r, lookup)) rows.push(r)
+      if (!rows.length) return []
+    }
+    if (plan.unreachable) return rows.length ? 'global' : []
+    return rows.filter((r) => this.keys.every((k) => r.has(k) || !plan.reached.has(k)))
+  }
+
+  /**
+   * Patterns that hold in every solution p takes part in (its scope and those around it; not
+   * paths) prune the rows once they bind all of a pattern's variables: a semi-join, so a probe
+   * reaches the partitions that hold the change, not every one its first edge leads to.
+   */
+  private holds(plan: WalkPlan, r: Map<string, Term>, lookup: Lookup): boolean {
+    next: for (const { x, blocked } of plan.checks) {
+      // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
+      for (const v of blocked) if (r.has(v)) continue next
+      const s = 't' in x.s ? x.s.t : r.get(x.s.v)
+      const pp = 't' in (x.p as Pos) ? (x.p as { t: Term }).t : r.get((x.p as { v: string }).v)
+      const o = 't' in x.o ? x.o.t : r.get(x.o.v)
+      // No triple has a literal subject (and the store would refuse to look).
+      if (s && s.termType === 'Literal') return false
+      if (!s || !pp || !o) {
+        // With a part unbound, it still needs some triple that agrees with what is bound (a
+        // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
+        if (!this.semiJoin) continue
+        // (Only through an index of a bound node: a predicate alone would read all of it.)
+        if ((!s && !o) || !patVars(x).some((v) => r.has(v))) continue
+        if (pp && pp.termType !== 'NamedNode') continue
+      }
+      const found = x.g ? lookup(s ?? null, pp ?? null, o ?? null, ('t' in x.g ? x.g.t : r.get(x.g.v)) ?? null) : lookup(s ?? null, pp ?? null, o ?? null)
+      if (!found.length) return false
+    }
+    return true
+  }
+
+  private plans = new Map<Pat | Scope, Map<string, WalkPlan>>()
+  private planCount = 0
+
+  /**
+   * How a walk goes from the variables `start` binds: breadth-first over the variables toward each
+   * key, through the patterns and aliases around (planned once per pattern and bound variables).
+   */
+  private plan(scope: Scope, p: Pat | undefined, start: Map<string, Term>): WalkPlan {
+    const owner = p ?? scope
+    let byBound = this.plans.get(owner)
+    if (!byBound) this.plans.set(owner, (byBound = new Map()))
+    const sig = [...start.keys()].sort().join(' ')
+    let plan = byBound.get(sig)
+    if (plan) return plan
     const bound = new Set(start.keys())
     // The patterns (and aliases) that occur with p in a solution: its scope and the scopes around it.
     const { around, aliases, byVar } = this.neighbours(scope, p)
     // Breadth-first over variables, from the bound ones to each key.
-    type Edge = { pat?: Pat; alias?: Alias; dir?: 'out' | 'in'; from: string }
     const via = new Map<string, Edge>()
     const queue = [...bound]
     const reached = new Set(bound)
@@ -320,14 +434,12 @@ export class Dependencies {
       if (reached.has(w)) return
       reached.add(w), via.set(w, edge), queue.push(w), level.set(w, at)
     }
-    const varsOf = patVars
     while (queue.length && !this.keys.every((k) => reached.has(k))) {
       const v = queue.shift()!
       for (const x of byVar.get(v) ?? []) {
-        const vs = varsOf(x)
         if (!leaves(v, x.scope)) continue
         // Path connectors need a bound end to walk from.
-        for (const w of vs) reach(w, { pat: x, from: v }, x.scope)
+        for (const w of patVars(x)) reach(w, { pat: x, from: v }, x.scope)
       }
       for (const a of aliases) {
         if (!leaves(v, a.scope)) continue
@@ -347,65 +459,20 @@ export class Dependencies {
       for (let w = k; via.has(w); w = via.get(w)!.from) chain.push(via.get(w)!)
       for (const e of chain.reverse()) if (!seen.has(e)) seen.add(e), needed.push(e)
     }
-    // Patterns that hold in every solution p takes part in (its scope and those around it; not
-    // paths) prune the rows once they bind all of a pattern's variables: a semi-join, so a probe
-    // reaches the partitions that hold the change, not every one its first edge leads to.
-    const checks = around
-    const holds = (r: Map<string, Term>) =>
-      checks.every((x) => {
-        // (Only with what may leave its scope for x's: a variable an inner group may leave unbound is no constraint.)
-        if (!varsOf(x).every((v) => !r.has(v) || leaves(v, x.scope))) return true
-        const val = (pos: Pos) => ('t' in pos ? pos.t : r.get(pos.v))
-        const s = val(x.s)
-        const pp = val(x.p as Pos)
-        const o = val(x.o)
-        // With a part unbound, it still needs some triple that agrees with what is bound (a
-        // semi-join): unless nothing of it is bound by the row, which would say nothing about the row.
-        // No triple has a literal subject (and the store would refuse to look).
-        if (s && s.termType === 'Literal') return false
-        if (!s || !pp || !o) {
-          if (!this.semiJoin) return true
-          // (Only through an index of a bound node: a predicate alone would read all of it.)
-          if (!varsOf(x).some((v) => r.has(v)) || (!s && !o)) return true
-          if (pp && pp.termType !== 'NamedNode') return true
-        }
-        if (!x.g) return lookup(s ?? null, pp ?? null, o ?? null).length > 0
-        return lookup(s ?? null, pp ?? null, o ?? null, val(x.g) ?? null).length > 0
-      })
-    // Bound already: the key is the change's own (with semiJoin, if the patterns around it hold).
-    if (this.keys.every((k) => bound.has(k))) return this.semiJoin ? [start].filter(holds) : [start]
-    let rows = [start].filter(holds)
-    const done = new Set<Pat | Alias>()
-    for (const e of needed) {
-      const x = (e.pat ?? e.alias)!
-      if (e.pat && done.has(x)) continue
-      done.add(x)
-      const next: Map<string, Term>[] = []
-      for (const r of rows) {
-        if (e.pat) next.push(...this.extend(e.pat, r, lookup))
-        else {
-          const a = e.alias!
-          if (e.dir === 'out') {
-            const t = r.get(a.to)
-            if (!t) continue
-            for (const w of a.from) {
-              const had = r.get(w)
-              if (had && !had.equals(t)) continue
-              next.push(new Map(r).set(w, t))
-            }
-          } else {
-            const t = r.get(a.from[0]!)
-            if (t && !r.has(a.to)) next.push(new Map(r).set(a.to, t))
-            else next.push(r)
-          }
-        }
-        if (next.length > 50_000) return 'global'
-      }
-      rows = dedupe(next).filter(holds)
-      if (!rows.length) return []
+    // A pattern joined once (a second edge through it adds nothing).
+    const done = new Set<Pat>()
+    const steps = needed.filter((e) => !e.pat || (!done.has(e.pat) && (done.add(e.pat), true)))
+    const checks = around.map((x) => ({ x, blocked: patVars(x).filter((v) => !leaves(v, x.scope)) }))
+    // The variables whose values the walk reads: the keys, and those of its steps and checks.
+    const reads = new Set(this.keys)
+    for (const e of steps) {
+      if (e.pat) for (const v of patVars(e.pat)) reads.add(v)
+      else for (const v of [e.alias!.to, ...e.alias!.from]) reads.add(v)
     }
-    if (unreachable) return rows.length ? 'global' : []
-    return rows.filter((r) => this.keys.every((k) => r.has(k) || !reached.has(k)))
+    for (const { x } of checks) for (const v of patVars(x)) reads.add(v)
+    plan = { id: String(this.planCount++), bound: this.keys.every((k) => bound.has(k)), unreachable, needed: steps, reached, checks, reads: [...reads].filter((v) => bound.has(v)).sort() }
+    byBound.set(sig, plan)
+    return plan
   }
 
   private neighbourhoods = new Map<Pat | Scope, { around: Pat[]; aliases: Alias[]; byVar: Map<string, Pat[]> }>()
@@ -433,20 +500,12 @@ export class Dependencies {
 
   /** Rows extended by one pattern, looked up with what the row binds. */
   private extend(x: Pat, r: Map<string, Term>, lookup: Lookup): Map<string, Term>[] {
-    const val = (pos: Pos) => ('t' in pos ? pos.t : r.get(pos.v))
-    const s = val(x.s)
-    const o = val(x.o)
+    const s = valueIn(r, x.s)
+    const o = valueIn(r, x.o)
     const out: Map<string, Term>[] = []
-    const set = (row: Map<string, Term>, pos: Pos, t: Term) => {
-      if ('t' in pos) return same(pos.t, t)
-      const had = row.get(pos.v)
-      if (had) return had.equals(t)
-      row.set(pos.v, t)
-      return true
-    }
     if (x.g) {
       // Inside GRAPH: a graph that is known, or each of the view's graphs the lookup finds.
-      const g = val(x.g)
+      const g = valueIn(r, x.g)
       if (!g && 'path' in x.p) return []
       if (g) lookup = inGraph(lookup, g)
     }
@@ -463,9 +522,9 @@ export class Dependencies {
       }
       return out
     }
-    const p = val(x.p)
+    const p = valueIn(r, x.p)
     if (!s && !o && !p) return []
-    for (const q of x.g ? lookup(s ?? null, (p as NamedNode) ?? null, o ?? null, val(x.g) ?? null) : lookup(s ?? null, (p as NamedNode) ?? null, o ?? null)) {
+    for (const q of x.g ? lookup(s ?? null, (p as NamedNode) ?? null, o ?? null, valueIn(r, x.g) ?? null) : lookup(s ?? null, (p as NamedNode) ?? null, o ?? null)) {
       const row = new Map(r)
       if ((!x.g || set(row, x.g, q.graph)) && set(row, x.s, q.subject) && set(row, x.p as Pos, q.predicate) && set(row, x.o, q.object)) out.push(row)
     }
@@ -634,16 +693,33 @@ function same(constant: Term, t: Term): boolean {
   return constant.termType === 'Literal' && t.termType === 'Literal' && NUMERIC.test(constant.datatype.value) && constant.datatype.equals(t.datatype) && Number(constant.value) === Number(t.value)
 }
 
+/** A position's term: its constant, or what the row binds its variable to. */
+function valueIn(r: Map<string, Term>, pos: Pos): Term | undefined {
+  return 't' in pos ? pos.t : r.get(pos.v)
+}
+
+/** Bind a position of a row to a term: whether it agrees (a constant, or a variable bound already). */
+function set(row: Map<string, Term>, pos: Pos, t: Term): boolean {
+  if ('t' in pos) return same(pos.t, t)
+  const had = row.get(pos.v)
+  if (had) return had.equals(t)
+  row.set(pos.v, t)
+  return true
+}
+
 /** A lookup confined to one named graph (paths inside GRAPH). */
 const inGraph = (lookup: Lookup, g: Term): Lookup => (s, p, o) => lookup(s, p, o, g)
 
 function dedupe(rows: Map<string, Term>[]): Map<string, Term>[] {
-  const seen = new Map<string, Map<string, Term>>()
+  const seen = new Set<string>()
+  const out: Map<string, Term>[] = []
   for (const r of rows) {
-    const k = [...r.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([a, t]) => a + '=' + termKey(t)).join(' ')
-    if (!seen.has(k)) seen.set(k, r)
+    const names = [...r.keys()].sort()
+    let k = ''
+    for (const a of names) k += a + '=' + termKey(r.get(a)!) + ' '
+    if (!seen.has(k)) seen.add(k), out.push(r)
   }
-  return [...seen.values()]
+  return out
 }
 
 /** Split a call's arguments at top-level commas. */
