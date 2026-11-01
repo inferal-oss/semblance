@@ -54,6 +54,7 @@ import { functions as sheetFunctions } from './sheet.ts'
 import { functions as connectorFunctions } from './connector.ts'
 import { functions as galleryFunctions } from './gallery.ts'
 import { functions as stallFunctions } from './stall.ts'
+import { diffFunctions } from './diff.ts'
 import { mint } from '../rdf.ts'
 import { tokenizeSparql } from '../sparql-tokens.ts'
 import { encodeForUri, isA, isTrue, labelOf, nodes, RDFS_LABEL, rdfList, str, text } from './util.ts'
@@ -878,6 +879,7 @@ export const functions: Record<string, FnRule> = {
   ...olFunctions,
   ...layoutFunctions,
   ...typeFunctions,
+  ...diffFunctions,
   ...actionsFunctions,
   ...inputsFunctions,
   ...feedbackFunctions,
