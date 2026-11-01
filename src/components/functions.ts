@@ -4,7 +4,7 @@
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
-import { BEH, C, DND, H, L10N, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
+import { BEH, C, DND, H, L10N, LC, MOD, NS, ORD, RDF_TYPE, SEM, STY, XSD_INTEGER } from '../ns.ts'
 import { chartFunctions } from './charts.ts'
 import { ganttFunctions } from './gantt.ts'
 import { C as VIEW_C } from '../view/functions.ts'
@@ -20,6 +20,7 @@ import { functions as outlineFunctions } from './outline.ts'
 import { validationFunctions } from '../layers/validation.ts'
 import { keyboardFunctions } from '../layers/keyboard.ts'
 import { statusFunctions } from '../layers/status.ts'
+import { constraintsFunctions } from '../layers/constraints.ts'
 import { positionFunctions } from '../layers/position.ts'
 import { l10nFunctions } from '../layers/l10n.ts'
 import { announceFunctions } from '../layers/announce.ts'
@@ -109,15 +110,19 @@ const textFieldScreen: FnRule = (ctx, focus) => {
   const error = text(ctx, focus, C.error)
   const o = ctx.out(focus)
   const inputId = mint(focus.value, 'input')
-  const parts = [
-    ...(label === undefined ? [] : [o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])]),
-    o.el('input', 'Input', {
-      type: str(ctx.object(focus, NS.c + 'inputType')) ?? 'text',
-      id: inputId,
-      value: str(ctx.object(focus, C.value)),
-      placeholder: text(ctx, focus, C.placeholder),
-    }),
-  ]
+  const input = o.el('input', 'Input', {
+    type: str(ctx.object(focus, NS.c + 'inputType')) ?? 'text',
+    id: inputId,
+    value: str(ctx.object(focus, C.value)),
+    placeholder: text(ctx, focus, C.placeholder),
+  })
+  o.t(input, LC.role, ctx.nn(LC.SingleLineControl))
+  const parts = [input]
+  if (label !== undefined) {
+    const el = o.el('label', 'Label', { for: inputId }, [o.text('label-text', label)])
+    o.t(el, LC.role, ctx.nn(LC.FieldLabel))
+    parts.unshift(el)
+  }
   if (help !== undefined) parts.push(o.el('help', 'Div', {}, [o.text('help-text', help)]))
   if (error !== undefined) parts.push(o.el('error', 'Div', {}, [o.text('error-text', error)]))
   o.renders(o.el('root', 'Div', {}, parts))
@@ -371,6 +376,8 @@ const segmented: FnRule = (ctx, focus) => {
   }
   // Over a place the address's path carries, a form whose buttons submit to the address each sets.
   const navigates = navigatesBy(ctx, target, property)
+  // A nav list's options are its items (lc:NavItem).
+  const item = isA(ctx, focus, NS.c + 'NavList') ? ctx.nn(LC.NavItem) : undefined
   const buttons = options(ctx, focus, property).map((opt) => {
     const key = encodeForUri(opt.value)
     const symbol = str(ctx.object(opt, SEM.symbol))
@@ -381,6 +388,7 @@ const segmented: FnRule = (ctx, focus) => {
     const b = o.el('opt-' + key, 'Button', { type: navigates ? 'submit' : 'button' }, parts)
     o.attr(b, 'aria-pressed', String(opt.value === current))
     o.t(b, C.selects, opt)
+    if (item) o.t(b, LC.role, item)
     return b
   })
   const root = o.el('root', navigates ? 'Form' : 'Div', {}, buttons)
@@ -619,10 +627,20 @@ const choice: FnRule = (ctx, focus) => {
     const key = encodeForUri(opt.value)
     return o.el('opt-' + key, 'Option', { value: opt.value, selected: opt.value === current ? '' : undefined }, [o.text('opt-' + key + '-text', label(ctx, opt))])
   }))
-  o.renders(o.el('root', 'Label', { for: selectId }, [o.el('caption', 'Span', {}, [o.text('caption-text', caption)]), select]))
+  const captionEl = o.el('caption', 'Span', {}, [o.text('caption-text', caption)])
+  const root = o.el('root', 'Label', { for: selectId }, [captionEl, select])
+  o.renders(root)
+  // Its parts: the select and the caption above it; placed inline, the pill around both is its
+  // control where it is wide, and on a compact screen the caption goes above the select again.
+  const inline = ctx.match(focus, NS.c + 'labelPlacement', ctx.nn(NS.c + 'LabelInline')).length > 0
+  o.t(select, LC.role, ctx.nn(LC.SingleLineControl)).t(captionEl, LC.role, ctx.nn(LC.FieldLabel))
+  if (inline) {
+    o.t(root, LC.role, ctx.nn(LC.SingleLineControl)).t(root, LC.atWidth, ctx.nn(NS.sty + 'RegularWidth'))
+    o.t(select, LC.atWidth, ctx.nn(NS.sty + 'CompactWidth')).t(captionEl, LC.atWidth, ctx.nn(NS.sty + 'CompactWidth'))
+  }
   return o.quads
 }
-choice.watches = (ctx, focus) => new Set([...watchControlled(ctx, focus), C.disabled])
+choice.watches = (ctx, focus) => new Set([...watchControlled(ctx, focus), C.disabled, NS.c + 'labelPlacement'])
 
 const chips: FnRule = (ctx, focus) => {
   const target = ctx.object(focus, C.controls)
@@ -866,6 +884,7 @@ export const functions: Record<string, FnRule> = {
   ...validationFunctions,
   ...keyboardFunctions,
   ...statusFunctions,
+  ...constraintsFunctions,
   ...positionFunctions,
   ...l10nFunctions,
   ...announceFunctions,

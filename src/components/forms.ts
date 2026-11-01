@@ -3,7 +3,7 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { C, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
+import { C, LC, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { mint } from '../rdf.ts'
 import { RDFS_LABEL, named, rdfList, str, encodeForUri, picked } from './util.ts'
 
@@ -161,9 +161,12 @@ const field: FnRule = (ctx, focus) => {
     },
     kind === 'textarea' && lex !== '' ? [o.text('control-text', lex)] : options,
   )
+  if (textual || kind === 'choice') o.t(control, LC.role, ctx.nn(LC.SingleLineControl))
   if (problem !== undefined) o.attr(control, 'aria-invalid', 'true')
   if (helpId || errorId) o.attr(control, 'aria-describedby', [helpId, errorId].filter(Boolean).join(' '))
-  const parts = [o.el('label', 'Label', { for: controlId }, [o.text('label-text', label)]), control]
+  const labelEl = o.el('label', 'Label', { for: controlId }, [o.text('label-text', label)])
+  o.t(labelEl, LC.role, ctx.nn(LC.FieldLabel))
+  const parts = [labelEl, control]
   if (help !== undefined) parts.push(o.el('help', 'Div', { class: 'sem-help', id: helpId }, [o.text('help-text', help)]))
   if (problem !== undefined) {
     const error = o.el('error', 'Div', { id: errorId }, [o.text('error-text', problem)])

@@ -11,7 +11,7 @@ Box trees of real pages, measured in Chromium's headless shell by `scripts/layou
 | 375-before / 375-after | a050a46 / a5fc6b7 | gallery pages 443-1038px wide at 375px |
 | 57-main / 57-after | 879f31a (main) / main with PR #125 merged (re-recorded 2026-10-27, resuming the watchdog's suspended update) | #57: the checkout's code and phone fields not lining up |
 | 233-before | cbb976c (main) | #233: a card's header actions wider than the card at 320px |
-| today | 879f31a (main); the themes page re-recorded on 881439e with #195; the windows page and the dashboard recorded on cbb976c with #233 | main at 320px |
+| today | main with #193 (parts by lc:role): the 320px gallery pages, the shape form (four themes, 1280 and 375px, Arabic), the navigation page (German, Arabic); the windows page and the dashboard recorded on cbb976c with #233 | main, measured by the parts its components name |
 
 Re-record one with, for example:
 

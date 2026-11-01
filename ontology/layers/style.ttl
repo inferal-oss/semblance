@@ -170,15 +170,15 @@ sty:atWidth a owl:ObjectProperty ; rdfs:domain sty:StyleRule ; rdfs:range sty:Wi
     rdfs:comment "Limits a style rule to viewports of this width class (with several, of any of them)."@en .
 sty:media a owl:DatatypeProperty ;
     rdfs:comment "A CSS media condition: a width class's, or a sty:underMedia condition's."@en .
-sty:CompactWidth a sty:WidthClass ; rdfs:label "Compact"@en ;
+sty:CompactWidth a sty:WidthClass ; rdfs:label "Compact"@en ; sem:slug "compact-width" ;
     rdfs:comment "A phone held upright, or a narrow window: one column, chrome folded away."@en ;
     sty:media "(max-width: 640px)" .
-sty:RegularWidth a sty:WidthClass ; rdfs:label "Regular"@en ;
+sty:RegularWidth a sty:WidthClass ; rdfs:label "Regular"@en ; sem:slug "regular-width" ;
     rdfs:comment "Everything wider than compact: tablets, laptops, desktops."@en ;
     sty:media "(min-width: 641px)" .
 # Within regular: a tablet, or a laptop's narrow window - room for a row of navigation, not for
 # every setting beside it.
-sty:MediumWidth a sty:WidthClass ; rdfs:label "Medium"@en ;
+sty:MediumWidth a sty:WidthClass ; rdfs:label "Medium"@en ; sem:slug "medium-width" ;
     rdfs:comment "Between compact and a wide desktop window (641-1099px): tablets, narrow windows."@en ;
     sty:media "(min-width: 641px) and (max-width: 1099px)" .
 

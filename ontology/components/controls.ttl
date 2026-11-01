@@ -393,7 +393,7 @@ CONSTRUCT {
   ?root rdfhtml:attribute ?methodAttr . ?methodAttr a rdfhtml:Attribute ; rdfhtml:attributeName "method" ; rdfhtml:attributeValue "get" .
   ?root rdfhtml:attribute ?roleAttr . ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
   ?root rdfhtml:attribute ?labelAttr . ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
-  ?button a rdfhtml:Button ; rdfhtml:type ?buttonType ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt .
+  ?button a rdfhtml:Button ; rdfhtml:type ?buttonType ; rdfhtml:hasChild ?symbol, ?name ; c:selects ?opt ; lc:role ?item .
   ?button rdfhtml:attribute ?pressedAttr . ?pressedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-pressed" ; rdfhtml:attributeValue ?pressed .
   ?symbol a rdfhtml:Span ; rdfhtml:hasChild ?symbolText ; ord:immediatelyPrecedes ?name .
   ?symbolText a rdfhtml:Text ; rdfhtml:data ?symbolData .
@@ -404,6 +404,8 @@ CONSTRUCT {
 WHERE {
   $this a/rdfs:subClassOf* c:Segmented ; c:controls ?target ; c:property ?property .
   BIND($this AS ?self)
+  # A nav list's options are its items (lc:NavItem).
+  BIND(IF(EXISTS { $this a/rdfs:subClassOf* c:NavList }, lc:NavItem, ?none) AS ?item)
   OPTIONAL { $this l10n:label ?localLabel }
   OPTIONAL { ?ownLabel_uAt l10n:of $this ; l10n:label ?ownLabel_u }
   OPTIONAL { { $this l10n:label ?ownLabel_u } UNION { ?l10nAt_ownLabel_u l10n:of $this ; l10n:label ?ownLabel_u } } OPTIONAL { $this c:label ?ownLabel_u FILTER(isLiteral(?ownLabel_u) && lang(?ownLabel_u) = "") FILTER(NOT EXISTS { $this l10n:label ?l10nPick } && NOT EXISTS { ?l10nAt l10n:of $this ; l10n:label ?l10nPick }) }
@@ -942,6 +944,9 @@ CONSTRUCT {
   ?captionEl a rdfhtml:Span ; rdfhtml:hasChild ?captionText ; ord:immediatelyPrecedes ?select .
   ?captionText a rdfhtml:Text ; rdfhtml:data ?caption .
   ?select a rdfhtml:Select ; rdfhtml:id ?selectId ; rdfhtml:disabled ?disabled ; rdfhtml:hasChild ?option .
+  ?pill lc:role lc:SingleLineControl ; lc:atWidth sty:RegularWidth .
+  ?select lc:role lc:SingleLineControl ; lc:atWidth ?compact .
+  ?captionEl lc:role lc:FieldLabel ; lc:atWidth ?compact .
   ?option a rdfhtml:Option ; rdfhtml:value ?optValue ; rdfhtml:selected ?selected ; rdfhtml:hasChild ?optText .
   ?optText a rdfhtml:Text ; rdfhtml:data ?optLabel .
   ?before ord:immediatelyPrecedes ?after .
@@ -975,6 +980,11 @@ WHERE {
   BIND(IRI(CONCAT(STR($this), "/~select")) AS ?select)
   BIND(STR(?select) AS ?selectId)
   BIND(IF(EXISTS { $this c:disabled ?d FILTER(STR(?d) = "true") }, "", ?none) AS ?disabled)
+  # Its parts: the select and the caption above it; placed inline, the pill around both is its
+  # control where it is wide, and on a compact screen the caption goes above the select again.
+  BIND(EXISTS { $this c:labelPlacement c:LabelInline } AS ?inline)
+  BIND(IF(?inline, ?root, ?none) AS ?pill)
+  BIND(IF(?inline, sty:CompactWidth, ?none) AS ?compact)
   {
     {} UNION {
       { $this c:options/rdf:rest*/rdf:first ?opt FILTER(isIRI(?opt)) BIND($this AS ?self) }

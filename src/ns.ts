@@ -48,6 +48,7 @@ export const NS = {
   rs: 'http://www.w3.org/2001/sw/DataAccess/tests/result-set#',
   file: 'https://semblance.dev/ns/file#',
   ol: 'https://semblance.dev/ns/outline#',
+  lc: 'https://semblance.dev/ns/layout-constraints#',
 } as const
 
 /** Prepended to every SPARQL rule body. */
@@ -464,6 +465,17 @@ export const EXT = {
 /** The outlines layer (ontology/layers/outline.ttl). */
 export const OL = { label: NS.ol + 'label', defaultLabel: NS.ol + 'defaultLabel', shows: NS.ol + 'shows' } as const
 
+/** The layout constraints layer (ontology/layers/constraints.ttl): parts by role, on rendered nodes. */
+export const LC = {
+  Layer: NS.lc + 'Layer',
+  role: NS.lc + 'role',
+  atWidth: NS.lc + 'atWidth',
+  WithParts: NS.lc + 'WithParts',
+  SingleLineControl: NS.lc + 'SingleLineControl',
+  FieldLabel: NS.lc + 'FieldLabel',
+  NavItem: NS.lc + 'NavItem',
+} as const
+
 /** The rendered state (ontology/layers/rendered.ttl, src/rendered.ts). */
 export const RND = Object.fromEntries(
   [
@@ -492,4 +504,4 @@ export const DEP = {
 } as const
 
 /** The layers an app gets unless it names its own: what every page needs, none of the tools'. */
-export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer, FS.Layer]
+export const DEFAULT_LAYERS = [A11Y.Layer, STY.Layer, VAL.Layer, VAL.ShapesLayer, KEY.Layer, ST.Layer, ANN.Layer, SEM.TooltipLayer, FS.Layer, LC.Layer]

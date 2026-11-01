@@ -99,7 +99,8 @@ c:ShapeFieldRendering-sparql-screen a sem:Rule ;
     sem:construct """
 CONSTRUCT {
   ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?labelEl , ?control , ?help , ?error .
-  ?labelEl a rdfhtml:Label ; rdfhtml:for ?controlId ; rdfhtml:hasChild ?labelText ; ord:precedes ?control , ?help , ?error .
+  ?labelEl a rdfhtml:Label ; rdfhtml:for ?controlId ; rdfhtml:hasChild ?labelText ; ord:precedes ?control , ?help , ?error ; lc:role lc:FieldLabel .
+  ?control lc:role ?controlRole .
   ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
   ?control a ?element ; rdfhtml:id ?controlId ; rdfhtml:type ?type ; rdfhtml:value ?value ; rdfhtml:min ?min ; rdfhtml:max ?max ;
            rdfhtml:step ?step ; rdfhtml:rows ?rows ; rdfhtml:checked ?checked ; rdfhtml:hasChild ?areaText , ?option ;
@@ -164,6 +165,7 @@ WHERE {
     BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelEl)
     BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
     BIND(IF(?kind = "choice", rdfhtml:Select, IF(?kind = "textarea", rdfhtml:Textarea, rdfhtml:Input)) AS ?element)
+    BIND(IF(?kind IN ("text", "number", "date", "choice"), lc:SingleLineControl, ?none) AS ?controlRole)
     BIND(IF(?kind IN ("text", "number", "date"), ?kind, IF(?kind = "boolean", "checkbox", ?none)) AS ?type)
     BIND(IF(?kind IN ("text", "number", "date") && ?lex != "", ?lex, ?none) AS ?value)
     BIND(IF(?kind = "number" && BOUND(?minInclusive), STR(?minInclusive), ?none) AS ?min)
