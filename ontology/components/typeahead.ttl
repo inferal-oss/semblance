@@ -193,7 +193,7 @@ c:CreatePhrase a c:Phrase ; rdfs:label "Create “{}”"@en , "Створити 
 c:AlreadyAdded a c:Phrase ; rdfs:label "“{}” is already added"@en , "«{}» уже додано"@uk , "„{}“ ist schon hinzugefügt"@de , "«{}» مضاف بالفعل"@ar .
 
 # --- texts: labels in the viewer's language, and search keys ------------------------------------------
-# A function layer, like c:ChoiceTexts: before anything renders, every option and every current
+# A layer, like c:ChoiceTexts: before anything renders, every option and every current
 # value gets a node <typeahead>/~term-<term> with its label in the viewer's language (or prefixed
 # name, c:optionNames), its search and match keys, a detail if it has one, and (an option) its
 # rank; the caption and the phrases get theirs too. Two rules: the options' texts, which hear the
@@ -201,35 +201,224 @@ c:AlreadyAdded a c:Phrase ; rdfs:label "“{}” is already added"@en , "«{}» 
 # a new instance), and the values' texts, which do (chosen, c:chosen). So a pick over options a node
 # lists rewrites two text nodes, not all of them. The option list and the pills read what they
 # derive (sem:readsMinted), so they follow the values without hearing typing.
+# Search keys are folded one character at a time (typeahead.ts fold(): its base letter lower-cased
+# when that is one character, else the character lower-cased when that is one, else the character),
+# so a match is at the same place in the label: in SPARQL, sx:sortKey of each character (sx:chars),
+# joined in order (GROUP_CONCAT over an ordered sub-select).
 
 c:TypeaheadTexts a sem:Rendering ;
     sem:targets c:Typeahead ;
     sem:requires c:controls ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:follows c:controls ;
-    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed, lower-cased); the labels themselves are picked from the viewer's languages in the graph." ;
-    sem:needsExtension sx:Locale .
+    sem:follows c:controls .
 c:TypeaheadTexts-fn a sem:Rule ; sem:implements c:TypeaheadTexts ; sem:function "typeahead:texts" .
+c:TypeaheadTexts-sparql a sem:Rule ;
+    sem:implements c:TypeaheadTexts ;
+    sem:needsExtension sx:Locale , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?node c:textOf $this ; c:textFor ?term ; l10n:label ?label ; c:searchKey ?searchKey ; c:matchKey ?matchKey ; c:detail ?detail ;
+        c:offered true ; c:rank ?rank .
+  ?captionNode l10n:label ?caption .
+  ?phraseNode l10n:label ?words .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Typeahead ; c:controls ?controls .
+  {
+    # The caption: its own label, else its property's.
+    # Its own c:label in the viewer's language (as l10n:Labels picks it: that runs in this stratum too).
+    OPTIONAL {
+      $this c:label ?pick . FILTER(isLiteral(?pick))
+      ?viewer l10n:prefers ?pref . ?pref l10n:code ?code ; sem:order ?rank .
+      BIND(LCASE(LANG(?pick)) AS ?tag)
+      FILTER(?tag = ?code || STRSTARTS(?tag, CONCAT(?code, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?better . ?better l10n:code ?code2 ; sem:order ?rank2 .
+        $this c:label ?other . FILTER(isLiteral(?other))
+        BIND(LCASE(LANG(?other)) AS ?tag2)
+        FILTER(?tag2 = ?code2 || STRSTARTS(?tag2, CONCAT(?code2, "-")))
+        FILTER(?rank2 < ?rank || (?rank2 = ?rank && ?tag2 = ?code2 && ?tag != ?code))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?pick)) $this c:label ?plain FILTER(isLiteral(?plain) && LANG(?plain) = "") }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain)) $this c:label ?en FILTER(LCASE(LANG(?en)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en)) $this c:label ?enx FILTER(STRSTARTS(LCASE(LANG(?enx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx)) $this c:label ?any FILTER(isLiteral(?any)) }
+    OPTIONAL { FILTER(!BOUND(?pick) && !BOUND(?plain) && !BOUND(?en) && !BOUND(?enx) && !BOUND(?any)) $this c:property ?captionProperty .
+      OPTIONAL { ?captionProperty l10n:label ?propertyLabelC1 }
+      OPTIONAL { FILTER(!BOUND(?propertyLabelC1)) ?propertyLabelC2At l10n:of ?captionProperty ; l10n:label ?propertyLabelC2 }
+      OPTIONAL { FILTER(!BOUND(?propertyLabelC1) && !BOUND(?propertyLabelC2)) ?captionProperty c:label ?propertyLabelC3 FILTER(isLiteral(?propertyLabelC3)) }
+      OPTIONAL { FILTER(!BOUND(?propertyLabelC1) && !BOUND(?propertyLabelC2) && !BOUND(?propertyLabelC3)) ?propertyLabelR1At l10n:of ?captionProperty ; l10n:name ?propertyLabelR1 }
+      OPTIONAL { FILTER(!BOUND(?propertyLabelC1) && !BOUND(?propertyLabelC2) && !BOUND(?propertyLabelC3) && !BOUND(?propertyLabelR1)) ?captionProperty rdfs:label ?propertyLabelR2 FILTER(isLiteral(?propertyLabelR2)) }
+      BIND(COALESCE(STR(?propertyLabelC1), STR(?propertyLabelC2), STR(?propertyLabelC3), STR(?propertyLabelR1), STR(?propertyLabelR2), REPLACE(STR(?captionProperty), "^.*[#/]", "")) AS ?propertyLabel)
+    }
+    BIND(COALESCE(STR(?pick), STR(?plain), STR(?en), STR(?enx), STR(?any), IF(BOUND(?captionProperty), ?propertyLabel, ?none)) AS ?caption)
+    BIND(IF(BOUND(?caption), IRI(CONCAT(STR($this), "/~l10n-caption")), ?none) AS ?captionNode)
+  } UNION {
+    # The phrases.
+    VALUES (?phrase ?phraseLocal) { (c:NoMatches "no-matches") (c:CreatePhrase "create") (c:AlreadyAdded "already-added") }
+    OPTIONAL { ?phraseAt l10n:of ?phrase ; l10n:name ?phraseTwin }
+    OPTIONAL { FILTER(!BOUND(?phraseTwin)) ?phrase rdfs:label ?phraseOnly FILTER(isLiteral(?phraseOnly)) }
+    BIND(STR(COALESCE(?phraseTwin, ?phraseOnly)) AS ?words)
+    BIND(IF(BOUND(?words), IRI(CONCAT(STR($this), "/~l10n-", ?phraseLocal)), ?none) AS ?phraseNode)
+  } UNION {
+    # Each option (as c:TypeaheadOptions finds them: the least position for one from two sources), and its rank.
+    { SELECT ?self ?term (MIN(?position) AS ?n) WHERE {
+        $this a/rdfs:subClassOf* c:Typeahead .
+        BIND($this AS ?self)
+        {
+          $this c:options ?head . ?head rdf:rest* ?cell . ?cell rdf:first ?term .
+          { SELECT ?self ?cell (COUNT(?mid) AS ?position) WHERE {
+              $this c:options ?head2 . ?head2 rdf:rest* ?mid . ?mid rdf:rest* ?cell .
+              BIND($this AS ?self)
+            } GROUP BY ?self ?cell }
+        } UNION {
+          FILTER NOT EXISTS { $this c:options ?explicit }
+          { $this c:optionClass ?class } UNION { FILTER NOT EXISTS { $this c:optionClass ?declared } FILTER NOT EXISTS { $this c:optionsFrom ?lister } $this c:property/rdfs:range ?class }
+          ?term a ?class FILTER(isIRI(?term))
+          OPTIONAL { ?term sem:order ?order }
+          BIND(COALESCE(xsd:integer(ROUND(xsd:decimal(?order))), 0) AS ?position)
+        } UNION {
+          FILTER NOT EXISTS { $this c:options ?explicit }
+          $this c:optionsInUse ?inUse FILTER(STR(?inUse) = "true")
+          $this c:property ?used . ?anyone ?used ?term .
+          BIND(0 AS ?position)
+        } UNION {
+          FILTER NOT EXISTS { $this c:options ?explicit }
+          $this c:optionsFrom ?source . ?source c:lists ?term .
+          BIND(0 AS ?position)
+        }
+      } GROUP BY ?self ?term }
+    FILTER(?self = $this)
+  # What it is called: a literal is its own text; with c:PrefixedNames, its prefixed name (the least
+  # prefix declared for its namespace), with its label as a detail it is also found by when the label
+  # says more than the name; else its label in the viewer's language.
+  BIND(EXISTS { $this c:optionNames c:PrefixedNames } AS ?prefixed)
+  BIND(REPLACE(STR(?term), "^.*[#/]", "") AS ?local)
+  OPTIONAL { ?term l10n:label ?saidC1 }
+  OPTIONAL { FILTER(!BOUND(?saidC1)) ?saidC2At l10n:of ?term ; l10n:label ?saidC2 }
+  OPTIONAL { FILTER(!BOUND(?saidC1) && !BOUND(?saidC2)) ?term c:label ?saidC3 FILTER(isLiteral(?saidC3)) }
+  OPTIONAL { FILTER(!BOUND(?saidC1) && !BOUND(?saidC2) && !BOUND(?saidC3)) ?saidR1At l10n:of ?term ; l10n:name ?saidR1 }
+  OPTIONAL { FILTER(!BOUND(?saidC1) && !BOUND(?saidC2) && !BOUND(?saidC3) && !BOUND(?saidR1)) ?term rdfs:label ?saidR2 FILTER(isLiteral(?saidR2)) }
+  BIND(COALESCE(STR(?saidC1), STR(?saidC2), STR(?saidC3), STR(?saidR1), STR(?saidR2)) AS ?said)
+  BIND(IF(isIRI(?term) && ?prefixed, REPLACE(STR(?term), "[^#/]*$", ""), ?none) AS ?ns)
+  LATERAL { OPTIONAL { SELECT ?ns (MIN(?prefix0) AS ?prefix) WHERE { ?declared sh:prefix ?prefix0 ; sh:namespace ?ns0 FILTER(STR(?ns0) = ?ns) } GROUP BY ?ns } }
+  BIND(IF(BOUND(?ns), IF(BOUND(?prefix) && REGEX(?local, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?prefix), ":", ?local), CONCAT("<", STR(?term), ">")), ?none) AS ?name)
+  BIND(BOUND(?name) && !STRSTARTS(?name, "<") AS ?named)
+  LATERAL { OPTIONAL { SELECT ?said (GROUP_CONCAT(?saidKeyPart; separator="") AS ?saidKey) WHERE {
+    { SELECT ?said ?saidKeyPart WHERE { (?said) sx:chars (?saidKeyCh ?saidKeyAt)
+        BIND(sx:sortKey(?saidKeyCh, "en") AS ?saidKeyBase) BIND(LCASE(?saidKeyCh) AS ?saidKeyLower)
+        BIND(IF(STRLEN(?saidKeyBase) = 1, ?saidKeyBase, IF(STRLEN(?saidKeyLower) = 1, ?saidKeyLower, ?saidKeyCh)) AS ?saidKeyPart) } ORDER BY ?saidKeyAt }
+  } GROUP BY ?said } }
+  LATERAL { OPTIONAL { SELECT ?name (GROUP_CONCAT(?nameKeyPart; separator="") AS ?nameKey) WHERE {
+    { SELECT ?name ?nameKeyPart WHERE { (?name) sx:chars (?nameKeyCh ?nameKeyAt)
+        BIND(sx:sortKey(?nameKeyCh, "en") AS ?nameKeyBase) BIND(LCASE(?nameKeyCh) AS ?nameKeyLower)
+        BIND(IF(STRLEN(?nameKeyBase) = 1, ?nameKeyBase, IF(STRLEN(?nameKeyLower) = 1, ?nameKeyLower, ?nameKeyCh)) AS ?nameKeyPart) } ORDER BY ?nameKeyAt }
+  } GROUP BY ?name } }
+  LATERAL { OPTIONAL { SELECT ?local (GROUP_CONCAT(?localKeyPart; separator="") AS ?localKey) WHERE {
+    { SELECT ?local ?localKeyPart WHERE { (?local) sx:chars (?localKeyCh ?localKeyAt)
+        BIND(sx:sortKey(?localKeyCh, "en") AS ?localKeyBase) BIND(LCASE(?localKeyCh) AS ?localKeyLower)
+        BIND(IF(STRLEN(?localKeyBase) = 1, ?localKeyBase, IF(STRLEN(?localKeyLower) = 1, ?localKeyLower, ?localKeyCh)) AS ?localKeyPart) } ORDER BY ?localKeyAt }
+  } GROUP BY ?local } }
+  BIND(IF(?named && BOUND(?said) && ?saidKey != COALESCE(?nameKey, "") && ?saidKey != COALESCE(?localKey, ""), ?said, ?none) AS ?detail)
+  BIND(IF(isLiteral(?term), STR(?term), IF(?named, ?name, COALESCE(?said, ?local))) AS ?label)
+  LATERAL { OPTIONAL { SELECT ?label (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0) WHERE {
+    { SELECT ?label ?searchKey0Part WHERE { (?label) sx:chars (?searchKey0Ch ?searchKey0At)
+        BIND(sx:sortKey(?searchKey0Ch, "en") AS ?searchKey0Base) BIND(LCASE(?searchKey0Ch) AS ?searchKey0Lower)
+        BIND(IF(STRLEN(?searchKey0Base) = 1, ?searchKey0Base, IF(STRLEN(?searchKey0Lower) = 1, ?searchKey0Lower, ?searchKey0Ch)) AS ?searchKey0Part) } ORDER BY ?searchKey0At }
+  } GROUP BY ?label } }
+  BIND(COALESCE(?searchKey0, "") AS ?searchKey)
+  BIND(IF(BOUND(?detail), CONCAT(?searchKey, "\\n", COALESCE(?saidKey, "")), ?searchKey) AS ?matchKey)
+  BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?term)))) AS ?node)
+    BIND(xsd:integer(IF(?n < 0, 0, IF(?n > 999999, 999999, ?n))) AS ?clamped)
+    BIND(CONCAT(SUBSTR("000000", STRLEN(STR(?clamped)) + 1), STR(?clamped), " ", ?searchKey) AS ?rank)
+  }
+}""" .
 
 c:TypeaheadValueTexts a sem:Rendering ;
     sem:targets c:Typeahead ;
     sem:requires c:controls ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:follows c:controls ;
-    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the values' labels as c:TypeaheadTexts folds the options' (NFD, combining marks removed, lower-cased)." ;
-    sem:needsExtension sx:Locale .
+    sem:follows c:controls .
 c:TypeaheadValueTexts-fn a sem:Rule ; sem:implements c:TypeaheadValueTexts ; sem:function "typeahead:values" .
+c:TypeaheadValueTexts-sparql a sem:Rule ;
+    sem:implements c:TypeaheadValueTexts ;
+    sem:needsExtension sx:Locale , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?node c:textOf $this ; c:textFor ?term ; l10n:label ?label ; c:searchKey ?searchKey ; c:matchKey ?matchKey ; c:detail ?detail ;
+        c:chosen true .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Typeahead ; c:controls ?controls ; c:property ?property .
+  FILTER(isIRI(?controls))
+  ?controls ?property ?term .
+  # What it is called: a literal is its own text; with c:PrefixedNames, its prefixed name (the least
+  # prefix declared for its namespace), with its label as a detail it is also found by when the label
+  # says more than the name; else its label in the viewer's language.
+  BIND(EXISTS { $this c:optionNames c:PrefixedNames } AS ?prefixed)
+  BIND(REPLACE(STR(?term), "^.*[#/]", "") AS ?local)
+  OPTIONAL { ?term l10n:label ?saidC1 }
+  OPTIONAL { FILTER(!BOUND(?saidC1)) ?saidC2At l10n:of ?term ; l10n:label ?saidC2 }
+  OPTIONAL { FILTER(!BOUND(?saidC1) && !BOUND(?saidC2)) ?term c:label ?saidC3 FILTER(isLiteral(?saidC3)) }
+  OPTIONAL { FILTER(!BOUND(?saidC1) && !BOUND(?saidC2) && !BOUND(?saidC3)) ?saidR1At l10n:of ?term ; l10n:name ?saidR1 }
+  OPTIONAL { FILTER(!BOUND(?saidC1) && !BOUND(?saidC2) && !BOUND(?saidC3) && !BOUND(?saidR1)) ?term rdfs:label ?saidR2 FILTER(isLiteral(?saidR2)) }
+  BIND(COALESCE(STR(?saidC1), STR(?saidC2), STR(?saidC3), STR(?saidR1), STR(?saidR2)) AS ?said)
+  BIND(IF(isIRI(?term) && ?prefixed, REPLACE(STR(?term), "[^#/]*$", ""), ?none) AS ?ns)
+  LATERAL { OPTIONAL { SELECT ?ns (MIN(?prefix0) AS ?prefix) WHERE { ?declared sh:prefix ?prefix0 ; sh:namespace ?ns0 FILTER(STR(?ns0) = ?ns) } GROUP BY ?ns } }
+  BIND(IF(BOUND(?ns), IF(BOUND(?prefix) && REGEX(?local, "^[A-Za-z_][A-Za-z0-9_-]*$"), CONCAT(STR(?prefix), ":", ?local), CONCAT("<", STR(?term), ">")), ?none) AS ?name)
+  BIND(BOUND(?name) && !STRSTARTS(?name, "<") AS ?named)
+  LATERAL { OPTIONAL { SELECT ?said (GROUP_CONCAT(?saidKeyPart; separator="") AS ?saidKey) WHERE {
+    { SELECT ?said ?saidKeyPart WHERE { (?said) sx:chars (?saidKeyCh ?saidKeyAt)
+        BIND(sx:sortKey(?saidKeyCh, "en") AS ?saidKeyBase) BIND(LCASE(?saidKeyCh) AS ?saidKeyLower)
+        BIND(IF(STRLEN(?saidKeyBase) = 1, ?saidKeyBase, IF(STRLEN(?saidKeyLower) = 1, ?saidKeyLower, ?saidKeyCh)) AS ?saidKeyPart) } ORDER BY ?saidKeyAt }
+  } GROUP BY ?said } }
+  LATERAL { OPTIONAL { SELECT ?name (GROUP_CONCAT(?nameKeyPart; separator="") AS ?nameKey) WHERE {
+    { SELECT ?name ?nameKeyPart WHERE { (?name) sx:chars (?nameKeyCh ?nameKeyAt)
+        BIND(sx:sortKey(?nameKeyCh, "en") AS ?nameKeyBase) BIND(LCASE(?nameKeyCh) AS ?nameKeyLower)
+        BIND(IF(STRLEN(?nameKeyBase) = 1, ?nameKeyBase, IF(STRLEN(?nameKeyLower) = 1, ?nameKeyLower, ?nameKeyCh)) AS ?nameKeyPart) } ORDER BY ?nameKeyAt }
+  } GROUP BY ?name } }
+  LATERAL { OPTIONAL { SELECT ?local (GROUP_CONCAT(?localKeyPart; separator="") AS ?localKey) WHERE {
+    { SELECT ?local ?localKeyPart WHERE { (?local) sx:chars (?localKeyCh ?localKeyAt)
+        BIND(sx:sortKey(?localKeyCh, "en") AS ?localKeyBase) BIND(LCASE(?localKeyCh) AS ?localKeyLower)
+        BIND(IF(STRLEN(?localKeyBase) = 1, ?localKeyBase, IF(STRLEN(?localKeyLower) = 1, ?localKeyLower, ?localKeyCh)) AS ?localKeyPart) } ORDER BY ?localKeyAt }
+  } GROUP BY ?local } }
+  BIND(IF(?named && BOUND(?said) && ?saidKey != COALESCE(?nameKey, "") && ?saidKey != COALESCE(?localKey, ""), ?said, ?none) AS ?detail)
+  BIND(IF(isLiteral(?term), STR(?term), IF(?named, ?name, COALESCE(?said, ?local))) AS ?label)
+  LATERAL { OPTIONAL { SELECT ?label (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0) WHERE {
+    { SELECT ?label ?searchKey0Part WHERE { (?label) sx:chars (?searchKey0Ch ?searchKey0At)
+        BIND(sx:sortKey(?searchKey0Ch, "en") AS ?searchKey0Base) BIND(LCASE(?searchKey0Ch) AS ?searchKey0Lower)
+        BIND(IF(STRLEN(?searchKey0Base) = 1, ?searchKey0Base, IF(STRLEN(?searchKey0Lower) = 1, ?searchKey0Lower, ?searchKey0Ch)) AS ?searchKey0Part) } ORDER BY ?searchKey0At }
+  } GROUP BY ?label } }
+  BIND(COALESCE(?searchKey0, "") AS ?searchKey)
+  BIND(IF(BOUND(?detail), CONCAT(?searchKey, "\\n", COALESCE(?saidKey, "")), ?searchKey) AS ?matchKey)
+  BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?term)))) AS ?node)
+}""" .
 
 c:TypeaheadQuery a sem:Rendering ;
     sem:targets c:Typeahead ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches c:value ;
-    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds the typed text as the labels are folded (NFD, combining marks removed, lower-cased)." ;
-    sem:needsExtension sx:Locale .
+    sem:watches c:value .
 c:TypeaheadQuery-fn a sem:Rule ; sem:implements c:TypeaheadQuery ; sem:function "typeahead:query" .
+c:TypeaheadQuery-sparql a sem:Rule ;
+    sem:implements c:TypeaheadQuery ;
+    sem:needsExtension sx:Locale , sx:Matches ;
+    sem:construct """
+CONSTRUCT { $this c:foldedQuery ?folded }
+WHERE {
+  $this a/rdfs:subClassOf* c:Typeahead ; c:value ?value .
+  # Trimmed as JavaScript trims (its white space and line terminators), then folded.
+  BIND(REPLACE(STR(?value), "^[\\\\s\u000B\u000C\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+|[\\\\s\u000B\u000C\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+$", "") AS ?typed)
+  FILTER(?typed != "")
+  LATERAL { OPTIONAL { SELECT ?typed (GROUP_CONCAT(?foldedPart; separator="") AS ?folded) WHERE {
+    { SELECT ?typed ?foldedPart WHERE { (?typed) sx:chars (?foldedCh ?foldedAt)
+        BIND(sx:sortKey(?foldedCh, "en") AS ?foldedBase) BIND(LCASE(?foldedCh) AS ?foldedLower)
+        BIND(IF(STRLEN(?foldedBase) = 1, ?foldedBase, IF(STRLEN(?foldedLower) = 1, ?foldedLower, ?foldedCh)) AS ?foldedPart) } ORDER BY ?foldedAt }
+  } GROUP BY ?typed } }
+}""" .
 
 # --- the field, the popup and their state ------------------------------------------------------------
 # One rule per typeahead. It reads the texts layer's nodes (sem:readsMinted) and the controlled
