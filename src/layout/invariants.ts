@@ -1,6 +1,9 @@
-// The layout invariants (ontology/layers/constraints.ttl) over a measured page: read the declarations
-// with SPARQL, instantiate them over a box tree for the function checker (check.ts), turn the tree
-// into rendered-state triples (rnd:) for the SPARQL checker (lc:Checker), and say what a finding means.
+// The layout invariants (ontology/layers/constraints.ttl) over a page's geometry: read the declarations
+// with SPARQL, instantiate them over a box tree for the function checker (check.ts), and say what a
+// finding means. The geometry is the rendered state (rnd:, with rnd:Layout) of a live store, read
+// into a box tree (fromRendered) for the function checker and queried as it is by the SPARQL checker
+// (lc:Checker, checkSparql), or a recorded page (measure.ts), turned into the same triples (toTurtle).
+import type { Quad_Graph } from '@rdfjs/types'
 import type { GraphStore } from '../store/types.ts'
 import { packBoxes, Rel, type Box, type Finding, type Invariant } from './check.ts'
 import { checkLayout } from './engine.ts'
@@ -10,6 +13,8 @@ export const LC = 'https://semblance.dev/ns/layout-constraints#'
 export const RND = 'https://semblance.dev/ns/rendered#'
 const C = 'https://semblance.dev/ns/component#'
 const POS = 'https://semblance.dev/ns/position#'
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+const RENDERED = 'urn:semblance:rendered'
 
 export const PREFIXES = `PREFIX lc: <${LC}>
 PREFIX rnd: <${RND}>
@@ -268,6 +273,64 @@ export function toTurtle(page: MeasuredPage, d: Declarations): string {
   return lines.join('\n')
 }
 
+/** The node index of a component or state IRI in a page made by toTurtle (-1: none). */
+export function fixtureNode(iri: string | undefined): number {
+  return iri?.startsWith('urn:fixture:c') ? Number(iri.slice(13)) : iri?.startsWith('urn:semblance:rendered:n') ? Number(iri.slice(24)) : -1
+}
+
+/**
+ * The rendered state of a live store (the urn:semblance:rendered graph, written with rnd:Layout) as
+ * a box tree, for the function checker: a node per state with a box, its slug from its component's
+ * class, a part's role and order, and for each component what the graph says of it (pos:direction,
+ * pos:layout). `components` and `states` give each node's component (or part) IRI and its state's, to read findings by.
+ */
+export function fromRendered(store: GraphStore, d: Declarations): { page: MeasuredPage; components: string[]; states: string[] } {
+  const f = store.factory
+  const g = f.namedNode(RENDERED)
+  const nn = (iri: string) => f.namedNode(iri)
+  const one = (s: string, p: string, graph: Quad_Graph | null = g) => store.match(nn(s), nn(p), null, graph)[0]?.object.value
+  const slugOf = new Map<string, string>()
+  for (const [slug, classes] of d.directTypes) for (const c of classes) slugOf.set(c, slug)
+  const states = store
+    .match(null, nn(RND + 'x'), null, g)
+    .map((q) => q.subject.value)
+    .filter((s) => one(s, RND + 'of'))
+  // parts after components, each component's parts of a role in their order
+  const index = (s: string) => Number(one(s, LC + 'index') ?? -1)
+  states.sort((a, b) => index(a) - index(b) || (a < b ? -1 : a > b ? 1 : 0))
+  const at = new Map(states.map((s, i) => [s, i]))
+  const components: string[] = []
+  const nodes: MeasuredNode[] = states.map((s) => {
+    const of = one(s, RND + 'of')!
+    components.push(of)
+    const role = one(s, LC + 'role')
+    const parentState = one(s, RND + 'parent')
+    const parent = parentState !== undefined ? (at.get(parentState) ?? -1) : -1
+    const num = (p: string) => Number(one(s, RND + p))
+    const node: MeasuredNode = { slug: '', parent, x: num('x'), y: num('y'), width: num('width'), height: num('height') }
+    if (role) node.part = local(role)
+    else {
+      const types = store.match(nn(of), nn(RDF_TYPE), null).map((q) => q.object.value)
+      node.slug = types.map((t) => slugOf.get(t)).find((x) => x !== undefined) ?? ''
+      if (store.match(nn(of), nn(POS + 'direction'), nn(POS + 'Row')).length) node.direction = 'row'
+      if (store.match(nn(of), nn(POS + 'layout'), nn(POS + 'FieldRow')).length) node.layout = 'field-row'
+    }
+    if (one(s, RND + 'scrolls') === 'true') node.scrolls = true
+    const line = one(s, RND + 'line')
+    if (line !== undefined) node.line = Number(line)
+    const sw = one(s, RND + 'scrollWidth')
+    const cw = one(s, RND + 'clientWidth')
+    if (sw !== undefined && cw !== undefined && Number(sw) > Number(cw)) node.overflowsBy = Number(sw) - Number(cw)
+    return node
+  })
+  // a part's slug is its component's
+  for (const n of nodes) if (n.part && n.parent >= 0) n.slug = nodes[n.parent]!.slug
+  const vp = 'urn:semblance:rendered:viewport'
+  const width = Number(one(vp, RND + 'width') ?? 0)
+  const page: MeasuredPage = { url: '', width, height: Number(one(vp, RND + 'height') ?? 0), theme: '', dir: '', scrollWidth: Number(one(vp, RND + 'scrollWidth') ?? width), nodes }
+  return { page, components, states }
+}
+
 /** A SPARQL finding: the invariant, the group's node (-1: the page), the member (-1 for a group), by. */
 export interface SparqlFinding {
   invariant: string
@@ -276,17 +339,36 @@ export interface SparqlFinding {
   by: number
 }
 
-/** The SPARQL checker (lc:Checker's lc:select, its derivations first) over a store holding the ontology and a page's triples. */
-export function checkSparql(store: GraphStore): SparqlFinding[] {
-  const g = [store.factory.defaultGraph()]
-  for (const r of store.select(PREFIXES + `SELECT ?q WHERE { ?cls lc:derive ?q }`, g)) for (const q of store.construct(PREFIXES + r.get('q')!.value, g)) store.add(q)
-  const fragments = new Map(store.select(PREFIXES + `SELECT ?f ?s WHERE { ?f lc:sparql ?s }`, g).map((r) => [local(r.get('f')!.value), r.get('s')!.value]))
-  const query = store.select(PREFIXES + `SELECT ?q WHERE { lc:Checker lc:select ?q }`, g)[0].get('q')!.value.replace(/%(\w+)%/g, (_, n) => fragments.get(n)!)
-  const nodeOf = (iri: string | undefined) => (iri?.startsWith('urn:fixture:c') ? Number(iri.slice(13)) : iri?.startsWith('urn:semblance:rendered:n') ? Number(iri.slice(24)) : -1)
-  return store.select(PREFIXES + query, g).map((r) => ({
-    invariant: r.get('inv')!.value,
-    scope: nodeOf(r.get('scope')?.value),
-    member: nodeOf(r.get('member')?.value),
-    by: Number(r.get('by')!.value),
-  }))
+/**
+ * The SPARQL checker (lc:Checker's lc:select, its derivations first) over a store holding the
+ * ontology, the app's graph and its rendered state: a live store (the rendered graph is read with the
+ * default graph), or a page's triples (toTurtle) in the default graph. What the derivations type
+ * (lc:FieldRow) goes into a graph of its own for the query and is taken out after it, so a live
+ * store is left as it was. `nodeOf` names a finding's scope and member (a component's or a state's IRI);
+ * `graphs` are read besides the default and the rendered graph: a live store's projections
+ * (urn:semblance:derived:<name>), where the components rules mint (a shape form's fields) are typed.
+ */
+export function checkSparql(store: GraphStore, nodeOf: (iri: string | undefined) => number = fixtureNode, graphs: string[] = []): SparqlFinding[] {
+  const f = store.factory
+  const data = [f.defaultGraph(), f.namedNode(RENDERED), ...graphs.map((g) => f.namedNode(g))]
+  const derived = f.namedNode('urn:semblance:layout-constraints')
+  const g = [...data, derived]
+  const added = store
+    .select(PREFIXES + `SELECT ?q WHERE { ?cls lc:derive ?q }`, data)
+    .flatMap((r) => store.construct(PREFIXES + r.get('q')!.value, data))
+    .map((q) => f.quad(q.subject, q.predicate, q.object, derived))
+    .filter((q) => !store.has(q))
+  for (const q of added) store.add(q)
+  try {
+    const fragments = new Map(store.select(PREFIXES + `SELECT ?f ?s WHERE { ?f lc:sparql ?s }`, data).map((r) => [local(r.get('f')!.value), r.get('s')!.value]))
+    const query = store.select(PREFIXES + `SELECT ?q WHERE { lc:Checker lc:select ?q }`, data)[0].get('q')!.value.replace(/%(\w+)%/g, (_, n) => fragments.get(n)!)
+    return store.select(PREFIXES + query, g).map((r) => ({
+      invariant: r.get('inv')!.value,
+      scope: nodeOf(r.get('scope')?.value),
+      member: nodeOf(r.get('member')?.value),
+      by: Number(r.get('by')!.value),
+    }))
+  } finally {
+    for (const q of added) store.delete(q)
+  }
 }

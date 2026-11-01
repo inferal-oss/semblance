@@ -475,6 +475,8 @@ export const LC = {
   SingleLineControl: NS.lc + 'SingleLineControl',
   FieldLabel: NS.lc + 'FieldLabel',
   NavItem: NS.lc + 'NavItem',
+  index: NS.lc + 'index',
+  Role: NS.lc + 'Role',
 } as const
 
 /** The rendered state (ontology/layers/rendered.ttl, src/rendered.ts). */
@@ -483,13 +485,13 @@ export const RND = Object.fromEntries(
     'observes', 'Aspect', 'Geometry', 'Visibility', 'Overlap', 'Focus', 'Hover', 'Press', 'Scroll', 'Open', 'Animation',
     'State', 'of', 'observesSelf', 'fixed', 'x', 'y', 'width', 'height', 'within', 'cell', 'rendered', 'inViewport', 'ratio', 'overlaps',
     'focused', 'focusWithin', 'focusVisible', 'hovered', 'pressed', 'scrollTop', 'scrollLeft', 'scrollHeight', 'scrollWidth',
-    'overflows', 'atStart', 'atEnd', 'open', 'topLayer', 'animating', 'Viewport',
+    'overflows', 'atStart', 'atEnd', 'open', 'topLayer', 'animating', 'Viewport', 'Layout', 'parent', 'line', 'scrolls', 'clientWidth',
   ].map((l) => [l, NS.rnd + l]),
 ) as Record<
   | 'observes' | 'Aspect' | 'Geometry' | 'Visibility' | 'Overlap' | 'Focus' | 'Hover' | 'Press' | 'Scroll' | 'Open' | 'Animation'
   | 'State' | 'of' | 'observesSelf' | 'fixed' | 'x' | 'y' | 'width' | 'height' | 'within' | 'cell' | 'rendered' | 'inViewport' | 'ratio' | 'overlaps'
   | 'focused' | 'focusWithin' | 'focusVisible' | 'hovered' | 'pressed' | 'scrollTop' | 'scrollLeft' | 'scrollHeight' | 'scrollWidth'
-  | 'overflows' | 'atStart' | 'atEnd' | 'open' | 'topLayer' | 'animating' | 'Viewport',
+  | 'overflows' | 'atStart' | 'atEnd' | 'open' | 'topLayer' | 'animating' | 'Viewport' | 'Layout' | 'parent' | 'line' | 'scrolls' | 'clientWidth',
   string
 >
 /** The dependency layer (ontology/layers/dependency.ttl). */

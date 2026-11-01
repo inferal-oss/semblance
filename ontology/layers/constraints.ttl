@@ -160,8 +160,9 @@ lc:Page a owl:Class ;
 
 # --- relations: each with the SPARQL that finds its violations over the rendered graph -------------
 #
-# Boxes are rnd: states (#35): ?b rnd:of ?component ; rnd:x, rnd:y, rnd:width, rnd:height. A part's box
-# also has lc:role and lc:index (its order among its component's parts of that role); every box has
+# Boxes are rnd: states (#35, observed with rnd:Layout): ?b rnd:of ?component ; rnd:x, rnd:y, rnd:width,
+# rnd:height. A part's box (rnd:of the part's node) also has lc:role and lc:index (its order among its
+# component's parts of that role); every box has
 # rnd:parent, the box of the nearest component above it (a part's: its component's), and rnd:scrolls
 # true when it clips or scrolls its inline overflow. A child of a row that wraps has rnd:line, the
 # line it is on (0, 1, ...): a group of children is compared line by line. Each result is one violation: ?inv ?scope
@@ -177,8 +178,8 @@ lc:groupMembers a owl:NamedIndividual ;
   ?scope a/rdfs:subClassOf* ?cls . ?sb rnd:of ?scope . FILTER NOT EXISTS { ?sb lc:role ?r }
   {
     ?inv lc:members lc:EachChild ; lc:part ?role .
-    ?cb rnd:parent ?sb ; rnd:of ?child . FILTER NOT EXISTS { ?cb lc:role ?r2 }
-    ?m rnd:of ?child ; lc:role ?role ; lc:index 0 ; rnd:parent ?cb .
+    ?cb rnd:parent ?sb . FILTER NOT EXISTS { ?cb lc:role ?r2 }
+    ?m lc:role ?role ; lc:index 0 ; rnd:parent ?cb .
   } UNION {
     ?inv lc:members lc:EachChild . FILTER NOT EXISTS { ?inv lc:part ?p }
     ?m rnd:parent ?sb . FILTER NOT EXISTS { ?m lc:role ?r3 }

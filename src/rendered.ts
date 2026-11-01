@@ -11,8 +11,9 @@
 //
 // The layout is the browser's (domLayout); tests give their own (linkedom has none).
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
-import { NS, RDF_TYPE, RENDERED_GRAPH, RND, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
-import type { Delta } from './rdf.ts'
+import { layoutBox } from './layout/box.ts'
+import { LC, NS, RDF_TYPE, RENDERED_GRAPH, RND, SEM, XSD_BOOLEAN, XSD_INTEGER } from './ns.ts'
+import { owningFocus, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
 import type { Runtime } from './runtime.ts'
 
@@ -54,6 +55,14 @@ export interface RenderedLayout {
   open(el: Element): boolean | undefined
   /** Whether it is drawn in the top layer (a modal dialog, a showing popover, fullscreen). */
   topLayer(el: Element): boolean
+  /** For rnd:Layout: its border box as laid out, before transforms, relative to the viewport (rect by default). */
+  box?(el: Element): Box
+  /** For rnd:Layout: whether it clips or scrolls its inline overflow. */
+  clips?(el: Element): boolean
+  /** For rnd:Layout: whether a media condition holds (a part named at one width class). */
+  matches?(media: string): boolean
+  /** For rnd:Layout: the document's width (its scrolling element's scroll width). */
+  documentWidth?(): number
 }
 
 const matches = (el: Element, selector: string) => {
@@ -83,6 +92,10 @@ export function domLayout(win: Window & typeof globalThis = globalThis as Window
       return undefined
     },
     topLayer: (el) => matches(el, ':modal') || matches(el, ':popover-open') || el.ownerDocument.fullscreenElement === el,
+    box: layoutBox,
+    clips: (el) => win.getComputedStyle(el).overflowX !== 'visible',
+    matches: (media) => win.matchMedia(media).matches,
+    documentWidth: () => win.document.scrollingElement?.scrollWidth ?? win.document.documentElement.scrollWidth,
   }
 }
 
@@ -110,12 +123,16 @@ interface Entry {
   seen?: string
   fixed?: boolean
   shown?: boolean
+  /** For a part a component names (rnd:Layout): its role, its component's entry, the media its role holds at. */
+  part?: { role: string; owner: Entry; media?: string; index?: number }
+  /** With rnd:Layout, a child of a row: the line it is on. */
+  line?: number
 }
 
 type Signal = 'focused' | 'hovered' | 'pressed' | 'animating'
 const SIGNALS: Signal[] = ['focused', 'hovered', 'pressed', 'animating']
 /** The aspects read from the layout every frame; the others follow events (open: toggle, or its attribute). */
-const MEASURED = [RND.Geometry, RND.Overlap, RND.Visibility, RND.Scroll]
+const MEASURED = [RND.Geometry, RND.Overlap, RND.Visibility, RND.Scroll, RND.Layout]
 
 /** Counts of what the effect did, for cost tests and benchmarks. */
 export interface RenderedFigures {
@@ -134,6 +151,10 @@ export class RenderedState {
   /** Component -> the aspects it asks for itself only (rnd:observesSelf). */
   private own = new Map<string, Set<string>>()
   private entries = new Map<Element, Entry>()
+  /** The parts observed components name (rnd:Layout), by element: an element may be a component's root and a part. */
+  private parts = new Map<Element, Entry>()
+  /** Role and width class slugs (data-sem-part, data-sem-part-at) to the role's IRI and the class's media condition. */
+  private slugs = new Map<string, { role?: string; media?: string }>()
   private byComponent = new Map<string, Entry>()
   private scheduled = false
   private rescan = true
@@ -265,6 +286,7 @@ export class RenderedState {
       this.put(viewport, vp, RND.height, this.int(v.height))
       this.put(viewport, vp, RND.scrollTop, this.int(v.scrollTop))
       this.put(viewport, vp, RND.scrollLeft, this.int(v.scrollLeft))
+      if (this.layoutObserved && this.layout.documentWidth) this.put(viewport, vp, RND.scrollWidth, this.int(Math.round(this.layout.documentWidth())))
     }
     this.diff(this.viewportWritten, viewport, delta)
     this.viewportWritten = viewport
@@ -301,31 +323,9 @@ export class RenderedState {
       const has = (a: string) => e.aspects.has(a)
       const geometry = has(RND.Geometry)
       if (geometry || has(RND.Visibility)) {
-        if (moved || !e.box) {
-          // What moves with the viewport is placed in it, so scrolling the page moves no box at all.
-          const rendered = this.layout.rendered(e.el)
-          const r = this.layout.rect(e.el)
-          e.fixed = this.movesWithViewport(e.el, fixedMemo)
-          const dx = e.fixed ? 0 : v.scrollLeft
-          const dy = e.fixed ? 0 : v.scrollTop
-          e.box = { x: Math.round(r.x + dx), y: Math.round(r.y + dy), width: Math.round(r.width), height: Math.round(r.height) }
-          e.shown = rendered && (e.box.width > 0 || e.box.height > 0)
-        }
-        const box = e.box
-        const fixed = e.fixed === true
+        this.measure(e, moved, v, fixedMemo)
         const shown = e.shown === true
-        if (geometry && shown) {
-          this.put(out, s, RND.x, this.int(box.x))
-          this.put(out, s, RND.y, this.int(box.y))
-          this.put(out, s, RND.width, this.int(box.width))
-          this.put(out, s, RND.height, this.int(box.height))
-          if (fixed) this.put(out, s, RND.fixed, this.bool(true))
-          for (const w of e.within ?? []) this.put(out, s, RND.within, w.state)
-          if (has(RND.Overlap) && box.width > 0 && box.height > 0) {
-            for (let cx = Math.floor(box.x / CELL); cx <= Math.floor((box.x + box.width - 1) / CELL); cx++)
-              for (let cy = Math.floor(box.y / CELL); cy <= Math.floor((box.y + box.height - 1) / CELL); cy++) this.put(out, s, RND.cell, this.f.literal(`${fixed ? 'v' : ''}${cx},${cy}`))
-          }
-        }
+        if (geometry && shown) this.geometry(e, out)
         if (has(RND.Visibility)) {
           const ratio = this.ratio(e, v)
           const quarters = Math.round(ratio * 4) / 4
@@ -365,8 +365,132 @@ export class RenderedState {
       if (out.size) this.put(out, s, RDF_TYPE, this.f.namedNode(RND.State)), this.put(out, s, RND.of, this.f.namedNode(e.component))
       next.set(e, out)
     }
+    if (this.parts.size) this.measureParts(moved, v, fixedMemo, visit, next)
+    if (this.layoutObserved) this.lines(next)
     for (const [e, out] of next) this.diff(e.written, out, delta), (e.written = out)
     this.write(delta)
+  }
+
+
+  /** Read its box (when something may have moved, or it has none yet): in the document, or in the viewport when fixed. */
+  private measure(e: Entry, moved: boolean, v: { scrollTop: number; scrollLeft: number }, fixedMemo: Map<Element, boolean>) {
+    if (!moved && e.box) return
+    // What moves with the viewport is placed in it, so scrolling the page moves no box at all.
+    const layout = e.aspects.has(RND.Layout)
+    const rendered = this.layout.rendered(e.el)
+    const r = layout && this.layout.box ? this.layout.box(e.el) : this.layout.rect(e.el)
+    e.fixed = this.movesWithViewport(e.el, fixedMemo)
+    const dx = e.fixed ? 0 : v.scrollLeft
+    const dy = e.fixed ? 0 : v.scrollTop
+    // rnd:Layout keeps hundredths of a pixel: a sub-pixel misalignment survives
+    const q = layout ? (n: number) => Math.round(n * 100) / 100 : Math.round
+    e.box = { x: q(r.x + dx), y: q(r.y + dy), width: q(r.width), height: q(r.height) }
+    e.shown = rendered && (e.box.width > 0 || e.box.height > 0)
+  }
+
+  /** What geometry (and rnd:Layout) writes for a shown box. */
+  private geometry(e: Entry, out: Map<string, Quad>) {
+    const s = e.state
+    const box = e.box!
+    const fixed = e.fixed === true
+    const layout = e.aspects.has(RND.Layout)
+    const n = (x: number) => (layout ? this.dec(x) : this.int(x))
+    this.put(out, s, RND.x, n(box.x))
+    this.put(out, s, RND.y, n(box.y))
+    this.put(out, s, RND.width, n(box.width))
+    this.put(out, s, RND.height, n(box.height))
+    if (fixed) this.put(out, s, RND.fixed, this.bool(true))
+    for (const w of e.within ?? []) this.put(out, s, RND.within, w.state)
+    if (e.aspects.has(RND.Overlap) && box.width > 0 && box.height > 0) {
+      for (let cx = Math.floor(box.x / CELL); cx <= Math.floor((box.x + box.width - 1) / CELL); cx++)
+        for (let cy = Math.floor(box.y / CELL); cy <= Math.floor((box.y + box.height - 1) / CELL); cy++) this.put(out, s, RND.cell, this.f.literal(`${fixed ? 'v' : ''}${cx},${cy}`))
+    }
+    if (!layout) return
+    const parent = e.part ? e.part.owner : e.within?.[0]
+    if (parent) this.put(out, s, RND.parent, parent.state)
+    // a component that clips its overflow scrolls it; a part's own content is checked against it (a nav item's text)
+    if (!e.part && this.layout.clips?.(e.el)) this.put(out, s, RND.scrolls, this.bool(true))
+    else {
+      const sc = this.layout.scroll(e.el)
+      if (sc.width - sc.clientWidth > 1 && sc.clientWidth > 0) {
+        this.put(out, s, RND.scrollWidth, this.int(Math.round(sc.width)))
+        this.put(out, s, RND.clientWidth, this.int(Math.round(sc.clientWidth)))
+      }
+    }
+  }
+
+  /** With rnd:Layout: the parts observed components name (measured whenever something may have moved), each with its role and order. */
+  private measureParts(moved: boolean, v: { scrollTop: number; scrollLeft: number }, fixedMemo: Map<Element, boolean>, visited: Set<Entry>, next: Map<Entry, Map<string, Quad>>) {
+    const counts = new Map<string, number>()
+    const live = [...this.parts.values()].filter((p) => !p.part!.media || this.layout.matches?.(p.part!.media) === true)
+    // their order among their component's parts of a role: the document's
+    if (live.length > 1) live.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1))
+    // a part whose width class the viewport left writes nothing
+    const active = new Set(live)
+    for (const p of this.parts.values()) if (!active.has(p) && p.written.size) next.set(p, new Map())
+    for (const p of live) {
+      const part = p.part!
+      const k = part.owner.component + ' ' + part.role
+      const index = counts.get(k) ?? 0
+      // unchanged when nothing moved and its order is the same
+      if (!moved && p.box && !visited.has(part.owner) && part.index === index && p.written.size) {
+        if (p.shown) counts.set(k, index + 1)
+        continue
+      }
+      part.index = index
+      this.figures.measured++
+      this.measure(p, moved, v, fixedMemo)
+      const out = new Map<string, Quad>()
+      if (p.shown) {
+        counts.set(k, index + 1)
+        this.geometry(p, out)
+        this.put(out, p.state, LC.role, this.f.namedNode(p.part!.role))
+        this.put(out, p.state, LC.index, this.int(index))
+        this.put(out, p.state, RDF_TYPE, this.f.namedNode(RND.State))
+        this.put(out, p.state, RND.of, this.f.namedNode(p.component))
+      }
+      next.set(p, out)
+    }
+  }
+
+  /** With rnd:Layout: the line each child of a row is on (a row: pos:direction pos:Row or pos:layout pos:FieldRow), in what is written now. */
+  private lines(next: Map<Entry, Map<string, Quad>>) {
+    const kids = new Map<Entry, Entry[]>()
+    for (const e of this.measured) {
+      const parent = e.within?.[0]
+      if (!e.aspects.has(RND.Layout) || !parent || !e.shown || !e.box) continue
+      ;(kids.get(parent) ?? kids.set(parent, []).get(parent)!).push(e)
+    }
+    const store = this.runtime.store
+    const row = (c: string) => {
+      const n = this.f.namedNode(c)
+      return store.match(n, this.f.namedNode(NS.pos + 'direction'), this.f.namedNode(NS.pos + 'Row')).length > 0 || store.match(n, this.f.namedNode(NS.pos + 'layout'), this.f.namedNode(NS.pos + 'FieldRow')).length > 0
+    }
+    for (const [parent, children] of kids) {
+      const isRow = row(parent.component)
+      children.sort((a, b) => a.box!.y - b.box!.y)
+      let line = -1
+      let bottom = -Infinity
+      for (const k of children) {
+        let at: number | undefined
+        if (isRow) {
+          if (k.box!.y >= bottom - 1) line++, (bottom = k.box!.y + k.box!.height)
+          else bottom = Math.max(bottom, k.box!.y + k.box!.height)
+          at = line
+        }
+        const out = next.get(k)
+        if (out) {
+          if (at !== undefined) this.put(out, k.state, RND.line, this.int(at))
+        } else if (at !== k.line) {
+          // a sibling moved it to another line: rewrite it
+          const fresh = new Map(k.written)
+          for (const key of [...fresh.keys()]) if (key.startsWith(RND.line + ' ')) fresh.delete(key)
+          if (at !== undefined) this.put(fresh, k.state, RND.line, this.int(at))
+          next.set(k, fresh)
+        }
+        k.line = at
+      }
+    }
   }
 
   // --- scopes and what they observe ---------------------------------------------------------------
@@ -380,7 +504,7 @@ export class RenderedState {
         if (!set) scopes.set(q.subject.value, (set = new Set()))
         set.add(q.object.value)
         // Overlap is computed from the boxes.
-        if (q.object.value === RND.Overlap) set.add(RND.Geometry)
+        if (q.object.value === RND.Overlap || q.object.value === RND.Layout) set.add(RND.Geometry)
       }
       return scopes
     }
@@ -417,11 +541,19 @@ export class RenderedState {
     this.records = []
     if (records.length) this.moved = true
     for (const r of records) if (r.type === 'attributes' && (r.attributeName === 'open' || r.attributeName === 'popover')) this.toggled.add(r.target as Element)
+    // A part named or unnamed in place (its attributes changed, the element stayed).
+    for (const r of records)
+      if (r.type === 'attributes' && (r.attributeName === 'data-sem-part' || r.attributeName === 'data-sem-part-at')) {
+        const el = r.target as Element
+        if (!el.hasAttribute('data-sem-part')) this.forgetPart(el)
+        else if (el.isConnected) this.observePart(el)
+      }
     if (this.rescan) {
       this.rescan = false
       const seen = new Set<Element>()
       this.walk(this.renderer.host, new Set(), seen)
       for (const el of [...this.entries.keys()]) if (!seen.has(el)) this.forget(el)
+      for (const el of [...this.parts.keys()]) if (!seen.has(el)) this.forgetPart(el)
       return
     }
     for (const r of records) {
@@ -442,7 +574,49 @@ export class RenderedState {
     const self = c !== undefined ? this.own.get(c) : undefined
     const mine = self ? new Set([...here, ...self]) : here
     if (c !== undefined && mine.size) seen?.add(el), this.observe(el, c, mine)
+    if (el.hasAttribute('data-sem-part')) this.observePart(el, seen)
     for (const child of el.children) this.walk(child, here, seen)
+  }
+
+  /** A part an observed component names (data-sem-part on a node it minted), when the component observes its layout. */
+  private observePart(el: Element, seen?: Set<Element>) {
+    const key = this.renderer.keyOf(el)
+    const owner = key === undefined ? undefined : this.byComponent.get(owningFocus(key))
+    if (key === undefined || !owner?.aspects.has(RND.Layout)) return
+    const role = this.slug(el.getAttribute('data-sem-part')!).role
+    if (!role) return
+    const at = el.getAttribute('data-sem-part-at')
+    const media = at === null ? undefined : (this.slug(at).media ?? 'not all')
+    seen?.add(el)
+    const known = this.parts.get(el)
+    if (known && known.component === key && known.part!.owner === owner && known.part!.role === role && known.part!.media === media) return
+    if (known) this.forgetPart(el)
+    const e: Entry = { component: key, el, state: this.f.namedNode(stateOf(key)), aspects: new Set([RND.Geometry, RND.Layout]), written: new Map(), part: { role, owner, media } }
+    this.parts.set(el, e)
+    this.resizes?.observe(el)
+  }
+
+  /** What a role's or a width class's slug stands for (the ontology, in the store). */
+  private slug(slug: string): { role?: string; media?: string } {
+    let known = this.slugs.get(slug)
+    if (known) return known
+    known = {}
+    const store = this.runtime.store
+    for (const q of store.match(null, this.f.namedNode(SEM.slug), this.f.literal(slug))) {
+      if (store.match(q.subject, this.f.namedNode(RDF_TYPE), this.f.namedNode(LC.Role)).length) known.role = q.subject.value
+      const media = store.match(q.subject, this.f.namedNode(NS.sty + 'media'), null)[0]
+      if (media) known.media = media.object.value
+    }
+    this.slugs.set(slug, known)
+    return known
+  }
+
+  private forgetPart(el: Element) {
+    const e = this.parts.get(el)
+    if (!e) return
+    this.parts.delete(el)
+    if (!this.entries.has(el)) this.resizes?.unobserve(el)
+    this.dropped.push(...e.written.values())
   }
 
   private observe(el: Element, component: string, aspects: Set<string>) {
@@ -512,7 +686,11 @@ export class RenderedState {
   private forgetUnder(el: Element) {
     if (el.isConnected && this.renderer.host.contains(el)) return
     if (this.entries.has(el)) this.forget(el)
-    for (const x of el.querySelectorAll('*')) if (this.entries.has(x)) this.forget(x)
+    if (this.parts.has(el)) this.forgetPart(el)
+    for (const x of el.querySelectorAll('*')) {
+      if (this.entries.has(x)) this.forget(x)
+      if (this.parts.has(x)) this.forgetPart(x)
+    }
   }
 
   private forget(el: Element) {
@@ -526,6 +704,8 @@ export class RenderedState {
     this.intersections?.unobserve(el)
     this.structure = true
     this.dropped.push(...e.written.values())
+    // its parts go with it
+    for (const [pel, p] of this.parts) if (p.part!.owner === e) this.forgetPart(pel)
   }
 
   /** The observed components with `aspect` an element is in, innermost first. */
@@ -622,6 +802,16 @@ export class RenderedState {
   }
 
   // --- writing ------------------------------------------------------------------------------------
+
+  /** Whether any component observes its layout. */
+  private get layoutObserved(): boolean {
+    for (const e of this.measured) if (e.aspects.has(RND.Layout)) return true
+    return false
+  }
+
+  private dec(n: number): Term {
+    return this.f.literal(String(n), this.f.namedNode(XSD_DECIMAL))
+  }
 
   private int(n: number): Term {
     return this.f.literal(String(n), this.f.namedNode(XSD_INTEGER))

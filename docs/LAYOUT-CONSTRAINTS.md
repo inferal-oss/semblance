@@ -73,19 +73,33 @@ on an **app** for its own pages.
 
 ## Geometry: the input
 
-The checker reads rendered state as triples (#35, PR #100's `rnd:` layer, still open):
+The checker reads rendered state as triples (the `rnd:` layer, ontology/layers/rendered.ttl):
 `?box rnd:of ?component ; rnd:x ; rnd:y ; rnd:width ; rnd:height`, in the
-`urn:semblance:rendered` graph. The spike needs three additions to `rnd:`:
+`urn:semblance:rendered` graph. A component asks for what the checker needs with
+`rnd:observes rnd:Layout` (#192), for itself and everything shown inside it:
 
-1. **part boxes**: `rnd:` measures component roots; the invariants compare controls and labels
-   inside them (`lc:role`, `lc:index`);
-2. **`rnd:parent`**, the box of the nearest observed component (PR #100 has `rnd:within`, every
-   ancestor; the checker needs the nearest one for children);
-3. **`rnd:scrollWidth`/`rnd:clientWidth` for any element** whose content overflows, and
-   `rnd:line` for children of a wrapping row.
+1. **part boxes**: a state per part its components name (`lc:role`, shown as `data-sem-part`,
+   #193), `rnd:of` the part's node, with its `lc:role`, its `lc:index` (its order among its
+   component's parts of that role) and `rnd:parent` its component's state. A part named at one
+   width class only (`lc:atWidth`) is measured while the viewport is in it;
+2. **`rnd:parent`**, the nearest observed component (`rnd:within` lists every one);
+3. **`rnd:scrolls`** where a component clips its inline overflow, and otherwise
+   **`rnd:scrollWidth`/`rnd:clientWidth`** where its content is wider (a part's always);
+   **`rnd:line`** for the children of a row (`pos:direction pos:Row`, `pos:layout
+   pos:FieldRow`); the viewport's `rnd:scrollWidth`, the document's width;
+4. **hundredths of a pixel** (`xsd:decimal`; other aspects keep whole pixels), so a 0.5 px
+   tolerance can be checked and #34's 3.5 px survives;
+5. **layout boxes, before transforms** (`src/layout/box.ts`): a theme that tilts a card (Doodle)
+   moves no box in it. The bounding box of a rotated element drifts along it (0.23 px per nav
+   item in Doodle's tilted list), its layout box does not.
 
-Precision: PR #100 rounds to whole px; the checker wants 0.01 px (a 0.5 px tolerance cannot be
-checked on rounded values). Quantize the *stored* values only for churn, or keep two decimals.
+`checkSparql` runs `lc:Checker` over a live store: the rendered graph with the app's graph and
+its projections' (where the components rules mint, a shape form's fields, are typed), what the
+derivations type in a graph of its own that is taken out after the query. `fromRendered` reads
+the same rendered graph into the box tree the function checker takes, and `test/layout-live.test.ts`
+keeps the twins in agreement there. `scripts/layout-check.ts --source rnd` records a page from its
+own rendered state (what the shell renders); in Chromium it gives the same box tree as the DOM
+recorder (`--source dom`, the default, which also measures any older checkout).
 
 ## The checker
 
@@ -230,7 +244,9 @@ a loaded machine the update after "Continue to shipping" outran the watchdog's t
 waited behind "The page is busy", and no field was measured, so the check passed with nothing to
 check. `scripts/layout-check.ts` now resumes suspended updates. Re-recorded on `main`, the row is clean
 in Semblance and RTL, and in Doodle it is 1.1 px off: Doodle tilts its card, and rotated boxes drift
-about 0.55 px per field along a row. The checker measures transformed boxes; #192 should measure
-layout boxes (or in the container's frame) so a theme's tilt is not a misalignment. #125 also
+about 0.55 px per field along a row. That recording has transformed boxes; both recorders and
+`rnd:Layout` measure layout boxes since #192, so a theme's tilt is not a misalignment. The
+checkout is re-recorded once it renders again (on `main` it stops at a stratification error of
+`c:DescriptionPairs`, #7). #125 also
 changed the field anatomy: `lc:FieldRow` now covers `pos:FieldRow`, and a Choice with its label
 above is a label (its span) and a control (its select) like any field.
