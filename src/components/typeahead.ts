@@ -1,6 +1,7 @@
-// Typeaheads (ontology/components/typeahead.ttl): the two function layers under the SPARQL
-// renderings. Labels in the viewer's language and search keys, folded as SPARQL cannot: NFD,
-// combining marks removed, lower case, one character for each of the label's.
+// Typeaheads (ontology/components/typeahead.ttl): the function twins of the texts layer under the
+// SPARQL renderings. Labels in the viewer's language and search keys, folded: NFD, combining marks
+// removed, lower case, one character for each of the label's (the SPARQL rules: sx:sortKey of each
+// character, sx:chars).
 import type { Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, L10N, NS, RDF_TYPE, RDFS_RANGE, XSD_BOOLEAN } from '../ns.ts'

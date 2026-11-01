@@ -359,8 +359,9 @@ describe('the gallery palette', () => {
 })
 
 describe('the command palette renders the same with SPARQL rules as with functions', () => {
-  it('after every step', () => {
-    const shells = (['sparql', 'function'] as const).map((prefer) => drive(mountShell(5, 'oxigraph', prefer)))
+  // On wat its texts layer is SPARQL too (sx:sortKey, sx:chars); Oxigraph runs the function twin either way.
+  it.each(['oxigraph', 'wat'] as const)('after every step (%s)', (kind) => {
+    const shells = (['sparql', 'function'] as const).map((prefer) => drive(mountShell(5, kind, prefer)))
     const same = (step: string) => {
       const [a, b] = shells.map((p) => p.document.getElementById('app')!.innerHTML)
       expect(a, `after ${step}: SPARQL and function renderings differ`).toBe(b)
@@ -380,6 +381,12 @@ describe('the command palette renders the same with SPARQL rules as with functio
     all((p) => p.open(), 'reopening, with a recent run')
     all((p) => p.press('ArrowUp'), 'Up')
     all((p) => p.press('Escape'), 'Escape')
+    for (const languages of [['uk'], ['ar'], ['de']]) {
+      all((p) => (p.screen.engine.reconfigure({ languages }), p.shell.flush()), languages.join())
+      all((p) => p.open(), `opening in ${languages.join()}`)
+      all((p) => p.type('ре'), `typing in ${languages.join()}`)
+      all((p) => p.press('Escape'), `closing in ${languages.join()}`)
+    }
   })
 })
 

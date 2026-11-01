@@ -127,18 +127,297 @@ c:PaletteRunPhrase a c:Phrase ; rdfs:label "to run"@en , "виконати"@uk ,
 c:PaletteClosePhrase a c:Phrase ; rdfs:label "to close"@en , "закрити"@uk , "schließen"@de , "للإغلاق"@ar .
 
 # --- texts: labels in the viewer's language, and search keys --------------------------------------
-# A function layer, like c:TypeaheadTexts: while the palette is open, every item it lists gets a node
+# A layer, like c:TypeaheadTexts: while the palette is open, every item it lists gets a node
 # <palette>/~term-<item> with its label in the viewer's language (l10n:label), its search key
-# (c:searchKey) and what it does (c:help); the sections and the phrases get theirs.
+# (c:searchKey, folded as c:TypeaheadTexts folds) and what it does (c:help); the sections and the
+# phrases get theirs. Labels are picked from the viewer's languages here (as l10n:Labels picks a
+# component's, in this same stratum). Where an item is shown is read up the component tree
+# (nav:Containment's edges): the innermost dimension of the first location whose switches show it.
 
 c:PaletteTexts a sem:Rendering ;
     sem:targets c:CommandPalette ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries ;
-    sem:functionOnly "awaits sx:Locale (sx:sortKey): it folds labels for matching (NFD, combining marks removed), as c:TypeaheadTexts does; the labels themselves are picked from the viewer's languages in the graph." ;
-    sem:needsExtension sx:Locale .
+    sem:watches rdf:type , c:open , c:label , c:placeholder , c:lists , c:entries .
 c:PaletteTexts-fn a sem:Rule ; sem:implements c:PaletteTexts ; sem:function "palette:texts" .
+c:PaletteTexts-sparql a sem:Rule ;
+    sem:implements c:PaletteTexts ;
+    sem:needsExtension sx:Locale , sx:Matches ;
+    sem:construct """
+CONSTRUCT {
+  ?node c:textOf $this ; c:textFor ?item ; l10n:label ?label ; c:searchKey ?searchKey ; c:help ?help .
+  ?wordsNode l10n:label ?words .
+  ?sectionNode l10n:label ?sectionLabel .
+}
+WHERE {
+  $this a c:CommandPalette ; c:open ?open .
+  FILTER(STR(?open) = "true")
+  {
+    # The words: its own caption and placeholder, else the phrases', else the English ones.
+    VALUES (?wordsLocal ?phrase ?fallback) {
+      ("caption" c:CommandPalette "Command palette") ("placeholder" c:PalettePlaceholder "Type a command or search…")
+      ("close" c:CloseCommand "Close") ("no-matches" c:NoMatches "No matches") ("move" c:PaletteMovePhrase "to move")
+      ("run" c:PaletteRunPhrase "to run") ("dismiss" c:PaletteClosePhrase "to close")
+    }
+    OPTIONAL {
+      $this c:label ?ownCaptionPick . FILTER(isLiteral(?ownCaptionPick))
+      ?viewer l10n:prefers ?ownCaptionPref . ?ownCaptionPref l10n:code ?ownCaptionCode ; sem:order ?ownCaptionRank .
+      BIND(LCASE(LANG(?ownCaptionPick)) AS ?ownCaptionTag)
+      FILTER(?ownCaptionTag = ?ownCaptionCode || STRSTARTS(?ownCaptionTag, CONCAT(?ownCaptionCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?ownCaptionBetter . ?ownCaptionBetter l10n:code ?ownCaptionCode2 ; sem:order ?ownCaptionRank2 .
+        $this c:label ?ownCaptionOther . FILTER(isLiteral(?ownCaptionOther))
+        BIND(LCASE(LANG(?ownCaptionOther)) AS ?ownCaptionTag2)
+        FILTER(?ownCaptionTag2 = ?ownCaptionCode2 || STRSTARTS(?ownCaptionTag2, CONCAT(?ownCaptionCode2, "-")))
+        FILTER(?ownCaptionRank2 < ?ownCaptionRank || (?ownCaptionRank2 = ?ownCaptionRank && ?ownCaptionTag2 = ?ownCaptionCode2 && ?ownCaptionTag != ?ownCaptionCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick)) $this c:label ?ownCaptionPlain FILTER(isLiteral(?ownCaptionPlain) && LANG(?ownCaptionPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain)) $this c:label ?ownCaptionEn FILTER(LCASE(LANG(?ownCaptionEn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain) && !BOUND(?ownCaptionEn)) $this c:label ?ownCaptionEnx FILTER(STRSTARTS(LCASE(LANG(?ownCaptionEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?ownCaptionPick) && !BOUND(?ownCaptionPlain) && !BOUND(?ownCaptionEn) && !BOUND(?ownCaptionEnx)) $this c:label ?ownCaptionAny FILTER(isLiteral(?ownCaptionAny))
+      FILTER NOT EXISTS { $this c:label ?ownCaptionLess FILTER(isLiteral(?ownCaptionLess) && STR(?ownCaptionLess) < STR(?ownCaptionAny)) } }
+    BIND(STR(COALESCE(?ownCaptionPick, ?ownCaptionPlain, ?ownCaptionEn, ?ownCaptionEnx, ?ownCaptionAny)) AS ?ownCaption)
+    OPTIONAL { ?ownPlaceholderAt l10n:of $this ; l10n:placeholder ?ownPlaceholderTwin }
+    OPTIONAL { FILTER(!BOUND(?ownPlaceholderTwin)) $this c:placeholder ?ownPlaceholderOnly FILTER(isLiteral(?ownPlaceholderOnly)) }
+    OPTIONAL { ?phraseAt l10n:of ?phrase ; l10n:name ?phraseTwin }
+    OPTIONAL { FILTER(!BOUND(?phraseTwin)) ?phrase rdfs:label ?phraseOnly FILTER(isLiteral(?phraseOnly)) }
+    BIND(IF(?wordsLocal = "caption", ?ownCaption, IF(?wordsLocal = "placeholder", STR(COALESCE(?ownPlaceholderTwin, ?ownPlaceholderOnly)), ?none)) AS ?own)
+    BIND(COALESCE(?own, STR(COALESCE(?phraseTwin, ?phraseOnly)), ?fallback) AS ?words)
+    BIND(IRI(CONCAT(STR($this), "/~l10n-", ?wordsLocal)) AS ?wordsNode)
+  } UNION {
+    # The recent section's label.
+    BIND(c:RecentSection AS ?section)
+  } UNION {
+    # Each item it lists (as c:PaletteOptions finds them), and its section's label.
+    { SELECT ?self ?item (MAX(?placeHit) AS ?placed) (MAX(?listedHit) AS ?listed) WHERE {
+        $this a c:CommandPalette .
+        BIND($this AS ?self)
+        {
+          FILTER(NOT EXISTS { $this c:lists ?anyList1 } || EXISTS { $this c:lists c:PaletteCommands })
+          ?item a key:Command .
+          BIND(0 AS ?placeHit) BIND(1 AS ?listedHit)
+        } UNION {
+          FILTER(NOT EXISTS { $this c:lists ?anyList2 } || EXISTS { $this c:lists c:PaletteShortcuts })
+          ?item key:shortcut ?combo .
+          FILTER(isIRI(?item))
+          FILTER NOT EXISTS { ?item a key:Command }
+          BIND(0 AS ?placeHit) BIND(1 AS ?listedHit)
+        } UNION {
+          ?switch a c:Switch ; c:controls ?subject ; c:property ?property ; c:cases ?cases .
+          ?cases rdf:rest*/rdf:first ?case .
+          ?case c:when ?value ; c:content ?item .
+          FILTER(isIRI(?item))
+          ?dimension nav:subject ?subject ; nav:property ?property .
+          BIND(IF(NOT EXISTS { $this c:lists ?anyList3 } || EXISTS { $this c:lists c:PalettePlaces }, 1, 0) AS ?listedHit)
+          BIND(1 AS ?placeHit)
+        } UNION {
+          $this c:entries ?head . ?head rdf:rest* ?cell . ?cell rdf:first ?item .
+          FILTER(isIRI(?item))
+          BIND(0 AS ?placeHit) BIND(1 AS ?listedHit)
+        }
+      } GROUP BY ?self ?item }
+    FILTER(?self = $this && ?listed = 1)
+    FILTER NOT EXISTS { ?item c:opens $this }
+    FILTER NOT EXISTS { ?item c:controls $this }
+    BIND(EXISTS { ?item a key:Command } AS ?isCommand)
+    # A place: the least value (by IRI) of the cases showing it, and the place it is in (its
+    # dimension's only nav:when).
+    LATERAL { OPTIONAL { SELECT ?item (MIN(STR(?value0)) AS ?placeValue) WHERE {
+      ?switch0 a c:Switch ; c:controls ?subject0 ; c:property ?property0 ; c:cases ?cases0 .
+      ?cases0 rdf:rest*/rdf:first ?case0 . ?case0 c:when ?value0 ; c:content ?item .
+      ?dimension0 nav:subject ?subject0 ; nav:property ?property0 .
+    } GROUP BY ?item } }
+    BIND(IF(?placed = 1, IRI(?placeValue), ?none) AS ?place)
+    LATERAL { OPTIONAL { SELECT ?item ?place (MIN(STR(?up0)) AS ?upIri) WHERE {
+      ?switch1 a c:Switch ; c:controls ?subject1 ; c:property ?property1 ; c:cases ?cases1 .
+      ?cases1 rdf:rest*/rdf:first ?case1 . ?case1 c:when ?place ; c:content ?item .
+      ?dimension1 nav:subject ?subject1 ; nav:property ?property1 ; nav:when ?up0 .
+      FILTER NOT EXISTS { ?dimension1 nav:when ?otherUp FILTER(?otherUp != ?up0) }
+    } GROUP BY ?item ?place } }
+    BIND(IF(BOUND(?upIri), IRI(?upIri), ?none) AS ?up)
+    BIND(COALESCE(?place, ?item) AS ?named)
+    OPTIONAL {
+      ?named c:label ?labelCPick . FILTER(isLiteral(?labelCPick))
+      ?viewer l10n:prefers ?labelCPref . ?labelCPref l10n:code ?labelCCode ; sem:order ?labelCRank .
+      BIND(LCASE(LANG(?labelCPick)) AS ?labelCTag)
+      FILTER(?labelCTag = ?labelCCode || STRSTARTS(?labelCTag, CONCAT(?labelCCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?labelCBetter . ?labelCBetter l10n:code ?labelCCode2 ; sem:order ?labelCRank2 .
+        ?named c:label ?labelCOther . FILTER(isLiteral(?labelCOther))
+        BIND(LCASE(LANG(?labelCOther)) AS ?labelCTag2)
+        FILTER(?labelCTag2 = ?labelCCode2 || STRSTARTS(?labelCTag2, CONCAT(?labelCCode2, "-")))
+        FILTER(?labelCRank2 < ?labelCRank || (?labelCRank2 = ?labelCRank && ?labelCTag2 = ?labelCCode2 && ?labelCTag != ?labelCCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?labelCPick)) ?named c:label ?labelCPlain FILTER(isLiteral(?labelCPlain) && LANG(?labelCPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain)) ?named c:label ?labelCEn FILTER(LCASE(LANG(?labelCEn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain) && !BOUND(?labelCEn)) ?named c:label ?labelCEnx FILTER(STRSTARTS(LCASE(LANG(?labelCEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?labelCPick) && !BOUND(?labelCPlain) && !BOUND(?labelCEn) && !BOUND(?labelCEnx)) ?named c:label ?labelCAny FILTER(isLiteral(?labelCAny))
+      FILTER NOT EXISTS { ?named c:label ?labelCLess FILTER(isLiteral(?labelCLess) && STR(?labelCLess) < STR(?labelCAny)) } }
+    BIND(STR(COALESCE(?labelCPick, ?labelCPlain, ?labelCEn, ?labelCEnx, ?labelCAny)) AS ?labelC)
+    OPTIONAL {
+      ?named rdfs:label ?labelRPick . FILTER(isLiteral(?labelRPick))
+      ?viewer l10n:prefers ?labelRPref . ?labelRPref l10n:code ?labelRCode ; sem:order ?labelRRank .
+      BIND(LCASE(LANG(?labelRPick)) AS ?labelRTag)
+      FILTER(?labelRTag = ?labelRCode || STRSTARTS(?labelRTag, CONCAT(?labelRCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?labelRBetter . ?labelRBetter l10n:code ?labelRCode2 ; sem:order ?labelRRank2 .
+        ?named rdfs:label ?labelROther . FILTER(isLiteral(?labelROther))
+        BIND(LCASE(LANG(?labelROther)) AS ?labelRTag2)
+        FILTER(?labelRTag2 = ?labelRCode2 || STRSTARTS(?labelRTag2, CONCAT(?labelRCode2, "-")))
+        FILTER(?labelRRank2 < ?labelRRank || (?labelRRank2 = ?labelRRank && ?labelRTag2 = ?labelRCode2 && ?labelRTag != ?labelRCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?labelRPick)) ?named rdfs:label ?labelRPlain FILTER(isLiteral(?labelRPlain) && LANG(?labelRPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain)) ?named rdfs:label ?labelREn FILTER(LCASE(LANG(?labelREn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain) && !BOUND(?labelREn)) ?named rdfs:label ?labelREnx FILTER(STRSTARTS(LCASE(LANG(?labelREnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?labelRPick) && !BOUND(?labelRPlain) && !BOUND(?labelREn) && !BOUND(?labelREnx)) ?named rdfs:label ?labelRAny FILTER(isLiteral(?labelRAny))
+      FILTER NOT EXISTS { ?named rdfs:label ?labelRLess FILTER(isLiteral(?labelRLess) && STR(?labelRLess) < STR(?labelRAny)) } }
+    BIND(STR(COALESCE(?labelRPick, ?labelRPlain, ?labelREn, ?labelREnx, ?labelRAny)) AS ?labelR)
+    BIND(COALESCE(?labelC, ?labelR, REPLACE(STR(?named), "^.*[#/]", "")) AS ?label)
+    # What it does: a place, the place it is in; else its c:help or rdfs:comment; else, but for a
+    # command, what the innermost dimension of the location showing it is called there.
+    # (A node that is not there is <urn:semblance:none>, which has no labels: no optional binds it.)
+    BIND(COALESCE(?up, <urn:semblance:none>) AS ?upNode)
+    OPTIONAL {
+      ?upNode c:label ?upLabelCPick . FILTER(isLiteral(?upLabelCPick))
+      ?viewer l10n:prefers ?upLabelCPref . ?upLabelCPref l10n:code ?upLabelCCode ; sem:order ?upLabelCRank .
+      BIND(LCASE(LANG(?upLabelCPick)) AS ?upLabelCTag)
+      FILTER(?upLabelCTag = ?upLabelCCode || STRSTARTS(?upLabelCTag, CONCAT(?upLabelCCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?upLabelCBetter . ?upLabelCBetter l10n:code ?upLabelCCode2 ; sem:order ?upLabelCRank2 .
+        ?upNode c:label ?upLabelCOther . FILTER(isLiteral(?upLabelCOther))
+        BIND(LCASE(LANG(?upLabelCOther)) AS ?upLabelCTag2)
+        FILTER(?upLabelCTag2 = ?upLabelCCode2 || STRSTARTS(?upLabelCTag2, CONCAT(?upLabelCCode2, "-")))
+        FILTER(?upLabelCRank2 < ?upLabelCRank || (?upLabelCRank2 = ?upLabelCRank && ?upLabelCTag2 = ?upLabelCCode2 && ?upLabelCTag != ?upLabelCCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick)) ?upNode c:label ?upLabelCPlain FILTER(isLiteral(?upLabelCPlain) && LANG(?upLabelCPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain)) ?upNode c:label ?upLabelCEn FILTER(LCASE(LANG(?upLabelCEn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain) && !BOUND(?upLabelCEn)) ?upNode c:label ?upLabelCEnx FILTER(STRSTARTS(LCASE(LANG(?upLabelCEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?upLabelCPick) && !BOUND(?upLabelCPlain) && !BOUND(?upLabelCEn) && !BOUND(?upLabelCEnx)) ?upNode c:label ?upLabelCAny FILTER(isLiteral(?upLabelCAny))
+      FILTER NOT EXISTS { ?upNode c:label ?upLabelCLess FILTER(isLiteral(?upLabelCLess) && STR(?upLabelCLess) < STR(?upLabelCAny)) } }
+    BIND(STR(COALESCE(?upLabelCPick, ?upLabelCPlain, ?upLabelCEn, ?upLabelCEnx, ?upLabelCAny)) AS ?upLabelC)
+    OPTIONAL {
+      ?upNode rdfs:label ?upLabelRPick . FILTER(isLiteral(?upLabelRPick))
+      ?viewer l10n:prefers ?upLabelRPref . ?upLabelRPref l10n:code ?upLabelRCode ; sem:order ?upLabelRRank .
+      BIND(LCASE(LANG(?upLabelRPick)) AS ?upLabelRTag)
+      FILTER(?upLabelRTag = ?upLabelRCode || STRSTARTS(?upLabelRTag, CONCAT(?upLabelRCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?upLabelRBetter . ?upLabelRBetter l10n:code ?upLabelRCode2 ; sem:order ?upLabelRRank2 .
+        ?upNode rdfs:label ?upLabelROther . FILTER(isLiteral(?upLabelROther))
+        BIND(LCASE(LANG(?upLabelROther)) AS ?upLabelRTag2)
+        FILTER(?upLabelRTag2 = ?upLabelRCode2 || STRSTARTS(?upLabelRTag2, CONCAT(?upLabelRCode2, "-")))
+        FILTER(?upLabelRRank2 < ?upLabelRRank || (?upLabelRRank2 = ?upLabelRRank && ?upLabelRTag2 = ?upLabelRCode2 && ?upLabelRTag != ?upLabelRCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick)) ?upNode rdfs:label ?upLabelRPlain FILTER(isLiteral(?upLabelRPlain) && LANG(?upLabelRPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain)) ?upNode rdfs:label ?upLabelREn FILTER(LCASE(LANG(?upLabelREn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain) && !BOUND(?upLabelREn)) ?upNode rdfs:label ?upLabelREnx FILTER(STRSTARTS(LCASE(LANG(?upLabelREnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?upLabelRPick) && !BOUND(?upLabelRPlain) && !BOUND(?upLabelREn) && !BOUND(?upLabelREnx)) ?upNode rdfs:label ?upLabelRAny FILTER(isLiteral(?upLabelRAny))
+      FILTER NOT EXISTS { ?upNode rdfs:label ?upLabelRLess FILTER(isLiteral(?upLabelRLess) && STR(?upLabelRLess) < STR(?upLabelRAny)) } }
+    BIND(STR(COALESCE(?upLabelRPick, ?upLabelRPlain, ?upLabelREn, ?upLabelREnx, ?upLabelRAny)) AS ?upLabelR)
+    BIND(COALESCE(?upLabelC, ?upLabelR, REPLACE(STR(?upNode), "^.*[#/]", "")) AS ?upLabel)
+    OPTIONAL { ?helpAt l10n:of ?item ; l10n:help ?helpTwin }
+    OPTIONAL { FILTER(!BOUND(?helpTwin)) ?item c:help ?helpOnly FILTER(isLiteral(?helpOnly)) }
+    OPTIONAL {
+      ?item rdfs:comment ?commentPick . FILTER(isLiteral(?commentPick))
+      ?viewer l10n:prefers ?commentPref . ?commentPref l10n:code ?commentCode ; sem:order ?commentRank .
+      BIND(LCASE(LANG(?commentPick)) AS ?commentTag)
+      FILTER(?commentTag = ?commentCode || STRSTARTS(?commentTag, CONCAT(?commentCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?commentBetter . ?commentBetter l10n:code ?commentCode2 ; sem:order ?commentRank2 .
+        ?item rdfs:comment ?commentOther . FILTER(isLiteral(?commentOther))
+        BIND(LCASE(LANG(?commentOther)) AS ?commentTag2)
+        FILTER(?commentTag2 = ?commentCode2 || STRSTARTS(?commentTag2, CONCAT(?commentCode2, "-")))
+        FILTER(?commentRank2 < ?commentRank || (?commentRank2 = ?commentRank && ?commentTag2 = ?commentCode2 && ?commentTag != ?commentCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?commentPick)) ?item rdfs:comment ?commentPlain FILTER(isLiteral(?commentPlain) && LANG(?commentPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain)) ?item rdfs:comment ?commentEn FILTER(LCASE(LANG(?commentEn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain) && !BOUND(?commentEn)) ?item rdfs:comment ?commentEnx FILTER(STRSTARTS(LCASE(LANG(?commentEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?commentPick) && !BOUND(?commentPlain) && !BOUND(?commentEn) && !BOUND(?commentEnx)) ?item rdfs:comment ?commentAny FILTER(isLiteral(?commentAny))
+      FILTER NOT EXISTS { ?item rdfs:comment ?commentLess FILTER(isLiteral(?commentLess) && STR(?commentLess) < STR(?commentAny)) } }
+    BIND(STR(COALESCE(?commentPick, ?commentPlain, ?commentEn, ?commentEnx, ?commentAny)) AS ?comment)
+    # (Walked up from the items that may need it - a component with a key, an entry - to a case of a
+    # switch under the location's root.)
+    OPTIONAL { SELECT ?item (MIN(?shownKey) AS ?shown) WHERE {
+      { ?item key:shortcut ?anyShortcut } UNION { $this c:entries/rdf:rest*/rdf:first ?item }
+      FILTER(isIRI(?item))
+      ?item (^nav:from/nav:to)* ?case2 . ?case2 c:when ?when2 .
+      ?switch2 c:cases/rdf:rest*/rdf:first ?case2 ; c:controls ?subject2 ; c:property ?property2 .
+      ?loc a nav:Location ; nav:root ?root ; nav:dimensions ?dims .
+      ?root (^nav:to/nav:from)* ?switch2 .
+      ?dims rdf:rest* ?dimCell . ?dimCell rdf:first ?dim2 .
+      ?dim2 nav:subject ?subject2 ; nav:property ?property2 .
+      FILTER NOT EXISTS { ?dim2 a nav:TargetDimension }
+      { SELECT ?dims ?dimCell (COUNT(?before) AS ?dimAt) WHERE { ?dims rdf:rest* ?before . ?before rdf:rest+ ?dimCell } GROUP BY ?dims ?dimCell }
+      # The first location by IRI, its innermost dimension: the least key wins.
+      BIND(CONCAT(STR(?loc), " ", SUBSTR("000000", STRLEN(STR(1000 - ?dimAt)) + 1), STR(1000 - ?dimAt), " ", STR(?when2)) AS ?shownKey)
+    } GROUP BY ?item }
+    BIND(IF(BOUND(?shown) && !?isCommand, IRI(REPLACE(?shown, "^[^ ]* [0-9]* ", "")), ?none) AS ?shownValue)
+    BIND(COALESCE(?shownValue, <urn:semblance:none>) AS ?shownNode)
+    OPTIONAL {
+      ?shownNode c:label ?shownLabelCPick . FILTER(isLiteral(?shownLabelCPick))
+      ?viewer l10n:prefers ?shownLabelCPref . ?shownLabelCPref l10n:code ?shownLabelCCode ; sem:order ?shownLabelCRank .
+      BIND(LCASE(LANG(?shownLabelCPick)) AS ?shownLabelCTag)
+      FILTER(?shownLabelCTag = ?shownLabelCCode || STRSTARTS(?shownLabelCTag, CONCAT(?shownLabelCCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?shownLabelCBetter . ?shownLabelCBetter l10n:code ?shownLabelCCode2 ; sem:order ?shownLabelCRank2 .
+        ?shownNode c:label ?shownLabelCOther . FILTER(isLiteral(?shownLabelCOther))
+        BIND(LCASE(LANG(?shownLabelCOther)) AS ?shownLabelCTag2)
+        FILTER(?shownLabelCTag2 = ?shownLabelCCode2 || STRSTARTS(?shownLabelCTag2, CONCAT(?shownLabelCCode2, "-")))
+        FILTER(?shownLabelCRank2 < ?shownLabelCRank || (?shownLabelCRank2 = ?shownLabelCRank && ?shownLabelCTag2 = ?shownLabelCCode2 && ?shownLabelCTag != ?shownLabelCCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick)) ?shownNode c:label ?shownLabelCPlain FILTER(isLiteral(?shownLabelCPlain) && LANG(?shownLabelCPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain)) ?shownNode c:label ?shownLabelCEn FILTER(LCASE(LANG(?shownLabelCEn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain) && !BOUND(?shownLabelCEn)) ?shownNode c:label ?shownLabelCEnx FILTER(STRSTARTS(LCASE(LANG(?shownLabelCEnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?shownLabelCPick) && !BOUND(?shownLabelCPlain) && !BOUND(?shownLabelCEn) && !BOUND(?shownLabelCEnx)) ?shownNode c:label ?shownLabelCAny FILTER(isLiteral(?shownLabelCAny))
+      FILTER NOT EXISTS { ?shownNode c:label ?shownLabelCLess FILTER(isLiteral(?shownLabelCLess) && STR(?shownLabelCLess) < STR(?shownLabelCAny)) } }
+    BIND(STR(COALESCE(?shownLabelCPick, ?shownLabelCPlain, ?shownLabelCEn, ?shownLabelCEnx, ?shownLabelCAny)) AS ?shownLabelC)
+    OPTIONAL {
+      ?shownNode rdfs:label ?shownLabelRPick . FILTER(isLiteral(?shownLabelRPick))
+      ?viewer l10n:prefers ?shownLabelRPref . ?shownLabelRPref l10n:code ?shownLabelRCode ; sem:order ?shownLabelRRank .
+      BIND(LCASE(LANG(?shownLabelRPick)) AS ?shownLabelRTag)
+      FILTER(?shownLabelRTag = ?shownLabelRCode || STRSTARTS(?shownLabelRTag, CONCAT(?shownLabelRCode, "-")))
+      FILTER NOT EXISTS {
+        ?viewer l10n:prefers ?shownLabelRBetter . ?shownLabelRBetter l10n:code ?shownLabelRCode2 ; sem:order ?shownLabelRRank2 .
+        ?shownNode rdfs:label ?shownLabelROther . FILTER(isLiteral(?shownLabelROther))
+        BIND(LCASE(LANG(?shownLabelROther)) AS ?shownLabelRTag2)
+        FILTER(?shownLabelRTag2 = ?shownLabelRCode2 || STRSTARTS(?shownLabelRTag2, CONCAT(?shownLabelRCode2, "-")))
+        FILTER(?shownLabelRRank2 < ?shownLabelRRank || (?shownLabelRRank2 = ?shownLabelRRank && ?shownLabelRTag2 = ?shownLabelRCode2 && ?shownLabelRTag != ?shownLabelRCode))
+      }
+    }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick)) ?shownNode rdfs:label ?shownLabelRPlain FILTER(isLiteral(?shownLabelRPlain) && LANG(?shownLabelRPlain) = "") }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain)) ?shownNode rdfs:label ?shownLabelREn FILTER(LCASE(LANG(?shownLabelREn)) = "en") }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain) && !BOUND(?shownLabelREn)) ?shownNode rdfs:label ?shownLabelREnx FILTER(STRSTARTS(LCASE(LANG(?shownLabelREnx)), "en-")) }
+    OPTIONAL { FILTER(!BOUND(?shownLabelRPick) && !BOUND(?shownLabelRPlain) && !BOUND(?shownLabelREn) && !BOUND(?shownLabelREnx)) ?shownNode rdfs:label ?shownLabelRAny FILTER(isLiteral(?shownLabelRAny))
+      FILTER NOT EXISTS { ?shownNode rdfs:label ?shownLabelRLess FILTER(isLiteral(?shownLabelRLess) && STR(?shownLabelRLess) < STR(?shownLabelRAny)) } }
+    BIND(STR(COALESCE(?shownLabelRPick, ?shownLabelRPlain, ?shownLabelREn, ?shownLabelREnx, ?shownLabelRAny)) AS ?shownLabelR)
+    BIND(COALESCE(?shownLabelC, ?shownLabelR, REPLACE(STR(?shownNode), "^.*[#/]", "")) AS ?shownLabel)
+    BIND(IF(BOUND(?place), IF(BOUND(?up), ?upLabel, ?none), COALESCE(STR(COALESCE(?helpTwin, ?helpOnly)), ?comment, IF(BOUND(?shownValue), ?shownLabel, ?none))) AS ?help0)
+    BIND(IF(?help0 != "", ?help0, ?none) AS ?help)
+    LATERAL { OPTIONAL { SELECT ?label (GROUP_CONCAT(?searchKey0Part; separator="") AS ?searchKey0) WHERE {
+      { SELECT ?label ?searchKey0Part WHERE { (?label) sx:chars (?searchKey0Ch ?searchKey0At)
+          BIND(sx:sortKey(?searchKey0Ch, "en") AS ?searchKey0Base) BIND(LCASE(?searchKey0Ch) AS ?searchKey0Lower)
+          BIND(IF(STRLEN(?searchKey0Base) = 1, ?searchKey0Base, IF(STRLEN(?searchKey0Lower) = 1, ?searchKey0Lower, ?searchKey0Ch)) AS ?searchKey0Part) } ORDER BY ?searchKey0At }
+    } GROUP BY ?label } }
+    BIND(COALESCE(?searchKey0, "") AS ?searchKey)
+    BIND(IRI(CONCAT(STR($this), "/~term-", ENCODE_FOR_URI(STR(?item)))) AS ?node)
+    # Its section: the least it names, else by what it is.
+    LATERAL { OPTIONAL { ?item c:paletteSection ?declaredSection FILTER NOT EXISTS { ?item c:paletteSection ?otherSection FILTER(STR(?otherSection) < STR(?declaredSection)) } } }
+    LATERAL { OPTIONAL { ?item c:to ?declaredTo FILTER(isIRI(?declaredTo)) } }
+    BIND(COALESCE(?declaredSection, IF(?isCommand, c:CommandsSection, IF(BOUND(?declaredTo) || ?placed = 1, c:PlacesSection, c:ActionsSection))) AS ?section)
+  }
+  # A section's label: its rdfs:label in the viewer's language, else its local name.
+  BIND(COALESCE(?section, <urn:semblance:none>) AS ?sectionAbout)
+  OPTIONAL { ?sectionAt l10n:of ?sectionAbout ; l10n:name ?sectionTwin }
+  OPTIONAL { FILTER(!BOUND(?sectionTwin)) ?sectionAbout rdfs:label ?sectionOnly FILTER(isLiteral(?sectionOnly)) }
+  BIND(IF(BOUND(?section), COALESCE(STR(COALESCE(?sectionTwin, ?sectionOnly)), REPLACE(STR(?section), "^.*[#/]", "")), ?none) AS ?sectionLabel)
+  BIND(IF(BOUND(?section), IRI(CONCAT(STR($this), "/~l10n-section-", ENCODE_FOR_URI(STR(?section)))), ?none) AS ?sectionNode)
+}""" .
 
 # --- the options: minted once, when the palette opens ------------------------------------------------
 # Before the components render (stratum -5), so the palette's own rule reads them. It does not hear

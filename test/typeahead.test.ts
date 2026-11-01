@@ -9,8 +9,8 @@ import { mountShell } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 
-function inputs(kind: 'oxigraph' | 'wat' = 'oxigraph') {
-  const h = mountShell(5, kind, 'sparql')
+function inputs(kind: 'oxigraph' | 'wat' = 'oxigraph', prefer: 'sparql' | 'function' = 'sparql') {
+  const h = mountShell(5, kind, prefer)
   h.showPage('Components')
   const { store, runtime } = h
   const f = store.factory
@@ -328,6 +328,56 @@ describe.each(['oxigraph', 'wat'] as const)('tag input (%s)', (kind) => {
     const text = runtime.project({ modality: MOD.Text, name: 'text', roots: [UI + 'inp-tags-col', UI + 'inp-combo-col'] })
     expect(toText(text.index, UI + 'inp-tags-labels')).toBe('Labels: ‹a11y› ‹design› [_]')
     expect(toText(text.index, UI + 'inp-combo-country')).toBe('Country: [Portugal_] ▾')
+  })
+})
+
+// The texts layer (#7): labels in the viewer's language, prefixed names and their details, and keys
+// folded one character at a time (sx:sortKey of each, joined in order), the same from the SPARQL rules
+// as from their function twins; on wat (Oxigraph has no sx: functions, so it runs the twins either way).
+describe('the texts layer, SPARQL and function rules alike (wat)', () => {
+  /** What the texts layer derived: every triple about a typeahead's text nodes, and the folded query. */
+  const texts = (h: ReturnType<typeof inputs>) => {
+    const graph = h.screen.engine.graph
+    return h.store
+      .match(null, null, null, graph)
+      .filter((q) => /^[^~]*inp-(combo|tags)-[a-z]+\/~(term-|l10n-)/.test(q.subject.value.replace(UI, '')) || q.predicate.value === NS.c + 'foldedQuery')
+      .filter((q) => !q.predicate.value.startsWith(NS.prov))
+      .map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.termType} ${q.object.value}`)
+      .sort()
+  }
+
+  it('chooses the SPARQL rules on wat', () => {
+    const rules = (inputs('wat').screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+    for (const slot of ['TypeaheadTexts', 'TypeaheadValueTexts', 'TypeaheadQuery']) expect(rules.find((r) => r.slot === NS.c + slot)?.kind, slot).toBe('sparql')
+  })
+
+  it('derives the same texts in every language, and as one types, picks, creates and removes', () => {
+    const sites = [inputs('wat', 'sparql'), inputs('wat', 'function')]
+    const same = (what = 'at start') => {
+      const [a, b] = sites.map(texts)
+      expect(a!.length).toBeGreaterThan(100)
+      // What only one side derived (an empty pair when they agree).
+      expect([a!.filter((x) => !b!.includes(x)), b!.filter((x) => !a!.includes(x))], what).toEqual([[], []])
+    }
+    same()
+    for (const languages of [['uk'], ['de'], ['ar'], ['en']]) {
+      for (const h of sites) h.screen.engine.reconfigure({ languages })
+      for (const h of sites) h.shell.flush()
+      same(languages.join())
+    }
+    const step = (act: (h: ReturnType<typeof inputs>) => void) => {
+      for (const h of sites) act(h)
+      same(act.toString())
+    }
+    step((h) => h.type('inp-combo-country', '  CURAÇ '))
+    step((h) => h.type('inp-combo-country', '\u00a0Réu\u2003'))
+    step((h) => h.press('inp-combo-country', 'Enter'))
+    step((h) => h.type('inp-combo-team', 'Quality Ops'))
+    step((h) => h.press('inp-combo-team', 'Enter'))
+    step((h) => h.type('inp-tags-labels', 'ünïcode'))
+    step((h) => h.press('inp-tags-labels', 'Enter'))
+    step((h) => h.click(h.root('inp-tags-topics').querySelector('.sem-ta-pills [data-sem-c=tag] button')!))
+    step((h) => h.type('inp-combo-country', ''))
   })
 })
 
