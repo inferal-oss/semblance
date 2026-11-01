@@ -161,7 +161,7 @@ Box trees were measured in Chromium (the cached headless shell, driven over the 
 | bug | before the fix | after |
 |---|---|---|
 | #34 controls of one form at different heights (999e2af → 19ae80a) | "A form's single-line controls are one height": the Role select is 4.5 px off in Classic and Cupertino, the date 3.5 px in Semblance | clean |
-| #57 checkout code + phone (main → PR #125) | "Fields side by side line up": the Code pill's top is 27.5 px from the Phone input's, in Semblance, Doodle and RTL | clean in Semblance and RTL, at 1280 and 375 px (the row wraps on a phone and is checked line by line); Doodle shows 1.1 px, its tilted card (see below) |
+| #57 checkout code + phone (main → PR #125) | "Fields side by side line up": the Code pill's top is 27.5 px from the Phone input's, in Semblance, Doodle and RTL | clean in Semblance, Doodle and RTL, at 1280 and 375 px (the row wraps on a phone and is checked line by line) |
 | #53 nav items out of their list (08b62ec → 27d4e65) | "Navigation items fit their list": every item is 9.3 px out at 375 px. No label on the site was long enough, so both checkouts were measured with one label lengthened, the way the issue's own theme test does it | clean |
 | 320 px (70de219 → 71686f3) | Inspection: the dock panel is 43 px out of its specimen, and the page is 19 px too wide | page fits |
 | 375 px (a050a46 → a5fc6b7) | Themes / Data / Type pages are 164–663 px too wide | page fits. Also caught: progress bars 8 px out of their specimens, the `c:Progress` 260 px minimum that 71686f3 fixed a day later |
@@ -243,10 +243,8 @@ Reading the numbers:
 a loaded machine the update after "Continue to shipping" outran the watchdog's turn budget, the page
 waited behind "The page is busy", and no field was measured, so the check passed with nothing to
 check. `scripts/layout-check.ts` now resumes suspended updates. Re-recorded on `main`, the row is clean
-in Semblance and RTL, and in Doodle it is 1.1 px off: Doodle tilts its card, and rotated boxes drift
-about 0.55 px per field along a row. That recording has transformed boxes; both recorders and
-`rnd:Layout` measure layout boxes since #192, so a theme's tilt is not a misalignment. The
-checkout is re-recorded once it renders again (on `main` it stops at a stratification error of
-`c:DescriptionPairs`, #7). #125 also
+in Semblance and RTL; Doodle first read 1.1 px off, as it tilts its card and rotated boxes drift
+about 0.55 px per field along a row. Both recorders and `rnd:Layout` measure layout boxes since
+#192, so a theme's tilt is not a misalignment: re-recorded so (#256), Doodle is clean too. #125 also
 changed the field anatomy: `lc:FieldRow` now covers `pos:FieldRow`, and a Choice with its label
 above is a label (its span) and a control (its select) like any field.

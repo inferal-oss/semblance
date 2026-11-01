@@ -53,13 +53,10 @@ const EXPECTED: [RegExp, string[]][] = [
   [/^375-after_components-(data|type)/, []],
   [/^375-after_components-themes/, ['contentStaysInCards']], // c:Progress's 260px minimum, fixed by 71686f3
   // #57: the checkout's code and phone fields (before PR #125: 57-main; after it, on main: 57-after);
-  // on a phone they wrap. Doodle tilts its card, so its rotated boxes drift 0.55 px per field along a
-  // row: 1.1 px over three, just past the tolerance. Recorded before the recorders measured layout
-  // boxes (#192); to be re-recorded when the checkout renders on main again
+  // on a phone they wrap. Doodle's 1280 px recording is of layout boxes, before its card's tilt (#192, #256)
   [/^57-main_.*_1280_/, ['fieldRowControlsShareTops']],
   [/^57-main_.*_375_/, []],
-  [/^57-after_examples-checkout_1280_doodle/, ['fieldRowControlsShareTops']],
-  [/^57-after_.*_(375_|semblance)/, []],
+  [/^57-after_/, []],
   // main at 320px; the themes page's frame specimens fit since #195 (a frame's minimum width is capped at its container)
   [/^today_components-(themes|inspection|navigation|feedback)_320/, []],
   // #233: a card's header actions in a row that does not wrap (the windows page, the dashboard), and a
