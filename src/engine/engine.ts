@@ -9,6 +9,7 @@ import type { Watchdog } from './watchdog.ts'
 import { Parked } from './parked.ts'
 import { ExactIndex } from './exact.ts'
 import type { Lookup } from '../view/deps.ts'
+import { probeLookup } from '../view/lookup.ts'
 
 export interface EngineOptions {
   modality: string
@@ -953,24 +954,7 @@ export class Engine {
 
   /** Lookups over the graphs rules read, with the batch's removed triples put back (old and new state together). */
   private exactLookup(): Lookup {
-    const removed = this.removedBatch
-    const graphs = this.graphs
-    return (s, p, o, g) => {
-      const out: Quad[] = []
-      const seen = new Set<string>()
-      const put = (x: Quad) => {
-        const k = termKey(x.subject) + ' ' + x.predicate.value + ' ' + termKey(x.object)
-        if (!seen.has(k)) seen.add(k), out.push(x)
-      }
-      // A literal (or a variable's stand-in) never is a subject or a predicate: nothing matches.
-      if ((s && s.termType === 'Literal') || (p && p.termType !== 'NamedNode')) return out
-      for (const graph of g ? [g] : graphs) for (const x of this.store.match(s as never, p as never, o as never, graph as never)) put(x)
-      if (removed.length) {
-        const pool = s ? this.removedBy.get('s' + termKey(s)) : o ? this.removedBy.get('o' + termKey(o)) : p ? this.removedBy.get('p' + p.value) : removed
-        for (const x of pool ?? []) if ((!s || x.subject.equals(s)) && (!p || x.predicate.equals(p)) && (!o || x.object.equals(o)) && (!g || x.graph.equals(g))) put(x)
-      }
-      return out
-    }
+    return probeLookup({ store: this.store, graphs: this.graphs, removed: this.removedBatch, removedBy: this.removedBy, graphMode: 'any' })
   }
 
   private touchFollowers(followers: Set<Follower> | undefined, q: Quad) {
