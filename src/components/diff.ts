@@ -1,6 +1,6 @@
 import type { FnRule } from '../engine/context.ts'
 import { C, NS } from '../ns.ts'
-import { nodes, text } from './util.ts'
+import { nodes, RDFS_LABEL, text } from './util.ts'
 
 const change = (value: string | undefined) => value === NS.c + 'DiffAdded' ? ['added', '+']
   : value === NS.c + 'DiffRemoved' ? ['removed', '-'] : ['context', ' ']
@@ -23,7 +23,8 @@ const lineScreen: FnRule = (ctx, focus) => {
   const value = ctx.object(focus, C.value)
   if (!value) return []
   const [kind, sign] = change(ctx.object(focus, NS.c + 'diffKind')?.value)
-  const description = `${kind === 'context' ? 'Unchanged' : kind === 'added' ? 'Added' : 'Removed'}: ${value.value}`
+  const status = ctx.object(focus, NS.c + 'diffKind') ?? ctx.nn(NS.c + 'DiffContext')
+  const description = `${text(ctx, status, RDFS_LABEL) ?? 'Unchanged'}: ${value.value}`
   const out = ctx.out(focus)
   const marker = out.el('sign', 'Span', { class: 'sem-sign', 'aria-hidden': 'true' }, [out.text('sign-text', sign!)])
   const code = out.el('code', 'Code', {}, [out.text('text', value.value)])
