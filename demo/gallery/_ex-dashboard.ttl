@@ -201,7 +201,8 @@ SELECT ?option (COALESCE(SUM(?n), 0) AS ?count) WHERE {
 } GROUP BY ?option""" .
 
 # The cube's own account of its last step, against what a from-scratch run reads.
-dx:qWork a sem:View ; sem:select """
+# A view over the runtime's figures about the cube (iv:reads dx:Cube): stepped when they are written.
+dx:qWork a sem:View , iv:View ; iv:materialize iv:Graph ; iv:reads dx:Cube ; iv:whileShown ui:ex-dashboard ; sem:select """
 SELECT ?value ?max ?label WHERE {
   OPTIONAL { dx:Cube iv:lastRows ?last ; iv:inputRows ?reads }
   BIND(COALESCE(?last, 0) AS ?value)

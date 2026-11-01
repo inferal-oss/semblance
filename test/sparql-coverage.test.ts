@@ -47,8 +47,6 @@ describe('SPARQL coverage', () => {
     expect(awaiting).toEqual([
       // The combobox work (#14) brings the typeahead's function twins.
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
-      // Views over derived triples (#147): formulas over a sheet's derived inputs or a view's figures.
-      { rendering: 'QueryFormula', issue: '147' },
     ])
   })
 

@@ -166,8 +166,10 @@ SELECT ?label ?tone WHERE {
 }""" .
 
 # Each tile's quiet line: the last change's work against what counting again would read (the
-# views' own figures, iv:lastRows and iv:inputRows; $this is the line, c:of its views).
-wh:qCost a sem:View ; sem:select """
+# views' own figures, iv:lastRows and iv:inputRows; $this is the line, c:of its views). A view per
+# line (iv:perReferrer) over what the runtime writes about the views it names (iv:reads).
+wh:qCost a sem:View , iv:View ; iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ;
+    iv:reads wh:OnHand , wh:SoldLastHour , wh:Recorded , wh:Stock , wh:Reorder , wh:BestSellers ; sem:select """
 SELECT ?label WHERE {
   { SELECT (SUM(?l) AS ?last) (SUM(?r) AS ?reads) (SUM(?t) AS ?ticks) (COUNT(?v) AS ?n)
     WHERE { $this c:of ?v . ?v iv:lastRows ?l ; iv:inputRows ?r ; iv:ticks ?t } }

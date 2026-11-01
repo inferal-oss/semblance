@@ -102,12 +102,17 @@ describe('a spreadsheet of resources and queries', () => {
     const ran: string[] = []
     // (the formula layer is offered every cell; a value cell is passed over)
     const formula = (focus: string) => s.store.match(s.store.factory.namedNode(focus), s.store.factory.namedNode(C + 'formulaText'), null).length > 0
-    const stop = s.screen.engine.onEvaluate((slot, focus) => (slot.endsWith('#Formula') || slot.endsWith('#QueryFormula')) && focus.startsWith(SS) && formula(focus) && ran.push(focus.slice(SS.length)))
+    // A formula is a view per cell (stepped when what it reads changes) and the formula layer's rule.
+    const record = (focus: string | undefined) => focus?.startsWith(SS) && formula(focus) && ran.push(focus.slice(SS.length))
+    const rules = s.screen.engine.onEvaluate((slot, focus) => slot.endsWith('#Formula') && record(focus))
+    const views = s.runtime.views.onStep((v) => record(v.focus))
+    const stop = () => (rules(), views())
     const edit = (text: string) => {
       ran.length = 0
       const before = s.screen.engine.stats.ruleRuns
+      const rows = s.runtime.views.totals.rowsIn
       s.type('B4', text)
-      return { formulas: [...new Set(ran)].sort(), ruleRuns: s.screen.engine.stats.ruleRuns - before }
+      return { formulas: [...new Set(ran)].sort(), ruleRuns: s.screen.engine.stats.ruleRuns - before, viewRows: s.runtime.views.totals.rowsIn - rows }
     }
     edit('4000') // the first change also starts the trace
     const small = edit('4001')

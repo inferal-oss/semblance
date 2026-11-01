@@ -7,16 +7,19 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
 
 # Sheets: cells are resources, formulas are queries, and the graph keeps them up to date.
 #
 # A c:Sheet places its cells (c:cell, each a c:SheetCell with a c:row and a c:column, both
 # numbers; columns are lettered A, B, C…). A cell either holds a value (c:value, which the reader
-# edits) or computes one: c:valueQuery names a SELECT (a sem:View) whose ?value is the cell's, and
+# edits) or computes one: c:valueQuery names a SELECT (a maintained iv:View) whose ?value is the cell's, and
 # c:dataset names the cells it reads - or says its formula as people write it (c:formulaText
-# "=SUM(B2:B5)"), which c:SheetFormula reads into both. The formula layer (ontology/components/formula.ttl) runs
-# the query and follows c:dataset, so a change re-runs exactly the cells that read it, and those
-# that read them - the dependency graph is the data's own. Selecting a cell shows its formula and
+# "=SUM(B2:B5)"), which c:SheetFormula reads into both. Each formula is a maintained view, one per
+# cell (iv:perReferrer c:valueQuery), over the cells it reads - their values as given, or as their
+# own formulas give them (iv:reads c:Formula) - and the formula layer (ontology/components/formula.ttl)
+# writes its value on the cell; so a change reaches exactly the cells that read it, and those that
+# read them - the dependency graph is the data's own. Selecting a cell shows its formula and
 # draws its dependencies: arrows from the cells it reads, and to the cells that read it. With
 # c:traceRecalculation, the host writes which formulas the last change re-ran (c:recalculated), and
 # the sheet marks them. Typing a formula into a cell and committing it makes it a formula cell
@@ -244,7 +247,8 @@ WHERE {
 
 c:SheetFunction a owl:Class ; rdfs:subClassOf sem:View ;
     rdfs:comment """A query a sheet's formula text names: a function over a range (c:functionName, "=SUM(B2:B5)") or an
-operator between two cells (c:operator, "=B2*C2"). $this is the cell; its inputs are its c:dataset."""@en .
+operator between two cells (c:operator, "=B2*C2"). $this is the cell; its inputs are its c:dataset. Each is a maintained
+view per cell that names it (iv:perReferrer c:valueQuery), reading what c:SheetFormula and c:Formula derive (iv:reads)."""@en .
 c:functionName a owl:DatatypeProperty ; rdfs:domain c:SheetFunction ;
     rdfs:comment "How a formula names the function, in capitals (\"SUM\")."@en .
 c:operator a owl:DatatypeProperty ; rdfs:domain c:SheetFunction ;
@@ -258,21 +262,29 @@ c:addsRowTo a owl:ObjectProperty ; rdfs:range c:Sheet ;
 c:addsColumnTo a owl:ObjectProperty ; rdfs:range c:Sheet ;
     rdfs:comment "On a sheet's control: the sheet activating it adds a column to (c:AddSheetColumn)."@en .
 
-c:SumFormula a c:SheetFunction , sem:View ; c:functionName "SUM" ; rdfs:label "the sum of a range"@en ;
+c:SumFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "SUM" ; rdfs:label "the sum of a range"@en ;
     sem:select """SELECT (SUM(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:AverageFormula a c:SheetFunction , sem:View ; c:functionName "AVERAGE" ; rdfs:label "the average of a range (to hundredths)"@en ;
+c:AverageFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "AVERAGE" ; rdfs:label "the average of a range (to hundredths)"@en ;
     sem:select """SELECT ((ROUND(AVG(xsd:decimal(?v)) * 100) / 100) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:MinFormula a c:SheetFunction , sem:View ; c:functionName "MIN" ; rdfs:label "the least of a range"@en ;
+c:MinFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "MIN" ; rdfs:label "the least of a range"@en ;
     sem:select """SELECT (MIN(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:MaxFormula a c:SheetFunction , sem:View ; c:functionName "MAX" ; rdfs:label "the greatest of a range"@en ;
+c:MaxFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:functionName "MAX" ; rdfs:label "the greatest of a range"@en ;
     sem:select """SELECT (MAX(xsd:decimal(?v)) AS ?value) WHERE { $this c:dataset ?input . ?input c:value ?v }""" .
-c:AddFormula a c:SheetFunction , sem:View ; c:operator "+" ; rdfs:label "one cell plus another"@en ;
+c:AddFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "+" ; rdfs:label "one cell plus another"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) + xsd:decimal(?b) AS ?value) }""" .
-c:SubtractFormula a c:SheetFunction , sem:View ; c:operator "-" ; rdfs:label "one cell minus another"@en ;
+c:SubtractFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "-" ; rdfs:label "one cell minus another"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) - xsd:decimal(?b) AS ?value) }""" .
-c:MultiplyFormula a c:SheetFunction , sem:View ; c:operator "*" ; rdfs:label "one cell times another"@en ;
+c:MultiplyFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "*" ; rdfs:label "one cell times another"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b BIND(xsd:decimal(?a) * xsd:decimal(?b) AS ?value) }""" .
-c:DivideFormula a c:SheetFunction , sem:View ; c:operator "/" ; rdfs:label "one cell over another (to four places)"@en ;
+c:DivideFormula a c:SheetFunction , sem:View , iv:View ;
+    iv:materialize iv:Graph ; iv:perReferrer c:valueQuery ; iv:reads c:SheetFormula , c:Formula ; c:operator "/" ; rdfs:label "one cell over another (to four places)"@en ;
     sem:select """SELECT ?value WHERE { $this c:leftOperand ?x ; c:rightOperand ?y . ?x c:value ?a . ?y c:value ?b FILTER(xsd:decimal(?b) != 0) BIND(ROUND(xsd:decimal(?a) / xsd:decimal(?b) * 10000) / 10000 AS ?value) }""" .
 
 # For the whole sheet at once, before anything that reads a cell's inputs (its grid, its arrows, its
