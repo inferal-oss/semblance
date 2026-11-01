@@ -39,11 +39,16 @@ const halt = (all: WeakRef<Persistence>[]) => {
 beforeEach(() => {
   inTest = true
 })
+// Then the turn ends. V8 keeps what a WeakRef was made for or deref'd to alive until the microtask
+// queue drains (N3's stores make them, and so does this file), and vitest goes from one synchronous
+// test to the next in microtasks: without a macrotask between them, every site a file mounts stays
+// alive until the file ends (the reference tests reached 4 GB at about 300 MB a test).
 afterEach(() => {
   inTest = false
   stop(sandboxesOfTest)
   halt(persistenceOfTest)
   dispose(ofTest)
+  return new Promise<void>((resolve) => setImmediate(resolve))
 })
 afterAll(() => {
   stop(sandboxesOfFile)
