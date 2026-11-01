@@ -101,6 +101,7 @@ export const ORD = {
 
 export const SEM = {
   watchesAnywhere: sem + 'watchesAnywhere',
+  watchesStatements: sem + 'watchesStatements',
   Component: sem + 'Component',
   Rule: sem + 'Rule',
   targets: sem + 'targets',

@@ -44,6 +44,11 @@ export interface Rule {
    * shape result): a change to a triple with one of them makes each of its foci due.
    */
   anywhere: string[]
+  /**
+   * sem:watchesStatements: its focus is a property, and the rule reads the statements made with it
+   * on any node (`?s $this ?o`): a change to one makes that focus dirty.
+   */
+  watchesStatements: boolean
   /** Re-run when other rules change nodes minted under the same focus. */
   readsMinted: boolean
   /**
@@ -189,6 +194,7 @@ export function loadRules(store: GraphStore): Rule[] {
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach,
       anywhere: getAll(SEM.watchesAnywhere),
+      watchesStatements: get(SEM.watchesStatements)?.value === 'true',
       memberWatches:
         getAll(SEM.memberWatches).length || getAll(SEM.memberWatchesVia).length
           ? { predicates: new Set(getAll(SEM.memberWatches)), via: getAll(SEM.memberWatchesVia) }
