@@ -77,13 +77,14 @@ function workbench(store: GraphStore): GraphStore {
  * The shell with persistence over the given backends, as the host runs it: remembered
  * state is restored before the first projection; `persistence.flush()` writes now.
  */
-export async function mountRemembering(backends: Record<string, Backend>, clock?: Clock) {
-  const store = workbench(sources(loadStore('oxigraph', todoApp(5), appGraph, ...gallery)))
+export async function mountRemembering(backends: Record<string, Backend>, clock?: Clock, held: string[] = []) {
+  const keep = Object.entries(galleryFiles).filter(([p]) => !held.some((h) => p.endsWith('/' + h)))
+  const store = workbench(sources(loadStore('oxigraph', todoApp(5), appGraph, ...keep.map(([, t]) => t))))
   const persistence = new Persistence(store, backends, { delayMs: 60_000 })
   await persistence.restore()
   const shell = mount(store, 'sparql', clock)
   persistence.attach(shell.runtime)
-  return { ...shell, persistence }
+  return { ...shell, persistence, later: held.map((h) => galleryFiles['demo/gallery/' + h]!) }
 }
 
 /**

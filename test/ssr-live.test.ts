@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
-import { loadSite, renderSite } from '../src/node/site.ts'
+import { loadSite, namedGraphs, renderSite } from '../src/node/site.ts'
 import { Navigation } from '../src/navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
@@ -29,7 +29,7 @@ const site = () => loadSite(new URL('semblance.config.ts', root).pathname)
 /** The site's client up to its first render, as demo/main.ts runs it (empty storage). */
 async function siteClient(url: string) {
   const s = await site()
-  const store = loadStore('wat', ...(await s.graphs()))
+  const store = loadStore('wat', ...Object.values(await namedGraphs(s)))
   s.setup?.(store, { single: false })
   const u = new URL(url, 'https://semblance.test/')
   await new Navigation(store, { root: ROOT, location: { pathname: u.pathname, search: u.search, hash: u.hash }, history: { pushState() {}, replaceState() {} }, events: new EventTarget(), links: new EventTarget() }).restore()
@@ -82,7 +82,7 @@ describe('live examples rendered on the server', () => {
 
   it('builds one sandbox per example shown, and lets each go once serialized', async () => {
     const s = await site()
-    const store = loadStore('wat', ...(await s.graphs()))
+    const store = loadStore('wat', ...Object.values(await namedGraphs(s)))
     s.setup?.(store, { single: false })
     const loaded: GraphStore[] = []
     const disposed = new Set<GraphStore>()

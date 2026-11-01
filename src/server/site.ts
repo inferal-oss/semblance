@@ -8,10 +8,25 @@ import type { GraphStore } from '../store/types.ts'
 export interface Site {
   /** The component the client mounts: the root of the projection. */
   root: string
-  /** The app's Turtle (the framework's ontology comes with every store). */
-  graphs(): string[] | Promise<string[]>
-  /** After the store is loaded, before the address is read (data the host records; `single`: one self-contained file). */
-  setup?(store: GraphStore, ctx: { single: boolean }): void
+  /**
+   * The app's Turtle (the framework's ontology comes with every store): a list, or graphs by name
+   * (in load order), of which each page names those its client loads first (pageGraphs).
+   */
+  graphs(): string[] | Record<string, string> | Promise<string[] | Record<string, string>>
+  /**
+   * After the store is loaded, before the address is read (data the host records; `single`: one
+   * self-contained file; `graphs`: the named graphs loaded, when not all of them are).
+   */
+  setup?(store: GraphStore, ctx: { single: boolean; graphs?: ReadonlySet<string> }): void
+  /**
+   * Record in each page the graphs its client needs to render it first (`ontology/<file>` and the
+   * names `graphs` gives), checked against the page rendered with all of them (src/server/page-graphs.ts):
+   * its client loads those, takes the page over, and loads the rest in idle time.
+   */
+  pageGraphs?: {
+    /** The graphs every page's client loads first anyway (bundled with it). */
+    always?: string[]
+  }
   /** After the address is read, before the first projection: what the client writes there too. */
   prepare?(store: GraphStore): void
   /** The layers the client enables (DEFAULT_LAYERS otherwise). */

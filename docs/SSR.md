@@ -208,12 +208,41 @@ announcements.
 
 ## Bytes
 
-The client still loads the whole ontology and every example's graph before it is interactive.
-That is most of a phone's wait, since the page itself paints from the HTML. The Vite plugin bundles
-the framework's ontology without its comments and indentation: the same triples, 846 to 735 KiB
-gzipped. The examples' own Turtle is kept as written, because the site shows it as their source.
+A page needs part of the site's graphs to render, and a client that waits for all of them is
+interactive late: the ontology and every example's graph are most of a phone's wait, since the page
+itself paints from the HTML. So each page names the graphs its client needs first, and the client
+loads those, takes the page over, and loads the rest in idle time (`Site.pageGraphs`,
+`src/server/page-graphs.ts`).
 
-Loading graphs per page would have the client project a page from part of the graph. A page that
-links to a resource in another page's graph (a docs page linking to a specimen) would then render
-differently from the server until that graph arrived. Doing it without breaking parity needs a
-build-time manifest of what each page needs, checked page by page. That is the next step.
+- **The build finds them.** After rendering a page, it renders it again with function rules,
+  whose reads are traced: a graph is needed when it states a triple the page read (a subject and
+  predicate some rule read for something it renders), describes a rule with output, a node with
+  output or a class of one. Reads made for the viewer (every term's label in its languages, kept
+  whether or not a page shows it) are not counted.
+- **The build checks them.** The page rendered from only those graphs must be the page rendered
+  from all of them, byte for byte; otherwise it names none, and its client loads everything. A page
+  rendered in place after another (a Reference term) names none either.
+- **The page names them** in `<meta name="semblance-graphs">`: `ontology/<file>` for the
+  framework's files, the site's own names (`demo/gallery/inputs.ttl`) for the rest. Each graph is
+  a chunk of its own in the client build; with the plugin's `preload`, the page preloads those it
+  names.
+- **The client loads the rest** once it is interactive (`sem:ready`), in idle time: fetched, read
+  a file per slice, then loaded as one change through the runtime (`Runtime.load`, or
+  `runtime.apply` of parsed triples). Their rules join the running engine and are evaluated for
+  what is shown, their reactions the bus, their remembered state is restored
+  (`Persistence.restoreAdded`), and the live examples build from then (they need the whole
+  ontology). A test takes pages over with only their graphs and loads the rest without a change
+  (`test/ssr.test.ts`).
+
+On semblance.dev a page names about 80 of the site's 189 graphs: 60% of the bytes. The shell reads
+much of the rest itself (the taskbar lists every window, the theme menu every theme, the command
+palette every command). On a throttled phone (Slow 4G, CPU slowed 4×, HTTP/2), the landing page is
+interactive at 8.9 s instead of 9.8 s, an example's page at 9.25 s instead of 10.1 s, with the
+first paint unchanged (1.8 s); the rest follows in idle time, its change one task of about 2 s
+there (0.4 s on a laptop). With preloads, the graphs arrive earlier (interactive at 8.4 s) but
+share the network with the stylesheet: the first paint waited until 4.5 s. Finer pieces than whole
+files (a theme's name apart from its styles) would leave more for later.
+
+The Vite plugin bundles the framework's ontology without its comments and indentation: the same
+triples, 846 to 735 KiB gzipped. The examples' own Turtle is kept as written, because the site
+shows it as their source.

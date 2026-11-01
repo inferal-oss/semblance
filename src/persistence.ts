@@ -241,41 +241,86 @@ export class Persistence {
     }
     let total = 0
     for (const policy of this.policies()) {
-      if (!policy.enabled) continue
-      const raw = await this.backend(policy.scope).get(this.key(policy.iri))
-      if (!raw) continue
-      let blob: Blob
-      try {
-        blob = JSON.parse(raw)
-      } catch {
-        continue
-      }
-      const expired = policy.retentionMs !== undefined && Date.now() - blob.savedAt > policy.retentionMs
-      if (blob.version !== policy.version || expired) {
-        await this.removeStored(policy)
-        continue
-      }
-      const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
-      const held = new Map(this.parse(blob.nt).map((q) => [quadKey(q), q]))
-      for (let i = 1; i <= (blob.chunks ?? 0); i++) {
-        const raw = await this.backend(policy.scope).get(this.key(policy.iri) + '#' + i)
-        if (!raw) break
-        const chunk = JSON.parse(raw) as Chunk
-        for (const q of this.parse(chunk.remove)) held.delete(quadKey(q))
-        for (const q of this.parse(chunk.add)) held.set(quadKey(q), q)
-      }
-      const quads = [...held.values()].map((q) => f.quad(q.subject, q.predicate, q.object, g))
-      // What is restored replaces the current values of the same subject and property.
-      // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
-      const pairs = new Map(quads.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
-      if (!policy.graph) {
-        for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) this.store.delete(q)
-      }
-      for (const q of quads) if (!this.store.has(q)) this.store.add(q)
-      this.restoredCounts.set(policy.iri, quads.length)
-      total += quads.length
+      this.considered.add(policy.iri)
+      const change = await this.storedChange(policy)
+      if (!change) continue
+      for (const q of change.remove) this.store.delete(q)
+      for (const q of change.add) if (!this.store.has(q)) this.store.add(q)
+      this.restoredCounts.set(policy.iri, change.add.length)
+      total += change.add.length
     }
     return total
+  }
+
+  /** The policies restore() has seen (a graph loaded later may bring more: restoreAdded). */
+  private considered = new Set<string>()
+
+  /**
+   * Put back what the policies added since restore() stored (a graph loaded after start brought
+   * them), as one change through the runtime, so what shows them updates. Returns how many triples.
+   */
+  async restoreAdded(): Promise<number> {
+    const runtime = this.runtime
+    if (!runtime) return 0
+    const change: { add: Quad[]; remove: Quad[] } = { add: [], remove: [] }
+    for (const policy of this.policies()) {
+      if (this.considered.has(policy.iri)) continue
+      this.considered.add(policy.iri)
+      const c = await this.storedChange(policy)
+      if (!c) continue
+      change.add.push(...c.add)
+      change.remove.push(...c.remove)
+      this.restoredCounts.set(policy.iri, c.add.length)
+      this.record(PER + 'Restore', policy, c.add.length)
+    }
+    // Named graphs are input graphs too: each part goes where its policy keeps it.
+    const byGraph = new Map<string, { add: Quad[]; remove: Quad[] }>()
+    for (const [k, qs] of [['add', change.add], ['remove', change.remove]] as const) {
+      for (const q of qs) {
+        const g = q.graph.termType === 'DefaultGraph' ? '' : q.graph.value
+        let d = byGraph.get(g)
+        if (!d) byGraph.set(g, (d = { add: [], remove: [] }))
+        d[k].push(q)
+      }
+    }
+    for (const [g, d] of byGraph) (g ? runtime.write(g, d) : runtime.apply(d))
+    return change.add.length
+  }
+
+  /** What restoring a policy changes: its stored triples, replacing the current values of their subjects and properties (none: nothing stored, or disabled). */
+  private async storedChange(policy: Policy): Promise<{ add: Quad[]; remove: Quad[] } | undefined> {
+    const f = this.store.factory
+    if (!policy.enabled) return undefined
+    const raw = await this.backend(policy.scope).get(this.key(policy.iri))
+    if (!raw) return undefined
+    let blob: Blob
+    try {
+      blob = JSON.parse(raw)
+    } catch {
+      return undefined
+    }
+    const expired = policy.retentionMs !== undefined && Date.now() - blob.savedAt > policy.retentionMs
+    if (blob.version !== policy.version || expired) {
+      await this.removeStored(policy)
+      return undefined
+    }
+    const g = policy.graph ? f.namedNode(policy.graph) : f.defaultGraph()
+    const held = new Map(this.parse(blob.nt).map((q) => [quadKey(q), q]))
+    for (let i = 1; i <= (blob.chunks ?? 0); i++) {
+      const raw = await this.backend(policy.scope).get(this.key(policy.iri) + '#' + i)
+      if (!raw) break
+      const chunk = JSON.parse(raw) as Chunk
+      for (const q of this.parse(chunk.remove)) held.delete(quadKey(q))
+      for (const q of this.parse(chunk.add)) held.set(quadKey(q), q)
+    }
+    const add = [...held.values()].map((q) => f.quad(q.subject, q.predicate, q.object, g))
+    // What is restored replaces the current values of the same subject and property.
+    // Keyed by the terms themselves (a remembered subject may be a blank node, not an IRI).
+    const pairs = new Map(add.map((q) => [termKey(q.subject) + ' ' + termKey(q.predicate), q] as const))
+    const keep = new Set(add.map(quadKey))
+    const remove: Quad[] = []
+    if (!policy.graph) for (const { subject, predicate } of pairs.values()) for (const q of this.store.match(subject, predicate, null, g)) if (!keep.has(quadKey(q))) remove.push(q)
+    return { add, remove }
   }
 
   /** Whether the last restore put back what a policy (or a storage-carried dimension) stored. */

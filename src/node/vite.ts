@@ -4,7 +4,7 @@
 // the pages' <head> also preloads the client's modules and the engine's WASM). In a single-file
 // build (vite-plugin-singlefile) the one file is rendered, with the stylesheet inline.
 import { readFileSync } from 'node:fs'
-import { resolve, sep } from 'node:path'
+import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Plugin, ResolvedConfig } from 'vite'
 import { buildSite } from './site.ts'
@@ -36,6 +36,7 @@ interface Chunk {
   isEntry: boolean
   imports: string[]
   dynamicImports: string[]
+  facadeModuleId?: string | null
 }
 
 const ontologyDir = fileURLToPath(new URL('../../ontology/', import.meta.url))
@@ -62,6 +63,8 @@ function site(opts: SemblancePluginOptions): Plugin {
   let config: ResolvedConfig
   let head = ''
   let disabled = false
+  /** The chunk of each graph a client imports on its own (`ontology/<file>`, `demo/gallery/<file>`: by path from the project). */
+  let graphChunks: Record<string, string> = {}
   const plugin: Plugin = {
     name: NAME,
     apply: 'build',
@@ -72,7 +75,18 @@ function site(opts: SemblancePluginOptions): Plugin {
       disabled = c.plugins.find((p) => p.name === NAME) !== plugin
     },
     generateBundle(_, bundle) {
-      if (disabled || config.build.ssr || !opts.preload) return
+      if (disabled || config.build.ssr) return
+      // A Turtle file imported on its own (?raw, lazily) is a chunk a page can preload by its graph's
+      // name: the framework's `ontology/<file>`, the app's by its path from the site description's folder.
+      const project = dirname(resolve(opts.config ?? 'semblance.config.ts')) + sep
+      graphChunks = {}
+      for (const o of Object.values(bundle) as unknown as Chunk[]) {
+        const id = o.type === 'chunk' ? o.facadeModuleId?.split('?')[0] : undefined
+        if (!id?.endsWith('.ttl')) continue
+        const name = id.startsWith(ontologyDir) ? 'ontology/' + id.slice(ontologyDir.length) : id.startsWith(project) ? id.slice(project.length) : undefined
+        if (name) graphChunks[name.split(sep).join('/')] = o.fileName
+      }
+      if (!opts.preload) return
       const base = config.base.startsWith('/') ? config.base : '/'
       const chunks = Object.values(bundle).filter((o) => o.type === 'chunk') as unknown as Chunk[]
       const entry = chunks.find((c) => c.isEntry)
@@ -106,6 +120,9 @@ function site(opts: SemblancePluginOptions): Plugin {
         base,
         // A single file has everything inline already: nothing to preload.
         head: single ? '' : head,
+        // With preloads, each page preloads the graphs it names too (they share the network with
+        // the stylesheet: on a throttled phone the first paint waited 4.5 s for them, not 1.8 s).
+        graphChunks: opts.preload ? graphChunks : undefined,
         workers: opts.workers,
         log: (line) => config.logger.info(line),
       })
