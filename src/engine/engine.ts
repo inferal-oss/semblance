@@ -988,7 +988,9 @@ export class Engine {
         }
       }
     }
-    const back = this.links.get(s)
+    // Nor a followed node's: where a parent put it is rendered output, not what a rule follows it for
+    // (a description list follows the node it describes, which may be a component placed at stratum 0).
+    const back = isPlacementOrProvenance(p) ? undefined : this.links.get(s)
     if (back) {
       for (const [fp, subjects] of back) {
         for (const r of this.followers.get(fp) ?? []) {
