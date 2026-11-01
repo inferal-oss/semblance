@@ -105,6 +105,7 @@ export const SEM = {
   watchesStatements: sem + 'watchesStatements',
   Component: sem + 'Component',
   Rule: sem + 'Rule',
+  Rendering: sem + 'Rendering',
   targets: sem + 'targets',
   modality: sem + 'modality',
   stratum: sem + 'stratum',

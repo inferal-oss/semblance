@@ -1,8 +1,7 @@
 // Formulas (ontology/components/formula.ttl): a component's value from a SELECT.
 import type { Term } from '@rdfjs/types'
 import type { FnRule, Out } from '../engine/context.ts'
-import { NS, RDF_TYPE, SEM, STY } from '../ns.ts'
-import { str } from './util.ts'
+import { NS, RDF_TYPE, STY } from '../ns.ts'
 import { maintainedRows } from '../view/rows.ts'
 
 const VALUE_QUERY = NS.c + 'valueQuery'
@@ -30,25 +29,4 @@ const formulaValue: FnRule = (ctx, focus) => {
   return row ? write(ctx.out(focus), focus, row) : []
 }
 
-/** c:QueryFormula: a c:valueQuery that is not a view, run (with $this the component). */
-const formulaQuery: FnRule = (ctx, focus) => {
-  const view = ctx.object(focus, VALUE_QUERY)
-  const query = view && str(ctx.object(view, SEM.select))
-  if (!query || !ctx.sparql || ctx.match(view, RDF_TYPE, NS.iv + 'View').length) return []
-  let row
-  try {
-    row = ctx.select(query.replaceAll('$this', `<${focus.value}>`))[0]
-  } catch {
-    return []
-  }
-  return row ? write(ctx.out(focus), focus, row) : []
-}
-
-/** c:FormulaKind: c:runsQuery true when the component's c:valueQuery is not a maintained view. */
-const formulaKind: FnRule = (ctx, focus) => {
-  const view = ctx.object(focus, VALUE_QUERY)
-  if (!view || ctx.match(view, RDF_TYPE, NS.iv + 'View').length) return []
-  return ctx.out(focus).t(focus, NS.c + 'runsQuery', ctx.f.literal('true', ctx.nn(NS.xsd + 'boolean'))).quads
-}
-
-export const formulaFunctions: Record<string, FnRule> = { 'formula:kind': formulaKind, 'formula:value': formulaValue, 'formula:query': formulaQuery }
+export const formulaFunctions: Record<string, FnRule> = { 'formula:value': formulaValue }

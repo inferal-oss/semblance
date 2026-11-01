@@ -155,6 +155,14 @@ const warn = (msg: string) => console.warn(`[semblance] ${msg}`)
 const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
 
 /** A view's definition as read from the graph (a template of iv:targets is defined per instance). */
+const NONE: Delta = { add: [], remove: [] }
+
+/** Which graphs beyond the input a view reads: the views graph (iv:reads a view), the derived graph (iv:reads a rendering). */
+export interface Reads {
+  readsViews?: boolean
+  readsDerived?: boolean
+}
+
 interface Definition {
   iri: string
   /** The view node its triples are on (the template, for instances). */
@@ -208,6 +216,18 @@ export class ViewRuntime {
    * cannot feed back (views -> rules -> views).
    */
   derivedFor?: (components: string[]) => Term | undefined
+  /**
+   * The graph the rules derive (the first projection's) that a maintained view reads when it names a
+   * rendering (iv:reads <rendering>): the runtime steps such views again after the projections, with
+   * what they derived (Runtime: a round), until nothing more changes.
+   */
+  derivedGraph?: NamedNode
+  /** Hear which views each tick stepped (a view that had something to do), e.g. a sheet's recalculation trace. */
+  onStep(fn: (view: ViewHandle & { focus?: string }) => void): () => void {
+    this.stepListeners.push(fn)
+    return () => (this.stepListeners = this.stepListeners.filter((x) => x !== fn))
+  }
+  private stepListeners: ((view: ViewHandle & { focus?: string }) => void)[] = []
   /** A followed result set changed: its rows are written at the next refresh (flushPending), which this asks for. */
   onPending?: () => void
   /** Followed result sets (iv:ResultSet, maintained) whose rows wait for the next refresh, and the nodes naming them that were shown when they changed. */
@@ -218,8 +238,11 @@ export class ViewRuntime {
   private afterTicks: ((tick: number) => void)[] = []
   /** Views in the order they step: a view after the views it reads (iv:reads). */
   private order: MaintainedView[] = []
-  /** Templates: template IRI -> its class (iv:targets), or the property that names it (iv:perReferrer), or names a query (iv:perQuery). */
-  private templates = new Map<string, { cls?: string; referrer?: string; perQuery?: PerQuery }>()
+  /**
+   * Templates: template IRI -> its class (iv:targets), or the property that names it (iv:perReferrer), or
+   * names a query (iv:perQuery); `derived`: it reads what a rendering derives, where its referrers may be too.
+   */
+  private templates = new Map<string, { cls?: string; referrer?: string; perQuery?: PerQuery; derived?: boolean }>()
   /** iv:perQuery instances: template -> instance IRI -> its definition's signature; and instance -> template. */
   private perQuery = new Map<string, Map<string, string>>()
   private instanceTemplate = new Map<string, string>()
@@ -317,11 +340,124 @@ export class ViewRuntime {
       const referrers = this.queryReferrers(iri)
       return [referrers.length ? { iri, node: iri, referrers } : { iri, node: iri }]
     }
-    this.templates.set(iri, cls ? { cls: cls.value } : { referrer: referrer!.value })
+    const derived = this.readsRendering(f.namedNode(iri))
+    this.templates.set(iri, cls ? { cls: cls.value, derived } : { referrer: referrer!.value, derived })
     const foci = cls
       ? this.store.match(null, f.namedNode(RDF_TYPE), cls as NamedNode).map((q) => q.subject)
       : this.store.match(null, referrer as NamedNode, f.namedNode(iri)).map((q) => q.subject)
     return [...new Set(foci.filter((t) => t.termType === 'NamedNode').map((t) => t.value))].map((focus) => ({ iri: this.instanceOf(iri, focus), node: iri, focus }))
+  }
+
+  /**
+   * A template's instances (iv:perReferrer, iv:targets) each probe a change on their own, with $this a
+   * constant; most of them find nothing. The template's query with $this the key routes a change once
+   * to the foci it can reach (Dependencies.probe), and only their instances step: a change costs what
+   * it reaches, not the number of instances. Null: the query cannot route (an instance then probes).
+   */
+  private routers = new Map<string, Dependencies | null>()
+  /** This pass's routing per template: whether it routed the fixed part of the change, how much of the views' output, and the foci they reach. */
+  private routed = new Map<string, { fixed: boolean; adds: number; removes: number; foci: Set<string> | 'all' }>()
+
+  private router(v: MaintainedView): Dependencies | undefined {
+    const tpl = v.def.node
+    let r = this.routers.get(tpl)
+    if (r === undefined) {
+      r = null
+      const node = this.store.factory.namedNode(tpl)
+      const text = this.text(node, SEM.select) ?? this.text(node, SEM.construct)
+      try {
+        const q = text && /[$?]this\b/.test(text) ? parseQuery(text, prefixMap(this.prefixes())) : undefined
+        const deps = q ? new Dependencies(this.store.factory, q.select.where, ['this']) : undefined
+        if (deps && !deps.problem) r = deps
+      } catch {
+        r = null
+      }
+      this.routers.set(tpl, r)
+    }
+    return r ?? undefined
+  }
+
+  /**
+   * Whether a change can reach this instance of a template (see routers); true when it cannot tell.
+   * `fixed` is what the pass started with (the input, what rules derived, the runtime's writes:
+   * routed once per template), `grown` the views' output so far (routed as it grows); a superset of
+   * what the instance sees.
+   */
+  private reaches(v: MaintainedView, fixed: Delta[], grown: Delta, removed: Quad[]): boolean {
+    if (!v.def.focus || v.window || v.plan.kind !== 'maintained' || v.plan.parts.some((p) => p.derived?.length || p.window)) return true
+    const deps = this.router(v)
+    if (!deps) return true
+    let hit = this.routed.get(v.def.node)
+    if (!hit) this.routed.set(v.def.node, (hit = { fixed: false, adds: 0, removes: 0, foci: new Set() }))
+    let lookup: Lookup | undefined
+    const route = (q: Quad) => {
+      if (hit!.foci === 'all') return
+      for (const pat of deps.route(q)) {
+        const keys = deps.probe(pat, q, (lookup ??= this.lookup(removed, v)))
+        if (keys === 'global') return void (hit!.foci = 'all')
+        for (const [k] of keys) {
+          if (!k) return void (hit!.foci = 'all')
+          hit!.foci.add(k.value)
+        }
+      }
+    }
+    if (!hit.fixed) {
+      hit.fixed = true
+      for (const d of fixed) for (const q of [...d.remove, ...d.add]) route(q)
+    }
+    for (; hit.removes < grown.remove.length; hit.removes++) route(grown.remove[hit.removes]!)
+    for (; hit.adds < grown.add.length; hit.adds++) route(grown.add[hit.adds]!)
+    return hit.foci === 'all' || hit.foci.has(v.def.focus)
+  }
+
+  /** Whether a view node reads what a rendering derives (iv:reads <rendering>). */
+  private readsRendering(node: NamedNode): boolean {
+    const f = this.store.factory
+    return this.store.match(node, f.namedNode(IV + 'reads'), null).some((q) => q.object.termType === 'NamedNode' && this.store.match(q.object, f.namedNode(RDF_TYPE), f.namedNode(SEM.Rendering)).length > 0)
+  }
+
+  /**
+   * Whether a triple a rendering derived can reach a view: some view or template reads derived
+   * triples (iv:reads <rendering>) by its predicate (the runtime keeps only these for a round).
+   */
+  readsDerived(q: Quad): boolean {
+    const p = this.derivedPredicates()
+    return !!p && (p.any || p.iris.has(q.predicate.value))
+  }
+
+  private derivedPreds?: { any: boolean; iris: Set<string> } | null
+  private derivedPredicates(): { any: boolean; iris: Set<string> } | undefined {
+    if (this.derivedPreds !== undefined) return this.derivedPreds ?? undefined
+    const iris = new Set<string>()
+    let any = false
+    let some = false
+    const visit = (part: import('./plan.ts').Part) => {
+      const d = part.deps?.predicates()
+      if (!d) any = true
+      else {
+        any ||= d.any
+        for (const i of d.iris) iris.add(i)
+      }
+      for (const x of part.derived ?? []) visit(x.part)
+    }
+    for (const v of this.views.values()) {
+      if (!v.readsDerived) continue
+      some = true
+      if (v.plan.kind === 'maintained') v.plan.parts.forEach(visit)
+      else if (v.plan.deps) {
+        const d = v.plan.deps.predicates()
+        any ||= d.any
+        for (const i of d.iris) iris.add(i)
+      } else any = true
+    }
+    for (const t of this.templates.values()) {
+      if (!t.derived) continue
+      some = true
+      if (t.referrer) iris.add(t.referrer)
+      if (t.cls) iris.add(RDF_TYPE)
+    }
+    this.derivedPreds = some ? { any, iris } : null
+    return this.derivedPreds ?? undefined
   }
 
   /** A template's iv:perQuery declaration, if it has one. */
@@ -422,6 +558,13 @@ export class ViewRuntime {
     const now = this.clock.now()
     const inDataset = (q: Quad) => this.dataset.has(q.graph.value)
     const changes = { add: delta.add.filter(inDataset), remove: delta.remove.filter(inDataset) }
+    // Beyond the input, only for the views that read them: what a rendering derived (the runtime's round
+    // after the projections) and what the runtime wrote in the views graph (its figures, in idle time).
+    const derivedGraph = this.derivedGraph
+    const ofDerived = (q: Quad) => !!derivedGraph && q.graph.equals(derivedGraph)
+    const derived = { add: delta.add.filter(ofDerived), remove: delta.remove.filter(ofDerived) }
+    const ofViews = (q: Quad) => q.graph.equals(this.graph)
+    const written = { add: delta.add.filter(ofViews), remove: delta.remove.filter(ofViews) }
     if ([...changes.add, ...changes.remove].some((q) => q.predicate.value === NS.sh + 'prefix' || q.predicate.value === NS.sh + 'namespace')) this.prefixText = undefined
     const out = new ZSet<Quad>()
     // A view's own triples (its query, its window, its parameters) changed: compile it again.
@@ -445,6 +588,14 @@ export class ViewRuntime {
         if (v.def.query === s) redefine.add(v.iri)
       }
       for (const [tpl, t] of this.templates) if (t.perQuery && this.perQueryReads(t.perQuery, q)) members.add(tpl)
+    }
+    // A template that reads what a rendering derives: its referrers (or instances) may be derived too.
+    for (const q of [...derived.add, ...derived.remove]) {
+      for (const [tpl, t] of this.templates) {
+        if (!t.derived) continue
+        if (t.cls !== undefined && q.predicate.value === RDF_TYPE && q.object.value === t.cls) members.add(tpl)
+        if (t.referrer !== undefined && q.predicate.value === t.referrer && q.object.value === tpl) members.add(tpl)
+      }
     }
     // Only the instances that came or went are defined or dropped; the others keep their state.
     for (const tpl of members) {
@@ -495,6 +646,7 @@ export class ViewRuntime {
       this.sort()
     }
     let worked = false
+    this.routed.clear()
     const viewDelta: Delta = { add: [], remove: [] }
     const applied: Delta = { add: [], remove: [] }
     const flush = () => {
@@ -507,7 +659,7 @@ export class ViewRuntime {
       viewDelta.remove.push(...d.remove)
     }
     flush()
-    let withViews: { at: number; delta: Delta } | undefined
+    let withViews: { at: string; delta: Delta } | undefined
     for (const v of this.order) {
       if (v.suspended) continue
       if ((v.whileShown || v.def.query) && !this.demanded(v)) {
@@ -516,19 +668,41 @@ export class ViewRuntime {
       }
       if (redefine.has(v.iri) && !retuned.has(v.iri)) {
         out.plus(v.initial(now))
+        for (const l of this.stepListeners) l(v)
         flush()
         continue
       }
-      // A view that reads other views' output sees what they wrote this tick (one change for all
-      // such views until another view writes: probes then share its removed triples' index).
-      if (v.readsViews && (!withViews || withViews.at !== viewDelta.add.length + viewDelta.remove.length))
-        withViews = { at: viewDelta.add.length + viewDelta.remove.length, delta: { add: [...changes.add, ...viewDelta.add], remove: [...changes.remove, ...viewDelta.remove] } }
-      const own = v.readsViews ? withViews!.delta : changes
+      // A view that reads other views' output sees what they wrote this tick, and the figures the runtime
+      // wrote about them (not about itself: its own figures change because it stepped); a view that reads
+      // what a rendering derives sees that. One change for all such views of a kind until another view
+      // writes (probes then share its removed triples' index), unless the write has figures of its own.
+      let own = changes
+      if (v.readsViews || v.readsDerived) {
+        const at = (v.readsDerived ? 'd' : 'v') + (viewDelta.add.length + viewDelta.remove.length)
+        const mine = (q: Quad) => q.subject.value === v.iri
+        const build = (skip?: (q: Quad) => boolean): Delta => {
+          const d: Delta = { add: [...changes.add], remove: [...changes.remove] }
+          if (v.readsDerived) d.add.push(...derived.add), d.remove.push(...derived.remove)
+          d.add.push(...(skip ? written.add.filter((q) => !skip(q)) : written.add), ...viewDelta.add)
+          d.remove.push(...(skip ? written.remove.filter((q) => !skip(q)) : written.remove), ...viewDelta.remove)
+          return d
+        }
+        if (written.add.some(mine) || written.remove.some(mine)) own = build(mine)
+        else {
+          if (withViews?.at !== at) withViews = { at, delta: build() }
+          own = withViews.delta
+        }
+      }
+      if (!this.reaches(v, v.readsDerived ? [changes, derived, written] : v.readsViews ? [changes, written] : [changes], v.readsViews || v.readsDerived ? viewDelta : NONE, own.remove)) continue
       const w = this.watchdog
       const t0 = w ? w.clock() : 0
       const d = v.step(own, now)
       if (w) w.note('view', v.iri, undefined, d?.size ?? 0, w.clock() - t0)
-      if (d) out.plus(d), (worked = true)
+      if (d) {
+        out.plus(d)
+        worked = true
+        for (const l of this.stepListeners) l(v)
+      }
       flush()
     }
     if (worked || redefine.size) {
@@ -699,7 +873,8 @@ export class ViewRuntime {
 
   /**
    * The figures of views marked iv:measured, as triples on each view (idle time: the
-   * runtime writes them; views never read the view graph, so this cannot feed back).
+   * runtime writes them, and views that read the views graph step with them - never with their
+   * own, so this cannot feed back).
    * A from-scratch evaluation is timed at most every `sampleMs` for comparison.
    */
   figures(sampleMs = 1000): Delta {
@@ -771,7 +946,7 @@ export class ViewRuntime {
         } catch {
           reads = () => true
         }
-        const row = this.store.sparql ? this.store.select(this.prefixes() + '\n' + text, this.datasetFor(true) as never)[0] : undefined
+        const row = this.store.sparql ? this.store.select(this.prefixes() + '\n' + text, this.datasetFor({ readsViews: true }) as never)[0] : undefined
         value = row?.get('value') ?? (row ? [...row.values()][0] : undefined)
       } else if (property && from) {
         reads = (q) => q.subject.equals(from) && q.predicate.equals(property)
@@ -812,6 +987,7 @@ export class ViewRuntime {
     if (missing !== undefined) return { kind: 'recompute', form, query, reason: `the parameter $${missing} has no value (and no iv:default)` }
     const window = this.readWindow(def)
     const partitionBy = this.one(s, IV + 'partitionBy')?.value
+    const reads: Reads = { readsViews: this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0, readsDerived: this.readsRendering(s) }
     const source: ViewSource = {
       iri: def.iri,
       form: construct ? 'construct' : 'select',
@@ -820,10 +996,10 @@ export class ViewRuntime {
       over: this.one(s, IV + 'over')?.value,
       partitionBy: def.hosted?.attribute ? [def.hosted.attribute] : partitionBy ? partitionBy.split(/[\s,]+/).map((v) => v.replace(/^[?$]/, '')).filter(Boolean) : undefined,
       window,
-      graphs: this.datasetFor(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0).filter((g) => g.termType === 'NamedNode').map((g) => g.value),
+      graphs: this.datasetFor(reads).filter((g) => g.termType === 'NamedNode').map((g) => g.value),
     }
     if (!source.query) return undefined
-    return (this.opts.compiler ?? compiler).compile(source, this.runner(this.store.match(s, f.namedNode(IV + 'reads'), null).length > 0))
+    return (this.opts.compiler ?? compiler).compile(source, this.runner(reads))
   }
 
   /**
@@ -914,12 +1090,15 @@ export class ViewRuntime {
     view.ephemeral = !!def.hosted || materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
     view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
     view.readsViews = view.reads.length > 0
+    view.readsDerived = this.readsRendering(s)
     this.views.set(def.iri, view)
     out.plus(view.planQuads())
   }
 
   /** Step order: views that read other views (iv:reads) after them. */
   private sort() {
+    this.derivedPreds = undefined
+    this.routers.clear()
     const done = new Set<MaintainedView>()
     const order: MaintainedView[] = []
     const visit = (v: MaintainedView, depth: number) => {
@@ -973,19 +1152,25 @@ export class ViewRuntime {
     }
   }
 
-  /** The graphs a view reads: the input graphs, and the views graph for views that read other views. */
-  datasetFor(readsViews: boolean): Term[] {
-    return readsViews ? [...this.graphs, this.graph] : this.graphs
+  /**
+   * The graphs a view reads: the input graphs; the views graph for views that read other views; and
+   * the derived graph (derivedGraph) for views that read what a rendering derives.
+   */
+  datasetFor(reads: Reads = {}): Term[] {
+    const graphs = reads.readsViews || reads.readsDerived ? [...this.graphs, this.graph] : this.graphs
+    return reads.readsDerived && this.derivedGraph ? [...graphs, this.derivedGraph] : graphs
   }
 
-  runner(readsViews = false, extra: Term[] = []) {
+  runner(reads: Reads = {}, extra: Term[] = []) {
     const prefixes = this.prefixes()
     const f = this.store.factory
-    const graphs = [...this.datasetFor(readsViews), ...extra]
+    // Read when it runs: the derived graph becomes known once the first projection exists (after views start).
+    const fixed = reads.readsDerived ? undefined : [...this.datasetFor(reads), ...extra]
+    const graphs = () => fixed ?? [...this.datasetFor(reads), ...extra]
     return {
       factory: f,
-      select: (q: string) => this.store.select(prefixes + '\n' + q, graphs as never),
-      construct: (q: string) => this.store.construct(prefixes + '\n' + q, graphs as never).map((x) => f.quad(x.subject, x.predicate, x.object, this.graph)),
+      select: (q: string) => this.store.select(prefixes + '\n' + q, graphs() as never),
+      construct: (q: string) => this.store.construct(prefixes + '\n' + q, graphs() as never).map((x) => f.quad(x.subject, x.predicate, x.object, this.graph)),
       timestampPath: (stream: string) => this.store.match(f.namedNode(stream), f.namedNode(NS.ldes + 'timestampPath'), null)[0]?.object.value,
     }
   }
@@ -996,10 +1181,10 @@ export class ViewRuntime {
    */
   private removedIndex = new WeakMap<readonly Quad[], Map<string, Quad[]>>()
 
-  lookup(removed: readonly Quad[], readsViews: boolean): Lookup {
+  lookup(removed: readonly Quad[], reads: Reads): Lookup {
     let removedBy = this.removedIndex.get(removed)
     if (!removedBy && removed.length) this.removedIndex.set(removed, (removedBy = indexRemoved(removed)))
-    return probeLookup({ store: this.store, graphs: this.datasetFor(readsViews), removed, removedBy, graphMode: 'named' })
+    return probeLookup({ store: this.store, graphs: this.datasetFor(reads), removed, removedBy, graphMode: 'named' })
   }
 
   /** A stream's retention (tree:view/ldes:retentionPolicy/ldes:amount), if it has one. */
@@ -1156,7 +1341,7 @@ class PartState {
     this.slotIndex = new Map(part.slots.map((s, i) => [s, i]))
     this.post = new PostCache(view, part.post)
     this.inner = (part.derived ?? []).map((d) => new PartState(d.part, view))
-    if (part.window) this.win = new WindowState(part.window, view.rt.store, () => view.rt.datasetFor(view.readsViews))
+    if (part.window) this.win = new WindowState(part.window, view.rt.store, () => view.rt.datasetFor(view))
   }
 
   /** The derived subqueries' current rows (what the body's evaluation inlines). */
@@ -1178,7 +1363,7 @@ class PartState {
       if (touched !== 'all' && nested !== 'all' && !touched.size) return
       const d = ps.update(touched === 'all' || nested === 'all' ? undefined : touched, now, happened)
       if (all || !d.size) return
-      const lookup = this.rt.lookup(changes.remove, this.view.readsViews)
+      const lookup = this.rt.lookup(changes.remove, this.view)
       for (const [, row] of d.entries()) {
         const keys = this.part.deps!.probeDerived(i, row, lookup)
         if (keys === 'global') return void (all = true)
@@ -1213,7 +1398,7 @@ class PartState {
     if (old.head !== next.head) return 'all'
     if (old.algebra.local === next.algebra.local) return touched
     if (!old.deps || !next.deps || old.patternless !== next.patternless || old.deps.patterns.length !== next.deps.patterns.length) return 'all'
-    const lookup = this.rt.lookup(removed, this.view.readsViews)
+    const lookup = this.rt.lookup(removed, this.view)
     const constant = (x: import('./deps.ts').Pos | { path: unknown }) => ('t' in x ? x.t : null)
     for (let j = 0; j < old.deps.patterns.length; j++) {
       const a = old.deps.patterns[j]!
@@ -1250,7 +1435,7 @@ class PartState {
       const candidates = new Map<string, (Term | undefined)[]>()
       for (const q of [...changes.remove, ...changes.add]) {
         for (const pat of p.deps.route(q)) {
-          const keys = p.deps.probe(pat, q, (lookup ??= this.rt.lookup(changes.remove, this.view.readsViews)))
+          const keys = p.deps.probe(pat, q, (lookup ??= this.rt.lookup(changes.remove, this.view)))
           if (keys === 'global') return 'all'
           for (const k of keys) candidates.set(keyString(k), k)
         }
@@ -1287,7 +1472,7 @@ class PartState {
     const s = val(a.s)
     const pp = val(a.p as { v: string } | { t: Term })
     const o = val(a.o)
-    for (const g of this.rt.datasetFor(this.view.readsViews)) if (this.rt.store.match((s ?? null) as never, (pp ?? null) as never, (o ?? null) as never, g as never).length) return true
+    for (const g of this.rt.datasetFor(this.view)) if (this.rt.store.match((s ?? null) as never, (pp ?? null) as never, (o ?? null) as never, g as never).length) return true
     return false
   }
 
@@ -1683,6 +1868,8 @@ export class MaintainedView implements ViewHandle {
   /** iv:reads: the views whose output it reads (it steps after them, and sees the views graph). */
   reads: string[] = []
   readsViews = false
+  /** iv:reads a rendering: it reads the derived graph too (ViewRuntime.derivedGraph), and is stepped again after the projections. */
+  readsDerived = false
   params: Param[] = []
   paramNodes: Term[] = []
   suspended = false
@@ -1720,6 +1907,11 @@ export class MaintainedView implements ViewHandle {
 
   get iri() {
     return this.def.iri
+  }
+
+  /** For an instance of a template: its focus ($this). */
+  get focus() {
+    return this.def.focus
   }
 
   private build() {
@@ -1991,7 +2183,7 @@ export class MaintainedView implements ViewHandle {
     if (this.plan.kind === 'recompute') {
       const t0 = performance.now()
       const derived = this.onRequest ? this.rt.derivedFor?.(this.def.referrers ?? []) : undefined
-      this.runInto(out, this.rt.runner(this.readsViews || this.onRequest, derived ? [derived] : []))
+      this.runInto(out, this.rt.runner({ readsViews: this.readsViews || this.onRequest, readsDerived: this.readsDerived }, derived ? [derived] : []))
       if (!this.onRequest) {
         const ms = performance.now() - t0
         this.figures.ticks++
@@ -2039,7 +2231,7 @@ export class MaintainedView implements ViewHandle {
     const values = rows.map((r, i) => `(${i} ${vars.map((v) => term(r.get(v))).join(' ')})`).join(' ')
     const query = `${post.prologue ?? ''}SELECT * WHERE {\n  VALUES (?__i ${vars.map((v) => '?' + v).join(' ')}) { ${values} }\n${post.values ? `  ${post.values}\n` : ''}${post.binds.map((b) => `  BIND(${b.expr} AS ?${b.as})`).join('\n')}\n${post.filters.map((x) => `  FILTER(${x})`).join('\n')}\n}`
     const out: Row[][] = rows.map(() => [])
-    for (const r of this.rt.runner(this.readsViews).select(query)) {
+    for (const r of this.rt.runner(this).select(query)) {
       const i = Number(r.get('__i')!.value)
       r.delete('__i')
       if (blanks.size) for (const [k, t] of r) if (t.termType === 'NamedNode' && blanks.has(t.value)) r.set(k, blanks.get(t.value)!)
@@ -2123,7 +2315,7 @@ export class MaintainedView implements ViewHandle {
     const t0 = performance.now()
     const derived = this.onRequest ? this.rt.derivedFor?.(this.def.referrers ?? []) : undefined
     // A run on request reads everything a rule's query would: other views' output and what rules derive.
-    const run = this.rt.runner(this.readsViews || this.onRequest, derived ? [derived] : [])
+    const run = this.rt.runner({ readsViews: this.readsViews || this.onRequest, readsDerived: this.readsDerived }, derived ? [derived] : [])
     const out = new ZSet<Quad>()
     const rowDelta = new ZSet<Row>()
     if (this.resultSet) {
@@ -2366,7 +2558,7 @@ export class MaintainedView implements ViewHandle {
 
   /** Evaluate the view's query from scratch (the oracle). */
   fromScratch(now: number): (Quad | Row)[] {
-    const run = this.rt.runner(this.readsViews)
+    const run = this.rt.runner(this)
     const query = this.plan.kind === 'recompute' ? this.plan.query : this.plan.reference?.(now)
     if (!query) return []
     try {

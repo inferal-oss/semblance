@@ -196,12 +196,50 @@ export class Runtime {
     for (const [graph, d] of byGraph) for (const l of this.inputListeners) l(graph, d)
   }
 
-  /** Views suspended while their components were hidden, shown now: rebuilt, and projected. */
+  /** Views suspended while their components were hidden, shown now: rebuilt, and projected; then the rounds of views that read what rules derive. */
   private resumeViews(): boolean {
     const resumed = this.views.resume()
-    if (!resumed.add.length && !resumed.remove.length) return false
-    for (const p of this.projections) p.engine.process(resumed), settle(p)
-    return true
+    const any = resumed.add.length > 0 || resumed.remove.length > 0
+    if (any) for (const p of this.projections) p.engine.process(resumed), settle(p)
+    this.rounds()
+    return any
+  }
+
+  /** What the first projection derived that a view reads (iv:reads <rendering>), since the last round: quad -> net weight. */
+  private derived = new Map<string, { q: Quad; w: number }>()
+
+  private collectDerived(d: Delta) {
+    for (const [w, qs] of [[-1, d.remove], [1, d.add]] as const) {
+      for (const q of qs) {
+        if (!this.views.readsDerived(q)) continue
+        const k = quadKey(q)
+        const e = this.derived.get(k)
+        if (e) e.w += w
+        else this.derived.set(k, { q, w })
+      }
+    }
+  }
+
+  /**
+   * Rounds after the projections: the views that read what a rendering derives step with what the
+   * first projection derived, and the projections take their change, until nothing more changes - as
+   * many rounds as the longest chain of views over rules over views (a sheet's formulas over
+   * formulas). A cycle in the data (two formulas reading each other) stops after MAX_ROUNDS.
+   */
+  private rounds() {
+    for (let i = 0; this.derived.size; i++) {
+      if (i === MAX_ROUNDS) {
+        console.warn(`Views that read what rules derive did not settle after ${MAX_ROUNDS} rounds (a cycle in the data?): ${[...this.derived.values()].slice(0, 3).map((e) => quadKey(e.q)).join('; ')}`)
+        this.derived.clear()
+        return
+      }
+      const d: Delta = { add: [], remove: [] }
+      for (const { q, w } of this.derived.values()) if (w) (w > 0 ? d.add : d.remove).push(q)
+      this.derived.clear()
+      if (!d.add.length && !d.remove.length) return
+      const v = this.views.tick(d)
+      if (v.add.length || v.remove.length) for (const p of this.projections) p.engine.process(v), settle(p)
+    }
   }
 
   /** Hear about every refresh (after the projections are updated): the host flushes its renderers. */
@@ -229,6 +267,7 @@ export class Runtime {
       any = true
     }
     for (const p of this.projections) if (p.engine.refresh()) settle(p), (any = true)
+    this.rounds()
     if (!any) return false
     const took = performance.now() - t
     this.refreshAfter = performance.now() + took * (1 / this.refreshShare - 1)
@@ -280,6 +319,11 @@ export class Runtime {
     const index = new HtmlIndex(onError)
     engine.watchdog = this.watchdog
     engine.onChange((d) => index.apply(d))
+    // A view that reads what rules derive (iv:reads <rendering>) reads the first projection's.
+    if (!this.projections.length) {
+      this.views.derivedGraph = engine.graph
+      engine.onChange((d) => this.collectDerived(d))
+    }
     engine.onStale = () => this.queueRefresh()
     if (opts.roots) {
       const roots = new Set(opts.roots)
@@ -464,6 +508,7 @@ export class Runtime {
     if (this.disposed) return
     this.watchdog.turn(() => {
       for (const p of this.projections) p.engine.retryStopped(), settle(p)
+      this.rounds()
     })
     for (const l of this.refreshListeners) l()
   }
@@ -509,6 +554,9 @@ function settle(p: Projection) {
     if (!p.engine.resume()) return
   }
 }
+
+/** At most this many rounds of views over rules per turn (Runtime.rounds). */
+const MAX_ROUNDS = 64
 
 const declaresWarmth = (q: Quad) => q.predicate.value === SEM.warm
 

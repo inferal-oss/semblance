@@ -7,7 +7,8 @@ document is the design: what a maintained view is, how it is declared and inspec
 the rule engine, the operator set and each operator's incremental form, time and windows, correctness,
 cost, and the phased plan. The decisions taken are at the end; what was built, and where it differs
 from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of phase 2), §23 (phase 4),
-§24 (phase 5) and §25 (phase 3).
+§24 (phase 5), §25 (phase 3), §26 (runs on request) and §27 (views over what rules and the runtime
+derive).
 
 ## Status
 
@@ -32,6 +33,7 @@ from the design, is §20 (phases 0 and 1), §21 (phase 2), §22 (the rest of pha
 | **Phase 4, time** (§23): tumbling windows (`iv:TumblingWindow`, `iv:size`, `iv:keep`, a bucket column `iv:bucketVariable`) and count windows (`iv:CountWindow`, `ldes:amount`) beside sliding ones, every window an edge over the stream's members ordered by time, moved at the cost of the members it flips; event time (`iv:clock iv:EventTime`, `iv:lateness`): the watermark is the greatest timestamp less the lateness, no timer, numeric timestamps as well as dates - the network inspector counts the last five seconds of `net:Capture` that way; the oracle writes each window out as SPARQL. | `src/view/window.ts`, `compile.ts`, `runtime.ts`, `ontology/layers/view.ttl`, `demo/gallery/_network.ttl`, `test/view-time.test.ts` | |
 | **Changes as a stream**: `ViewHandle.since(tick)` and `keepHistory`; replicas (`src/view/replica.ts`: messages, catch-up, a reset after a redefinition, BroadcastChannel adapters); `iv:recordsChanges` puts the triples on a delta log's members; **undo** over the change log (`beh:undoable` reactions record their effective change as `rdf:Statement`s on the member, `beh:Undoer` / `beh:UndoLatest` applies the opposite of the latest one that still applies), in the Kanban example. | `src/view/runtime.ts`, `replica.ts`, `src/behaviour/events.ts`, `undo.ts`, `ontology/layers/behaviour.ttl`, `test/view-delta.test.ts`, `test/ex-kanban.test.ts` | |
 | **Phase 3, views and rules together** (§25): **exact dependencies for SPARQL rules** from their own patterns (the view compiler's dependencies, `$this` the partition key), replacing `sem:follows` / `sem:watches` / `sem:readsMinted` behind an engine option (`exactDependencies`); probes walk sibling groups and prune by partly bound patterns (views gain too); `ctx.rows(view)` for function rules; **persistence policies as views** (dirty from their view, a write stores the change: one change of a 2,000-triple policy writes three triples); **`iv:strategy iv:Incremental` for rules** (a hosted view per rule, partitioned by `$this`, feeding each focus's output). | `src/engine/exact.ts`, `engine.ts`, `context.ts`, `rules.ts`, `src/view/deps.ts`, `runtime.ts`, `src/persistence.ts`, `test/engine.test.ts`, `test/persistence-cost.test.ts`, `test/rules-incremental.test.ts` | |
+| **Views over what rules and the runtime derive** (§27): `iv:reads <rendering>` reads the first projection's derived graph, stepped in rounds after the projections until nothing more changes; figures written in idle time step the views that read the views graph. A sheet's formulas are views per cell, `c:QueryFormula` is gone, and the dashboard's progress, the warehouse's cost lines and the workbench's Plan summary are views over figures (#147). | `src/view/runtime.ts`, `src/runtime.ts`, `src/recalculation.ts`, `ontology/components/formula.ttl`, `sheet.ttl`, `test/ex-sheet.test.ts`, `test/view-derived.test.ts` | |
 | **The workbench on views**: Follow updates (the Live switch) types the query as an `iv:View` (`c:FollowAsView`; `iv:materialize iv:ResultSet`, `iv:strategy iv:Auto`, measured), the table reads its maintained rows (followed at the next frame), and a **Plan** tab shows its strategy or fallback, the last change's work against a re-run, the from-scratch check and its operators. Recomputed views re-run only for changes their patterns see. | `ontology/components/workbench.ttl`, `src/components/workbench.ts`, `demo/gallery/_workbench.ttl`, `test/follow-updates.test.ts` | |
 
 Related, outside the view runtime: the SPARQL workbench's **Follow updates** (5559be4) re-runs a
@@ -1524,8 +1526,7 @@ What uses it:
   `<row>-v`, `rs:index` (else the row's node) as the order, with function twins that read the same
   rows and render the same HTML (`test/charts-sparql.test.ts`). A formula whose query reads `$this`
   is a view per component that asks it (`iv:perReferrer c:valueQuery`). A query over what rules or
-  the runtime derive (a sheet's formulas, a view's figures) is not a view yet (#147) and is run by
-  `c:QueryFormula`, a function.
+  the runtime derive (a sheet's formulas, a view's figures) is a view too since #147 (§27).
 
 Measured (Node, `test/grid-cost.test.ts`, the network inspector sorted by duration, the earlier
 visit's samples hidden; a response for an old entry inside the window, then one outside it):
@@ -1840,8 +1841,8 @@ maintained one (`src/view/runs.ts`, `runtime.ts`, `ontology/layers/view.ttl`):
   it (`iv:label`).
 - **A run reads everything a rule's query would**: the input graphs, the views graph (other views'
   output: `rnd:overlaps`) and the derived graph of the projection that shows it (`derivedFor`). It is
-  never stepped by a change, so this cannot feed back; a maintained view still reads input graphs only
-  (#147).
+  never stepped by a change, so this cannot feed back; a maintained view reads what rules derive when
+  it says so (§27).
 - **`iv:perQuery <property>`**: a template whose instances are the queries nodes name by the property
   (of `iv:referrerClass`), each at the query's own IRI, so the nodes that show one query share one run;
   each node says which view runs it (`iv:run`, in the views graph). A query that is an `iv:View` of its
@@ -1854,6 +1855,42 @@ maintained one (`src/view/runs.ts`, `runtime.ts`, `ontology/layers/view.ttl`):
   `c:ResultTableAsText-sparql` as text), byte for byte as its function twins, which read the same rows
   (`test/result-table-sparql.test.ts`, Oxigraph and WAT, after each step); the graph and Turtle views
   read it too, so no rendering runs a query held in the data.
+
+## 27. Views over what rules and the runtime derive, as built
+
+A maintained view reads the input graphs; with `iv:reads` it also reads (`src/view/runtime.ts`,
+`src/runtime.ts`, `ontology/layers/view.ttl`):
+
+- **Other views and what the runtime writes about them** (`iv:reads <view>`): their output, their
+  plan and strategy (`iv:strategy`, `iv:fallback`, `iv:operator`) and the figures of measured views
+  (`iv:lastRows`, `iv:inputRows`, `iv:stateRows`, `iv:matches`, …), all in the views graph. It steps
+  after the views it reads in a tick and sees what they wrote; the figures are written in idle time
+  (`Runtime.warm`, `ViewRuntime.figures`), a write to the views graph like any other, and step the
+  views that read the views graph. A view never sees the figures about itself (they change because it
+  stepped, so it would step at every idle slice); figures are written after the tick they describe, so
+  a view over figures is one step behind them by construction, never in a cycle with them.
+- **What rules derive** (`iv:reads <rendering>`, a `sem:Rendering`): the derived graph of the first
+  projection (`ViewRuntime.derivedGraph`). Rules read views (the views graph is an input of every
+  projection), so views over rules over views is a cycle of graphs - not, for data that has none, of
+  values. The runtime runs it as **rounds** (`Runtime.rounds`): after the projections have taken a
+  change, what the first one derived that such a view can read (the predicates of its patterns, and a
+  template's referrer property: `ViewRuntime.readsDerived`) steps those views, and their change goes to
+  the projections again, until nothing more changes. A round costs what it changes, like a tick; there
+  are as many as the longest chain of views over rules over views. A cycle in the data (two formulas
+  reading each other) stops after 64 rounds with a warning, as the engine settles its own fixpoints.
+  A template that reads what rules derive (`iv:perReferrer`, `iv:targets`) also takes its referrers
+  or instances from there. Rounds run wherever the projections take a change: a tick, a refresh, idle
+  warming, a preload, a resumed or continued stall.
+- **What uses it**: the formula layer has one rendering, `c:Formula` (the first row of a maintained
+  view); `c:QueryFormula`, which ran the queries that were not views, is gone (#147). A sheet's
+  formulas (`c:SumFormula` …, `ontology/components/sheet.ttl`) are views per cell
+  (`iv:perReferrer c:valueQuery`) reading what `c:SheetFormula` derives (a cell's query and inputs)
+  and the values `c:Formula` gives other formula cells (`iv:reads c:SheetFormula , c:Formula`): a
+  change to a cell reaches exactly the formulas that read it, then theirs, round by round. The
+  recalculation trace hears the views runtime step them (`ViewRuntime.onStep`). The dashboard's
+  progress (`dx:qWork`, `iv:reads dx:Cube`), the warehouse's cost lines (`wh:qCost`, a view per line
+  reading its views' figures) and the workbench's Plan tab (`ui:qPlanSummary`, `iv:reads
+  ui:currentQuery`) are views over figures.
 
 ## Decisions
 

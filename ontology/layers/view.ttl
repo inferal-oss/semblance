@@ -95,9 +95,12 @@ iv:partitionBy a owl:DatatypeProperty ; rdfs:domain iv:View ;
 partition, evaluated with the key bound and cached, and evaluated again only when a changed triple
 reaches it through the query's own patterns. Default: the member of a <stream> tree:member ?m pattern,
 else the subject of the first triple pattern."""@en .
-iv:reads a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:View ;
-    rdfs:comment """A view whose output this one reads (in the views graph): it steps after that view in each tick
-and sees what it wrote, as a change like any other."""@en .
+iv:reads a owl:ObjectProperty ; rdfs:domain iv:View ;
+    rdfs:comment """What this view reads beyond the input graphs. A view: its output and what the runtime writes about it
+(its plan, strategy and figures - iv:lastRows, iv:inputRows, iv:matches -, in the views graph); it steps after that view
+in each tick and sees what it wrote, and the figures when the runtime writes them (in idle time; never its own), as a
+change like any other. A rendering (sem:Rendering): what rules derive (the first projection's derived graph); it is
+stepped again after the projections, with what they derived, round by round until nothing more changes (docs/IVM.md §27)."""@en .
 
 # --- a view per instance, and parameters ---------------------------------------------------------------
 
