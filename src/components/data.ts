@@ -3,7 +3,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { Attrs, FnRule, Out, RuleContext } from '../engine/context.ts'
 import { formatLocale } from '../engine/context.ts'
-import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN } from '../ns.ts'
+import { BEH, C, H, MOD, NS, RDF_TYPE, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { isTrue, labelOf, named, nodes, num, rdfList, str, text } from './util.ts'
 import { sortKey } from '../../rdf-engine/host/intl.ts'
 import { compareKeys, TUPLE } from '../render/order-key.ts'
@@ -36,6 +36,10 @@ const C_PARENT_PROPERTY = NS.c + 'parentProperty'
 const C_EXPANDED = NS.c + 'expandedNode'
 const C_DETAIL_PROPERTY = NS.c + 'detailProperty'
 const C_TOGGLES = NS.c + 'expands'
+const C_TREE_ITEM = NS.c + 'TreeItem'
+const C_IN_TREE = NS.c + 'inTree'
+const C_ITEM_LEVEL = NS.c + 'itemLevel'
+const C_PARENT_ITEM = NS.c + 'parentItem'
 
 /** A short, stable key for an IRI or a value (FNV-1a, base 36). */
 export function hashKey(s: string): string {
@@ -621,85 +625,100 @@ const timelineItem: FnRule = (ctx, focus) => {
 
 /**
  * An expandable hierarchy from c:of: a node's children are the subjects that point at it
- * through c:parentProperty. Open nodes are graph state (c:expandedNode) on the tree.
+ * through c:parentProperty. Open nodes are graph state (c:expandedNode) on the tree. The tree
+ * mints the item of its root; each item renders its node and mints the items of its children
+ * when it is open (keyed by the path to it, so a node under two parents is two items).
  */
 const tree: FnRule = (ctx, focus) => {
   const root = ctx.object(focus, C.of)
   const parent = ctx.object(focus, C_PARENT_PROPERTY)
   if (!named(root) || !named(parent)) return []
   const o = ctx.out(focus)
-  const expanded = new Set(ctx.objects(focus, C_EXPANDED).map((t) => t.value))
-  const detail = ctx.object(focus, C_DETAIL_PROPERTY)
-  const target = ctx.object(focus, C.controls)
-  const property = ctx.object(focus, C.property)
-  const selectable = named(target) && named(property)
-  const selected = selectable ? ctx.object(target, property)?.value : undefined
-  const children = (n: NamedNode) =>
-    ctx
-      .match(null, parent, n)
-      .map((q) => q.subject)
-      .filter(named)
-      .map((t) => ({ t, label: labelOf(ctx, t) }))
-      .sort((a, b) => a.label.localeCompare(b.label, locale(ctx)) || (a.t.value < b.t.value ? -1 : 1))
-  const caption = text(ctx, focus, C.label) ?? labelOf(ctx, root)
-  const dropTarget = ctx.match(focus, NS.rdf + 'type', null).some((q) => q.object.value === NS.dnd + 'DropTarget' || q.object.value === NS.dnd + 'Sortable')
-
+  const item = treeItemOf(ctx, o, 'n' + md5Key(root.value), focus, root, 1)
   if (ctx.modality === MOD.Text) {
-    const lines: string[] = []
-    const walk = (n: NamedNode, label: string, depth: number, path: Set<string>) => {
-      const kids = path.has(n.value) ? [] : children(n)
-      const open = expanded.has(n.value) && kids.length > 0
-      lines.push(`${'  '.repeat(depth)}${kids.length ? (open ? '▾ ' : '▸ ') : '  '}${label}${n.value === selected ? '  ◂' : ''}`)
-      if (open) for (const k of kids) walk(k.t, k.label, depth + 1, new Set([...path, n.value]))
-    }
-    walk(root, labelOf(ctx, root), 0, new Set())
-    o.renders(el(o, 'root', 'Div', {}, lines.map((l, i) => el(o, `line${i}`, 'Div', {}, [o.text(`line${i}-text`, l)]))))
+    o.renders(el(o, 'root', 'Div', {}, [item]))
     return o.quads
   }
-
-  // Elements are keyed by the node's path, so a node under two parents is two items.
-  const item = (n: NamedNode, label: string, level: number, key: string, path: Set<string>): NamedNode => {
-    const id = 'n' + key
-    const kids = path.has(n.value) ? [] : children(n)
-    const open = expanded.has(n.value) && kids.length > 0
-    const rowParts: NamedNode[] = []
-    if (kids.length) {
-      const twisty = el(o, `${id}-twisty`, 'Button', { type: 'button', class: 'sem-twisty' }, [el(o, `${id}-twisty-icon`, 'Span', { 'aria-hidden': 'true' }, [o.text(`${id}-twisty-text`, '▸')])])
-      o.attr(twisty, 'aria-label', `${open ? 'Collapse' : 'Expand'} ${label}`)
-      o.t(twisty, C_TOGGLES, n)
-      rowParts.push(twisty)
-    } else rowParts.push(el(o, `${id}-leaf`, 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' }))
-    const labelEl = selectable
-      ? el(o, `${id}-label`, 'Button', { type: 'button', class: 'sem-label' }, [o.text(`${id}-label-text`, label)])
-      : el(o, `${id}-label`, 'Span', { class: 'sem-label' }, [o.text(`${id}-label-text`, label)])
-    if (selectable) o.t(labelEl, C.selects, n)
-    // Without selection, the label toggles too (a larger hit area than the twisty).
-    else if (kids.length) o.t(labelEl, C_TOGGLES, n)
-    rowParts.push(labelEl)
-    const detailText = named(detail) ? display(ctx, ctx.object(n, detail)) : ''
-    if (detailText) rowParts.push(el(o, `${id}-detail`, 'Code', { class: 'sem-detail' }, [o.text(`${id}-detail-text`, detailText)]))
-    if (kids.length) rowParts.push(el(o, `${id}-count`, 'Span', { class: 'sem-count' }, [o.text(`${id}-count-text`, String(kids.length))]))
-    const row = el(o, `${id}-row`, 'Div', { class: 'sem-row' }, rowParts)
-    // A tree that is a drop target receives into each node: its row is the node's zone.
-    if (dropTarget) o.t(focus, NS.dnd + 'zone', row).t(row, NS.dnd + 'receptacle', n)
-    const parts = [row]
-    if (open) {
-      const inner = new Set([...path, n.value])
-      const group = el(o, `${id}-group`, 'Ul', {}, kids.map((k) => item(k.t, k.label, level + 1, hashKey(key + ' ' + k.t.value), inner)))
-      o.attr(group, 'role', 'group')
-      parts.push(group)
-    }
-    const li = el(o, id, 'Li', { style: `--tree-level: ${level - 1}` }, parts)
-    o.attr(li, 'role', 'treeitem')
-    o.attr(li, 'aria-level', String(level))
-    if (kids.length) o.attr(li, 'aria-expanded', String(open))
-    if (selectable) o.attr(li, 'aria-selected', String(n.value === selected))
-    return li
-  }
-  const list = el(o, 'root', 'Ul', {}, [item(root, labelOf(ctx, root), 1, hashKey(root.value), new Set())])
+  const list = el(o, 'root', 'Ul', {}, [item])
   o.attr(list, 'role', 'tree')
-  o.attr(list, 'aria-label', caption)
+  o.attr(list, 'aria-label', text(ctx, focus, C.label) ?? labelOf(ctx, root))
   o.renders(list)
+  return o.quads
+}
+
+/** Mint the item of a node in a tree, at a level. */
+function treeItemOf(ctx: RuleContext, o: Out, local: string, tree: NamedNode, n: NamedNode, level: number, parentItem?: NamedNode): NamedNode {
+  const item = o.node(local)
+  o.t(item, RDF_TYPE, ctx.nn(C_TREE_ITEM)).t(item, C_IN_TREE, tree).t(item, C.of, n).t(item, C_ITEM_LEVEL, ctx.f.literal(String(level), ctx.nn(XSD_INTEGER)))
+  if (parentItem) o.t(item, C_PARENT_ITEM, parentItem)
+  return item
+}
+
+/**
+ * One node of a tree: its row (a twisty or a leaf, the label, the detail, how many children),
+ * and, when open, the items of its children, placed by their order key (the label in the viewer's
+ * collation, then the IRI). A node already on the path to it has no children here (a cycle).
+ */
+const treeItem: FnRule = (ctx, focus) => {
+  const tree = ctx.object(focus, C_IN_TREE)
+  const n = ctx.object(focus, C.of)
+  if (!named(tree) || !named(n)) return []
+  const parent = ctx.object(tree, C_PARENT_PROPERTY)
+  if (!named(parent)) return []
+  const o = ctx.out(focus)
+  const level = num(ctx, focus, C_ITEM_LEVEL, 1)
+  const path = new Set<string>()
+  for (let a = ctx.object(focus, C_PARENT_ITEM); named(a); a = ctx.object(a, C_PARENT_ITEM)) {
+    const at = ctx.object(a, C.of)
+    if (at) path.add(at.value)
+  }
+  const label = labelOf(ctx, n)
+  o.t(focus, SEM.orderKey, TUPLE + 's' + sortKey(label, formatLocale(ctx.languages)) + TUPLE + 's' + n.value)
+  const kids = path.has(n.value) ? [] : [...new Set(ctx.match(null, parent, n).map((q) => q.subject).filter(named).map((t) => t.value))]
+  const open = kids.length > 0 && ctx.match(tree, C_EXPANDED, n).length > 0
+  const target = ctx.object(tree, C.controls)
+  const property = ctx.object(tree, C.property)
+  const selectable = named(target) && named(property)
+  const selected = selectable && ctx.match(target, property, n).length > 0
+  const children = open ? kids.map((k) => treeItemOf(ctx, o, 'c' + md5Key(k), tree, ctx.f.namedNode(k), level + 1, focus)) : []
+  const group = (tag: string) => {
+    const g = el(o, 'group', tag)
+    for (const c of children) o.t(g, H.hasChild, c)
+    return g
+  }
+  if (ctx.modality === MOD.Text) {
+    const line = `${'  '.repeat(level - 1)}${kids.length ? (open ? '▾ ' : '▸ ') : '  '}${label}${selected ? '  ◂' : ''}`
+    o.renders(el(o, 'root', 'Div', {}, [el(o, 'line', 'Div', {}, [o.text('line-text', line)]), ...(open ? [group('Div')] : [])]))
+    return o.quads
+  }
+  const rowParts: NamedNode[] = []
+  if (kids.length) {
+    const twisty = el(o, 'twisty', 'Button', { type: 'button', class: 'sem-twisty' }, [el(o, 'twisty-icon', 'Span', { 'aria-hidden': 'true' }, [o.text('twisty-text', '▸')])])
+    o.attr(twisty, 'aria-label', `${open ? 'Collapse' : 'Expand'} ${label}`)
+    o.t(twisty, C_TOGGLES, n)
+    rowParts.push(twisty)
+  } else rowParts.push(el(o, 'leaf', 'Span', { class: 'sem-leaf', 'aria-hidden': 'true' }))
+  const labelEl = el(o, 'label', selectable ? 'Button' : 'Span', { type: selectable ? 'button' : undefined, class: 'sem-label' }, [o.text('label-text', label)])
+  if (selectable) o.t(labelEl, C.selects, n)
+  // Without selection, the label toggles too (a larger hit area than the twisty).
+  else if (kids.length) o.t(labelEl, C_TOGGLES, n)
+  rowParts.push(labelEl)
+  const detail = ctx.object(tree, C_DETAIL_PROPERTY)
+  // The least value, if the node has several.
+  const detailValue = named(detail) ? ctx.objects(n, detail).sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0))[0] : undefined
+  const detailText = display(ctx, detailValue)
+  if (detailText) rowParts.push(el(o, 'detail', 'Code', { class: 'sem-detail' }, [o.text('detail-text', detailText)]))
+  if (kids.length) rowParts.push(el(o, 'count', 'Span', { class: 'sem-count' }, [o.text('count-text', String(kids.length))]))
+  const row = el(o, 'row', 'Div', { class: 'sem-row' }, rowParts)
+  // A tree that is a drop target receives into each node: its row is the node's zone.
+  if (ctx.match(tree, RDF_TYPE, null).some((q) => q.object.value === NS.dnd + 'DropTarget' || q.object.value === NS.dnd + 'Sortable')) o.t(tree, NS.dnd + 'zone', row).t(row, NS.dnd + 'receptacle', n)
+  const li = el(o, 'root', 'Li', { style: `--tree-level: ${level - 1}` }, [row, ...(open ? [group('Ul')] : [])])
+  if (open) o.attr(o.node('group'), 'role', 'group')
+  o.attr(li, 'role', 'treeitem')
+  o.attr(li, 'aria-level', String(level))
+  if (kids.length) o.attr(li, 'aria-expanded', String(open))
+  if (selectable) o.attr(li, 'aria-selected', String(selected))
+  o.renders(li)
   return o.quads
 }
 
@@ -722,6 +741,7 @@ export const functions: Record<string, FnRule> = {
   'data:timeline': timeline,
   'data:timeline-item': timelineItem,
   'data:tree': tree,
+  'data:tree-item': treeItem,
 }
 
 export const reactions: Record<string, ReactionFn> = {

@@ -222,6 +222,11 @@ A pair is dirty when the focus's own triples change, and also:
 - `sem:watchesStatements true` — the focus is a property and the rule reads the statements made
   with it on any node (`?s $this ?o`: `nav:Containment`, whose foci are the containment
   properties): adding or removing one makes that focus dirty;
+- `sem:follows ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] )` — a path whose last
+  step goes against a predicate named in the data: a triple `?child ?p ?node` makes dirty the
+  foci that reach `?node` along the path's other steps and name `?p` along the given one (a tree's
+  item hears the children pointing at its node through its tree's `c:parentProperty`). A
+  `[ sem:inverse p ]` step does the same for a fixed `p`;
 - `sem:requires c:icon` — the rule is skipped for a focus without that property;
 - `sem:inputOnly true` — derived triples (other rules' output) do not re-trigger it;
 - `sem:forEach c:item` — the rendering is member-wise: evaluated once per (focus, member), so

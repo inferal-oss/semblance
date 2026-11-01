@@ -5,10 +5,10 @@
 // only transiently: the lifted element follows the pointer, and the page scrolls near its edges.
 import type { Term } from '@rdfjs/types'
 import { DND, NS } from '../ns.ts'
-import { mint, owningFocus } from '../rdf.ts'
+import { mint } from '../rdf.ts'
 import type { DomRenderer } from '../render/dom.ts'
 import { comboOf } from '../layers/keyboard.ts'
-import { receptionOf } from '../layers/dragdrop.ts'
+import { receptionOf, zoneTarget } from '../layers/dragdrop.ts'
 import type { EventBus, EventDetail, Handled } from './events.ts'
 
 /** What a drop event copies from the drag in progress. */
@@ -107,7 +107,7 @@ export class DragHost {
 
   private placeIn(zone: HTMLElement, index: number): Place {
     const key = this.renderer.keyOf(zone)!
-    const place: Place = { zone, target: owningFocus(key), receptacle: zone.getAttribute('data-sem-drop-zone')! }
+    const place: Place = { zone, target: zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key), receptacle: zone.getAttribute('data-sem-drop-zone')! }
     if (zone.hasAttribute('data-sem-drop-ordered')) {
       const items = this.itemsOf(zone)
       place.after = items[index - 1]?.getAttribute('data-sem-drag') ?? undefined

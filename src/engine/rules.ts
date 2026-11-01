@@ -22,7 +22,8 @@ export interface Rule {
   /**
    * Paths of followed predicates (sem:follows given an RDF list): a change on a node reached
    * from the focus along a path, or on any node on the way, makes the focus dirty. A step
-   * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse).
+   * "*p" is any number of p steps (sem:zeroOrMore); "^p" is a step against p (sem:inverse); a last
+   * step "^@q r" is against the predicate the focus names along q r (sem:inverseVia).
    */
   followPaths: string[][]
   /**
@@ -168,10 +169,20 @@ export function loadRules(store: GraphStore): Rule[] {
         if (!first) continue
         // [ sem:zeroOrMore p ]: any number of p steps (an RDF list's rdf:rest), written "*p".
         // [ sem:inverse p ]: a step against p (from a node to what it is p of), written "^p".
+        // [ sem:inverseVia ( q … ) ]: a step against the predicate the focus names along q …, written "^@q …".
         const star = first.termType === 'NamedNode' ? undefined : one(first, SEM.zeroOrMore)
         const inverse = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverse)
-        path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
+        const via = first.termType === 'NamedNode' ? undefined : one(first, SEM.inverseVia)
+        if (via) {
+          const names: string[] = []
+          for (let v: Term | undefined = via; v && v.value !== RDF_NIL; v = one(v, RDF_REST)) {
+            const q = one(v, RDF_FIRST)
+            if (q) names.push(q.value)
+          }
+          path.push('^@' + names.join(' '))
+        } else path.push(star ? '*' + star.value : inverse ? '^' + inverse.value : first.value)
       }
+      if (path.slice(0, -1).some((step) => step.startsWith('^@'))) throw new Error(`Rule <${r.value}>: a [ sem:inverseVia … ] step must be the last of its sem:follows path`)
       // One plain step is a followed predicate; a lone [ sem:inverse p ] or [ sem:zeroOrMore p ] stays a path.
       return path.length === 1 && !/^[*^]/.test(path[0]!) ? path[0]! : path
     })
@@ -190,7 +201,7 @@ export function loadRules(store: GraphStore): Rule[] {
       fn,
       follows: follows.filter((p): p is string => typeof p === 'string'),
       followPaths: follows.filter((p): p is string[] => typeof p !== 'string'),
-      ...(watches.length ? { watches: new Set(watches) } : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
+      ...(watches.length ? { watches: new Set(watches) } : query ? namedPredicates(prefixes + '\n' + query, [...requires, ...unless, ...follows.flat().filter((p) => !p.startsWith('^@')).map((p) => p.replace(/^[*^]/, '')), ...(forEach ? [forEach] : [])]) : {}),
       readsMinted: get(SEM.readsMinted)?.value === 'true',
       forEach,
       anywhere: getAll(SEM.watchesAnywhere),

@@ -833,7 +833,8 @@ c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ;
 # --- Tree: an expandable hierarchy ----------------------------------------------------------------
 # The tree starts at c:of; a node's children are the subjects whose c:parentProperty is the node
 # (for rdfs:subClassOf: its direct subclasses). Which nodes are open is graph state on the tree
-# (c:expandedNode), toggled by a reaction on the twisty. With c:controls and c:property, a node's label
+# (c:expandedNode), toggled by a reaction on the twisty. The tree mints the c:TreeItem of its root; an
+# open item mints its children's, so items are keyed by the path to them. With c:controls and c:property, a node's label
 # selects it: clicking writes `<controls> <property> <node>`, and that node is aria-selected.
 
 c:Tree a owl:Class ;
@@ -849,13 +850,221 @@ c:expandedNode a owl:ObjectProperty ; rdfs:domain c:Tree ;
 c:detailProperty a owl:ObjectProperty ; rdfs:range rdf:Property ; rdfs:comment "A property whose value is shown beside each node's label."@en .
 c:expands a owl:ObjectProperty ; rdfs:comment "On a rendered twisty: the tree node that activating it opens or closes."@en .
 
-c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 ;
-    sem:needsExtension sx:Locale ;
-    sem:functionOnly """awaits sx:Locale (sx:collated, or sx:sortKey for sem:orderKey): siblings sort in the viewer's collation
-(localeCompare), which no SPARQL (1.1 or 1.2) function gives. The walk itself needs no extension: per-tree step edges
-along c:parentProperty, as c:BreadcrumbSteps mints them, and items keyed by their path, which a building block can mint
-level by level for the open nodes.""" .
+c:TreeItem a owl:Class ;
+    rdfs:subClassOf sem:Component ;
+    rdfs:comment "Internal: one node (c:of) of a c:Tree at a level, minted by the tree for its root and by an open item for its children (keyed by the path to it)."@en ;
+    sem:slug "tree-item" .
+c:itemLevel a owl:DatatypeProperty ; rdfs:domain c:TreeItem ; rdfs:range xsd:integer ; rdfs:comment "Its level in the tree (1 for the root)."@en .
+c:parentItem a owl:ObjectProperty ; rdfs:domain c:TreeItem ; rdfs:range c:TreeItem ; rdfs:comment "The item it is a child of."@en .
+
+c:TreeRendering a sem:Rendering ; sem:targets c:Tree ; sem:stratum 0 .
 c:TreeRendering-fn a sem:Rule ; sem:implements c:TreeRendering ; sem:function "data:tree" .
+c:TreeRendering-sparql a sem:Rule ;
+    sem:implements c:TreeRendering ;
+    sem:modality mod:Screen ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Ul ; sem:renders $this ; rdfhtml:hasChild ?item ; rdfhtml:attribute ?roleAttr , ?labelAttr .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tree" .
+  ?labelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
+  ?item a c:TreeItem ; c:inTree $this ; c:of ?node ; c:itemLevel 1 .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Tree ; c:of ?node ; c:parentProperty ?prop . FILTER(isIRI(?node) && isIRI(?prop))
+  OPTIONAL { $this l10n:label ?capPicked }
+  OPTIONAL { FILTER(!BOUND(?capPicked)) ?capAt l10n:of $this ; l10n:label ?capTwin }
+  OPTIONAL { FILTER(!BOUND(?capPicked) && !BOUND(?capTwin)) $this c:label ?capOnly FILTER(isLiteral(?capOnly)) }
+  OPTIONAL { ?node l10n:label ?nodePicked }
+  OPTIONAL { FILTER(!BOUND(?nodePicked)) ?nodeAt l10n:of ?node ; l10n:label ?nodeTwin }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin)) ?node c:label ?nodeOnly FILTER(isLiteral(?nodeOnly)) }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly)) ?nodeNameAt l10n:of ?node ; l10n:name ?nodeName }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly) && !BOUND(?nodeName)) ?node rdfs:label ?nodeRdfs FILTER(isLiteral(?nodeRdfs)) }
+  BIND(COALESCE(STR(?capPicked), STR(?capTwin), STR(?capOnly), COALESCE(STR(?nodePicked), STR(?nodeTwin), STR(?nodeOnly), STR(?nodeName), STR(?nodeRdfs), REPLACE(STR(?node), "^.*[#/]", ""))) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?labelAttr)
+  BIND(IRI(CONCAT(STR($this), "/~n", SUBSTR(MD5(STR(?node)), 1, 8))) AS ?item)
+}""" .
+c:TreeRendering-sparql-text a sem:Rule ;
+    sem:implements c:TreeRendering ;
+    sem:modality mod:Text ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?item .
+  ?item a c:TreeItem ; c:inTree $this ; c:of ?node ; c:itemLevel 1 .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Tree ; c:of ?node ; c:parentProperty ?prop . FILTER(isIRI(?node) && isIRI(?prop))
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~n", SUBSTR(MD5(STR(?node)), 1, 8))) AS ?item)
+}""" .
+
+# An item hears its tree (open nodes, the parent and detail properties, selection), its node and the
+# children pointing at it through the tree's parent property, a property in the data (sem:inverseVia).
+# Siblings are placed by their own sem:orderKey: the label in the viewer's collation, then the IRI.
+c:TreeItemRendering a sem:Rendering ; sem:targets c:TreeItem ; sem:stratum 0 ;
+    sem:follows c:inTree , ( c:inTree c:controls ) , c:of , ( c:of [ sem:inverseVia ( c:inTree c:parentProperty ) ] ) .
+c:TreeItemRendering-fn a sem:Rule ; sem:implements c:TreeItemRendering ; sem:function "data:tree-item" .
+c:TreeItemRendering-sparql a sem:Rule ;
+    sem:implements c:TreeItemRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this sem:orderKey ?orderKey .
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:style ?style ; rdfhtml:attribute ?roleAttr , ?levelAttr , ?expandedAttr , ?selectedAttr ; rdfhtml:hasChild ?row , ?group .
+  ?roleAttr a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "treeitem" .
+  ?levelAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-level" ; rdfhtml:attributeValue ?levelText .
+  ?expandedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-expanded" ; rdfhtml:attributeValue ?openText .
+  ?selectedAttr a rdfhtml:Attribute ; rdfhtml:attributeName "aria-selected" ; rdfhtml:attributeValue ?selectedText .
+  ?row a rdfhtml:Div ; rdfhtml:class "sem-row" ; rdfhtml:hasChild ?lead , ?labelEl , ?detail , ?count ; ord:immediatelyPrecedes ?group ; dnd:receptacle ?receptacle .
+  ?zoneOf dnd:zone ?row .
+  ?lead a ?leadTag ; rdfhtml:type ?leadType ; rdfhtml:class ?leadClass ; c:expands ?expands ; rdfhtml:attribute ?leadAttr ;
+        rdfhtml:hasChild ?icon ; ord:immediatelyPrecedes ?labelEl .
+  ?leadAttr a rdfhtml:Attribute ; rdfhtml:attributeName ?leadAttrName ; rdfhtml:attributeValue ?leadAttrValue .
+  ?icon a rdfhtml:Span ; rdfhtml:attribute ?iconHidden ; rdfhtml:hasChild ?iconText .
+  ?iconHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?iconText a rdfhtml:Text ; rdfhtml:data "▸" .
+  ?labelEl a ?labelTag ; rdfhtml:type ?labelType ; rdfhtml:class "sem-label" ; c:selects ?selects ; c:expands ?labelExpands ;
+        rdfhtml:hasChild ?labelText ; ord:immediatelyPrecedes ?afterLabel .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+  ?detail a rdfhtml:Code ; rdfhtml:class "sem-detail" ; rdfhtml:hasChild ?detailText ; ord:immediatelyPrecedes ?afterDetail .
+  ?detailText a rdfhtml:Text ; rdfhtml:data ?detailString .
+  ?count a rdfhtml:Span ; rdfhtml:class "sem-count" ; rdfhtml:hasChild ?countText .
+  ?countText a rdfhtml:Text ; rdfhtml:data ?countString .
+  ?group a rdfhtml:Ul ; rdfhtml:attribute ?groupRole ; rdfhtml:hasChild ?child .
+  ?groupRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "group" .
+  ?child a c:TreeItem ; c:inTree ?tree ; c:of ?kid ; c:itemLevel ?childLevel ; c:parentItem $this .
+}
+WHERE {
+  $this a c:TreeItem ; c:inTree ?tree ; c:of ?node . FILTER(isIRI(?node))
+  ?tree c:parentProperty ?prop . FILTER(isIRI(?prop))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { $this c:itemLevel ?level0 }
+  BIND(COALESCE(xsd:integer(STR(?level0)), 1) AS ?level)
+  OPTIONAL { ?node l10n:label ?nodePicked }
+  OPTIONAL { FILTER(!BOUND(?nodePicked)) ?nodeAt l10n:of ?node ; l10n:label ?nodeTwin }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin)) ?node c:label ?nodeOnly FILTER(isLiteral(?nodeOnly)) }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly)) ?nodeNameAt l10n:of ?node ; l10n:name ?nodeName }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly) && !BOUND(?nodeName)) ?node rdfs:label ?nodeRdfs FILTER(isLiteral(?nodeRdfs)) }
+  BIND(COALESCE(STR(?nodePicked), STR(?nodeTwin), STR(?nodeOnly), STR(?nodeName), STR(?nodeRdfs), REPLACE(STR(?node), "^.*[#/]", "")) AS ?label)
+  BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale), "\\u0001s", STR(?node)) AS ?orderKey)
+  # Its children, unless its node is already on the path to it (a cycle).
+  LATERAL { OPTIONAL { SELECT ?prop ?node (COUNT(DISTINCT ?k) AS ?kids0) WHERE { ?k ?prop ?node FILTER(isIRI(?k)) } GROUP BY ?prop ?node } }
+  BIND(IF(EXISTS { $this c:parentItem+ ?ancestor . ?ancestor c:of ?node }, 0, COALESCE(?kids0, 0)) AS ?kids)
+  BIND(?kids > 0 && EXISTS { ?tree c:expandedNode ?node } AS ?open)
+  OPTIONAL { ?tree c:controls ?target ; c:property ?selectP FILTER(isIRI(?target) && isIRI(?selectP)) }
+  BIND(BOUND(?target) AS ?selectable)
+  BIND(?selectable && EXISTS { ?target ?selectP ?node } AS ?selected)
+  # The least value of the detail property, if the node has several.
+  OPTIONAL { ?tree c:detailProperty ?detailP FILTER(isIRI(?detailP))
+    ?node ?detailP ?dv . FILTER NOT EXISTS { ?node ?detailP ?dvBefore FILTER(STR(?dvBefore) < STR(?dv)) }
+    OPTIONAL { ?dv l10n:label ?dvPicked }
+    OPTIONAL { FILTER(!BOUND(?dvPicked)) ?dvAt l10n:of ?dv ; l10n:label ?dvTwin }
+    OPTIONAL { FILTER(!BOUND(?dvPicked) && !BOUND(?dvTwin)) ?dv c:label ?dvOnly FILTER(isLiteral(?dvOnly)) }
+    OPTIONAL { FILTER(!BOUND(?dvPicked) && !BOUND(?dvTwin) && !BOUND(?dvOnly)) ?dvNameAt l10n:of ?dv ; l10n:name ?dvName }
+    OPTIONAL { FILTER(!BOUND(?dvPicked) && !BOUND(?dvTwin) && !BOUND(?dvOnly) && !BOUND(?dvName)) ?dv rdfs:label ?dvRdfs FILTER(isLiteral(?dvRdfs)) }
+  }
+  BIND(IF(isLiteral(?dv) && REGEX(STR(?dv), "^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"), xsd:double(STR(?dv)), ?none) AS ?dvNumber)
+  BIND(IF(!BOUND(?dv), "", IF(isIRI(?dv), COALESCE(STR(?dvPicked), STR(?dvTwin), STR(?dvOnly), STR(?dvName), STR(?dvRdfs), REPLACE(STR(?dv), "^.*[#/]", "")),
+       COALESCE(IF(?dvNumber * 0 = 0, sx:formatNumber(?dvNumber, ?locale, "maximumFractionDigits=2"), ?none), STR(?dv)))) AS ?detailString)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(CONCAT("--tree-level: ", STR(?level - 1)) AS ?style)
+  BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?roleAttr)
+  BIND(IRI(CONCAT(STR($this), "/~root-aria-level")) AS ?levelAttr)
+  BIND(STR(?level) AS ?levelText)
+  BIND(IF(?kids > 0, IRI(CONCAT(STR($this), "/~root-aria-expanded")), ?none) AS ?expandedAttr)
+  BIND(IF(?open, "true", "false") AS ?openText)
+  BIND(IF(?selectable, IRI(CONCAT(STR($this), "/~root-aria-selected")), ?none) AS ?selectedAttr)
+  BIND(IF(?selected, "true", "false") AS ?selectedText)
+  BIND(IRI(CONCAT(STR($this), "/~row")) AS ?row)
+  # A tree that is a drop target receives into each node: its row is the node's zone.
+  BIND(EXISTS { ?tree a ?dropClass FILTER(?dropClass IN (dnd:DropTarget, dnd:Sortable)) } AS ?drops)
+  BIND(IF(?drops, ?tree, ?none) AS ?zoneOf)
+  BIND(IF(?drops, ?node, ?none) AS ?receptacle)
+  # The lead: a twisty for a node with children, a dot for a leaf.
+  BIND(?kids > 0 AS ?parent)
+  BIND(IRI(CONCAT(STR($this), IF(?parent, "/~twisty", "/~leaf"))) AS ?lead)
+  BIND(IF(?parent, rdfhtml:Button, rdfhtml:Span) AS ?leadTag)
+  BIND(IF(?parent, "button", ?none) AS ?leadType)
+  BIND(IF(?parent, "sem-twisty", "sem-leaf") AS ?leadClass)
+  BIND(IF(?parent, ?node, ?none) AS ?expands)
+  BIND(IRI(CONCAT(STR(?lead), IF(?parent, "-aria-label", "-aria-hidden"))) AS ?leadAttr)
+  BIND(IF(?parent, "aria-label", "aria-hidden") AS ?leadAttrName)
+  BIND(IF(?parent, CONCAT(IF(?open, "Collapse ", "Expand "), ?label), "true") AS ?leadAttrValue)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~twisty-icon")), ?none) AS ?icon)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~twisty-icon-aria-hidden")), ?none) AS ?iconHidden)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~twisty-text")), ?none) AS ?iconText)
+  # The label selects its node; without selection, it toggles it too (a larger hit area than the twisty).
+  BIND(IRI(CONCAT(STR($this), "/~label")) AS ?labelEl)
+  BIND(IRI(CONCAT(STR($this), "/~label-text")) AS ?labelText)
+  BIND(IF(?selectable, rdfhtml:Button, rdfhtml:Span) AS ?labelTag)
+  BIND(IF(?selectable, "button", ?none) AS ?labelType)
+  BIND(IF(?selectable, ?node, ?none) AS ?selects)
+  BIND(IF(!?selectable && ?parent, ?node, ?none) AS ?labelExpands)
+  BIND(IF(?detailString != "", IRI(CONCAT(STR($this), "/~detail")), ?none) AS ?detail)
+  BIND(IF(BOUND(?detail), IRI(CONCAT(STR($this), "/~detail-text")), ?none) AS ?detailText)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~count")), ?none) AS ?count)
+  BIND(IF(?parent, IRI(CONCAT(STR($this), "/~count-text")), ?none) AS ?countText)
+  BIND(STR(?kids) AS ?countString)
+  BIND(COALESCE(?detail, ?count) AS ?afterLabel)
+  BIND(IF(BOUND(?detail), ?count, ?none) AS ?afterDetail)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group-role")), ?none) AS ?groupRole)
+  LATERAL { {} UNION {
+    FILTER(?open)
+    ?kid ?prop ?node . FILTER(isIRI(?kid))
+    BIND(IRI(CONCAT(STR($this), "/~c", SUBSTR(MD5(STR(?kid)), 1, 8))) AS ?child)
+    BIND(?level + 1 AS ?childLevel)
+  } }
+}""" .
+c:TreeItemRendering-sparql-text a sem:Rule ;
+    sem:implements c:TreeItemRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this sem:orderKey ?orderKey .
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line , ?group .
+  ?line a rdfhtml:Div ; rdfhtml:hasChild ?lineText ; ord:immediatelyPrecedes ?group .
+  ?lineText a rdfhtml:Text ; rdfhtml:data ?data .
+  ?group a rdfhtml:Div ; rdfhtml:hasChild ?child .
+  ?child a c:TreeItem ; c:inTree ?tree ; c:of ?kid ; c:itemLevel ?childLevel ; c:parentItem $this .
+}
+WHERE {
+  $this a c:TreeItem ; c:inTree ?tree ; c:of ?node . FILTER(isIRI(?node))
+  ?tree c:parentProperty ?prop . FILTER(isIRI(?prop))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { $this c:itemLevel ?level0 }
+  BIND(COALESCE(xsd:integer(STR(?level0)), 1) AS ?level)
+  OPTIONAL { ?node l10n:label ?nodePicked }
+  OPTIONAL { FILTER(!BOUND(?nodePicked)) ?nodeAt l10n:of ?node ; l10n:label ?nodeTwin }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin)) ?node c:label ?nodeOnly FILTER(isLiteral(?nodeOnly)) }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly)) ?nodeNameAt l10n:of ?node ; l10n:name ?nodeName }
+  OPTIONAL { FILTER(!BOUND(?nodePicked) && !BOUND(?nodeTwin) && !BOUND(?nodeOnly) && !BOUND(?nodeName)) ?node rdfs:label ?nodeRdfs FILTER(isLiteral(?nodeRdfs)) }
+  BIND(COALESCE(STR(?nodePicked), STR(?nodeTwin), STR(?nodeOnly), STR(?nodeName), STR(?nodeRdfs), REPLACE(STR(?node), "^.*[#/]", "")) AS ?label)
+  BIND(CONCAT("\\u0001s", sx:sortKey(?label, ?locale), "\\u0001s", STR(?node)) AS ?orderKey)
+  # Its children, unless its node is already on the path to it (a cycle).
+  LATERAL { OPTIONAL { SELECT ?prop ?node (COUNT(DISTINCT ?k) AS ?kids0) WHERE { ?k ?prop ?node FILTER(isIRI(?k)) } GROUP BY ?prop ?node } }
+  BIND(IF(EXISTS { $this c:parentItem+ ?ancestor . ?ancestor c:of ?node }, 0, COALESCE(?kids0, 0)) AS ?kids)
+  BIND(?kids > 0 && EXISTS { ?tree c:expandedNode ?node } AS ?open)
+  OPTIONAL { ?tree c:controls ?target ; c:property ?selectP FILTER(isIRI(?target) && isIRI(?selectP)) }
+  BIND(BOUND(?target) AS ?selectable)
+  BIND(?selectable && EXISTS { ?target ?selectP ?node } AS ?selected)
+  # Two spaces per level (up to 64 levels).
+  BIND(SUBSTR("                                                                                                                                ", 1, 2 * (?level - 1)) AS ?indent)
+  BIND(CONCAT(?indent, IF(?kids > 0, IF(?open, "\u25BE ", "\u25B8 "), "  "), ?label, IF(?selected, "  \u25C2", "")) AS ?data)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+  BIND(IRI(CONCAT(STR($this), "/~line-text")) AS ?lineText)
+  BIND(IF(?open, IRI(CONCAT(STR($this), "/~group")), ?none) AS ?group)
+  LATERAL { {} UNION {
+    FILTER(?open)
+    ?kid ?prop ?node . FILTER(isIRI(?kid))
+    BIND(IRI(CONCAT(STR($this), "/~c", SUBSTR(MD5(STR(?kid)), 1, 8))) AS ?child)
+    BIND(?level + 1 AS ?childLevel)
+  } }
+}""" .
 
 c:TreeToggle a beh:Reaction ;
     beh:when beh:Click ;

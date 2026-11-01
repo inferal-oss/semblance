@@ -3,7 +3,8 @@
 import type { NamedNode, Quad, Term } from '@rdfjs/types'
 import type { ReactionContext, ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, RuleContext } from '../engine/context.ts'
-import { mint } from '../rdf.ts'
+import { mint, owningFocus } from '../rdf.ts'
+import type { GraphStore } from '../store/types.ts'
 import { C, DND, NS, RDF_TYPE, RDFS_SUBCLASS, VAL, XSD_INTEGER } from '../ns.ts'
 import { named, RDFS_LABEL, rdfList, text, encodeForUri } from '../components/util.ts'
 
@@ -34,6 +35,15 @@ const said = (ctx: RuleContext, phrase: string, english: string) => text(ctx, ct
 
 /** The node a target's reception of a receptacle is minted as (also read by the host). */
 export const receptionOf = (target: string, receptacle: string) => mint(target, 'drop-' + encodeForUri(receptacle))
+
+/**
+ * The target a rendered zone (by its key) receives for: the one that names it (dnd:zone; a tree's row
+ * is minted by its item, not by the tree), else the component that minted it (its root).
+ */
+export function zoneTarget(store: GraphStore, graph: Quad['graph'], key: string): string {
+  const f = store.factory
+  return store.match(null, f.namedNode(DND.zone), f.namedNode(key), graph)[0]?.subject.value ?? owningFocus(key)
+}
 
 /** A target's zones: those it names (dnd:zone, each with its receptacle), else its root receiving dnd:receptacle or itself. */
 function zonesOf(ctx: RuleContext, focus: NamedNode): { zone: NamedNode; receptacle: Term }[] {

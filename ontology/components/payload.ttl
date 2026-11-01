@@ -56,7 +56,7 @@ c:JsonNode a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Internal: one value of a c:JsonTree, minted by its parsing (keyed by its JSON Pointer)."@en ;
     sem:slug "json-node" .
-c:inTree a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonTree .
+c:inTree a owl:ObjectProperty ; rdfs:comment "From a node a tree minted (a c:JsonNode, a c:TreeItem) to its tree."@en .
 c:jsonPath a owl:DatatypeProperty ; rdfs:domain c:JsonNode ; rdfs:comment "Its JSON Pointer."@en .
 c:jsonKey a owl:DatatypeProperty ; rdfs:domain c:JsonNode ; rdfs:comment "Its key in its parent (an array index for items; the tree's name for the root)."@en .
 c:jsonType a owl:DatatypeProperty ; rdfs:domain c:JsonNode ; rdfs:comment "object, array, string, number, boolean or null."@en .

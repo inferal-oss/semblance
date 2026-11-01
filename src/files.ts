@@ -30,11 +30,11 @@
 // uploads already in the graph when it attaches (a restored session) are stale: not performed.
 import type { NamedNode, Term } from '@rdfjs/types'
 import type { EventBus, Handled } from './behaviour/events.ts'
-import { receptionOf } from './layers/dragdrop.ts'
+import { receptionOf, zoneTarget } from './layers/dragdrop.ts'
 import { arrivalOf } from './components/upload.ts'
 import { decodeThumbnail, type FileStoreBackend, indexedDbFileStore, PREVIEW_SIZE, type Thumbnailer } from './file-store.ts'
 import { DND, FILE, FILES_GRAPH, NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
-import { mint, owningFocus, type Delta } from './rdf.ts'
+import { mint, type Delta } from './rdf.ts'
 import type { DomRenderer } from './render/dom.ts'
 
 const XSD_DATETIME = NS.xsd + 'dateTime'
@@ -544,7 +544,7 @@ export class Files {
     if (!el || !renderer.host.contains(el) || el.closest('[hidden], [inert]')) return undefined
     const key = renderer.keyOf(el)
     if (!key) return undefined
-    const drop = owningFocus(key)
+    const drop = zoneTarget(this.bus.runtime.store, this.bus.projection.engine.graph, key)
     if (!this.bus.reactionsFor(FILE.Arrive, drop).length) return undefined
     return { drop, receptacle: el.getAttribute('data-sem-drop-zone')! }
   }
