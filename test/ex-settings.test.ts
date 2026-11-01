@@ -143,6 +143,25 @@ describe('the settings example', () => {
     expect(t.status()).toContain('All changes saved')
   })
 
+  it('restores what was saved when its graph is loaded after start (a page that did not need it first)', async () => {
+    const storage: Record<string, Backend> = { [PER + 'Session']: memoryBackend(), [PER + 'Device']: memoryBackend(), [PER + 'Database']: memoryBackend() }
+    const a = await mountRemembering(storage)
+    const s = open(a)
+    s.type('set-name', 'Augusta Ada King')
+    s.click(s.save())
+    await a.persistence.flush()
+
+    // Its policy (set:remember…) is in the example's graph: not there when the page starts.
+    const b = await mountRemembering(storage, undefined, ['_ex-settings.ttl'])
+    b.runtime.load(b.later[0]!)
+    expect(await b.persistence.restoreAdded()).toBeGreaterThan(0)
+    expect(await b.persistence.restoreAdded()).toBe(0) // once
+    b.shell.flush()
+    const t = open(b)
+    expect(t.input('set-name').value).toBe('Augusta Ada King')
+    expect(t.status()).toContain('All changes saved')
+  })
+
   it('renders the same with SPARQL and function rules, and a keystroke costs a few rules', () => {
     const [x, y] = (['sparql', 'function'] as const).map((prefer) => open(mountSite('oxigraph', prefer)))
     const html = (s: typeof x) => s.root('ex-settings').outerHTML

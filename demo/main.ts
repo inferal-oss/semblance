@@ -16,14 +16,16 @@ import { NetworkCapture } from '../src/network.ts'
 import { Sandboxes } from '../src/sandbox.ts'
 import { compactIri, declaredPrefixes } from '../src/prefixes.ts'
 import { graphLanguages } from '../src/server/render.ts'
-import { serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
-import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteGraphs, siteLayers } from './site.ts'
+import { pageGraphs, serverRendered, serverStyled, takeOver } from '../src/web/takeover.ts'
+import { carryInFragment, type CompileMode, prepareSite, recordSiteSources, ROOT, siteLayers, siteNamedGraphs, siteSources } from './site.ts'
 import { L10N, MOD, NS, SEM, STY } from '../src/ns.ts'
 import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
-import { Runtime } from '../src/runtime.ts'
+import { parseTurtle, Runtime } from '../src/runtime.ts'
+import { sourceQuads } from '../src/sources.ts'
+import type { Quad } from '@rdfjs/types'
 import { compileStyles } from '../src/style/compile.ts'
-import { hasStore, initWeb, loadStoreWith, type StoreKind } from '../src/web/load.ts'
+import { hasStore, initWeb, loadOntology, loadStoreOf, loadStoreWith, ONTOLOGY_NAMES, ontologyText, type StoreKind } from '../src/web/load.ts'
 import { attachWalkthroughs } from '../src/web/walkthrough.ts'
 import { attachConnectors } from '../src/web/connectors.ts'
 import { attachSnaps } from '../src/web/snap.ts'
@@ -54,14 +56,20 @@ const defaultCompile = (store: string): CompileMode => (store === 'rust' ? 'idle
 const compileParam = ['off', 'run', 'idle'].includes(params.get('compile') ?? '') ? (params.get('compile') as CompileMode) : undefined
 const compile = compileParam ?? defaultCompile(kind)
 
-// Only the chosen store's code and WASM are loaded.
-await initWeb(kind)
+// The graphs a page rendered beforehand needs first (it names them; the build checked that they
+// render it): the rest load in idle time, once the page is interactive. Any other page loads all.
+const firstGraphs = serverRendered(document.getElementById('app')!) ? pageGraphs(document) : undefined
+const wanted = (name: string) => !firstGraphs || firstGraphs.includes(name)
+// The Components page: one graph per component group (demo/gallery/*.ttl), each a chunk of its own.
+const galleryLoaders = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>).map(([p, load]) => ['demo/' + p.slice(2), load]))
+const galleryFiles: Record<string, string> = {}
+const loadGallery = (names: string[]) => Promise.all(names.map(async (n) => void (galleryFiles[n] ??= await galleryLoaders[n]!())))
+// Only the chosen store's code and WASM are loaded, and the graphs the page needs, at once.
+await Promise.all([initWeb(kind, { ontology: false }), loadOntology(ONTOLOGY_NAMES.filter(wanted)), loadGallery(Object.keys(galleryLoaders).filter(wanted))])
 performance.mark('sem:wasm')
-// The Components page: one graph per component group (demo/gallery/*.ttl).
-const galleryFiles = Object.fromEntries(Object.entries(import.meta.glob('./gallery/*.ttl', { query: '?raw', import: 'default', eager: true }) as Record<string, string>).map(([p, t]) => ['demo/' + p.slice(2), t]))
 const storeOptions = { compiled: compile === 'idle' ? ('idle' as const) : compile === 'run' }
-const store = loadStoreWith(kind, storeOptions, ...siteGraphs(appGraph, galleryFiles))
-performance.mark('sem:store')
+const store = loadStoreOf(kind, storeOptions, ONTOLOGY_NAMES.filter(wanted), ...Object.values(siteNamedGraphs(appGraph, galleryFiles)))
+performance.mark('sem:store', { detail: { graphs: firstGraphs?.length } })
 // The examples show their own source, recorded as data (c:SourceText).
 recordSiteSources(store, galleryFiles)
 // One file is one page: where we are goes in the fragment.
@@ -147,6 +155,11 @@ function deferUntilSeen(slot: Element, build: () => void) {
   observer.observe(slot)
 }
 
+// Every graph of the site, once the rest of them (beyond what the page needed first) are loaded.
+let graphsLoaded: () => void
+const allGraphs = new Promise<void>((resolve) => (graphsLoaded = resolve))
+if (!firstGraphs) graphsLoaded!()
+
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
 let sandboxes: Sandboxes | undefined
 // DOM patches are timed: a hang outside every turn of the engine is blamed on them (the stall log).
@@ -169,8 +182,9 @@ sandboxes = new Sandboxes(runtime, screen, {
   languages: () => [...screen.engine.languages],
   siteCss,
   // Each example loads the ontology into a store of its own: built once its slot is near the view,
-  // after the page has painted (an example below the fold waits until it is scrolled to).
-  defer: deferUntilSeen,
+  // after the page has painted (an example below the fold waits until it is scrolled to), and once
+  // the whole ontology is here (its pre-rendered HTML shows until then).
+  defer: (slot, build) => void allGraphs.then(() => deferUntilSeen(slot, build)),
 })
 sandboxes.attach()
 flush()
@@ -485,6 +499,33 @@ const scheduleWarmup = () => {
   if (!warming) (warming = true), idle(warmup)
 }
 scheduleWarmup()
+if (firstGraphs) idle(() => void loadRest())
+
+/**
+ * The graphs the page did not need first, in idle time: fetched, read a file per slice, then loaded
+ * as one change through the runtime (their rules join the engine, their reactions the bus, their
+ * remembered state is restored), with the sources of the examples among them.
+ */
+async function loadRest() {
+  performance.mark('sem:graphs-fetch')
+  const ontology = ONTOLOGY_NAMES.filter((n) => !wanted(n))
+  const gallery = Object.keys(galleryLoaders).filter((n) => !wanted(n))
+  await Promise.all([loadOntology(ontology), loadGallery(gallery)])
+  const texts = [...ontology.map((n) => ontologyText(n)!), ...gallery.map((n) => galleryFiles[n]!)]
+  const add: Quad[] = []
+  for (const text of texts) {
+    await new Promise<void>((resolve) => idle(() => resolve()))
+    add.push(...parseTurtle(text, store.factory))
+  }
+  add.push(...sourceQuads(store.factory, siteSources(Object.fromEntries(gallery.map((n) => [n, galleryFiles[n]!])))))
+  performance.mark('sem:graphs-parsed', { detail: { quads: add.length } })
+  runtime.apply({ add, remove: [] })
+  await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
+  flush()
+  scheduleWarmup()
+  graphsLoaded()
+  performance.mark('sem:graphs')
+}
 void recordMemory()
 setInterval(() => void recordMemory(), 3000)
 

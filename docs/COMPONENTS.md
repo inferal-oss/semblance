@@ -230,7 +230,8 @@ A pair is dirty when the focus's own triples change, and also:
 A graph loaded after start (`runtime.load(turtle)`, or any change that adds or removes a
 `sem:Rule`, a `sem:Rendering` or a triple about one) brings its rules into the running engine as
 enabling a layer does: they are evaluated for every focus they apply to, in their stratum, and the
-bus answers its reactions.
+bus answers its reactions; the site's pages load the graphs they need first this way and the rest
+in idle time (docs/SSR.md, "Bytes").
 
 Strata only run upward: a rule that a higher stratum's output would make dirty again throws
 "Stratification violation". A rule at a low stratum (say -15) targeting a component onto which a

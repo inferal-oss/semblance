@@ -624,6 +624,36 @@ export class Engine {
     this.run()
   }
 
+  /**
+   * What function rules read through their context (traced), by subject: for each focus, the
+   * predicates read ('*': any). With function rules preferred, what a render read of the graph.
+   */
+  *tracedReads(): Iterable<{ subject: string; focus: string; predicates: ReadonlySet<string> }> {
+    for (const [subject, byRule] of this.readers) {
+      const byFocus = new Map<string, Set<string>>()
+      for (const foci of byRule.values()) {
+        for (const [focus, preds] of foci) {
+          const owner = focusOf(focus)
+          let all = byFocus.get(owner)
+          if (!all) byFocus.set(owner, (all = new Set()))
+          for (const p of preds) all.add(p)
+        }
+      }
+      for (const [focus, predicates] of byFocus) yield { subject, focus, predicates }
+    }
+  }
+
+  /** Each rule and focus with output (a member-wise rule's focus, not its members). */
+  *produced(): Iterable<{ rule: Rule; focus: string }> {
+    for (const [rule, byFocus] of this.outputs) {
+      const seen = new Set<string>()
+      for (const [key, out] of byFocus) {
+        const focus = focusOf(key)
+        if (out.size && !seen.has(focus)) seen.add(focus), yield { rule, focus }
+      }
+    }
+  }
+
   /** Which rule produced a derived node, and for which focus. */
   explain(node: string): { rule: string; focus: string } | undefined {
     for (let focus = owningFocus(node); ; focus = owningFocus(focus)) {

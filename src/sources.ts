@@ -1,6 +1,7 @@
 // Source texts as data: the host records the texts worth showing - an example's own file -
 // as c:SourceText nodes (ontology/components/views.ttl), so a c:SourceView can show them
 // verbatim, comments included, from the graph like anything else.
+import type { Quad } from '@rdfjs/types'
 import { NS, RDF_TYPE, XSD_INTEGER } from './ns.ts'
 import { tokenizeSparql } from './sparql-tokens.ts'
 import type { GraphStore } from './store/types.ts'
@@ -10,7 +11,13 @@ export const sourceIri = (path: string) => 'urn:semblance:source:' + path
 
 /** Record each text under its path (e.g. "demo/gallery/_ex-kanban.ttl"). */
 export function recordSources(store: GraphStore, sources: Record<string, string>): void {
-  const f = store.factory
+  for (const q of sourceQuads(store.factory, sources)) store.add(q)
+}
+
+/** recordSources' triples, for a change (a graph loaded after start records its source with it). */
+export function sourceQuads(f: GraphStore['factory'], sources: Record<string, string>): Quad[] {
+  const out: Quad[] = []
+  const store = { add: (q: Quad) => void out.push(q) }
   const nn = (iri: string) => f.namedNode(iri)
   for (const [path, text] of Object.entries(sources)) {
     const s = nn(sourceIri(path))
@@ -31,6 +38,7 @@ export function recordSources(store: GraphStore, sources: Record<string, string>
       store.add(f.quad(node, nn(NS.c + 'toLine'), int(span.to)))
     })
   }
+  return out
 }
 
 export interface SubjectSpan {

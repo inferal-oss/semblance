@@ -29,6 +29,18 @@ export function serverRendered(host: Element): boolean {
   return host.hasAttribute(SSR_ATTRIBUTE)
 }
 
+/** The <meta> a page names the graphs its client needs first in (space-separated). */
+export const PAGE_GRAPHS_META = 'semblance-graphs'
+
+/**
+ * The graphs the page says its client needs first (src/server/page-graphs.ts: `ontology/<file>` and
+ * the site's own names), or undefined: then it needs all of them.
+ */
+export function pageGraphs(doc: Document): string[] | undefined {
+  const content = doc.querySelector(`meta[name="${PAGE_GRAPHS_META}"]`)?.getAttribute('content')
+  return content ? content.split(/\s+/).filter(Boolean) : undefined
+}
+
 /** Whether the document has the server's stylesheet. */
 export function serverStyled(doc: Document): boolean {
   return !!doc.querySelector(`[${STYLES_ATTRIBUTE}]`)

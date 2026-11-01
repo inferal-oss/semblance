@@ -81,6 +81,20 @@ export function ontologySources(): string[] {
   return ONTOLOGY_FILES.map((f) => readFileSync(ontologyDir + f, 'utf8'))
 }
 
+/** The framework's ontology files by name (`ontology/<file>`), in load order: a page may load some of them first. */
+export function ontologyFiles(): Record<string, string> {
+  return Object.fromEntries(ONTOLOGY_FILES.map((f) => ['ontology/' + f, readFileSync(ontologyDir + f, 'utf8')]))
+}
+
+/** A store with only some of the framework's ontology files (by name, as ontologyFiles has them) and the given app data. */
+export function loadStoreOf(kind: StoreKind, ontology: Iterable<string>, ...data: string[]): GraphStore {
+  const store = createStore(kind)
+  const wanted = new Set(ontology)
+  for (const f of ONTOLOGY_FILES) if (wanted.has('ontology/' + f)) store.loadTurtle(readFileSync(ontologyDir + f, 'utf8'))
+  for (const ttl of data) store.loadTurtle(ttl)
+  return store
+}
+
 /** A store with the framework ontologies and the given app data loaded. */
 export function loadStore(kind: StoreKind, ...data: string[]): GraphStore {
   return loadStoreWith(kind, {}, ...data)
