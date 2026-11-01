@@ -231,8 +231,9 @@ describe('c:DescriptionList, c:Stat and c:Avatar', () => {
     expect(dl.localName).toBe('dl')
     const pairs = [...dl.querySelectorAll('.sem-pair')].map((p) => [p.querySelector('dt')!.textContent, p.querySelector('dd')!.textContent])
     expect(pairs[0]).toEqual(['slug', 'table'])
-    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table.
-    expect(pairs[1]).toEqual(['subClassOf', 'Table, Sortable, Component'])
+    // c:Table is a sem:Component and a c:Sortable, and (ontology/alignments.ttl) a schema:Table: in
+    // the viewer's collation of their labels.
+    expect(pairs[1]).toEqual(['subClassOf', 'Component, Sortable, Table'])
     expect(pairs[2]![1]).toMatch(/^Rows of a SPARQL SELECT/)
     expect([...root('dt-dl-explicit').querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Store', 'Strata', 'Change log', 'Identity'])
   })
