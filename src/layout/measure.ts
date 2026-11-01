@@ -48,13 +48,14 @@ export interface PartHooks {
   widths: Record<string, string>
 }
 
-export function measurePage(parts: PartHooks): MeasuredPage {
+/** `boxOf` gives an element's box relative to the viewport: as laid out, before transforms (src/layout/box.ts), by default its bounding box. */
+export function measurePage(parts: PartHooks, boxOf: (el: Element) => { x: number; y: number; width: number; height: number } = (el) => el.getBoundingClientRect()): MeasuredPage {
   const nodes: MeasuredNode[] = []
   const indexOf = new Map<Element, number>()
   const round = (n: number) => Math.round(n * 100) / 100
   const box = (el: Element) => {
-    const r = el.getBoundingClientRect()
-    return { x: round(r.left + scrollX), y: round(r.top + scrollY), width: round(r.width), height: round(r.height) }
+    const r = boxOf(el)
+    return { x: round(r.x + scrollX), y: round(r.y + scrollY), width: round(r.width), height: round(r.height) }
   }
   const visible = (el: Element) => {
     const r = el.getBoundingClientRect()
