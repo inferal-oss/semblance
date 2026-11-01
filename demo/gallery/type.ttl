@@ -14,7 +14,7 @@
 # Gallery page: Type.
 
 ui:gallery-type a c:Stack ; pos:direction pos:Column ; pos:gap tok:space-5 ;
-    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-kbd ui:ty-code ui:ty-quote ui:ty-walk ui:ty-live ) .
+    c:children ( ui:gallery-type-intro ui:ty-scale ui:ty-tones ui:ty-running ui:ty-links ui:ty-kbd ui:ty-code ui:ty-diff ui:ty-quote ui:ty-walk ui:ty-live ) .
 ui:gallery-type-intro a c:Heading ; c:label "Type" .
 
 # --- the type scale ---
@@ -113,6 +113,18 @@ ui:ty-code a c:Flippable ; c:front ui:ty-code-spec .
 ui:ty-code-spec a c:Specimen ; c:demonstrates c:Code ; c:label "Code" ;
     c:help "Inline <code>, or with c:block true a <pre><code> block. c:language \"sparql\" or \"turtle\" colors the tokens with the palette of the rule sources on the back of every card." ;
     c:children ( ui:ty-code-col ) .
+
+# --- ordered text changes ---
+ui:ty-diff-view a c:DiffView ; c:label "Changes to greeting.txt" ;
+    c:items ( ui:ty-diff-before ui:ty-diff-removed ui:ty-diff-added ui:ty-diff-after ) .
+ui:ty-diff-before a c:DiffLine ; c:value "Hello," ; c:diffKind c:DiffContext .
+ui:ty-diff-removed a c:DiffLine ; c:value "old world" ; c:diffKind c:DiffRemoved .
+ui:ty-diff-added a c:DiffLine ; c:value "Semblance world" ; c:diffKind c:DiffAdded .
+ui:ty-diff-after a c:DiffLine ; c:value "Goodbye." ; c:diffKind c:DiffContext .
+ui:ty-diff a c:Flippable ; c:front ui:ty-diff-spec .
+ui:ty-diff-spec a c:Specimen ; c:demonstrates c:DiffView , c:DiffLine ; c:label "Text diff" ;
+    c:help "An ordered list of plain text lines. Each line is added, removed or unchanged; the sign and colors follow the theme." ;
+    c:children ( ui:ty-diff-view ) .
 
 # --- quotation ---
 ui:ty-quote-1 a c:Blockquote ;
