@@ -88,7 +88,7 @@ ex:Biggest a sem:View , iv:View ; iv:materialize iv:Graph ;
   sem:select """SELECT ?value ?label ?max WHERE { ?e <https://example.org/#amount> ?value BIND(CONCAT("biggest: ", STR(?value)) AS ?label) BIND(200 AS ?max) } ORDER BY DESC(?value) LIMIT 2""" .
 ex:Unordered a sem:View , iv:View ; iv:materialize iv:Graph ;
   sem:select """SELECT ?value WHERE { ?e <https://example.org/#amount> ?value }""" .
-ex:Plain a sem:View ; sem:select """SELECT (COUNT(?e) AS ?value) WHERE { ?e <https://example.org/#amount> ?x }""" .
+ex:Count a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT (COUNT(?e) AS ?value) WHERE { ?e <https://example.org/#amount> ?x }""" .
 ex:Nothing a sem:View , iv:View ; iv:materialize iv:Graph ; sem:select """SELECT ?value WHERE { ?e <https://example.org/#none> ?value }""" .
 
 ex:page a c:Stack ; c:children ( ex:a ex:b ex:c ex:d ex:e ex:f ex:g ) .
@@ -97,7 +97,7 @@ ex:b a c:Stat ; c:label "In" ; c:valueQuery ex:Of ; ex:sums ex:In .
 ex:c a c:Stat ; c:label "Out" ; c:valueQuery ex:Of ; ex:sums ex:Out .
 ex:d a c:Progress ; c:valueQuery ex:Biggest .
 ex:e a c:Stat ; c:label "Some" ; c:valueQuery ex:Unordered .
-ex:f a c:Stat ; c:label "Count" ; c:valueQuery ex:Plain ; c:dataset ex:e1 .
+ex:f a c:Stat ; c:label "Count" ; c:valueQuery ex:Count .
 ex:g a c:Stat ; c:label "None" ; c:value 7 ; c:valueQuery ex:Nothing .
 `
 
@@ -183,7 +183,7 @@ describe('charts and finding lists over maintained views, in SPARQL', () => {
       }
       const values = () => [...s.html()[0]!.matchAll(/class="sem-value">([^<]*)</g)].map((m) => m[1])
       both(() => {})
-      // Total (toned), In and Out (one view each), the first of an unordered view, a query run as it is, a stated value.
+      // Total (toned), In and Out (one view each), the first of an unordered view, an aggregate, a stated value.
       expect(values()).toEqual(['142.5', '100', '42.5', '12.5', '3', '7'])
       expect(s.html()[0]).toContain('data-sem-tone="warning"')
       expect(s.html()[0]).toContain('aria-valuetext="biggest: 100"')
