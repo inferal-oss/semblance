@@ -130,6 +130,9 @@ describe('server-side rendering: the site', () => {
     const full = await siteClient(url)
     const rules = (c: typeof client) => c.screen.engine.activeRules.map((r) => r.iri).sort()
     expect(rules(client)).toEqual(rules(full))
+    // And every maintained view (a view whose query came with the rest is defined then).
+    const views = (c: typeof client) => c.runtime.views.all().map((v) => v.iri).sort()
+    expect(views(client)).toEqual(views(full))
     server.runtime.dispose()
     client.runtime.dispose()
     full.runtime.dispose()

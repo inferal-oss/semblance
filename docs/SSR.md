@@ -237,9 +237,9 @@ loads those, takes the page over, and loads the rest in idle time (`Site.pageGra
 On semblance.dev a page names about 80 of the site's 189 graphs: 60% of the bytes. The shell reads
 much of the rest itself (the taskbar lists every window, the theme menu every theme, the command
 palette every command). On a throttled phone (Slow 4G, CPU slowed 4×, HTTP/2), the landing page is
-interactive at 8.9 s instead of 9.8 s, an example's page at 9.25 s instead of 10.1 s, with the
-first paint unchanged (1.8 s); the rest follows in idle time, its change one task of about 2 s
-there (0.4 s on a laptop). With preloads, the graphs arrive earlier (interactive at 8.4 s) but
+interactive at 9.1 s instead of 9.8 s, an example's page at 9.3 s instead of 10.1 s, with the
+first paint unchanged (1.8 s): it sends 1,085 KiB instead of 1,252 before it is interactive. The
+rest follows in idle time, its change one task of about 2 s there (0.4 s on a laptop). With preloads, the graphs arrive earlier (interactive at 8.4 s) but
 share the network with the stylesheet: the first paint waited until 4.5 s. Finer pieces than whole
 files (a theme's name apart from its styles) would leave more for later.
 

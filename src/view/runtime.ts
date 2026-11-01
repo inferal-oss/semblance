@@ -231,6 +231,8 @@ export class ViewRuntime {
   private timer?: { at: number; cancel: () => void }
   private ctx: RuleContext
   private prefixText?: string
+  /** View nodes with no implementation yet (their query is in a graph not loaded): defined once one arrives. */
+  private undefinedViews = new Set<string>()
 
   /** The store's SPARQL prefixes (the framework's and those declared in the graph), cached until a declaration changes. */
   prefixes(): string {
@@ -430,7 +432,7 @@ export class ViewRuntime {
       if (q.subject.termType !== 'NamedNode') continue
       const s = q.subject.value
       if (q.predicate.value === RDF_TYPE && q.object.value === IV + 'View') nodes.add(s)
-      else if (this.views.has(s) || this.templates.has(s)) nodes.add(s)
+      else if (this.views.has(s) || this.templates.has(s) || this.undefinedViews.has(s)) nodes.add(s)
       // An instance of a template's class, or a node naming it (iv:perReferrer), came or went.
       for (const [tpl, t] of this.templates) {
         if (t.cls !== undefined && q.predicate.value === RDF_TYPE && q.object.value === t.cls) members.add(tpl)
@@ -883,9 +885,12 @@ export class ViewRuntime {
     if (useFn) plan = this.fnPlan(fnView!, def, sparqlPlan)
     else if (sparqlPlan) plan = sparqlPlan
     else {
-      warn(`<${def.iri}> has no implementation this store can run; skipped`)
+      // Not defined yet (a graph loaded later states its query): defined when it does (tick).
+      this.undefinedViews.add(def.node)
+      if (fn || hasQuery) warn(`<${def.iri}> has no implementation this store can run; skipped`)
       return
     }
+    this.undefinedViews.delete(def.node)
     if (plan.kind === 'recompute' && !onRequest) {
       const note = `<${def.iri}> is recomputed from scratch: ${plan.reason}`
       // iv:Auto says a fallback is expected (a query typed into the workbench): no error, no warning; strict still compares it.
