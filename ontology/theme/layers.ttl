@@ -304,6 +304,7 @@
 # A component's toggles together, at the end of a row they share (a header, a bar).
 [] a sty:StyleRule ; sty:part ".sem-fullscreen-toggles" ;
     sty:declares [ sty:property "display" ; sty:raw "inline-flex" ] ,
+                 [ sty:property "flex" ; sty:raw "none" ] ,
                  [ sty:property "gap" ; sty:raw "4px" ] ,
                  [ sty:property "margin-inline-start" ; sty:raw "auto" ] .
 # The first of a component's toggles keeps them at the end of a row it shares.

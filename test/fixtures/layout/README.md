@@ -10,7 +10,8 @@ Box trees of real pages, measured in Chromium's headless shell by `scripts/layou
 | 320-before / 320-after | 70de219 / 71686f3 | a progress bar and a docked panel wider than a 320px screen |
 | 375-before / 375-after | a050a46 / a5fc6b7 | gallery pages 443-1038px wide at 375px |
 | 57-main / 57-after | 879f31a (main) / main with PR #125 merged (re-recorded 2026-10-27, resuming the watchdog's suspended update) | #57: the checkout's code and phone fields not lining up |
-| today | 879f31a (main); the themes page re-recorded on 881439e with #195 | main at 320px |
+| 233-before | cbb976c (main) | #233: a card's header actions wider than the card at 320px |
+| today | 879f31a (main); the themes page re-recorded on 881439e with #195; the windows page and the dashboard recorded on cbb976c with #233 | main at 320px |
 
 Re-record one with, for example:
 

@@ -171,6 +171,12 @@ sty:Raised a sty:Elevation ; sem:slug "raised" ;
                  [ sty:property "clip-path" ; sty:raw "inset(50%)" ] ,
                  [ sty:property "white-space" ; sty:raw "nowrap" ] .
 
+# An action in a row of actions (a card's header, an alert, a toast, a dialog) is never wider than
+# the row: the row wraps first, and an action that alone is too wide wraps its label.
+[] a sty:StyleRule ; sty:part ".sem-actions > [data-sem-c]" ;
+    sty:declares [ sty:property "max-width" ; sty:raw "100%" ] ,
+                 [ sty:property "white-space" ; sty:raw "normal" ] .
+
 # --- form controls: they fit the space they are given ----------------------------------------
 # A text control's own minimum width comes from its default size (about 20 characters), and a
 # grid or flex item does not shrink below its content's minimum by default. Some engines let a
@@ -797,8 +803,10 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
 
 # --- card ---------------------------------------------------------------------------------------
 
+# Its one column is as wide as the card, whatever its content's minimum (that scrolls or wraps).
 [] a sty:StyleRule ; sty:appliesTo c:Card ;
     sty:declares [ sty:property "display" ; sty:raw "grid" ] ,
+                 [ sty:property "grid-template-columns" ; sty:raw "minmax(0, 1fr)" ] ,
                  [ sty:property "row-gap" ; sty:raw "0" ] ,
                  [ sty:property "min-width" ; sty:raw "0" ] ,
                  [ sty:property "background" ; sty:token tok:surface ] ,
@@ -833,10 +841,15 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "color" ; sty:token tok:accent-strong ] ,
                  [ sty:property "background" ; sty:token tok:accent-soft ] .
 
+# Actions sit at the header's end and wrap there when the card is narrow.
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header .sem-actions" ;
-    sty:declares [ sty:property "margin-left" ; sty:raw "auto" ] ,
+    sty:declares [ sty:property "margin-inline-start" ; sty:raw "auto" ] ,
                  [ sty:property "display" ; sty:raw "flex" ] ,
-                 [ sty:property "gap" ; sty:raw "6px" ] .
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
+                 [ sty:property "justify-content" ; sty:raw "flex-end" ] ,
+                 [ sty:property "gap" ; sty:raw "6px" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "max-width" ; sty:raw "100%" ] .
 
 [] a sty:StyleRule ; sty:appliesTo c:Card ; sty:part "> header p" ;
     sty:declares [ sty:property "flex-basis" ; sty:raw "100%" ] ,
@@ -1133,8 +1146,13 @@ sty:Dots a sty:Backdrop ; sem:slug "dots" ;
                  [ sty:property "text-transform" ; sty:raw "uppercase" ] ,
                  [ sty:property "letter-spacing" ; sty:raw "0.06em" ] ,
                  [ sty:property "color" ; sty:token tok:muted ] .
+# A narrow header shortens the path, never its toggles.
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part ".sem-source-path" ;
     sty:declares [ sty:property "font" ; sty:raw "12px var(--sem-mono)" ] ,
+                 [ sty:property "min-width" ; sty:raw "0" ] ,
+                 [ sty:property "overflow" ; sty:raw "hidden" ] ,
+                 [ sty:property "text-overflow" ; sty:raw "ellipsis" ] ,
+                 [ sty:property "white-space" ; sty:raw "nowrap" ] ,
                  [ sty:property "color" ; sty:token tok:faint ] .
 [] a sty:StyleRule ; sty:appliesTo c:SourceView ; sty:part "> .sem-source" ;
     sty:declares [ sty:property "margin" ; sty:raw "0" ] ,

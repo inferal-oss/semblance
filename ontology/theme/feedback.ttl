@@ -67,6 +67,7 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:Alert ; sty:part "> .sem-actions" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] .
 
 # --- tag ---
@@ -274,6 +275,7 @@
                  [ sty:property "color" ; sty:token tok:muted ] .
 [] a sty:StyleRule ; sty:appliesTo c:Toast ; sty:part "> .sem-content .sem-actions" ;
     sty:declares [ sty:property "display" ; sty:raw "flex" ] ,
+                 [ sty:property "flex-wrap" ; sty:raw "wrap" ] ,
                  [ sty:property "gap" ; sty:token tok:space-2 ] ,
                  [ sty:property "margin-top" ; sty:token tok:space-2 ] .
 [] a sty:StyleRule ; sty:appliesTo c:Toast ; sty:part "> .sem-close" ;
