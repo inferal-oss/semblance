@@ -5,7 +5,7 @@ import { BEH, C, H, MOD, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { MINT_SEPARATOR, owningFocus } from '../rdf.ts'
 import { HtmlIndex } from '../render/html-index.ts'
 import { toIndentedHTML } from '../render/serialize.ts'
-import { tokenizeSparql } from '../sparql-tokens.ts'
+import { matchTokens, tokenizeSparql } from '../sparql-tokens.ts'
 import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
@@ -332,15 +332,21 @@ function renderedSubtree(ctx: RuleContext, start: NamedNode): Quad[] {
   return out
 }
 
-/** Source text as lines of tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their lexical forms). */
-function sourceLines(text: string): { kind: Token['kind']; text: string }[][] {
+/**
+ * Source text as lines of tokens of the Turtle highlighter's kinds (Turtle and SPARQL share their
+ * lexical forms), each with where it starts (in code points, as c:SourceViewRendering-sparql keys
+ * them). A token over several lines (a long string) is cut at the line breaks, each piece keeping
+ * its kind.
+ */
+function sourceLines(text: string): { kind: Token['kind']; text: string; start: number }[][] {
   const kinds = { keyword: 'keyword', var: 'pname', string: 'literal', pname: 'pname', iri: 'iri', number: 'number', comment: 'comment', text: 'punct' } as const
-  const lines: { kind: Token['kind']; text: string }[][] = [[]]
-  for (const t of tokenizeSparql(text)) {
-    // A token over several lines (a long string) is cut at the line breaks, each piece keeping its kind.
+  const lines: { kind: Token['kind']; text: string; start: number }[][] = [[]]
+  for (const t of matchTokens(text)) {
+    let at = t.start
     t.text.split('\n').forEach((piece, i) => {
-      if (i > 0) lines.push([])
-      if (piece) lines[lines.length - 1]!.push({ kind: kinds[t.kind], text: piece })
+      if (i > 0) lines.push([]), at++
+      if (piece) lines[lines.length - 1]!.push({ kind: kinds[t.kind], text: piece, start: at })
+      at += [...piece].length
     })
   }
   return lines
@@ -370,12 +376,12 @@ const sourceView: FnRule = (ctx, focus) => {
     const toggles = o.el('fullscreen-toggles', 'Span', { class: 'sem-fullscreen-toggles' }, fullscreenToggles(ctx, o, focus))
     o.t(head, H.hasChild, toggles).t(pathEl, NS.ord + 'precedes', toggles)
   }
-  const lines = sourceLines(body.replace(/\s+$/, ''))
+  const lines = sourceLines(body.replace(/[ \t\n\r]+$/, ''))
   const number = (n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'integer'))
   const rows = lines.map((tokens, i) => {
     const key = `L${i + 1}`
     // Plain runs are text; colored tokens are spans. The line break belongs to the line it ends.
-    const parts = tokens.map((t, j) => (t.kind === 'punct' || t.kind === 'space' ? o.text(`${key}-${j}`, t.text) : o.el(`${key}-${j}s`, 'Span', { class: 'ttl-' + t.kind }, [o.text(`${key}-${j}`, t.text)])))
+    const parts = tokens.map((t) => (t.kind === 'punct' || t.kind === 'space' ? o.text(`${key}-${t.start}`, t.text) : o.el(`${key}-${t.start}`, 'Span', { class: 'ttl-' + t.kind }, [o.text(`${key}-${t.start}-text`, t.text)])))
     if (i < lines.length - 1) parts.push(o.text(`${key}-nl`, '\n'))
     const row = o.el(key, 'Span', { class: 'sem-line' }, parts)
     o.t(row, NS.c + 'line', number(i + 1))

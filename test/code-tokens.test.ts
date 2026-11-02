@@ -6,8 +6,10 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { engineStore } from '../rdf-engine/host/store.ts'
 import { loadStore } from '../src/node/load.ts'
-import { KEYWORDS, TOKEN_PATTERN, matchTokens, tokenizeCode, tokenizeSparql } from '../src/sparql-tokens.ts'
-import { mountShell } from './harness.ts'
+import { KEYWORDS, QUOTED_PATTERN, TOKEN_PATTERN, matchTokens, tokenizeCode, tokenizeSparql } from '../src/sparql-tokens.ts'
+import { MOD } from '../src/ns.ts'
+import { toText } from '../src/render/serialize.ts'
+import { mountShell, mountSite } from './harness.ts'
 
 const UI = 'https://semblance.dev/demo#'
 const C = 'https://semblance.dev/ns/component#'
@@ -41,6 +43,12 @@ describe('the SPARQL and Turtle lexicon', () => {
     const f = store.factory
     const lexicon = f.namedNode(C + 'SparqlLexicon')
     expect(store.match(lexicon, f.namedNode(C + 'tokenPattern'), null).map((q) => q.object.value)).toEqual([TOKEN_PATTERN])
+    expect(store.match(lexicon, f.namedNode(C + 'quotedPattern'), null).map((q) => q.object.value)).toEqual([QUOTED_PATTERN])
+    // Its long strings (group 2) are the token pattern's.
+    for (const text of TRICKY) {
+      const long = [...text.matchAll(new RegExp(QUOTED_PATTERN, 'g'))].filter((m) => m[2]).map((m) => `${m.index} ${m[0]}`)
+      expect(long).toEqual([...text.matchAll(new RegExp(TOKEN_PATTERN, 'g'))].filter((m) => m[2]?.startsWith('"""')).map((m) => `${m.index} ${m[0]}`))
+    }
     expect(store.match(lexicon, f.namedNode(C + 'keyword'), null).map((q) => q.object.value).sort()).toEqual([...KEYWORDS].sort())
   })
 
@@ -139,5 +147,71 @@ describe('colored code, SPARQL and function rules alike (wat)', () => {
       set(hs, id, C + 'label', '\n\n  SELECT * { ?s ?p ?o }  \n\t\n')
       same(hs, id, `${id} trimmed`)
     }
+  })
+})
+
+// Every example's source, and texts that stress the lines: long strings over lines (with blank lines,
+// two on one line, one closed and another opened on the same line), unclosed ones, empty texts.
+describe('source views, SPARQL and function rules alike (wat)', () => {
+  const STRESS = [
+    'ex:a ex:q """SELECT ?x\n\nWHERE { ?x a "y" }\n""" ; ex:r """a""" , """b\nc""" . ex:b ex:q """one\n""" , """two\nthree""" .\n# end',
+    '"""never closed\nex:a a ex:B .\n"x" """\n',
+    'ex:a ex:p "😀 é" , <http://e/x y> , 1.5 , 120.0e0 .\r\n@prefix ex: <x> .\n\n\n   \n',
+    '',
+    '\n\n',
+  ]
+  const sites = () =>
+    (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountSite('wat', prefer)
+      const visible = (el: Element) => !el.closest('[hidden]')
+      h.fire([...h.document.querySelectorAll('button')].find((b) => b.textContent!.trim() === 'Examples' && visible(b))!, 'click')
+      return { ...h, visible, prefer }
+    })
+  type H = ReturnType<typeof sites>[number]
+  const views = (h: H) => [...h.document.querySelectorAll('[data-sem-c=source-view]')].filter(h.visible)
+  const textOf = (h: H, iri: string) => toText(h.runtime.project({ modality: MOD.Text, prefer: h.prefer, name: 'text-source-' + Math.random(), roots: [iri] }).index, iri)
+
+  it('shows every example’s source the same, on screen and as text', () => {
+    const hs = sites()
+    const names = [...hs[0]!.document.querySelectorAll('[data-sem-c=nav-list] button')].filter(hs[0]!.visible).map((b) => b.textContent!.trim())
+    expect(names.length).toBeGreaterThan(5)
+    let seen = 0
+    for (const name of names) {
+      for (const h of hs) h.fire([...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === name && h.visible(b))!, 'click')
+      const [a, b] = hs.map((h) => views(h).map((v) => v.outerHTML))
+      expect(a, name).toEqual(b)
+      seen += a!.length
+    }
+    expect(seen).toBeGreaterThan(5)
+  })
+
+  it('shows any text the same, and the lines as the text has them', () => {
+    const hs = sites()
+    const view = UI + 'exs-signin'
+    const source = 'urn:semblance:source:demo/gallery/_ex-signin.ttl'
+    for (const h of hs) h.fire([...h.document.querySelectorAll('[data-sem-c=nav-list] button')].find((b) => b.textContent!.trim() === 'Sign in with a code' && h.visible(b))!, 'click')
+    for (const text of STRESS) {
+      for (const h of hs) {
+        const f = h.store.factory
+        const s = f.namedNode(source)
+        h.runtime.apply({ remove: h.store.match(s, f.namedNode(C + 'text'), null), add: [f.quad(s, f.namedNode(C + 'text'), f.literal(text))] })
+        h.shell.flush()
+      }
+      const [a, b] = hs.map((h) => views(h)[0]!.outerHTML)
+      expect(a!.split('<span class="sem-line"'), JSON.stringify(text)).toEqual(b!.split('<span class="sem-line"'))
+      expect(a, JSON.stringify(text)).toBe(b)
+      const [ta, tb] = hs.map((h) => textOf(h, view))
+      expect(ta, JSON.stringify(text)).toBe(tb)
+      const rows = [...views(hs[0]!)[0]!.querySelectorAll('.sem-line')]
+      expect(rows.map((r) => r.textContent!.replace(/\n$/, ''))).toEqual(text.replace(/[ \t\n\r]+$/, '').split('\n'))
+    }
+    for (const h of hs) {
+      const f = h.store.factory
+      h.runtime.apply({ remove: h.store.match(f.namedNode(view), f.namedNode(C + 'of'), null), add: [] })
+      h.shell.flush()
+    }
+    const [a, b] = hs.map((h) => [...h.document.querySelectorAll('*')].find((e) => h.shell.keyOf(e) === `${view}/~root`)?.outerHTML)
+    expect(a).toContain('sem-empty')
+    expect(a).toBe(b)
   })
 })

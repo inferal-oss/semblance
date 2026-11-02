@@ -192,9 +192,12 @@ c:ttl-false a c:TurtleKeyword ; rdfs:label "false" ; rdfs:comment "The boolean f
 c:CodeLexicon a owl:Class ; rdfs:comment "How a language's text splits into tokens to color: c:tokenPattern and its c:keyword words."@en .
 c:tokenPattern a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ;
     rdfs:comment "An XPath regular expression whose matches, left to right, are a text's tokens (every character is in one)."@en .
+c:quotedPattern a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ;
+    rdfs:comment "The tokens of c:tokenPattern that can hold a quote (comments, strings, IRIs), long strings in group 2: where they start and end, for a rule that tokenizes line by line."@en .
 c:keyword a owl:DatatypeProperty ; rdfs:domain c:CodeLexicon ; rdfs:comment "A word colored as a keyword, as written (case matters)."@en .
 c:SparqlLexicon a c:CodeLexicon ;
     c:tokenPattern "(#[^\\n]*)|(\"\"\"[\\s\\S]*?\"\"\"|\"(?:[^\"\\\\\\n]|\\\\.)*\")|([?$][A-Za-z_][A-Za-z0-9_]*)|(<[^<>\\s]*>)|((?:[Gg][Rr][Oo][Uu][Pp]|[Oo][Rr][Dd][Ee][Rr])[ \\t]+[Bb][Yy][A-Za-z0-9_]*)|([A-Za-z][A-Za-z0-9_-]*:(?:[A-Za-z_][A-Za-z0-9_-]*|/)?)|(@(?:prefix|base)[A-Za-z0-9_]*)|([0-9]+(?:\\.[0-9]+)?[A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)|[^#\"?$<@A-Za-z0-9_\\n]+|[\\s\\S]" ;
+    c:quotedPattern "(#[^\\n]*)|(\"\"\"[\\s\\S]*?\"\"\")|(\"(?:[^\"\\\\\\n]|\\\\.)*\")|(<[^<>\\s]*>)" ;
     c:keyword "CONSTRUCT" , "SELECT" , "WHERE" , "PREFIX" , "LIMIT" , "OPTIONAL" , "FILTER" , "BIND" , "AS" , "UNION" , "VALUES" , "NOT" , "EXISTS" , "MINUS" , "LATERAL" , "DISTINCT" , "IF" , "COALESCE" , "CONCAT" , "STR" , "STRLEN" , "STRAFTER" , "UCASE" , "IRI" , "ENCODE_FOR_URI" , "REPLACE" , "BOUND" , "ROUND" , "MIN" , "MAX" , "AVG" , "SUM" , "COUNT" , "true" , "false" , "a" .
 
 c:SuggestionsPhrase a c:Phrase ; rdfs:label "Suggestions"@en , "Підказки"@uk , "Vorschläge"@de , "اقتراحات"@ar .

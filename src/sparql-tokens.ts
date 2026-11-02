@@ -24,6 +24,13 @@ export const TOKEN_PATTERN =
   '|([A-Za-z][A-Za-z0-9_-]*:(?:[A-Za-z_][A-Za-z0-9_-]*|/)?)|(@(?:prefix|base)[A-Za-z0-9_]*)' +
   '|([0-9]+(?:\\.[0-9]+)?[A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)|[^#"?$<@A-Za-z0-9_\\n]+|[\\s\\S]'
 
+/**
+ * The tokens that can hold a quote, as TOKEN_PATTERN finds them (comments, strings, IRIs), with a long
+ * string in group 2: where long strings start and end, so a rule that tokenizes line by line knows
+ * which lines are inside one.
+ */
+export const QUOTED_PATTERN = '(#[^\\n]*)|("""[\\s\\S]*?""")|("(?:[^"\\\\\\n]|\\\\.)*")|(<[^<>\\s]*>)'
+
 /** The words colored as keywords in SPARQL (and Turtle), as written: case matters. */
 export const KEYWORDS = [
   'CONSTRUCT', 'SELECT', 'WHERE', 'PREFIX', 'LIMIT', 'OPTIONAL', 'FILTER', 'BIND', 'AS', 'UNION', 'VALUES', 'NOT', 'EXISTS',
