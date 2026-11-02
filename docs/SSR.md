@@ -166,7 +166,11 @@ then shows it (`broken`), and the panes stay empty. A styled example (one that d
 `sty:` rules) carries its scoped styles in a `<style>` beside its rendering.
 
 The client still builds a sandbox when its slot comes near the view (`Sandboxes`' `defer`), not
-during the first moments. The first sandbox of a slot the server rendered takes its elements
+during the first moments, once the whole ontology's text has arrived (the site's own graph need not
+have taken in the rest yet), and mounts it in a task of its own (`pace`). The home page's todo is
+live 0.3 s after the page is interactive on a laptop, 0.9 s with the CPU slowed 4× (it was 5 to 6 s,
+and 8 s, while it waited for the site to take in every graph, its clicks held all that time and then
+replayed together: two clicks on a checkbox undid each other). The first sandbox of a slot the server rendered takes its elements
 over (`DomRenderer.adopt`, `Sandboxes.adopted`) rather than replacing them: its first projection
 is the server's, so no node is created, and nothing flashes or moves. Its own stylesheet replaces
 the server's `<style>`. The frame then reads `live`. A source edit remembered from earlier in the
@@ -232,19 +236,23 @@ loads those, takes the page over, and loads the rest in idle time (`Site.pageGra
   a chunk of its own in the client build; with the plugin's `preload`, the page preloads those it
   names.
 - **The client loads the rest** once it is interactive (`sem:ready`), in idle time: fetched, read
-  a file per slice, then loaded as one change through the runtime (`Runtime.load`, or
-  `runtime.apply` of parsed triples). Their rules join the running engine and are evaluated for
-  what is shown, their reactions the bus, their remembered state is restored
-  (`Persistence.restoreAdded`), and the live examples build from then (they need the whole
-  ontology). A test takes pages over with only their graphs and loads the rest without a change
-  (`test/ssr.test.ts`).
+  as many files per idle period as fit in it, then taken in through the runtime in several changes
+  (`sliceAddition`, `src/slices.ts`): what defines rules first, as one change (the engine reads its
+  rules again once), then the rest a slice per idle period, each slice whole descriptions (a subject
+  with every blank node it reaches). Their rules join the running engine and are evaluated for what
+  is shown, their reactions the bus, their remembered state is restored
+  (`Persistence.restoreAdded`). The live examples build once the ontology's text is fetched (they
+  need the whole ontology, in stores of their own). A test takes pages over with only their graphs
+  and loads the rest, sliced, without a change (`test/ssr.test.ts`). Every engine reads each rule's
+  query once (what it watches, whether its output is attributable), so a sandbox or a reload of the
+  rules does not parse again what the page's engine parsed.
 
 On semblance.dev a page names about 80 of the site's 189 graphs: 60% of the bytes. The shell reads
 much of the rest itself (the taskbar lists every window, the theme menu every theme, the command
 palette every command). On a throttled phone (Slow 4G, CPU slowed 4×, HTTP/2), the landing page is
 interactive at 9.1 s instead of 9.8 s, an example's page at 9.3 s instead of 10.1 s, with the
 first paint unchanged (1.8 s): it sends 1,085 KiB instead of 1,252 before it is interactive. The
-rest follows in idle time, its change one task of about 2 s there (0.4 s on a laptop). With preloads, the graphs arrive earlier (interactive at 8.4 s) but
+rest follows in idle time, in slices (it was one task of about 2 s there, 0.4 s on a laptop). With preloads, the graphs arrive earlier (interactive at 8.4 s) but
 share the network with the stylesheet: the first paint waited until 4.5 s. Finer pieces than whole
 files (a theme's name apart from its styles) would leave more for later.
 

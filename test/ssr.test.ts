@@ -17,6 +17,7 @@ import type { Site } from '../src/server/site.ts'
 import type { GraphStore } from '../src/store/types.ts'
 import { DEFAULT_LAYERS } from '../src/web/mount.ts'
 import { replayKept, takeOver } from '../src/web/takeover.ts'
+import { sliceAddition } from '../src/slices.ts'
 import { prepareSite, recordSiteSources, ROOT, siteGraphs, siteLayers, siteSources } from '../demo/site.ts'
 
 // Server-side rendering (docs/SSR.md): a page rendered beforehand (the build) or per request is
@@ -119,12 +120,17 @@ describe('server-side rendering: the site', () => {
     const taken = adopt(renderDocument(TEMPLATE, server), client)
     expect(taken.mismatches).toBe(0)
     expect(taken.ops).toBe(0)
-    // The rest, as the client loads it in idle time: one change, with the examples' sources.
+    // The rest, as the client loads it in idle time, with the examples' sources: what defines rules
+    // in one change, then the rest a slice at a time (demo/main.ts), none of them a long task.
     const rest = Object.keys(named).filter((n) => !graphs!.includes(n))
     const f = client.store.factory
     const add = rest.flatMap((n) => parseTurtle(named[n]!, f))
     add.push(...sourceQuads(f, siteSources(Object.fromEntries(rest.filter((n) => n.startsWith('demo/gallery/')).map((n) => [n, named[n]!])))))
-    client.runtime.apply({ add, remove: [] })
+    const slices = sliceAddition(add, 150)
+    expect(slices.rules.length + slices.rest.reduce((n, s) => n + s.length, 0)).toBe(add.length)
+    expect(slices.rest.length).toBeGreaterThan(1)
+    client.runtime.apply({ add: slices.rules, remove: [] })
+    for (const slice of slices.rest) client.runtime.apply({ add: slice, remove: [] })
     expect(serializeRoot(client.runtime, client.screen, ROOT, { sandboxes: { load: (...t) => loadStore('wat', ...t) }, prefer: 'sparql' })).toBe(server.html)
     // Every rule of the site is active now, as in a client that loaded everything at once.
     const full = await siteClient(url)

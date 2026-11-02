@@ -455,6 +455,12 @@ export interface SandboxesOptions extends SandboxOptions {
    * page's first moments are not spent on examples below the fold. Call `build` then (once).
    */
   defer?: (slot: Element, build: () => void) => void
+  /**
+   * When a deferred example's first sandbox, once built, is mounted (its slots taken over, its data
+   * projected, what was kept replayed): at once by default; a host may put it in a task of its own
+   * (the next idle period), so neither is a long task. Until then what is done there stays kept.
+   */
+  pace?: (mount: () => void) => void
   /** How long typing pauses before a sandbox is rebuilt, in ms (300). */
   delayMs?: number
   /** Put text on the clipboard (navigator.clipboard by default). */
@@ -478,6 +484,8 @@ interface Mounted {
   /** The site's slot element the sandbox is mounted in. */
   slot: Element
   sandbox?: Sandbox
+  /** A sandbox built and waiting to be mounted (SandboxesOptions.pace). */
+  pending?: Sandbox
   renderer?: DomRenderer
   textRenderer?: DomRenderer
   /** The data pane's renderer: the sandbox's diff viewer (c:dataPreview). */
@@ -592,7 +600,7 @@ export class Sandboxes {
         if (m) this.unmount(m)
         const fresh: Mounted = { iri, slot, languages: lang, builds: 0, shownAt: tick }
         this.mounted.set(iri, fresh)
-        if (this.opts.defer) this.opts.defer(slot, () => !this.disposed && this.mounted.get(iri) === fresh && !fresh.builds && (this.build(fresh), this.opts.flush()))
+        if (this.opts.defer) this.opts.defer(slot, () => !this.disposed && this.mounted.get(iri) === fresh && !fresh.builds && (this.build(fresh, this.opts.pace), this.opts.flush()))
         else this.build(fresh)
       }
       // Too many built: let go of those hidden longest (shown ones stay, however many).
@@ -674,7 +682,7 @@ export class Sandboxes {
     return this.spec(example).sources
   }
 
-  private build(m: Mounted) {
+  private build(m: Mounted, pace?: (mount: () => void) => void) {
     const store = this.runtime.store
     const f = store.factory
     const spec = this.spec(m.iri)
@@ -702,6 +710,23 @@ export class Sandboxes {
       wd.note('rule', LIVE.LiveExample, m.iri, 1, now() - t0)
       return b
     })
+    if (built.sandbox && pace && !m.sandbox) {
+      // Mounted in a task of its own; let go if the example was rebuilt or let go meanwhile.
+      const sandbox = built.sandbox
+      const buildMs = now() - t0
+      m.pending = sandbox
+      pace(() => {
+        if (m.pending !== sandbox) return
+        m.pending = undefined
+        if (this.disposed || this.mounted.get(m.iri) !== m) return sandbox.runtime.dispose()
+        const t1 = now()
+        this.mount(m, sandbox)
+        this.write(m.iri, { state: LIVE.Live, problems: built.problems, ms: Math.max(0, Math.round(buildMs + now() - t1)), edited, interacted: false })
+        this.opts.flush()
+      })
+      return
+    }
+    if (m.pending) m.pending.runtime.dispose(), (m.pending = undefined)
     if (built.sandbox) this.mount(m, built.sandbox)
     else if (!m.sandbox) {
       // What the server rendered will not be taken over: what was done there is let go.
@@ -855,6 +880,8 @@ export class Sandboxes {
 
   private unmount(m: Mounted) {
     if (m.timer !== undefined) clearTimeout(m.timer)
+    m.pending?.runtime.dispose()
+    m.pending = undefined
     this.unmountSandbox(m)
     this.mounted.delete(m.iri)
   }

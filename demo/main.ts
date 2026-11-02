@@ -23,6 +23,7 @@ import type { Delta } from '../src/rdf.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { parseTurtle, Runtime } from '../src/runtime.ts'
 import { sourceQuads } from '../src/sources.ts'
+import { sliceAddition } from '../src/slices.ts'
 import type { Quad } from '@rdfjs/types'
 import { compileStyles } from '../src/style/compile.ts'
 import { hasStore, initWeb, loadOntology, loadStoreOf, loadStoreWith, ONTOLOGY_NAMES, ontologyText, type StoreKind } from '../src/web/load.ts'
@@ -155,10 +156,11 @@ function deferUntilSeen(slot: Element, build: () => void) {
   observer.observe(slot)
 }
 
-// Every graph of the site, once the rest of them (beyond what the page needed first) are loaded.
-let graphsLoaded: () => void
-const allGraphs = new Promise<void>((resolve) => (graphsLoaded = resolve))
-if (!firstGraphs) graphsLoaded!()
+// The whole ontology's text, once the rest of it (beyond what the page needed first) is fetched:
+// what a live example's sandbox loads into a store of its own.
+let ontologyFetched: () => void
+const wholeOntology = new Promise<void>((resolve) => (ontologyFetched = resolve))
+if (!firstGraphs) ontologyFetched!()
 
 // Live examples (c:LiveExample) run in sandboxes of their own, mounted in their slots once shown.
 let sandboxes: Sandboxes | undefined
@@ -183,8 +185,11 @@ sandboxes = new Sandboxes(runtime, screen, {
   siteCss,
   // Each example loads the ontology into a store of its own: built once its slot is near the view,
   // after the page has painted (an example below the fold waits until it is scrolled to), and once
-  // the whole ontology is here (its pre-rendered HTML shows until then).
-  defer: (slot, build) => void allGraphs.then(() => deferUntilSeen(slot, build)),
+  // the whole ontology's text is here (its pre-rendered HTML shows until then). It does not wait for
+  // the site's own graph to take the rest in: its clicks are held until it is built.
+  defer: (slot, build) => void wholeOntology.then(() => deferUntilSeen(slot, build)),
+  // Its build and its mount (taking the server's rendering over) are tasks of their own.
+  pace: (mount) => idle(() => mount()),
 })
 sandboxes.attach()
 flush()
@@ -510,20 +515,32 @@ async function loadRest() {
   performance.mark('sem:graphs-fetch')
   const ontology = ONTOLOGY_NAMES.filter((n) => !wanted(n))
   const gallery = Object.keys(galleryLoaders).filter((n) => !wanted(n))
-  await Promise.all([loadOntology(ontology), loadGallery(gallery)])
+  await Promise.all([loadOntology(ontology).then(() => ontologyFetched()), loadGallery(gallery)])
   const texts = [...ontology.map((n) => ontologyText(n)!), ...gallery.map((n) => galleryFiles[n]!)]
   const add: Quad[] = []
-  for (const text of texts) {
-    await new Promise<void>((resolve) => idle(() => resolve()))
-    add.push(...parseTurtle(text, store.factory))
+  // As many files per idle period as fit in it (at least one): an idle callback comes once per idle
+  // period (up to 50 ms apart on a quiet page), so a file per callback took seconds.
+  for (let i = 0; i < texts.length; ) {
+    const deadline = await new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
+    do add.push(...parseTurtle(texts[i++]!, store.factory))
+    while (i < texts.length && deadline.timeRemaining() > 4)
   }
   add.push(...sourceQuads(store.factory, siteSources(Object.fromEntries(gallery.map((n) => [n, galleryFiles[n]!])))))
   performance.mark('sem:graphs-parsed', { detail: { quads: add.length } })
-  runtime.apply({ add, remove: [] })
+  // Taken in as several changes, none a long task: what defines rules first (the rules are read
+  // again once), then the rest a slice per idle period, whole descriptions at a time.
+  const { rules, rest } = sliceAddition(add, 150)
+  runtime.apply({ add: rules, remove: [] })
+  flush()
+  for (let i = 0; i < rest.length; ) {
+    const deadline = await new Promise<{ timeRemaining(): number }>((resolve) => idle(resolve))
+    do runtime.apply({ add: rest[i++]!, remove: [] })
+    while (i < rest.length && deadline.timeRemaining() > 8)
+    flush()
+  }
   await persistence.restoreAdded().catch((e) => console.warn('[semblance] could not restore remembered state', e))
   flush()
   scheduleWarmup()
-  graphsLoaded()
   performance.mark('sem:graphs')
 }
 void recordMemory()
