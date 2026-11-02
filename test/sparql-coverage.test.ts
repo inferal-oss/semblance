@@ -47,6 +47,8 @@ describe('SPARQL coverage', () => {
     expect(awaiting).toEqual([
       // The combobox work (#14) brings the typeahead's function twins.
       ...['TagInputPills', 'TypeaheadMatches', 'TypeaheadOptionRendering', 'TypeaheadOptions', 'TypeaheadRendering'].map((rendering) => ({ rendering, issue: '14' })),
+      // sx:json's position of a value among its siblings (#266) lets the JSON tree place members in source order.
+      { rendering: 'JsonTreeRendering', issue: '266' },
     ])
   })
 

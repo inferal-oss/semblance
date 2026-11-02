@@ -10,6 +10,10 @@ import { type Token, type TurtleSection, turtleTokens } from '../turtle.ts'
 import { fullscreenToggles } from '../layers/fullscreen.ts'
 import { labelOf as textLabelOf, text, declaredPrefixes, fnv, named, rdfList, str } from './util.ts'
 import { md5Key } from './data.ts'
+import { formatNumber } from '../../rdf-engine/host/intl.ts'
+
+const SH_PREFIX = NS.sh + 'prefix'
+const SH_NAMESPACE = NS.sh + 'namespace'
 
 const C_GRAPH_MARK = NS.c + 'GraphMark'
 const C_ACTIVE = NS.c + 'active'
@@ -152,10 +156,28 @@ const emblem: FnRule = (ctx, focus) => {
   return o.quads
 }
 
-/** An IRI as prefix:local when a declared prefix fits, else its last segments. */
+/**
+ * An IRI as prefix:local by the longest declared namespace it starts with (sh:prefix; the least prefix
+ * of equals), the local part percent-decoded, else its last 46 characters: as c:MetricsRendering-sparql.
+ */
 function compact(ctx: RuleContext, iri: string): string {
-  for (const [p, ns] of Object.entries(declaredPrefixes(ctx))) if (iri.startsWith(ns)) return `${p}:${decodeURIComponent(iri.slice(ns.length))}`
-  return iri.length > 48 ? '…' + iri.slice(-46) : iri
+  const declared = ctx.memo('metrics:declarations', () =>
+    ctx.untraced(() =>
+      ctx.match(null, SH_PREFIX, null).flatMap((q) => ctx.objects(q.subject, SH_NAMESPACE).map((ns) => ({ prefix: q.object.value, ns: ns.value }))),
+    ),
+  )
+  let best: { prefix: string; ns: string } | undefined
+  for (const d of declared)
+    if (iri.startsWith(d.ns) && (!best || d.ns.length > best.ns.length || (d.ns.length === best.ns.length && d.prefix < best.prefix))) best = d
+  if (best) {
+    const local = iri.slice(best.ns.length)
+    let decoded = local
+    try {
+      decoded = decodeURIComponent(local)
+    } catch {}
+    return `${best.prefix}:${decoded}`
+  }
+  return [...iri].length > 48 ? '…' + [...iri].slice(-46).join('') : iri
 }
 
 // --- Metrics and Toggle --------------------------------------------------------------------
@@ -163,19 +185,20 @@ function compact(ctx: RuleContext, iri: string): string {
 const metrics: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
   const of = ctx.object(focus, C.of)
-  const fields = rdfList(ctx, ctx.object(focus, C.fields)).filter(named)
+  const fields = rdfList(ctx, ctx.object(focus, C.fields))
   if (!of) return []
   const chips = fields.flatMap((p, i) => {
+    if (!named(p)) return []
     const v = ctx.object(of, p)
     if (!v) return []
     const unit = text(ctx, p, C.unit)
     const value =
       v.termType === 'NamedNode'
         ? compact(ctx, v.value)
-        : v.termType === 'Literal' && /^-?\d+(\.\d+)?$/.test(v.value) && v.value.includes('.')
-          ? Number(v.value).toFixed(2)
+        : v.termType === 'Literal' && /^-?\d+\.\d+$/.test(v.value)
+          ? formatNumber(Number(v.value), 'en-US', 'minimumFractionDigits=2;maximumFractionDigits=2;useGrouping=false')
           : v.value
-    const label = text(ctx, p, RDFS_LABEL)
+    const label = text(ctx, p, RDFS_LABEL) || undefined
     // Presentation is declared on the property: c:emphasis, c:hideLabel.
     const emphasis = str(ctx.object(p, C.emphasis)) === 'true'
     const showLabel = label && str(ctx.object(p, C.hideLabel)) !== 'true'
@@ -183,10 +206,13 @@ const metrics: FnRule = (ctx, focus) => {
       o.el(`m${i}-v`, 'B', {}, [o.text(`m${i}-v-text`, unit ? `${value} ${unit}` : value)]),
       ...(showLabel ? [o.text(`m${i}-l`, label)] : []),
     ])
+    o.t(chip, SEM.orderKey, ctx.f.literal(String(i), ctx.nn(NS.xsd + 'integer')))
     if (label) o.tip(chip, label)
     return [chip]
   })
-  o.renders(o.el('root', 'Div', { hidden: chips.length ? undefined : '' }, chips))
+  const root = o.el('root', 'Div', { hidden: chips.length ? undefined : '' })
+  for (const chip of chips) o.t(root, H.hasChild, chip)
+  o.renders(root)
   return o.quads
 }
 
