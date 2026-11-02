@@ -9,6 +9,9 @@ import { queryForm } from '../sparql-forms.ts'
 import { turtleTokens } from '../turtle.ts'
 import { RDFS_COMMENT, RDFS_LABEL, isTrue, labelOf, named, nodes, num, str, text, declaredPrefixes, fnv } from './util.ts'
 import { hitToggles } from './actions.ts'
+import { md5 } from './data.ts'
+import { formatLocale } from '../engine/context.ts'
+import { formatNumber as intlNumber, sortKey } from '../../rdf-engine/host/intl.ts'
 
 const c = NS.c
 const W = {
@@ -857,115 +860,184 @@ const tableMarkdown: FnRule = (ctx, focus) => {
 }
 
 // --- results: a graph ----------------------------------------------------------------------------------
+//
+// The function twin of c:ResultGraphRendering-sparql and its building blocks (c:ResultGraphParts,
+// c:ResultGraphLayers, c:ResultGraphPlacement, c:ResultGraphRows): every step is one SPARQL can
+// take - ties broken by sx:sortKey and then the term's key, ids from MD5, sums of whole numbers or
+// rounded, coordinates written by `fixed` - so both sides draw the same graph, byte for byte.
 
 interface GNode {
   key: string
   term: Term
+  /** The term as shown: a prefixed name (or <iri>), a blank node's label, a literal's text. */
+  name: string
   label: string
+  sort: string
+  kind: 'iri' | 'literal' | 'bnode'
   degree: number
   x: number
   y: number
+  /** As the building blocks state it: links of the run, layer, ring order, role, place and angles. */
+  allDegree?: number
+  layer?: number
+  ringRank?: number
+  role?: 'hub' | 'near' | 'far'
+  nearIndex?: number
+  angle?: number
+  farAngle?: number
+  farRank?: number
 }
 interface GEdge {
+  /** Its key: from, what links them (the predicate's key, or ?variable), to. */
+  id: string
+  via: string
+  predicate?: Term
   from: string
   to: string
   label: string
+  order: number
 }
 
-const termKey = (t: Term) => (t.termType === 'Literal' ? `"${t.value}"` : t.termType === 'BlankNode' ? '_:' + t.value : t.value)
+const XSD_STRING = NS.xsd + 'string'
 
-/** Nodes and edges of a result: triples, ?s ?p ?o rows, or each row's first value linked to the rest. */
-function graphOf(ctx: RuleContext, result: Outcome): { nodes: Map<string, GNode>; edges: GEdge[] } {
+/** A term's key: an IRI, a blank node's label, a literal's text with its language or datatype (none for xsd:string). */
+function graphKey(t: Term, label?: string): string {
+  if (t.termType === 'Literal') return `"${t.value}"` + (t.language ? '@' + t.language : t.datatype.value !== XSD_STRING ? '^^' + t.datatype.value : '')
+  if (t.termType === 'BlankNode') return label ?? '_:' + t.value
+  return t.value
+}
+
+const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+/** Ties between nodes: by the sort key of their label (sx:sortKey), then by key. */
+const byText = (a: GNode, b: GNode) => byCode(a.sort, b.sort) || byCode(a.key, b.key)
+
+/** A number with k decimals, as ROUND(x × 10^k) with the point put in (also below zero). */
+function fixed(v: number, k: number): string {
+  const r = Math.round(v * 10 ** k)
+  const d = String(Math.abs(r))
+  const p = d.length <= k ? '0'.repeat(k + 1 - d.length) + d : d
+  return (r < 0 ? '-' : '') + (k ? p.slice(0, p.length - k) + '.' + p.slice(p.length - k) : p)
+}
+
+/**
+ * Nodes and edges of a run: each row's ?s ?p ?o (or ?subject ?predicate ?object, a CONSTRUCT's
+ * triples), else its first value that is no literal linked to each other value by variable. An
+ * edge is (from, label, to) once, in the order it first occurs (row, then column); a link from a
+ * node to itself is no edge, but its node is one.
+ */
+function graphOf(ctx: RuleContext, run: Extract<Run, { kind: 'rows' }>): { nodes: Map<string, GNode>; edges: GEdge[] } {
   const nodesByKey = new Map<string, GNode>()
-  const edges: GEdge[] = []
-  const seen = new Set<string>()
-  const node = (t: Term) => {
-    const k = termKey(t)
-    if (!nodesByKey.has(k)) nodesByKey.set(k, { key: k, term: t, label: truncate(display(ctx, t), 26), degree: 0, x: 0, y: 0 })
-    return nodesByKey.get(k)!
-  }
-  const edge = (s: Term, p: string, o: Term) => {
-    const a = node(s)
-    const b = node(o)
-    const id = `${a.key}\u0000${p}\u0000${b.key}`
-    if (a === b || seen.has(id)) return
-    seen.add(id)
-    a.degree++
-    b.degree++
-    edges.push({ from: a.key, to: b.key, label: p })
-  }
-  if (result.kind === 'graph') for (const q of result.quads) edge(q.subject, q.predicate.value === RDF_TYPE ? 'a' : display(ctx, q.predicate), q.object)
-  if (result.kind === 'select') {
-    const v = result.vars
-    const spo = (['s', 'p', 'o'] as const).every((x) => v.includes(x)) ? ['s', 'p', 'o'] : (['subject', 'predicate', 'object'] as const).every((x) => v.includes(x)) ? ['subject', 'predicate', 'object'] : undefined
-    for (const row of result.rows) {
-      if (spo) {
-        const [s, p, o] = spo.map((x) => row.get(x))
-        if (s && p && o) edge(s, p.value === RDF_TYPE ? 'a' : display(ctx, p), o)
-        continue
-      }
-      const hub = v.map((x) => row.get(x)).find((t) => t && t.termType !== 'Literal')
-      if (!hub) continue
-      for (const x of v) {
-        const t = row.get(x)
-        if (t && !t.equals(hub)) edge(hub, '?' + x, t)
-      }
+  const edges = new Map<string, GEdge>()
+  const node = (t: Term, blankLabel?: string) => {
+    const key = graphKey(t, blankLabel)
+    let n = nodesByKey.get(key)
+    if (!n) {
+      const name = t.termType === 'NamedNode' ? compact(ctx, t.value) : t.termType === 'BlankNode' ? key : t.value
+      const label = truncate(name, 26)
+      n = { key, term: t, name, label, sort: sortKey(label, 'en'), kind: t.termType === 'Literal' ? 'literal' : t.termType === 'BlankNode' ? 'bnode' : 'iri', degree: 0, x: 0, y: 0 }
+      nodesByKey.set(key, n)
     }
+    return n
   }
-  return { nodes: nodesByKey, edges }
+  const edge = (s: Term, sl: string | undefined, via: string, label: string, o: Term, ol: string | undefined, order: number, predicate?: Term) => {
+    const a = node(s, sl)
+    const b = node(o, ol)
+    const id = `${a.key} ${via} ${b.key}`
+    if (a === b || edges.has(id)) return
+    edges.set(id, { id, via, predicate, from: a.key, to: b.key, label, order })
+  }
+  const v = run.columns
+  const spo = (['s', 'p', 'o'] as const).every((x) => v.includes(x)) ? ['s', 'p', 'o'] : (['subject', 'predicate', 'object'] as const).every((x) => v.includes(x)) ? ['subject', 'predicate', 'object'] : undefined
+  for (const row of run.rows) {
+    const at = (x: string) => v.indexOf(x)
+    if (spo) {
+      const [s, p, o] = spo.map((x) => row.cells[at(x)])
+      const [sl, pl, ol] = spo.map((x) => row.labels[at(x)])
+      if (s && p && o) edge(s, sl, graphKey(p, pl), p.value === RDF_TYPE && p.termType === 'NamedNode' ? 'a' : p.termType === 'NamedNode' ? compact(ctx, p.value) : graphKey(p, pl), o, ol, row.index * 1000, p.termType === 'BlankNode' ? undefined : p)
+      continue
+    }
+    const hub = row.cells.findIndex((t) => t && t.termType !== 'Literal')
+    if (hub < 0) continue
+    const h = row.cells[hub]!
+    v.forEach((x, j) => {
+      const t = row.cells[j]
+      if (t && !t.equals(h)) edge(h, row.labels[hub], '?' + x, '?' + x, t, row.labels[j], row.index * 1000 + j)
+    })
+  }
+  return { nodes: nodesByKey, edges: [...edges.values()].sort((a, b) => a.order - b.order) }
 }
 
 const VIEW_W = 720
+const TAU = 2 * Math.PI
+/** The ring layout's angles: sums rounded (12 places), so the order SPARQL adds them in does not matter. */
+const round12 = (v: number) => Math.round(v * 1e12) / 1e12
+
+/** A graph's layout, as the building blocks state it (result-graph.ttl). */
+interface GLayout {
+  layered: boolean
+  height: number
+  /** A ring's: its outer radius, centre's y and the least gap between far nodes. */
+  outer?: number
+  cy?: number
+  gap?: number
+}
 
 /**
  * Positions: in layers (longest path from the sources) when the graph is acyclic and no layer
  * is wide; otherwise the hub in the middle, its neighbours on a ring and the rest outside.
- * Deterministic: ties are broken by label.
+ * Deterministic: ties are broken by label (its sort key), then by key. Each node also keeps what
+ * the building blocks state about it (its layer, its place and role in a ring, its angle).
  */
-function layout(kept: GNode[], edges: GEdge[]): { height: number } {
+function layout(kept: GNode[], edges: GEdge[]): GLayout {
   const byKey = new Map(kept.map((n) => [n.key, n]))
-  const out = new Map(kept.map((n) => [n.key, [] as string[]]))
-  const indeg = new Map(kept.map((n) => [n.key, 0]))
-  for (const e of edges) out.get(e.from)!.push(e.to), indeg.set(e.to, indeg.get(e.to)! + 1)
-  // Kahn: an order if acyclic, with each node's layer as its longest path from a source.
-  const layer = new Map<string, number>()
-  const queue = kept.filter((n) => indeg.get(n.key) === 0).map((n) => n.key)
-  for (const k of queue) layer.set(k, 0)
-  const remaining = new Map(indeg)
-  for (let i = 0; i < queue.length; i++) {
-    const k = queue[i]!
-    for (const t of out.get(k)!) {
-      layer.set(t, Math.max(layer.get(t) ?? 0, layer.get(k)! + 1))
-      remaining.set(t, remaining.get(t)! - 1)
-      if (remaining.get(t) === 0) queue.push(t)
+  const parents = new Map(kept.map((n) => [n.key, [] as GNode[]]))
+  for (const e of edges) parents.get(e.to)!.push(byKey.get(e.from)!)
+  // A layer each: 0 for a source, else one below its lowest parent; none on a cycle (or below one).
+  const layerOf = (n: GNode, seen: Set<string>): number | undefined => {
+    if (n.layer !== undefined) return n.layer
+    if (seen.has(n.key)) return undefined
+    seen.add(n.key)
+    let l = 0
+    for (const p of parents.get(n.key)!) {
+      const pl = layerOf(p, seen)
+      if (pl === undefined) return undefined
+      l = Math.max(l, pl + 1)
     }
+    seen.delete(n.key)
+    n.layer = l
+    return l
   }
-  const acyclic = queue.length === kept.length
+  for (const n of kept) layerOf(n, new Set())
+  const acyclic = kept.every((n) => n.layer !== undefined)
   const layers: GNode[][] = []
-  if (acyclic) for (const n of kept) (layers[layer.get(n.key)!] ??= []).push(n)
+  if (acyclic) for (const n of kept) (layers[n.layer!] ??= []).push(n)
   const widest = Math.max(0, ...layers.map((l) => l?.length ?? 0))
   if (acyclic && layers.length > 1 && widest <= 7) {
-    const parents = new Map(kept.map((n) => [n.key, [] as GNode[]]))
-    for (const e of edges) parents.get(e.to)!.push(byKey.get(e.from)!)
     layers.forEach((row, li) => {
+      // Parents are in the layers above, placed already; whole numbers, so their sum is exact.
       const bary = (n: GNode) => {
         const ps = parents.get(n.key)!
-        return li && ps.length ? ps.reduce((s, p) => s + p.x, 0) / ps.length : 0
+        return ps.length ? ps.reduce((s, p) => s + p.x, 0) / ps.length : 0
       }
-      row.sort((a, b) => bary(a) - bary(b) || b.degree - a.degree || a.label.localeCompare(b.label))
+      const b = new Map(row.map((n) => [n.key, bary(n)]))
+      row.sort((p, q) => b.get(p.key)! - b.get(q.key)! || q.degree - p.degree || byText(p, q))
       row.forEach((n, i) => {
         n.x = Math.round(((i + 1) * VIEW_W) / (row.length + 1))
         n.y = 50 + li * 120
       })
     })
-    return { height: 50 + (layers.length - 1) * 120 + 60 }
+    return { layered: true, height: 50 + (layers.length - 1) * 120 + 60 }
   }
-  const sorted = [...kept].sort((a, b) => b.degree - a.degree || a.label.localeCompare(b.label))
+  const sorted = [...kept].sort((a, b) => b.degree - a.degree || byText(a, b))
+  sorted.forEach((n, i) => (n.ringRank = i))
   const hub = sorted.length > 3 && sorted[0]!.degree >= Math.max(3, 2 * (sorted[1]?.degree ?? 0) - 1) ? sorted[0] : undefined
   const rest = sorted.filter((n) => n !== hub)
   const touches = (a: GNode, b: GNode) => edges.some((e) => (e.from === a.key && e.to === b.key) || (e.to === a.key && e.from === b.key))
   const near = hub ? rest.filter((n) => touches(hub, n)) : rest
   const far = rest.filter((n) => !near.includes(n))
+  if (hub) hub.role = 'hub'
+  for (const n of near) n.role = 'near'
+  for (const n of far) n.role = 'far'
   const cx = VIEW_W / 2
   const inner = Math.min(250, 80 + near.length * 6)
   const outer = inner + 120
@@ -977,56 +1049,187 @@ function layout(kept: GNode[], edges: GEdge[]): { height: number } {
     n.x = Math.round(cx + Math.cos(a) * radius * 1.35)
     n.y = Math.round(cy + Math.sin(a) * radius)
   }
-  const angle = new Map<string, number>()
   near.forEach((n, i) => {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / near.length
-    angle.set(n.key, a)
+    n.nearIndex = i
+    n.angle = a
     place(n, a, near.length === 1 && !hub ? 0 : inner, i, near.length)
   })
-  // The outer ring follows the inner one: each node near the nodes it links to, spread apart.
-  const TAU = 2 * Math.PI
-  const norm = (a: number) => ((((a + Math.PI / 2) % TAU) + TAU) % TAU) - Math.PI / 2
+  // The outer ring follows the inner one: each node near the nodes it links to (the mean of their
+  // angles, from -π/2), spread at least `gap` apart in that order.
+  const norm = (a: number) => {
+    const s = a + Math.PI / 2
+    return (s < 0 ? s + TAU : s) - Math.PI / 2
+  }
   const wanted = far
     .map((n) => {
-      const as = near.filter((m) => touches(n, m)).map((m) => angle.get(m.key)!)
-      const t = as.length ? norm(Math.atan2(as.reduce((s, a) => s + Math.sin(a), 0), as.reduce((s, a) => s + Math.cos(a), 0))) : Infinity
+      const as = near.filter((m) => touches(n, m)).map((m) => m.angle!)
+      const t = as.length ? norm(Math.atan2(round12(as.reduce((s, a) => s + Math.sin(a), 0)), round12(as.reduce((s, a) => s + Math.cos(a), 0)))) : Infinity
+      if (as.length) n.farAngle = t
       return { n, t }
     })
-    .sort((a, b) => a.t - b.t || a.n.label.localeCompare(b.n.label))
+    .sort((a, b) => a.t - b.t || byText(a.n, b.n))
   const gap = Math.min(TAU / Math.max(1, far.length), 0.2)
-  let last = -Infinity
-  wanted.forEach(({ n, t }, i) => {
-    const a = Math.max(Number.isFinite(t) ? t : last + gap, last + gap, -Math.PI / 2)
-    last = a
+  // Each angle is its own or further along than the one before it: the most of -π/2 + i·gap and
+  // t_j + (i - j)·gap over the nodes j up to it.
+  wanted.forEach(({ n }, i) => {
+    n.farRank = i
+    let a = -Math.PI / 2 + i * gap
+    for (let j = 0; j <= i; j++) if (Number.isFinite(wanted[j]!.t)) a = Math.max(a, wanted[j]!.t + (i - j) * gap)
     place(n, a, outer, i, far.length)
   })
-  return { height: cy + (far.length ? outer : inner) + 50 }
+  return { layered: false, height: cy + (far.length ? outer : inner) + 50, outer, cy, gap: far.length ? gap : undefined }
 }
+
+/** What a result graph shows: its run's nodes and links, the nodes kept and the links among them, laid out. */
+interface GModel {
+  all: Map<string, GNode>
+  allEdges: GEdge[]
+  kept: GNode[]
+  edges: GEdge[]
+  layout: GLayout
+}
+
+/** The model of a result graph whose run has rows (else undefined), laid out unless `lay` is false. */
+function graphModel(ctx: RuleContext, focus: NamedNode, lay = true): GModel | undefined {
+  const run = readRun(ctx, focus)
+  if (run.kind !== 'rows') return undefined
+  const { nodes: all, edges: allEdges } = graphOf(ctx, run)
+  for (const e of allEdges) all.get(e.from)!.degree++, all.get(e.to)!.degree++
+  for (const n of all.values()) n.allDegree = n.degree
+  const limit = Math.min(200, limitOf(ctx, focus, 40))
+  // The best-connected nodes (IRIs and blank nodes before literals), and the edges among them.
+  const kept = [...all.values()].sort((a, b) => Number(a.kind === 'literal') - Number(b.kind === 'literal') || b.degree - a.degree || byText(a, b)).slice(0, limit)
+  const keep = new Set(kept.map((n) => n.key))
+  const edges = allEdges.filter((e) => keep.has(e.from) && keep.has(e.to))
+  for (const n of kept) n.degree = edges.filter((e) => e.from === n.key || e.to === n.key).length
+  return { all, allEdges, kept, edges, layout: allEdges.length && lay ? layout(kept, edges) : { layered: false, height: 0 } }
+}
+
+// The building blocks' function twins (result-graph.ttl): each states its part of the model.
+const GN = (graph: string, key: string) => mint(graph, 'gn-' + md5(key).slice(0, 12))
+const GE = (graph: string, id: string) => mint(graph, 'ge-' + md5(id).slice(0, 12))
+const ownerOf = (iri: string) => iri.slice(0, iri.indexOf('/~'))
+const dbl = (ctx: RuleContext, n: number) => ctx.f.literal(String(n), ctx.nn(NS.xsd + 'double'))
+const bool = (ctx: RuleContext, b: boolean) => ctx.f.literal(String(b), ctx.nn(XSD_BOOLEAN))
+
+/** A graph block: the model of `graph` and what to state from it (nothing when its run has no rows). */
+function graphBlock(state: (ctx: RuleContext, o: Out, g: string, m: GModel, focus: NamedNode) => void, always?: (ctx: RuleContext, o: Out, g: string, m: GModel | undefined) => void, ownGraph = true): FnRule {
+  return (ctx, focus) => {
+    const o = ctx.out(focus)
+    const g = ownGraph ? focus.value : ownerOf(focus.value)
+    const m = graphModel(ctx, ctx.nn(g))
+    always?.(ctx, o, g, m)
+    if (m) state(ctx, o, g, m, focus)
+    return o.quads
+  }
+}
+
+const graphParts = graphBlock((ctx, o, g, m) => {
+  o.t(ctx.nn(mint(g, 'gp')), c + 'partsOf', ctx.nn(g))
+  for (const n of m.all.values()) {
+    const node = ctx.nn(GN(g, n.key))
+    o.t(node, c + 'graphNodeIn', ctx.nn(g)).t(node, c + 'nodeKey', n.key)
+    if (n.kind !== 'bnode') o.t(node, c + 'nodeTerm', n.term)
+  }
+  for (const e of m.allEdges) {
+    const link = ctx.nn(GE(g, e.id))
+    o.t(link, c + 'graphLinkIn', ctx.nn(g)).t(link, c + 'linkFrom', ctx.nn(GN(g, e.from))).t(link, c + 'linkTo', ctx.nn(GN(g, e.to)))
+    o.t(link, c + 'linkVia', e.via).t(link, c + 'linkOrder', int(ctx, e.order))
+    if (e.predicate) o.t(link, c + 'linkPredicate', e.predicate)
+  }
+})
+const graphNames = graphBlock((ctx, o, g, m) => {
+  for (const n of m.all.values()) {
+    const node = ctx.nn(GN(g, n.key))
+    o.t(node, c + 'nodeName', n.name).t(node, c + 'nodeLabel', n.label).t(node, c + 'nodeSort', n.sort).t(node, c + 'nodeKind', n.kind)
+  }
+  for (const e of m.allEdges) o.t(ctx.nn(GE(g, e.id)), c + 'linkLabel', e.label)
+})
+const graphKept = graphBlock(
+  (ctx, o, g, m) => m.kept.forEach((n, i) => o.t(ctx.nn(GN(g, n.key)), RDF_TYPE, ctx.nn(c + 'GraphNode')).t(ctx.nn(GN(g, n.key)), c + 'keptRank', int(ctx, i)).t(ctx.nn(GN(g, n.key)), c + 'allDegree', int(ctx, n.allDegree!))),
+  (ctx, o, g, m) => o.t(ctx.nn(mint(g, 'gp')), c + 'nodeCount', int(ctx, m?.all.size ?? 0)).t(ctx.nn(mint(g, 'gp')), c + 'linkCount', int(ctx, m?.allEdges.length ?? 0)),
+)
+const graphLinks = graphBlock(
+  (ctx, o, g, m) => {
+    for (const e of m.edges) o.t(ctx.nn(GE(g, e.id)), RDF_TYPE, ctx.nn(c + 'GraphLink'))
+    for (const n of m.kept) o.t(ctx.nn(GN(g, n.key)), c + 'degree', int(ctx, n.degree))
+  },
+  (ctx, o, g, m) => o.t(ctx.nn(mint(g, 'gp')), c + 'keptCount', int(ctx, m?.kept.length ?? 0)).t(ctx.nn(mint(g, 'gp')), c + 'keptLinkCount', int(ctx, m?.edges.length ?? 0)),
+)
+const graphLayers = graphBlock(
+  (ctx, o, g, m, focus) => {
+    const n = m.kept.find((k) => GN(g, k.key) === focus.value)
+    if (n?.layer !== undefined) o.t(focus, c + 'layer', int(ctx, n.layer))
+  },
+  undefined,
+  false,
+)
+const graphShape = graphBlock((ctx, o, g, m) => {
+  if (!m.allEdges.length) return
+  const parts = ctx.nn(mint(g, 'gp'))
+  o.t(parts, c + 'layered', bool(ctx, m.layout.layered))
+  if (m.layout.layered) {
+    o.t(parts, c + 'height', int(ctx, m.layout.height))
+    for (const n of m.kept) {
+      const layer = ctx.nn(mint(g, 'gy-' + n.layer))
+      o.t(layer, RDF_TYPE, ctx.nn(c + 'GraphLayer')).t(layer, c + 'layerIn', ctx.nn(g)).t(layer, c + 'layerIndex', int(ctx, n.layer!)).t(layer, c + 'layerMember', ctx.nn(GN(g, n.key)))
+    }
+    return
+  }
+  for (const n of m.kept) o.t(ctx.nn(GN(g, n.key)), c + 'ringRank', int(ctx, n.ringRank!)).t(ctx.nn(GN(g, n.key)), c + 'ringRole', n.role!)
+})
+const graphNear = graphBlock((ctx, o, g, m) => {
+  if (!m.allEdges.length || m.layout.layered) return
+  const parts = ctx.nn(mint(g, 'gp'))
+  o.t(parts, c + 'ringOuter', int(ctx, m.layout.outer!)).t(parts, c + 'ringCentre', int(ctx, m.layout.cy!)).t(parts, c + 'height', int(ctx, m.layout.height))
+  for (const n of m.kept) {
+    if (n.role === 'far') continue
+    const node = ctx.nn(GN(g, n.key))
+    o.t(node, c + 'x', int(ctx, n.x)).t(node, c + 'y', int(ctx, n.y))
+    if (n.role === 'near') o.t(node, c + 'nearIndex', int(ctx, n.nearIndex!)).t(node, c + 'angle', dbl(ctx, n.angle!))
+  }
+})
+const graphFar = graphBlock((ctx, o, g, m) => {
+  if (!m.allEdges.length || m.layout.layered || m.layout.gap === undefined) return
+  o.t(ctx.nn(mint(g, 'gp')), c + 'ringGap', dbl(ctx, m.layout.gap))
+  for (const n of m.kept) {
+    if (n.role !== 'far') continue
+    o.t(ctx.nn(GN(g, n.key)), c + 'farRank', int(ctx, n.farRank!))
+    if (n.farAngle !== undefined) o.t(ctx.nn(GN(g, n.key)), c + 'farAngle', dbl(ctx, n.farAngle))
+  }
+})
+const graphFarPlaces = graphBlock((ctx, o, g, m) => {
+  if (!m.allEdges.length || m.layout.layered) return
+  for (const n of m.kept) if (n.role === 'far') o.t(ctx.nn(GN(g, n.key)), c + 'x', int(ctx, n.x)).t(ctx.nn(GN(g, n.key)), c + 'y', int(ctx, n.y))
+})
+const graphRows = graphBlock(
+  (ctx, o, g, m, focus) => {
+    if (!m.layout.layered) return
+    for (const n of m.kept) if (mint(g, 'gy-' + n.layer) === focus.value) o.t(ctx.nn(GN(g, n.key)), c + 'x', int(ctx, n.x)).t(ctx.nn(GN(g, n.key)), c + 'y', int(ctx, n.y))
+  },
+  undefined,
+  false,
+)
 
 const graphview: FnRule = (ctx, focus) => {
   const o = ctx.out(focus)
-  const result = outcome(ctx, focus)
-  const shownNotice = notice(ctx, o, result)
+  const run = readRun(ctx, focus)
+  const shownNotice = notice(ctx, o, run.kind === 'rows' || run.kind === 'ask' ? ({ kind: 'select', vars: [], rows: [] } as Outcome) : run)
   if (shownNotice) {
     o.renders(o.el('root', 'Div', {}, shownNotice))
     return o.quads
   }
-  const { nodes: all, edges: allEdges } = graphOf(ctx, result)
-  if (!allEdges.length) {
+  const model = graphModel(ctx, focus, ctx.modality !== MOD.Text)
+  if (!model?.allEdges.length) {
     o.renders(o.el('root', 'Div', {}, [o.el('empty', 'P', { class: 'sem-empty' }, [o.text('empty-text', say(ctx, P.noGraph, 'Nothing to draw: the results link no nodes.'))])]))
     return o.quads
   }
-  const limit = limitOf(ctx, focus, 40)
-  // The best-connected nodes (IRIs before literals), and the edges among them.
-  const kept = [...all.values()]
-    .sort((a, b) => Number(a.term.termType === 'Literal') - Number(b.term.termType === 'Literal') || b.degree - a.degree || a.label.localeCompare(b.label))
-    .slice(0, limit)
-  const keep = new Set(kept.map((n) => n.key))
-  const edges = allEdges.filter((e) => keep.has(e.from) && keep.has(e.to))
-  for (const n of kept) n.degree = edges.filter((e) => e.from === n.key || e.to === n.key).length
+  const { all, allEdges, kept, edges } = model
   const hidden = all.size - kept.length
-  const size = say(ctx, P.graphSize, 'Nodes: {n} · edges: {m}', { n: all.size, m: allEdges.length })
-  const more = hidden > 0 ? say(ctx, P.more, '+{n} more', { n: hidden }) : undefined
+  const locale = formatLocale(ctx.languages)
+  const size = say(ctx, P.graphSize, 'Nodes: {n} · edges: {m}', { n: intlNumber(all.size, locale), m: intlNumber(allEdges.length, locale) })
+  const more = hidden > 0 ? say(ctx, P.more, '+{n} more', { n: intlNumber(hidden, locale) }) : undefined
 
   if (ctx.modality === MOD.Text) {
     const lines = edges.slice(0, 30).map((e) => `${all.get(e.from)!.label} —${e.label}→ ${all.get(e.to)!.label}`)
@@ -1034,16 +1237,16 @@ const graphview: FnRule = (ctx, focus) => {
     return o.quads
   }
 
-  const { height } = layout(kept, edges)
+  const { height } = model.layout
   const at = new Map(kept.map((n) => [n.key, n]))
-  const ids = new Map(kept.map((n) => [n.key, 'n' + fnv(n.key)]))
+  const ids = new Map(kept.map((n) => [n.key, 'n' + md5(n.key).slice(0, 12)]))
   // At most 24 edge labels, spent on the rarest predicates first: a predicate's edges are labelled
   // all or none, and the frequent ones (many look alike) are left to a legend of every predicate.
   const counts = new Map<string, number>()
   for (const e of edges) counts.set(e.label, (counts.get(e.label) ?? 0) + 1)
   const labelled = new Set<string>()
   let budget = 24
-  for (const [p, n] of [...counts].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))) {
+  for (const [p, n] of [...counts].sort((a, b) => a[1] - b[1] || byCode(a[0], b[0]))) {
     if (n > budget) break
     labelled.add(p)
     budget -= n
@@ -1052,20 +1255,21 @@ const graphview: FnRule = (ctx, focus) => {
   edges.forEach((e) => {
     const a = at.get(e.from)!
     const b = at.get(e.to)!
-    const id = `e${fnv(e.from + '\u0000' + e.label + '\u0000' + e.to)}`
+    const id = 'e' + md5(e.id).slice(0, 12)
     const dx = b.x - a.x
     const dy = b.y - a.y
-    const len = Math.hypot(dx, dy) || 1
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
     const [ux, uy] = [dx / len, dy / len]
     const [x1, y1, x2, y2] = [a.x + ux * 8, a.y + uy * 8, b.x - ux * 10, b.y - uy * 10]
-    const head = `M${(x2 + ux * 4).toFixed(1)},${(y2 + uy * 4).toFixed(1)} L${(x2 - ux * 5 - uy * 4).toFixed(1)},${(y2 - uy * 5 + ux * 4).toFixed(1)} L${(x2 - ux * 5 + uy * 4).toFixed(1)},${(y2 - uy * 5 - ux * 4).toFixed(1)} Z`
+    const f = (n: number) => fixed(n, 1)
+    const head = `M${f(x2 + ux * 4)},${f(y2 + uy * 4)} L${f(x2 - ux * 5 - uy * 4)},${f(y2 - uy * 5 + ux * 4)} L${f(x2 - ux * 5 + uy * 4)},${f(y2 - uy * 5 - ux * 4)} Z`
     const parts = [
-      o.svg(`${id}-line`, 'Line', { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), class: 'sem-edge' }),
+      o.svg(`${id}-line`, 'Line', { x1: f(x1), y1: f(y1), x2: f(x2), y2: f(y2), class: 'sem-edge' }),
       o.svg(`${id}-head`, 'Path', { d: head, class: 'sem-arrow' }),
     ]
     if (labelled.has(e.label))
       parts.push(
-        o.svg(`${id}-label`, 'Text', { x: ((a.x + b.x) / 2).toFixed(1), y: ((a.y + b.y) / 2 - 3).toFixed(1), 'text-anchor': 'middle', class: 'sem-edge-label' }, [
+        o.svg(`${id}-label`, 'Text', { x: f((a.x + b.x) / 2), y: f((a.y + b.y) / 2 - 3), 'text-anchor': 'middle', class: 'sem-edge-label' }, [
           o.text(`${id}-label-text`, truncate(e.label, 22)),
         ]),
       )
@@ -1076,17 +1280,17 @@ const graphview: FnRule = (ctx, focus) => {
   })
   kept.forEach((n, i) => {
     const id = ids.get(n.key)!
-    const kind = n.term.termType === 'Literal' ? 'sem-literal' : n.term.termType === 'BlankNode' ? 'sem-bnode' : 'sem-iri'
-    const dot = o.svg(`${id}-dot`, n.term.termType === 'Literal' ? 'Rect' : 'Circle', n.term.termType === 'Literal' ? { x: n.x - 6, y: n.y - 6, width: 12, height: 12, rx: 3, class: 'sem-dot' } : { cx: n.x, cy: n.y, r: 7, class: 'sem-dot' })
-    o.tip(dot, n.term.termType === 'Literal' ? n.term.value : n.term.value)
+    const literal = n.kind === 'literal'
+    const dot = o.svg(`${id}-dot`, literal ? 'Rect' : 'Circle', literal ? { x: n.x - 6, y: n.y - 6, width: 12, height: 12, rx: 3, class: 'sem-dot' } : { cx: n.x, cy: n.y, r: 7, class: 'sem-dot' })
+    o.tip(dot, n.kind === 'bnode' ? n.key : n.term.value)
     // A node is a toggle button (its aria-pressed is the selection rule's); one is in the tab order,
     // and arrow keys move among them (key:navigation).
-    const mark = o.svg(id, 'G', { class: `sem-node ${kind}`, role: 'button', tabindex: i ? '-1' : '0', 'aria-label': truncate(display(ctx, n.term), 120) }, [
+    const mark = o.svg(id, 'G', { class: `sem-node sem-${n.kind}`, role: 'button', tabindex: i ? '-1' : '0', 'aria-label': truncate(n.name, 120) }, [
       dot,
       o.svg(`${id}-label`, 'Text', { x: n.x, y: n.y + 20, 'text-anchor': 'middle', class: 'sem-node-label' }, [o.text(`${id}-label-text`, n.label)]),
     ])
     // The term it shows (c:selectedTerm names one); a blank node is stood in for by its mark.
-    o.t(mark, W.term, n.term.termType === 'BlankNode' ? mark : n.term)
+    o.t(mark, W.term, n.kind === 'bnode' ? mark : n.term)
     marks.push(mark)
   })
   const svg = o.svg('plot', 'Svg', { viewBox: `0 0 ${VIEW_W} ${Math.max(160, height)}`, role: 'group', 'aria-label': size, class: 'sem-plot' }, marks)
@@ -1095,7 +1299,7 @@ const graphview: FnRule = (ctx, focus) => {
   o.attr(details, 'aria-live', 'polite')
   const parts = [summaryBar(ctx, o, size + (more ? ` · ${more}` : '')), details, o.el('canvas', 'Div', { class: 'sem-canvas' }, [svg])]
   if (labelled.size < counts.size) {
-    const legend = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([p, n]) => `${p} ×${formatNumber(ctx, n)}`).join(' · ')
+    const legend = [...counts].sort((a, b) => b[1] - a[1] || byCode(a[0], b[0])).map(([p, n]) => `${p} ×${intlNumber(n, locale)}`).join(' · ')
     parts.splice(1, 0, o.el('legend', 'P', { class: 'sem-legend' }, [o.text('legend-text', legend)]))
   }
   o.renders(o.el('root', 'Div', {}, parts))
@@ -1242,6 +1446,16 @@ export const functions: Record<string, FnRule> = {
   'workbench:table-text': tableText,
   'workbench:table-markdown': tableMarkdown,
   'workbench:graph': graphview,
+  'workbench:graph-parts': graphParts,
+  'workbench:graph-names': graphNames,
+  'workbench:graph-kept': graphKept,
+  'workbench:graph-links': graphLinks,
+  'workbench:graph-layers': graphLayers,
+  'workbench:graph-shape': graphShape,
+  'workbench:graph-near': graphNear,
+  'workbench:graph-far': graphFar,
+  'workbench:graph-far-places': graphFarPlaces,
+  'workbench:graph-rows': graphRows,
   'workbench:graph-selection': graphSelection,
   'workbench:turtle': turtleview,
 }

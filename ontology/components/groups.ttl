@@ -169,6 +169,7 @@ c:WindowState sem:group c:WindowsGroup . c:Edge sem:group c:WindowsGroup . c:Poi
 c:QueryWorkbench sem:group c:InspectionGroup . c:RunQueryButton sem:group c:InspectionGroup .
 c:QueryResultView sem:group c:InspectionGroup . c:ResultTable sem:group c:InspectionGroup .
 c:ResultGraph sem:group c:InspectionGroup . c:ResultTurtle sem:group c:InspectionGroup .
+c:GraphNode sem:group c:InspectionGroup . c:GraphLink sem:group c:InspectionGroup . c:GraphLayer sem:group c:InspectionGroup .
 c:GraphKey sem:group c:InspectionGroup . c:Salience sem:group c:InspectionGroup .
 c:QueryView sem:group c:InspectionGroup . c:TriplesView sem:group c:InspectionGroup .
 c:StreamMembers sem:group c:InspectionGroup . c:StreamStats sem:group c:InspectionGroup .
