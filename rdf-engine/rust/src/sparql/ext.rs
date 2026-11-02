@@ -279,7 +279,7 @@ impl Ctx<'_> {
                 let Some(Ok((s, _))) = ins.first().map(|v| self.string(v)) else { return out };
                 let Some(values) = json(&s) else { return out };
                 let kinds: Vec<u32> = [&b"object"[..], b"array", b"string", b"number", b"boolean", b"null"].iter().map(|k| self.to_id(&Val::Str(k.to_vec(), None))).collect();
-                let mut vals = Vec::with_capacity(5);
+                let mut vals = Vec::with_capacity(6);
                 for j in &values {
                     vals.clear();
                     vals.push(self.to_id(&Val::Str(j.path.clone(), None)));
@@ -305,6 +305,10 @@ impl Ctx<'_> {
                             };
                             self.dict.intern(Key::literal(v, dt))
                         }
+                    });
+                    vals.push(match j.index {
+                        Some(i) => self.to_id(&Val::Num(Num::Int(i as i128))),
+                        None => NONE,
                     });
                     if !emit(self, m, row, &vals, &mut out) {
                         break;
@@ -356,13 +360,15 @@ enum JDt {
 }
 
 /// One JSON value: its pointer, its parent's, its key, its kind (object,
-/// array, string, number, boolean, null) and a scalar's lexical form.
+/// array, string, number, boolean, null), a scalar's lexical form and its
+/// position among its siblings (None for the root).
 struct JValue {
     path: Vec<u8>,
     parent: Option<Vec<u8>>,
     key: JKey,
     kind: u8,
     value: Option<(Vec<u8>, JDt)>,
+    index: Option<usize>,
 }
 
 const MAX_DEPTH: usize = 512;
@@ -371,7 +377,7 @@ const MAX_DEPTH: usize = 512;
 fn json(s: &[u8]) -> Option<Vec<JValue>> {
     let mut p = Json { s, i: 0, out: Vec::new() };
     p.ws();
-    p.value(Vec::new(), None, JKey::Root, 0)?;
+    p.value(Vec::new(), None, JKey::Root, None, 0)?;
     p.ws();
     if p.i != s.len() {
         return None;
@@ -414,7 +420,7 @@ impl Json<'_> {
         }
     }
 
-    fn value(&mut self, path: Vec<u8>, parent: Option<Vec<u8>>, key: JKey, depth: usize) -> Option<()> {
+    fn value(&mut self, path: Vec<u8>, parent: Option<Vec<u8>>, key: JKey, at: Option<usize>, depth: usize) -> Option<()> {
         if self.i >= self.s.len() {
             return None;
         }
@@ -425,7 +431,7 @@ impl Json<'_> {
                 }
                 let object = self.peek() == b'{';
                 self.i += 1;
-                self.out.push(JValue { path: path.clone(), parent, key, kind: if object { 0 } else { 1 }, value: None });
+                self.out.push(JValue { path: path.clone(), parent, key, kind: if object { 0 } else { 1 }, value: None, index: at });
                 self.ws();
                 let close = if object { b'}' } else { b']' };
                 if self.eat(close) {
@@ -467,7 +473,7 @@ impl Json<'_> {
                         }
                         JKey::Root => {}
                     }
-                    self.value(child, Some(path.clone()), key, depth + 1)?;
+                    self.value(child, Some(path.clone()), key, Some(index), depth + 1)?;
                     index += 1;
                     self.ws();
                     if self.eat(close) {
@@ -480,18 +486,18 @@ impl Json<'_> {
             }
             b'"' => {
                 let v = self.string()?;
-                self.out.push(JValue { path, parent, key, kind: 2, value: Some((v, JDt::String)) });
+                self.out.push(JValue { path, parent, key, kind: 2, value: Some((v, JDt::String)), index: at });
                 Some(())
             }
             b't' | b'f' => {
                 let t = self.peek() == b't';
                 self.lit(if t { b"true" } else { b"false" })?;
-                self.out.push(JValue { path, parent, key, kind: 4, value: Some((if t { b"true".to_vec() } else { b"false".to_vec() }, JDt::Boolean)) });
+                self.out.push(JValue { path, parent, key, kind: 4, value: Some((if t { b"true".to_vec() } else { b"false".to_vec() }, JDt::Boolean)), index: at });
                 Some(())
             }
             b'n' => {
                 self.lit(b"null")?;
-                self.out.push(JValue { path, parent, key, kind: 5, value: None });
+                self.out.push(JValue { path, parent, key, kind: 5, value: None, index: at });
                 Some(())
             }
             _ => {
@@ -523,7 +529,7 @@ impl Json<'_> {
                     }
                     dt = JDt::Double;
                 }
-                self.out.push(JValue { path, parent, key, kind: 3, value: Some((self.s[start..self.i].to_vec(), dt)) });
+                self.out.push(JValue { path, parent, key, kind: 3, value: Some((self.s[start..self.i].to_vec(), dt)), index: at });
                 Some(())
             }
         }
