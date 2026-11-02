@@ -3,7 +3,7 @@ import type { NamedNode } from '@rdfjs/types'
 import type { ReactionFn } from '../behaviour/events.ts'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { C, MOD, NS } from '../ns.ts'
-import { tokenizeCode } from '../sparql-tokens.ts'
+import { matchTokens, tokenizeCode } from '../sparql-tokens.ts'
 import { isTrue, labelOf, named, num, rdfList, str, text } from './util.ts'
 
 const C_LINK = NS.c + 'Link'
@@ -124,11 +124,11 @@ const kbd: FnRule = (ctx, focus) => {
 
 const tokens = tokenizeCode
 
+/** A sample's tokens, each keyed by where it starts (as c:CodeColoredRendering-sparql keys them). */
 function colored(o: Out, key: string, source: string, language: string | undefined): NamedNode[] {
-  const toks = tokens(source, language)
-  if (!toks) return [o.text(`${key}-text`, source)]
-  return toks.map((t, j) =>
-    t.kind === 'text' ? o.text(`${key}-t${j}`, t.text) : o.el(`${key}-s${j}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-t${j}`, t.text)]),
+  if (!tokens('', language)) return [o.text(`${key}-text`, source)]
+  return matchTokens(source, language === 'turtle').map((t) =>
+    t.kind === 'text' ? o.text(`${key}-${t.start}`, t.text) : o.el(`${key}-${t.start}`, 'Span', { class: 'tok-' + t.kind }, [o.text(`${key}-${t.start}-text`, t.text)]),
   )
 }
 
