@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { NS } from '../src/ns.ts'
+import { describe, expect, it, vi } from 'vitest'
+import { MOD, NS } from '../src/ns.ts'
+import { toText } from '../src/render/serialize.ts'
 import { type Backend, memoryBackend, Persistence } from '../src/persistence.ts'
 import { mountRemembering } from './harness.ts'
 
@@ -104,5 +105,56 @@ describe('persistence (per:Policy)', () => {
     a.store.dispose?.()
     await new Promise((r) => setTimeout(r, 60))
     expect(await storage[PER + 'Session']!.get('semblance:' + UI + 'rememberInspector')).toBeUndefined()
+  })
+})
+
+// The list of policies (#7): in the viewer's collation, sizes by sx:formatNumber and the last write's clock
+// time by sx:formatDateTime, its status in the viewer's language, the same from the SPARQL rules as from
+// their function twin, on screen and as text; on wat (Oxigraph has no sx: functions, so it runs the twin).
+describe('the list of policies, SPARQL and function rules alike (wat)', () => {
+  it('renders the same as policies are written, switched off and forgotten, in every language', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-24T13:05:09Z'))
+    try {
+      const sites = await Promise.all((['sparql', 'function'] as const).map(async (prefer) => {
+        const h = await mountRemembering(browser(), undefined, [], 'wat', prefer)
+        const f = h.store.factory
+        const app = f.namedNode(UI + 'app')
+        const group = f.namedNode(UI + 'galleryGroup')
+        h.showPage('Components')
+        h.runtime.apply({ remove: h.store.match(app, group, null), add: [f.quad(app, group, f.namedNode(UI + 'GroupLayers'))] })
+        h.shell.flush()
+        return { ...h, text: h.runtime.project({ modality: MOD.Text, prefer, name: 'text-policies', roots: [UI + 'policies'] }) }
+      }))
+      const rules = (sites[0]!.screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+      expect(rules.find((r) => r.slot === NS.c + 'PolicyListRendering')?.kind).toBe('sparql')
+      const list = (h: (typeof sites)[number]) => h.document.querySelector('[data-sem-c=policy-list]')!
+      const same = (what: string) => {
+        const [a, b] = sites.map((h) => list(h).outerHTML)
+        expect(a, what).toBe(b)
+        const [ta, tb] = sites.map((h) => toText(h.text.index, UI + 'policies'))
+        expect(ta, what).toBe(tb)
+      }
+      same('at start')
+      expect(list(sites[0]!).querySelectorAll('li').length).toBeGreaterThan(3)
+      for (const h of sites) pressZ(h)
+      for (const h of sites) await h.persistence.flush()
+      for (const h of sites) h.shell.flush()
+      same('written')
+      expect(list(sites[0]!).textContent).toContain('saved')
+      for (const languages of [['uk'], ['de'], ['ar'], ['en']]) {
+        for (const h of sites) for (const p of [h.screen, h.text]) p.engine.reconfigure({ languages })
+        for (const h of sites) h.shell.flush()
+        same(languages.join())
+      }
+      for (const act of ['[role=switch][aria-checked=true]', '.sem-forget:not([disabled])']) {
+        for (const h of sites) h.fire(list(h).querySelector(act)!, 'click')
+        for (const h of sites) await h.persistence.flush()
+        for (const h of sites) h.shell.flush()
+        same(act)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
