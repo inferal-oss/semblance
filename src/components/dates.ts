@@ -7,6 +7,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, Out, RuleContext } from '../engine/context.ts'
 import { C, H, L10N, LC, NS, ORD, RDF_TYPE, RDFS_SUBCLASS, SEM, XSD_BOOLEAN, XSD_INTEGER } from '../ns.ts'
 import { isTrue, named, RDFS_LABEL, str, text, picked } from './util.ts'
+import { formatDateTime, formatNumber } from '../../rdf-engine/host/intl.ts'
 
 const c = (local: string) => NS.c + local
 const l10n = (local: string) => NS.l10n + local
@@ -97,58 +98,58 @@ export interface CalendarTexts {
   weekdays: { label: string; abbr: string }[]
 }
 
-/** A usable BCP 47 tag (the given one if Intl knows it, else English). */
+/** A usable BCP 47 tag: the given one, canonical, if Intl knows it, else English (sx:formatDateTime's info=locale). */
 export function localeTag(tag: string | undefined): string {
   try {
-    return Intl.getCanonicalLocales(tag || 'en')[0] ?? 'en'
+    return formatDateTime(SAMPLE, tag || 'en', 'info=locale')
   } catch {
     return 'en'
   }
 }
 
-/** A locale's calendar as patterns and names (see ontology/layers/l10n.ttl for the %-codes). */
+// What the SPARQL rule formats (l10n:CalendarTexts-sparql), in UTC: 24 October 2026 (a Saturday),
+// 1:05 and 13:00 on 1 January for the clock, months on their 1st and 15th, weekdays from Monday 19 October.
+const SAMPLE = new Date(Date.UTC(2026, 9, 24))
+const NUMERIC = 'year=numeric;month=2-digit;day=2-digit;timeZone=UTC'
+const LONG = 'weekday=long;year=numeric;month=long;day=numeric;timeZone=UTC'
+const MONTH_YEAR = 'year=numeric;month=long;timeZone=UTC'
+const CLOCK = 'hour=numeric;minute=2-digit;timeZone=UTC'
+const PERIOD = 'hour=numeric;hour12=true;timeZone=UTC;part=dayPeriod'
+
+/** A locale's calendar as patterns and names (see ontology/layers/l10n.ttl for the %-codes), as l10n:CalendarTexts-sparql reads it. */
 export function calendarTexts(tag: string): CalendarTexts {
-  const format = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(tag, { timeZone: 'UTC', ...o })
-  const pattern = (parts: Intl.DateTimeFormatPart[], codes: Partial<Record<string, string>>) => parts.map((p) => (p.type === 'literal' ? p.value : (codes[p.type] ?? p.value))).join('')
-  const part = (parts: Intl.DateTimeFormatPart[], type: string) => parts.find((p) => p.type === type)?.value ?? ''
-  const sample = Date.UTC(2026, 9, 24)
-  const numeric = format({ year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(sample)
-  const long = format({ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  const monthYear = format({ year: 'numeric', month: 'long' })
-  const clock = format({ hour: 'numeric', minute: '2-digit' })
-  const clockParts = clock.formatToParts(Date.UTC(2026, 0, 1, 1, 5))
-  const periods = format({ hour: 'numeric', hour12: true })
-  const am = part(periods.formatToParts(Date.UTC(2026, 0, 1, 1)), 'dayPeriod') || 'AM'
-  const pm = part(periods.formatToParts(Date.UTC(2026, 0, 1, 13)), 'dayPeriod') || 'PM'
-  const cycle = clock.resolvedOptions().hourCycle
-  const hour = part(clockParts, 'hour').length === 2 ? '%H' : '%h'
-  const number = new Intl.NumberFormat(tag, { useGrouping: false })
-  const digits = Array.from({ length: 10 }, (_, i) => number.format(i))
-  const locale = new Intl.Locale(tag) as Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }
-  const firstDay = (locale.getWeekInfo?.() ?? locale.weekInfo)?.firstDay ?? 1
+  const at = (iso: string) => new Date(iso + 'Z')
+  const format = (d: Date, options: string) => formatDateTime(d, tag, options)
+  const am = format(at('2026-01-01T01:00:00'), PERIOD) || 'AM'
+  const pm = format(at('2026-01-01T13:00:00'), PERIOD) || 'PM'
+  const cycle = format(SAMPLE, CLOCK + ';info=hourCycle')
+  const hour = format(at('2026-01-01T01:05:00'), CLOCK + ';part=hour').length === 2 ? '%H' : '%h'
+  const timeHint = format(at('2026-01-01T01:05:00'), CLOCK + ';fields=hour:hh,minute:mm,dayPeriod:%a').replaceAll('%a', () => am)
+  const digits = Array.from({ length: 10 }, (_, i) => formatNumber(i, tag, 'useGrouping=false')).join('')
+  const firstDay = Number(format(SAMPLE, 'info=firstDay'))
+  const pad = (n: number) => String(n).padStart(2, '0')
   return {
     tag,
     firstWeekday: firstDay >= 1 && firstDay <= 7 ? firstDay : 1,
-    datePattern: pattern(numeric, { day: '%d', month: '%m', year: '%y' }),
-    dateHint: pattern(numeric, { day: 'dd', month: 'mm', year: 'yyyy' }),
-    longDatePattern: pattern(long.formatToParts(sample), { weekday: '%w', day: '%e', month: '%M', year: '%y' }),
-    monthYearPattern: pattern(monthYear.formatToParts(sample), { month: '%M', year: '%y' }),
-    timePattern: pattern(clockParts, { hour, minute: '%n', dayPeriod: '%a' }),
-    timeHint: pattern(clockParts, { hour: 'hh', minute: 'mm', dayPeriod: am }),
+    datePattern: format(SAMPLE, NUMERIC + ';fields=day:%d,month:%m,year:%y'),
+    dateHint: format(SAMPLE, NUMERIC + ';fields=day:dd,month:mm,year:yyyy'),
+    longDatePattern: format(SAMPLE, LONG + ';fields=weekday:%w,day:%e,month:%M,year:%y'),
+    monthYearPattern: format(SAMPLE, MONTH_YEAR + ';fields=month:%M,year:%y'),
+    timePattern: format(at('2026-01-01T01:05:00'), `${CLOCK};fields=hour:${hour},minute:%n,dayPeriod:%a`),
+    timeHint,
     hourCycle: cycle === 'h11' || cycle === 'h12' ? 'h12' : 'h23',
     am,
     pm,
-    digits: digits.every((d) => [...d].length === 1) ? digits.join('') : LATIN,
+    digits: [...digits].length === 10 ? digits : LATIN,
     months: Array.from({ length: 12 }, (_, i) => ({
-      label: part(monthYear.formatToParts(Date.UTC(2026, i, 1)), 'month'),
-      inDate: part(long.formatToParts(Date.UTC(2026, i, 15)), 'month'),
+      label: format(at(`2026-${pad(i + 1)}-01T00:00:00`), MONTH_YEAR + ';part=month'),
+      inDate: format(at(`2026-${pad(i + 1)}-15T00:00:00`), LONG + ';part=month'),
     })),
-    // 19 October 2026 is a Monday.
     // A column heading: the short name, or the narrow one where the short one is a whole word (Arabic).
     weekdays: Array.from({ length: 7 }, (_, i) => {
-      const at = Date.UTC(2026, 9, 19 + i)
-      const short = format({ weekday: 'short' }).format(at)
-      return { label: format({ weekday: 'long' }).format(at), abbr: [...short].length <= 4 ? short : format({ weekday: 'narrow' }).format(at) }
+      const d = at(`2026-10-${19 + i}T00:00:00`)
+      const short = format(d, 'weekday=short;timeZone=UTC')
+      return { label: format(d, 'weekday=long;timeZone=UTC'), abbr: [...short].length <= 4 ? short : format(d, 'weekday=narrow;timeZone=UTC') }
     }),
   }
 }
@@ -190,8 +191,10 @@ const calendar: FnRule = (ctx, focus) => {
     .t(focus, l10n('am'), t.am)
     .t(focus, l10n('pm'), t.pm)
     .t(focus, l10n('digits'), t.digits)
+  // Today in the store's time zone, as the rule reads it from NOW().
   const now = new Date()
-  o.t(focus, l10n('today'), lit(isoDate(now.getFullYear(), now.getMonth() + 1, now.getDate()), XSD_DATE))
+  const today = ['year=numeric;part=year', 'month=2-digit;part=month', 'day=2-digit;part=day'].map((p) => formatDateTime(now, 'en', p, ctx.timeZone)).join('-')
+  o.t(focus, l10n('today'), lit(today, XSD_DATE))
   // The page's direction is the viewer's language's.
   const lang = ctx.languages[0]
   const language = lang ? ctx.match(null, L10N.code, null).find((q) => q.object.value === lang)?.subject : undefined

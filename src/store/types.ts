@@ -26,6 +26,8 @@ export interface GraphStore {
    * queries may use. Absent: none. A rule that needs a group the store lacks is not chosen.
    */
   readonly extensions?: ReadonlySet<string>
+  /** The time zone `sx:formatDateTime` uses when its options name none (undefined: the host's own). */
+  readonly timeZone?: string
   add(q: Quad): void
   delete(q: Quad): void
   has(q: Quad): boolean

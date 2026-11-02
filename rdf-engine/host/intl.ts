@@ -63,13 +63,45 @@ export function formatNumber(n: number, lang: string, options?: string): string 
   return cached(`n\0${lang}\0${options ?? ''}`, () => new Intl.NumberFormat(lang, intlOptions(options))).format(n)
 }
 
-/** sx:formatDateTime; `timeZone` applies when the options name none. */
+type WeekInfo = { firstDay: number }
+const dateFormats = new Map<string, { format: Intl.DateTimeFormat; part?: string; fields?: Map<string, string>; info?: string }>()
+
+/**
+ * sx:formatDateTime; `timeZone` applies when the options name none. Three options are not
+ * Intl's (EXTENSIONS.md): `part=<type>` is the text of that field alone (formatToParts; "" when
+ * there is none), `fields=<type>:<text>,…` the formatted text with those fields' texts replaced,
+ * and `info=` what the locale says rather than a date: `firstDay` (1 Monday … 7 Sunday),
+ * `hourCycle` (as resolved, "" without an hour) or `locale` (the tag, canonical).
+ */
 export function formatDateTime(d: Date, lang: string, options?: string, timeZone?: string): string {
-  return cached(`d\0${lang}\0${options ?? ''}\0${timeZone ?? ''}`, () => {
+  const key = `${lang}\0${options ?? ''}\0${timeZone ?? ''}`
+  let f = dateFormats.get(key)
+  if (!f) {
     const o = intlOptions(options)
+    const { part, fields, info } = o
+    delete o.part
+    delete o.fields
+    delete o.info
     if (timeZone && o.timeZone === undefined) o.timeZone = timeZone
-    return new Intl.DateTimeFormat(lang, o)
-  }).format(d)
+    f = {
+      format: new Intl.DateTimeFormat(lang, o),
+      part: part === undefined ? undefined : String(part),
+      fields: fields === undefined ? undefined : new Map(String(fields).split(',').map((pair) => [pair.slice(0, pair.indexOf(':')), pair.slice(pair.indexOf(':') + 1)])),
+      info: info === undefined ? undefined : String(info),
+    }
+    if (dateFormats.size >= 256) dateFormats.clear()
+    dateFormats.set(key, f)
+  }
+  if (f.info === 'locale') return Intl.getCanonicalLocales(lang)[0]!
+  if (f.info === 'hourCycle') return f.format.resolvedOptions().hourCycle ?? ''
+  if (f.info === 'firstDay') {
+    const locale = new Intl.Locale(lang) as Intl.Locale & { getWeekInfo?: () => WeekInfo; weekInfo?: WeekInfo }
+    return String((locale.getWeekInfo?.() ?? locale.weekInfo)?.firstDay ?? '')
+  }
+  if (f.info !== undefined) throw new RangeError(`no info ${f.info}`)
+  if (f.part !== undefined) return f.format.formatToParts(d).find((p) => p.type === f.part)?.value ?? ''
+  if (f.fields) return f.format.formatToParts(d).map((p) => (p.type === 'literal' ? p.value : (f.fields!.get(p.type) ?? p.value))).join('')
+  return f.format.format(d)
 }
 
 /** sx:collated as an ORDER BY key: -1, 0 or 1. */
