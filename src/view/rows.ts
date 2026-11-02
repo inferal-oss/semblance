@@ -9,8 +9,11 @@ import { NS, RDF_TYPE } from '../ns.ts'
 
 const RS = NS.rs
 
-/** The rows of a maintained, materialized SELECT view, in its ORDER BY (rs:index); undefined when the view is not one. */
-export function maintainedRows(ctx: RuleContext, view: Term): Map<string, Term>[] | undefined {
+/**
+ * The rows of a maintained, materialized SELECT view, in its ORDER BY (rs:index); undefined when the
+ * view is not one. A row the result has n times (iv:multiplicity) is there n times, or once with `once`.
+ */
+export function maintainedRows(ctx: RuleContext, view: Term, once = false): Map<string, Term>[] | undefined {
   if (!ctx.match(view, RDF_TYPE, RS + 'ResultSet').length) return undefined
   const rows = ctx.objects(view, RS + 'solution').map((r) => {
     const row = new Map<string, Term>()
@@ -24,7 +27,7 @@ export function maintainedRows(ctx: RuleContext, view: Term): Map<string, Term>[
     return { row, index, key: r.value, n }
   })
   rows.sort((a, b) => (Number.isNaN(a.index) || Number.isNaN(b.index) ? (a.key < b.key ? -1 : 1) : a.index - b.index))
-  return rows.flatMap((r) => Array.from({ length: r.n }, () => r.row))
+  return rows.flatMap((r) => Array.from({ length: once ? 1 : r.n }, () => r.row))
 }
 
 /** A sem:View's rows: maintained ones from the views graph, others by running the SELECT (RuleContext.rows). */

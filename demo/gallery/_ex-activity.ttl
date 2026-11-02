@@ -40,10 +40,10 @@ WHERE { $event beh:node ?hit . ?n rdfhtml:hasChild* ?hit . ?n c:selects ui:ExAct
 
 # --- the views: SELECTs over the stream -------------------------------------------------------------
 # Each reads the stream's members once (tree:member, then the member's own triples); the log is
-# bounded, so none of them grows with the session. All but the per-minute one (it reads NOW()) are
-# maintained views too (iv:View, docs/IVM.md): an event is one partition, evaluated once - the
-# component classes reach outside it, to the event's target - and its rows are a result set in the
-# views graph, which the figures, the charts and the list read.
+# bounded, so none of them grows with the session. They are maintained views too (iv:View,
+# docs/IVM.md): an event is one partition, evaluated once - the component classes reach outside it,
+# to the event's target - and its rows are a result set in the views graph, which the figures, the
+# charts and the list read.
 
 act:SinceOpened a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "events since you opened this page" ;
     sem:select """
@@ -72,13 +72,15 @@ SELECT ?type (COUNT(?m) AS ?value) WHERE {
 GROUP BY ?type
 ORDER BY DESC(?value) ?type""" .
 
-# Events per minute, counted from when you opened this page (minutes before it are negative).
+# Events per minute, counted from when you opened this page (minutes before it are negative; before
+# the page is opened, from the oldest event in the log).
 # A minute is a number: ((year * 12 + month) * 31 + day) * 1440 + hours * 60 + minutes, in UTC.
-act:PerMinute a sem:View ; rdfs:label "events per minute" ;
+act:PerMinute a sem:View , iv:View ; iv:materialize iv:Graph ; iv:whileShown ui:ex-activity ; rdfs:label "events per minute" ;
     sem:select """
 SELECT ?minute ?series (COUNT(?m) AS ?value) WHERE {
+  { SELECT (MIN(?t0) AS ?oldest) WHERE { beh:ChangeLog tree:member ?m0 . ?m0 beh:at ?t0 } }
   OPTIONAL { act:visit act:openedAt ?opened }
-  BIND(COALESCE(?opened, NOW()) AS ?zero)
+  BIND(COALESCE(?opened, ?oldest) AS ?zero)
   BIND(((YEAR(?zero) * 12 + MONTH(?zero)) * 31 + DAY(?zero)) * 1440 + HOURS(?zero) * 60 + MINUTES(?zero) AS ?z)
   beh:ChangeLog tree:member ?m . ?m beh:at ?t .
   BIND(((YEAR(?t) * 12 + MONTH(?t)) * 31 + DAY(?t)) * 1440 + HOURS(?t) * 60 + MINUTES(?t) - ?z AS ?minute)
