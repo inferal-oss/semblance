@@ -43,7 +43,8 @@ export async function siteStore(site: Site, opts: RenderSiteOptions & { graphs?:
   const data = Object.entries(named).filter(([n]) => !only || only.has(n)).map(([, t]) => t)
   const store = only ? loadStoreOf(kind, only, ...data) : loadStore(kind, ...data)
   site.setup?.(store, { single: !!opts.single, ...(only && { graphs: only }) })
-  if (opts.base) setBase(store, opts.base)
+  // Where its paths start, and where relative URLs in its data resolve, on every page (one file: as given).
+  if (!opts.single) setBase(store, opts.base ?? '/')
   return store
 }
 

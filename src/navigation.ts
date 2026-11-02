@@ -478,13 +478,17 @@ export function inPlaceKey(r: Reader, loc: Location, address: string): string | 
   return spellAddress(r, loc, values).path
 }
 
-/** Where every location's paths start (nav:base): an app served under a path ("/docs/app/"). */
+/**
+ * Where every location's paths start (nav:base): "/", or an app served under a path ("/docs/app/").
+ * Relative URLs in the app's data (an image's "photos/a.jpg") resolve there too, on every page
+ * (Runtime.urlBase): an app without one is a single document, whose URLs resolve against itself.
+ */
 export function setBase(store: GraphStore, base: string): void {
   const f = store.factory
   const value = base.endsWith('/') ? base : base + '/'
   for (const { subject } of store.match(null, f.namedNode(RDF_TYPE), f.namedNode(NAV + 'Location'), f.defaultGraph())) {
     for (const q of store.match(subject, f.namedNode(NAV + 'base'), null, f.defaultGraph())) store.delete(q)
-    if (value !== '/') store.add(f.quad(subject, f.namedNode(NAV + 'base'), f.literal(value), f.defaultGraph()))
+    store.add(f.quad(subject, f.namedNode(NAV + 'base'), f.literal(value), f.defaultGraph()))
   }
 }
 

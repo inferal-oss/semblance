@@ -58,6 +58,20 @@ export interface Dirty {
   islands: Set<string>
 }
 
+/** Content attributes whose value is one URL. */
+const URL_ATTRIBUTES = new Set(['href', 'src', 'poster', 'action', 'formaction', 'cite'])
+/** A URL that does not depend on the document's own address: with a scheme, from the root, or in the document (#, ?). */
+const ANCHORED = /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|[/#?])/
+
+/**
+ * A URL as it resolves against a base (an absolute path ending in '/'): a relative one ("photos/a.jpg",
+ * "./a.jpg") is written after the base; any other, and an empty one, as given.
+ */
+export function resolveUrl(value: string, base: string): string {
+  const v = value.trim()
+  return v === '' || ANCHORED.test(v) ? value : base + v.replace(/^(?:\.\/)+/, '')
+}
+
 const newDirty = (): Dirty => ({ attrs: new Set(), data: new Set(), children: new Set(), recreate: new Set(), roots: new Set(), islands: new Set() })
 
 const inc = <K, V>(m: Map<K, Set<V>>, k: K, v: V, sign: number) => {
@@ -98,7 +112,15 @@ export class HtmlIndex {
   footprint(): Record<string, number> {
     return { nodes: this.nodes.size, attrs: this.attrs.size, immediate: this.immediate.size, strict: this.strict.size, roots: this.rootByFocus.size, chainParents: this.chainParent.size }
   }
-  constructor(private readonly onError: (e: Error) => void = (e) => console.error(e)) {}
+  /**
+   * @param urlBase Where relative URLs in what is rendered resolve (nav:base: the site's root, an
+   * absolute path ending in '/'): a relative src or href is written against it, so an asset in the
+   * data ("photos/harbour.jpg") is the same file on every page. Absent: URLs are written as given.
+   */
+  constructor(
+    private readonly onError: (e: Error) => void = (e) => console.error(e),
+    readonly urlBase?: string,
+  ) {}
 
   apply(delta: Delta): void {
     for (const q of delta.remove) this.quad(q, -1)
@@ -275,6 +297,7 @@ export class HtmlIndex {
       const rec = this.attrs.get(a)
       if (rec?.name !== undefined && rec.value !== undefined) set(rec.name, rec.value)
     }
+    if (this.urlBase !== undefined) for (const [name, value] of out) if (URL_ATTRIBUTES.has(name)) out.set(name, resolveUrl(value, this.urlBase))
     return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
   }
 

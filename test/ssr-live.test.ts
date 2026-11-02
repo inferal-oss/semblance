@@ -3,7 +3,7 @@ import { parseHTML } from 'linkedom'
 import { describe, expect, it } from 'vitest'
 import { loadStore } from '../src/node/load.ts'
 import { loadSite, namedGraphs, renderSite } from '../src/node/site.ts'
-import { Navigation } from '../src/navigation.ts'
+import { Navigation, setBase } from '../src/navigation.ts'
 import { DEFAULT_LAYERS, MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toHTML } from '../src/render/serialize.ts'
@@ -31,6 +31,7 @@ async function siteClient(url: string) {
   const s = await site()
   const store = loadStore('wat', ...Object.values(await namedGraphs(s)))
   s.setup?.(store, { single: false })
+  setBase(store, '/')
   const u = new URL(url, 'https://semblance.test/')
   await new Navigation(store, { root: ROOT, location: { pathname: u.pathname, search: u.search, hash: u.hash }, history: { pushState() {}, replaceState() {} }, events: new EventTarget(), links: new EventTarget() }).restore()
   prepareSite(store, { kind: 'wat', prefer: 'sparql', compile: 'off' })
@@ -86,6 +87,7 @@ describe('live examples rendered on the server', () => {
     const s = await site()
     const store = loadStore('wat', ...Object.values(await namedGraphs(s)))
     s.setup?.(store, { single: false })
+    setBase(store, '/')
     const loaded: GraphStore[] = []
     const disposed = new Set<GraphStore>()
     const counted = (...t: string[]) => {

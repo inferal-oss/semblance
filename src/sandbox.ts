@@ -94,6 +94,8 @@ export interface SandboxOptions {
    * freezing the site: a build is reported broken, an interaction leaves a problem.
    */
   budgetMs?: number
+  /** Where relative URLs in the examples resolve: the site's (its screen projection's urlBase, src/render/html-index.ts). */
+  urlBase?: string
 }
 
 /** What a stalled sandbox says: the budget, and the slowest work of the turn. */
@@ -174,7 +176,7 @@ export function buildSandbox(sources: SandboxSource[], root: string, opts: Sandb
     runtime = new Runtime(store)
     const budgetMs = opts.budgetMs ?? 1500
     runtime.watchdog.budgetMs = budgetMs
-    const base = { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [root] }
+    const base = { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [root], urlBase: opts.urlBase }
     const screen = runtime.project({ ...base, modality: MOD.Screen, name: 'screen' }, (e) => warnings.push(e.message))
     const text = opts.withText ? runtime.project({ ...base, modality: MOD.Text, name: 'text' }, (e) => warnings.push(e.message)) : undefined
     // Over budget: the sandbox stops itself, and the build is broken (the site never waits on it).
@@ -372,7 +374,7 @@ function projectData(sandbox: Sandbox, query: string, sources: SandboxSource[], 
   const quads = readData(sandbox, query, sources)
   if (quads) showData(sandbox, quads, seen, sources)
   return (sandbox.data = sandbox.runtime.project(
-    { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data' },
+    { layers: opts.layers ?? DEFAULT_LAYERS, prefer: opts.prefer, functions: opts.functions, languages: opts.languages, roots: [DATA_VIEWER], modality: MOD.Screen, name: 'data', urlBase: opts.urlBase },
     (e) => console.warn('[semblance] the data of a live example', e.message),
   ))
 }
@@ -411,7 +413,7 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
     const slots = slotsOf(iri)
     if (!screen.index.slots.has(slots.screen) || !screen.index.isShown(iri, roots)) continue
     const spec = exampleSpec(store, iri)
-    const built = buildExample(spec, { ...opts, languages })
+    const built = buildExample(spec, { ...opts, urlBase: opts.urlBase ?? screen.index.urlBase, languages })
     const sandbox = built.sandbox
     if (!sandbox) {
       // What the browser's host writes of a build that failed (and nothing was ever shown).
@@ -426,7 +428,7 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
       out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}" ${SSR_ATTRIBUTE}>${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
       if (sandbox.text && screen.index.slots.has(slots.text)) out.set(slots.text, `<div>${toHTML(sandbox.text.index, sandbox.root)}</div>`)
       if (spec.dataQuery && screen.index.slots.has(slots.data)) {
-        const data = projectData(sandbox, spec.dataQuery, spec.sources, new Set(), { ...opts, languages })
+        const data = projectData(sandbox, spec.dataQuery, spec.sources, new Set(), { ...opts, urlBase: opts.urlBase ?? screen.index.urlBase, languages })
         out.set(slots.data, `<div>${toHTML(data.index, DATA_VIEWER)}</div>`)
       }
     } finally {
@@ -706,7 +708,7 @@ export class Sandboxes {
     // A build is a turn of the site's watchdog (no budget of its own there): a hang it causes is blamed on the example.
     const wd = this.runtime.watchdog
     const built = wd.turn(() => {
-      const b = buildExample(spec, { ...this.opts, languages: this.opts.languages?.() })
+      const b = buildExample(spec, { ...this.opts, urlBase: this.opts.urlBase ?? this.screen.index.urlBase, languages: this.opts.languages?.() })
       wd.note('rule', LIVE.LiveExample, m.iri, 1, now() - t0)
       return b
     })
@@ -768,7 +770,7 @@ export class Sandboxes {
     let dataHost: Element | undefined
     const seen = new Set<string>()
     if (dataQuery && dataSlot) {
-      const data = projectData(sandbox, dataQuery, this.sources(m.iri), seen, { ...this.opts, languages: this.opts.languages?.() })
+      const data = projectData(sandbox, dataQuery, this.sources(m.iri), seen, { ...this.opts, urlBase: this.opts.urlBase ?? this.screen.index.urlBase, languages: this.opts.languages?.() })
       dataHost = hostIn(servedIn(dataSlot))
       dataRenderer = new DomRenderer(data.index, dataHost, DATA_VIEWER)
     }
