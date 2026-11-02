@@ -156,6 +156,8 @@ const localName = (iri: string) => iri.replace(/^.*[#/]/, '')
 
 /** A view's definition as read from the graph (a template of iv:targets is defined per instance). */
 const NONE: Delta = { add: [], remove: [] }
+/** iv:reads iv:Everything: what a rule's query reads - the input graphs, every view's output, what rules derive. */
+const EVERYTHING = IV + 'Everything'
 
 /** Which graphs beyond the input a view reads: the views graph (iv:reads a view), the derived graph (iv:reads a rendering). */
 export interface Reads {
@@ -410,10 +412,12 @@ export class ViewRuntime {
     return hit.foci === 'all' || hit.foci.has(v.def.focus)
   }
 
-  /** Whether a view node reads what a rendering derives (iv:reads <rendering>). */
+  /** Whether a view node reads what a rendering derives (iv:reads <rendering>, or iv:reads iv:Everything). */
   private readsRendering(node: NamedNode): boolean {
     const f = this.store.factory
-    return this.store.match(node, f.namedNode(IV + 'reads'), null).some((q) => q.object.termType === 'NamedNode' && this.store.match(q.object, f.namedNode(RDF_TYPE), f.namedNode(SEM.Rendering)).length > 0)
+    return this.store
+      .match(node, f.namedNode(IV + 'reads'), null)
+      .some((q) => q.object.termType === 'NamedNode' && (q.object.value === EVERYTHING || this.store.match(q.object, f.namedNode(RDF_TYPE), f.namedNode(SEM.Rendering)).length > 0))
   }
 
   /**
@@ -1087,6 +1091,7 @@ export class ViewRuntime {
     const materialize = this.one(s, IV + 'materialize')?.value
     view.materialize = materialize === IV + 'Graph'
     if (materialize === IV + 'ResultSet') view.resultSet = new ResultSetWriter()
+    view.eachTick = this.one(s, IV + 'writeEach')?.value === IV + 'Tick'
     view.ephemeral = !!def.hosted || materialize === IV + 'Ephemeral' || (materialize === IV + 'ResultSet' && plan.form === 'construct')
     view.reads = this.store.match(s, f.namedNode(IV + 'reads'), null).map((q) => q.object.value)
     view.readsViews = view.reads.length > 0
@@ -1105,6 +1110,8 @@ export class ViewRuntime {
       if (done.has(v) || depth > 32) return
       done.add(v)
       for (const r of v.reads) for (const w of this.views.values()) if (w !== v && (w.iri === r || w.def.node === r)) visit(w, depth + 1)
+      // iv:reads iv:Everything: after every view that does not read everything too.
+      if (v.reads.includes(EVERYTHING)) for (const w of this.views.values()) if (w !== v && !w.reads.includes(EVERYTHING)) visit(w, depth + 1)
       order.push(v)
     }
     for (const v of this.views.values()) visit(v, 0)
@@ -1861,11 +1868,13 @@ export class MaintainedView implements ViewHandle {
   resultSet?: ResultSetWriter
   /** iv:strategy iv:OnRequest: run when defined (and shown), never stepped by a change to the data. */
   onRequest = false
+  /** iv:writeEach iv:Tick: a maintained result set is written in the tick that changed it, not at the next refresh. */
+  eachTick = false
   /** The query text it runs (parameters put in): its result set's columns are read from it. */
   text = ''
   /** Run on request: a parameter with no value (it is not run). */
   missing?: string
-  /** iv:reads: the views whose output it reads (it steps after them, and sees the views graph). */
+  /** iv:reads: the views whose output it reads (it steps after them, and sees the views graph); iv:Everything, after every view. */
   reads: string[] = []
   readsViews = false
   /** iv:reads a rendering: it reads the derived graph too (ViewRuntime.derivedGraph), and is stepped again after the projections. */
@@ -2109,7 +2118,7 @@ export class MaintainedView implements ViewHandle {
     if (this.resultSet) {
       const written = new ZSet<Quad>()
       // Evaluated now, written now; a change after that, at the next refresh.
-      if (initial || this.onRequest) this.writeResultSet(written)
+      if (initial || this.onRequest || this.eachTick) this.writeResultSet(written)
       else this.rt.markPending(this)
       this.notify(rowDelta, out)
       return written
@@ -2320,7 +2329,7 @@ export class MaintainedView implements ViewHandle {
     const rowDelta = new ZSet<Row>()
     if (this.resultSet) {
       // Followed, it runs at the next refresh, once for every change since.
-      if (!initial && !this.onRequest) {
+      if (!initial && !this.onRequest && !this.eachTick) {
         this.rt.markPending(this)
         return out
       }

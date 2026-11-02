@@ -101,6 +101,10 @@ iv:reads a owl:ObjectProperty ; rdfs:domain iv:View ;
 in each tick and sees what it wrote, and the figures when the runtime writes them (in idle time; never its own), as a
 change like any other. A rendering (sem:Rendering): what rules derive (the first projection's derived graph); it is
 stepped again after the projections, with what they derived, round by round until nothing more changes (docs/IVM.md §27)."""@en .
+iv:Everything a owl:NamedIndividual ;
+    rdfs:comment """As the object of iv:reads: what a rule's query reads - the input graphs, every view's output (the view
+steps after every view that does not read everything too) and what rules derive (as iv:reads <rendering>). For a
+query held in data that a component shows (c:TableRuns), whatever it matches."""@en .
 
 # --- a view per instance, and parameters ---------------------------------------------------------------
 
@@ -179,7 +183,15 @@ columns are in order (iv:column):
   <view>/~column-i rs:variable "v" ; rs:index i
   <row> rs:index i ; rs:binding <row>-v …   <row>-v rs:variable "v" ; rs:value term
 (src/view/runs.ts). A maintained one (a query that follows updates) writes its rows at the host's
-next refresh, once for every change since, as a rule that follows a query re-runs once a frame."""@en .
+next refresh, once for every change since, as a rule that follows a query re-runs once a frame
+(unless it is written each tick: iv:writeEach)."""@en .
+iv:writeEach a owl:ObjectProperty ; rdfs:domain iv:View ; rdfs:range iv:WriteTime ;
+    rdfs:comment """When a maintained iv:ResultSet is written: iv:Frame (the default) at the host's next refresh, once for
+every change since; iv:Tick in the tick that changed it, as an iv:Graph view's rows are - for rows a page shows
+beside figures that change in the same tick (a table beside the totals it lists)."""@en .
+iv:WriteTime a owl:Class .
+iv:Frame a iv:WriteTime ; rdfs:label "at the next refresh"@en .
+iv:Tick a iv:WriteTime ; rdfs:label "in the tick"@en .
 iv:column a owl:ObjectProperty ; rdfs:comment "On an iv:ResultSet's view: one of its columns (rs:variable, rs:index from 1)."@en .
 iv:rowCount a owl:DatatypeProperty ; rdfs:range xsd:integer ; rdfs:comment "On an iv:ResultSet's view: how many rows it has."@en .
 iv:triples a owl:DatatypeProperty ; rdfs:range xsd:boolean ; rdfs:comment "On an iv:ResultSet's view: its rows are a CONSTRUCT's (or DESCRIBE's) triples."@en .
