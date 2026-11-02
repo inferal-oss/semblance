@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { engineStore } from '../rdf-engine/host/store.ts'
 import { loadStore } from '../src/node/load.ts'
 import { KEYWORDS, QUOTED_PATTERN, TOKEN_PATTERN, matchTokens, tokenizeCode, tokenizeSparql } from '../src/sparql-tokens.ts'
-import { MOD } from '../src/ns.ts'
+import { MOD, NS } from '../src/ns.ts'
 import { toText } from '../src/render/serialize.ts'
 import { mountShell, mountSite } from './harness.ts'
 
@@ -213,5 +213,92 @@ describe('source views, SPARQL and function rules alike (wat)', () => {
     const [a, b] = hs.map((h) => [...h.document.querySelectorAll('*')].find((e) => h.shell.keyOf(e) === `${view}/~root`)?.outerHTML)
     expect(a).toContain('sem-empty')
     expect(a).toBe(b)
+  })
+})
+
+// The workbench names each sample's form past its prologue (comments, PREFIX, BASE) by the lexicon.
+describe('the workbench, SPARQL and function rules alike (wat)', () => {
+  const FORMS = [
+    '# a comment\nPREFIX ex: <http://e/>\nBASE <http://b/>\nconstruct { ?s ?p ?o } WHERE { ?s ?p ?o }',
+    'prefix a: <x> describe <x>',
+    '  ASK { ?s a ex:T }',
+    '"lit" SELECT',
+    'ex:pname SELECT * {}',
+    '?x SELECT',
+    '# only a comment',
+    '',
+    'PREFIX false: <x> SELECT * {}',
+    '<http://x#SELECT> ASK {}',
+  ]
+  const sites = () =>
+    (['sparql', 'function'] as const).map((prefer) => {
+      const h = mountShell(5, 'wat', prefer)
+      h.fire([...h.document.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Query')!, 'click')
+      return { ...h, prefer }
+    })
+  type H = ReturnType<typeof sites>[number]
+  const bench = UI + 'workbench'
+  const html = (h: H) => {
+    const el = [...h.document.querySelectorAll('*')].find((e) => h.shell.keyOf(e) === `${bench}/~root`)!
+    // Not the panes it holds (the editor, the results: their own renderings).
+    const copy = el.cloneNode(true) as Element
+    for (const inner of copy.querySelectorAll('[data-sem-c=query-editor], [data-sem-c=tabs]')) inner.replaceChildren()
+    return copy.outerHTML
+  }
+  const text = (h: H) => toText(h.runtime.project({ modality: MOD.Text, prefer: h.prefer, name: 'text-bench-' + Math.random(), roots: [bench] }).index, bench)
+  const same = (hs: H[], what: string) => {
+    const [a, b] = hs.map(html)
+    expect(a, what).toBe(b)
+    const [ta, tb] = hs.map(text)
+    expect(ta, what).toBe(tb)
+  }
+
+  it('chooses the SPARQL rule on wat', () => {
+    const rules = (sites()[0]!.screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
+    expect(rules.find((r) => r.slot === C + 'QueryWorkbenchRendering')?.kind).toBe('sparql')
+  })
+
+  it('is not rendered again by typing in the editor', () => {
+    const h = sites()[0]!
+    const runs = () => h.screen.engine.stats.byRule.get(C + 'QueryWorkbenchRendering-sparql-screen')?.runs ?? 0
+    const before = runs()
+    expect(before).toBeGreaterThan(0)
+    const ta = h.document.querySelector('[data-sem-c=query-editor] textarea') as HTMLTextAreaElement
+    for (const q of ['S', 'SE', 'SELECT * { ?s ?p ?o }']) {
+      ta.value = q
+      h.fire(ta, 'input')
+    }
+    expect(runs()).toBe(before)
+  })
+
+  it('renders the same as samples load, queries run and updates are followed', () => {
+    const hs = sites()
+    same(hs, 'at start')
+    const labels = [...hs[0]!.document.querySelectorAll('.sem-sample .sem-sample-label')].map((l) => l.textContent!)
+    expect(labels.length).toBeGreaterThan(10)
+    for (const label of labels.slice(0, 4)) {
+      for (const h of hs) h.fire([...h.document.querySelectorAll('.sem-sample')].find((b) => b.querySelector('.sem-sample-label')!.textContent === label)!, 'click')
+      same(hs, 'sample ' + label)
+    }
+    for (const h of hs) {
+      const ta = h.document.querySelector('[data-sem-c=query-editor] textarea') as HTMLTextAreaElement
+      ta.value = 'SELECT ?s WHERE { ?s a c:Tab }'
+      h.fire(ta, 'input')
+      h.fire(h.document.querySelector('[data-sem-c=query-workbench] .sem-toolbar button')!, 'click')
+    }
+    same(hs, 'a query of its own')
+    for (const h of hs) h.fire(h.document.querySelector('[data-sem-c=query-workbench] [role=switch]')!, 'click')
+    same(hs, 'following updates')
+    const f = hs[0]!.store.factory
+    for (const [i, query] of FORMS.entries()) {
+      for (const h of hs) {
+        const s = f.namedNode(UI + 'sampleReactions')
+        h.runtime.apply({ remove: h.store.match(s, f.namedNode(NS.sem + 'select'), null), add: [f.quad(s, f.namedNode(NS.sem + 'select'), f.literal(query))] })
+        h.shell.flush()
+      }
+      same(hs, `form ${i}: ${JSON.stringify(query)}`)
+    }
+    for (const h of hs) h.fire([...h.document.querySelectorAll('.sem-sample')].find((b) => b.querySelector('.sem-sample-label')!.textContent === labels[1])!, 'click')
+    same(hs, 'a rewritten sample run')
   })
 })
