@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/behaviour/events.ts'
 import { loadStore, loadStoreOf, ontologyFiles } from '../src/node/load.ts'
 import { loadSite, namedGraphs, pageGraphs, renderSite, siteRoutes } from '../src/node/site.ts'
-import { Navigation } from '../src/navigation.ts'
+import { Navigation, setBase } from '../src/navigation.ts'
 import { MOD, NS } from '../src/ns.ts'
 import { DomRenderer } from '../src/render/dom.ts'
 import { toHTML } from '../src/render/serialize.ts'
@@ -35,6 +35,7 @@ async function siteClient(url: string, extra?: (store: GraphStore) => void, only
   const graphs = Object.entries(named).filter(([n]) => !only || only.includes(n)).map(([, t]) => t)
   const store = only ? loadStoreOf('wat', only, ...graphs) : loadStore('wat', ...graphs)
   site.setup?.(store, { single: false, ...(only && { graphs: new Set(only) }) })
+  setBase(store, '/')
   extra?.(store)
   const u = new URL(url, 'https://semblance.test/')
   const location = { pathname: u.pathname, search: u.search, hash: u.hash }

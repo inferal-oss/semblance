@@ -75,8 +75,8 @@ performance.mark('sem:store', { detail: { graphs: firstGraphs?.length } })
 recordSiteSources(store, galleryFiles)
 // One file is one page: where we are goes in the fragment.
 if (import.meta.env.MODE === 'single') carryInFragment(store)
-// Served under a path (SEMBLANCE_BASE): the site's paths start there.
-else if (import.meta.env.BASE_URL.startsWith('/') && import.meta.env.BASE_URL !== '/') setBase(store, import.meta.env.BASE_URL)
+// Its paths start at where it is served (SEMBLANCE_BASE, else "/"), and relative URLs in its data resolve there.
+else setBase(store, import.meta.env.BASE_URL.startsWith('/') ? import.meta.env.BASE_URL : '/')
 // Remembered state (per:Policy nodes in the graph) is restored before the first projection.
 const persistence = new Persistence(store, {
   [NS.per + 'Session']: webStorageBackend(sessionStorage),

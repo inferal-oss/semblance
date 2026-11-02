@@ -5,7 +5,7 @@ import { Engine, type EngineOptions } from './engine/engine.ts'
 import { functions as builtinFunctions } from './components/functions.ts'
 import { HtmlIndex } from './render/html-index.ts'
 import type { GraphStore } from './store/types.ts'
-import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, SEM } from './ns.ts'
+import { EVENTS_GRAPH, FILES_GRAPH, NAV_GRAPH, NETWORK_GRAPH, NS, PERF_GRAPH, PERSIST_GRAPH, RENDERED_GRAPH, SEM } from './ns.ts'
 import { docsFunctions } from './layers/docs.ts'
 import { persistenceFunctions } from './persistence.ts'
 import { navigationFunctions } from './navigation.ts'
@@ -16,6 +16,12 @@ import { functions as referenceFunctions } from './components/reference.ts'
 import { VIEW_GRAPH, ViewRuntime } from './view/runtime.ts'
 import { viewFunctions } from './view/functions.ts'
 import { Watchdog } from './engine/watchdog.ts'
+
+/**
+ * What a projection renders: `roots` (optional) are the instances it is mounted at; `urlBase` is
+ * where relative URLs in what it renders resolve (by default the store's nav:base, see HtmlIndex).
+ */
+export type ProjectOptions = EngineOptions & { roots?: string[]; urlBase?: string }
 
 /** An engine plus the RDF/HTML view it keeps up to date. */
 export interface Projection {
@@ -298,16 +304,26 @@ export class Runtime {
   }
 
   /**
+   * Where the app is served from (nav:base, setBase in src/navigation.ts): relative URLs in its data
+   * resolve there, whatever the page's own path. Absent (an app in one document): they are as given.
+   */
+  urlBase(): string | undefined {
+    const f = this.store.factory
+    const b = this.store.match(null, f.namedNode(NS.nav + 'base'), null, f.defaultGraph())[0]?.object.value
+    return b === undefined ? undefined : b.endsWith('/') ? b : b + '/'
+  }
+
+  /**
    * `roots` (optional) are the instances this projection is mounted at: only
    * what is shown under them is evaluated (see Engine.demand); the rest waits.
    */
-  project(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+  project(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     // Views start with the first projection (whose rule preference they share), before it reads the store.
     if (!this.views.isStarted) this.views.start(opts.prefer)
     return this.watchdog.turn(() => this.projectWatched(opts, onError))
   }
 
-  private projectWatched(opts: EngineOptions & { roots?: string[] }, onError?: (e: Error) => void): Projection {
+  private projectWatched(opts: ProjectOptions, onError?: (e: Error) => void): Projection {
     const name = opts.name ?? 'main'
     const engine = new Engine(this.store, {
       inputGraphs: [EVENTS_GRAPH, PERF_GRAPH, PERSIST_GRAPH, NETWORK_GRAPH, NAV_GRAPH, FILES_GRAPH, RENDERED_GRAPH, VIEW_GRAPH],
@@ -316,7 +332,7 @@ export class Runtime {
       ...opts,
       functions: { ...builtinFunctions, ...docsFunctions, ...persistenceFunctions, ...navigationFunctions, ...workbenchFunctions, ...referenceFunctions, ...privacyFunctions, ...exampleFunctions, ...opts.functions },
     })
-    const index = new HtmlIndex(onError)
+    const index = new HtmlIndex(onError, opts.urlBase ?? this.urlBase())
     engine.watchdog = this.watchdog
     engine.onChange((d) => index.apply(d))
     // A view that reads what rules derive (iv:reads <rendering>) reads the first projection's.

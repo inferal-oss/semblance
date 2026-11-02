@@ -102,6 +102,17 @@ target stays in the fragment: `/components/inputs/#inp-codes-spec`. The Referenc
 path too (`/reference/c:Window/`); it is shown in place (`nav:rendersInPlace`), so the build
 renders a language's terms one after another in one runtime rather than each from a fresh store.
 
+Relative URLs in the data resolve against `nav:base` too, not against the page's own path: an
+image's `c:image "photos/harbour.jpg"` is `/photos/harbour.jpg` on `/examples/photos/` and every
+other page, `/docs/app/photos/harbour.jpg` under a base path. The HTML index writes every relative
+`href`, `src`, `poster`, `action`, `formaction` and `cite` after the base (`resolveUrl`,
+`src/render/html-index.ts`), so the server's HTML, the client's DOM and the live examples'
+sandboxes (which take their site's base) agree, and a rule and its function twin still render the
+URL as the data has it. URLs with a scheme, from the root, or within the document (`#…`, `?…`) are
+left as written. A one-file build has no base (`nav:base` is absent): its URLs resolve against the
+file itself. A `<base href>` in the document was the alternative; it would send in-page links
+(`#main`) and the navigation effect's relative addresses to the base's page instead.
+
 A link that keeps where we are reads a value its focus cannot reach (the language is a property of
 the app, not of the link). Its rendering says so with `sem:readsLocation`. Each link's
 destination also states which dimensions it kept (`nav:keeps`), and the engine re-runs it only

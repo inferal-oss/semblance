@@ -69,7 +69,7 @@ c:ListMembers a sem:Rendering ;
     sem:targets c:List ;
     sem:stratum 0 ;
     sem:forEach c:item ;
-    sem:watches rdf:type , c:sortBy , c:itemLabel , c:itemChecked .
+    sem:watches rdf:type , c:sortBy , c:itemLabel , c:itemChecked , c:itemImage .
 
 c:ListMembers-fn a sem:Rule ;
     sem:implements c:ListMembers ;
@@ -81,7 +81,7 @@ c:ListMembers-sparql a sem:Rule ;
     sem:memberWatchesVia c:sortBy , c:itemLabel ;
     sem:construct """
 CONSTRUCT {
-  ?inst a c:ListItem ; c:of $member ; c:inList $this ; c:labelFrom ?labelFrom ; c:checkedFrom ?checkedFrom ; sem:orderKey ?key .
+  ?inst a c:ListItem ; c:of $member ; c:inList $this ; c:labelFrom ?labelFrom ; c:checkedFrom ?checkedFrom ; c:imageFrom ?imageFrom ; sem:orderKey ?key .
   ?drag a dnd:Draggable ; dnd:carries $member ; dnd:name ?name .
   ?root rdfhtml:hasChild ?inst .
 }
@@ -89,6 +89,7 @@ WHERE {
   $this a c:List .
   OPTIONAL { $this c:itemLabel ?labelFrom }
   OPTIONAL { $this c:itemChecked ?checkedFrom }
+  OPTIONAL { $this c:itemImage ?imageFrom }
   OPTIONAL { $this c:sortBy ?sortBy . $member ?sortBy ?rawKey }
   BIND(COALESCE(STR(?rawKey), "\\uFFFF") AS ?key)
   BIND(IRI(CONCAT(STR($this), "/~i-", ENCODE_FOR_URI(STR($member)))) AS ?inst)
