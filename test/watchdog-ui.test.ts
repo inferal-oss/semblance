@@ -4,6 +4,7 @@ import { HeartbeatWatch } from '../src/behaviour/heartbeat.ts'
 import { StallMonitor } from '../src/behaviour/stall.ts'
 import { WD } from '../src/components/stall.ts'
 import type { FnRule } from '../src/engine/context.ts'
+import type { Rule } from '../src/engine/rules.ts'
 import { EX, todoApp, todoReactions } from '../src/examples/todo.ts'
 import { loadStore } from '../src/node/load.ts'
 import { BEH, MOD, NS, PERF_GRAPH } from '../src/ns.ts'
@@ -27,13 +28,16 @@ function site(slowMs = 1000) {
   }
   const monitor = new StallMonitor(h.runtime, { watchdog: UI + 'watchdog', bus: h.bus, flush: () => h.shell.flush(), defer: (fn) => queue.push(fn), yieldTo: (fn) => queue.push(fn), now: () => Date.parse('2026-10-24T12:00:00Z') })
   monitor.attach()
-  // A temporary slow rule: the status bar's metrics "take" slowMs each.
-  const fns = (h.screen.engine as unknown as { functions: Record<string, FnRule> }).functions
-  const metrics = fns['metrics']!
+  // A temporary slow rendering: the status bar's metrics "take" slowMs each, whichever rule the
+  // engine chose for c:MetricsRendering (its SPARQL rule on this site, in one query for all of
+  // them, or its function twin, one at a time).
+  const engine = h.screen.engine as unknown as { evaluateAll: (rule: Rule, foci: Set<string>) => unknown }
+  const evaluateAll = engine.evaluateAll.bind(engine)
   let slow = true
-  fns['metrics'] = (ctx, focus, m) => {
-    if (slow) t += slowMs
-    return metrics(ctx, focus, m)
+  const culprits = new Set<string>()
+  engine.evaluateAll = (rule, foci) => {
+    if (slow && rule.slot === NS.c + 'MetricsRendering') (t += slowMs * foci.size), culprits.add(rule.iri)
+    return evaluateAll(rule, foci)
   }
   const f = h.store.factory
   const stats = (n: number) => {
@@ -46,7 +50,7 @@ function site(slowMs = 1000) {
   const open = () => !!dialog() && !dialog()!.hasAttribute('hidden')
   const button = (text: string) => [...dialog()!.querySelectorAll('button')].find((b) => b.textContent!.trim() === text)!
   const state = () => h.store.match(null, f.namedNode(WD.stallState), null, f.namedNode(PERF_GRAPH)).map((q) => q.object.value.replace(/^.*#/, ''))
-  return { ...h, wd, monitor, drain, stats, open, dialog, button, state, clock: { advance: (ms: number) => (t += ms) }, fast: () => (slow = false) }
+  return { ...h, wd, monitor, drain, stats, open, dialog, button, state, culprits, clock: { advance: (ms: number) => (t += ms) }, fast: () => (slow = false) }
 }
 
 /** The same site and changes, never suspended. */
@@ -75,7 +79,9 @@ describe('the stall dialog', () => {
     const report = h.dialog()!.querySelector('[data-sem-c=stall-report]')!
     expect(report.getAttribute('data-sem-state')).toBe('suspended')
     expect(report.querySelector('.sem-summary')!.textContent).toMatch(/^Suspended · \d+ done · \d+ waiting · \d+ ms$/)
-    expect(report.querySelector('a')!.textContent).toBe('MetricsRendering-fn')
+    // The slow rule is the culprit, named by the rule that ran.
+    expect([...h.culprits]).toHaveLength(1)
+    expect(report.querySelector('a')!.textContent).toBe([...h.culprits][0]!.replace(/^.*[#/]/, ''))
     expect(report.textContent).toContain('turn budget')
     expect(h.state()).toEqual(['Suspended'])
     // The stall is an event in the change log, addressed to the watchdog.
