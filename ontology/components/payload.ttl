@@ -67,11 +67,181 @@ c:jsonParent a owl:ObjectProperty ; rdfs:domain c:JsonNode ; rdfs:range c:JsonNo
 # c:expanded (a disclosure's boolean) says whether a container node is open; sem:orderKey places it
 # among its siblings (its position in its parent).
 
-c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ;
-    sem:functionOnly "awaits #266 (sx:json's position of a value among its siblings): it parses the payload as JSON and places an object's members in source order, which sx:json's rows do not carry. What it mints, the c:JsonNode structure, is rendered by SPARQL." ;
-    sem:needsExtension sx:Json ;
-    sem:awaitsWork <https://github.com/inferal-oss/semblance/issues/266> .
+c:JsonTreeRendering a sem:Rendering ; sem:targets c:JsonTree ; sem:stratum 0 ; sem:follows c:of , c:bindFrom .
 c:JsonTreeRendering-fn a sem:Rule ; sem:implements c:JsonTreeRendering ; sem:function "payload:json-tree" .
+# The payload read as the hex view reads it, parsed by sx:json: a node per value JSON.parse keeps,
+# keyed by its JSON Pointer as the function twin keys it (the first eight hex digits of its MD5),
+# minted only under open containers. A scalar shows ?json, as JSON.stringify writes it.
+c:JsonTreeRendering-sparql a sem:Rule ;
+    sem:implements c:JsonTreeRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Json ;
+    sem:construct """
+CONSTRUCT {
+  ?root a ?rootTag ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:attribute ?rootRole , ?rootName ; rdfhtml:hasChild ?empty , ?note , ?rawEl , ?top .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?rootRole a rdfhtml:Attribute ; rdfhtml:attributeName "role" ; rdfhtml:attributeValue "tree" .
+  ?rootName a rdfhtml:Attribute ; rdfhtml:attributeName "aria-label" ; rdfhtml:attributeValue ?caption .
+  ?note a rdfhtml:P ; rdfhtml:class "sem-note" ; rdfhtml:hasChild ?noteText ; ord:immediatelyPrecedes ?rawEl .
+  ?noteText a rdfhtml:Text ; rdfhtml:data "Not valid JSON; shown as text." .
+  ?rawEl a rdfhtml:Pre ; rdfhtml:class "sem-raw" ; rdfhtml:hasChild ?rawText .
+  ?rawText a rdfhtml:Text ; rdfhtml:data ?payload .
+  ?node a c:JsonNode ; c:inTree $this ; c:jsonPath ?path ; c:jsonKey ?key ; c:jsonType ?kind ; c:jsonDepth ?depth ; sem:orderKey ?orderKey ;
+        c:jsonParent ?parentNode ; c:jsonCount ?count ; c:expanded ?open ; c:jsonValue ?json .
+}
+WHERE {
+  $this a c:JsonTree .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  LATERAL { OPTIONAL { $this c:expandDepth ?depthRaw } }
+  BIND(COALESCE(xsd:double(STR(?depthRaw)), 1) AS ?openDepth)
+  OPTIONAL { $this l10n:label ?labelPicked }
+  OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+  BIND(STR(COALESCE(?labelPicked, ?labelOnly, "root")) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+      BIND(rdfhtml:P AS ?rootTag)
+      BIND("sem-empty" AS ?rootClass)
+    } UNION {
+      FILTER(BOUND(?payload))
+      FILTER NOT EXISTS { (?payload) sx:json (?anyPath ?anyParent ?anyKey ?anyKind ?anyValue) }
+      BIND(IRI(CONCAT(STR($this), "/~note")) AS ?note)
+      BIND(IRI(CONCAT(STR($this), "/~note-text")) AS ?noteText)
+      BIND(IRI(CONCAT(STR($this), "/~raw")) AS ?rawEl)
+      BIND(IRI(CONCAT(STR($this), "/~raw-text")) AS ?rawText)
+      BIND(rdfhtml:Div AS ?rootTag)
+      BIND("sem-invalid" AS ?rootClass)
+    } UNION {
+      FILTER(BOUND(?payload))
+      BIND(rdfhtml:Ul AS ?rootTag)
+      BIND(IRI(CONCAT(STR($this), "/~root-role")) AS ?rootRole)
+      BIND(IRI(CONCAT(STR($this), "/~root-aria-label")) AS ?rootName)
+      # One row per value JSON.parse keeps, with its number of members (the members' rows count one
+      # each, in one pass: no join); shown when no ancestor is closed: none collapsed, and every
+      # ancestor at c:expandDepth or deeper expanded.
+      { SELECT ?payload ?path (SAMPLE(?parent0) AS ?parent) (SAMPLE(?key00) AS ?key0) (SAMPLE(?kind0) AS ?kind) (SAMPLE(?index0) AS ?index)
+          (SAMPLE(?json0) AS ?json) (SUM(?member) AS ?count0) WHERE {
+        { (?payload) sx:json (?path ?parent0 ?key00 ?kind0 ?value0 ?index0 ?json0 ?kept) FILTER(?kept) BIND(0 AS ?member) }
+        UNION
+        { (?payload) sx:json (?memberPath ?path ?memberKey ?memberKind ?memberValue ?memberIndex ?memberJson ?memberKept)
+          FILTER(?memberKept && BOUND(?path)) BIND(1 AS ?member) }
+      } GROUP BY ?payload ?path }
+      BIND(STRLEN(?path) - STRLEN(REPLACE(?path, "/", "")) AS ?depth)
+      FILTER NOT EXISTS { $this c:collapsedPath ?closedAbove FILTER(STRSTARTS(?path, CONCAT(STR(?closedAbove), "/"))) }
+      LATERAL { OPTIONAL { SELECT ?path ?openDepth (COUNT(DISTINCT ?openAbove) AS ?openedAbove) WHERE {
+        $this c:expandedPath ?openAbove0 BIND(STR(?openAbove0) AS ?openAbove)
+        FILTER(STRSTARTS(?path, CONCAT(?openAbove, "/")) && STRLEN(?openAbove) - STRLEN(REPLACE(?openAbove, "/", "")) >= ?openDepth)
+      } GROUP BY ?path ?openDepth } }
+      FILTER(COALESCE(?openedAbove, 0) >= ?depth - ?openDepth)
+      BIND(?kind IN ("object", "array") AS ?container)
+      BIND(IF(?container, !EXISTS { $this c:collapsedPath ?path } && (EXISTS { $this c:expandedPath ?path } || ?depth < ?openDepth), ?none) AS ?open)
+      BIND(IF(?container, ?count0, ?none) AS ?count)
+      BIND(STR(?key0) AS ?keyText)
+      BIND(COALESCE(?keyText, ?caption) AS ?key)
+      # Where JavaScript lists a member: names that are array indices first, by number, then the
+      # rest in source order (sx:json's ?index).
+      BIND(IF(!BOUND(?parent), 0, IF(REGEX(?keyText, "^(0|[1-9][0-9]{0,9})$") && xsd:integer(?keyText) <= 4294967294, xsd:integer(?keyText), 4294967295 + ?index)) AS ?orderKey)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?path), 1, 8))) AS ?node)
+      BIND(IF(BOUND(?parent), IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?parent), 1, 8))), ?none) AS ?parentNode)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(""), 1, 8))) AS ?top)
+    }
+  }
+}""" .
+c:JsonTreeRendering-sparql-text a sem:Rule ;
+    sem:implements c:JsonTreeRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Json ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:class ?rootClass ; rdfhtml:hasChild ?empty , ?note , ?rawEl , ?top .
+  ?empty a rdfhtml:Text ; rdfhtml:data ?emptyText .
+  ?note a rdfhtml:Div ; rdfhtml:hasChild ?noteText ; ord:immediatelyPrecedes ?rawEl .
+  ?noteText a rdfhtml:Text ; rdfhtml:data "Not valid JSON; shown as text." .
+  ?rawEl a rdfhtml:Div ; rdfhtml:hasChild ?rawText .
+  ?rawText a rdfhtml:Text ; rdfhtml:data ?payload .
+  ?node a c:JsonNode ; c:inTree $this ; c:jsonPath ?path ; c:jsonKey ?key ; c:jsonType ?kind ; c:jsonDepth ?depth ; sem:orderKey ?orderKey ;
+        c:jsonParent ?parentNode ; c:jsonCount ?count ; c:expanded ?open ; c:jsonValue ?json .
+}
+WHERE {
+  $this a c:JsonTree .
+  LATERAL { OPTIONAL { $this c:value ?own FILTER(isLiteral(?own)) } }
+  LATERAL { OPTIONAL { $this c:of ?of0 FILTER(isIRI(?of0)) } }
+  LATERAL { OPTIONAL { $this c:bindFrom ?from ; c:bindProperty ?bindProperty . ?from ?bindProperty ?bound FILTER(isIRI(?bound)) } }
+  BIND(IF(BOUND(?own), ?none, COALESCE(?of0, ?bound)) AS ?subject)
+  BIND(COALESCE(?subject, sem:Nothing) AS ?from0)
+  BIND(EXISTS { $this c:via ?anyVia } AS ?hasVia)
+  LATERAL { OPTIONAL { $this c:via ?via . ?from0 ?via ?hop } }
+  BIND(COALESCE(IF(?hasVia, ?hop, ?subject), sem:Nothing) AS ?holder)
+  LATERAL { OPTIONAL { $this c:payloadProperty ?payloadProperty . ?holder ?payloadProperty ?raw FILTER(isLiteral(?raw)) } }
+  BIND(STR(COALESCE(?own, ?raw)) AS ?payload)
+  LATERAL { OPTIONAL { $this c:expandDepth ?depthRaw } }
+  BIND(COALESCE(xsd:double(STR(?depthRaw)), 1) AS ?openDepth)
+  OPTIONAL { $this l10n:label ?labelPicked }
+  OPTIONAL { FILTER(!BOUND(?labelPicked)) $this c:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+  BIND(STR(COALESCE(?labelPicked, ?labelOnly, "root")) AS ?caption)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  LATERAL {
+    {
+      FILTER(!BOUND(?payload))
+      BIND(IRI(CONCAT(STR($this), "/~empty")) AS ?empty)
+      OPTIONAL { ?emptyAt l10n:of $this ; l10n:emptyText ?emptyPicked }
+      OPTIONAL { FILTER(!BOUND(?emptyPicked)) $this c:emptyText ?emptyOnly FILTER(isLiteral(?emptyOnly)) }
+      BIND(STR(COALESCE(?emptyPicked, ?emptyOnly, "No payload.")) AS ?emptyText)
+      BIND("sem-empty" AS ?rootClass)
+    } UNION {
+      FILTER(BOUND(?payload))
+      FILTER NOT EXISTS { (?payload) sx:json (?anyPath ?anyParent ?anyKey ?anyKind ?anyValue) }
+      BIND(IRI(CONCAT(STR($this), "/~note")) AS ?note)
+      BIND(IRI(CONCAT(STR($this), "/~note-text")) AS ?noteText)
+      BIND(IRI(CONCAT(STR($this), "/~raw")) AS ?rawEl)
+      BIND(IRI(CONCAT(STR($this), "/~raw-text")) AS ?rawText)
+    } UNION {
+      FILTER(BOUND(?payload))
+      # One row per value JSON.parse keeps, with its number of members (the members' rows count one
+      # each, in one pass: no join); shown when no ancestor is closed: none collapsed, and every
+      # ancestor at c:expandDepth or deeper expanded.
+      { SELECT ?payload ?path (SAMPLE(?parent0) AS ?parent) (SAMPLE(?key00) AS ?key0) (SAMPLE(?kind0) AS ?kind) (SAMPLE(?index0) AS ?index)
+          (SAMPLE(?json0) AS ?json) (SUM(?member) AS ?count0) WHERE {
+        { (?payload) sx:json (?path ?parent0 ?key00 ?kind0 ?value0 ?index0 ?json0 ?kept) FILTER(?kept) BIND(0 AS ?member) }
+        UNION
+        { (?payload) sx:json (?memberPath ?path ?memberKey ?memberKind ?memberValue ?memberIndex ?memberJson ?memberKept)
+          FILTER(?memberKept && BOUND(?path)) BIND(1 AS ?member) }
+      } GROUP BY ?payload ?path }
+      BIND(STRLEN(?path) - STRLEN(REPLACE(?path, "/", "")) AS ?depth)
+      FILTER NOT EXISTS { $this c:collapsedPath ?closedAbove FILTER(STRSTARTS(?path, CONCAT(STR(?closedAbove), "/"))) }
+      LATERAL { OPTIONAL { SELECT ?path ?openDepth (COUNT(DISTINCT ?openAbove) AS ?openedAbove) WHERE {
+        $this c:expandedPath ?openAbove0 BIND(STR(?openAbove0) AS ?openAbove)
+        FILTER(STRSTARTS(?path, CONCAT(?openAbove, "/")) && STRLEN(?openAbove) - STRLEN(REPLACE(?openAbove, "/", "")) >= ?openDepth)
+      } GROUP BY ?path ?openDepth } }
+      FILTER(COALESCE(?openedAbove, 0) >= ?depth - ?openDepth)
+      BIND(?kind IN ("object", "array") AS ?container)
+      BIND(IF(?container, !EXISTS { $this c:collapsedPath ?path } && (EXISTS { $this c:expandedPath ?path } || ?depth < ?openDepth), ?none) AS ?open)
+      BIND(IF(?container, ?count0, ?none) AS ?count)
+      BIND(STR(?key0) AS ?keyText)
+      BIND(COALESCE(?keyText, ?caption) AS ?key)
+      # Where JavaScript lists a member: names that are array indices first, by number, then the
+      # rest in source order (sx:json's ?index).
+      BIND(IF(!BOUND(?parent), 0, IF(REGEX(?keyText, "^(0|[1-9][0-9]{0,9})$") && xsd:integer(?keyText) <= 4294967294, xsd:integer(?keyText), 4294967295 + ?index)) AS ?orderKey)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?path), 1, 8))) AS ?node)
+      BIND(IF(BOUND(?parent), IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(?parent), 1, 8))), ?none) AS ?parentNode)
+      BIND(IRI(CONCAT(STR($this), "/~n-", SUBSTR(MD5(""), 1, 8))) AS ?top)
+    }
+  }
+}""" .
 
 c:JsonNodeRendering a sem:Rendering ; sem:targets c:JsonNode ; sem:stratum 0 .
 c:JsonNodeRendering-fn a sem:Rule ; sem:implements c:JsonNodeRendering ; sem:function "payload:json-node" .

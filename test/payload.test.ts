@@ -88,7 +88,90 @@ describe('payload views, SPARQL and function rules alike (wat)', () => {
 
   it('chooses the SPARQL rules on wat', () => {
     const rules = (sites()[0]!.screen.engine as unknown as { rules: { slot: string; kind: string }[] }).rules
-    for (const slot of ['HexViewRendering']) expect(rules.find((r) => r.slot === C + slot)?.kind, slot).toBe('sparql')
+    for (const slot of ['HexViewRendering', 'JsonTreeRendering']) expect(rules.find((r) => r.slot === C + slot)?.kind, slot).toBe('sparql')
+  })
+
+  it('builds the same JSON tree of any payload, as it opens and closes', () => {
+    const hs = sites()
+    const id = 'dt-json-order'
+    same(hs, id, 'at start')
+    const tree = (h: H) => [...h.document.querySelectorAll('*')].find((e) => h.shell.keyOf(e) === `${UI}${id}/~root`)
+    const item = (h: H, key: string) =>
+      [...tree(h)!.querySelectorAll('[role=treeitem]')].find((li) => li.querySelector(':scope > .sem-row > .sem-label')?.textContent === key)!
+    const press = (h: H, el: Element, key: string) => {
+      const e = new h.window.Event('keydown', { bubbles: true, cancelable: true })
+      Object.assign(e, { key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
+      el.dispatchEvent(e)
+    }
+    const act = (what: string, f: (h: H) => void) => {
+      for (const h of hs) {
+        f(h)
+        h.shell.flush()
+      }
+      same(hs, id, what)
+      const [a, b] = hs.map(nodes)
+      expect(a, what).toEqual(b)
+    }
+    // The nodes each side mints, and the tree's open and closed paths.
+    const nodes = (h: H) =>
+      h.store
+        .match(null, h.store.factory.namedNode(C + 'inTree'), h.store.factory.namedNode(UI + id))
+        .flatMap((q) => h.store.match(q.subject, null, null))
+        .concat(h.store.match(h.store.factory.namedNode(UI + id), null, null).filter((q) => /Path$/.test(q.predicate.value)))
+        .filter((q) => !q.predicate.value.startsWith('http://www.w3.org/ns/prov#'))
+        .map((q) => `${q.graph.value} ${q.subject.value} ${q.predicate.value} ${q.object.termType === 'Literal' ? JSON.stringify(q.object.value) + '^^' + q.object.datatype.value : q.object.value}`)
+        .filter((line, i, all) => all.indexOf(line) === i)
+        .sort()
+    const paths = (h: H, p: string) => h.store.match(h.store.factory.namedNode(UI + id), h.store.factory.namedNode(C + p), null).map((q) => q.object.value).sort()
+    // By pointer, by key and by keyboard (Right opens, Left closes, Down moves).
+    act('open tags', (h) => h.fire(item(h, 'tags').querySelector('.sem-twisty')!, 'click'))
+    act('close customer by its key', (h) => h.fire(item(h, 'customer').querySelector('.sem-label')!, 'click'))
+    act('open customer again', (h) => h.fire(item(h, 'customer').querySelector('.sem-twisty')!, 'click'))
+    act('open items/0 by Right', (h) => press(h, item(h, 'items').querySelector(':scope > [role=group] .sem-label')!, 'ArrowRight'))
+    act('down a row', (h) => press(h, item(h, 'items').querySelector(':scope > .sem-row > .sem-label')!, 'ArrowDown'))
+    act('close items by Left', (h) => press(h, item(h, 'items').querySelector(':scope > .sem-row > .sem-label')!, 'ArrowLeft'))
+    for (const h of hs) expect(paths(h, 'expandedPath')).toEqual(['/customer', '/customer/tags', '/items/0'])
+    for (const h of hs) expect(paths(h, 'collapsedPath')).toEqual(['/items'])
+    act('close the root', (h) => h.fire(item(h, 'order').querySelector('.sem-twisty')!, 'click'))
+    act('open the root', (h) => h.fire(item(h, 'order').querySelector('.sem-twisty')!, 'click'))
+    const INT = 'http://www.w3.org/2001/XMLSchema#integer'
+    for (const depth of ['0', '1', '3', '9']) {
+      set(hs, id, C + 'expandDepth', depth, INT)
+      same(hs, id, 'expandDepth ' + depth)
+    }
+    for (const [what, value] of [
+      ['duplicate keys', '{"a": 1, "b": {"x": true}, "a": {"y": [1, 2]}, "c": null, "b": 2}'],
+      ['array-index names first', '{"z": 1, "10": 2, "2": 3, "01": 4, "-1": 5, "4294967295": 6, "4294967294": 7, "": 8}'],
+      ['numbers re-spelled', '[1.50, -2e3, 0.1e1, 1e21, 1E-7, -0, 1e400, 262475353774415.625, 0.000001, 123456789012345678901234567890]'],
+      ['escaped strings', String.raw`{"q\"uote": "a\"b\\c\/d", "ctl": "\b\t\n\f\r\u0001\u001f", "uni": "€ 😀 €", "lone": "\ud800", "sl/ash~tilde": "x", "~": {"/": 1}}`],
+      ['empty containers', '{"o": {}, "a": [], "n": [[], {}, [[]]]}'],
+      ['deep nesting', '[[[[[[[[[[[[{"deep": [[[[["bottom"]]]]]}]]]]]]]]]]]]'],
+      ['a scalar', '"just a string"'],
+      ['null', 'null'],
+      ['whitespace around', ' \n {"a" : [ 1 , 2 ] } \t'],
+      ['invalid', '{"broken": '],
+      ['empty', ''],
+    ]) {
+      set(hs, id, C + 'value', value)
+      same(hs, id, what!)
+      set(hs, id, C + 'expandDepth', '99', INT)
+      same(hs, id, what + ', all open')
+      // The same nodes; their order keys differ only where JavaScript's order is not the source's
+      // (duplicate names, array-index names), since the function twin never sees source positions.
+      const [a, b] = hs.map((h) => nodes(h).filter((x) => !x.includes(' https://semblance.dev/ns/core#orderKey ')))
+      expect(a, what).toEqual(b)
+      act(what + ', root closed', (h) => {
+        const t = tree(h)?.querySelector('.sem-twisty')
+        if (t) h.fire(t, 'click')
+      })
+      set(hs, id, C + 'collapsedPath')
+      set(hs, id, C + 'expandedPath')
+      set(hs, id, C + 'expandDepth', '1', INT)
+    }
+    set(hs, id, C + 'value')
+    same(hs, id, 'no payload')
+    // The body viewer's JSON tree: a payload bound through a selection.
+    same(hs, 'dt-body-fixed', 'a body as JSON')
   })
 
   it('writes the same hex dump of any payload, up to its limit', () => {
