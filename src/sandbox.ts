@@ -26,6 +26,7 @@ import { type Projection, Runtime } from './runtime.ts'
 import type { GraphStore } from './store/types.ts'
 import { compileStyles } from './style/compile.ts'
 import { attachAnchoredPopups } from './web/anchored-popups.ts'
+import { replayKept, SSR_ATTRIBUTE } from './web/takeover.ts'
 
 const c = NS.c
 /** The diff viewer of a live example's data, in its sandbox (each sandbox has a store of its own). */
@@ -422,7 +423,7 @@ export function prerenderSandboxes(runtime: Runtime, screen: Projection, opts: P
       const id = `ssr-${++n}`
       const css = sandbox.styled ? scopedCss(compileStyles(sandbox.store), typeof opts.siteCss === 'function' ? opts.siteCss() : (opts.siteCss ?? ''), `[${SANDBOX_ATTRIBUTE}="${id}"]`) : ''
       const style = css ? `<style ${SANDBOX_STYLES_ATTRIBUTE}>${css.replace(/<\/style/gi, '<\\/style')}</style>` : ''
-      out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}">${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
+      out.set(slots.screen, `${style}<div ${SANDBOX_ATTRIBUTE}="${id}" ${SSR_ATTRIBUTE}>${toHTML(sandbox.screen.index, sandbox.root)}</div>`)
       if (sandbox.text && screen.index.slots.has(slots.text)) out.set(slots.text, `<div>${toHTML(sandbox.text.index, sandbox.root)}</div>`)
       if (spec.dataQuery && screen.index.slots.has(slots.data)) {
         const data = projectData(sandbox, spec.dataQuery, spec.sources, new Set(), { ...opts, languages })
@@ -702,6 +703,11 @@ export class Sandboxes {
       return b
     })
     if (built.sandbox) this.mount(m, built.sandbox)
+    else if (!m.sandbox) {
+      // What the server rendered will not be taken over: what was done there is let go.
+      const served = this.served(m)
+      if (served) served.removeAttribute(SSR_ATTRIBUTE), replayKept(served, { discard: true })
+    }
     const ms = Math.max(0, Math.round(now() - t0))
     const state = built.sandbox ? LIVE.Live : m.sandbox ? LIVE.Stale : LIVE.Broken
     this.write(m.iri, { state, problems: built.problems, ms: built.sandbox ? ms : undefined, edited, interacted: built.sandbox ? false : undefined })
@@ -719,7 +725,7 @@ export class Sandboxes {
     const dataQuery = this.dataQuery(m)
     const dataSlot = dataQuery && (this.opts.renderer.nodeOf(mint(m.iri, 'data')) as Element | undefined)
     // What a server rendered in the slots: the sandbox's element, and the text's and the data's.
-    const served = !m.sandbox ? ([...m.slot.children].find((el) => el.getAttribute(SANDBOX_ATTRIBUTE)?.startsWith('ssr-')) ?? null) : null
+    const served = !m.sandbox ? this.served(m) : null
     const servedIn = (slot: Element | undefined | '') => (served && slot && slot.firstElementChild?.localName === 'div' ? slot.firstElementChild : null)
     const taken: Element[] = []
     const hostIn = (own: Element | null) => (own ? (taken.push(own), own) : doc.createElement('div'))
@@ -814,6 +820,16 @@ export class Sandboxes {
       detachRefresh()
       detachTimer()
     }
+    // What the visitor did in the server's rendering before now happens now, with everything listening.
+    if (served) {
+      served.removeAttribute(SSR_ATTRIBUTE)
+      replayKept(served)
+    }
+  }
+
+  /** The element a server rendered in the example's slot (prerenderSandboxes), if it is there. */
+  private served(m: Mounted): Element | null {
+    return [...m.slot.children].find((el) => el.getAttribute(SANDBOX_ATTRIBUTE)?.startsWith('ssr-')) ?? null
   }
 
   /** The style rules the sandbox adds to the site's, scoped to its own element. */
