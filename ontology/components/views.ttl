@@ -498,10 +498,66 @@ c:Metrics a owl:Class ;
     rdfs:subClassOf sem:Component ;
     rdfs:comment "Chips showing c:fields of one node (c:of), labelled by the properties' rdfs:label and c:unit."@en ;
     sem:slug "metrics" .
-c:MetricsRendering a sem:Rendering ; sem:targets c:Metrics ; sem:stratum 0 ; sem:follows c:of ;
-    sem:functionOnly "awaits sx:Text (sx:decodeURI): it shows IRIs compacted with the declared prefixes and percent-decoded." ;
-    sem:needsExtension sx:Text .
+c:MetricsRendering a sem:Rendering ; sem:targets c:Metrics ; sem:stratum 0 ; sem:follows c:of .
 c:MetricsRendering-fn a sem:Rule ; sem:implements c:MetricsRendering ; sem:function "metrics" .
+# A chip per field that has a value, placed by its position in c:fields. An IRI is written prefix:local
+# by the longest declared namespace it starts with (sh:prefix; the least prefix of equals), its local
+# part percent-decoded (sx:decodeURI, sx:Text), else by its last 46 characters; a decimal with two
+# places (sx:formatNumber, sx:Locale); a property's label and unit in the viewer's language.
+c:MetricsRendering-sparql a sem:Rule ;
+    sem:implements c:MetricsRendering ;
+    sem:needsExtension sx:Text , sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hidden ?hidden ; rdfhtml:hasChild ?chip .
+  ?chip a rdfhtml:Span ; rdfhtml:class ?chipClass ; sem:orderKey ?i ; sem:tooltip ?label ; rdfhtml:hasChild ?valueEl , ?labelText .
+  ?valueEl ord:immediatelyPrecedes ?labelText .
+  ?valueEl a rdfhtml:B ; rdfhtml:hasChild ?valueText . ?valueText a rdfhtml:Text ; rdfhtml:data ?shown .
+  ?labelText a rdfhtml:Text ; rdfhtml:data ?label .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:Metrics ; c:of ?of .
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IF(EXISTS { $this c:fields/rdf:rest*/rdf:first ?anyField . ?of ?anyField ?anyValue FILTER(isIRI(?anyField)) }, ?none, "") AS ?hidden)
+  OPTIONAL {
+    $this c:fields ?fields .
+    ?fields rdf:rest* ?cell . ?cell rdf:first ?p . FILTER(isIRI(?p))
+    { SELECT ?cell (COUNT(?before) - 1 AS ?i) WHERE { $this c:fields ?list . ?list rdf:rest* ?before . ?before rdf:rest* ?cell } GROUP BY ?cell }
+    ?of ?p ?v .
+    OPTIONAL { ?unitAt l10n:of ?p ; l10n:unit ?unitPicked }
+    OPTIONAL { FILTER(!BOUND(?unitPicked)) ?p c:unit ?unitOnly FILTER(isLiteral(?unitOnly)) }
+    BIND(STR(COALESCE(?unitPicked, ?unitOnly)) AS ?unit)
+    OPTIONAL { ?labelAt l10n:of ?p ; l10n:name ?labelPicked }
+    OPTIONAL { FILTER(!BOUND(?labelPicked)) ?p rdfs:label ?labelOnly FILTER(isLiteral(?labelOnly)) }
+    BIND(STR(COALESCE(?labelPicked, ?labelOnly)) AS ?label0)
+    BIND(IF(?label0 != "", ?label0, ?none) AS ?label)
+    # An IRI by the longest declared namespace it starts with.
+    LATERAL {
+      OPTIONAL {
+        ?decl sh:prefix ?prefix ; sh:namespace ?nsTerm .
+        FILTER(isIRI(?v) && STRSTARTS(STR(?v), STR(?nsTerm)))
+        FILTER NOT EXISTS {
+          ?other sh:prefix ?otherPrefix ; sh:namespace ?otherNs .
+          FILTER(STRSTARTS(STR(?v), STR(?otherNs)) && (STRLEN(STR(?otherNs)) > STRLEN(STR(?nsTerm)) || (STRLEN(STR(?otherNs)) = STRLEN(STR(?nsTerm)) && STR(?otherPrefix) < STR(?prefix))))
+        }
+      }
+    }
+    BIND(STRLEN(STR(?nsTerm)) AS ?nsLength)
+    BIND(IF(BOUND(?prefix), CONCAT(STR(?prefix), ":", COALESCE(sx:decodeURI(SUBSTR(STR(?v), ?nsLength + 1)), SUBSTR(STR(?v), ?nsLength + 1))),
+      IF(STRLEN(STR(?v)) > 48, CONCAT("…", SUBSTR(STR(?v), STRLEN(STR(?v)) - 45)), STR(?v))) AS ?iriText)
+    BIND(IF(isIRI(?v), ?iriText,
+      IF(isLiteral(?v) && REGEX(STR(?v), "^-?[0-9]+[.][0-9]+$"),
+        COALESCE(sx:formatNumber(xsd:double(STR(?v)), "en-US", "minimumFractionDigits=2;maximumFractionDigits=2;useGrouping=false"), STR(?v)), STR(?v))) AS ?value)
+    BIND(IF(COALESCE(?unit, "") != "", CONCAT(?value, " ", ?unit), ?value) AS ?shown)
+    BIND(IF(EXISTS { ?p c:emphasis ?emphasis FILTER(STR(?emphasis) = "true") }, "sem-metric sem-lead", "sem-metric") AS ?chipClass)
+    BIND(EXISTS { ?p c:hideLabel ?hide FILTER(STR(?hide) = "true") } AS ?hideLabel)
+    BIND(CONCAT(STR($this), "/~m", STR(?i)) AS ?k)
+  }
+  BIND(IRI(?k) AS ?chip)
+  BIND(IRI(CONCAT(?k, "-v")) AS ?valueEl)
+  BIND(IRI(CONCAT(?k, "-v-text")) AS ?valueText)
+  BIND(IF(BOUND(?label) && !?hideLabel, IRI(CONCAT(?k, "-l")), ?none) AS ?labelText)
+}""" .
 
 # --- Toggle ------------------------------------------------------------------------------------
 
