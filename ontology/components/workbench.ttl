@@ -728,9 +728,8 @@ c:selectedTerm."""@en ;
     sem:slug "result-graph" .
 # Not the selection: changing it must not run the query or lay the graph out again.
 c:ResultGraphRendering a sem:Rendering ; sem:targets c:ResultGraph ; sem:stratum 0 ; sem:follows c:of ; sem:refresh sem:NextFrame ;
-    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions ;
-    sem:functionOnly "awaits sx:Math (sx:sin, sx:cos): it lays the result graph out (trigonometry, layering by longest path). (Its triples would come from a step that writes the result as graph data.)" ;
-    sem:needsExtension sx:Math .
+    sem:watches rdf:type , c:of , c:limit , sem:select , sem:construct , c:runCount , c:followUpdates , c:actions .
+# Its SPARQL side, and the building blocks it reads, are in result-graph.ttl.
 c:ResultGraphRendering-fn a sem:Rule ; sem:implements c:ResultGraphRendering ; sem:function "workbench:graph" .
 
 # --- selecting in the graph ----------------------------------------------------------------------------

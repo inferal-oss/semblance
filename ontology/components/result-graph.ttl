@@ -1,0 +1,818 @@
+@prefix sx: <https://semblance.dev/ns/sparql#> .
+@prefix sem: <https://semblance.dev/ns/core#> .
+@prefix c: <https://semblance.dev/ns/component#> .
+@prefix mod: <https://semblance.dev/ns/modality#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix iv: <https://semblance.dev/ns/view#> .
+@prefix rs: <http://www.w3.org/2001/sw/DataAccess/tests/result-set#> .
+
+# The result graph (c:ResultGraph, workbench.ttl) in SPARQL: what it draws is data first, laid out
+# step by step by building blocks, each a stratum below the next, so the drawing is plain SPARQL.
+#
+#   c:ResultGraphParts      every node and link of the run (iv:run): <graph>/~gn-<md5(key)[:12]>,
+#                           <graph>/~ge-<md5(from via to)[:12]>
+#   c:ResultGraphNames      a node's name (a prefixed name, <iri>, a blank node's label, a literal's
+#                           text), label (26 characters), sort key (sx:sortKey), kind; a link's label
+#   c:ResultGraphKept       the best-connected nodes shown (c:limit, at most 200): c:GraphNode
+#   c:ResultGraphLinks      the links among them (c:GraphLink), and each node's degree among them
+#   c:ResultGraphLayers     per node: its layer, one below its lowest parent - each node reads its
+#                           parents' layers, so a new link re-layers only what lies below it; none
+#                           on a cycle (a layer reaching the node count is dropped, so a cycle
+#                           unwinds)
+#   c:ResultGraphShape      layers (c:GraphLayer) when the graph is acyclic, has two or more layers
+#                           and none wider than 7; else the ring's order and roles (hub, near, far)
+#   c:ResultGraphNear       the ring: the hub in the middle, the near nodes around it
+#   c:ResultGraphFar        the far nodes outside, by the mean angle of the near nodes they link to
+#   c:ResultGraphRows       per layer: its nodes in a row, by the mean x of their parents (the
+#                           layers above), each layer read again when a parent moves
+#
+# The function twin (workbench.ts, "workbench:graph") computes the same in one pass; a test checks
+# that both draw the same, byte for byte, after each step.
+
+c:GraphNode a owl:Class ; rdfs:comment "Derived (c:ResultGraphKept): a node a c:ResultGraph shows."@en .
+c:GraphLink a owl:Class ; rdfs:comment "Derived (c:ResultGraphLinks): a link a c:ResultGraph shows, between two of its c:GraphNode s."@en .
+c:GraphLayer a owl:Class ; rdfs:comment "Derived (c:ResultGraphShape): a layer of a layered c:ResultGraph."@en .
+c:graphNodeIn a owl:ObjectProperty ; rdfs:range c:ResultGraph ; rdfs:comment "Derived: a node of the graph's run, whether shown or not."@en .
+c:graphLinkIn a owl:ObjectProperty ; rdfs:range c:ResultGraph ; rdfs:comment "Derived: a link of the graph's run."@en .
+c:partsOf a owl:ObjectProperty ; rdfs:range c:ResultGraph ; rdfs:comment "Derived: the node holding a graph's counts and measures (<graph>/~gp)."@en .
+c:nodeTerm a rdf:Property ; rdfs:comment "Derived: the IRI or literal a graph node stands for (a blank node's has none: its c:nodeKey is its label)."@en .
+c:nodeKey a owl:DatatypeProperty ; rdfs:comment "Derived: a graph node's key - its IRI, its blank node's label, or its literal's text with language or datatype."@en .
+c:nodeName a owl:DatatypeProperty ; rdfs:comment "Derived: how a graph node's term is written (a prefixed name, <iri>, a label, a literal's text)."@en .
+c:nodeLabel a owl:DatatypeProperty ; rdfs:comment "Derived: a graph node's label (its name, cut at 26 characters)."@en .
+c:nodeSort a owl:DatatypeProperty ; rdfs:comment "Derived: a graph node's label as an sx:sortKey (ties in every order it is placed by)."@en .
+c:nodeKind a owl:DatatypeProperty ; rdfs:comment "Derived: \"iri\", \"literal\" or \"bnode\"."@en .
+c:allDegree a owl:DatatypeProperty ; rdfs:comment "Derived: how many links of the run a graph node has."@en .
+c:keptRank a owl:DatatypeProperty ; rdfs:comment "Derived: a shown graph node's place among them (from 0): IRIs before literals, best connected first."@en .
+c:degree a owl:DatatypeProperty ; rdfs:comment "Derived: how many shown links a shown graph node has."@en .
+c:linkFrom a owl:ObjectProperty ; rdfs:comment "Derived: the graph node a link starts at."@en .
+c:linkTo a owl:ObjectProperty ; rdfs:comment "Derived: the graph node a link points to."@en .
+c:linkVia a owl:DatatypeProperty ; rdfs:comment "Derived: what makes a link: its predicate's key, or ?variable (a row's first value linked to the others)."@en .
+c:linkPredicate a rdf:Property ; rdfs:comment "Derived: a link's predicate, when it has one."@en .
+c:linkOrder a owl:DatatypeProperty ; rdfs:comment "Derived: where a link first occurs: its row's index × 1000 + its column (from 0)."@en .
+c:linkLabel a owl:DatatypeProperty ; rdfs:comment "Derived: a link's label: a for rdf:type, its predicate's prefixed name, or ?variable."@en .
+c:linkRank a owl:DatatypeProperty ; rdfs:comment "Derived: a shown link's place among them (from 0), by c:linkOrder."@en .
+c:nodeCount a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: how many nodes its run has."@en .
+c:linkCount a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: how many links its run has."@en .
+c:keptCount a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: how many nodes it shows."@en .
+c:layer a owl:DatatypeProperty ; rdfs:comment "Derived: a shown graph node's layer (0 for a source; one below its lowest parent)."@en .
+c:layered a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: whether it is drawn in layers (else in a ring)."@en .
+c:layerIn a owl:ObjectProperty ; rdfs:comment "Derived: the graph a c:GraphLayer belongs to."@en .
+c:layerIndex a owl:DatatypeProperty ; rdfs:comment "Derived: a c:GraphLayer's place, from 0 at the top."@en .
+c:layerMember a owl:ObjectProperty ; rdfs:comment "Derived: a node in a c:GraphLayer."@en .
+c:ringRank a owl:DatatypeProperty ; rdfs:comment "Derived: a node's place in a ring graph's order (best connected first)."@en .
+c:ringRole a owl:DatatypeProperty ; rdfs:comment "Derived: \"hub\", \"near\" (on the inner ring) or \"far\" (on the outer)."@en .
+c:nearIndex a owl:DatatypeProperty ; rdfs:comment "Derived: a near node's place on the inner ring (from 0)."@en .
+c:angle a owl:DatatypeProperty ; rdfs:comment "Derived: a near node's angle on the inner ring, in radians (-π/2 at the top)."@en .
+c:ringOuter a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: the outer ring's radius."@en .
+c:ringCentre a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: the rings' centre's y."@en .
+c:x a owl:DatatypeProperty ; rdfs:comment "Derived: a shown graph node's x."@en .
+c:y a owl:DatatypeProperty ; rdfs:comment "Derived: a shown graph node's y."@en .
+c:height a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: how tall its drawing is."@en .
+
+# Every node and link of the run: each row's ?s ?p ?o (or ?subject ?predicate ?object, a CONSTRUCT's
+# triples), else its first value that is no literal linked to each other value (?variable). A link is
+# (from, via, to) once, placed where it first occurs; a link from a node to itself is none, but its
+# node is one.
+c:ResultGraphParts a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -9 ;
+    sem:follows c:of , c:bindFrom , ( iv:run rs:solution rs:binding ) , ( iv:run iv:column ) .
+c:ResultGraphParts-fn a sem:Rule ; sem:implements c:ResultGraphParts ; sem:function "workbench:graph-parts" .
+c:ResultGraphParts-sparql a sem:Rule ;
+    sem:implements c:ResultGraphParts ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?parts c:partsOf $this .
+  ?sNode c:graphNodeIn $this ; c:nodeKey ?sKey ; c:nodeTerm ?sTerm .
+  ?oNode c:graphNodeIn $this ; c:nodeKey ?oKey ; c:nodeTerm ?oTerm .
+  ?link c:graphLinkIn $this ; c:linkFrom ?sNode ; c:linkTo ?oNode ; c:linkVia ?via ; c:linkPredicate ?p ; c:linkOrder ?order .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph ; iv:run ?run0 . ?run0 a rs:ResultSet .
+  FILTER NOT EXISTS { ?run0 iv:error ?anyError }
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  { SELECT ?sKey ?s ?oKey ?o ?via ?p (MIN(?ord) AS ?order) WHERE {
+      $this iv:run ?run . ?run rs:solution ?r . ?r rs:index ?ri .
+      { SELECT ?spo1 ?spo2 WHERE {
+          $this iv:run ?runV .
+          BIND(EXISTS { ?runV iv:column ?c1 . ?c1 rs:variable "s" } && EXISTS { ?runV iv:column ?c2 . ?c2 rs:variable "p" } && EXISTS { ?runV iv:column ?c3 . ?c3 rs:variable "o" } AS ?spo1)
+          BIND(EXISTS { ?runV iv:column ?c4 . ?c4 rs:variable "subject" } && EXISTS { ?runV iv:column ?c5 . ?c5 rs:variable "predicate" } && EXISTS { ?runV iv:column ?c6 . ?c6 rs:variable "object" } AS ?spo2)
+        } }
+      LATERAL {
+        {
+          # ?s ?p ?o, or a CONSTRUCT's ?subject ?predicate ?object.
+          FILTER(?spo1 || ?spo2)
+          BIND(IRI(CONCAT(STR(?r), "-", IF(?spo1, "s", "subject"))) AS ?sb)
+          BIND(IRI(CONCAT(STR(?r), "-", IF(?spo1, "p", "predicate"))) AS ?pb)
+          BIND(IRI(CONCAT(STR(?r), "-", IF(?spo1, "o", "object"))) AS ?ob)
+          ?sb rs:value ?s . ?pb rs:value ?p0 . ?ob rs:value ?o .
+          OPTIONAL { ?sb iv:label ?sl } OPTIONAL { ?pb iv:label ?pl } OPTIONAL { ?ob iv:label ?ol }
+          BIND(IF(isLiteral(?p0), CONCAT('"', STR(?p0), '"', IF(LANG(?p0) != "", CONCAT("@", LANG(?p0)), IF(DATATYPE(?p0) != xsd:string, CONCAT("^^", STR(DATATYPE(?p0))), ""))), IF(isBlank(?p0), ?pl, STR(?p0))) AS ?via)
+          BIND(IF(isBlank(?p0), ?unbound, ?p0) AS ?p)
+          BIND(xsd:integer(?ri) * 1000 AS ?ord)
+        } UNION {
+          # Else the row's first value that is no literal (by column), linked to each other value.
+          FILTER(!?spo1 && !?spo2)
+          { SELECT ?r (MIN(?hci) AS ?hubIndex) WHERE {
+              $this iv:run ?runH . ?runH iv:column ?hc . ?hc rs:variable ?hv ; rs:index ?hci .
+              ?r rs:binding ?hb . ?hb rs:variable ?hv ; rs:value ?hval FILTER(!isLiteral(?hval))
+            } GROUP BY ?r }
+          $this iv:run ?runO . ?runO iv:column ?hubCol . ?hubCol rs:index ?hubIndex ; rs:variable ?hubVar .
+          BIND(IRI(CONCAT(STR(?r), "-", ?hubVar)) AS ?sb)
+          ?sb rs:value ?s . OPTIONAL { ?sb iv:label ?sl }
+          ?runO iv:column ?oCol . ?oCol rs:index ?oIndex ; rs:variable ?oVar .
+          BIND(IRI(CONCAT(STR(?r), "-", ?oVar)) AS ?ob)
+          ?ob rs:value ?o . OPTIONAL { ?ob iv:label ?ol }
+          FILTER(!sameTerm(?o, ?s))
+          BIND(CONCAT("?", STR(?oVar)) AS ?via)
+          BIND(xsd:integer(?ri) * 1000 + xsd:integer(?oIndex) - 1 AS ?ord)
+        }
+      }
+      BIND(IF(isLiteral(?s), CONCAT('"', STR(?s), '"', IF(LANG(?s) != "", CONCAT("@", LANG(?s)), IF(DATATYPE(?s) != xsd:string, CONCAT("^^", STR(DATATYPE(?s))), ""))), IF(isBlank(?s), ?sl, STR(?s))) AS ?sKey)
+      BIND(IF(isLiteral(?o), CONCAT('"', STR(?o), '"', IF(LANG(?o) != "", CONCAT("@", LANG(?o)), IF(DATATYPE(?o) != xsd:string, CONCAT("^^", STR(DATATYPE(?o))), ""))), IF(isBlank(?o), ?ol, STR(?o))) AS ?oKey)
+    } GROUP BY ?sKey ?s ?oKey ?o ?via ?p }
+  BIND(IRI(CONCAT(STR($this), "/~gn-", SUBSTR(MD5(?sKey), 1, 12))) AS ?sNode)
+  BIND(IRI(CONCAT(STR($this), "/~gn-", SUBSTR(MD5(?oKey), 1, 12))) AS ?oNode)
+  BIND(IF(isBlank(?s), ?unbound, ?s) AS ?sTerm)
+  BIND(IF(isBlank(?o), ?unbound, ?o) AS ?oTerm)
+  BIND(IF(?sKey = ?oKey, ?unbound, IRI(CONCAT(STR($this), "/~ge-", SUBSTR(MD5(CONCAT(?sKey, " ", ?via, " ", ?oKey)), 1, 12)))) AS ?link)
+}""" .
+
+# Names: a node's term written as the workbench writes terms (a prefixed name, else <iri> - its last
+# 56 characters when longer than 60 -, a blank node's label, a literal's text), its label (cut at 26
+# characters with …), the label's sort key and its kind; a link's label (a for rdf:type, its
+# predicate's prefixed name, else what makes it). The candidates are ranked by a leading digit and
+# the best taken (MAX), so no IRI is joined twice.
+c:ResultGraphNames a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -8 ; sem:readsMinted true .
+c:ResultGraphNames-fn a sem:Rule ; sem:implements c:ResultGraphNames ; sem:function "workbench:graph-names" .
+c:ResultGraphNames-sparql a sem:Rule ;
+    sem:implements c:ResultGraphNames ;
+    sem:bulk false ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?node c:nodeName ?name ; c:nodeLabel ?label ; c:nodeSort ?sort ; c:nodeKind ?kind .
+  ?link c:linkLabel ?linkLabel .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  {
+    { SELECT ?node (MAX(?cand) AS ?best) WHERE {
+        {
+          ?node c:graphNodeIn $this ; c:nodeKey ?key .
+          OPTIONAL { ?node c:nodeTerm ?t }
+          BIND(CONCAT("0", IF(BOUND(?t) && isIRI(?t), IF(STRLEN(STR(?t)) > 60, CONCAT("<…", SUBSTR(STR(?t), STRLEN(STR(?t)) - 55), ">"), CONCAT("<", STR(?t), ">")), IF(BOUND(?t), STR(?t), ?key))) AS ?cand)
+        } UNION { SELECT ?node (CONCAT("1", ?prefix, ":", SUBSTR(STR(?t), ?length + 1)) AS ?cand) WHERE {
+          { SELECT ?node ?t ?length (MIN(?pp) AS ?prefix) WHERE {
+              { SELECT ?node ?t (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                  ?node c:graphNodeIn $this ; c:nodeTerm ?t FILTER(isIRI(?t))
+                  { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                  BIND(STR(?ns0) AS ?ns)
+                  FILTER(STRSTARTS(STR(?t), ?ns) && REGEX(SUBSTR(STR(?t), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+                } GROUP BY ?node ?t }
+              { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+              BIND(STR(?p1) AS ?pp)
+              FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?t), STR(?ns1)))
+            } GROUP BY ?node ?t ?length }
+        } }
+      } GROUP BY ?node }
+    ?node c:graphNodeIn $this .
+    OPTIONAL { ?node c:nodeTerm ?term }
+    BIND(SUBSTR(?best, 2) AS ?name)
+    BIND(IF(STRLEN(?name) > 26, CONCAT(SUBSTR(?name, 1, 25), "…"), ?name) AS ?label)
+    BIND(sx:sortKey(?label, "en") AS ?sort)
+    BIND(IF(!BOUND(?term), "bnode", IF(isLiteral(?term), "literal", "iri")) AS ?kind)
+  } UNION {
+    { SELECT ?link (MAX(?cand) AS ?best) WHERE {
+        {
+          ?link c:graphLinkIn $this ; c:linkVia ?via .
+          OPTIONAL { ?link c:linkPredicate ?t }
+          BIND(CONCAT("0", IF(BOUND(?t) && isIRI(?t), IF(STRLEN(STR(?t)) > 60, CONCAT("<…", SUBSTR(STR(?t), STRLEN(STR(?t)) - 55), ">"), CONCAT("<", STR(?t), ">")), ?via)) AS ?cand)
+        } UNION { SELECT ?link (CONCAT("1", ?prefix, ":", SUBSTR(STR(?t), ?length + 1)) AS ?cand) WHERE {
+          { SELECT ?link ?t ?length (MIN(?pp) AS ?prefix) WHERE {
+              { SELECT ?link ?t (MAX(STRLEN(?ns)) AS ?length) WHERE {
+                  ?link c:graphLinkIn $this ; c:linkPredicate ?t FILTER(isIRI(?t))
+                  { ?d sem:prefixName ?p0 ; sem:namespace ?ns0 } UNION { ?d sh:prefix ?p0 ; sh:namespace ?ns0 }
+                  BIND(STR(?ns0) AS ?ns)
+                  FILTER(STRSTARTS(STR(?t), ?ns) && REGEX(SUBSTR(STR(?t), STRLEN(?ns) + 1), "^[A-Za-z_][A-Za-z0-9_-]*$"))
+                } GROUP BY ?link ?t }
+              { ?d2 sem:prefixName ?p1 ; sem:namespace ?ns1 } UNION { ?d2 sh:prefix ?p1 ; sh:namespace ?ns1 }
+              BIND(STR(?p1) AS ?pp)
+              FILTER(STRLEN(STR(?ns1)) = ?length && STRSTARTS(STR(?t), STR(?ns1)))
+            } GROUP BY ?link ?t ?length }
+        } }
+      } GROUP BY ?link }
+    ?link c:graphLinkIn $this .
+    OPTIONAL { ?link c:linkPredicate ?pred }
+    BIND(IF(BOUND(?pred) && sameTerm(?pred, rdf:type), "a", SUBSTR(?best, 2)) AS ?linkLabel)
+  }
+}""" .
+
+# The nodes shown: the first c:limit (default 40, at most 200) in the order IRIs and blank nodes
+# before literals, most links first, by label (sort key, then key). A rank is how many come before
+# (a 0 for itself, a 1 for each before, summed: no OPTIONAL), among the first 200 only.
+c:ResultGraphKept a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -7 ; sem:readsMinted true ; sem:watches rdf:type , c:limit .
+c:ResultGraphKept-fn a sem:Rule ; sem:implements c:ResultGraphKept ; sem:function "workbench:graph-kept" .
+c:ResultGraphKept-sparql a sem:Rule ;
+    sem:implements c:ResultGraphKept ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?n a c:GraphNode ; c:keptRank ?rank ; c:allDegree ?deg .
+  ?parts c:nodeCount ?nodeCount ; c:linkCount ?linkCount .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  OPTIONAL { $this c:limit ?limit0 }
+  BIND(COALESCE(xsd:integer(ROUND(xsd:double(?limit0))), 40) AS ?limit1)
+  BIND(IF(?limit1 < 1, 1, IF(?limit1 > 200, 200, ?limit1)) AS ?limit)
+  LATERAL {
+  {
+    { SELECT ?n ?deg (SUM(?one) AS ?rank) WHERE {
+        { { SELECT ?n ?lit ?deg ?sort ?key WHERE {
+          ?n c:graphNodeIn $this ; c:nodeKey ?key ; c:nodeSort ?sort ; c:nodeKind ?kind .
+          BIND(IF(?kind = "literal", 1, 0) AS ?lit)
+          { SELECT ?n (SUM(?e) AS ?deg) WHERE {
+              { ?n c:graphNodeIn $this BIND(0 AS ?e) } UNION { ?l1 c:graphLinkIn $this ; c:linkFrom ?n BIND(1 AS ?e) } UNION { ?l2 c:graphLinkIn $this ; c:linkTo ?n BIND(1 AS ?e) }
+            } GROUP BY ?n }
+        } ORDER BY ?lit DESC(?deg) ?sort ?key LIMIT 200 } BIND(0 AS ?one) }
+        UNION
+        { { SELECT ?n ?lit ?deg ?sort ?key WHERE {
+          ?n c:graphNodeIn $this ; c:nodeKey ?key ; c:nodeSort ?sort ; c:nodeKind ?kind .
+          BIND(IF(?kind = "literal", 1, 0) AS ?lit)
+          { SELECT ?n (SUM(?e) AS ?deg) WHERE {
+              { ?n c:graphNodeIn $this BIND(0 AS ?e) } UNION { ?l1 c:graphLinkIn $this ; c:linkFrom ?n BIND(1 AS ?e) } UNION { ?l2 c:graphLinkIn $this ; c:linkTo ?n BIND(1 AS ?e) }
+            } GROUP BY ?n }
+        } ORDER BY ?lit DESC(?deg) ?sort ?key LIMIT 200 }
+          { SELECT ?m ?lit2 ?deg2 ?sort2 ?key2 WHERE {
+          ?m c:graphNodeIn $this ; c:nodeKey ?key2 ; c:nodeSort ?sort2 ; c:nodeKind ?kind .
+          BIND(IF(?kind = "literal", 1, 0) AS ?lit2)
+          { SELECT ?m (SUM(?e) AS ?deg2) WHERE {
+              { ?m c:graphNodeIn $this BIND(0 AS ?e) } UNION { ?l1 c:graphLinkIn $this ; c:linkFrom ?m BIND(1 AS ?e) } UNION { ?l2 c:graphLinkIn $this ; c:linkTo ?m BIND(1 AS ?e) }
+            } GROUP BY ?m }
+        } ORDER BY ?lit2 DESC(?deg2) ?sort2 ?key2 LIMIT 200 }
+          FILTER(?lit2 < ?lit || (?lit2 = ?lit && (?deg2 > ?deg || (?deg2 = ?deg && (?sort2 < ?sort || (?sort2 = ?sort && ?key2 < ?key))))))
+          BIND(1 AS ?one) }
+      } GROUP BY ?n ?deg }
+    FILTER(?rank < ?limit)
+  } UNION {
+    { SELECT (COUNT(?an) AS ?nodeCount) WHERE { ?an c:graphNodeIn $this } }
+    { SELECT (COUNT(?al) AS ?linkCount) WHERE { ?al c:graphLinkIn $this } }
+  }
+  }
+}""" .
+
+# The links shown (between nodes shown), each node's degree among them, and the counts.
+c:ResultGraphLinks a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -6 ; sem:readsMinted true .
+c:ResultGraphLinks-fn a sem:Rule ; sem:implements c:ResultGraphLinks ; sem:function "workbench:graph-links" .
+c:ResultGraphLinks-sparql a sem:Rule ;
+    sem:implements c:ResultGraphLinks ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?link a c:GraphLink .
+  ?n c:degree ?degree .
+  ?parts c:keptCount ?keptCount ; c:keptLinkCount ?keptLinks .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  {
+    ?link c:graphLinkIn $this ; c:linkFrom ?ka ; c:linkTo ?kb ; c:linkOrder ?o . ?ka a c:GraphNode . ?kb a c:GraphNode .
+  } UNION {
+    { SELECT ?n (SUM(?one) AS ?degree) WHERE {
+        { ?n a c:GraphNode ; c:graphNodeIn $this BIND(0 AS ?one) }
+        UNION { ?l1 c:graphLinkIn $this ; c:linkFrom ?ka ; c:linkTo ?kb ; c:linkOrder ?o1 . ?ka a c:GraphNode . ?kb a c:GraphNode . FILTER(sameTerm(?ka, ?n) || sameTerm(?kb, ?n)) ?n a c:GraphNode ; c:graphNodeIn $this BIND(1 AS ?one) }
+      } GROUP BY ?n }
+  } UNION {
+    { SELECT (COUNT(?kn) AS ?keptCount) WHERE { ?kn a c:GraphNode ; c:graphNodeIn $this } }
+    { SELECT (COUNT(?kl) AS ?keptLinks) WHERE { ?kl c:graphLinkIn $this ; c:linkFrom ?ka ; c:linkTo ?kb ; c:linkOrder ?o2 . ?ka a c:GraphNode . ?kb a c:GraphNode . } }
+  }
+}""" .
+
+# A node's layer: 0 with no parent (a node a shown link points from to it), else one below its lowest
+# parent - once every parent has one. A node reads its parents' layers, so it is evaluated again when
+# one changes (the stratum settles, as rules that mint components do), and a new link re-layers only
+# the nodes below it. A layer reaching the node count is dropped: on a cycle none is kept. (The count
+# is read, not followed: a node whose layer could reach it is evaluated again anyway, its parents'
+# layers having changed.)
+c:ResultGraphLayers a sem:BuildingBlock ; sem:targets c:GraphNode ; sem:stratum -5 ; sem:always true ;
+    sem:follows ( [ sem:inverse c:linkTo ] c:linkFrom ) , ( [ sem:inverse c:linkTo ] ) ;
+    sem:watches rdf:type , c:linkTo , c:linkFrom , c:layer .
+c:ResultGraphLayers-fn a sem:Rule ; sem:implements c:ResultGraphLayers ; sem:function "workbench:graph-layers" .
+c:ResultGraphLayers-sparql a sem:Rule ;
+    sem:implements c:ResultGraphLayers ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { $this c:layer ?layer }
+WHERE {
+  $this a c:GraphNode ; c:graphNodeIn ?g .
+  BIND(IRI(CONCAT(STR(?g), "/~gp")) AS ?parts)
+  ?parts c:keptCount ?count .
+  { SELECT (COUNT(?pl) AS ?parents) (COUNT(?parentLayer) AS ?layered) (MAX(?parentLayer) AS ?lowest) WHERE {
+      ?pl a c:GraphLink ; c:linkTo $this ; c:linkFrom ?p . OPTIONAL { ?p c:layer ?parentLayer }
+    } }
+  FILTER(?parents = ?layered)
+  BIND(IF(?parents = 0, 0, ?lowest + 1) AS ?layer)
+  FILTER(?layer < ?count)
+}""" .
+
+# The shape: in layers when every node has one (acyclic), there are two or more and none has more than
+# 7 nodes - the layers (c:GraphLayer, <graph>/~gy-<n>) and the height; else a ring: each node's place
+# (most links first, by label) and role. The first is the hub when there are more than 3 nodes and it
+# has at least 3 links and at least twice the second's less one; with a hub, the nodes it links to are
+# near (the inner ring) and the rest far (the outer); without, all are near.
+c:ResultGraphShape a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -4 ; sem:readsMinted true .
+c:ResultGraphShape-fn a sem:Rule ; sem:implements c:ResultGraphShape ; sem:function "workbench:graph-shape" .
+c:ResultGraphShape-sparql a sem:Rule ;
+    sem:implements c:ResultGraphShape ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT {
+  ?parts c:layered ?layered ; c:height ?height .
+  ?layerNode a c:GraphLayer ; c:layerIn $this ; c:layerIndex ?ly ; c:layerMember ?ym .
+  ?rn c:ringRank ?rank ; c:ringRole ?role .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  ?parts c:keptCount ?count .
+  { SELECT (COUNT(?ln) AS ?withLayer) (MAX(?ll) AS ?deepest0) WHERE { ?ln a c:GraphNode ; c:graphNodeIn $this ; c:layer ?ll } }
+  { SELECT (MAX(?w) AS ?widest0) WHERE { { SELECT ?wl (COUNT(?wn) AS ?w) WHERE { ?wn a c:GraphNode ; c:graphNodeIn $this ; c:layer ?wl } GROUP BY ?wl } } }
+  BIND(COALESCE(?deepest0, -1) AS ?deepest)
+  BIND(COALESCE(?widest0, 0) AS ?widest)
+  BIND(?withLayer = ?count && ?deepest >= 1 && ?widest <= 7 AS ?layered)
+  LATERAL {
+    {
+      BIND(IF(?layered, 50 + ?deepest * 120 + 60, ?unbound) AS ?height)
+    } UNION {
+      FILTER(?layered)
+      ?ym a c:GraphNode ; c:graphNodeIn $this ; c:layer ?ly .
+      BIND(IRI(CONCAT(STR($this), "/~gy-", STR(?ly))) AS ?layerNode)
+    } UNION {
+      FILTER(!?layered)
+      { SELECT ?rn (SUM(?one) AS ?rank) WHERE {
+          { ?rn a c:GraphNode ; c:graphNodeIn $this ; c:degree ?d ; c:nodeSort ?s ; c:nodeKey ?k . BIND(0 AS ?one) }
+          UNION
+          { ?rn a c:GraphNode ; c:graphNodeIn $this ; c:degree ?d ; c:nodeSort ?s ; c:nodeKey ?k . ?m a c:GraphNode ; c:graphNodeIn $this ; c:degree ?d2 ; c:nodeSort ?s2 ; c:nodeKey ?k2 .
+            FILTER(?d2 > ?d || (?d2 = ?d && (?s2 < ?s || (?s2 = ?s && ?k2 < ?k))))
+            BIND(1 AS ?one) }
+        } GROUP BY ?rn }
+      { SELECT ?first ?d0 WHERE { ?first a c:GraphNode ; c:graphNodeIn $this ; c:degree ?d0 ; c:nodeSort ?fs ; c:nodeKey ?fk . } ORDER BY DESC(?d0) ?fs ?fk LIMIT 1 }
+      OPTIONAL { SELECT ?d1 WHERE { ?second a c:GraphNode ; c:graphNodeIn $this ; c:degree ?d1 ; c:nodeSort ?ss ; c:nodeKey ?sk . } ORDER BY DESC(?d1) ?ss ?sk OFFSET 1 LIMIT 1 }
+      BIND(2 * COALESCE(?d1, 0) - 1 AS ?twice)
+      BIND(?count > 3 && ?d0 >= IF(?twice > 3, ?twice, 3) AS ?hasHub)
+      BIND(EXISTS { ?hl a c:GraphLink { ?hl c:linkFrom ?first ; c:linkTo ?rn } UNION { ?hl c:linkFrom ?rn ; c:linkTo ?first } } AS ?nearHub)
+      BIND(IF(?hasHub && sameTerm(?rn, ?first), "hub", IF(!?hasHub || ?nearHub, "near", "far")) AS ?role)
+    }
+  }
+}""" .
+
+# The ring: the hub in the middle, the near nodes around it from the top, clockwise in ring order
+# (radius 80 + 6 a node, at most 250; drawn 1.35 times as wide as tall); the outer ring 120 further.
+c:ResultGraphNear a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -3 ; sem:readsMinted true .
+c:ResultGraphNear-fn a sem:Rule ; sem:implements c:ResultGraphNear ; sem:function "workbench:graph-near" .
+c:ResultGraphNear-sparql a sem:Rule ;
+    sem:implements c:ResultGraphNear ;
+    sem:bulk false ;
+    sem:needsExtension sx:Math ;
+    sem:construct """
+CONSTRUCT {
+  ?n c:nearIndex ?i ; c:angle ?a ; c:x ?x ; c:y ?y .
+  ?parts c:ringOuter ?outer ; c:ringCentre ?cy ; c:height ?height .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  ?parts c:layered false .
+  { SELECT (SUM(IF(?r1 = "near", 1, 0)) AS ?nearCount) (SUM(IF(?r1 = "far", 1, 0)) AS ?farCount) (SUM(IF(?r1 = "hub", 1, 0)) AS ?hubCount) WHERE {
+      ?q a c:GraphNode ; c:graphNodeIn $this ; c:ringRole ?r1 } }
+  BIND(IF(80 + ?nearCount * 6 < 250, 80 + ?nearCount * 6, 250) AS ?inner)
+  BIND(?inner + 120 AS ?outer)
+  BIND(40 + IF(?farCount > 0, ?outer, ?inner) AS ?cy)
+  LATERAL {
+    {
+      BIND(?cy + IF(?farCount > 0, ?outer, ?inner) + 50 AS ?height)
+    } UNION {
+      ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "hub" .
+      BIND(360 AS ?x) BIND(?cy AS ?y)
+    } UNION {
+      { SELECT ?n (SUM(?one) AS ?i) WHERE {
+          { ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "near" ; c:ringRank ?r . BIND(0 AS ?one) }
+          UNION { ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "near" ; c:ringRank ?r . ?m a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "near" ; c:ringRank ?r2 . FILTER(?r2 < ?r) BIND(1 AS ?one) }
+        } GROUP BY ?n }
+      BIND(-sx:pi() / 2 + ?i * 2 * sx:pi() / ?nearCount AS ?a)
+      BIND(IF(?nearCount = 1 && ?hubCount = 0, 0, ?inner) AS ?r0)
+      BIND(IF(?nearCount > 14 && ?i - 2 * FLOOR(?i / 2) = 1, ?r0 * 7.0E-1, xsd:double(?r0)) AS ?radius)
+      BIND(xsd:integer(ROUND(360 + sx:cos(?a) * ?radius * 1.35E0)) AS ?x)
+      BIND(xsd:integer(ROUND(?cy + sx:sin(?a) * ?radius)) AS ?y)
+    }
+  }
+}""" .
+
+# The outer ring's order: each far node at the mean angle of the near nodes it links to, in that order
+# (those linking to none last), by label; and the least gap between two (2π over their count, at most 0.2).
+c:ResultGraphFar a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -2 ; sem:readsMinted true .
+c:ResultGraphFar-fn a sem:Rule ; sem:implements c:ResultGraphFar ; sem:function "workbench:graph-far" .
+c:ResultGraphFar-sparql a sem:Rule ;
+    sem:implements c:ResultGraphFar ;
+    sem:bulk false ;
+    sem:needsExtension sx:Math ;
+    sem:construct """
+CONSTRUCT {
+  ?n c:farAngle ?t ; c:farRank ?rank .
+  ?parts c:ringGap ?gap .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  ?parts c:layered false .
+  {
+    { SELECT (COUNT(?f) AS ?farCount) WHERE { ?f a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . } }
+    FILTER(?farCount > 0)
+    BIND(IF(2 * sx:pi() / ?farCount < 2.0E-1, 2 * sx:pi() / ?farCount, 2.0E-1) AS ?gap)
+  } UNION {
+    { SELECT ?n ?t (SUM(?one) AS ?rank) WHERE {
+        { ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . ?n c:nodeSort ?s ; c:nodeKey ?k . OPTIONAL { SELECT ?n (?t0 AS ?t) WHERE {
+          { SELECT ?n (SUM(sx:sin(?na)) AS ?sinSum) (SUM(sx:cos(?na)) AS ?cosSum) WHERE {
+              ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" .
+              ?nm a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "near" ; c:angle ?na .
+              FILTER EXISTS { ?al a c:GraphLink { ?al c:linkFrom ?n ; c:linkTo ?nm } UNION { ?al c:linkFrom ?nm ; c:linkTo ?n } }
+            } GROUP BY ?n }
+          BIND(sx:atan2(ROUND(?sinSum * 1.0E12) / 1.0E12, ROUND(?cosSum * 1.0E12) / 1.0E12) + sx:pi() / 2 AS ?shifted)
+          BIND(IF(?shifted < 0, ?shifted + 2 * sx:pi(), ?shifted) - sx:pi() / 2 AS ?t0)
+        } } BIND(0 AS ?one) }
+        UNION
+        { ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . ?n c:nodeSort ?s ; c:nodeKey ?k . OPTIONAL { SELECT ?n (?t0 AS ?t) WHERE {
+          { SELECT ?n (SUM(sx:sin(?na)) AS ?sinSum) (SUM(sx:cos(?na)) AS ?cosSum) WHERE {
+              ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" .
+              ?nm a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "near" ; c:angle ?na .
+              FILTER EXISTS { ?al a c:GraphLink { ?al c:linkFrom ?n ; c:linkTo ?nm } UNION { ?al c:linkFrom ?nm ; c:linkTo ?n } }
+            } GROUP BY ?n }
+          BIND(sx:atan2(ROUND(?sinSum * 1.0E12) / 1.0E12, ROUND(?cosSum * 1.0E12) / 1.0E12) + sx:pi() / 2 AS ?shifted)
+          BIND(IF(?shifted < 0, ?shifted + 2 * sx:pi(), ?shifted) - sx:pi() / 2 AS ?t0)
+        } }
+          ?m a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . ?m c:nodeSort ?s2 ; c:nodeKey ?k2 . OPTIONAL { SELECT ?m (?t20 AS ?t2) WHERE {
+          { SELECT ?m (SUM(sx:sin(?na)) AS ?sinSum) (SUM(sx:cos(?na)) AS ?cosSum) WHERE {
+              ?m a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" .
+              ?nm a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "near" ; c:angle ?na .
+              FILTER EXISTS { ?al a c:GraphLink { ?al c:linkFrom ?m ; c:linkTo ?nm } UNION { ?al c:linkFrom ?nm ; c:linkTo ?m } }
+            } GROUP BY ?m }
+          BIND(sx:atan2(ROUND(?sinSum * 1.0E12) / 1.0E12, ROUND(?cosSum * 1.0E12) / 1.0E12) + sx:pi() / 2 AS ?shifted)
+          BIND(IF(?shifted < 0, ?shifted + 2 * sx:pi(), ?shifted) - sx:pi() / 2 AS ?t20)
+        } }
+          FILTER(IF(BOUND(?t2), !BOUND(?t) || ?t2 < ?t, false) || ((IF(BOUND(?t2), BOUND(?t) && ?t2 = ?t, !BOUND(?t))) && (?s2 < ?s || (?s2 = ?s && ?k2 < ?k))))
+          BIND(1 AS ?one) }
+      } GROUP BY ?n ?t }
+  }
+}""" .
+c:farAngle a owl:DatatypeProperty ; rdfs:comment "Derived: the angle a far node of a ring graph wants (the mean of its near neighbours')."@en .
+c:farRank a owl:DatatypeProperty ; rdfs:comment "Derived: a far node's place on the outer ring (from 0)."@en .
+c:ringGap a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: the least angle between two far nodes."@en .
+c:keptLinkCount a owl:DatatypeProperty ; rdfs:comment "Derived, on a graph's parts: how many links it shows."@en .
+
+# The outer ring: each far node at its angle, or further along than the one before it by the gap - the
+# most of -π/2 + i·gap and t_j + (i - j)·gap over the nodes j up to it that have an angle.
+c:ResultGraphFarPlaces a sem:BuildingBlock ; sem:targets c:ResultGraph ; sem:stratum -1 ; sem:readsMinted true .
+c:ResultGraphFarPlaces-fn a sem:Rule ; sem:implements c:ResultGraphFarPlaces ; sem:function "workbench:graph-far-places" .
+c:ResultGraphFarPlaces-sparql a sem:Rule ;
+    sem:implements c:ResultGraphFarPlaces ;
+    sem:bulk false ;
+    sem:needsExtension sx:Math ;
+    sem:construct """
+CONSTRUCT { ?n c:x ?x ; c:y ?y }
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?parts)
+  ?parts c:layered false ; c:ringOuter ?outer ; c:ringCentre ?cy ; c:ringGap ?gap .
+  { SELECT (COUNT(?f) AS ?farCount) WHERE { ?f a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . } }
+  { SELECT ?n ?i (MAX(?cand) AS ?a) WHERE {
+      BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?gapAt) ?gapAt c:ringGap ?g .
+      { ?n a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . ?n c:farRank ?i . }
+      LATERAL {
+        { BIND(-sx:pi() / 2 + ?i * ?g AS ?cand) }
+        UNION
+        { ?m a c:GraphNode ; c:graphNodeIn $this ; c:ringRole "far" . ?m c:farRank ?j ; c:farAngle ?tj . FILTER(?j <= ?i) BIND(?tj + (?i - ?j) * ?g AS ?cand) }
+      }
+    } GROUP BY ?n ?i }
+  BIND(IF(?farCount > 14 && ?i - 2 * FLOOR(?i / 2) = 1, ?outer * 7.0E-1, xsd:double(?outer)) AS ?radius)
+      BIND(xsd:integer(ROUND(360 + sx:cos(?a) * ?radius * 1.35E0)) AS ?x)
+      BIND(xsd:integer(ROUND(?cy + sx:sin(?a) * ?radius)) AS ?y)
+}""" .
+
+# A layer's row: its nodes by the mean x of their parents (one a link: the layers above; 0 with none),
+# most links first, by label, spread evenly across the width; 120 a layer down from 50. A layer is
+# evaluated again when a parent moves, so the rows settle from the top.
+c:ResultGraphRows a sem:BuildingBlock ; sem:targets c:GraphLayer ; sem:stratum -2 ; sem:always true ;
+    sem:follows ( c:layerMember [ sem:inverse c:linkTo ] c:linkFrom ) , ( c:layerMember [ sem:inverse c:linkTo ] ) , c:layerMember ;
+    sem:watches rdf:type , c:layerMember , c:layerIndex , c:linkTo , c:linkFrom , c:x , c:degree , c:nodeSort , c:nodeKey .
+c:ResultGraphRows-fn a sem:Rule ; sem:implements c:ResultGraphRows ; sem:function "workbench:graph-rows" .
+c:ResultGraphRows-sparql a sem:Rule ;
+    sem:implements c:ResultGraphRows ;
+    sem:bulk false ;
+    sem:construct """
+CONSTRUCT { ?n c:x ?x ; c:y ?y }
+WHERE {
+  $this a c:GraphLayer ; c:layerIndex ?li .
+  { SELECT (COUNT(?member) AS ?size) WHERE { $this c:layerMember ?member } }
+  { SELECT ?n (SUM(?one) AS ?rank) WHERE {
+      { $this c:layerMember ?n BIND(0 AS ?one) }
+      UNION
+      { { SELECT ?n ?b ?d ?s ?k WHERE {
+            $this c:layerMember ?n . ?n c:degree ?d ; c:nodeSort ?s ; c:nodeKey ?k .
+            { SELECT ?n (SUM(?px) AS ?sumX) (SUM(?pc) AS ?parentCount) WHERE {
+                { $this c:layerMember ?n BIND(0 AS ?px) BIND(0 AS ?pc) }
+                UNION { $this c:layerMember ?n . ?pl a c:GraphLink ; c:linkTo ?n ; c:linkFrom ?p . ?p c:x ?px BIND(1 AS ?pc) }
+              } GROUP BY ?n }
+            BIND(IF(?parentCount = 0, 0.0E0, xsd:double(?sumX) / xsd:double(?parentCount)) AS ?b)
+          } }
+        { SELECT (?n AS ?m) (?b AS ?b2) (?d AS ?d2) (?s AS ?s2) (?k AS ?k2) WHERE {
+            $this c:layerMember ?n . ?n c:degree ?d ; c:nodeSort ?s ; c:nodeKey ?k .
+            { SELECT ?n (SUM(?px) AS ?sumX) (SUM(?pc) AS ?parentCount) WHERE {
+                { $this c:layerMember ?n BIND(0 AS ?px) BIND(0 AS ?pc) }
+                UNION { $this c:layerMember ?n . ?pl a c:GraphLink ; c:linkTo ?n ; c:linkFrom ?p . ?p c:x ?px BIND(1 AS ?pc) }
+              } GROUP BY ?n }
+            BIND(IF(?parentCount = 0, 0.0E0, xsd:double(?sumX) / xsd:double(?parentCount)) AS ?b)
+          } }
+        FILTER(?b2 < ?b || (?b2 = ?b && (?d2 > ?d || (?d2 = ?d && (?s2 < ?s || (?s2 = ?s && ?k2 < ?k))))))
+        BIND(1 AS ?one) }
+    } GROUP BY ?n }
+  BIND(xsd:integer(ROUND(xsd:double((?rank + 1) * 720) / xsd:double(?size + 1))) AS ?x)
+  BIND(50 + ?li * 120 AS ?y)
+}""" .
+
+# --- the drawing -------------------------------------------------------------------------------------
+# What c:ResultGraphRendering-fn draws, from the data above: on screen the size (beside the
+# c:actions), the legend, the selection's line (c:ResultGraphSelection fills it) and the plot - a link a
+# line, an arrowhead and maybe a label, a node a toggle button with a dot and a label; as text the
+# size and the first 30 links as sentences. Numbers in the viewer's l10n:formatLocale (sx:formatNumber).
+c:ResultGraphRendering-sparql a sem:Rule ;
+    sem:implements c:ResultGraphRendering ;
+    sem:modality mod:Screen ;
+    sem:bulk false ;
+    sem:readsMinted true ;
+    sem:needsExtension sx:Math , sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:id ?id ; sem:orderKey ?key ; sem:tooltip ?tip ; c:term ?term ; c:edgeFrom ?edgeFrom ; c:edgeTo ?edgeTo ;
+      c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode ; rdfhtml:attribute ?attr .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?el ord:immediatelyPrecedes ?after .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  BIND(IRI(CONCAT(?me, "/~gp")) AS ?parts)
+  # What it shows (as the result table): not run, a binding without a value, a failed run, or the run.
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none", IF(EXISTS { ?view iv:error ?anyError }, "error", "run")))) AS ?state0)
+  OPTIONAL { ?parts c:linkCount ?linkCount0 }
+  OPTIONAL { ?parts c:nodeCount ?nodeCount0 }
+  OPTIONAL { ?parts c:keptCount ?keptCount0 }
+  BIND(COALESCE(?linkCount0, 0) AS ?linkCount) BIND(COALESCE(?nodeCount0, 0) AS ?nodeCount) BIND(COALESCE(?keptCount0, 0) AS ?keptCount)
+  BIND(IF(?state0 = "run", IF(?linkCount > 0, "draw", "nothing"), ?state0) AS ?state)
+  OPTIONAL { ?notRunAt l10n:of c:NotRunPhrase ; l10n:name ?notRun0 } OPTIONAL { FILTER(!BOUND(?notRun0)) c:NotRunPhrase rdfs:label ?notRun1 }
+  BIND(STR(COALESCE(?notRun0, ?notRun1)) AS ?notRun)
+  OPTIONAL { ?failedAt l10n:of c:QueryFailedPhrase ; l10n:name ?failed0 } OPTIONAL { FILTER(!BOUND(?failed0)) c:QueryFailedPhrase rdfs:label ?failed1 }
+  BIND(STR(COALESCE(?failed0, ?failed1)) AS ?failed)
+  OPTIONAL { ?noGraphAt l10n:of c:NoGraphPhrase ; l10n:name ?noGraph0 } OPTIONAL { FILTER(!BOUND(?noGraph0)) c:NoGraphPhrase rdfs:label ?noGraph1 }
+  BIND(STR(COALESCE(?noGraph0, ?noGraph1)) AS ?noGraph)
+  OPTIONAL { ?sizePhraseAt l10n:of c:GraphSizePhrase ; l10n:name ?sizePhrase0 } OPTIONAL { FILTER(!BOUND(?sizePhrase0)) c:GraphSizePhrase rdfs:label ?sizePhrase1 }
+  BIND(STR(COALESCE(?sizePhrase0, ?sizePhrase1)) AS ?sizePhrase)
+  OPTIONAL { ?morePhraseAt l10n:of c:MorePhrase ; l10n:name ?morePhrase0 } OPTIONAL { FILTER(!BOUND(?morePhrase0)) c:MorePhrase rdfs:label ?morePhrase1 }
+  BIND(STR(COALESCE(?morePhrase0, ?morePhrase1)) AS ?morePhrase)
+  OPTIONAL { ?viewer l10n:formatLocale ?locale0 }
+  BIND(COALESCE(?locale0, "en-US") AS ?locale)
+  BIND(REPLACE(REPLACE(?sizePhrase, "[{]n[}]", sx:formatNumber(?nodeCount, ?locale)), "[{]m[}]", sx:formatNumber(?linkCount, ?locale)) AS ?size)
+  BIND(?nodeCount - ?keptCount AS ?hidden)
+  BIND(IF(?hidden > 0, REPLACE(?morePhrase, "[{]n[}]", sx:formatNumber(?hidden, ?locale)), ?unset) AS ?more)
+  BIND(?state = "draw" && EXISTS { $this c:actions/rdf:rest*/rdf:first ?anyAction FILTER(isIRI(?anyAction)) } AS ?bar)
+  # Edge labels: at most 24, spent on the rarest labels first (a label's links all or none); the rest
+  # are counted in a legend. A label is shown when the counts up to it (rarest first, by label) fit.
+  { SELECT (MAX(?cum0) AS ?mostCum) WHERE {
+      { SELECT ?lab0 (SUM(?c2) AS ?cum0) WHERE {
+          { SELECT ?lab0 (COUNT(?l0) AS ?c0) WHERE { ?l0 a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?lab0 } GROUP BY ?lab0 }
+          { SELECT (?lab0 AS ?lab2) (?c0 AS ?c2) WHERE { { SELECT ?lab0 (COUNT(?l0) AS ?c0) WHERE { ?l0 a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?lab0 } GROUP BY ?lab0 } } }
+          FILTER(?c2 < ?c0 || (?c2 = ?c0 && ?lab2 <= ?lab0))
+        } GROUP BY ?lab0 }
+    } }
+  BIND(?state = "draw" && COALESCE(?mostCum, 0) > 24 AS ?legend)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # Not run, or a binding without a value: a sentence (its c:emptyText).
+    FILTER(?state = "none" || ?state = "unbound")
+    OPTIONAL { FILTER(?state = "unbound") ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(?state = "unbound" && !BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, ?notRun)) AS ?data)
+  } UNION {
+    # A failed run: its error, as a c:Alert.
+    FILTER(?state = "error")
+    ?view iv:error ?message .
+    BIND(IRI(CONCAT(?me, "/~error")) AS ?el) BIND(c:Alert AS ?tag) BIND(?root AS ?parent)
+    BIND(?failed AS ?alertLabel) BIND(STR(?message) AS ?alertHelp) BIND(sty:Danger AS ?tone)
+  } UNION {
+    # An answer, or rows that link no nodes: nothing to draw.
+    FILTER(?state = "nothing")
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(?noGraph AS ?data)
+  } UNION {
+    # Drawn: the size (beside the c:actions), the legend, the selection's line, the plot.
+    FILTER(?state = "draw")
+    VALUES (?local ?tag0 ?cls0 ?parentLocal ?key0) {
+      ("summary-bar" rdfhtml:Div "sem-result-bar" "root" 0) ("summary" rdfhtml:P "sem-summary" UNDEF 0) ("actions" rdfhtml:Div "sem-actions" "summary-bar" 1)
+      ("legend" rdfhtml:P "sem-legend" "root" 1) ("selection" rdfhtml:P "sem-selection" "root" 2) ("canvas" rdfhtml:Div "sem-canvas" "root" 3) ("plot" svg:Svg UNDEF "canvas" UNDEF)
+    }
+    FILTER(IF(?local = "summary-bar" || ?local = "actions", ?bar, IF(?local = "legend", ?legend, true)))
+    BIND(IRI(CONCAT(?me, "/~", ?local)) AS ?el) BIND(?tag0 AS ?tag) BIND(?cls0 AS ?cls) BIND(?key0 AS ?key)
+    BIND(IRI(CONCAT(?me, "/~", COALESCE(?parentLocal, IF(?bar, "summary-bar", "root")))) AS ?parent)
+    BIND(IF(?local = "summary", IRI(CONCAT(?me, "/~summary-text")), ?unset) AS ?textNode)
+    BIND(IF(?local = "summary", CONCAT(?size, IF(BOUND(?more), CONCAT(" · ", ?more), "")), ?unset) AS ?data)
+    BIND(IF(?local = "selection", CONCAT(?me, "/~selection"), ?unset) AS ?id)
+  } UNION {
+    FILTER(?state = "draw")
+    BIND(IRI(CONCAT(?me, "/~selection")) AS ?el)
+    VALUES (?an ?av) { ("aria-live" "polite") }
+    BIND(IRI(CONCAT(?me, "/~selection-aria-live")) AS ?attr)
+  } UNION {
+    FILTER(?state = "draw")
+    BIND(IRI(CONCAT(?me, "/~plot")) AS ?el)
+    { SELECT (MAX(?h0) AS ?height) WHERE { BIND(IRI(CONCAT(STR($this), "/~gp")) AS ?hp) ?hp c:height ?h0 } }
+    VALUES ?an { "viewBox" "role" "aria-label" "class" } BIND(IF(?an = "viewBox", CONCAT("0 0 720 ", STR(IF(?height > 160, ?height, 160))), IF(?an = "role", "group", IF(?an = "aria-label", ?size, IF(?an = "class", "sem-plot", ?unset)))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", "plot", "-a-", ?an)) AS ?attr)
+  } UNION {
+    # The actions, in their order.
+    FILTER(?bar)
+    $this c:actions/rdf:rest* ?cell . ?cell rdf:first ?el FILTER(isIRI(?el))
+    BIND(IRI(CONCAT(?me, "/~actions")) AS ?parent)
+    OPTIONAL { ?cell rdf:rest/rdf:first ?after FILTER(isIRI(?after)) }
+  } UNION {
+    # The legend: every label, most links first, with its count.
+    FILTER(?legend)
+    { SELECT ?lab (COUNT(?ll) AS ?count) WHERE { ?ll a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?lab } GROUP BY ?lab }
+    { SELECT ?lab (SUM(?one) AS ?place) WHERE {
+        { { SELECT ?lab (COUNT(?la) AS ?ca) WHERE { ?la a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?lab } GROUP BY ?lab } BIND(0 AS ?one) }
+        UNION {
+          { SELECT ?lab (COUNT(?la) AS ?ca) WHERE { ?la a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?lab } GROUP BY ?lab }
+          { SELECT (?lab AS ?lab3) (?ca AS ?c3) WHERE { { SELECT ?lab (COUNT(?la) AS ?ca) WHERE { ?la a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?lab } GROUP BY ?lab } } }
+          FILTER(?c3 > ?ca || (?c3 = ?ca && ?lab3 < ?lab))
+          BIND(1 AS ?one)
+        }
+      } GROUP BY ?lab }
+    BIND(IRI(CONCAT(?me, "/~legend")) AS ?el)
+    BIND(?place AS ?at)
+    BIND(IRI(CONCAT(?me, "/~legend-text-", STR(?at))) AS ?textNode) BIND(?at AS ?textKey)
+    BIND(CONCAT(IF(?at = 0, "", " · "), ?lab, " ×", sx:formatNumber(?count, ?locale)) AS ?data)
+  } UNION {
+    # A link: its line (from the edge of one dot to the edge of the other), its arrowhead, and its
+    # label when its label is shown; and the marks it joins (c:edgeFrom, c:edgeTo).
+    FILTER(?state = "draw")
+    ?link a c:GraphLink ; c:graphLinkIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label ; c:linkOrder ?order .
+    ?from c:x ?ax ; c:y ?ay . ?to c:x ?bx ; c:y ?by .
+    { SELECT ?label (SUM(?c4) AS ?cum) WHERE {
+        { SELECT ?label (COUNT(?l5) AS ?c5) WHERE { ?l5 a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?label } GROUP BY ?label }
+        { SELECT (?label AS ?lab4) (?c5 AS ?c4) WHERE { { SELECT ?label (COUNT(?l5) AS ?c5) WHERE { ?l5 a c:GraphLink ; c:graphLinkIn $this ; c:linkLabel ?label } GROUP BY ?label } } }
+        FILTER(?c4 < ?c5 || (?c4 = ?c5 && ?lab4 <= ?label))
+      } GROUP BY ?label }
+    BIND(?cum <= 24 AS ?labelled)
+    BIND(CONCAT("e", STRAFTER(STR(?link), "/~ge-")) AS ?id0)
+    BIND(?bx - ?ax AS ?dx) BIND(?by - ?ay AS ?dy) BIND(sx:sqrt(?dx * ?dx + ?dy * ?dy) AS ?len0) BIND(IF(?len0 = 0, 1.0E0, ?len0) AS ?len) BIND(xsd:double(?dx) / ?len AS ?ux) BIND(xsd:double(?dy) / ?len AS ?uy) BIND(?ax + ?ux * 8 AS ?x1) BIND(?ay + ?uy * 8 AS ?y1) BIND(?bx - ?ux * 10 AS ?x2) BIND(?by - ?uy * 10 AS ?y2)
+    BIND(xsd:integer(ROUND((?x1) * 10)) AS ?x1sR) BIND(STR(ABS(?x1sR)) AS ?x1sD0) BIND(IF(STRLEN(?x1sD0) <= 1, CONCAT("0", ?x1sD0), ?x1sD0) AS ?x1sD) BIND(CONCAT(IF(?x1sR < 0, "-", ""), SUBSTR(?x1sD, 1, STRLEN(?x1sD) - 1), ".", SUBSTR(?x1sD, STRLEN(?x1sD))) AS ?x1s) BIND(xsd:integer(ROUND((?y1) * 10)) AS ?y1sR) BIND(STR(ABS(?y1sR)) AS ?y1sD0) BIND(IF(STRLEN(?y1sD0) <= 1, CONCAT("0", ?y1sD0), ?y1sD0) AS ?y1sD) BIND(CONCAT(IF(?y1sR < 0, "-", ""), SUBSTR(?y1sD, 1, STRLEN(?y1sD) - 1), ".", SUBSTR(?y1sD, STRLEN(?y1sD))) AS ?y1s) BIND(xsd:integer(ROUND((?x2) * 10)) AS ?x2sR) BIND(STR(ABS(?x2sR)) AS ?x2sD0) BIND(IF(STRLEN(?x2sD0) <= 1, CONCAT("0", ?x2sD0), ?x2sD0) AS ?x2sD) BIND(CONCAT(IF(?x2sR < 0, "-", ""), SUBSTR(?x2sD, 1, STRLEN(?x2sD) - 1), ".", SUBSTR(?x2sD, STRLEN(?x2sD))) AS ?x2s) BIND(xsd:integer(ROUND((?y2) * 10)) AS ?y2sR) BIND(STR(ABS(?y2sR)) AS ?y2sD0) BIND(IF(STRLEN(?y2sD0) <= 1, CONCAT("0", ?y2sD0), ?y2sD0) AS ?y2sD) BIND(CONCAT(IF(?y2sR < 0, "-", ""), SUBSTR(?y2sD, 1, STRLEN(?y2sD) - 1), ".", SUBSTR(?y2sD, STRLEN(?y2sD))) AS ?y2s)
+    BIND(xsd:integer(ROUND((?x2 + ?ux * 4) * 10)) AS ?h1xR) BIND(STR(ABS(?h1xR)) AS ?h1xD0) BIND(IF(STRLEN(?h1xD0) <= 1, CONCAT("0", ?h1xD0), ?h1xD0) AS ?h1xD) BIND(CONCAT(IF(?h1xR < 0, "-", ""), SUBSTR(?h1xD, 1, STRLEN(?h1xD) - 1), ".", SUBSTR(?h1xD, STRLEN(?h1xD))) AS ?h1x) BIND(xsd:integer(ROUND((?y2 + ?uy * 4) * 10)) AS ?h1yR) BIND(STR(ABS(?h1yR)) AS ?h1yD0) BIND(IF(STRLEN(?h1yD0) <= 1, CONCAT("0", ?h1yD0), ?h1yD0) AS ?h1yD) BIND(CONCAT(IF(?h1yR < 0, "-", ""), SUBSTR(?h1yD, 1, STRLEN(?h1yD) - 1), ".", SUBSTR(?h1yD, STRLEN(?h1yD))) AS ?h1y)
+    BIND(xsd:integer(ROUND((?x2 - ?ux * 5 - ?uy * 4) * 10)) AS ?h2xR) BIND(STR(ABS(?h2xR)) AS ?h2xD0) BIND(IF(STRLEN(?h2xD0) <= 1, CONCAT("0", ?h2xD0), ?h2xD0) AS ?h2xD) BIND(CONCAT(IF(?h2xR < 0, "-", ""), SUBSTR(?h2xD, 1, STRLEN(?h2xD) - 1), ".", SUBSTR(?h2xD, STRLEN(?h2xD))) AS ?h2x) BIND(xsd:integer(ROUND((?y2 - ?uy * 5 + ?ux * 4) * 10)) AS ?h2yR) BIND(STR(ABS(?h2yR)) AS ?h2yD0) BIND(IF(STRLEN(?h2yD0) <= 1, CONCAT("0", ?h2yD0), ?h2yD0) AS ?h2yD) BIND(CONCAT(IF(?h2yR < 0, "-", ""), SUBSTR(?h2yD, 1, STRLEN(?h2yD) - 1), ".", SUBSTR(?h2yD, STRLEN(?h2yD))) AS ?h2y)
+    BIND(xsd:integer(ROUND((?x2 - ?ux * 5 + ?uy * 4) * 10)) AS ?h3xR) BIND(STR(ABS(?h3xR)) AS ?h3xD0) BIND(IF(STRLEN(?h3xD0) <= 1, CONCAT("0", ?h3xD0), ?h3xD0) AS ?h3xD) BIND(CONCAT(IF(?h3xR < 0, "-", ""), SUBSTR(?h3xD, 1, STRLEN(?h3xD) - 1), ".", SUBSTR(?h3xD, STRLEN(?h3xD))) AS ?h3x) BIND(xsd:integer(ROUND((?y2 - ?uy * 5 - ?ux * 4) * 10)) AS ?h3yR) BIND(STR(ABS(?h3yR)) AS ?h3yD0) BIND(IF(STRLEN(?h3yD0) <= 1, CONCAT("0", ?h3yD0), ?h3yD0) AS ?h3yD) BIND(CONCAT(IF(?h3yR < 0, "-", ""), SUBSTR(?h3yD, 1, STRLEN(?h3yD) - 1), ".", SUBSTR(?h3yD, STRLEN(?h3yD))) AS ?h3y)
+    BIND(xsd:integer(ROUND((xsd:double(?ax + ?bx) / 2) * 10)) AS ?mxsR) BIND(STR(ABS(?mxsR)) AS ?mxsD0) BIND(IF(STRLEN(?mxsD0) <= 1, CONCAT("0", ?mxsD0), ?mxsD0) AS ?mxsD) BIND(CONCAT(IF(?mxsR < 0, "-", ""), SUBSTR(?mxsD, 1, STRLEN(?mxsD) - 1), ".", SUBSTR(?mxsD, STRLEN(?mxsD))) AS ?mxs) BIND(xsd:integer(ROUND((xsd:double(?ay + ?by) / 2 - 3) * 10)) AS ?mysR) BIND(STR(ABS(?mysR)) AS ?mysD0) BIND(IF(STRLEN(?mysD0) <= 1, CONCAT("0", ?mysD0), ?mysD0) AS ?mysD) BIND(CONCAT(IF(?mysR < 0, "-", ""), SUBSTR(?mysD, 1, STRLEN(?mysD) - 1), ".", SUBSTR(?mysD, STRLEN(?mysD))) AS ?mys)
+    VALUES ?part { "g" "line" "head" "label" }
+    FILTER(?labelled || ?part != "label")
+    BIND(IF(?part = "g", ?id0, CONCAT(?id0, "-", ?part)) AS ?local0)
+    BIND(IF(?part = "text", ?unset, IRI(CONCAT(?me, "/~", ?local0))) AS ?el)
+    BIND(IF(?part = "g", svg:G, IF(?part = "line", svg:Line, IF(?part = "head", svg:Path, IF(?part = "label", svg:Text, ?unset)))) AS ?tag)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~plot")), IF(?part = "text", ?unset, IRI(CONCAT(?me, "/~", ?id0)))) AS ?parent)
+    BIND(IF(?part = "g", ?order, IF(?part = "line", 0, IF(?part = "head", 1, IF(?part = "label", 2, ?unset)))) AS ?key)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~n", STRAFTER(STR(?from), "/~gn-"))), ?unset) AS ?edgeFrom)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~n", STRAFTER(STR(?to), "/~gn-"))), ?unset) AS ?edgeTo)
+    BIND(IF(?part = "label", IRI(CONCAT(?me, "/~", ?id0, "-label-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "label", IF(STRLEN(?label) > 22, CONCAT(SUBSTR(?label, 1, 21), "…"), ?label), ?unset) AS ?data)
+    LATERAL {
+      VALUES ?an { "class" "x1" "y1" "x2" "y2" "d" "x" "y" "text-anchor" } BIND(IF(?an = "class", IF(?part = "g", "sem-link", IF(?part = "line", "sem-edge", IF(?part = "head", "sem-arrow", "sem-edge-label"))), IF(?an = "x1", IF(?part = "line", ?x1s, ?unset), IF(?an = "y1", IF(?part = "line", ?y1s, ?unset), IF(?an = "x2", IF(?part = "line", ?x2s, ?unset), IF(?an = "y2", IF(?part = "line", ?y2s, ?unset), IF(?an = "d", IF(?part = "head", CONCAT("M", ?h1x, ",", ?h1y, " L", ?h2x, ",", ?h2y, " L", ?h3x, ",", ?h3y, " Z"), ?unset), IF(?an = "x", IF(?part = "label", ?mxs, ?unset), IF(?an = "y", IF(?part = "label", ?mys, ?unset), IF(?an = "text-anchor", IF(?part = "label", "middle", ?unset), ?unset))))))))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", ?local0, "-a-", ?an)) AS ?attr)
+    }
+  } UNION {
+    # A node: a toggle button (one in the tab order) showing its term (c:term; a blank node's mark
+    # stands in for it), a dot (a literal's square) with the term as its tooltip, and its label.
+    FILTER(?state = "draw")
+    ?n a c:GraphNode ; c:graphNodeIn $this ; c:keptRank ?rank ; c:nodeKind ?kind ; c:nodeName ?name ; c:nodeLabel ?nodeLabel ; c:nodeKey ?nodeKey ; c:x ?nx ; c:y ?ny .
+    OPTIONAL { ?n c:nodeTerm ?nodeTerm }
+    BIND(CONCAT("n", STRAFTER(STR(?n), "/~gn-")) AS ?id0)
+    VALUES ?part { "g" "dot" "label" }
+    BIND(IF(?part = "g", ?id0, CONCAT(?id0, "-", ?part)) AS ?local0)
+    BIND(IF(?part = "text", ?unset, IRI(CONCAT(?me, "/~", ?local0))) AS ?el)
+    BIND(?kind = "literal" AS ?square)
+    BIND(IF(?part = "g", svg:G, IF(?part = "dot", IF(?square, svg:Rect, svg:Circle), IF(?part = "label", svg:Text, ?unset))) AS ?tag)
+    BIND(IF(?part = "g", IRI(CONCAT(?me, "/~plot")), IF(?part = "text", ?unset, IRI(CONCAT(?me, "/~", ?id0)))) AS ?parent)
+    BIND(IF(?part = "g", 1000000000000000 + ?rank, IF(?part = "dot", 0, IF(?part = "label", 1, ?unset))) AS ?key)
+    BIND(IF(?part = "g", IF(?kind = "bnode", ?el, ?nodeTerm), ?unset) AS ?term)
+    BIND(IF(?part = "dot", IF(?kind = "bnode", ?nodeKey, STR(?nodeTerm)), ?unset) AS ?tip)
+    BIND(IF(?part = "label", IRI(CONCAT(?me, "/~", ?id0, "-label-text")), ?unset) AS ?textNode)
+    BIND(IF(?part = "label", ?nodeLabel, ?unset) AS ?data)
+    LATERAL {
+      VALUES ?an { "class" "role" "tabindex" "aria-label" "cx" "cy" "r" "x" "y" "width" "height" "rx" "text-anchor" } BIND(IF(?an = "class", IF(?part = "g", CONCAT("sem-node sem-", ?kind), IF(?part = "dot", "sem-dot", "sem-node-label")), IF(?an = "role", IF(?part = "g", "button", ?unset), IF(?an = "tabindex", IF(?part = "g", IF(?rank = 0, "0", "-1"), ?unset), IF(?an = "aria-label", IF(?part = "g", IF(STRLEN(?name) > 120, CONCAT(SUBSTR(?name, 1, 119), "…"), ?name), ?unset), IF(?an = "cx", IF(?part = "dot" && !?square, STR(?nx), ?unset), IF(?an = "cy", IF(?part = "dot" && !?square, STR(?ny), ?unset), IF(?an = "r", IF(?part = "dot" && !?square, "7", ?unset), IF(?an = "x", IF(?part = "dot" && ?square, STR(?nx - 6), IF(?part = "label", STR(?nx), ?unset)), IF(?an = "y", IF(?part = "dot" && ?square, STR(?ny - 6), IF(?part = "label", STR(?ny + 20), ?unset)), IF(?an = "width", IF(?part = "dot" && ?square, "12", ?unset), IF(?an = "height", IF(?part = "dot" && ?square, "12", ?unset), IF(?an = "rx", IF(?part = "dot" && ?square, "3", ?unset), IF(?an = "text-anchor", IF(?part = "label", "middle", ?unset), ?unset))))))))))))) AS ?av) FILTER(BOUND(?av)) BIND(IRI(CONCAT(?me, "/~", ?local0, "-a-", ?an)) AS ?attr)
+    }
+  }
+  }
+}""" .
+c:ResultGraphAsText-sparql a sem:Rule ;
+    sem:implements c:ResultGraphRendering ;
+    sem:modality mod:Text ;
+    sem:bulk false ;
+    sem:readsMinted true ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?shownRoot sem:renders $this .
+  ?el a ?tag ; rdfhtml:class ?cls ; rdfhtml:id ?id ; sem:orderKey ?key ; sem:tooltip ?tip ; c:term ?term ; c:edgeFrom ?edgeFrom ; c:edgeTo ?edgeTo ;
+      c:label ?alertLabel ; c:help ?alertHelp ; sty:tone ?tone ; rdfhtml:hasChild ?textNode ; rdfhtml:attribute ?attr .
+  ?parent rdfhtml:hasChild ?el .
+  ?textNode a rdfhtml:Text ; rdfhtml:data ?data ; sem:orderKey ?textKey .
+  ?attr a rdfhtml:Attribute ; rdfhtml:attributeName ?an ; rdfhtml:attributeValue ?av .
+  ?el ord:immediatelyPrecedes ?after .
+}
+WHERE {
+  $this a/rdfs:subClassOf* c:ResultGraph .
+  BIND(STR($this) AS ?me)
+  BIND(IRI(CONCAT(?me, "/~root")) AS ?root)
+  BIND(IRI(CONCAT(?me, "/~gp")) AS ?parts)
+  # What it shows (as the result table): not run, a binding without a value, a failed run, or the run.
+  OPTIONAL { $this c:of ?q FILTER(isIRI(?q)) FILTER EXISTS { { ?q sem:select ?qt } UNION { ?q sem:construct ?qt } FILTER(REGEX(STR(?qt), "[^ \\t\\r\\n]")) } }
+  BIND(EXISTS { $this c:bindVariable ?anyVariable FILTER(STR(?anyVariable) != "") } AS ?binds)
+  BIND(EXISTS { $this c:bindFrom ?bindFrom ; c:bindProperty ?bindProperty . ?bindFrom ?bindProperty ?bindValue FILTER(isIRI(?bindValue)) } AS ?bindsValue)
+  OPTIONAL { $this iv:run ?run . ?run a rs:ResultSet }
+  BIND(COALESCE(?run, c:none) AS ?view)
+  BIND(IF(!BOUND(?q), "none", IF(?binds && !?bindsValue, "unbound", IF(!BOUND(?run), "none", IF(EXISTS { ?view iv:error ?anyError }, "error", "run")))) AS ?state0)
+  OPTIONAL { ?parts c:linkCount ?linkCount0 }
+  OPTIONAL { ?parts c:nodeCount ?nodeCount0 }
+  OPTIONAL { ?parts c:keptCount ?keptCount0 }
+  BIND(COALESCE(?linkCount0, 0) AS ?linkCount) BIND(COALESCE(?nodeCount0, 0) AS ?nodeCount) BIND(COALESCE(?keptCount0, 0) AS ?keptCount)
+  BIND(IF(?state0 = "run", IF(?linkCount > 0, "draw", "nothing"), ?state0) AS ?state)
+  OPTIONAL { ?notRunAt l10n:of c:NotRunPhrase ; l10n:name ?notRun0 } OPTIONAL { FILTER(!BOUND(?notRun0)) c:NotRunPhrase rdfs:label ?notRun1 }
+  BIND(STR(COALESCE(?notRun0, ?notRun1)) AS ?notRun)
+  OPTIONAL { ?failedAt l10n:of c:QueryFailedPhrase ; l10n:name ?failed0 } OPTIONAL { FILTER(!BOUND(?failed0)) c:QueryFailedPhrase rdfs:label ?failed1 }
+  BIND(STR(COALESCE(?failed0, ?failed1)) AS ?failed)
+  OPTIONAL { ?noGraphAt l10n:of c:NoGraphPhrase ; l10n:name ?noGraph0 } OPTIONAL { FILTER(!BOUND(?noGraph0)) c:NoGraphPhrase rdfs:label ?noGraph1 }
+  BIND(STR(COALESCE(?noGraph0, ?noGraph1)) AS ?noGraph)
+  OPTIONAL { ?sizePhraseAt l10n:of c:GraphSizePhrase ; l10n:name ?sizePhrase0 } OPTIONAL { FILTER(!BOUND(?sizePhrase0)) c:GraphSizePhrase rdfs:label ?sizePhrase1 }
+  BIND(STR(COALESCE(?sizePhrase0, ?sizePhrase1)) AS ?sizePhrase)
+  OPTIONAL { ?morePhraseAt l10n:of c:MorePhrase ; l10n:name ?morePhrase0 } OPTIONAL { FILTER(!BOUND(?morePhrase0)) c:MorePhrase rdfs:label ?morePhrase1 }
+  BIND(STR(COALESCE(?morePhrase0, ?morePhrase1)) AS ?morePhrase)
+  OPTIONAL { ?viewer l10n:formatLocale ?locale0 }
+  BIND(COALESCE(?locale0, "en-US") AS ?locale)
+  BIND(REPLACE(REPLACE(?sizePhrase, "[{]n[}]", sx:formatNumber(?nodeCount, ?locale)), "[{]m[}]", sx:formatNumber(?linkCount, ?locale)) AS ?size)
+  BIND(?nodeCount - ?keptCount AS ?hidden)
+  BIND(IF(?hidden > 0, REPLACE(?morePhrase, "[{]n[}]", sx:formatNumber(?hidden, ?locale)), ?unset) AS ?more)
+  LATERAL {
+  {
+    BIND(?root AS ?el) BIND(?root AS ?shownRoot) BIND(rdfhtml:Div AS ?tag)
+  } UNION {
+    # Not run, or a binding without a value: a sentence (its c:emptyText).
+    FILTER(?state = "none" || ?state = "unbound")
+    OPTIONAL { FILTER(?state = "unbound") ?emptyAt l10n:of $this ; l10n:emptyText ?e0 }
+    OPTIONAL { FILTER(?state = "unbound" && !BOUND(?e0)) $this c:emptyText ?e1 FILTER(isLiteral(?e1)) }
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(STR(COALESCE(?e0, ?e1, ?notRun)) AS ?data)
+  } UNION {
+    # A failed run: its error, as a c:Alert.
+    FILTER(?state = "error")
+    ?view iv:error ?message .
+    BIND(IRI(CONCAT(?me, "/~error")) AS ?el) BIND(c:Alert AS ?tag) BIND(?root AS ?parent)
+    BIND(?failed AS ?alertLabel) BIND(STR(?message) AS ?alertHelp) BIND(sty:Danger AS ?tone)
+  } UNION {
+    # An answer, or rows that link no nodes: nothing to draw.
+    FILTER(?state = "nothing")
+    BIND(IRI(CONCAT(?me, "/~empty")) AS ?el) BIND(rdfhtml:P AS ?tag) BIND("sem-empty" AS ?cls) BIND(?root AS ?parent)
+    BIND(IRI(CONCAT(?me, "/~empty-text")) AS ?textNode) BIND(?noGraph AS ?data)
+  } UNION {
+    # The size, and the first 30 links as sentences, a line each.
+    FILTER(?state = "draw")
+    BIND(?root AS ?el) BIND(IRI(CONCAT(?me, "/~lines")) AS ?textNode) BIND(-1 AS ?textKey)
+    BIND(CONCAT(?size, IF(BOUND(?more), CONCAT(" (", ?more, ")"), "")) AS ?data)
+  } UNION {
+    FILTER(?state = "draw")
+    { SELECT ?link ?order WHERE { ?link a c:GraphLink ; c:graphLinkIn $this ; c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label ; c:linkOrder ?order . } ORDER BY ?order LIMIT 30 }
+    ?link c:linkFrom ?from ; c:linkTo ?to ; c:linkLabel ?label . ?from c:nodeLabel ?fromLabel . ?to c:nodeLabel ?toLabel .
+    BIND(?root AS ?el) BIND(IRI(CONCAT(?me, "/~lines-", STRAFTER(STR(?link), "/~ge-"))) AS ?textNode) BIND(?order AS ?textKey)
+    BIND(CONCAT("\\n", ?fromLabel, " —", ?label, "→ ", ?toLabel) AS ?data)
+  }
+  }
+}""" .
