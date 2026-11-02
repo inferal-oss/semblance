@@ -826,9 +826,112 @@ WHERE {
   }
 }""" .
 c:TimelineItemRendering a sem:Rendering ; sem:targets c:TimelineItem ; sem:stratum 0 ;
-    sem:functionOnly "awaits sx:Locale (sx:formatDateTime): the event's clock time in the viewer's time zone and locale." ;
     sem:needsExtension sx:Locale .
 c:TimelineItemRendering-fn a sem:Rule ; sem:implements c:TimelineItemRendering ; sem:function "data:timeline-item" .
+# The event's clock time by sx:formatDateTime (sx:Locale) in the viewer's l10n:formatLocale and the
+# store's time zone; what (the event's class) and on what (beh:target) by their labels in the viewer's language.
+c:TimelineItemRendering-sparql-screen a sem:Rule ;
+    sem:implements c:TimelineItemRendering ;
+    sem:modality mod:Screen ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Li ; sem:renders $this ; rdfhtml:hasChild ?dot , ?body , ?meta .
+  ?dot ord:immediatelyPrecedes ?body . ?body ord:immediatelyPrecedes ?meta .
+  ?dot a rdfhtml:Span ; rdfhtml:class "sem-dot" ; rdfhtml:attribute ?dotHidden .
+  ?dotHidden a rdfhtml:Attribute ; rdfhtml:attributeName "aria-hidden" ; rdfhtml:attributeValue "true" .
+  ?body a rdfhtml:Div ; rdfhtml:class "sem-body" ; rdfhtml:hasChild ?whatEl , ?targetEl .
+  ?whatEl ord:immediatelyPrecedes ?targetEl .
+  ?whatEl a rdfhtml:Strong ; rdfhtml:hasChild ?whatText . ?whatText a rdfhtml:Text ; rdfhtml:data ?what .
+  ?targetEl a rdfhtml:Span ; rdfhtml:class "sem-target" ; rdfhtml:hasChild ?targetText . ?targetText a rdfhtml:Text ; rdfhtml:data ?on .
+  ?meta a rdfhtml:Div ; rdfhtml:class "sem-meta" ; rdfhtml:hasChild ?timeEl , ?effectEl .
+  ?timeEl ord:immediatelyPrecedes ?effectEl .
+  ?timeEl a rdfhtml:Time ; rdfhtml:dateTime ?atText ; rdfhtml:hasChild ?timeText . ?timeText a rdfhtml:Text ; rdfhtml:data ?time .
+  ?effectEl a rdfhtml:Span ; rdfhtml:class "sem-effect" ; rdfhtml:hasChild ?effectText ; sem:tooltip ?tip .
+  ?effectText a rdfhtml:Text ; rdfhtml:data ?effect .
+}
+WHERE {
+  $this c:of ?m . FILTER(isIRI(?m))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?m a ?type FILTER(isIRI(?type)) }
+  BIND(COALESCE(?type, <urn:semblance:none>) AS ?typeN)
+  OPTIONAL { { ?typeN l10n:label ?typeC } UNION { ?typeCAt l10n:of ?typeN ; l10n:label ?typeC } }
+  OPTIONAL { FILTER(!BOUND(?typeC)) ?typeN c:label ?typeCOnly FILTER(isLiteral(?typeCOnly)) }
+  OPTIONAL { ?typeRAt l10n:of ?typeN ; l10n:name ?typeR }
+  OPTIONAL { FILTER(!BOUND(?typeR)) ?typeN rdfs:label ?typeROnly FILTER(isLiteral(?typeROnly)) }
+  BIND(STR(COALESCE(?typeC, ?typeCOnly, ?typeR, ?typeROnly, REPLACE(STR(?type), "^.*[#/]", ""))) AS ?typeLabel)
+  BIND(COALESCE(?typeLabel, "Event") AS ?what)
+  OPTIONAL { ?m beh:target ?target FILTER(isIRI(?target)) }
+  BIND(COALESCE(?target, <urn:semblance:none>) AS ?targetN)
+  OPTIONAL { { ?targetN l10n:label ?targetC } UNION { ?targetCAt l10n:of ?targetN ; l10n:label ?targetC } }
+  OPTIONAL { FILTER(!BOUND(?targetC)) ?targetN c:label ?targetCOnly FILTER(isLiteral(?targetCOnly)) }
+  OPTIONAL { ?targetRAt l10n:of ?targetN ; l10n:name ?targetR }
+  OPTIONAL { FILTER(!BOUND(?targetR)) ?targetN rdfs:label ?targetROnly FILTER(isLiteral(?targetROnly)) }
+  BIND(STR(COALESCE(?targetC, ?targetCOnly, ?targetR, ?targetROnly, REPLACE(STR(?target), "^.*[#/]", ""))) AS ?targetLabel)
+  BIND(?targetLabel AS ?on)
+  OPTIONAL { ?m beh:at ?at }
+  BIND(COALESCE(sx:formatDateTime(?at, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?at), "") AS ?time)
+  OPTIONAL { ?m beh:added ?addedRaw }
+  OPTIONAL { ?m beh:removed ?removedRaw }
+  BIND(COALESCE(xsd:integer(STR(?addedRaw)), 0) AS ?added)
+  BIND(COALESCE(xsd:integer(STR(?removedRaw)), 0) AS ?removed)
+  BIND(IF(?added != 0 || ?removed != 0, CONCAT("+", STR(?added), " −", STR(?removed)), "") AS ?effectText0)
+  BIND(IF(BOUND(?at), STR(?at), ?none) AS ?atText)
+  BIND(IF(?effectText0 != "", ?effectText0, ?none) AS ?effect)
+  BIND(IF(BOUND(?effect), CONCAT(STR(?added), " triples added, ", STR(?removed), " removed"), ?none) AS ?tip)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~dot")) AS ?dot)
+  BIND(IRI(CONCAT(STR($this), "/~dot-aria-hidden")) AS ?dotHidden)
+  BIND(IRI(CONCAT(STR($this), "/~body")) AS ?body)
+  BIND(IRI(CONCAT(STR($this), "/~what")) AS ?whatEl)
+  BIND(IRI(CONCAT(STR($this), "/~what-text")) AS ?whatText)
+  BIND(IF(BOUND(?on), IRI(CONCAT(STR($this), "/~target")), ?none) AS ?targetEl)
+  BIND(IRI(CONCAT(STR($this), "/~target-text")) AS ?targetText)
+  BIND(IRI(CONCAT(STR($this), "/~meta")) AS ?meta)
+  BIND(IRI(CONCAT(STR($this), "/~time")) AS ?timeEl)
+  BIND(IRI(CONCAT(STR($this), "/~time-text")) AS ?timeText)
+  BIND(IF(BOUND(?effect), IRI(CONCAT(STR($this), "/~effect")), ?none) AS ?effectEl)
+  BIND(IRI(CONCAT(STR($this), "/~effect-text")) AS ?effectText)
+}""" .
+c:TimelineItemRendering-sparql-text a sem:Rule ;
+    sem:implements c:TimelineItemRendering ;
+    sem:modality mod:Text ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  ?root a rdfhtml:Div ; sem:renders $this ; rdfhtml:hasChild ?line .
+  ?line a rdfhtml:Text ; rdfhtml:data ?text .
+}
+WHERE {
+  $this c:of ?m . FILTER(isIRI(?m))
+  ?viewer l10n:formatLocale ?locale .
+  OPTIONAL { ?m a ?type FILTER(isIRI(?type)) }
+  BIND(COALESCE(?type, <urn:semblance:none>) AS ?typeN)
+  OPTIONAL { { ?typeN l10n:label ?typeC } UNION { ?typeCAt l10n:of ?typeN ; l10n:label ?typeC } }
+  OPTIONAL { FILTER(!BOUND(?typeC)) ?typeN c:label ?typeCOnly FILTER(isLiteral(?typeCOnly)) }
+  OPTIONAL { ?typeRAt l10n:of ?typeN ; l10n:name ?typeR }
+  OPTIONAL { FILTER(!BOUND(?typeR)) ?typeN rdfs:label ?typeROnly FILTER(isLiteral(?typeROnly)) }
+  BIND(STR(COALESCE(?typeC, ?typeCOnly, ?typeR, ?typeROnly, REPLACE(STR(?type), "^.*[#/]", ""))) AS ?typeLabel)
+  BIND(COALESCE(?typeLabel, "Event") AS ?what)
+  OPTIONAL { ?m beh:target ?target FILTER(isIRI(?target)) }
+  BIND(COALESCE(?target, <urn:semblance:none>) AS ?targetN)
+  OPTIONAL { { ?targetN l10n:label ?targetC } UNION { ?targetCAt l10n:of ?targetN ; l10n:label ?targetC } }
+  OPTIONAL { FILTER(!BOUND(?targetC)) ?targetN c:label ?targetCOnly FILTER(isLiteral(?targetCOnly)) }
+  OPTIONAL { ?targetRAt l10n:of ?targetN ; l10n:name ?targetR }
+  OPTIONAL { FILTER(!BOUND(?targetR)) ?targetN rdfs:label ?targetROnly FILTER(isLiteral(?targetROnly)) }
+  BIND(STR(COALESCE(?targetC, ?targetCOnly, ?targetR, ?targetROnly, REPLACE(STR(?target), "^.*[#/]", ""))) AS ?targetLabel)
+  BIND(?targetLabel AS ?on)
+  OPTIONAL { ?m beh:at ?at }
+  BIND(COALESCE(sx:formatDateTime(?at, ?locale, "hour=2-digit;minute=2-digit;second=2-digit;hour12=false"), STR(?at), "") AS ?time)
+  OPTIONAL { ?m beh:added ?addedRaw }
+  OPTIONAL { ?m beh:removed ?removedRaw }
+  BIND(COALESCE(xsd:integer(STR(?addedRaw)), 0) AS ?added)
+  BIND(COALESCE(xsd:integer(STR(?removedRaw)), 0) AS ?removed)
+  BIND(IF(?added != 0 || ?removed != 0, CONCAT("+", STR(?added), " −", STR(?removed)), "") AS ?effectText0)
+  BIND(CONCAT(?time, "  ", ?what, IF(BOUND(?on), CONCAT(" → ", ?on), ""), IF(?effectText0 != "", CONCAT("  ", ?effectText0), "")) AS ?text)
+  BIND(IRI(CONCAT(STR($this), "/~root")) AS ?root)
+  BIND(IRI(CONCAT(STR($this), "/~line")) AS ?line)
+}""" .
 
 # --- Tree: an expandable hierarchy ----------------------------------------------------------------
 # The tree starts at c:of; a node's children are the subjects whose c:parentProperty is the node

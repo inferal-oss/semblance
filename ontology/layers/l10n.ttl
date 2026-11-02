@@ -162,10 +162,95 @@ l10n:CalendarTexts a sem:Rendering ;
     sem:targets l10n:Dated ;
     sem:stratum -20 ;
     sem:inputOnly true ;
-    sem:watches <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> , l10n:locale ;
-    sem:functionOnly "awaits sx:Locale (sx:formatDateTime): the locale's calendar comes from the host's Intl (names, the order of a date's fields, the hour cycle, the first day of the week)." ;
-    sem:needsExtension sx:Locale .
+    sem:watches <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> , l10n:locale .
 l10n:CalendarTexts-fn a sem:Rule ; sem:implements l10n:CalendarTexts ; sem:function "l10n:calendar" .
+# The calendar from the host's Intl through sx:formatDateTime (sx:Locale): fixed dates in UTC
+# formatted with fields replaced by their %-codes (fields=), one field alone (part=), or what the
+# locale says (info=: its canonical tag, hour cycle, first day of the week). The samples: 24 October
+# 2026 (a Saturday), 1:05 and 13:00 on 1 January for the clock, each month on its 1st (as in a
+# heading) and its 15th (as in a long date), the weekdays from Monday 19 October. The digits are
+# sx:formatNumber's 0 … 9; today is NOW() in the store's time zone.
+l10n:CalendarTexts-sparql a sem:Rule ;
+    sem:implements l10n:CalendarTexts ;
+    sem:needsExtension sx:Locale ;
+    sem:construct """
+CONSTRUCT {
+  $this l10n:localeTag ?tag ; l10n:firstWeekday ?firstWeekday ; l10n:datePattern ?datePattern ; l10n:dateHint ?dateHint ;
+    l10n:longDatePattern ?longDatePattern ; l10n:monthYearPattern ?monthYearPattern ; l10n:timePattern ?timePattern ;
+    l10n:timeHint ?timeHint ; l10n:hourCycle ?hourCycle ; l10n:am ?am ; l10n:pm ?pm ; l10n:digits ?digits ;
+    l10n:today ?today ; l10n:rightToLeft ?rtl .
+  ?month l10n:label ?monthLabel ; l10n:inDate ?inDate .
+  ?weekday l10n:label ?weekdayLabel ; l10n:abbr ?abbr .
+  ?phraseNode l10n:label ?words .
+}
+WHERE {
+  OPTIONAL { $this l10n:locale ?ownTag }
+  BIND(STR(?ownTag) AS ?own)
+  OPTIONAL { ?viewer l10n:prefers ?firstPref . ?firstPref sem:order 1 ; l10n:code ?firstCode }
+  BIND(COALESCE(?own, ?firstCode, "") AS ?asked)
+  BIND(COALESCE(sx:formatDateTime("2026-10-24"^^xsd:date, IF(?asked = "", "en", ?asked), "info=locale"), "en") AS ?tag)
+  LATERAL {
+    {
+      BIND("2026-10-24"^^xsd:date AS ?sample)
+      BIND("2026-01-01T01:05:00Z"^^xsd:dateTime AS ?clockAt)
+      BIND("year=numeric;month=2-digit;day=2-digit;timeZone=UTC;fields=" AS ?numeric)
+      BIND("weekday=long;year=numeric;month=long;day=numeric;timeZone=UTC;fields=" AS ?long)
+      BIND("hour=numeric;minute=2-digit;timeZone=UTC" AS ?clock)
+      BIND(COALESCE(sx:formatDateTime("2026-01-01T01:00:00Z"^^xsd:dateTime, ?tag, "hour=numeric;hour12=true;timeZone=UTC;part=dayPeriod"), "") AS ?am0)
+      BIND(COALESCE(sx:formatDateTime("2026-01-01T13:00:00Z"^^xsd:dateTime, ?tag, "hour=numeric;hour12=true;timeZone=UTC;part=dayPeriod"), "") AS ?pm0)
+      BIND(IF(?am0 = "", "AM", ?am0) AS ?am)
+      BIND(IF(?pm0 = "", "PM", ?pm0) AS ?pm)
+      BIND(COALESCE(sx:formatDateTime(?sample, ?tag, CONCAT(?clock, ";info=hourCycle")), "") AS ?cycle)
+      BIND(IF(?cycle = "h11" || ?cycle = "h12", "h12", "h23") AS ?hourCycle)
+      BIND(IF(STRLEN(sx:formatDateTime(?clockAt, ?tag, CONCAT(?clock, ";part=hour"))) = 2, "%H", "%h") AS ?hourCode)
+      BIND(sx:formatDateTime(?sample, ?tag, CONCAT(?numeric, "day:%d,month:%m,year:%y")) AS ?datePattern)
+      BIND(sx:formatDateTime(?sample, ?tag, CONCAT(?numeric, "day:dd,month:mm,year:yyyy")) AS ?dateHint)
+      BIND(sx:formatDateTime(?sample, ?tag, CONCAT(?long, "weekday:%w,day:%e,month:%M,year:%y")) AS ?longDatePattern)
+      BIND(sx:formatDateTime(?sample, ?tag, "year=numeric;month=long;timeZone=UTC;fields=month:%M,year:%y") AS ?monthYearPattern)
+      BIND(sx:formatDateTime(?clockAt, ?tag, CONCAT(?clock, ";fields=hour:", ?hourCode, ",minute:%n,dayPeriod:%a")) AS ?timePattern)
+      BIND(REPLACE(sx:formatDateTime(?clockAt, ?tag, CONCAT(?clock, ";fields=hour:hh,minute:mm,dayPeriod:%a")), "%a", ?am) AS ?timeHint)
+      BIND(CONCAT(sx:formatNumber(0, ?tag, "useGrouping=false"), sx:formatNumber(1, ?tag, "useGrouping=false"), sx:formatNumber(2, ?tag, "useGrouping=false"),
+        sx:formatNumber(3, ?tag, "useGrouping=false"), sx:formatNumber(4, ?tag, "useGrouping=false"), sx:formatNumber(5, ?tag, "useGrouping=false"),
+        sx:formatNumber(6, ?tag, "useGrouping=false"), sx:formatNumber(7, ?tag, "useGrouping=false"), sx:formatNumber(8, ?tag, "useGrouping=false"),
+        sx:formatNumber(9, ?tag, "useGrouping=false")) AS ?localDigits)
+      BIND(IF(STRLEN(?localDigits) = 10, ?localDigits, "0123456789") AS ?digits)
+      BIND(xsd:integer(COALESCE(sx:formatDateTime(?sample, ?tag, "info=firstDay"), "1")) AS ?firstDay)
+      BIND(IF(?firstDay >= 1 && ?firstDay <= 7, ?firstDay, 1) AS ?firstWeekday)
+      BIND(NOW() AS ?now)
+      BIND(STRDT(CONCAT(sx:formatDateTime(?now, "en", "year=numeric;part=year"), "-", sx:formatDateTime(?now, "en", "month=2-digit;part=month"), "-",
+        sx:formatDateTime(?now, "en", "day=2-digit;part=day")), xsd:date) AS ?today)
+      OPTIONAL { ?language l10n:direction l10n:RTL ; l10n:code ?languageCode FILTER(?languageCode = ?firstCode) }
+      BIND(IF(BOUND(?language), true, ?unbound) AS ?rtl)
+    } UNION {
+      VALUES (?m ?first ?middle) {
+        (1 "2026-01-01"^^xsd:date "2026-01-15"^^xsd:date) (2 "2026-02-01"^^xsd:date "2026-02-15"^^xsd:date)
+        (3 "2026-03-01"^^xsd:date "2026-03-15"^^xsd:date) (4 "2026-04-01"^^xsd:date "2026-04-15"^^xsd:date)
+        (5 "2026-05-01"^^xsd:date "2026-05-15"^^xsd:date) (6 "2026-06-01"^^xsd:date "2026-06-15"^^xsd:date)
+        (7 "2026-07-01"^^xsd:date "2026-07-15"^^xsd:date) (8 "2026-08-01"^^xsd:date "2026-08-15"^^xsd:date)
+        (9 "2026-09-01"^^xsd:date "2026-09-15"^^xsd:date) (10 "2026-10-01"^^xsd:date "2026-10-15"^^xsd:date)
+        (11 "2026-11-01"^^xsd:date "2026-11-15"^^xsd:date) (12 "2026-12-01"^^xsd:date "2026-12-15"^^xsd:date)
+      }
+      BIND(IRI(CONCAT(STR($this), "/~l10n-month-", STR(?m))) AS ?month)
+      BIND(sx:formatDateTime(?first, ?tag, "year=numeric;month=long;timeZone=UTC;part=month") AS ?monthLabel)
+      BIND(sx:formatDateTime(?middle, ?tag, "weekday=long;year=numeric;month=long;day=numeric;timeZone=UTC;part=month") AS ?inDate)
+    } UNION {
+      VALUES (?w ?day) {
+        (1 "2026-10-19"^^xsd:date) (2 "2026-10-20"^^xsd:date) (3 "2026-10-21"^^xsd:date) (4 "2026-10-22"^^xsd:date)
+        (5 "2026-10-23"^^xsd:date) (6 "2026-10-24"^^xsd:date) (7 "2026-10-25"^^xsd:date)
+      }
+      BIND(IRI(CONCAT(STR($this), "/~l10n-weekday-", STR(?w))) AS ?weekday)
+      BIND(sx:formatDateTime(?day, ?tag, "weekday=long;timeZone=UTC") AS ?weekdayLabel)
+      BIND(sx:formatDateTime(?day, ?tag, "weekday=short;timeZone=UTC") AS ?short)
+      BIND(IF(STRLEN(?short) <= 4, ?short, sx:formatDateTime(?day, ?tag, "weekday=narrow;timeZone=UTC")) AS ?abbr)
+    } UNION {
+      $this a/rdfs:subClassOf* ?class . ?class l10n:phrase ?phrase .
+      OPTIONAL { ?phraseAt l10n:of ?phrase ; l10n:name ?picked }
+      OPTIONAL { FILTER(!BOUND(?picked)) ?phrase rdfs:label ?only FILTER(isLiteral(?only)) }
+      BIND(STR(COALESCE(?picked, ?only)) AS ?words)
+      BIND(IRI(CONCAT(STR($this), "/~l10n-", REPLACE(STR(?phrase), "^.*[#/]", ""))) AS ?phraseNode)
+    }
+  }
+}""" .
 
 # --- texts in the viewer's language, for SPARQL rules -------------------------------------
 # A text property whose values are translations has an l10n: twin (l10n:pickedAs). l10n:Terms
