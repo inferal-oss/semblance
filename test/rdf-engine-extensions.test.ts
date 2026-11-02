@@ -275,6 +275,29 @@ describe.skipIf(!built.length).each(built)('%s engine: SPARQL extensions', (kind
       expect(rows(s, esc, ['path'])).toEqual(['/a~1b~0c^^string'])
     })
 
+    it('sx:json: ?index, each value\'s position among its siblings', () => {
+      const json = '{"z": 1, "a": [true, {"y": null, "b": "x"}], "m": {}}'
+      const q = `SELECT ?path ?index { (${JSON.stringify(json)}) sx:json (?path ?parent ?key ?kind ?value ?index) }`
+      expect(rows(s, q, ['path', 'index'])).toEqual([
+        '^^string -',
+        '/z^^string 0^^integer',
+        '/a^^string 1^^integer',
+        '/a/0^^string 0^^integer',
+        '/a/1^^string 1^^integer',
+        '/a/1/y^^string 0^^integer',
+        '/a/1/b^^string 1^^integer',
+        '/m^^string 2^^integer',
+      ])
+      // members in source order, not by key or path
+      const ordered = `SELECT ?key { (${JSON.stringify(json)}) sx:json (?path "" ?key ?kind ?value ?index) } ORDER BY ?index`
+      expect(rows(s, ordered, ['key'])).toEqual(['z^^string', 'a^^string', 'm^^string'])
+      // a bound index selects that sibling
+      expect(rows(s, `SELECT ?path { (${JSON.stringify(json)}) sx:json (?path "/a/1" ?key ?kind ?value 1) }`, ['path'])).toEqual(['/a/1/b^^string'])
+      // the five-variable form is unchanged
+      expect(rows(s, `SELECT ?path { (${JSON.stringify(json)}) sx:json (?path ?parent ?key ?kind ?value) }`, ['path'])).toHaveLength(8)
+      expect(rows(s, `SELECT ?i { (" 42 ") sx:json (?p ?parent ?key ?k ?v ?i) }`, ['i'])).toEqual(['-'])
+    })
+
     it('sx:json: scalars at the root, invalid JSON, depth', () => {
       expect(rows(s, `SELECT ?k ?v { (" 42 ") sx:json (?p ?parent ?key ?k ?v) }`, ['k', 'v'])).toEqual(['number^^string 42^^integer'])
       expect(rows(s, `SELECT ?k ?v { ("\\"x\\"") sx:json (?p ?parent ?key ?k ?v) }`, ['k', 'v'])).toEqual(['string^^string x^^string'])

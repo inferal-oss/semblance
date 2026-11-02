@@ -189,6 +189,7 @@ One row per code point of `?text`: `?char` the code point as an `xsd:string`,
 
 ```sparql
 (?payload) sx:json (?path ?parent ?key ?kind ?value)
+(?payload) sx:json (?path ?parent ?key ?kind ?value ?index)
 ```
 
 Parses `?payload` as JSON (RFC 8259) and yields one row per value, in document
@@ -199,7 +200,10 @@ of `"object"`, `"array"`, `"string"`, `"number"`, `"boolean"`, `"null"`, and
 `?value` the scalar's value (unbound for objects, arrays and null): a string as
 `xsd:string`; a number with its JSON spelling as the lexical form, as
 `xsd:integer` (no fraction or exponent), `xsd:decimal` (a fraction, no exponent)
-or `xsd:double` (an exponent); `true` and `false` as `xsd:boolean`. Pointer
+or `xsd:double` (an exponent); `true` and `false` as `xsd:boolean`. The optional `?index` is the value's
+0-based position among its parent's members or items (`xsd:integer`; unbound
+for the root), so a rule can order an object's members as the source does
+(`ORDER BY ?index`, or `ord:` from it); for an array item it equals `?key`. Pointer
 tokens escape `~` as `~0` and `/` as `~1`. Invalid JSON (including a lone
 surrogate escape, and nesting deeper than 512) yields no rows; whitespace
 around the value is allowed. Rules mint IRIs from `?path`.

@@ -556,7 +556,7 @@
       (local.set $p (i32.add (local.get $p) (global.get $cplen)))
       (br $cps)))))
 
-;; sx:json: (path, parent, key, kind, value) per value, in document order.
+;; sx:json: (path, parent, key, kind, value, index) per value, in document order.
 (func $mg_json (param $text i32)
   (local $v i32) (local $i i32) (local $j i32)
   (if (i32.eqz (local.tee $v (call $js_parse (call $tval (local.get $text)) (call $tlen (local.get $text))))) (then (return)))
@@ -565,9 +565,9 @@
       (local.set $j (i32.const 0))
       (loop $cols
         (call $mg_val (local.get $j) (call $v_at (local.get $v) (i32.add (local.get $i) (local.get $j))))
-        (br_if $cols (i32.lt_u (local.tee $j (i32.add (local.get $j) (i32.const 1))) (i32.const 5))))
-      (call $mg_emit (i32.const 5))
-      (local.set $i (i32.add (local.get $i) (i32.const 5)))
+        (br_if $cols (i32.lt_u (local.tee $j (i32.add (local.get $j) (i32.const 1))) (i32.const 6))))
+      (call $mg_emit (i32.const 6))
+      (local.set $i (i32.add (local.get $i) (i32.const 6)))
       (br $values))))
   (call $v_free (local.get $v)))
 
@@ -575,7 +575,7 @@
 
 (global $js_p (mut i32) (i32.const 0))
 (global $js_e (mut i32) (i32.const 0))
-(global $js_rows (mut i32) (i32.const 0))   ;; vector: 5 ids per value
+(global $js_rows (mut i32) (i32.const 0))   ;; vector: 6 ids per value
 (global $js_path (mut i32) (i32.const 0))   ;; the current pointer (a byte buffer)
 (global $js_str (mut i32) (i32.const 0))    ;; the last string read (a byte buffer)
 
@@ -589,7 +589,7 @@
   (global.set $js_p (local.get $p))
   (global.set $js_e (i32.add (local.get $p) (local.get $n)))
   (global.set $js_rows (call $v_new))
-  (local.set $ok (call $js_value (i32.const 0) (i32.const 0) (i32.const 0)))
+  (local.set $ok (call $js_value (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))
   (call $js_ws)
   (if (i32.and (local.get $ok) (i32.eq (global.get $js_p) (global.get $js_e))) (then (return (global.get $js_rows))))
   (call $v_free (global.get $js_rows))
@@ -618,10 +618,10 @@
   (global.set $js_p (i32.add (global.get $js_p) (local.get $n)))
   (i32.const 1))
 
-;; A value (after white space) with its parent's pointer and its key (0 for the
-;; root); depth: the containers around it.
-(func $js_value (param $parent i32) (param $key i32) (param $depth i32) (result i32)
-  (local $c i32) (local $path i32) (local $at i32) (local $i i32) (local $len i32) (local $start i32) (local $dt i32)
+;; A value (after white space) with its parent's pointer, its key and its
+;; position among its siblings (0 for the root); depth: the containers around it.
+(func $js_value (param $parent i32) (param $key i32) (param $index i32) (param $depth i32) (result i32)
+  (local $c i32) (local $path i32) (local $at i32) (local $i i32) (local $len i32) (local $start i32) (local $dt i32) (local $nth i32)
   (call $js_ws)
   (local.set $c (call $js_peek))
   (local.set $path (call $simple (i32.load (global.get $js_path)) (i32.load offset=4 (global.get $js_path))))
@@ -629,11 +629,12 @@
   (if (i32.or (i32.eq (local.get $c) (i32.const '{')) (i32.eq (local.get $c) (i32.const '['))) (then
     (if (i32.ge_u (local.get $depth) (i32.const 512)) (then (return (i32.const 0))))
     (global.set $js_p (i32.add (global.get $js_p) (i32.const 1)))
-    (call $js_row (local.get $path) (local.get $parent) (local.get $key)
+    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (local.get $index)
       (if (result i32) (i32.eq (local.get $c) (i32.const '{')) (then (call $simple (@str "object"))) (else (call $simple (@str "array"))))
       (i32.const 0))
     (if (call $js_eat (i32.add (local.get $c) (i32.const 2))) (then (return (i32.const 1))))   ;; '}' or ']'
     (loop $members
+      (local.set $nth (call $int_term (i64.extend_i32_u (local.get $i))))
       (if (i32.eq (local.get $c) (i32.const '{'))
         (then
           (call $js_ws)
@@ -642,28 +643,28 @@
           (if (i32.eqz (call $js_eat (i32.const ':'))) (then (return (i32.const 0))))
           (call $js_token (i32.load (global.get $js_str)) (i32.load offset=4 (global.get $js_str))))
         (else
-          (local.set $at (call $int_term (i64.extend_i32_u (local.get $i))))
+          (local.set $at (local.get $nth))
           (call $gb_byte (global.get $js_path) (i32.const '/'))
           (i32.store offset=4 (global.get $js_path)
             (i32.sub (call $u64_digits (call $js_path_room) (i64.extend_i32_u (local.get $i))) (i32.load (global.get $js_path))))))
-      (if (i32.eqz (call $js_value (local.get $path) (local.get $at) (i32.add (local.get $depth) (i32.const 1)))) (then (return (i32.const 0))))
+      (if (i32.eqz (call $js_value (local.get $path) (local.get $at) (local.get $nth) (i32.add (local.get $depth) (i32.const 1)))) (then (return (i32.const 0))))
       (i32.store offset=4 (global.get $js_path) (local.get $len))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (if (call $js_eat (i32.const ',')) (then (br $members))))
     (return (call $js_eat (i32.add (local.get $c) (i32.const 2))))))
   (if (i32.eq (local.get $c) (i32.const '"')) (then
     (if (i32.eqz (call $js_string)) (then (return (i32.const 0))))
-    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (call $simple (@str "string"))
+    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (local.get $index) (call $simple (@str "string"))
       (call $simple (i32.load (global.get $js_str)) (i32.load offset=4 (global.get $js_str))))
     (return (i32.const 1))))
   (if (call $js_word (@str "true")) (then
-    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (call $simple (@str "boolean")) (call $bool (i32.const 1)))
+    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (local.get $index) (call $simple (@str "boolean")) (call $bool (i32.const 1)))
     (return (i32.const 1))))
   (if (call $js_word (@str "false")) (then
-    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (call $simple (@str "boolean")) (call $bool (i32.const 0)))
+    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (local.get $index) (call $simple (@str "boolean")) (call $bool (i32.const 0)))
     (return (i32.const 1))))
   (if (call $js_word (@str "null")) (then
-    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (call $simple (@str "null")) (i32.const 0))
+    (call $js_row (local.get $path) (local.get $parent) (local.get $key) (local.get $index) (call $simple (@str "null")) (i32.const 0))
     (return (i32.const 1))))
   ;; a number: -?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?
   (local.set $start (global.get $js_p))
@@ -684,7 +685,7 @@
       (then (global.set $js_p (i32.add (global.get $js_p) (i32.const 1)))))
     (if (i32.eqz (call $js_digits)) (then (return (i32.const 0))))
     (local.set $dt (i32.const K_DOUBLE))))
-  (call $js_row (local.get $path) (local.get $parent) (local.get $key) (call $simple (@str "number"))
+  (call $js_row (local.get $path) (local.get $parent) (local.get $key) (local.get $index) (call $simple (@str "number"))
     (call $typed (local.get $start) (i32.sub (global.get $js_p) (local.get $start)) (call $known (local.get $dt))))
   (i32.const 1))
 
@@ -719,12 +720,13 @@
       (local.set $p (i32.add (local.get $p) (i32.const 1)))
       (br $bytes)))))
 
-(func $js_row (param $path i32) (param $parent i32) (param $key i32) (param $kind i32) (param $value i32)
+(func $js_row (param $path i32) (param $parent i32) (param $key i32) (param $index i32) (param $kind i32) (param $value i32)
   (call $v_push1 (global.get $js_rows) (local.get $path))
   (call $v_push1 (global.get $js_rows) (local.get $parent))
   (call $v_push1 (global.get $js_rows) (local.get $key))
   (call $v_push1 (global.get $js_rows) (local.get $kind))
-  (call $v_push1 (global.get $js_rows) (local.get $value)))
+  (call $v_push1 (global.get $js_rows) (local.get $value))
+  (call $v_push1 (global.get $js_rows) (local.get $index)))
 
 ;; Four hex digits: their value, or -1.
 (func $js_hex4 (result i32)
