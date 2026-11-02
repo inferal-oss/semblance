@@ -54,10 +54,13 @@ c:sorts a owl:ObjectProperty ; rdfs:comment "On a rendered header: the c:Column 
 
 # A run of each table's query (iv:perQuery, ontology/layers/view.ttl), maintained as the graph changes,
 # its rows a result set in the views graph that the table names (iv:run); a query that is a view of its
-# own keeps its own annotations.
+# own keeps its own annotations. It reads what a rule's query would (iv:reads iv:Everything: other views'
+# output, the rendered state, what rules derive) and is written in the tick that changes it, so a table
+# agrees with the figures beside it.
 c:TableRuns a iv:View ;
     iv:perQuery c:query ; iv:referrerClass c:Table ;
-    iv:strategy iv:Auto ; iv:materialize iv:ResultSet .
+    iv:strategy iv:Auto ; iv:materialize iv:ResultSet ;
+    iv:reads iv:Everything ; iv:writeEach iv:Tick .
 c:TableRendering a sem:Rendering ; sem:targets c:Table ; sem:stratum 0 ;
     sem:follows c:dataset , ( iv:run rs:solution rs:binding ) , ( iv:run iv:column ) , ( c:tableColumns [ sem:zeroOrMore rdf:rest ] rdf:first ) .
 c:TableRendering-fn a sem:Rule ; sem:implements c:TableRendering ; sem:function "data:table" .

@@ -1837,8 +1837,9 @@ maintained one (`src/view/runs.ts`, `runtime.ts`, `ontology/layers/view.ttl`):
   values; a row the result has n times is n rows). A maintained view (one that follows updates) writes
   the same, from its output, at the host's next refresh (`Runtime.refresh`, `ViewRuntime.flushPending`):
   it is maintained every tick, but a busy graph rewrites its rows, and re-renders what reads them, once a
-  frame - or at once when a node that shows it is shown again. A blank node's label is written beside
-  it (`iv:label`).
+  frame - or at once when a node that shows it is shown again. With `iv:writeEach iv:Tick` it is written
+  in the tick that changed it instead, as an `iv:Graph` view's rows are (a table beside the totals it
+  lists agrees with them). A blank node's label is written beside it (`iv:label`).
 - **A run reads everything a rule's query would**: the input graphs, the views graph (other views'
   output: `rnd:overlaps`) and the derived graph of the projection that shows it (`derivedFor`). It is
   never stepped by a change, so this cannot feed back; a maintained view reads what rules derive when
@@ -1881,6 +1882,12 @@ A maintained view reads the input graphs; with `iv:reads` it also reads (`src/vi
   A template that reads what rules derive (`iv:perReferrer`, `iv:targets`) also takes its referrers
   or instances from there. Rounds run wherever the projections take a change: a tick, a refresh, idle
   warming, a preload, a resumed or continued stall.
+- **Everything** (`iv:reads iv:Everything`): what a rule's query reads - the input graphs, every view's
+  output (the view steps after every view that does not read everything too) and what rules derive (as
+  `iv:reads <rendering>`, in rounds). For a query held in data that a component shows, whatever it
+  matches: every table's run (`c:TableRuns`, `ontology/components/data.ttl`, also `iv:writeEach iv:Tick`)
+  reads a section's rendered place and the view that marks the one being read (the reader), the
+  derived and the input alike, as the table's function rule's own SELECT did.
 - **What uses it**: the formula layer has one rendering, `c:Formula` (the first row of a maintained
   view); `c:QueryFormula`, which ran the queries that were not views, is gone (#147). A sheet's
   formulas (`c:SumFormula` …, `ontology/components/sheet.ttl`) are views per cell
