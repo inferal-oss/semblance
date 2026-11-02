@@ -3,7 +3,7 @@ import type { NamedNode, Term } from '@rdfjs/types'
 import type { FnRule, RuleContext } from '../engine/context.ts'
 import { C, NS, RDF_TYPE, SEM } from '../ns.ts'
 import { labelOf, rdfList, str, text } from './util.ts'
-import { maintainedRows, viewRows } from '../view/rows.ts'
+import { maintainedRows } from '../view/rows.ts'
 import { md5Key } from './data.ts'
 import { compareKeys, tupleKey } from '../render/order-key.ts'
 
@@ -41,18 +41,18 @@ function encoding(ctx: RuleContext, focus: NamedNode) {
   }
 }
 
-/** Run the chart's view; returns undefined (and renders a message) if it cannot. */
+/**
+ * The chart's rows, from the views graph where the views runtime keeps them (a maintained SELECT:
+ * iv:View, iv:materialize iv:Graph), each row once; else the message it shows instead.
+ */
 function rows(ctx: RuleContext, focus: NamedNode): Row[] | string {
-  if (!ctx.sparql) return 'Charts run SPARQL; choose a store with SPARQL.'
   const view = ctx.object(focus, C.view)
-  const query = view && str(ctx.object(view, SEM.select))
-  if (!query) return 'No view.'
-  try {
-    return viewRows(ctx, view!, query)
-  } catch (e) {
-    return `View ${labelOf(ctx, view!)} failed: ${(e as Error).message}`
-  }
+  if (!view || !ctx.object(view, SEM.select)) return 'No view.'
+  return maintainedRows(ctx, view, true) ?? `${labelOf(ctx, view)} is not a maintained view (iv:View, iv:materialize iv:Graph).`
 }
+
+/** A facet's value in a caption: a number as en-US writes it (1,000), anything else as it is. */
+const facetText = (facet: string) => (/^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(facet) ? Number(facet).toLocaleString('en-US') : facet)
 
 /** Series in legend order (c:legend: nodes with c:key + rdfs:label), else first-seen. */
 function legendOf(ctx: RuleContext, focus: NamedNode, data: Row[], variable: string | undefined) {
@@ -142,30 +142,33 @@ const heatmap: FnRule = (ctx, focus) => {
   const lo = Math.log10(0.01)
   const hi = Math.log10(100)
   const step = (v: number) => Math.round(Math.min(1, Math.max(0, (Math.log10(Math.max(v, 0.01)) - lo) / (hi - lo))) * 12)
+  // Facets, columns (categories) and rows (series) in the order first seen; keyed by their text.
   const facets = groupBy(data, (r) => (e.facet ? str(r.get(e.facet)) ?? '' : ''))
-  const tables = [...facets].map(([facet, rs], fi) => {
+  const tables = [...facets].map(([facet, rs]) => {
+    const f = `f-${md5Key(facet)}`
     const columns = [...new Set(rs.map((r) => str(r.get(e.category)) ?? ''))]
     const rowsBy = groupBy(rs, (r) => (e.series ? str(r.get(e.series)) ?? '' : ''))
-    const head = o.el(`f${fi}-head`, 'Thead', {}, [
-      o.el(`f${fi}-head-row`, 'Tr', {}, [o.el(`f${fi}-corner`, 'Th'), ...columns.map((c, ci) => o.el(`f${fi}-col${ci}`, 'Th', { scope: 'col' }, [o.text(`f${fi}-col${ci}-text`, c)]))]),
+    const head = o.el(`${f}-head`, 'Thead', {}, [
+      o.el(`${f}-head-row`, 'Tr', {}, [o.el(`${f}-corner`, 'Th'), ...columns.map((c) => o.el(`${f}-col-${md5Key(c)}`, 'Th', { scope: 'col' }, [o.text(`${f}-col-${md5Key(c)}-text`, c)]))]),
     ])
-    const body = o.el(`f${fi}-body`, 'Tbody', {}, [...rowsBy].map(([row, cs], ri) =>
-      o.el(`f${fi}-r${ri}`, 'Tr', {}, [
-        o.el(`f${fi}-r${ri}-h`, 'Th', { scope: 'row' }, [o.text(`f${fi}-r${ri}-h-text`, row)]),
-        ...columns.map((c, ci) => {
-          const r = cs.find((x) => str(x.get(e.category)) === c)
+    const body = o.el(`${f}-body`, 'Tbody', {}, [...rowsBy].map(([row, cs]) => {
+      const rid = `${f}-r-${md5Key(row)}`
+      return o.el(rid, 'Tr', {}, [
+        o.el(`${rid}-h`, 'Th', { scope: 'row' }, [o.text(`${rid}-h-text`, row)]),
+        ...columns.map((c) => {
+          const r = cs.find((x) => (str(x.get(e.category)) ?? '') === c)
           const v = num(r?.get(e.value))
-          const id = `f${fi}-r${ri}-c${ci}`
+          const id = `${rid}-c-${md5Key(c)}`
           if (v === undefined) return o.el(id, 'Td', { class: 'sem-pending' }, [o.text(id + '-text', '…')])
           const flagged = e.flag !== undefined && str(r!.get(e.flag)) === 'true'
           const cell = o.el(id, 'Td', { class: `sem-h${step(v)}${flagged ? ' sem-flagged' : ''}` }, [o.text(id + '-text', `${flagged ? '⚠ ' : ''}${fmt(v)}`)])
           o.tip(cell, `${c} · ${row}: ${fmt(v)} ${e.unit}${flagged && e.flagLabel ? ` — ${e.flagLabel}` : ''}`.trim())
           return cell
         }),
-      ]),
-    ))
-    const caption = o.el(`f${fi}-caption`, 'Figcaption', {}, [o.text(`f${fi}-caption-text`, e.facetLabel.replace('{value}', Number.isFinite(Number(facet)) ? Number(facet).toLocaleString('en-US') : facet))])
-    return o.el(`f${fi}`, 'Figure', {}, [caption, o.el(`f${fi}-scroll`, 'Div', { class: 'sem-scroll' }, [o.el(`f${fi}-table`, 'Table', {}, [head, body])])])
+      ])
+    }))
+    const caption = o.el(`${f}-caption`, 'Figcaption', {}, [o.text(`${f}-caption-text`, e.facetLabel.replace('{value}', facetText(facet)))])
+    return o.el(f, 'Figure', {}, [caption, o.el(`${f}-scroll`, 'Div', { class: 'sem-scroll' }, [o.el(`${f}-table`, 'Table', {}, [head, body])])])
   })
   const ramp = o.el('ramp', 'Span', { class: 'sem-ramp' }, Array.from({ length: 13 }, (_, i) => o.el(`ramp-${i}`, 'I', { class: `sem-h${i}` })))
   const scale = o.el('scale', 'Div', { class: 'sem-scale' }, [
@@ -200,28 +203,31 @@ const linechart: FnRule = (ctx, focus) => {
   const yHi = Math.ceil(Math.log10(Math.max(...ys)))
   const x = (v: number) => m.l + ((tx(v) - tx(xs[0]!)) / (tx(xs[xs.length - 1]!) - tx(xs[0]!) || 1)) * (W - m.l - m.r)
   const y = (v: number) => Hh - m.b - ((Math.log10(v) - yLo) / (yHi - yLo || 1)) * (Hh - m.t - m.b)
+  /** A coordinate to one decimal, as ROUND(v × 10) writes it. */
+  const c1 = (v: number) => fixed(v, 1)
   const parts: NamedNode[] = []
-  for (let k = yLo; k <= yHi; k++) {
+  // A decade's line and label each; at most 64 decades (1e-32 to 1e32 is already unreadable).
+  for (let k = yLo; k <= Math.min(yHi, yLo + 63); k++) {
     const v = 10 ** k
-    parts.push(o.svg(`grid${k}`, 'Line', { x1: m.l, x2: W - m.r, y1: y(v).toFixed(1), y2: y(v).toFixed(1), class: 'sem-grid' }))
-    parts.push(o.svg(`ylab${k}`, 'Text', { x: m.l - 8, y: y(v).toFixed(1), 'text-anchor': 'end', 'dominant-baseline': 'central', class: 'sem-axis' }, [o.text(`ylab${k}-t`, `${v >= 1 ? v : v.toFixed(2)} ${e.unit}`.trim())]))
+    parts.push(o.svg(`grid${k}`, 'Line', { x1: m.l, x2: W - m.r, y1: c1(y(v)), y2: c1(y(v)), class: 'sem-grid' }))
+    parts.push(o.svg(`ylab${k}`, 'Text', { x: m.l - 8, y: c1(y(v)), 'text-anchor': 'end', 'dominant-baseline': 'central', class: 'sem-axis' }, [o.text(`ylab${k}-t`, `${v >= 1 ? v : v.toFixed(2)} ${e.unit}`.trim())]))
   }
-  xs.forEach((v, i) => parts.push(o.svg(`xlab${i}`, 'Text', { x: x(v).toFixed(1), y: Hh - m.b + 22, 'text-anchor': 'middle', class: 'sem-axis' }, [o.text(`xlab${i}-t`, `${v.toLocaleString('en-US')}`)])))
+  xs.forEach((v, i) => parts.push(o.svg(`xlab${i}`, 'Text', { x: c1(x(v)), y: Hh - m.b + 22, 'text-anchor': 'middle', class: 'sem-axis' }, [o.text(`xlab${i}-t`, `${v.toLocaleString('en-US')}`)])))
   if (e.reference === 'linear') {
     const firsts = series.map((s) => points.find((p) => p.s === s.key && p.x === xs[0])).filter(Boolean) as { y: number }[]
     const start = Math.max(...firsts.map((p) => p.y))
     const end = Math.min(start * (xs[xs.length - 1]! / xs[0]!), 10 ** yHi)
-    const ref = o.svg('reference', 'Line', { x1: x(xs[0]!).toFixed(1), y1: y(start).toFixed(1), x2: x(xs[xs.length - 1]!).toFixed(1), y2: y(end).toFixed(1), class: 'sem-reference' })
+    const ref = o.svg('reference', 'Line', { x1: c1(x(xs[0]!)), y1: c1(y(start)), x2: c1(x(xs[xs.length - 1]!)), y2: c1(y(end)), class: 'sem-reference' })
     o.tip(ref, 'proportional (linear) growth from the slowest configuration')
-    parts.push(ref, o.svg('reference-label', 'Text', { x: (x(xs[xs.length - 1]!) - 4).toFixed(1), y: (y(end) - 8).toFixed(1), 'text-anchor': 'end', class: 'sem-axis' }, [o.text('reference-label-t', 'linear')]))
+    parts.push(ref, o.svg('reference-label', 'Text', { x: c1(x(xs[xs.length - 1]!) - 4), y: c1(y(end) - 8), 'text-anchor': 'end', class: 'sem-axis' }, [o.text('reference-label-t', 'linear')]))
   }
   series.forEach((s, si) => {
     const ps = points.filter((p) => p.s === s.key).sort((a, b) => a.x - b.x)
     if (!ps.length) return
     const color = `var(--sem-series-${(si % 6) + 1})`
-    parts.push(o.svg(`line${si}`, 'Path', { d: ps.map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`).join(' '), class: 'sem-line', style: `stroke: ${color}` }))
+    parts.push(o.svg(`line${si}`, 'Path', { d: ps.map((p, i) => `${i ? 'L' : 'M'}${c1(x(p.x))},${c1(y(p.y))}`).join(' '), class: 'sem-line', style: `stroke: ${color}` }))
     ps.forEach((p, pi) => {
-      const dot = o.svg(`dot${si}-${pi}`, 'Circle', { cx: x(p.x).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, class: 'sem-dot', style: `fill: ${color}` })
+      const dot = o.svg(`dot${si}-${pi}`, 'Circle', { cx: c1(x(p.x)), cy: c1(y(p.y)), r: 4.5, class: 'sem-dot', style: `fill: ${color}` })
       o.tip(dot, `${s.label} · ${p.x.toLocaleString('en-US')}: ${fmt(p.y)} ${e.unit}`.trim())
       parts.push(dot)
     })
