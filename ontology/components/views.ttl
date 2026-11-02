@@ -505,7 +505,7 @@ WHERE {
       # by sx:matches: a record's place is its line's number.
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
         { SELECT ?text ?lineRecord WHERE {
-          (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt)
+          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
           BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
         } ORDER BY ?lineAt }
@@ -515,7 +515,7 @@ WHERE {
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
         { SELECT ?text ?stringRecord WHERE {
           c:SparqlLexicon c:quotedPattern ?quoted .
-          (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString)
+          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
           FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
           BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
@@ -526,7 +526,7 @@ WHERE {
       BIND(STRLEN(?lines) / 14 AS ?lineCount)
       BIND(CONCAT(STR($this), "/~L") AS ?key)
       LATERAL { OPTIONAL {
-        (?lines "[0-9]{14}") sx:matches (?record ?recordAt)
+        LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
         BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
         BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
         BIND(?ls + xsd:integer(SUBSTR(?record, 8, 7)) AS ?le)
@@ -559,7 +559,7 @@ WHERE {
             FILTER(?fe > ?fs)
             BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
             c:SparqlLexicon c:tokenPattern ?pattern .
-            (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9)
+            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
             BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
             BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
             BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
@@ -643,7 +643,7 @@ WHERE {
       # by sx:matches: a record's place is its line's number.
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?lineRecord; separator="") AS ?lines0) WHERE {
         { SELECT ?text ?lineRecord WHERE {
-          (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt)
+          LATERAL { (?text "[^\\n]*\\n|[^\\n]+$|^$") sx:matches (?lineMatch ?lineAt) }
           BIND(STRLEN(?lineMatch) - IF(STRENDS(?lineMatch, "\\n"), 1, 0) AS ?lineLength)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?lineAt)), STRLEN(STR(?lineAt)) + 1), SUBSTR(CONCAT("0000000", STR(?lineLength)), STRLEN(STR(?lineLength)) + 1)) AS ?lineRecord)
         } ORDER BY ?lineAt }
@@ -653,7 +653,7 @@ WHERE {
       LATERAL { OPTIONAL { SELECT ?text (GROUP_CONCAT(?stringRecord; separator="") AS ?strings0) WHERE {
         { SELECT ?text ?stringRecord WHERE {
           c:SparqlLexicon c:quotedPattern ?quoted .
-          (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString)
+          LATERAL { (?text ?quoted) sx:matches (?stringMatch ?stringAt ?quotedComment ?longString) }
           FILTER(BOUND(?longString) && CONTAINS(?stringMatch, "\\n"))
           BIND(?stringAt + STRLEN(?stringMatch) AS ?stringEnd)
           BIND(CONCAT(SUBSTR(CONCAT("0000000", STR(?stringAt)), STRLEN(STR(?stringAt)) + 1), SUBSTR(CONCAT("0000000", STR(?stringEnd)), STRLEN(STR(?stringEnd)) + 1)) AS ?stringRecord)
@@ -664,7 +664,7 @@ WHERE {
       BIND(STRLEN(?lines) / 14 AS ?lineCount)
       BIND(CONCAT(STR($this), "/~L") AS ?key)
       LATERAL { OPTIONAL {
-        (?lines "[0-9]{14}") sx:matches (?record ?recordAt)
+        LATERAL { (?lines "[0-9]{14}") sx:matches (?record ?recordAt) }
         BIND(xsd:integer(FLOOR((?recordAt - 1) / 14)) + 1 AS ?k)
         BIND(xsd:integer(SUBSTR(?record, 1, 7)) AS ?ls)
         BIND(?ls + xsd:integer(SUBSTR(?record, 8, 7)) AS ?le)
@@ -697,7 +697,7 @@ WHERE {
             FILTER(?fe > ?fs)
             BIND(SUBSTR(?text, ?fs, ?fe - ?fs) AS ?src)
             c:SparqlLexicon c:tokenPattern ?pattern .
-            (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9)
+            LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
             BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
             BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
             BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",

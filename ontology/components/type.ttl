@@ -594,7 +594,7 @@ WHERE {
   BIND(CONCAT(STR($this), "/~code-") AS ?key)
   LATERAL { OPTIONAL {
     c:SparqlLexicon c:tokenPattern ?pattern .
-    (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9)
+    LATERAL { (?src ?pattern) sx:matches (?m ?at ?g1 ?g2 ?g3 ?g4 ?g5 ?g6 ?g7 ?g8 ?g9) }
     BIND(STRBEFORE(COALESCE(?g6, ""), ":") AS ?pfx)
     BIND(REGEX(?m, "^[0-9]+([.][0-9]+)?$") AS ?numeral)
     BIND(IF(BOUND(?g1), "comment", IF(BOUND(?g2), "string", IF(BOUND(?g3), "var", IF(BOUND(?g4), "iri",
